@@ -12,7 +12,7 @@ role/
 │   ├── landing/      # TanStack Start — marketing/SEO + onboarding business   [PENDIENTE scaffold]
 │   └── mobile/       # Expo — port del app Flutter (fudi)      [PENDIENTE scaffold]
 └── packages/
-    └── role-commons/ # DTOs, schemas Zod, enums, tipos         [heredado de ~/Projects/role-commons]
+    └── commons/ # DTOs, schemas Zod, enums, tipos         [heredado de ~/Projects/role-commons]
 ```
 
 **Flutter (fudi) queda fuera del monorepo** como repo separado, congelado a features, hasta que `mobile` alcance paridad (estrategia strangler).

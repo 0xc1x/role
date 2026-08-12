@@ -5,7 +5,7 @@ Monorepo bun workspaces + Turborepo para el ecosistema Rolé (móvil Expo, landi
 ## Antes de trabajar
 
 - `README.md` (raíz) — mapa, decisiones de arquitectura, comandos.
-- `AGENTS.md` / `CLAUDE.md` en `packages/role-commons/` (convenciones propias del paquete).
+- `AGENTS.md` / `CLAUDE.md` en `packages/commons/` (convenciones propias del paquete).
 - Docs de cada app (`apps/api/README.md`, `apps/admin/README.md`, `apps/api/IMPROVEMENT_PLAN.md`).
 
 ## Reglas
