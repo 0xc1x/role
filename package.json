@@ -1,0 +1,24 @@
+{
+  "name": "role",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "dev:api": "bun run --cwd apps/api start:dev",
+    "dev:admin": "bun run --cwd apps/admin dev",
+    "dev:commons": "bun run --cwd packages/role-commons typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  },
+  "dependencies": {
+    "nitro": "npm:nitro-nightly@latest"
+  }
+}

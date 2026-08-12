@@ -1,0 +1,9 @@
+{
+  "name": "role-mobile",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'scaffold pendiente — ver apps/mobile/README.md'",
+    "build": "echo 'scaffold pendiente'",
+    "typecheck": "echo 'scaffold pendiente'"
+  }
+}
