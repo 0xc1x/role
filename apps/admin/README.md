@@ -27,7 +27,7 @@ Admin SPA de **Role** — panel de administración construido con TanStack Start
 
 - [Bun](https://bun.sh) >= 1.2 (package manager único)
 - `role-api` corriendo (ver su README para setup)
-- `role-commons` linkeado (via `bun link` o `file:`)
+- `role-commons` por `workspace:*` (monorepo) — nada que linkear
 
 ## Variables de entorno
 
