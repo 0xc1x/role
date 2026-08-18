@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.output/
+.assets/
+.tanstack/
+*.log
+.env
+.env.local
+.env.*.local

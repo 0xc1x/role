@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* Rolé brand tokens */
+@theme {
+  --color-role-primary: #bf1c19;
+  --color-role-primary-soft: #fdecec;
+  --color-role-secondary: #96bf85;
+  --color-role-accent: #435d38;
+  --color-role-background: #faf9f7;
+  --color-role-card: #fff5f5;
+  --color-role-muted: #f4f1ee;
+  --color-role-foreground: #1c1917;
+  --color-role-muted-foreground: #6b6b6b;
+  --color-role-border: #e7e2dc;
+  --color-role-success: #0d9488;
+  --color-role-warning: #f59e0b;
+  --color-role-star: #f59e0b;
+  --font-heading: "Outfit", "Inter Variable", sans-serif;
+  --font-sans: "DM Sans", "Inter Variable", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-role-background);
+  color: var(--color-role-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+}
+
+/* Font loading fallbacks (self-hosted via Google Fonts in <head>) */
+@font-face {
+  font-family: "Outfit";
+  font-weight: 600 800;
+  font-display: swap;
+  src: local("Outfit");
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-weight: 400 700;
+  font-display: swap;
+  src: local("DM Sans");
+}
