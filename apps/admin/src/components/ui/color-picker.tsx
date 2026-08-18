@@ -144,7 +144,7 @@ const PRESET_COLORS = [
  * Desestructurar un número lanza "is not iterable".
  */
 function firstSliderValue(v: number | readonly number[]): number {
-	return Array.isArray(v) ? v[0] : v;
+	return typeof v === "number" ? v : v[0];
 }
 
 // --- Área 2D Saturación / Valor ---

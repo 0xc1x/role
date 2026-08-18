@@ -49,25 +49,29 @@ const slideFormSchema = CreateSlideFormSchema.omit({
 }).extend({
 	image: z.custom<File | string | null>(),
 	// Inputs del form usan "" para “sin valor”; el schema de commons espera null.
-	badge_text: z.string().max(30).nullable().optional().or(z.literal("")),
+	badge_text: z
+		.string()
+		.max(30)
+		.transform((v) => (v === "" ? null : v)),
 	text_color: z
 		.string()
 		.refine((v) => v === "" || HEX_REGEX.test(v), {
 			message:
 				"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
 		})
-		.nullable()
-		.optional(),
+		.transform((v) => (v === "" ? null : v)),
 	button_color: z
 		.string()
 		.refine((v) => v === "" || HEX_REGEX.test(v), {
 			message:
 				"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
 		})
-		.nullable()
-		.optional(),
-	start_at: z.string().nullable().optional().or(z.literal("")),
-	end_at: z.string().nullable().optional().or(z.literal("")),
+		.transform((v) => (v === "" ? null : v)),
+	start_at: z.string().transform((v) => (v === "" ? null : v)),
+	end_at: z.string().transform((v) => (v === "" ? null : v)),
+	// El form siempre provee estos valores; quitamos optional de commons.
+	active: z.boolean(),
+	priority: z.number().int().min(0),
 });
 
 type SlideFormValues = z.input<typeof slideFormSchema>;
