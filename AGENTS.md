@@ -5,7 +5,7 @@ Monorepo bun workspaces + Turborepo para el ecosistema **Rolé**: marketplace de
 ## Contexto obligatorio — lee por tarea, no leas todo
 
 | Tipo de tarea | Lectura mínima |
-|---|---|
+| --- | --- |
 | Cualquiera | Este archivo + `README.md` (mapa/quickstart) + `docs/architecture.md` |
 | Cambios en contratos | `packages/commons/AGENTS.md` + `docs/contracts.md` |
 | Trabajo en API | `apps/api/AGENTS.md` + `packages/commons` |
@@ -20,13 +20,13 @@ role/
 ├── apps/
 │   ├── api/          # NestJS 11 + drizzle — BFF de admin/landing
 │   ├── admin/        # TanStack Start + shadcn — panel de administración
-│   ├── landing/      # TanStack Start — marketing/SEO + onboarding business (scaffold pendiente)
-│   └── mobile/       # Expo — port del app Flutter fudi (scaffold pendiente)
+│   ├── landing/      # TanStack Start — marketing/SEO + onboarding business [implementado]
+│   └── mobile/       # Expo — port de la app Flutter (Rolé) [implementado]
 └── packages/
     └── commons/      # Contratos SSOT: DTOs, schemas Zod, enums, tipos
 ```
 
-**Flutter (fudi) queda fuera del monorepo** como repo separado, congelado a features, hasta que `mobile` alcance paridad (estrategia strangler).
+**Flutter (Rolé v1) queda fuera del monorepo** como repo separado, congelado a features, hasta que `mobile` alcance paridad (estrategia strangler).
 
 ## Interrelación (grafo de dependencias)
 

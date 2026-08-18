@@ -9,25 +9,25 @@ role/
 ├── apps/
 │   ├── api/          # NestJS 11 + drizzle-orm + supabase-js   [heredado de github.com/0xc1x/role-api]
 │   ├── admin/        # TanStack Start + shadcn + biome         [heredado de github.com/0xc1x/role-front-admin]
-│   ├── landing/      # TanStack Start — marketing/SEO + onboarding business   [PENDIENTE scaffold]
-│   └── mobile/       # Expo — port del app Flutter (fudi)      [PENDIENTE scaffold]
+│   ├── landing/      # TanStack Start — marketing/SEO + onboarding business   [implementado]
+│   └── mobile/       # Expo — port de la app Flutter (Rolé)                    [implementado]
 └── packages/
     └── commons/       # DTOs, schemas Zod, enums, tipos (pkg @0xc1x/role-commons)  [heredado de ~/Projects/role-commons]
 ```
 
-**Flutter (fudi) queda fuera del monorepo** como repo separado, congelado a features, hasta que `mobile` alcance paridad (estrategia strangler).
+**Flutter (Rolé v1) queda fuera del monorepo** como repo separado, congelado a features, hasta que `mobile` alcance paridad (estrategia strangler).
 
 ## Decisiones (ADRs)
 
 Decisiones de arquitectura documentadas en `docs/decisions/` (formato ADR ligero):
 
 | ADR | Decisión |
-|---|---|
+| --- | --- |
 | ADR-0001 | Package manager: bun (un solo lockfile) |
 | ADR-0002 | Móvil se comunica directo con Supabase (API = BFF de admin/landing) |
 | ADR-0003 | Bundle ID `com.xcix.role` — renombrar a la empresa pre-release |
 | ADR-0004 | Landing = marketing/SEO + onboarding con verificación manual |
-| ADR-0005 | Monorepo — unificación de api/admin/commons; fudi fuera hasta sunset |
+| ADR-0005 | Monorepo — unificación de api/admin/commons; Rolé v1 (Flutter) fuera hasta sunset |
 
 **Pendiente**: tri-state de verificación de negocio (`pending/active/rejected`) antes de congelar schemas.
 
@@ -56,8 +56,10 @@ Filtros turbo: `bun run build --filter=api...` (solo api y sus dependencias).
 - ✅ `role-commons` build (tsc + fix-imports).
 - ✅ `api` typecheck + build (nest).
 - ✅ `admin` **build** (nitro) — requiere el hoist del alias `nitro→nitro-nightly` en la raíz (ver abajo).
-- ⚠️ `admin` **typecheck** — 3 errores pre-existentes del repo (no causados por el wiring), surfaced por el lockfile fresco: `color-picker.tsx` (tipo union de base-ui), `slide.form.tsx` (drift de contrato móvil: commons HEAD hizo `badge_text` nullable — commit `d561ee8` — y el form aún espera `string`), `vite.config.ts` (`rollupConfig` eliminado de API de nitro-nightly). Pendiente de fix en `apps/admin`.
-- ⏳ `landing`, `mobile`: solo estructura; scaffold pendiente (ver `apps/landing/README.md` y `apps/mobile/README.md`).
+- ✅ `admin` **typecheck** — resuelto (3 errores pre-existentes arreglados: `color-picker.tsx` union de base-ui, `slide.form.tsx` drift de `badge_text` nullable en commons, `vite.config.ts` rollupConfig).
+- ✅ `mobile` **typecheck** (tsc estricto, EXIT 0) + **tests** (vitest: dominio de ofertas y órdenes) — scaffold completo: auth, ofertas, órdenes, favoritos, perfil, negocio, landing in-app.
+- ✅ `landing` **typecheck** (tsc EXIT 0) + **build** (vite + nitro, SSR) + biome check — 8 rutas: `/`, `/about`, `/how-it-works`, `/for-business`, `/help-center`, `/privacy`, `/terms`, 404. Deep links `role://` a la app.
+- ✅ `api` **tests** (jest) — 13 suites / 776 tests verdes; fixes: mapper de commons a `packages/commons`, transform de ESM-only (`jose`) en jest.config, tipos en 3 specs.
 
 ### Workaround: alias nitro en la raíz
 

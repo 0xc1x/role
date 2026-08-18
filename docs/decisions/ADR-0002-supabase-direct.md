@@ -5,7 +5,7 @@
 
 ## Contexto
 
-El app Flutter (fudi) consume Supabase directamente (queries + RLS). La API NestJS existe como BFF para admin/landing. La pregunta era si el móvil debía pasar por la API como intermediaria.
+El app Flutter original (Rolé v1) consume Supabase directamente (queries + RLS). La API NestJS existe como BFF para admin/landing. La pregunta era si el móvil debía pasar por la API como intermediaria.
 
 ## Decisión
 

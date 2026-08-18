@@ -5,7 +5,7 @@
 
 ## Contexto
 
-El app Flutter actual usa `com.xcix.fudi` (org xcix). Un bundle ID publicado no se puede cambiar sin crear una listing nueva en App Store / app nueva en Play. El lanzamiento aún no ocurre.
+El app Flutter original (Rolé v1) usa `com.xcix.fudi` (org xcix), renombrado a `com.xcix.role` en el port Expo. Un bundle ID publicado no se puede cambiar sin crear una listing nueva en App Store / app nueva en Play. El lanzamiento aún no ocurre.
 
 ## Decisión
 

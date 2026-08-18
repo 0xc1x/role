@@ -5,11 +5,11 @@
 
 ## Contexto
 
-Existían tres repos separados: `role-api` (NestJS), `role-front-admin` (TanStack Start) y `role-commons` (contratos, publicado al registry GitHub Packages). El admin consumía `@0xc1x/role-commons@^1.0.0` publicado; la API lo consumía por `file:../role-commons` — drift real de contratos, mitigado con scripts (`commons:check`). Además el registry requería token (401 sin él). El app Flutter (fudi) se migrará a Expo.
+Existían tres repos separados: `role-api` (NestJS), `role-front-admin` (TanStack Start) y `role-commons` (contratos, publicado al registry GitHub Packages). El admin consumía `@0xc1x/role-commons@^1.0.0` publicado; la API lo consumía por `file:../role-commons` — drift real de contratos, mitigado con scripts (`commons:check`). Además el registry requería token (401 sin él). El app Flutter original (Rolé v1) se migrará a Expo.
 
 ## Decisión
 
-**Un solo repo `role`** con bun workspaces + Turborepo: `apps/{api,admin,landing,mobile}` + `packages/commons`. Los contratos pasan a `workspace:*` (sin publicación). Flutter (fudi) queda **fuera** del monorepo hasta sunset.
+**Un solo repo `role`** con bun workspaces + Turborepo: `apps/{api,admin,landing,mobile}` + `packages/commons`. Los contratos pasan a `workspace:*` (sin publicación). Flutter original (Rolé v1) queda **fuera** del monorepo hasta sunset.
 
 ## Consecuencias
 
