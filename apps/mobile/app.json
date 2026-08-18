@@ -1,0 +1,81 @@
+{
+  "expo": {
+    "name": "Rolé",
+    "slug": "role-mobile",
+    "scheme": "role",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#BF1C19"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.xcix.role",
+      "config": {
+        "googleMapsApiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Rolé usa tu ubicación para mostrarte ofertas cercanas y calcular distancias.",
+        "NSCameraUsageDescription": "Rolé usa la cámara para escanear el código QR de recogida de tus pedidos."
+      }
+    },
+    "android": {
+      "package": "com.xcix.role",
+      "config": {
+        "googleMaps": {
+          "apiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
+        }
+      },
+      "adaptiveIcon": {
+        "backgroundColor": "#BF1C19",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "name": "rolé — Rescata Comida",
+      "shortName": "rolé",
+      "description": "Rescata comida deliciosa de restaurantes y negocios locales a precios increíbles. Pickup-only y cero desperdicio.",
+      "themeColor": "#BF1C19",
+      "backgroundColor": "#BF1C19",
+      "lang": "es"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-image",
+      "expo-splash-screen",
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Rolé usa la cámara para escanear códigos QR de recogida."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Rolé usa tu ubicación para mostrarte ofertas cercanas."
+        }
+      ],
+      "@sentry/react-native"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

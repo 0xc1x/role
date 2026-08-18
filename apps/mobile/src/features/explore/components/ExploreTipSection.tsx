@@ -1,0 +1,91 @@
+import { StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+
+import { strings } from "@/core/i18n/strings";
+import { AppText } from "@/core/ui";
+import { useTheme } from "@/core/theme";
+import { spacing, radii } from "@/core/theme/spacing";
+
+/**
+ * Banner de "Consejo del día" entre el grid de categorías y la lista de
+ * ofertas (portado de ExploreTipSection/fudi).
+ */
+export function ExploreTipSection() {
+	const { colors, scheme } = useTheme();
+	const isDark = scheme === "dark";
+
+	const cardBackground = isDark ? colors.surfaceWarning : colors.yellowLight;
+	const cardBorder = colors.yellowDark + (isDark ? "4D" : "33");
+
+	return (
+		<View style={styles.wrap}>
+			<View
+				style={[
+					styles.card,
+					{
+						backgroundColor: cardBackground,
+						borderColor: cardBorder,
+					},
+				]}
+			>
+				<View style={styles.titleRow}>
+					<View
+						style={[
+							styles.bulbCircle,
+							{
+								backgroundColor: colors.card + (isDark ? "00" : "80"),
+								shadowColor: colors.yellowDark,
+								shadowOpacity: isDark ? 0.2 : 0.3,
+							},
+						]}
+					>
+						<Ionicons
+							name="bulb"
+							size={20}
+							color={isDark ? colors.yellow : colors.yellowDark}
+						/>
+					</View>
+					<AppText variant="h4" weight="bold">
+						{strings.explore.tipTitle}
+					</AppText>
+				</View>
+				<AppText
+					variant="bodyMedium"
+					style={[styles.tipBody, { color: colors.foreground }]}
+				>
+					{strings.explore.tips.join(" ")}
+				</AppText>
+			</View>
+		</View>
+	);
+}
+
+const styles = StyleSheet.create({
+	wrap: {
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.md,
+	},
+	card: {
+		padding: spacing.lg,
+		borderRadius: radii.xl,
+		borderWidth: 1,
+	},
+	titleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+	},
+	bulbCircle: {
+		width: 32,
+		height: 32,
+		borderRadius: 16,
+		alignItems: "center",
+		justifyContent: "center",
+		shadowOffset: { width: 0, height: 0 },
+		shadowRadius: 12,
+	},
+	tipBody: {
+		marginTop: spacing.md,
+		lineHeight: 20,
+	},
+});
