@@ -5,7 +5,7 @@ import { createSecretKey } from 'node:crypto';
 import { SignJWT } from 'jose';
 import { AuthGuard } from './auth.guard';
 import { IS_PUBLIC_KEY } from '../common/decorators/public.decorator';
-import { DRIZZLE } from '../database/database.tokens';
+import type { Env } from '../config/env.schema';
 
 const SUPABASE_URL = 'https://test.supabase.co';
 const JWT_SECRET = 'test-jwt-secret-at-least-32-characters-long';
@@ -77,7 +77,11 @@ describe('AuthGuard', () => {
       limit: jest.fn(),
     };
 
-    guard = new AuthGuard(reflector, config, db as any);
+    guard = new AuthGuard(
+      reflector,
+      config as unknown as ConfigService<Env, true>,
+      db as any,
+    );
   });
 
   it('allows public routes without a token', async () => {
@@ -133,9 +137,7 @@ describe('AuthGuard', () => {
     const token = await signHs256Token({ sub: 'missing-user' });
     db.limit.mockResolvedValueOnce([]);
     const ctx = mockExecutionContext(`Bearer ${token}`);
-    await expect(guard.canActivate(ctx)).rejects.toThrow(
-      /Profile not found/i,
-    );
+    await expect(guard.canActivate(ctx)).rejects.toThrow(/Profile not found/i);
   });
 
   it('attaches user from profile on valid HS256 token', async () => {

@@ -1,7 +1,12 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { OffersService } from './offers.service';
-import { OffersRepository, type OfferRow, type DbExecutor, type OfferListRow } from './offers.repository';
+import {
+  OffersRepository,
+  type OfferRow,
+  type DbExecutor,
+  type OfferListRow,
+} from './offers.repository';
 
 const makeOfferRow = (overrides: Partial<OfferRow> = {}): OfferRow => ({
   id: 'o1',
@@ -138,6 +143,8 @@ describe('OffersService', () => {
         available_only: false,
       });
       const offer = result.data[0];
+      expect(offer).toBeDefined();
+      if (!offer) return;
 
       expect(offer.id).toBe('o1');
       expect(offer.title).toBe('Test Offer');
@@ -146,7 +153,7 @@ describe('OffersService', () => {
       expect(offer.business.name).toBe('Test Business');
       expect(offer.location.address).toBe('123 Main St');
       expect(offer.categories).toHaveLength(1);
-      expect(offer.categories[0].name).toBe('Category 1');
+      expect(offer.categories?.[0]?.name).toBe('Category 1');
     });
   });
 
@@ -165,13 +172,19 @@ describe('OffersService', () => {
     it('should throw NotFoundException when not found', async () => {
       repository.findById.mockResolvedValue(null);
 
-      await expect(service.getById('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.getById('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('create', () => {
     it('should create and return an offer', async () => {
-      const mockUser = { id: 'user-1', email: 'test@test.com', role: 'business' as const };
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'business' as const,
+      };
       const body = {
         business_id: 'b1',
         business_location_id: 'bl1',
@@ -212,7 +225,11 @@ describe('OffersService', () => {
 
   describe('update', () => {
     it('should update and return the offer', async () => {
-      const mockUser = { id: 'user-1', email: 'test@test.com', role: 'business' as const };
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'business' as const,
+      };
       const existing = makeOfferRow();
       repository.findDtoById.mockResolvedValue(existing);
       repository.isBusinessOwner.mockResolvedValue(true);
@@ -221,10 +238,15 @@ describe('OffersService', () => {
       repository.transaction.mockImplementation(async (fn) =>
         fn({} as unknown as DbExecutor),
       );
-      repository.update.mockResolvedValue({ ...existing, title: 'Updated Offer' });
+      repository.update.mockResolvedValue({
+        ...existing,
+        title: 'Updated Offer',
+      });
       repository.findCategoryIds.mockResolvedValue([]);
 
-      const result = await service.update(mockUser, 'o1', { title: 'Updated Offer' });
+      const result = await service.update(mockUser, 'o1', {
+        title: 'Updated Offer',
+      });
 
       expect(repository.update).toHaveBeenCalledWith(
         expect.anything(),
@@ -235,7 +257,11 @@ describe('OffersService', () => {
     });
 
     it('should throw NotFoundException when offer not found', async () => {
-      const mockUser = { id: 'user-1', email: 'test@test.com', role: 'business' as const };
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'business' as const,
+      };
       repository.findDtoById.mockResolvedValue(null);
 
       await expect(
@@ -244,7 +270,11 @@ describe('OffersService', () => {
     });
 
     it('should update categories when provided', async () => {
-      const mockUser = { id: 'user-1', email: 'test@test.com', role: 'business' as const };
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'business' as const,
+      };
       const existing = makeOfferRow();
       repository.findDtoById.mockResolvedValue(existing);
       repository.isBusinessOwner.mockResolvedValue(true);
@@ -268,7 +298,11 @@ describe('OffersService', () => {
 
   describe('remove', () => {
     it('should deactivate the offer', async () => {
-      const mockUser = { id: 'user-1', email: 'test@test.com', role: 'business' as const };
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'business' as const,
+      };
       const existing = makeOfferRow();
       repository.findDtoById.mockResolvedValue(existing);
       repository.isBusinessOwner.mockResolvedValue(true);
@@ -279,22 +313,26 @@ describe('OffersService', () => {
 
       await service.remove(mockUser, 'o1');
 
-      expect(repository.update).toHaveBeenCalledWith(
-        expect.anything(),
-        'o1',
-        { is_active: false },
-      );
+      expect(repository.update).toHaveBeenCalledWith(expect.anything(), 'o1', {
+        is_active: false,
+      });
     });
 
     it('should throw NotFoundException when offer not found', async () => {
-      const mockUser = { id: 'user-1', email: 'test@test.com', role: 'business' as const };
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'business' as const,
+      };
       repository.findDtoById.mockResolvedValue(null);
       repository.transaction.mockImplementation(async (fn) =>
         fn({} as unknown as DbExecutor),
       );
       repository.update.mockResolvedValue(null);
 
-      await expect(service.remove(mockUser, 'nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.remove(mockUser, 'nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

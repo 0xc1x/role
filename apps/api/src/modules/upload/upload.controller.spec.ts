@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
@@ -56,7 +55,10 @@ describe('UploadController', () => {
       expect(result).toEqual({
         url: 'https://supabase.co/storage/v1/object/public/images/categories/uuid.webp',
       });
-      expect(uploadService.uploadImage).toHaveBeenCalledWith(mockFile, expectedOptions);
+      expect(uploadService.uploadImage).toHaveBeenCalledWith(
+        mockFile,
+        expectedOptions,
+      );
     });
 
     it('should pass through service errors', async () => {

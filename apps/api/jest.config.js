@@ -20,10 +20,15 @@ module.exports = {
       },
     ],
   },
-  transformIgnorePatterns: ['node_modules/(?!@0xc1x/role-commons/)'],
+  transformIgnorePatterns: [
+    // Transformar sólo lo que vive fuera de node_modules y los paquetes ESM-only
+    // (jose, role-commons) que la resolución de bun coloca dentro del store
+    // (node_modules/.bun/<pkg>@<ver>/node_modules/<pkg>/...).
+    'node_modules/(?!.*(jose/|role-commons/))',
+  ],
   moduleNameMapper: {
     // Prefer source when linked package dist is stale / ESM-only under CJS jest.
-    '^@0xc1x/role-commons$': '<rootDir>/../role-commons/src/index.ts',
+    '^@0xc1x/role-commons$': '<rootDir>/../../packages/commons/src/index.ts',
   },
   collectCoverageFrom: [
     'src/**/*.(t|j)s',
