@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuthStore } from "@/features/auth/store";
 import { strings } from "@/core/i18n/strings";
-import { RoleTabBar } from "@/core/ui";
+import RoleTabBar from "@/core/ui/RoleTabBar";
 
 export default function ConsumerLayout() {
 	const status = useAuthStore((s) => s.status);
@@ -45,7 +45,6 @@ export default function ConsumerLayout() {
 					),
 				}}
 			/>
-			<Tabs.Screen name="_" options={{ href: null }} />
 		</Tabs>
 	);
 }

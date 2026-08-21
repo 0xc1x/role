@@ -4,6 +4,9 @@
 
 @layer base {
   :root {
+    /* Modo de dark mode de css-interop: 'class' evita el error
+       "Cannot manually set color scheme" en web. */
+    --css-interop-darkMode: class;
     --background: #faf9f7;
     --foreground: #1a1a18;
     --card: #fff5f5;

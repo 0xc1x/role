@@ -25,7 +25,6 @@ import { fonts, typography, type TypeStyle } from "@/core/theme/typography";
 
 export type { ColorTokens, TypeStyle };
 export { spacing, fonts, typography };
-export { default as RoleTabBar } from "./RoleTabBar";
 
 export type FontVariant = keyof typeof typography;
 export type FontWeight =

@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuthStore } from "@/features/auth/store";
 import { strings } from "@/core/i18n/strings";
-import { RoleTabBar } from "@/core/ui";
+import RoleTabBar from "@/core/ui/RoleTabBar";
 
 /** Barra de pestañas del modo negocio (misma interacción que el modo consumidor). */
 export default function BusinessLayout() {
