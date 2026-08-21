@@ -8,6 +8,7 @@ import {
 	TagIcon,
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
+import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/help-center")({
 	component: HelpCenterPage,
@@ -70,24 +71,33 @@ const CATEGORIES = [
 	},
 ];
 
-const CONTACT_OPTIONS = [
-	{
-		icon: MailIcon,
-		title: "Soporte general",
-		description: "Dudas sobre reservas, la app o tu cuenta.",
-		contact: "hola@role.app",
-		href: "mailto:hola@role.app",
-	},
-	{
-		icon: MailIcon,
-		title: "Para negocios",
-		description: "Consultas comerciales y registro de comercios.",
-		contact: "negocios@role.app",
-		href: "mailto:negocios@role.app",
-	},
-];
+function useContactOptions() {
+	const holaEmail = useConfig("contact.hola_email", "hola@role.app");
+	const negociosEmail = useConfig(
+		"contact.negocios_email",
+		"negocios@role.app",
+	);
+	return [
+		{
+			icon: MailIcon,
+			title: "Soporte general",
+			description: "Dudas sobre reservas, la app o tu cuenta.",
+			contact: holaEmail,
+			href: `mailto:${holaEmail}`,
+		},
+		{
+			icon: MailIcon,
+			title: "Para negocios",
+			description: "Consultas comerciales y registro de comercios.",
+			contact: negociosEmail,
+			href: `mailto:${negociosEmail}`,
+		},
+	];
+}
 
 function HelpCenterPage() {
+	const contactOptions = useContactOptions();
+	const slaHours = useConfig("support.sla_hours", "24");
 	return (
 		<div className="min-h-screen">
 			<Navbar />
@@ -187,11 +197,11 @@ function HelpCenterPage() {
 								Habla con nosotros
 							</h2>
 							<p className="mx-auto mt-4 max-w-md text-lg text-role-muted-foreground">
-								Respondemos en menos de 24 horas entre semana.
+								Respondemos en menos de {slaHours} horas entre semana.
 							</p>
 						</div>
 						<div className="grid gap-5 sm:grid-cols-2">
-							{CONTACT_OPTIONS.map((c, i) => {
+							{contactOptions.map((c, i) => {
 								const Icon = c.icon;
 								return (
 									<a

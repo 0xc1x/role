@@ -82,6 +82,7 @@ describe('OffersService', () => {
             transaction: jest.fn(),
             findMany: jest.fn(),
             findById: jest.fn(),
+            findRandomActive: jest.fn(),
             findDtoById: jest.fn(),
             insert: jest.fn(),
             update: jest.fn(),
@@ -175,6 +176,25 @@ describe('OffersService', () => {
       await expect(service.getById('nonexistent')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('getRandom', () => {
+    it('should return a random active offer mapped', async () => {
+      const row = makeListRow();
+      repository.findRandomActive.mockResolvedValue(row);
+
+      const result = await service.getRandom();
+
+      expect(result?.id).toBe('o1');
+    });
+
+    it('should return null when there are no active offers', async () => {
+      repository.findRandomActive.mockResolvedValue(null);
+
+      const result = await service.getRandom();
+
+      expect(result).toBeNull();
     });
   });
 

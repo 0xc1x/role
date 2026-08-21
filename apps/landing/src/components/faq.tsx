@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { useConfig } from "@/lib/use-config";
+
 const FAQS = [
 	{
 		q: "¿Qué es Rolé?",
@@ -24,6 +26,7 @@ const FAQS = [
 ];
 
 export function Faq() {
+	const holaEmail = useConfig("contact.hola_email", "hola@role.app");
 	const [openIndex, setOpenIndex] = useState<number | null>(null);
 
 	return (
@@ -84,7 +87,7 @@ export function Faq() {
 				<p className="mt-2 text-sm leading-relaxed text-role-muted-foreground">
 					Escríbenos a{" "}
 					<a
-						href="mailto:hola@role.app"
+						href={`mailto:${holaEmail}`}
 						className="font-semibold text-role-primary underline decoration-role-primary/30 underline-offset-4 transition-colors hover:decoration-role-primary"
 					>
 						hola@role.app

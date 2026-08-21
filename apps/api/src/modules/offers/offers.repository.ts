@@ -201,6 +201,57 @@ export class OffersRepository {
       .leftJoin(categories, eq(categories.id, offerCategories.category_id));
   }
 
+  private groupByFields() {
+    return [
+      offers.id,
+      offers.business_id,
+      offers.business_location_id,
+      offers.title,
+      offers.description,
+      offers.image,
+      offers.original_price,
+      offers.discounted_price,
+      offers.discount_percentage,
+      offers.stock,
+      offers.initial_stock,
+      offers.pickup_start,
+      offers.pickup_end,
+      offers.is_active,
+      offers.includes,
+      offers.allergens,
+      offers.rating,
+      offers.review_count,
+      offers.created_at,
+      offers.updated_at,
+      businesses.name,
+      businesses.slug,
+      businesses.image,
+      businesses.rating,
+      businessLocations.name,
+      businessLocations.address,
+      businessLocations.latitude,
+      businessLocations.longitude,
+      businessLocations.zone,
+    ];
+  }
+
+  /** Oferta activa aleatoria con stock y pickup vigente (hero landing). */
+  async findRandomActive(): Promise<OfferListRow | null> {
+    const [row] = await this.baseSelect()
+      .where(
+        and(
+          eq(offers.is_active, true),
+          eq(businesses.is_active, true),
+          gt(offers.stock, 0),
+          gt(offers.pickup_end, sql`now()`),
+        ),
+      )
+      .groupBy(...this.groupByFields())
+      .orderBy(sql`random()`)
+      .limit(1);
+    return (row as OfferListRow | undefined) ?? null;
+  }
+
   private buildFilters(query: ListOffersQuery): SQL[] {
     const filters: SQL[] = [];
 
@@ -251,37 +302,7 @@ export class OffersRepository {
     const where = filters.length ? and(...filters) : undefined;
     const offset = (query.page - 1) * query.limit;
 
-    const groupBy = [
-      offers.id,
-      offers.business_id,
-      offers.business_location_id,
-      offers.title,
-      offers.description,
-      offers.image,
-      offers.original_price,
-      offers.discounted_price,
-      offers.discount_percentage,
-      offers.stock,
-      offers.initial_stock,
-      offers.pickup_start,
-      offers.pickup_end,
-      offers.is_active,
-      offers.includes,
-      offers.allergens,
-      offers.rating,
-      offers.review_count,
-      offers.created_at,
-      offers.updated_at,
-      businesses.name,
-      businesses.slug,
-      businesses.image,
-      businesses.rating,
-      businessLocations.name,
-      businessLocations.address,
-      businessLocations.latitude,
-      businessLocations.longitude,
-      businessLocations.zone,
-    ];
+    const groupBy = this.groupByFields();
 
     // Count without category joins so multi-category offers are not inflated.
     // category_id filter is applied via subquery in buildFilters.

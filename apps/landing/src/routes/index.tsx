@@ -12,6 +12,7 @@ import { Testimonials } from "@/components/testimonials";
 import {
 	appConfigQueryOptions,
 	platformStatsQueryOptions,
+	randomOfferQueryOptions,
 } from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
@@ -23,6 +24,9 @@ export const Route = createFileRoute("/")({
 				.catch(() => undefined),
 			context.queryClient
 				.ensureQueryData(appConfigQueryOptions)
+				.catch(() => undefined),
+			context.queryClient
+				.ensureQueryData(randomOfferQueryOptions)
 				.catch(() => undefined),
 		]),
 	component: LandingPage,

@@ -1,4 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
+
 import { BagIcon } from "@/components/icons";
+import { randomOfferQueryOptions } from "@/lib/queries";
 import { usePlatformStats } from "@/lib/use-config";
 
 const numberFormat = new Intl.NumberFormat("es-EC");
@@ -8,8 +11,13 @@ function formatStat(value: number | undefined): string {
 	return `${numberFormat.format(value)}+`;
 }
 
+function formatPrice(value: number): string {
+	return `$${numberFormat.format(Math.round(value))}`;
+}
+
 export function Hero() {
 	const stats = usePlatformStats();
+	const { data: offer } = useQuery(randomOfferQueryOptions);
 
 	const STATS = [
 		{ value: formatStat(stats?.users), label: "usuarios rescatando" },
@@ -42,34 +50,46 @@ export function Hero() {
 					<div className="relative rounded-[2rem] bg-white/[0.04] border border-white/10 p-6 backdrop-blur-xl shadow-dark-glow">
 						<div className="flex items-center justify-between rounded-[1.25rem] bg-white/[0.06] p-5">
 							<div className="flex items-center gap-4">
-								<div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-role-primary text-white">
-									<BagIcon className="h-7 w-7" />
-								</div>
+								{offer?.image ? (
+									<img
+										src={offer.image}
+										alt={offer.title}
+										className="h-14 w-14 rounded-2xl object-cover"
+									/>
+								) : (
+									<div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-role-primary text-white">
+										<BagIcon className="h-7 w-7" />
+									</div>
+								)}
 								<div>
 									<p className="font-heading font-semibold">
-										Panadería La Espiga
+										{offer?.business.name ?? "Comercios locales"}
 									</p>
-									<p className="text-sm text-role-dark-muted">
-										Pan artesanal · Centro
+									<p className="line-clamp-2 max-w-40 text-sm text-role-dark-muted">
+										{offer
+											? `${offer.title}${offer.location.zone ? ` · ${offer.location.zone}` : ""}`
+											: "Ofertas reales cerca de ti"}
 									</p>
 								</div>
 							</div>
 							<div className="text-right">
 								<p className="text-sm line-through text-role-dark-muted">
-									$120
+									{formatPrice(offer?.original_price ?? 120)}
 								</p>
 								<p className="font-heading text-xl font-bold text-role-primary tabular-nums">
-									$36
+									{formatPrice(offer?.discounted_price ?? 36)}
 								</p>
 							</div>
 						</div>
 					</div>
 					<div className="absolute -bottom-6 -left-8 -rotate-6 rounded-[1.25rem] bg-white p-4 text-role-foreground shadow-raised">
 						<p className="text-xs font-semibold uppercase tracking-wide text-role-dark-muted">
-							Reservada
+							Oferta real
 						</p>
 						<p className="mt-1 font-heading text-lg font-bold tabular-nums">
-							Bolsa sorpresa · $52
+							{offer
+								? `${offer.title} · ${formatPrice(offer.discounted_price)}`
+								: "Bolsa sorpresa"}
 						</p>
 					</div>
 				</div>

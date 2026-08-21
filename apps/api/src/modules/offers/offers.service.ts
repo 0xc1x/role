@@ -40,6 +40,15 @@ export class OffersService {
     return OfferMapper.toResponse(row);
   }
 
+  /**
+   * Oferta activa aleatoria con stock y pickup vigente.
+   * `null` si no hay ofertas publicables (la landing muestra fallback).
+   */
+  async getRandom(): Promise<OfferWithBusiness | null> {
+    const row = await this.offersRepository.findRandomActive();
+    return row ? OfferMapper.toResponse(row) : null;
+  }
+
   async create(user: AuthUser, body: CreateOfferDto): Promise<OfferDto> {
     await this.assertCanMutateBusiness(user, body.business_id);
     await this.assertLocationBelongsToBusiness(

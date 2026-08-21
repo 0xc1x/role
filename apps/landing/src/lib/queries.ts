@@ -1,4 +1,8 @@
-import type { AppConfigMap, PlatformStats } from "@0xc1x/role-commons";
+import type {
+	AppConfigMap,
+	OfferWithBusiness,
+	PlatformStats,
+} from "@0xc1x/role-commons";
 import { queryOptions } from "@tanstack/react-query";
 
 import { apiGet } from "./api";
@@ -26,6 +30,13 @@ export const platformStatsQueryOptions = queryOptions({
 	queryKey: ["stats", "platform"],
 	queryFn: () => apiGet<PlatformStats>("/stats/platform"),
 	staleTime: 5 * 60_000,
+});
+
+/** Oferta activa aleatoria para la tarjeta flotante del hero. */
+export const randomOfferQueryOptions = queryOptions({
+	queryKey: ["offers", "random"],
+	queryFn: () => apiGet<OfferWithBusiness | null>("/offers/random"),
+	staleTime: 60_000,
 });
 
 export function getConfigValue(

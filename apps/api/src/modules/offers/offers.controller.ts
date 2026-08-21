@@ -27,6 +27,7 @@ import type {
   CreateOfferDto,
   ListOffersQuery,
   OfferDto,
+  OfferWithBusiness,
   UpdateOfferDto,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
@@ -50,6 +51,14 @@ export class OffersController {
     query: ListOffersQuery,
   ) {
     return this.offersService.list(query);
+  }
+
+  @Public()
+  @Get('random')
+  @ApiOperation({ summary: 'Random active offer (landing hero)' })
+  @ApiOkResponse({ description: 'Offer with business and location, or null' })
+  getRandom(): Promise<OfferWithBusiness | null> {
+    return this.offersService.getRandom();
   }
 
   @Public()
