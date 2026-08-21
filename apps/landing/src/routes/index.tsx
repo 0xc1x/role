@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
 
 function LandingPage() {
 	return (
-		<div className="min-h-screen">
+		<main id="main" className="min-h-screen">
 			<Navbar />
 			<Hero />
 			<Features />
@@ -26,6 +26,6 @@ function LandingPage() {
 			<Contact />
 			<Cta />
 			<Footer />
-		</div>
+		</main>
 	);
 }
