@@ -1,14 +1,27 @@
 import { BagIcon } from "@/components/icons";
+import { usePlatformStats } from "@/lib/use-config";
 
-export const STATS = [
-	{ value: "48 200+", label: "usuarios rescatando" },
-	{ value: "1 940+", label: "comercios aliados" },
-	{ value: "112 600+", label: "comidas salvadas" },
-];
+const numberFormat = new Intl.NumberFormat("es-EC");
+
+function formatStat(value: number | undefined): string {
+	if (value === undefined) return "—";
+	return `${numberFormat.format(value)}+`;
+}
 
 export function Hero() {
+	const stats = usePlatformStats();
+
+	const STATS = [
+		{ value: formatStat(stats?.users), label: "usuarios rescatando" },
+		{ value: formatStat(stats?.businesses), label: "comercios aliados" },
+		{ value: formatStat(stats?.meals_saved), label: "comidas salvadas" },
+	];
+
 	return (
-		<section data-hero className="relative min-h-[92vh] flex items-center overflow-hidden bg-role-dark-bg text-white">
+		<section
+			data-hero
+			className="relative min-h-[92vh] flex items-center overflow-hidden bg-role-dark-bg text-white"
+		>
 			{/* Background layers — atmospheric, warm-tinted */}
 			<div aria-hidden className="pointer-events-none absolute inset-0">
 				<div className="absolute inset-0 bg-[url('https://picsum.photos/seed/role-market/1920/1280')] bg-cover bg-center opacity-[0.12]" />
@@ -33,7 +46,9 @@ export function Hero() {
 									<BagIcon className="h-7 w-7" />
 								</div>
 								<div>
-									<p className="font-heading font-semibold">Panadería La Espiga</p>
+									<p className="font-heading font-semibold">
+										Panadería La Espiga
+									</p>
 									<p className="text-sm text-role-dark-muted">
 										Pan artesanal · Centro
 									</p>
@@ -81,9 +96,8 @@ export function Hero() {
 
 					{/* Subheadline */}
 					<p className="max-w-lg text-lg leading-relaxed text-white/80 reveal reveal-delay-2">
-						Rolé conecta comercios locales con excedente de comida con
-						personas que quieren comer bien por menos. Menos desperdicio, más
-						comunidad.
+						Rolé conecta comercios locales con excedente de comida con personas
+						que quieren comer bien por menos. Menos desperdicio, más comunidad.
 					</p>
 
 					{/* CTAs */}

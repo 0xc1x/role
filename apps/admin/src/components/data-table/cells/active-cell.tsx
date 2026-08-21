@@ -14,7 +14,12 @@ interface ActiveCellProps {
 	label: string;
 }
 
-export function ActiveCell({ active, onToggle, isPending, label }: ActiveCellProps) {
+export function ActiveCell({
+	active,
+	onToggle,
+	isPending,
+	label,
+}: ActiveCellProps) {
 	return (
 		<div className="flex items-center gap-2">
 			<TooltipProvider delay={1000}>
@@ -30,10 +35,14 @@ export function ActiveCell({ active, onToggle, isPending, label }: ActiveCellPro
 							/>
 						</span>
 					</TooltipTrigger>
-					<TooltipContent side="top" className="flex items-center gap-1.5 text-xs">
+					<TooltipContent
+						side="top"
+						className="flex items-center gap-1.5 text-xs"
+					>
 						<span
-							className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-red-500"
-								}`}
+							className={`size-1.5 rounded-full ${
+								active ? "bg-emerald-500" : "bg-red-500"
+							}`}
 						/>
 						{active ? `${label} activa` : `${label} inactiva`}
 					</TooltipContent>
@@ -42,8 +51,9 @@ export function ActiveCell({ active, onToggle, isPending, label }: ActiveCellPro
 
 			<span className="flex size-3.5 shrink-0 items-center justify-center">
 				<Loader2
-					className={`size-3.5 animate-spin text-muted-foreground transition-opacity ${isPending ? "opacity-100" : "opacity-0"
-						}`}
+					className={`size-3.5 animate-spin text-muted-foreground transition-opacity ${
+						isPending ? "opacity-100" : "opacity-0"
+					}`}
 				/>
 			</span>
 		</div>

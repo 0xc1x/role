@@ -16,15 +16,13 @@ describe("categoriesKeys", () => {
 
 	test("list with params", () => {
 		const params = { page: 1, limit: 20, search: "test", active: true };
-		expect(categoriesKeys.list(params)).toEqual([
-			"categories",
-			"list",
-			params,
-		]);
+		expect(categoriesKeys.list(params)).toEqual(["categories", "list", params]);
 	});
 
 	test("list with partial params", () => {
-		expect(categoriesKeys.list({ page: 2, limit: 20, active: undefined })).toEqual([
+		expect(
+			categoriesKeys.list({ page: 2, limit: 20, active: undefined }),
+		).toEqual([
 			"categories",
 			"list",
 			{ page: 2, limit: 20, active: undefined },

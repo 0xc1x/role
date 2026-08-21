@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-
 import { Footer } from "@/components/footer";
 import {
 	ChartIcon,
@@ -10,6 +9,7 @@ import {
 	UsersIcon,
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
+import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/for-business")({
 	component: ForBusinessPage,
@@ -38,11 +38,19 @@ const BENEFITS = [
 	},
 ];
 
-const STATS = [
-	{ value: "12%", label: "ingresos extra en promedio" },
-	{ value: "1 940+", label: "comercios ya con nosotros" },
-	{ value: "<24h", label: "para empezar a vender" },
-];
+function useBusinessStats() {
+	const stats = usePlatformStats();
+	const numberFormat = new Intl.NumberFormat("es-EC");
+	return [
+		{ value: "12%", label: "ingresos extra en promedio" },
+		{
+			value:
+				stats === undefined ? "—" : `${numberFormat.format(stats.businesses)}+`,
+			label: "comercios ya con nosotros",
+		},
+		{ value: "<24h", label: "para empezar a vender" },
+	];
+}
 
 const PROCESS = [
 	{
@@ -63,12 +71,18 @@ const PROCESS = [
 ];
 
 function ForBusinessPage() {
+	const stats = useBusinessStats();
+	const businessesLabel =
+		stats[1].value === "—" ? undefined : stats[1].value.replace(/\+$/, "");
 	return (
 		<div className="min-h-screen">
 			<Navbar />
 			<main id="main">
 				{/* Hero */}
-				<section data-hero className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32">
+				<section
+					data-hero
+					className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32"
+				>
 					<div aria-hidden className="pointer-events-none absolute inset-0">
 						<div className="absolute inset-0 bg-gradient-to-br from-role-dark-bg via-role-dark-bg to-role-primary-deep/30" />
 						<div className="absolute -top-40 -right-32 h-96 w-96 animate-drift rounded-full bg-role-primary/20 blur-3xl" />
@@ -81,15 +95,15 @@ function ForBusinessPage() {
 								Para negocios
 							</p>
 							<h1 className="mt-4 font-heading text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl reveal reveal-delay-1">
-								Convierte tu excedente en{" "}
+								{"Convierte tu excedente en "}
 								<span className="editorial italic font-normal text-role-secondary">
 									ingresos.
 								</span>
 							</h1>
 							<p className="mt-6 max-w-xl text-lg leading-relaxed text-white/75 reveal reveal-delay-2">
-								Únete a los más de 1 940 comercios que ya reducen su desperdicio
-								y recuperan valor con Rolé. Sin costos de registro, sin
-								comisiones sobre el cobro.
+								Únete a los más de {businessesLabel ?? "miles de"} comercios que
+								ya reducen su desperdicio y recuperan valor con Rolé. Sin costos
+								de registro, sin comisiones sobre el cobro.
 							</p>
 							<div className="mt-10 flex flex-wrap gap-4 reveal reveal-delay-3">
 								<a
@@ -112,7 +126,7 @@ function ForBusinessPage() {
 
 						{/* Stats strip */}
 						<dl className="mt-16 grid grid-cols-3 gap-4 border-t border-white/10 pt-10 reveal reveal-delay-5">
-							{STATS.map((s) => (
+							{(stats ?? []).map((s) => (
 								<div key={s.label}>
 									<dd className="font-heading text-3xl font-bold tabular-nums text-role-primary md:text-4xl">
 										{s.value}
@@ -204,10 +218,11 @@ function ForBusinessPage() {
 							role="img"
 							aria-label="5 de 5 estrellas"
 						>
-							{Array.from({ length: 5 }).map((_, i) => (
+							{[1, 2, 3, 4, 5].map((n) => (
+								// El div padre ya expone role="img" + aria-label.
 								// biome-ignore lint/a11y/noSvgWithoutTitle: icono decorativo
 								<svg
-									key={`star-${i}`}
+									key={n}
 									width="18"
 									height="18"
 									viewBox="0 0 24 24"

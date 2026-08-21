@@ -19,19 +19,22 @@ const STEPS = [
 		n: "01",
 		title: "Descubre las ofertas",
 		body: "Abre la app y explora un mapa de comercios cerca de ti con excedente de comida fresca. Cada oferta muestra el contenido aproximado, el horario de recogida y el descuento aplicado — desde 50% hasta 70% del precio original.",
-		detail: "Filtra por tipo de comida, distancia y horario. Guarda tus comercios favoritos para recibir alertas cuando publiquen.",
+		detail:
+			"Filtra por tipo de comida, distancia y horario. Guarda tus comercios favoritos para recibir alertas cuando publiquen.",
 	},
 	{
 		n: "02",
 		title: "Reserva en segundos",
 		body: "Elige la oferta que más te guste y confirma la reserva. Recibe al instante un código de recogida único directamente en la app, con la dirección del comercio y la ventana de tiempo para pasar.",
-		detail: "La reserva es gratuita. El pago se hace en el comercio al recoger — sin tarjeta, sin compromiso previo.",
+		detail:
+			"La reserva es gratuita. El pago se hace en el comercio al recoger — sin tarjeta, sin compromiso previo.",
 	},
 	{
 		n: "03",
 		title: "Recoge y disfruta",
 		body: "Acude al comercio dentro del horario indicado, muestra tu código en la app, paga y llévate tu comida. Sin filas, sin esperas, sin sorpresas.",
-		detail: "La comida ya está lista para ti. Solo pasa, recoge y disfruta de comida de calidad a una fracción del precio.",
+		detail:
+			"La comida ya está lista para ti. Solo pasa, recoge y disfruta de comida de calidad a una fracción del precio.",
 	},
 ];
 
@@ -74,7 +77,10 @@ function HowItWorksPage() {
 			<Navbar />
 			<main id="main">
 				{/* Hero */}
-				<section data-hero className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32">
+				<section
+					data-hero
+					className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32"
+				>
 					<div aria-hidden className="pointer-events-none absolute inset-0">
 						<div className="absolute inset-0 bg-gradient-to-br from-role-dark-bg via-role-dark-bg to-role-primary-deep/30" />
 						<div className="absolute -top-32 right-0 h-96 w-96 animate-drift rounded-full bg-role-primary/20 blur-3xl" />
@@ -121,7 +127,8 @@ function HowItWorksPage() {
 					</div>
 					<div className="space-y-6">
 						{STEPS.map((s, i) => {
-							const Icon = [MapPinIcon, TagIcon, ClockCheckIcon][i] ?? ClockCheckIcon;
+							const Icon =
+								[MapPinIcon, TagIcon, ClockCheckIcon][i] ?? ClockCheckIcon;
 							return (
 								<article
 									key={s.n}

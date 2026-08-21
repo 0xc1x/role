@@ -111,9 +111,9 @@ function RootComponent() {
 		);
 
 		const observeAll = () => {
-			document
-				.querySelectorAll(".reveal:not(.visible)")
-				.forEach((el) => observer.observe(el));
+			document.querySelectorAll(".reveal:not(.visible)").forEach((el) => {
+				observer.observe(el);
+			});
 		};
 
 		observeAll();

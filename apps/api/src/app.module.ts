@@ -14,6 +14,8 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { SlidesModule } from './modules/slides/slides.module';
 import { BusinessesModule } from './modules/businesses/businesses.module';
+import { AppConfigModule } from './modules/app-config/app-config.module';
+import { StatsModule } from './modules/stats/stats.module';
 
 @Module({
   imports: [
@@ -54,6 +56,8 @@ import { BusinessesModule } from './modules/businesses/businesses.module';
     UploadModule,
     SlidesModule,
     BusinessesModule,
+    AppConfigModule,
+    StatsModule,
   ],
   providers: [
     {

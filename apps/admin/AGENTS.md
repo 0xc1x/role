@@ -59,12 +59,14 @@ bun run check           # biome (lint + format)
 bun run typecheck && bun run check && bun run test
 ```
 
-## Estado conocido (fix pendiente)
+## Estado conocido
 
-3 errores de typecheck pre-existentes (no causados por el wiring del monorepo; surfaced por el lockfile fresco):
+Sin errores pendientes de typecheck ni lint (`bun run check` y `bun run typecheck` pasan limpios).
 
-1. `src/components/ui/color-picker.tsx` — tipo `number | readonly number[]` de base-ui no asignable a `number`.
-2. `src/features/slides/forms/slide.form.tsx` — **drift de contrato**: `commons` (HEAD) hizo `badge_text` nullable (commit `d561ee8`) y el form espera `string` — alinear el form al contrato.
-3. `vite.config.ts` — `rollupConfig` eliminado de la API de nitro-nightly.
+Notas de mantenimiento:
 
-Hasta que se corrijan, `bun run typecheck` global falla en este paquete (build sí pasa). Corregir en orden: contrato → form → dependencias.
+- Los primitivos vendidos en `src/components/ui/**` tienen overrides de reglas
+  a11y/suspicious en `biome.json` (patrón estándar para shadcn/Base UI). Si
+  actualizas un primitivo, conserva los overrides.
+- Los forms usan render-prop JSX (`<form.Field name="x">{(field) => …}</form.Field>`);
+  no uses el prop `children={…}` (lo marca `noChildrenProp`).

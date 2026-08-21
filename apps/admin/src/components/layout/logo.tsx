@@ -20,9 +20,10 @@ export function Logo({
 			<svg
 				width={width}
 				height={height}
-				viewBox="1081 1010 2737 1207" // ViewBox optimizado (recortado)
+				viewBox="1081 1010 2737 1207"
 				fill="none"
 				xmlns="http://www.w3.org/2000/svg"
+				aria-hidden="true"
 				className={cn("text-current shrink-0", className)}
 				style={{
 					fillRule: "evenodd",
@@ -135,6 +136,7 @@ export function Logo({
 			viewBox="0 0 1457 1457"
 			fill="none"
 			xmlns="http://www.w3.org/2000/svg"
+			aria-hidden="true"
 			className={cn("text-current shrink-0", className)}
 			style={{
 				fillRule: "evenodd",

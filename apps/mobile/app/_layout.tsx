@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useFonts } from "expo-font";
 import {
 	Outfit_600SemiBold,
@@ -36,6 +36,7 @@ if (Platform.OS === "web") {
 import { ThemeProvider, light } from "@/core/theme";
 import { queryClient } from "@/core/query/client";
 import { analytics } from "@/core/analytics";
+import { appConfigQueryOptions } from "@/features/config";
 import { useAuthStore, watchAuthState } from "@/features/auth/store";
 import { Toaster } from "sonner-native";
 SplashScreen.preventAutoHideAsync();
@@ -51,6 +52,7 @@ export default function RootLayout() {
 		DMSans_700Bold,
 	});
 	const initialize = useAuthStore((s) => s.initialize);
+	const [configReady, setConfigReady] = useState(false);
 
 	useEffect(() => {
 		analytics.init();
@@ -61,13 +63,32 @@ export default function RootLayout() {
 		};
 	}, [initialize]);
 
+	// Primera consulta de la app: config dinámica desde Supabase mientras
+	// la splash screen sigue visible. Con guard de timeout para no bloquear
+	// el arranque si la red falla (los hooks usan fallbacks).
 	useEffect(() => {
-		if (fontsLoaded) {
+		let cancelled = false;
+		const timeout = setTimeout(() => {
+			if (!cancelled) setConfigReady(true);
+		}, 2500);
+		queryClient
+			.prefetchQuery(appConfigQueryOptions)
+			.finally(() => {
+				if (!cancelled) setConfigReady(true);
+			});
+		return () => {
+			cancelled = true;
+			clearTimeout(timeout);
+		};
+	}, []);
+
+	useEffect(() => {
+		if (fontsLoaded && configReady) {
 			void SplashScreen.hideAsync();
 		}
-	}, [fontsLoaded]);
+	}, [fontsLoaded, configReady]);
 
-	if (!fontsLoaded) return null;
+	if (!fontsLoaded || !configReady) return null;
 
 	return (
 		<GestureHandlerRootView style={{ flex: 1 }}>

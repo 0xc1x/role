@@ -42,7 +42,7 @@ export function Navbar() {
 			clearTimeout(t);
 			window.removeEventListener("resize", measure);
 		};
-	}, [pathname]);
+	}, []);
 
 	useEffect(() => {
 		const handleScroll = () => setPastHero(window.scrollY > heroBottom - 64);

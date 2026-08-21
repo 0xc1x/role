@@ -31,6 +31,24 @@
 		"formatter": {
 			"quoteStyle": "double"
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["src/components/ui/**"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useSemanticElements": "off",
+						"noStaticElementInteractions": "off",
+						"useKeyWithClickEvents": "off",
+						"noLabelWithoutControl": "off"
+					},
+					"suspicious": {
+						"noArrayIndexKey": "off",
+						"noDocumentCookie": "off"
+					}
+				}
+			}
+		}
+	]
 }
-

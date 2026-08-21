@@ -1,11 +1,23 @@
 import { type FormEvent, useState } from "react";
 
+import { useConfig } from "@/lib/use-config";
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Errors = Partial<Record<"name" | "email" | "message", string>>;
 
 export function Contact() {
 	const [errors, setErrors] = useState<Errors>({});
+	const holaEmail = useConfig("contact.hola_email", "hola@role.app");
+	const negociosEmail = useConfig(
+		"contact.negocios_email",
+		"negocios@role.app",
+	);
+	const slaHours = useConfig("support.sla_hours", "24");
+	const hoursWeekdays = useConfig(
+		"support.hours_weekdays",
+		"Lun – Vie, 9:00 – 18:00",
+	);
 
 	function handleSubmit(e: FormEvent<HTMLFormElement>) {
 		e.preventDefault();
@@ -49,8 +61,8 @@ export function Contact() {
 						¿Tienes dudas? Escríbenos.
 					</h2>
 					<p className="mt-4 max-w-md text-lg leading-relaxed text-role-muted-foreground">
-						Te ayudaremos con lo que necesites. Respondemos en menos de 24 horas
-						entre semana.
+						Te ayudaremos con lo que necesites. Respondemos en menos de{" "}
+						{slaHours} horas entre semana.
 					</p>
 					<div className="mt-10 space-y-4 text-sm">
 						<div className="flex items-center gap-3">
@@ -75,10 +87,10 @@ export function Contact() {
 							<div>
 								<p className="font-semibold">Soporte</p>
 								<a
-									href="mailto:hola@role.app"
+									href={`mailto:${holaEmail}`}
 									className="text-role-muted-foreground transition-colors hover:text-role-primary"
 								>
-									hola@role.app
+									{holaEmail}
 								</a>
 							</div>
 						</div>
@@ -104,10 +116,10 @@ export function Contact() {
 							<div>
 								<p className="font-semibold">Para negocios</p>
 								<a
-									href="mailto:negocios@role.app"
+									href={`mailto:${negociosEmail}`}
 									className="text-role-muted-foreground transition-colors hover:text-role-primary"
 								>
-									negocios@role.app
+									{negociosEmail}
 								</a>
 							</div>
 						</div>
@@ -132,9 +144,7 @@ export function Contact() {
 							</span>
 							<div>
 								<p className="font-semibold">Horario</p>
-								<p className="text-role-muted-foreground">
-									Lun – Vie, 9:00 – 18:00
-								</p>
+								<p className="text-role-muted-foreground">{hoursWeekdays}</p>
 							</div>
 						</div>
 					</div>

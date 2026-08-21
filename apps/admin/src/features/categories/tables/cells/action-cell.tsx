@@ -1,6 +1,6 @@
 import type { CategoryDto } from "@0xc1x/role-commons";
 import type { Row } from "@tanstack/react-table";
-import { MoreHorizontal, Pen, Trash2 } from "lucide-react";
+import { Loader2, MoreHorizontal, Pen, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
 	AlertDialog,
@@ -22,9 +22,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Loader2 } from "lucide-react";
 import { CategoryUpdateDrawer, useDeleteCategory } from "@/features/categories";
-
 
 export function ActionCell({ row }: { row: Row<CategoryDto> }) {
 	const [editingCategory, setEditingCategory] = useState<CategoryDto | null>(

@@ -8,6 +8,7 @@ import {
 	Dimensions,
 	Pressable,
 	Platform,
+	Linking,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,47 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { strings } from "@/core/i18n/strings";
-
-interface PromoItem {
-	id: string;
-	title: string;
-	message: string;
-	imageUrl: string;
-	icon?: string;
-	isSponsored?: boolean;
-}
-
-const PROMO_ITEMS: PromoItem[] = [
-	{
-		id: "1",
-		title: strings.home.promo1Title,
-		message: strings.home.promo1Body,
-		imageUrl:
-			"https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&fit=crop",
-	},
-	{
-		id: "2",
-		title: strings.home.promo2Title,
-		message: strings.home.promo2Body,
-		imageUrl:
-			"https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=400&fit=crop",
-	},
-	{
-		id: "3",
-		title: strings.home.promo3Title,
-		message: strings.home.promo3Body,
-		imageUrl:
-			"https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=400&fit=crop",
-	},
-	{
-		id: "4",
-		title: strings.home.promo4Title,
-		message: strings.home.promo4Body,
-		imageUrl:
-			"https://images.unsplash.com/photo-1574484284002-952d92456975?w=400&fit=crop",
-		isSponsored: true,
-	},
-];
+import { usePromoSlides, type PromoSlide } from "@/features/slides";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH - spacing.lg * 2;
@@ -63,6 +24,7 @@ const CARD_HEIGHT = Math.min((CARD_WIDTH * 9) / 16, 220);
 
 export function PromoSlider() {
 	const { colors } = useTheme();
+	const { data: slides = [] } = usePromoSlides();
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [isPaused, setIsPaused] = useState(false);
 	const scrollRef = useRef<ScrollView>(null);
@@ -70,15 +32,15 @@ export function PromoSlider() {
 
 	const goTo = useCallback(
 		(index: number, animated = true) => {
-			const total = PROMO_ITEMS.length;
-			const clamped = ((index % total) + total) % total;
+			const total = slides.length;
+			const clamped = total === 0 ? 0 : ((index % total) + total) % total;
 			setCurrentIndex(clamped);
 			scrollRef.current?.scrollTo({
 				x: clamped * step,
 				animated,
 			});
 		},
-		[step],
+		[step, slides.length],
 	);
 
 	const goNext = useCallback(() => goTo(currentIndex + 1), [currentIndex, goTo]);
@@ -86,7 +48,7 @@ export function PromoSlider() {
 
 	useEffect(() => {
 		const interval = setInterval(() => {
-			if (!isPaused && PROMO_ITEMS.length > 1) {
+			if (!isPaused && slides.length > 1) {
 				goTo(currentIndex + 1);
 			}
 		}, 5000);
@@ -136,8 +98,11 @@ export function PromoSlider() {
 	}) => {
 		scrollX.current = event.nativeEvent.contentOffset.x;
 		const index = Math.round(event.nativeEvent.contentOffset.x / step);
-		if (index >= 0 && index < PROMO_ITEMS.length) setCurrentIndex(index);
+		if (index >= 0 && index < slides.length) setCurrentIndex(index);
 	};
+
+	// Sin contenido activo (o mientras carga) el carrusel no se renderiza.
+	if (slides.length === 0) return null;
 
 	return (
 		<View style={styles.container}>
@@ -161,14 +126,14 @@ export function PromoSlider() {
 						}}
 						style={{ height: CARD_HEIGHT }}
 					>
-						{PROMO_ITEMS.map((item) => (
+						{slides.map((item) => (
 							<View key={item.id} style={styles.card}>
 								<PromoCard item={item} />
 							</View>
 						))}
 					</ScrollView>
 				</View>
-				{PROMO_ITEMS.length > 1 && (
+				{slides.length > 1 && (
 					<>
 						<Pressable
 							onPress={goPrev}
@@ -196,10 +161,10 @@ export function PromoSlider() {
 				)}
 			</View>
 
-			{PROMO_ITEMS.length > 1 && (
+			{slides.length > 1 && (
 				<View style={styles.dotsContainer}>
-					{PROMO_ITEMS.map((_, index) => (
-						<Pressable key={index} onPress={() => goTo(index)}>
+					{slides.map((item, index) => (
+						<Pressable key={item.id} onPress={() => goTo(index)}>
 							<View
 								style={[
 									styles.dot,
@@ -220,30 +185,47 @@ export function PromoSlider() {
 	);
 }
 
-function PromoCard({ item }: { item: PromoItem }) {
+function PromoCard({ item }: { item: PromoSlide }) {
 	const { colors } = useTheme();
 	const halfWidth = CARD_WIDTH / 2;
+	const badgeLabel =
+		item.badgeText ??
+		(item.isSponsored ? strings.home.promoSponsored : strings.home.promoTips);
+	const textColor = item.textColor ?? colors.greenDarkForeground;
+
+	const openRedirect = () => {
+		if (!item.redirectUrl) return;
+		void Linking.openURL(item.redirectUrl).catch(() => {
+			// URL inválida o sin handler: no rompemos la UI.
+		});
+	};
 
 	return (
 		<View style={[styles.cardInner, { backgroundColor: colors.greenDark }]}>
-			<Image source={{ uri: item.imageUrl }} style={styles.cardImage} resizeMode="cover" />
-			<BlurView intensity={40} tint="dark" style={styles.cardImage} />
+			{item.imageUrl ? (
+				<>
+					<Image source={{ uri: item.imageUrl }} style={styles.cardImage} resizeMode="cover" />
+					<BlurView intensity={40} tint="dark" style={styles.cardImage} />
+				</>
+			) : null}
 			<View style={styles.gradientOverlay} />
-			<View
-				style={[
-					styles.rightImage,
-					{
-						left: halfWidth,
-						width: halfWidth,
-					},
-				]}
-			>
-				<Image
-					source={{ uri: item.imageUrl }}
-					style={styles.cardImage}
-					resizeMode="cover"
-				/>
-			</View>
+			{item.imageUrl ? (
+				<View
+					style={[
+						styles.rightImage,
+						{
+							left: halfWidth,
+							width: halfWidth,
+						},
+					]}
+				>
+					<Image
+						source={{ uri: item.imageUrl }}
+						style={styles.cardImage}
+						resizeMode="cover"
+					/>
+				</View>
+			) : null}
 			<View style={styles.cardContent}>
 				<View style={styles.badge}>
 					<Text
@@ -253,15 +235,13 @@ function PromoCard({ item }: { item: PromoItem }) {
 							fontWeight: "500",
 						}}
 					>
-						{item.isSponsored
-							? strings.home.promoSponsored
-							: strings.home.promoTips}
+						{badgeLabel}
 					</Text>
 				</View>
 				<View>
 					<Text
 						style={{
-							color: colors.greenDarkForeground,
+							color: textColor,
 							fontSize: 18,
 							fontWeight: "600",
 							letterSpacing: -0.2,
@@ -272,32 +252,36 @@ function PromoCard({ item }: { item: PromoItem }) {
 					<Text
 						numberOfLines={3}
 						style={{
-							color: colors.greenDarkForeground + "B3",
+							color: textColor + "B3",
 							fontSize: 12,
 							lineHeight: 17,
 							marginTop: 6,
 						}}
 					>
-						{item.message}
+						{item.caption}
 					</Text>
 				</View>
-				<Pressable
-					style={({ pressed }) => [
-						styles.promoButton,
-						{ backgroundColor: colors.primary },
-						pressed && styles.promoButtonPressed,
-					]}
-				>
-					<Text
-						style={{
-							color: colors.primaryForeground,
-							fontSize: 15,
-							fontWeight: "600",
-						}}
+				{item.ctaLabel && item.redirectUrl ? (
+					<Pressable
+						accessibilityRole="button"
+						onPress={openRedirect}
+						style={({ pressed }) => [
+							styles.promoButton,
+							{ backgroundColor: item.buttonColor ?? colors.primary },
+							pressed && styles.promoButtonPressed,
+						]}
 					>
-						{strings.home.promoSeeMore}
-					</Text>
-				</Pressable>
+						<Text
+							style={{
+								color: colors.primaryForeground,
+								fontSize: 15,
+								fontWeight: "600",
+							}}
+						>
+							{item.ctaLabel}
+						</Text>
+					</Pressable>
+				) : null}
 			</View>
 		</View>
 	);

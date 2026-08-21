@@ -16,9 +16,7 @@ export function Features() {
 			</div>
 			<div className="mt-14 grid gap-5 lg:grid-cols-12 reveal reveal-delay-1">
 				{/* Featured card - spans 7 columns, 2 rows */}
-				<article
-					className="relative group overflow-hidden rounded-[var(--radius-section)] p-8 lg:col-span-7 lg:row-span-2 bg-role-primary text-white shadow-dark-glow reveal reveal-delay-2"
-				>
+				<article className="relative group overflow-hidden rounded-[var(--radius-section)] p-8 lg:col-span-7 lg:row-span-2 bg-role-primary text-white shadow-dark-glow reveal reveal-delay-2">
 					<div
 						aria-hidden
 						className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl opacity-60 transition-opacity duration-300 group-hover:opacity-100"

@@ -1,0 +1,1074 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Sign in with email and password",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Register a new user account",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Refresh access token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "operationId": "AuthController_getProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The authenticated user profile"
+          }
+        },
+        "summary": "Get current authenticated user profile",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Logged out successfully"
+          }
+        },
+        "summary": "Log out (revoke refresh token globally)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Service health"
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/v1/categories": {
+      "get": {
+        "operationId": "CategoriesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated category list"
+          }
+        },
+        "summary": "List categories",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "post": {
+        "operationId": "CategoriesController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Category created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a category (admin)",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/v1/categories/{id}": {
+      "get": {
+        "operationId": "CategoriesController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category detail"
+          }
+        },
+        "summary": "Get category by id",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "patch": {
+        "operationId": "CategoriesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a category (admin)",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "delete": {
+        "operationId": "CategoriesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category soft-deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft-delete a category (admin)",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/v1/offers": {
+      "get": {
+        "operationId": "OffersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated offer list"
+          }
+        },
+        "summary": "List available surplus food offers",
+        "tags": [
+          "Offers"
+        ]
+      },
+      "post": {
+        "operationId": "OffersController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Offer created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create an offer (admin or business owner)",
+        "tags": [
+          "Offers"
+        ]
+      }
+    },
+    "/api/v1/offers/{id}": {
+      "get": {
+        "operationId": "OffersController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offer detail with business and location"
+          }
+        },
+        "summary": "Get offer detail",
+        "tags": [
+          "Offers"
+        ]
+      },
+      "patch": {
+        "operationId": "OffersController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offer updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update an offer (admin or business owner)",
+        "tags": [
+          "Offers"
+        ]
+      },
+      "delete": {
+        "operationId": "OffersController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offer deactivated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deactivate an offer (admin or business owner)",
+        "tags": [
+          "Offers"
+        ]
+      }
+    },
+    "/api/v1/orders": {
+      "post": {
+        "operationId": "OrdersController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Order created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reserve / create an order for an offer",
+        "tags": [
+          "Orders"
+        ]
+      },
+      "get": {
+        "operationId": "OrdersController_listMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated orders"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List my orders (consumer)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/business": {
+      "get": {
+        "operationId": "OrdersController_listForBusiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated business orders"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List orders for a business I own",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order detail"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get order by id",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/status": {
+      "patch": {
+        "operationId": "OrdersController_updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated order"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Transition order status",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/upload/image": {
+      "post": {
+        "operationId": "UploadController_uploadImage",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "description": "Archivo de imagen y opciones de bucket/folder",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadImageBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Imagen subida y comprimida a WebP. La URL pública se devuelve en el cuerpo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://[project].supabase.co/storage/v1/object/public/images/categories/uuid.webp"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Archivo inválido, formato no soportado o excede el tamaño máximo"
+          },
+          "401": {
+            "description": "No autorizado"
+          },
+          "403": {
+            "description": "Requiere rol admin"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload an image (admin)",
+        "tags": [
+          "Upload"
+        ]
+      }
+    },
+    "/api/v1/slides": {
+      "get": {
+        "operationId": "SlidesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated slide list"
+          }
+        },
+        "summary": "List slides",
+        "tags": [
+          "Slides"
+        ]
+      },
+      "post": {
+        "operationId": "SlidesController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Slide created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a slide (admin)",
+        "tags": [
+          "Slides"
+        ]
+      }
+    },
+    "/api/v1/slides/{id}": {
+      "get": {
+        "operationId": "SlidesController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slide detail"
+          }
+        },
+        "summary": "Get slide by id",
+        "tags": [
+          "Slides"
+        ]
+      },
+      "patch": {
+        "operationId": "SlidesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slide updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a slide (admin)",
+        "tags": [
+          "Slides"
+        ]
+      },
+      "delete": {
+        "operationId": "SlidesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slide soft-deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft-delete a slide (admin)",
+        "tags": [
+          "Slides"
+        ]
+      }
+    },
+    "/api/v1/businesses": {
+      "get": {
+        "operationId": "BusinessesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated businesses"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List my businesses",
+        "tags": [
+          "Businesses"
+        ]
+      },
+      "post": {
+        "operationId": "BusinessesController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Business created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new business",
+        "tags": [
+          "Businesses"
+        ]
+      }
+    },
+    "/api/v1/businesses/{id}": {
+      "get": {
+        "operationId": "BusinessesController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Business detail"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get business by id",
+        "tags": [
+          "Businesses"
+        ]
+      },
+      "patch": {
+        "operationId": "BusinessesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated business"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update business",
+        "tags": [
+          "Businesses"
+        ]
+      },
+      "delete": {
+        "operationId": "BusinessesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Business deactivated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deactivate business",
+        "tags": [
+          "Businesses"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/locations": {
+      "get": {
+        "operationId": "BusinessesController_listLocations",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated locations"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List locations for a business",
+        "tags": [
+          "Businesses"
+        ]
+      },
+      "post": {
+        "operationId": "BusinessesController_createLocation",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Location created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new location for a business",
+        "tags": [
+          "Businesses"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/locations/{locationId}": {
+      "get": {
+        "operationId": "BusinessesController_getLocation",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Location detail"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get location by id",
+        "tags": [
+          "Businesses"
+        ]
+      },
+      "patch": {
+        "operationId": "BusinessesController_updateLocation",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated location"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update location",
+        "tags": [
+          "Businesses"
+        ]
+      },
+      "delete": {
+        "operationId": "BusinessesController_removeLocation",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Location deactivated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deactivate location",
+        "tags": [
+          "Businesses"
+        ]
+      }
+    },
+    "/api/v1/app-config/public": {
+      "get": {
+        "operationId": "AppConfigController_listPublic",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Public config entries"
+          }
+        },
+        "summary": "List public app config (key/value)",
+        "tags": [
+          "App Config"
+        ]
+      }
+    },
+    "/api/v1/app-config": {
+      "get": {
+        "operationId": "AppConfigController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated config list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all app config (admin)",
+        "tags": [
+          "App Config"
+        ]
+      },
+      "post": {
+        "operationId": "AppConfigController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Config entry created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a config entry (admin)",
+        "tags": [
+          "App Config"
+        ]
+      }
+    },
+    "/api/v1/app-config/{key}": {
+      "patch": {
+        "operationId": "AppConfigController_update",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Config entry updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a config entry by key (admin)",
+        "tags": [
+          "App Config"
+        ]
+      },
+      "delete": {
+        "operationId": "AppConfigController_remove",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Config entry deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a config entry by key (admin)",
+        "tags": [
+          "App Config"
+        ]
+      }
+    },
+    "/api/v1/stats/platform": {
+      "get": {
+        "operationId": "StatsController_getPlatformStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Platform stats"
+          }
+        },
+        "summary": "Real platform stats (users, businesses, meals)",
+        "tags": [
+          "Stats"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Role API",
+    "description": "Backend API para Role — marketplace de comida excedente",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "Object": {
+        "type": "object",
+        "properties": {}
+      },
+      "UploadImageBody": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "Archivo de imagen (jpeg, png, webp)"
+          },
+          "bucket": {
+            "type": "string",
+            "description": "Nombre del bucket en Supabase (opcional, por defecto el del .env)",
+            "example": "public-assets"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Carpeta dentro del bucket (opcional, por defecto \"categories\")",
+            "example": "categories"
+          }
+        },
+        "required": [
+          "file"
+        ]
+      }
+    }
+  }
+}

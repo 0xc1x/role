@@ -104,9 +104,8 @@ export function CategoryForm({
 				</p>
 			)}
 
-			<form.Field
-				name="name"
-				children={(field) => {
+			<form.Field name="name">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -126,11 +125,10 @@ export function CategoryForm({
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="description"
-				children={(field) => {
+			<form.Field name="description">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -150,11 +148,10 @@ export function CategoryForm({
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="slug"
-				children={(field) => {
+			<form.Field name="slug">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -174,11 +171,10 @@ export function CategoryForm({
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="emoji"
-				children={(field) => {
+			<form.Field name="emoji">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -221,11 +217,10 @@ export function CategoryForm({
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="image"
-				children={(field) => (
+			<form.Field name="image">
+				{(field) => (
 					<ImageField
 						currentFile={field.state.value}
 						isInvalid={field.state.meta.isTouched && !field.state.meta.isValid}
@@ -234,12 +229,11 @@ export function CategoryForm({
 						onChange={(file) => field.handleChange(file)}
 					/>
 				)}
-			/>
+			</form.Field>
 
 			{category && (
-				<form.Field
-					name="active"
-					children={(field) => {
+				<form.Field name="active">
+					{(field) => {
 						const isActive = field.state.value;
 						return (
 							<Field>
@@ -247,11 +241,8 @@ export function CategoryForm({
 								<div className="flex items-center gap-3">
 									<Switch
 										checked={isActive}
-										onCheckedChange={(checked) =>
-											field.handleChange(checked)
-										}
+										onCheckedChange={(checked) => field.handleChange(checked)}
 										className="data-checked:border-emerald-500 data-checked:bg-emerald-500 data-unchecked:border-red-500 data-unchecked:bg-red-500 dark:data-unchecked:border-red-600 dark:data-unchecked:bg-red-600"
-
 									/>
 									<Badge
 										variant={isActive ? "default" : "destructive"}
@@ -263,7 +254,7 @@ export function CategoryForm({
 							</Field>
 						);
 					}}
-				/>
+				</form.Field>
 			)}
 		</form>
 	);

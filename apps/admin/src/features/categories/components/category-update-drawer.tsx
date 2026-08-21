@@ -10,9 +10,9 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "@/components/ui/drawer";
+import { Spinner } from "@/components/ui/spinner";
 import { categoriesKeys } from "@/features/categories";
 import { CategoryForm } from "../forms/category.form";
-import { Spinner } from "@/components/ui/spinner";
 
 export interface CategoryUpdateDrawerProps {
 	category: CategoryDto;
@@ -52,11 +52,13 @@ export function CategoryUpdateDrawer({
 
 				<DrawerFooter>
 					<Button type="submit" form={FORM_ID} disabled={isMutating}>
-						{isMutating
-							? <>
+						{isMutating ? (
+							<>
 								<Spinner /> Actualziando categoria
 							</>
-							: "Actualizar Categoria"}
+						) : (
+							"Actualizar Categoria"
+						)}
 					</Button>
 					<DrawerClose>
 						<Button variant="outline" className="w-full">

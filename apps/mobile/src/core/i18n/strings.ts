@@ -144,21 +144,9 @@ export const strings = {
 		seeMoreCategories: "+{n}",
 		seeLess: "Ver menos",
 		// ── Promo slider ────────────────────────────────────────────
-		promoSeeMore: "Ver más",
+		// El contenido del carrusel vive en la tabla `slides` (gestionado en admin).
 		promoTips: "Tips",
 		promoSponsored: "Sponsoreado",
-		promo1Title: "¿Sabías que…",
-		promo1Body:
-			"Cada año se desperdician 1.3 mil millones de toneladas de comida en el mundo. ¡Tú puedes ayudar!",
-		promo2Title: "Impacto ambiental",
-		promo2Body:
-			"Al rescatar un paquete sorpresa evitas la emisión de ~2.5kg de CO2. Cada rescate cuenta.",
-		promo3Title: "Comida rescatada",
-		promo3Body:
-			"Los alimentos aptos para consumo pero no para venta son rescatados por negocios como los de Rolé.",
-		promo4Title: "Gana-gana",
-		promo4Body:
-			"Rescatar comida no solo ahorra dinero, también reduce el desperdicio y apoya a negocios locales.",
 		// ── Eco banner ──────────────────────────────────────────────
 		ecoBannerTitle: "Cada paquete que rescatas hace la diferencia",
 		ecoBannerBody: "Gracias por ayudar al planeta",
@@ -195,7 +183,7 @@ export const strings = {
 		myLocation: "Mi ubicación",
 		tips: [
 			"¿Sabías que rescatando un paquete sorpresa evitas la emisión de 2.5kg de CO2?",
-			"Fudi conecta excedentes de comida con personas que quieren ahorrar y ayudar al planeta.",
+			"Rolé conecta excedentes de comida con personas que quieren ahorrar y ayudar al planeta.",
 			"Revisa siempre el horario de recogida antes de realizar tu compra.",
 		],
 		availableOffers: "Ofertas disponibles",

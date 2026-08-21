@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Footer } from "@/components/footer";
-import { MailIcon, MapPinIcon, TagIcon, ClockCheckIcon } from "@/components/icons";
+import {
+	ClockCheckIcon,
+	MailIcon,
+	MapPinIcon,
+	TagIcon,
+} from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 
 export const Route = createFileRoute("/help-center")({
@@ -88,7 +93,10 @@ function HelpCenterPage() {
 			<Navbar />
 			<main id="main">
 				{/* Hero */}
-				<section data-hero className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32">
+				<section
+					data-hero
+					className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32"
+				>
 					<div aria-hidden className="pointer-events-none absolute inset-0">
 						<div className="absolute inset-0 bg-gradient-to-br from-role-dark-bg via-role-dark-bg to-role-primary-deep/25" />
 						<div className="absolute -top-32 left-1/4 h-96 w-96 animate-drift rounded-full bg-role-primary/15 blur-3xl" />

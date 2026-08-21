@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { useIsMutating } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -11,10 +12,9 @@ import {
 	DrawerTitle,
 	DrawerTrigger,
 } from "@/components/ui/drawer";
+import { Spinner } from "@/components/ui/spinner";
 import { categoriesKeys } from "@/features/categories";
 import { CategoryForm } from "../forms/category.form";
-import { Spinner } from "@/components/ui/spinner";
-import { Plus } from "lucide-react";
 
 export function CategoryCreateDrawer() {
 	const [isOpen, setIsOpen] = useState(false);
@@ -54,11 +54,13 @@ export function CategoryCreateDrawer() {
 
 				<DrawerFooter>
 					<Button type="submit" form={FORM_ID} disabled={isMutating}>
-						{isMutating
-							? <>
+						{isMutating ? (
+							<>
 								<Spinner /> Creando categoria
 							</>
-							: "Crear Categoria"}
+						) : (
+							"Crear Categoria"
+						)}
 					</Button>
 					<DrawerClose>
 						<Button variant="outline" className="w-full">

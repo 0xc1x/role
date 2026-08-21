@@ -6,4 +6,6 @@ export * from './payment';
 export * from './review';
 export * from './user';
 export * from './categories';
-export * from './slides'
+export * from './slides';
+export * from './config';
+export * from './stats'

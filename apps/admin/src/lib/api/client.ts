@@ -180,7 +180,7 @@ async function request<T>(
 
 	const token = getToken();
 	if (token) {
-		headers["Authorization"] = `Bearer ${token}`;
+		headers.Authorization = `Bearer ${token}`;
 	}
 	if (!options?.formData) {
 		headers["Content-Type"] = "application/json";
@@ -199,7 +199,7 @@ async function request<T>(
 		if (refreshed) {
 			const newToken = getToken();
 			if (newToken) {
-				headers["Authorization"] = `Bearer ${newToken}`;
+				headers.Authorization = `Bearer ${newToken}`;
 			}
 			const retryResponse = await fetch(`${env.VITE_API_URL}${path}`, {
 				method,

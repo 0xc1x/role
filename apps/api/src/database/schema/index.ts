@@ -7,6 +7,7 @@ export * from './offer-categories';
 export * from './orders';
 export * from './categories';
 export * from './slides';
+export * from './app-configs';
 
 import { businessLocations } from './business-locations';
 import { businesses } from './businesses';
@@ -16,6 +17,7 @@ import { orderEvents, orders } from './orders';
 import { profiles } from './profiles';
 import { categories } from './categories';
 import { slides } from './slides';
+import { appConfig } from './app-configs';
 
 
 /** Schema map passed to drizzle() for typed queries. */
@@ -28,7 +30,8 @@ export const schema = {
   orders,
   orderEvents,
   categories,
-  slides
+  slides,
+  appConfig
 };
 
 export type DatabaseSchema = typeof schema;

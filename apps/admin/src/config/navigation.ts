@@ -94,7 +94,7 @@ export const navMain: NavMainItem[] = [
 	},
 	{
 		title: "Configuración",
-		url: "#",
+		url: "/configuracion",
 		icon: Settings2,
 	},
 ];

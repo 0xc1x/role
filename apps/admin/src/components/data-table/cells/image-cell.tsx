@@ -1,13 +1,13 @@
-import { useRef, useState } from "react";
 import { Loader2, Pencil, UploadCloud, X } from "lucide-react";
+import { useRef, useState } from "react";
 import { usePreviewUrl } from "@/components/media/image-field";
+import { ImageThumbnail } from "@/components/media/image-thumbnail";
 import { Button } from "@/components/ui/button";
 import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import { ImageThumbnail } from "@/components/media/image-thumbnail";
 
 interface ImageCellProps {
 	imageUrl: string | null;

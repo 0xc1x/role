@@ -26,8 +26,8 @@ function HomePage() {
 				<Skeleton className="h-10 w-72" />
 				<Skeleton className="h-6 w-56" />
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-					{Array.from({ length: 3 }).map((_, i) => (
-						<div key={i} className="rounded-lg border p-6 space-y-2">
+					{[1, 2, 3].map((n) => (
+						<div key={n} className="rounded-lg border p-6 space-y-2">
 							<Skeleton className="h-6 w-16" />
 							<Skeleton className="h-8 w-12" />
 							<Skeleton className="h-4 w-32" />

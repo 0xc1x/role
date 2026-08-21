@@ -6,8 +6,8 @@ import {
 	Link,
 	Scripts,
 } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useState } from "react";
 import { ThemeProvider } from "next-themes";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { getQueryClient } from "@/config/query-client";
 import appCss from "../styles.css?url";
 

@@ -43,7 +43,10 @@ function AboutPage() {
 			<Navbar />
 			<main id="main">
 				{/* Hero */}
-				<section data-hero className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32">
+				<section
+					data-hero
+					className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32"
+				>
 					<div aria-hidden className="pointer-events-none absolute inset-0">
 						<div className="absolute inset-0 bg-gradient-to-br from-role-dark-bg via-role-dark-bg to-role-primary-deep/25" />
 						<div className="absolute -top-32 right-0 h-96 w-96 animate-drift rounded-full bg-role-primary/15 blur-3xl" />
@@ -61,9 +64,9 @@ function AboutPage() {
 							</span>
 						</h1>
 						<p className="mt-6 max-w-xl text-lg leading-relaxed text-white/75 reveal reveal-delay-2">
-							Cada año, toneladas de comida perfectamente buena se desperdicia en
-							comercios que no logran venderla a tiempo. A nosotros no nos parece
-							bien.
+							Cada año, toneladas de comida perfectamente buena se desperdicia
+							en comercios que no logran venderla a tiempo. A nosotros no nos
+							parece bien.
 						</p>
 					</div>
 				</section>
@@ -90,10 +93,10 @@ function AboutPage() {
 							</h2>
 							<p className="mt-4 leading-relaxed text-role-muted-foreground">
 								Reducir el desperdicio de alimentos mientras construimos
-								comunidades más conscientes y solidarias. No buscamos
-								reemplazar la compra regular: queremos que el excedente que ya
-								existe llegue a alguien que lo disfrute. Cada bolsa rescatada es
-								un pequeño triunfo contra el desperdicio.
+								comunidades más conscientes y solidarias. No buscamos reemplazar
+								la compra regular: queremos que el excedente que ya existe
+								llegue a alguien que lo disfrute. Cada bolsa rescatada es un
+								pequeño triunfo contra el desperdicio.
 							</p>
 						</div>
 
@@ -186,8 +189,8 @@ function AboutPage() {
 								Únete al rol
 							</h2>
 							<p className="mx-auto mt-4 max-w-lg text-lg text-white/85">
-								Rescata comida deliciosa a precio increíble o registra tu negocio
-								para recuperar valor de tu excedente.
+								Rescata comida deliciosa a precio increíble o registra tu
+								negocio para recuperar valor de tu excedente.
 							</p>
 							<div className="mt-9 flex flex-wrap justify-center gap-4">
 								<a

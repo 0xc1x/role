@@ -11,6 +11,7 @@ import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import type { ColorTokens } from "@/core/theme/colors";
 import { useAuthStore } from "@/features/auth/store";
+import { useConfigValue } from "@/features/config";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -273,16 +274,24 @@ function ContactSupportCard({ onPress }: { onPress: () => void }) {
 
 function ScheduleInfo() {
 	const { colors } = useTheme();
+	const weekdays = useConfigValue(
+		"support.hours_weekdays",
+		strings.helpCenter.scheduleWeekdays,
+	);
+	const weekend = useConfigValue(
+		"support.hours_weekend",
+		strings.helpCenter.scheduleWeekend,
+	);
 	return (
 		<View style={styles.schedule}>
 			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 				{strings.helpCenter.scheduleTitle}
 			</AppText>
 			<AppText variant="bodyMedium" weight="medium">
-				{strings.helpCenter.scheduleWeekdays}
+				{weekdays}
 			</AppText>
 			<AppText variant="bodyMedium" weight="medium">
-				{strings.helpCenter.scheduleWeekend}
+				{weekend}
 			</AppText>
 		</View>
 	);
@@ -293,6 +302,15 @@ export default function HelpScreen() {
 	const { status, initialized } = useAuthStore();
 	const [query, setQuery] = useState("");
 	const [expandedId, setExpandedId] = useState<string | null>(null);
+
+	const supportEmail = useConfigValue(
+		"support.email",
+		strings.helpCenter.supportEmail,
+	);
+	const supportPhone = useConfigValue(
+		"support.phone",
+		strings.helpCenter.supportPhone,
+	);
 
 	const categories: Category[] = [
 		{
@@ -354,12 +372,11 @@ export default function HelpScreen() {
 
 	const openEmail = () =>
 		void launchUrl(
-			`mailto:${strings.helpCenter.supportEmail}?subject=${encodeURIComponent(strings.helpCenter.mailSubject)}`,
+			`mailto:${supportEmail}?subject=${encodeURIComponent(strings.helpCenter.mailSubject)}`,
 			"mailError",
 		);
 
-	const openCall = () =>
-		void launchUrl(`tel:${strings.helpCenter.supportPhone}`, "callError");
+	const openCall = () => void launchUrl(`tel:${supportPhone}`, "callError");
 
 	// Redirect guests to login
 	useEffect(() => {

@@ -1,4 +1,5 @@
 import { Wordmark } from "@/components/brand";
+import { useConfig } from "@/lib/use-config";
 
 const EXPLORE = [
 	{ label: "Cómo funciona", href: "/how-it-works" },
@@ -12,13 +13,37 @@ const LEGAL = [
 	{ label: "Términos y condiciones", href: "/terms" },
 ];
 
-const SOCIAL = [
-	{ label: "Instagram", href: "#" },
-	{ label: "Twitter", href: "#" },
-	{ label: "LinkedIn", href: "#" },
-];
+const SOCIAL_FALLBACKS = {
+	"social.instagram_url": "#",
+	"social.twitter_url": "#",
+	"social.linkedin_url": "#",
+} as const;
 
 export function Footer() {
+	const instagram = useConfig(
+		"social.instagram_url",
+		SOCIAL_FALLBACKS["social.instagram_url"],
+	);
+	const twitter = useConfig(
+		"social.twitter_url",
+		SOCIAL_FALLBACKS["social.twitter_url"],
+	);
+	const linkedin = useConfig(
+		"social.linkedin_url",
+		SOCIAL_FALLBACKS["social.linkedin_url"],
+	);
+	const holaEmail = useConfig("contact.hola_email", "hola@role.app");
+	const negociosEmail = useConfig(
+		"contact.negocios_email",
+		"negocios@role.app",
+	);
+
+	const SOCIAL = [
+		{ label: "Instagram", href: instagram },
+		{ label: "Twitter", href: twitter },
+		{ label: "LinkedIn", href: linkedin },
+	];
+
 	return (
 		<footer className="relative bg-role-dark-bg text-white pt-32 pb-10 px-6 overflow-hidden">
 			{/* Watermark wordmark */}
@@ -107,7 +132,7 @@ export function Footer() {
 						</h4>
 						<div className="flex flex-col gap-3 text-role-dark-muted">
 							<a
-								href="mailto:hola@role.app"
+								href={`mailto:${holaEmail}`}
 								className="hover:text-white transition-colors duration-200 flex items-center gap-2"
 							>
 								{/* biome-ignore lint/a11y/noSvgWithoutTitle: icono decorativo */}
@@ -125,10 +150,10 @@ export function Footer() {
 									<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
 									<polyline points="22,6 12,13 2,6" />
 								</svg>
-								hola@role.app
+								{holaEmail}
 							</a>
 							<a
-								href="mailto:negocios@role.app"
+								href={`mailto:${negociosEmail}`}
 								className="hover:text-white transition-colors duration-200 flex items-center gap-2"
 							>
 								{/* biome-ignore lint/a11y/noSvgWithoutTitle: icono decorativo */}
@@ -146,7 +171,7 @@ export function Footer() {
 									<path d="M21 10V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v5" />
 									<path d="M14 10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8" />
 								</svg>
-								negocios@role.app
+								{negociosEmail}
 							</a>
 						</div>
 					</div>

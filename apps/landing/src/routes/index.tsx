@@ -9,8 +9,22 @@ import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
 import { Navbar } from "@/components/navbar";
 import { Testimonials } from "@/components/testimonials";
+import {
+	appConfigQueryOptions,
+	platformStatsQueryOptions,
+} from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
+	// SSR: config + stats reales se resuelven en el server para SEO.
+	loader: ({ context }) =>
+		Promise.all([
+			context.queryClient
+				.ensureQueryData(platformStatsQueryOptions)
+				.catch(() => undefined),
+			context.queryClient
+				.ensureQueryData(appConfigQueryOptions)
+				.catch(() => undefined),
+		]),
 	component: LandingPage,
 });
 

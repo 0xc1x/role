@@ -167,9 +167,8 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 				</p>
 			)}
 
-			<form.Field
-				name="title"
-				children={(field) => {
+			<form.Field name="title">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -189,11 +188,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="caption"
-				children={(field) => {
+			<form.Field name="caption">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -213,11 +211,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="badge_text"
-				children={(field) => {
+			<form.Field name="badge_text">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -237,11 +234,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="cta_label"
-				children={(field) => {
+			<form.Field name="cta_label">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -261,11 +257,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="redirect_url"
-				children={(field) => {
+			<form.Field name="redirect_url">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -285,11 +280,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="type"
-				children={(field) => {
+			<form.Field name="type">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -320,11 +314,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="priority"
-				children={(field) => {
+			<form.Field name="priority">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					const priority = field.state.value ?? 0;
@@ -351,11 +344,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="text_color"
-				children={(field) => {
+			<form.Field name="text_color">
+				{(field) => {
 					const rawValue = field.state.value ?? "";
 					const hasFormatError =
 						rawValue.length > 0 && !HEX_REGEX.test(rawValue);
@@ -400,11 +392,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="button_color"
-				children={(field) => {
+			<form.Field name="button_color">
+				{(field) => {
 					const rawValue = field.state.value ?? "";
 					const hasFormatError =
 						rawValue.length > 0 && !HEX_REGEX.test(rawValue);
@@ -449,11 +440,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="start_at"
-				children={(field) => {
+			<form.Field name="start_at">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -468,11 +458,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="end_at"
-				children={(field) => {
+			<form.Field name="end_at">
+				{(field) => {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
@@ -489,11 +478,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						</Field>
 					);
 				}}
-			/>
+			</form.Field>
 
-			<form.Field
-				name="image"
-				children={(field) => (
+			<form.Field name="image">
+				{(field) => (
 					<ImageField
 						label="Imagen de la slide"
 						currentFile={field.state.value}
@@ -503,12 +491,11 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						onChange={(file) => field.handleChange(file)}
 					/>
 				)}
-			/>
+			</form.Field>
 
 			{slide && (
-				<form.Field
-					name="active"
-					children={(field) => {
+				<form.Field name="active">
+					{(field) => {
 						const isActive = field.state.value;
 						return (
 							<Field>
@@ -529,7 +516,7 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 							</Field>
 						);
 					}}
-				/>
+				</form.Field>
 			)}
 		</form>
 	);

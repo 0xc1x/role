@@ -1,1 +1,1 @@
-export { columns as slidesColumns } from "./tables/slides.columns"
+export { columns as slidesColumns } from "./tables/slides.columns";
