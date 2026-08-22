@@ -92,7 +92,11 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "export:web": "expo export --platform web",
+    "deploy:web": "expo export --platform web && node scripts/fix-web-dist.mjs && cp vercel.json dist/ && cd dist && vercel --prod"
   },
-  "trustedDependencies": ["@sentry/cli"]
+  "trustedDependencies": [
+    "@sentry/cli"
+  ]
 }

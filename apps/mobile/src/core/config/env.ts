@@ -27,7 +27,21 @@ const envSchema = z.object({
 export type AppEnv = z.infer<typeof envSchema>;
 
 function loadEnv(): AppEnv {
-	const parsed = envSchema.safeParse(process.env);
+	// Metro inlines ONLY literal member accesses like `process.env.EXPO_PUBLIC_X`
+	// at build time. Passing `process.env` wholesale (e.g. `safeParse(process.env)`)
+	// defeats that: on static web exports there is no runtime process.env, every
+	// value arrives undefined and validation fails with a blank screen.
+	// So each variable must be read explicitly, by dotted name.
+	const raw = {
+		EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+		EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+		EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN,
+		EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+		EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL:
+			process.env.EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL,
+		EXPO_PUBLIC_ENVIRONMENT: process.env.EXPO_PUBLIC_ENVIRONMENT,
+	};
+	const parsed = envSchema.safeParse(raw);
 	if (!parsed.success) {
 		// Fail loudly at startup instead of crashing mid-session with a
 		// cryptic network error. Fields are public (anon key), so the

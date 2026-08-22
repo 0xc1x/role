@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LayoutCategoriasRouteImport } from './routes/_layout.categorias'
 import { Route as LayoutConfiguracionRouteImport } from './routes/_layout.configuracion'
+import { Route as LayoutEmailsRouteImport } from './routes/_layout.emails'
 import { Route as LayoutHomeRouteImport } from './routes/_layout.home'
 import { Route as LayoutSlidesRouteImport } from './routes/_layout.slides'
 
@@ -47,6 +48,11 @@ const LayoutConfiguracionRoute = LayoutConfiguracionRouteImport.update({
   path: '/configuracion',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutEmailsRoute = LayoutEmailsRouteImport.update({
+  id: '/emails',
+  path: '/emails',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutHomeRoute = LayoutHomeRouteImport.update({
   id: '/home',
   path: '/home',
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/categorias': typeof LayoutCategoriasRoute
   '/configuracion': typeof LayoutConfiguracionRoute
+  '/emails': typeof LayoutEmailsRoute
   '/home': typeof LayoutHomeRoute
   '/slides': typeof LayoutSlidesRoute
 }
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/categorias': typeof LayoutCategoriasRoute
   '/configuracion': typeof LayoutConfiguracionRoute
+  '/emails': typeof LayoutEmailsRoute
   '/home': typeof LayoutHomeRoute
   '/slides': typeof LayoutSlidesRoute
 }
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/_layout/categorias': typeof LayoutCategoriasRoute
   '/_layout/configuracion': typeof LayoutConfiguracionRoute
+  '/_layout/emails': typeof LayoutEmailsRoute
   '/_layout/home': typeof LayoutHomeRoute
   '/_layout/slides': typeof LayoutSlidesRoute
 }
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/categorias'
     | '/configuracion'
+    | '/emails'
     | '/home'
     | '/slides'
   fileRoutesByTo: FileRoutesByTo
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/categorias'
     | '/configuracion'
+    | '/emails'
     | '/home'
     | '/slides'
   id:
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/_layout/categorias'
     | '/_layout/configuracion'
+    | '/_layout/emails'
     | '/_layout/home'
     | '/_layout/slides'
   fileRoutesById: FileRoutesById
@@ -169,6 +181,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutConfiguracionRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/emails': {
+      id: '/_layout/emails'
+      path: '/emails'
+      fullPath: '/emails'
+      preLoaderRoute: typeof LayoutEmailsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/home': {
       id: '/_layout/home'
       path: '/home'
@@ -189,6 +208,7 @@ declare module '@tanstack/react-router' {
 interface LayoutRouteChildren {
   LayoutCategoriasRoute: typeof LayoutCategoriasRoute
   LayoutConfiguracionRoute: typeof LayoutConfiguracionRoute
+  LayoutEmailsRoute: typeof LayoutEmailsRoute
   LayoutHomeRoute: typeof LayoutHomeRoute
   LayoutSlidesRoute: typeof LayoutSlidesRoute
 }
@@ -196,6 +216,7 @@ interface LayoutRouteChildren {
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutCategoriasRoute: LayoutCategoriasRoute,
   LayoutConfiguracionRoute: LayoutConfiguracionRoute,
+  LayoutEmailsRoute: LayoutEmailsRoute,
   LayoutHomeRoute: LayoutHomeRoute,
   LayoutSlidesRoute: LayoutSlidesRoute,
 }
