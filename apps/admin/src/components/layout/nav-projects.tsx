@@ -19,7 +19,14 @@ export function NavProjects({
 	}[];
 }) {
 	const location = useLocation();
-	const currentPath = location.pathname;
+	// pathname + search serializado (los urls pueden diferir por ?tab=…)
+	const searchString =
+		typeof location.search === "string"
+			? location.search
+			: new URLSearchParams(
+					(location.search ?? {}) as Record<string, string>,
+				).toString();
+	const currentUrl = `${location.pathname}${searchString ? `?${searchString}` : ""}`;
 
 	return (
 		<SidebarGroup>
@@ -29,7 +36,7 @@ export function NavProjects({
 					<SidebarMenuItem key={item.name}>
 						<SidebarMenuButton
 							render={<Link to={item.url} />}
-							isActive={currentPath === item.url}
+							isActive={currentUrl === item.url}
 						>
 							<item.icon />
 							<span>{item.name}</span>

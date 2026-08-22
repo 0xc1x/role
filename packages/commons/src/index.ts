@@ -9,3 +9,4 @@ export * from './categories';
 export * from './slides';
 export * from './config';
 export * from './stats'
+export * from './email'

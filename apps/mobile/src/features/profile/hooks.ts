@@ -68,6 +68,25 @@ export function useUpdatePreferences(userId: string) {
 	});
 }
 
+// ─── Marketing preferences ──────────────────────────────────────────
+export function useMarketingPreferences(userId: string) {
+	return useQuery({
+		queryKey: ["marketingPrefs", userId],
+		queryFn: () => profileRepository.getMarketingPreferences(userId),
+		enabled: userId.length > 0,
+	});
+}
+
+export function useUpdateMarketingPreferences(userId: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (isSubscribed: boolean) =>
+			profileRepository.setMarketingSubscribed(userId, isSubscribed),
+		onSuccess: () =>
+			void queryClient.invalidateQueries({ queryKey: ["marketingPrefs", userId] }),
+	});
+}
+
 // ─── Notification preferences ───────────────────────────────────────
 export function useNotificationPreferences(userId: string) {
 	return useQuery({

@@ -461,6 +461,10 @@ export const strings = {
 		maxDistance: "Distancia máxima",
 		searchRadiusHint:
 			"Te mostraremos ofertas gastronómicas y comerciales dentro de este radio de cobertura.",
+		marketing: "Emails de marketing",
+		marketingLabel: "Novedades y anuncios",
+		marketingHint:
+			"Recibe noticias y promociones de Rolé. Puedes darte de baja cuando quieras.",
 		km: "km",
 	},
 	notificationsSettings: {

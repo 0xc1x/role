@@ -74,16 +74,16 @@ export const navMain: NavMainItem[] = [
 	},
 	{
 		title: "Correos",
-		url: "#",
+		url: "/emails",
 		icon: Mail,
 		items: [
 			{
 				title: "Plantillas",
-				url: "#",
+				url: "/emails?tab=plantillas",
 			},
 			{
 				title: "Gestión de correos",
-				url: "#",
+				url: "/emails",
 			},
 		],
 	},
@@ -107,7 +107,7 @@ export const projects: NavProject[] = [
 	},
 	{
 		name: "Campañas de Marketing",
-		url: "#",
+		url: "/emails?tab=campanas",
 		icon: Megaphone,
 	},
 	{

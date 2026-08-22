@@ -16,6 +16,8 @@ import { SlidesModule } from './modules/slides/slides.module';
 import { BusinessesModule } from './modules/businesses/businesses.module';
 import { AppConfigModule } from './modules/app-config/app-config.module';
 import { StatsModule } from './modules/stats/stats.module';
+import { EmailMarketingModule } from './modules/email-marketing/email-marketing.module';
+import { ProfilesModule } from './modules/profiles/profiles.module';
 
 @Module({
   imports: [
@@ -58,6 +60,8 @@ import { StatsModule } from './modules/stats/stats.module';
     BusinessesModule,
     AppConfigModule,
     StatsModule,
+    EmailMarketingModule,
+    ProfilesModule,
   ],
   providers: [
     {

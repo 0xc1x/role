@@ -8,6 +8,7 @@ export * from './orders';
 export * from './categories';
 export * from './slides';
 export * from './app-configs';
+export * from './email-marketing';
 
 import { businessLocations } from './business-locations';
 import { businesses } from './businesses';
@@ -18,6 +19,15 @@ import { profiles } from './profiles';
 import { categories } from './categories';
 import { slides } from './slides';
 import { appConfig } from './app-configs';
+import {
+  campaigns,
+  emailComponents,
+  emailSends,
+  emailTemplates,
+  marketingPreferences,
+  segmentUsers,
+  segments,
+} from './email-marketing';
 
 
 /** Schema map passed to drizzle() for typed queries. */
@@ -31,7 +41,14 @@ export const schema = {
   orderEvents,
   categories,
   slides,
-  appConfig
+  appConfig,
+  emailComponents,
+  emailTemplates,
+  marketingPreferences,
+  segments,
+  segmentUsers,
+  campaigns,
+  emailSends
 };
 
 export type DatabaseSchema = typeof schema;

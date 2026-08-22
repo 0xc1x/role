@@ -28,6 +28,18 @@ export const envSchema = z.object({
   DOCS_USER: z.string().optional(),
   /** Basic auth password for /docs in production */
   DOCS_PASSWORD: z.string().optional(),
+  /** Resend API key — vacío deshabilita el envío real de emails de marketing */
+  RESEND_API_KEY: z.string().default(''),
+  /** Remitente por defecto para emails de marketing */
+  EMAIL_FROM: z.string().default('Rolé <no-reply@role.app>'),
+  /** Secreto de firma del webhook de Resend — vacío deshabilita la verificación */
+  RESEND_WEBHOOK_SECRET: z.string().default(''),
+  /** Secreto HMAC para tokens de desuscripción */
+  UNSUBSCRIBE_SECRET: z.string().default(''),
+  /** Base absoluta del endpoint de desuscripción (enlace del footer) */
+  UNSUBSCRIBE_URL_BASE: z
+    .string()
+    .default('http://localhost:4001/api/v1/email-marketing/unsubscribe'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -145,6 +145,34 @@ export const profileRepository = {
 		if (error) throw toAppError(error, "Error al guardar preferencias");
 	},
 
+	// ─── Marketing preferences ────────────────────────────────────────
+	async getMarketingPreferences(userId: string): Promise<{
+		is_subscribed: boolean;
+	}> {
+		const { data, error } = await supabase
+			.from("marketing_preferences")
+			.select("is_subscribed")
+			.eq("user_id", userId)
+			.maybeSingle();
+		if (error) throw toAppError(error, "Error al cargar preferencias");
+		return { is_subscribed: data?.is_subscribed ?? true };
+	},
+
+	async setMarketingSubscribed(userId: string, isSubscribed: boolean): Promise<void> {
+		const { error } = await supabase
+			.from("marketing_preferences")
+			.upsert(
+				{
+					user_id: userId,
+					is_subscribed: isSubscribed,
+					unsubscribed_at: isSubscribed ? null : new Date().toISOString(),
+					source: "app",
+				},
+				{ onConflict: "user_id" },
+			);
+		if (error) throw toAppError(error, "Error al guardar preferencias");
+	},
+
 	// ─── Consumer notification preferences ────────────────────────────
 	async getNotificationPreferences(
 		userId: string,

@@ -29,7 +29,14 @@ type NavItem = {
 
 export function NavMain({ items }: { items: NavItem[] }) {
 	const location = useLocation();
-	const currentPath = location.pathname;
+	// pathname + search serializado: los sub-items pueden diferir solo por ?tab=…
+	const searchString =
+		typeof location.search === "string"
+			? location.search
+			: new URLSearchParams(
+					(location.search ?? {}) as Record<string, string>,
+				).toString();
+	const currentUrl = `${location.pathname}${searchString ? `?${searchString}` : ""}`;
 
 	return (
 		<SidebarGroup className="w-full min-w-0">
@@ -40,7 +47,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
 					const hasSubItems = !!item.items?.length;
 					const isSubItemActive =
 						hasSubItems &&
-						item.items?.some((subItem) => currentPath === subItem.url);
+						item.items?.some((subItem) => currentUrl === subItem.url);
 
 					return hasSubItems ? (
 						<Collapsible
@@ -70,7 +77,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
 											<SidebarMenuSubButton
 												className="w-full"
 												render={<Link to={subItem.url} />}
-												isActive={currentPath === subItem.url}
+												isActive={currentUrl === subItem.url}
 											>
 												<span>{subItem.title}</span>
 											</SidebarMenuSubButton>
@@ -85,7 +92,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
 								tooltip={item.title}
 								className="flex w-full min-w-0 items-center"
 								render={<Link to={item.url} />}
-								isActive={currentPath === item.url}
+								isActive={currentUrl === item.url}
 							>
 								{item.icon && <item.icon />}
 								<span className="min-w-0 flex-1 truncate">{item.title}</span>
