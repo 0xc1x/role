@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PaginatedDataSchema, PaginationQuerySchema } from '../../_common/schemas/api.schema';
 import { AppRoleSchema, TimestamptzSchema, UuidSchema } from '../../_common/schemas/common';
 
 export const ProfileSchema = z.object({
@@ -33,3 +34,15 @@ export const UpdateProfileSchema = z
     city: z.string().nullable(),
   })
   .partial();
+
+// ─── Admin: listado de perfiles ────────────────────────────────────────
+export const ListProfilesQuerySchema = PaginationQuerySchema.extend({
+  search: z.string().min(1).max(100).optional(),
+  role: AppRoleSchema.optional(),
+  /** Solo perfiles suscritos a esta categoría de marketing. */
+  subscribed_to: z
+    .enum(['announcements', 'promotions', 'news'])
+    .optional(),
+});
+
+export const ProfileListResponseSchema = PaginatedDataSchema(ProfileSchema);
