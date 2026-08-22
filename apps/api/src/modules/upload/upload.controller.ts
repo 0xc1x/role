@@ -21,6 +21,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { IsOptional } from 'class-validator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UploadService } from './upload.service';
 
@@ -34,12 +35,14 @@ class UploadImageBody {
   })
   file: any;
 
+  @IsOptional()
   @ApiPropertyOptional({
     description: 'Nombre del bucket en Supabase (opcional, por defecto el del .env)',
     example: 'public-assets',
   })
   bucket?: string;
 
+  @IsOptional()
   @ApiPropertyOptional({
     description: 'Carpeta dentro del bucket (opcional, por defecto "categories")',
     example: 'categories',
