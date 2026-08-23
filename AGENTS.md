@@ -21,12 +21,10 @@ role/
 │   ├── api/          # NestJS 11 + drizzle — BFF de admin/landing
 │   ├── admin/        # TanStack Start + shadcn — panel de administración
 │   ├── landing/      # TanStack Start — marketing/SEO + onboarding business [implementado]
-│   └── mobile/       # Expo — port de la app Flutter (Rolé) [implementado]
+│   └── mobile/       # Expo — app móvil consumer [implementado]
 └── packages/
     └── commons/      # Contratos SSOT: DTOs, schemas Zod, enums, tipos
 ```
-
-**Flutter (Rolé v1) queda fuera del monorepo** como repo separado, congelado a features, hasta que `mobile` alcance paridad (estrategia strangler).
 
 ## Interrelación (grafo de dependencias)
 

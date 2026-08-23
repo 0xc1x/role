@@ -5,7 +5,7 @@
 
 ## Contexto
 
-El app Flutter original (Rolé v1) consume Supabase directamente (queries + RLS). La API NestJS existe como BFF para admin/landing. La pregunta era si el móvil debía pasar por la API como intermediaria.
+El móvil consume Supabase directamente (queries + RLS). La API NestJS existe como BFF para admin/landing. La pregunta era si el móvil debía pasar por la API como intermediaria.
 
 ## Decisión
 
@@ -13,7 +13,7 @@ El app Flutter original (Rolé v1) consume Supabase directamente (queries + RLS)
 
 ## Consecuencias
 
-- Zero rediseño de datos: las queries/RLS del app Flutter se portan tal cual a supabase-js en Expo.
+- Zero rediseño de datos: las queries/RLS se mantienen en supabase-js en Expo.
 - La API posee las reglas de negocio que no deben vivir en cliente (stock, ciclo de órdenes, pagos futuros).
 - Los contratos de `commons` sirven para validación client-side y tipos; el `openapi.json` queda disponible si algún día se generan clientes.
 - Revisar esta decisión si el móvil necesita lógica transaccional que no puede ir en RLS/función de borde.

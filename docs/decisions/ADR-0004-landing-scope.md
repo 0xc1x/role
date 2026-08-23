@@ -5,7 +5,7 @@
 
 ## Contexto
 
-La landing vive hoy en Flutter (`lib/features/landing`). La web SEO-critical no debe ir a Expo web (débil en SEO/fidelidad). El admin ya es TanStack Start, lo que hace natural una segunda app Start para la landing.
+La web SEO-critical no debe ir a Expo web (débil en SEO/fidelidad). El admin ya es TanStack Start, lo que hace natural una segunda app Start para la landing.
 
 ## Decisión
 

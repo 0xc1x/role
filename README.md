@@ -10,12 +10,12 @@ role/
 │   ├── api/          # NestJS 11 + drizzle-orm + supabase-js   [heredado de github.com/0xc1x/role-api]
 │   ├── admin/        # TanStack Start + shadcn + biome         [heredado de github.com/0xc1x/role-front-admin]
 │   ├── landing/      # TanStack Start — marketing/SEO + onboarding business   [implementado]
-│   └── mobile/       # Expo — port de la app Flutter (Rolé)                    [implementado]
+│   └── mobile/       # Expo — app móvil consumer                          [implementado]
 └── packages/
     └── commons/       # DTOs, schemas Zod, enums, tipos (pkg @0xc1x/role-commons)  [heredado de ~/Projects/role-commons]
 ```
 
-**Flutter (Rolé v1) queda fuera del monorepo** como repo separado, congelado a features, hasta que `mobile` alcance paridad (estrategia strangler).
+La app móvil consumer vive como `apps/mobile` (Expo) dentro del monorepo.
 
 ## Decisiones (ADRs)
 
@@ -27,7 +27,7 @@ Decisiones de arquitectura documentadas en `docs/decisions/` (formato ADR ligero
 | ADR-0002 | Móvil se comunica directo con Supabase (API = BFF de admin/landing) |
 | ADR-0003 | Bundle ID `com.xcix.role` — renombrar a la empresa pre-release |
 | ADR-0004 | Landing = marketing/SEO + onboarding con verificación manual |
-| ADR-0005 | Monorepo — unificación de api/admin/commons; Rolé v1 (Flutter) fuera hasta sunset |
+| ADR-0005 | Monorepo — unificación de api/admin/commons/mobile en un solo repo |
 
 **Pendiente**: tri-state de verificación de negocio (`pending/active/rejected`) antes de congelar schemas.
 

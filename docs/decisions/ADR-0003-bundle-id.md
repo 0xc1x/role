@@ -5,7 +5,7 @@
 
 ## Contexto
 
-El app Flutter original (Rolé v1) usa `com.xcix.fudi` (org xcix), renombrado a `com.xcix.role` en el port Expo. Un bundle ID publicado no se puede cambiar sin crear una listing nueva en App Store / app nueva en Play. El lanzamiento aún no ocurre.
+El app Expo nace con `com.xcix.role` (org xcix). Un bundle ID publicado no se puede cambiar sin crear una listing nueva en App Store / app nueva en Play. El lanzamiento aún no ocurre.
 
 ## Decisión
 
@@ -14,5 +14,5 @@ El app Expo nace con **`com.xcix.role`** (en `app.json`: `android.package` / `io
 ## Consecuencias
 
 - La listing de stores se crea con el ID final (el de la empresa), no con `com.xcix.role`.
-- No se renombra el app Flutter internamente (va a morir en el strangler) — solo los artefactos nuevos nacen como Rolé.
+- El segmento `xcix` se renombrará al nombre de la empresa antes del primer release — los artefactos nuevos ya nacen como Rolé.
 - Aviso en `apps/mobile/README.md` como recordatorio pre-release.

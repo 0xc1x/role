@@ -26,7 +26,7 @@ apps/api ─────┘                └── apps/landing
 
 **Registro de negocio (landing)**: el negocio se registra desde la landing (TanStack Start) → insert directo a Supabase con `is_active=false` → el admin verifica los datos personalmente (admin → API → actualiza estado) → el móvil muestra el negocio cuando RLS lo permite.
 
-**Catálogo y órdenes (móvil)**: el móvil lee/crea ofertas, órdenes y reservas directo contra Supabase (mismas queries y RLS que el app Flutter original (Rolé v1)). La API posee las reglas transaccionales (stock, ciclo de vida de órdenes) para admin/landing.
+**Catálogo y órdenes (móvil)**: el móvil lee/crea ofertas, órdenes y reservas directo contra Supabase (queries y RLS nativas). La API posee las reglas transaccionales (stock, ciclo de vida de órdenes) para admin/landing.
 
 **Panel admin**: consume la API REST (`VITE_API_URL`) y los contratos de `commons` para tipar respuestas.
 
@@ -45,4 +45,4 @@ apps/api ─────┘                └── apps/landing
 - **Seguridad**: RLS en Supabase es la frontera de datos; la API valida input con zod y verifica JWT (jose); guards por rol; Helmet + Throttler en producción.
 - **Contratos**: no inventar campos de dominio fuera de `commons` — si el admin necesita un campo nuevo, el contrato se actualiza en `commons` (ver `docs/contracts.md`).
 - **Build order**: `turbo` ejecuta `commons` antes que sus consumidores; nunca dependas de un paquete sin declararlo en `dependencies`.
-- **Flutter (Rolé v1)**: repo aparte, en sunset hasta paridad de `mobile`.
+- **Mobile**: app consumer Expo dentro del monorepo (`apps/mobile`).
