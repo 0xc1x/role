@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { SEGMENT_FILTER_FIELDS, type SegmentFilters } from '@0xc1x/role-commons';
+import {
+  SEGMENT_FILTER_FIELDS,
+  type SegmentFilters,
+} from '@0xc1x/role-commons';
 import { EmailMarketingRepository } from './email-marketing.repository';
 
 export interface Recipient {

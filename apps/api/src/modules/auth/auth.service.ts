@@ -12,7 +12,12 @@ import type { Env } from '../../config/env.schema';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import { profiles } from '../../database/schema';
-import type { LoginRequest, RegisterRequest, RefreshRequest, LogoutRequest } from '@0xc1x/role-commons';
+import type {
+  LoginRequest,
+  RegisterRequest,
+  RefreshRequest,
+  LogoutRequest,
+} from '@0xc1x/role-commons';
 
 @Injectable()
 export class AuthService {
@@ -129,8 +134,7 @@ export class AuthService {
       return {
         id: user.id,
         email: body.email,
-        message:
-          'Account created. Please sign in with your credentials.',
+        message: 'Account created. Please sign in with your credentials.',
       };
     }
 

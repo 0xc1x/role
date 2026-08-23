@@ -23,12 +23,16 @@ export interface ListProfilesFilter {
 export class ProfilesRepository {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async list(f: ListProfilesFilter): Promise<{ rows: ProfileRow[]; total: number }> {
+  async list(
+    f: ListProfilesFilter,
+  ): Promise<{ rows: ProfileRow[]; total: number }> {
     const filters: SQL[] = [];
     if (f.role) filters.push(eq(profiles.role, f.role as ProfileRow['role']));
     if (f.search) {
       const term = `%${f.search}%`;
-      filters.push(or(ilike(profiles.email, term), ilike(profiles.full_name, term))!);
+      filters.push(
+        or(ilike(profiles.email, term), ilike(profiles.full_name, term))!,
+      );
     }
     // Subscripción activa a la categoría (sin join: subquery simple).
     if (f.subscribedTo) {

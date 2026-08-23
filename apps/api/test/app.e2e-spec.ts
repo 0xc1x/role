@@ -75,7 +75,6 @@ const canBoot = hasDb && hasSupabase;
 describe('App e2e (always)', () => {
   it('documents skip reason when env is incomplete', () => {
     if (!canBoot) {
-      // eslint-disable-next-line no-console
       console.info(
         '[e2e] Skipped full suite: set DATABASE_URL + SUPABASE_* to enable.',
       );

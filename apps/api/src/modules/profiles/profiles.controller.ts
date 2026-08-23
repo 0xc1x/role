@@ -7,7 +7,12 @@ import {
   Patch,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import {
   ListProfilesQuerySchema,
   UpdateProfileSchema,
@@ -43,7 +48,9 @@ export class ProfilesController {
   }
 
   @Get(':id')
-  async getById(@Param('id', ParseUUIDPipe) id: string): Promise<ProfileDto | null> {
+  async getById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ProfileDto | null> {
     return this.profilesService.getById(id);
   }
 

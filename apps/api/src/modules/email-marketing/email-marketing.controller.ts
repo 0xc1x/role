@@ -21,6 +21,7 @@ import {
   CreateSegmentSchema,
   ListCampaignsQuerySchema,
   ListComponentsQuerySchema,
+  ListSegmentsQuerySchema,
   ListSendsQuerySchema,
   TestCampaignSchema,
   UpdateCampaignSchema,
@@ -31,8 +32,13 @@ import {
 import type {
   CampaignDto,
   CampaignPaginatedData,
+  CreateCampaignDto,
   EmailComponentPaginatedData,
   EmailTemplatePaginatedData,
+  ListCampaignsQuery,
+  ListComponentsQuery,
+  ListSegmentsQuery,
+  ListSendsQuery,
   RenderedEmail,
   SegmentPaginatedData,
   TestCampaignDto,
@@ -68,14 +74,13 @@ export class EmailMarketingController {
   @Get('components')
   @ApiOperation({ summary: 'List email components (header/footer)' })
   listComponents(
-    @Query(new ZodValidationPipe(ListComponentsQuerySchema)) q: any,
+    @Query(new ZodValidationPipe(ListComponentsQuerySchema))
+    q: ListComponentsQuery,
   ): Promise<EmailComponentPaginatedData> {
-    return this.repository
-      .listComponents(q)
-      .then(({ rows, total }) => ({
-        data: rows.map((r) => EmailMarketingMapper.toComponentDto(r)),
-        meta: { page: q.page, limit: q.limit, total },
-      })) as Promise<EmailComponentPaginatedData>;
+    return this.repository.listComponents(q).then(({ rows, total }) => ({
+      data: rows.map((r) => EmailMarketingMapper.toComponentDto(r)),
+      meta: { page: q.page, limit: q.limit, total },
+    })) as Promise<EmailComponentPaginatedData>;
   }
 
   @Post('components')
@@ -88,7 +93,8 @@ export class EmailMarketingController {
   @Patch('components/:id')
   updateComponent(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(UpdateEmailComponentSchema)) body: UpdateEmailComponentDto,
+    @Body(new ZodValidationPipe(UpdateEmailComponentSchema))
+    body: UpdateEmailComponentDto,
   ) {
     return this.repository.updateComponent(id, body);
   }
@@ -102,7 +108,8 @@ export class EmailMarketingController {
 
   @Get('templates')
   listTemplates(
-    @Query(new ZodValidationPipe(ListComponentsQuerySchema)) q: any,
+    @Query(new ZodValidationPipe(ListComponentsQuerySchema))
+    q: ListComponentsQuery,
   ): Promise<EmailTemplatePaginatedData> {
     return this.repository.listTemplates(q).then(({ rows, total }) => ({
       data: rows.map((r) => EmailMarketingMapper.toTemplateDto(r)),
@@ -112,7 +119,9 @@ export class EmailMarketingController {
 
   @Post('templates/:id/render')
   @HttpCode(HttpStatus.OK)
-  async renderPreview(@Param('id', ParseUUIDPipe) id: string): Promise<RenderedEmail> {
+  async renderPreview(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<RenderedEmail> {
     return this.campaignsService.preview({ templateId: id });
   }
 
@@ -129,14 +138,15 @@ export class EmailMarketingController {
   async createTemplate(
     @Body(new ZodValidationPipe(CreateEmailTemplateSchema)) body: any,
   ) {
-    const row = await this.repository.insertTemplate(body);
-    return EmailMarketingMapper.toTemplateDto(row[0]);
+    const rows = await this.repository.insertTemplate(body);
+    return EmailMarketingMapper.toTemplateDto(rows[0]!);
   }
 
   @Patch('templates/:id')
   async updateTemplate(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(UpdateEmailTemplateSchema)) body: UpdateEmailTemplateDto,
+    @Body(new ZodValidationPipe(UpdateEmailTemplateSchema))
+    body: UpdateEmailTemplateDto,
   ) {
     const row = await this.repository.updateTemplate(id, body);
     return row ? EmailMarketingMapper.toTemplateDto(row) : null;
@@ -151,7 +161,7 @@ export class EmailMarketingController {
 
   @Get('segments')
   listSegments(
-    @Query(new ZodValidationPipe(ListComponentsQuerySchema)) q: any,
+    @Query(new ZodValidationPipe(ListSegmentsQuerySchema)) q: ListSegmentsQuery,
   ): Promise<SegmentPaginatedData> {
     return this.repository.listSegments(q).then(({ rows, total }) => ({
       data: rows.map((r) => EmailMarketingMapper.toSegmentDto(r)),
@@ -201,7 +211,8 @@ export class EmailMarketingController {
   @HttpCode(HttpStatus.OK)
   setSegmentUsers(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(AddSegmentUsersSchema)) body: { user_ids: string[] },
+    @Body(new ZodValidationPipe(AddSegmentUsersSchema))
+    body: { user_ids: string[] },
   ) {
     return this.repository.replaceSegmentUsers(id, body.user_ids);
   }
@@ -209,7 +220,8 @@ export class EmailMarketingController {
   @Post('segments/:id/users')
   addSegmentUsers(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(AddSegmentUsersSchema)) body: { user_ids: string[] },
+    @Body(new ZodValidationPipe(AddSegmentUsersSchema))
+    body: { user_ids: string[] },
   ) {
     return this.repository.addSegmentUsers(id, body.user_ids);
   }
@@ -218,7 +230,8 @@ export class EmailMarketingController {
 
   @Get('campaigns')
   listCampaigns(
-    @Query(new ZodValidationPipe(ListCampaignsQuerySchema)) q: any,
+    @Query(new ZodValidationPipe(ListCampaignsQuerySchema))
+    q: ListCampaignsQuery,
   ): Promise<CampaignPaginatedData> {
     return this.repository.listCampaigns(q).then(({ rows, total }) => ({
       data: rows.map((r) => EmailMarketingMapper.toCampaignDto(r)),
@@ -227,16 +240,18 @@ export class EmailMarketingController {
   }
 
   @Get('campaigns/:id')
-  getCampaign(@Param('id', ParseUUIDPipe) id: string): Promise<CampaignDto | null> {
-    return this.repository.getCampaignById(id).then((row) =>
-      row ? EmailMarketingMapper.toCampaignDto(row) : null,
-    );
+  getCampaign(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<CampaignDto | null> {
+    return this.repository
+      .getCampaignById(id)
+      .then((row) => (row ? EmailMarketingMapper.toCampaignDto(row) : null));
   }
 
   @Post('campaigns')
   createCampaign(
     @CurrentUser() user: AuthUser,
-    @Body(new ZodValidationPipe(CreateCampaignSchema)) body: any,
+    @Body(new ZodValidationPipe(CreateCampaignSchema)) body: CreateCampaignDto,
   ) {
     return this.repository.insertCampaign({
       ...body,
@@ -312,7 +327,7 @@ export class EmailMarketingController {
   @Get('campaigns/:id/sends')
   listSends(
     @Param('id', ParseUUIDPipe) id: string,
-    @Query(new ZodValidationPipe(ListSendsQuerySchema)) q: any,
+    @Query(new ZodValidationPipe(ListSendsQuerySchema)) q: ListSendsQuery,
   ) {
     return this.campaignsService.listSends({ campaignId: id, ...q });
   }

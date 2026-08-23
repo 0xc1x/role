@@ -73,12 +73,17 @@ export class CampaignsService {
         this.buildSampleVars(),
       ),
       html,
-      variables_used: Array.isArray(template.variables) ? template.variables : [],
+      variables_used: Array.isArray(template.variables)
+        ? (template.variables as string[])
+        : [],
     };
   }
 
   /** Envío real a emails fijos con el mismo pipeline. No se registra. */
-  async test(campaignId: string, dto: TestCampaignDto): Promise<{ sent: number }> {
+  async test(
+    campaignId: string,
+    dto: TestCampaignDto,
+  ): Promise<{ sent: number }> {
     const campaign = await this.getCampaignOrFail(campaignId);
     if (!campaign.template_id) {
       throw new BadRequestException('La campaña no tiene plantilla');
@@ -92,7 +97,7 @@ export class CampaignsService {
     // Un solo asunto: override con contenido, si no el de la plantilla.
     rendered.subject = `[TEST] ${this.applySubjectOverride(campaign, rendered.subject)}`;
     if (dto.overrides?.body_html) {
-      const { header, footer } = await this.loadParts(campaign.template_id!);
+      const { header, footer } = await this.loadParts(campaign.template_id);
       rendered.html = this.renderer.assemble({
         headerHtml: header?.html_content ?? null,
         bodyHtml: dto.overrides.body_html,
@@ -133,23 +138,20 @@ export class CampaignsService {
 
   /** Producción: resuelve destinatarios y encola un email_sends por persona. */
   async send(campaignId: string): Promise<CampaignDto> {
-		const campaign = await this.getCampaignOrFail(campaignId);
-		if (
-			campaign.status !== 'draft' &&
-			campaign.status !== 'scheduled' &&
-			campaign.status !== 'failed'
-		) {
-			throw new BadRequestException(
-				`Solo se pueden enviar campañas draft, scheduled o failed (estado actual: ${campaign.status})`,
-			);
-		}
+    const campaign = await this.getCampaignOrFail(campaignId);
+    if (
+      campaign.status !== 'draft' &&
+      campaign.status !== 'scheduled' &&
+      campaign.status !== 'failed'
+    ) {
+      throw new BadRequestException(
+        `Solo se pueden enviar campañas draft, scheduled o failed (estado actual: ${campaign.status})`,
+      );
+    }
     if (!campaign.template_id) {
       throw new BadRequestException('La campaña no tiene plantilla');
     }
-    if (
-      !campaign.segment_ids?.length &&
-      !campaign.include_user_ids?.length
-    ) {
+    if (!campaign.segment_ids?.length && !campaign.include_user_ids?.length) {
       throw new BadRequestException(
         'Selecciona al menos un segmento o usuarios incluidos',
       );
@@ -191,7 +193,11 @@ export class CampaignsService {
 
   async cancel(campaignId: string): Promise<CampaignDto> {
     const campaign = await this.getCampaignOrFail(campaignId);
-    if (campaign.status !== 'draft' && campaign.status !== 'sending' && campaign.status !== 'scheduled') {
+    if (
+      campaign.status !== 'draft' &&
+      campaign.status !== 'sending' &&
+      campaign.status !== 'scheduled'
+    ) {
       throw new BadRequestException(
         `No se puede cancelar una campaña en estado ${campaign.status}`,
       );
@@ -234,7 +240,12 @@ export class CampaignsService {
     return { processed };
   }
 
-  listSends(query: { campaignId: string; page: number; limit: number; status?: string }) {
+  listSends(query: {
+    campaignId: string;
+    page: number;
+    limit: number;
+    status?: string;
+  }) {
     return this.repository
       .listSendsByCampaign(query.campaignId, query)
       .then(({ rows, total }) =>
@@ -267,8 +278,9 @@ export class CampaignsService {
     );
     await this.repository.recountStats(campaign.id);
     const updated =
-      (await this.repository.updateCampaign(campaign.id, { status: 'sending' })) ??
-      campaign;
+      (await this.repository.updateCampaign(campaign.id, {
+        status: 'sending',
+      })) ?? campaign;
     // Primera tanda inmediata; el cron drena el resto.
     void this.processBatch(updated).catch((err: unknown) =>
       this.logger.error(`Primera tanda de ${campaign.id} falló`, err),
@@ -278,14 +290,20 @@ export class CampaignsService {
 
   /** Envía un lote de la cola; marca fin de campaña cuando vacía. */
   private async processBatch(campaign: CampaignRow): Promise<number> {
-    const batch = await this.repository.findQueuedBatch(campaign.id, BATCH_SIZE);
+    const batch = await this.repository.findQueuedBatch(
+      campaign.id,
+      BATCH_SIZE,
+    );
     for (const send of batch) {
       try {
         const rendered = await this.renderCampaign(
           campaign,
           (send.variables_used as Record<string, string> | null) ?? undefined,
         );
-        rendered.subject = this.applySubjectOverride(campaign, rendered.subject);
+        rendered.subject = this.applySubjectOverride(
+          campaign,
+          rendered.subject,
+        );
         const result = await this.deliver(send.email, rendered);
         await this.repository.markSent(send.id, result);
       } catch (err) {
@@ -331,8 +349,12 @@ export class CampaignsService {
     const template = await this.repository.findTemplateById(templateId);
     if (!template) throw new NotFoundException('Plantilla no encontrada');
     const [header, footer] = await Promise.all([
-      template.header_id ? this.repository.findComponentById(template.header_id) : null,
-      template.footer_id ? this.repository.findComponentById(template.footer_id) : null,
+      template.header_id
+        ? this.repository.findComponentById(template.header_id)
+        : null,
+      template.footer_id
+        ? this.repository.findComponentById(template.footer_id)
+        : null,
     ]);
     return { template, header, footer };
   }
@@ -342,7 +364,9 @@ export class CampaignsService {
     campaign: CampaignRow,
     vars?: Record<string, string>,
   ): Promise<RenderedEmail> {
-    const { template, header, footer } = await this.loadParts(campaign.template_id!);
+    const { template, header, footer } = await this.loadParts(
+      campaign.template_id!,
+    );
     return {
       subject: this.applySubjectOverride(campaign, template.subject),
       html: this.renderer.assemble({
@@ -351,12 +375,17 @@ export class CampaignsService {
         footerHtml: footer?.html_content ?? null,
         vars: vars ?? {},
       }),
-      variables_used: Array.isArray(template.variables) ? template.variables : [],
+      variables_used: Array.isArray(template.variables)
+        ? (template.variables as string[])
+        : [],
     };
   }
 
   /** Un solo criterio de asunto: override si tiene contenido, si no fallback. */
-  private applySubjectOverride(campaign: CampaignRow, fallback: string): string {
+  private applySubjectOverride(
+    campaign: CampaignRow,
+    fallback: string,
+  ): string {
     const override = campaign.subject_override?.trim();
     return override ? override : fallback;
   }
@@ -367,7 +396,10 @@ export class CampaignsService {
     return campaign;
   }
 
-  private async deliver(email: string, rendered: RenderedEmail): Promise<string | null> {
+  private async deliver(
+    email: string,
+    rendered: RenderedEmail,
+  ): Promise<string | null> {
     if (!this.resend) {
       // Sin API key (dev): simula éxito para probar el flujo completo.
       return `dev_${Date.now()}`;

@@ -28,7 +28,10 @@ export class AppConfigService {
     }
 
     const inserted = await this.appConfigRepository.transaction(async (tx) => {
-      return this.appConfigRepository.insert(tx, AppConfigMapper.toInsert(body));
+      return this.appConfigRepository.insert(
+        tx,
+        AppConfigMapper.toInsert(body),
+      );
     });
 
     return AppConfigMapper.toDto(inserted);

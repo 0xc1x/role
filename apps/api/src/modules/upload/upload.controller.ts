@@ -37,14 +37,16 @@ class UploadImageBody {
 
   @IsOptional()
   @ApiPropertyOptional({
-    description: 'Nombre del bucket en Supabase (opcional, por defecto el del .env)',
+    description:
+      'Nombre del bucket en Supabase (opcional, por defecto el del .env)',
     example: 'public-assets',
   })
   bucket?: string;
 
   @IsOptional()
   @ApiPropertyOptional({
-    description: 'Carpeta dentro del bucket (opcional, por defecto "categories")',
+    description:
+      'Carpeta dentro del bucket (opcional, por defecto "categories")',
     example: 'categories',
   })
   folder?: string;
@@ -53,7 +55,7 @@ class UploadImageBody {
 @ApiTags('Upload')
 @Controller('upload')
 export class UploadController {
-  constructor(private readonly uploadService: UploadService) { }
+  constructor(private readonly uploadService: UploadService) {}
 
   @Throttle({ upload: { limit: 5, ttl: 60000 } })
   @Post('image')
@@ -67,20 +69,30 @@ export class UploadController {
     type: UploadImageBody,
   })
   @ApiCreatedResponse({
-    description: 'Imagen subida y comprimida a WebP. La URL pública se devuelve en el cuerpo.',
+    description:
+      'Imagen subida y comprimida a WebP. La URL pública se devuelve en el cuerpo.',
     content: {
       'application/json': {
         schema: {
           type: 'object',
           properties: {
-            url: { type: 'string', format: 'uri', example: 'https://[project].supabase.co/storage/v1/object/public/images/categories/uuid.webp' },
+            url: {
+              type: 'string',
+              format: 'uri',
+              example:
+                'https://[project].supabase.co/storage/v1/object/public/images/categories/uuid.webp',
+            },
           },
           required: ['url'],
         },
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Archivo inválido, formato no soportado o excede el tamaño máximo' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Archivo inválido, formato no soportado o excede el tamaño máximo',
+  })
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 403, description: 'Requiere rol admin' })
   async uploadImage(

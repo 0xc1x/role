@@ -1,4 +1,3 @@
-import type { OrderStatus } from '@0xc1x/role-commons';
 import { toNumber } from '../../common/utils/numeric';
 import { canViewPickupCode } from './order-status.machine';
 import type { orders as ordersTable } from '../../database/schema';
@@ -36,7 +35,7 @@ export type OrderResponse = {
  */
 export class OrderMapper {
   static toResponse(row: OrderRow, viewer: OrderViewer): OrderResponse {
-    const status = row.status as OrderStatus;
+    const status = row.status;
     const showPickupCode = canViewPickupCode({
       status,
       isOrderOwner: viewer.isOrderOwner,

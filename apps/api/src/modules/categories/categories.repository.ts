@@ -14,7 +14,13 @@ export type CategoryInsert = typeof categories.$inferInsert;
 export type CategoryUpdate = Partial<
   Pick<
     CategoryInsert,
-    'name' | 'description' | 'emoji' | 'slug' | 'image_url' | 'active' | 'deleted_at'
+    | 'name'
+    | 'description'
+    | 'emoji'
+    | 'slug'
+    | 'image_url'
+    | 'active'
+    | 'deleted_at'
   >
 >;
 

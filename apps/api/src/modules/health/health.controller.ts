@@ -1,4 +1,10 @@
-import { Controller, Get, Inject, HttpStatus, HttpException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  HttpStatus,
+  HttpException,
+} from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { sql } from 'drizzle-orm';
 import { Public } from '../../common/decorators/public.decorator';

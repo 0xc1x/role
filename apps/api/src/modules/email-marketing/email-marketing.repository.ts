@@ -58,14 +58,21 @@ export class EmailMarketingRepository {
   async listComponents(f: ListFilter) {
     // Grid muestra inactivos; solo oculta eliminados.
     const filters: SQL[] = [isNull(emailComponents.deleted_at)];
-    if (f.active !== undefined) filters.push(eq(emailComponents.is_active, f.active));
+    if (f.active !== undefined)
+      filters.push(eq(emailComponents.is_active, f.active));
     if (f.search) filters.push(ilike(emailComponents.name, `%${f.search}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailComponents, where, f);
   }
 
   async findComponentById(id: string): Promise<ComponentRow | null> {
-    const [row] = await this.db.select().from(emailComponents).where(and(eq(emailComponents.id, id), isNull(emailComponents.deleted_at))).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(emailComponents)
+      .where(
+        and(eq(emailComponents.id, id), isNull(emailComponents.deleted_at)),
+      )
+      .limit(1);
     return (row as ComponentRow) ?? null;
   }
 
@@ -99,14 +106,19 @@ export class EmailMarketingRepository {
   async listTemplates(f: ListFilter) {
     // Grid muestra inactivos; solo oculta eliminados.
     const filters: SQL[] = [isNull(emailTemplates.deleted_at)];
-    if (f.active !== undefined) filters.push(eq(emailTemplates.is_active, f.active));
+    if (f.active !== undefined)
+      filters.push(eq(emailTemplates.is_active, f.active));
     if (f.search) filters.push(ilike(emailTemplates.name, `%${f.search}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailTemplates, where, f);
   }
 
   async findTemplateById(id: string): Promise<TemplateRow | null> {
-    const [row] = await this.db.select().from(emailTemplates).where(and(eq(emailTemplates.id, id), isNull(emailTemplates.deleted_at))).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(emailTemplates)
+      .where(and(eq(emailTemplates.id, id), isNull(emailTemplates.deleted_at)))
+      .limit(1);
     return (row as TemplateRow) ?? null;
   }
 
@@ -148,7 +160,11 @@ export class EmailMarketingRepository {
   }
 
   async findSegmentById(id: string): Promise<SegmentRow | null> {
-    const [row] = await this.db.select().from(segments).where(and(eq(segments.id, id), isNull(segments.deleted_at))).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(segments)
+      .where(and(eq(segments.id, id), isNull(segments.deleted_at)))
+      .limit(1);
     return (row as SegmentRow) ?? null;
   }
 
@@ -156,7 +172,10 @@ export class EmailMarketingRepository {
     return this.db.insert(segments).values(values).returning();
   }
 
-  async updateSegment(id: string, values: Partial<typeof segments.$inferInsert>) {
+  async updateSegment(
+    id: string,
+    values: Partial<typeof segments.$inferInsert>,
+  ) {
     const [row] = await this.db
       .update(segments)
       .set({ ...values, updated_at: new Date() })
@@ -199,18 +218,24 @@ export class EmailMarketingRepository {
   /** Reemplaza todos los miembros de un segmento estático (edición). */
   async replaceSegmentUsers(segmentId: string, userIds: string[]) {
     await this.db.transaction(async (tx) => {
-      await tx.delete(segmentUsers).where(eq(segmentUsers.segment_id, segmentId));
+      await tx
+        .delete(segmentUsers)
+        .where(eq(segmentUsers.segment_id, segmentId));
       if (userIds.length > 0) {
-        await tx.insert(segmentUsers).values(
-          userIds.map((user_id) => ({ segment_id: segmentId, user_id })),
-        );
+        await tx
+          .insert(segmentUsers)
+          .values(
+            userIds.map((user_id) => ({ segment_id: segmentId, user_id })),
+          );
       }
     });
     const [row] = await this.db
       .select({ c: count() })
       .from(segmentUsers)
       .where(eq(segmentUsers.segment_id, segmentId));
-    await this.updateSegment(segmentId, { estimated_count: Number(row?.c ?? 0) });
+    await this.updateSegment(segmentId, {
+      estimated_count: Number(row?.c ?? 0),
+    });
   }
 
   async addSegmentUsers(segmentId: string, userIds: string[]) {
@@ -222,7 +247,9 @@ export class EmailMarketingRepository {
       .select({ c: count() })
       .from(segmentUsers)
       .where(eq(segmentUsers.segment_id, segmentId));
-    await this.updateSegment(segmentId, { estimated_count: Number(row?.c ?? 0) });
+    await this.updateSegment(segmentId, {
+      estimated_count: Number(row?.c ?? 0),
+    });
   }
 
   /**
@@ -299,7 +326,11 @@ export class EmailMarketingRepository {
   }
 
   async getCampaignById(id: string): Promise<CampaignRow | null> {
-    const [row] = await this.db.select().from(campaigns).where(and(eq(campaigns.id, id), isNull(campaigns.deleted_at))).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(campaigns)
+      .where(and(eq(campaigns.id, id), isNull(campaigns.deleted_at)))
+      .limit(1);
     return (row as CampaignRow) ?? null;
   }
 
@@ -307,7 +338,10 @@ export class EmailMarketingRepository {
     return this.db.insert(campaigns).values(values).returning();
   }
 
-  async updateCampaign(id: string, values: Partial<typeof campaigns.$inferInsert>) {
+  async updateCampaign(
+    id: string,
+    values: Partial<typeof campaigns.$inferInsert>,
+  ) {
     const [row] = await this.db
       .update(campaigns)
       .set({ ...values, updated_at: new Date() })
@@ -320,14 +354,17 @@ export class EmailMarketingRepository {
     return this.db
       .select()
       .from(campaigns)
-      .where(and(eq(campaigns.status, 'scheduled'), lte(campaigns.scheduled_at, now)));
+      .where(
+        and(
+          eq(campaigns.status, 'scheduled'),
+          lte(campaigns.scheduled_at, now),
+        ),
+      );
   }
 
   // ─── Envíos (la cola) ──────────────────────────────────────────────
 
-  insertSends(
-    values: (typeof emailSends.$inferInsert)[],
-  ): Promise<SendRow[]> {
+  insertSends(values: (typeof emailSends.$inferInsert)[]): Promise<SendRow[]> {
     if (values.length === 0) return Promise.resolve([]);
     return this.db.insert(emailSends).values(values).returning();
   }
@@ -350,19 +387,30 @@ export class EmailMarketingRepository {
   async markSent(id: string, resendId: string | null) {
     await this.db
       .update(emailSends)
-      .set({ status: 'sent', resend_id: resendId, sent_at: new Date(), updated_at: new Date() })
+      .set({
+        status: 'sent',
+        resend_id: resendId,
+        sent_at: new Date(),
+        updated_at: new Date(),
+      })
       .where(eq(emailSends.id, id));
   }
 
   async markFailed(id: string, message: string) {
     await this.db
       .update(emailSends)
-      .set({ status: 'failed', error_message: message.slice(0, 500), updated_at: new Date() })
+      .set({
+        status: 'failed',
+        error_message: message.slice(0, 500),
+        updated_at: new Date(),
+      })
       .where(eq(emailSends.id, id));
   }
 
   async deleteSendsByCampaign(campaignId: string): Promise<void> {
-    await this.db.delete(emailSends).where(eq(emailSends.campaign_id, campaignId));
+    await this.db
+      .delete(emailSends)
+      .where(eq(emailSends.campaign_id, campaignId));
   }
 
   /** ¿Quedan envíos en cola para esta campaña? */
@@ -371,7 +419,10 @@ export class EmailMarketingRepository {
       .select({ c: count() })
       .from(emailSends)
       .where(
-        and(eq(emailSends.campaign_id, campaignId), eq(emailSends.status, 'queued')),
+        and(
+          eq(emailSends.campaign_id, campaignId),
+          eq(emailSends.status, 'queued'),
+        ),
       );
     return Number(row?.c ?? 0);
   }
@@ -400,7 +451,8 @@ export class EmailMarketingRepository {
 
   listSendsByCampaign(campaignId: string, f: ListFilter & { status?: string }) {
     const filters: SQL[] = [eq(emailSends.campaign_id, campaignId)];
-    if (f.status) filters.push(eq(emailSends.status, f.status as SendRow['status']));
+    if (f.status)
+      filters.push(eq(emailSends.status, f.status as SendRow['status']));
     return this.paginate(emailSends, and(...filters), f);
   }
 
@@ -456,9 +508,12 @@ export class EmailMarketingRepository {
     table: AnyTable,
     where: SQL | undefined,
     f: ListFilter,
-  // ponytail: filas como any — el mapper es quien las tipa hacia fuera.
+    // ponytail: filas como any — el mapper es quien las tipa hacia fuera.
   ): Promise<{ rows: any[]; total: number }> {
-    const [totalRow] = await this.db.select({ c: count() }).from(table).where(where);
+    const [totalRow] = await this.db
+      .select({ c: count() })
+      .from(table)
+      .where(where);
     const rows = await this.db
       .select()
       .from(table)
@@ -468,5 +523,4 @@ export class EmailMarketingRepository {
       .offset((f.page - 1) * f.limit);
     return { rows, total: Number(totalRow?.c ?? 0) };
   }
-
 }

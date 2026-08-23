@@ -99,10 +99,7 @@ export class AppConfigRepository {
     }
     if (filter.search) {
       const term = `%${filter.search}%`;
-      filters.push(
-        ilike(appConfig.key, term) ||
-          ilike(appConfig.label, term),
-      );
+      filters.push(ilike(appConfig.key, term) || ilike(appConfig.label, term));
     }
 
     const where = filters.length > 0 ? and(...filters) : undefined;

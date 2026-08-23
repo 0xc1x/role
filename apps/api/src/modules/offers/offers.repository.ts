@@ -90,10 +90,7 @@ export class OffersRepository {
     return this.db.transaction(fn);
   }
 
-  async insert(
-    executor: DbExecutor,
-    values: OfferInsert,
-  ): Promise<OfferRow> {
+  async insert(executor: DbExecutor, values: OfferInsert): Promise<OfferRow> {
     const [row] = await executor.insert(offers).values(values).returning();
     if (!row) {
       throw new Error('Failed to insert offer');
@@ -184,9 +181,15 @@ export class OffersRepository {
         location_latitude: businessLocations.latitude,
         location_longitude: businessLocations.longitude,
         location_zone: businessLocations.zone,
-        category_ids: sql<string[]>`COALESCE(array_agg(DISTINCT ${offerCategories.category_id}) FILTER (WHERE ${offerCategories.category_id} IS NOT NULL), '{}'::uuid[])`,
-        category_names: sql<string[]>`COALESCE(array_agg(DISTINCT ${categories.name}) FILTER (WHERE ${categories.name} IS NOT NULL), '{}'::text[])`,
-        category_slugs: sql<string[]>`COALESCE(array_agg(DISTINCT ${categories.slug}) FILTER (WHERE ${categories.slug} IS NOT NULL), '{}'::text[])`,
+        category_ids: sql<
+          string[]
+        >`COALESCE(array_agg(DISTINCT ${offerCategories.category_id}) FILTER (WHERE ${offerCategories.category_id} IS NOT NULL), '{}'::uuid[])`,
+        category_names: sql<
+          string[]
+        >`COALESCE(array_agg(DISTINCT ${categories.name}) FILTER (WHERE ${categories.name} IS NOT NULL), '{}'::text[])`,
+        category_slugs: sql<
+          string[]
+        >`COALESCE(array_agg(DISTINCT ${categories.slug}) FILTER (WHERE ${categories.slug} IS NOT NULL), '{}'::text[])`,
       })
       .from(offers)
       .innerJoin(businesses, eq(offers.business_id, businesses.id))
@@ -194,10 +197,7 @@ export class OffersRepository {
         businessLocations,
         eq(offers.business_location_id, businessLocations.id),
       )
-      .leftJoin(
-        offerCategories,
-        eq(offerCategories.offer_id, offers.id),
-      )
+      .leftJoin(offerCategories, eq(offerCategories.offer_id, offers.id))
       .leftJoin(categories, eq(categories.id, offerCategories.category_id));
   }
 
@@ -249,7 +249,7 @@ export class OffersRepository {
       .groupBy(...this.groupByFields())
       .orderBy(sql`random()`)
       .limit(1);
-    return (row as OfferListRow | undefined) ?? null;
+    return row ?? null;
   }
 
   private buildFilters(query: ListOffersQuery): SQL[] {
@@ -325,7 +325,7 @@ export class OffersRepository {
         .then((rows) => rows[0]?.value ?? 0),
     ]);
 
-    return { items: items as OfferListRow[], total: Number(totalRow) };
+    return { items: items, total: Number(totalRow) };
   }
 
   async findById(id: string): Promise<OfferListRow | null> {
@@ -365,7 +365,7 @@ export class OffersRepository {
       .where(eq(offers.id, id))
       .groupBy(...groupBy)
       .limit(1);
-    return (row as OfferListRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async findByIdForUpdate(
@@ -409,7 +409,9 @@ export class OffersRepository {
     const [row] = await this.db
       .select({ id: businesses.id })
       .from(businesses)
-      .where(and(eq(businesses.id, businessId), eq(businesses.owner_id, userId)))
+      .where(
+        and(eq(businesses.id, businessId), eq(businesses.owner_id, userId)),
+      )
       .limit(1);
     return Boolean(row);
   }

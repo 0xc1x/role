@@ -55,9 +55,7 @@ export class CategoriesController {
   @Get(':id')
   @ApiOperation({ summary: 'Get category by id' })
   @ApiOkResponse({ description: 'Category detail' })
-  getById(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<CategoryDto> {
+  getById(@Param('id', ParseUUIDPipe) id: string): Promise<CategoryDto> {
     return this.categoriesService.getById(id);
   }
 
@@ -93,9 +91,7 @@ export class CategoriesController {
   @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Soft-delete a category (admin)' })
   @ApiOkResponse({ description: 'Category soft-deleted' })
-  remove(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<CategoryDto> {
+  remove(@Param('id', ParseUUIDPipe) id: string): Promise<CategoryDto> {
     return this.categoriesService.remove(id);
   }
 }

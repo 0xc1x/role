@@ -28,10 +28,7 @@ export class CategoryMapper {
     };
   }
 
-  static toInsert(
-    dto: CreateCategoryDto,
-    slug: string,
-  ): CategoryInsert {
+  static toInsert(dto: CreateCategoryDto, slug: string): CategoryInsert {
     return {
       name: dto.name,
       description: dto.description ?? null,

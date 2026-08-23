@@ -12,10 +12,7 @@ import {
   type ListCategoriesQuery,
   type UpdateCategoryDto,
 } from '@0xc1x/role-commons';
-import {
-  CategoriesRepository,
-  type DbExecutor,
-} from './categories.repository';
+import { CategoriesRepository, type DbExecutor } from './categories.repository';
 import { CategoryMapper } from './categories.mapper';
 
 @Injectable()

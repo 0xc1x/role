@@ -79,7 +79,10 @@ export function canActorTransition(
   return false;
 }
 
-export function isTransitionAllowed(from: OrderStatus, to: OrderStatus): boolean {
+export function isTransitionAllowed(
+  from: OrderStatus,
+  to: OrderStatus,
+): boolean {
   return (ORDER_TRANSITIONS[from] as readonly string[]).includes(to);
 }
 

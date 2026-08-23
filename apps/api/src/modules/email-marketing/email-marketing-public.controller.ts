@@ -91,15 +91,12 @@ export class EmailMarketingPublicController {
     const secret = this.config.get('RESEND_WEBHOOK_SECRET', { infer: true });
     if (!secret) return; // dev sin secret: no se verifica
 
-    if (
-      !input.id ||
-      !input.timestamp ||
-      !input.signatureHeader
-    ) {
+    if (!input.id || !input.timestamp || !input.signatureHeader) {
       throw new BadRequestException('Faltan headers de firma svix');
     }
     const ageSeconds = Math.abs(Date.now() / 1000 - Number(input.timestamp));
-    if (ageSeconds > 300) throw new BadRequestException('Timestamp fuera de tolerancia');
+    if (ageSeconds > 300)
+      throw new BadRequestException('Timestamp fuera de tolerancia');
 
     const secretKey = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
     const expected = createHmac('sha256', secretKey)

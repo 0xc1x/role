@@ -4,18 +4,13 @@ import {
   type ListProfilesQuery,
   type ProfileDto,
 } from '@0xc1x/role-commons';
-import {
-  ProfilesRepository,
-  type ProfileRow,
-} from './profiles.repository';
+import { ProfilesRepository, type ProfileRow } from './profiles.repository';
 
 @Injectable()
 export class ProfilesService {
   constructor(private readonly repository: ProfilesRepository) {}
 
-  async list(
-    query: ListProfilesQuery & { subscribed_to?: string },
-  ) {
+  async list(query: ListProfilesQuery & { subscribed_to?: string }) {
     const { rows, total } = await this.repository.list({ ...query });
     return paginatedDataFromQuery(
       rows.map((row) => this.toDto(row)),

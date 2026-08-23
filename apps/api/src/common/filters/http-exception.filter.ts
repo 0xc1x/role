@@ -26,7 +26,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let error = 'Internal Server Error';
     let details: unknown;
 
-    const requestId = (request.headers['x-request-id'] as string) || crypto.randomUUID();
+    const requestId =
+      (request.headers['x-request-id'] as string) || crypto.randomUUID();
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();

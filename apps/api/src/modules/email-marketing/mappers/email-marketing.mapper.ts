@@ -5,7 +5,19 @@ import type {
   EmailTemplateDto,
   SegmentDto,
 } from '@0xc1x/role-commons';
-import type { CampaignRow, SendRow } from '../email-marketing.repository';
+import type {
+  CampaignRow,
+  ComponentRow,
+  SegmentRow,
+  SendRow,
+  TemplateRow,
+} from '../email-marketing.repository';
+
+/** Campos comunes de las filas con auditoría (componentes/plantillas no tienen description). */
+type BaseRow = Pick<
+  CampaignRow,
+  'id' | 'name' | 'created_at' | 'updated_at' | 'deleted_at'
+> & { description?: string | null };
 
 /** Filas DB → DTOs de commons (fechas Date → ISO). */
 export class EmailMarketingMapper {
@@ -13,8 +25,7 @@ export class EmailMarketingMapper {
     return value ? value.toISOString() : null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private static base(row: any) {
+  private static base(row: BaseRow) {
     return {
       id: row.id,
       name: row.name,
@@ -25,7 +36,7 @@ export class EmailMarketingMapper {
     };
   }
 
-  static toComponentDto(row: any): EmailComponentDto {
+  static toComponentDto(row: ComponentRow): EmailComponentDto {
     return {
       ...this.base(row),
       type: row.type,
@@ -34,20 +45,22 @@ export class EmailMarketingMapper {
     };
   }
 
-  static toTemplateDto(row: any): EmailTemplateDto {
+  static toTemplateDto(row: TemplateRow): EmailTemplateDto {
     return {
       ...this.base(row),
       subject: row.subject,
       body_html: row.body_html,
       header_id: row.header_id ?? null,
       footer_id: row.footer_id ?? null,
-      variables: Array.isArray(row.variables) ? row.variables : [],
+      variables: Array.isArray(row.variables)
+        ? (row.variables as string[])
+        : [],
       is_active: row.is_active,
       deleted_at: row.deleted_at?.toISOString() ?? null,
     };
   }
 
-  static toSegmentDto(row: any): SegmentDto {
+  static toSegmentDto(row: SegmentRow): SegmentDto {
     return {
       ...this.base(row),
       type: row.type,

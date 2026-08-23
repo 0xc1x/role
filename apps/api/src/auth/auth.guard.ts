@@ -56,7 +56,9 @@ export class AuthGuard implements CanActivate {
 
     const header = request.headers.authorization;
     if (!header?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
+      throw new UnauthorizedException(
+        'Missing or invalid Authorization header',
+      );
     }
 
     const token = header.slice('Bearer '.length).trim();
@@ -70,7 +72,14 @@ export class AuthGuard implements CanActivate {
     try {
       const { alg } = decodeProtectedHeader(token);
 
-      let payload: { sub?: string; email?: string; user_email?: string; iss?: string; aud?: string | string[]; exp?: number };
+      let payload: {
+        sub?: string;
+        email?: string;
+        user_email?: string;
+        iss?: string;
+        aud?: string | string[];
+        exp?: number;
+      };
 
       const supabaseUrl = this.config.get('SUPABASE_URL', { infer: true });
       const expectedIss = `${supabaseUrl}/auth/v1`;
@@ -137,7 +146,9 @@ export class AuthGuard implements CanActivate {
       .limit(1);
 
     if (!profile) {
-      throw new UnauthorizedException('Profile not found for authenticated user');
+      throw new UnauthorizedException(
+        'Profile not found for authenticated user',
+      );
     }
 
     // Cache the profile
@@ -145,7 +156,7 @@ export class AuthGuard implements CanActivate {
       profile: {
         id: profile.id,
         email: profile.email,
-        role: profile.role as AppRole,
+        role: profile.role,
       },
       expiresAt: Date.now() + this.cacheTtl,
     });
@@ -153,7 +164,7 @@ export class AuthGuard implements CanActivate {
     request.user = {
       id: profile.id,
       email: profile.email ?? email,
-      role: profile.role as AppRole,
+      role: profile.role,
     };
 
     return true;

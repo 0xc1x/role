@@ -4,7 +4,11 @@ import {
   type AppConfigDto,
   type PublicAppConfigDto,
 } from '@0xc1x/role-commons';
-import type { AppConfigInsert, AppConfigRow, AppConfigUpdate } from '../app-config.repository';
+import type {
+  AppConfigInsert,
+  AppConfigRow,
+  AppConfigUpdate,
+} from '../app-config.repository';
 
 /**
  * AppConfigMapper

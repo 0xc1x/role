@@ -154,7 +154,9 @@ export class OrdersRepository {
     const [row] = await this.db
       .select({ id: businesses.id })
       .from(businesses)
-      .where(and(eq(businesses.id, businessId), eq(businesses.owner_id, userId)))
+      .where(
+        and(eq(businesses.id, businessId), eq(businesses.owner_id, userId)),
+      )
       .limit(1);
     return Boolean(row);
   }

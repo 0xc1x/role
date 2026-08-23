@@ -32,18 +32,29 @@ export class UploadService {
       },
     });
 
-    const rawBuckets = this.config.get('SUPABASE_ALLOWED_BUCKETS', { infer: true }) ?? '';
-    this.allowedBuckets = rawBuckets.split(',').map((s) => s.trim()).filter(Boolean);
+    const rawBuckets =
+      this.config.get('SUPABASE_ALLOWED_BUCKETS', { infer: true }) ?? '';
+    this.allowedBuckets = rawBuckets
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-    const rawFolders = this.config.get('SUPABASE_ALLOWED_FOLDERS', { infer: true }) ?? '';
-    this.allowedFolders = rawFolders.split(',').map((s) => s.trim()).filter(Boolean);
+    const rawFolders =
+      this.config.get('SUPABASE_ALLOWED_FOLDERS', { infer: true }) ?? '';
+    this.allowedFolders = rawFolders
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
   async uploadImage(
     file: { buffer: Buffer; mimetype?: string; originalname?: string },
     options?: UploadOptions,
   ): Promise<{ url: string; path: string }> {
-    const bucket = options?.bucket ?? this.config.get('SUPABASE_STORAGE_BUCKET', { infer: true }) ?? 'images';
+    const bucket =
+      options?.bucket ??
+      this.config.get('SUPABASE_STORAGE_BUCKET', { infer: true }) ??
+      'images';
     const folder = options?.folder ?? 'categories';
 
     if (!this.allowedBuckets.includes(bucket)) {
@@ -59,12 +70,19 @@ export class UploadService {
     try {
       metadata = await sharp(file.buffer).metadata();
     } catch {
-      throw new BadRequestException('Formato de archivo no válido. Solo JPEG, PNG y WebP son permitidos');
+      throw new BadRequestException(
+        'Formato de archivo no válido. Solo JPEG, PNG y WebP son permitidos',
+      );
     }
 
     // Check detected format
-    if (!metadata.format || !ALLOWED_MIME_TYPES.includes(`image/${metadata.format}`)) {
-      throw new BadRequestException('Formato de archivo no válido. Solo JPEG, PNG y WebP son permitidos');
+    if (
+      !metadata.format ||
+      !ALLOWED_MIME_TYPES.includes(`image/${metadata.format}`)
+    ) {
+      throw new BadRequestException(
+        'Formato de archivo no válido. Solo JPEG, PNG y WebP son permitidos',
+      );
     }
 
     // Process with sharp
@@ -85,7 +103,10 @@ export class UploadService {
 
     // Verify dimensions after compression
     const compressedMetadata = await sharp(compressed).metadata();
-    if ((compressedMetadata.width ?? 0) > MAX_DIMENSION || (compressedMetadata.height ?? 0) > MAX_DIMENSION) {
+    if (
+      (compressedMetadata.width ?? 0) > MAX_DIMENSION ||
+      (compressedMetadata.height ?? 0) > MAX_DIMENSION
+    ) {
       throw new BadRequestException(
         `Las dimensiones de la imagen exceden el máximo permitido (${MAX_DIMENSION}px)`,
       );

@@ -6,7 +6,6 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import type { OrderStatus } from '@0xc1x/role-commons';
 import {
   paginatedDataFromQuery,
   type CreateOrderRequest,
@@ -33,7 +32,10 @@ export class OrdersService {
     private readonly offersRepository: OffersRepository,
   ) {}
 
-  async create(user: AuthUser, body: CreateOrderRequest): Promise<OrderResponse> {
+  async create(
+    user: AuthUser,
+    body: CreateOrderRequest,
+  ): Promise<OrderResponse> {
     // coupon_code reserved for later wave
     void body.coupon_code;
 
@@ -220,7 +222,7 @@ export class OrdersService {
         throw new NotFoundException(`Order ${id} not found`);
       }
 
-      const current = locked.order.status as OrderStatus;
+      const current = locked.order.status;
       const next = body.status;
 
       if (current === next) {
@@ -267,8 +269,7 @@ export class OrdersService {
         );
       }
 
-      const source: OrderEventSource =
-        user.role === 'admin' ? 'admin' : 'api';
+      const source: OrderEventSource = user.role === 'admin' ? 'admin' : 'api';
 
       await this.ordersRepository.insertEvent(tx, {
         order_id: id,
@@ -314,7 +315,7 @@ export class OrdersService {
         );
         if (!locked) return;
 
-        const current = locked.order.status as OrderStatus;
+        const current = locked.order.status;
         if (current !== 'pending' && current !== 'ready_for_pickup') {
           return;
         }

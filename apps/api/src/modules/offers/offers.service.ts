@@ -23,7 +23,9 @@ import { OfferMapper } from './offers.mapper';
 export class OffersService {
   constructor(private readonly offersRepository: OffersRepository) {}
 
-  async list(query: ListOffersQuery): Promise<PaginatedData<OfferWithBusiness>> {
+  async list(
+    query: ListOffersQuery,
+  ): Promise<PaginatedData<OfferWithBusiness>> {
     const { items, total } = await this.offersRepository.findMany(query);
     return paginatedDataFromQuery(
       items.map((row) => OfferMapper.toResponse(row)),
@@ -90,7 +92,9 @@ export class OffersService {
       return offer;
     });
 
-    const category_ids = await this.offersRepository.findCategoryIds(created.id);
+    const category_ids = await this.offersRepository.findCategoryIds(
+      created.id,
+    );
     return OfferMapper.toDto(created, category_ids);
   }
 
@@ -165,7 +169,9 @@ export class OffersService {
       return row;
     });
 
-    const category_ids = await this.offersRepository.findCategoryIds(updated.id);
+    const category_ids = await this.offersRepository.findCategoryIds(
+      updated.id,
+    );
     return OfferMapper.toDto(updated, category_ids);
   }
 
