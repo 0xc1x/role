@@ -1,12 +1,6 @@
-import type {
-  BusinessDto,
-  BusinessLocationDto,
-} from '@0xc1x/role-commons';
+import type { BusinessDto, BusinessLocationDto } from '@0xc1x/role-commons';
 import { toNumber, toNumberOrNull } from '../../common/utils/numeric';
-import type {
-  BusinessLocationRow,
-  BusinessRow,
-} from './businesses.repository';
+import type { BusinessLocationRow, BusinessRow } from './businesses.repository';
 
 /**
  * Maps business / location rows → API DTOs (numerics + ISO dates).

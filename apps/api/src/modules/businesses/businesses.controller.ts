@@ -153,7 +153,12 @@ export class BusinessesController {
     @Body(new ZodValidationPipe(UpdateBusinessLocationSchema))
     body: UpdateBusinessLocationDto,
   ) {
-    return this.businessesService.updateLocation(user, businessId, locationId, body);
+    return this.businessesService.updateLocation(
+      user,
+      businessId,
+      locationId,
+      body,
+    );
   }
 
   @Delete(':businessId/locations/:locationId')

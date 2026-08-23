@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -68,10 +69,7 @@ export class BusinessesService {
     return BusinessMapper.toDto(row);
   }
 
-  async create(
-    user: AuthUser,
-    body: CreateBusinessDto,
-  ): Promise<BusinessDto> {
+  async create(user: AuthUser, body: CreateBusinessDto): Promise<BusinessDto> {
     if (user.role !== 'admin') {
       body.owner_id = user.id;
     }
@@ -131,6 +129,11 @@ export class BusinessesService {
       if (body.email !== undefined) patch.email = body.email;
       if (body.website !== undefined) patch.website = body.website;
       if (body.commission_rate !== undefined && body.commission_rate !== null) {
+        if (await this.businessesRepository.hasPendingPayout(id)) {
+          throw new ConflictException(
+            'No se puede cambiar la comisión: el negocio tiene pagos pendientes de procesar',
+          );
+        }
         patch.commission_rate = body.commission_rate.toString();
       }
       if (body.is_active !== undefined) patch.is_active = body.is_active;
@@ -222,7 +225,8 @@ export class BusinessesService {
   ): Promise<BusinessLocationDto> {
     await this.assertCanMutateBusiness(user, businessId);
 
-    const existing = await this.businessesRepository.findLocationById(locationId);
+    const existing =
+      await this.businessesRepository.findLocationById(locationId);
     if (!existing || existing.business_id !== businessId) {
       throw new NotFoundException(`Location ${locationId} not found`);
     }
@@ -262,7 +266,8 @@ export class BusinessesService {
   ): Promise<void> {
     await this.assertCanMutateBusiness(user, businessId);
 
-    const existing = await this.businessesRepository.findLocationById(locationId);
+    const existing =
+      await this.businessesRepository.findLocationById(locationId);
     if (!existing || existing.business_id !== businessId) {
       throw new NotFoundException(`Location ${locationId} not found`);
     }
@@ -293,7 +298,10 @@ export class BusinessesService {
     businessId: string,
   ): Promise<void> {
     if (user.role === 'admin') return;
-    const isOwner = await this.businessesRepository.isOwner(businessId, user.id);
+    const isOwner = await this.businessesRepository.isOwner(
+      businessId,
+      user.id,
+    );
     if (!isOwner) {
       throw new ForbiddenException('You can only access businesses you own');
     }
@@ -318,7 +326,10 @@ export class BusinessesService {
     businessId: string,
   ): Promise<void> {
     if (user.role === 'admin') return;
-    const isOwner = await this.businessesRepository.isOwner(businessId, user.id);
+    const isOwner = await this.businessesRepository.isOwner(
+      businessId,
+      user.id,
+    );
     if (!isOwner) {
       throw new ForbiddenException('You can only manage businesses you own');
     }

@@ -1,18 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  and,
-  count,
-  desc,
-  eq,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, count, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
-import {
-  businessLocations,
-  businesses,
-} from '../../database/schema';
+import { businessLocations, businesses } from '../../database/schema';
+import { payouts } from '../../database/schema/payouts';
 import type {
   ListBusinessesQuery,
   ListBusinessLocationsQuery,
@@ -58,6 +49,21 @@ export type DbExecutor = Database;
 @Injectable()
 export class BusinessesRepository {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+
+  /** True if the business has payouts in a non-final state (pending/processing). */
+  async hasPendingPayout(businessId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ one: eq(payouts.business_id, payouts.business_id) })
+      .from(payouts)
+      .where(
+        and(
+          eq(payouts.business_id, businessId),
+          or(eq(payouts.status, 'pending'), eq(payouts.status, 'processing')),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  }
 
   transaction<T>(fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
     return this.db.transaction(fn);
@@ -146,7 +152,9 @@ export class BusinessesRepository {
     const [row] = await this.db
       .select({ id: businesses.id })
       .from(businesses)
-      .where(and(eq(businesses.id, businessId), eq(businesses.owner_id, userId)))
+      .where(
+        and(eq(businesses.id, businessId), eq(businesses.owner_id, userId)),
+      )
       .limit(1);
     return Boolean(row);
   }
@@ -169,9 +177,7 @@ export class BusinessesRepository {
     }
 
     if (query.search) {
-      filters.push(
-        sql`${businesses.name} ILIKE ${`%${query.search}%`}`,
-      );
+      filters.push(sql`${businesses.name} ILIKE ${`%${query.search}%`}`);
     }
 
     const where = filters.length ? and(...filters) : undefined;
