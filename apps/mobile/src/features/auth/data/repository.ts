@@ -12,13 +12,36 @@ export interface SignUpResult {
 /**
  * Auth data operations against Supabase Auth.
  */
+/**
+ * Merges the session-metadata profile with the `profiles` table row so
+ * DB-backed fields (phone, city, current role) survive signup/login.
+ */
+export async function enrichProfile(profile: UserProfile): Promise<UserProfile> {
+  try {
+    const row = await authRepository.fetchProfile(profile.id);
+    if (!row) return profile;
+    return {
+      ...profile,
+      fullName: row.fullName ?? profile.fullName,
+      avatarUrl: row.avatarUrl ?? profile.avatarUrl,
+      phone: row.phone ?? profile.phone,
+      city: row.city ?? profile.city,
+      email: row.email || profile.email,
+      role: row.role,
+    };
+  } catch {
+    return profile;
+  }
+}
+
 export const authRepository = {
   async signInWithEmail(email: string, password: string): Promise<UserProfile> {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw mapAuthError(error);
     const user = data.user;
     if (!user) throw Errors.unauthorized('No se pudo iniciar sesión con esas credenciales');
-    return profileFromUser(user);
+    // Role must come from the DB row, not signup metadata (it can change).
+    return enrichProfile(profileFromUser(user));
   },
 
   async signUpWithEmail(input: {

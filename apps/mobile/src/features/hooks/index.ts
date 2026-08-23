@@ -4,7 +4,10 @@ import { useAuthStore } from "@/features/auth/store";
 import { offersRepository } from "@/features/offers/data/repository";
 import { favoritesRepository } from "@/features/favorites/data/repository";
 import { orderRepository } from "@/features/orders/data/repository";
-import { useSavedAddresses } from "@/features/profile/hooks";
+import {
+	useSavedAddresses,
+	usePreferences,
+} from "@/features/profile/hooks";
 
 // ─── Offers ─────────────────────────────────────────────────────────
 export function useActiveOffers(categoryId?: string | null) {
@@ -97,9 +100,18 @@ export function useCategoryStats() {
 }
 
 export function usePopularAreas() {
+	const profile = useAuthStore((s) => s.profile);
+	const { data: preferences } = usePreferences(profile?.id ?? "");
+	const address = useSelectedAddress();
+	const lat = address?.latitude;
+	const lng = address?.longitude;
+	const radiusKm = preferences?.notification_radius_km ?? 5;
 	return useQuery({
-		queryKey: ["areas", "popular"],
-		queryFn: () => offersRepository.getPopularAreas(),
+		queryKey: ["areas", "popular", lat, lng, radiusKm],
+		queryFn: () =>
+			offersRepository.getPopularAreas(
+				lat != null && lng != null ? { lat, lng, radiusKm } : undefined,
+			),
 	});
 }
 
@@ -111,9 +123,19 @@ export function useRecentOffers(limit = 5) {
 }
 
 export function useNearbyBusinesses(limit = 5) {
+	const profile = useAuthStore((s) => s.profile);
+	const { data: preferences } = usePreferences(profile?.id ?? "");
+	const address = useSelectedAddress();
+	const lat = address?.latitude;
+	const lng = address?.longitude;
+	const radiusKm = preferences?.notification_radius_km ?? 5;
 	return useQuery({
-		queryKey: ["businesses", "nearby", limit],
-		queryFn: () => offersRepository.getNearbyBusinesses(undefined, limit),
+		queryKey: ["businesses", "nearby", limit, lat, lng, radiusKm],
+		queryFn: () =>
+			offersRepository.getNearbyBusinesses(
+				lat != null && lng != null ? { lat, lng, radiusKm } : undefined,
+				limit,
+			),
 	});
 }
 
@@ -229,6 +251,8 @@ export function useCancelOrder() {
 		mutationFn: (orderId: string) => orderRepository.cancelOrder(orderId),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["orders"] });
+			// Cancelar devuelve stock a la oferta.
+			queryClient.invalidateQueries({ queryKey: ["offers"] });
 		},
 	});
 }
@@ -245,6 +269,8 @@ export function useSubmitReview() {
 		}) => orderRepository.submitReview(input),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["orders"] });
+			// El rating vive en la fila del negocio.
+			void queryClient.invalidateQueries({ queryKey: ["businesses"] });
 		},
 	});
 }

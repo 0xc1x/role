@@ -181,11 +181,6 @@ export const strings = {
 		moreCategories: "+{n} categorías",
 		tipTitle: "Consejo del día",
 		myLocation: "Mi ubicación",
-		tips: [
-			"¿Sabías que rescatando un paquete sorpresa evitas la emisión de 2.5kg de CO2?",
-			"Rolé conecta excedentes de comida con personas que quieren ahorrar y ayudar al planeta.",
-			"Revisa siempre el horario de recogida antes de realizar tu compra.",
-		],
 		availableOffers: "Ofertas disponibles",
 		mapOfOffers: "Mapa de ofertas",
 		noOffersInZone: "No hay ofertas disponibles en esta zona",
@@ -469,6 +464,7 @@ export const strings = {
 	},
 	notificationsSettings: {
 		title: "Notificaciones",
+		pushEnabled: "Dispositivo registrado para push",
 		banner:
 			"Configura tus alertas para no perderte ningún paquete sorpresa y rescatar comida a tiempo.",
 		channelsSection: "Canales de comunicación",
@@ -545,6 +541,10 @@ export const strings = {
 			'La ubicación "{label}" dejará de estar disponible para tus pedidos rápidos.',
 		deleted: "Dirección eliminada",
 		saved: "Dirección guardada",
+		updated: "Dirección actualizada",
+		edit: "Editar",
+		editTitle: "Editar dirección",
+		setAsDefaultHint: "Usar como dirección principal",
 	},
 	paymentMethods: {
 		title: "Medios de pago",
@@ -573,6 +573,17 @@ export const strings = {
 		payments: "Pagos",
 		notifications: "Notificaciones",
 		statistics: "Estadísticas",
+		statsSubtitle: "Análisis de rendimiento",
+		statsSummary: "Resumen del período",
+		statsWeek: "Semana",
+		statsMonth: "Mes",
+		statsYear: "Año",
+		kpiRescued: "Rescatadas",
+		vsPrevious: "vs anterior",
+		dailyAvg: "Promedio diario",
+		avgTicket: "Ticket promedio",
+		noSalesInPeriod: "Sin datos de ventas en este período",
+		noSalesProducts: "Aún no hay ventas en este período",
 		managementSubtitle: "Administra tu negocio desde un solo lugar",
 		locationsDesc: "Gestiona los locales y su información.",
 		productsDesc: "Crea y administra tus ofertas de comida.",
@@ -759,7 +770,7 @@ export const strings = {
 		ordersScanInvalid: "Código inválido",
 		ordersScanAgain: "Escanear de nuevo",
 		ordersScanWebUnavailable:
-			"El escaneo QR solo está disponible en la app móvil. Usa el código manual.",
+			"Tu navegador no soporta escaneo QR (usa Chrome o Edge) o no diste permiso a la cámara. Ingresa el código manual.",
 		cameraPermissionTitle: "Permiso de cámara",
 		cameraPermissionBody:
 			"Necesitamos acceso a la cámara para escanear el código QR de recogida.",

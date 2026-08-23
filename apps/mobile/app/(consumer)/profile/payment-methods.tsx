@@ -16,15 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
 import { strings } from "@/core/i18n/strings";
-import {
-	AppText,
-	Button,
-	Card,
-	EmptyState,
-	Screen,
-	ScreenHeader,
-	TextField,
-} from "@/core/ui";
+import { AppText, Button, Card, EmptyState, Screen, ScreenHeader } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import { usePaymentMethods } from "@/features/profile/hooks";
 import { profileRepository } from "@/features/profile/data/repository";
@@ -111,9 +103,6 @@ export default function PaymentMethodsScreen() {
 	const { data: methods, refetch } = usePaymentMethods(userId);
 	const [showForm, setShowForm] = useState(false);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
-	const [number, setNumber] = useState("");
-	const [name, setName] = useState("");
-	const [expiry, setExpiry] = useState("");
 
 	// Redirect guests to login
 	useEffect(() => {
@@ -123,27 +112,6 @@ export default function PaymentMethodsScreen() {
 	}, [status, initialized, router]);
 
 	if (!initialized || status === "guest") return null;
-
-	const addCard = async () => {
-		const digits = number.replace(/\D/g, "");
-		if (digits.length < 15) return;
-		const method: PaymentMethodModel = {
-			id: `card_${Date.now()}`,
-			brand: "card",
-			last4: digits.slice(-4),
-			cardHolder: name.trim() || "—",
-			expiryMonth: expiry.split("/")[0] ?? "",
-			expiryYear: expiry.split("/")[1] ?? "",
-			isDefault: (methods?.length ?? 0) === 0,
-			createdAt: new Date().toISOString(),
-		};
-		await profileRepository.savePaymentMethod(userId, method);
-		setShowForm(false);
-		setNumber("");
-		setName("");
-		setExpiry("");
-		void refetch();
-	};
 
 	const setDefault = (id: string) => {
 		void profileRepository
@@ -186,25 +154,11 @@ export default function PaymentMethodsScreen() {
 
 				{showForm ? (
 					<Card style={{ marginTop: spacing.lg, gap: spacing.md }}>
-						<TextField
-							label={strings.paymentMethods.cardNumber}
-							value={number}
-							onChangeText={setNumber}
-							keyboardType="number-pad"
-							placeholder="4242 4242 4242 4242"
-						/>
-						<TextField
-							label={strings.paymentMethods.cardHolder}
-							value={name}
-							onChangeText={setName}
-						/>
-						<TextField
-							label={strings.paymentMethods.expiry}
-							value={expiry}
-							onChangeText={setExpiry}
-							placeholder="MM/AA"
-						/>
-						<Button label={strings.common.save} onPress={() => void addCard()} fullWidth />
+						<AppText variant="bodyMedium" weight="semiBold">Próximamente</AppText>
+						<AppText variant="bodySmall" style={{ color: '#666' }}>
+							La alta de tarjetas se habilitará con el SDK del gateway (tokenización PCI — nunca almacenamos el número de tarjeta).
+						</AppText>
+						<Button label={strings.common.cancel} variant="outline" onPress={() => setShowForm(false)} fullWidth />
 					</Card>
 				) : (
 					<Button

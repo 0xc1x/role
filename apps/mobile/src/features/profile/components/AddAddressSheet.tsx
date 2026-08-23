@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
-	KeyboardAvoidingView,
-	Platform,
+	Modal,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -10,14 +9,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { toast } from "sonner-native";
-import type { AddressType } from "@0xc1x/role-commons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { AddressType, SavedAddress } from "@0xc1x/role-commons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Button } from "@/core/ui";
+import { AppText, BottomSheetModal, Button } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
-import { useSaveAddress } from "@/features/profile/hooks";
+import { useSaveAddress, useUpdateAddress } from "@/features/profile/hooks";
 import { MapPickerView, type MapPickerResult } from "./MapPickerView";
 
 const TYPE_OPTIONS: { type: AddressType; label: string }[] = [
@@ -26,12 +24,12 @@ const TYPE_OPTIONS: { type: AddressType; label: string }[] = [
 	{ type: "other", label: strings.addresses.labelOther },
 ];
 
-const HOUSING_OPTIONS: { value: string; label: string }[] = [
-	{ value: "apartment", label: strings.addresses.housingApartment },
-	{ value: "house", label: strings.addresses.housingHouse },
-	{ value: "office", label: strings.addresses.housingOffice },
-	{ value: "building", label: strings.addresses.housingBuilding },
-	{ value: "other", label: strings.addresses.housingOther },
+const HOUSING_OPTIONS: { value: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+	{ value: "apartment", label: strings.addresses.housingApartment, icon: "business" },
+	{ value: "house", label: strings.addresses.housingHouse, icon: "home" },
+	{ value: "office", label: strings.addresses.housingOffice, icon: "briefcase-outline" },
+	{ value: "building", label: strings.addresses.housingBuilding, icon: "business-outline" },
+	{ value: "other", label: strings.addresses.housingOther, icon: "ellipsis-horizontal" },
 ];
 
 const TYPE_DEFAULT_LABELS: Record<string, string> = {
@@ -41,37 +39,50 @@ const TYPE_DEFAULT_LABELS: Record<string, string> = {
 
 export function AddAddressSheet({
 	userId,
+	address,
 	onClose,
 }: {
 	userId: string;
+	address?: SavedAddress;
 	onClose: () => void;
 }) {
 	const { colors } = useTheme();
-	const insets = useSafeAreaInsets();
 	const save = useSaveAddress(userId);
+	const update = useUpdateAddress(userId);
 
-	const [selectedType, setSelectedType] = useState<AddressType>("home");
-	const [label, setLabel] = useState("");
-	const [address, setAddress] = useState("");
-	const [references, setReferences] = useState("");
-	const [housingType, setHousingType] = useState<string | null>(null);
-	const [picked, setPicked] = useState<MapPickerResult | null>(null);
+	const [selectedType, setSelectedType] = useState<AddressType>(
+		address?.type ?? "home",
+	);
+	const [label, setLabel] = useState(address?.label ?? "");
+	const [addressText, setAddressText] = useState(address?.address ?? "");
+	const [references, setReferences] = useState(address?.references ?? "");
+	const [housingType, setHousingType] = useState<string | null>(
+		address?.housing_type ?? null,
+	);
+	const [isDefault, setIsDefault] = useState(address?.is_default ?? false);
+	const [picked, setPicked] = useState<MapPickerResult | null>(
+		address
+			? { latitude: address.latitude, longitude: address.longitude, address: address.address }
+			: null,
+	);
 	const [saving, setSaving] = useState(false);
 	const [showMap, setShowMap] = useState(false);
 
 	if (showMap) {
 		return (
-			<View style={[styles.full, { backgroundColor: colors.background }]}>
-				<MapPickerView
-					initialLocation={picked}
-					onCancel={() => setShowMap(false)}
-					onConfirm={(result) => {
-						setPicked(result);
-						if (result.address) setAddress(result.address);
-						setShowMap(false);
-					}}
-				/>
-			</View>
+			<Modal visible transparent statusBarTranslucent animationType="fade">
+				<View style={[styles.full, { backgroundColor: colors.background }]}>
+					<MapPickerView
+						initialLocation={picked}
+						onCancel={() => setShowMap(false)}
+						onConfirm={(result) => {
+							setPicked(result);
+							if (result.address) setAddressText(result.address);
+							setShowMap(false);
+						}}
+					/>
+				</View>
+			</Modal>
 		);
 	}
 
@@ -87,7 +98,7 @@ export function AddAddressSheet({
 	};
 
 	const handleSave = () => {
-		if (!label.trim() || !address.trim()) {
+		if (!label.trim() || !addressText.trim()) {
 			toast.error(strings.addresses.fillRequired);
 			return;
 		}
@@ -96,262 +107,231 @@ export function AddAddressSheet({
 			return;
 		}
 		setSaving(true);
-		save.mutate(
-			{
-				label: label.trim(),
-				address: address.trim(),
-				latitude: picked.latitude,
-				longitude: picked.longitude,
-				type: selectedType,
-				references: references.trim() ? references.trim() : null,
-				housingType,
+		const payload = {
+			label: label.trim(),
+			address: addressText.trim(),
+			latitude: picked.latitude,
+			longitude: picked.longitude,
+			type: selectedType,
+			references: references.trim() ? references.trim() : null,
+			housingType,
+		};
+		const callbacks = {
+			onSuccess: () => {
+				toast.success(
+					address ? strings.addresses.updated : strings.addresses.saved,
+				);
+				onClose();
 			},
-			{
-				onSuccess: () => {
-					toast.success(strings.addresses.saved);
-					onClose();
-				},
-				onError: (error) => {
-					toast.error(
-						error instanceof Error ? error.message : strings.common.error,
-					);
-				},
-				onSettled: () => setSaving(false),
+			onError: (error: unknown) => {
+				toast.error(
+					error instanceof Error ? error.message : strings.common.error,
+				);
 			},
-		);
+			onSettled: () => setSaving(false),
+		};
+		if (address) {
+			update.mutate({ id: address.id, userId, ...payload, isDefault }, callbacks);
+		} else {
+			save.mutate(payload, callbacks);
+		}
 	};
 
 	return (
-		<View style={styles.backdrop}>
-			<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-			<KeyboardAvoidingView
-				behavior={Platform.OS === "ios" ? "padding" : undefined}
-				style={styles.keyboardView}
+		<BottomSheetModal
+			onClose={onClose}
+			title={address ? strings.addresses.editTitle : strings.addresses.whereDeliver}
+		>
+			<ScrollView
+				style={styles.scroll}
+				contentContainerStyle={styles.scrollContent}
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
 			>
 				<View
+					style={[styles.segmented, { backgroundColor: colors.inputBackground }]}
+				>
+					{TYPE_OPTIONS.map((option) => {
+						const isSelected = selectedType === option.type;
+						return (
+							<Pressable
+								key={option.type}
+								onPress={() => handleTypeSelect(option.type)}
+								style={[
+									styles.segment,
+									isSelected && {
+										backgroundColor: colors.card,
+										shadowColor: colors.shadow,
+										shadowOffset: { width: 0, height: 2 },
+										shadowOpacity: 0.05,
+										shadowRadius: 4,
+										elevation: 1,
+									},
+								]}
+							>
+								<AppText
+									variant="bodyMedium"
+									weight={isSelected ? "bold" : "medium"}
+									style={{
+										color: isSelected
+											? colors.foreground
+											: colors.mutedForeground,
+									}}
+								>
+									{option.label}
+								</AppText>
+							</Pressable>
+						);
+					})}
+				</View>
+
+				<FieldLabel>{strings.addresses.nameAddress}</FieldLabel>
+				<IconInput
+					icon="create-outline"
+					value={label}
+					onChangeText={setLabel}
+					placeholder={strings.addresses.nameHint}
+				 colors={colors}
+				/>
+
+				<Pressable
+					onPress={() => setShowMap(true)}
 					style={[
-						styles.sheet,
+						styles.mapCard,
 						{
-							backgroundColor: colors.card,
-							borderColor: colors.borderSolid,
-							paddingBottom: insets.bottom,
+							borderColor: picked ? colors.primary : colors.borderSolid,
+							backgroundColor: picked
+								? colors.primary + "0F"
+								: "transparent",
+							borderWidth: picked ? 2 : 1.5,
 						},
 					]}
 				>
 					<View
-						style={[styles.grabber, { backgroundColor: colors.borderSolid }]}
-					/>
-					<View style={styles.header}>
-						<AppText variant="h3" weight="bold">
-							{strings.addresses.whereDeliver}
-						</AppText>
-						<Pressable
-							onPress={onClose}
-							hitSlop={8}
-							style={[
-								styles.closeButton,
-								{ backgroundColor: colors.inputBackground },
-							]}
-						>
-							<Ionicons name="close" size={16} color={colors.foreground} />
-						</Pressable>
-					</View>
-
-					<ScrollView
-						style={styles.scroll}
-						contentContainerStyle={styles.scrollContent}
-						keyboardShouldPersistTaps="handled"
-						showsVerticalScrollIndicator={false}
+						style={[
+							styles.mapCardIcon,
+							{
+								backgroundColor: picked
+									? colors.primary
+									: colors.inputBackground,
+							},
+						]}
 					>
-						<View
-							style={[
-								styles.segmented,
-								{ backgroundColor: colors.inputBackground },
-							]}
-						>
-							{TYPE_OPTIONS.map((option) => {
-								const isSelected = selectedType === option.type;
-								return (
-									<Pressable
-										key={option.type}
-										onPress={() => handleTypeSelect(option.type)}
-										style={[
-											styles.segment,
-											isSelected && {
-												backgroundColor: colors.card,
-												shadowColor: colors.shadow,
-												shadowOffset: { width: 0, height: 2 },
-												shadowOpacity: 1,
-												shadowRadius: 4,
-												elevation: 1,
-											},
-										]}
-									>
-										<AppText
-											variant="bodyMedium"
-											weight={isSelected ? "bold" : "regular"}
-											style={{
-												color: isSelected
-													? colors.foreground
-													: colors.mutedForeground,
-											}}
-										>
-											{option.label}
-										</AppText>
-									</Pressable>
-								);
-							})}
-						</View>
-
-						<FieldLabel>{strings.addresses.nameAddress}</FieldLabel>
-						<TextInput
-							value={label}
-							onChangeText={setLabel}
-							placeholder={strings.addresses.nameHint}
-							placeholderTextColor={colors.mutedForeground}
-							autoCapitalize="sentences"
-							style={[
-								styles.input,
-								{
-									backgroundColor: colors.inputBackground,
-									color: colors.foreground,
-								},
-							]}
+						<Ionicons
+							name={picked ? "location" : "map-outline"}
+							size={20}
+							color={
+								picked ? colors.primaryForeground : colors.foreground
+							}
 						/>
-
-						<Pressable
-							onPress={() => setShowMap(true)}
-							style={[
-								styles.mapCard,
-								{
-									borderColor: picked ? colors.primary : colors.borderSolid,
-									backgroundColor: picked
-										? colors.primary + "0F"
-										: "transparent",
-								},
-							]}
+					</View>
+					<View style={styles.mapCardText}>
+						<AppText weight="bold">
+							{picked
+								? strings.addresses.locationDetected
+								: strings.addresses.locateOnMap}
+						</AppText>
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground }}
 						>
-							<View
+							{picked
+								? strings.addresses.locationDetectedSub
+								: strings.addresses.locateOnMapSub}
+						</AppText>
+					</View>
+					<Ionicons
+						name="chevron-forward"
+						size={18}
+						color={colors.mutedForeground}
+					/>
+				</Pressable>
+
+				<FieldLabel>{strings.addresses.exactAddress}</FieldLabel>
+				<IconInput
+					icon="location-outline"
+					value={addressText}
+					onChangeText={setAddressText}
+					placeholder={strings.addresses.addressHint}
+					colors={colors}
+				/>
+
+				<FieldLabel>{strings.addresses.housingType}</FieldLabel>
+				<View style={styles.chipsRow}>
+					{HOUSING_OPTIONS.map((option) => {
+						const isSelected = housingType === option.value;
+						return (
+							<Pressable
+								key={option.value}
+								onPress={() =>
+									setHousingType(isSelected ? null : option.value)
+								}
 								style={[
-									styles.mapCardIcon,
+									styles.chip,
 									{
-										backgroundColor: picked
-											? colors.primary
-											: colors.inputBackground,
+										backgroundColor: isSelected
+											? colors.foreground
+											: colors.inputBackground + "80",
 									},
 								]}
 							>
 								<Ionicons
-									name={picked ? "pin" : "map-outline"}
-									size={20}
+									name={option.icon}
+									size={14}
 									color={
-										picked ? colors.primaryForeground : colors.foreground
+										isSelected ? colors.background : colors.mutedForeground
 									}
 								/>
-							</View>
-							<View style={styles.mapCardText}>
-								<AppText weight="bold">
-									{picked
-										? strings.addresses.locationDetected
-										: strings.addresses.locateOnMap}
-								</AppText>
 								<AppText
 									variant="bodySmall"
-									style={{ color: colors.mutedForeground }}
+									weight="semiBold"
+									style={{
+										color: isSelected ? colors.background : colors.foreground,
+									}}
 								>
-									{picked
-										? strings.addresses.locationDetectedSub
-										: strings.addresses.locateOnMapSub}
+									{option.label}
 								</AppText>
-							</View>
-							<Ionicons
-								name="chevron-forward"
-								size={18}
-								color={colors.mutedForeground}
-							/>
-						</Pressable>
-
-						<FieldLabel>{strings.addresses.exactAddress}</FieldLabel>
-						<TextInput
-							value={address}
-							onChangeText={setAddress}
-							placeholder={strings.addresses.addressHint}
-							placeholderTextColor={colors.mutedForeground}
-							autoCapitalize="sentences"
-							style={[
-								styles.input,
-								{
-									backgroundColor: colors.inputBackground,
-									color: colors.foreground,
-								},
-							]}
-						/>
-
-						<FieldLabel>{strings.addresses.housingType}</FieldLabel>
-						<View style={styles.chipsRow}>
-							{HOUSING_OPTIONS.map((option) => {
-								const isSelected = housingType === option.value;
-								return (
-									<Pressable
-										key={option.value}
-										onPress={() =>
-											setHousingType(isSelected ? null : option.value)
-										}
-										style={[
-											styles.chip,
-											{
-												backgroundColor: isSelected
-													? colors.foreground
-													: colors.inputBackground,
-											},
-										]}
-									>
-										<AppText
-											variant="bodySmall"
-											weight="semiBold"
-											style={{
-												color: isSelected
-													? colors.primaryForeground
-													: colors.foreground,
-											}}
-										>
-											{option.label}
-										</AppText>
-									</Pressable>
-								);
-							})}
-						</View>
-
-						<FieldLabel>{strings.addresses.references}</FieldLabel>
-						<TextInput
-							value={references}
-							onChangeText={setReferences}
-							placeholder={strings.addresses.referencesHint}
-							placeholderTextColor={colors.mutedForeground}
-							autoCapitalize="sentences"
-							multiline
-							style={[
-								styles.input,
-								styles.inputMultiline,
-								{
-									backgroundColor: colors.inputBackground,
-									color: colors.foreground,
-								},
-							]}
-						/>
-
-						<Button
-							label={strings.addresses.confirmAddress}
-							onPress={handleSave}
-							loading={saving}
-							fullWidth
-							size="lg"
-							style={styles.confirmButton}
-						/>
-					</ScrollView>
+							</Pressable>
+						);
+					})}
 				</View>
-			</KeyboardAvoidingView>
-		</View>
+
+				<FieldLabel>{strings.addresses.references}</FieldLabel>
+				<IconInput
+					icon="list-outline"
+					value={references}
+					onChangeText={setReferences}
+					placeholder={strings.addresses.referencesHint}
+					colors={colors}
+					multiline
+				/>
+
+				{address && !address.is_default ? (
+					<Pressable
+						onPress={() => setIsDefault((v) => !v)}
+						style={styles.defaultRow}
+					>
+						<Ionicons
+							name={isDefault ? "checkbox" : "square-outline"}
+							size={22}
+							color={isDefault ? colors.primary : colors.mutedForeground}
+						/>
+						<AppText variant="bodyMedium" style={{ color: colors.foreground }}>
+							{strings.addresses.setAsDefaultHint}
+						</AppText>
+					</Pressable>
+				) : null}
+
+				<Button
+					label={strings.addresses.confirmAddress}
+					onPress={handleSave}
+					loading={saving}
+					fullWidth
+					size="lg"
+					style={styles.confirmButton}
+				/>
+			</ScrollView>
+		</BottomSheetModal>
 	);
 }
 
@@ -368,41 +348,53 @@ function FieldLabel({ children }: { children: string }) {
 	);
 }
 
+function IconInput({
+	icon,
+	value,
+	onChangeText,
+	placeholder,
+	colors,
+	multiline,
+}: {
+	icon: keyof typeof Ionicons.glyphMap;
+	value: string;
+	onChangeText: (text: string) => void;
+	placeholder: string;
+	colors: ReturnType<typeof useTheme>["colors"];
+	multiline?: boolean;
+}) {
+	return (
+		<View
+			style={[
+				styles.inputRow,
+				{ backgroundColor: colors.inputBackground + "80" },
+			]}
+		>
+			<Ionicons
+				name={icon}
+				size={20}
+				color={colors.mutedForeground}
+				style={styles.inputIcon}
+			/>
+			<TextInput
+				value={value}
+				onChangeText={onChangeText}
+				placeholder={placeholder}
+				placeholderTextColor={colors.mutedForeground}
+				autoCapitalize="sentences"
+				multiline={multiline}
+				style={[
+					styles.input,
+					multiline && styles.inputMultiline,
+					{ color: colors.foreground },
+				]}
+			/>
+		</View>
+	);
+}
+
 const styles = StyleSheet.create({
 	full: { flex: 1 },
-	backdrop: {
-		flex: 1,
-		justifyContent: "flex-end",
-		backgroundColor: "rgba(0,0,0,0.5)",
-	},
-	keyboardView: { width: "100%", maxHeight: "92%" },
-	sheet: {
-		borderTopLeftRadius: radii.xl,
-		borderTopRightRadius: radii.xl,
-		borderWidth: 1,
-		overflow: "hidden",
-	},
-	grabber: {
-		alignSelf: "center",
-		width: 48,
-		height: 5,
-		borderRadius: 2.5,
-		marginTop: spacing.md,
-	},
-	header: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		paddingHorizontal: spacing.xl,
-		paddingVertical: spacing.md,
-	},
-	closeButton: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
-		alignItems: "center",
-		justifyContent: "center",
-	},
 	scroll: { flexShrink: 1 },
 	scrollContent: {
 		paddingHorizontal: spacing.xl,
@@ -415,6 +407,7 @@ const styles = StyleSheet.create({
 		padding: 6,
 		borderRadius: 24,
 		marginBottom: spacing.sm,
+		backgroundColor: "transparent",
 	},
 	segment: {
 		flex: 1,
@@ -422,20 +415,28 @@ const styles = StyleSheet.create({
 		borderRadius: 18,
 		alignItems: "center",
 	},
-	input: {
+	inputRow: {
+		flexDirection: "row",
+		alignItems: "center",
 		borderRadius: 20,
-		paddingHorizontal: spacing.lg,
+		paddingHorizontal: spacing.md,
+	},
+	inputIcon: { marginRight: spacing.sm },
+	input: {
+		flex: 1,
 		paddingVertical: spacing.md,
 		fontSize: 15,
 	},
-	inputMultiline: { minHeight: 88, textAlignVertical: "top" },
+	inputMultiline: {
+		minHeight: 64,
+		textAlignVertical: "top",
+	},
 	mapCard: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.md,
 		padding: spacing.md,
 		borderRadius: 20,
-		borderWidth: 1.5,
 		marginTop: spacing.sm,
 	},
 	mapCardIcon: {
@@ -452,9 +453,17 @@ const styles = StyleSheet.create({
 		gap: spacing.sm,
 	},
 	chip: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.xs,
 		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.sm,
 		borderRadius: radii.pill,
+	},
+	defaultRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
 	},
 	confirmButton: { marginTop: spacing.sm },
 });

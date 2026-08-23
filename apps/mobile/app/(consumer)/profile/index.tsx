@@ -288,6 +288,7 @@ function SettingsTab() {
 
 function SignOutDialog() {
 	const [open, setOpen] = useState(false);
+	const { colors } = useTheme();
 
 	const confirmSignOut = () => {
 		authRepository.signOut().then(() => {
@@ -297,29 +298,37 @@ function SignOutDialog() {
 	};
 
 	return (
-		<AlertDialog open={open} onOpenChange={setOpen}>
-			<AlertDialogTrigger asChild>
-				<Button
-					label={strings.profile.signOutItem}
-					variant="danger"
-					onPress={() => setOpen(true)}
-				/>
-			</AlertDialogTrigger>
-			<AlertDialogContent>
-				<AlertDialogHeader>
-					<AlertDialogTitle>{strings.auth.signOut}</AlertDialogTitle>
-					<AlertDialogDescription>{strings.auth.signOutConfirm}</AlertDialogDescription>
-				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel>
-						<Text>Cancelar</Text>
-					</AlertDialogCancel>
-					<AlertDialogAction onPress={confirmSignOut}>
-						<Text>{strings.auth.signOut}</Text>
-					</AlertDialogAction>
-				</AlertDialogFooter>
-			</AlertDialogContent>
-		</AlertDialog>
+		<View style={{ gap: spacing.md }}>
+			<AlertDialog open={open} onOpenChange={setOpen}>
+				<AlertDialogTrigger asChild>
+					<Button
+						label={strings.profile.signOutItem}
+						variant="danger"
+						onPress={() => setOpen(true)}
+					/>
+				</AlertDialogTrigger>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{strings.auth.signOut}</AlertDialogTitle>
+						<AlertDialogDescription>{strings.auth.signOutConfirm}</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>
+							<Text>Cancelar</Text>
+						</AlertDialogCancel>
+						<AlertDialogAction onPress={confirmSignOut}>
+							<Text>{strings.auth.signOut}</Text>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+			<AppText
+				variant="bodySmall"
+				style={{ color: colors.mutedForeground, textAlign: "center" }}
+			>
+				{strings.settings.version} 1.0.0
+			</AppText>
+		</View>
 	);
 }
 

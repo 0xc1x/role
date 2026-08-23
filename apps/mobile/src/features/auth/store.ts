@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { supabase } from "@/core/supabase/client";
 
 import { parseRole, type UserProfile } from "./domain/user";
-import { authRepository } from "./data/repository";
+import { authRepository, enrichProfile } from "./data/repository";
 
 export type AuthStatus = "loading" | "authenticated" | "guest";
 
@@ -24,28 +24,6 @@ function profileFromUser(user: {
 		analyticsConsentGranted:
 			user.user_metadata?.analytics_consent_granted === true,
 	};
-}
-
-/**
- * Merges the session-metadata profile with the `profiles` table row so
- * DB-backed fields (phone, city) survive initial load / auth events.
- */
-async function enrichProfile(profile: UserProfile): Promise<UserProfile> {
-	try {
-		const row = await authRepository.fetchProfile(profile.id);
-		if (!row) return profile;
-		return {
-			...profile,
-			fullName: row.fullName ?? profile.fullName,
-			avatarUrl: row.avatarUrl ?? profile.avatarUrl,
-			phone: row.phone ?? profile.phone,
-			city: row.city ?? profile.city,
-			email: row.email || profile.email,
-			role: row.role,
-		};
-	} catch {
-		return profile;
-	}
 }
 
 interface AuthState {

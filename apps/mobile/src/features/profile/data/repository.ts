@@ -4,7 +4,6 @@ import type {
 	SavedAddress,
 	UserPreferences,
 } from "@0xc1x/role-commons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 import { supabase } from "@/core/supabase/client";
@@ -22,10 +21,6 @@ import {
 } from "../domain/profile";
 
 const CO2_KG_PER_ORDER = 1.2;
-
-function paymentMethodsKey(userId: string): string {
-	return `role.paymentMethods.${userId}`;
-}
 
 export const profileRepository = {
 	// ─── Saved addresses ──────────────────────────────────────────────
@@ -273,54 +268,61 @@ export const profileRepository = {
 		});
 	},
 
-	// ─── Payment methods (device-local, secure storage) ───────────────
+	// ─── Payment methods (Supabase tokenized — PCI: never PAN) ───────
 	async getPaymentMethods(userId: string): Promise<PaymentMethodModel[]> {
-		const raw = await AsyncStorage.getItem(paymentMethodsKey(userId));
-		if (!raw) return [];
-		try {
-			return JSON.parse(raw) as PaymentMethodModel[];
-		} catch {
-			await AsyncStorage.removeItem(paymentMethodsKey(userId)).catch(() => {});
-			return [];
-		}
+		const { data, error } = await supabase
+			.from('payment_methods')
+			.select('id, brand, last4, exp_month, exp_year, holder_name, is_default, created_at')
+			.eq('user_id', userId)
+			.is('deleted_at', null)
+			.eq('active', true)
+			.order('is_default', { ascending: false })
+			.order('created_at', { ascending: false });
+		if (error) throw toAppError(error, 'Error al cargar métodos de pago');
+		return (data ?? []).map((r: Record<string, unknown>) => ({
+			id: String(r.id),
+			brand: String(r.brand ?? 'card'),
+			last4: String(r.last4 ?? '0000'),
+			cardHolder: String(r.holder_name ?? '—'),
+			expiryMonth: String(r.exp_month ?? '').padStart(2, '0'),
+			expiryYear: String(r.exp_year ?? '').slice(-2),
+			isDefault: Boolean(r.is_default),
+			createdAt: String(r.created_at ?? ''),
+		}));
 	},
 
-	async savePaymentMethod(
-		userId: string,
-		method: PaymentMethodModel,
-	): Promise<void> {
-		const current = await this.getPaymentMethods(userId);
-		const updated = [
-			...current.map((m) =>
-				method.isDefault ? { ...m, isDefault: false } : m,
-			),
-			method,
-		];
-		await AsyncStorage.setItem(
-			paymentMethodsKey(userId),
-			JSON.stringify(updated),
-		);
+	async savePaymentMethod(userId: string, method: PaymentMethodModel): Promise<void> {
+		// ponytail: scaffold only — gateway SDK will supply token + brand/last4/exp.
+		// This path creates a simulated tokenized row (never PAN) for continuity.
+		if (method.isDefault) {
+			await supabase.from('payment_methods').update({ is_default: false }).eq('user_id', userId);
+		}
+		const { error } = await supabase.from('payment_methods').insert({
+			user_id: userId,
+			gateway: 'place_to_pay',
+			gateway_token: `tok_sim_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+			brand: method.brand || 'visa',
+			last4: method.last4,
+			exp_month: Number(method.expiryMonth) || 12,
+			exp_year: Number(`20${method.expiryYear}`) || 2030,
+			holder_name: method.cardHolder,
+			is_default: method.isDefault,
+		});
+		if (error) throw toAppError(error, 'Error al guardar método de pago');
 	},
 
-	async deletePaymentMethod(userId: string, id: string): Promise<void> {
-		const current = await this.getPaymentMethods(userId);
-		let updated = current.filter((m) => m.id !== id);
-		if (updated.length > 0 && !updated.some((m) => m.isDefault)) {
-			updated = [{ ...updated[0]!, isDefault: true }, ...updated.slice(1)];
-		}
-		await AsyncStorage.setItem(
-			paymentMethodsKey(userId),
-			JSON.stringify(updated),
-		);
+	async deletePaymentMethod(_userId: string, id: string): Promise<void> {
+		const { error } = await supabase
+			.from('payment_methods')
+			.update({ active: false, deleted_at: new Date().toISOString() })
+			.eq('id', id);
+		if (error) throw toAppError(error, 'Error al eliminar método de pago');
 	},
 
 	async setDefaultPaymentMethod(userId: string, id: string): Promise<void> {
-		const current = await this.getPaymentMethods(userId);
-		const updated = current.map((m) => ({ ...m, isDefault: m.id === id }));
-		await AsyncStorage.setItem(
-			paymentMethodsKey(userId),
-			JSON.stringify(updated),
-		);
+		await supabase.from('payment_methods').update({ is_default: false }).eq('user_id', userId);
+		const { error } = await supabase.from('payment_methods').update({ is_default: true }).eq('id', id);
+		if (error) throw toAppError(error, 'Error al actualizar método de pago');
 	},
 };
 

@@ -183,7 +183,7 @@ function FavoriteCard({ item }: { item: FavoriteOffer }) {
 						>
 							{formatMoney(item.originalPrice)}
 						</AppText>
-						<StatusBadge label={`${discount}%`} tone="brand" />
+						<StatusBadge label={`${Math.trunc(discount)}%`} tone="brand" />
 					</View>
 
 					<View style={styles.metaRow}>

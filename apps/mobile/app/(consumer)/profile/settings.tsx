@@ -164,26 +164,7 @@ export default function SettingsScreen() {
 					</AppText>
 				</Card>
 
-				<Card style={{ marginTop: spacing.md }}>
-					<View style={styles.row}>
-						<AppText variant="bodyMedium">{strings.settings.language}</AppText>
-						<AppText
-							variant="bodyMedium"
-							style={{ color: colors.mutedForeground }}
-						>
-							{strings.settings.languageValue}
-						</AppText>
-					</View>
-					<View style={styles.row}>
-						<AppText variant="bodyMedium">{strings.settings.version}</AppText>
-						<AppText
-							variant="bodyMedium"
-							style={{ color: colors.mutedForeground }}
-						>
-							1.0.0
-						</AppText>
-					</View>
-				</Card>
+
 			</View>
 		</Screen>
 	);

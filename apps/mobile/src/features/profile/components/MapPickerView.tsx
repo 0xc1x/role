@@ -39,15 +39,13 @@ export function MapPickerView({
 }) {
 	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
-	const [region, setRegion] = useState<Region>(
-		initialLocation
-			? {
-					...DEFAULT_REGION,
-					latitude: initialLocation.latitude,
-					longitude: initialLocation.longitude,
-				}
-			: DEFAULT_REGION,
-	);
+	// Uncontrolled map (initialRegion only): a controlled `region` prop fights
+	// the user's pan gestures and snaps the camera back mid-drag.
+	const mapRef = useRef<MapView>(null);
+	const [coords, setCoords] = useState({
+		latitude: initialLocation?.latitude ?? DEFAULT_REGION.latitude,
+		longitude: initialLocation?.longitude ?? DEFAULT_REGION.longitude,
+	});
 	const [loading, setLoading] = useState(!initialLocation);
 	const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
 	const [resolving, setResolving] = useState(false);
@@ -59,6 +57,9 @@ export function MapPickerView({
 			return;
 		}
 		void determinePosition();
+		return () => {
+			if (resolveTimer.current) clearTimeout(resolveTimer.current);
+		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -75,13 +76,13 @@ export function MapPickerView({
 				accuracy: Location.Accuracy.High,
 			});
 			const next = {
-				...region,
 				latitude: position.coords.latitude,
 				longitude: position.coords.longitude,
 			};
-			setRegion(next);
+			setCoords(next);
+			mapRef.current?.animateToRegion({ ...DEFAULT_REGION, ...next }, 400);
 			setLoading(false);
-			await resolveAddress(position.coords.latitude, position.coords.longitude);
+			await resolveAddress(next.latitude, next.longitude);
 		} catch {
 			setLoading(false);
 		}
@@ -95,7 +96,13 @@ export function MapPickerView({
 				longitude,
 			});
 			const place = results[0];
-			const parts = [place?.street, place?.district, place?.city, place?.region]
+			const parts = [
+				place?.street,
+				place?.streetNumber,
+				place?.district,
+				place?.city,
+				place?.region,
+			]
 				.map((part) => part?.trim())
 				.filter((part): part is string => typeof part === "string" && part.length > 0);
 			setResolvedAddress(parts.join(", ") || null);
@@ -107,7 +114,7 @@ export function MapPickerView({
 	}
 
 	const handleRegionChangeComplete = (next: Region) => {
-		setRegion(next);
+		setCoords({ latitude: next.latitude, longitude: next.longitude });
 		if (resolveTimer.current) clearTimeout(resolveTimer.current);
 		resolveTimer.current = setTimeout(() => {
 			void resolveAddress(next.latitude, next.longitude);
@@ -117,8 +124,9 @@ export function MapPickerView({
 	return (
 		<View style={styles.full}>
 			<MapView
+				ref={mapRef}
 				style={StyleSheet.absoluteFill}
-				region={region}
+				initialRegion={{ ...DEFAULT_REGION, ...coords }}
 				onRegionChangeComplete={handleRegionChangeComplete}
 				showsUserLocation
 				showsMyLocationButton={false}
@@ -175,14 +183,14 @@ export function MapPickerView({
 						{strings.addresses.moveMapToSelect}
 					</AppText>
 				)}
-				<Pressable
-					onPress={() =>
-						onConfirm({
-							latitude: region.latitude,
-							longitude: region.longitude,
-							address: resolvedAddress,
-						})
-					}
+			<Pressable
+				onPress={() =>
+					onConfirm({
+						latitude: coords.latitude,
+						longitude: coords.longitude,
+						address: resolvedAddress,
+					})
+				}
 					style={[styles.confirmButton, { backgroundColor: colors.primary }]}
 				>
 					<AppText

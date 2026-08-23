@@ -59,11 +59,7 @@ export interface UserOrderSummary {
 	offerImageUrl: string | null;
 }
 
-/**
- * Payment method stored on-device (expo-secure-store). There is no DB
- * table for consumer cards in phase 1 — payment happens at pickup —
- * so this contract is intentionally mobile-only.
- */
+/** Tokenized payment method (PCI: PAN never stored — only gateway_token + last4). */
 export interface PaymentMethodModel {
 	id: string;
 	brand: string;

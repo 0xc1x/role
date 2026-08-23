@@ -30,6 +30,16 @@ export function useSaveAddress(userId: string) {
 	});
 }
 
+export function useUpdateAddress(userId: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: Parameters<typeof profileRepository.updateAddress>[0]) =>
+			profileRepository.updateAddress(input),
+		onSuccess: () =>
+			void queryClient.invalidateQueries({ queryKey: ["addresses", userId] }),
+	});
+}
+
 export function useDeleteAddress(userId: string) {
 	const queryClient = useQueryClient();
 	return useMutation({

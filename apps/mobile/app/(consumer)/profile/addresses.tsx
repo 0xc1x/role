@@ -30,6 +30,7 @@ import {
 import { useAuthStore } from "@/features/auth/store";
 import { useSavedAddresses, useDeleteAddress } from "@/features/profile/hooks";
 import { AddAddressSheet } from "@/features/profile/components/AddAddressSheet";
+import type { SavedAddress } from "@0xc1x/role-commons";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 
@@ -41,6 +42,7 @@ export default function AddressesScreen() {
 	);
 	const remove = useDeleteAddress(profile?.id ?? "");
 	const [showAddSheet, setShowAddSheet] = useState(false);
+	const [editTarget, setEditTarget] = useState<SavedAddress | null>(null);
 
 	// Redirect guests to login
 	useEffect(() => {
@@ -127,6 +129,13 @@ export default function AddressesScreen() {
 											/>
 										) : null}
 									</View>
+								<View style={styles.cardActions}>
+									<Button
+										label={strings.addresses.edit}
+										variant="ghost"
+										size="sm"
+										onPress={() => setEditTarget(item)}
+									/>
 									<Button
 										label={strings.common.delete}
 										variant="ghost"
@@ -138,6 +147,7 @@ export default function AddressesScreen() {
 											})
 										}
 									/>
+								</View>
 								</View>
 								<AppText
 									variant="bodySmall"
@@ -163,6 +173,15 @@ export default function AddressesScreen() {
 				<AddAddressSheet
 					userId={profile?.id ?? ""}
 					onClose={() => setShowAddSheet(false)}
+				/>
+			) : null}
+
+			{editTarget ? (
+				<AddAddressSheet
+					key={editTarget.id}
+					userId={profile?.id ?? ""}
+					address={editTarget}
+					onClose={() => setEditTarget(null)}
 				/>
 			) : null}
 
@@ -224,5 +243,9 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		flexShrink: 1,
+	},
+	cardActions: {
+		flexDirection: "row",
+		alignItems: "center",
 	},
 });
