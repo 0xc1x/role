@@ -14,9 +14,12 @@ import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LayoutCategoriasRouteImport } from './routes/_layout.categorias'
+import { Route as LayoutComisionesRouteImport } from './routes/_layout.comisiones'
 import { Route as LayoutConfiguracionRouteImport } from './routes/_layout.configuracion'
+import { Route as LayoutConsejosRouteImport } from './routes/_layout.consejos'
 import { Route as LayoutEmailsRouteImport } from './routes/_layout.emails'
 import { Route as LayoutHomeRouteImport } from './routes/_layout.home'
+import { Route as LayoutPagosRouteImport } from './routes/_layout.pagos'
 import { Route as LayoutSlidesRouteImport } from './routes/_layout.slides'
 
 const IndexRoute = IndexRouteImport.update({
@@ -43,9 +46,19 @@ const LayoutCategoriasRoute = LayoutCategoriasRouteImport.update({
   path: '/categorias',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutComisionesRoute = LayoutComisionesRouteImport.update({
+  id: '/comisiones',
+  path: '/comisiones',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutConfiguracionRoute = LayoutConfiguracionRouteImport.update({
   id: '/configuracion',
   path: '/configuracion',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutConsejosRoute = LayoutConsejosRouteImport.update({
+  id: '/consejos',
+  path: '/consejos',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutEmailsRoute = LayoutEmailsRouteImport.update({
@@ -56,6 +69,11 @@ const LayoutEmailsRoute = LayoutEmailsRouteImport.update({
 const LayoutHomeRoute = LayoutHomeRouteImport.update({
   id: '/home',
   path: '/home',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutPagosRoute = LayoutPagosRouteImport.update({
+  id: '/pagos',
+  path: '/pagos',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutSlidesRoute = LayoutSlidesRouteImport.update({
@@ -69,9 +87,12 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/categorias': typeof LayoutCategoriasRoute
+  '/comisiones': typeof LayoutComisionesRoute
   '/configuracion': typeof LayoutConfiguracionRoute
+  '/consejos': typeof LayoutConsejosRoute
   '/emails': typeof LayoutEmailsRoute
   '/home': typeof LayoutHomeRoute
+  '/pagos': typeof LayoutPagosRoute
   '/slides': typeof LayoutSlidesRoute
 }
 export interface FileRoutesByTo {
@@ -79,9 +100,12 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/categorias': typeof LayoutCategoriasRoute
+  '/comisiones': typeof LayoutComisionesRoute
   '/configuracion': typeof LayoutConfiguracionRoute
+  '/consejos': typeof LayoutConsejosRoute
   '/emails': typeof LayoutEmailsRoute
   '/home': typeof LayoutHomeRoute
+  '/pagos': typeof LayoutPagosRoute
   '/slides': typeof LayoutSlidesRoute
 }
 export interface FileRoutesById {
@@ -91,9 +115,12 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/_layout/categorias': typeof LayoutCategoriasRoute
+  '/_layout/comisiones': typeof LayoutComisionesRoute
   '/_layout/configuracion': typeof LayoutConfiguracionRoute
+  '/_layout/consejos': typeof LayoutConsejosRoute
   '/_layout/emails': typeof LayoutEmailsRoute
   '/_layout/home': typeof LayoutHomeRoute
+  '/_layout/pagos': typeof LayoutPagosRoute
   '/_layout/slides': typeof LayoutSlidesRoute
 }
 export interface FileRouteTypes {
@@ -103,9 +130,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/categorias'
+    | '/comisiones'
     | '/configuracion'
+    | '/consejos'
     | '/emails'
     | '/home'
+    | '/pagos'
     | '/slides'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -113,9 +143,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/categorias'
+    | '/comisiones'
     | '/configuracion'
+    | '/consejos'
     | '/emails'
     | '/home'
+    | '/pagos'
     | '/slides'
   id:
     | '__root__'
@@ -124,9 +157,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/_layout/categorias'
+    | '/_layout/comisiones'
     | '/_layout/configuracion'
+    | '/_layout/consejos'
     | '/_layout/emails'
     | '/_layout/home'
+    | '/_layout/pagos'
     | '/_layout/slides'
   fileRoutesById: FileRoutesById
 }
@@ -174,11 +210,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutCategoriasRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/comisiones': {
+      id: '/_layout/comisiones'
+      path: '/comisiones'
+      fullPath: '/comisiones'
+      preLoaderRoute: typeof LayoutComisionesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/configuracion': {
       id: '/_layout/configuracion'
       path: '/configuracion'
       fullPath: '/configuracion'
       preLoaderRoute: typeof LayoutConfiguracionRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/consejos': {
+      id: '/_layout/consejos'
+      path: '/consejos'
+      fullPath: '/consejos'
+      preLoaderRoute: typeof LayoutConsejosRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/emails': {
@@ -195,6 +245,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutHomeRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/pagos': {
+      id: '/_layout/pagos'
+      path: '/pagos'
+      fullPath: '/pagos'
+      preLoaderRoute: typeof LayoutPagosRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/slides': {
       id: '/_layout/slides'
       path: '/slides'
@@ -207,17 +264,23 @@ declare module '@tanstack/react-router' {
 
 interface LayoutRouteChildren {
   LayoutCategoriasRoute: typeof LayoutCategoriasRoute
+  LayoutComisionesRoute: typeof LayoutComisionesRoute
   LayoutConfiguracionRoute: typeof LayoutConfiguracionRoute
+  LayoutConsejosRoute: typeof LayoutConsejosRoute
   LayoutEmailsRoute: typeof LayoutEmailsRoute
   LayoutHomeRoute: typeof LayoutHomeRoute
+  LayoutPagosRoute: typeof LayoutPagosRoute
   LayoutSlidesRoute: typeof LayoutSlidesRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutCategoriasRoute: LayoutCategoriasRoute,
+  LayoutComisionesRoute: LayoutComisionesRoute,
   LayoutConfiguracionRoute: LayoutConfiguracionRoute,
+  LayoutConsejosRoute: LayoutConsejosRoute,
   LayoutEmailsRoute: LayoutEmailsRoute,
   LayoutHomeRoute: LayoutHomeRoute,
+  LayoutPagosRoute: LayoutPagosRoute,
   LayoutSlidesRoute: LayoutSlidesRoute,
 }
 

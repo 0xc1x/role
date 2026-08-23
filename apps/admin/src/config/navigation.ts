@@ -50,8 +50,18 @@ export const navMain: NavMainItem[] = [
 	},
 	{
 		title: "Consejos",
-		url: "#",
+		url: "/consejos",
 		icon: Info,
+	},
+	{
+		title: "Pagos",
+		url: "/pagos",
+		icon: DollarSign,
+	},
+	{
+		title: "Comisiones",
+		url: "/comisiones",
+		icon: BadgeDollarSign,
 	},
 	{
 		title: "Notificaciones",
@@ -115,9 +125,6 @@ export const projects: NavProject[] = [
 		url: "#",
 		icon: BadgeDollarSign,
 	},
-	{
-		name: "Comisiones",
-		url: "#",
-		icon: DollarSign,
-	},
 ];
+
+export const payoutsNav = { title: "Pagos", url: "/pagos", icon: DollarSign };
