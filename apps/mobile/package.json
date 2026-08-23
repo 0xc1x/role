@@ -58,6 +58,7 @@
     "expo-secure-store": "~57.0.1",
     "expo-splash-screen": "~57.0.6",
     "expo-status-bar": "~57.0.1",
+    "firebase": "^11",
     "lucide-react-native": "^1.31.0",
     "nativewind": "^4",
     "react": "19.2.3",
@@ -87,14 +88,16 @@
     "vitest": "^4.1.10"
   },
   "scripts": {
+    "prestart": "bun scripts/generate-firebase-config.mjs",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "preexport:web": "bun scripts/generate-firebase-config.mjs",
     "export:web": "expo export --platform web",
-    "deploy:web": "expo export --platform web && node scripts/fix-web-dist.mjs && cp vercel.json dist/ && cd dist && vercel --prod"
+    "deploy:web": "bun run preexport:web && expo export --platform web && bun scripts/fix-web-dist.mjs && cp vercel.json dist/ && cd dist && vercel --prod"
   },
   "trustedDependencies": [
     "@sentry/cli"

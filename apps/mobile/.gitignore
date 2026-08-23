@@ -42,3 +42,6 @@ yarn-error.*
 
 # agent-local config
 .claude/
+
+# Firebase config generado desde .env (keys fuera del repo)
+public/firebase-config.js

@@ -22,6 +22,13 @@ const envSchema = z.object({
 	EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL: z.string().optional().default(""),
 	/** Runtime environment label (development | staging | production) */
 	EXPO_PUBLIC_ENVIRONMENT: z.string().optional().default("development"),
+	// ── Firebase (proyecto heredado de fudi) — web push PWA ───────────
+	EXPO_PUBLIC_FIREBASE_API_KEY: z.string().optional().default(""),
+	EXPO_PUBLIC_FIREBASE_PROJECT_ID: z.string().optional().default(""),
+	EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().optional().default(""),
+	EXPO_PUBLIC_FIREBASE_APP_ID: z.string().optional().default(""),
+	/** VAPID key para suscribir clientes web a FCM */
+	EXPO_PUBLIC_FIREBASE_VAPID_KEY: z.string().optional().default(""),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -40,6 +47,12 @@ function loadEnv(): AppEnv {
 		EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL:
 			process.env.EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL,
 		EXPO_PUBLIC_ENVIRONMENT: process.env.EXPO_PUBLIC_ENVIRONMENT,
+		EXPO_PUBLIC_FIREBASE_API_KEY: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+		EXPO_PUBLIC_FIREBASE_PROJECT_ID: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+		EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:
+			process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+		EXPO_PUBLIC_FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+		EXPO_PUBLIC_FIREBASE_VAPID_KEY: process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY,
 	};
 	const parsed = envSchema.safeParse(raw);
 	if (!parsed.success) {

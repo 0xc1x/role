@@ -6,8 +6,16 @@ import { toAppError } from "@/core/error/mapper";
 
 // ─── Device token sync ──────────────────────────────────────────────
 /** Saves/updates this device's push token for the current user. */
-export async function syncDeviceToken(userId: string): Promise<void> {
-	if (Platform.OS === "web") return;
+export async function syncDeviceToken(userId: string): Promise<boolean> {
+	if (Platform.OS === "web") {
+		// PWA: FCM via service worker + VAPID (expo-notifications has no
+		// remote push on web). Platform-split import keeps firebase out of
+		// the native bundle.
+		const mod = await (Platform.OS === "web"
+			? import("./web-push.web")
+			: import("./web-push.native"));
+		return mod.syncWebPushToken(userId);
+	}
 
 	let token: string | null = null;
 	try {
@@ -16,7 +24,7 @@ export async function syncDeviceToken(userId: string): Promise<void> {
 		if (status !== "granted") {
 			status = (await Notifications.requestPermissionsAsync()).status;
 		}
-		if (status !== "granted") return;
+		if (status !== "granted") return false;
 
 		const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? null;
 		const ticket = await Notifications.getExpoPushTokenAsync({
@@ -24,17 +32,18 @@ export async function syncDeviceToken(userId: string): Promise<void> {
 		});
 		token = ticket.data;
 	} catch {
-		return; // Permission/token unavailable — not fatal.
+		return false; // Permission/token unavailable — not fatal.
 	}
-	if (!token) return;
+	if (!token) return false;
 
 	const { error } = await supabase.from("device_tokens").upsert({
 		user_id: userId,
 		token,
 		platform: Platform.OS,
-		last_seen_at: new Date().toISOString(),
+		is_active: true,
 	});
 	if (error) throw toAppError(error, "Error al registrar el dispositivo");
+	return true;
 }
 
 export async function removeDeviceToken(userId: string): Promise<void> {
