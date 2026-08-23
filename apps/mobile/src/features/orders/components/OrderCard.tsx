@@ -55,7 +55,7 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 			style={[
 				styles.card,
 				{
-					borderColor: colors.border + "0A",
+					borderColor: colors.borderSolid,
 					backgroundColor: colors.card,
 				},
 			]}
@@ -122,6 +122,7 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 						letterSpacing: -0.3,
 						color: isActive ? colors.primary : colors.success,
 						alignSelf: "center",
+						marginRight: spacing.md,
 					}}
 				>
 					{formatMoneyPrecise(order.price)}

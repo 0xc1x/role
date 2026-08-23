@@ -4,10 +4,9 @@ import { Ionicons } from "@expo/vector-icons";
 import type { BusinessLocation } from "@0xc1x/role-commons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
+import { AppText, BottomSheetModal } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
-import { SheetModal } from "../SheetModal";
 
 /**
  * Sucursal selector pill + bottom sheet. `null` = todas las sucursales
@@ -55,7 +54,7 @@ export function BranchSelector({
 			</Pressable>
 
 			{open ? (
-				<SheetModal
+				<BottomSheetModal
 					title={strings.business.locations}
 					onClose={() => setOpen(false)}
 				>
@@ -79,7 +78,7 @@ export function BranchSelector({
 							}}
 						/>
 					))}
-				</SheetModal>
+				</BottomSheetModal>
 			) : null}
 		</>
 	);

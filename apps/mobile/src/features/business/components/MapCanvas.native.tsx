@@ -18,7 +18,7 @@ export type { MapCanvasProps };
 
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(
 	function MapCanvas(
-		{ coords, fullscreen = false, onRegionChange },
+		{ coords, fullscreen = false, onRegionChange, children, centerPin = true },
 		ref,
 	) {
 		const { colors } = useTheme();
@@ -55,16 +55,19 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(
 				showsUserLocation={!fullscreen}
 				showsCompass={false}
 			>
-				<Marker coordinate={coords} anchor={{ x: 0.5, y: 0.5 }}>
-					<View style={styles.pinShadow}>
-						<Ionicons
-							name="location"
-							size={40}
-							color={colors.primary}
-							style={styles.pin}
-						/>
-					</View>
-				</Marker>
+				{children}
+				{centerPin ? (
+					<Marker coordinate={coords} anchor={{ x: 0.5, y: 0.5 }}>
+						<View style={styles.pinShadow}>
+							<Ionicons
+								name="location"
+								size={40}
+								color={colors.primary}
+								style={styles.pin}
+							/>
+						</View>
+					</Marker>
+				) : null}
 			</MapView>
 		);
 	},

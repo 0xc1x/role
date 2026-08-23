@@ -15,13 +15,12 @@ import {
 import { Text } from "@/components/ui/text";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, StatusBadge } from "@/core/ui";
+import { AppText, BottomSheetModal, StatusBadge } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { formatMoney, formatTime } from "@/core/utils/formatters";
 import type { OfferDetail } from "@/features/offers/domain/offer";
 import { useDeleteOffer, useToggleOfferActive } from "@/features/business/hooks";
-import { SheetModal } from "../SheetModal";
 
 /**
  * Business product card (ported from Rolé v1 `ProductCard`): status,
@@ -169,29 +168,38 @@ export function ProductCard({
 			</Pressable>
 
 			{menuOpen ? (
-				<SheetModal
+				<BottomSheetModal
 					title={product.offer.title}
 					onClose={() => setMenuOpen(false)}
 				>
-					<MenuRow
-						icon={isActive ? "eye-off-outline" : "eye-outline"}
-						label={isActive ? strings.business.deactivate : strings.business.activate}
-						color={colors.foreground}
-						onPress={() => {
-							toggleActive.mutate({ offerId: product.offer.id, isActive: !isActive });
-							setMenuOpen(false);
-						}}
-					/>
-					<MenuRow
-						icon="trash-outline"
-						label={strings.common.delete}
-						color={colors.destructive}
-						onPress={() => {
-							setMenuOpen(false);
-							setDeleteOpen(true);
-						}}
-					/>
-				</SheetModal>
+					<View style={styles.menuList}>
+						<MenuRow
+							icon={isActive ? "eye-off-outline" : "eye-outline"}
+							label={isActive ? strings.business.deactivate : strings.business.activate}
+							onPress={() => {
+								toggleActive.mutate({ offerId: product.offer.id, isActive: !isActive });
+								setMenuOpen(false);
+							}}
+						/>
+						<MenuRow
+							icon="create-outline"
+							label={strings.common.edit}
+							onPress={() => {
+								setMenuOpen(false);
+								router.push(`/business/${businessId}/offer/${product.offer.id}/edit`);
+							}}
+						/>
+						<MenuRow
+							icon="trash-outline"
+							label={strings.common.delete}
+							destructive
+							onPress={() => {
+								setMenuOpen(false);
+								setDeleteOpen(true);
+							}}
+						/>
+					</View>
+				</BottomSheetModal>
 			) : null}
 
 			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -246,24 +254,37 @@ function ActionButton({
 function MenuRow({
 	icon,
 	label,
-	color,
+	destructive,
 	onPress,
 }: {
 	icon: keyof typeof Ionicons.glyphMap;
 	label: string;
-	color: string;
+	destructive?: boolean;
 	onPress?: () => void;
 }) {
+	const { colors } = useTheme();
 	return (
 		<Pressable
 			onPress={onPress}
 			style={({ pressed }) => [
 				styles.menuRow,
-				{ opacity: pressed ? 0.7 : 1 },
+				{
+					backgroundColor: colors.inputBackground,
+					borderColor: colors.borderSolid,
+					opacity: pressed ? 0.85 : 1,
+				},
 			]}
 		>
-			<Ionicons name={icon} size={18} color={color} />
-			<AppText variant="bodyMedium" weight="medium" style={{ color }}>
+			<Ionicons
+				name={icon}
+				size={18}
+				color={destructive ? colors.destructive : colors.foreground}
+			/>
+			<AppText
+				variant="bodyMedium"
+				weight="medium"
+				style={{ color: destructive ? colors.destructive : colors.foreground }}
+			>
 				{label}
 			</AppText>
 		</Pressable>
@@ -374,10 +395,17 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 	},
+	menuList: {
+		gap: spacing.sm,
+		paddingHorizontal: spacing.xl,
+	},
 	menuRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.md,
-		paddingVertical: spacing.md + 2,
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.md,
+		borderRadius: radii.lg,
+		borderWidth: 1,
 	},
 });

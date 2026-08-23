@@ -1,17 +1,8 @@
-import { useMemo, useState } from "react";
-import {
-	KeyboardAvoidingView,
-	Modal,
-	Platform,
-	Pressable,
-	ScrollView,
-	StyleSheet,
-	View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Button } from "@/core/ui";
+import { AppText, BottomSheetModal, Button } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useCategories } from "@/features/hooks";
@@ -42,7 +33,6 @@ export function OfferFiltersSheet({
 	onClose: () => void;
 }) {
 	const { colors } = useTheme();
-	const insets = useSafeAreaInsets();
 	const { data: categories } = useCategories();
 
 	const [state, setState] = useState<OfferFilterState>(current);
@@ -51,14 +41,6 @@ export function OfferFiltersSheet({
 		state.category != null ||
 		state.maxPrice != null ||
 		state.maxDistanceKm != null;
-
-	const catName = useMemo(() => {
-		if (!state.category) return null;
-		return (
-			categories?.find((c) => c.id === state.category)?.name ??
-			state.category
-		);
-	}, [categories, state.category]);
 
 	const renderOption = (
 		key: string,
@@ -100,150 +82,107 @@ export function OfferFiltersSheet({
 	);
 
 	return (
-		<Modal
-			visible
-			transparent
-			statusBarTranslucent
-			animationType="slide"
-			onRequestClose={onClose}
+		<BottomSheetModal
+			onClose={onClose}
+			footer={
+				<Button
+					label={
+						hasActiveFilters
+							? strings.allOffers.applyFilters
+							: strings.common.close
+					}
+					onPress={() => {
+						if (hasActiveFilters) {
+							onApply(state);
+						}
+						onClose();
+					}}
+					fullWidth
+					size="lg"
+				/>
+			}
 		>
-			<View style={styles.backdrop}>
-				<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-				<KeyboardAvoidingView
-					behavior={Platform.OS === "ios" ? "padding" : undefined}
-					style={styles.keyboardView}
-				>
-				<View
-					style={[
-						styles.sheet,
-						{
-							backgroundColor: colors.card,
-							borderColor: colors.borderSolid,
-							paddingBottom: insets.bottom,
-						},
-					]}
-				>
-					<View style={[styles.grabber, { backgroundColor: colors.borderSolid }]} />
-					<View style={styles.header}>
-						<AppText variant="h3" weight="bold">
-							{strings.allOffers.filters}
+			<View style={styles.header}>
+				<AppText variant="h3" weight="bold">
+					{strings.allOffers.filters}
+				</AppText>
+				{hasActiveFilters ? (
+					<Pressable onPress={() => setState(emptyOfferFilters)} hitSlop={8}>
+						<AppText
+							variant="bodySmall"
+							weight="semiBold"
+							style={{ color: colors.primary }}
+						>
+							{strings.allOffers.clearAll}
 						</AppText>
-						{hasActiveFilters ? (
-							<Pressable onPress={() => setState(emptyOfferFilters)} hitSlop={8}>
-								<AppText
-									variant="bodySmall"
-									weight="semiBold"
-									style={{ color: colors.primary }}
-								>
-									{strings.allOffers.clearAll}
-								</AppText>
-							</Pressable>
-						) : (
-							<Pressable onPress={onClose} hitSlop={8}>
-								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-									{strings.common.close}
-								</AppText>
-							</Pressable>
-						)}
-					</View>
-					<ScrollView
-						showsVerticalScrollIndicator={false}
-						contentContainerStyle={styles.scrollContent}
-						keyboardShouldPersistTaps="handled"
-					>
-						{renderSection(
-							strings.allOffers.category,
-							(categories ?? []).map((cat: EmbeddedCategory) =>
-								renderOption(
-									cat.id,
-									cat.name,
-									state.category === cat.id,
-									() =>
-										setState((s) => ({
-											...s,
-											category: s.category === cat.id ? null : cat.id,
-										})),
-								),
-							),
-						)}
-						{renderSection(
-							strings.allOffers.maxDistance,
-							DISTANCE_OPTIONS.map((km) =>
-								renderOption(
-									`dist-${km}`,
-									`${km} ${strings.allOffers.km}`,
-									state.maxDistanceKm === km,
-									() =>
-										setState((s) => ({
-											...s,
-											maxDistanceKm: s.maxDistanceKm === km ? null : km,
-										})),
-								),
-							),
-						)}
-						{renderSection(
-							strings.allOffers.maxPrice,
-							PRICE_OPTIONS.map((price) =>
-								renderOption(
-									`price-${price}`,
-									strings.allOffers.price.replace(
-										"{n}",
-										`$${price}`,
-									),
-									state.maxPrice === price,
-									() =>
-										setState((s) => ({
-											...s,
-											maxPrice: s.maxPrice === price ? null : price,
-										})),
-								),
-							),
-						)}
-					</ScrollView>
-					<View style={styles.footer}>
-						<Button
-							label={
-								hasActiveFilters
-									? strings.allOffers.applyFilters
-									: strings.common.close
-							}
-							onPress={() => {
-								if (hasActiveFilters) {
-									onApply(state);
-								}
-								onClose();
-							}}
-							fullWidth
-							size="lg"
-						/>
-					</View>
-				</View>
-			</KeyboardAvoidingView>
+					</Pressable>
+				) : (
+					<Pressable onPress={onClose} hitSlop={8}>
+						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+							{strings.common.close}
+						</AppText>
+					</Pressable>
+				)}
 			</View>
-		</Modal>
+			<ScrollView
+				showsVerticalScrollIndicator={false}
+				contentContainerStyle={styles.scrollContent}
+				keyboardShouldPersistTaps="handled"
+			>
+				{renderSection(
+					strings.allOffers.category,
+					(categories ?? []).map((cat: EmbeddedCategory) =>
+						renderOption(
+							cat.id,
+							cat.name,
+							state.category === cat.id,
+							() =>
+								setState((s) => ({
+									...s,
+									category: s.category === cat.id ? null : cat.id,
+								})),
+						),
+					),
+				)}
+				{renderSection(
+					strings.allOffers.maxDistance,
+					DISTANCE_OPTIONS.map((km) =>
+						renderOption(
+							`dist-${km}`,
+							`${km} ${strings.allOffers.km}`,
+							state.maxDistanceKm === km,
+							() =>
+								setState((s) => ({
+									...s,
+									maxDistanceKm: s.maxDistanceKm === km ? null : km,
+								})),
+						),
+					),
+				)}
+				{renderSection(
+					strings.allOffers.maxPrice,
+					PRICE_OPTIONS.map((price) =>
+						renderOption(
+							`price-${price}`,
+							strings.allOffers.price.replace(
+								"{n}",
+								`$${price}`,
+							),
+							state.maxPrice === price,
+							() =>
+								setState((s) => ({
+									...s,
+									maxPrice: s.maxPrice === price ? null : price,
+								})),
+						),
+					),
+				)}
+			</ScrollView>
+		</BottomSheetModal>
 	);
 }
 
 const styles = StyleSheet.create({
-	backdrop: {
-		flex: 1,
-		justifyContent: "flex-end",
-		backgroundColor: "rgba(0,0,0,0.5)",
-	},
-	keyboardView: { width: "100%", maxHeight: "88%" },
-	sheet: {
-		borderTopLeftRadius: radii.xl,
-		borderTopRightRadius: radii.xl,
-		borderWidth: 1,
-		overflow: "hidden",
-	},
-	grabber: {
-		alignSelf: "center",
-		width: 48,
-		height: 5,
-		borderRadius: 2.5,
-		marginTop: spacing.md,
-	},
 	header: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -269,9 +208,5 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.sm,
 		borderRadius: radii.pill,
 		borderWidth: 1,
-	},
-	footer: {
-		paddingHorizontal: spacing.xl,
-		paddingTop: spacing.sm,
 	},
 });

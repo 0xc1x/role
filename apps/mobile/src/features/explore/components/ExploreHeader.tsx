@@ -112,7 +112,7 @@ function ExploreHeaderPillButton({
 }) {
 	const { colors, scheme } = useTheme();
 	const pillColor = onBrand
-		? colors.card + "CC"
+		? "rgba(255,255,255,0.18)"
 		: scheme === "dark"
 			? colors.primaryForeground + "14"
 			: colors.card;

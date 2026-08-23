@@ -23,6 +23,8 @@ import { strings } from "@/core/i18n/strings";
 import { spacing, radii } from "@/core/theme/spacing";
 import { fonts, typography, type TypeStyle } from "@/core/theme/typography";
 
+export { BottomSheetModal } from "./BottomSheetModal";
+
 export type { ColorTokens, TypeStyle };
 export { spacing, fonts, typography };
 

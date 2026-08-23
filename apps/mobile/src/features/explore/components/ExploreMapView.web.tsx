@@ -1,24 +1,35 @@
-import { Pressable, StyleSheet, View } from "react-native";
-import { createElement } from "react";
+import { useState } from "react";
+import { Image, Pressable, StyleSheet, View } from "react-native";
+import { AdvancedMarker } from "@vis.gl/react-google-maps";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
-import type { OfferDetail } from "@/features/offers/domain/offer";
+import { formatMoney } from "@/core/utils/formatters";
+import {
+	discountPercentage,
+	type OfferDetail,
+} from "@/features/offers/domain/offer";
 import {
 	exploreFilterSummary,
 	type ExploreFilterState,
 } from "@/features/explore/exploreTypes";
 import { useCategories } from "@/features/hooks";
+import { env } from "@/core/config/env";
+// Static import: this file is web-only.
+import { MapCanvas } from "@/features/business/components/MapCanvas.web";
 
 const FALLBACK_COORD = { latitude: -1.8312, longitude: -78.1834 };
 
 /**
- * Fallback web del mapa de Explorar: embebe Google Maps centrado en el usuario
- * o en la primera oferta. En nativo se usa react-native-maps (archivo .native.tsx).
+ * Mapa de Explorar (web): mismo Google Maps interactivo que el picker de
+ * ubicación, con pines de precio por oferta. En nativo se usa react-native-maps
+ * (archivo .native.tsx).
  */
 export function ExploreMapView({
 	offers,
@@ -36,8 +47,12 @@ export function ExploreMapView({
 	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
 	const { data: categories } = useCategories();
+	const [selectedOffer, setSelectedOffer] = useState<OfferDetail | null>(null);
 
-	const firstLocated = offers.find((o) => o.location != null);
+	const locatedOffers = offers.filter((o) => o.location != null);
+	const hasOffers = locatedOffers.length > 0;
+
+	const firstLocated = locatedOffers[0];
 	const center =
 		userLocation ??
 		(firstLocated?.location
@@ -47,7 +62,6 @@ export function ExploreMapView({
 				}
 			: FALLBACK_COORD);
 
-	const hasOffers = offers.some((o) => o.location != null);
 	const filterParts = exploreFilterSummary(
 		filters,
 		filters.category != null
@@ -58,13 +72,60 @@ export function ExploreMapView({
 
 	return (
 		<View style={styles.flex}>
-			{createElement("iframe", {
-				title: strings.explore.mapOfOffers,
-				src: `https://maps.google.com/maps?q=${center.latitude},${center.longitude}&z=13&output=embed`,
-				style: styles.map,
-				allowFullScreen: true,
-			})}
+			{env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ? (
+				<MapCanvas
+					coords={center}
+					fullscreen
+					centerPin={false}
+					onRegionChange={() => {}}
+				>
+					{locatedOffers.map((offer) => {
+						const selected =
+							selectedOffer?.offer.id === offer.offer.id;
+						return (
+							<AdvancedMarker
+								key={`${offer.offer.id}-${selected ? "sel" : "def"}`}
+								position={{
+									lat: offer.location!.latitude,
+									lng: offer.location!.longitude,
+								}}
+								onClick={() => setSelectedOffer(offer)}
+							>
+								<View
+									style={[
+										styles.pricePill,
+										selected
+											? {
+													backgroundColor: colors.primary,
+													borderColor: colors.primary,
+												}
+											: {
+													backgroundColor: colors.card,
+													borderColor: colors.primary,
+												},
+									]}
+								>
+									<AppText
+										weight="extraBold"
+										style={{
+											color: selected
+												? colors.primaryForeground
+												: colors.primary,
+											fontSize: 12,
+										}}
+									>
+										{formatMoney(offer.offer.discounted_price)}
+									</AppText>
+								</View>
+							</AdvancedMarker>
+						);
+					})}
+				</MapCanvas>
+			) : (
+				<View style={[styles.flex, styles.mapFallback]} />
+			)}
 
+			{/* ── Header ─────────────────────────────────────────────── */}
 			<View style={[styles.header, { top: insets.top + spacing.sm }]}>
 				<View
 					style={[styles.headerCard, { backgroundColor: colors.card, shadowColor: colors.shadow }]}
@@ -98,6 +159,7 @@ export function ExploreMapView({
 				</View>
 			</View>
 
+			{/* ── Estados ────────────────────────────────────────────── */}
 			{!hasOffers ? (
 				<View style={[styles.noOffers, { top: 116 }]}>
 					<View style={[styles.noOffersCard, { backgroundColor: colors.card }]}>
@@ -108,10 +170,104 @@ export function ExploreMapView({
 				</View>
 			) : null}
 
-			<View style={[styles.legend, { bottom: 24, backgroundColor: colors.card }]}>
-				<View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-				<AppText variant="bodySmall">{strings.explore.offersAvailable}</AppText>
+			{/* ── Card de oferta seleccionada / leyenda ──────────────── */}
+			{selectedOffer ? (
+				<MapOfferCard
+					offer={selectedOffer}
+					onClose={() => setSelectedOffer(null)}
+				/>
+			) : (
+				<View style={[styles.legend, { bottom: 24, backgroundColor: colors.card }]}>
+					<View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
+					<AppText variant="bodySmall">{strings.explore.offersAvailable}</AppText>
+				</View>
+			)}
+		</View>
+	);
+}
+
+function MapOfferCard({
+	offer,
+	onClose,
+}: {
+	offer: OfferDetail;
+	onClose: () => void;
+}) {
+	const { colors } = useTheme();
+	const discount = Math.round(discountPercentage(offer.offer));
+
+	return (
+		<View style={[styles.selectedCard, { backgroundColor: colors.card, shadowColor: colors.shadow }]}>
+			<View style={styles.selectedImageWrap}>
+				{offer.offer.image ? (
+					<Image
+						source={{ uri: offer.offer.image }}
+						style={styles.selectedImage}
+						resizeMode="cover"
+					/>
+				) : (
+					<View style={[styles.selectedImage, { backgroundColor: colors.surfaceMuted }]} />
+				)}
+				{discount > 0 ? (
+					<View style={[styles.selectedDiscount, { backgroundColor: colors.primary }]}>
+						<AppText weight="extraBold" style={{ color: colors.primaryForeground, fontSize: 12 }}>
+							-{discount}%
+						</AppText>
+					</View>
+				) : null}
+				<Pressable onPress={onClose} style={[styles.selectedClose, { backgroundColor: colors.card }]}>
+					<Ionicons name="close" size={16} color={colors.foreground} />
+				</Pressable>
+				<LinearGradient
+					colors={["transparent", "rgba(0,0,0,0.4)"]}
+					style={styles.selectedFade}
+				/>
 			</View>
+			<View style={styles.selectedBody}>
+				<AppText variant="labelSmall" weight="bold" numberOfLines={1}>
+					{offer.offer.title}
+				</AppText>
+				<View style={styles.selectedMeta}>
+					<Ionicons name="storefront-outline" size={14} color={colors.mutedForeground} />
+					<AppText
+						variant="bodySmall"
+						numberOfLines={1}
+						style={{ color: colors.mutedForeground, flex: 1 }}
+					>
+						{offer.business.name}
+					</AppText>
+					<AppText
+						variant="bodySmall"
+						style={{
+							color:
+								offer.offer.stock <= 3 ? colors.destructive : colors.mutedForeground,
+						}}
+					>
+						{strings.explore.availableCount.replace("{n}", String(offer.offer.stock))}
+					</AppText>
+				</View>
+				<View style={styles.selectedPriceRow}>
+					<AppText weight="extraBold" style={{ color: colors.primary, fontSize: 20 }}>
+						{formatMoney(offer.offer.discounted_price)}
+					</AppText>
+					{offer.offer.original_price > offer.offer.discounted_price ? (
+						<AppText
+							variant="bodySmall"
+							style={{ textDecorationLine: "line-through", color: colors.mutedForeground }}
+						>
+							{formatMoney(offer.offer.original_price)}
+						</AppText>
+					) : null}
+				</View>
+			</View>
+			<Pressable
+				onPress={() => router.push(`/offer/${offer.offer.id}`)}
+				style={[styles.detailButton, { backgroundColor: colors.primary }]}
+			>
+				<AppText weight="bold" style={{ color: colors.primaryForeground }}>
+					{strings.explore.viewDetail}
+				</AppText>
+			</Pressable>
 		</View>
 	);
 }
@@ -119,12 +275,15 @@ export function ExploreMapView({
 const styles = StyleSheet.create({
 	flex: {
 		flex: 1,
-		backgroundColor: "#e5e5e5",
 	},
-	map: {
-		width: "100%",
-		height: "100%",
-		borderWidth: 0,
+	mapFallback: { backgroundColor: "#e5e5e5" },
+	pricePill: {
+		paddingHorizontal: 10,
+		paddingVertical: 5,
+		borderRadius: radii.pill,
+		borderWidth: 2,
+		alignItems: "center",
+		marginBottom: 12,
 	},
 	header: {
 		position: "absolute",
@@ -152,6 +311,7 @@ const styles = StyleSheet.create({
 	headerTitle: {
 		flex: 1,
 		paddingHorizontal: spacing.md,
+		gap: 2,
 	},
 	noOffers: {
 		position: "absolute",
@@ -178,5 +338,73 @@ const styles = StyleSheet.create({
 		width: 12,
 		height: 12,
 		borderRadius: 6,
+	},
+	selectedCard: {
+		position: "absolute",
+		left: spacing.lg,
+		right: spacing.lg,
+		bottom: spacing.md,
+		borderRadius: radii.xl,
+		overflow: "hidden",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.12,
+		shadowRadius: 16,
+		elevation: 6,
+	},
+	selectedImageWrap: {
+		height: 140,
+	},
+	selectedImage: {
+		width: "100%",
+		height: "100%",
+	},
+	selectedDiscount: {
+		position: "absolute",
+		top: spacing.sm,
+		left: spacing.sm,
+		paddingHorizontal: 8,
+		paddingVertical: 3,
+		borderRadius: radii.pill,
+	},
+	selectedClose: {
+		position: "absolute",
+		top: spacing.sm,
+		right: spacing.sm,
+		width: 28,
+		height: 28,
+		borderRadius: 14,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	selectedFade: {
+		position: "absolute",
+		left: 0,
+		right: 0,
+		bottom: 0,
+		height: 60,
+	},
+	selectedBody: {
+		paddingHorizontal: spacing.md,
+		paddingTop: spacing.sm,
+		gap: spacing.xs,
+	},
+	selectedMeta: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 4,
+	},
+	selectedPriceRow: {
+		flexDirection: "row",
+		alignItems: "baseline",
+		gap: spacing.sm,
+		marginTop: spacing.sm,
+	},
+	detailButton: {
+		margin: spacing.md,
+		marginTop: spacing.sm,
+		height: 46,
+		borderRadius: radii.lg,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 });

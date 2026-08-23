@@ -557,13 +557,18 @@ async function syncCategories(
 	if (error) throw toAppError(error, "Error al guardar categorías");
 }
 
-async function uploadImage(uri: string, remotePath: string): Promise<string> {
+async function uploadImage(
+	uri: string,
+	remotePath: string,
+): Promise<string | null> {
 	try {
-		let fileUri = uri;
-		if (Platform.OS === "android" && !uri.startsWith("file://")) {
-			fileUri = uri; // content:// URIs are handled by the storage client
+		let bytes: ArrayBuffer;
+		if (Platform.OS === "web") {
+			// expo-image-picker devuelve blob:/data: URIs — hay que fetchearlos.
+			bytes = await (await fetch(uri)).arrayBuffer();
+		} else {
+			bytes = await new File(uri).arrayBuffer();
 		}
-		const bytes = await new File(fileUri).arrayBuffer();
 		const { error } = await supabase.storage
 			.from("product_images")
 			.upload(remotePath, bytes, { contentType: "image/jpeg", upsert: true });
@@ -573,8 +578,9 @@ async function uploadImage(uri: string, remotePath: string): Promise<string> {
 			.getPublicUrl(remotePath);
 		return data.publicUrl;
 	} catch {
-		// Upload failed — keep the local URI so the user still sees the image.
-		return uri;
+		// Upload fallido: null mantiene la imagen anterior en la oferta
+		// (nunca persistir una URI local, muere al recargar).
+		return null;
 	}
 }
 

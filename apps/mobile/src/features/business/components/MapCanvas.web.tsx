@@ -1,32 +1,55 @@
 import { Ionicons } from "@expo/vector-icons";
 import { APIProvider, Map, useMap } from "@vis.gl/react-google-maps";
-import { forwardRef, useImperativeHandle } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { env } from "@/core/config/env";
 import { useTheme } from "@/core/theme";
 import type { MapCanvasHandle, MapCanvasProps } from "./MapCanvas.types";
-
 function zoomForDelta(delta: number): number {
 	const zoom = Math.round(Math.log2(360 / Math.max(delta, 0.0001)));
 	return Math.min(Math.max(zoom, 1), 20);
 }
 
 const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
-	function MapCanvasInner({ coords, fullscreen = false, onRegionChange }, ref) {
+	function MapCanvasInner(
+		{ coords, fullscreen = false, onRegionChange, children, centerPin = true },
+		ref,
+	) {
 		const { colors } = useTheme();
 		const map = useMap();
+		// Camera target requested before the Google map instance is ready.
+		const pending = useRef<{
+			next: { latitude: number; longitude: number };
+			delta?: number;
+		} | null>(null);
 
 		useImperativeHandle(
 			ref,
 			() => ({
 				animateToRegion: (next, delta = 0.01) => {
-					map?.panTo({ lat: next.latitude, lng: next.longitude });
-					map?.setZoom(zoomForDelta(delta));
+					if (!map) {
+						pending.current = { next, delta };
+						return;
+					}
+					map.panTo({ lat: next.latitude, lng: next.longitude });
+					map.setZoom(zoomForDelta(delta));
 				},
 			}),
 			[map],
 		);
+
+		// Apply a target that arrived while the map was still initializing.
+		useEffect(() => {
+			if (map && pending.current) {
+				map.panTo({
+					lat: pending.current.next.latitude,
+					lng: pending.current.next.longitude,
+				});
+				map.setZoom(zoomForDelta(pending.current.delta ?? 0.01));
+				pending.current = null;
+			}
+		}, [map]);
 
 		return (
 			<View style={fullscreen ? styles.fullscreenMap : styles.map}>
@@ -40,15 +63,19 @@ const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 						const { center } = ev.detail;
 						onRegionChange({ latitude: center.lat, longitude: center.lng });
 					}}
-				/>
-				<View pointerEvents="none" style={styles.pinWrap}>
-					<Ionicons
-						name="location"
-						size={40}
-						color={colors.primary}
-						style={styles.pin}
-					/>
-				</View>
+				>
+					{children}
+				</Map>
+				{centerPin ? (
+					<View pointerEvents="none" style={styles.pinWrap}>
+						<Ionicons
+							name="location"
+							size={40}
+							color={colors.primary}
+							style={styles.pin}
+						/>
+					</View>
+				) : null}
 			</View>
 		);
 	},

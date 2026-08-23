@@ -48,6 +48,7 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 
 export default function OrderDetailScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
+	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 	const { data, isLoading, isError, error, refetch } = useOrder(id ?? "");
 	const cancel = useCancelOrder();
 
@@ -57,8 +58,6 @@ export default function OrderDetailScreen() {
 
 	const { order } = data;
 	const canCancel = ["pending", "confirmed"].includes(order.status);
-
-	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 
 	const handleCancel = () => setConfirmCancelOpen(true);
 

@@ -1,8 +1,7 @@
 # Rolé — Mobile (`apps/mobile`)
 
-Expo SDK 57 + expo-router + TypeScript estricto. Port de la app Flutter original
-(Rolé v1, repo `~/Projects/fudi`) con reescritura profesional (ver
-`docs/improvements/`).
+Expo SDK 57 + expo-router + TypeScript estricto. App móvil consumer
+(ver `docs/improvements/` para el detalle de mejoras aplicadas).
 
 ## Stack y decisiones
 

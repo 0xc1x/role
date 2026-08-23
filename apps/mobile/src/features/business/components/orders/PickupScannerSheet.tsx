@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 import {
 	ActivityIndicator,
-	Modal,
-	Platform,
 	Pressable,
 	StyleSheet,
 	View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
 	CameraView,
 	useCameraPermissions,
@@ -16,7 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Button } from "@/core/ui";
+import { AppText, BottomSheetModal, Button } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useValidatePickupCode } from "@/features/business/hooks";
@@ -42,67 +39,39 @@ export function PickupScannerSheet({
 	onValidated: () => void;
 }) {
 	const { colors } = useTheme();
-	const insets = useSafeAreaInsets();
 
 	return (
-		<Modal
-			visible
-			transparent
-			statusBarTranslucent
-			animationType="slide"
-			onRequestClose={onClose}
-		>
-			<View style={styles.backdrop}>
-				<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-				<View
-					style={[
-						styles.sheet,
-						{
-							backgroundColor: colors.card,
-							borderColor: colors.borderSolid,
-							paddingBottom: insets.bottom,
-						},
-					]}
+		<BottomSheetModal onClose={onClose} title={strings.business.ordersScanTitle}>
+			<View style={styles.content}>
+				<AppText
+					variant="bodySmall"
+					style={{ color: colors.mutedForeground, textAlign: "center" }}
 				>
-					<View style={[styles.grabber, { backgroundColor: colors.borderSolid }]} />
+					{strings.business.ordersScanHint}
+				</AppText>
 
-					<AppText variant="h3" weight="bold" style={styles.title}>
-						{strings.business.ordersScanTitle}
-					</AppText>
-					<AppText
-						variant="bodySmall"
-						style={{ color: colors.mutedForeground, textAlign: "center" }}
-					>
-						{strings.business.ordersScanHint}
-					</AppText>
+			<NativeScanner
+				businessId={businessId}
+				orderId={orderId}
+				onValidated={onValidated}
+				onClose={onClose}
+				colors={colors}
+			/>
 
-					{Platform.OS === "web" ? (
-						<WebFallback colors={colors} onClose={onClose} />
-					) : (
-						<NativeScanner
-							businessId={businessId}
-							orderId={orderId}
-							onValidated={onValidated}
-							onClose={onClose}
-							colors={colors}
-						/>
-					)}
-
-					<Button
-						label={strings.common.cancel}
-						variant="outline"
-						fullWidth
-						size="lg"
-						onPress={onClose}
-						style={styles.cancel}
-					/>
-				</View>
+			<Button
+				label={strings.common.cancel}
+				variant="outline"
+				fullWidth
+				size="lg"
+				onPress={onClose}
+				style={styles.cancel}
+				/>
 			</View>
-		</Modal>
+		</BottomSheetModal>
 	);
 }
 
-// ─── Native: cámara + overlay de estados ─────────────────────────────
+// ─── Native/web: cámara + overlay de estados ─────────────────────
 
 function NativeScanner({
 	businessId,
@@ -277,59 +246,11 @@ function NativeScanner({
 	);
 }
 
-// ─── Web: aviso de no disponibilidad ─────────────────────────────────
-
-function WebFallback({
-	colors,
-	onClose,
-}: {
-	colors: ReturnType<typeof useTheme>["colors"];
-	onClose: () => void;
-}) {
-	return (
-		<View
-			style={[
-				styles.previewWrap,
-				styles.center,
-				{
-					borderColor: colors.borderSolid,
-					backgroundColor: colors.inputBackground,
-					paddingHorizontal: spacing.xl,
-				},
-			]}
-		>
-			<Ionicons name="qr-code-outline" size={40} color={colors.mutedForeground} />
-			<AppText
-				variant="bodyMedium"
-				style={{ color: colors.mutedForeground, textAlign: "center", marginTop: spacing.sm }}
-			>
-				{strings.business.ordersScanWebUnavailable}
-			</AppText>
-		</View>
-	);
-}
-
 const styles = StyleSheet.create({
-	backdrop: {
-		flex: 1,
-		justifyContent: "flex-end",
-		backgroundColor: "rgba(0,0,0,0.5)",
-	},
-	sheet: {
-		borderTopLeftRadius: radii.xl,
-		borderTopRightRadius: radii.xl,
-		borderWidth: 1,
+	content: {
 		paddingHorizontal: spacing.xl,
-		paddingTop: spacing.md,
 		gap: spacing.md,
 	},
-	grabber: {
-		alignSelf: "center",
-		width: 48,
-		height: 5,
-		borderRadius: 2.5,
-	},
-	title: { textAlign: "center" },
 	previewWrap: {
 		height: 320,
 		borderRadius: radii.xl,

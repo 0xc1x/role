@@ -334,6 +334,7 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 // ─── Sign out ────────────────────────────────────────────────────────
 function SignOutDialog({ style }: { style?: object }) {
 	const [open, setOpen] = useState(false);
+	const { colors } = useTheme();
 	const confirmSignOut = () => {
 		void authRepository.signOut().then(() => {
 			useAuthStore.getState().clear();
@@ -341,30 +342,37 @@ function SignOutDialog({ style }: { style?: object }) {
 		setOpen(false);
 	};
 	return (
-		<AlertDialog open={open} onOpenChange={setOpen}>
-			<AlertDialogTrigger asChild>
-				<Button
-					label={strings.profile.signOutItem}
-					variant="danger"
-					onPress={() => setOpen(true)}
-					style={style}
-				/>
-			</AlertDialogTrigger>
-			<AlertDialogContent>
-				<AlertDialogHeader>
-					<AlertDialogTitle>{strings.auth.signOut}</AlertDialogTitle>
-					<AlertDialogDescription>{strings.auth.signOutConfirm}</AlertDialogDescription>
-				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel>
-						<Text>Cancelar</Text>
-					</AlertDialogCancel>
-					<AlertDialogAction onPress={confirmSignOut}>
-						<Text>{strings.auth.signOut}</Text>
-					</AlertDialogAction>
-				</AlertDialogFooter>
-			</AlertDialogContent>
-		</AlertDialog>
+		<View style={[{ gap: spacing.sm }, style]}>
+			<AlertDialog open={open} onOpenChange={setOpen}>
+				<AlertDialogTrigger asChild>
+					<Button
+						label={strings.profile.signOutItem}
+						variant="danger"
+						onPress={() => setOpen(true)}
+					/>
+				</AlertDialogTrigger>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{strings.auth.signOut}</AlertDialogTitle>
+						<AlertDialogDescription>{strings.auth.signOutConfirm}</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>
+							<Text>Cancelar</Text>
+						</AlertDialogCancel>
+						<AlertDialogAction onPress={confirmSignOut}>
+							<Text>{strings.auth.signOut}</Text>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+			<AppText
+				variant="bodySmall"
+				style={{ color: colors.mutedForeground, textAlign: "center" }}
+			>
+				{strings.settings.version} 1.0.0
+			</AppText>
+		</View>
 	);
 }
 

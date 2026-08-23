@@ -5,8 +5,9 @@ import type { BottomTabBarProps } from "expo-router/build/react-navigation/botto
 import { useTheme } from "@/core/theme";
 import { radii } from "@/core/theme/spacing";
 import { AppText } from "@/core/ui";
+import { setTabBarProps } from "./tabbar-store";
 
-const BAR_HEIGHT = 64;
+export const BAR_HEIGHT = 64;
 const DURATION_MS = 400;
 const HALF_MS = DURATION_MS / 2;
 const STRETCH_FACTOR = 0.18;
@@ -37,6 +38,10 @@ function isTabHidden(style: unknown): boolean {
 export default function RoleTabBar(props: BottomTabBarProps) {
 	const { colors } = useTheme();
 	const insets = props.insets;
+
+	const barKey = `${props.state.index}:${props.state.routes.map((r) => r.key).join("|")}`;
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	useEffect(() => setTabBarProps(props), [barKey]);
 
 	const [measuredWidth, setMeasuredWidth] = useState(0);
 
@@ -149,6 +154,7 @@ export default function RoleTabBar(props: BottomTabBarProps) {
 					backgroundColor: colors.background,
 					borderTopColor: colors.borderSolid,
 					paddingBottom: insets.bottom,
+					zIndex: 1100,
 				},
 			]}
 		>

@@ -2,6 +2,7 @@ import {
 	createContext,
 	useCallback,
 	useContext,
+	useEffect,
 	useMemo,
 	useState,
 	type PropsWithChildren,
@@ -44,10 +45,21 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 	const [hydrated, setHydrated] = useState(false);
 
 	// Hydrate the persisted preference once on mount.
-	void loadPersistedMode().then((m) => {
-		setModeState(m);
-		setHydrated(true);
-	});
+	useEffect(() => {
+		void loadPersistedMode().then((m) => {
+			setModeState(m);
+			setHydrated(true);
+		});
+	}, []);
+
+	// Sincroniza la clase .dark para Tailwind/NativeWind en web (global.css usa :root/.dark, no media query)
+	useEffect(() => {
+		if (typeof document === "undefined") return;
+		const resolved: ThemeScheme = mode === "system" ? systemScheme : mode;
+		document.documentElement.classList.toggle("dark", resolved === "dark");
+		// actualiza color-scheme para scrollbars/form controls nativos
+		document.documentElement.style.colorScheme = resolved;
+	}, [mode, systemScheme]);
 
 	const setMode = useCallback((next: ThemeMode) => {
 		setModeState(next);

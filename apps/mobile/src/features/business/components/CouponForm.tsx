@@ -5,6 +5,7 @@ import { Platform, Pressable, StyleSheet, View } from "react-native";
 import type { Coupon, CouponType } from "@0xc1x/role-commons";
 
 import { strings } from "@/core/i18n/strings";
+import { Switch } from "@/components/ui/switch";
 import { AppText, Button, Card, TextField } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
@@ -272,9 +273,9 @@ export function CouponForm({
 							{strings.business.couponAvailabilityHint}
 						</AppText>
 					</View>
-					<SwitchToggle
-						value={isActive}
-						onChange={() => setIsActive((v) => !v)}
+					<Switch
+						checked={isActive}
+						onCheckedChange={() => setIsActive((v) => !v)}
 					/>
 				</View>
 			</Card>
@@ -337,35 +338,6 @@ function TypeOption({
 	);
 }
 
-function SwitchToggle({
-	value,
-	onChange,
-}: {
-	value: boolean;
-	onChange: () => void;
-}) {
-	const { colors } = useTheme();
-	return (
-		<Pressable
-			onPress={onChange}
-			accessibilityRole="switch"
-			accessibilityState={{ checked: value }}
-			style={[
-				styles.switchTrack,
-				{ backgroundColor: value ? colors.primary : colors.borderSolid },
-			]}
-		>
-			<View
-				style={[
-					styles.switchThumb,
-					{ backgroundColor: "#fff" },
-					value && styles.switchThumbOn,
-				]}
-			/>
-		</Pressable>
-	);
-}
-
 const styles = StyleSheet.create({
 	container: { gap: spacing.md },
 	sectionTitle: {
@@ -413,18 +385,4 @@ const styles = StyleSheet.create({
 		gap: spacing.md,
 	},
 	statusText: { flex: 1, gap: 2 },
-	switchTrack: {
-		width: 50,
-		height: 30,
-		borderRadius: 15,
-		padding: 3,
-	},
-	switchThumb: {
-		width: 24,
-		height: 24,
-		borderRadius: 12,
-	},
-	switchThumbOn: {
-		transform: [{ translateX: 20 }],
-	},
 });

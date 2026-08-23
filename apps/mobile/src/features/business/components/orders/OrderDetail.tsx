@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-	Alert,
 	Image,
 	Modal,
 	Pressable,
@@ -8,8 +7,20 @@ import {
 	View,
 } from "react-native";
 import { router } from "expo-router";
+import { toast } from "sonner-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Text } from "@/components/ui/text";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
@@ -53,6 +64,7 @@ export function OrderDetail({
 	const { colors } = useTheme();
 	const [validateOpen, setValidateOpen] = useState(false);
 	const [scannerOpen, setScannerOpen] = useState(false);
+	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 	const updateStatus = useUpdateOrderStatus(businessId);
 	const validate = useValidatePickupCode(businessId);
 	const { order } = item;
@@ -65,7 +77,7 @@ export function OrderDetail({
 
 	const handleScannedValidation = () => {
 		setScannerOpen(false);
-		Alert.alert(strings.business.ordersDeliverySuccess);
+		toast.success(strings.business.ordersDeliverySuccess);
 	};
 
 	const markReady = () =>
@@ -74,24 +86,7 @@ export function OrderDetail({
 			status: "ready_for_pickup",
 		});
 
-	const confirmCancel = () => {
-		Alert.alert(
-			strings.business.ordersCancelOrder,
-			strings.business.ordersCancelConfirm,
-			[
-				{ text: strings.common.no, style: "cancel" },
-				{
-					text: strings.business.ordersCancelOrder,
-					style: "destructive",
-					onPress: () =>
-						updateStatus.mutate(
-							{ orderId: order.id, status: "cancelled" },
-							{ onSuccess: () => router.back() },
-						),
-				},
-			],
-		);
-	};
+	const confirmCancel = () => setConfirmCancelOpen(true);
 
 	return (
 		<View style={styles.root}>
@@ -175,9 +170,9 @@ export function OrderDetail({
 								onSuccess: (result) => {
 									if (result.success) {
 										setValidateOpen(false);
-										Alert.alert(strings.business.ordersDeliverySuccess);
+										toast.success(strings.business.ordersDeliverySuccess);
 									} else {
-										Alert.alert(strings.business.ordersCodeInvalid);
+										toast.error(strings.business.ordersCodeInvalid);
 									}
 								},
 							},
@@ -195,6 +190,37 @@ export function OrderDetail({
 					onValidated={handleScannedValidation}
 				/>
 			) : null}
+
+			<AlertDialog
+				open={confirmCancelOpen}
+				onOpenChange={setConfirmCancelOpen}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{strings.business.ordersCancelOrder}
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							{strings.business.ordersCancelConfirm}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>
+							<Text>{strings.common.no}</Text>
+						</AlertDialogCancel>
+						<AlertDialogAction
+							onPress={() =>
+								updateStatus.mutate(
+									{ orderId: order.id, status: "cancelled" },
+									{ onSuccess: () => router.back() },
+								)
+							}
+						>
+							<Text>{strings.business.ordersCancelOrder}</Text>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</View>
 	);
 }

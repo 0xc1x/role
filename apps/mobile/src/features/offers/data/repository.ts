@@ -258,11 +258,15 @@ export const offersRepository = {
 		return stats;
 	},
 
-	async getPopularAreas(): Promise<AreaStat[]> {
+	async getPopularAreas(
+		near?: { lat: number; lng: number; radiusKm?: number },
+	): Promise<AreaStat[]> {
 		try {
 			const { data, error } = await supabase
 				.from("offers")
-				.select("business_locations!offers_business_location_id_fkey(zone)")
+				.select(
+					"business_locations!offers_business_location_id_fkey(zone, latitude, longitude)",
+				)
 				.eq("is_active", true)
 				.gt("stock", 0)
 				.gt("pickup_end", new Date().toISOString())
@@ -272,8 +276,20 @@ export const offersRepository = {
 			for (const row of toRows(data)) {
 				const loc = row.business_locations as Record<string, unknown> | null;
 				const zone = loc?.zone as string | null;
-				if (zone && zone.length > 0)
-					counts.set(zone, (counts.get(zone) ?? 0) + 1);
+				if (!zone || zone.length === 0) continue;
+				if (near) {
+					const lat = loc?.latitude as number | null;
+					const lng = loc?.longitude as number | null;
+					if (
+						lat == null ||
+						lng == null ||
+						haversineKm(near.lat, near.lng, lat, lng) >
+							(near.radiusKm ?? 5)
+					) {
+						continue;
+					}
+				}
+				counts.set(zone, (counts.get(zone) ?? 0) + 1);
 			}
 			return [...counts.entries()]
 				.map(([name, deals]) => ({ name, deals }))

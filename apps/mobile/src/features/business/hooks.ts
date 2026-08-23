@@ -41,6 +41,8 @@ export function useSaveOffer(businessId: string) {
 			void queryClient.invalidateQueries({
 				queryKey: ["businesses", businessId, "offers"],
 			});
+			// El detalle y las vistas consumidoras leen de ["offers", ...].
+			void queryClient.invalidateQueries({ queryKey: ["offers"] });
 		},
 	});
 }
@@ -53,6 +55,7 @@ export function useDeleteOffer(businessId: string) {
 			void queryClient.invalidateQueries({
 				queryKey: ["businesses", businessId, "offers"],
 			});
+			void queryClient.invalidateQueries({ queryKey: ["offers"] });
 		},
 	});
 }
@@ -66,6 +69,7 @@ export function useToggleOfferActive(businessId: string) {
 			void queryClient.invalidateQueries({
 				queryKey: ["businesses", businessId, "offers"],
 			});
+			void queryClient.invalidateQueries({ queryKey: ["offers"] });
 		},
 	});
 }
@@ -94,8 +98,9 @@ export function useUpsertLocation(businessId: string) {
 		) => businessRepository.upsertLocation(location),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({
-				queryKey: ["businesses", businessId, "locations"],
+				queryKey: ["businesses", businessId],
 			});
+			void queryClient.invalidateQueries({ queryKey: ["business-locations"] });
 		},
 	});
 }
@@ -107,8 +112,9 @@ export function useToggleLocationStatus(businessId: string) {
 			businessRepository.toggleLocationStatus(id, isActive),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({
-				queryKey: ["businesses", businessId, "locations"],
+				queryKey: ["businesses", businessId],
 			});
+			void queryClient.invalidateQueries({ queryKey: ["business-locations"] });
 		},
 	});
 }
@@ -131,6 +137,7 @@ export function useUpsertCoupon(businessId: string) {
 			void queryClient.invalidateQueries({
 				queryKey: ["businesses", businessId, "coupons"],
 			});
+			void queryClient.invalidateQueries({ queryKey: ["coupons"] });
 		},
 	});
 }
@@ -143,6 +150,7 @@ export function useDeleteCoupon(businessId: string) {
 			void queryClient.invalidateQueries({
 				queryKey: ["businesses", businessId, "coupons"],
 			});
+			void queryClient.invalidateQueries({ queryKey: ["coupons"] });
 		},
 	});
 }
@@ -164,6 +172,7 @@ export function useToggleCouponStatus(businessId: string) {
 			void queryClient.invalidateQueries({
 				queryKey: ["businesses", businessId, "coupons"],
 			});
+			void queryClient.invalidateQueries({ queryKey: ["coupons"] });
 		},
 	});
 }
@@ -174,9 +183,10 @@ export function useUpdateBusiness(businessId: string) {
 		mutationFn: (patch: Parameters<typeof businessRepository.updateBusiness>[1]) =>
 			businessRepository.updateBusiness(businessId, patch),
 		onSuccess: () => {
-			void queryClient.invalidateQueries({
-				queryKey: ["businesses", businessId],
-			});
+			// Prefijo ancho: cubre perfil propio, owned y directorio consumidor.
+			void queryClient.invalidateQueries({ queryKey: ["businesses"] });
+			// Los datos del negocio viven embebidos en el detalle de oferta.
+			void queryClient.invalidateQueries({ queryKey: ["offers"] });
 		},
 	});
 }
@@ -255,6 +265,7 @@ export function useUpdateOrderStatus(businessId: string) {
 			void queryClient.invalidateQueries({
 				queryKey: businessOrdersKey(businessId),
 			});
+			void queryClient.invalidateQueries({ queryKey: ["orders"] });
 		},
 	});
 }
@@ -275,6 +286,7 @@ export function useValidatePickupCode(businessId: string) {
 				void queryClient.invalidateQueries({
 					queryKey: businessOrdersKey(businessId),
 				});
+				void queryClient.invalidateQueries({ queryKey: ["orders"] });
 			}
 		},
 	});

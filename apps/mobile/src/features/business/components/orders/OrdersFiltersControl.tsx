@@ -1,14 +1,13 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Button } from "@/core/ui";
+import { AppText, BottomSheetModal, Button } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { orderStatusLabels } from "@/features/orders/domain/order";
-import { SheetModal } from "../SheetModal";
 
 const ALL_STATUSES: OrderStatusType[] = [
 	"pending",
@@ -66,7 +65,7 @@ export function OrdersFiltersControl({
 			</Pressable>
 
 			{open ? (
-				<SheetModal
+				<BottomSheetModal
 					title={strings.business.ordersFilterStatus}
 					onClose={() => setOpen(false)}
 					footer={
@@ -81,33 +80,39 @@ export function OrdersFiltersControl({
 						/>
 					}
 				>
-					<Pressable
-						onPress={() => setDraft(null)}
-						style={({ pressed }) => [
-							styles.option,
-							{
-								backgroundColor: draft === null ? colors.secondary : colors.inputBackground,
-								borderColor:
-									draft === null ? colors.secondary : colors.borderSolid,
-								opacity: pressed ? 0.85 : 1,
-							},
-						]}
+					<ScrollView
+						style={styles.scroll}
+						contentContainerStyle={styles.scrollContent}
+						showsVerticalScrollIndicator={false}
+						keyboardShouldPersistTaps="handled"
 					>
-						<AppText
-							variant="bodyMedium"
-							weight={draft === null ? "semiBold" : "regular"}
-							style={{
-								color: draft === null ? colors.secondaryForeground : colors.foreground,
-							}}
+						<Pressable
+							onPress={() => setDraft(null)}
+							style={({ pressed }) => [
+								styles.option,
+								{
+									backgroundColor: draft === null ? colors.secondary : colors.inputBackground,
+									borderColor:
+										draft === null ? colors.secondary : colors.borderSolid,
+									opacity: pressed ? 0.85 : 1,
+								},
+							]}
 						>
-							{strings.business.ordersClear}
-						</AppText>
-						{draft === null ? (
-							<Ionicons name="checkmark" size={18} color={colors.secondaryForeground} />
-						) : null}
-					</Pressable>
+							<AppText
+								variant="bodyMedium"
+								weight={draft === null ? "semiBold" : "regular"}
+								style={{
+									color: draft === null ? colors.secondaryForeground : colors.foreground,
+								}}
+							>
+								{strings.business.ordersClear}
+							</AppText>
+							{draft === null ? (
+								<Ionicons name="checkmark" size={18} color={colors.secondaryForeground} />
+							) : null}
+						</Pressable>
 
-					{ALL_STATUSES.map((item) => {
+						{ALL_STATUSES.map((item) => {
 						const selected = draft === item;
 						return (
 							<Pressable
@@ -152,8 +157,9 @@ export function OrdersFiltersControl({
 								) : null}
 							</Pressable>
 						);
-					})}
-				</SheetModal>
+						})}
+					</ScrollView>
+				</BottomSheetModal>
 			) : null}
 		</>
 	);
@@ -188,6 +194,8 @@ const styles = StyleSheet.create({
 		borderRadius: radii.pill,
 		borderWidth: 1,
 	},
+	scroll: { maxHeight: 380 },
+	scrollContent: { gap: 8, paddingHorizontal: spacing.xl },
 	option: {
 		flexDirection: "row",
 		alignItems: "center",

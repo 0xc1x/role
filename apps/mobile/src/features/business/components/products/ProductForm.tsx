@@ -1,17 +1,16 @@
 import { useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Image, Platform, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Button, TextField } from "@/core/ui";
+import { AppText, BottomSheetModal, Button, TextField } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useCategories } from "@/features/hooks";
 import { useBusinessLocations, useSaveOffer } from "@/features/business/hooks";
 import type { OfferDetail } from "@/features/offers/domain/offer";
-import { SheetModal } from "../SheetModal";
 import { DateTimeField } from "./DateTimeFields";
 
 /**
@@ -79,6 +78,10 @@ export function ProductForm({
 	};
 
 	const pickImage = async () => {
+		if (Platform.OS === "web") {
+			setImageUri(await pickWebImage());
+			return;
+		}
 		const result = await ImagePicker.launchImageLibraryAsync({
 			mediaTypes: ["images"],
 			quality: 0.8,
@@ -364,7 +367,7 @@ export function ProductForm({
 			/>
 
 			{locationPickerOpen ? (
-				<SheetModal
+				<BottomSheetModal
 					title={strings.business.locations}
 					onClose={() => setLocationPickerOpen(false)}
 				>
@@ -445,7 +448,7 @@ export function ProductForm({
 							) : null}
 						</Pressable>
 					))}
-				</SheetModal>
+				</BottomSheetModal>
 			) : null}
 		</View>
 	);
@@ -455,6 +458,30 @@ function defaultPickup(isStart: boolean): Date {
 	const date = new Date();
 	date.setHours(isStart ? 18 : 20, 0, 0, 0);
 	return date;
+}
+
+// ponytail: expo-image-picker en web abre el diálogo con un click sintético
+// sin user activation → nunca abre y el await queda colgado. Input nativo
+// con click() síncrono dentro del handler; migrar de vuelta si upstream lo
+// arregla.
+function pickWebImage(): Promise<string | null> {
+	return new Promise((resolve) => {
+		const input = document.createElement("input");
+		input.type = "file";
+		input.accept = "image/*";
+		let done = false;
+		const finish = (value: string | null) => {
+			if (done) return;
+			done = true;
+			resolve(value);
+			input.remove();
+		};
+		input.onchange = () =>
+			finish(input.files?.[0] ? URL.createObjectURL(input.files[0]) : null);
+		input.oncancel = () => finish(null);
+		document.body.appendChild(input);
+		input.click();
+	});
 }
 
 function FormSection({

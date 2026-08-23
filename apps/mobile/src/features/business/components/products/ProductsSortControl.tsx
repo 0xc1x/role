@@ -3,14 +3,13 @@ import { Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
+import { AppText, BottomSheetModal } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import {
 	PRODUCT_SORTS,
 	type ProductsSort,
 } from "@/features/business/domain/products";
-import { SheetModal } from "../SheetModal";
 
 const SORT_LABELS: Record<ProductsSort, string> = {
 	newest: strings.business.sortNewest,
@@ -54,7 +53,7 @@ export function ProductsSortControl({
 			</Pressable>
 
 			{open ? (
-				<SheetModal title={strings.business.sort} onClose={() => setOpen(false)}>
+				<BottomSheetModal title={strings.business.sort} onClose={() => setOpen(false)}>
 					{PRODUCT_SORTS.map((sort) => {
 						const selected = sort === value;
 						return (
@@ -94,7 +93,7 @@ export function ProductsSortControl({
 							</Pressable>
 						);
 					})}
-				</SheetModal>
+				</BottomSheetModal>
 			) : null}
 		</>
 	);

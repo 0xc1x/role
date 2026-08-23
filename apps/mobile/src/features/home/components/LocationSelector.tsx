@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	Dimensions,
-	Modal,
 	View,
 	StyleSheet,
 	Animated,
@@ -20,6 +19,7 @@ import Reanimated, {
 import { useAuthStore } from "@/features/auth/store";
 import { useSavedAddresses, useSetDefaultAddress } from "@/features/profile/hooks";
 import { AddAddressSheet } from "@/features/profile/components/AddAddressSheet";
+import { router } from "expo-router";
 import type { SavedAddressDto } from "@0xc1x/role-commons";
 import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
@@ -29,6 +29,7 @@ import { spacing, radii } from "@/core/theme/spacing";
 export function LocationSelector() {
 	const { colors } = useTheme();
 	const profile = useAuthStore((s) => s.profile);
+	const status = useAuthStore((s) => s.status);
 	const userId = profile?.id ?? "";
 	const { data: addresses, isLoading, isError } = useSavedAddresses(userId);
 	const setDefault = useSetDefaultAddress(userId);
@@ -91,6 +92,10 @@ export function LocationSelector() {
 
 	const handleAddAddress = () => {
 		closeDropdown();
+		if (status !== "authenticated") {
+			router.replace("/login");
+			return;
+		}
 		setShowAddAddress(true);
 	};
 
@@ -141,18 +146,12 @@ export function LocationSelector() {
 				</Portal>
 			) : null}
 
-			<Modal
-				visible={showAddAddress}
-				transparent
-				animationType="slide"
-				statusBarTranslucent
-				onRequestClose={() => setShowAddAddress(false)}
-			>
+			{showAddAddress ? (
 				<AddAddressSheet
 					userId={userId}
 					onClose={() => setShowAddAddress(false)}
 				/>
-			</Modal>
+			) : null}
 		</View>
 	);
 }

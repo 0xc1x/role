@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
 	},
 	leafDecorationWrap: {
 		position: "absolute",
-		right: 0,
+		right: spacing.md,
 		top: -5,
 		bottom: -5,
 		justifyContent: "center",

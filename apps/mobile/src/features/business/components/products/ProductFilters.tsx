@@ -3,11 +3,10 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Button } from "@/core/ui";
+import { AppText, BottomSheetModal, Button } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useCategories } from "@/features/hooks";
-import { SheetModal } from "../SheetModal";
 
 /**
  * "Filtrar" pill + category bottom sheet. A single active category is
@@ -61,7 +60,7 @@ export function ProductFilters({
 			</Pressable>
 
 			{open ? (
-				<SheetModal
+				<BottomSheetModal
 					title={strings.business.category}
 					onClose={() => setOpen(false)}
 					footer={
@@ -122,7 +121,7 @@ export function ProductFilters({
 							);
 						})}
 					</View>
-				</SheetModal>
+				</BottomSheetModal>
 			) : null}
 		</>
 	);
