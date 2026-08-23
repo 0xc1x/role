@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 
@@ -37,6 +37,7 @@ export default function ExploreScreen() {
 	const [sheetVisible, setSheetVisible] = useState(false);
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 	const [viewModeMap, setViewModeMap] = useState(false);
+	const scrollRef = useRef<ScrollView>(null);
 
 	// Debounce la búsqueda como en fudi (400ms).
 	useEffect(() => {
@@ -139,9 +140,17 @@ export default function ExploreScreen() {
 		);
 	}
 
+	const handleCollapseCategories = useCallback(() => {
+		// deja que LayoutAnimation arranque y luego hace scroll suave arriba
+		requestAnimationFrame(() => {
+			scrollRef.current?.scrollTo({ y: 0, animated: true });
+		});
+	}, []);
+
 	return (
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
 			<ScrollView
+				ref={scrollRef}
 				style={styles.flex}
 				contentContainerStyle={styles.content}
 				showsVerticalScrollIndicator={false}
@@ -170,6 +179,7 @@ export default function ExploreScreen() {
 				<ExploreCategoryGrid
 					selectedCategory={selectedCategory}
 					onCategoryTap={handleCategoryTap}
+					onCollapse={handleCollapseCategories}
 				/>
 
 				<ExploreTipSection />

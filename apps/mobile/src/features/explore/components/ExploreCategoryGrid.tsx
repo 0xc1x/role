@@ -35,9 +35,11 @@ const ENTRY_ANIM_DURATION = 300;
 export function ExploreCategoryGrid({
 	selectedCategory,
 	onCategoryTap,
+	onCollapse,
 }: {
 	selectedCategory: string | null;
 	onCategoryTap: (categoryId: string) => void;
+	onCollapse?: () => void;
 }) {
 	const { colors, scheme } = useTheme();
 	const { data: areas } = usePopularAreas();
@@ -82,8 +84,10 @@ export function ExploreCategoryGrid({
 	const mutedText = baseText + (isDark ? "99" : "80");
 
 	const toggleExpand = () => {
+		const willCollapse = showAll;
 		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 		setShowAll((s) => !s);
+		if (willCollapse) onCollapse?.();
 	};
 
 	return (
@@ -216,7 +220,6 @@ export function ExploreCategoryGrid({
 									</AppText>
 								) : null}
 							</View>
-							<Ionicons name="chevron-forward" size={20} color={colors.primary} />
 						</Pressable>
 					</CategoryFadeSlideIn>
 				) : null}

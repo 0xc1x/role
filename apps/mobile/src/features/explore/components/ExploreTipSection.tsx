@@ -5,14 +5,18 @@ import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { useRandomTip } from "@/features/tips/hooks";
 
 /**
  * Banner de "Consejo del día" entre el grid de categorías y la lista de
- * ofertas (portado de ExploreTipSection/fudi).
+ * ofertas. Muestra un consejo aleatorio de Supabase; se oculta si no hay.
  */
 export function ExploreTipSection() {
 	const { colors, scheme } = useTheme();
 	const isDark = scheme === "dark";
+	const { data: tip, isLoading } = useRandomTip();
+
+	if (isLoading || !tip) return null;
 
 	const cardBackground = isDark ? colors.surfaceWarning : colors.yellowLight;
 	const cardBorder = colors.yellowDark + (isDark ? "4D" : "33");
@@ -53,7 +57,7 @@ export function ExploreTipSection() {
 					variant="bodyMedium"
 					style={[styles.tipBody, { color: colors.foreground }]}
 				>
-					{strings.explore.tips.join(" ")}
+					{tip.content}
 				</AppText>
 			</View>
 		</View>
