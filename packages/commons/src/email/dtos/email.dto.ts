@@ -20,6 +20,7 @@ import {
   CreateSegmentSchema,
   ListCampaignsQuerySchema,
   ListComponentsQuerySchema,
+  ListSegmentsQuerySchema,
   ListSendsQuerySchema,
   TestCampaignSchema,
   UpdateCampaignSchema,
@@ -45,6 +46,7 @@ export type CreateCampaignDto = z.infer<typeof CreateCampaignSchema>;
 export type UpdateCampaignDto = z.infer<typeof UpdateCampaignSchema>;
 
 export type ListComponentsQuery = z.infer<typeof ListComponentsQuerySchema>;
+export type ListSegmentsQuery = z.infer<typeof ListSegmentsQuerySchema>;
 export type ListCampaignsQuery = z.infer<typeof ListCampaignsQuerySchema>;
 export type ListSendsQuery = z.infer<typeof ListSendsQuerySchema>;
 export type TestCampaignDto = z.infer<typeof TestCampaignSchema>;
