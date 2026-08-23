@@ -18,6 +18,11 @@ export const OrderSchema = z.object({
   pickup_code: z.string().min(1),
   pickup_time: TimestamptzSchema.nullable(),
   coupon_id: UuidSchema.nullable(),
+  /** Tarifa congelada al crear la orden (fracción, ej. 0.1 = 10%). */
+  commission_rate: z.number().min(0).max(1),
+  platform_fee: z.number().min(0),
+  net_amount: z.number().min(0),
+  payout_id: UuidSchema.nullable(),
   created_at: TimestamptzSchema,
   updated_at: TimestamptzSchema,
 });
@@ -33,6 +38,10 @@ export const CreateOrderSchema = z.object({
   pickup_code: z.string().min(1),
   pickup_time: TimestamptzSchema.nullable().optional(),
   coupon_id: UuidSchema.nullable().optional(),
+  commission_rate: z.number().min(0).max(1).optional(),
+  platform_fee: z.number().min(0).optional(),
+  net_amount: z.number().min(0).optional(),
+  payout_id: UuidSchema.nullable().optional(),
 });
 
 export const UpdateOrderSchema = z

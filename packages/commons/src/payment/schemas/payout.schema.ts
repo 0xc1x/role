@@ -9,6 +9,7 @@ import {
 export const PayoutSchema = z.object({
   id: UuidSchema,
   business_id: UuidSchema,
+  business_name: z.string().nullable().optional(),
   period_start: DateSchema,
   period_end: DateSchema,
   gross_amount: z.number(),
