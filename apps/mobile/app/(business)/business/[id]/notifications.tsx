@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
-import { StyleSheet, Switch, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
+import { Switch } from "@/components/ui/switch";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
@@ -201,12 +202,7 @@ function ToggleRow({
 					</AppText>
 				) : null}
 			</View>
-			<Switch
-				value={value}
-				onValueChange={onChange}
-				trackColor={{ true: colors.primary }}
-				thumbColor="#fff"
-			/>
+			<Switch checked={value} onCheckedChange={onChange} />
 		</View>
 	);
 }

@@ -1,9 +1,20 @@
 import { useState } from "react";
 import { useEffect } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Text } from "@/components/ui/text";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
@@ -99,6 +110,7 @@ export default function PaymentMethodsScreen() {
 	const userId = profile?.id ?? "";
 	const { data: methods, refetch } = usePaymentMethods(userId);
 	const [showForm, setShowForm] = useState(false);
+	const [deleteId, setDeleteId] = useState<string | null>(null);
 	const [number, setNumber] = useState("");
 	const [name, setName] = useState("");
 	const [expiry, setExpiry] = useState("");
@@ -140,21 +152,9 @@ export default function PaymentMethodsScreen() {
 	};
 
 	const deleteMethod = (id: string) => {
-		Alert.alert(
-			strings.paymentMethods.deleteConfirm,
-			strings.paymentMethods.deleteConfirmBody,
-			[
-				{ text: strings.common.cancel, style: "cancel" },
-				{
-					text: strings.common.delete,
-					style: "destructive",
-					onPress: () =>
-						void profileRepository
-							.deletePaymentMethod(userId, id)
-							.then(() => refetch()),
-				},
-			],
-		);
+		void profileRepository
+			.deletePaymentMethod(userId, id)
+			.then(() => refetch());
 	};
 
 	return (
@@ -178,7 +178,7 @@ export default function PaymentMethodsScreen() {
 							<PaymentMethodRow
 								method={item}
 								onSetDefault={setDefault}
-								onDelete={deleteMethod}
+								onDelete={setDeleteId}
 							/>
 						)}
 					/>
@@ -216,6 +216,32 @@ export default function PaymentMethodsScreen() {
 					/>
 				)}
 			</View>
+
+			<AlertDialog
+				open={deleteId != null}
+				onOpenChange={(open) => !open && setDeleteId(null)}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{strings.paymentMethods.deleteConfirm}
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							{strings.paymentMethods.deleteConfirmBody}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>
+							<Text>{strings.common.cancel}</Text>
+						</AlertDialogCancel>
+						<AlertDialogAction
+							onPress={() => deleteId && deleteMethod(deleteId)}
+						>
+							<Text>{strings.common.delete}</Text>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</Screen>
 	);
 }

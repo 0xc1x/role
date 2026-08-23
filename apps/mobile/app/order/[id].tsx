@@ -1,8 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { Order } from "@0xc1x/role-commons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Alert, Linking, Pressable, StyleSheet, View } from "react-native";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
+import { useState } from "react";
 import QRCode from "react-native-qrcode-svg";
+
+import {
+ AlertDialog,
+ AlertDialogAction,
+ AlertDialogCancel,
+ AlertDialogContent,
+ AlertDialogDescription,
+ AlertDialogFooter,
+ AlertDialogHeader,
+ AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Text } from "@/components/ui/text";
 
 import { strings } from "@/core/i18n/strings";
 import {
@@ -45,19 +58,9 @@ export default function OrderDetailScreen() {
 	const { order } = data;
 	const canCancel = ["pending", "confirmed"].includes(order.status);
 
-	const handleCancel = () => {
-		Alert.alert(strings.orders.cancel, strings.orders.cancelConfirm, [
-			{ text: strings.common.no, style: "cancel" },
-			{
-				text: strings.orders.cancel,
-				style: "destructive",
-				onPress: () =>
-					cancel.mutate(order.id, {
-						onSuccess: () => void refetch(),
-					}),
-			},
-		]);
-	};
+	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+
+	const handleCancel = () => setConfirmCancelOpen(true);
 
 	return (
 		<Screen scroll>
@@ -84,7 +87,7 @@ export default function OrderDetailScreen() {
 					<Button
 						label={strings.orders.cancel}
 						variant="danger"
-						onPress={handleCancel}
+						onPress={() => void handleCancel()}
 						loading={cancel.isPending}
 						fullWidth
 						style={styles.cancelBtn}
@@ -108,8 +111,31 @@ export default function OrderDetailScreen() {
 							style={styles.reviewBtn}
 						/>
 					</>
-				) : null}
+					) : null}
 			</View>
+
+			<AlertDialog open={confirmCancelOpen} onOpenChange={setConfirmCancelOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{strings.orders.cancel}</AlertDialogTitle>
+						<AlertDialogDescription>
+							{strings.orders.cancelConfirm}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>
+							<Text>{strings.common.no}</Text>
+						</AlertDialogCancel>
+						<AlertDialogAction
+							onPress={() =>
+								cancel.mutate(order.id, { onSuccess: () => void refetch() })
+							}
+						>
+							<Text>{strings.orders.cancel}</Text>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</Screen>
 	);
 }

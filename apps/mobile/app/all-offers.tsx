@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
@@ -174,9 +175,7 @@ export default function AllOffersScreen() {
 						columnWrapperStyle={styles.gridRow}
 						contentContainerStyle={styles.gridContent}
 						scrollEnabled={false}
-						renderItem={() => (
-							<View style={[styles.skeletonCard, { backgroundColor: colors.card }]} />
-						)}
+						renderItem={() => <Skeleton style={styles.skeletonCard} />}
 					/>
 				</View>
 			) : isError ? (
@@ -293,8 +292,7 @@ const styles = StyleSheet.create({
 		flex: 1,
 		height: 220,
 		borderRadius: 16,
-	},
-	centerBox: {
+	},	centerBox: {
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",

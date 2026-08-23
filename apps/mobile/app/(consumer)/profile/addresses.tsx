@@ -1,9 +1,20 @@
 import { useCallback, useState } from "react";
 import { useEffect } from "react";
-import { Alert, FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Text } from "@/components/ui/text";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
@@ -40,27 +51,17 @@ export default function AddressesScreen() {
 
 	if (!initialized || status === "guest") return null;
 
-	const handleDelete = useCallback(
-		(id: string) => remove.mutate(id, { onSuccess: () => void refetch() }),
-		[remove, refetch],
-	);
+	const [deleteTarget, setDeleteTarget] = useState<{
+		id: string;
+		label: string;
+	} | null>(null);
 
-	const confirmDelete = useCallback(
-		(id: string, label: string) => {
-			Alert.alert(
-				strings.addresses.deleteConfirmTitle,
-				strings.addresses.deleteConfirmBody.replace("{label}", label),
-				[
-					{ text: strings.common.cancel, style: "cancel" },
-					{
-						text: strings.common.delete,
-						style: "destructive",
-						onPress: () => handleDelete(id),
-					},
-				],
-			);
+	const handleDelete = useCallback(
+		(id: string) => {
+			remove.mutate(id, { onSuccess: () => void refetch() });
+			setDeleteTarget(null);
 		},
-		[handleDelete],
+		[remove, refetch],
 	);
 
 	return (
@@ -72,10 +73,10 @@ export default function AddressesScreen() {
 					onPress={() => setShowAddSheet(true)}
 					style={[styles.addButton, { backgroundColor: colors.foreground }]}
 				>
-					<Ionicons name="add" size={20} color={colors.primaryForeground} />
+					<Ionicons name="add" size={20} color={colors.background} />
 					<AppText
 						weight="bold"
-						style={{ color: colors.primaryForeground }}
+						style={{ color: colors.background }}
 					>
 						{strings.addresses.addNew}
 					</AppText>
@@ -130,7 +131,12 @@ export default function AddressesScreen() {
 										label={strings.common.delete}
 										variant="ghost"
 										size="sm"
-										onPress={() => confirmDelete(String(item.id), item.label)}
+										onPress={() =>
+											setDeleteTarget({
+												id: String(item.id),
+												label: item.label,
+											})
+										}
 									/>
 								</View>
 								<AppText
@@ -153,18 +159,41 @@ export default function AddressesScreen() {
 				)}
 			</View>
 
-			<Modal
-				visible={showAddSheet}
-				transparent
-				animationType="slide"
-				statusBarTranslucent
-				onRequestClose={() => setShowAddSheet(false)}
-			>
+			{showAddSheet ? (
 				<AddAddressSheet
 					userId={profile?.id ?? ""}
 					onClose={() => setShowAddSheet(false)}
 				/>
-			</Modal>
+			) : null}
+
+			<AlertDialog
+				open={deleteTarget != null}
+				onOpenChange={(open) => !open && setDeleteTarget(null)}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{strings.addresses.deleteConfirmTitle}
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							{strings.addresses.deleteConfirmBody.replace(
+								"{label}",
+								deleteTarget?.label ?? "",
+							)}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>
+							<Text>{strings.common.cancel}</Text>
+						</AlertDialogCancel>
+						<AlertDialogAction
+							onPress={() => deleteTarget && handleDelete(deleteTarget.id)}
+						>
+							<Text>{strings.common.delete}</Text>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</Screen>
 	);
 }

@@ -1,9 +1,11 @@
 import { useEffect } from "react";
-import { Platform, StyleSheet, Switch, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
+import { toast } from "sonner-native";
 import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
 
+import { Switch } from "@/components/ui/switch";
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card, Screen, ScreenHeader } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
@@ -170,10 +172,9 @@ function NotificationRow({
 				</AppText>
 			</View>
 			<Switch
-				value={Boolean(value)}
+				checked={Boolean(value)}
 				disabled={disabled}
-				onValueChange={(v) => onToggle(config, v)}
-				trackColor={{ true: colors.primary }}
+				onCheckedChange={(v) => onToggle(config, v)}
 			/>
 		</View>
 	);
@@ -228,7 +229,16 @@ export default function NotificationsSettingsScreen() {
 		if (config.key === "push_enabled" && value) {
 			const granted = await ensurePushPermission();
 			if (!granted) return;
-			void syncDeviceToken(userId);
+			try {
+				const registered = await syncDeviceToken(userId);
+				if (!registered) return; // Permiso denegado — sin toast.
+				toast.success(strings.notificationsSettings.pushEnabled);
+			} catch (e) {
+				toast.error(
+					e instanceof Error ? e.message : strings.common.error,
+				);
+				return;
+			}
 		}
 		update.mutate({
 			[config.key]: value,

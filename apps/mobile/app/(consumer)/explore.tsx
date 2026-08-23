@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import { EmptyState, ErrorState } from "@/core/ui";
 import { SectionHeader } from "@/core/ui";
@@ -112,20 +113,29 @@ export default function ExploreScreen() {
 
 	if (viewModeMap) {
 		return (
-			<ExploreMapView
-				offers={data ?? []}
-				filters={{ ...filters, searchQuery: debouncedSearch }}
-				userLocation={
-					selectedAddress?.latitude != null
-						? {
-								latitude: selectedAddress.latitude,
-								longitude: selectedAddress.longitude,
-							}
-						: null
-				}
-				onBack={toggleViewMode}
-				onFilterTap={openFilterSheet}
-			/>
+			<View style={styles.flex}>
+				<ExploreMapView
+					offers={data ?? []}
+					filters={{ ...filters, searchQuery: debouncedSearch }}
+					userLocation={
+						selectedAddress?.latitude != null
+							? {
+									latitude: selectedAddress.latitude,
+									longitude: selectedAddress.longitude,
+								}
+							: null
+					}
+					onBack={toggleViewMode}
+					onFilterTap={openFilterSheet}
+				/>
+				{sheetVisible ? (
+					<OfferFiltersSheet
+						current={activeFilters}
+						onApply={applySheetFilters}
+						onClose={closeFilterSheet}
+					/>
+				) : null}
+			</View>
 		);
 	}
 
@@ -174,10 +184,7 @@ export default function ExploreScreen() {
 				{isLoading ? (
 					<View style={styles.offersList}>
 						{[0, 1, 2, 3, 4].map((i) => (
-							<View
-								key={i}
-								style={[styles.skeleton, { backgroundColor: colors.card }]}
-							/>
+							<Skeleton key={i} style={styles.skeleton} />
 						))}
 					</View>
 				) : isError ? (

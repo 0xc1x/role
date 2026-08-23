@@ -1,6 +1,7 @@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link, router, type Href } from "expo-router";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -44,35 +45,19 @@ function initialsOf(profile: UserProfile): string {
 
 function ProfileAvatar({ profile }: { profile: UserProfile }) {
 	const { colors } = useTheme();
-	const size = 80;
-
-	if (profile.avatarUrl) {
-		return (
-			<Image
-				source={{ uri: profile.avatarUrl }}
-				style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}
-			/>
-		);
-	}
-
 	return (
-		<View
-			style={[
-				styles.avatar,
-				{
-					width: size,
-					height: size,
-					borderRadius: size / 2,
-					backgroundColor: colors.primary,
-				},
-			]}
-		>
-			<AppText
-				style={{ fontSize: 28, fontWeight: "700", color: colors.primaryForeground }}
-			>
-				{initialsOf(profile)}
-			</AppText>
-		</View>
+		<Avatar style={{ width: 80, height: 80 }} alt={initialsOf(profile)}>
+			{profile.avatarUrl ? (
+				<AvatarImage source={{ uri: profile.avatarUrl }} />
+			) : null}
+			<AvatarFallback className="bg-primary">
+				<AppText
+					style={{ fontSize: 28, fontWeight: "700", color: colors.primaryForeground }}
+				>
+					{initialsOf(profile)}
+				</AppText>
+			</AvatarFallback>
+		</Avatar>
 	);
 }
 
@@ -373,7 +358,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, gap: spacing.lg },
 	headerRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-	avatar: { alignItems: "center", justifyContent: "center" },
 	statsRow: { flexDirection: "row", gap: spacing.sm },
 	statCard: {
 		flex: 1,

@@ -4,6 +4,11 @@ import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
+import {
+	Avatar,
+	AvatarFallback,
+	AvatarImage,
+} from "@/components/ui/avatar";
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button, Screen, ScreenHeader, TextField } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
@@ -93,13 +98,22 @@ export default function EditProfileScreen() {
 				<ScreenHeader title={strings.profileEdit.title} />
 
 				<View style={styles.avatarWrap}>
-					<View
-						style={[styles.avatar, { backgroundColor: colors.secondary }]}
-					>
-						<AppText style={{ fontSize: 32, fontWeight: "700", color: colors.primary }}>
-							{initialsOf(profile)}
-						</AppText>
-					</View>
+					<Avatar style={{ width: 96, height: 96 }} alt={initialsOf(profile)}>
+						{profile.avatarUrl ? (
+							<AvatarImage source={{ uri: profile.avatarUrl }} />
+						) : null}
+						<AvatarFallback className="bg-secondary">
+							<AppText
+								style={{
+									fontSize: 32,
+									fontWeight: "700",
+									color: colors.primary,
+								}}
+							>
+								{initialsOf(profile)}
+							</AppText>
+						</AvatarFallback>
+					</Avatar>
 					<Button
 						label={strings.profileEdit.changeAvatar}
 						variant="ghost"
@@ -153,11 +167,4 @@ export default function EditProfileScreen() {
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, gap: spacing.md },
 	avatarWrap: { alignItems: "center", gap: spacing.xs },
-	avatar: {
-		width: 96,
-		height: 96,
-		borderRadius: 48,
-		alignItems: "center",
-		justifyContent: "center",
-	},
 });

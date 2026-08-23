@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import { AppText, CircleIconButton, SearchBar, SelectableChipsBar } from "@/core/ui";
 import { useTheme } from "@/core/theme";
@@ -91,9 +92,7 @@ export default function AllBusinessesScreen() {
 						columnWrapperStyle={styles.businessRow}
 						contentContainerStyle={styles.businessContent}
 						scrollEnabled={false}
-						renderItem={() => (
-							<View style={[styles.skeletonCard, { backgroundColor: colors.card }]} />
-						)}
+						renderItem={() => <Skeleton style={styles.skeletonCard} />}
 					/>
 				</View>
 			) : isError ? (
