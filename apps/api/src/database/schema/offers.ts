@@ -21,7 +21,10 @@ export const offers = pgTable('offers', {
   title: text('title').notNull(),
   description: text('description'),
   image: text('image'),
-  original_price: numeric('original_price', { precision: 12, scale: 2 }).notNull(),
+  original_price: numeric('original_price', {
+    precision: 12,
+    scale: 2,
+  }).notNull(),
   discounted_price: numeric('discounted_price', {
     precision: 12,
     scale: 2,
@@ -39,6 +42,10 @@ export const offers = pgTable('offers', {
   allergens: text('allergens'),
   rating: numeric('rating', { precision: 10, scale: 2 }).notNull().default('0'),
   review_count: integer('review_count').notNull().default(0),
-  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  created_at: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });

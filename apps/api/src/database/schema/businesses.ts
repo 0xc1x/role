@@ -26,11 +26,17 @@ export const businesses = pgTable('businesses', {
   phone: text('phone'),
   email: text('email'),
   website: text('website'),
-  commission_rate: numeric('commission_rate', { precision: 10, scale: 4 }).default(
-    '0.1000',
-  ),
+  commission_rate: numeric('commission_rate', {
+    precision: 10,
+    scale: 4,
+  }).default('0.1000'),
   balance: numeric('balance', { precision: 12, scale: 2 }).default('0.00'),
+  currency: text('currency').notNull().default('USD'),
   is_active: boolean('is_active').notNull().default(true),
-  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  created_at: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });

@@ -21,6 +21,10 @@ export const businessLocations = pgTable('business_locations', {
   is_active: boolean('is_active').notNull().default(true),
   zone: text('zone'),
   is_headquarter: boolean('is_headquarter').notNull().default(false),
-  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  created_at: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });

@@ -9,6 +9,10 @@ export const profiles = pgTable('profiles', {
   phone: text('phone'),
   role: appRoleEnum('role').notNull().default('user'),
   city: text('city'),
-  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  created_at: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });

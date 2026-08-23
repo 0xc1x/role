@@ -9,6 +9,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { TipsModule } from './modules/tips/tips.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { UploadModule } from './modules/upload/upload.module';
@@ -18,6 +19,8 @@ import { AppConfigModule } from './modules/app-config/app-config.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { EmailMarketingModule } from './modules/email-marketing/email-marketing.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
+import { PayoutsModule } from './modules/payouts/payouts.module';
+import { CommissionsModule } from './modules/commissions/commissions.module';
 
 @Module({
   imports: [
@@ -53,6 +56,7 @@ import { ProfilesModule } from './modules/profiles/profiles.module';
     AuthModule,
     HealthModule,
     CategoriesModule,
+    TipsModule,
     OffersModule,
     OrdersModule,
     UploadModule,
@@ -62,6 +66,8 @@ import { ProfilesModule } from './modules/profiles/profiles.module';
     StatsModule,
     EmailMarketingModule,
     ProfilesModule,
+    PayoutsModule,
+    CommissionsModule,
   ],
   providers: [
     {
@@ -70,4 +76,4 @@ import { ProfilesModule } from './modules/profiles/profiles.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

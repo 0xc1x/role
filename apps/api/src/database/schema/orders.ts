@@ -25,12 +25,29 @@ export const orders = pgTable('orders', {
   order_number: text('order_number').notNull().unique(),
   status: orderStatusEnum('status').notNull().default('pending'),
   price: numeric('price', { precision: 12, scale: 2 }).notNull(),
-  original_price: numeric('original_price', { precision: 12, scale: 2 }).notNull(),
+  original_price: numeric('original_price', {
+    precision: 12,
+    scale: 2,
+  }).notNull(),
   pickup_code: text('pickup_code').notNull(),
   pickup_time: timestamp('pickup_time', { withTimezone: true }),
   coupon_id: uuid('coupon_id'),
-  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  commission_rate: numeric('commission_rate', { precision: 10, scale: 4 })
+    .notNull()
+    .default('0.1000'),
+  platform_fee: numeric('platform_fee', { precision: 12, scale: 2 })
+    .notNull()
+    .default('0'),
+  net_amount: numeric('net_amount', { precision: 12, scale: 2 })
+    .notNull()
+    .default('0'),
+  payout_id: uuid('payout_id'),
+  created_at: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 export const orderEvents = pgTable('order_events', {
@@ -43,5 +60,7 @@ export const orderEvents = pgTable('order_events', {
   changed_by: uuid('changed_by').references(() => profiles.id),
   reason: text('reason'),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
-  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  created_at: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
