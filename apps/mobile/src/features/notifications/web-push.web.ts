@@ -32,6 +32,26 @@ export async function syncWebPushToken(
 	}
 	if (permission !== "granted") return false;
 
+	const firebaseConfig = {
+		apiKey: env.EXPO_PUBLIC_FIREBASE_API_KEY,
+		authDomain: `${env.EXPO_PUBLIC_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+		projectId: env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+		messagingSenderId: env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+		appId: env.EXPO_PUBLIC_FIREBASE_APP_ID,
+	};
+	if (
+		!firebaseConfig.apiKey ||
+		!firebaseConfig.projectId ||
+		!firebaseConfig.messagingSenderId ||
+		!firebaseConfig.appId
+	) {
+		// Sin esto, @firebase/installations lanza el criptico
+		// "installations/missing-app-config-values".
+		throw new Error(
+			"Push web no configurado: faltan EXPO_PUBLIC_FIREBASE_* en .env",
+		);
+	}
+
 	const { getApps, initializeApp } = await import("firebase/app");
 	const { getMessaging, getToken, onMessage, isSupported } =
 		await import("firebase/messaging");
@@ -41,11 +61,7 @@ export async function syncWebPushToken(
 	const app =
 		getApps()[0] ??
 		initializeApp({
-			apiKey: env.EXPO_PUBLIC_FIREBASE_API_KEY,
-			authDomain: `${env.EXPO_PUBLIC_FIREBASE_PROJECT_ID}.firebaseapp.com`,
-			projectId: env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-			messagingSenderId: env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-			appId: env.EXPO_PUBLIC_FIREBASE_APP_ID,
+			...firebaseConfig,
 		});
 	const messaging = getMessaging(app);
 

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Rolé",
-    "slug": "role-mobile",
+    "slug": "role",
     "scheme": "role",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -40,7 +40,11 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "CAMERA"
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -76,6 +80,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bd0f41e5-120e-47e5-bc0c-e85bf4597f83"
+      }
+    },
+    "owner": "lemnxcixs-team"
   }
 }
