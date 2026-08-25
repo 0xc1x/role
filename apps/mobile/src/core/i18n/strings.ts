@@ -469,6 +469,10 @@ export const strings = {
 	notificationsSettings: {
 		title: "Notificaciones",
 		pushEnabled: "Dispositivo registrado para push",
+		blockedBrowser:
+			"Las notificaciones están bloqueadas para este sitio. Habilítalas en el candado de la barra de direcciones → Notificaciones → Permitir, y vuelve a intentar.",
+		blockedDevice:
+			"Las notificaciones están desactivadas para la app. Habilítalas en la configuración del dispositivo y vuelve a intentar.",
 		banner:
 			"Configura tus alertas para no perderte ningún paquete sorpresa y rescatar comida a tiempo.",
 		channelsSection: "Canales de comunicación",

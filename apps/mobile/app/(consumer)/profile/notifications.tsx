@@ -87,12 +87,24 @@ const SMART_ALERTS: ToggleConfig[] = [
 	},
 ];
 
-async function ensurePushPermission(): Promise<boolean> {
-	if (Platform.OS === "web") return true;
+/**
+ * Estado real del permiso, pidiéndolo solo si está en "default".
+ * "denied" es pegajoso (el navegador/SO nunca vuelve a preguntar).
+ */
+async function ensurePushPermission(): Promise<"granted" | "denied"> {
+	if (Platform.OS === "web") {
+		if (typeof window === "undefined" || !("Notification" in window)) {
+			return "denied";
+		}
+		if (Notification.permission === "default") {
+			await Notification.requestPermission();
+		}
+		return Notification.permission === "granted" ? "granted" : "denied";
+	}
 	const current = await Notifications.getPermissionsAsync();
-	if (current.status === "granted") return true;
+	if (current.status === "granted") return "granted";
 	const requested = await Notifications.requestPermissionsAsync();
-	return requested.status === "granted";
+	return requested.status === "granted" ? "granted" : "denied";
 }
 
 function SectionTitle({ children }: { children: string }) {
@@ -227,8 +239,18 @@ export default function NotificationsSettingsScreen() {
 	const toggle = async (config: ToggleConfig, value: boolean) => {
 		if (config.upcoming) return;
 		if (config.key === "push_enabled" && value) {
-			const granted = await ensurePushPermission();
-			if (!granted) return;
+			const permission = await ensurePushPermission();
+			if (permission === "denied") {
+				// Permiso pegajoso: ni el navegador ni el SO volverán a
+				// preguntar; guiamos al usuario a desbloquearlo manualmente.
+				toast.error(
+					Platform.OS === "web"
+						? strings.notificationsSettings.blockedBrowser
+						: strings.notificationsSettings.blockedDevice,
+					{ duration: 8000 },
+				);
+				return;
+			}
 			try {
 				const registered = await syncDeviceToken(userId);
 				if (!registered) return; // Permiso denegado — sin toast.

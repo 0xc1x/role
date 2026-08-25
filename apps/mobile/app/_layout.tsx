@@ -91,6 +91,8 @@ export default function RootLayout() {
 	}, [fontsLoaded, configReady]);
 
 	// Registro automático de push post-login (una vez por usuario).
+	// Sin requestPermission: los navegadores auto-deniegan prompts sin
+	// gesto del usuario; el permiso se pide desde el toggle de Ajustes.
 	const authStatus = useAuthStore((s) => s.status);
 	const authProfileId = useAuthStore((s) => s.profile?.id);
 	const syncedFor = useRef<string | null>(null);
@@ -98,7 +100,7 @@ export default function RootLayout() {
 		if (authStatus !== "authenticated" || !authProfileId) return;
 		if (syncedFor.current === authProfileId) return;
 		syncedFor.current = authProfileId;
-		syncDeviceToken(authProfileId).catch(() => {
+		syncDeviceToken(authProfileId, { request: false }).catch(() => {
 			// Sin permiso/token: no es fatal; se puede activar desde Ajustes.
 			syncedFor.current = null;
 		});

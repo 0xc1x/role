@@ -14,14 +14,22 @@ async function loadNotifications(): Promise<NotificationsModule | null> {
 }
 
 // ─── Device token sync ──────────────────────────────────────────────
-/** Saves/updates this device's push token for the current user. */
-export async function syncDeviceToken(userId: string): Promise<boolean> {
+/**
+ * Saves/updates this device's push token for the current user.
+ * `request: false` solo sincroniza si el permiso ya está concedido
+ * (registro automático post-login, sin prompt del SO).
+ */
+export async function syncDeviceToken(
+	userId: string,
+	opts: { request?: boolean } = {},
+): Promise<boolean> {
+	const { request = true } = opts;
 	if (Platform.OS === "web") {
 		// PWA: FCM via service worker + VAPID (expo-notifications has no
 		// remote push on web). Platform-split import keeps firebase out of
 		// the native bundle.
 		const mod = await import("./web-push.web");
-		return mod.syncWebPushToken(userId);
+		return mod.syncWebPushToken(userId, { request });
 	}
 
 	const Notifications = await loadNotifications();
@@ -29,12 +37,12 @@ export async function syncDeviceToken(userId: string): Promise<boolean> {
 
 	let token: string | null = null;
 	try {
-		const { status: existing } = await Notifications.getPermissionsAsync();
-		let status = existing;
+		const { status } = await Notifications.getPermissionsAsync();
 		if (status !== "granted") {
-			status = (await Notifications.requestPermissionsAsync()).status;
+			if (!request) return false;
+			const requested = await Notifications.requestPermissionsAsync();
+			if (requested.status !== "granted") return false;
 		}
-		if (status !== "granted") return false;
 
 		const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? null;
 		const ticket = await Notifications.getExpoPushTokenAsync({

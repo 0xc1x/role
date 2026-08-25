@@ -11,7 +11,11 @@ import { env } from "@/core/config/env";
  */
 let foregroundListenerRegistered = false;
 
-export async function syncWebPushToken(userId: string): Promise<boolean> {
+export async function syncWebPushToken(
+	userId: string,
+	opts: { request?: boolean } = {},
+): Promise<boolean> {
+	const { request = true } = opts;
 	if (
 		typeof window === "undefined" ||
 		!("serviceWorker" in navigator) ||
@@ -21,7 +25,9 @@ export async function syncWebPushToken(userId: string): Promise<boolean> {
 	}
 
 	let permission = Notification.permission;
-	if (permission === "default") {
+	// Con permiso "denied" el navegador jamás vuelve a mostrar el prompt;
+	// solo lo pedimos si está en "default" y hay gesto de usuario.
+	if (permission === "default" && request) {
 		permission = await Notification.requestPermission();
 	}
 	if (permission !== "granted") return false;
