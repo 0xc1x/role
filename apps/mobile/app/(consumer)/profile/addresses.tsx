@@ -131,12 +131,6 @@ export default function AddressesScreen() {
 									</View>
 								<View style={styles.cardActions}>
 									<Button
-										label={strings.addresses.edit}
-										variant="ghost"
-										size="sm"
-										onPress={() => setEditTarget(item)}
-									/>
-									<Button
 										label={strings.common.delete}
 										variant="ghost"
 										size="sm"
@@ -146,6 +140,12 @@ export default function AddressesScreen() {
 												label: item.label,
 											})
 										}
+									/>
+									<Button
+										label={strings.addresses.edit}
+										variant="ghost"
+										size="sm"
+										onPress={() => setEditTarget(item)}
 									/>
 								</View>
 								</View>
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
 		flexShrink: 1,
 	},
 	cardActions: {
-		flexDirection: "row",
-		alignItems: "center",
+		flexDirection: "column",
+		alignItems: "flex-end",
 	},
 });
