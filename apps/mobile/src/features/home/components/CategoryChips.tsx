@@ -3,9 +3,7 @@ import { View, StyleSheet, FlatList, Pressable } from "react-native";
 import Animated, {
 	useSharedValue,
 	useAnimatedStyle,
-	withSequence,
-	withTiming,
-	Easing,
+	withSpring,
 } from "react-native-reanimated";
 
 import { useTheme } from "@/core/theme";
@@ -129,20 +127,12 @@ function AnimatedChip({
 	useEffect(() => {
 		if (prevSelected.current !== selected) {
 			prevSelected.current = selected;
-			scale.value = withSequence(
-				withTiming(0.92, {
-					duration: 70,
-					easing: Easing.in(Easing.quad),
-				}),
-				withTiming(1.06, {
-					duration: 65,
-					easing: Easing.out(Easing.quad),
-				}),
-				withTiming(1, {
-					duration: 45,
-					easing: Easing.inOut(Easing.quad),
-				}),
-			);
+			scale.value = 0.88;
+			scale.value = withSpring(1, {
+				damping: 5,
+				stiffness: 180,
+				mass: 0.6,
+			});
 		}
 	}, [selected, scale]);
 
@@ -177,6 +167,7 @@ function AnimatedChip({
 
 const styles = StyleSheet.create({
 	container: {
+		marginTop: spacing.sm,
 		marginBottom: spacing.md,
 	},
 	listContent: {
@@ -204,6 +195,7 @@ const styles = StyleSheet.create({
 		minHeight: 40,
 	},
 	loadingContainer: {
+		marginTop: spacing.sm,
 		paddingHorizontal: spacing.lg,
 		paddingBottom: spacing.xs,
 		gap: spacing.sm,

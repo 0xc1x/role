@@ -11,7 +11,6 @@ import {
 	Linking,
 } from "react-native";
 import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
@@ -33,18 +32,14 @@ export function PromoSlider() {
 	const goTo = useCallback(
 		(index: number, animated = true) => {
 			const total = slides.length;
-			const clamped = total === 0 ? 0 : ((index % total) + total) % total;
-			setCurrentIndex(clamped);
+			setCurrentIndex(total === 0 ? 0 : ((index % total) + total) % total);
 			scrollRef.current?.scrollTo({
-				x: clamped * step,
+				x: index * step,
 				animated,
 			});
 		},
 		[step, slides.length],
 	);
-
-	const goNext = useCallback(() => goTo(currentIndex + 1), [currentIndex, goTo]);
-	const goPrev = useCallback(() => goTo(currentIndex - 1), [currentIndex, goTo]);
 
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -98,6 +93,13 @@ export function PromoSlider() {
 	}) => {
 		scrollX.current = event.nativeEvent.contentOffset.x;
 		const index = Math.round(event.nativeEvent.contentOffset.x / step);
+		// Llegó al clon de la primera slide: reset silencioso al inicio real.
+		// El clon es idéntico, así que el salto es invisible.
+		if (index >= slides.length) {
+			setCurrentIndex(0);
+			scrollRef.current?.scrollTo({ x: 0, animated: false });
+			return;
+		}
 		if (index >= 0 && index < slides.length) setCurrentIndex(index);
 	};
 
@@ -126,39 +128,14 @@ export function PromoSlider() {
 						}}
 						style={{ height: CARD_HEIGHT }}
 					>
-						{slides.map((item) => (
-							<View key={item.id} style={styles.card}>
+						{/* Clon de la primera slide al final para el loop continuo. */}
+						{[...slides, slides[0]].map((item, i) => (
+							<View key={i < slides.length ? item.id : `clone-${item.id}`} style={styles.card}>
 								<PromoCard item={item} />
 							</View>
 						))}
 					</ScrollView>
 				</View>
-				{slides.length > 1 && (
-					<>
-						<Pressable
-							onPress={goPrev}
-							accessibilityLabel="Anterior"
-							style={[
-								styles.navButton,
-								styles.navLeft,
-								{ backgroundColor: colors.card + "CC" },
-							]}
-						>
-							<Ionicons name="chevron-back" size={22} color={colors.foreground} />
-						</Pressable>
-						<Pressable
-							onPress={goNext}
-							accessibilityLabel="Siguiente"
-							style={[
-								styles.navButton,
-								styles.navRight,
-								{ backgroundColor: colors.card + "CC" },
-							]}
-						>
-							<Ionicons name="chevron-forward" size={22} color={colors.foreground} />
-						</Pressable>
-					</>
-				)}
 			</View>
 
 			{slides.length > 1 && (
@@ -294,39 +271,12 @@ const styles = StyleSheet.create({
 	sliderWrap: {
 		position: "relative",
 	},
-	navButton: {
-		position: "absolute",
-		top: "50%",
-		marginTop: -20,
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		alignItems: "center",
-		justifyContent: "center",
-		zIndex: 10,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.2,
-		shadowRadius: 6,
-		elevation: 4,
-	},
-	navLeft: {
-		left: spacing.lg,
-	},
-	navRight: {
-		right: spacing.lg,
-	},
 	card: {
 		width: CARD_WIDTH,
 		height: CARD_HEIGHT,
 		borderRadius: radii.md,
 		overflow: "hidden",
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 6 },
-		shadowOpacity: 0.12,
-		shadowRadius: 16,
-		elevation: 4,
-	},
+		boxShadow: `0px 6px 16px #0000001f`,	},
 	cardInner: {
 		flex: 1,
 		borderRadius: radii.md,
@@ -374,12 +324,7 @@ const styles = StyleSheet.create({
 		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.3,
-		shadowRadius: 10,
-		elevation: 4,
-	},
+		boxShadow: `0px 4px 10px #0000004d`,	},
 	promoButtonPressed: {
 		opacity: 0.85,
 	},
