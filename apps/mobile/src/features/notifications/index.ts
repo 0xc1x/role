@@ -46,29 +46,23 @@ export async function syncDeviceToken(userId: string): Promise<boolean> {
 	}
 	if (!token) return false;
 
-	const { error } = await supabase.from("device_tokens").upsert({
-		user_id: userId,
-		token,
-		platform: Platform.OS,
-		is_active: true,
-	});
+	const { error } = await supabase
+		.from("device_tokens")
+		.upsert(
+			{
+				user_id: userId,
+				token,
+				platform: Platform.OS,
+				is_active: true,
+			},
+			{ onConflict: "token" },
+		);
 	if (error) throw toAppError(error, "Error al registrar el dispositivo");
 	return true;
 }
 
 export async function removeDeviceToken(userId: string): Promise<void> {
-	const { data } = await supabase
-		.from("device_tokens")
-		.select("token")
-		.eq("user_id", userId);
-	await Promise.all(
-		(data ?? []).map((row) =>
-			supabase
-				.from("device_tokens")
-				.update({ user_id: null })
-				.eq("token", String(row.token)),
-		),
-	).catch(() => {});
+	await supabase.from("device_tokens").delete().eq("user_id", userId);
 }
 
 // ─── In-app notification handler (solo nativo) ──────────────────────

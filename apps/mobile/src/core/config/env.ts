@@ -20,6 +20,8 @@ const envSchema = z.object({
 	EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().optional().default(""),
 	/** Deep-link target for password recovery emails */
 	EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL: z.string().optional().default(""),
+	/** EAS project id — requerido para push tokens nativos (expo-notifications) */
+	EXPO_PUBLIC_EAS_PROJECT_ID: z.string().optional().default(""),
 	/** Runtime environment label (development | staging | production) */
 	EXPO_PUBLIC_ENVIRONMENT: z.string().optional().default("development"),
 	// ── Firebase (proyecto heredado de fudi) — web push PWA ───────────

@@ -16,7 +16,7 @@ import {
 	Screen,
 } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
-import { authRepository } from "@/features/auth/data/repository";
+import { performSignOut } from "@/features/auth/sign-out";
 import { useBusinesses, useBusinessProfile } from "@/features/business/hooks";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
 import { spacing } from "@/core/theme/spacing";
@@ -39,9 +39,7 @@ function SignOutDialog() {
 	const { colors } = useTheme();
 
 	const confirmSignOut = () => {
-		authRepository.signOut().then(() => {
-			useAuthStore.getState().clear();
-		});
+		void performSignOut();
 		setOpen(false);
 	};
 

@@ -7,6 +7,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, Button, Screen, TextField } from "@/core/ui";
 import { authRepository } from "@/features/auth/data/repository";
 import { useAuthStore } from "@/features/auth/store";
+import { performSignOut } from "@/features/auth/sign-out";
 import { toAppError } from "@/core/error/mapper";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
@@ -46,7 +47,7 @@ export default function UpdatePasswordScreen() {
 			await authRepository.updatePassword(password);
 			toast.success(strings.auth.passwordUpdated);
 			// La sesión recovery es de un solo uso: cerramos y pedimos login.
-			await authRepository.signOut();
+			await performSignOut();
 			router.replace("/(auth)/login");
 		} catch (e) {
 			setError(toAppError(e, strings.auth.updatePassword).message);

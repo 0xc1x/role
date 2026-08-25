@@ -18,7 +18,7 @@ import { strings } from "@/core/i18n/strings";
 import { Button, EmptyState, Screen } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { useAuthStore } from "@/features/auth/store";
-import { authRepository } from "@/features/auth/data/repository";
+import { performSignOut } from "@/features/auth/sign-out";
 
 /**
  * Estado "aún no tienes negocio" compartido por products/orders/management
@@ -31,10 +31,7 @@ export function NoBusinessPrompt() {
 
 	const confirmSignOut = () => {
 		setSignOutOpen(false);
-		authRepository.signOut().then(() => {
-			useAuthStore.getState().clear();
-			router.replace("/(auth)/login");
-		});
+		void performSignOut();
 	};
 
 	return (

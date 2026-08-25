@@ -1,5 +1,5 @@
 import { Stack, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFonts } from "expo-font";
 import {
 	Outfit_600SemiBold,
@@ -38,7 +38,7 @@ import { queryClient } from "@/core/query/client";
 import { analytics } from "@/core/analytics";
 import { appConfigQueryOptions } from "@/features/config";
 import { useAuthStore, watchAuthState } from "@/features/auth/store";
-import { initNotificationHandler } from "@/features/notifications";
+import { initNotificationHandler, syncDeviceToken } from "@/features/notifications";
 import { Toaster } from "sonner-native";
 SplashScreen.preventAutoHideAsync();
 
@@ -89,6 +89,20 @@ export default function RootLayout() {
 			void SplashScreen.hideAsync();
 		}
 	}, [fontsLoaded, configReady]);
+
+	// Registro automático de push post-login (una vez por usuario).
+	const authStatus = useAuthStore((s) => s.status);
+	const authProfileId = useAuthStore((s) => s.profile?.id);
+	const syncedFor = useRef<string | null>(null);
+	useEffect(() => {
+		if (authStatus !== "authenticated" || !authProfileId) return;
+		if (syncedFor.current === authProfileId) return;
+		syncedFor.current = authProfileId;
+		syncDeviceToken(authProfileId).catch(() => {
+			// Sin permiso/token: no es fatal; se puede activar desde Ajustes.
+			syncedFor.current = null;
+		});
+	}, [authStatus, authProfileId]);
 
 	// Link de recovery aterrizó en cualquier ruta: mandar a actualizar
 	// contraseña antes de que el redirect por rol se lo lleve a home.

@@ -9,6 +9,8 @@ import { env } from "@/core/config/env";
  * 3. Gets an FCM token (VAPID) and upserts it into `device_tokens`.
  * 4. Shows foreground messages with the Notification API.
  */
+let foregroundListenerRegistered = false;
+
 export async function syncWebPushToken(userId: string): Promise<boolean> {
 	if (
 		typeof window === "undefined" ||
@@ -58,12 +60,15 @@ export async function syncWebPushToken(userId: string): Promise<boolean> {
 	});
 	if (error) throw new Error("Error al registrar el dispositivo");
 
-	onMessage(messaging, (payload) => {
-		const title = payload.notification?.title ?? "Rolé";
-		if (Notification.permission === "granted") {
-			new Notification(title, { body: payload.notification?.body ?? "" });
-		}
-	});
+	if (!foregroundListenerRegistered) {
+		foregroundListenerRegistered = true;
+		onMessage(messaging, (payload) => {
+			const title = payload.notification?.title ?? "Rolé";
+			if (Notification.permission === "granted") {
+				new Notification(title, { body: payload.notification?.body ?? "" });
+			}
+		});
+	}
 
 	return true;
 }

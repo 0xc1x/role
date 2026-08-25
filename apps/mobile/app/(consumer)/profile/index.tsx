@@ -17,7 +17,7 @@ import {
 	Screen,
 } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
-import { authRepository } from "@/features/auth/data/repository";
+import { performSignOut } from "@/features/auth/sign-out";
 import { useProfileStats } from "@/features/profile/hooks";
 import { useOrders } from "@/features/hooks";
 import { OrderCard } from "@/features/orders/components/OrderCard";
@@ -292,9 +292,7 @@ function SignOutDialog() {
 	const { colors } = useTheme();
 
 	const confirmSignOut = () => {
-		authRepository.signOut().then(() => {
-			useAuthStore.getState().clear();
-		});
+		void performSignOut();
 		setOpen(false);
 	};
 

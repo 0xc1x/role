@@ -19,7 +19,7 @@ import {
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
 import { useAuthStore } from "@/features/auth/store";
-import { authRepository } from "@/features/auth/data/repository";
+import { performSignOut } from "@/features/auth/sign-out";
 import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
 import { LocationCard } from "@/features/business/components/LocationCard";
@@ -323,9 +323,7 @@ function SignOutDialog({ style }: { style?: object }) {
 	const [open, setOpen] = useState(false);
 	const { colors } = useTheme();
 	const confirmSignOut = () => {
-		void authRepository.signOut().then(() => {
-			useAuthStore.getState().clear();
-		});
+		void performSignOut();
 		setOpen(false);
 	};
 	return (
