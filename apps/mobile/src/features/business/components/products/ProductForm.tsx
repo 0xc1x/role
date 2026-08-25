@@ -288,16 +288,20 @@ export function ProductForm({
 					<TextField
 						label={strings.business.productPrice}
 						value={originalPrice}
-						onChangeText={setOriginalPrice}
-						keyboardType="numeric"
+						onChangeText={(t) =>
+							setOriginalPrice(t.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"))
+						}
+						keyboardType="decimal-pad"
 						containerStyle={{ flex: 1 }}
 						error={errors.originalPrice ?? null}
 					/>
 					<TextField
 						label={strings.business.productDiscountedPrice}
 						value={discountedPrice}
-						onChangeText={setDiscountedPrice}
-						keyboardType="numeric"
+						onChangeText={(t) =>
+							setDiscountedPrice(t.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"))
+						}
+						keyboardType="decimal-pad"
 						containerStyle={{ flex: 1 }}
 						error={errors.discountedPrice ?? null}
 					/>
@@ -315,8 +319,8 @@ export function ProductForm({
 				<TextField
 					label={strings.business.productStock}
 					value={stock}
-					onChangeText={setStock}
-					keyboardType="numeric"
+					onChangeText={(t) => setStock(t.replace(/[^0-9]/g, ""))}
+					keyboardType="number-pad"
 					error={errors.stock ?? null}
 				/>
 			</FormSection>
@@ -464,7 +468,7 @@ function defaultPickup(isStart: boolean): Date {
 // sin user activation → nunca abre y el await queda colgado. Input nativo
 // con click() síncrono dentro del handler; migrar de vuelta si upstream lo
 // arregla.
-function pickWebImage(): Promise<string | null> {
+export function pickWebImage(): Promise<string | null> {
 	return new Promise((resolve) => {
 		const input = document.createElement("input");
 		input.type = "file";

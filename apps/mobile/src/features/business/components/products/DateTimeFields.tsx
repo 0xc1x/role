@@ -1,18 +1,18 @@
-import { useState } from "react";
-import { Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { createElement, useRef, useState, type ChangeEvent } from "react";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
+import { spacing } from "@/core/theme/spacing";
 
 type Mode = "date" | "time";
 
 /**
  * Date/time field for the pickup window. On native it uses
- * @react-native-community/datetimepicker; on web it falls back to a plain
- * text input (momentarily — the community picker has no web support).
+ * @react-native-community/datetimepicker; on web it delegates to the
+ * browser's native `<input type="date|time">` picker via showPicker().
  */
 export function DateTimeField({
 	mode,
@@ -27,6 +27,7 @@ export function DateTimeField({
 }) {
 	const { colors } = useTheme();
 	const [show, setShow] = useState(false);
+	const webInputRef = useRef<HTMLInputElement>(null);
 
 	if (Platform.OS === "web") {
 		const isDate = mode === "date";
@@ -38,23 +39,50 @@ export function DateTimeField({
 				<AppText variant="labelSmall" weight="semiBold" style={{ color: colors.mutedForeground }}>
 					{label}
 				</AppText>
-				<TextInput
-					value={current}
-					onChangeText={(text) => {
-						const next = isDate ? parseDateInput(text) : parseTimeInput(text);
-						if (next) onChange(next);
+				<Pressable
+					onPress={() => {
+						const input = webInputRef.current;
+						if (!input) return;
+						// showPicker() abre el picker nativo del navegador; fallback a click().
+						if (typeof input.showPicker === "function") input.showPicker();
+						else input.click();
 					}}
-					placeholder={isDate ? "YYYY-MM-DD" : "HH:mm"}
-					placeholderTextColor={colors.mutedForeground}
-					style={[
-						styles.input,
+					accessibilityRole="button"
+					style={({ pressed }) => [
+						styles.inputRow,
 						{
 							backgroundColor: colors.inputBackground,
 							borderColor: colors.border,
-							color: colors.foreground,
+							opacity: pressed ? 0.8 : 1,
 						},
 					]}
-				/>
+				>
+					<Ionicons
+						name={isDate ? "calendar-outline" : "time-outline"}
+						size={16}
+						color={colors.mutedForeground}
+					/>
+					<AppText variant="bodyMedium">{current}</AppText>
+				</Pressable>
+				{createElement("input", {
+					ref: webInputRef,
+					type: mode,
+					value: current,
+					onChange: (e: ChangeEvent<HTMLInputElement>) => {
+						const raw = e.target.value;
+						const next = isDate ? parseDateInput(raw) : parseTimeInput(raw);
+						if (next) onChange(next);
+					},
+					style: {
+						position: "absolute",
+						width: 1,
+						height: 1,
+						opacity: 0,
+						pointerEvents: "none",
+						border: "none",
+						padding: 0,
+					},
+				})}
 			</View>
 		);
 	}
@@ -144,13 +172,6 @@ const styles = StyleSheet.create({
 	field: {
 		flex: 1,
 		gap: 6,
-	},
-	input: {
-		borderRadius: radii.lg,
-		borderWidth: 1,
-		paddingHorizontal: 16,
-		paddingVertical: 12,
-		fontSize: 15,
 	},
 	inputRow: {
 		flexDirection: "row",

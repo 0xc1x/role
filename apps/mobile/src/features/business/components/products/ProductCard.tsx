@@ -66,7 +66,7 @@ export function ProductCard({
 					{
 						backgroundColor: colors.card,
 						borderColor: colors.borderSolid,
-						shadowColor: colors.cardShadow,
+						boxShadow: `0px 6px 16px ${colors.cardShadow}`,
 						opacity: pressed ? 0.92 : 1,
 					},
 				]}
@@ -114,6 +114,22 @@ export function ProductCard({
 							{product.offer.title}
 						</AppText>
 						<View style={styles.infoChips}>
+							{product.location?.name ? (
+								<View style={styles.infoChip}>
+									<Ionicons
+										name="storefront-outline"
+										size={12}
+										color={colors.mutedForeground}
+									/>
+									<AppText
+										variant="bodySmall"
+										numberOfLines={1}
+										style={{ color: colors.mutedForeground }}
+									>
+										{product.location.name}
+									</AppText>
+								</View>
+							) : null}
 							<View style={styles.infoChip}>
 								<Ionicons name="time-outline" size={12} color={colors.mutedForeground} />
 								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
@@ -296,10 +312,6 @@ const styles = StyleSheet.create({
 		borderRadius: radii.lg,
 		borderWidth: StyleSheet.hairlineWidth,
 		overflow: "hidden",
-		shadowOffset: { width: 0, height: 6 },
-		shadowOpacity: 1,
-		shadowRadius: 16,
-		elevation: 2,
 	},
 	mainRow: {
 		flexDirection: "row",
