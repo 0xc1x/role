@@ -74,13 +74,24 @@ export async function syncWebPushToken(
 	});
 	if (!token) return false;
 
-	const { error } = await supabase.from("device_tokens").upsert({
-		user_id: userId,
-		token,
-		platform: "web",
-		is_active: true,
-	});
-	if (error) throw new Error("Error al registrar el dispositivo");
+	const { error } = await supabase
+		.from("device_tokens")
+		.upsert(
+			{
+				user_id: userId,
+				token,
+				platform: "web",
+				is_active: true,
+			},
+			{ onConflict: "token" },
+		);
+	if (error) {
+		// 23505 = token duplicado: ya está registrado, es éxito para el flujo.
+		if (error.code === "23505") return true;
+		throw Object.assign(new Error("Error al registrar el dispositivo"), {
+			code: error.code,
+		});
+	}
 
 	if (!foregroundListenerRegistered) {
 		foregroundListenerRegistered = true;

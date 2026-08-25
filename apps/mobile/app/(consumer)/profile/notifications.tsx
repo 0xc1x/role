@@ -256,10 +256,14 @@ export default function NotificationsSettingsScreen() {
 				if (!registered) return; // Permiso denegado — sin toast.
 				toast.success(strings.notificationsSettings.pushEnabled);
 			} catch (e) {
-				toast.error(
-					e instanceof Error ? e.message : strings.common.error,
-				);
-				return;
+				// 23505 = el token ya estaba registrado: igual de válido.
+				const code = (e as { code?: string }).code;
+				if (code !== "23505") {
+					toast.error(
+						e instanceof Error ? e.message : strings.common.error,
+					);
+					return;
+				}
 			}
 		}
 		update.mutate({
