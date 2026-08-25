@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
-import { AppText, CircleIconButton } from "@/core/ui";
+import { AppText, CircleIconButton, goBackOr } from "@/core/ui";
 
 /**
  * Estructura común de las pantallas de autenticación (portada de Fudi):
@@ -23,11 +22,6 @@ export function AuthScreenShell({
 }) {
 	const { colors } = useTheme();
 
-	const goBack = () => {
-		if (router.canGoBack()) router.back();
-		else router.replace("/");
-	};
-
 	return (
 		<SafeAreaView
 			edges={["top", "bottom"]}
@@ -36,7 +30,7 @@ export function AuthScreenShell({
 			<View style={styles.header}>
 				<CircleIconButton
 					icon={<Ionicons name="chevron-back" size={20} color={colors.foreground} />}
-					onPress={goBack}
+					onPress={() => goBackOr("/")}
 					accessibilityLabel={strings.common.back}
 				/>
 				<AppText variant="h2" weight="bold" numberOfLines={1} style={styles.headerTitle}>

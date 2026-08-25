@@ -15,7 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, CircleIconButton, HeartButton } from "@/core/ui";
+import { AppText, CircleIconButton, goBackOr, HeartButton } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useBusinessProfile } from "@/features/business/hooks";
@@ -141,8 +141,7 @@ export default function BusinessProfileScreen() {
 
 			{/* ── Cover + gradiente ──────────────────────────────────────── */}
 			<Animated.View
-				style={[styles.header, { height: headerHeight, opacity: headerOpacity }]}
-				pointerEvents="none"
+				style={[styles.header, { height: headerHeight, opacity: headerOpacity, pointerEvents: "none" }]}
 			>
 				{profile.business.cover_image ? (
 					<Image
@@ -168,7 +167,7 @@ export default function BusinessProfileScreen() {
 			<View style={[styles.topBar, { top: insets.top + 6 }]}>
 				<CircleIconButton
 					icon={<Ionicons name="chevron-back" size={20} color={colors.foreground} />}
-					onPress={() => router.back()}
+					onPress={() => goBackOr("/(consumer)")}
 				/>
 				<View style={styles.topBarRight}>
 					<HeartButton isFavorite={false} onPress={() => {}} />
@@ -620,12 +619,7 @@ const styles = StyleSheet.create({
 		height: 86,
 		borderRadius: radii.xl,
 		padding: 4,
-		shadowColor: "#0000000F",
-		shadowOffset: { width: 0, height: 8 },
-		shadowOpacity: 1,
-		shadowRadius: 12,
-		elevation: 4,
-	},
+		boxShadow: `0px 8px 12px #0000000F`,	},
 	logo: {
 		width: "100%",
 		height: "100%",
@@ -664,12 +658,7 @@ const styles = StyleSheet.create({
 		padding: spacing.xl,
 		borderRadius: radii.xl,
 		backgroundColor: "transparent",
-		shadowColor: "#00000005",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 1,
-		shadowRadius: 12,
-		elevation: 2,
-	},
+		boxShadow: `0px 4px 12px #00000005`,	},
 	infoRow: {
 		flexDirection: "row",
 		alignItems: "flex-start",

@@ -76,7 +76,7 @@ export default function BusinessLayout() {
 				}}
 			/>
 			<Tabs.Screen
-				name="profile"
+				name="business-profile"
 				options={{
 					title: strings.business.profile,
 					tabBarLabel: strings.business.profile,

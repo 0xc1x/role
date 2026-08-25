@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { Text } from "@/components/ui/text";
 import { strings } from "@/core/i18n/strings";
+import { APP_VERSION } from "@/core/version";
 import {
 	AppText,
 	Button,
@@ -73,7 +74,7 @@ function SignOutDialog() {
 				variant="bodySmall"
 				style={{ color: colors.mutedForeground, textAlign: "center" }}
 			>
-				{strings.settings.version} 1.0.0
+				{strings.settings.version} {APP_VERSION}
 			</AppText>
 		</View>
 	);
@@ -103,6 +104,7 @@ export default function BusinessProfileScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
+				{/* Raíz de tab: sin botón atrás. */}
 				<AppText variant="h2" weight="bold">
 					{strings.business.profile}
 				</AppText>
@@ -125,7 +127,7 @@ export default function BusinessProfileScreen() {
 							label={strings.business.editProfile}
 							icon={<Ionicons name="create-outline" size={20} color="#fff" />}
 							style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
-							onPress={() => router.push("/(business)/profile/edit")}
+							onPress={() => router.push("/(business)/business-profile/edit")}
 						/>
 					</Card>
 				) : null}
@@ -156,7 +158,7 @@ export default function BusinessProfileScreen() {
 								<Ionicons
 									name={option.icon}
 									size={20}
-									color={selected ? colors.primary : colors.mutedForeground}
+									color={colors.foreground}
 								/>
 								<AppText
 									variant="bodySmall"
@@ -176,7 +178,7 @@ export default function BusinessProfileScreen() {
 							<AppText variant="bodyMedium">
 								Panel de {b?.name ?? ""}
 							</AppText>
-							<Ionicons name="chevron-forward" size={18} color="gray" />
+							<Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
 						</View>
 					</Link>
 				</Card>

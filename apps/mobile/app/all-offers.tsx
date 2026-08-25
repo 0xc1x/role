@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import {
+	goBackOr,
 	AppText,
 	CircleIconButton,
 	FilterChip,
@@ -92,7 +93,7 @@ export default function AllOffersScreen() {
 						icon={
 							<Ionicons name="chevron-back" size={22} color={colors.foreground} />
 						}
-						onPress={() => router.back()}
+						onPress={() => goBackOr("/(consumer)")}
 						accessibilityLabel={strings.common.back}
 					/>
 					<AppText variant="h2" weight="bold">

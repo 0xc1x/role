@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
-import { AppText, CircleIconButton, SearchBar, SelectableChipsBar } from "@/core/ui";
+import { AppText, CircleIconButton, goBackOr, SearchBar, SelectableChipsBar } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
 import { useAllBusinesses, useSelectedAddress } from "@/features/hooks";
@@ -59,7 +59,7 @@ export default function AllBusinessesScreen() {
 						icon={
 							<Ionicons name="chevron-back" size={22} color={colors.foreground} />
 						}
-						onPress={() => router.back()}
+						onPress={() => goBackOr("/(consumer)")}
 						accessibilityLabel={strings.common.back}
 					/>
 					<AppText variant="h2" weight="bold">

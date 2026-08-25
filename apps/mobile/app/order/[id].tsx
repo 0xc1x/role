@@ -20,6 +20,7 @@ import { Text } from "@/components/ui/text";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
+	goBackOr,
 	Button,
 	Card,
 	ErrorState,
@@ -147,7 +148,7 @@ function DetailHeader({ order }: { order: Order }) {
 		<View style={styles.header}>
 			<View style={styles.headerLeft}>
 				<Pressable
-					onPress={() => router.back()}
+					onPress={() => goBackOr("/(consumer)/profile/orders")}
 					hitSlop={8}
 					accessibilityRole="button"
 					accessibilityLabel={strings.common.back}

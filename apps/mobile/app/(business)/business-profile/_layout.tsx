@@ -8,6 +8,7 @@ export default function BusinessProfileLayout() {
 			<Stack.Screen name="edit" />
 			<Stack.Screen name="dashboard" />
 			<Stack.Screen name="stats" />
+			<Stack.Screen name="business-new" />
 		</Stack>
 	);
 }

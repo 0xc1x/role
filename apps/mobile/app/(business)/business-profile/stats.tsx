@@ -416,7 +416,7 @@ function PeriodSummary({
 		stats.ordersCount > 0 ? (stats.revenue / stats.ordersCount).toFixed(2) : "0.00";
 
 	return (
-		<View style={[styles.summary, { backgroundColor: colors.primary, shadowColor: colors.primary }]}>
+		<View style={[styles.summary, { backgroundColor: colors.primary, boxShadow: `0px 4px 12px ${colors.primary}4D` }]}>
 			<AppText
 				variant="bodyMedium"
 				weight="semiBold"
@@ -544,10 +544,6 @@ const styles = StyleSheet.create({
 		marginTop: spacing.lg,
 		padding: spacing.lg,
 		borderRadius: radii.lg,
-		elevation: 6,
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.3,
-		shadowRadius: 12,
 	},
 	summaryRow: {
 		flexDirection: "row",

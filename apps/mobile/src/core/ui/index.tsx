@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import {
+	Platform,
 	ActivityIndicator,
 	Animated,
 	Pressable,
@@ -15,72 +16,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 
 import { useTheme } from "@/core/theme";
 import type { ColorTokens } from "@/core/theme/colors";
 import { strings } from "@/core/i18n/strings";
 import { spacing, radii } from "@/core/theme/spacing";
 import { fonts, typography, type TypeStyle } from "@/core/theme/typography";
+import { AppText } from "./AppText";
 
 export { BottomSheetModal } from "./BottomSheetModal";
+export { AppText, type FontVariant, type FontWeight } from "./AppText";
 
 export type { ColorTokens, TypeStyle };
 export { spacing, fonts, typography };
-
-export type FontVariant = keyof typeof typography;
-export type FontWeight =
-	| "regular"
-	| "medium"
-	| "semiBold"
-	| "bold"
-	| "extraBold";
-
-const WEIGHT_FONTS: Record<FontWeight, string> = {
-	regular: fonts.body,
-	medium: fonts.bodyMedium,
-	semiBold: fonts.bodySemiBold,
-	bold: fonts.bodyBold,
-	extraBold: fonts.headingExtraBold,
-};
-
-// ─── Text ───────────────────────────────────────────────────────────
-interface AppTextProps {
-	variant?: FontVariant;
-	weight?: FontWeight;
-	color?: string;
-	style?: StyleProp<TextStyle>;
-	numberOfLines?: number;
-	children: ReactNode;
-}
-
-export function AppText({
-	variant = "bodyMedium",
-	weight,
-	color,
-	style,
-	numberOfLines,
-	children,
-}: AppTextProps) {
-	const { colors } = useTheme();
-	const base: TypeStyle = typography[variant];
-	return (
-		<Text
-			numberOfLines={numberOfLines}
-			style={[
-				{
-					fontFamily: weight ? WEIGHT_FONTS[weight] : base.fontFamily,
-					fontSize: base.fontSize,
-					lineHeight: base.lineHeight ?? base.fontSize * 1.4,
-					color: color ?? colors.foreground,
-				},
-				style,
-			]}
-		>
-			{children}
-		</Text>
-	);
-}
 
 // ─── Button ─────────────────────────────────────────────────────────
 export type ButtonVariant =
@@ -231,7 +180,7 @@ export function CircleIconButton({
 					height: size,
 					backgroundColor: colors.card,
 					borderColor: colors.borderSolid,
-					shadowColor: colors.shadow,
+					boxShadow: `0px 2px 8px ${colors.shadow}`,
 					transform: [{ scale: pressed ? 0.94 : 1 }],
 				},
 			]}
@@ -265,7 +214,7 @@ export function HeartButton({
 			toValue: 1,
 			friction: 3,
 			tension: 160,
-			useNativeDriver: true,
+			useNativeDriver: Platform.OS !== "web",
 		}).start();
 	}, [isFavorite, scale]);
 
@@ -283,8 +232,7 @@ export function HeartButton({
 						backgroundColor: isFavorite
 							? `${colors.redAccent}26`
 							: colors.card,
-						borderColor: colors.borderSolid,
-						shadowColor: colors.shadow,
+						boxShadow: `0px 2px 8px ${colors.shadow}`,
 						transform: [{ scale: pressed ? 0.94 : 1 }],
 					},
 				]}
@@ -461,18 +409,26 @@ export function FilterChip({
 }
 
 // ─── ScreenHeader (back button + title) ──────────────────────────
+/** Atrás si hay historia; si no (refresh/deep-link), al fallback. */
+export function goBackOr(fallback: Href) {
+	if (router.canGoBack()) router.back();
+	else router.replace(fallback);
+}
+
 interface ScreenHeaderProps {
 	title?: string;
 	onBack?: () => void;
+	/** Destino cuando no hay historia que popear. Default: home consumidor. */
+	fallback?: Href;
 	style?: StyleProp<ViewStyle>;
 }
 
-export function ScreenHeader({ title, onBack, style }: ScreenHeaderProps) {
+export function ScreenHeader({ title, onBack, fallback, style }: ScreenHeaderProps) {
 	const { colors } = useTheme();
 	return (
 		<View style={[styles.screenHeader, style]}>
 			<Pressable
-				onPress={onBack ?? (() => router.back())}
+				onPress={onBack ?? (() => goBackOr(fallback ?? "/(consumer)"))}
 				hitSlop={8}
 				accessibilityRole="button"
 				accessibilityLabel={strings.common.back}
@@ -511,11 +467,7 @@ export function Card({ children, style, onPress }: CardProps) {
 		{
 			backgroundColor: colors.card,
 			borderColor: colors.borderSolid,
-			shadowColor: colors.cardShadow,
-			shadowOffset: { width: 0, height: 4 },
-			shadowOpacity: 1,
-			shadowRadius: 16,
-			elevation: 2,
+			boxShadow: `0px 4px 16px ${colors.cardShadow}`,
 		},
 		style,
 	];
@@ -818,13 +770,8 @@ const styles = StyleSheet.create({
 	},
 	circleButton: {
 		borderRadius: 99,
-		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",
-		elevation: 2,
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.08,
-		shadowRadius: 8,
 	},
 	field: { marginBottom: spacing.md },
 	fieldLabel: { marginBottom: 6 },
@@ -907,7 +854,9 @@ const styles = StyleSheet.create({
 		borderRadius: 12,
 		borderWidth: 1,
 	},
-	searchInput: { flex: 1, paddingVertical: spacing.sm + 2, fontSize: 14 },
+	// minWidth: 0 permite que el input encoja dentro de filas flex en web
+	// (sin esto el placeholder desborda la caja).
+	searchInput: { flex: 1, minWidth: 0, paddingVertical: spacing.sm + 2, fontSize: 14 },
 	searchClear: {
 		width: 24,
 		height: 24,
