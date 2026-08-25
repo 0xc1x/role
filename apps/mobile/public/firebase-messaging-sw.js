@@ -19,3 +19,20 @@ messaging.onBackgroundMessage((payload) => {
 		data: payload.data,
 	});
 });
+
+// Click en la notificación: abre/focaliza la app con el link del push.
+self.addEventListener('notificationclick', (event) => {
+	event.notification.close();
+	const link = event.notification.data?.link ?? '/';
+	event.waitUntil(
+		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+			for (const client of clients) {
+				if (client.url.includes(self.location.origin) && 'focus' in client) {
+					client.navigate(link).catch(() => {});
+					return client.focus();
+				}
+			}
+			return self.clients.openWindow(link);
+		}),
+	);
+});
