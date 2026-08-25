@@ -1,28 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import {
-	FlatList,
-	Image,
-	Pressable,
-	RefreshControl,
-	StyleSheet,
-	View,
-} from "react-native";
+import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
 	Button,
-	Card,
 	EmptyState,
 	ErrorState,
 	LoadingView,
 	Screen,
 	ScreenHeader,
-	StatusBadge,
 } from "@/core/ui";
-import { useFavorites, useToggleFavorite } from "@/features/hooks";
-import { discountPercentage } from "@/features/offers/domain/offer";
+import { useFavorites } from "@/features/hooks";
+import type { OfferDetail } from "@/features/offers/domain/offer";
+import { OfferCard } from "@/features/offers/components/OfferCard";
 import type { FavoriteOffer } from "@/features/favorites/data/repository";
 import { formatMoney } from "@/core/utils/formatters";
 import { spacing } from "@/core/theme/spacing";
@@ -31,7 +23,6 @@ import { useTheme } from "@/core/theme";
 export default function FavoritesScreen() {
 	const { colors } = useTheme();
 	const { data, isLoading, isError, error, refetch, isFetching } = useFavorites();
-	const toggle = useToggleFavorite();
 
 	if (isLoading) return <LoadingView />;
 	if (isError) return <ErrorState error={error} onRetry={refetch} />;
@@ -105,106 +96,53 @@ export default function FavoritesScreen() {
 						}
 					/>
 				}
-				renderItem={({ item }) => <FavoriteCard item={item} />}
+				renderItem={({ item }) => <OfferCard offer={toOfferDetail(item)} />}
 			/>
 		</Screen>
 	);
 }
 
-// ─── Card ────────────────────────────────────────────────────────────
+// ─── Mapper ──────────────────────────────────────────────────────────
 
-function FavoriteCard({ item }: { item: FavoriteOffer }) {
-	const { colors } = useTheme();
-	const toggle = useToggleFavorite();
-	const discount = discountPercentage({
-		original_price: item.originalPrice,
-		discounted_price: item.discountedPrice,
-	});
-
-	return (
-		<Card onPress={() => router.push(`/offer/${item.offerId}`)}>
-			<View style={styles.row}>
-				{item.imageUrl ? (
-					<Image source={{ uri: item.imageUrl }} style={styles.image} />
-				) : (
-					<View
-						style={[
-							styles.image,
-							styles.imageFallback,
-							{ backgroundColor: colors.muted },
-						]}
-					>
-						<Ionicons
-							name="storefront-outline"
-							size={26}
-							color={colors.mutedForeground}
-						/>
-					</View>
-				)}
-
-				<View style={styles.body}>
-					<View style={styles.topRow}>
-						<AppText
-							variant="labelSmall"
-							weight="semiBold"
-							numberOfLines={1}
-							style={[styles.business, { color: colors.mutedForeground }]}
-						>
-							{item.businessName}
-						</AppText>
-						<Pressable
-							onPress={() => toggle.mutate(item.offerId)}
-							hitSlop={8}
-							accessibilityRole="button"
-							accessibilityLabel={strings.offers.removeFromFavorites}
-							style={[
-								styles.heartBtn,
-								{ backgroundColor: colors.redAccent + "26" },
-							]}
-						>
-							<Ionicons name="heart" size={15} color={colors.redAccent} />
-						</Pressable>
-					</View>
-
-					<AppText variant="h4" weight="bold" numberOfLines={2}>
-						{item.title}
-					</AppText>
-
-					<View style={styles.priceRow}>
-						<AppText variant="price" style={{ color: colors.primary }}>
-							{formatMoney(item.discountedPrice)}
-						</AppText>
-						<AppText
-							variant="bodySmall"
-							style={{
-								textDecorationLine: "line-through",
-								color: colors.mutedForeground,
-							}}
-						>
-							{formatMoney(item.originalPrice)}
-						</AppText>
-						<StatusBadge label={`${Math.trunc(discount)}%`} tone="brand" />
-					</View>
-
-					<View style={styles.metaRow}>
-						<Ionicons name="star" size={14} color={colors.warning} />
-						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-							{item.rating.toFixed(1)}
-						</AppText>
-						{item.address ? (
-							<AppText
-								variant="bodySmall"
-								numberOfLines={1}
-								style={[styles.address, { color: colors.mutedForeground }]}
-							>
-								{item.address}
-							</AppText>
-						) : null}
-					</View>
-				</View>
-			</View>
-		</Card>
-	);
+/** FavoriteOffer → OfferDetail para reusar la card canónica de ofertas. */
+function toOfferDetail(item: FavoriteOffer): OfferDetail {
+	return {
+		offer: {
+			id: item.offerId,
+			business_id: "",
+			business_location_id: "",
+			title: item.title,
+			description: null,
+			image: item.imageUrl,
+			category_ids: [],
+			original_price: item.originalPrice,
+			discounted_price: item.discountedPrice,
+			discount_percentage: null,
+			// Sin datos de stock/pickup en la proyección de favoritos: neutros
+			// para que la card no muestre esos badges.
+			stock: 999,
+			initial_stock: 999,
+			pickup_start: "",
+			pickup_end: "",
+			is_active: true,
+			includes: null,
+			allergens: null,
+			rating: item.rating,
+			review_count: 0,
+			created_at: "",
+			updated_at: "",
+		},
+		business: {
+			id: "",
+			name: item.businessName,
+			type: "other",
+			image: null,
+			rating: item.rating,
+			review_count: 0,
+		},
+		location: null,
+		categories: item.categories,
+	};
 }
 
 const styles = StyleSheet.create({
@@ -220,30 +158,4 @@ const styles = StyleSheet.create({
 	},
 	bannerText: { flex: 1, fontSize: 13, fontWeight: "600" },
 	exploreBtn: { marginTop: spacing.lg },
-	row: { flexDirection: "row", alignItems: "stretch" },
-	image: { width: 96, height: 96, borderRadius: 16 },
-	imageFallback: { alignItems: "center", justifyContent: "center" },
-	body: { flex: 1, marginLeft: spacing.md, gap: 4 },
-	topRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-	business: { flex: 1 },
-	heartBtn: {
-		width: 28,
-		height: 28,
-		borderRadius: 14,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	priceRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.sm,
-		marginTop: 2,
-	},
-	metaRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.xs,
-		marginTop: 2,
-	},
-	address: { flex: 1 },
 });

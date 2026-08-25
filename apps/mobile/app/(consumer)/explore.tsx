@@ -17,7 +17,7 @@ import { ExploreHeader } from "@/features/explore/components/ExploreHeader";
 import { ExploreActiveFiltersBar, type ActiveFilterKey } from "@/features/explore/components/ExploreActiveFiltersBar";
 import { ExploreCategoryGrid } from "@/features/explore/components/ExploreCategoryGrid";
 import { ExploreTipSection } from "@/features/explore/components/ExploreTipSection";
-import { ExploreDealCard } from "@/features/explore/components/ExploreDealCard";
+import { OfferCard } from "@/features/offers/components/OfferCard";
 import { ExploreMapView } from "@/features/explore/components/ExploreMapView";
 import {
 	emptyExploreFilters,
@@ -112,6 +112,13 @@ export default function ExploreScreen() {
 		setFilters((f) => ({ ...f, ...sheetFilters }));
 	}, []);
 
+	const handleCollapseCategories = useCallback(() => {
+		// deja que LayoutAnimation arranque y luego hace scroll suave arriba
+		requestAnimationFrame(() => {
+			scrollRef.current?.scrollTo({ y: 0, animated: true });
+		});
+	}, []);
+
 	if (viewModeMap) {
 		return (
 			<View style={styles.flex}>
@@ -139,13 +146,6 @@ export default function ExploreScreen() {
 			</View>
 		);
 	}
-
-	const handleCollapseCategories = useCallback(() => {
-		// deja que LayoutAnimation arranque y luego hace scroll suave arriba
-		requestAnimationFrame(() => {
-			scrollRef.current?.scrollTo({ y: 0, animated: true });
-		});
-	}, []);
 
 	return (
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
@@ -210,7 +210,7 @@ export default function ExploreScreen() {
 				) : (
 					<View style={styles.offersList}>
 						{(data ?? []).map((offer) => (
-							<ExploreDealCard key={offer.offer.id} offer={offer} />
+							<OfferCard key={offer.offer.id} offer={offer} />
 						))}
 					</View>
 				)}
