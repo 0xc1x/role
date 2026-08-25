@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card, StatusBadge } from "@/core/ui";
@@ -11,20 +11,27 @@ export function LocationCard({
 	address,
 	phone,
 	isActive,
+	imageUrl,
 	onPress,
 }: {
 	name: string;
 	address: string;
 	phone: string | null;
 	isActive: boolean;
+	/** Logo del negocio; si no hay, placeholder con ícono. */
+	imageUrl?: string | null;
 	onPress: () => void;
 }) {
 	const { colors } = useTheme();
 	return (
 		<Card onPress={onPress} style={styles.card}>
 			<View style={styles.body}>
-				<View style={styles.icon}>
-					<Ionicons name="storefront" size={22} color={colors.greenDark} />
+				<View style={[styles.icon, { backgroundColor: colors.muted }]}>
+					{imageUrl ? (
+						<Image source={{ uri: imageUrl }} style={styles.iconImage} />
+					) : (
+						<Ionicons name="storefront" size={22} color={colors.mutedForeground} />
+					)}
 				</View>
 				<View style={styles.info}>
 					<View style={styles.rowBetween}>
@@ -80,14 +87,14 @@ export function LocationCard({
 					pressed && { opacity: 0.85 },
 				]}
 			>
-				<AppText
-					variant="bodySmall"
-					weight="semiBold"
-					style={{ color: colors.greenDark }}
-				>
-					{strings.business.viewDetailsAndConfig}
-				</AppText>
-				<Ionicons name="chevron-forward" size={16} color={colors.greenDark} />
+			<AppText
+				variant="bodySmall"
+				weight="semiBold"
+				style={{ color: colors.foreground }}
+			>
+				{strings.business.viewDetailsAndConfig}
+			</AppText>
+			<Ionicons name="chevron-forward" size={16} color={colors.foreground} />
 			</Pressable>
 		</Card>
 	);
@@ -104,10 +111,11 @@ const styles = StyleSheet.create({
 		width: 72,
 		height: 72,
 		borderRadius: 20,
-		backgroundColor: "rgba(0,0,0,0.06)",
 		alignItems: "center",
 		justifyContent: "center",
+		overflow: "hidden",
 	},
+	iconImage: { width: "100%", height: "100%" },
 	info: { flex: 1 },
 	footer: {
 		flexDirection: "row",

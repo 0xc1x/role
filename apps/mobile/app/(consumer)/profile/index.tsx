@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
+import { APP_VERSION } from "@/core/version";
 import {
 	AppText,
 	Button,
@@ -326,7 +327,7 @@ function SignOutDialog() {
 				variant="bodySmall"
 				style={{ color: colors.mutedForeground, textAlign: "center" }}
 			>
-				{strings.settings.version} 1.0.0
+				{strings.settings.version} {APP_VERSION}
 			</AppText>
 		</View>
 	);
