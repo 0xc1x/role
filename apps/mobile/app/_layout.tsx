@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { useFonts } from "expo-font";
 import {
@@ -38,6 +38,7 @@ import { queryClient } from "@/core/query/client";
 import { analytics } from "@/core/analytics";
 import { appConfigQueryOptions } from "@/features/config";
 import { useAuthStore, watchAuthState } from "@/features/auth/store";
+import { initNotificationHandler } from "@/features/notifications";
 import { Toaster } from "sonner-native";
 SplashScreen.preventAutoHideAsync();
 
@@ -58,6 +59,7 @@ export default function RootLayout() {
 		analytics.init();
 		watchAuthState();
 		void initialize();
+		void initNotificationHandler();
 		return () => {
 			// watcher is store-bound; nothing to clean here
 		};
@@ -87,6 +89,17 @@ export default function RootLayout() {
 			void SplashScreen.hideAsync();
 		}
 	}, [fontsLoaded, configReady]);
+
+	// Link de recovery aterrizó en cualquier ruta: mandar a actualizar
+	// contraseña antes de que el redirect por rol se lo lleve a home.
+	const pendingRecovery = useAuthStore((s) => s.pendingPasswordRecovery);
+	const router = useRouter();
+	useEffect(() => {
+		if (pendingRecovery) {
+			useAuthStore.setState({ pendingPasswordRecovery: false });
+			router.replace("/(auth)/update-password");
+		}
+	}, [pendingRecovery, router]);
 
 	if (!fontsLoaded || !configReady) return null;
 
