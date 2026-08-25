@@ -27,6 +27,7 @@ import {
 	type OrdersTab,
 } from "@/features/business/domain/orders";
 import { orderStatusLabels } from "@/features/orders/domain/order";
+import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
 import { BranchSelector } from "@/features/business/components/products/BranchSelector";
 import { OrderStatsRow } from "@/features/business/components/orders/OrderStatsRow";
 import { OrdersTabs } from "@/features/business/components/orders/OrdersTabs";
@@ -71,19 +72,7 @@ export default function BusinessOrdersScreen() {
 
 	if (businessesLoading || !business) {
 		if (!businessesLoading && !business) {
-			return (
-				<Screen>
-					<EmptyState
-						title={strings.business.noBusiness}
-						action={
-							<Button
-								label={strings.business.createBusiness}
-								onPress={() => router.push("/business-signup")}
-							/>
-						}
-					/>
-				</Screen>
-			);
+			return <NoBusinessPrompt />;
 		}
 		return <LoadingView />;
 	}

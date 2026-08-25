@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 
 import { Text } from "@/components/ui/text";
 import { strings } from "@/core/i18n/strings";
+import { APP_VERSION } from "@/core/version";
 import {
 	AppText,
 	Button,
@@ -19,6 +20,7 @@ import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
 import { useAuthStore } from "@/features/auth/store";
 import { authRepository } from "@/features/auth/data/repository";
+import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
 import { LocationCard } from "@/features/business/components/LocationCard";
 import {
@@ -35,23 +37,7 @@ export default function GestionScreen() {
 	if (isLoading) return null;
 
 	if (!business) {
-		return (
-			<Screen>
-				<View style={styles.stateContainer}>
-					<EmptyState
-						icon={<Ionicons name="storefront-outline" size={28} />}
-						title={strings.business.noBusiness}
-						message={strings.business.createBusiness}
-						action={
-							<Button
-								label={strings.business.createBusiness}
-								onPress={() => router.push("/(business)/profile")}
-							/>
-						}
-					/>
-				</View>
-			</Screen>
-		);
+		return <NoBusinessPrompt />;
 	}
 
 	return <GestionContent businessId={business.id} />;
@@ -104,7 +90,7 @@ function GestionContent({ businessId }: { businessId: string }) {
 						variant="primary"
 						icon={<Ionicons name="create-outline" size={20} color="#fff" />}
 						style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
-						onPress={() => router.push("/(business)/profile/edit")}
+						onPress={() => router.push("/(business)/business-profile/edit")}
 					/>
 				</Card>
 
@@ -150,6 +136,7 @@ function GestionContent({ businessId }: { businessId: string }) {
 								address={location.address}
 								phone={location.phone}
 								isActive={location.is_active}
+								imageUrl={business?.image ?? null}
 								onPress={() =>
 									router.push(
 										`/business/${businessId}/locations/${location.id}` as Href,
@@ -189,7 +176,7 @@ function QuickActionsGrid({ businessId }: { businessId: string }) {
 	const base = `/business/${businessId}`;
 
 	const large = {
-		icon: <Ionicons name="trending-up" size={18} color={colors.greenDark} />,
+		icon: <Ionicons name="trending-up" size={18} color={colors.success} />,
 		title: strings.business.quickStats,
 		subtitle: strings.business.quickStatsSub,
 		route: `${base}/stats`,
@@ -283,22 +270,22 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 	const base = `/business/${businessId}`;
 	const items = [
 		{
-			icon: <Ionicons name="settings-outline" size={20} color="gray" />,
+			icon: <Ionicons name="settings-outline" size={20} color={colors.mutedForeground} />,
 			label: strings.business.generalSettings,
-			route: "/(business)/profile" as Href,
+			route: "/(business)/business-profile" as Href,
 		},
 		{
-			icon: <Ionicons name="notifications-outline" size={20} color="currentColor" />,
+			icon: <Ionicons name="notifications-outline" size={20} color={colors.mutedForeground} />,
 			label: strings.business.notifications,
 			route: `${base}/notifications` as Href,
 		},
 		{
-			icon: <Ionicons name="card-outline" size={20} color="currentColor" />,
+			icon: <Ionicons name="card-outline" size={20} color={colors.mutedForeground} />,
 			label: strings.business.paymentMethods,
 			route: `${base}/payouts` as Href,
 		},
 		{
-			icon: <Ionicons name="help-circle-outline" size={20} color="currentColor" />,
+			icon: <Ionicons name="help-circle-outline" size={20} color={colors.mutedForeground} />,
 			label: strings.business.helpCenter,
 			route: `${base}/help` as Href,
 		},
@@ -320,7 +307,7 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 								<AppText variant="bodyMedium">{item.label}</AppText>
 							</View>
 						</View>
-						<Ionicons name="chevron-forward" size={18} color="gray" />
+						<Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
 					</Pressable>
 					{index < items.length - 1 ? (
 						<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
@@ -370,7 +357,7 @@ function SignOutDialog({ style }: { style?: object }) {
 				variant="bodySmall"
 				style={{ color: colors.mutedForeground, textAlign: "center" }}
 			>
-				{strings.settings.version} 1.0.0
+				{strings.settings.version} {APP_VERSION}
 			</AppText>
 		</View>
 	);

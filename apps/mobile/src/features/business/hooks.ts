@@ -177,6 +177,25 @@ export function useToggleCouponStatus(businessId: string) {
 	});
 }
 
+export function useCreateBusiness() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: Parameters<typeof businessRepository.createBusiness>[0]) =>
+			businessRepository.createBusiness(input),
+		onSuccess: () => {
+			void queryClient.invalidateQueries({ queryKey: ["businesses"] });
+		},
+	});
+}
+
+export function useBusinessHours(businessId: string) {
+	return useQuery({
+		queryKey: ["businesses", businessId, "hours"],
+		queryFn: () => businessRepository.getBusinessHours(businessId),
+		enabled: businessId.length > 0,
+	});
+}
+
 export function useUpdateBusiness(businessId: string) {
 	const queryClient = useQueryClient();
 	return useMutation({

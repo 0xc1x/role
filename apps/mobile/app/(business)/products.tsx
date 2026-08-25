@@ -25,6 +25,7 @@ import {
 	productStats,
 	type ProductsSort,
 } from "@/features/business/domain/products";
+import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
 import { BranchSelector } from "@/features/business/components/products/BranchSelector";
 import { BusinessStatsRow } from "@/features/business/components/products/BusinessStatsRow";
 import { ProductsSortControl } from "@/features/business/components/products/ProductsSortControl";
@@ -67,19 +68,7 @@ export default function BusinessProductsScreen() {
 
 	if (businessesLoading || !business) {
 		if (!businessesLoading && !business) {
-			return (
-				<Screen>
-					<EmptyState
-						title={strings.business.noBusiness}
-						action={
-							<Button
-								label={strings.business.createBusiness}
-								onPress={() => router.push("/business-signup")}
-							/>
-						}
-					/>
-				</Screen>
-			);
+			return <NoBusinessPrompt />;
 		}
 		return <LoadingView />;
 	}

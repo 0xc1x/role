@@ -176,8 +176,27 @@ export const businessRepository = {
 		};
 	},
 
-	async getBusinessesByOwnerId(ownerId: string): Promise<Business[]> {
+	/** Horarios crudos por día (para el formulario de edición). */
+	async getBusinessHours(
+		businessId: string,
+	): Promise<
+		Array<{ day: string; open: string; close: string; closed: boolean }>
+	> {
 		const { data, error } = await supabase
+			.from("business_hours")
+			.select("day, open_time, close_time, is_closed")
+			.eq("business_id", businessId)
+			.order("day", { ascending: true });
+		if (error) throw toAppError(error, "Error al cargar horarios");
+		return toRows(data).map((r) => ({
+			day: DAY_LABELS[String(r.day)] ?? String(r.day),
+			open: formatTime(String(r.open_time ?? "00:00:00")),
+			close: formatTime(String(r.close_time ?? "00:00:00")),
+			closed: Boolean(r.is_closed),
+		}));
+	},
+
+	async getBusinessesByOwnerId(ownerId: string): Promise<Business[]> {		const { data, error } = await supabase
 			.from("businesses")
 			.select("*")
 			.eq("owner_id", ownerId)
@@ -247,27 +266,7 @@ export const businessRepository = {
 		const businessId = String(businessResult.data.id);
 
 		if (input.hours.length > 0) {
-			const hourRows = input.hours.map((h) => {
-				const lower = h.hours.toLowerCase();
-				const isClosed = lower.includes("cerrado");
-				let open = "00:00:00";
-				let close = "00:00:00";
-				if (!isClosed) {
-					const parts = h.hours.split("-").map((s) => s.trim());
-					if (parts.length === 2) {
-						open = toDbTime(parts[0]);
-						close = toDbTime(parts[1]);
-					}
-				}
-				return {
-					business_id: businessId,
-					day: DAY_TO_DB[h.day.toLowerCase()] ?? h.day.toLowerCase(),
-					open_time: open,
-					close_time: close,
-					is_closed: isClosed,
-				};
-			});
-			await supabase.from("business_hours").insert(hourRows);
+			await insertBusinessHours(businessId, input.hours);
 		}
 
 		if (input.address && input.latitude != null && input.longitude != null) {
@@ -286,15 +285,84 @@ export const businessRepository = {
 
 	async updateBusiness(
 		businessId: string,
-		patch: Partial<
-			Pick<Business, "name" | "description" | "phone" | "email" | "website">
-		>,
+		patch: {
+			name?: string;
+			description?: string | null;
+			phone?: string | null;
+			email?: string | null;
+			website?: string | null;
+			type?: BusinessType;
+			logoUri?: string | null;
+			coverUri?: string | null;
+			hours?: Array<{ day: string; hours: string }>;
+			address?: string | null;
+			latitude?: number | null;
+			longitude?: number | null;
+			zone?: string | null;
+		},
 	): Promise<void> {
+		const businessUpdate: Record<string, unknown> = {
+			updated_at: new Date().toISOString(),
+		};
+		if (patch.name != null) businessUpdate.name = patch.name;
+		if (patch.description !== undefined)
+			businessUpdate.description = patch.description;
+		if (patch.phone !== undefined) businessUpdate.phone = patch.phone;
+		if (patch.email !== undefined) businessUpdate.email = patch.email;
+		if (patch.website !== undefined) businessUpdate.website = patch.website;
+		if (patch.type) businessUpdate.type = patch.type;
+		if (patch.logoUri) {
+			businessUpdate.image = await uploadImage(
+				patch.logoUri,
+				`logos/${businessId}_${Date.now()}.jpg`,
+			);
+		}
+		if (patch.coverUri) {
+			businessUpdate.cover_image = await uploadImage(
+				patch.coverUri,
+				`covers/${businessId}_${Date.now()}.jpg`,
+			);
+		}
+
 		const { error } = await supabase
 			.from("businesses")
-			.update({ ...patch, updated_at: new Date().toISOString() })
+			.update(businessUpdate)
 			.eq("id", businessId);
 		if (error) throw toAppError(error, "Error al actualizar el negocio");
+
+		if (patch.hours) {
+			// ponytail: replace-all de horarios — simple y suficiente para un
+			// solo editor por negocio; concurrencia optimista si hace falta.
+			await supabase
+				.from("business_hours")
+				.delete()
+				.eq("business_id", businessId);
+			if (patch.hours.length > 0) {
+				await insertBusinessHours(businessId, patch.hours);
+			}
+		}
+
+		if (patch.latitude != null && patch.longitude != null) {
+			const { data: hqRow } = await supabase
+				.from("business_locations")
+				.select("id, name")
+				.eq("business_id", businessId)
+				.eq("is_headquarter", true)
+				.maybeSingle();
+			const hq = (hqRow ?? null) as { id?: string; name?: string } | null;
+			const locationId = hq?.id ? String(hq.id) : undefined;
+			await this.upsertLocation({
+				...(locationId ? { id: locationId } : {}),
+				business_id: businessId,
+				name: hq?.name ?? patch.name ?? "Local principal",
+				address: patch.address ?? "",
+				latitude: patch.latitude,
+				longitude: patch.longitude,
+				zone: patch.zone ?? null,
+				phone: patch.phone ?? null,
+				is_headquarter: true,
+			});
+		}
 	},
 
 	// ─── Locations ────────────────────────────────────────────────────
@@ -768,6 +836,33 @@ function buildRange(
 function formatTime(time: string): string {
 	const [h, m] = time.split(":");
 	return `${(h ?? "00").padStart(2, "0")}:${(m ?? "00").padStart(2, "0")}`;
+}
+
+async function insertBusinessHours(
+	businessId: string,
+	hours: Array<{ day: string; hours: string }>,
+): Promise<void> {
+	const hourRows = hours.map((h) => {
+		const lower = h.hours.toLowerCase();
+		const isClosed = lower.includes("cerrado");
+		let open = "00:00:00";
+		let close = "00:00:00";
+		if (!isClosed) {
+			const parts = h.hours.split("-").map((s) => s.trim());
+			if (parts.length === 2) {
+				open = toDbTime(parts[0]);
+				close = toDbTime(parts[1]);
+			}
+		}
+		return {
+			business_id: businessId,
+			day: DAY_TO_DB[h.day.toLowerCase()] ?? h.day.toLowerCase(),
+			open_time: open,
+			close_time: close,
+			is_closed: isClosed,
+		};
+	});
+	await supabase.from("business_hours").insert(hourRows);
 }
 
 function toDbTime(time: string): string {
