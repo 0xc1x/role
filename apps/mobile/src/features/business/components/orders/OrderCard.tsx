@@ -68,27 +68,15 @@ export function OrderCard({
 						{strings.business.ordersOrderLine.replace("{n}", order.order_number)}
 					</AppText>
 
-					{item.customerName || item.customerPhone ? (
+					{item.customerName ? (
 						<View style={styles.customerRow}>
 							<AppText
 								variant="labelSmall"
 								numberOfLines={1}
 								style={styles.customerName}
 							>
-								{item.customerName ?? strings.business.ordersOrderedBy}
+								{item.customerName}
 							</AppText>
-							{item.customerPhone ? (
-								<View style={styles.phoneRow}>
-									<Ionicons name="call-outline" size={11} color={colors.mutedForeground} />
-									<AppText
-										variant="bodySmall"
-										numberOfLines={1}
-										style={{ color: colors.mutedForeground }}
-									>
-										{item.customerPhone}
-									</AppText>
-								</View>
-							) : null}
 						</View>
 					) : null}
 
@@ -145,11 +133,6 @@ const styles = StyleSheet.create({
 		marginTop: 2,
 	},
 	customerName: { flexShrink: 1 },
-	phoneRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 3,
-	},
 	bottomRow: {
 		flexDirection: "row",
 		alignItems: "center",

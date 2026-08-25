@@ -119,7 +119,7 @@ export function OrderDetail({
 						{
 							backgroundColor: colors.card,
 							borderColor: colors.borderSolid,
-							shadowColor: colors.cardShadow,
+							boxShadow: `0px -4px 10px ${colors.cardShadow}`,
 						},
 					]}
 				>
@@ -479,7 +479,7 @@ function OrderInfoCard({ item }: { item: OrderDetail }) {
 					{strings.business.ordersOrderNumber}
 				</AppText>
 				<AppText variant="bodyMedium" weight="medium">
-					#{item.order.id.substring(0, 8).toUpperCase()}
+					{item.order.order_number}
 				</AppText>
 			</View>
 			<View style={styles.orderInfoCol}>
@@ -707,10 +707,6 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.md,
 		borderTopWidth: 1,
 		gap: spacing.sm,
-		shadowOffset: { width: 0, height: -4 },
-		shadowOpacity: 1,
-		shadowRadius: 10,
-		elevation: 4,
 	},
 	backdrop: {
 		flex: 1,
