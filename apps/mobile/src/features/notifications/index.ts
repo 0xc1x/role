@@ -45,8 +45,17 @@ export async function syncDeviceToken(
 		}
 
 		const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? null;
+		if (!projectId) {
+			// ponytail: sin proyecto EAS no hay token de Expo push (el error
+			// crudo de expo-installations llegaba hasta el toast). Solución
+			// real: `eas init` para generar extra.eas.projectId en app.json.
+			console.warn(
+				"[notifications] EXPO_PUBLIC_EAS_PROJECT_ID no configurado — push nativo deshabilitado en este build",
+			);
+			return false;
+		}
 		const ticket = await Notifications.getExpoPushTokenAsync({
-			projectId: projectId ?? undefined,
+			projectId,
 		});
 		token = ticket.data;
 	} catch {
