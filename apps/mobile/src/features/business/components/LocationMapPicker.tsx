@@ -282,11 +282,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		elevation: 2,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.15,
-		shadowRadius: 4,
-	},
+		boxShadow: `0px 2px 4px #00000026`,	},
 	fullscreen: { flex: 1 },
 	fullscreenBar: {
 		flexDirection: "row",

@@ -133,7 +133,7 @@ export function MapPickerView({
 				loadingEnabled
 			/>
 
-			<View pointerEvents="none" style={styles.centerMarker}>
+			<View style={[styles.centerMarker, { pointerEvents: "none" }]}>
 				<Ionicons name="location" size={48} color={colors.primary} />
 			</View>
 

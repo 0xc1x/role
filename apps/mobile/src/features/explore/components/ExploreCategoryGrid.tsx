@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+	Platform,
 	Animated,
 	Easing,
 	Image,
@@ -251,13 +252,13 @@ function CategoryFadeSlideIn({
 				toValue: 1,
 				duration: ENTRY_ANIM_DURATION,
 				easing: Easing.out(Easing.cubic),
-				useNativeDriver: true,
+				useNativeDriver: Platform.OS !== "web",
 			}),
 			Animated.timing(translateY, {
 				toValue: 0,
 				duration: ENTRY_ANIM_DURATION,
 				easing: Easing.out(Easing.cubic),
-				useNativeDriver: true,
+				useNativeDriver: Platform.OS !== "web",
 			}),
 		]).start();
 	}, [animate, opacity, translateY]);
@@ -300,7 +301,7 @@ function ExploreCategoryCard({
 			]}
 		>
 			{category.imageUrl ? (
-				<View pointerEvents="none" style={styles.categoryImageWrap}>
+				<View style={[styles.categoryImageWrap, { pointerEvents: "none" }]}>
 					<Image
 						source={{ uri: category.imageUrl }}
 						style={styles.categoryImage}
@@ -372,11 +373,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	selectedShadow: {
-		shadowColor: "#FF4B4B",
-		shadowOpacity: 0.15,
-		shadowRadius: 10,
-		shadowOffset: { width: 0, height: 4 },
-		elevation: 3,
+		boxShadow: "0px 4px 10px #FF4B4B26",
 	},
 	categoryImageWrap: {
 		position: "absolute",
@@ -389,7 +386,6 @@ const styles = StyleSheet.create({
 	categoryImage: {
 		width: "100%",
 		height: "100%",
-		resizeMode: "cover",
 	},
 	categoryFade: {
 		position: "absolute",

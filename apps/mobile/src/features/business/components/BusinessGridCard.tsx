@@ -45,7 +45,7 @@ export function BusinessGridCard({
 				{
 					backgroundColor: colors.card,
 					borderColor: colors.borderSolid,
-					shadowColor: colors.cardShadow,
+					boxShadow: `0px 6px 16px ${colors.cardShadow}`,
 				},
 			]}
 		>
@@ -113,10 +113,6 @@ const styles = StyleSheet.create({
 		borderRadius: radii.lg,
 		borderWidth: StyleSheet.hairlineWidth,
 		overflow: "hidden",
-		shadowOffset: { width: 0, height: 6 },
-		shadowOpacity: 1,
-		shadowRadius: 16,
-		elevation: 2,
 	},
 	imageWrap: {
 		height: 140,

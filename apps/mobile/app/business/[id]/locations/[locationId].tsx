@@ -108,7 +108,7 @@ export default function BusinessLocationDetailScreen() {
 							onRegionChange={() => {}}
 						/>
 					</Suspense>
-					<View pointerEvents="none" style={[styles.mapHint, { backgroundColor: colors.card + "E6" }]}>
+					<View style={[styles.mapHint, { backgroundColor: colors.card + "E6", pointerEvents: "none" }]}>
 						<Ionicons
 							name="create-outline"
 							size={13}

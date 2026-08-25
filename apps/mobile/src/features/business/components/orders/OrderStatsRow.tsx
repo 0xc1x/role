@@ -46,7 +46,7 @@ export function OrderStatsRow({ stats }: { stats: OrderStats }) {
 				{
 					backgroundColor: colors.card,
 					borderColor: colors.borderSolid,
-					shadowColor: colors.cardShadow,
+					boxShadow: `0px 4px 16px ${colors.cardShadow}`,
 				},
 			]}
 		>
@@ -87,10 +87,6 @@ const styles = StyleSheet.create({
 		alignItems: "stretch",
 		borderRadius: radii.lg,
 		borderWidth: 1,
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 1,
-		shadowRadius: 16,
-		elevation: 2,
 	},
 	item: {
 		flex: 1,

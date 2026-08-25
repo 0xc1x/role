@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+	Platform,
 	Dimensions,
 	View,
 	StyleSheet,
@@ -47,7 +48,7 @@ export function LocationSelector() {
 		Animated.timing(chevronRotation, {
 			toValue: next ? 1 : 0,
 			duration: 250,
-			useNativeDriver: true,
+			useNativeDriver: Platform.OS !== "web",
 		}).start();
 		if (next) {
 			triggerRef.current?.measureInWindow((x, y, width, height) => {
@@ -77,7 +78,7 @@ export function LocationSelector() {
 		Animated.timing(chevronRotation, {
 			toValue: 0,
 			duration: 250,
-			useNativeDriver: true,
+			useNativeDriver: Platform.OS !== "web",
 		}).start();
 	};
 
@@ -377,12 +378,7 @@ const styles = StyleSheet.create({
 		maxWidth: 300,
 		borderRadius: radii.xl,
 		borderWidth: 1,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.15,
-		shadowRadius: 20,
-		elevation: 8,
-	},
+		boxShadow: `0px 4px 20px #00000026`,	},
 	loadingBox: {
 		paddingHorizontal: spacing.lg,
 		paddingVertical: spacing.lg,

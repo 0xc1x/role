@@ -38,8 +38,7 @@ export function ExploreTipSection() {
 							styles.bulbCircle,
 							{
 								backgroundColor: colors.card + (isDark ? "00" : "80"),
-								shadowColor: colors.yellowDark,
-								shadowOpacity: isDark ? 0.2 : 0.3,
+								boxShadow: `0px 0px 12px ${colors.yellowDark}${isDark ? "33" : "4D"}`,
 							},
 						]}
 					>
@@ -85,8 +84,6 @@ const styles = StyleSheet.create({
 		borderRadius: 16,
 		alignItems: "center",
 		justifyContent: "center",
-		shadowOffset: { width: 0, height: 0 },
-		shadowRadius: 12,
 	},
 	tipBody: {
 		marginTop: spacing.md,

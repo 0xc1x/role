@@ -2,7 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Linking, Pressable, StyleSheet, View } from "react-native";
+import {
+	Animated,
+	Linking,
+	Platform,
+	Pressable,
+	StyleSheet,
+	View,
+} from "react-native";
 import { toast } from "sonner-native";
 
 import { strings } from "@/core/i18n/strings";
@@ -141,7 +148,7 @@ function FaqChevron({ expanded }: { expanded: boolean }) {
 		Animated.timing(rotation, {
 			toValue: expanded ? 1 : 0,
 			duration: 200,
-			useNativeDriver: true,
+			useNativeDriver: Platform.OS !== "web",
 		}).start();
 	}, [expanded, rotation]);
 

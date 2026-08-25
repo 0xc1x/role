@@ -161,11 +161,7 @@ export function AddAddressSheet({
 									styles.segment,
 									isSelected && {
 										backgroundColor: colors.card,
-										shadowColor: colors.shadow,
-										shadowOffset: { width: 0, height: 2 },
-										shadowOpacity: 0.05,
-										shadowRadius: 4,
-										elevation: 1,
+										boxShadow: `0px 2px 4px ${colors.shadow}`,
 									},
 								]}
 							>

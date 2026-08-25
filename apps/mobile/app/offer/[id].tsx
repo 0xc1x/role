@@ -303,9 +303,8 @@ export default function OfferDetailScreen() {
 			<Animated.View
 				style={[
 					styles.header,
-					{ height: headerHeight, opacity: headerOpacity },
+					{ height: headerHeight, opacity: headerOpacity, pointerEvents: "none" },
 				]}
-				pointerEvents="none"
 			>
 				{data.offer.image ? (
 					<Image
@@ -567,12 +566,7 @@ const styles = StyleSheet.create({
 		padding: spacing.xl,
 		borderRadius: 20,
 		marginTop: spacing.xl,
-		shadowColor: "#00000014",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 1,
-		shadowRadius: 10,
-		elevation: 2,
-	},
+		boxShadow: `0px 4px 10px #00000014`,	},
 	header: {
 		position: "absolute",
 		top: 0,
@@ -612,12 +606,7 @@ const styles = StyleSheet.create({
 		padding: 16,
 		borderRadius: 24,
 		minHeight: BOTTOM_BAR_HEIGHT,
-		shadowColor: "#00000014",
-		shadowOffset: { width: 0, height: 8 },
-		shadowOpacity: 1,
-		shadowRadius: 24,
-		elevation: 8,
-	},
+		boxShadow: `0px 8px 24px #00000014`,	},
 	saveButton: {
 		height: 52,
 		borderRadius: 16,

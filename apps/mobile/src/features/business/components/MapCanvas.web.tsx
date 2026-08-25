@@ -67,7 +67,7 @@ const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 					{children}
 				</Map>
 				{centerPin ? (
-					<View pointerEvents="none" style={styles.pinWrap}>
+					<View style={[styles.pinWrap, { pointerEvents: "none" }]}>
 						<Ionicons
 							name="location"
 							size={40}
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
 	},
 	pin: {
 		marginTop: -30,
-		textShadowColor: "rgba(0,0,0,0.2)",
-		textShadowRadius: 3,
+		// @ts-ignore — RN types aún no exponen textShadow unificado
+		textShadow: "0px 0px 3px rgba(0,0,0,0.2)",
 	},
 });

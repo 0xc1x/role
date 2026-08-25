@@ -1,5 +1,12 @@
 import * as React from "react";
-import { Animated, Dimensions, Pressable, StyleSheet, View } from "react-native";
+import {
+	Animated,
+	Dimensions,
+	Platform,
+	Pressable,
+	StyleSheet,
+	View,
+} from "react-native";
 import { Portal } from "@rn-primitives/portal";
 
 import { cn } from "@/lib/utils";
@@ -113,7 +120,7 @@ export function DrawerContent({
 		const anim = Animated.timing(offset, {
 			toValue: 0,
 			duration: 280,
-			useNativeDriver: true,
+			useNativeDriver: Platform.OS !== "web",
 		});
 		anim.start();
 		return () => anim.stop();

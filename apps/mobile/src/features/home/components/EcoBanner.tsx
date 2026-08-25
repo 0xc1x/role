@@ -44,7 +44,7 @@ export function EcoBanner() {
 					</AppText>
 				</View>
 			</View>
-			<View style={styles.leafDecorationWrap} pointerEvents="none">
+			<View style={[styles.leafDecorationWrap, { pointerEvents: "none" }]}>
 				<View
 					style={[styles.leafDecoration, { backgroundColor: colors.ecoGreen }]}
 				>

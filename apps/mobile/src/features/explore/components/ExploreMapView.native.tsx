@@ -185,7 +185,7 @@ export function ExploreMapView({
 			{/* ── Header ─────────────────────────────────────────────── */}
 			<View style={[styles.header, { top: spacing.md }]}>
 				<View
-					style={[styles.headerCard, { backgroundColor: colors.card, shadowColor: colors.shadow }]}
+					style={[styles.headerCard, { backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}
 				>
 					<Pressable
 						onPress={onBack}
@@ -238,7 +238,7 @@ export function ExploreMapView({
 			</View>
 
 			{/* ── Controles de zoom + mi ubicación ─────────────────────── */}
-			<View style={[styles.zoomControls, { top: 96, backgroundColor: colors.card, shadowColor: colors.shadow }]}>
+			<View style={[styles.zoomControls, { top: 96, backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}>
 				<Pressable onPress={zoomIn} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel="zoom in">
 					<Ionicons name="add" size={20} color={colors.foreground} />
 				</Pressable>
@@ -247,7 +247,7 @@ export function ExploreMapView({
 					<Ionicons name="remove" size={20} color={colors.foreground} />
 				</Pressable>
 			</View>
-			<View style={[styles.myLocation, { bottom: selectedOffer ? 360 : 80, backgroundColor: colors.card, shadowColor: colors.shadow }]}>
+			<View style={[styles.myLocation, { bottom: selectedOffer ? 360 : 80, backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}>
 				<Pressable onPress={() => void goToMyLocation()} accessibilityRole="button" accessibilityLabel={strings.explore.myLocation}>
 					<Ionicons name="locate" size={22} color={colors.primary} />
 				</Pressable>
@@ -302,7 +302,7 @@ function MapOfferCard({
 	const hasRating = (offer.business.rating ?? 0) > 0;
 
 	return (
-		<View style={[styles.selectedCard, { backgroundColor: colors.card, shadowColor: colors.shadow }]}>
+		<View style={[styles.selectedCard, { backgroundColor: colors.card, boxShadow: `0px 4px 16px ${colors.shadow}` }]}>
 			<View style={styles.selectedImageWrap}>
 				{offer.offer.image ? (
 					<Image
@@ -419,10 +419,6 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.sm,
 		borderRadius: radii.lg,
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.08,
-		shadowRadius: 8,
-		elevation: 3,
 	},
 	headerButton: {
 		width: 40,
@@ -440,10 +436,6 @@ const styles = StyleSheet.create({
 		position: "absolute",
 		right: spacing.lg,
 		borderRadius: radii.lg,
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.08,
-		shadowRadius: 8,
-		elevation: 3,
 		overflow: "hidden",
 	},
 	zoomButton: {
@@ -463,10 +455,6 @@ const styles = StyleSheet.create({
 		borderRadius: 22,
 		alignItems: "center",
 		justifyContent: "center",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.08,
-		shadowRadius: 8,
-		elevation: 3,
 	},
 	centerOverlay: {
 		position: "absolute",
@@ -517,10 +505,6 @@ const styles = StyleSheet.create({
 		bottom: spacing.md,
 		borderRadius: radii.xl,
 		overflow: "hidden",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.12,
-		shadowRadius: 16,
-		elevation: 6,
 	},
 	selectedImageWrap: {
 		height: 140,

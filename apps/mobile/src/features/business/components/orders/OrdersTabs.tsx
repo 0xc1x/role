@@ -42,7 +42,7 @@ export function OrdersTabs({
 							styles.tab,
 							{
 								backgroundColor: selected ? colors.card : "transparent",
-								shadowColor: selected ? colors.cardShadow : "transparent",
+								boxShadow: selected ? `0px 2px 4px ${colors.cardShadow}` : undefined,
 								opacity: pressed ? 0.85 : 1,
 							},
 						]}
@@ -75,9 +75,5 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		paddingVertical: spacing.sm,
 		borderRadius: radii.pill,
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 1,
-		shadowRadius: 4,
-		elevation: 1,
 	},
 });

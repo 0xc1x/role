@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { AppText } from "@/core/ui";
+import { AppText } from "./AppText";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
 import {
