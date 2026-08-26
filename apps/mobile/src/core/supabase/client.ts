@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { env } from '@/core/config/env';
 
@@ -16,6 +17,9 @@ export const supabase: SupabaseClient = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      // Sin adaptador, supabase-js cae a memoria en nativo y la sesión
+      // se pierde en cada reinicio de la app.
+      storage: AsyncStorage,
     },
   },
 );
