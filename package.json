@@ -17,8 +17,5 @@
   },
   "devDependencies": {
     "turbo": "^2.0.0"
-  },
-  "dependencies": {
-    "nitro": "npm:nitro-nightly@latest"
   }
 }

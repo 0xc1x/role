@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { parseRedisUrl } from '../../common/utils/redis';
 import type { Env } from '../../config/env.schema';
 import { NotificationsRepository } from './notifications.repository';
 
@@ -191,11 +192,6 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private parseRedisUrl(url: string): import('ioredis').RedisOptions {
-    try {
-      const u = new URL(url);
-      return { host: u.hostname, port: Number(u.port) || 6379, username: u.username || undefined, password: u.password || undefined, maxRetriesPerRequest: null as unknown as number };
-    } catch {
-      return { host: 'localhost', port: 6379, maxRetriesPerRequest: null as unknown as number };
-    }
+    return parseRedisUrl(url);
   }
 }

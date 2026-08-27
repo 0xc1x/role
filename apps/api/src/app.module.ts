@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { SecurityModule } from './auth/security.module';
+import { parseRedisUrl } from './common/utils/redis';
 import { validateEnv, type Env } from './config/env.schema';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './modules/health/health.module';
@@ -37,21 +38,13 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => {
         const url = config.get('REDIS_URL', { infer: true });
-        if (!url) return { connection: { host: 'localhost', port: 6379, lazyConnect: true, enableReadyCheck: false, maxRetriesPerRequest: null } } as never;
-        try {
-          const u = new URL(url);
-          return {
-            connection: {
-              host: u.hostname,
-              port: Number(u.port) || 6379,
-              username: u.username || undefined,
-              password: u.password || undefined,
-              maxRetriesPerRequest: null,
-            },
-          } as never;
-        } catch {
-          return { connection: { host: 'localhost', port: 6379, lazyConnect: true, enableReadyCheck: false, maxRetriesPerRequest: null } } as never;
+        const connection = parseRedisUrl(url ?? '');
+        // lazyConnect not needed when url is present; keep defaults lean
+        if (!url) {
+          (connection as Record<string, unknown>).lazyConnect = true;
+          (connection as Record<string, unknown>).enableReadyCheck = false;
         }
+        return { connection } as never;
       },
     }),
     ThrottlerModule.forRoot([
