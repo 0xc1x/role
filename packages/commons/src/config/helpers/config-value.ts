@@ -20,35 +20,12 @@ export function coerceConfigValue(
   }
 }
 
-/** Lee una clave del mapa de config con fallback seguro. */
-export function getConfigValue<K extends string>(
-  map: AppConfigMap | undefined,
-  key: K,
-  fallback: string,
-): string;
-export function getConfigValue<K extends string>(
-  map: AppConfigMap | undefined,
-  key: K,
-  fallback: number,
-): number;
-export function getConfigValue<K extends string>(
-  map: AppConfigMap | undefined,
-  key: K,
-  fallback: boolean,
-): boolean;
-export function getConfigValue(
+export function getConfigValue<T extends string | number | boolean>(
   map: AppConfigMap | undefined,
   key: string,
-  fallback: string | number | boolean,
-): string | number | boolean {
+  fallback: T,
+): T {
   const value = map?.[key];
   if (value === undefined || value === null) return fallback;
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value;
-  }
-  return fallback;
+  return typeof value === typeof fallback ? (value as T) : fallback;
 }

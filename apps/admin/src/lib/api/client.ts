@@ -1,9 +1,11 @@
 import { env } from "@/config/env";
 import { ApiClientError, throwFromResponse } from "./errors";
 
-const STORAGE_KEY_TOKEN = "role_admin_auth_token";
-const STORAGE_KEY_REFRESH = "role_admin_refresh_token";
-const STORAGE_KEY_EXPIRES_AT = "role_admin_token_expires_at";
+const KEYS = {
+	token: "role_admin_auth_token",
+	refresh: "role_admin_refresh_token",
+	expiresAt: "role_admin_token_expires_at",
+} as const;
 
 function getStorage(): Storage | undefined {
 	if (typeof window === "undefined") return undefined;
@@ -14,79 +16,37 @@ function getStorage(): Storage | undefined {
 	}
 }
 
-export function getToken(): string | null {
-	const storage = getStorage();
-	if (!storage) return null;
+function getItem(key: string): string | null {
+	const s = getStorage();
+	if (!s) return null;
 	try {
-		return storage.getItem(STORAGE_KEY_TOKEN);
+		return s.getItem(key);
 	} catch {
 		return null;
 	}
 }
 
-export function setToken(token: string | null) {
-	const storage = getStorage();
-	if (!storage) return;
+function setItem(key: string, value: string | null) {
+	const s = getStorage();
+	if (!s) return;
 	try {
-		if (token) {
-			storage.setItem(STORAGE_KEY_TOKEN, token);
-		} else {
-			storage.removeItem(STORAGE_KEY_TOKEN);
-		}
+		if (value) s.setItem(key, value);
+		else s.removeItem(key);
 	} catch {}
 }
 
-export function getRefreshToken(): string | null {
-	const storage = getStorage();
-	if (!storage) return null;
-	try {
-		return storage.getItem(STORAGE_KEY_REFRESH);
-	} catch {
-		return null;
-	}
-}
-
-export function setRefreshToken(token: string | null) {
-	const storage = getStorage();
-	if (!storage) return;
-	try {
-		if (token) {
-			storage.setItem(STORAGE_KEY_REFRESH, token);
-		} else {
-			storage.removeItem(STORAGE_KEY_REFRESH);
-		}
-	} catch {}
-}
-
-export function getTokenExpiresAt(): string | null {
-	const storage = getStorage();
-	if (!storage) return null;
-	try {
-		return storage.getItem(STORAGE_KEY_EXPIRES_AT);
-	} catch {
-		return null;
-	}
-}
-
-export function setTokenExpiresAt(expiresAt: string | null) {
-	const storage = getStorage();
-	if (!storage) return;
-	try {
-		if (expiresAt) {
-			storage.setItem(STORAGE_KEY_EXPIRES_AT, expiresAt);
-		} else {
-			storage.removeItem(STORAGE_KEY_EXPIRES_AT);
-		}
-	} catch {}
-}
+export const getToken = () => getItem(KEYS.token);
+export const setToken = (v: string | null) => setItem(KEYS.token, v);
+export const getRefreshToken = () => getItem(KEYS.refresh);
+export const setRefreshToken = (v: string | null) => setItem(KEYS.refresh, v);
+export const getTokenExpiresAt = () => getItem(KEYS.expiresAt);
+export const setTokenExpiresAt = (v: string | null) => setItem(KEYS.expiresAt, v);
 
 export function clearAuth() {
-	const storage = getStorage();
-	if (!storage) return;
+	const s = getStorage();
+	if (!s) return;
 	try {
-		storage.removeItem(STORAGE_KEY_TOKEN);
-		storage.removeItem(STORAGE_KEY_REFRESH);
-		storage.removeItem(STORAGE_KEY_EXPIRES_AT);
+		for (const k of Object.values(KEYS)) s.removeItem(k);
 	} catch {}
 }
 
@@ -139,91 +99,64 @@ function isTokenExpired(): boolean {
 	return Date.now() >= expTime - 5 * 60 * 1000;
 }
 
+function buildHeaders(formData?: FormData, token?: string | null): Record<string, string> {
+	const h: Record<string, string> = {};
+	if (!formData) h["Content-Type"] = "application/json";
+	if (token) h.Authorization = `Bearer ${token}`;
+	return h;
+}
+
+function buildBody(opts?: { body?: unknown; formData?: FormData }): BodyInit | undefined {
+	if (opts?.formData) return opts.formData;
+	if (opts?.body) return JSON.stringify(opts.body);
+	return undefined;
+}
+
 async function request<T>(
 	method: string,
 	path: string,
-	options?: {
-		body?: unknown;
-		skipAuth?: boolean;
-		formData?: FormData;
-	},
+	options?: { body?: unknown; skipAuth?: boolean; formData?: FormData },
 ): Promise<T> {
-	const headers: Record<string, string> = {};
-
 	if (options?.skipAuth) {
-		if (!options.formData) {
-			headers["Content-Type"] = "application/json";
-		}
-		const response = await fetch(`${env.VITE_API_URL}${path}`, {
+		const res = await fetch(`${env.VITE_API_URL}${path}`, {
 			method,
-			headers,
-			body:
-				options.formData ??
-				(options.body ? JSON.stringify(options.body) : undefined),
+			headers: buildHeaders(options.formData),
+			body: buildBody(options),
 		});
-		if (!response.ok) {
-			return throwFromResponse(response);
-		}
-		return response.json() as Promise<T>;
+		if (!res.ok) return throwFromResponse(res);
+		return res.json() as Promise<T>;
 	}
 
 	if (isTokenExpired()) {
 		const refreshed = await attemptTokenRefresh();
 		if (!refreshed) {
 			clearAuth();
-			if (typeof window !== "undefined") {
-				window.location.href = "/login";
-			}
+			if (typeof window !== "undefined") window.location.href = "/login";
 			throw new ApiClientError({ status: 401, message: "Session expired" });
 		}
 	}
 
 	const token = getToken();
-	if (token) {
-		headers.Authorization = `Bearer ${token}`;
-	}
-	if (!options?.formData) {
-		headers["Content-Type"] = "application/json";
-	}
+	const headers = buildHeaders(options?.formData, token);
+	const body = buildBody(options);
+	const response = await fetch(`${env.VITE_API_URL}${path}`, { method, headers, body });
 
-	const response = await fetch(`${env.VITE_API_URL}${path}`, {
-		method,
-		headers,
-		body:
-			options?.formData ??
-			(options?.body ? JSON.stringify(options.body) : undefined),
-	});
-
-	if (response.status === 401) {
-		const refreshed = await attemptTokenRefresh();
-		if (refreshed) {
-			const newToken = getToken();
-			if (newToken) {
-				headers.Authorization = `Bearer ${newToken}`;
-			}
-			const retryResponse = await fetch(`${env.VITE_API_URL}${path}`, {
-				method,
-				headers,
-				body:
-					options?.formData ??
-					(options?.body ? JSON.stringify(options.body) : undefined),
-			});
-			if (retryResponse.ok) {
-				return retryResponse.json() as Promise<T>;
-			}
-		}
-		clearAuth();
-		if (typeof window !== "undefined") {
-			window.location.href = "/login";
-		}
-		throw new ApiClientError({ status: 401, message: "Session expired" });
+	if (response.status !== 401) {
+		if (!response.ok) return throwFromResponse(response);
+		return response.json() as Promise<T>;
 	}
 
-	if (!response.ok) {
-		return throwFromResponse(response);
+	const refreshed = await attemptTokenRefresh();
+	if (refreshed) {
+		const newToken = getToken();
+		if (newToken) headers.Authorization = `Bearer ${newToken}`;
+		const retry = await fetch(`${env.VITE_API_URL}${path}`, { method, headers, body });
+		if (retry.ok) return retry.json() as Promise<T>;
+		if (!retry.ok) return throwFromResponse(retry);
 	}
-
-	return response.json() as Promise<T>;
+	clearAuth();
+	if (typeof window !== "undefined") window.location.href = "/login";
+	throw new ApiClientError({ status: 401, message: "Session expired" });
 }
 
 export const api = {

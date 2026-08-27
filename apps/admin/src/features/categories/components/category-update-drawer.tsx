@@ -1,17 +1,6 @@
 import type { CategoryDto } from "@0xc1x/role-commons";
-import { useIsMutating } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import {
-	Drawer,
-	DrawerClose,
-	DrawerContent,
-	DrawerDescription,
-	DrawerFooter,
-	DrawerHeader,
-	DrawerTitle,
-} from "@/components/ui/drawer";
-import { Spinner } from "@/components/ui/spinner";
 import { categoriesKeys } from "@/features/categories";
+import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
 import { CategoryForm } from "../forms/category.form";
 
 export interface CategoryUpdateDrawerProps {
@@ -25,48 +14,22 @@ export function CategoryUpdateDrawer({
 	isOpen,
 	onClose,
 }: CategoryUpdateDrawerProps) {
-	const FORM_ID = "update-category-drawer-form";
-	const isMutating = useIsMutating({ mutationKey: categoriesKeys.all }) > 0;
-
 	return (
-		<Drawer
-			open={isOpen}
-			onOpenChange={(open) => !open && onClose()}
-			swipeDirection="right"
+		<ResourceUpdateDrawer
+			formId="update-category-drawer-form"
+			mutationKey={categoriesKeys.all}
+			title="Categoría"
+			description="Actualiza una categoría existente"
+			isOpen={isOpen}
+			onClose={onClose}
+			submitLabel="Actualizar Categoria"
+			updatingLabel="Actualziando categoria"
 		>
-			<DrawerContent>
-				<DrawerHeader>
-					<DrawerTitle>Categoría</DrawerTitle>
-					<DrawerDescription>
-						Actualiza una categoría existente
-					</DrawerDescription>
-				</DrawerHeader>
-
-				<div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
-					<CategoryForm
-						formId={FORM_ID}
-						category={category}
-						onSuccess={onClose}
-					/>
-				</div>
-
-				<DrawerFooter>
-					<Button type="submit" form={FORM_ID} disabled={isMutating}>
-						{isMutating ? (
-							<>
-								<Spinner /> Actualziando categoria
-							</>
-						) : (
-							"Actualizar Categoria"
-						)}
-					</Button>
-					<DrawerClose>
-						<Button variant="outline" className="w-full">
-							Cancelar
-						</Button>
-					</DrawerClose>
-				</DrawerFooter>
-			</DrawerContent>
-		</Drawer>
+			<CategoryForm
+				formId="update-category-drawer-form"
+				category={category}
+				onSuccess={onClose}
+			/>
+		</ResourceUpdateDrawer>
 	);
 }
