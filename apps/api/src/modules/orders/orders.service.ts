@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { randomInt } from 'node:crypto';
@@ -30,6 +31,8 @@ import {
   type DbExecutor,
 } from './orders.repository';
 
+import { NotificationHandlers } from '../notifications/notification.handlers';
+
 /** Espejo del charset de `generate_pickup_code` (sin caracteres ambiguos). */
 const PICKUP_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -41,6 +44,8 @@ export class OrdersService {
     private readonly ordersRepository: OrdersRepository,
     private readonly offersRepository: OffersRepository,
     private readonly config: ConfigService<Env, true>,
+    @Optional()
+    private readonly notificationHandlers?: NotificationHandlers,
   ) {}
 
   async create(
@@ -162,6 +167,9 @@ export class OrdersService {
       return order;
     });
 
+    // Fase 2.3: emisión desde flujo API (dormida hasta flag)
+    this.emitOrderChange(created.id);
+
     return OrderMapper.toResponse(created, {
       isOrderOwner: true,
       isBusinessOwner: false,
@@ -212,6 +220,8 @@ export class OrdersService {
 
       return order!;
     });
+
+    this.emitOrderChange(id);
 
     return OrderMapper.toResponse(cancelled, {
       isOrderOwner: true,
@@ -268,6 +278,8 @@ export class OrdersService {
 
       return order!;
     });
+
+    this.emitOrderChange(id);
 
     return OrderMapper.toResponse(completed, {
       isOrderOwner: false,
@@ -449,6 +461,8 @@ export class OrdersService {
       return order;
     });
 
+    this.emitOrderChange(id);
+
     const isOrderOwner = updated.user_id === user.id;
     const isBusinessOwner = await this.ordersRepository.isBusinessOwner(
       updated.business_id,
@@ -549,5 +563,11 @@ export class OrdersService {
       code += PICKUP_CODE_CHARS[randomInt(PICKUP_CODE_CHARS.length)];
     }
     return code;
+  }
+
+  private emitOrderChange(orderId: string): void {
+    if (!this.config.get('ENABLE_API_MIRROR_NOTIFICATIONS', { infer: true })) return;
+    // Fire-and-forget: no bloquea la respuesta HTTP, BullMQ hace reintentos
+    this.notificationHandlers?.onOrderStatusChanged(orderId).catch(() => {});
   }
 }

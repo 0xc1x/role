@@ -9,6 +9,8 @@ export * from './coupons';
 export * from './reviews';
 export * from './user-preferences';
 export * from './business-notification-preferences';
+export * from './device-tokens';
+export * from './favorites';
 export * from './categories';
 export * from './slides';
 export * from './tips';
@@ -33,6 +35,8 @@ import { categories } from './categories';
 import { slides } from './slides';
 import { tips } from './tips';
 import { appConfig } from './app-configs';
+import { deviceTokens } from './device-tokens';
+import { favorites } from './favorites';
 import {
   campaigns,
   emailComponents,
@@ -63,6 +67,8 @@ export const schema = {
   categories,
   slides,
   tips,
+  deviceTokens,
+  favorites,
   appConfig,
   emailComponents,
   emailTemplates,

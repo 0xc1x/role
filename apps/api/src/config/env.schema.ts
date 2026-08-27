@@ -52,6 +52,16 @@ export const envSchema = z.object({
   ENABLE_API_MIRROR_PAYOUTS: mirrorFlag(),
   /** ADR-0008: expiración de ofertas por job del API */
   ENABLE_API_MIRROR_OFFERS: mirrorFlag(),
+  /** Fase 2: notificaciones push espejo (Supabase edges siguen activas por defecto) */
+  ENABLE_API_MIRROR_NOTIFICATIONS: mirrorFlag(),
+  /** BullMQ: URL de Redis para colas de notificaciones (vacío = ejecución directa sin cola) */
+  REDIS_URL: z.string().default(''),
+  /** FCM HTTP v1: JSON del service account de Firebase (vacío deshabilita envío web) */
+  FCM_SERVICE_ACCOUNT: z.string().default(''),
+  /** FCM: project_id (opcional si ya está en el JSON) */
+  FCM_PROJECT_ID: z.string().default(''),
+  /** Expo: access token para push nativo (opcional) */
+  EXPO_ACCESS_TOKEN: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -3,7 +3,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../../config/env.schema';
+import { NotificationHandlers } from '../notifications/notification.handlers';
 import {
   paginatedDataFromQuery,
   type CreateOfferDto,
@@ -21,7 +25,12 @@ import { OfferMapper } from './offers.mapper';
 
 @Injectable()
 export class OffersService {
-  constructor(private readonly offersRepository: OffersRepository) {}
+  constructor(
+    private readonly offersRepository: OffersRepository,
+    private readonly config: ConfigService<Env, true>,
+    @Optional()
+    private readonly notificationHandlers?: NotificationHandlers,
+  ) {}
 
   /**
    * Espejo de `check_offer_expiry` (parte temporal, ADR-0008):
@@ -104,6 +113,9 @@ export class OffersService {
     const category_ids = await this.offersRepository.findCategoryIds(
       created.id,
     );
+    if (this.config.get('ENABLE_API_MIRROR_NOTIFICATIONS', { infer: true })) {
+      this.notificationHandlers?.onOfferCreated(created.id).catch(() => {});
+    }
     return OfferMapper.toDto(created, category_ids);
   }
 

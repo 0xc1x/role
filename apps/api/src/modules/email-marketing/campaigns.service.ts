@@ -3,7 +3,10 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import {
@@ -24,19 +27,20 @@ const BATCH_SIZE = 50;
 
 /**
  * Orquestación de campañas: preview → test → encolar producción.
- * La cola es la propia tabla email_sends procesada por el cron.
+ * Cola DB (email_sends) + BullMQ (email-expedition) con rate-limit Resend 10/s.
+ * Sin REDIS_URL cae a ejecución directa (dev).
  */
 @Injectable()
 export class CampaignsService {
   private readonly logger = new Logger(CampaignsService.name);
   private readonly resend: Resend | null;
-  private running = false;
 
   constructor(
     private readonly repository: EmailMarketingRepository,
     private readonly renderer: RendererService,
     private readonly recipients: RecipientsService,
     private readonly config: ConfigService<Env, true>,
+    @Optional() @InjectQueue('email-expedition') private readonly queue?: Queue<{ campaignId: string }>,
   ) {
     const apiKey = this.config.get('RESEND_API_KEY', { infer: true });
     this.resend = apiKey ? new Resend(apiKey) : null;
@@ -208,34 +212,32 @@ export class CampaignsService {
     return EmailMarketingMapper.toCampaignDto(updated!);
   }
 
+  async getCampaign(campaignId: string) {
+    return this.repository.getCampaignById(campaignId);
+  }
+
   /**
    * Tick del cron: campañas programadas vencidas + un lote de la cola.
-   * Un solo proceso (flag running) → sin locking.
+   * Con BullMQ este método queda como fallback sin-Redis; el flujo normal es vía queue.
    */
   async processTick(): Promise<{ processed: number }> {
-    if (this.running) return { processed: 0 };
-    this.running = true;
     let processed = 0;
-    try {
-      for (const due of await this.repository.findDueScheduled(new Date())) {
-        try {
-          await this.send(due.id);
-        } catch (err) {
-          this.logger.error(`Campaña programada ${due.id} falló`, err);
-          void this.repository.updateCampaign(due.id, { status: 'failed' });
-        }
+    for (const due of await this.repository.findDueScheduled(new Date())) {
+      try {
+        await this.send(due.id);
+      } catch (err) {
+        this.logger.error(`Campaña programada ${due.id} falló`, err);
+        void this.repository.updateCampaign(due.id, { status: 'failed' });
       }
+    }
 
-      const sending = await this.repository.listCampaigns({
-        page: 1,
-        limit: BATCH_SIZE,
-        status: 'sending',
-      });
-      for (const campaign of sending.rows) {
-        processed += await this.processBatch(campaign);
-      }
-    } finally {
-      this.running = false;
+    const sending = await this.repository.listCampaigns({
+      page: 1,
+      limit: BATCH_SIZE,
+      status: 'sending',
+    });
+    for (const campaign of sending.rows) {
+      processed += await this.processBatch(campaign);
     }
     return { processed };
   }
@@ -281,15 +283,29 @@ export class CampaignsService {
       (await this.repository.updateCampaign(campaign.id, {
         status: 'sending',
       })) ?? campaign;
-    // Primera tanda inmediata; el cron drena el resto.
-    void this.processBatch(updated).catch((err: unknown) =>
-      this.logger.error(`Primera tanda de ${campaign.id} falló`, err),
-    );
+
+    // BullMQ: encolar drenado con rate-limit; sin REDIS_URL ejecución directa (ponytail fallback)
+    const redisUrl = this.config.get('REDIS_URL', { infer: true });
+    if (redisUrl && this.queue) {
+      const delay =
+        updated.scheduled_at && updated.scheduled_at > new Date()
+          ? updated.scheduled_at.getTime() - Date.now()
+          : 0;
+      await this.queue.add(
+        'process-batch',
+        { campaignId: updated.id },
+        delay > 0 ? { delay } : undefined,
+      );
+    } else {
+      void this.processBatch(updated).catch((err: unknown) =>
+        this.logger.error(`Primera tanda de ${campaign.id} falló`, err),
+      );
+    }
     return EmailMarketingMapper.toCampaignDto(updated);
   }
 
-  /** Envía un lote de la cola; marca fin de campaña cuando vacía. */
-  private async processBatch(campaign: CampaignRow): Promise<number> {
+  /** Envía un lote de la cola; marca fin de campaña cuando vacía. Público para el processor BullMQ. */
+  async processBatch(campaign: CampaignRow): Promise<number> {
     const batch = await this.repository.findQueuedBatch(
       campaign.id,
       BATCH_SIZE,
@@ -332,6 +348,9 @@ export class CampaignsService {
           status: 'failed',
         });
       }
+    } else if (this.config.get('REDIS_URL', { infer: true }) && this.queue) {
+      // BullMQ: quedan más — re-encolar siguiente lote (rate-limit 10/s vía worker limiter)
+      await this.queue.add('process-batch', { campaignId: campaign.id });
     }
     return batch.length;
   }

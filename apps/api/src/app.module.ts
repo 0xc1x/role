@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { SecurityModule } from './auth/security.module';
-import { validateEnv } from './config/env.schema';
+import { validateEnv, type Env } from './config/env.schema';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -21,6 +22,7 @@ import { EmailMarketingModule } from './modules/email-marketing/email-marketing.
 import { ProfilesModule } from './modules/profiles/profiles.module';
 import { PayoutsModule } from './modules/payouts/payouts.module';
 import { CommissionsModule } from './modules/commissions/commissions.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 
 @Module({
@@ -31,6 +33,27 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
       validate: validateEnv,
     }),
     ScheduleModule.forRoot(),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => {
+        const url = config.get('REDIS_URL', { infer: true });
+        if (!url) return { connection: { host: 'localhost', port: 6379, lazyConnect: true, enableReadyCheck: false, maxRetriesPerRequest: null } } as never;
+        try {
+          const u = new URL(url);
+          return {
+            connection: {
+              host: u.hostname,
+              port: Number(u.port) || 6379,
+              username: u.username || undefined,
+              password: u.password || undefined,
+              maxRetriesPerRequest: null,
+            },
+          } as never;
+        } catch {
+          return { connection: { host: 'localhost', port: 6379, lazyConnect: true, enableReadyCheck: false, maxRetriesPerRequest: null } } as never;
+        }
+      },
+    }),
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
@@ -70,6 +93,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
     PayoutsModule,
     CommissionsModule,
     ReviewsModule,
+    NotificationsModule,
   ],
   providers: [
     {

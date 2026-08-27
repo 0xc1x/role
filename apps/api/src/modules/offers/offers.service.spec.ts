@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { OffersService } from './offers.service';
 import {
@@ -76,6 +77,7 @@ describe('OffersService', () => {
     const module = await Test.createTestingModule({
       providers: [
         OffersService,
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(false) } },
         {
           provide: OffersRepository,
           useValue: {
