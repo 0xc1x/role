@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import { businesses } from '../../database/schema/businesses';
+import { orders } from '../../database/schema/orders';
 import { payouts } from '../../database/schema/payouts';
 
 export type PayoutRow = typeof payouts.$inferSelect;
@@ -65,13 +66,73 @@ export class PayoutsRepository {
     return row ?? null;
   }
 
+  /**
+   * Espejo del cron SQL `generate_payouts` (ADR-0008): agrupa órdenes
+   * completed sin payout por negocio, crea payout pending, backfillea fee/net
+   * legacy y recalcula el balance. Mismo comportamiento, mismo orden.
+   */
   async generate(): Promise<number> {
-    // ponytail: drizzle pg driver returns {rows} or array depending on version — handle both
-    const res = (await this.db.execute(
-      sql`select public.generate_payouts() as n`,
-    )) as unknown as { rows: { n: number }[] } | { n: number }[];
-    const rows = Array.isArray(res) ? res : res.rows;
-    const raw = rows?.[0]?.n;
-    return typeof raw === 'number' ? raw : Number(raw ?? 0);
+    return this.db.transaction(async (tx) => {
+      const groups = await tx
+        .select({
+          businessId: orders.business_id,
+          gross: sql<string>`sum(${orders.price})`,
+          // deriva fee si platform_fee es 0 por legacy: round(price * commission_rate)
+          fee: sql<string>`sum(case when ${orders.platform_fee} = 0 and ${orders.commission_rate} > 0 then round(${orders.price} * ${orders.commission_rate}, 2) else ${orders.platform_fee} end)`,
+          periodStart: sql<string>`min(${orders.created_at})::date`,
+        })
+        .from(orders)
+        .where(and(eq(orders.status, 'completed'), isNull(orders.payout_id)))
+        .groupBy(orders.business_id);
+
+      let created = 0;
+
+      for (const g of groups) {
+        const gross = Number(g.gross);
+        const fee = Number(g.fee);
+        const net = gross - fee;
+
+        const [payout] = await tx
+          .insert(payouts)
+          .values({
+            business_id: g.businessId,
+            period_start: g.periodStart,
+            period_end: sql`current_date`,
+            gross_amount: String(gross),
+            platform_fee: String(fee),
+            net_amount: String(net),
+            status: 'pending',
+          })
+          .returning({ id: payouts.id });
+        if (!payout) continue;
+
+        await tx
+          .update(orders)
+          .set({
+            payout_id: payout.id,
+            // backfill legacy fee/net para consistencia futura
+            platform_fee: sql`case when ${orders.platform_fee} = 0 and ${orders.commission_rate} > 0 then round(${orders.price} * ${orders.commission_rate}, 2) else ${orders.platform_fee} end`,
+            net_amount: sql`${orders.price} - case when ${orders.platform_fee} = 0 and ${orders.commission_rate} > 0 then round(${orders.price} * ${orders.commission_rate}, 2) else ${orders.platform_fee} end`,
+          })
+          .where(
+            and(
+              eq(orders.business_id, g.businessId),
+              eq(orders.status, 'completed'),
+              isNull(orders.payout_id),
+            ),
+          );
+
+        await tx
+          .update(businesses)
+          .set({
+            balance: sql`coalesce((select sum(o.net_amount) from ${orders} o where o.business_id = ${businesses.id} and o.status = 'completed' and o.payout_id is null), 0)`,
+          })
+          .where(eq(businesses.id, g.businessId));
+
+        created += 1;
+      }
+
+      return created;
+    });
   }
 }

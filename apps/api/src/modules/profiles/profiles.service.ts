@@ -33,6 +33,15 @@ export class ProfilesService {
     return this.toDto(row);
   }
 
+  /**
+   * Espejo de `handle_new_user` + defaults (ADR-0008): crea preferencias y
+   * consents por defecto. Dormido: se invocará desde el registro vía API
+   * cuando ese flujo exista; el trigger SQL sigue activo para Supabase Auth.
+   */
+  async registerDefaults(userId: string): Promise<void> {
+    await this.repository.insertRegistrationDefaults(userId);
+  }
+
   private toDto(row: ProfileRow): ProfileDto {
     return {
       id: row.id,

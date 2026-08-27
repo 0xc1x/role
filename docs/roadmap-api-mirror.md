@@ -26,6 +26,7 @@
 | Trigger `update_business_rating` / `update_offer_rating` | Recálculo de ratings | 1.3 |
 | Trigger `check_offer_expiry` | Expiración de ofertas | 1.4 |
 | Trigger `handle_new_user` + defaults | Profile, preferencias, consents, notificaciones al registrarse | 1.5 |
+| Trigger `create_business_notification_preferences` | Preferencias de notificación por negocio al crearlo | 1.5 |
 | Edge `send-push-notification` | FCM HTTP v1 + desactivación de tokens muertos | 2.1 |
 | Edge `handle-order-event` | Push por cambio de estado (consumidor + negocio, con preferencias) | 2.2 |
 | Edge `handle-offer-created` | Alertas de favoritos | 2.2 |

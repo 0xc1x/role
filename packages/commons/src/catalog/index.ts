@@ -5,3 +5,4 @@ export * from './entities/offer';
 export * from './enums/coupon-type';
 export * from './schemas/coupon.schema';
 export * from './schemas/offer.schema';
+export * from './schemas/offer-query.schema';

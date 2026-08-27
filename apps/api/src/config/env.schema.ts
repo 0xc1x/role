@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+/**
+ * Flag booleano de env ("true"/"false") para los espejos del ADR-0008.
+ * Default false: el SQL de Supabase sigue siendo el emisor activo hasta el cutover.
+ */
+const mirrorFlag = (def: 'true' | 'false' = 'false') =>
+  z
+    .enum(['true', 'false'])
+    .default(def)
+    .transform((v) => v === 'true');
+
 export const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
@@ -36,6 +46,12 @@ export const envSchema = z.object({
   UNSUBSCRIBE_URL_BASE: z
     .string()
     .default('http://localhost:4001/api/v1/email-marketing/unsubscribe'),
+  /** ADR-0008: acumulación de earnings en el API (trigger SQL sigue activo) */
+  ENABLE_API_MIRROR_ORDERS: mirrorFlag(),
+  /** ADR-0008: generación de payouts por job del API (cron SQL sigue activo) */
+  ENABLE_API_MIRROR_PAYOUTS: mirrorFlag(),
+  /** ADR-0008: expiración de ofertas por job del API */
+  ENABLE_API_MIRROR_OFFERS: mirrorFlag(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -1,9 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { OrderStatus } from '@0xc1x/role-commons';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
-import { businesses, orderEvents, orders } from '../../database/schema';
+import {
+  businesses,
+  coupons,
+  orderEvents,
+  orders,
+} from '../../database/schema';
 import { ACTIVE_ORDER_STATUSES } from './order-status.machine';
 
 export type DbExecutor = Database;
@@ -214,5 +219,84 @@ export class OrdersRepository {
       })
       .from(orders)
       .where(inArray(orders.status, ['pending', 'ready_for_pickup']));
+  }
+
+  /**
+   * Folio diario `FD-YYYY-MMDD-NNN` (espejo de `generate_order_number`).
+   * El MAX+1 del SQL requiere lock para evitar colisiones concurrentes
+   * (ADR-0008): advisory xact-lock por día en lugar de tabla de secuencias.
+   */
+  async nextOrderNumber(tx: DbExecutor): Promise<string> {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext('FD-' || to_char(now(), 'YYYY-MMDD')))`,
+    );
+    // ponytail: driver puede devolver filas o {rows}; normalizar como en payouts
+    const result = (await tx.execute(sql`
+      SELECT 'FD-' || to_char(now(), 'YYYY-MMDD') || '-' || lpad((
+        COALESCE(MAX(CAST(SUBSTRING(order_number FROM 16) AS INTEGER)), 0) + 1
+      )::text, 3, '0') AS order_number
+      FROM ${orders}
+      WHERE order_number LIKE 'FD-' || to_char(now(), 'YYYY-MMDD') || '-%'
+    `)) as unknown as { rows?: Array<{ order_number?: string }> } | Array<{
+      order_number: string;
+    }>;
+    const row = Array.isArray(result) ? result[0] : result.rows?.[0];
+    if (!row?.order_number) throw new Error('Failed to generate order number');
+    return row.order_number;
+  }
+
+  /** Tarifa vigente del negocio (snapshot al crear la orden). */
+  async findCommissionRate(
+    tx: DbExecutor,
+    businessId: string,
+  ): Promise<string | null> {
+    const [row] = await tx
+      .select({ commission_rate: businesses.commission_rate })
+      .from(businesses)
+      .where(eq(businesses.id, businessId))
+      .limit(1);
+    return row?.commission_rate ?? null;
+  }
+
+  /** Cupón activo y vigente del negocio, con lock (espejo del SELECT … FOR UPDATE). */
+  async findCouponByCodeForUpdate(
+    tx: DbExecutor,
+    businessId: string,
+    code: string,
+  ) {
+    const [row] = await tx
+      .select()
+      .from(coupons)
+      .where(
+        and(
+          eq(coupons.business_id, businessId),
+          eq(coupons.code, code),
+          eq(coupons.is_active, true),
+        ),
+      )
+      .for('update', { of: coupons })
+      .limit(1);
+    if (!row) return null;
+    if (row.expires_at && row.expires_at <= new Date()) return null;
+    return row;
+  }
+
+  async incrementCouponUsedCount(tx: DbExecutor, couponId: string) {
+    await tx
+      .update(coupons)
+      .set({ used_count: sql`${coupons.used_count} + 1`, updated_at: sql`now()` })
+      .where(eq(coupons.id, couponId));
+  }
+
+  /** Espejo dormido del trigger `accrue_order_earnings` — solo con flag. */
+  async accrueBusinessBalance(
+    tx: DbExecutor,
+    businessId: string,
+    netAmount: string,
+  ): Promise<void> {
+    await tx
+      .update(businesses)
+      .set({ balance: sql`${businesses.balance} + ${netAmount}` })
+      .where(eq(businesses.id, businessId));
   }
 }

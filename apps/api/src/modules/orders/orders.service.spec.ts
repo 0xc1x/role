@@ -5,6 +5,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { OrdersService } from './orders.service';
 import { OrdersRepository } from './orders.repository';
 import { OffersRepository } from '../offers/offers.repository';
@@ -79,10 +80,28 @@ const makeOrderWithBusinessOwner = (overrides: Record<string, any> = {}) => ({
   ...overrides,
 });
 
+const makeCouponRow = (overrides: Record<string, any> = {}) => ({
+  id: 'coupon-1',
+  business_id: 'business-1',
+  code: 'PROMO10',
+  name: 'Promo',
+  type: 'percentage' as const,
+  value: '10',
+  min_order_amount: '0',
+  max_uses: null,
+  used_count: 0,
+  is_active: true,
+  expires_at: null,
+  created_at: new Date('2025-01-01T00:00:00Z'),
+  updated_at: new Date('2025-01-01T00:00:00Z'),
+  ...overrides,
+});
+
 describe('OrdersService', () => {
   let service: OrdersService;
   let ordersRepository: jest.Mocked<OrdersRepository>;
   let offersRepository: jest.Mocked<OffersRepository>;
+  const getFlag = jest.fn().mockReturnValue(false);
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -102,6 +121,11 @@ describe('OrdersService', () => {
             insertEvent: jest.fn(),
             isBusinessOwner: jest.fn(),
             findBusinessIdsOwnedBy: jest.fn(),
+            nextOrderNumber: jest.fn(),
+            findCommissionRate: jest.fn(),
+            findCouponByCodeForUpdate: jest.fn(),
+            incrementCouponUsedCount: jest.fn(),
+            accrueBusinessBalance: jest.fn(),
           },
         },
         {
@@ -114,6 +138,7 @@ describe('OrdersService', () => {
             findOrderCandidatesToExpire: jest.fn(),
           },
         },
+        { provide: ConfigService, useValue: { get: getFlag } },
       ],
     }).compile();
 
@@ -128,98 +153,316 @@ describe('OrdersService', () => {
     );
   });
 
-  describe('create', () => {
-    it('should create and return an order', async () => {
-      const body = { offer_id: 'offer-1' };
-      const offer = makeOfferRow();
-      const createdOrder = makeOrderRow({ id: 'order-1', user_id: 'user-1' });
+  describe('create (espejo de reserve_offer)', () => {
+    const body = { offer_id: 'offer-1' };
+    const createdOrder = makeOrderRow({
+      id: 'order-1',
+      user_id: 'user-1',
+      pickup_code: 'ABCDEF',
+    });
 
+    const mockHappyPath = (offer = makeOfferRow()) => {
       offersRepository.findByIdForUpdate.mockResolvedValue(offer);
       ordersRepository.findActiveByUserAndOffer.mockResolvedValue(null);
+      ordersRepository.findCommissionRate.mockResolvedValue('0.1000');
       offersRepository.decrementStock.mockResolvedValue(true);
+      ordersRepository.nextOrderNumber.mockResolvedValue('FD-2026-0825-001');
       ordersRepository.insertOrder.mockResolvedValue(createdOrder);
       ordersRepository.insertEvent.mockResolvedValue(undefined);
+    };
+
+    it('feliz: crea orden con snapshot de comisión y contrato del RPC', async () => {
+      mockHappyPath();
 
       const result = await service.create(mockAuthUser, body);
 
       expect(result).toMatchObject({
         id: 'order-1',
-        user_id: 'user-1',
-        offer_id: 'offer-1',
-        business_id: 'business-1',
         status: 'pending',
-        pickup_code: 'ABC123',
+        pickup_code: 'ABCDEF',
       });
-      expect(offersRepository.findByIdForUpdate).toHaveBeenCalledWith(
+      // Snapshot de comisión sobre el precio final tras cupón (sin cupón aquí)
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
         expect.anything(),
-        'offer-1',
+        expect.objectContaining({
+          commission_rate: '0.1',
+          platform_fee: '1', // round(9.99 * 0.10, 2) = 1.00
+          net_amount: '8.99', // 9.99 - 1.00
+          coupon_id: null,
+        }),
       );
-      expect(ordersRepository.insertOrder).toHaveBeenCalled();
-      expect(ordersRepository.insertEvent).toHaveBeenCalled();
-    });
-
-    it('should throw ConflictException when user already has active order', async () => {
-      const body = { offer_id: 'offer-1' };
-      ordersRepository.findActiveByUserAndOffer.mockResolvedValue(
-        makeOrderRow({ id: 'existing-order' }),
-      );
-
-      await expect(service.create(mockAuthUser, body)).rejects.toThrow(
-        ConflictException,
+      expect(ordersRepository.insertEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ status: 'pending', previous_status: null }),
       );
     });
 
-    it('should throw NotFoundException when offer not found', async () => {
-      const body = { offer_id: 'nonexistent' };
-      offersRepository.findByIdForUpdate.mockResolvedValue(null);
-
-      await expect(service.create(mockAuthUser, body)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('should throw ConflictException when offer is inactive', async () => {
-      const body = { offer_id: 'offer-1' };
-      offersRepository.findByIdForUpdate.mockResolvedValue(
+    it.each([
+      [
+        'oferta inexistente/inactiva',
         makeOfferRow({ is_active: false }),
-      );
-
-      await expect(service.create(mockAuthUser, body)).rejects.toThrow(
-        ConflictException,
-      );
-    });
-
-    it('should throw ConflictException when offer is out of stock', async () => {
-      const body = { offer_id: 'offer-1' };
-      offersRepository.findByIdForUpdate.mockResolvedValue(
-        makeOfferRow({ stock: 0 }),
-      );
-
-      await expect(service.create(mockAuthUser, body)).rejects.toThrow(
-        ConflictException,
-      );
-    });
-
-    it('should throw ConflictException when pickup window ended', async () => {
-      const body = { offer_id: 'offer-1' };
-      offersRepository.findByIdForUpdate.mockResolvedValue(
+        'OFFER_NOT_FOUND',
+      ],
+      ['stock insuficiente', makeOfferRow({ stock: 0 }), 'OFFER_OUT_OF_STOCK'],
+      [
+        'ventana vencida',
         makeOfferRow({ pickup_end: new Date('2020-01-01T00:00:00Z') }),
+        'OFFER_EXPIRED',
+      ],
+    ])('%s → mismo código de error que el RPC', async (_name, offer, code) => {
+      mockHappyPath(offer);
+
+      await expect(service.create(mockAuthUser, body)).rejects.toThrow(code);
+    });
+
+    it('duplicado activo → DUPLICATE_RESERVATION', async () => {
+      offersRepository.findByIdForUpdate.mockResolvedValue(makeOfferRow());
+      ordersRepository.findActiveByUserAndOffer.mockResolvedValue(
+        makeOrderRow({ id: 'existing' }),
       );
 
       await expect(service.create(mockAuthUser, body)).rejects.toThrow(
-        ConflictException,
+        'DUPLICATE_RESERVATION',
       );
     });
 
-    it('should throw ConflictException when decrementStock fails', async () => {
-      const body = { offer_id: 'offer-1' };
-      offersRepository.findByIdForUpdate.mockResolvedValue(makeOfferRow());
+    it('condición de carrera en stock → OFFER_OUT_OF_STOCK', async () => {
+      mockHappyPath();
       offersRepository.decrementStock.mockResolvedValue(false);
 
       await expect(service.create(mockAuthUser, body)).rejects.toThrow(
-        ConflictException,
+        'OFFER_OUT_OF_STOCK',
       );
     });
+
+    it('cupón porcentual: descuento acotado al precio y comisión sobre el final', async () => {
+      mockHappyPath();
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
+        makeCouponRow({ type: 'percentage', value: '50' }), // 9.99 → 5.00
+      );
+
+      await service.create(mockAuthUser, { ...body, coupon_code: 'PROMO10' });
+
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          price: '4.995', // 9.99 - 4.995
+          coupon_id: 'coupon-1',
+          platform_fee: '0.5', // round(4.995 * 0.1, 2)
+          net_amount: '4.5',
+        }),
+      );
+      expect(ordersRepository.incrementCouponUsedCount).toHaveBeenCalledWith(
+        expect.anything(),
+        'coupon-1',
+      );
+    });
+
+    it('cupón fijo mayor al precio: descuento acotado (precio final 0)', async () => {
+      mockHappyPath();
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
+        makeCouponRow({ type: 'fixed', value: '50' }),
+      );
+
+      await service.create(mockAuthUser, { ...body, coupon_code: 'X' });
+
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ price: '0', net_amount: '0' }),
+      );
+    });
+
+    it('cupón agotado → COUPON_EXHAUSTED sin decrementar stock', async () => {
+      mockHappyPath();
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
+        makeCouponRow({ max_uses: 5, used_count: 5 }),
+      );
+
+      await expect(
+        service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
+      ).rejects.toThrow('COUPON_EXHAUSTED');
+      expect(offersRepository.decrementStock).not.toHaveBeenCalled();
+    });
+
+    it('mínimo no alcanzado → COUPON_MIN_NOT_MET', async () => {
+      mockHappyPath();
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
+        makeCouponRow({ min_order_amount: '20' }),
+      );
+
+      await expect(
+        service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
+      ).rejects.toThrow('COUPON_MIN_NOT_MET');
+    });
+
+    it('cupón inexistente/vencido: el SQL continúa sin descuento (espejo idéntico)', async () => {
+      mockHappyPath();
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(null);
+
+      await service.create(mockAuthUser, { ...body, coupon_code: 'NOPE' });
+
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ price: '9.99', coupon_id: null }),
+      );
+    });
+
+    it('folio FD-YYYY-MMDD-NNN generado con lock diario', async () => {
+      mockHappyPath();
+
+      await service.create(mockAuthUser, body);
+
+      expect(ordersRepository.nextOrderNumber).toHaveBeenCalledTimes(1);
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ order_number: 'FD-2026-0825-001' }),
+      );
+    });
+
+    it('pickup code: 6 chars del charset sin ambiguos', async () => {
+      mockHappyPath();
+
+      const result = await service.create(mockAuthUser, body);
+
+      expect(result.pickup_code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
+    });
+  });
+
+  describe('cancelOrder (espejo de cancel_order)', () => {
+    it('feliz: cancela, restaura stock y registra evento', async () => {
+      ordersRepository.findByIdForUpdate.mockResolvedValue(
+        makeOrderWithBusinessOwner({
+          order: makeOrderRow({ user_id: 'user-1', status: 'pending' }),
+        }),
+      );
+      ordersRepository.updateStatus.mockResolvedValue(
+        makeOrderRow({ status: 'cancelled' }),
+      );
+      ordersRepository.insertEvent.mockResolvedValue(undefined);
+
+      const result = await service.cancelOrder(mockAuthUser, 'order-1');
+
+      expect(result.status).toBe('cancelled');
+      expect(offersRepository.incrementStock).toHaveBeenCalledWith(
+        expect.anything(),
+        'offer-1',
+        1,
+      );
+      expect(ordersRepository.insertEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          status: 'cancelled',
+          reason: 'Cancelado por el usuario',
+        }),
+      );
+    });
+
+    it('ORDER_NOT_FOUND cuando la orden no existe', async () => {
+      ordersRepository.findByIdForUpdate.mockResolvedValue(null);
+
+      await expect(service.cancelOrder(mockAuthUser, 'x')).rejects.toThrow(
+        'ORDER_NOT_FOUND',
+      );
+    });
+
+    it('NOT_ORDER_OWNER cuando no es dueño', async () => {
+      ordersRepository.findByIdForUpdate.mockResolvedValue(
+        makeOrderWithBusinessOwner({
+          order: makeOrderRow({ user_id: 'someone-else' }),
+        }),
+      );
+
+      await expect(service.cancelOrder(mockAuthUser, 'order-1')).rejects.toThrow(
+        'NOT_ORDER_OWNER',
+      );
+    });
+
+    it.each(['completed', 'cancelled', 'expired', 'picked_up'] as const)(
+      '%s → CANNOT_CANCEL',
+      async (status) => {
+        ordersRepository.findByIdForUpdate.mockResolvedValue(
+          makeOrderWithBusinessOwner({
+            order: makeOrderRow({ user_id: 'user-1', status }),
+          }),
+        );
+
+        await expect(
+          service.cancelOrder(mockAuthUser, 'order-1'),
+        ).rejects.toThrow('CANNOT_CANCEL');
+      },
+    );
+  });
+
+  describe('validatePickupCode (espejo de validate_pickup_code)', () => {
+    const businessLocked = (overrides: Record<string, any> = {}) =>
+      makeOrderWithBusinessOwner({
+        order: makeOrderRow({
+          user_id: 'consumer-1',
+          status: 'ready_for_pickup',
+          ...overrides,
+        }),
+      });
+
+    const happyMocks = (locked = businessLocked()) => {
+      ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
+      ordersRepository.updateStatus.mockResolvedValue({
+        ...locked.order,
+        status: 'completed',
+      });
+      ordersRepository.insertEvent.mockResolvedValue(undefined);
+    };
+
+    it('feliz: completa la orden con metadata method=pickup_code', async () => {
+      happyMocks();
+
+      const result = await service.validatePickupCode(
+        mockBusinessUser,
+        'order-1',
+        'ABC123',
+      );
+
+      expect(result.status).toBe('completed');
+      expect(ordersRepository.insertEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          status: 'completed',
+          previous_status: 'ready_for_pickup',
+          metadata: expect.objectContaining({ method: 'pickup_code' }),
+        }),
+      );
+    });
+
+    it('UNAUTHORIZED si el caller no es el dueño del negocio (o no existe)', async () => {
+      happyMocks(businessLocked());
+
+      await expect(
+        service.validatePickupCode(mockAdminUser, 'order-1', 'ABC123'),
+      ).rejects.toThrow('UNAUTHORIZED');
+
+      ordersRepository.findByIdForUpdate.mockResolvedValue(null);
+      await expect(
+        service.validatePickupCode(mockBusinessUser, 'nope', 'ABC123'),
+      ).rejects.toThrow('UNAUTHORIZED');
+    });
+
+    it('INVALID_CODE con código incorrecto', async () => {
+      happyMocks();
+
+      await expect(
+        service.validatePickupCode(mockBusinessUser, 'order-1', 'WRONG1'),
+      ).rejects.toThrow('INVALID_CODE');
+    });
+
+    it.each(['pending', 'confirmed', 'completed', 'cancelled'] as const)(
+      '%s → INVALID_STATUS',
+      async (status) => {
+        happyMocks(businessLocked({ status }));
+
+        await expect(
+          service.validatePickupCode(mockBusinessUser, 'order-1', 'ABC123'),
+        ).rejects.toThrow('INVALID_STATUS');
+      },
+    );
   });
 
   describe('listMine', () => {
@@ -494,6 +737,46 @@ describe('OrdersService', () => {
       });
 
       expect(result.status).toBe('completed');
+    });
+
+    it('espejo dormido: sin flag NO acumula earnings (el trigger SQL lo hace)', async () => {
+      const locked = makeOrderWithBusinessOwner({
+        order: makeOrderRow({ status: 'picked_up', user_id: 'user-1' }),
+      });
+      ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
+      ordersRepository.updateStatus.mockResolvedValue(
+        makeOrderRow({ status: 'completed' }),
+      );
+      ordersRepository.isBusinessOwner.mockResolvedValue(true);
+
+      getFlag.mockReturnValue(false);
+      await service.updateStatus(mockBusinessUser, 'order-1', {
+        status: 'completed',
+      });
+
+      expect(ordersRepository.accrueBusinessBalance).not.toHaveBeenCalled();
+    });
+
+    it('espejo activo (flag): acumula net_amount al completar', async () => {
+      const locked = makeOrderWithBusinessOwner({
+        order: makeOrderRow({ status: 'picked_up', user_id: 'user-1' }),
+      });
+      ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
+      ordersRepository.updateStatus.mockResolvedValue(
+        makeOrderRow({ status: 'completed' }),
+      );
+      ordersRepository.isBusinessOwner.mockResolvedValue(true);
+
+      getFlag.mockImplementation((key: string) => key === 'ENABLE_API_MIRROR_ORDERS');
+      await service.updateStatus(mockBusinessUser, 'order-1', {
+        status: 'completed',
+      });
+
+      expect(ordersRepository.accrueBusinessBalance).toHaveBeenCalledWith(
+        expect.anything(),
+        'business-1',
+        '8.99',
+      );
     });
   });
 

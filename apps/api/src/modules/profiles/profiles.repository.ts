@@ -2,7 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
-import { profiles } from '../../database/schema';
+import {
+  consumerNotificationPreferences,
+  profiles,
+  userConsents,
+  userPreferences,
+} from '../../database/schema';
 
 export type ProfileRow = typeof profiles.$inferSelect;
 
@@ -79,5 +84,30 @@ export class ProfilesRepository {
       .where(eq(profiles.id, id))
       .returning();
     return row ?? null;
+  }
+
+  /**
+   * Espejo de los triggers `create_user_preferences` +
+   * `consumer_notification_preferences` + `create_default_consents`
+   * (ADR-0008). Idempotente: ON CONFLICT DO NOTHING como el SQL.
+   */
+  async insertRegistrationDefaults(userId: string): Promise<void> {
+    const tx = this.db;
+    await tx
+      .insert(userPreferences)
+      .values({ user_id: userId })
+      .onConflictDoNothing();
+    await tx
+      .insert(consumerNotificationPreferences)
+      .values({ user_id: userId })
+      .onConflictDoNothing();
+    await tx
+      .insert(userConsents)
+      .values([
+        { user_id: userId, consent_type: 'analytics', granted: false },
+        { user_id: userId, consent_type: 'marketing', granted: false },
+        { user_id: userId, consent_type: 'notifications', granted: true },
+      ])
+      .onConflictDoNothing();
   }
 }

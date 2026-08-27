@@ -23,6 +23,15 @@ import { OfferMapper } from './offers.mapper';
 export class OffersService {
   constructor(private readonly offersRepository: OffersRepository) {}
 
+  /**
+   * Espejo de `check_offer_expiry` (parte temporal, ADR-0008):
+   * desactiva ofertas activas cuya ventana de pickup venció.
+   */
+  async expireStale(): Promise<{ expired: number }> {
+    const expired = await this.offersRepository.expireStale(new Date());
+    return { expired };
+  }
+
   async list(
     query: ListOffersQuery,
   ): Promise<PaginatedData<OfferWithBusiness>> {

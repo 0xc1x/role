@@ -5,7 +5,8 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
+import { ConfigService } from '@nestjs/config';
 import {
   paginatedDataFromQuery,
   type CreateOrderRequest,
@@ -15,6 +16,7 @@ import {
   type UpdateOrderStatusRequest,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
+import type { Env } from '../../config/env.schema';
 import { OffersRepository } from '../offers/offers.repository';
 import {
   canActorTransition,
@@ -23,23 +25,49 @@ import {
   type OrderEventSource,
 } from './order-status.machine';
 import { OrderMapper, type OrderResponse } from './orders.mapper';
-import { OrdersRepository } from './orders.repository';
+import {
+  OrdersRepository,
+  type DbExecutor,
+} from './orders.repository';
+
+/** Espejo del charset de `generate_pickup_code` (sin caracteres ambiguos). */
+const PICKUP_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 @Injectable()
 export class OrdersService {
   constructor(
     private readonly ordersRepository: OrdersRepository,
     private readonly offersRepository: OffersRepository,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   async create(
     user: AuthUser,
     body: CreateOrderRequest,
   ): Promise<OrderResponse> {
-    // coupon_code reserved for later wave
-    void body.coupon_code;
-
     const created = await this.ordersRepository.transaction(async (tx) => {
+      // Espejo de `reserve_offer`: los códigos de error son los mismos que
+      // devuelve el RPC para que los tests de equivalencia sean directos.
+      const offer = await this.offersRepository.findByIdForUpdate(
+        tx,
+        body.offer_id,
+      );
+      if (!offer || !offer.is_active) {
+        throw new ConflictException(
+          'OFFER_NOT_FOUND: Oferta no encontrada o inactiva',
+        );
+      }
+      if (offer.stock <= 0) {
+        throw new ConflictException('OFFER_OUT_OF_STOCK: Oferta agotada');
+      }
+      if (new Date() > offer.pickup_end) {
+        throw new ConflictException(
+          'OFFER_EXPIRED: Ventana de pickup cerrada',
+        );
+      }
+
       const existing = await this.ordersRepository.findActiveByUserAndOffer(
         tx,
         user.id,
@@ -47,27 +75,47 @@ export class OrdersService {
       );
       if (existing) {
         throw new ConflictException(
-          'You already have an active order for this offer',
+          'DUPLICATE_RESERVATION: Ya tienes una reserva activa para esta oferta',
         );
       }
 
-      const offer = await this.offersRepository.findByIdForUpdate(
-        tx,
-        body.offer_id,
-      );
-      if (!offer) {
-        throw new NotFoundException(`Offer ${body.offer_id} not found`);
-      }
+      const commissionRate =
+        Number(
+          await this.ordersRepository.findCommissionRate(tx, offer.business_id),
+        ) || 0;
 
-      const now = new Date();
-      if (!offer.is_active) {
-        throw new ConflictException('Offer is not active');
-      }
-      if (offer.stock < 1) {
-        throw new ConflictException('Offer is out of stock');
-      }
-      if (offer.pickup_end <= now) {
-        throw new ConflictException('Offer pickup window has ended');
+      let price = Number(offer.discounted_price);
+      const originalPrice = Number(offer.original_price);
+      let discount = 0;
+      let couponId: string | null = null;
+
+      if (body.coupon_code) {
+        const coupon = await this.ordersRepository.findCouponByCodeForUpdate(
+          tx,
+          offer.business_id,
+          body.coupon_code,
+        );
+        if (coupon) {
+          if (
+            coupon.max_uses !== null &&
+            coupon.used_count >= coupon.max_uses
+          ) {
+            throw new ConflictException('COUPON_EXHAUSTED: Cupon agotado');
+          }
+          if (Number(coupon.min_order_amount ?? 0) > price) {
+            throw new ConflictException(
+              'COUPON_MIN_NOT_MET: Monto minimo no alcanzado para el cupon',
+            );
+          }
+          discount =
+            coupon.type === 'percentage'
+              ? Math.min((price * Number(coupon.value)) / 100, price)
+              : Math.min(Number(coupon.value), price);
+          price = Math.max(price - discount, 0);
+          couponId = coupon.id;
+          await this.ordersRepository.incrementCouponUsedCount(tx, coupon.id);
+        }
+        // Sin coincidencia el SQL continúa sin descuento — espejo idéntico.
       }
 
       const decremented = await this.offersRepository.decrementStock(
@@ -76,10 +124,14 @@ export class OrdersService {
         1,
       );
       if (!decremented) {
-        throw new ConflictException('Offer is out of stock');
+        throw new ConflictException(
+          'OFFER_OUT_OF_STOCK: Oferta agotada (condicion de carrera)',
+        );
       }
 
-      const orderNumber = this.generateOrderNumber();
+      const platformFee = round2(price * commissionRate);
+
+      const orderNumber = await this.ordersRepository.nextOrderNumber(tx);
       const pickupCode = this.generatePickupCode();
 
       const order = await this.ordersRepository.insertOrder(tx, {
@@ -88,11 +140,14 @@ export class OrdersService {
         business_id: offer.business_id,
         order_number: orderNumber,
         status: 'pending',
-        price: offer.discounted_price,
-        original_price: offer.original_price,
+        price: String(price),
+        original_price: String(originalPrice),
         pickup_code: pickupCode,
         pickup_time: offer.pickup_start,
-        coupon_id: null,
+        coupon_id: couponId,
+        commission_rate: String(commissionRate),
+        platform_fee: String(platformFee),
+        net_amount: String(round2(price - platformFee)),
       });
 
       await this.ordersRepository.insertEvent(tx, {
@@ -100,7 +155,7 @@ export class OrdersService {
         status: 'pending',
         previous_status: null,
         changed_by: user.id,
-        reason: 'Order created',
+        reason: 'Reserva creada',
         metadata: { source: 'api' satisfies OrderEventSource },
       });
 
@@ -110,6 +165,113 @@ export class OrdersService {
     return OrderMapper.toResponse(created, {
       isOrderOwner: true,
       isBusinessOwner: false,
+      isAdmin: user.role === 'admin',
+    });
+  }
+
+  /** Espejo de la RPC `cancel_order`. */
+  async cancelOrder(user: AuthUser, id: string): Promise<OrderResponse> {
+    const cancelled = await this.ordersRepository.transaction(async (tx) => {
+      const locked = await this.ordersRepository.findByIdForUpdate(tx, id);
+      if (!locked) {
+        throw new NotFoundException('ORDER_NOT_FOUND: Pedido no encontrado');
+      }
+      if (locked.order.user_id !== user.id) {
+        throw new ForbiddenException(
+          'NOT_ORDER_OWNER: No eres el dueño de este pedido',
+        );
+      }
+      const current = locked.order.status;
+      if (
+        current !== 'pending' &&
+        current !== 'confirmed' &&
+        current !== 'ready_for_pickup'
+      ) {
+        throw new UnprocessableEntityException(
+          'CANNOT_CANCEL: Este pedido no se puede cancelar',
+        );
+      }
+
+      const order = await this.ordersRepository.updateStatus(
+        tx,
+        id,
+        'cancelled',
+        current,
+      );
+
+      await this.offersRepository.incrementStock(tx, locked.order.offer_id, 1);
+
+      await this.ordersRepository.insertEvent(tx, {
+        order_id: id,
+        status: 'cancelled',
+        previous_status: current,
+        changed_by: user.id,
+        reason: 'Cancelado por el usuario',
+        metadata: { source: 'api' satisfies OrderEventSource },
+      });
+
+      return order!;
+    });
+
+    return OrderMapper.toResponse(cancelled, {
+      isOrderOwner: true,
+      isBusinessOwner: false,
+      isAdmin: user.role === 'admin',
+    });
+  }
+
+  /** Espejo de la RPC `validate_pickup_code`. */
+  async validatePickupCode(
+    user: AuthUser,
+    id: string,
+    pickupCode: string,
+  ): Promise<OrderResponse> {
+    const completed = await this.ordersRepository.transaction(async (tx) => {
+      // El SQL valida ownership antes que existencia (join contra businesses).
+      const locked = await this.ordersRepository.findByIdForUpdate(tx, id);
+      if (!locked || locked.business_owner_id !== user.id) {
+        throw new ForbiddenException(
+          'UNAUTHORIZED: No tienes permiso para validar este pedido',
+        );
+      }
+      if (locked.order.pickup_code !== pickupCode) {
+        throw new ConflictException(
+          'INVALID_CODE: Código de recogida inválido',
+        );
+      }
+      if (locked.order.status !== 'ready_for_pickup') {
+        throw new ConflictException(
+          'INVALID_STATUS: El pedido no está listo para recoger',
+        );
+      }
+
+      const order = await this.ordersRepository.updateStatus(
+        tx,
+        id,
+        'completed',
+        'ready_for_pickup',
+      );
+
+      await this.accrueEarningsIfNeeded(tx, locked.order);
+
+      await this.ordersRepository.insertEvent(tx, {
+        order_id: id,
+        status: 'completed',
+        previous_status: 'ready_for_pickup',
+        changed_by: user.id,
+        reason: null,
+        metadata: {
+          method: 'pickup_code',
+          source: 'api' satisfies OrderEventSource,
+        },
+      });
+
+      return order!;
+    });
+
+    return OrderMapper.toResponse(completed, {
+      isOrderOwner: false,
+      isBusinessOwner: true,
       isAdmin: user.role === 'admin',
     });
   }
@@ -280,6 +442,10 @@ export class OrdersService {
         metadata: { source },
       });
 
+      if (next === 'completed') {
+        await this.accrueEarningsIfNeeded(tx, locked.order, current);
+      }
+
       return order;
     });
 
@@ -355,17 +521,33 @@ export class OrdersService {
     return { expired };
   }
 
-  private generateOrderNumber(): string {
-    const date = new Date();
-    const y = date.getUTCFullYear().toString().slice(-2);
-    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(date.getUTCDate()).padStart(2, '0');
-    const rand = randomBytes(3).toString('hex').toUpperCase();
-    return `RLE-${y}${m}${d}-${rand}`;
+  /**
+   * Espejo dormido del trigger `accrue_order_earnings`: al pasar a completed,
+   * suma net_amount al balance del negocio. Detrás de flag porque el trigger
+   * SQL sigue activo en Supabase (evita doble acumulación hasta el cutover).
+   */
+  private async accrueEarningsIfNeeded(
+    tx: DbExecutor,
+    order: { business_id: string; net_amount: string },
+    previousStatus?: string,
+  ): Promise<void> {
+    const mirrorEnabled = this.config.get('ENABLE_API_MIRROR_ORDERS', {
+      infer: true,
+    });
+    if (!mirrorEnabled) return;
+    if (previousStatus === 'completed') return;
+    await this.ordersRepository.accrueBusinessBalance(
+      tx,
+      order.business_id,
+      order.net_amount,
+    );
   }
 
   private generatePickupCode(): string {
-    // 6-char alphanumeric, easy to read at counter
-    return randomBytes(3).toString('hex').toUpperCase();
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += PICKUP_CODE_CHARS[randomInt(PICKUP_CODE_CHARS.length)];
+    }
+    return code;
   }
 }

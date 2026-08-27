@@ -21,6 +21,7 @@ import { EmailMarketingModule } from './modules/email-marketing/email-marketing.
 import { ProfilesModule } from './modules/profiles/profiles.module';
 import { PayoutsModule } from './modules/payouts/payouts.module';
 import { CommissionsModule } from './modules/commissions/commissions.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { CommissionsModule } from './modules/commissions/commissions.module';
     ProfilesModule,
     PayoutsModule,
     CommissionsModule,
+    ReviewsModule,
   ],
   providers: [
     {

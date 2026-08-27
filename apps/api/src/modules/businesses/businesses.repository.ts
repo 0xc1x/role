@@ -2,7 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
-import { businessLocations, businesses } from '../../database/schema';
+import {
+  businessLocations,
+  businessNotificationPreferences,
+  businesses,
+} from '../../database/schema';
 import { payouts } from '../../database/schema/payouts';
 import type {
   ListBusinessesQuery,
@@ -77,6 +81,11 @@ export class BusinessesRepository {
     if (!row) {
       throw new Error('Failed to insert business');
     }
+    // Espejo del trigger create_business_notification_preferences (on conflict = idempotente con el trigger activo).
+    await executor
+      .insert(businessNotificationPreferences)
+      .values({ business_id: row.id })
+      .onConflictDoNothing();
     return row;
   }
 

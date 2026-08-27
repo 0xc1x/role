@@ -1,4 +1,5 @@
 export * from './dtos/business.dto';
+export * from './dtos/business-query.dto';
 export * from './dtos/business-hours.dto';
 export * from './dtos/business-location.dto';
 export * from './dtos/business-notification-preferences.dto';
@@ -8,6 +9,7 @@ export * from './entities/business-location';
 export * from './entities/business-notification-preferences';
 export * from './enums/business-type';
 export * from './schemas/business.schema';
+export * from './schemas/business-query.schema';
 export * from './schemas/business-hours.schema';
 export * from './schemas/business-location.schema';
 export * from './schemas/business-notification-preferences.schema';

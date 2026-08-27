@@ -5,6 +5,10 @@ export * from './business-locations';
 export * from './offers';
 export * from './offer-categories';
 export * from './orders';
+export * from './coupons';
+export * from './reviews';
+export * from './user-preferences';
+export * from './business-notification-preferences';
 export * from './categories';
 export * from './slides';
 export * from './tips';
@@ -16,6 +20,14 @@ import { businesses } from './businesses';
 import { offerCategories } from './offer-categories';
 import { offers } from './offers';
 import { orderEvents, orders } from './orders';
+import { coupons } from './coupons';
+import { reviews } from './reviews';
+import {
+  consumerNotificationPreferences,
+  userConsents,
+  userPreferences,
+} from './user-preferences';
+import { businessNotificationPreferences } from './business-notification-preferences';
 import { profiles } from './profiles';
 import { categories } from './categories';
 import { slides } from './slides';
@@ -41,6 +53,12 @@ export const schema = {
   offerCategories,
   orders,
   orderEvents,
+  coupons,
+  reviews,
+  userPreferences,
+  consumerNotificationPreferences,
+  userConsents,
+  businessNotificationPreferences,
   payouts,
   categories,
   slides,

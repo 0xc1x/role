@@ -121,9 +121,4 @@ export const UpdateOfferSchema = CreateOfferFieldsSchema.partial()
 
 export const PatchOfferSchema = UpdateOfferSchema;
 
-/**
- * Marketplace list query lives in `_common/schemas/api.schema`
- * (`ListOffersQuerySchema`) until offers is migrated to this domain module.
- * Keep response shape helpers here for domain consistency.
- */
 export const OfferListResponseSchema = PaginatedDataSchema(OfferSchema);

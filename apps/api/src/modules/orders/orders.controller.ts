@@ -26,12 +26,14 @@ import {
   ListBusinessOrdersQuerySchema,
   ListOrdersQuerySchema,
   UpdateOrderStatusSchema,
+  ValidatePickupCodeSchema,
 } from '@0xc1x/role-commons';
 import type {
   CreateOrderRequest,
   ListBusinessOrdersQuery,
   ListOrdersQuery,
   UpdateOrderStatusRequest,
+  ValidatePickupCodeRequest,
 } from '@0xc1x/role-commons';
 
 @ApiTags('Orders')
@@ -95,5 +97,30 @@ export class OrdersController {
     body: UpdateOrderStatusRequest,
   ) {
     return this.ordersService.updateStatus(user, id, body);
+  }
+
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'Cancel my order (espejo de la RPC cancel_order)' })
+  @ApiOkResponse({ description: 'Cancelled order' })
+  cancel(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.ordersService.cancelOrder(user, id);
+  }
+
+  @Post(':id/validate-pickup')
+  @Roles('business')
+  @ApiOperation({
+    summary: 'Validate pickup code (espejo de la RPC validate_pickup_code)',
+  })
+  @ApiOkResponse({ description: 'Completed order' })
+  validatePickup(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(ValidatePickupCodeSchema))
+    body: ValidatePickupCodeRequest,
+  ) {
+    return this.ordersService.validatePickupCode(user, id, body.pickup_code);
   }
 }

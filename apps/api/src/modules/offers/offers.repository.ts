@@ -485,4 +485,20 @@ export class OffersRepository {
       );
     return rows;
   }
+
+  /**
+   * Espejo de la parte temporal del `check_offer_expiry`: desactiva ofertas
+   * activas con ventana vencida. La desactivación por stock=0 la cubre el
+   * trigger SQL en cada cambio de stock (y el decremento del espejo).
+   */
+  async expireStale(now: Date): Promise<number> {
+    const rows = await this.db
+      .update(offers)
+      .set({ is_active: false, updated_at: sql`now()` })
+      .where(
+        and(eq(offers.is_active, true), lte(offers.pickup_end, now)),
+      )
+      .returning({ id: offers.id });
+    return rows.length;
+  }
 }
