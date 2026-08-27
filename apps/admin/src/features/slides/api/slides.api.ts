@@ -6,17 +6,18 @@ import type {
 	UpdateSlideDto,
 } from "@0xc1x/role-commons";
 import { api } from "@/lib/api/client";
-import { toSearchParams } from "@/lib/api/http";
+import { createResourceApi } from "@/lib/api/resource";
+
+const base = createResourceApi<
+	SlideDto,
+	CreateSlideDto,
+	UpdateSlideDto,
+	ListSlideQuery,
+	SlidePaginatedData
+>("/slides");
 
 export const slidesApi = {
-	create: (body: CreateSlideDto) => api.post<SlideDto>("/slides", body),
-	list: (query?: ListSlideQuery) =>
-		api.get<SlidePaginatedData>(
-			`/slides${toSearchParams(query as Record<string, string | number | boolean | undefined>)}`,
-		),
-	update: (id: string, body: UpdateSlideDto) =>
-		api.patch<SlideDto>(`/slides/${id}`, body),
-	remove: (id: string) => api.delete<SlideDto>(`/slides/${id}`),
+	...base,
 	uploadImage: (file: File, folder: string, bucket: string = "images") => {
 		const formData = new FormData();
 		formData.append("file", file);

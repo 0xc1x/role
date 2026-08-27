@@ -3,57 +3,30 @@ import type {
 	ListTipsQuery,
 	UpdateTipDto,
 } from "@0xc1x/role-commons";
-import {
-	queryOptions,
-	useMutation,
-	useQuery,
-	useQueryClient,
-} from "@tanstack/react-query";
 import { tipsApi } from "../api/tips.api";
 import { tipsKeys } from "./tips.keys";
+import {
+	createListOptions,
+	createUseCreate,
+	createUseDelete,
+	createUseUpdate,
+} from "@/lib/query/resource-helpers";
+import { useQuery } from "@tanstack/react-query";
 
-export const tipsListOptions = (params?: ListTipsQuery) =>
-	queryOptions({
-		queryKey: tipsKeys.list(params),
-		queryFn: () => tipsApi.list(params),
-		staleTime: 30_000,
-	});
+export const tipsListOptions = createListOptions(tipsKeys, tipsApi.list);
 
 export function useTipsList(params?: ListTipsQuery) {
 	return useQuery(tipsListOptions(params));
 }
 
-export function useCreateTip() {
-	const qc = useQueryClient();
-	return useMutation({
-		mutationKey: tipsKeys.all,
-		mutationFn: (body: CreateTipDto) => tipsApi.create(body),
-		onSuccess: () => {
-			void qc.invalidateQueries({ queryKey: tipsKeys.lists() });
-		},
-	});
-}
+export const useCreateTip = createUseCreate<
+	CreateTipDto,
+	Awaited<ReturnType<typeof tipsApi.create>>
+>(tipsKeys, tipsApi.create);
 
-export function useUpdateTip() {
-	const qc = useQueryClient();
-	return useMutation({
-		mutationKey: tipsKeys.all,
-		mutationFn: ({ id, body }: { id: string; body: UpdateTipDto }) =>
-			tipsApi.update(id, body),
-		onSuccess: (data) => {
-			void qc.invalidateQueries({ queryKey: tipsKeys.lists() });
-			qc.setQueryData(tipsKeys.detail(data.id), data);
-		},
-	});
-}
+export const useUpdateTip = createUseUpdate<
+	UpdateTipDto,
+	Awaited<ReturnType<typeof tipsApi.update>>
+>(tipsKeys, tipsApi.update);
 
-export function useDeleteTip() {
-	const qc = useQueryClient();
-	return useMutation({
-		mutationKey: tipsKeys.all,
-		mutationFn: (id: string) => tipsApi.remove(id),
-		onSuccess: () => {
-			void qc.invalidateQueries({ queryKey: tipsKeys.all });
-		},
-	});
-}
+export const useDeleteTip = createUseDelete(tipsKeys, tipsApi.remove);

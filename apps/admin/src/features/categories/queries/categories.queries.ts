@@ -3,49 +3,35 @@ import type {
 	ListCategoriesQuery,
 	UpdateCategoryDto,
 } from "@0xc1x/role-commons";
-import {
-	queryOptions,
-	useMutation,
-	useQuery,
-	useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { categoriesApi } from "../api/categories.api";
 import { categoriesKeys } from "./categories.keys";
+import {
+	createListOptions,
+	createUseCreate,
+	createUseDelete,
+	createUseUpdate,
+} from "@/lib/query/resource-helpers";
+import { useQuery } from "@tanstack/react-query";
 
-export const categoriesListOptions = (params?: ListCategoriesQuery) =>
-	queryOptions({
-		queryKey: categoriesKeys.list(params),
-		queryFn: () => categoriesApi.list(params),
-		staleTime: 30_000,
-	});
+export const categoriesListOptions = createListOptions(
+	categoriesKeys,
+	categoriesApi.list,
+);
 
 export function useCategoriesList(params?: ListCategoriesQuery) {
 	return useQuery(categoriesListOptions(params));
 }
 
-export function useCreateCategory() {
-	const qc = useQueryClient();
-	return useMutation({
-		mutationKey: categoriesKeys.all,
-		mutationFn: (body: CreateCategoryDto) => categoriesApi.create(body),
-		onSuccess: () => {
-			void qc.invalidateQueries({ queryKey: categoriesKeys.lists() });
-		},
-	});
-}
+export const useCreateCategory = createUseCreate<
+	CreateCategoryDto,
+	Awaited<ReturnType<typeof categoriesApi.create>>
+>(categoriesKeys, categoriesApi.create);
 
-export function useUpdateCategory() {
-	const qc = useQueryClient();
-	return useMutation({
-		mutationKey: categoriesKeys.all,
-		mutationFn: ({ id, body }: { id: string; body: UpdateCategoryDto }) =>
-			categoriesApi.update(id, body),
-		onSuccess: (data) => {
-			void qc.invalidateQueries({ queryKey: categoriesKeys.lists() });
-			qc.setQueryData(categoriesKeys.detail(data.id), data);
-		},
-	});
-}
+export const useUpdateCategory = createUseUpdate<
+	UpdateCategoryDto,
+	Awaited<ReturnType<typeof categoriesApi.update>>
+>(categoriesKeys, categoriesApi.update);
 
 export function useUploadImage() {
 	return useMutation({
@@ -53,13 +39,7 @@ export function useUploadImage() {
 	});
 }
 
-export function useDeleteCategory() {
-	const qc = useQueryClient();
-	return useMutation({
-		mutationKey: categoriesKeys.all,
-		mutationFn: (id: string) => categoriesApi.remove(id),
-		onSuccess: () => {
-			void qc.invalidateQueries({ queryKey: categoriesKeys.all });
-		},
-	});
-}
+export const useDeleteCategory = createUseDelete(
+	categoriesKeys,
+	categoriesApi.remove,
+);

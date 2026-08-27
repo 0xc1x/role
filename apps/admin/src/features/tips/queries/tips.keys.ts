@@ -1,10 +1,4 @@
 import type { ListTipsQuery } from "@0xc1x/role-commons";
+import { createResourceKeys } from "@/lib/query/keys";
 
-export const tipsKeys = {
-	all: ["tips"] as const,
-	lists: () => [...tipsKeys.all, "list"] as const,
-	list: (params?: ListTipsQuery) =>
-		[...tipsKeys.lists(), params ?? {}] as const,
-	details: () => [...tipsKeys.all, "detail"] as const,
-	detail: (id: string) => [...tipsKeys.details(), id] as const,
-};
+export const tipsKeys = createResourceKeys<ListTipsQuery>("tips");
