@@ -1,41 +1,54 @@
 @import "tailwindcss";
 
-/* Rolé brand tokens — dark editorial, warm-tinted palette */
+/* Rolé brand tokens — synced with mobile light theme (apps/mobile/src/core/theme/colors.ts) */
 @theme {
-  --color-role-primary: #c4332a;
-  --color-role-primary-deep: #93211c;
-  --color-role-primary-soft: #fbe9e7;
-  --color-role-primary-hover: #a82a22;
-  --color-role-primary-glow: #c4332a;
-  --color-role-secondary: #94a87e;
-  --color-role-accent: #435d38;
-  --color-role-background: #faf8f5;
-  --color-role-surface: #ffffff;
-  --color-role-surface-muted: #f4f1ec;
-  --color-role-card: #fff7f5;
-  --color-role-muted: #f3efe9;
-  --color-role-foreground: #1a1714;
-  --color-role-muted-foreground: #6b655d;
-  --color-role-border: #e5e0d8;
-  --color-role-ring: #c4332a;
-  --color-role-success: #0d9488;
-  --color-role-warning: #f59e0b;
-  --color-role-star: #f59e0b;
-  /* Warm-tinted dark — never pure #000 */
-  --color-role-dark-bg: #1a1614;
-  --color-role-dark-surface: #221e1b;
-  --color-role-dark-border: #38322d;
-  --color-role-dark-muted: #8a837a;
-  --color-role-dark-muted-soft: #5c554e;
-  --font-heading: "Outfit", "Inter Variable", sans-serif;
+  --color-role-primary: #BF1C19;
+  --color-role-primary-deep: #901B35;
+  --color-role-primary-soft: #FEE2E2;
+  --color-role-primary-hover: #A01815;
+  --color-role-primary-glow: #BF1C19;
+  --color-role-secondary: #96BF85;
+  --color-role-accent: #435D38;
+  --color-role-background: #FAF9F7;
+  --color-role-surface: #FFFFFF;
+  --color-role-surface-muted: #FFF5F5;
+  --color-role-card: #FFF5F5;
+  --color-role-muted: #FFF5F5;
+  --color-role-foreground: #1A1A18;
+  --color-role-muted-foreground: #737373;
+  --color-role-border: #E5E5E5;
+  --color-role-ring: #BF1C19;
+  --color-role-success: #22C55E;
+  --color-role-warning: #F59E0B;
+  --color-role-star: #FACC15;
+  /* Subscribe palette — ponytail: reused tokens, expand when brand diverges */
+  --color-paper: #f1f0eb;
+  --color-paper-2: #e7e5de;
+  --color-cream: #faf9f6;
+  --color-ink: #12241a;
+  --color-ink-soft: #3d5248;
+  --color-muted: #66756d;
+  --color-forest: #04542d;
+  --color-forest-hover: #056b39;
+  --color-leaf: #e4efe8;
+  --color-line: #d2cfc6;
+  --color-danger: #8b3a2a;
+  /* Warm-tinted dark — synced with mobile dark */
+  --color-role-dark-bg: #121212;
+  --color-role-dark-surface: #2C2C2C;
+  --color-role-dark-border: #3D3D3D;
+  --color-role-dark-muted: #9E9E9E;
+  --color-role-dark-muted-soft: #6B7280;
+  --font-heading: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  /* "Outfit", "Inter Variable", sans-serif; */
   --font-editorial: "Playfair Display", "Georgia", serif;
-  --font-sans: "DM Sans", "Inter Variable", sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --shadow-soft: 0 1px 2px 0 rgb(26 23 20 / 0.04), 0 4px 16px -2px rgb(26 23 20 / 0.06);
   --shadow-raised: 0 2px 4px 0 rgb(26 23 20 / 0.05), 0 14px 36px -10px rgb(26 23 20 / 0.14);
-  --shadow-card-hover: 0 8px 24px -6px rgb(196 51 42 / 0.14), 0 18px 44px -12px rgb(26 23 20 / 0.14);
-  --shadow-glow: 0 12px 48px -8px rgb(196 51 42 / 0.45);
-  --shadow-glass: 0 4px 24px -4px rgb(26 22 20 / 0.3), 0 8px 32px -8px rgb(26 22 20 / 0.2);
-  --shadow-dark-glow: 0 16px 64px -12px rgb(196 51 42 / 0.5);
+  --shadow-card-hover: 0 8px 24px -6px rgb(191 28 25 / 0.14), 0 18px 44px -12px rgb(26 23 20 / 0.14);
+  --shadow-glow: 0 12px 48px -8px rgb(191 28 25 / 0.45);
+  --shadow-glass: 0 4px 24px -4px rgb(18 18 18 / 0.3), 0 8px 32px -8px rgb(18 18 18 / 0.2);
+  --shadow-dark-glow: 0 16px 64px -12px rgb(191 28 25 / 0.5);
   --radius-card: 1.5rem;
   --radius-pill: 9999px;
   --radius-section: 2.5rem;
@@ -68,7 +81,12 @@ body {
   overflow-x: hidden;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-heading);
   text-wrap: balance;
 }
@@ -100,22 +118,6 @@ body::before {
   pointer-events: none;
   opacity: 0.035;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: var(--color-role-surface-muted);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-role-border);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-role-muted-foreground);
 }
 
 /* Font loading fallbacks */
@@ -158,6 +160,7 @@ body::before {
     opacity: 0;
     transform: translateY(40px) scale(0.95);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -174,6 +177,7 @@ body::before {
     opacity: 0;
     transform: translateY(-16px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -190,6 +194,7 @@ body::before {
     opacity: 0;
     transform: translateY(-10px) scale(0.97);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -207,6 +212,7 @@ body::before {
     opacity: 0;
     transform: translateX(-10px);
   }
+
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -218,19 +224,49 @@ body::before {
 }
 
 /* Stagger delays */
-.reveal-delay-1 { transition-delay: 100ms; }
-.reveal-delay-2 { transition-delay: 200ms; }
-.reveal-delay-3 { transition-delay: 300ms; }
-.reveal-delay-4 { transition-delay: 400ms; }
-.reveal-delay-5 { transition-delay: 500ms; }
-.reveal-delay-6 { transition-delay: 600ms; }
-.reveal-delay-7 { transition-delay: 700ms; }
-.reveal-delay-8 { transition-delay: 800ms; }
+.reveal-delay-1 {
+  transition-delay: 100ms;
+}
+
+.reveal-delay-2 {
+  transition-delay: 200ms;
+}
+
+.reveal-delay-3 {
+  transition-delay: 300ms;
+}
+
+.reveal-delay-4 {
+  transition-delay: 400ms;
+}
+
+.reveal-delay-5 {
+  transition-delay: 500ms;
+}
+
+.reveal-delay-6 {
+  transition-delay: 600ms;
+}
+
+.reveal-delay-7 {
+  transition-delay: 700ms;
+}
+
+.reveal-delay-8 {
+  transition-delay: 800ms;
+}
 
 /* Drift — orbes decorativos de fondo */
 @keyframes drift {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(48px, -36px) scale(1.1); }
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate(48px, -36px) scale(1.1);
+  }
 }
 
 .animate-drift {
@@ -242,6 +278,7 @@ body::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .animate-drift,
   .animate-drift-slow,
   .animate-float-y,
@@ -253,10 +290,74 @@ body::before {
 
 /* Float-y — levitación continua (cards flotantes del hero) */
 @keyframes float-y {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-14px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-14px);
+  }
 }
 
 .animate-float-y {
   animation: float-y 6s ease-in-out infinite;
+}
+
+/* Details/summary — expand con altura animada para todos los FAQs */
+details {
+  interpolate-size: allow-keywords;
+  transition:
+    border-color 0.3s ease,
+    background-color 0.3s ease;
+}
+
+details[open] {
+  border-color: var(--color-line);
+}
+
+details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details::details-content {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.25s ease;
+}
+
+details[open]::details-content {
+  height: auto;
+  opacity: 1;
+}
+
+/* Fallback universal — asegura animación si ::details-content no aplica o es ignorado */
+details > summary + * {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.25s ease;
+}
+
+details[open] > summary + * {
+  max-height: 500px;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  details::details-content,
+  details > summary + * {
+    transition: none;
+  }
 }

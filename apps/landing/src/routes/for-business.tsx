@@ -10,6 +10,9 @@ import {
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { usePlatformStats } from "@/lib/use-config";
+import { Eyebrow } from "@/components/section";
+import { Cta } from "@/components/cta";
+import { HeroBackground } from "@/components/hero-background";
 
 export const Route = createFileRoute("/for-business")({
 	component: ForBusinessPage,
@@ -38,19 +41,7 @@ const BENEFITS = [
 	},
 ];
 
-function useBusinessStats() {
-	const stats = usePlatformStats();
-	const numberFormat = new Intl.NumberFormat("es-EC");
-	return [
-		{ value: "12%", label: "ingresos extra en promedio" },
-		{
-			value:
-				stats === undefined ? "—" : `${numberFormat.format(stats.businesses)}+`,
-			label: "comercios ya con nosotros",
-		},
-		{ value: "<24h", label: "para empezar a vender" },
-	];
-}
+const numberFormat = new Intl.NumberFormat("es-EC");
 
 const PROCESS = [
 	{
@@ -71,7 +62,18 @@ const PROCESS = [
 ];
 
 function ForBusinessPage() {
-	const stats = useBusinessStats();
+	const statsData = usePlatformStats();
+	const stats = [
+		{ value: "12%", label: "ingresos extra en promedio" },
+		{
+			value:
+				statsData === undefined
+					? "—"
+					: `${numberFormat.format(statsData.businesses)}+`,
+			label: "comercios ya con nosotros",
+		},
+		{ value: "<24h", label: "para empezar a vender" },
+	];
 	const businessesLabel =
 		stats[1].value === "—" ? undefined : stats[1].value.replace(/\+$/, "");
 	return (
@@ -83,12 +85,7 @@ function ForBusinessPage() {
 					data-hero
 					className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32"
 				>
-					<div aria-hidden className="pointer-events-none absolute inset-0">
-						<div className="absolute inset-0 bg-gradient-to-br from-role-dark-bg via-role-dark-bg to-role-primary-deep/30" />
-						<div className="absolute -top-40 -right-32 h-96 w-96 animate-drift rounded-full bg-role-primary/20 blur-3xl" />
-						<div className="absolute -bottom-48 -left-24 h-[30rem] w-[30rem] animate-drift-slow rounded-full bg-role-primary-deep/35 blur-3xl" />
-						<div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_40%,_rgb(26_22_20)_100%)]" />
-					</div>
+					<HeroBackground />
 					<div className="relative mx-auto max-w-6xl">
 						<div className="max-w-2xl">
 							<p className="text-sm font-semibold uppercase tracking-widest text-role-secondary reveal">
@@ -141,33 +138,28 @@ function ForBusinessPage() {
 				{/* Benefits */}
 				<section className="mx-auto max-w-5xl px-6 py-24 md:py-32">
 					<div className="mb-16 max-w-2xl reveal">
-						<p className="text-sm font-semibold uppercase tracking-widest text-role-primary">
-							Por qué unirte
-						</p>
-						<h2 className="mt-3 font-heading text-3xl font-bold tracking-tight md:text-4xl">
+						<Eyebrow>Por qué unirte</Eyebrow>
+						<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 							Cuatro razones para estar en Rolé
 						</h2>
 					</div>
 					<div className="grid gap-5 md:grid-cols-2">
-						{BENEFITS.map((b, i) => {
-							const Icon = b.icon;
-							return (
-								<article
-									key={b.title}
-									className={`group rounded-[var(--radius-card)] border border-role-border/50 bg-white p-8 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:border-role-primary/30 hover:shadow-raised reveal reveal-delay-${i + 1}`}
-								>
-									<div className="flex h-12 w-12 items-center justify-center rounded-xl bg-role-primary-soft text-role-primary transition-colors duration-300 group-hover:bg-role-primary group-hover:text-white">
-										<Icon className="h-6 w-6" />
-									</div>
-									<h3 className="mt-6 font-heading text-xl font-bold">
-										{b.title}
-									</h3>
-									<p className="mt-3 text-sm leading-relaxed text-role-muted-foreground">
-										{b.body}
-									</p>
-								</article>
-							);
-						})}
+						{BENEFITS.map((f, i) => (
+							<article
+								key={f.title}
+								className={`rounded-3xl bg-paper p-6 shadow-[var(--shadow-card)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-card-hover)] md:p-8 reveal reveal-delay-${i + 1}`}
+							>
+								<div className="flex size-11 items-center justify-center rounded-2xl bg-leaf text-forest">
+									<f.icon className="size-5" strokeWidth={1.75} />
+								</div>
+								<h3 className="mt-5 font-display text-xl font-medium tracking-tight">
+									{f.title}
+								</h3>
+								<p className="mt-2 text-sm leading-relaxed text-ink-soft">
+									{f.body}
+								</p>
+							</article>
+						))}
 					</div>
 				</section>
 
@@ -175,59 +167,59 @@ function ForBusinessPage() {
 				<section className="bg-role-surface-muted px-6 py-24 md:py-32">
 					<div className="mx-auto max-w-5xl">
 						<div className="mb-16 max-w-2xl reveal">
-							<p className="text-sm font-semibold uppercase tracking-widest text-role-primary">
-								Cómo empezar
-							</p>
-							<h2 className="mt-3 font-heading text-3xl font-bold tracking-tight md:text-4xl">
+							<Eyebrow>Cómo empezar</Eyebrow>
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 								Del registro a tu primera venta
 							</h2>
 							<p className="mt-4 max-w-lg text-lg text-role-muted-foreground">
 								Tres pasos. Menos de 24 horas para estar activo y vendiendo.
 							</p>
 						</div>
-						<div className="relative grid gap-8 md:grid-cols-3 md:gap-6">
-							<div
-								aria-hidden
-								className="absolute left-0 right-0 top-7 hidden h-px bg-gradient-to-r from-role-primary/0 via-role-primary/30 to-role-primary/0 md:block"
-							/>
+						<ol className="mt-14 grid gap-6 md:grid-cols-3">
 							{PROCESS.map((s, i) => (
-								<div
+								<li
 									key={s.n}
 									className={`relative reveal reveal-delay-${i + 1}`}
 								>
-									<div className="flex h-14 w-14 items-center justify-center rounded-full bg-role-primary font-heading text-base font-bold text-white shadow-glow">
+									{i < PROCESS.length - 1 ? (
+										<span
+											className="pointer-events-none absolute left-[4.5rem] right-[-0.75rem] top-6 hidden h-px bg-line md:block"
+											aria-hidden="true"
+										/>
+									) : null}
+									<p className="font-display text-4xl font-medium text-forest/30">
 										{s.n}
-									</div>
-									<h3 className="mt-6 font-heading text-xl font-bold">
+									</p>
+									<h3 className="mt-4 font-display text-xl font-medium tracking-tight">
 										{s.title}
 									</h3>
-									<p className="mt-3 leading-relaxed text-role-muted-foreground">
+									<p className="mt-2 text-sm leading-relaxed text-ink-soft">
 										{s.body}
 									</p>
-								</div>
+								</li>
 							))}
-						</div>
+						</ol>
+
 					</div>
 				</section>
 
-				{/* Testimonial highlight */}
+				{/* Testimonial highlight — visual unify: cream/leaf system like Testimonials */}
 				<section className="mx-auto max-w-4xl px-6 py-24 md:py-32">
-					<figure className="rounded-[var(--radius-section)] bg-role-primary p-10 text-white shadow-dark-glow md:p-16 reveal">
+					<figure className="flex flex-col rounded-3xl bg-cream p-8 shadow-[var(--shadow-card)] md:p-10 reveal">
 						<div
-							className="flex gap-1 text-role-secondary"
+							className="flex gap-1"
 							role="img"
 							aria-label="5 de 5 estrellas"
 						>
 							{[1, 2, 3, 4, 5].map((n) => (
-								// El div padre ya expone role="img" + aria-label.
 								// biome-ignore lint/a11y/noSvgWithoutTitle: icono decorativo
 								<svg
 									key={n}
 									width="18"
 									height="18"
 									viewBox="0 0 24 24"
-									fill="#f59e0b"
-									stroke="#f59e0b"
+									fill="#FACC15"
+									stroke="#FACC15"
 									strokeWidth="2"
 									aria-hidden
 								>
@@ -235,63 +227,40 @@ function ForBusinessPage() {
 								</svg>
 							))}
 						</div>
-						<blockquote className="mt-6 font-heading text-2xl font-semibold leading-snug tracking-tight md:text-3xl">
+						<blockquote className="mt-6 flex-1 font-display text-xl font-medium leading-snug tracking-tight text-ink md:text-2xl">
 							“Antes tiraba el pan del día. Ahora representa el 12% de mis
 							ingresos y la gente llega puntual a recoger. Rolé es la mejor
 							decisión que tomé este año.”
 						</blockquote>
-						<figcaption className="mt-8 flex items-center gap-4">
+						<figcaption className="mt-8 flex items-center gap-3">
 							<span
-								className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 font-heading text-sm font-bold"
-								aria-hidden
+								className="flex size-11 items-center justify-center rounded-full bg-leaf font-display text-sm font-medium text-forest"
+								aria-hidden="true"
 							>
 								CR
 							</span>
-							<div>
-								<p className="font-semibold">Carlos Ruiz</p>
-								<p className="text-sm text-white/70">Panadería La Espiga</p>
-							</div>
+							<span>
+								<span className="block text-sm font-semibold">Carlos Ruiz</span>
+								<span className="block text-xs text-muted">
+									Panadería La Espiga
+								</span>
+							</span>
 						</figcaption>
 					</figure>
 				</section>
 
-				{/* CTA */}
-				<section className="mx-auto max-w-6xl px-6 pb-32">
-					<div className="relative overflow-hidden rounded-[var(--radius-section)] bg-role-surface-muted px-8 py-16 text-center md:px-16 md:py-20">
-						<div
-							aria-hidden
-							className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-role-primary/10 blur-3xl"
-						/>
-						<div className="relative reveal">
-							<SparkIcon className="mx-auto h-8 w-8 text-role-primary" />
-							<h2 className="mt-6 font-heading text-3xl font-bold tracking-tight md:text-4xl">
-								¿Listo para unirte?
-							</h2>
-							<p className="mx-auto mt-4 max-w-xl text-lg text-role-muted-foreground">
-								El registro se completa en la app. Un representante verifica tu
-								negocio en menos de 24 horas.
-							</p>
-							<div className="mt-9 flex flex-wrap justify-center gap-4">
-								<a
-									href="role://business-signup"
-									className="inline-flex items-center gap-2 rounded-full bg-role-primary px-8 py-3 font-semibold text-white shadow-soft transition-all duration-200 hover:bg-role-primary-hover hover:shadow-glow active:scale-[0.98]"
-								>
-									<StoreIcon className="h-5 w-5" />
-									Registrar mi negocio
-								</a>
-								<a
-									href="mailto:negocios@role.app"
-									className="rounded-full border border-role-border px-8 py-3 font-semibold text-role-foreground transition-colors duration-200 hover:bg-role-muted"
-								>
-									Contactar a ventas
-								</a>
-							</div>
-							<p className="mt-5 text-sm text-role-muted-foreground">
-								Sin costo de registro. Sin comisiones sobre el cobro.
-							</p>
-						</div>
-					</div>
-				</section>
+				<Cta
+					variant="muted"
+					title="¿Listo para unirte?"
+					body="El registro se completa en la app. Un representante verifica tu negocio en menos de 24 horas."
+					primaryLabel="Registrar mi negocio"
+					primaryHref="role://business-signup"
+					primaryIcon={<StoreIcon className="h-5 w-5" />}
+					secondaryLabel="Contactar a ventas"
+					secondaryHref="mailto:negocios@role.app"
+					foot="Sin costo de registro. Sin comisiones sobre el cobro."
+					icon={<SparkIcon className="h-8 w-8 text-role-primary" />}
+				/>
 			</main>
 			<Footer />
 		</div>

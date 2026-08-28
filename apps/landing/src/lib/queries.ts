@@ -39,11 +39,4 @@ export const randomOfferQueryOptions = queryOptions({
 	staleTime: 60_000,
 });
 
-export function getConfigValue(
-	map: AppConfigMap | undefined,
-	key: string,
-	fallback: string,
-): string {
-	const value = map?.[key];
-	return typeof value === "string" ? value : fallback;
-}
+

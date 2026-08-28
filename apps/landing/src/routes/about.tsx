@@ -3,16 +3,25 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Footer } from "@/components/footer";
 import { HeartIcon, LeafIcon, SparkIcon, UsersIcon } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
+import { Eyebrow } from "@/components/section";
+import { HeroBackground } from "@/components/hero-background";
+import { platformStatsQueryOptions } from "@/lib/queries";
+import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/about")({
+	loader: ({ context }) =>
+		context.queryClient
+			.ensureQueryData(platformStatsQueryOptions)
+			.catch(() => undefined),
 	component: AboutPage,
 });
 
-const IMPACT = [
-	{ value: "48 200+", label: "usuarios activos" },
-	{ value: "1 940+", label: "comercios aliados" },
-	{ value: "112 600+", label: "comidas salvadas" },
-];
+const numberFormat = new Intl.NumberFormat("es-EC");
+
+function formatStat(value: number | undefined): string {
+	if (value === undefined) return "—";
+	return `${numberFormat.format(value)}+`;
+}
 
 const VALUES = [
 	{
@@ -38,6 +47,13 @@ const VALUES = [
 ];
 
 function AboutPage() {
+	const stats = usePlatformStats();
+	const IMPACT = [
+		{ value: formatStat(stats?.users), label: "usuarios activos" },
+		{ value: formatStat(stats?.businesses), label: "comercios aliados" },
+		{ value: formatStat(stats?.meals_saved), label: "comidas salvadas" },
+	];
+
 	return (
 		<div className="min-h-screen">
 			<Navbar />
@@ -47,19 +63,12 @@ function AboutPage() {
 					data-hero
 					className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32"
 				>
-					<div aria-hidden className="pointer-events-none absolute inset-0">
-						<div className="absolute inset-0 bg-gradient-to-br from-role-dark-bg via-role-dark-bg to-role-primary-deep/25" />
-						<div className="absolute -top-32 right-0 h-96 w-96 animate-drift rounded-full bg-role-primary/15 blur-3xl" />
-						<div className="absolute bottom-0 left-0 h-80 w-80 animate-drift-slow rounded-full bg-role-primary-deep/25 blur-3xl" />
-						<div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_42%,_rgb(26_22_20)_100%)]" />
-					</div>
+					<HeroBackground />
 					<div className="relative mx-auto max-w-4xl">
-						<p className="text-sm font-semibold uppercase tracking-widest text-role-secondary reveal">
-							Sobre nosotros
-						</p>
-						<h1 className="mt-4 font-heading text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl reveal reveal-delay-1">
+						<Eyebrow>Sobre nosotros</Eyebrow>
+						<h1 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 							La comida deliciosa no debería{" "}
-							<span className="editorial italic font-normal text-role-secondary">
+							<span className="font-display italic font-normal text-role-secondary">
 								terminar en la basura.
 							</span>
 						</h1>
@@ -75,7 +84,7 @@ function AboutPage() {
 				<section className="mx-auto max-w-3xl px-6 py-24 md:py-32">
 					<div className="space-y-16">
 						<div className="reveal">
-							<h2 className="font-heading text-2xl font-bold tracking-tight md:text-3xl">
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 								La idea
 							</h2>
 							<p className="mt-4 leading-relaxed text-role-muted-foreground">
@@ -88,7 +97,7 @@ function AboutPage() {
 						</div>
 
 						<div className="reveal reveal-delay-1">
-							<h2 className="font-heading text-2xl font-bold tracking-tight md:text-3xl">
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 								La misión
 							</h2>
 							<p className="mt-4 leading-relaxed text-role-muted-foreground">
@@ -101,7 +110,7 @@ function AboutPage() {
 						</div>
 
 						<div className="reveal reveal-delay-2">
-							<h2 className="font-heading text-2xl font-bold tracking-tight md:text-3xl">
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 								Cómo funciona
 							</h2>
 							<p className="mt-4 leading-relaxed text-role-muted-foreground">
@@ -119,10 +128,8 @@ function AboutPage() {
 				<section className="bg-role-surface-muted px-6 py-24 md:py-32">
 					<div className="mx-auto max-w-4xl">
 						<div className="mb-12 max-w-2xl reveal">
-							<p className="text-sm font-semibold uppercase tracking-widest text-role-primary">
-								El impacto hasta hoy
-							</p>
-							<h2 className="mt-3 font-heading text-3xl font-bold tracking-tight md:text-4xl">
+							<Eyebrow>El impacto hasta hoy</Eyebrow>
+							<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 								Números que cuentan
 							</h2>
 						</div>
@@ -147,10 +154,8 @@ function AboutPage() {
 				{/* Values */}
 				<section className="mx-auto max-w-4xl px-6 py-24 md:py-32">
 					<div className="mb-16 max-w-2xl reveal">
-						<p className="text-sm font-semibold uppercase tracking-widest text-role-primary">
-							Lo que nos guía
-						</p>
-						<h2 className="mt-3 font-heading text-3xl font-bold tracking-tight md:text-4xl">
+						<Eyebrow>Lo que nos guía</Eyebrow>
+						<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 							Cuatro principios
 						</h2>
 					</div>
@@ -197,7 +202,7 @@ function AboutPage() {
 									href="role://"
 									className="rounded-full bg-white px-8 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 								>
-									Conseguir la app
+									Consigue la app
 								</a>
 								<a
 									href="/for-business"

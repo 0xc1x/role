@@ -1,61 +1,56 @@
+import { Eyebrow, Section } from "@/components/section";
+
 const STEPS = [
 	{
 		n: "01",
-		title: "Explora",
-		body: "Descubre ofertas de comida cerca de ti a precios reducidos.",
+		title: "Los locales publican al cierre",
+		body: "Un restaurante sube lo que le sobró del día: porciones, pan, fruta. En menos de un minuto está visible en el mapa.",
 	},
 	{
 		n: "02",
-		title: "Reserva",
-		body: "Reserva en segundos y recibe tu código de recogida.",
+		title: "Reservas y pagas en la app",
+		body: "Ves qué hay cerca, a cuánto y hasta cuándo. Reservas tu bolsa sorpresa y pagas desde Rolé — sin filas ni llamadas.",
 	},
 	{
 		n: "03",
-		title: "Recoge",
-		body: "Pasa por el comercio y recupera tu comida. Sin filas ni esperas.",
+		title: "Recoges el mismo día",
+		body: "Pasas por el local en la ventana acordada, muestras tu código y listo. Comida fresca a un tercio del precio.",
 	},
 ];
 
 export function HowItWorks() {
 	return (
-		<section className="bg-role-muted py-32">
-			<div className="mx-auto max-w-6xl px-6">
-				<div className="flex flex-wrap items-end justify-between gap-6">
-					<div>
-						<p className="text-sm font-semibold uppercase tracking-widest text-role-primary">
-							Así de fácil
-						</p>
-						<h2 className="mt-3 font-heading text-3xl font-bold tracking-tight md:text-5xl">
-							Del excedente del comercio a tu mesa
-						</h2>
-					</div>
-					<p className="text-sm font-heading font-bold text-role-muted-foreground">
-						3 pasos · menos de 2 minutos
-					</p>
-				</div>
-				<div className="relative mt-20 grid gap-12 md:grid-cols-3 md:gap-8">
-					<div
-						aria-hidden
-						className="absolute left-0 right-0 top-7 hidden h-px bg-gradient-to-r from-role-primary/0 via-role-primary/40 to-role-primary/0 md:block"
-					/>
-					{STEPS.map((s, i) => (
-						<div
-							key={s.n}
-							className={`relative ${i % 2 === 1 ? "md:mt-12" : ""}`}
-						>
-							<div className="flex h-14 w-14 items-center justify-center rounded-full bg-role-primary font-heading text-base font-bold text-white shadow-glow">
-								{s.n}
-							</div>
-							<h3 className="mt-6 font-heading text-2xl font-bold">
-								{s.title}
-							</h3>
-							<p className="mt-2 max-w-xs leading-relaxed text-role-muted-foreground">
-								{s.body}
-							</p>
-						</div>
-					))}
-				</div>
+		<Section id="como-funciona">
+			<div className="reveal">
+				<Eyebrow>Cómo funciona</Eyebrow>
+				<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
+					Del excedente del comercio a tu mesa
+				</h2>
 			</div>
-		</section>
+			<ol className="mt-14 grid gap-6 md:grid-cols-3">
+				{STEPS.map((s, i) => (
+					<li
+						key={s.n}
+						className={`relative reveal reveal-delay-${i + 1}`}
+					>
+						{i < STEPS.length - 1 ? (
+							<span
+								className="pointer-events-none absolute left-[4.5rem] right-[-0.75rem] top-6 hidden h-px bg-line md:block"
+								aria-hidden="true"
+							/>
+						) : null}
+						<p className="font-display text-4xl font-medium text-forest/30">
+							{s.n}
+						</p>
+						<h3 className="mt-4 font-display text-xl font-medium tracking-tight">
+							{s.title}
+						</h3>
+						<p className="mt-2 text-sm leading-relaxed text-ink-soft">
+							{s.body}
+						</p>
+					</li>
+				))}
+			</ol>
+		</Section>
 	);
 }

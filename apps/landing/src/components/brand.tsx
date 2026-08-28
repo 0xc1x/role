@@ -8,7 +8,8 @@ type LogoProps = React.SVGProps<SVGSVGElement>;
 export function Wordmark({ className, ...props }: LogoProps) {
 	return (
 		<svg
-			viewBox="0 0 4961 3508"
+			viewBox="1020 920 2840 1360"
+			preserveAspectRatio="xMinYMid meet"
 			fillRule="evenodd"
 			clipRule="evenodd"
 			strokeLinecap="round"
@@ -103,7 +104,7 @@ export function Wordmark({ className, ...props }: LogoProps) {
 export function LogoMark({ className, ...props }: LogoProps) {
 	return (
 		<svg
-			viewBox="0 0 1357 1359"
+			viewBox="240 240 880 885"
 			fillRule="evenodd"
 			clipRule="evenodd"
 			strokeLinecap="round"

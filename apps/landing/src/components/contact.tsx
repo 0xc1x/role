@@ -1,245 +1,222 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
+import { Check } from "lucide-react";
 
-import { useConfig } from "@/lib/use-config";
+import { Eyebrow, Section } from "@/components/section";
+import { cn } from "@/lib/utils";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type WaitlistRole = "negocio" | "persona";
 
-type Errors = Partial<Record<"name" | "email" | "message", string>>;
+const CITIES = ["Quito", "Guayaquil", "Cuenca", "Manta", "Otra"];
+
+const ROLES: { id: WaitlistRole; label: string }[] = [
+	{ id: "negocio", label: "Tengo un local" },
+	{ id: "persona", label: "Quiero Rolé" },
+];
+
+const COPY: Record<WaitlistRole, { title: string; body: string }> = {
+	negocio: {
+		title: "Pon tu local en el primer piloto de tu zona.",
+		body: "Te escribimos para armar el onboarding de Rolé. Sin newsletters semanales.",
+	},
+	persona: {
+		title: "Rolé es el producto para rescatar comida.",
+		body: "Te avisamos cuando abra en tu ciudad. Sin spam, solo apertura.",
+	},
+};
+
+function isEmail(v: string) {
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+// ponytail: localStorage only, no server sync — migrate to API when waitlist needs persistence/search
+const LS_KEY = "role-waitlist";
+const LS_LAST = "role-waitlist-last";
+
+function readLeads(): { email: string }[] {
+	if (typeof window === "undefined") return [];
+	try {
+		const raw = localStorage.getItem(LS_KEY);
+		if (!raw) return [];
+		const p = JSON.parse(raw);
+		return Array.isArray(p) ? p : [];
+	} catch {
+		return [];
+	}
+}
 
 export function Contact() {
-	const [errors, setErrors] = useState<Errors>({});
-	const holaEmail = useConfig("contact.hola_email", "hola@role.app");
-	const negociosEmail = useConfig(
-		"contact.negocios_email",
-		"negocios@role.app",
-	);
-	const slaHours = useConfig("support.sla_hours", "24");
-	const hoursWeekdays = useConfig(
-		"support.hours_weekdays",
-		"Lun – Vie, 9:00 – 18:00",
-	);
+	const [role, setRole] = useState<WaitlistRole>("negocio");
+	const [name, setName] = useState("");
+	const [email, setEmail] = useState("");
+	const [city, setCity] = useState("Quito");
+	const [error, setError] = useState<string | null>(null);
+	const [done, setDone] = useState<string | null>(null);
 
-	function handleSubmit(e: FormEvent<HTMLFormElement>) {
+	useEffect(() => {
+		const e = localStorage.getItem(LS_LAST);
+		if (e) setDone(e);
+	}, []);
+
+	useEffect(() => {
+		const onRole = (e: Event) => {
+			const next = (e as CustomEvent<WaitlistRole>).detail;
+			if (next === "persona" || next === "negocio")
+				setRole(next);
+		};
+		window.addEventListener("fudi:role", onRole);
+		return () => window.removeEventListener("fudi:role", onRole);
+	}, []);
+
+	function onSubmit(e: FormEvent) {
 		e.preventDefault();
-		const form = e.currentTarget;
-		const data = new FormData(form);
-		const name = String(data.get("nombre") ?? "").trim();
-		const email = String(data.get("correo") ?? "").trim();
-		const message = String(data.get("mensaje") ?? "").trim();
-
-		const next: Errors = {};
-		if (!name) next.name = "Escribe tu nombre para poder responderte.";
-		if (!email) next.email = "Necesitamos un correo para escribirte.";
-		else if (!EMAIL_RE.test(email))
-			next.email = "Ese correo no parece válido. Revísalo y vuelve a intentar.";
-		if (message.length < 10)
-			next.message = "Cuéntanos un poco más (mínimo 10 caracteres).";
-
-		setErrors(next);
-		if (Object.keys(next).length > 0) return;
-
-		const subject = encodeURIComponent(`Contacto desde la web — ${name}`);
-		const body = encodeURIComponent(`${email}\n\n${message}`);
-		window.location.href = `mailto:hola@role.app?subject=${subject}&body=${body}`;
+		setError(null);
+		const trimmed = email.trim().toLowerCase();
+		if (!isEmail(trimmed)) {
+			setError("Ingresa un correo válido.");
+			return;
+		}
+		const lead = {
+			email: trimmed,
+			name: name.trim(),
+			role,
+			city,
+			product: "role" as const,
+			at: new Date().toISOString(),
+		};
+		const leads = readLeads().filter((l) => l.email !== trimmed);
+		localStorage.setItem(LS_KEY, JSON.stringify([...leads, lead]));
+		localStorage.setItem(LS_LAST, trimmed);
+		setDone(trimmed);
 	}
 
-	const fieldClass = (hasError: boolean) =>
-		`w-full rounded-xl border bg-role-surface-muted px-4 py-3 outline-none transition-colors placeholder:text-role-muted-foreground/50 ${
-			hasError
-				? "border-role-primary"
-				: "border-role-border focus:border-role-primary focus:ring-2 focus:ring-role-primary/20"
-		}`;
+	const copy = COPY[role];
 
 	return (
-		<section className="bg-role-surface-muted py-32">
-			<div className="mx-auto grid max-w-6xl items-start gap-14 px-6 lg:grid-cols-2">
+		<Section id="contacto" tone="forest" className="py-24 md:py-32">
+			<div className="grid items-start gap-12 lg:grid-cols-[1fr_1fr]">
 				<div className="reveal">
-					<p className="text-sm font-semibold uppercase tracking-widest text-role-primary">
-						Contacto
-					</p>
-					<h2 className="mt-3 font-heading text-3xl font-bold tracking-tight md:text-5xl">
-						¿Tienes dudas? Escríbenos.
+					<Eyebrow className="text-cream/70">Hablemos</Eyebrow>
+					<h2 className="font-display text-3xl font-medium tracking-[-0.03em] text-cream sm:text-4xl md:text-5xl">
+						{copy.title}
 					</h2>
-					<p className="mt-4 max-w-md text-lg leading-relaxed text-role-muted-foreground">
-						Te ayudaremos con lo que necesites. Respondemos en menos de{" "}
-						{slaHours} horas entre semana.
+					<p className="mt-4 max-w-md text-base leading-relaxed text-cream/80">
+						{copy.body}
 					</p>
-					<div className="mt-10 space-y-4 text-sm">
-						<div className="flex items-center gap-3">
-							<span className="flex h-10 w-10 items-center justify-center rounded-xl bg-role-primary-soft text-lg">
-								{/* biome-ignore lint/a11y/noSvgWithoutTitle: icono decorativo */}
-								<svg
-									width="20"
-									height="20"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									aria-hidden
-									className="text-role-primary"
-								>
-									<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-									<polyline points="22,6 12,13 2,6" />
-								</svg>
-							</span>
-							<div>
-								<p className="font-semibold">Soporte</p>
-								<a
-									href={`mailto:${holaEmail}`}
-									className="text-role-muted-foreground transition-colors hover:text-role-primary"
-								>
-									{holaEmail}
-								</a>
-							</div>
-						</div>
-						<div className="flex items-center gap-3">
-							<span className="flex h-10 w-10 items-center justify-center rounded-xl bg-role-primary-soft text-lg">
-								{/* biome-ignore lint/a11y/noSvgWithoutTitle: icono decorativo */}
-								<svg
-									width="20"
-									height="20"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									aria-hidden
-									className="text-role-primary"
-								>
-									<path d="M21 10V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v5" />
-									<path d="M14 10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8" />
-								</svg>
-							</span>
-							<div>
-								<p className="font-semibold">Para negocios</p>
-								<a
-									href={`mailto:${negociosEmail}`}
-									className="text-role-muted-foreground transition-colors hover:text-role-primary"
-								>
-									{negociosEmail}
-								</a>
-							</div>
-						</div>
-						<div className="flex items-center gap-3">
-							<span className="flex h-10 w-10 items-center justify-center rounded-xl bg-role-primary-soft text-lg">
-								{/* biome-ignore lint/a11y/noSvgWithoutTitle: icono decorativo */}
-								<svg
-									width="20"
-									height="20"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									aria-hidden
-									className="text-role-primary"
-								>
-									<circle cx="12" cy="12" r="10" />
-									<polyline points="12 6 12 12 16 14" />
-								</svg>
-							</span>
-							<div>
-								<p className="font-semibold">Horario</p>
-								<p className="text-role-muted-foreground">{hoursWeekdays}</p>
-							</div>
-						</div>
-					</div>
 				</div>
-				<form
-					onSubmit={handleSubmit}
-					noValidate
-					className="reveal rounded-[var(--radius-section)] bg-white p-8 shadow-raised"
-				>
-					<div className="flex flex-col gap-2">
-						<label htmlFor="contact-name" className="text-sm font-semibold">
-							Nombre
-						</label>
-						<input
-							id="contact-name"
-							name="nombre"
-							type="text"
-							autoComplete="name"
-							placeholder="Ana Torres"
-							className={fieldClass(Boolean(errors.name))}
-							aria-invalid={Boolean(errors.name)}
-							aria-describedby={errors.name ? "contact-name-error" : undefined}
-						/>
-						{errors.name ? (
-							<p
-								id="contact-name-error"
-								role="alert"
-								className="text-sm text-role-primary"
-							>
-								{errors.name}
+
+				<div className="rounded-3xl bg-cream p-6 text-ink shadow-[var(--shadow-card)] md:p-8 reveal reveal-delay-1">
+					{done ? (
+						<div className="flex flex-col items-start gap-4 py-4">
+							<span className="flex size-12 items-center justify-center rounded-2xl bg-leaf text-forest">
+								<Check className="size-6" strokeWidth={2} />
+							</span>
+							<h3 className="font-display text-2xl font-medium tracking-tight">
+								Te escribimos.
+							</h3>
+							<p className="text-sm leading-relaxed text-ink-soft">
+								Confirmamos <span className="font-medium text-ink">{done}</span>.
+								El equipo de Rolé te contacta cuando haya un piloto o apertura
+								cerca.
 							</p>
-						) : null}
-					</div>
-					<div className="mt-4 flex flex-col gap-2">
-						<label htmlFor="contact-email" className="text-sm font-semibold">
-							Correo electrónico
-						</label>
-						<input
-							id="contact-email"
-							name="correo"
-							type="email"
-							autoComplete="email"
-							placeholder="ana@correo.com"
-							className={fieldClass(Boolean(errors.email))}
-							aria-invalid={Boolean(errors.email)}
-							aria-describedby={
-								errors.email ? "contact-email-error" : undefined
-							}
-						/>
-						{errors.email ? (
-							<p
-								id="contact-email-error"
-								role="alert"
-								className="text-sm text-role-primary"
+							<button
+								type="button"
+								onClick={() => {
+									setDone(null);
+									setEmail("");
+								}}
+								className="inline-flex h-11 items-center justify-center rounded-xl bg-transparent px-5 text-sm font-medium text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.14)] hover:bg-ink/5"
 							>
-								{errors.email}
-							</p>
-						) : null}
-					</div>
-					<div className="mt-4 flex flex-col gap-2">
-						<label htmlFor="contact-message" className="text-sm font-semibold">
-							Mensaje
-						</label>
-						<textarea
-							id="contact-message"
-							name="mensaje"
-							rows={5}
-							placeholder="Cuéntanos en qué podemos ayudarte..."
-							className={fieldClass(Boolean(errors.message))}
-							aria-invalid={Boolean(errors.message)}
-							aria-describedby={
-								errors.message ? "contact-message-error" : undefined
-							}
-						/>
-						{errors.message ? (
-							<p
-								id="contact-message-error"
-								role="alert"
-								className="text-sm text-role-primary"
+								Usar otro correo
+							</button>
+						</div>
+					) : (
+						<form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+							<div
+								className="flex rounded-2xl bg-paper-2 p-1"
+								role="group"
+								aria-label="Tipo de registro"
 							>
-								{errors.message}
+								{ROLES.map((r) => (
+									<button
+										key={r.id}
+										type="button"
+										onClick={() => setRole(r.id)}
+										className={cn(
+											"h-11 flex-1 rounded-xl px-2 text-xs font-medium  transition-colors duration-150 sm:text-sm",
+											role === r.id
+												? "bg-cream text-ink shadow-[var(--shadow-card)]"
+												: "text-ink-soft",
+										)}
+									>
+										{r.label}
+									</button>
+								))}
+							</div>
+
+							<label className="flex flex-col gap-1.5">
+								<span className="text-sm font-medium">Nombre</span>
+								<input
+									name="name"
+									autoComplete="name"
+									placeholder="Tu nombre"
+									value={name}
+									onChange={(e) => setName(e.target.value)}
+									className="h-12 w-full rounded-xl bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] outline-none placeholder:text-muted focus-visible:shadow-[0_0_0_2px_var(--color-forest)]"
+								/>
+							</label>
+
+							<label className="flex flex-col gap-1.5">
+								<span className="text-sm font-medium">Correo</span>
+								<input
+									name="email"
+									type="email"
+									autoComplete="email"
+									inputMode="email"
+									required
+									placeholder="tu@correo.com"
+									value={email}
+									onChange={(e) => setEmail(e.target.value)}
+									aria-invalid={Boolean(error)}
+									className="h-12 w-full rounded-xl bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] outline-none placeholder:text-muted focus-visible:shadow-[0_0_0_2px_var(--color-forest)]"
+								/>
+							</label>
+
+							<label className="flex flex-col gap-1.5">
+								<span className="text-sm font-medium">Ciudad</span>
+								<select
+									name="city"
+									value={city}
+									onChange={(e) => setCity(e.target.value)}
+									className="h-12 w-full rounded-xl bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] outline-none focus-visible:shadow-[0_0_0_2px_var(--color-forest)]"
+								>
+									{CITIES.map((c) => (
+										<option key={c} value={c}>
+											{c}
+										</option>
+									))}
+								</select>
+							</label>
+
+							{error ? (
+								<p className="text-sm text-danger" role="alert">
+									{error}
+								</p>
+							) : null}
+
+							<button
+								type="submit"
+								className="mt-1 inline-flex h-12 w-full items-center justify-center rounded-xl bg-forest px-6 text-sm font-medium text-cream hover:bg-forest-hover active:scale-[0.98]"
+							>
+								Enviar
+							</button>
+							<p className="text-xs leading-relaxed text-muted">
+								Al enviar aceptas que Rolé te contacte sobre productos y
+								pilotos. Puedes salir cuando quieras.
 							</p>
-						) : null}
-					</div>
-					<button
-						type="submit"
-						className="mt-6 w-full rounded-full bg-role-primary px-6 py-3 font-semibold text-white shadow-soft transition-all duration-200 hover:bg-role-primary-hover hover:shadow-glow active:scale-[0.98]"
-					>
-						Enviar mensaje
-					</button>
-					<p className="mt-3 text-center text-xs text-role-muted-foreground">
-						El mensaje se abre en tu cliente de correo.
-					</p>
-				</form>
+						</form>
+					)}
+				</div>
 			</div>
-		</section>
+		</Section>
 	);
 }

@@ -5,10 +5,13 @@ import {
 	ArrowRightIcon,
 	ClockCheckIcon,
 	LeafIcon,
-	MapPinIcon,
 	TagIcon,
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
+import { ChevronDown } from "lucide-react";
+import { Eyebrow } from "@/components/section";
+import { Cta } from "@/components/cta";
+import { HeroBackground } from "@/components/hero-background";
 
 export const Route = createFileRoute("/how-it-works")({
 	component: HowItWorksPage,
@@ -81,12 +84,7 @@ function HowItWorksPage() {
 					data-hero
 					className="relative overflow-hidden bg-role-dark-bg px-6 pt-36 pb-24 text-white md:pt-44 md:pb-32"
 				>
-					<div aria-hidden className="pointer-events-none absolute inset-0">
-						<div className="absolute inset-0 bg-gradient-to-br from-role-dark-bg via-role-dark-bg to-role-primary-deep/30" />
-						<div className="absolute -top-32 right-0 h-96 w-96 animate-drift rounded-full bg-role-primary/20 blur-3xl" />
-						<div className="absolute bottom-0 left-1/4 h-72 w-72 animate-drift-slow rounded-full bg-role-primary-deep/30 blur-3xl" />
-						<div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_40%,_rgb(26_22_20)_100%)]" />
-					</div>
+					<HeroBackground />
 					<div className="relative mx-auto max-w-4xl">
 						<p className="text-sm font-semibold uppercase tracking-widest text-role-secondary reveal">
 							Guía rápida
@@ -103,7 +101,7 @@ function HowItWorksPage() {
 								href="role://"
 								className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 							>
-								Descargar la app
+								Consigue la app
 							</a>
 							<Link
 								to="/for-business"
@@ -118,44 +116,36 @@ function HowItWorksPage() {
 				{/* Steps */}
 				<section className="mx-auto max-w-5xl px-6 py-24 md:py-32">
 					<div className="mb-16 max-w-2xl reveal">
-						<p className="text-sm font-semibold uppercase tracking-widest text-role-primary">
-							El proceso
-						</p>
-						<h2 className="mt-3 font-heading text-3xl font-bold tracking-tight md:text-4xl">
+						<Eyebrow>El proceso</Eyebrow>
+						<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 							Tres pasos. Menos de dos minutos.
 						</h2>
 					</div>
 					<div className="space-y-6">
-						{STEPS.map((s, i) => {
-							const Icon =
-								[MapPinIcon, TagIcon, ClockCheckIcon][i] ?? ClockCheckIcon;
-							return (
-								<article
+						<ol className="mt-14 grid gap-6 md:grid-cols-1">
+							{STEPS.map((s, i) => (
+								<li
 									key={s.n}
-									className={`group relative flex flex-col gap-6 rounded-[var(--radius-card)] border border-role-border/50 bg-white p-8 shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:border-role-primary/30 hover:shadow-raised sm:flex-row sm:items-start md:p-10 reveal reveal-delay-${i + 1}`}
+									className={`relative reveal reveal-delay-${i + 1}`}
 								>
-									<div className="flex items-center gap-5 sm:flex-col sm:items-center sm:gap-3">
-										<span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-role-primary-soft font-heading text-base font-bold text-role-primary tabular-nums">
-											{s.n}
-										</span>
-										<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-role-muted text-role-foreground transition-colors duration-300 group-hover:bg-role-primary group-hover:text-white">
-											<Icon className="h-5 w-5" />
-										</div>
-									</div>
-									<div className="flex-1">
-										<h3 className="font-heading text-xl font-bold tracking-tight md:text-2xl">
-											{s.title}
-										</h3>
-										<p className="mt-3 max-w-xl leading-relaxed text-role-muted-foreground">
-											{s.body}
-										</p>
-										<p className="mt-4 border-l-2 border-role-primary/20 pl-4 text-sm leading-relaxed text-role-foreground/70">
-											{s.detail}
-										</p>
-									</div>
-								</article>
-							);
-						})}
+									{i < STEPS.length - 1 ? (
+										<span
+											className="pointer-events-none absolute left-[4.5rem] right-[-0.75rem] top-6 hidden h-px bg-line md:block"
+											aria-hidden="true"
+										/>
+									) : null}
+									<p className="font-display text-4xl font-medium text-forest/30">
+										{s.n}
+									</p>
+									<h3 className="mt-4 font-display text-xl font-medium tracking-tight">
+										{s.title}
+									</h3>
+									<p className="mt-2 text-sm leading-relaxed text-ink-soft">
+										{s.body}
+									</p>
+								</li>
+							))}
+						</ol>
 					</div>
 				</section>
 
@@ -163,10 +153,8 @@ function HowItWorksPage() {
 				<section className="bg-role-surface-muted px-6 py-24 md:py-32">
 					<div className="mx-auto max-w-5xl">
 						<div className="mb-16 max-w-2xl reveal">
-							<p className="text-sm font-semibold uppercase tracking-widest text-role-primary">
-								Por qué vale la pena
-							</p>
-							<h2 className="mt-3 font-heading text-3xl font-bold tracking-tight md:text-4xl">
+							<Eyebrow>Por qué vale la pena</Eyebrow>
+							<h2 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 								Bueno para tu bolsillo. Bueno para el planeta.
 							</h2>
 						</div>
@@ -197,45 +185,24 @@ function HowItWorksPage() {
 				{/* Mini FAQ */}
 				<section className="mx-auto max-w-3xl px-6 py-24 md:py-32">
 					<div className="mb-12 reveal">
-						<p className="text-sm font-semibold uppercase tracking-widest text-role-primary">
-							Dudas frecuentes
-						</p>
-						<h2 className="mt-3 font-heading text-3xl font-bold tracking-tight md:text-4xl">
+						<Eyebrow>Dudas frecuentes</Eyebrow>
+						<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl">
 							Lo que más nos preguntan
 						</h2>
 					</div>
 					<div className="space-y-3">
-						{FAQ.map((f, i) => (
+						{FAQ.map((item, i) => (
 							<details
-								key={f.q}
-								className={`group overflow-hidden rounded-[var(--radius-card)] border border-role-border bg-white transition-all duration-300 hover:shadow-soft [&_summary::-webkit-details-marker]:hidden reveal reveal-delay-${i + 1}`}
+								key={item.q}
+								className={`group border-b border-line [&_summary::-webkit-details-marker]:hidden reveal reveal-delay-${i + 1}`}
 							>
-								<summary className="flex cursor-pointer select-none items-center justify-between gap-4 px-6 py-5">
-									<span className="font-heading text-base font-bold text-role-foreground transition-colors group-hover:text-role-primary">
-										{f.q}
-									</span>
-									<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-role-muted text-role-primary transition-transform duration-200 group-open:rotate-180">
-										{/* biome-ignore lint/a11y/noSvgWithoutTitle: icono decorativo */}
-										<svg
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											strokeWidth="2"
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											aria-hidden
-										>
-											<path d="m6 9 6 6 6-6" />
-										</svg>
-									</span>
+								<summary className="flex w-full cursor-pointer list-none items-center justify-between gap-4 py-5 text-left text-base font-medium text-ink">
+									{item.q}
+									<ChevronDown className="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
 								</summary>
-								<div className="px-6 pb-5 pt-0">
-									<p className="max-w-2xl leading-relaxed text-role-muted-foreground">
-										{f.a}
-									</p>
-								</div>
+								<p className="pb-5 text-sm leading-relaxed text-ink-soft">
+									{item.a}
+								</p>
 							</details>
 						))}
 					</div>
@@ -248,32 +215,17 @@ function HowItWorksPage() {
 					</Link>
 				</section>
 
-				{/* CTA */}
-				<section className="mx-auto max-w-6xl px-6 pb-32">
-					<div className="relative overflow-hidden rounded-[var(--radius-section)] bg-role-primary px-8 py-20 text-center text-white md:px-16">
-						<div aria-hidden className="pointer-events-none absolute inset-0">
-							<div className="absolute -left-24 -top-24 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
-							<div className="absolute -bottom-32 -right-16 h-96 w-96 rounded-full bg-role-primary-deep/70 blur-3xl" />
-						</div>
-						<div className="relative reveal">
-							<h2 className="font-heading text-3xl font-bold tracking-tight md:text-4xl">
-								Listo para tu primera reserva
-							</h2>
-							<p className="mx-auto mt-4 max-w-lg text-lg text-white/85">
-								Descarga la app y empieza a rescatar comida deliciosa hoy mismo.
-							</p>
-							<a
-								href="role://"
-								className="mt-9 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
-							>
-								Conseguir la app
-								<ArrowRightIcon className="h-4 w-4" />
-							</a>
-						</div>
-					</div>
-				</section>
+				<Cta
+					eyebrow={undefined}
+					title="Listo para tu primera reserva"
+					body="Descarga la app y empieza a rescatar comida deliciosa hoy mismo."
+					primaryLabel="Consigue la app"
+					secondaryLabel={undefined}
+					secondaryHref={undefined}
+					foot={undefined}
+				/>
 			</main>
 			<Footer />
-		</div>
+		</div >
 	);
 }

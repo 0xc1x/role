@@ -51,8 +51,8 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
-      "name": "rolé — Rescata Comida",
-      "shortName": "rolé",
+      "name": "Rolé — Rescata Comida",
+      "shortName": "Rolé",
       "description": "Rescata comida deliciosa de restaurantes y negocios locales a precios increíbles. Pickup-only y cero desperdicio.",
       "themeColor": "#BF1C19",
       "backgroundColor": "#BF1C19",

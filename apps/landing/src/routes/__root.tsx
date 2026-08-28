@@ -1,5 +1,5 @@
-import type { QueryClient } from "@tanstack/react-query";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient as QC } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
@@ -9,11 +9,10 @@ import {
 } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import { getQueryClient } from "@/lib/query-client";
 import appCss from "../styles.css?url";
 
 export interface RouterContext {
-	queryClient: QueryClient;
+	queryClient: QC;
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -93,6 +92,14 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 	),
 	component: RootComponent,
 });
+
+function getQueryClient() {
+	return new QueryClient({
+		defaultOptions: {
+			queries: { staleTime: 30_000, gcTime: 5 * 60_000, retry: 1 },
+		},
+	});
+}
 
 function RootComponent() {
 	const queryClient = getQueryClient();

@@ -1,18 +1,25 @@
 {
   "id": "com.xcix.role",
-  "name": "rolé — Rescata Comida",
-  "short_name": "rolé",
+  "name": "Rolé — Rescata Comida",
+  "short_name": "Rolé",
   "description": "Rescata comida deliciosa de restaurantes y negocios locales a precios increíbles. Pickup-only y cero desperdicio.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "portrait-primary",
   "background_color": "#bf1c19",
   "theme_color": "#bf1c19",
   "lang": "es",
   "dir": "ltr",
-  "categories": ["food", "shopping", "lifestyle"],
+  "categories": [
+    "food",
+    "shopping",
+    "lifestyle"
+  ],
   "prefer_related_applications": false,
   "icons": [
     {
