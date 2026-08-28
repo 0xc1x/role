@@ -1,4 +1,4 @@
-import { Wordmark } from "@/components/brand";
+import { LogoMark, Wordmark } from "@/components/brand";
 import { useConfig } from "@/lib/use-config";
 
 const EXPLORE = [
@@ -51,10 +51,11 @@ export function Footer() {
 					<div>
 						<a
 							href="/"
-							className="inline-flex rounded-2xl bg-paper p-2"
+							className="inline-flex items-center gap-2 rounded-2xl bg-paper p-2"
 							aria-label="Rolé — Inicio"
 						>
-							<Wordmark className="h-8 w-auto text-ink" />
+							<LogoMark className="h-5 w-auto text-ink" />
+							<Wordmark className="h-5 w-auto text-ink" />
 						</a>
 						<p className="mt-5 max-w-sm text-sm leading-relaxed text-cream/70">
 							Rescatamos comida deliciosa del desperdicio y la ponemos a precios

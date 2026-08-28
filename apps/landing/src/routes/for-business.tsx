@@ -259,7 +259,6 @@ function ForBusinessPage() {
 					secondaryLabel="Contactar a ventas"
 					secondaryHref="mailto:negocios@role.app"
 					foot="Sin costo de registro. Sin comisiones sobre el cobro."
-					icon={<SparkIcon className="h-8 w-8 text-role-primary" />}
 				/>
 			</main>
 			<Footer />

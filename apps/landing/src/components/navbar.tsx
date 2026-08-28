@@ -71,7 +71,7 @@ export function Navbar() {
 				<div className="flex h-14 items-center justify-between px-4 md:h-16 md:px-5">
 					<Link to="/" className="flex items-center" aria-label="Rolé — Inicio">
 						<Wordmark
-							className={`h-9 w-auto transition-colors duration-500 md:h-10 ${headerSolid ? "text-role-foreground" : "text-white"}`}
+							className={`h-9 w-auto transition-colors duration-500 md:h-10 ${headerSolid ? "text-ink" : "text-white"}`}
 						/>
 					</Link>
 
