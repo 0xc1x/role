@@ -5,6 +5,7 @@ import {
 	Animated,
 	Image,
 	Pressable,
+	RefreshControl,
 	ScrollView,
 	StyleSheet,
 	View,
@@ -44,7 +45,7 @@ export default function OfferDetailScreen() {
 	const insets = useSafeAreaInsets();
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const offerId = id ?? "";
-	const { data, isLoading, isError, error, refetch } = useOffer(offerId);
+	const { data, isLoading, isError, error, refetch, isFetching } = useOffer(offerId);
 	const isFavorite = useIsFavorite(offerId);
 	const toggleFavorite = useToggleFavorite();
 	const selectedAddress = useSelectedAddress();
@@ -125,6 +126,7 @@ export default function OfferDetailScreen() {
 					{ useNativeDriver: false },
 				)}
 				showsVerticalScrollIndicator={false}
+				refreshControl={<RefreshControl refreshing={!!isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
 			>
 				<View style={{ height: HERO_HEIGHT }} />
 
@@ -328,8 +330,8 @@ export default function OfferDetailScreen() {
 				/>
 			</Animated.View>
 
-			{/* ── Barra flotante superior (back + favorito) ─────────────── */}
-			<View style={[styles.topBar, { top: insets.top + 6 }]}>
+			{/* ── Barra flotante superior (back + favorito) — alineada a spacing.xl ─────────────── */}
+			<View style={[styles.topBar, { top: insets.top + spacing.xl }]}>
 				<CircleIconButton
 					icon={
 						<Ionicons
@@ -588,8 +590,8 @@ const styles = StyleSheet.create({
 	},
 	topBar: {
 		position: "absolute",
-		left: 16,
-		right: 16,
+		left: spacing.xl,
+		right: spacing.xl,
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",

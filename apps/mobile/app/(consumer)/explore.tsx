@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
-import { EmptyState, ErrorState } from "@/core/ui";
+import { Button, EmptyState, ErrorState } from "@/core/ui";
 import { SectionHeader } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
 import { useFilteredOffers, useSelectedAddress } from "@/features/hooks";
+import { useAuthStore } from "@/features/auth/store";
+import { usePreferences } from "@/features/profile/hooks";
 import {
 	OfferFiltersSheet,
 	type OfferFilterState,
@@ -30,6 +32,10 @@ const SEARCH_DEBOUNCE_MS = 400;
 export default function ExploreScreen() {
 	const { colors } = useTheme();
 	const selectedAddress = useSelectedAddress();
+	const profile = useAuthStore((s) => s.profile);
+	const { data: preferences } = usePreferences(profile?.id ?? "");
+	const isGuest = !profile;
+	const prefRadius = preferences?.notification_radius_km ?? 5;
 
 	const [search, setSearch] = useState("");
 	const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -54,10 +60,11 @@ export default function ExploreScreen() {
 		[filters.category, filters.maxPrice, filters.maxDistanceKm],
 	);
 
-	const { data, isLoading, isError, error, refetch } = useFilteredOffers({
+	const effectiveMaxDistanceKm = filters.maxDistanceKm ?? (isGuest ? null : prefRadius);
+	const { data, isLoading, isError, error, refetch, isFetching } = useFilteredOffers({
 		category: filters.category,
 		maxPrice: filters.maxPrice,
-		maxDistanceKm: filters.maxDistanceKm,
+		maxDistanceKm: effectiveMaxDistanceKm,
 		lat: selectedAddress?.latitude ?? undefined,
 		lng: selectedAddress?.longitude ?? undefined,
 		searchQuery: debouncedSearch.length > 0 ? debouncedSearch : null,
@@ -120,6 +127,14 @@ export default function ExploreScreen() {
 	}, []);
 
 	if (viewModeMap) {
+		if (isGuest) {
+			return (
+				<View style={[styles.flex, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center", padding: spacing.xl }]}>
+					<EmptyState title={strings.explore.loginRequiredTitle} message={strings.explore.loginRequiredBody} />
+					<Button label={strings.explore.loginCTA} onPress={() => router.push("/login")} style={{ marginTop: spacing.lg }} />
+				</View>
+			);
+		}
 		return (
 			<View style={styles.flex}>
 				<ExploreMapView
@@ -155,6 +170,9 @@ export default function ExploreScreen() {
 				contentContainerStyle={styles.content}
 				showsVerticalScrollIndicator={false}
 				keyboardShouldPersistTaps="handled"
+				refreshControl={
+					<RefreshControl refreshing={isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />
+				}
 			>
 				<ExploreHeader
 					search={search}
@@ -191,7 +209,12 @@ export default function ExploreScreen() {
 				/>
 
 				{/* ── Ofertas ─────────────────────────────────────────── */}
-				{isLoading ? (
+				{isGuest ? (
+					<View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.lg, gap: spacing.md, alignItems: "center" }}>
+						<EmptyState title={strings.explore.loginRequiredTitle} message={strings.explore.loginRequiredBody} />
+						<Button label={strings.explore.loginCTA} onPress={() => router.push("/login")} />
+					</View>
+				) : isLoading ? (
 					<View style={styles.offersList}>
 						{[0, 1, 2, 3, 4].map((i) => (
 							<Skeleton key={i} style={styles.skeleton} />
@@ -209,7 +232,7 @@ export default function ExploreScreen() {
 					/>
 				) : (
 					<View style={styles.offersList}>
-						{(data ?? []).map((offer) => (
+						{(data ?? []).slice(0, 8).map((offer) => (
 							<OfferCard key={offer.offer.id} offer={offer} />
 						))}
 					</View>

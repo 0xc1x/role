@@ -186,7 +186,7 @@ function PickupCodeCard({ order }: { order: Order }) {
 		<View
 			style={[
 				styles.pickupCard,
-				{ backgroundColor: colors.card, borderColor: colors.primary + "4D" },
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
 			]}
 		>
 			<AppText style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
@@ -198,14 +198,14 @@ function PickupCodeCard({ order }: { order: Order }) {
 			<View
 				style={[
 					styles.qrBox,
-					{ borderColor: colors.borderSolid, backgroundColor: "#FFFFFF" },
+					{ borderColor: colors.borderSolid, backgroundColor: colors.card },
 				]}
 			>
 				<QRCode
 					value={qrValue}
 					size={176}
 					color="#131316"
-					backgroundColor="#FFFFFF"
+					backgroundColor={colors.card}
 				/>
 			</View>
 			<AppText style={[styles.sectionNote, { color: colors.mutedForeground }]}>
@@ -332,8 +332,8 @@ function ProductItemsCard({ item }: { item: OrderDetail }) {
 				style={[
 					styles.itemRow,
 					{
-						backgroundColor: colors.inputBackground,
-						borderColor: colors.border + "99",
+						backgroundColor: colors.card,
+						borderColor: colors.borderSolid,
 					},
 				]}
 			>

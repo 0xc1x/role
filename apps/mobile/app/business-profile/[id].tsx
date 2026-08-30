@@ -164,7 +164,7 @@ export default function BusinessProfileScreen() {
 			</Animated.View>
 
 			{/* ── Controles superiores flotantes ─────────────────────────── */}
-			<View style={[styles.topBar, { top: insets.top + 6 }]}>
+			<View style={[styles.topBar, { top: insets.top + spacing.xl }]}>
 				<CircleIconButton
 					icon={<Ionicons name="chevron-back" size={20} color={colors.foreground} />}
 					onPress={() => goBackOr("/(consumer)")}
@@ -438,7 +438,7 @@ function HoursCard({ hours }: { hours: BusinessProfileDetail["hours"] }) {
 			{hours.map((h) => {
 				const closed = h.hoursDisplay === strings.businessProfile.closed;
 				return (
-					<View key={h.dayRange} style={styles.hoursRow}>
+					<View key={h.dayRange} style={[styles.hoursRow, { borderBottomColor: colors.border }]}>
 						<AppText weight="medium">{h.dayRange}</AppText>
 						<AppText
 							style={{ color: closed ? colors.destructive : colors.mutedForeground }}
@@ -505,7 +505,7 @@ function ReviewItem({ review }: { review: BusinessReviewView }) {
 		? ""
 		: `${date.getDate()}/${date.getMonth() + 1}`;
 	return (
-		<View style={styles.reviewItem}>
+		<View style={[styles.reviewItem, { borderBottomColor: colors.border }]}>
 			<View style={[styles.avatar, { backgroundColor: colors.muted }]}>
 				<Ionicons name="person-outline" size={16} color={colors.mutedForeground} />
 			</View>
@@ -673,7 +673,6 @@ const styles = StyleSheet.create({
 		justifyContent: "space-between",
 		paddingVertical: spacing.sm,
 		borderBottomWidth: StyleSheet.hairlineWidth,
-		borderBottomColor: "#00000014",
 	},
 	reviewsHeaderRow: {
 		flexDirection: "row",
@@ -692,7 +691,6 @@ const styles = StyleSheet.create({
 		alignItems: "flex-start",
 		paddingVertical: spacing.md,
 		borderBottomWidth: StyleSheet.hairlineWidth,
-		borderBottomColor: "#00000014",
 	},
 	avatar: {
 		width: 36,
@@ -740,8 +738,8 @@ const styles = StyleSheet.create({
 	},
 	topBar: {
 		position: "absolute",
-		left: 16,
-		right: 16,
+		left: spacing.xl,
+		right: spacing.xl,
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",

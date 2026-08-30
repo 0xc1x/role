@@ -1,9 +1,21 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button } from "@/core/ui";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Text } from "@/components/ui/text";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useUpdateOrderStatus } from "@/features/business/hooks";
@@ -27,31 +39,51 @@ export function OrderActionButtons({
 
 	const markReady = () =>
 		updateStatus.mutate({ orderId: order.id, status: "ready_for_pickup" });
+	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+	const handleCancel = () => setConfirmCancelOpen(true);
+	const confirmCancel = () =>
+		updateStatus.mutate({ orderId: order.id, status: "cancelled" });
 
 	if (order.status === "pending") {
 		return (
-			<View style={styles.row}>
-				<Button
-					label={strings.business.ordersMarkReady}
-					variant="primary"
-					style={[styles.markReady, { backgroundColor: colors.info }]}
-					onPress={markReady}
-					loading={updateStatus.isPending}
-				/>
-				<Pressable
-					onPress={() =>
-						updateStatus.mutate({ orderId: order.id, status: "cancelled" })
-					}
-					accessibilityRole="button"
-					accessibilityLabel={strings.business.ordersCancelOrder}
-					style={({ pressed }) => [
-						styles.cancelBtn,
-						{ borderColor: colors.borderSolid, opacity: pressed ? 0.8 : 1 },
-					]}
-				>
-					<Ionicons name="close-circle-outline" size={20} color={colors.destructive} />
-				</Pressable>
-			</View>
+			<>
+				<View style={styles.row}>
+					<Button
+						label={strings.business.ordersMarkReady}
+						variant="primary"
+						style={[styles.markReady, { backgroundColor: colors.info }]}
+						onPress={markReady}
+						loading={updateStatus.isPending}
+					/>
+					<Pressable
+						onPress={handleCancel}
+						accessibilityRole="button"
+						accessibilityLabel={strings.business.ordersCancelOrder}
+						style={({ pressed }) => [
+							styles.cancelBtn,
+							{ borderColor: colors.borderSolid, opacity: pressed ? 0.8 : 1 },
+						]}
+					>
+						<Ionicons name="close-circle-outline" size={20} color={colors.destructive} />
+					</Pressable>
+				</View>
+				<AlertDialog open={confirmCancelOpen} onOpenChange={setConfirmCancelOpen}>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>{strings.business.ordersCancelOrder}</AlertDialogTitle>
+							<AlertDialogDescription>{strings.business.ordersCancelConfirm}</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>
+								<Text>{strings.common.no}</Text>
+							</AlertDialogCancel>
+							<AlertDialogAction onPress={confirmCancel}>
+								<Text>{strings.business.ordersCancelOrder}</Text>
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+			</>
 		);
 	}
 

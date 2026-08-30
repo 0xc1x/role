@@ -13,10 +13,16 @@ const messaging = firebase.messaging();
 // Mensajes recibidos con la app cerrada o en background.
 messaging.onBackgroundMessage((payload) => {
 	const title = payload.notification?.title ?? "Rolé";
+	const data = payload.data ?? {};
 	self.registration.showNotification(title, {
 		body: payload.notification?.body ?? "",
-		tag: payload.messageId,
-		data: payload.data,
+		icon: data.icon ?? "/icons/Icon-192.png",
+		badge: data.badge ?? "/icons/Icon-72.png",
+		image: data.image,
+		tag: data.tag ?? payload.messageId ?? data.type,
+		renotify: false,
+		requireInteraction: false,
+		data,
 	});
 });
 

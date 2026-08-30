@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { FlatList, Pressable, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,13 +8,17 @@ import { strings } from "@/core/i18n/strings";
 import {
 	goBackOr,
 	AppText,
+	Button,
 	CircleIconButton,
+	EmptyState,
 	FilterChip,
 	SearchBar,
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
-import { useCategories, useFilteredOffers, useSelectedAddress } from "@/features/hooks";
+import { useCategories, useFilteredOffersInfinite, useSelectedAddress } from "@/features/hooks";
+import { useAuthStore } from "@/features/auth/store";
+import { usePreferences } from "@/features/profile/hooks";
 import { OfferGridCard } from "@/features/offers/components/OfferGridCard";
 import {
 	OfferFiltersSheet,
@@ -39,14 +43,20 @@ export default function AllOffersScreen() {
 
 	const selectedAddress = useSelectedAddress();
 	const { data: categories } = useCategories();
-	const { data, isLoading, isError, error, refetch } = useFilteredOffers({
+	const profile = useAuthStore((s) => s.profile);
+	const { data: preferences } = usePreferences(profile?.id ?? "");
+	const isGuest = !profile;
+	const prefRadius = preferences?.notification_radius_km ?? 5;
+	const effectiveMaxDistanceKm = filters.maxDistanceKm ?? (isGuest ? null : prefRadius);
+	const { data: infiniteData, isLoading, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching } = useFilteredOffersInfinite({
 		category: filters.category,
 		maxPrice: filters.maxPrice,
-		maxDistanceKm: filters.maxDistanceKm,
+		maxDistanceKm: effectiveMaxDistanceKm,
 		lat: selectedAddress?.latitude ?? undefined,
 		lng: selectedAddress?.longitude ?? undefined,
 		searchQuery: debouncedSearch.length > 0 ? debouncedSearch : null,
 	});
+	const data = useMemo(() => infiniteData?.pages.flat() ?? [], [infiniteData]);
 
 	// Debounce the search input.
 	useEffect(() => {
@@ -167,7 +177,12 @@ export default function AllOffersScreen() {
 			) : null}
 
 			{/* Grid */}
-			{isLoading ? (
+			{isGuest ? (
+				<View style={styles.centerBox}>
+					<EmptyState title={strings.explore.loginRequiredTitle} message={strings.explore.loginRequiredBody} />
+					<Button label={strings.explore.loginCTA} onPress={() => router.push("/login")} style={{ marginTop: spacing.lg }} />
+				</View>
+			) : isLoading ? (
 				<View style={styles.gridContainer}>
 					<FlatList
 						data={[0, 1, 2, 3, 4, 5]}
@@ -214,6 +229,26 @@ export default function AllOffersScreen() {
 					columnWrapperStyle={styles.gridRow}
 					contentContainerStyle={styles.gridContent}
 					showsVerticalScrollIndicator={false}
+					refreshControl={<RefreshControl refreshing={!!isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
+					onEndReached={() => {
+						if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+					}}
+					onEndReachedThreshold={0.5}
+					ListFooterComponent={
+						isFetchingNextPage ? (
+							<View style={{ padding: spacing.lg, alignItems: "center" }}>
+								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+									Cargando más…
+								</AppText>
+							</View>
+						) : hasNextPage ? null : data.length > 0 ? (
+							<View style={{ padding: spacing.lg, alignItems: "center" }}>
+								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+									No hay más ofertas
+								</AppText>
+							</View>
+						) : null
+					}
 					renderItem={({ item }) => (
 						<View style={styles.gridItem}>
 							<OfferGridCard offer={item} />
@@ -239,7 +274,7 @@ const styles = StyleSheet.create({
 	flex: { flex: 1 },
 	header: {
 		paddingHorizontal: spacing.xl,
-		paddingTop: spacing.lg,
+		paddingTop: spacing.xl,
 		gap: spacing.md,
 	},
 	headerRow: {

@@ -156,13 +156,17 @@ export const offersRepository = {
 		maxPrice?: number | null;
 		maxDistanceKm?: number | null;
 		searchQuery?: string | null;
+		page?: number;
+		limit?: number;
 	}): Promise<OfferDetail[]> {
 		const {
 			category = null,
 			maxPrice = null,
 			maxDistanceKm = null,
 			searchQuery = null,
-		} = params;
+			page = 0,
+			limit,
+		} = params as typeof params & { page?: number; limit?: number };
 		let q = activeQuery(category);
 		if (maxPrice != null) q = q.lte("discounted_price", maxPrice);
 		if (searchQuery != null && searchQuery.length > 0) {
@@ -170,7 +174,12 @@ export const offersRepository = {
 				`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`,
 			);
 		}
-		const { data, error } = await q.order("created_at", { ascending: false });
+		q = q.order("created_at", { ascending: false });
+		if (limit != null) {
+			const offset = page * limit;
+			q = q.range(offset, offset + limit - 1);
+		}
+		const { data, error } = await q;
 		if (error) throw toAppError(error, "Error al filtrar ofertas");
 		let offers = toRows(data).map(mapOfferDetail);
 
@@ -344,6 +353,7 @@ export const offersRepository = {
 		searchQuery?: string | null;
 		type?: string | null;
 		limit?: number;
+		page?: number;
 	}): Promise<BusinessSummary[]> {
 		const {
 			lat = null,
@@ -352,8 +362,12 @@ export const offersRepository = {
 			searchQuery = null,
 			type = null,
 			limit = 50,
-		} = params;
-		const all = await fetchActive();
+			page = 0,
+		} = params as typeof params & { page?: number };
+		// ponytail: paginado server-side — fetchActive con range para no traer todo
+		const all = await fetchActive(
+			page != null && limit != null ? { limit: limit * 3, offset: page * limit } : undefined,
+		);
 		const byId = new Map<string, BusinessSummary>();
 		for (const offer of all) {
 			const b = offer.business;
@@ -411,10 +425,15 @@ function activeQuery(category: string | null) {
 async function fetchActive(options?: {
 	category?: string | null;
 	limit?: number;
+	offset?: number;
 }): Promise<OfferDetail[]> {
 	let q = activeQuery(options?.category ?? null);
-	if (options?.limit != null) q = q.limit(options.limit);
-	const { data, error } = await q.order("created_at", { ascending: false });
+	q = q.order("created_at", { ascending: false });
+	if (options?.limit != null) {
+		const offset = options.offset ?? 0;
+		q = q.range(offset, offset + options.limit - 1);
+	}
+	const { data, error } = await q;
 	if (error) throw toAppError(error, "Error al cargar ofertas");
 	return toRows(data).map(mapOfferDetail);
 }

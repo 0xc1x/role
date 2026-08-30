@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
 import {
@@ -27,6 +28,8 @@ export default function OrdersScreen() {
 	const { data, isLoading, isError, error, refetch, isFetching } = useOrders();
 	const [query, setQuery] = useState("");
 	const [tab, setTab] = useState<OrdersTab>("active");
+	const [historyPeriod, setHistoryPeriod] = useState<"today" | "week" | "all">("week");
+	const [weekOffset, setWeekOffset] = useState(0);
 
 	const normalized = query.trim().toLowerCase();
 	const filtered = useMemo(() => {
@@ -41,10 +44,40 @@ export default function OrdersScreen() {
 	const active = filtered.filter((item) => isActiveStatus(item.order.status));
 	const past = filtered.filter((item) => isTerminalStatus(item.order.status));
 
+	const historyList = useMemo(() => {
+		if (tab !== "past") return past;
+		if (historyPeriod === "all") return past;
+		const now = new Date();
+		if (historyPeriod === "today") {
+			const start = new Date(now);
+			start.setHours(0, 0, 0, 0);
+			const end = new Date(now);
+			end.setHours(23, 59, 59, 999);
+			return past.filter((item) => {
+				const d = new Date(item.order.created_at);
+				return d >= start && d <= end;
+			});
+		}
+		// week: lunes a domingo de la semana con offset
+		const base = new Date(now);
+		base.setDate(base.getDate() + weekOffset * 7);
+		const day = base.getDay() === 0 ? 7 : base.getDay();
+		const monday = new Date(base);
+		monday.setDate(base.getDate() - day + 1);
+		monday.setHours(0, 0, 0, 0);
+		const sunday = new Date(monday);
+		sunday.setDate(monday.getDate() + 6);
+		sunday.setHours(23, 59, 59, 999);
+		return past.filter((item) => {
+			const d = new Date(item.order.created_at);
+			return d >= monday && d <= sunday;
+		});
+	}, [past, tab, historyPeriod, weekOffset]);
+
 	if (isLoading) return <LoadingView />;
 	if (isError) return <ErrorState error={error} onRetry={refetch} />;
 
-	const list = tab === "active" ? active : past;
+	const list = tab === "active" ? active : historyList;
 
 	return (
 		<Screen>
@@ -66,6 +99,18 @@ export default function OrdersScreen() {
 				pastCount={past.length}
 				onChange={setTab}
 			/>
+
+			{tab === "past" ? (
+				<HistoryDateFilter
+					period={historyPeriod}
+					weekOffset={weekOffset}
+					onPeriodChange={(p) => {
+						setHistoryPeriod(p);
+						if (p !== "week") setWeekOffset(0);
+					}}
+					onWeekChange={setWeekOffset}
+				/>
+			) : null}
 
 			<FlatList
 				data={list}
@@ -150,6 +195,82 @@ function OrdersTabs({
 		</View>
 	);
 }
+
+function HistoryDateFilter({
+	period,
+	weekOffset,
+	onPeriodChange,
+	onWeekChange,
+}: {
+	period: "today" | "week" | "all";
+	weekOffset: number;
+	onPeriodChange: (p: "today" | "week" | "all") => void;
+	onWeekChange: (o: number) => void;
+}) {
+	const { colors } = useTheme();
+	const now = new Date();
+	const base = new Date(now);
+	base.setDate(base.getDate() + weekOffset * 7);
+	const day = base.getDay() === 0 ? 7 : base.getDay();
+	const monday = new Date(base);
+	monday.setDate(base.getDate() - day + 1);
+	const sunday = new Date(monday);
+	sunday.setDate(monday.getDate() + 6);
+	const fmt = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+	const weekLabel = weekOffset === 0 ? "Esta semana" : `${fmt(monday)} - ${fmt(sunday)}`;
+	const isFutureWeek = weekOffset >= 0;
+
+	return (
+		<View style={historyStyles.wrap}>
+			<View style={historyStyles.chipsRow}>
+				{([
+					{ k: "week" as const, l: "Semana" },
+					{ k: "today" as const, l: "Hoy" },
+					{ k: "all" as const, l: "Todo" },
+				] as const).map((c) => {
+					const sel = period === c.k;
+					return (
+						<Pressable
+							key={c.k}
+							onPress={() => onPeriodChange(c.k)}
+							style={[historyStyles.chip, { borderColor: sel ? colors.primary : colors.borderSolid, backgroundColor: sel ? colors.primary : colors.card }]}
+						>
+							<AppText variant="bodySmall" weight={sel ? "bold" : "regular"} style={{ color: sel ? colors.primaryForeground : colors.mutedForeground }}>
+								{c.l}
+							</AppText>
+						</Pressable>
+					);
+				})}
+			</View>
+			{period === "week" ? (
+				<View style={historyStyles.weekRow}>
+					<Pressable onPress={() => onWeekChange(weekOffset - 1)} hitSlop={8} style={historyStyles.weekBtn}>
+						<Ionicons name="chevron-back" size={18} color={colors.foreground} />
+					</Pressable>
+					<AppText variant="bodySmall" weight="semiBold" style={{ color: colors.foreground }}>
+						{weekLabel}
+					</AppText>
+					<Pressable
+						onPress={() => !isFutureWeek && onWeekChange(weekOffset + 1)}
+						hitSlop={8}
+						style={[historyStyles.weekBtn, isFutureWeek && { opacity: 0.3 }]}
+						disabled={isFutureWeek}
+					>
+						<Ionicons name="chevron-forward" size={18} color={colors.foreground} />
+					</Pressable>
+				</View>
+			) : null}
+		</View>
+	);
+}
+
+const historyStyles = StyleSheet.create({
+	wrap: { paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, gap: spacing.sm },
+	chipsRow: { flexDirection: "row", gap: spacing.sm },
+	chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+	weekRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.xs },
+	weekBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+});
 
 const styles = StyleSheet.create({
 	header: { paddingHorizontal: spacing.xl },

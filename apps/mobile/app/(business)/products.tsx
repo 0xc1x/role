@@ -128,8 +128,10 @@ export default function BusinessProductsScreen() {
 						value={searchQuery}
 						onChangeText={setSearchQuery}
 						placeholder={strings.business.searchProducts}
-						containerStyle={styles.searchBar}
+						containerStyle={styles.searchBarFull}
 					/>
+				</View>
+				<View style={styles.filterRow}>
 					<ProductFilters activeCategoryId={categoryId} onApply={setCategoryId} />
 				</View>
 
@@ -196,7 +198,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "space-between",
 		paddingHorizontal: spacing.xl,
-		paddingTop: spacing.lg,
+		paddingTop: spacing.xl,
 		paddingBottom: spacing.md,
 	},
 	content: {
@@ -214,6 +216,10 @@ const styles = StyleSheet.create({
 		marginTop: spacing.sm,
 	},
 	searchRow: {
+		width: "100%",
+	},
+	searchBarFull: { width: "100%" },
+	filterRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.sm,

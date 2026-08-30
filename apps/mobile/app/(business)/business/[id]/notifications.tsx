@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
+import { toast } from "sonner-native";
+import * as Notifications from "expo-notifications";
 
 import { Switch } from "@/components/ui/switch";
 import { strings } from "@/core/i18n/strings";
@@ -16,9 +18,23 @@ import {
 	useBusinessNotifications,
 	useUpdateBusinessNotifications,
 } from "@/features/business/hooks";
+import { useAuthStore } from "@/features/auth/store";
+import { syncDeviceToken } from "@/features/notifications";
 import type { BusinessNotificationPreferences } from "@0xc1x/role-commons";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+
+async function ensurePushPermission(): Promise<"granted" | "denied"> {
+	if (Platform.OS === "web") {
+		if (typeof window === "undefined" || !("Notification" in window)) return "denied";
+		if (Notification.permission === "default") await Notification.requestPermission();
+		return Notification.permission === "granted" ? "granted" : "denied";
+	}
+	const current = await Notifications.getPermissionsAsync();
+	if (current.status === "granted") return "granted";
+	const requested = await Notifications.requestPermissionsAsync();
+	return requested.status === "granted" ? "granted" : "denied";
+}
 
 export default function BusinessNotificationsScreen() {
 	const { colors } = useTheme();
@@ -28,16 +44,42 @@ export default function BusinessNotificationsScreen() {
 		businessId,
 	);
 	const update = useUpdateBusinessNotifications(businessId);
+	const profile = useAuthStore((s) => s.profile);
+	const userId = profile?.id ?? "";
 
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 	if (!data) return <LoadingView />;
 
-	const toggle = (
+	const toggle = async (
 		key: keyof BusinessNotificationPreferences,
 		value: boolean,
 	) => {
+		if (key === "sms_enabled" || key === "whatsapp_enabled") return;
+		if (key === "push_enabled" && value && userId) {
+			const permission = await ensurePushPermission();
+			if (permission === "denied") {
+				toast.error(
+					Platform.OS === "web"
+						? strings.notificationsSettings.blockedBrowser
+						: strings.notificationsSettings.blockedDevice,
+					{ duration: 8000 },
+				);
+				return;
+			}
+			try {
+				const registered = await syncDeviceToken(userId);
+				if (!registered) return;
+				toast.success(strings.notificationsSettings.pushEnabled);
+			} catch (e) {
+				const code = (e as { code?: string }).code;
+				if (code !== "23505") {
+					toast.error(e instanceof Error ? e.message : "No se pudo registrar el dispositivo");
+					return;
+				}
+			}
+		}
 		update.mutate({ [key]: value } as Partial<BusinessNotificationPreferences>);
 	};
 
@@ -140,11 +182,13 @@ export default function BusinessNotificationsScreen() {
 							key: "sms_enabled" as const,
 							icon: "chatbox-outline" as const,
 							label: strings.business.notificationsSms,
+							upcoming: true as const,
 						},
 						{
 							key: "whatsapp_enabled" as const,
 							icon: "logo-whatsapp" as const,
 							label: strings.business.notificationsWhatsapp,
+							upcoming: true as const,
 						},
 					].map((item) => (
 						<ToggleRow
@@ -154,6 +198,7 @@ export default function BusinessNotificationsScreen() {
 							value={Boolean(data[item.key])}
 							onChange={(v) => toggle(item.key, v)}
 							showDivider
+							upcoming={Boolean((item as { upcoming?: boolean }).upcoming)}
 						/>
 					))}
 				</Card>
@@ -169,6 +214,7 @@ function ToggleRow({
 	value,
 	onChange,
 	showDivider = false,
+	upcoming = false,
 }: {
 	icon: keyof typeof Ionicons.glyphMap;
 	title: string;
@@ -176,6 +222,7 @@ function ToggleRow({
 	value: boolean;
 	onChange: (v: boolean) => void;
 	showDivider?: boolean;
+	upcoming?: boolean;
 }) {
 	const { colors } = useTheme();
 	return (
@@ -188,11 +235,20 @@ function ToggleRow({
 				},
 			]}
 		>
-			<Ionicons name={icon} size={18} color={colors.primary} />
+			<View style={[{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: (colors as unknown as Record<string, string>).inputBackground ?? colors.muted } as never]}>
+				<Ionicons name={icon} size={18} color={upcoming ? colors.mutedForeground : colors.primary} />
+			</View>
 			<View style={styles.toggleText}>
-				<AppText variant="bodyMedium" weight="medium">
-					{title}
-				</AppText>
+				<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+					<AppText variant="bodyMedium" weight="medium" style={upcoming ? { color: colors.mutedForeground } : undefined}>
+						{title}
+					</AppText>
+					{upcoming ? (
+						<View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: colors.inputBackground }}>
+							<AppText style={{ fontSize: 10, fontWeight: "600", color: colors.mutedForeground }}>{strings.notificationsSettings.upcoming}</AppText>
+						</View>
+					) : null}
+				</View>
 				{description ? (
 					<AppText
 						variant="bodySmall"
@@ -202,7 +258,7 @@ function ToggleRow({
 					</AppText>
 				) : null}
 			</View>
-			<Switch checked={value} onCheckedChange={onChange} />
+			<Switch checked={Boolean(value)} disabled={upcoming} onCheckedChange={onChange} />
 		</View>
 	);
 }

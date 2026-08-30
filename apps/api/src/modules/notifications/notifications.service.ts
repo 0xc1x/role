@@ -102,15 +102,19 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
 
     const corsOrigins = this.config.get('CORS_ORIGINS', { infer: true });
     const base = corsOrigins.split(',')[0]?.trim() ?? '';
-    const link = job.payload.data?.link ?? '';
-    const absoluteLink = link ? (link.startsWith('http') ? link : `${base}${link}`) : '';
+    const abs = (v?: string) => (v ? (v.startsWith('http') ? v : `${base}${v}`) : '');
+    const link = abs(job.payload.data?.link);
+    const icon = abs(job.payload.data?.icon) || `${base}/icons/Icon-192.png`;
+    const badge = abs(job.payload.data?.badge) || `${base}/icons/Icon-72.png`;
+    const image = abs(job.payload.data?.image);
+    const tag = job.payload.data?.tag ?? job.payload.data?.type ?? 'role';
 
     await Promise.allSettled(
       targets.map(async (t) => {
         try {
           const ok = await this.sendToToken(t, {
             ...job.payload,
-            data: { ...job.payload.data, link: absoluteLink },
+            data: { ...job.payload.data, link, icon, badge, tag, ...(image ? { image } : {}) },
           });
           if (!ok) await this.repo.deactivateToken(t.token);
         } catch (err) {
@@ -137,11 +141,26 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       const accessToken = await this.getFcmAccessToken(saJson);
+      const d = payload.data ?? {};
+      const webpushNotif: Record<string, unknown> = {
+        title: payload.title,
+        body: payload.body,
+        icon: d.icon ?? `${this.config.get('CORS_ORIGINS', { infer: true }).split(',')[0]?.trim()}/icons/Icon-192.png`,
+        badge: d.badge ?? `${this.config.get('CORS_ORIGINS', { infer: true }).split(',')[0]?.trim()}/icons/Icon-72.png`,
+        tag: d.tag ?? d.type ?? 'role',
+        renotify: false,
+      };
+      if (d.image) webpushNotif.image = d.image;
       const res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: { token, notification: { title: payload.title, body: payload.body }, data: payload.data },
+          message: {
+            token,
+            notification: { title: payload.title, body: payload.body },
+            data: payload.data,
+            webpush: { notification: webpushNotif, fcm_options: { link: d.link } },
+          },
         }),
       });
       if (res.ok) return true;

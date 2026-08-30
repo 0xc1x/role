@@ -146,6 +146,7 @@ export default function BusinessProfileScreen() {
 								onPress={() => setMode(option.mode)}
 								style={({ pressed }) => [
 									styles.themeOption,
+									{ borderColor: colors.border },
 									selected && {
 										backgroundColor: colors.secondary,
 										borderColor: colors.primary,
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.md,
 		borderRadius: 12,
 		borderWidth: 1,
-		borderColor: "rgba(0,0,0,0.1)",
+		// borderColor dinámico via useTheme (colors.border) — valor por defecto neutro
 	},
 	pressed: { opacity: 0.85 },
 });

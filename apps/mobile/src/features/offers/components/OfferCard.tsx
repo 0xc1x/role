@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
 		height: 160,
 	},
 	offerImagePlaceholder: {
-		backgroundColor: "#E5E5E5",
+		backgroundColor: "#E5E5E5", // ponytail: placeholder tokenizado en runtime via colors.muted — hex solo para StyleSheet estático
 	},
 	discountBadge: {
 		position: "absolute",

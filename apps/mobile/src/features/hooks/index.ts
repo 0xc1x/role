@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuthStore } from "@/features/auth/store";
 import { offersRepository } from "@/features/offers/data/repository";
@@ -88,6 +88,50 @@ export function useFilteredOffers(filters: {
 	return useQuery({
 		queryKey: ["offers", "filtered", filters],
 		queryFn: () => offersRepository.getFilteredOffers(filters),
+	});
+}
+
+const PAGE_SIZE = 20;
+
+export function useFilteredOffersInfinite(filters: {
+	category?: string | null;
+	maxPrice?: number | null;
+	maxDistanceKm?: number | null;
+	lat?: number;
+	lng?: number;
+	searchQuery?: string | null;
+}) {
+	return useInfiniteQuery({
+		queryKey: ["offers", "filtered", "infinite", filters],
+		initialPageParam: 0,
+		queryFn: ({ pageParam }) =>
+			offersRepository.getFilteredOffers({ ...filters, page: pageParam as number, limit: PAGE_SIZE }),
+		getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+			lastPage.length < PAGE_SIZE ? undefined : (lastPageParam as number) + 1,
+	});
+}
+
+export function useAllBusinessesInfinite(
+	lat?: number | null,
+	lng?: number | null,
+	searchQuery?: string | null,
+	type?: string | null,
+) {
+	return useInfiniteQuery({
+		queryKey: ["businesses", "all", "infinite", { lat, lng, searchQuery, type }],
+		initialPageParam: 0,
+		queryFn: ({ pageParam }) =>
+			offersRepository.getAllBusinesses({
+				lat,
+				lng,
+				radiusKm: 10,
+				searchQuery,
+				type,
+				limit: PAGE_SIZE,
+				page: pageParam as number,
+			}),
+		getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+			lastPage.length < PAGE_SIZE ? undefined : (lastPageParam as number) + 1,
 	});
 }
 

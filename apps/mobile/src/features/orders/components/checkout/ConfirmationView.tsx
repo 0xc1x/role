@@ -52,14 +52,14 @@ export function ConfirmationView({
 				<View
 					style={[
 						styles.qrBox,
-						{ borderColor: colors.borderSolid, backgroundColor: "#FFFFFF" },
+						{ borderColor: colors.borderSolid, backgroundColor: colors.card },
 					]}
 				>
 					<QRCode
 						value={qrValue}
 						size={176}
 						color="#131316"
-						backgroundColor="#FFFFFF"
+						backgroundColor={colors.card}
 					/>
 				</View>
 				<AppText style={[styles.pickupCode, { color: colors.primary }]}>

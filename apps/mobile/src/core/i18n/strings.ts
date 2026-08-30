@@ -193,6 +193,9 @@ export const strings = {
 		pickupWindow: "{start} - {end}",
 		availableCount: "{n} disponibles",
 		viewDetail: "Ver detalle",
+		loginRequiredTitle: "Inicia sesión para ver ofertas",
+		loginRequiredBody: "Inicia sesión para visualizar las ofertas disponibles cerca de tu ubicación seleccionada.",
+		loginCTA: "Iniciar sesión",
 	},
 	allOffers: {
 		title: "Todas las ofertas",

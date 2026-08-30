@@ -55,7 +55,7 @@ const CHANNELS: ToggleConfig[] = [
 		key: "whatsapp_enabled",
 		label: strings.notificationsSettings.whatsapp,
 		subtitle: strings.notificationsSettings.whatsappSubtitle,
-		icon: "chatbubble-outline",
+		icon: "logo-whatsapp",
 		upcoming: true,
 	},
 ];

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { FlatList, Pressable, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,7 +8,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, CircleIconButton, goBackOr, SearchBar, SelectableChipsBar } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
-import { useAllBusinesses, useSelectedAddress } from "@/features/hooks";
+import { useAllBusinessesInfinite, useSelectedAddress } from "@/features/hooks";
 import { BusinessGridCard } from "@/features/business/components/BusinessGridCard";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
 
@@ -27,12 +27,13 @@ export default function AllBusinessesScreen() {
 	);
 
 	const selectedAddress = useSelectedAddress();
-	const { data, isLoading, isError, error, refetch } = useAllBusinesses(
+	const { data: infiniteData, isLoading, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching } = useAllBusinessesInfinite(
 		selectedAddress?.latitude ?? null,
 		selectedAddress?.longitude ?? null,
 		debouncedSearch.length > 0 ? debouncedSearch : null,
 		selectedType,
 	);
+	const data = useMemo(() => infiniteData?.pages.flat() ?? [], [infiniteData]);
 
 	useEffect(() => {
 		const t = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
@@ -130,6 +131,26 @@ export default function AllBusinessesScreen() {
 					columnWrapperStyle={styles.businessRow}
 					contentContainerStyle={styles.businessContent}
 					showsVerticalScrollIndicator={false}
+					refreshControl={<RefreshControl refreshing={!!isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
+					onEndReached={() => {
+						if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+					}}
+					onEndReachedThreshold={0.5}
+					ListFooterComponent={
+						isFetchingNextPage ? (
+							<View style={{ padding: spacing.lg, alignItems: "center" }}>
+								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+									Cargando más…
+								</AppText>
+							</View>
+						) : hasNextPage ? null : data.length > 0 ? (
+							<View style={{ padding: spacing.lg, alignItems: "center" }}>
+								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+									No hay más negocios
+								</AppText>
+							</View>
+						) : null
+					}
 					renderItem={({ item }) => (
 						<View style={styles.businessItem}>
 							<BusinessGridCard
@@ -151,7 +172,7 @@ const styles = StyleSheet.create({
 	flex: { flex: 1 },
 	header: {
 		paddingHorizontal: spacing.xl,
-		paddingTop: spacing.lg,
+		paddingTop: spacing.xl,
 		gap: spacing.md,
 	},
 	headerRow: {

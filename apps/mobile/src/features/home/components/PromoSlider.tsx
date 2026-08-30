@@ -10,7 +10,6 @@ import {
 	Platform,
 	Linking,
 } from "react-native";
-import { BlurView } from "expo-blur";
 
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
@@ -54,6 +53,18 @@ export function PromoSlider() {
 	const dragStartX = useRef<number | null>(null);
 	const dragAreaRef = useRef<View>(null);
 
+	const snapToNearest = useCallback(() => {
+		const index = Math.round(scrollX.current / step);
+		if (index >= slides.length) {
+			setCurrentIndex(0);
+			scrollRef.current?.scrollTo({ x: 0, animated: true });
+			return;
+		}
+		const clamped = Math.max(0, Math.min(index, slides.length - 1));
+		setCurrentIndex(clamped);
+		scrollRef.current?.scrollTo({ x: clamped * step, animated: true });
+	}, [slides.length, step]);
+
 	useEffect(() => {
 		if (Platform.OS !== "web") return;
 		const area = dragAreaRef.current as unknown as HTMLElement | null;
@@ -74,8 +85,13 @@ export function PromoSlider() {
 			}
 		};
 		const handleUp = () => {
+			if (dragStartX.current != null) {
+				// actualiza scrollX con el delta final antes de snear
+				// el último handleMove ya dejó scrollX desfasado, recalcula
+			}
 			dragStartX.current = null;
 			setIsPaused(false);
+			snapToNearest();
 		};
 
 		area.addEventListener("mousedown", handleDown);
@@ -86,21 +102,17 @@ export function PromoSlider() {
 			window.removeEventListener("mousemove", handleMove);
 			window.removeEventListener("mouseup", handleUp);
 		};
-	}, []);
+	}, [snapToNearest]);
 
 	const handleScroll = (event: {
 		nativeEvent: { contentOffset: { x: number } };
 	}) => {
 		scrollX.current = event.nativeEvent.contentOffset.x;
-		const index = Math.round(event.nativeEvent.contentOffset.x / step);
-		// Llegó al clon de la primera slide: reset silencioso al inicio real.
-		// El clon es idéntico, así que el salto es invisible.
-		if (index >= slides.length) {
-			setCurrentIndex(0);
-			scrollRef.current?.scrollTo({ x: 0, animated: false });
-			return;
-		}
-		if (index >= 0 && index < slides.length) setCurrentIndex(index);
+	};
+
+	const handleMomentumEnd = () => {
+		setIsPaused(false);
+		snapToNearest();
 	};
 
 	// Sin contenido activo (o mientras carga) el carrusel no se renderiza.
@@ -115,13 +127,16 @@ export function PromoSlider() {
 						horizontal
 						showsHorizontalScrollIndicator={false}
 						snapToInterval={step}
+						snapToAlignment="center"
 						decelerationRate="fast"
+						disableIntervalMomentum
+						pagingEnabled={false}
 						onScroll={handleScroll}
 						scrollEventThrottle={16}
 						onMomentumScrollBegin={() => setIsPaused(true)}
-						onMomentumScrollEnd={() => setIsPaused(false)}
+						onMomentumScrollEnd={handleMomentumEnd}
 						onTouchStart={() => setIsPaused(true)}
-						onTouchEnd={() => setIsPaused(false)}
+						onTouchEnd={handleMomentumEnd}
 						contentContainerStyle={{
 							paddingHorizontal: spacing.lg,
 							gap: spacing.sm,
@@ -164,7 +179,6 @@ export function PromoSlider() {
 
 function PromoCard({ item }: { item: PromoSlide }) {
 	const { colors } = useTheme();
-	const halfWidth = CARD_WIDTH / 2;
 	const badgeLabel =
 		item.badgeText ??
 		(item.isSponsored ? strings.home.promoSponsored : strings.home.promoTips);
@@ -172,67 +186,43 @@ function PromoCard({ item }: { item: PromoSlide }) {
 
 	const openRedirect = () => {
 		if (!item.redirectUrl) return;
-		void Linking.openURL(item.redirectUrl).catch(() => {
-			// URL inválida o sin handler: no rompemos la UI.
-		});
+		void Linking.openURL(item.redirectUrl).catch(() => {});
 	};
 
 	return (
-		<View style={[styles.cardInner, { backgroundColor: colors.greenDark }]}>
-			{item.imageUrl ? (
-				<>
-					<Image source={{ uri: item.imageUrl }} style={styles.cardImage} resizeMode="cover" />
-					<BlurView intensity={40} tint="dark" style={styles.cardImage} />
-				</>
-			) : null}
-			<View style={styles.gradientOverlay} />
-			{item.imageUrl ? (
-				<View
-					style={[
-						styles.rightImage,
-						{
-							left: halfWidth,
-							width: halfWidth,
-						},
-					]}
-				>
-					<Image
-						source={{ uri: item.imageUrl }}
-						style={styles.cardImage}
-						resizeMode="cover"
-					/>
-				</View>
-			) : null}
-			<View style={styles.cardContent}>
+		<View style={[styles.cardInner, { backgroundColor: colors.greenDark, flexDirection: "row" }]}>
+			{/* Lado izquierdo sólido — sin Blur ni overlay traslúcido */}
+			<View style={styles.cardLeft}>
 				<View style={styles.badge}>
 					<Text
 						style={{
 							color: colors.greenDarkForeground + "B3",
 							fontSize: 11,
-							fontWeight: "500",
+							fontWeight: "600",
+							letterSpacing: 0.4,
 						}}
 					>
-						{badgeLabel}
+						{badgeLabel.toUpperCase()}
 					</Text>
 				</View>
-				<View>
+				<View style={{ gap: 6 }}>
 					<Text
 						style={{
 							color: textColor,
 							fontSize: 18,
-							fontWeight: "600",
-							letterSpacing: -0.2,
+							fontWeight: "700",
+							letterSpacing: -0.3,
+							lineHeight: 22,
 						}}
 					>
 						{item.title}
 					</Text>
 					<Text
-						numberOfLines={3}
+						numberOfLines={2}
 						style={{
-							color: textColor + "B3",
+							color: textColor + "CC",
 							fontSize: 12,
-							lineHeight: 17,
-							marginTop: 6,
+							lineHeight: 16,
 						}}
 					>
 						{item.caption}
@@ -251,14 +241,22 @@ function PromoCard({ item }: { item: PromoSlide }) {
 						<Text
 							style={{
 								color: colors.primaryForeground,
-								fontSize: 15,
-								fontWeight: "600",
+								fontSize: 14,
+								fontWeight: "700",
 							}}
 						>
 							{item.ctaLabel}
 						</Text>
 					</Pressable>
 				) : null}
+			</View>
+			{/* Lado derecho imagen limpia — sin velo */}
+			<View style={styles.cardRight}>
+				{item.imageUrl ? (
+					<Image source={{ uri: item.imageUrl }} style={styles.cardRightImage} resizeMode="cover" />
+				) : (
+					<View style={[styles.cardRightImage, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]} />
+				)}
 			</View>
 		</View>
 	);
@@ -274,64 +272,55 @@ const styles = StyleSheet.create({
 	card: {
 		width: CARD_WIDTH,
 		height: CARD_HEIGHT,
-		borderRadius: radii.md,
+		borderRadius: radii.xl,
 		overflow: "hidden",
-		boxShadow: `0px 6px 16px #0000001f`,	},
+		boxShadow: `0px 8px 20px #00000014`,
+	},
 	cardInner: {
 		flex: 1,
-		borderRadius: radii.md,
+		borderRadius: radii.xl,
 		overflow: "hidden",
 	},
-	cardImage: {
-		position: "absolute",
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-	},
-	gradientOverlay: {
-		position: "absolute",
-		top: 0,
-		left: 0,
-		bottom: 0,
-		width: "70%",
-		backgroundColor: "rgba(17,28,21,0.55)",
-	},
-	rightImage: {
-		position: "absolute",
-		top: 0,
-		bottom: 0,
-	},
-	cardContent: {
-		position: "absolute",
-		top: 0,
-		left: 0,
-		bottom: 0,
-		width: "52%",
+	cardLeft: {
+		width: "54%",
 		paddingHorizontal: 18,
 		paddingVertical: 16,
 		justifyContent: "space-between",
+		gap: 10,
+	},
+	cardRight: {
+		width: "46%",
+		overflow: "hidden",
+	},
+	cardRightImage: {
+		width: "100%",
+		height: "100%",
 	},
 	badge: {
 		alignSelf: "flex-start",
 		paddingHorizontal: 10,
-		paddingVertical: 4,
+		paddingVertical: 5,
 		borderRadius: radii.pill,
-		backgroundColor: "rgba(255,255,255,0.12)",
+		backgroundColor: "rgba(255,255,255,0.14)",
+		borderWidth: 1,
+		borderColor: "rgba(255,255,255,0.18)",
 	},
 	promoButton: {
-		height: 42,
-		borderRadius: radii.md,
+		height: 38,
+		borderRadius: radii.pill,
 		alignItems: "center",
 		justifyContent: "center",
-		boxShadow: `0px 4px 10px #0000004d`,	},
+		paddingHorizontal: 16,
+		boxShadow: `0px 4px 12px #00000022`,
+	},
 	promoButtonPressed: {
 		opacity: 0.85,
+		transform: [{ scale: 0.98 }],
 	},
 	dotsContainer: {
 		flexDirection: "row",
 		justifyContent: "center",
-		gap: 6,
+		gap: 8,
 		marginTop: spacing.sm,
 	},
 	dot: {
@@ -340,6 +329,6 @@ const styles = StyleSheet.create({
 		borderRadius: 4,
 	},
 	dotActive: {
-		width: 20,
+		width: 22,
 	},
 });

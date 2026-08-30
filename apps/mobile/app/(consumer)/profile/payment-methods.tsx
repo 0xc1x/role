@@ -15,6 +15,8 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
+import { toast } from "sonner-native";
+
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button, Card, EmptyState, Screen, ScreenHeader } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
@@ -155,16 +157,17 @@ export default function PaymentMethodsScreen() {
 				{showForm ? (
 					<Card style={{ marginTop: spacing.lg, gap: spacing.md }}>
 						<AppText variant="bodyMedium" weight="semiBold">Próximamente</AppText>
-						<AppText variant="bodySmall" style={{ color: '#666' }}>
-							La alta de tarjetas se habilitará con el SDK del gateway (tokenización PCI — nunca almacenamos el número de tarjeta).
-						</AppText>
+						{/* La alta de tarjetas se habilitará con el SDK del gateway (tokenización PCI — nunca almacenamos el número de tarjeta). */}
 						<Button label={strings.common.cancel} variant="outline" onPress={() => setShowForm(false)} fullWidth />
 					</Card>
 				) : (
 					<Button
 						label={strings.paymentMethods.add}
 						variant="outline"
-						onPress={() => setShowForm(true)}
+						onPress={() => {
+							toast.info("Se agregará próximamente");
+							setShowForm(true);
+						}}
 						fullWidth
 						style={{ marginTop: spacing.lg }}
 					/>

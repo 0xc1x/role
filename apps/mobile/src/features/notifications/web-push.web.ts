@@ -98,7 +98,15 @@ export async function syncWebPushToken(
 		onMessage(messaging, (payload) => {
 			const title = payload.notification?.title ?? "Rolé";
 			if (Notification.permission === "granted") {
-				new Notification(title, { body: payload.notification?.body ?? "" });
+				const data = (payload.data ?? {}) as Record<string, string>;
+				new Notification(title, {
+					body: payload.notification?.body ?? "",
+					icon: data.icon ?? "/icons/Icon-192.png",
+					badge: data.badge ?? "/icons/Icon-72.png",
+					tag: data.tag ?? data.type ?? "role",
+					image: data.image,
+					data,
+				} as NotificationOptions & { image?: string; badge?: string });
 			}
 		});
 	}
