@@ -1,15 +1,34 @@
-# role-commons
+# @0xc1x/role-commons (`packages/commons`)
 
-To install dependencies:
+Fuente de verdad de contratos del ecosistema Rolé: DTOs, schemas Zod, enums y entidades por dominio.
+
+Consumido por `api`, `admin`, `landing` y `mobile` vía `workspace:*` — no se publica al registry.
+
+## Comandos
+
+Desde la raíz del monorepo:
 
 ```bash
-bun install
+bun run build --filter=@0xc1x/role-commons   # tsc + fix-imports → dist/
+bun run typecheck                             # valida commons + todos los consumidores
 ```
 
-To run:
+Desde este directorio:
 
 ```bash
-bun run index.ts
+bun run build        # tsc + scripts/fix-imports.mjs
+bun run test         # vitest
+bun run docs:export  # openapi.json desde schemas
 ```
 
-This project was created using `bun init` in bun v1.3.14. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Estructura
+
+```
+src/
+├── <dominio>/{schemas,dtos,enums,entities}/
+└── _common/    # enums y schemas transversales
+```
+
+## Guía de agente
+
+Ver [AGENTS.md](./AGENTS.md) y [../../docs/contracts.md](../../docs/contracts.md).

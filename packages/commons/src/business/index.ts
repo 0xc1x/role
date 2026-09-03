@@ -8,6 +8,7 @@ export * from './entities/business-hours';
 export * from './entities/business-location';
 export * from './entities/business-notification-preferences';
 export * from './enums/business-type';
+export * from './enums/business-verification-status';
 export * from './schemas/business.schema';
 export * from './schemas/business-query.schema';
 export * from './schemas/business-hours.schema';

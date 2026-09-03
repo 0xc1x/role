@@ -4,6 +4,9 @@ import {
   TimestamptzSchema,
   UuidSchema,
 } from '../../_common/schemas/common';
+import { BUSINESS_VERIFICATION_STATUSES } from '../enums/business-verification-status';
+
+export const BusinessVerificationStatusSchema = z.enum(BUSINESS_VERIFICATION_STATUSES);
 
 export const BusinessSchema = z.object({
   id: UuidSchema,
@@ -22,6 +25,10 @@ export const BusinessSchema = z.object({
   commission_rate: z.number().nullable(),
   balance: z.number().nullable(),
   is_active: z.boolean(),
+  verification_status: BusinessVerificationStatusSchema,
+  verified_at: TimestamptzSchema.nullable(),
+  verified_by: UuidSchema.nullable(),
+  rejection_reason: z.string().nullable(),
   created_at: TimestamptzSchema,
   updated_at: TimestamptzSchema,
 });
@@ -40,6 +47,8 @@ export const CreateBusinessSchema = z.object({
   website: z.string().nullable().optional(),
   commission_rate: z.number().nullable().optional(),
   is_active: z.boolean().optional(),
+  verification_status: BusinessVerificationStatusSchema.optional(),
+  rejection_reason: z.string().nullable().optional(),
 });
 
 export const UpdateBusinessSchema = CreateBusinessSchema.partial().omit({

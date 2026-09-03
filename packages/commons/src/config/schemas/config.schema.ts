@@ -25,6 +25,8 @@ export const AppConfigValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
+  z.array(z.string()),
+  z.record(z.string(), z.unknown()),
 ]);
 
 const AppConfigBaseSchema = z.object({

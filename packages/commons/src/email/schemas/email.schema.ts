@@ -5,6 +5,7 @@ import {
   CAMPAIGN_STATUSES,
   EMAIL_COMPONENT_TYPES,
   EMAIL_SEND_STATUSES,
+  EMAIL_SEND_TYPES,
   MARKETING_CATEGORIES,
   SEGMENT_TYPES,
 } from '../enums/email.enum';
@@ -207,22 +208,37 @@ export const TestCampaignSchema = z.object({
 
 export const EmailSendDtoSchema = z.object({
   id: UuidSchema,
-  campaign_id: UuidSchema,
+  type: z.enum(EMAIL_SEND_TYPES),
+  source_type: z.string().nullable(),
+  source_id: UuidSchema.nullable(),
+  template_id: UuidSchema,
   user_id: UuidSchema.nullable(),
   email: z.string().email(),
+  variables_used: z.record(z.string(), z.unknown()).nullable().optional(),
   resend_id: z.string().nullable(),
   status: z.enum(EMAIL_SEND_STATUSES),
+  attempts: z.number().int().nonnegative(),
+  max_attempts: z.number().int().positive(),
+  error_message: z.string().nullable(),
+  error_code: z.string().nullable(),
+  scheduled_at: TimestamptzSchema.nullable(),
+  queued_at: TimestamptzSchema.nullable(),
+  processed_at: TimestamptzSchema.nullable(),
   sent_at: TimestamptzSchema.nullable(),
   delivered_at: TimestamptzSchema.nullable(),
   opened_at: TimestamptzSchema.nullable(),
   clicked_at: TimestamptzSchema.nullable(),
   bounced_at: TimestamptzSchema.nullable(),
-  error_message: z.string().nullable(),
   created_at: TimestamptzSchema,
+  updated_at: TimestamptzSchema.nullable(),
 });
 
 export const ListSendsQuerySchema = PaginationQuerySchema.extend({
   status: z.enum(EMAIL_SEND_STATUSES).optional(),
+  type: z.enum(EMAIL_SEND_TYPES).optional(),
+  source_type: z.string().nullable().optional(),
+  source_id: UuidSchema.nullable().optional(),
+  search: z.string().optional(),
 });
 
 export const EmailSendListResponseSchema = PaginatedDataSchema(EmailSendDtoSchema);

@@ -15,9 +15,23 @@ export function coerceConfigValue(
       return typeof raw === 'number' ? raw : (fallback as number);
     case 'boolean':
       return typeof raw === 'boolean' ? raw : (fallback as boolean);
+    case 'json':
+      return typeof raw === 'string' ? raw : (fallback as string);
     default:
       return typeof raw === 'string' ? raw : (fallback as string);
   }
+}
+
+export function getConfigStringArray(
+  map: AppConfigMap | undefined,
+  key: string,
+  fallback: readonly string[],
+): readonly string[] {
+  const value = map?.[key];
+  if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
+    return value as string[];
+  }
+  return fallback;
 }
 
 export function getConfigValue<T extends string | number | boolean>(

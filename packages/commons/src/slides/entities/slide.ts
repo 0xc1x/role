@@ -7,6 +7,7 @@ export interface Slide {
     badge_text?: string | null;
     cta_label: string | null;
     redirect_url: string | null;
+    coupon_code?: string | null;
     image_url: string;
     text_color?: string | null;
     button_color?: string | null;

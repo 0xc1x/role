@@ -6,6 +6,7 @@ export const APP_CONFIG_VALUE_TYPES = [
   'email',
   'url',
   'phone',
+  'json',
 ] as const;
 
 export type AppConfigValueType = (typeof APP_CONFIG_VALUE_TYPES)[number];
@@ -18,6 +19,7 @@ export const AppConfigValueType = {
   EMAIL: 'email',
   URL: 'url',
   PHONE: 'phone',
+  JSON: 'json',
 } as const satisfies Record<string, AppConfigValueType>;
 
 export const APP_CONFIG_CATEGORIES = [
