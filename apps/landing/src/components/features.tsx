@@ -1,6 +1,7 @@
 import { BadgePercent, Earth, Salad, Zap } from "lucide-react";
 
 import { Eyebrow, Section } from "@/components/section";
+import { Card, CardContent } from "@/components/ui/card";
 
 const FEATURES = [
 	{
@@ -39,20 +40,22 @@ export function Features() {
 			</div>
 			<div className="mt-14 grid gap-4 sm:grid-cols-2">
 				{FEATURES.map((f, i) => (
-					<article
+					<Card
 						key={f.title}
-						className={`rounded-3xl bg-paper p-6 shadow-[var(--shadow-card)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-card-hover)] md:p-8 reveal reveal-delay-${i + 1}`}
+						className={`rounded-3xl border-0 bg-paper p-0 shadow-[var(--shadow-card)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-card-hover)] reveal reveal-delay-${i + 1}`}
 					>
-						<div className="flex size-11 items-center justify-center rounded-2xl bg-leaf text-forest">
-							<f.icon className="size-5" strokeWidth={1.75} />
-						</div>
-						<h3 className="mt-5 font-display text-xl font-medium tracking-tight">
-							{f.title}
-						</h3>
-						<p className="mt-2 text-sm leading-relaxed text-ink-soft">
-							{f.body}
-						</p>
-					</article>
+						<CardContent className="p-6 md:p-8">
+							<div className="flex size-11 items-center justify-center rounded-2xl bg-leaf text-forest">
+								<f.icon className="size-5" strokeWidth={1.75} />
+							</div>
+							<h3 className="mt-5 font-display text-xl font-medium tracking-tight">
+								{f.title}
+							</h3>
+							<p className="mt-2 text-sm leading-relaxed text-ink-soft">
+								{f.body}
+							</p>
+						</CardContent>
+					</Card>
 				))}
 			</div>
 		</Section>

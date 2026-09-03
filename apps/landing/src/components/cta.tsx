@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 
 type CtaProps = {
 	variant?: "primary" | "muted";
@@ -21,9 +22,9 @@ const VARIANT_STYLES = {
 		heading: "",
 		body: "text-white/85",
 		primaryButton:
-			"bg-white text-role-primary shadow-dark-glow hover:shadow-2xl motion-safe:hover:-translate-y-0.5 focus-visible:ring-white focus-visible:ring-offset-role-primary",
+			"bg-white text-role-primary shadow-dark-glow hover:bg-white hover:text-role-primary hover:shadow-2xl motion-safe:hover:-translate-y-0.5 focus-visible:ring-white focus-visible:ring-offset-role-primary",
 		secondaryButton:
-			"border border-white/30 text-white hover:bg-white/10 focus-visible:ring-white focus-visible:ring-offset-role-primary",
+			"border border-white/30 bg-transparent text-white hover:bg-white hover:text-role-primary focus-visible:ring-white focus-visible:ring-offset-role-primary",
 		foot: "text-white/60",
 	},
 	muted: {
@@ -32,9 +33,9 @@ const VARIANT_STYLES = {
 		heading: "font-display font-medium",
 		body: "text-ink-soft",
 		primaryButton:
-			"bg-role-primary text-white shadow-soft hover:bg-role-primary-hover hover:shadow-glow focus-visible:ring-role-primary focus-visible:ring-offset-role-surface-muted",
+			"bg-role-primary text-white shadow-soft hover:bg-role-primary-hover hover:text-white hover:shadow-glow focus-visible:ring-role-primary focus-visible:ring-offset-role-surface-muted",
 		secondaryButton:
-			"border border-role-border text-ink hover:bg-role-muted focus-visible:ring-role-primary focus-visible:ring-offset-role-surface-muted",
+			"border border-role-border bg-transparent text-ink hover:bg-white hover:text-ink focus-visible:ring-role-primary focus-visible:ring-offset-role-surface-muted",
 		foot: "text-role-muted-foreground",
 	},
 } as const;
@@ -98,20 +99,22 @@ export function Cta({
 					</p>
 
 					<div className="mt-9 flex flex-wrap justify-center gap-4">
-						<a
-							href={primaryHref}
-							className={`inline-flex items-center gap-2 rounded-full px-8 py-3 font-semibold outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.98] ${styles.primaryButton}`}
+						<Button
+							variant="ghost"
+							render={<a href={primaryHref} />}
+							className={`inline-flex items-center gap-2 rounded-full px-8 py-3 font-semibold active:scale-[0.98] ${styles.primaryButton}`}
 						>
 							{primaryIcon}
 							{primaryLabel}
-						</a>
+						</Button>
 						{secondaryLabel && secondaryHref ? (
-							<a
-								href={secondaryHref}
-								className={`rounded-full px-8 py-3 font-semibold outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-offset-2 ${styles.secondaryButton}`}
+							<Button
+								variant="ghost"
+								render={<a href={secondaryHref} />}
+								className={`rounded-full px-8 py-3 font-semibold ${styles.secondaryButton}`}
 							>
 								{secondaryLabel}
-							</a>
+							</Button>
 						) : null}
 					</div>
 

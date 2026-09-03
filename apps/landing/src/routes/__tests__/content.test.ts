@@ -10,8 +10,8 @@ const ROUTES: Record<string, string> = {
 	// El h1 parte la frase con un span estilizado; el marker cubre hasta "en".
 	"/for-business": "Convierte tu excedente en",
 	"/help-center": "Centro de ayuda",
-	"/privacy": "Política de privacidad",
-	"/terms": "Términos y condiciones",
+	"/privacy": "Política de",
+	"/terms": "Términos y",
 };
 
 describe("landing routes", () => {

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as BusinessSignupRouteImport } from './routes/business-signup'
 import { Route as ForBusinessRouteImport } from './routes/for-business'
 import { Route as HelpCenterRouteImport } from './routes/help-center'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
@@ -25,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessSignupRoute = BusinessSignupRouteImport.update({
+  id: '/business-signup',
+  path: '/business-signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForBusinessRoute = ForBusinessRouteImport.update({
@@ -56,6 +62,7 @@ const TermsRoute = TermsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/business-signup': typeof BusinessSignupRoute
   '/for-business': typeof ForBusinessRoute
   '/help-center': typeof HelpCenterRoute
   '/how-it-works': typeof HowItWorksRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/business-signup': typeof BusinessSignupRoute
   '/for-business': typeof ForBusinessRoute
   '/help-center': typeof HelpCenterRoute
   '/how-it-works': typeof HowItWorksRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/business-signup': typeof BusinessSignupRoute
   '/for-business': typeof ForBusinessRoute
   '/help-center': typeof HelpCenterRoute
   '/how-it-works': typeof HowItWorksRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about'
+    | '/business-signup'
     | '/for-business'
     | '/help-center'
     | '/how-it-works'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/business-signup'
     | '/for-business'
     | '/help-center'
     | '/how-it-works'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/about'
+    | '/business-signup'
     | '/for-business'
     | '/help-center'
     | '/how-it-works'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  BusinessSignupRoute: typeof BusinessSignupRoute
   ForBusinessRoute: typeof ForBusinessRoute
   HelpCenterRoute: typeof HelpCenterRoute
   HowItWorksRoute: typeof HowItWorksRoute
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/business-signup': {
+      id: '/business-signup'
+      path: '/business-signup'
+      fullPath: '/business-signup'
+      preLoaderRoute: typeof BusinessSignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/for-business': {
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  BusinessSignupRoute: BusinessSignupRoute,
   ForBusinessRoute: ForBusinessRoute,
   HelpCenterRoute: HelpCenterRoute,
   HowItWorksRoute: HowItWorksRoute,

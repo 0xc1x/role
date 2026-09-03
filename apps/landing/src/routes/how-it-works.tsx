@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-
+import { Cta } from "@/components/cta";
 import { Footer } from "@/components/footer";
+import { HeroBackground } from "@/components/hero-background";
 import {
 	ArrowRightIcon,
 	ClockCheckIcon,
@@ -8,10 +9,13 @@ import {
 	TagIcon,
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
-import { ChevronDown } from "lucide-react";
 import { Eyebrow } from "@/components/section";
-import { Cta } from "@/components/cta";
-import { HeroBackground } from "@/components/hero-background";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@/components/ui/accordion";
 
 export const Route = createFileRoute("/how-it-works")({
 	component: HowItWorksPage,
@@ -190,22 +194,18 @@ function HowItWorksPage() {
 							Lo que más nos preguntan
 						</h2>
 					</div>
-					<div className="space-y-3">
+					<Accordion>
 						{FAQ.map((item, i) => (
-							<details
+							<AccordionItem
 								key={item.q}
-								className={`group border-b border-line [&_summary::-webkit-details-marker]:hidden reveal reveal-delay-${i + 1}`}
+								value={item.q}
+								className={`reveal reveal-delay-${i + 1}`}
 							>
-								<summary className="flex w-full cursor-pointer list-none items-center justify-between gap-4 py-5 text-left text-base font-medium text-ink">
-									{item.q}
-									<ChevronDown className="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
-								</summary>
-								<p className="pb-5 text-sm leading-relaxed text-ink-soft">
-									{item.a}
-								</p>
-							</details>
+								<AccordionTrigger>{item.q}</AccordionTrigger>
+								<AccordionContent>{item.a}</AccordionContent>
+							</AccordionItem>
 						))}
-					</div>
+					</Accordion>
 					<Link
 						to="/help-center"
 						className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-role-primary transition-colors hover:text-role-primary-hover reveal reveal-delay-4"
@@ -226,6 +226,6 @@ function HowItWorksPage() {
 				/>
 			</main>
 			<Footer />
-		</div >
+		</div>
 	);
 }

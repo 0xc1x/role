@@ -1,18 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Cta } from "@/components/cta";
 import { Footer } from "@/components/footer";
+import { HeroBackground } from "@/components/hero-background";
 import {
 	ChartIcon,
 	ClockCheckIcon,
 	HeartIcon,
-	SparkIcon,
 	StoreIcon,
 	UsersIcon,
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
-import { usePlatformStats } from "@/lib/use-config";
 import { Eyebrow } from "@/components/section";
-import { Cta } from "@/components/cta";
-import { HeroBackground } from "@/components/hero-background";
+import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/for-business")({
 	component: ForBusinessPage,
@@ -104,7 +103,7 @@ function ForBusinessPage() {
 							</p>
 							<div className="mt-10 flex flex-wrap gap-4 reveal reveal-delay-3">
 								<a
-									href="role://business-signup"
+									href="/business-signup"
 									className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 								>
 									Registrar mi negocio
@@ -199,7 +198,6 @@ function ForBusinessPage() {
 								</li>
 							))}
 						</ol>
-
 					</div>
 				</section>
 
@@ -252,9 +250,9 @@ function ForBusinessPage() {
 				<Cta
 					variant="muted"
 					title="¿Listo para unirte?"
-					body="El registro se completa en la app. Un representante verifica tu negocio en menos de 24 horas."
+					body="Completa el formulario y un representante verifica tu negocio en menos de 24 horas."
 					primaryLabel="Registrar mi negocio"
-					primaryHref="role://business-signup"
+					primaryHref="/business-signup"
 					primaryIcon={<StoreIcon className="h-5 w-5" />}
 					secondaryLabel="Contactar a ventas"
 					secondaryHref="mailto:negocios@role.app"

@@ -3,6 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Heart, MapPin } from "lucide-react";
 
 import { BagIcon } from "@/components/icons";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { randomOfferQueryOptions } from "@/lib/queries";
 import { usePlatformStats } from "@/lib/use-config";
 
@@ -60,7 +64,7 @@ export function Hero() {
 			>
 				<div className="relative w-full animate-float-y">
 					<div className="absolute inset-0 translate-y-3 rounded-xl bg-role-primary/20 blur-2xl" />
-					<div className="relative overflow-hidden rounded-xl border border-role-border/50 bg-white shadow-[0_6px_16px_rgba(18,18,18,0.12)]">
+					<Card className="relative overflow-hidden rounded-xl border border-role-border/50 bg-white p-0 shadow-[0_6px_16px_rgba(18,18,18,0.12)] gap-0">
 						<div className="relative h-40 w-full bg-role-muted">
 							{offer?.image ? (
 								<img
@@ -74,22 +78,22 @@ export function Hero() {
 								</div>
 							)}
 							{discountPct > 0 ? (
-								<div className="absolute right-2 top-2 rounded-full bg-role-primary px-2.5 py-1 text-xs font-bold text-white">
+								<Badge className="absolute right-2 top-2 rounded-full bg-role-primary px-2.5 py-1 text-xs font-bold text-white hover:bg-role-primary">
 									-{discountPct}%
-								</div>
+								</Badge>
 							) : null}
 							{(offer as unknown as { stock?: number })?.stock != null &&
-								(offer as unknown as { stock: number }).stock <= 3 &&
-								(offer as unknown as { stock: number }).stock > 0 ? (
-								<div className="absolute bottom-2 left-2 rounded-full bg-role-primary-deep px-2.5 py-1 text-xs font-semibold text-white">
+							(offer as unknown as { stock: number }).stock <= 3 &&
+							(offer as unknown as { stock: number }).stock > 0 ? (
+								<Badge className="absolute bottom-2 left-2 rounded-full bg-role-primary-deep px-2.5 py-1 text-xs font-semibold text-white hover:bg-role-primary-deep">
 									¡Quedan {(offer as unknown as { stock: number }).stock}!
-								</div>
+								</Badge>
 							) : null}
 							<div className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 shadow-sm">
 								<Heart className="h-4 w-4 text-role-muted-foreground" />
 							</div>
 						</div>
-						<div className="p-4">
+						<CardContent className="p-4">
 							<div className="flex items-end gap-3">
 								<div className="min-w-0 flex-[4] pr-2">
 									<p className="line-clamp-2 text-[15px] font-bold leading-[19px] text-role-foreground">
@@ -103,7 +107,8 @@ export function Hero() {
 										</span>
 									</div>
 									<p className="mt-1 truncate text-xs text-role-muted-foreground">
-										{offer && (offer as unknown as { pickup_end?: string }).pickup_end
+										{offer &&
+										(offer as unknown as { pickup_end?: string }).pickup_end
 											? `Recoge antes de las ${formatTime((offer as unknown as { pickup_end: string }).pickup_end)}`
 											: "Recoge antes de las 17:00"}
 									</p>
@@ -117,8 +122,8 @@ export function Hero() {
 									</p>
 								</div>
 							</div>
-						</div>
-					</div>
+						</CardContent>
+					</Card>
 				</div>
 			</div>
 
@@ -133,7 +138,6 @@ export function Hero() {
 
 					{/* Display headline with editorial serif span */}
 					<h1 className="max-w-2xl font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
-
 						<span className="editorial italic font-normal text-role-secondary">
 							La comida que sobra no tiene que perderse.
 						</span>
@@ -144,34 +148,48 @@ export function Hero() {
 					{/* Subheadline */}
 					<p className="max-w-lg text-lg leading-relaxed text-white/80 reveal reveal-delay-2">
 						Rolé conecta comercios locales con excedente de comida y personas
-						que quieren rescatar el excedente de restaurantes, panaderías y mercados; fresco, cercano y a un tercio del precio. Recoges el mismo día.
+						que quieren rescatar el excedente de restaurantes, panaderías y
+						mercados; fresco, cercano y a un tercio del precio. Recoges el mismo
+						día.
 					</p>
 
 					{/* CTAs */}
 					<div className="flex flex-wrap items-center gap-4 reveal reveal-delay-3">
-						<a
-							href="role://"
-							className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98] active:translate-y-0"
+						<Button
+							variant="ghost"
+							render={<a href="role://" />}
+							className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow hover:bg-white hover:text-role-primary hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 						>
 							Consigue la app
-						</a>
-						<a
-							href="/for-business"
-							className="rounded-full border border-white/25 px-7 py-3 font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.98]"
+						</Button>
+						<Button
+							variant="ghost"
+							render={<a href="/for-business" />}
+							className="rounded-full border border-white/25 bg-transparent px-7 py-3 font-semibold text-white hover:bg-white hover:text-role-primary active:scale-[0.98]"
 						>
 							Para negocios
-						</a>
+						</Button>
 					</div>
 
 					{/* Stats with tabular nums */}
-					<dl className="flex divide-x divide-white/10 reveal reveal-delay-4">
-						{STATS.map((s) => (
-							<div key={s.label} className="px-5 first:pl-0 last:pr-0">
-								<dt className="sr-only">{s.label}</dt>
-								<dd className="font-heading text-2xl font-bold tabular-nums md:text-3xl">
-									{s.value}
-								</dd>
-								<p className="mt-1 text-sm text-white/55">{s.label}</p>
+					<dl className="flex items-stretch reveal reveal-delay-4">
+						{STATS.map((s, idx) => (
+							<div key={s.label} className="flex items-stretch">
+								<div
+									className={`px-5 ${idx === 0 ? "pl-0" : ""} ${idx === STATS.length - 1 ? "pr-0" : ""}`}
+								>
+									<dt className="sr-only">{s.label}</dt>
+									<dd className="font-heading text-2xl font-bold tabular-nums md:text-3xl">
+										{s.value}
+									</dd>
+									<p className="mt-1 text-sm text-white/55">{s.label}</p>
+								</div>
+								{idx < STATS.length - 1 ? (
+									<Separator
+										orientation="vertical"
+										className="h-auto bg-white/10"
+									/>
+								) : null}
 							</div>
 						))}
 					</dl>

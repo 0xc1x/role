@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient as QC } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
@@ -109,7 +109,7 @@ function RootComponent() {
 			(entries) => {
 				for (const entry of entries) {
 					if (entry.isIntersecting) {
-						entry.target.classList.add("visible");
+						(entry.target as HTMLElement).dataset.revealed = "true";
 						observer.unobserve(entry.target);
 					}
 				}
@@ -118,9 +118,11 @@ function RootComponent() {
 		);
 
 		const observeAll = () => {
-			document.querySelectorAll(".reveal:not(.visible)").forEach((el) => {
-				observer.observe(el);
-			});
+			document
+				.querySelectorAll(".reveal:not([data-revealed='true'])")
+				.forEach((el) => {
+					observer.observe(el);
+				});
 		};
 
 		observeAll();

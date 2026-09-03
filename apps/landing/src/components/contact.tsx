@@ -1,12 +1,27 @@
-import { type FormEvent, useEffect, useState } from "react";
+import {
+	CONTACT_CITIES_FALLBACK,
+	getConfigStringArray,
+} from "@0xc1x/role-commons";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-
+import { type FormEvent, useEffect, useState } from "react";
 import { Eyebrow, Section } from "@/components/section";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { apiPost } from "@/lib/api";
+import { appConfigQueryOptions } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 type WaitlistRole = "negocio" | "persona";
-
-const CITIES = ["Quito", "Guayaquil", "Cuenca", "Manta", "Otra"];
 
 const ROLES: { id: WaitlistRole; label: string }[] = [
 	{ id: "negocio", label: "Tengo un local" },
@@ -28,29 +43,33 @@ function isEmail(v: string) {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
-// ponytail: localStorage only, no server sync — migrate to API when waitlist needs persistence/search
-const LS_KEY = "role-waitlist";
 const LS_LAST = "role-waitlist-last";
-
-function readLeads(): { email: string }[] {
-	if (typeof window === "undefined") return [];
-	try {
-		const raw = localStorage.getItem(LS_KEY);
-		if (!raw) return [];
-		const p = JSON.parse(raw);
-		return Array.isArray(p) ? p : [];
-	} catch {
-		return [];
-	}
-}
 
 export function Contact() {
 	const [role, setRole] = useState<WaitlistRole>("negocio");
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
 	const [city, setCity] = useState("Quito");
+	const [cityOther, setCityOther] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [done, setDone] = useState<string | null>(null);
+
+	const { data: configMap } = useQuery(appConfigQueryOptions);
+	const cities = getConfigStringArray(
+		configMap as Record<string, unknown> | undefined,
+		"contact.cities",
+		CONTACT_CITIES_FALLBACK,
+	);
+
+	const mutation = useMutation({
+		mutationFn: (payload: {
+			name: string;
+			email: string;
+			role: WaitlistRole;
+			city: string;
+			city_other?: string;
+		}) => apiPost<{ ok: boolean }>("/contact", payload),
+	});
 
 	useEffect(() => {
 		const e = localStorage.getItem(LS_LAST);
@@ -58,10 +77,13 @@ export function Contact() {
 	}, []);
 
 	useEffect(() => {
+		if (!cities.includes(city)) setCity(cities[0] ?? "Quito");
+	}, [cities, city]);
+
+	useEffect(() => {
 		const onRole = (e: Event) => {
 			const next = (e as CustomEvent<WaitlistRole>).detail;
-			if (next === "persona" || next === "negocio")
-				setRole(next);
+			if (next === "persona" || next === "negocio") setRole(next);
 		};
 		window.addEventListener("fudi:role", onRole);
 		return () => window.removeEventListener("fudi:role", onRole);
@@ -75,18 +97,31 @@ export function Contact() {
 			setError("Ingresa un correo válido.");
 			return;
 		}
-		const lead = {
-			email: trimmed,
-			name: name.trim(),
-			role,
-			city,
-			product: "role" as const,
-			at: new Date().toISOString(),
-		};
-		const leads = readLeads().filter((l) => l.email !== trimmed);
-		localStorage.setItem(LS_KEY, JSON.stringify([...leads, lead]));
-		localStorage.setItem(LS_LAST, trimmed);
-		setDone(trimmed);
+		if (city === "Otra" && !cityOther.trim()) {
+			setError("Indica la ciudad.");
+			return;
+		}
+		if (!cities.includes(city)) {
+			setError("Ciudad no habilitada.");
+			return;
+		}
+		mutation.mutate(
+			{
+				name: name.trim(),
+				email: trimmed,
+				role,
+				city,
+				...(city === "Otra" ? { city_other: cityOther.trim() } : {}),
+			},
+			{
+				onSuccess: () => {
+					localStorage.setItem(LS_LAST, trimmed);
+					setDone(trimmed);
+				},
+				onError: (err: Error) =>
+					setError(err.message || "No pudimos enviar. Intenta de nuevo."),
+			},
+		);
 	}
 
 	const copy = COPY[role];
@@ -114,60 +149,79 @@ export function Contact() {
 								Te escribimos.
 							</h3>
 							<p className="text-sm leading-relaxed text-ink-soft">
-								Confirmamos <span className="font-medium text-ink">{done}</span>.
-								El equipo de Rolé te contacta cuando haya un piloto o apertura
+								Confirmamos <span className="font-medium text-ink">{done}</span>
+								. El equipo de Rolé te contacta cuando haya un piloto o apertura
 								cerca.
 							</p>
-							<button
+							<Button
 								type="button"
+								variant="ghost"
 								onClick={() => {
 									setDone(null);
 									setEmail("");
 								}}
-								className="inline-flex h-11 items-center justify-center rounded-xl bg-transparent px-5 text-sm font-medium text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.14)] hover:bg-ink/5"
+								className="h-11 rounded-xl bg-transparent px-5 text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.14)] hover:bg-ink/5 hover:text-ink"
 							>
 								Usar otro correo
-							</button>
+							</Button>
 						</div>
 					) : (
-						<form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+						<form
+							onSubmit={onSubmit}
+							className="flex flex-col gap-4"
+							noValidate
+						>
+							{/* biome-ignore lint/a11y/useSemanticElements: toggle group styled as div; fieldset breaks layout */}
 							<div
 								className="flex rounded-2xl bg-paper-2 p-1"
 								role="group"
 								aria-label="Tipo de registro"
 							>
 								{ROLES.map((r) => (
-									<button
+									<Button
 										key={r.id}
 										type="button"
+										variant="ghost"
 										onClick={() => setRole(r.id)}
 										className={cn(
-											"h-11 flex-1 rounded-xl px-2 text-xs font-medium  transition-colors duration-150 sm:text-sm",
+											"h-11 flex-1 rounded-xl px-2 text-xs font-medium transition-colors duration-150 sm:text-sm",
 											role === r.id
-												? "bg-cream text-ink shadow-[var(--shadow-card)]"
-												: "text-ink-soft",
+												? "bg-cream text-ink shadow-[var(--shadow-card)] hover:bg-cream"
+												: "text-ink-soft hover:bg-transparent hover:text-ink-soft",
 										)}
 									>
 										{r.label}
-									</button>
+									</Button>
 								))}
 							</div>
 
-							<label className="flex flex-col gap-1.5">
-								<span className="text-sm font-medium">Nombre</span>
-								<input
+							<div className="flex flex-col gap-1.5">
+								<Label
+									htmlFor="contact-name"
+									className="text-sm font-medium text-ink"
+								>
+									Nombre
+								</Label>
+								<Input
+									id="contact-name"
 									name="name"
 									autoComplete="name"
 									placeholder="Tu nombre"
 									value={name}
 									onChange={(e) => setName(e.target.value)}
-									className="h-12 w-full rounded-xl bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] outline-none placeholder:text-muted focus-visible:shadow-[0_0_0_2px_var(--color-forest)]"
+									className="h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] placeholder:text-muted focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0"
 								/>
-							</label>
+							</div>
 
-							<label className="flex flex-col gap-1.5">
-								<span className="text-sm font-medium">Correo</span>
-								<input
+							<div className="flex flex-col gap-1.5">
+								<Label
+									htmlFor="contact-email"
+									className="text-sm font-medium text-ink"
+								>
+									Correo
+								</Label>
+								<Input
+									id="contact-email"
 									name="email"
 									type="email"
 									autoComplete="email"
@@ -177,25 +231,53 @@ export function Contact() {
 									value={email}
 									onChange={(e) => setEmail(e.target.value)}
 									aria-invalid={Boolean(error)}
-									className="h-12 w-full rounded-xl bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] outline-none placeholder:text-muted focus-visible:shadow-[0_0_0_2px_var(--color-forest)]"
+									className="h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] placeholder:text-muted focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0"
 								/>
-							</label>
+							</div>
 
-							<label className="flex flex-col gap-1.5">
-								<span className="text-sm font-medium">Ciudad</span>
-								<select
-									name="city"
-									value={city}
-									onChange={(e) => setCity(e.target.value)}
-									className="h-12 w-full rounded-xl bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] outline-none focus-visible:shadow-[0_0_0_2px_var(--color-forest)]"
-								>
-									{CITIES.map((c) => (
-										<option key={c} value={c}>
-											{c}
-										</option>
-									))}
-								</select>
-							</label>
+							<div className="flex flex-col gap-1.5">
+								<Label className="text-sm font-medium text-ink">Ciudad</Label>
+								<Select value={city} onValueChange={(v) => v && setCity(v)}>
+									<SelectTrigger
+										id="contact-city"
+										className="h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] data-placeholder:text-muted focus-visible:border-0 focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0 [&_svg]:text-muted"
+									>
+										<SelectValue placeholder="Selecciona ciudad" />
+									</SelectTrigger>
+									<SelectContent className="rounded-xl border border-black/10 bg-cream shadow-[var(--shadow-card)]">
+										<SelectGroup>
+											{cities.map((c) => (
+												<SelectItem
+													key={c}
+													value={c}
+													className="rounded-lg text-sm text-ink focus:bg-ink/5 data-highlighted:bg-ink/5"
+												>
+													{c}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									</SelectContent>
+								</Select>
+							</div>
+
+							{city === "Otra" ? (
+								<div className="flex flex-col gap-1.5">
+									<Label
+										htmlFor="contact-city-other"
+										className="text-sm font-medium text-ink"
+									>
+										¿Qué ciudad?
+									</Label>
+									<Input
+										id="contact-city-other"
+										name="city_other"
+										placeholder="Escribe tu ciudad"
+										value={cityOther}
+										onChange={(e) => setCityOther(e.target.value)}
+										className="h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] placeholder:text-muted focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0"
+									/>
+								</div>
+							) : null}
 
 							{error ? (
 								<p className="text-sm text-danger" role="alert">
@@ -203,12 +285,14 @@ export function Contact() {
 								</p>
 							) : null}
 
-							<button
+							<Button
+								variant="ghost"
 								type="submit"
-								className="mt-1 inline-flex h-12 w-full items-center justify-center rounded-xl bg-forest px-6 text-sm font-medium text-cream hover:bg-forest-hover active:scale-[0.98]"
+								disabled={mutation.isPending}
+								className="mt-1 h-12 w-full rounded-xl bg-forest px-6 text-sm font-medium text-cream hover:bg-forest-hover hover:text-cream active:scale-[0.98] disabled:opacity-60"
 							>
-								Enviar
-							</button>
+								{mutation.isPending ? "Enviando…" : "Enviar"}
+							</Button>
 							<p className="text-xs leading-relaxed text-muted">
 								Al enviar aceptas que Rolé te contacte sobre productos y
 								pilotos. Puedes salir cuando quieras.

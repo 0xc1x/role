@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Footer } from "@/components/footer";
+import { HeroBackground } from "@/components/hero-background";
 import { HeartIcon, LeafIcon, SparkIcon, UsersIcon } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
-import { HeroBackground } from "@/components/hero-background";
 import { platformStatsQueryOptions } from "@/lib/queries";
 import { usePlatformStats } from "@/lib/use-config";
 

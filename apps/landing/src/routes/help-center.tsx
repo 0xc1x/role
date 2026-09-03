@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-
 import { Footer } from "@/components/footer";
+import { HeroBackground } from "@/components/hero-background";
 import {
 	ClockCheckIcon,
 	MailIcon,
@@ -8,10 +8,14 @@ import {
 	TagIcon,
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
-import { useConfig } from "@/lib/use-config";
 import { Eyebrow } from "@/components/section";
-import { HeroBackground } from "@/components/hero-background";
-import { ChevronDown } from "lucide-react";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@/components/ui/accordion";
+import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/help-center")({
 	component: HelpCenterPage,
@@ -112,8 +116,7 @@ function HelpCenterPage() {
 				>
 					<HeroBackground />
 					<div className="relative mx-auto max-w-4xl">
-						<Eyebrow>							Ayuda
-						</Eyebrow>
+						<Eyebrow> Ayuda</Eyebrow>
 						<h1 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 							Centro de ayuda
 						</h1>
@@ -136,22 +139,18 @@ function HelpCenterPage() {
 									<h2 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl">
 										{cat.title}
 									</h2>
-									<div className="space-y-3">
+									<Accordion className="space-y-0">
 										{cat.items.map((item, i) => (
-											<details
+											<AccordionItem
 												key={item.q}
-												className={`group border-b border-line [&_summary::-webkit-details-marker]:hidden reveal reveal-delay-${i + 1}`}
+												value={item.q}
+												className={`reveal reveal-delay-${i + 1}`}
 											>
-												<summary className="flex w-full cursor-pointer list-none items-center justify-between gap-4 py-5 text-left text-base font-medium text-ink">
-													{item.q}
-													<ChevronDown className="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
-												</summary>
-												<p className="pb-5 text-sm leading-relaxed text-ink-soft">
-													{item.a}
-												</p>
-											</details>
+												<AccordionTrigger>{item.q}</AccordionTrigger>
+												<AccordionContent>{item.a}</AccordionContent>
+											</AccordionItem>
 										))}
-									</div>
+									</Accordion>
 								</div>
 							);
 						})}
@@ -189,7 +188,8 @@ function HelpCenterPage() {
 											{c.description}
 										</p>
 										<p className="mt-3 font-semibold leading-relaxed text-role-primary">
-											{c.contact}											</p>
+											{c.contact}{" "}
+										</p>
 									</a>
 								);
 							})}

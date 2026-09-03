@@ -121,7 +121,9 @@ export function Footer() {
 					</div>
 				</div>
 				<div className="mt-16 flex flex-col gap-3 border-t border-cream/10 pt-6 text-xs text-cream/50 sm:flex-row sm:items-center sm:justify-between">
-					<p>© {new Date().getFullYear()} Füdi. Todos los derechos reservados.</p>
+					<p>
+						© {new Date().getFullYear()} Füdi. Todos los derechos reservados.
+					</p>
 					<div className="flex gap-6">
 						{SOCIAL.map((s) => (
 							<a

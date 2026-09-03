@@ -29,10 +29,7 @@ export function HowItWorks() {
 			</div>
 			<ol className="mt-14 grid gap-6 md:grid-cols-3">
 				{STEPS.map((s, i) => (
-					<li
-						key={s.n}
-						className={`relative reveal reveal-delay-${i + 1}`}
-					>
+					<li key={s.n} className={`relative reveal reveal-delay-${i + 1}`}>
 						{i < STEPS.length - 1 ? (
 							<span
 								className="pointer-events-none absolute left-[4.5rem] right-[-0.75rem] top-6 hidden h-px bg-line md:block"

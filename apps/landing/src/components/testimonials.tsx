@@ -1,4 +1,6 @@
 import { Eyebrow, Section } from "@/components/section";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Card, CardContent } from "@/components/ui/card";
 
 const STORIES = [
 	{
@@ -35,26 +37,27 @@ export function Testimonials() {
 			</div>
 			<div className="mt-14 grid gap-4 lg:grid-cols-3">
 				{STORIES.map((s, i) => (
-					<figure
+					<Card
 						key={s.name}
-						className={`flex flex-col rounded-3xl bg-cream p-6 shadow-[var(--shadow-card)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-card-hover)] md:p-8 reveal reveal-delay-${i + 1}`}
+						className={`flex flex-col rounded-3xl border-0 bg-cream p-0 shadow-[var(--shadow-card)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-card-hover)] reveal reveal-delay-${i + 1}`}
 					>
-						<blockquote className="flex-1 font-display text-xl italic font-light leading-snug tracking-tight text-ink">
-							“{s.quote}”
-						</blockquote>
-						<figcaption className="mt-8 flex items-center gap-3">
-							<span
-								className="flex size-11 items-center justify-center rounded-full bg-leaf font-display text-sm font-medium text-forest"
-								aria-hidden="true"
-							>
-								{s.initials}
-							</span>
-							<span>
-								<span className="block text-sm font-semibold">{s.name}</span>
-								<span className="block text-xs text-muted">{s.role}</span>
-							</span>
-						</figcaption>
-					</figure>
+						<CardContent className="flex flex-1 flex-col p-6 md:p-8">
+							<blockquote className="flex-1 font-display text-xl italic font-light leading-snug tracking-tight text-ink">
+								“{s.quote}”
+							</blockquote>
+							<figcaption className="mt-8 flex items-center gap-3">
+								<Avatar className="size-11 rounded-full bg-leaf text-forest">
+									<AvatarFallback className="bg-leaf font-display text-sm font-medium text-forest">
+										{s.initials}
+									</AvatarFallback>
+								</Avatar>
+								<span>
+									<span className="block text-sm font-semibold">{s.name}</span>
+									<span className="block text-xs text-muted">{s.role}</span>
+								</span>
+							</figcaption>
+						</CardContent>
+					</Card>
 				))}
 			</div>
 			<p className="mt-6 text-xs text-muted reveal reveal-delay-4">

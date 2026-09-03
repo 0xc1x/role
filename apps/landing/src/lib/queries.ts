@@ -38,5 +38,3 @@ export const randomOfferQueryOptions = queryOptions({
 	queryFn: () => apiGet<OfferWithBusiness | null>("/offers/random"),
 	staleTime: 60_000,
 });
-
-
