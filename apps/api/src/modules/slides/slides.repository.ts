@@ -25,6 +25,7 @@ export type SlideUpdate = Partial<
     | 'priority'
     | 'active'
     | 'redirect_url'
+    | 'coupon_code'
     | 'deleted_at'
     | 'start_at'
     | 'end_at'

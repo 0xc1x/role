@@ -25,11 +25,11 @@ src/
 ├── auth/ + modules/auth # guards por rol
 ```
 
-## Convenciones (no inventar — seguir `IMPROVEMENT_PLAN.md`)
+## Convenciones
 
 - **Mappers por módulo** (dominio ↔ DTO): nunca expongas filas de DB crudas por la API.
 - **Guards por rol** en rutas protegidas; validación con zod en fronteras.
-- **Alinear drizzle schema ↔ schemas zod de commons**: en el monorepo el compilador (`bun run typecheck`) es el guard principal; `db:drift` y `check-commons-align.mjs` son scripts heredados de la era de repos separados.
+- **Alinear drizzle schema ↔ schemas zod de commons**: `bun run typecheck` en la raíz es el guard principal.
 - **OpenAPI**: `bun run openapi:export` regenera `openapi/` (consumido por Scalar).
 
 ## Comandos
@@ -52,4 +52,5 @@ bun run typecheck && bun run test
 
 ## Deuda y estado conocido
 
-Ver `IMPROVEMENT_PLAN.md` — fases: 0) seguridad (registro/roles, AuthGuard, upload, hardening HTTP), 1) dominio (módulo businesses faltante, órdenes core, offers), 2) calidad (capas, TS estricto, shared package), 3) testing/CI. No duplicar trabajo ya planeado allí: leerlo antes de tocar un módulo.
+- Roadmap activo (espejo Supabase → API): `docs/roadmap-api-mirror.md` (ADR-0008).
+- Backlog histórico pre-monorepo: `IMPROVEMENT_PLAN.md` (archivado — muchos ítems ya aplicados o obsoletos).

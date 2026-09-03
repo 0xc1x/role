@@ -369,19 +369,39 @@ export class EmailMarketingRepository {
     return this.db.insert(emailSends).values(values).returning();
   }
 
-  /** Lote de envíos pendientes. Un solo cron → sin locking necesario. */
+  /** Lote de envíos pendientes — BD fuente de verdad, BullMQ solo ejecuta. */
   findQueuedBatch(campaignId: string, limit: number): Promise<SendRow[]> {
+    // Compat: campaignId se mapea a source_type='campaign' + source_id
     return this.db
       .select()
       .from(emailSends)
       .where(
         and(
-          eq(emailSends.campaign_id, campaignId),
-          eq(emailSends.status, 'queued'),
+          eq(emailSends.type, 'campaign'),
+          eq(emailSends.source_type, 'campaign'),
+          eq(emailSends.source_id, campaignId),
+          sql`status in ('pending','queued') and attempts < max_attempts`,
         ),
       )
-      .orderBy(emailSends.created_at)
+      .orderBy(emailSends.scheduled_at)
       .limit(limit);
+  }
+
+  /** Lote genérico para cron que busca pendientes/fallidos reintentables */
+  findPendingBatch(limit: number): Promise<SendRow[]> {
+    return this.db
+      .select()
+      .from(emailSends)
+      .where(sql`status in ('pending','queued','failed') and attempts < max_attempts and (scheduled_at is null or scheduled_at <= now())`)
+      .orderBy(emailSends.scheduled_at)
+      .limit(limit);
+  }
+
+  async markProcessing(id: string) {
+    await this.db
+      .update(emailSends)
+      .set({ status: 'processing', processed_at: new Date(), updated_at: new Date() })
+      .where(eq(emailSends.id, id));
   }
 
   async markSent(id: string, resendId: string | null) {
@@ -391,26 +411,33 @@ export class EmailMarketingRepository {
         status: 'sent',
         resend_id: resendId,
         sent_at: new Date(),
+        processed_at: new Date(),
+        attempts: sql`attempts + 1`,
         updated_at: new Date(),
       })
       .where(eq(emailSends.id, id));
   }
 
-  async markFailed(id: string, message: string) {
+  async markFailed(id: string, message: string, code?: string) {
     await this.db
       .update(emailSends)
       .set({
-        status: 'failed',
+        status: sql`case when attempts + 1 >= max_attempts then 'failed'::email_send_status else 'queued'::email_send_status end`,
         error_message: message.slice(0, 500),
+        error_code: code ?? null,
+        attempts: sql`attempts + 1`,
+        scheduled_at: sql`case when attempts + 1 < max_attempts then now() + (interval '5 minutes' * (attempts + 1)) else scheduled_at end`,
         updated_at: new Date(),
       })
       .where(eq(emailSends.id, id));
   }
 
+  async markCancelled(id: string) {
+    await this.db.update(emailSends).set({ status: 'cancelled', updated_at: new Date() }).where(eq(emailSends.id, id));
+  }
+
   async deleteSendsByCampaign(campaignId: string): Promise<void> {
-    await this.db
-      .delete(emailSends)
-      .where(eq(emailSends.campaign_id, campaignId));
+    await this.db.delete(emailSends).where(and(eq(emailSends.type, 'campaign'), eq(emailSends.source_type, 'campaign'), eq(emailSends.source_id, campaignId)));
   }
 
   /** ¿Quedan envíos en cola para esta campaña? */
@@ -420,8 +447,10 @@ export class EmailMarketingRepository {
       .from(emailSends)
       .where(
         and(
-          eq(emailSends.campaign_id, campaignId),
-          eq(emailSends.status, 'queued'),
+          eq(emailSends.type, 'campaign'),
+          eq(emailSends.source_type, 'campaign'),
+          eq(emailSends.source_id, campaignId),
+          sql`status in ('pending','queued')`,
         ),
       );
     return Number(row?.c ?? 0);
@@ -450,10 +479,31 @@ export class EmailMarketingRepository {
   }
 
   listSendsByCampaign(campaignId: string, f: ListFilter & { status?: string }) {
-    const filters: SQL[] = [eq(emailSends.campaign_id, campaignId)];
+    const filters: SQL[] = [eq(emailSends.type, 'campaign'), eq(emailSends.source_type, 'campaign'), eq(emailSends.source_id, campaignId)];
     if (f.status)
       filters.push(eq(emailSends.status, f.status as SendRow['status']));
     return this.paginate(emailSends, and(...filters), f);
+  }
+
+  async listSends(f: ListFilter & { status?: string; type?: string; source_type?: string | null; source_id?: string | null; search?: string }) {
+    const filters: SQL[] = [];
+    if (f.status) filters.push(eq(emailSends.status, f.status as SendRow['status']));
+    if (f.type) filters.push(eq(emailSends.type, f.type as SendRow['type']));
+    if (f.source_type) filters.push(eq(emailSends.source_type, f.source_type));
+    if (f.source_id) filters.push(eq(emailSends.source_id, f.source_id));
+    if (f.search) filters.push(ilike(emailSends.email, `%${f.search}%`));
+    const where = filters.length ? and(...filters) : undefined;
+    return this.paginate(emailSends, where, f);
+  }
+
+  async findSendById(id: string): Promise<SendRow | null> {
+    const [row] = await this.db.select().from(emailSends).where(eq(emailSends.id, id)).limit(1);
+    return (row as SendRow) ?? null;
+  }
+
+  async updateSend(id: string, values: Partial<typeof emailSends.$inferInsert>) {
+    const [row] = await this.db.update(emailSends).set({ ...values, updated_at: new Date() }).where(eq(emailSends.id, id)).returning();
+    return row ?? null;
   }
 
   /** Recalcula contadores de campaña desde email_sends (auto-consistente). */
@@ -470,12 +520,12 @@ export class EmailMarketingRepository {
       from (
         select
           count(*) as total,
-          count(*) filter (where status <> 'queued') as sent,
+          count(*) filter (where status <> 'pending' and status <> 'queued') as sent,
           count(*) filter (where status in ('delivered','opened','clicked')) as delivered,
           count(*) filter (where status in ('opened','clicked')) as opened,
           count(*) filter (where status = 'clicked') as clicked,
           count(*) filter (where status in ('bounced','complained')) as bounced
-        from email_sends where campaign_id = ${campaignId}
+        from email_sends where type = 'campaign' and source_type = 'campaign' and source_id = ${campaignId}::uuid
       ) s
       where c.id = ${campaignId}
     `);

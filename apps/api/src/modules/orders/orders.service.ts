@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
   UnprocessableEntityException,
@@ -40,6 +41,8 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly ordersRepository: OrdersRepository,
     private readonly offersRepository: OffersRepository,
@@ -568,6 +571,10 @@ export class OrdersService {
   private emitOrderChange(orderId: string): void {
     if (!this.config.get('ENABLE_API_MIRROR_NOTIFICATIONS', { infer: true })) return;
     // Fire-and-forget: no bloquea la respuesta HTTP, BullMQ hace reintentos
-    this.notificationHandlers?.onOrderStatusChanged(orderId).catch(() => {});
+    this.notificationHandlers?.onOrderStatusChanged(orderId).catch((err) => {
+      this.logger.warn(
+        `Notificación de cambio de estado falló para orden ${orderId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
   }
 }

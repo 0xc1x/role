@@ -3,7 +3,7 @@
 Generate a static OpenAPI document from the Nest app:
 
 ```bash
-npm run openapi:export
+bun run openapi:export
 ```
 
 This boots `AppModule` (without listening), builds the Swagger document, and writes:

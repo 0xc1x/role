@@ -2,13 +2,15 @@
 
 ## Commands
 
+Desde `apps/api` (o `bun run test --filter=role-api` desde la raíz):
+
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Unit tests (`src/**/*.spec.ts`) |
-| `npm run test:cov` | Unit + coverage (thresholds in `jest.config.js`) |
-| `npm run test:e2e` | E2E smoke (requires full env; otherwise most suites skip) |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run lint` | ESLint |
+| `bun run test` | Unit tests (`src/**/*.spec.ts`) |
+| `bun run test:cov` | Unit + coverage (thresholds in `jest.config.js`) |
+| `bun run test:e2e` | E2E smoke (requires full env; otherwise most suites skip) |
+| `bun run typecheck` | `tsc --noEmit` |
+| `bun run lint` | ESLint |
 
 ## Layout
 
@@ -30,10 +32,10 @@ Excludes: `*.module.ts`, `main.ts`, `database/schema/**`, specs.
 
 ## CI
 
-GitHub Actions: `.github/workflows/ci.yml`
+GitHub Actions en la raíz del monorepo: `.github/workflows/ci.yml`
 
-- `npm ci` → `lint` → `typecheck` → `test:cov` → `build`
-- `role-commons` is expected as sibling `file:../role-commons` (workflow attempts to check out / link it).
+- `bun install --frozen-lockfile` → `bun run typecheck` → `bun run test` → `bun run build` (turbo)
+- `packages/commons` se compila vía `dependsOn: ^build` antes de los consumidores.
 
 ## Integration / testcontainers (pending)
 

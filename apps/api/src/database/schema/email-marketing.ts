@@ -27,7 +27,9 @@ export const campaignStatusEnum = pgEnum('campaign_status', [
   'failed',
 ]);
 export const emailSendStatusEnum = pgEnum('email_send_status', [
+  'pending',
   'queued',
+  'processing',
   'sent',
   'delivered',
   'opened',
@@ -35,6 +37,14 @@ export const emailSendStatusEnum = pgEnum('email_send_status', [
   'bounced',
   'complained',
   'failed',
+  'cancelled',
+]);
+export const emailSendTypeEnum = pgEnum('email_send_type', [
+  'campaign',
+  'transactional',
+  'newsletter',
+  'notification',
+  'test',
 ]);
 
 // ─── Componentes (header / footer) ─────────────────────────────────────
@@ -180,25 +190,35 @@ export const campaigns = pgTable(
   ],
 );
 
-// ─── Envíos individuales (cola) ───────────────────────────────────────
+// ─── Envíos individuales (cola robusta) ──────────────────────────────
+// type/source + template_id not null para reintentos sin campaign_id (BD fuente de verdad, BullMQ solo ejecuta)
 export const emailSends = pgTable(
   'email_sends',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    campaign_id: uuid('campaign_id')
+    type: emailSendTypeEnum('type').notNull().default('campaign'),
+    source_type: text('source_type'),
+    source_id: uuid('source_id'),
+    template_id: uuid('template_id')
       .notNull()
-      .references(() => campaigns.id, { onDelete: 'cascade' }),
+      .references(() => emailTemplates.id, { onDelete: 'set null' }),
     user_id: uuid('user_id'),
     email: text('email').notNull(),
+    variables_used: jsonb('variables_used'),
+    status: emailSendStatusEnum('status').notNull().default('pending'),
     resend_id: text('resend_id'),
-    status: emailSendStatusEnum('status').notNull().default('queued'),
+    attempts: integer('attempts').notNull().default(0),
+    max_attempts: integer('max_attempts').notNull().default(5),
+    error_message: text('error_message'),
+    error_code: text('error_code'),
+    scheduled_at: timestamp('scheduled_at', { withTimezone: true }),
+    queued_at: timestamp('queued_at', { withTimezone: true }),
+    processed_at: timestamp('processed_at', { withTimezone: true }),
     sent_at: timestamp('sent_at', { withTimezone: true }),
     delivered_at: timestamp('delivered_at', { withTimezone: true }),
     opened_at: timestamp('opened_at', { withTimezone: true }),
     clicked_at: timestamp('clicked_at', { withTimezone: true }),
     bounced_at: timestamp('bounced_at', { withTimezone: true }),
-    error_message: text('error_message'),
-    variables_used: jsonb('variables_used'),
     created_at: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -207,12 +227,13 @@ export const emailSends = pgTable(
       .defaultNow(),
   },
   (t) => [
-    index('idx_email_sends_campaign').on(t.campaign_id),
+    index('idx_email_sends_type_status').on(t.type, t.status),
+    index('idx_email_sends_source').on(t.source_type, t.source_id),
+    index('idx_email_sends_template').on(t.template_id),
     index('idx_email_sends_user').on(t.user_id),
     index('idx_email_sends_resend_id').on(t.resend_id),
     index('idx_email_sends_status').on(t.status),
-    index('idx_email_sends_queued')
-      .on(t.campaign_id, t.created_at)
-      .where(sql`status = 'queued'`),
+    index('idx_email_sends_scheduled').on(t.scheduled_at).where(sql`status in ('pending','queued')`),
+    index('idx_email_sends_queued_at').on(t.queued_at),
   ],
 );

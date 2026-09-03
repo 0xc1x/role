@@ -1,5 +1,11 @@
 # Plan de mejora — Role API
 
+> **Archivado (2026-08).** Este documento describe el backlog de la era de repos separados (`role-api` + `file:../role-commons` + npm). Muchos ítems ya están aplicados en el monorepo. Para trabajo activo, usar:
+>
+> - `docs/roadmap-api-mirror.md` — migración de lógica Supabase → API (ADR-0008)
+> - `apps/api/AGENTS.md` — convenciones y verificación actual
+> - `docs/contracts.md` — contratos en `packages/commons`
+
 Documento de mejora continua para llevar **role-api** a un estándar profesional de BFF/API de producción (NestJS + Drizzle + Supabase).
 
 **Fecha:** 2026-07-30  

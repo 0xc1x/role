@@ -34,6 +34,7 @@ import type {
   CampaignPaginatedData,
   CreateCampaignDto,
   EmailComponentPaginatedData,
+  EmailSendDto,
   EmailTemplatePaginatedData,
   ListCampaignsQuery,
   ListComponentsQuery,
@@ -330,5 +331,41 @@ export class EmailMarketingController {
     @Query(new ZodValidationPipe(ListSendsQuerySchema)) q: ListSendsQuery,
   ) {
     return this.campaignsService.listSends({ campaignId: id, ...q });
+  }
+
+  @Get('sends')
+  listAllSends(
+    @Query(new ZodValidationPipe(ListSendsQuerySchema)) q: ListSendsQuery,
+  ) {
+    return this.repository
+      .listSends(q)
+      .then(({ rows, total }) => ({
+        data: rows.map((r) => EmailMarketingMapper.toSendDto(r)),
+        meta: { page: q.page, limit: q.limit, total },
+      })) as Promise<never>;
+  }
+
+  @Patch('sends/:id')
+  updateSend(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: Partial<EmailSendDto>,
+  ) {
+    return this.repository.updateSend(id, body as never).then((row) => (row ? EmailMarketingMapper.toSendDto(row) : null));
+  }
+
+  @Post('sends/:id/retry')
+  @HttpCode(HttpStatus.OK)
+  async retrySend(@Param('id', ParseUUIDPipe) id: string) {
+    const row = await this.repository.findSendById(id);
+    if (!row) throw new Error('Envío no encontrado');
+    await this.repository.updateSend(id, {
+      status: 'pending' as never,
+      scheduled_at: new Date() as never,
+      queued_at: new Date() as never,
+      attempts: 0 as never,
+      error_message: null as never,
+      error_code: null as never,
+    } as never);
+    return { ok: true };
   }
 }

@@ -11,6 +11,6 @@ import { NotificationJobs } from './notification.jobs';
     NotificationHandlers,
     NotificationJobs,
   ],
-  exports: [NotificationsService, NotificationHandlers],
+  exports: [NotificationsService, NotificationHandlers, NotificationsRepository],
 })
 export class NotificationsModule {}

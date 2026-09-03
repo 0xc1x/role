@@ -9,7 +9,8 @@ export function toSlideDto(row: SlideRow): SlideDto {
     caption: row.caption,
     badge_text: row.badge_text,
     cta_label: row.cta_label ?? '',
-    redirect_url: row.redirect_url ?? '',
+    redirect_url: row.redirect_url,
+    coupon_code: row.coupon_code,
     image_url: row.image_url,
     text_color: row.text_color,
     button_color: row.button_color,
@@ -30,7 +31,8 @@ export function toSlideInsert(dto: CreateSlideDto): SlideInsert {
     caption: dto.caption,
     badge_text: dto.badge_text ?? null,
     cta_label: dto.cta_label ?? null,
-    redirect_url: dto.redirect_url ?? null,
+    redirect_url: dto.redirect_url || null,
+    coupon_code: dto.coupon_code ?? null,
     image_url: dto.image_url ?? '',
     text_color: dto.text_color ?? null,
     button_color: dto.button_color ?? null,
@@ -49,7 +51,7 @@ export function toSlideUpdate(dto: UpdateSlideDto): SlideUpdate {
     'caption',
     'badge_text',
     'cta_label',
-    'redirect_url',
+    'coupon_code',
     'text_color',
     'button_color',
     'type',
@@ -59,6 +61,7 @@ export function toSlideUpdate(dto: UpdateSlideDto): SlideUpdate {
   for (const k of directKeys) {
     if (dto[k] !== undefined) (update as Record<string, unknown>)[k] = dto[k];
   }
+  if (dto.redirect_url !== undefined) update.redirect_url = dto.redirect_url || null;
   if (dto.image_url !== undefined) update.image_url = dto.image_url ?? '';
   if (dto.start_at !== undefined) update.start_at = dto.start_at ? new Date(dto.start_at) : null;
   if (dto.end_at !== undefined) update.end_at = dto.end_at ? new Date(dto.end_at) : null;

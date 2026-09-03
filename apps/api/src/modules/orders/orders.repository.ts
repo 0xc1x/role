@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import type { OrderStatus } from '@0xc1x/role-commons';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
@@ -258,7 +258,11 @@ export class OrdersRepository {
     return row?.commission_rate ?? null;
   }
 
-  /** Cupón activo y vigente del negocio, con lock (espejo del SELECT … FOR UPDATE). */
+  /**
+   * Cupón activo y vigente del negocio o global (business_id null), con lock
+   * (espejo del SELECT … FOR UPDATE). Ante el mismo código, el cupón del
+   * negocio gana sobre el global.
+   */
   async findCouponByCodeForUpdate(
     tx: DbExecutor,
     businessId: string,
@@ -269,10 +273,13 @@ export class OrdersRepository {
       .from(coupons)
       .where(
         and(
-          eq(coupons.business_id, businessId),
           eq(coupons.code, code),
           eq(coupons.is_active, true),
+          or(eq(coupons.business_id, businessId), isNull(coupons.business_id)),
         ),
+      )
+      .orderBy(
+        sql`case when ${coupons.business_id} = ${businessId} then 0 else 1 end`,
       )
       .for('update', { of: coupons })
       .limit(1);

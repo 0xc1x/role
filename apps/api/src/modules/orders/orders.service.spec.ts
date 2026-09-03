@@ -295,6 +295,23 @@ describe('OrdersService', () => {
       ).rejects.toThrow('COUPON_MIN_NOT_MET');
     });
 
+    it('cupón global (business_id null): aplica igual que el del negocio', async () => {
+      mockHappyPath();
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
+        makeCouponRow({ business_id: null, value: '20' }), // 9.99 → 7.99
+      );
+
+      await service.create(mockAuthUser, { ...body, coupon_code: 'GLOBAL10' });
+
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          price: '7.992', // 9.99 * 0.8 (el espejo no redondea el precio)
+          coupon_id: 'coupon-1',
+        }),
+      );
+    });
+
     it('cupón inexistente/vencido: el SQL continúa sin descuento (espejo idéntico)', async () => {
       mockHappyPath();
       ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(null);

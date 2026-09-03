@@ -33,6 +33,10 @@ export const businesses = pgTable('businesses', {
   balance: numeric('balance', { precision: 12, scale: 2 }).default('0.00'),
   currency: text('currency').notNull().default('USD'),
   is_active: boolean('is_active').notNull().default(true),
+  verification_status: text('verification_status').notNull().default('pending'),
+  verified_at: timestamp('verified_at', { withTimezone: true }),
+  verified_by: uuid('verified_by').references(() => profiles.id),
+  rejection_reason: text('rejection_reason'),
   created_at: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -14,6 +14,7 @@ export const slides = pgTable('slides', {
   badge_text: text('badge_text'),
   cta_label: text('cta_label'),
   redirect_url: text('redirect_url'),
+  coupon_code: text('coupon_code'),
   image_url: text('image_url').notNull(),
   text_color: text('text_color'),
   button_color: text('button_color'),

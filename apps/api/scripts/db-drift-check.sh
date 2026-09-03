@@ -2,7 +2,7 @@
 # Compare remote Supabase schema (drizzle-kit pull) against committed Drizzle mirrors.
 # Does not overwrite schema files — pulls into a temp dir and diffs.
 #
-# Usage: npm run db:drift
+# Usage: bun run db:drift
 # Requires: DATABASE_URL, drizzle-kit
 set -euo pipefail
 

@@ -15,7 +15,9 @@ export * from './categories';
 export * from './slides';
 export * from './tips';
 export * from './app-configs';
+export * from './app-store';
 export * from './email-marketing';
+export * from './push-notifications';
 
 import { businessLocations } from './business-locations';
 import { businesses } from './businesses';
@@ -35,6 +37,7 @@ import { categories } from './categories';
 import { slides } from './slides';
 import { tips } from './tips';
 import { appConfig } from './app-configs';
+import { appStore } from './app-store';
 import { deviceTokens } from './device-tokens';
 import { favorites } from './favorites';
 import {
@@ -46,6 +49,7 @@ import {
   segmentUsers,
   segments,
 } from './email-marketing';
+import { pushNotifications, pushTemplates } from './push-notifications';
 import { payouts } from './payouts';
 
 /** Schema map passed to drizzle() for typed queries. */
@@ -70,6 +74,7 @@ export const schema = {
   deviceTokens,
   favorites,
   appConfig,
+  appStore,
   emailComponents,
   emailTemplates,
   marketingPreferences,
@@ -77,6 +82,8 @@ export const schema = {
   segmentUsers,
   campaigns,
   emailSends,
+  pushTemplates,
+  pushNotifications,
 };
 
 export type DatabaseSchema = typeof schema;

@@ -1,3 +1,4 @@
+import { createPrivateKey } from 'node:crypto';
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { parseRedisUrl } from '../../common/utils/redis';
@@ -14,6 +15,16 @@ export type EnqueuePushJob = {
   userIds: string[];
   payload: PushPayload;
   prefFlag?: string;
+};
+
+/** Resultado de un envío con reporte (rutas admin). */
+export type PushSendReport = {
+  /** Usuarios a los que se intentó entregar (tras filtros de preferencias). */
+  targeted: number;
+  /** Entregas por dispositivo exitosas. */
+  sent: number;
+  /** Entregas por dispositivo fallidas (token desactivado). */
+  failed: number;
 };
 
 @Injectable()
@@ -75,53 +86,118 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         removeOnFail: 500,
       });
     } else {
-      // ponytail: direct call when no Redis, BullMQ if retry matters
+      // Sin Redis no hay reintentos: envío directo; con Redis, BullMQ reintenta
       await this.processSend(job);
     }
   }
 
   async processSend(job: EnqueuePushJob): Promise<void> {
-    let userIds = job.userIds;
-    if (job.prefFlag) {
-      userIds = await this.repo.filterByConsumerPrefs(userIds, job.prefFlag as never);
-      if (userIds.length === 0) return;
-    }
-    const pushAllowed = await this.repo.filterByConsumerPrefs(userIds, 'push_enabled' as never);
-    userIds = pushAllowed;
-    if (userIds.length === 0) return;
-
-    const quietFiltered: string[] = [];
-    for (const id of userIds) {
-      if (!(await this.repo.isInQuietHours(id))) quietFiltered.push(id);
-    }
-    userIds = quietFiltered;
+    const userIds = await this.resolveAllowedRecipients(job.userIds, job.prefFlag);
     if (userIds.length === 0) return;
 
     const targets = await this.repo.findActiveTokens(userIds);
     if (targets.length === 0) return;
 
-    const corsOrigins = this.config.get('CORS_ORIGINS', { infer: true });
-    const base = corsOrigins.split(',')[0]?.trim() ?? '';
-    const abs = (v?: string) => (v ? (v.startsWith('http') ? v : `${base}${v}`) : '');
-    const link = abs(job.payload.data?.link);
-    const icon = abs(job.payload.data?.icon) || `${base}/icons/Icon-192.png`;
-    const badge = abs(job.payload.data?.badge) || `${base}/icons/Icon-72.png`;
-    const image = abs(job.payload.data?.image);
-    const tag = job.payload.data?.tag ?? job.payload.data?.type ?? 'role';
+    const payload = this.enrichPayload(job.payload);
 
     await Promise.allSettled(
       targets.map(async (t) => {
         try {
-          const ok = await this.sendToToken(t, {
-            ...job.payload,
-            data: { ...job.payload.data, link, icon, badge, tag, ...(image ? { image } : {}) },
-          });
+          const ok = await this.sendToToken(t, payload);
           if (!ok) await this.repo.deactivateToken(t.token);
         } catch (err) {
           this.logger.warn(`Push failed ${t.platform} ${t.token.slice(0, 10)}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }),
     );
+  }
+
+  /**
+   * Envío con reporte para rutas admin: mismo pipeline de processSend
+   * (preferencias → push_enabled → quiet hours → tokens activos) pero
+   * contando resultados por dispositivo. `render` permite personalizar el
+   * payload por usuario (p. ej. `{{nombre}}`); `skipFilters` entrega sin
+   * pasar por preferencias ni quiet hours (envíos de prueba).
+   */
+  async sendWithReport(
+    userIds: string[],
+    payload: PushPayload,
+    opts?: {
+      prefFlag?: string;
+      render?: (userId: string) => PushPayload;
+      skipFilters?: boolean;
+    },
+  ): Promise<PushSendReport> {
+    if (userIds.length === 0) return { targeted: 0, sent: 0, failed: 0 };
+    const allowed = opts?.skipFilters
+      ? userIds
+      : await this.resolveAllowedRecipients(userIds, opts?.prefFlag);
+    if (allowed.length === 0) return { targeted: 0, sent: 0, failed: 0 };
+
+    const targets = await this.repo.findActiveTokens(allowed);
+    const targeted = allowed.length;
+    if (targets.length === 0) return { targeted, sent: 0, failed: 0 };
+
+    let sent = 0;
+    let failed = 0;
+    await Promise.allSettled(
+      targets.map(async (t) => {
+        const base = opts?.render ? opts.render(t.user_id) : payload;
+        try {
+          const ok = await this.sendToToken(t, this.enrichPayload(base));
+          if (ok) {
+            sent += 1;
+          } else {
+            failed += 1;
+            await this.repo.deactivateToken(t.token);
+          }
+        } catch (err) {
+          failed += 1;
+          this.logger.warn(`Push failed ${t.platform} ${t.token.slice(0, 10)}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }),
+    );
+    return { targeted, sent, failed };
+  }
+
+  /** Filtra userIds por prefFlag, push_enabled y quiet hours. */
+  private async resolveAllowedRecipients(
+    userIds: string[],
+    prefFlag?: string,
+  ): Promise<string[]> {
+    let allowed = userIds;
+    if (prefFlag) {
+      allowed = await this.repo.filterByConsumerPrefs(allowed, prefFlag as never);
+      if (allowed.length === 0) return [];
+    }
+    const pushAllowed = await this.repo.filterByConsumerPrefs(allowed, 'push_enabled' as never);
+    if (pushAllowed.length === 0) return [];
+
+    const quietFiltered: string[] = [];
+    for (const id of pushAllowed) {
+      if (!(await this.repo.isInQuietHours(id))) quietFiltered.push(id);
+    }
+    return quietFiltered;
+  }
+
+  /** Completa link/icon/badge/tag/image absolutos a partir de CORS_ORIGINS. */
+  private enrichPayload(payload: PushPayload): PushPayload {
+    const corsOrigins = this.config.get('CORS_ORIGINS', { infer: true });
+    const first = corsOrigins.split(',')[0]?.trim() ?? '';
+    // `*` es wildcard de CORS, no una base de URL: deja las rutas relativas
+    // intactas (el SW de push las resuelve contra su origen).
+    const base = !first || first === '*' ? '' : first;
+    const abs = (v?: string) => (v ? (v.startsWith('http') ? v : `${base}${v}`) : '');
+    const link = abs(payload.data?.link);
+    const icon = abs(payload.data?.icon) || `${base}/icons/Icon-192.png`;
+    const badge = abs(payload.data?.badge) || `${base}/icons/Icon-72.png`;
+    const image = abs(payload.data?.image);
+    const tag = payload.data?.tag ?? payload.data?.type ?? 'role';
+
+    return {
+      ...payload,
+      data: { ...payload.data, link, icon, badge, tag, ...(image ? { image } : {}) },
+    };
   }
 
   private async sendToToken(
@@ -139,8 +215,10 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       this.logger.debug('FCM_SERVICE_ACCOUNT not set — mock send (no-op)');
       return true;
     }
+    // Credenciales inválidas = error de configuración: se propaga para que el
+    // reporte admin lo cuente como fallo real (no "sent" ni deactivate).
+    const accessToken = await this.getFcmAccessToken(saJson);
     try {
-      const accessToken = await this.getFcmAccessToken(saJson);
       const d = payload.data ?? {};
       const webpushNotif: Record<string, unknown> = {
         title: payload.title,
@@ -165,7 +243,12 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       });
       if (res.ok) return true;
       const body = await res.text();
-      if (body.includes('UNREGISTERED') || body.includes('NOT_FOUND') || res.status === 404) return false;
+      if (body.includes('UNREGISTERED') || body.includes('NOT_FOUND') || res.status === 404) {
+        // Token muerto del lado FCM (suscripción web vencida, app desinstalada):
+        // se desactiva para no reintentarlo; el cliente debe renovarlo.
+        this.logger.debug(`Token muerto (UNREGISTERED), desactivando: ${token.slice(0, 12)}…`);
+        return false;
+      }
       this.logger.warn(`FCM send failed ${res.status}: ${body}`);
       return true;
     } catch (err) {
@@ -201,7 +284,18 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private async getFcmAccessToken(saJson: string): Promise<string> {
     if (this.fcmAccessToken && Date.now() < this.fcmTokenExpiry) return this.fcmAccessToken;
     const { JWT } = await import('google-auth-library');
-    const creds = JSON.parse(saJson) as { client_email: string; private_key: string };
+    let creds: { client_email: string; private_key: string };
+    try {
+      creds = JSON.parse(saJson) as { client_email: string; private_key: string };
+      // La firma del JWT falla con el críptico "DECODER routines::unsupported"
+      // cuando la private_key llegó truncada al pegarla en .env; validar el PEM
+      // aquí produce un mensaje accionable.
+      createPrivateKey(creds.private_key);
+    } catch {
+      throw new Error(
+        'FCM_SERVICE_ACCOUNT malformado: el JSON o su private_key no se copiaron completos — regenera el JSON en Firebase Console y pégalo en una sola línea',
+      );
+    }
     const client = new JWT({ email: creds.client_email, key: creds.private_key, scopes: ['https://www.googleapis.com/auth/firebase.messaging'] });
     const tokens = await client.authorize();
     this.fcmAccessToken = tokens.access_token ?? null;

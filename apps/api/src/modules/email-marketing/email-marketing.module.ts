@@ -28,6 +28,6 @@ import { EmailExpeditionProcessor } from './email-expedition.processor';
     RendererService,
     EmailExpeditionProcessor,
   ],
-  exports: [CampaignsService],
+  exports: [CampaignsService, RecipientsService],
 })
 export class EmailMarketingModule {}

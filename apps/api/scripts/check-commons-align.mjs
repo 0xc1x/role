@@ -2,7 +2,7 @@
 /**
  * Fail if @0xc1x/role-commons is missing, unbuilt, or zod major drifts from the API.
  *
- * Usage: npm run commons:check
+ * Usage: bun run commons:check
  * Intended for local DX and CI (Phase 3) before typecheck/test.
  */
 import { createRequire } from 'node:module';
@@ -43,9 +43,14 @@ let commonsPkgPath;
 try {
   commonsPkgPath = require.resolve('@0xc1x/role-commons/package.json');
 } catch {
-  fail(
-    'cannot resolve @0xc1x/role-commons — run npm install (and build ../role-commons if using file:)',
-  );
+  const workspaceFallback = join(root, '..', '..', 'packages', 'commons', 'package.json');
+  if (existsSync(workspaceFallback)) {
+    commonsPkgPath = workspaceFallback;
+  } else {
+    fail(
+      'cannot resolve @0xc1x/role-commons — run bun install from the monorepo root (and build packages/commons if dist is missing)',
+    );
+  }
 }
 
 const commonsRoot = dirname(commonsPkgPath);
@@ -56,7 +61,7 @@ const distIndex = join(commonsRoot, 'dist', 'index.js');
 const distTypes = join(commonsRoot, 'dist', 'index.d.ts');
 if (!existsSync(distIndex) || !existsSync(distTypes)) {
   fail(
-    `commons dist missing (expected dist/index.js + dist/index.d.ts under ${commonsRoot}). Run: cd ../role-commons && bun run build`,
+    `commons dist missing (expected dist/index.js + dist/index.d.ts under ${commonsRoot}). Run: bun run build --filter=@0xc1x/role-commons`,
   );
 }
 ok('commons dist present (index.js + index.d.ts)');
@@ -79,12 +84,18 @@ if (apiMajor !== commonsMajor) {
 }
 ok(`zod majors align (api ${apiZod}, commons ${commonsZod})`);
 
-// When published (not file:), require a concrete semver range, not a floating "latest".
-if (!String(depSpec).startsWith('file:') && !/^\d|\^|~|>=/.test(String(depSpec))) {
+// When published (not workspace/file), require a concrete semver range.
+if (
+  !String(depSpec).startsWith('workspace:') &&
+  !String(depSpec).startsWith('file:') &&
+  !/^\d|\^|~|>=/.test(String(depSpec))
+) {
   fail(`published dependency should be a semver range, got: ${depSpec}`);
 }
-if (String(depSpec).startsWith('file:')) {
-  ok('using local file: link (publish semver for deploy — see IMPROVEMENT_PLAN 5.4)');
+if (String(depSpec).startsWith('workspace:')) {
+  ok('using workspace:* link (monorepo)');
+} else if (String(depSpec).startsWith('file:')) {
+  ok('using local file: link');
 } else {
   ok(`using published range: ${depSpec}`);
 }

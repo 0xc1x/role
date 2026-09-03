@@ -91,4 +91,26 @@ describe('NotificationsService (espejo send-push-notification)', () => {
     });
     expect(repo.deactivateToken).not.toHaveBeenCalled();
   });
+
+  it('FCM con private_key truncada cuenta como fallo y no desactiva el token', async () => {
+    repo.filterByConsumerPrefs.mockResolvedValue(['u1']);
+    repo.isInQuietHours.mockResolvedValue(false);
+    repo.findActiveTokens.mockResolvedValue([
+      { user_id: 'u1', token: 'web-token', platform: 'web' },
+    ]);
+    get.mockImplementation((key: string) => {
+      if (key === 'FCM_SERVICE_ACCOUNT')
+        return '{"type":"service_account","client_email":"sa@fudi.iam.gserviceaccount.com","private_key":"-----BEGIN PRIVATE KEY-----\\nMIIEvQ\\n-----END PRIVATE KEY-----\\n"}';
+      if (key === 'FCM_PROJECT_ID') return 'fudi';
+      if (key === 'CORS_ORIGINS') return 'http://localhost:3000';
+      return '';
+    });
+    global.fetch = jest.fn();
+
+    const report = await service.sendWithReport(['u1'], { title: 'T', body: 'B' });
+
+    expect(report).toEqual({ targeted: 1, sent: 0, failed: 1 });
+    expect(repo.deactivateToken).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });

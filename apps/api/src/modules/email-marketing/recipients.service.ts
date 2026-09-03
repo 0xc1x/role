@@ -28,12 +28,44 @@ export class RecipientsService {
     },
     category: string,
   ): Promise<Recipient[]> {
+    const ids = await this.resolveUserIds(input, category);
+    const rows = await this.repository.findSubscribedRecipients(ids, category);
+    // Dedup por email: un email = un envío.
+    const seen = new Set<string>();
+    return rows
+      .filter((r) => {
+        if (!r.email || seen.has(r.email)) return false;
+        seen.add(r.email);
+        return true;
+      })
+      .map((r) => ({
+        userId: r.user_id,
+        email: r.email,
+        fullName: r.full_name ?? null,
+      }));
+  }
+
+  /**
+   * Resolución de usuarios por segmentos (estáticos/dinámicos) ∪ include −
+   * exclude. Con `category` (email) solo aplican segmentos de esa categoría;
+   * sin ella (push) aplican todos los segmentos activos. No filtra por
+   * marketing_preferences: cada canal aplica su propio gating.
+   */
+  async resolveUserIds(
+    input: {
+      segmentIds: string[];
+      includeUserIds: string[];
+      excludeUserIds: string[];
+    },
+    category?: string,
+  ): Promise<string[]> {
     const idSet = new Set<string>(input.includeUserIds);
 
     for (const segmentId of input.segmentIds) {
       const segment = await this.repository.findSegmentById(segmentId);
-      // Un segmento solo aplica a campañas de su misma categoría.
-      if (!segment?.is_active || segment.category !== category) continue;
+      // Un segmento (email) solo aplica a campañas de su misma categoría.
+      if (!segment?.is_active) continue;
+      if (category && segment.category !== category) continue;
 
       if (segment.type === 'static') {
         for (const id of await this.repository.getSegmentUserIds(segmentId)) {
@@ -51,23 +83,6 @@ export class RecipientsService {
     }
 
     for (const id of input.excludeUserIds) idSet.delete(id);
-
-    const rows = await this.repository.findSubscribedRecipients(
-      [...idSet],
-      category,
-    );
-    // Dedup por email: un email = un envío.
-    const seen = new Set<string>();
-    return rows
-      .filter((r) => {
-        if (!r.email || seen.has(r.email)) return false;
-        seen.add(r.email);
-        return true;
-      })
-      .map((r) => ({
-        userId: r.user_id,
-        email: r.email,
-        fullName: r.full_name ?? null,
-      }));
+    return [...idSet];
   }
 }

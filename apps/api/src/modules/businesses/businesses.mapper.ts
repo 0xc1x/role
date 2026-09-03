@@ -24,6 +24,10 @@ export class BusinessMapper {
       rating: toNumberOrNull(row.rating),
       review_count: row.review_count ?? null,
       is_active: row.is_active,
+      verification_status: row.verification_status as BusinessDto['verification_status'],
+      verified_at: row.verified_at ? row.verified_at.toISOString() : null,
+      verified_by: row.verified_by ?? null,
+      rejection_reason: row.rejection_reason ?? null,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
     };

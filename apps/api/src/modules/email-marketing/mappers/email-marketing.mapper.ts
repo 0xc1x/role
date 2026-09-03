@@ -101,18 +101,29 @@ export class EmailMarketingMapper {
   static toSendDto(row: SendRow): EmailSendDto {
     return {
       id: row.id,
-      campaign_id: row.campaign_id,
+      type: row.type,
+      source_type: row.source_type ?? null,
+      source_id: row.source_id ?? null,
+      template_id: row.template_id,
       user_id: row.user_id ?? null,
       email: row.email,
+      variables_used: (row.variables_used as Record<string, unknown> | null) ?? null,
       resend_id: row.resend_id ?? null,
       status: row.status,
+      attempts: row.attempts ?? 0,
+      max_attempts: row.max_attempts ?? 5,
+      error_message: row.error_message ?? null,
+      error_code: row.error_code ?? null,
+      scheduled_at: this.iso(row.scheduled_at),
+      queued_at: this.iso(row.queued_at),
+      processed_at: this.iso(row.processed_at),
       sent_at: this.iso(row.sent_at),
       delivered_at: this.iso(row.delivered_at),
       opened_at: this.iso(row.opened_at),
       clicked_at: this.iso(row.clicked_at),
       bounced_at: this.iso(row.bounced_at),
-      error_message: row.error_message ?? null,
       created_at: row.created_at.toISOString(),
+      updated_at: this.iso(row.updated_at as Date | null),
     };
   }
 }

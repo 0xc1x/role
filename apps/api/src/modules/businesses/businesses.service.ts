@@ -72,6 +72,9 @@ export class BusinessesService {
   async create(user: AuthUser, body: CreateBusinessDto): Promise<BusinessDto> {
     if (user.role !== 'admin') {
       body.owner_id = user.id;
+      // Business role always creates pending, is_active false (trigger syncs)
+      body.verification_status = 'pending';
+      body.is_active = false;
     }
 
     const existing = await this.businessesRepository.findBySlug(body.slug);
@@ -92,9 +95,14 @@ export class BusinessesService {
         email: body.email ?? null,
         website: body.website ?? null,
         commission_rate: (body.commission_rate ?? 0.1).toString(),
-        is_active: body.is_active ?? true,
+        is_active: body.is_active ?? false,
+        verification_status: body.verification_status ?? 'pending',
+        rejection_reason: body.rejection_reason ?? null,
       });
     });
+
+    // TODO: email hook — business_pending_admin + business_pending_owner
+    // Will be implemented via EmailMarketing module after template seeding
 
     return BusinessMapper.toDto(created);
   }
@@ -137,6 +145,25 @@ export class BusinessesService {
         patch.commission_rate = body.commission_rate.toString();
       }
       if (body.is_active !== undefined) patch.is_active = body.is_active;
+      if (body.verification_status !== undefined) {
+        if (user.role !== 'admin') {
+          throw new ForbiddenException('Solo admin puede verificar negocios');
+        }
+        patch.verification_status = body.verification_status;
+        patch.verified_at = new Date();
+        patch.verified_by = user.id;
+        if (body.verification_status === 'approved') {
+          patch.is_active = true;
+          patch.rejection_reason = null;
+        } else if (body.verification_status === 'rejected') {
+          patch.is_active = false;
+          patch.rejection_reason = body.rejection_reason ?? null;
+        } else if (body.verification_status === 'pending') {
+          patch.is_active = false;
+        }
+      } else if (body.rejection_reason !== undefined && user.role === 'admin') {
+        patch.rejection_reason = body.rejection_reason;
+      }
 
       const row = await this.businessesRepository.update(tx, id, patch);
       if (!row) {

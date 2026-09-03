@@ -11,6 +11,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { CouponsModule } from './modules/coupons/coupons.module';
 import { TipsModule } from './modules/tips/tips.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { OrdersModule } from './modules/orders/orders.module';
@@ -24,7 +25,10 @@ import { ProfilesModule } from './modules/profiles/profiles.module';
 import { PayoutsModule } from './modules/payouts/payouts.module';
 import { CommissionsModule } from './modules/commissions/commissions.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { PushNotificationsModule } from './modules/push-notifications/push-notifications.module';
+import { ContactModule } from './modules/contact/contact.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
+import { StoreModule } from './modules/store/store.module';
 
 @Module({
   imports: [
@@ -67,12 +71,18 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
         ttl: 60000,
         limit: 20,
       },
+      {
+        name: 'contact',
+        ttl: 60000,
+        limit: 5,
+      },
     ]),
     DatabaseModule,
     SecurityModule,
     AuthModule,
     HealthModule,
     CategoriesModule,
+    CouponsModule,
     TipsModule,
     OffersModule,
     OrdersModule,
@@ -87,6 +97,9 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
     CommissionsModule,
     ReviewsModule,
     NotificationsModule,
+    PushNotificationsModule,
+    StoreModule,
+    ContactModule,
   ],
   providers: [
     {

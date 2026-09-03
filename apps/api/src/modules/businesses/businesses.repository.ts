@@ -29,6 +29,10 @@ export type BusinessUpdate = Partial<
     | 'website'
     | 'commission_rate'
     | 'is_active'
+    | 'verification_status'
+    | 'verified_at'
+    | 'verified_by'
+    | 'rejection_reason'
   >
 >;
 
@@ -135,6 +139,9 @@ export class BusinessesRepository {
     if (query.is_active !== undefined) {
       filters.push(eq(businesses.is_active, query.is_active));
     }
+    if (query.verification_status) {
+      filters.push(eq(businesses.verification_status, query.verification_status));
+    }
 
     const where = and(...filters);
     const offset = (query.page - 1) * query.limit;
@@ -183,6 +190,9 @@ export class BusinessesRepository {
 
     if (query.is_active !== undefined) {
       filters.push(eq(businesses.is_active, query.is_active));
+    }
+    if (query.verification_status) {
+      filters.push(eq(businesses.verification_status, query.verification_status));
     }
 
     if (query.search) {

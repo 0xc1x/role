@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -25,6 +26,8 @@ import { OfferMapper } from './offers.mapper';
 
 @Injectable()
 export class OffersService {
+  private readonly logger = new Logger(OffersService.name);
+
   constructor(
     private readonly offersRepository: OffersRepository,
     private readonly config: ConfigService<Env, true>,
@@ -114,7 +117,11 @@ export class OffersService {
       created.id,
     );
     if (this.config.get('ENABLE_API_MIRROR_NOTIFICATIONS', { infer: true })) {
-      this.notificationHandlers?.onOfferCreated(created.id).catch(() => {});
+      this.notificationHandlers?.onOfferCreated(created.id).catch((err) => {
+        this.logger.warn(
+          `Notificación de oferta creada falló para ${created.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
     }
     return OfferMapper.toDto(created, category_ids);
   }

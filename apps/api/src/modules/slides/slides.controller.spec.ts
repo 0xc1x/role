@@ -42,6 +42,7 @@ describe('SlidesController', () => {
     badge_text: null,
     cta_label: 'Click',
     redirect_url: 'https://example.com',
+    coupon_code: null,
     image_url: 'https://example.com/slide.png',
     text_color: null,
     button_color: null,

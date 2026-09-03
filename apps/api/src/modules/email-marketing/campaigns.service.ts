@@ -239,7 +239,40 @@ export class CampaignsService {
     for (const campaign of sending.rows) {
       processed += await this.processBatch(campaign);
     }
+    // Transaccionales pendientes (BD fuente de verdad, BullMQ solo ejecuta)
+    processed += await this.processTransactionalBatch();
     return { processed };
+  }
+
+  /** Procesa un lote de transaccionales pendientes/fallidos reintentables (max 5). */
+  async processTransactionalBatch(): Promise<number> {
+    const batch = await this.repository.findPendingBatch(20);
+    // Filtrar solo transaccionales para no mezclar con campañas (estas van por processBatch)
+    const transactional = batch.filter((r) => r.type !== 'campaign');
+    for (const send of transactional) {
+      try {
+        await this.repository.markProcessing(send.id);
+        const template = await this.repository.findTemplateById(send.template_id);
+        if (!template) throw new Error('Plantilla no encontrada');
+        const [header, footer] = await Promise.all([
+          template.header_id ? this.repository.findComponentById(template.header_id) : Promise.resolve(null),
+          template.footer_id ? this.repository.findComponentById(template.footer_id) : Promise.resolve(null),
+        ]);
+        const vars = (send.variables_used as Record<string, string>) ?? {};
+        const html = this.renderer.assemble({
+          headerHtml: header?.html_content ?? null,
+          bodyHtml: template.body_html,
+          footerHtml: footer?.html_content ?? null,
+          vars,
+        });
+        const subject = this.renderer.renderVariables(template.subject, vars);
+        const resendId = await this.deliver(send.email, { subject, html, variables_used: [] });
+        await this.repository.markSent(send.id, resendId);
+      } catch (err) {
+        await this.repository.markFailed(send.id, err instanceof Error ? err.message : String(err));
+      }
+    }
+    return transactional.length;
   }
 
   listSends(query: {
@@ -265,12 +298,21 @@ export class CampaignsService {
     campaign: CampaignRow,
     recipients: { userId: string; email: string; fullName: string | null }[],
   ): Promise<CampaignDto> {
+    if (!campaign.template_id) throw new Error('Campaña sin plantilla');
+    const now = new Date();
     await this.repository.insertSends(
       recipients.map((r) => ({
-        campaign_id: campaign.id,
+        type: 'campaign' as const,
+        source_type: 'campaign',
+        source_id: campaign.id,
+        template_id: campaign.template_id as string,
         user_id: r.userId,
         email: r.email,
-        // Variables congeladas al encolar: el render por envío no reconsulta.
+        status: 'pending' as const,
+        scheduled_at: now,
+        queued_at: now,
+        attempts: 0,
+        max_attempts: 5,
         variables_used: {
           nombre: r.fullName ?? '',
           empresa: '',
