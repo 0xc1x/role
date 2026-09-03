@@ -13,7 +13,7 @@
     "lint": "turbo run lint",
     "dev:api": "bun run --cwd apps/api start:dev",
     "dev:admin": "bun run --cwd apps/admin dev",
-    "dev:commons": "bun run --cwd packages/role-commons typecheck"
+    "dev:commons": "bun run --cwd packages/commons typecheck"
   },
   "devDependencies": {
     "turbo": "^2.0.0"

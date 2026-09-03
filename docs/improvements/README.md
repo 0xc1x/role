@@ -47,5 +47,4 @@ La reescritura en `apps/mobile` (Expo + expo-router + TanStack Query + Zustand) 
 
 - **Pago**: el original no tenía pago real; Rolé mantiene "pago en recogida" (pay-at-pickup).
   Ver [01-tipado-y-contratos.md](./01-tipado-y-contratos.md) para la propuesta de `payments`.
-- **Admin**: typecheck con 3 errores pre-existentes (ver README raíz).
 - **Verificación de negocio tri-state** (`pending/active/rejected`) — README raíz.

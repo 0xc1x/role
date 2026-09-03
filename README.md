@@ -7,12 +7,12 @@ Ecosistema TS unificado: app móvil (Expo), landing (TanStack Start), admin (Tan
 ```
 role/
 ├── apps/
-│   ├── api/          # NestJS 11 + drizzle-orm + supabase-js   [heredado de github.com/0xc1x/role-api]
-│   ├── admin/        # TanStack Start + shadcn + biome         [heredado de github.com/0xc1x/role-front-admin]
-│   ├── landing/      # TanStack Start — marketing/SEO + onboarding business   [implementado]
-│   └── mobile/       # Expo — app móvil consumer                          [implementado]
+│   ├── api/          # NestJS 11 + drizzle-orm + supabase-js
+│   ├── admin/        # TanStack Start + shadcn + biome
+│   ├── landing/      # TanStack Start — marketing/SEO + onboarding business
+│   └── mobile/       # Expo — app móvil consumer
 └── packages/
-    └── commons/       # DTOs, schemas Zod, enums, tipos (pkg @0xc1x/role-commons)  [heredado de ~/Projects/role-commons]
+    └── commons/      # DTOs, schemas Zod, enums, tipos (@0xc1x/role-commons)
 ```
 
 La app móvil consumer vive como `apps/mobile` (Expo) dentro del monorepo.
@@ -50,13 +50,15 @@ bun run dev:admin           # Vite dev :3000
 
 Filtros turbo: `bun run build --filter=api...` (solo api y sus dependencias).
 
+CI en `.github/workflows/ci.yml` (typecheck + test + build con turbo).
+
 ## Estado (verificado)
 
-- ✅ `bun install` — un solo `bun.lock` en la raíz; commons resuelve por `workspace:*` (ya NO se requiere token de GitHub Packages — el repo standalone falla con 401, el monorepo no).
-- ✅ `role-commons` build (tsc + fix-imports).
+- ✅ `bun install` — un solo `bun.lock` en la raíz; commons resuelve por `workspace:*`.
+- ✅ `commons` build (tsc + fix-imports).
 - ✅ `api` typecheck + build (nest).
 - ✅ `admin` **build** (nitro) — requiere el hoist del alias `nitro→nitro-nightly` en la raíz (ver abajo).
-- ✅ `admin` **typecheck** — resuelto (3 errores pre-existentes arreglados: `color-picker.tsx` union de base-ui, `slide.form.tsx` drift de `badge_text` nullable en commons, `vite.config.ts` rollupConfig).
+- ✅ `admin` **typecheck** + biome check.
 - ✅ `mobile` **typecheck** (tsc estricto, EXIT 0) + **tests** (vitest: dominio de ofertas y órdenes) — scaffold completo: auth, ofertas, órdenes, favoritos, perfil, negocio, landing in-app.
 - ✅ `landing` **typecheck** (tsc EXIT 0) + **build** (vite + nitro, SSR) + biome check — 8 rutas: `/`, `/about`, `/how-it-works`, `/for-business`, `/help-center`, `/privacy`, `/terms`, 404. Deep links `role://` a la app.
 - ✅ `api` **tests** (jest) — 13 suites / 776 tests verdes; fixes: mapper de commons a `packages/commons`, transform de ESM-only (`jose`) en jest.config, tipos en 3 specs.
