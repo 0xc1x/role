@@ -197,11 +197,13 @@ function SendTab() {
 
 	const applyTemplate = (templateId: string) => {
 		const t = (templates.data?.data ?? []).find((x) => x.id === templateId);
+		const link = ((t?.data as Record<string, unknown> | undefined)?.link as string) ?? "";
 		setValues({
 			...values,
 			template_id: templateId,
 			title: t?.title ?? values.title,
 			body: t?.body ?? values.body,
+			link: link || values.link,
 		});
 	};
 
@@ -510,13 +512,21 @@ function TemplatesTab() {
 					fields={({ values, setValues }) => (
 						<PushTemplateFields values={values} setValues={setValues} />
 					)}
-					toPayload={(v) => v}
+					toPayload={(v) => ({
+						name: v.name,
+						title: v.title,
+						body: v.body,
+						is_active: v.is_active,
+						data: v.link.trim() ? { link: v.link.trim() } : {},
+					})}
 					onSubmit={(payload) => mutations.create.mutateAsync(payload)}
 					isPending={mutations.create.isPending}
 				/>
 			</div>
 			{list.isLoading ? <Loading /> : null}
-			{(list.data?.data ?? []).map((t) => (
+			{(list.data?.data ?? []).map((t) => {
+				const link = ((t.data as Record<string, unknown> | undefined)?.link as string) ?? "";
+				return (
 				<div
 					key={t.id}
 					className="flex items-center justify-between rounded-lg border p-3"
@@ -526,6 +536,7 @@ function TemplatesTab() {
 						<p className="truncate text-sm text-muted-foreground">
 							{t.title} — {t.body}
 						</p>
+						{link ? <p className="truncate text-xs text-muted-foreground">↗ {link}</p> : null}
 					</div>
 					<div className="flex items-center gap-2">
 						<Badge variant={t.is_active ? "default" : "secondary"}>
@@ -542,7 +553,13 @@ function TemplatesTab() {
 							fields={({ values, setValues }) => (
 								<PushTemplateFields values={values} setValues={setValues} />
 							)}
-							toPayload={(v) => v}
+							toPayload={(v) => ({
+								name: v.name,
+								title: v.title,
+								body: v.body,
+								is_active: v.is_active,
+								data: v.link.trim() ? { link: v.link.trim() } : {},
+							})}
 							onSubmit={(payload) =>
 								mutations.update.mutateAsync({ id: t.id, body: payload })
 							}
@@ -558,7 +575,8 @@ function TemplatesTab() {
 						</Button>
 					</div>
 				</div>
-			))}
+				);
+			})}
 
 			{testing ? (
 				<TemplateTestDrawer

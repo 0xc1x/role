@@ -60,6 +60,7 @@ export const PushTestSchema = z.object({
   title: z.string().min(1).max(120),
   body: z.string().min(1).max(500),
   type: z.enum(PUSH_NOTIFICATION_TYPES).default('announcement'),
+  data: JsonObjectSchema.optional(),
 });
 
 export const PushSendResultSchema = z.object({

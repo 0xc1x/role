@@ -82,11 +82,11 @@ export class PushAdminService {
    * preferencias ni quiet hours, y sin registrar en el historial.
    * Renderiza `{{nombre}}` igual que el envío manual (las plantillas lo usan).
    */
-  async test(input: PushTestDto): Promise<PushSendResult> {
+  async test(input: PushTestDto & { data?: Record<string, unknown> }): Promise<PushSendResult> {
     const payload = {
       title: `[TEST] ${input.title}`,
       body: input.body,
-      data: toPayloadData(input.type),
+      data: toPayloadData(input.type, (input as { data?: Record<string, unknown> }).data),
     };
     // Regex local (sin /g): NAME_VARIABLE tiene /gi y .test() avanzaría su lastIndex.
     const hasNameVariable = /\{\{\s*nombre\s*\}\}/i.test(
@@ -117,6 +117,7 @@ export class PushAdminService {
       ...input,
       title: template.title,
       body: template.body,
+      data: (template.data as Record<string, unknown>) ?? undefined,
     });
   }
 

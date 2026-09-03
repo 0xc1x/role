@@ -17,6 +17,7 @@ export interface PushTemplateFormValues {
 	name: string;
 	title: string;
 	body: string;
+	link: string;
 	is_active: boolean;
 }
 
@@ -56,6 +57,17 @@ export function PushTemplateFields({
 					maxLength={500}
 				/>
 			</Field>
+			<Field>
+				<FieldLabel>Link de destino (opcional, ruta de la app)</FieldLabel>
+				<Input
+					value={values.link}
+					onChange={(e) => setValues({ ...values, link: e.target.value })}
+					placeholder="/all-offers"
+				/>
+				<p className="text-xs text-muted-foreground">
+					Ej: /all-offers, /all-businesses o /. Vacío = inicio.
+				</p>
+			</Field>
 			<Field className="flex flex-row items-center gap-3">
 				<Switch
 					id="push-template-active"
@@ -77,6 +89,7 @@ export function pushTemplateDefaults(t?: PushTemplateDto): PushTemplateFormValue
 		name: t?.name ?? "",
 		title: t?.title ?? "",
 		body: t?.body ?? "",
+		link: ((t?.data as Record<string, unknown> | undefined)?.link as string) ?? "",
 		is_active: t?.is_active ?? true,
 	};
 }
