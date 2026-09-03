@@ -11,6 +11,8 @@
     --foreground: #1a1a18;
     --card: #fff5f5;
     --card-foreground: #1a1a18;
+    --popover: #ffffff;
+    --popover-foreground: #1a1a18;
     --primary: #bf1c19;
     --primary-foreground: #ffffff;
     --secondary: #96bf85;
@@ -32,6 +34,8 @@
     --foreground: #faf9f7;
     --card: #2c2c2c;
     --card-foreground: #faf9f7;
+    --popover: #2c2c2c;
+    --popover-foreground: #faf9f7;
     --primary: #bf1c19;
     --primary-foreground: #ffffff;
     --secondary: #96bf85;
@@ -46,5 +50,11 @@
     --border-solid: #3d3d3d;
     --input: #2c2c2c;
     --ring: #ffffff33;
+  }
+
+  input,
+  textarea,
+  select {
+    outline: none;
   }
 }

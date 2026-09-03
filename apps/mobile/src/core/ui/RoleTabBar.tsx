@@ -5,6 +5,7 @@ import type { BottomTabBarProps } from "expo-router/build/react-navigation/botto
 import { useTheme } from "@/core/theme";
 import { radii } from "@/core/theme/spacing";
 import { AppText } from "./AppText";
+import { filterVisibleRoutes, resolveActiveTabIndex } from "./tab-index";
 
 export const BAR_HEIGHT = 64;
 const DURATION_MS = 400;
@@ -12,17 +13,10 @@ const HALF_MS = DURATION_MS / 2;
 const STRETCH_FACTOR = 0.18;
 const MAX_WIDTH = 480;
 
-type TabBarStyleOption = {
-	display?: string;
+type RoleTabBarProps = BottomTabBarProps & {
+	/** Tab visible a resaltar cuando la ruta activa no está entre las rutas visibles (deep link). */
+	fallbackTabName?: string;
 };
-
-function isTabHidden(style: unknown): boolean {
-	if (!style) return false;
-	const target = Array.isArray(style) ? style : [style];
-	return target.some(
-		(s) => (s as TabBarStyleOption | null | undefined)?.display === "none",
-	);
-}
 
 /**
  * Barra de pestañas inferior de Rolé.
@@ -34,7 +28,10 @@ function isTabHidden(style: unknown): boolean {
  * 3. Ventana máscara que "revela" icono + label clavados a la pantalla
  *    (el contenido no se mueve: la píldora pasa por encima).
  */
-export default function RoleTabBar(props: BottomTabBarProps) {
+export default function RoleTabBar({
+	fallbackTabName,
+	...props
+}: RoleTabBarProps) {
 	const { colors } = useTheme();
 	const insets = props.insets;
 
@@ -46,21 +43,14 @@ export default function RoleTabBar(props: BottomTabBarProps) {
 	const initialized = useRef(false);
 
 	const routes = useMemo(
-		() =>
-			props.state.routes.filter(
-				(route) =>
-					!isTabHidden(
-						props.descriptors[route.key]?.options.tabBarItemStyle,
-					),
-			),
+		() => filterVisibleRoutes(props.state.routes, props.descriptors),
 		[props.state.routes, props.descriptors],
 	);
 
-	const currentIndex = Math.max(
-		0,
-		routes.findIndex(
-			(r) => r.key === props.state.routes[props.state.index]?.key,
-		),
+	const currentIndex = resolveActiveTabIndex(
+		props.state,
+		routes,
+		fallbackTabName,
 	);
 	const barWidth = Math.min(measuredWidth, MAX_WIDTH);
 	const itemWidth = routes.length > 0 ? barWidth / routes.length : 0;

@@ -15,7 +15,15 @@ import {
 import { Text } from "@/components/ui/text";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Button, Card, Screen, ScreenHeader, StatusBadge } from "@/core/ui";
+import {
+	AppText,
+	Button,
+	Card,
+	goBackOr,
+	Screen,
+	ScreenHeader,
+	StatusBadge,
+} from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import {
@@ -231,7 +239,10 @@ export function ProductDetail({
 						<AlertDialogAction
 							onPress={() => {
 								setDeleteOpen(false);
-								deleteOffer.mutate(offer.id, { onSuccess: () => router.back() });
+								deleteOffer.mutate(offer.id, {
+									onSuccess: () =>
+										goBackOr(`/business/${businessId}/offers`),
+								});
 							}}
 						>
 							<Text>{strings.common.delete}</Text>

@@ -397,7 +397,7 @@ export default function HelpScreen() {
 	return (
 		<Screen scroll>
 			<View style={[styles.container, { backgroundColor: colors.background }]}>
-				<ScreenHeader title={strings.helpCenter.title} />
+				<ScreenHeader title={strings.helpCenter.title} fallback="/(consumer)/profile" />
 				<SearchBar
 					value={query}
 					onChangeText={setQuery}

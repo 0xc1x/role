@@ -7,6 +7,7 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useCategories } from "@/features/hooks";
 import type { EmbeddedCategory } from "@/features/offers/domain/offer";
+import { Ionicons } from "@expo/vector-icons";
 
 export interface OfferFilterState {
 	category: string | null;
@@ -119,7 +120,7 @@ export function OfferFiltersSheet({
 				) : (
 					<Pressable onPress={onClose} hitSlop={8}>
 						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-							{strings.common.close}
+							<Ionicons name="close" size={16} color={colors.foreground} />
 						</AppText>
 					</Pressable>
 				)}
@@ -166,7 +167,7 @@ export function OfferFiltersSheet({
 							`price-${price}`,
 							strings.allOffers.price.replace(
 								"{n}",
-								`$${price}`,
+								`${price}`,
 							),
 							state.maxPrice === price,
 							() =>
@@ -187,11 +188,9 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		paddingHorizontal: spacing.xl,
 		paddingVertical: spacing.md,
 	},
 	scrollContent: {
-		paddingHorizontal: spacing.xl,
 		paddingBottom: spacing.md,
 		gap: spacing.lg,
 	},

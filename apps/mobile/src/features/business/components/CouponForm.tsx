@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { AppText, Button, Card, TextField } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { DateTimeField } from "./products/DateTimeFields";
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
@@ -236,18 +237,14 @@ export function CouponForm({
 					</AppText>
 				) : null}
 				{showPicker ? (
-					<DateTimePicker
-						value={expiry ?? new Date(Date.now() + 30 * 86400000)}
+					<DateTimeField
 						mode="date"
-						minimumDate={new Date()}
-						maximumDate={new Date(Date.now() + 365 * 2 * 86400000)}
-						display={Platform.OS === "ios" ? "inline" : "default"}
-						onChange={(event, date) => {
-							if (Platform.OS === "android") setShowPicker(false);
-							if (date) {
-								setExpiry(date);
-								setShowExpiryError(false);
-							}
+						label={strings.business.couponExpiry}
+						value={expiry ?? new Date(Date.now() + 30 * 86400000)}
+						onChange={(date) => {
+							setExpiry(date);
+							setShowExpiryError(false);
+							setShowPicker(false);
 						}}
 					/>
 				) : null}
@@ -346,7 +343,7 @@ const styles = StyleSheet.create({
 		gap: 6,
 		marginBottom: spacing.md,
 	},
-	codeRow: { flexDirection: "row", gap: spacing.sm },
+	codeRow: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-end" },
 	codeField: { flex: 1 },
 	generate: {
 		height: 48,
@@ -356,7 +353,6 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",
-		marginTop: 22,
 	},
 	typeRow: { flexDirection: "row", gap: spacing.sm },
 	typeOption: {

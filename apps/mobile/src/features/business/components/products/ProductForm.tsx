@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { Image, Platform, Pressable, StyleSheet, View } from "react-native";
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal, Button, TextField } from "@/core/ui";
+import {
+	AppText,
+	BottomSheetModal,
+	Button,
+	goBackOr,
+	TextField,
+} from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useCategories } from "@/features/hooks";
@@ -136,7 +141,7 @@ export function ProductForm({
 				imageUri,
 			},
 			{
-				onSuccess: () => router.back(),
+				onSuccess: () => goBackOr("/(business)/products"),
 				onError: (e) =>
 					setErrors({
 						form: e instanceof Error ? e.message : "Error al guardar",
@@ -510,7 +515,7 @@ function FormSection({
 
 const styles = StyleSheet.create({
 	content: {
-		padding: spacing.xl,
+		marginTop: spacing.lg,
 		gap: spacing.lg,
 	},
 	section: {

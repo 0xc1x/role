@@ -1,9 +1,15 @@
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
-import { ErrorState, LoadingView, Screen, ScreenHeader } from "@/core/ui";
+import {
+	ErrorState,
+	goBackOr,
+	LoadingView,
+	Screen,
+	ScreenHeader,
+} from "@/core/ui";
 import { spacing } from "@/core/theme/spacing";
 import { useBusinessLocation, useUpsertLocation } from "@/features/business/hooks";
 import {
@@ -45,7 +51,7 @@ export default function BusinessLocationEditScreen() {
 			{
 				onSuccess: () => {
 					setSubmitting(false);
-					router.back();
+					goBackOr(`/business/${businessId}/locations`);
 				},
 				onError: (e) => {
 					setSubmitting(false);

@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { lazy, Suspense } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import {
@@ -16,15 +15,8 @@ import {
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { formatShortDate } from "@/core/utils/formatters";
-import { env } from "@/core/config/env";
 import { useBusinessLocation } from "@/features/business/hooks";
-
-const RMap = lazy(() =>
-	(Platform.OS === "web"
-		? import("@/features/business/components/MapCanvas.web")
-		: import("@/features/business/components/MapCanvas.native")
-	).then((m) => ({ default: m.MapCanvas })),
-);
+import { BusinessLocationMap } from "@/features/business/components/BusinessLocationMap";
 
 export default function BusinessLocationDetailScreen() {
 	const { colors } = useTheme();
@@ -84,42 +76,17 @@ export default function BusinessLocationDetailScreen() {
 			</Card>
 
 			{/* ── Mapa ─────────────────────────────────────────────────── */}
-			{env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ? (
-				<Pressable
+			{/* Fijo (sin pan/zoom), igual que la geolocalización del perfil
+			    público; el toque lleva a editar la sucursal. */}
+			<View style={styles.mapSection}>
+				<BusinessLocationMap
+					latitude={location.latitude}
+					longitude={location.longitude}
 					onPress={() =>
 						router.push(`/business/${id}/locations/${location.id}/edit`)
 					}
-					style={({ pressed }) => [
-						styles.mapWrap,
-						{
-							borderColor: colors.borderSolid,
-							opacity: pressed ? 0.92 : 1,
-						},
-					]}
-					accessibilityRole="button"
-					accessibilityLabel={strings.business.editInformation}
-				>
-					<Suspense fallback={<View style={styles.mapFallback} />}>
-						<RMap
-							coords={{
-								latitude: location.latitude,
-								longitude: location.longitude,
-							}}
-							onRegionChange={() => {}}
-						/>
-					</Suspense>
-					<View style={[styles.mapHint, { backgroundColor: colors.card + "E6", pointerEvents: "none" }]}>
-						<Ionicons
-							name="create-outline"
-							size={13}
-							color={colors.mutedForeground}
-						/>
-						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-							{strings.business.editInformation}
-						</AppText>
-					</View>
-				</Pressable>
-			) : null}
+				/>
+			</View>
 
 			{/* ── Información ──────────────────────────────────────────── */}
 			<Card style={styles.card}>
@@ -252,25 +219,7 @@ const styles = StyleSheet.create({
 		paddingVertical: 3,
 		borderRadius: radii.pill,
 	},
-	mapWrap: {
-		height: 160,
-		borderRadius: radii.lg,
-		borderWidth: 1,
-		overflow: "hidden",
-		marginTop: spacing.lg,
-	},
-	mapFallback: { flex: 1 },
-	mapHint: {
-		position: "absolute",
-		right: spacing.sm,
-		bottom: spacing.sm,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-		paddingHorizontal: spacing.sm,
-		paddingVertical: 5,
-		borderRadius: radii.pill,
-	},
+	mapSection: { marginTop: spacing.lg },
 	card: { marginTop: spacing.lg },
 	infoRow: {
 		flexDirection: "row",

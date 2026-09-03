@@ -353,13 +353,14 @@ const styles = StyleSheet.create({
 	details: {
 		flexDirection: "row",
 		flexWrap: "wrap",
-		gap: spacing.lg,
+		justifyContent: "space-between",
 		rowGap: spacing.sm,
 	},
 	detailItem: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.xs,
+		width: "48%",
 	},
 	overlay: {
 		flex: 1,

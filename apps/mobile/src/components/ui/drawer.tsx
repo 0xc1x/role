@@ -112,7 +112,7 @@ export function DrawerContent({
 	const insets = useSafeAreaInsets();
 	const tabBarProps = useTabBarStore((s) => s.props);
 	const hasTabs = tabBarProps !== null;
-	const bottomOffset = hasTabs ? BAR_HEIGHT + insets.bottom : 0;
+	const bottomOffset = hasTabs ? insets.bottom : 0;
 	const offset = React.useRef(new Animated.Value(Dimensions.get("window").height)).current;
 
 	React.useEffect(() => {
@@ -145,7 +145,7 @@ export function DrawerContent({
 						borderTopRightRadius: 32,
 						overflow: "hidden",
 						width: "100%",
-						paddingBottom: bottomOffset + spacing.xxxl,
+						paddingBottom: bottomOffset,
 						transform: [{ translateY: offset }],
 					},
 					{ zIndex: 1001 } as any,

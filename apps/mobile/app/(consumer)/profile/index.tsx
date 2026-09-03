@@ -1,8 +1,8 @@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link, router, type Href } from "expo-router";
-import { Pressable, StyleSheet, View } from "react-native";
-import { useEffect, useState } from "react";
+import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
@@ -118,6 +118,8 @@ function ProfileHeader({ profile }: { profile: UserProfile }) {
 
 // ─── Tabs ───────────────────────────────────────────────────────────
 
+const TAB_INDICATOR_DURATION = 220;
+
 function ProfileTabs({
 	active,
 	onChange,
@@ -130,18 +132,59 @@ function ProfileTabs({
 		{ key: "history", label: strings.profile.historyTab },
 		{ key: "settings", label: strings.profile.settingsTab },
 	];
+
+	// Layout real (x, width) de cada tab, medido con onLayout.
+	const layoutsRef = useRef<Record<number, { x: number; width: number }>>({});
+	const [indicatorReady, setIndicatorReady] = useState(false);
+	const indicatorX = useRef(new Animated.Value(0)).current;
+	const indicatorWidth = useRef(new Animated.Value(0)).current;
+
+	const activeIndex = tabs.findIndex((t) => t.key === active);
+
+	const animateIndicatorTo = (index: number) => {
+		const layout = layoutsRef.current[index];
+		if (!layout) return;
+		Animated.parallel([
+			Animated.timing(indicatorX, {
+				toValue: layout.x,
+				duration: TAB_INDICATOR_DURATION,
+				useNativeDriver: false,
+			}),
+			Animated.timing(indicatorWidth, {
+				toValue: layout.width,
+				duration: TAB_INDICATOR_DURATION,
+				useNativeDriver: false,
+			}),
+		]).start();
+	};
+
+	const handleTabLayout = (index: number) => (e: LayoutChangeEvent) => {
+		const { x, width } = e.nativeEvent.layout;
+		layoutsRef.current[index] = { x, width };
+		// Posiciona el indicador de una vez (sin animar) la primera vez
+		// que se mide el layout del tab activo.
+		if (index === activeIndex && !indicatorReady) {
+			indicatorX.setValue(x);
+			indicatorWidth.setValue(width);
+			setIndicatorReady(true);
+		}
+	};
+
+	const handlePress = (tab: ProfileTab, index: number) => {
+		onChange(tab);
+		animateIndicatorTo(index);
+	};
+
 	return (
 		<View style={styles.tabBar}>
-			{tabs.map((tab) => {
+			{tabs.map((tab, index) => {
 				const selected = active === tab.key;
 				return (
 					<Pressable
 						key={tab.key}
-						onPress={() => onChange(tab.key)}
-						style={[
-							styles.tab,
-							selected && { borderBottomColor: colors.primary },
-						]}
+						onPress={() => handlePress(tab.key, index)}
+						onLayout={handleTabLayout(index)}
+						style={styles.tab}
 					>
 						<AppText
 							variant="bodyMedium"
@@ -153,6 +196,18 @@ function ProfileTabs({
 					</Pressable>
 				);
 			})}
+			{indicatorReady ? (
+				<Animated.View
+					style={[
+						styles.tabIndicator,
+						{
+							backgroundColor: colors.primary,
+							transform: [{ translateX: indicatorX }],
+							width: indicatorWidth,
+						},
+					]}
+				/>
+			) : null}
 		</View>
 	);
 }
@@ -374,13 +429,18 @@ const styles = StyleSheet.create({
 		borderRadius: 16,
 		alignItems: "center",
 	},
-	tabBar: { flexDirection: "row" },
+	tabBar: { flexDirection: "row", position: "relative" },
 	tab: {
 		flex: 1,
 		alignItems: "center",
 		paddingVertical: spacing.md,
-		borderBottomWidth: 2,
-		borderBottomColor: "transparent",
+	},
+	tabIndicator: {
+		position: "absolute",
+		bottom: 0,
+		left: 0,
+		height: 2,
+		borderRadius: 1,
 	},
 	pastHeader: { flexDirection: "row", alignItems: "center" },
 	pastTitle: { flex: 1 },

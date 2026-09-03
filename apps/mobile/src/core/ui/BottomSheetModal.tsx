@@ -64,12 +64,13 @@ export function BottomSheetModal({
 						</View>
 					</DrawerHeader>
 				) : null}
-				{children}
-				{footer ? (
-					<DrawerFooter style={{ paddingHorizontal: spacing.xl, paddingTop: 12 }}>
-						{footer}
-					</DrawerFooter>
-				) : null}
+				<View style={{ gap: spacing.sm, paddingHorizontal: spacing.xl }}>
+					{children}
+				</View>
+				<DrawerFooter style={{ paddingHorizontal: spacing.md, paddingTop: 6 }}>
+					{footer ? (footer) : null}
+				</DrawerFooter>
+				
 			</DrawerContent>
 		</Drawer>
 	);

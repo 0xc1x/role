@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 	},
 	scroll: { maxHeight: 380 },
-	scrollContent: { gap: 8, paddingHorizontal: spacing.xl },
+	scrollContent: { gap: 8 },
 	option: {
 		flexDirection: "row",
 		alignItems: "center",

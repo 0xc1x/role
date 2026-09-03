@@ -15,7 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, CircleIconButton, goBackOr, HeartButton } from "@/core/ui";
+import { AppText, CircleIconButton, goBackOr } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useBusinessProfile } from "@/features/business/hooks";
@@ -169,14 +169,6 @@ export default function BusinessProfileScreen() {
 					icon={<Ionicons name="chevron-back" size={20} color={colors.foreground} />}
 					onPress={() => goBackOr("/(consumer)")}
 				/>
-				<View style={styles.topBarRight}>
-					<HeartButton isFavorite={false} onPress={() => {}} />
-					<View style={{ width: spacing.sm }} />
-					<CircleIconButton
-						icon={<Ionicons name="share-outline" size={20} color={colors.foreground} />}
-						onPress={() => {}}
-					/>
-				</View>
 			</View>
 		</View>
 	);
@@ -743,9 +735,5 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-	},
-	topBarRight: {
-		flexDirection: "row",
-		alignItems: "center",
 	},
 });

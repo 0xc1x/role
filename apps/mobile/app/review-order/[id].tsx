@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
@@ -8,6 +8,7 @@ import {
 	Button,
 	Card,
 	ErrorState,
+	goBackOr,
 	LoadingView,
 	Screen,
 	ScreenHeader,
@@ -69,7 +70,7 @@ export default function ReviewOrderScreen() {
 				comment: comment.trim() || undefined,
 			},
 			{
-				onSuccess: () => router.back(),
+				onSuccess: () => goBackOr(`/order/${data.order.id}`),
 			},
 		);
 	};

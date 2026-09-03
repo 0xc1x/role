@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router, type Href } from "expo-router";
+import { router, useNavigation, type Href } from "expo-router";
 
 import { useTheme } from "@/core/theme";
 import type { ColorTokens } from "@/core/theme/colors";
@@ -409,7 +409,9 @@ export function FilterChip({
 }
 
 // ─── ScreenHeader (back button + title) ──────────────────────────
-/** Atrás si hay historia; si no (refresh/deep-link), al fallback. */
+/** Atrás vía router global si hay historia; si no (refresh/deep-link), al fallback.
+ *  Para pantallas del stack raíz: su GO_BACK siempre popea ahí.
+ *  ScreenHeader no la usa: necesita popear el stack propio, no el global. */
 export function goBackOr(fallback: Href) {
 	if (router.canGoBack()) router.back();
 	else router.replace(fallback);
@@ -418,17 +420,28 @@ export function goBackOr(fallback: Href) {
 interface ScreenHeaderProps {
 	title?: string;
 	onBack?: () => void;
-	/** Destino cuando no hay historia que popear. Default: home consumidor. */
+	/** Destino cuando el stack propio no tiene historia que popear. Default: home consumidor. */
 	fallback?: Href;
 	style?: StyleProp<ViewStyle>;
 }
 
 export function ScreenHeader({ title, onBack, fallback, style }: ScreenHeaderProps) {
 	const { colors } = useTheme();
+	const navigation = useNavigation();
+
+	// Popea solo el stack que contiene a esta pantalla. Si ese stack no tiene
+	// historia propia (pantallas dentro de tabs ocultos), el GO_BACK burbujea
+	// al navegador de tabs (backBehavior firstRoute) y salta al primer tab en
+	// vez de volver atrás; en ese caso se navega al fallback declarado.
+	const handleBack = () => {
+		if ((navigation.getState()?.index ?? 0) > 0) navigation.goBack();
+		else router.navigate(fallback ?? "/(consumer)");
+	};
+
 	return (
 		<View style={[styles.screenHeader, style]}>
 			<Pressable
-				onPress={onBack ?? (() => goBackOr(fallback ?? "/(consumer)"))}
+				onPress={onBack ?? handleBack}
 				hitSlop={8}
 				accessibilityRole="button"
 				accessibilityLabel={strings.common.back}
@@ -759,6 +772,59 @@ function margin(mult: number): number {
 	return spacing.md * mult;
 }
 
+export function SectionTitle({ children }: { children: string }) {
+	const { colors } = useTheme();
+	return (
+		<AppText
+			variant="labelSmall"
+			weight="bold"
+			style={{ color: colors.mutedForeground }}
+		>
+			{children}
+		</AppText>
+	);
+}
+
+export function ThemeOptionCard({
+	label,
+	icon,
+	isSelected,
+	onPress,
+}: {
+	label: string;
+	icon: string;
+	isSelected: boolean;
+	onPress: () => void;
+}) {
+	const { colors } = useTheme();
+	return (
+		<Pressable
+			onPress={onPress}
+			style={[
+				styles.themeCard,
+				{
+					backgroundColor: isSelected ? colors.primary + "0D" : colors.card,
+					borderColor: isSelected ? colors.primary : colors.borderSolid,
+					borderWidth: isSelected ? 1.5 : 1,
+				},
+			]}
+		>
+			<Ionicons
+				name={icon as never}
+				size={20}
+				color={isSelected ? colors.primary : colors.mutedForeground}
+			/>
+			<AppText
+				variant="bodySmall"
+				weight={isSelected ? "bold" : "regular"}
+				style={{ color: isSelected ? colors.primary : colors.foreground }}
+			>
+				{label}
+			</AppText>
+		</Pressable>
+	);
+}
+
 // ─── Styles ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
 	flex: { flex: 1 },
@@ -889,5 +955,12 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.xs + 2,
 		borderRadius: radii.pill,
 		borderWidth: 1,
+	},
+	themeCard: {
+		flex: 1,
+		alignItems: "center",
+		gap: spacing.xs,
+		paddingVertical: spacing.md,
+		borderRadius: radii.md,
 	},
 });

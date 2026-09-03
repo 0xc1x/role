@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/react-native";
 
-import { env } from "@/core/config/env";
+import { env, isProd } from "@/core/config/env";
 
 export interface TrackEvent {
 	category: string;
@@ -9,25 +9,43 @@ export interface TrackEvent {
 	value?: number;
 }
 
+const dsn = env.EXPO_PUBLIC_SENTRY_DSN;
+const enabled = dsn.length > 0;
+let didInit = false;
+
+function doInit(): void {
+	if (!enabled || didInit) return;
+	didInit = true;
+	Sentry.init({
+		dsn,
+		environment: env.EXPO_PUBLIC_ENVIRONMENT,
+		enabled: true,
+		tracesSampleRate: isProd ? 0.1 : 0,
+		sendDefaultPii: false,
+		enableNative: true,
+		debug: false,
+		attachStacktrace: true,
+	});
+}
+
+// Init sincrónico y temprano: se ejecuta al importar el módulo
+// (app/_layout lo importa y index.ts también lo puede importar).
+// Funciona en nativo y web con el mismo DSN.
+doInit();
+
 /**
- * Analytics service — Sentry breadcrumbs + optional events.
- * Initialized only when a DSN is present in the environment.
+ * Analytics service — Sentry breadcrumbs + error reporting.
+ * Nativo + web con el mismo DSN. Si EXPO_PUBLIC_SENTRY_DSN está vacío, no-op.
  */
 export const analytics = {
-	initialized: env.EXPO_PUBLIC_SENTRY_DSN.length > 0,
+	initialized: enabled,
 
 	init(): void {
-		if (!this.initialized) return;
-		Sentry.init({
-			dsn: env.EXPO_PUBLIC_SENTRY_DSN,
-			environment: env.EXPO_PUBLIC_ENVIRONMENT,
-			tracesSampleRate: 0.1,
-			sendDefaultPii: false,
-		});
+		doInit();
 	},
 
 	track(event: TrackEvent): void {
-		if (!this.initialized) return;
+		if (!enabled) return;
 		Sentry.addBreadcrumb({
 			category: event.category,
 			message: event.action,
@@ -39,12 +57,12 @@ export const analytics = {
 	},
 
 	trackError(error: unknown, context?: Record<string, unknown>): void {
-		if (!this.initialized) return;
+		if (!enabled) return;
 		Sentry.captureException(error, { extra: context });
 	},
 
 	setUser(userId: string | null): void {
-		if (!this.initialized) return;
+		if (!enabled) return;
 		if (userId) {
 			Sentry.setUser({ id: userId });
 		} else {

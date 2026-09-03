@@ -15,7 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, CircleIconButton, HeartButton } from "@/core/ui";
+import { AppText, CircleIconButton, goBackOr, HeartButton } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
 import {
@@ -340,7 +340,7 @@ export default function OfferDetailScreen() {
 							color={colors.foreground}
 						/>
 					}
-					onPress={() => router.back()}
+					onPress={() => goBackOr("/(consumer)")}
 				/>
 				<HeartButton
 					isFavorite={isFavorite}

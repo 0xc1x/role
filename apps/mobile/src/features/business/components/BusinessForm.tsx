@@ -90,7 +90,7 @@ function dateToTime(d: Date): string {
 
 /**
  * Formulario compartido de negocio: creación (business-new) y edición
- * (business-profile/edit). Los campos son los que soportan
+ * (my-business/edit). Los campos son los que soportan
  * createBusiness/updateBusiness del repository.
  */
 export function BusinessForm({

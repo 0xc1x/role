@@ -53,7 +53,7 @@ export async function syncWebPushToken(
 	}
 
 	const { getApps, initializeApp } = await import("firebase/app");
-	const { getMessaging, getToken, onMessage, isSupported } =
+	const { getMessaging, getToken, onMessage, isSupported, deleteToken } =
 		await import("firebase/messaging");
 
 	if (!(await isSupported())) return false;
@@ -68,6 +68,13 @@ export async function syncWebPushToken(
 	const registration = await navigator.serviceWorker.register(
 		"/firebase-messaging-sw.js",
 	);
+	if (request) {
+		// El token cacheado en IndexedDB puede apuntar a una suscripción push
+		// ya muerta (site data borrado, SW actualizado, ventana cerrada): al
+		// activar desde Ajustes forzamos suscripción nueva en vez de
+		// re-registrar un token que FCM responderá UNREGISTERED.
+		await deleteToken(messaging).catch(() => undefined);
+	}
 	const token = await getToken(messaging, {
 		vapidKey: env.EXPO_PUBLIC_FIREBASE_VAPID_KEY,
 		serviceWorkerRegistration: registration,

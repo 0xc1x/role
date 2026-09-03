@@ -90,8 +90,17 @@ export function watchAuthState(): () => void {
 			store.clear();
 		}
 		if (session?.user) {
-			const { setProfile } = useAuthStore.getState();
-			void enrichProfile(profileFromUser(session.user)).then(setProfile);
+			const userId = session.user.id;
+			void enrichProfile(profileFromUser(session.user)).then(
+				async (profile) => {
+					// El enrich puede resolverse tarde (p. ej. logout + login con
+					// otra cuenta): solo aplicar si este usuario sigue siendo la
+					// sesión vigente, para no pisar el perfil del usuario nuevo.
+					const { data } = await supabase.auth.getSession();
+					if (data.session?.user?.id !== userId) return;
+					useAuthStore.getState().setProfile(profile);
+				},
+			);
 		}
 	});
 

@@ -151,6 +151,8 @@ export const strings = {
 		// El contenido del carrusel vive en la tabla `slides` (gestionado en admin).
 		promoTips: "Tips",
 		promoSponsored: "Sponsoreado",
+		promoCoupon: "Cupón",
+		couponCopied: "¡Código copiado!",
 		// ── Eco banner ──────────────────────────────────────────────
 		ecoBannerTitle: "Cada paquete que rescatas hace la diferencia",
 		ecoBannerBody: "Gracias por ayudar al planeta",
@@ -438,6 +440,10 @@ export const strings = {
 		emailHint: "usuario@correo.com",
 		phone: "Teléfono",
 		city: "Ciudad",
+		cityPlaceholder: "Selecciona tu ciudad",
+		cityOtherLabel: "¿Qué ciudad?",
+		cityOtherPlaceholder: "Escribe tu ciudad",
+		cityOtherRequired: "Indica la ciudad.",
 		avatar: "Foto de perfil",
 		changeAvatar: "Cambiar foto",
 		required: "Requerido",
@@ -560,8 +566,7 @@ export const strings = {
 	paymentMethods: {
 		title: "Medios de pago",
 		empty: "No tienes medios de pago guardados",
-		payAtPickupHint:
-			"Durante la fase 1 el pago se realiza al recoger. Estos datos se usan solo para agilizar tu checkout futuro.",
+		payAtPickupHint: "Pagarás al recoger tu pedido en el local.",
 		cardNumber: "Número de tarjeta",
 		cardHolder: "Nombre del titular",
 		expiry: "Vencimiento (MM/AA)",
@@ -589,6 +594,11 @@ export const strings = {
 		statsWeek: "Semana",
 		statsMonth: "Mes",
 		statsYear: "Año",
+		statsThisWeek: "Esta semana",
+		statsThisMonth: "Este mes",
+		statsThisYear: "Este año",
+		statsPreviousPeriod: "Período anterior",
+		statsNextPeriod: "Período siguiente",
 		kpiRescued: "Rescatadas",
 		vsPrevious: "vs anterior",
 		dailyAvg: "Promedio diario",
@@ -662,7 +672,7 @@ export const strings = {
 		sortStockLow: "Menor stock",
 		allBranches: "Todas las sucursales",
 		activeProducts: "Activos",
-		soldToday: "Vendidos hoy",
+		soldToday: "Vendidos",
 		availableStock: "Disponibles",
 		noProductsTitle: "No tienes productos publicados",
 		noProductsBody: "Publica tu primer excedente de comida.",
@@ -1220,7 +1230,7 @@ export const strings = {
 		pendingProcessing: "Por procesar",
 		autoCutoff: "Corte automático en 3d",
 		onePayout: "1 transferencia",
-		payoutsCount: "{n} transferencias",
+		payoutsCount: "transferencias",
 		payoutsFilterAll: "Todos",
 		payoutsFilterPaid: "Completados",
 		payoutsFilterProcessing: "En proceso",
@@ -1515,73 +1525,90 @@ export const strings = {
 		],
 	},
 	aboutScreen: {
-		title: "Sobre Rolé",
-		missionTitle: "Nuestra Misión",
+		title: "Sobre nosotros",
+		heroTitle: "La comida deliciosa no debería terminar en la basura.",
+		heroBody:
+			"Cada año, toneladas de comida perfectamente buena se desperdicia en comercios que no logran venderla a tiempo. A nosotros no nos parece bien.",
+		ideaTitle: "La idea",
+		ideaBody:
+			"Rolé nació de una observación simple: comercios de barrio tiran comida buena al final del día y, a la vez, muchas personas buscan opciones accesibles para comer bien. Conectamos esos dos extremos. Los comercios recuperan valor de su excedente y los usuarios disfrutan comida de calidad con hasta 70% de descuento.",
+		missionTitle: "La misión",
 		missionBody:
-			"En Rolé, creemos que la buena comida no debería desperdiciarse. Estamos construyendo el marketplace de excedentes más grande de Latinoamérica.",
-		whyTitle: "¿Por qué existimos?",
-		whyBody1:
-			"Cada año, un tercio de toda la comida producida en el mundo se desperdicia. Esto no solo es un problema social y económico, sino también una de las principales causas del cambio climático.",
-		whyBody2:
-			"Rolé nace para conectar a los comercios que tienen excedentes diarios con usuarios que quieren disfrutar de comida de calidad a un precio reducido, reduciendo juntos el impacto ambiental.",
-		valuesTitle: "Nuestros Valores",
-		valueSustainability: "Sostenibilidad",
-		valueSustainabilityBody:
-			"Cada acción que tomamos busca reducir el impacto ambiental y promover un consumo responsable.",
-		valueCommunity: "Comunidad",
-		valueCommunityBody:
-			"Creamos vínculos fuertes entre comercios y vecinos, fortaleciendo la economía local.",
-		valueInnovation: "Innovación",
-		valueInnovationBody:
-			"Usamos la tecnología para resolver problemas complejos de logística y desperdicio.",
-		statsTitle: "Nuestro impacto hasta hoy",
-		statMeals: "Comidas rescatadas",
-		statMealsValue: "500k+",
-		statBusinesses: "Comercios aliados",
-		statBusinessesValue: "2k+",
-		statUsers: "Usuarios activos",
-		statUsersValue: "100k+",
-		statCo2: "kg de CO₂ ahorrados",
-		statCo2Value: "1.2M",
+			"Reducir el desperdicio de alimentos mientras construimos comunidades más conscientes y solidarias. No buscamos reemplazar la compra regular: queremos que el excedente que ya existe llegue a alguien que lo disfrute. Cada bolsa rescatada es un pequeño triunfo contra el desperdicio.",
+		howTitle: "Cómo funciona",
+		howBody:
+			"No somos un delivery ni un intermediario de pago. Somos una plataforma que conecta comercios con excedente y personas que quieren aprovecharlo. La reserva es gratuita, el pago se hace directo en el comercio y la recogida es presencial. Simple, transparente y sin comisiones ocultas.",
+		statsTitle: "El impacto hasta hoy",
+		statsSubtitle: "Números que cuentan",
+		statUsers: "usuarios activos",
+		statUsersValue: "15+",
+		statBusinesses: "comercios aliados",
+		statBusinessesValue: "13+",
+		statMeals: "comidas salvadas",
+		statMealsValue: "7+",
+		principlesEyebrow: "Lo que nos guía",
+		principlesTitle: "Cuatro principios",
+		principle1Title: "Menos desperdicio",
+		principle1Body:
+			"Cada comida rescatada es una menos en la basura. Medimos y publicamos nuestro impacto colectivo porque lo que se mide, mejora.",
+		principle2Title: "Comunidad primero",
+		principle2Body:
+			"Conectamos comercios locales con personas del barrio. No somos un marketplace anónimo: fomentamos relaciones que se repiten.",
+		principle3Title: "Acceso real",
+		principle3Body:
+			"Comida de calidad no debería ser lujo. Hacemos que sea accesible para más personas mientras los comercios recuperan valor.",
+		principle4Title: "Simple por diseño",
+		principle4Body:
+			"Sin papeles, sin suscripciones, sin pasos extra. Si una funcionalidad no reduce fricción, no la construimos.",
 	},
 	termsScreen: {
 		title: "Términos y condiciones",
 		updatedAt: "Última actualización: 19 de abril de 2026",
 		sections: [
 			{
-				title: "1. Aceptación de los términos",
+				title: "1. Aceptación y objeto",
 				content:
-					"Al acceder y utilizar Rolé, aceptas estar sujeto a estos términos y condiciones. Si no estás de acuerdo con alguna parte de estos términos, no podrás utilizar nuestro servicio.",
+					"Estos Términos regulan el uso de Rolé (app y web) operado por 0xC1X S.A.S., RUC 1799999999001, Quito, Ecuador. Al crear cuenta o usar el servicio aceptas estos términos. Si no estás de acuerdo, no uses la plataforma.",
 			},
 			{
-				title: "2. Descripción del servicio",
+				title: "2. El servicio e intermediación",
 				content:
-					"Rolé es una plataforma que conecta a usuarios con establecimientos comerciales para la compra de excedentes de comida a precios reducidos. El servicio es de solo recogida (pickup-only).",
+					"Rolé es una plataforma tecnológica que intermedia entre comercios con excedente y usuarios. No produce, comercializa ni transporta alimentos; no es empleador de comercios o repartidores. Las ofertas son publicadas por los comercios y su contenido puede variar.",
 			},
 			{
-				title: "3. Registro de cuenta",
+				title: "3. Registro y cuenta",
 				content:
-					"Para utilizar ciertas funciones, debes registrarte y crear una cuenta. Eres responsable de mantener la confidencialidad de tu cuenta y contraseña.",
+					"El registro es gratuito y requiere datos veraces. Eres responsable de tu contraseña y de la actividad en tu cuenta. Cuenta personal, única e intransferible. Podemos suspender cuentas con datos falsos o uso indebido.",
 			},
 			{
-				title: "4. Pedidos y pagos",
+				title: "4. Reservas, pagos y recogida",
 				content:
-					"Los pedidos se realizan a través de la aplicación y deben ser pagados en el momento de la reserva. El comercio es responsable de la calidad de los productos entregados.",
+					"La reserva en la app confirma tu lugar; el pago se realiza directamente en el comercio al recoger (pickup-only). No cobramos en la app en esta fase. Acude en el horario indicado con tu código de reserva.",
 			},
 			{
-				title: "5. Cancelaciones y reembolsos",
+				title: "5. Cancelaciones y no show",
 				content:
-					"Puedes cancelar tu pedido hasta 2 horas antes del horario de recogida para obtener un reembolso completo. Pasado ese tiempo, no se aceptarán cancelaciones.",
+					"Puedes cancelar sin costo antes del cierre de la ventana de recogida. Las reservas no recogidas se liberan y afectan tu historial; no hay reembolso si ya pagaste en el comercio (aplica criterio del comercio).",
 			},
 			{
-				title: "6. Responsabilidades del usuario",
+				title: "6. Obligaciones del usuario",
 				content:
-					"Te comprometes a recoger tu pedido en la ventana de tiempo indicada. Si no recoges tu pedido, no tendrás derecho a reembolso.",
+					"Usar la plataforma de forma diligente, respetar horarios, no revender, no crear cuentas duplicadas y no interferir con el servicio. El incumplimiento puede implicar suspensión.",
 			},
 			{
-				title: "7. Limitación de responsabilidad",
+				title: "7. Obligaciones del comercio y exoneración",
 				content:
-					"Rolé no se hace responsable de la calidad, seguridad o legalidad de los alimentos proporcionados por los comercios.",
+					"El comercio responde por la calidad, seguridad, legalidad y etiquetado de sus productos. Rolé, como intermediario tecnológico, no asume responsabilidad por falta de disponibilidad, calidad o efectos del consumo, sin perjuicio de mediar ante reclamos.",
+			},
+			{
+				title: "8. Propiedad intelectual y uso",
+				content:
+					"Textos, marcas, logos y diseño son de Rolé o licenciados. No puedes copiar, extraer o usar el contenido sin autorización. El uso indebido habilita baja y acciones legales.",
+			},
+			{
+				title: "9. Cambios, ley y contacto",
+				content:
+					"Podemos actualizar estos términos y notificar cambios relevantes en la app/web. Se rigen por leyes de la República del Ecuador, jurisdicción tribunales de Quito. Contacto legal: legal@role.app.",
 			},
 		],
 	},
@@ -1590,39 +1617,59 @@ export const strings = {
 		updatedAt: "Última actualización: 19 de abril de 2026",
 		sections: [
 			{
-				title: "1. Información que recopilamos",
+				title: "1. Responsable del tratamiento",
 				content:
-					"Recopilamos información que nos proporcionas directamente al registrarte, como tu nombre, correo electrónico y número de teléfono. También recopilamos información sobre tu ubicación cuando usas la aplicación para mostrarte ofertas cercanas.",
+					"Rolé (0xC1X S.A.S., RUC 1799999999001, Quito, Ecuador) es responsable del tratamiento. Contacto de privacidad: privacidad@role.app. Este aviso se rige por la LOPDP (RO 459, 26-may-2021) y su Reglamento.",
 			},
 			{
-				title: "2. Uso de la información",
+				title: "2. Normativa aplicable",
 				content:
-					"Utilizamos tu información para:\n• Proveer y mantener el servicio\n• Procesar tus pedidos y pagos\n• Enviarte notificaciones sobre tus pedidos\n• Mejorar nuestra plataforma y experiencia de usuario\n• Cumplir con obligaciones legales",
+					"Tratamos tus datos conforme a la LOPDP, su Reglamento y la Constitución (Art. 66.19). La política se interpreta bajo ley ecuatoriana y jurisdicción de Quito.",
 			},
 			{
-				title: "3. Compartir información",
+				title: "3. Datos que recopilamos",
 				content:
-					"Compartimos información limitada con los establecimientos comerciales para procesar tus pedidos. No vendemos tus datos personales a terceros.",
+					"Automáticos: IP anonimizada, navegador/SO, páginas vistas, duración, fecha/hora y referer. Voluntarios: nombre, correo, teléfono, ubicación aproximada, preferencias y datos de reserva (oferta, comercio, horario).",
 			},
 			{
-				title: "4. Seguridad de los datos",
+				title: "4. Finalidades",
 				content:
-					"Implementamos medidas de seguridad técnicas y organizativas para proteger tu información personal. Sin embargo, ninguna transmisión por internet es 100% segura.",
+					"Proveer el servicio; procesar reservas y coordinar recogidas; mostrarte ofertas cercanas; enviarte notificaciones transaccionales; mejorar la experiencia y estadísticas agregadas; cumplir obligaciones legales y prevenir fraude.",
 			},
 			{
-				title: "5. Tus derechos",
+				title: "5. Base legal",
 				content:
-					"Tienes derecho a acceder, rectificar o eliminar tus datos personales. Puedes gestionar tus preferencias desde la configuración de tu cuenta.",
+					"Ejecución del contrato (reserva), consentimiento (marketing/cookies no esenciales), interés legítimo (mejora y seguridad) y cumplimiento legal. Puedes retirar el consentimiento sin afectar tratamientos previos.",
 			},
 			{
-				title: "6. Cookies",
+				title: "6. Conservación",
 				content:
-					"Utilizamos cookies y tecnologías similares para mejorar la navegación y entender cómo se usa nuestro servicio.",
+					"Navegación/logs: hasta 12 meses. Cuenta y reservas: mientras mantengas la cuenta y 24 meses tras la baja, salvo obligación legal mayor. Contacto: hasta revocar consentimiento.",
 			},
 			{
-				title: "7. Cambios en la política",
+				title: "7. Destinatarios y transferencias",
 				content:
-					"Podemos actualizar nuestra política de privacidad periódicamente. Te notificaremos sobre cambios significativos a través de la aplicación.",
+					"Compartimos lo mínimo con comercios (tu reserva) y encargados técnicos: Supabase (BD), Vercel (hosting), Sentry (observabilidad), Firebase/Google (push y mapas). Algunos servidores están en EE. UU./UE con cláusulas tipo y DPAs vigentes.",
+			},
+			{
+				title: "8. Tus derechos",
+				content:
+					"Acceso, rectificación, supresión, oposición, portabilidad, limitación y a no ser objeto de decisiones automatizadas. Ejerce en privacidad@role.app con cédula, derecho y medio de respuesta. Respondemos en máximo 15 días (Art. 26 Reglamento LOPDP); puedes reclamar ante la SPDP.",
+			},
+			{
+				title: "9. Seguridad",
+				content:
+					"Cifrado SSL/HTTPS, control de accesos, registro de actividad, backups y actualizaciones. Ante brecha notificamos a la SPDP en máximo 5 días y a ti en 2 días si hay riesgo significativo.",
+			},
+			{
+				title: "10. Cookies",
+				content:
+					"Usamos cookies técnicas (necesarias), de análisis y de terceros (Google Maps, Sentry). Verás banner para aceptar, rechazar o configurar por categoría (Art. 8 LOPDP). Las no esenciales no se cargan hasta tu consentimiento.",
+			},
+			{
+				title: "11. Cambios y contacto",
+				content:
+					"Podemos actualizar esta política y publicaremos la nueva versión aquí con fecha de vigencia. Contacto: privacidad@role.app. Jurisdicción: tribunales de Quito.",
 			},
 		],
 	},

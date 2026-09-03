@@ -46,7 +46,7 @@ export function NoBusinessPrompt() {
 							<Button
 								label={strings.business.createBusiness}
 								onPress={() =>
-									router.push("/(business)/business-profile/business-new")
+									router.push("/my-business/business-new")
 								}
 							/>
 							<Button

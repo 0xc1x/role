@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, SearchBar } from "@/core/ui";
-import { Logo } from "@/core/ui/Logo";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 
@@ -33,7 +32,7 @@ export function ExploreHeader({
 	const brandBackground = onBrand ? colors.primary : colors.background;
 	const brandForeground = onBrand ? colors.primaryForeground : colors.foreground;
 
-	return (
+		return (
 		<View
 			style={[
 				styles.container,
@@ -43,15 +42,10 @@ export function ExploreHeader({
 				},
 			]}
 		>
-			<Logo
-				width={44}
-				height={32}
-				color={brandForeground}
-			/>
 			<AppText
 				variant="h1"
 				weight="extraBold"
-				style={{ color: brandForeground, marginTop: spacing.md }}
+				style={{ color: brandForeground }}
 			>
 				{strings.explore.title}
 			</AppText>

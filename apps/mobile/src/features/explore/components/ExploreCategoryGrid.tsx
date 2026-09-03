@@ -190,10 +190,10 @@ export function ExploreCategoryGrid({
 							onPress={toggleExpand}
 							style={[
 								styles.expandCard,
-								{ backgroundColor: cellBackground },
-								showAll
-									? { borderColor: colors.primary + "33" }
-									: { borderColor: colors.primary + "26" },
+								{ 
+									backgroundColor: cellBackground,
+									borderColor: colors.border
+								},
 							]}
 						>
 							<View style={[styles.expandIcon, { backgroundColor: colors.primary + "1A" }]}>

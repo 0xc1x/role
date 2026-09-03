@@ -1,5 +1,6 @@
 import { router } from "expo-router";
 
+import { queryClient } from "@/core/query/client";
 import { authRepository } from "./data/repository";
 import { useAuthStore } from "./store";
 import { removeDeviceToken } from "@/features/notifications";
@@ -17,5 +18,8 @@ export async function performSignOut(): Promise<void> {
 	}
 	await authRepository.signOut();
 	useAuthStore.getState().clear();
+	// Evita que datos del usuario anterior (órdenes, favoritos, etc.)
+	// sobrevivan al logout en la caché de la sesión siguiente.
+	queryClient.clear();
 	router.replace("/(auth)/login");
 }

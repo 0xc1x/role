@@ -146,6 +146,15 @@ export function useUpdateProfile(userId: string) {
 	});
 }
 
+// ─── Platform stats (public) ────────────────────────────────────────
+export function usePlatformStats() {
+	return useQuery({
+		queryKey: ["platformStats"],
+		queryFn: () => profileRepository.getPlatformStats(),
+		staleTime: 60_000,
+	});
+}
+
 // ─── Payment methods (device-local) ─────────────────────────────────
 export function usePaymentMethods(userId: string) {
 	return useQuery({

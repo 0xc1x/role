@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react-native";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { useFonts } from "expo-font";
@@ -42,7 +43,7 @@ import { initNotificationHandler, syncDeviceToken } from "@/features/notificatio
 import { Toaster } from "sonner-native";
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayout() {
 	const [fontsLoaded] = useFonts({
 		Outfit_600SemiBold,
 		Outfit_700Bold,
@@ -56,6 +57,8 @@ export default function RootLayout() {
 	const [configReady, setConfigReady] = useState(false);
 
 	useEffect(() => {
+		// analytics ya se auto-inicializó en index.ts (nativo + web).
+		// Se mantiene el call idempotente por compatibilidad.
 		analytics.init();
 		watchAuthState();
 		void initialize();
@@ -64,6 +67,17 @@ export default function RootLayout() {
 			// watcher is store-bound; nothing to clean here
 		};
 	}, [initialize]);
+
+	// Sincroniza usuario con Sentry (nativo + web) para agrupar errores por usuario
+	const authProfileId = useAuthStore((s) => s.profile?.id);
+	const authStatus = useAuthStore((s) => s.status);
+	useEffect(() => {
+		if (authStatus === "authenticated" && authProfileId) {
+			analytics.setUser(authProfileId);
+		} else if (authStatus === "guest") {
+			analytics.setUser(null);
+		}
+	}, [authStatus, authProfileId]);
 
 	// Primera consulta de la app: config dinámica desde Supabase mientras
 	// la splash screen sigue visible. Con guard de timeout para no bloquear
@@ -93,8 +107,6 @@ export default function RootLayout() {
 	// Registro automático de push post-login (una vez por usuario).
 	// Sin requestPermission: los navegadores auto-deniegan prompts sin
 	// gesto del usuario; el permiso se pide desde el toggle de Ajustes.
-	const authStatus = useAuthStore((s) => s.status);
-	const authProfileId = useAuthStore((s) => s.profile?.id);
 	const syncedFor = useRef<string | null>(null);
 	useEffect(() => {
 		if (authStatus !== "authenticated" || !authProfileId) return;
@@ -120,25 +132,28 @@ export default function RootLayout() {
 	if (!fontsLoaded || !configReady) return null;
 
 	return (
-		<GestureHandlerRootView style={{ flex: 1 }}>
-			<ThemeProvider>
-				<QueryClientProvider client={queryClient}>
-					<Stack
-						screenOptions={{
-							headerShown: false,
-							contentStyle: { backgroundColor: light.background },
-						}}
-					>
-						<Stack.Screen name="(auth)" />
-						<Stack.Screen name="(consumer)" />
-						<Stack.Screen name="(business)" />
-						<Stack.Screen name="landing" />
-					</Stack>
-          <Toaster/>
-					<PortalHost />
-				</QueryClientProvider>
-        
-			</ThemeProvider>
-		</GestureHandlerRootView>
+		<Sentry.ErrorBoundary fallback={() => <></>}>
+			<GestureHandlerRootView style={{ flex: 1 }}>
+				<ThemeProvider>
+					<QueryClientProvider client={queryClient}>
+						<Stack
+							screenOptions={{
+								headerShown: false,
+								contentStyle: { backgroundColor: light.background },
+							}}
+						>
+							<Stack.Screen name="(auth)" />
+							<Stack.Screen name="(consumer)" />
+							<Stack.Screen name="(business)" />
+							<Stack.Screen name="landing" />
+						</Stack>
+						<Toaster />
+						<PortalHost />
+					</QueryClientProvider>
+				</ThemeProvider>
+			</GestureHandlerRootView>
+		</Sentry.ErrorBoundary>
 	);
 }
+
+export default Sentry.wrap(RootLayout);

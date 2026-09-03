@@ -9,7 +9,11 @@ import {
 	Pressable,
 	Platform,
 	Linking,
+	Animated,
 } from "react-native";
+import { type Href, router } from "expo-router";
+import * as Clipboard from "expo-clipboard";
+import { toast } from "sonner-native";
 
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
@@ -19,6 +23,7 @@ import { usePromoSlides, type PromoSlide } from "@/features/slides";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH - spacing.lg * 2;
 const CARD_HEIGHT = Math.min((CARD_WIDTH * 9) / 16, 220);
+const DOT_ANIM_DURATION = 250;
 
 export function PromoSlider() {
 	const { colors } = useTheme();
@@ -28,10 +33,22 @@ export function PromoSlider() {
 	const scrollRef = useRef<ScrollView>(null);
 	const step = CARD_WIDTH + spacing.sm;
 
+	// Detecta el salto de "loop" (última slide -> primera) para no animar
+	// el indicador cruzando hacia atrás por todos los dots intermedios.
+	const prevIndexRef = useRef(0);
+	const isWrapRef = useRef(false);
+
 	const goTo = useCallback(
 		(index: number, animated = true) => {
 			const total = slides.length;
-			setCurrentIndex(total === 0 ? 0 : ((index % total) + total) % total);
+			if (total === 0) {
+				setCurrentIndex(0);
+				return;
+			}
+			const nextIndex = ((index % total) + total) % total;
+			isWrapRef.current = prevIndexRef.current === total - 1 && nextIndex === 0;
+			prevIndexRef.current = nextIndex;
+			setCurrentIndex(nextIndex);
 			scrollRef.current?.scrollTo({
 				x: index * step,
 				animated,
@@ -51,44 +68,52 @@ export function PromoSlider() {
 
 	const scrollX = useRef(0);
 	const dragStartX = useRef<number | null>(null);
+	const dragStartScrollX = useRef(0);
 	const dragAreaRef = useRef<View>(null);
+
+	const setIndexFromSnap = useCallback(
+		(index: number) => {
+			const total = slides.length;
+			const isWrap = prevIndexRef.current === total - 1 && index === 0;
+			isWrapRef.current = isWrap;
+			prevIndexRef.current = index;
+			setCurrentIndex(index);
+		},
+		[slides.length],
+	);
 
 	const snapToNearest = useCallback(() => {
 		const index = Math.round(scrollX.current / step);
 		if (index >= slides.length) {
-			setCurrentIndex(0);
+			setIndexFromSnap(0);
 			scrollRef.current?.scrollTo({ x: 0, animated: true });
 			return;
 		}
 		const clamped = Math.max(0, Math.min(index, slides.length - 1));
-		setCurrentIndex(clamped);
+		setIndexFromSnap(clamped);
 		scrollRef.current?.scrollTo({ x: clamped * step, animated: true });
-	}, [slides.length, step]);
+	}, [slides.length, step, setIndexFromSnap]);
 
 	useEffect(() => {
 		if (Platform.OS !== "web") return;
 		const area = dragAreaRef.current as unknown as HTMLElement | null;
 		if (!area) return;
 
+		const maxScroll = step * slides.length;
+
 		const handleDown = (e: MouseEvent) => {
 			dragStartX.current = e.pageX;
+			dragStartScrollX.current = scrollX.current;
 			setIsPaused(true);
 		};
 		const handleMove = (e: MouseEvent) => {
 			if (dragStartX.current == null) return;
 			const dx = e.pageX - dragStartX.current;
-			if (scrollRef.current) {
-				scrollRef.current.scrollTo({
-					x: scrollX.current - dx,
-					animated: false,
-				});
-			}
+			const newX = Math.max(0, Math.min(dragStartScrollX.current - dx, maxScroll));
+			scrollX.current = newX;
+			scrollRef.current?.scrollTo({ x: newX, animated: false });
 		};
 		const handleUp = () => {
-			if (dragStartX.current != null) {
-				// actualiza scrollX con el delta final antes de snear
-				// el último handleMove ya dejó scrollX desfasado, recalcula
-			}
 			dragStartX.current = null;
 			setIsPaused(false);
 			snapToNearest();
@@ -102,7 +127,7 @@ export function PromoSlider() {
 			window.removeEventListener("mousemove", handleMove);
 			window.removeEventListener("mouseup", handleUp);
 		};
-	}, [snapToNearest]);
+	}, [snapToNearest, step, slides.length]);
 
 	const handleScroll = (event: {
 		nativeEvent: { contentOffset: { x: number } };
@@ -154,25 +179,75 @@ export function PromoSlider() {
 			</View>
 
 			{slides.length > 1 && (
-				<View style={styles.dotsContainer}>
-					{slides.map((item, index) => (
-						<Pressable key={item.id} onPress={() => goTo(index)}>
-							<View
-								style={[
-									styles.dot,
-									index === currentIndex && styles.dotActive,
-									{
-										backgroundColor:
-											index === currentIndex
-												? colors.primary
-												: colors.foreground + "33",
-									},
-								]}
-							/>
-						</Pressable>
-					))}
-				</View>
+				<DotsIndicator
+					count={slides.length}
+					activeIndex={currentIndex}
+					isWrap={isWrapRef.current}
+					onPressDot={(index) => goTo(index)}
+					activeColor={colors.primary}
+					inactiveColor={colors.foreground + "33"}
+				/>
 			)}
+		</View>
+	);
+}
+
+// ─── DotsIndicator ──────────────────────────────────────────────────
+function DotsIndicator({
+	count,
+	activeIndex,
+	isWrap,
+	onPressDot,
+	activeColor,
+	inactiveColor,
+}: {
+	count: number;
+	activeIndex: number;
+	isWrap: boolean;
+	onPressDot: (index: number) => void;
+	activeColor: string;
+	inactiveColor: string;
+}) {
+	// Un Animated.Value por dot (0 = inactivo, 1 = activo).
+	const animsRef = useRef<Animated.Value[]>([]);
+	if (animsRef.current.length !== count) {
+		animsRef.current = Array.from(
+			{ length: count },
+			(_, i) => new Animated.Value(i === activeIndex ? 1 : 0),
+		);
+	}
+
+	useEffect(() => {
+		const animations = animsRef.current.map((anim, i) =>
+			Animated.timing(anim, {
+				toValue: i === activeIndex ? 1 : 0,
+				// En el salto de loop (última -> primera) no animamos:
+				// el carrusel ya "avanzó" visualmente hacia el clon, así
+				// que el indicador solo debe reflejar el estado final.
+				duration: isWrap ? 0 : DOT_ANIM_DURATION,
+				useNativeDriver: false,
+			}),
+		);
+		Animated.parallel(animations).start();
+	}, [activeIndex, isWrap]);
+
+	return (
+		<View style={styles.dotsContainer}>
+			{animsRef.current.map((anim, index) => {
+				const width = anim.interpolate({
+					inputRange: [0, 1],
+					outputRange: [8, 22],
+				});
+				const backgroundColor = anim.interpolate({
+					inputRange: [0, 1],
+					outputRange: [inactiveColor, activeColor],
+				});
+				return (
+					<Pressable key={index} onPress={() => onPressDot(index)} hitSlop={6}>
+						<Animated.View style={[styles.dot, { width, backgroundColor }]} />
+					</Pressable>
+				);
+			})}
 		</View>
 	);
 }
@@ -181,11 +256,27 @@ function PromoCard({ item }: { item: PromoSlide }) {
 	const { colors } = useTheme();
 	const badgeLabel =
 		item.badgeText ??
-		(item.isSponsored ? strings.home.promoSponsored : strings.home.promoTips);
+		(item.isSponsored
+			? strings.home.promoSponsored
+			: item.type === "coupon"
+				? strings.home.promoCoupon
+				: strings.home.promoTips);
 	const textColor = item.textColor ?? colors.greenDarkForeground;
 
-	const openRedirect = () => {
+	const handleCtaPress = () => {
+		if (item.type === "coupon") {
+			if (!item.couponCode) return;
+			void Clipboard.setStringAsync(item.couponCode).then(() => {
+				toast.success(strings.home.couponCopied);
+			});
+			return;
+		}
 		if (!item.redirectUrl) return;
+		// Convención: "/" = ruta interna de la app (ej. /explore); resto, URL externa.
+		if (item.redirectUrl.startsWith("/")) {
+			router.push(item.redirectUrl as Href);
+			return;
+		}
 		void Linking.openURL(item.redirectUrl).catch(() => {});
 	};
 
@@ -228,10 +319,11 @@ function PromoCard({ item }: { item: PromoSlide }) {
 						{item.caption}
 					</Text>
 				</View>
-				{item.ctaLabel && item.redirectUrl ? (
+				{item.ctaLabel &&
+				(item.type === "coupon" ? item.couponCode : item.redirectUrl) ? (
 					<Pressable
 						accessibilityRole="button"
-						onPress={openRedirect}
+						onPress={handleCtaPress}
 						style={({ pressed }) => [
 							styles.promoButton,
 							{ backgroundColor: item.buttonColor ?? colors.primary },
@@ -324,11 +416,7 @@ const styles = StyleSheet.create({
 		marginTop: spacing.sm,
 	},
 	dot: {
-		width: 8,
 		height: 8,
 		borderRadius: 4,
-	},
-	dotActive: {
-		width: 22,
 	},
 });

@@ -257,6 +257,8 @@ export const businessRepository = {
 				website: input.website,
 				rating: 0,
 				review_count: 0,
+				is_active: false,
+				verification_status: "pending",
 			})
 			.select("id")
 			.single();

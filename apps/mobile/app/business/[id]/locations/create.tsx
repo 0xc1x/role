@@ -1,9 +1,8 @@
-import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
-import { Screen, ScreenHeader } from "@/core/ui";
+import { goBackOr, Screen, ScreenHeader } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
@@ -39,7 +38,7 @@ export default function BusinessLocationCreateScreen() {
 			{
 				onSuccess: () => {
 					setSubmitting(false);
-					router.back();
+					goBackOr(`/business/${businessId}/locations`);
 				},
 				onError: (e) => {
 					setSubmitting(false);

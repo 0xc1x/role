@@ -47,9 +47,9 @@ export default function ConsumerHomeScreen() {
 
 	return (
 		<View style={{ flex: 1, backgroundColor: colors.background }}>
-			<View style={[styles.topBar, { borderBottomColor: colors.border }]}>
+			<View style={[styles.topBar, { borderBottomColor: colors.background }]}>
 				<LocationSelector />
-				<Logo width={200} height={80} color={colors.primary} />
+				<Logo width={100} height={60} color={colors.primary} />
 			</View>
 			<ScrollView
 				ref={scrollRef}
@@ -117,7 +117,6 @@ const styles = StyleSheet.create({
 		justifyContent: "space-between",
 		minHeight: 56,
 		paddingHorizontal: spacing.lg,
-		paddingVertical: spacing.sm,
 		borderBottomWidth: StyleSheet.hairlineWidth,
 		zIndex: 100,
 	},

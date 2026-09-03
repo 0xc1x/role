@@ -69,7 +69,7 @@ export default function AddressesScreen() {
 	return (
 		<Screen>
 			<View style={styles.container}>
-				<ScreenHeader title={strings.addresses.title} />
+				<ScreenHeader title={strings.addresses.title} fallback="/(consumer)/profile" />
 
 				<Pressable
 					onPress={() => setShowAddSheet(true)}

@@ -274,7 +274,7 @@ export default function NotificationsSettingsScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
-				<ScreenHeader title={strings.notificationsSettings.title} />
+				<ScreenHeader title={strings.notificationsSettings.title} fallback="/(consumer)/profile" />
 
 				<View
 					style={[

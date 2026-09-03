@@ -82,7 +82,7 @@ export default function OrdersScreen() {
 	return (
 		<Screen>
 			<View style={styles.header}>
-				<ScreenHeader title={strings.orders.title} />
+				<ScreenHeader title={strings.orders.title} fallback="/(consumer)/profile" />
 			</View>
 
 			<View style={styles.searchWrap}>
@@ -273,7 +273,7 @@ const historyStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-	header: { paddingHorizontal: spacing.xl },
+	header: { padding: spacing.xl , gap: spacing.md},
 	searchWrap: { paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
 	tabBar: { flexDirection: "row" },
 	tab: {

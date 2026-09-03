@@ -2,6 +2,8 @@
  * Proyección móvil de una slide activa (PostgREST).
  * No duplica la entidad de commons: solo los campos que la UI consume.
  */
+import type { SlideType } from "@0xc1x/role-commons";
+
 export interface PromoSlide {
   id: string;
   title: string;
@@ -9,9 +11,13 @@ export interface PromoSlide {
   badgeText: string | null;
   ctaLabel: string | null;
   redirectUrl: string | null;
+  /** Solo type === 'coupon': código que el CTA copia al portapapeles. */
+  couponCode: string | null;
   imageUrl: string | null;
   textColor: string | null;
   buttonColor: string | null;
+  /** El CTA reacciona al tipo: cupón copia, ruta interna navega, URL abre externo. */
+  type: SlideType;
   /** type === 'sponsor' muestra el badge "Sponsoreado". */
   isSponsored: boolean;
 }
@@ -23,6 +29,7 @@ interface SlideRow {
   badge_text: string | null;
   cta_label: string | null;
   redirect_url: string | null;
+  coupon_code: string | null;
   image_url: string | null;
   text_color: string | null;
   button_color: string | null;
@@ -41,9 +48,12 @@ export function toPromoSlide(row: SlideRow): PromoSlide {
     badgeText: row.badge_text,
     ctaLabel: row.cta_label,
     redirectUrl: row.redirect_url,
+    couponCode: row.coupon_code,
     imageUrl: row.image_url,
     textColor: row.text_color,
     buttonColor: row.button_color,
+    // `type` es texto libre en la tabla; el repositorio filtra a tipos conocidos.
+    type: row.type as SlideType,
     isSponsored: row.type === "sponsor",
   };
 }

@@ -130,7 +130,7 @@ export default function PaymentMethodsScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
-				<ScreenHeader title={strings.profile.paymentMethods} />
+				<ScreenHeader title={strings.profile.paymentMethods} fallback="/(consumer)/profile" />
 
 				{!methods || methods.length === 0 ? (
 					<EmptyState

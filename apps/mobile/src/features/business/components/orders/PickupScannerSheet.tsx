@@ -248,7 +248,7 @@ function NativeScanner({
 
 const styles = StyleSheet.create({
 	content: {
-		paddingHorizontal: spacing.xl,
+		paddingHorizontal: spacing.sm,
 		gap: spacing.md,
 	},
 	previewWrap: {
@@ -256,6 +256,7 @@ const styles = StyleSheet.create({
 		borderRadius: radii.xl,
 		borderWidth: 1,
 		overflow: "hidden",
+		padding: spacing.lg,
 	},
 	preview: {
 		flex: 1,

@@ -5,8 +5,9 @@ import {
 	Pressable,
 	StyleSheet,
 	View,
+	TouchableOpacity,
+	Linking
 } from "react-native";
-import { router } from "expo-router";
 import { toast } from "sonner-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -26,6 +27,7 @@ import {
 	AppText,
 	Button,
 	Card,
+	goBackOr,
 	Screen,
 	ScreenHeader,
 	StatusBadge,
@@ -40,7 +42,11 @@ import {
 } from "@/core/utils/formatters";
 import { orderStatusLabels } from "@/features/orders/domain/order";
 import { orderStatusTone } from "@/features/orders/components/OrderCard";
-import { isTerminalStatus, type OrderDetail } from "@/features/orders/domain/order";
+import {
+	isTerminalStatus,
+	lastEventTimeFor,
+	type OrderDetail,
+} from "@/features/orders/domain/order";
 import {
 	useUpdateOrderStatus,
 	useValidatePickupCode,
@@ -211,8 +217,8 @@ export function OrderDetail({
 						<AlertDialogAction
 							onPress={() =>
 								updateStatus.mutate(
-									{ orderId: order.id, status: "cancelled" },
-									{ onSuccess: () => router.back() },
+								{ orderId: order.id, status: "cancelled" },
+								{ onSuccess: () => goBackOr("/(business)/orders") },
 								)
 							}
 						>
@@ -262,6 +268,12 @@ function ProductCard({ item }: { item: OrderDetail }) {
 // ─── Información del cliente ─────────────────────────────────────────
 
 function CustomerInfoCard({ item }: { item: OrderDetail }) {
+	const handleCall = () => {
+		if (item.customerPhone) {
+			Linking.openURL(`tel:${item.customerPhone}`);
+		}
+	};
+
 	return (
 		<Card style={styles.card}>
 			<AppText variant="h4" weight="bold">
@@ -272,16 +284,17 @@ function CustomerInfoCard({ item }: { item: OrderDetail }) {
 				label={strings.business.ordersName}
 				text={item.customerName ?? strings.business.ordersNoName}
 			/>
-			<InfoRow
-				icon="call-outline"
-				label={strings.business.phone}
-				text={item.customerPhone ?? strings.business.ordersNoPhone}
-			/>
-			<InfoRow
-				icon="mail-outline"
-				label={strings.business.email}
-				text={item.customerEmail ?? strings.business.ordersNoEmail}
-			/>
+			<TouchableOpacity
+				onPress={handleCall}
+				disabled={!item.customerPhone}
+				activeOpacity={0.6}
+			>
+				<InfoRow
+					icon="call-outline"
+					label={strings.business.phone}
+					text={item.customerPhone ?? strings.business.ordersNoPhone}
+				/>
+			</TouchableOpacity>
 		</Card>
 	);
 }
@@ -323,81 +336,106 @@ interface TimelineEntry {
 	color: string;
 	background: string;
 }
+type OrderStatus =
+	| "pending"
+	| "confirmed"
+	| "ready_for_pickup"
+	| "picked_up"
+	| "completed"
+	| "cancelled"
+	| "expired";
+
+type TimelineIcon = TimelineEntry["icon"];
+
+type TimelineStep = {
+	statuses: OrderStatus[];
+	icon: TimelineIcon;
+	title: string;
+	note: string;
+	eventKeys: OrderStatus[];
+	fallback: string;
+	color: string;
+	background: string;
+};
 
 function buildTimeline(item: OrderDetail, colors: ReturnType<typeof useTheme>["colors"]): TimelineEntry[] {
-	const { order } = item;
+	const { order, events } = item;
 	const created = order.created_at;
-	const readyTime = order.pickup_time ?? created;
-	const entries: TimelineEntry[] = [
+	const readyFallback = order.pickup_time ?? created;
+
+	const steps: TimelineStep[] = [
 		{
+			statuses: ["pending", "confirmed", "ready_for_pickup", "picked_up", "completed"],
 			icon: "time-outline",
 			title: strings.business.ordersTimelinePending,
 			note: strings.business.ordersTimelinePendingNote,
-			timestamp: created,
+			eventKeys: ["pending"],
+			fallback: created,
 			color: colors.warning,
 			background: colors.surfaceWarning,
 		},
-	];
-
-	const confirmed = ["confirmed", "ready_for_pickup", "picked_up", "completed"];
-	const ready = ["ready_for_pickup", "picked_up", "completed"];
-
-	if (confirmed.includes(order.status)) {
-		entries.push({
+		{
+			statuses: ["confirmed", "ready_for_pickup", "picked_up", "completed"],
 			icon: "checkmark-circle-outline",
 			title: strings.business.ordersTimelineConfirmed,
 			note: strings.business.ordersTimelineConfirmedNote,
-			timestamp: created,
+			eventKeys: ["confirmed"],
+			fallback: created,
 			color: colors.info,
 			background: colors.infoSurface,
-		});
-	}
-
-	if (ready.includes(order.status)) {
-		entries.push({
+		},
+		{
+			statuses: ["ready_for_pickup", "picked_up", "completed"],
 			icon: "checkmark-circle",
 			title: strings.business.ordersTimelineReady,
 			note: strings.business.ordersTimelineReadyNote,
-			timestamp: readyTime,
-			color: colors.primary,
-			background: colors.secondary + "4D",
-		});
-	}
-
-	if (order.status === "completed") {
-		entries.push({
+			eventKeys: ["ready_for_pickup"],
+			fallback: readyFallback,
+			color: colors.success,
+			background: colors.surfaceSuccess, // ajusta al token correcto
+		},
+		{
+			statuses: ["completed"],
 			icon: "checkmark-done-circle",
 			title: strings.business.ordersTimelineCompleted,
 			note: strings.business.ordersTimelineCompletedNote,
-			timestamp: readyTime,
+			eventKeys: ["picked_up", "completed"],
+			fallback: readyFallback,
 			color: colors.success,
 			background: colors.surfaceSuccess,
-		});
-	}
-
-	if (order.status === "cancelled") {
-		entries.push({
+		},
+		{
+			statuses: ["cancelled"],
 			icon: "close-circle-outline",
 			title: strings.business.ordersTimelineCancelled,
 			note: strings.business.ordersTimelineCancelledNote,
-			timestamp: created,
+			eventKeys: ["cancelled"],
+			fallback: created,
 			color: colors.destructive,
 			background: colors.destructiveSurface,
-		});
-	}
-
-	if (order.status === "expired") {
-		entries.push({
+		},
+		{
+			statuses: ["expired"],
 			icon: "timer-outline",
 			title: strings.business.ordersTimelineExpired,
 			note: strings.business.ordersTimelineExpiredNote,
-			timestamp: created,
+			eventKeys: ["expired"],
+			fallback: created,
 			color: colors.destructive,
 			background: colors.destructiveSurface,
-		});
-	}
+		},
+	];
 
-	return entries;
+	return steps
+		.filter((step) => step.statuses.includes(order.status))
+		.map((step) => ({
+			icon: step.icon,
+			title: step.title,
+			note: step.note,
+			timestamp: lastEventTimeFor(events, step.eventKeys, step.fallback),
+			color: step.color,
+			background: step.background,
+		}));
 }
 
 function TimelineCard({ item }: { item: OrderDetail }) {

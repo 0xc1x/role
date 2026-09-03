@@ -90,7 +90,7 @@ function GestionContent({ businessId }: { businessId: string }) {
 						variant="primary"
 						icon={<Ionicons name="create-outline" size={20} color="#fff" />}
 						style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
-						onPress={() => router.push("/(business)/business-profile/edit")}
+						onPress={() => router.push("/my-business/edit")}
 					/>
 				</Card>
 
@@ -272,7 +272,7 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 		{
 			icon: <Ionicons name="settings-outline" size={20} color={colors.mutedForeground} />,
 			label: strings.business.generalSettings,
-			route: "/(business)/business-profile" as Href,
+			route: "/my-business" as Href,
 		},
 		{
 			icon: <Ionicons name="notifications-outline" size={20} color={colors.mutedForeground} />,

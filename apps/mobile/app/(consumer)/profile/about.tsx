@@ -9,6 +9,7 @@ import { AppText, Screen, ScreenHeader } from "@/core/ui";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { useAuthStore } from "@/features/auth/store";
+import { usePlatformStats } from "@/features/profile/hooks";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -23,42 +24,27 @@ function Hero() {
 		>
 			<View style={styles.heroBody}>
 				<AppText variant="h2" weight="bold" style={styles.centered}>
-					{strings.aboutScreen.missionTitle}
+					{strings.aboutScreen.heroTitle}
 				</AppText>
-				<AppText
-					variant="bodyLarge"
-					style={[styles.centered, { color: colors.mutedForeground }]}
-				>
-					{strings.aboutScreen.missionBody}
+				<AppText variant="bodyLarge" style={[styles.centered, { color: colors.mutedForeground }]}>
+					{strings.aboutScreen.heroBody}
 				</AppText>
 			</View>
 		</LinearGradient>
 	);
 }
 
-function Mission() {
+function TextSection({ title, body }: { title: string; body: string }) {
 	const { colors } = useTheme();
 	return (
 		<View style={styles.section}>
-			<View style={styles.missionBody}>
+			<View style={styles.textSectionBody}>
 				<AppText variant="h2" weight="bold" style={styles.centered}>
-					{strings.aboutScreen.whyTitle}
+					{title}
 				</AppText>
-				<AppText
-					variant="bodyLarge"
-					style={[styles.centered, styles.missionText, { color: colors.mutedForeground }]}
-				>
-					{strings.aboutScreen.whyBody1}
+				<AppText variant="bodyLarge" style={[styles.centered, styles.bodyText, { color: colors.mutedForeground }]}>
+					{body}
 				</AppText>
-				<AppText
-					variant="bodyLarge"
-					style={[styles.centered, { color: colors.mutedForeground }]}
-				>
-					{strings.aboutScreen.whyBody2}
-				</AppText>
-				<View style={[styles.ecoPanel, { backgroundColor: `${colors.secondary}33` }]}>
-					<Ionicons name="leaf-outline" size={80} color={colors.ecoGreen} />
-				</View>
 			</View>
 		</View>
 	);
@@ -91,28 +77,36 @@ function ValueCard({
 	);
 }
 
-function Values() {
+function Principles() {
 	const { colors } = useTheme();
 	return (
 		<View style={[styles.section, { backgroundColor: colors.background }]}>
+			<AppText variant="bodySmall" weight="bold" style={[styles.eyebrow, { color: colors.primary }]}>
+				{strings.aboutScreen.principlesEyebrow.toUpperCase()}
+			</AppText>
 			<AppText variant="h2" weight="bold" style={[styles.centered, styles.sectionTitle]}>
-				{strings.aboutScreen.valuesTitle}
+				{strings.aboutScreen.principlesTitle}
 			</AppText>
 			<View style={styles.valueList}>
 				<ValueCard
 					icon="leaf-outline"
-					title={strings.aboutScreen.valueSustainability}
-					description={strings.aboutScreen.valueSustainabilityBody}
+					title={strings.aboutScreen.principle1Title}
+					description={strings.aboutScreen.principle1Body}
 				/>
 				<ValueCard
-					icon="heart-outline"
-					title={strings.aboutScreen.valueCommunity}
-					description={strings.aboutScreen.valueCommunityBody}
+					icon="people-outline"
+					title={strings.aboutScreen.principle2Title}
+					description={strings.aboutScreen.principle2Body}
 				/>
 				<ValueCard
-					icon="bulb-outline"
-					title={strings.aboutScreen.valueInnovation}
-					description={strings.aboutScreen.valueInnovationBody}
+					icon="pricetag-outline"
+					title={strings.aboutScreen.principle3Title}
+					description={strings.aboutScreen.principle3Body}
+				/>
+				<ValueCard
+					icon="sparkles-outline"
+					title={strings.aboutScreen.principle4Title}
+					description={strings.aboutScreen.principle4Body}
 				/>
 			</View>
 		</View>
@@ -121,19 +115,23 @@ function Values() {
 
 function Stats() {
 	const { colors } = useTheme();
+	const { data } = usePlatformStats();
+	// Fallback a valores de strings si RPC falla / aún carga (no bloquea UI)
+	const users = data?.users ?? 15;
+	const businesses = data?.businesses ?? 13;
+	const meals = data?.meals ?? 7;
 	const items = [
-		{ value: strings.aboutScreen.statMealsValue, label: strings.aboutScreen.statMeals },
-		{
-			value: strings.aboutScreen.statBusinessesValue,
-			label: strings.aboutScreen.statBusinesses,
-		},
-		{ value: strings.aboutScreen.statUsersValue, label: strings.aboutScreen.statUsers },
-		{ value: strings.aboutScreen.statCo2Value, label: strings.aboutScreen.statCo2 },
+		{ value: `${users}+`, label: strings.aboutScreen.statUsers },
+		{ value: `${businesses}+`, label: strings.aboutScreen.statBusinesses },
+		{ value: `${meals}+`, label: strings.aboutScreen.statMeals },
 	];
 	return (
 		<View style={styles.section}>
 			<AppText variant="h2" weight="bold" style={[styles.centered, styles.sectionTitle]}>
 				{strings.aboutScreen.statsTitle}
+			</AppText>
+			<AppText variant="bodyMedium" weight="semiBold" style={[styles.centered, { color: colors.mutedForeground }]}>
+				{strings.aboutScreen.statsSubtitle}
 			</AppText>
 			<View style={styles.statsGrid}>
 				{items.map((item) => (
@@ -141,10 +139,7 @@ function Stats() {
 						<AppText variant="h2" weight="bold" style={{ color: colors.primary }}>
 							{item.value}
 						</AppText>
-						<AppText
-							variant="bodyMedium"
-							style={[styles.centered, { color: colors.mutedForeground }]}
-						>
+						<AppText variant="bodyMedium" style={[styles.centered, { color: colors.mutedForeground }]}>
 							{item.label}
 						</AppText>
 					</View>
@@ -157,7 +152,6 @@ function Stats() {
 export default function AboutScreen() {
 	const { status, initialized } = useAuthStore();
 
-	// Redirect guests to login
 	useEffect(() => {
 		if (initialized && status === "guest") {
 			router.replace("/login");
@@ -169,12 +163,14 @@ export default function AboutScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.header}>
-				<ScreenHeader title={strings.aboutScreen.title} />
+				<ScreenHeader title={strings.aboutScreen.title} fallback="/(consumer)/profile" />
 			</View>
 			<Hero />
-			<Mission />
-			<Values />
+			<TextSection title={strings.aboutScreen.ideaTitle} body={strings.aboutScreen.ideaBody} />
+			<TextSection title={strings.aboutScreen.missionTitle} body={strings.aboutScreen.missionBody} />
+			<TextSection title={strings.aboutScreen.howTitle} body={strings.aboutScreen.howBody} />
 			<Stats />
+			<Principles />
 		</Screen>
 	);
 }
@@ -193,26 +189,20 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.xl,
 	},
 	centered: { textAlign: "center" },
+	eyebrow: { textAlign: "center", letterSpacing: 1.2, fontSize: 12 },
 	section: {
 		paddingVertical: 48,
 		paddingHorizontal: spacing.xl,
 	},
-	missionBody: {
+	textSectionBody: {
 		alignItems: "center",
-		gap: spacing.xl,
+		gap: spacing.lg,
 		maxWidth: 1000,
 		alignSelf: "center",
 	},
-	missionText: { lineHeight: 24 },
-	ecoPanel: {
-		width: "100%",
-		height: 250,
-		borderRadius: 40,
-		alignItems: "center",
-		justifyContent: "center",
-	},
+	bodyText: { lineHeight: 24 },
 	sectionTitle: { marginBottom: spacing.sm },
-	valueList: { gap: spacing.lg, maxWidth: 700, alignSelf: "center", width: "100%" },
+	valueList: { gap: spacing.lg, maxWidth: 700, alignSelf: "center", width: "100%", marginTop: spacing.lg },
 	valueCard: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -231,9 +221,11 @@ const styles = StyleSheet.create({
 		flexWrap: "wrap",
 		gap: spacing.lg,
 		marginTop: spacing.xl,
+		justifyContent: "center",
 	},
 	statItem: {
-		width: "47%",
+		minWidth: 90,
+		flex: 1,
 		alignItems: "center",
 		gap: spacing.sm,
 	},

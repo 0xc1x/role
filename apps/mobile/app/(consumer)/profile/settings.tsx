@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Card, Screen, ScreenHeader } from "@/core/ui";
+import { AppText, Card, Screen, ScreenHeader, SectionTitle, ThemeOptionCard} from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import { useTheme, type ThemeMode } from "@/core/theme";
 import { usePreferences, useUpdatePreferences } from "@/features/profile/hooks";
@@ -17,58 +17,6 @@ const MODES: Array<{ key: ThemeMode; label: string; icon: string }> = [
 	{ key: "system", label: strings.settings.system, icon: "phone-portrait-outline" },
 ];
 
-function SectionTitle({ children }: { children: string }) {
-	const { colors } = useTheme();
-	return (
-		<AppText
-			variant="labelSmall"
-			weight="bold"
-			style={{ color: colors.mutedForeground }}
-		>
-			{children}
-		</AppText>
-	);
-}
-
-function ThemeOptionCard({
-	label,
-	icon,
-	isSelected,
-	onPress,
-}: {
-	label: string;
-	icon: string;
-	isSelected: boolean;
-	onPress: () => void;
-}) {
-	const { colors } = useTheme();
-	return (
-		<Pressable
-			onPress={onPress}
-			style={[
-				styles.themeCard,
-				{
-					backgroundColor: isSelected ? colors.primary + "0D" : colors.card,
-					borderColor: isSelected ? colors.primary : colors.borderSolid,
-					borderWidth: isSelected ? 1.5 : 1,
-				},
-			]}
-		>
-			<Ionicons
-				name={icon as never}
-				size={20}
-				color={isSelected ? colors.primary : colors.mutedForeground}
-			/>
-			<AppText
-				variant="bodySmall"
-				weight={isSelected ? "bold" : "regular"}
-				style={{ color: isSelected ? colors.primary : colors.foreground }}
-			>
-				{label}
-			</AppText>
-		</Pressable>
-	);
-}
 
 function SectionLabel({ children }: { children: string }) {
 	const { colors } = useTheme();
@@ -114,7 +62,7 @@ export default function SettingsScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
-				<ScreenHeader title={strings.settings.title} />
+				<ScreenHeader title={strings.settings.title} fallback="/(consumer)/profile" />
 
 				<SectionTitle>{strings.settings.appearance}</SectionTitle>
 				<View style={styles.themeRow}>
@@ -173,13 +121,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, gap: spacing.lg },
 	themeRow: { flexDirection: "row", gap: spacing.sm },
-	themeCard: {
-		flex: 1,
-		alignItems: "center",
-		gap: spacing.xs,
-		paddingVertical: spacing.md,
-		borderRadius: radii.md,
-	},
+	
 	radiusCard: { gap: spacing.sm },
 	radiusHeader: {
 		flexDirection: "row",

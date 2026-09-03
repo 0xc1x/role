@@ -324,6 +324,18 @@ export const profileRepository = {
 		const { error } = await supabase.from('payment_methods').update({ is_default: true }).eq('id', id);
 		if (error) throw toAppError(error, 'Error al actualizar método de pago');
 	},
+
+	// ─── Platform stats (public, real counts) ───────────────────────
+	async getPlatformStats(): Promise<{ users: number; businesses: number; meals: number }> {
+		const { data, error } = await supabase.rpc('get_platform_stats');
+		if (error) throw toAppError(error, 'Error al cargar estadísticas');
+		const row = data as unknown as { users: number; businesses: number; meals: number };
+		return {
+			users: Number(row.users ?? 0),
+			businesses: Number(row.businesses ?? 0),
+			meals: Number(row.meals ?? 0),
+		};
+	},
 };
 
 function num(value: unknown): number | null {

@@ -11,12 +11,16 @@ import { Errors } from "@/core/error/app-error";
 import type {
 	CancelOrderResult,
 	OrderDetail,
+	OrderStatusEvent,
 	ReservationResult,
 } from "../domain/order";
 
+// `order_events` va sin `!inner`: si RLS no expone eventos para el rol,
+// PostgREST devuelve la colección vacía en lugar de fallar toda la query.
 const ORDER_SELECT = `
   id, user_id, offer_id, business_id, order_number, status,
   price, original_price, pickup_code, pickup_time, coupon_id, created_at,
+  order_events (status, created_at),
   offers!inner (
     title, image, business_location_id,
     business_locations:business_location_id (address)
@@ -191,15 +195,30 @@ export const orderRepository = {
 		code: string,
 		businessId: string,
 	): Promise<Coupon | null> {
-		const { data, error } = await supabase
+		const upperCode = code.toUpperCase();
+		// Precedencia: cupón del negocio primero, global (business_id null)
+		// después — espejo del match de `reserve_offer`.
+		const { data: businessCoupon, error: businessError } = await supabase
 			.from("coupons")
 			.select("*")
-			.eq("code", code.toUpperCase())
+			.eq("code", upperCode)
 			.eq("business_id", businessId)
 			.eq("is_active", true)
 			.maybeSingle();
-		if (error) throw toAppError(error, "Error al validar el cupón");
-		return (data as unknown as Coupon | null) ?? null;
+		if (businessError)
+			throw toAppError(businessError, "Error al validar el cupón");
+		if (businessCoupon) return businessCoupon as unknown as Coupon;
+
+		const { data: globalCoupon, error: globalError } = await supabase
+			.from("coupons")
+			.select("*")
+			.eq("code", upperCode)
+			.is("business_id", null)
+			.eq("is_active", true)
+			.maybeSingle();
+		if (globalError)
+			throw toAppError(globalError, "Error al validar el cupón");
+		return (globalCoupon as unknown as Coupon | null) ?? null;
 	},
 
 	async submitReview(input: {
@@ -270,7 +289,24 @@ function mapOrderDetail(row: Row): OrderDetail {
 		customerName: (customer?.full_name as string | null) ?? null,
 		customerPhone: (customer?.phone as string | null) ?? null,
 		customerEmail: customerEmail,
+		events: mapStatusEvents(row.order_events),
 	};
+}
+
+function mapStatusEvents(value: unknown): OrderStatusEvent[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.filter(
+			(e): e is { status: OrderStatusType; created_at: string } =>
+				e != null &&
+				typeof (e as Row).status === "string" &&
+				typeof (e as Row).created_at === "string",
+		)
+		.map((e) => ({
+			status: e.status as OrderStatusType,
+			created_at: e.created_at,
+		}))
+		.sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
 function toRows(data: unknown): Row[] {

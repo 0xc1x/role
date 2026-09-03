@@ -18,7 +18,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, BottomSheetModal, StatusBadge } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
-import { formatMoney, formatTime } from "@/core/utils/formatters";
+import { formatMoney, formatRelativeDay, formatTime } from "@/core/utils/formatters";
 import type { OfferDetail } from "@/features/offers/domain/offer";
 import { useDeleteOffer, useToggleOfferActive } from "@/features/business/hooks";
 
@@ -135,7 +135,7 @@ export function ProductCard({
 								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 									{strings.business.untilTime.replace(
 										"{time}",
-										formatTime(product.offer.pickup_end),
+										formatRelativeDay(product.offer.pickup_end),
 									)}
 								</AppText>
 							</View>
@@ -408,8 +408,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	menuList: {
-		gap: spacing.sm,
-		paddingHorizontal: spacing.xl,
+		gap: 8, paddingHorizontal: spacing.xl 
 	},
 	menuRow: {
 		flexDirection: "row",

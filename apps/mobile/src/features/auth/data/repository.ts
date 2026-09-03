@@ -50,7 +50,7 @@ export const authRepository = {
     password: string;
     role: 'user' | 'business';
     analyticsConsentGranted: boolean;
-  }): Promise<SignUpResult> {
+  }): Promise<SignUpResult & { userId: string }> {
     const { data, error } = await supabase.auth.signUp({
       email: input.email,
       password: input.password,
@@ -70,8 +70,8 @@ export const authRepository = {
     if (hasActiveSession && input.analyticsConsentGranted) {
       await syncAnalyticsConsent(user.id);
     }
-    if (!hasActiveSession) return { requiresEmailConfirmation: true, profile: null };
-    return { requiresEmailConfirmation: false, profile: profileFromUser(user) };
+    if (!hasActiveSession) return { requiresEmailConfirmation: true, profile: null, userId: user.id };
+    return { requiresEmailConfirmation: false, profile: profileFromUser(user), userId: user.id };
   },
 
   async signOut(): Promise<void> {

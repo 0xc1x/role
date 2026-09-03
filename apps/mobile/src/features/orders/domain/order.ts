@@ -72,6 +72,32 @@ export interface OrderDetail {
 	customerName: string | null;
 	customerPhone: string | null;
 	customerEmail: string | null;
+	/** Cambios de estado registrados en `order_events` (vacío si RLS no expone ninguno). */
+	events: OrderStatusEvent[];
+}
+
+/** Proyección mínima de `public.order_events` para el historial del pedido. */
+export interface OrderStatusEvent {
+	status: OrderStatusType;
+	created_at: string;
+}
+
+/**
+ * Timestamp real (ISO de `order_events`) del último cambio de estado entre
+ * los estados dados; si no hay eventos, cae al fallback (heurística previa).
+ * El formateo para pantalla queda en la capa de presentación.
+ */
+export function lastEventTimeFor(
+	events: readonly OrderStatusEvent[],
+	statuses: readonly OrderStatusType[],
+	fallback: string,
+): string {
+	let last: string | null = null;
+	for (const event of events) {
+		if (!statuses.includes(event.status)) continue;
+		if (last == null || event.created_at > last) last = event.created_at;
+	}
+	return last ?? fallback;
 }
 
 export function orderDiscount(

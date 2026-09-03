@@ -45,6 +45,7 @@ function makeOrder(
 		customerName: overrides.customerName ?? null,
 		customerPhone: null,
 		customerEmail: null,
+		events: [],
 	} satisfies OrderDetail;
 }
 

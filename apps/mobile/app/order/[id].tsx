@@ -32,9 +32,12 @@ import { useCancelOrder, useOrder } from "@/features/hooks";
 import { orderStatusTone } from "@/features/orders/components/OrderCard";
 import {
 	isActiveStatus,
+	lastEventTimeFor,
 	orderDiscount,
 	orderStatusLabels,
 	type OrderDetail,
+	type OrderStatusEvent,
+	type OrderStatusType,
 } from "@/features/orders/domain/order";
 import {
 	formatMoneyPrecise,
@@ -81,7 +84,7 @@ export default function OrderDetailScreen() {
 
 				<InstructionsCard order={order} />
 
-				<TimelineCard order={order} />
+				<TimelineCard order={order} events={data.events} />
 
 				{canCancel ? (
 					<Button
@@ -465,8 +468,17 @@ function formatTimestamp(iso: string): string {
 	return `${formatShortDate(iso)} · ${formatTime(iso)}`;
 }
 
-function buildTimeline(order: Order, colors: ColorTokens): TimelineSection[] {
-	const created = formatTimestamp(order.created_at);
+function buildTimeline(
+	order: Order,
+	events: OrderStatusEvent[],
+	colors: ColorTokens,
+): TimelineSection[] {
+	// Fallbacks en ISO; `lastEventTimeFor` devuelve ISO (evento o fallback)
+	// y `formatTimestamp` formatea una única vez para pantalla.
+	const createdIso = order.created_at;
+	const readyIso = order.pickup_time ?? createdIso;
+	const timeOf = (statuses: OrderStatusType[], fallback: string) =>
+		formatTimestamp(lastEventTimeFor(events, statuses, fallback));
 	const ready =
 		order.status === "ready_for_pickup" ||
 		order.status === "picked_up" ||
@@ -477,7 +489,7 @@ function buildTimeline(order: Order, colors: ColorTokens): TimelineSection[] {
 			icon: "checkmark-circle-outline",
 			title: strings.orders.timelineConfirmed,
 			note: strings.orders.timelineConfirmedNote,
-			time: created,
+			time: timeOf(["confirmed"], createdIso),
 			color: colors.primary,
 			background: colors.secondary + "4D",
 		},
@@ -488,7 +500,7 @@ function buildTimeline(order: Order, colors: ColorTokens): TimelineSection[] {
 			icon: "time-outline",
 			title: strings.orders.timelineReady,
 			note: strings.orders.timelineReadyNote,
-			time: order.pickup_time ? formatTimestamp(order.pickup_time) : created,
+			time: timeOf(["ready_for_pickup"], readyIso),
 			color: colors.primary,
 			background: colors.secondary + "4D",
 		});
@@ -499,7 +511,7 @@ function buildTimeline(order: Order, colors: ColorTokens): TimelineSection[] {
 			icon: "checkmark-circle",
 			title: strings.orders.timelineCompleted,
 			note: strings.orders.timelineCompletedNote,
-			time: order.pickup_time ? formatTimestamp(order.pickup_time) : created,
+			time: timeOf(["picked_up", "completed"], readyIso),
 			color: colors.success,
 			background: colors.surfaceSuccess,
 		});
@@ -510,7 +522,7 @@ function buildTimeline(order: Order, colors: ColorTokens): TimelineSection[] {
 			icon: "close-circle-outline",
 			title: strings.orders.timelineCancelled,
 			note: strings.orders.timelineCancelledNote,
-			time: created,
+			time: timeOf(["cancelled"], createdIso),
 			color: colors.destructive,
 			background: colors.destructiveSurface,
 		});
@@ -520,7 +532,7 @@ function buildTimeline(order: Order, colors: ColorTokens): TimelineSection[] {
 			icon: "timer-outline",
 			title: strings.orders.timelineExpired,
 			note: strings.orders.timelineExpiredNote,
-			time: created,
+			time: timeOf(["expired"], createdIso),
 			color: colors.destructive,
 			background: colors.destructiveSurface,
 		});
@@ -529,9 +541,15 @@ function buildTimeline(order: Order, colors: ColorTokens): TimelineSection[] {
 	return sections;
 }
 
-function TimelineCard({ order }: { order: Order }) {
+function TimelineCard({
+	order,
+	events,
+}: {
+	order: Order;
+	events: OrderStatusEvent[];
+}) {
 	const { colors } = useTheme();
-	const sections = buildTimeline(order, colors);
+	const sections = buildTimeline(order, events, colors);
 	return (
 		<Card style={styles.cardBlock}>
 			<View style={styles.timelineHeader}>

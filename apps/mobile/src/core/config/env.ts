@@ -14,8 +14,11 @@ const envSchema = z.object({
 	EXPO_PUBLIC_SUPABASE_URL: z.string().url(),
 	/** Supabase anon (public) key */
 	EXPO_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
-	/** Sentry DSN — optional, empty disables crash reporting */
-	EXPO_PUBLIC_SENTRY_DSN: z.string().optional().default(""),
+	/** Sentry DSN — optional, empty disables crash reporting (nativo + web) */
+	EXPO_PUBLIC_SENTRY_DSN: z
+		.union([z.string().url(), z.literal("")])
+		.optional()
+		.default(""),
 	/** Google Maps API key — required for the explore map on native */
 	EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().optional().default(""),
 	/** Deep-link target for password recovery emails */
@@ -31,6 +34,8 @@ const envSchema = z.object({
 	EXPO_PUBLIC_FIREBASE_APP_ID: z.string().optional().default(""),
 	/** VAPID key para suscribir clientes web a FCM */
 	EXPO_PUBLIC_FIREBASE_VAPID_KEY: z.string().optional().default(""),
+	/** API BFF URL para notificaciones admin (opcional en mobile) */
+	EXPO_PUBLIC_API_URL: z.string().url().optional().or(z.literal("")).default(""),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -49,12 +54,14 @@ function loadEnv(): AppEnv {
 		EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL:
 			process.env.EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL,
 		EXPO_PUBLIC_ENVIRONMENT: process.env.EXPO_PUBLIC_ENVIRONMENT,
+		EXPO_PUBLIC_EAS_PROJECT_ID: process.env.EXPO_PUBLIC_EAS_PROJECT_ID,
 		EXPO_PUBLIC_FIREBASE_API_KEY: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
 		EXPO_PUBLIC_FIREBASE_PROJECT_ID: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
 		EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:
 			process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
 		EXPO_PUBLIC_FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 		EXPO_PUBLIC_FIREBASE_VAPID_KEY: process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY,
+		EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
 	};
 	const parsed = envSchema.safeParse(raw);
 	if (!parsed.success) {

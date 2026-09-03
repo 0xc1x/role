@@ -159,10 +159,11 @@ export function AddAddressSheet({
 								onPress={() => handleTypeSelect(option.type)}
 								style={[
 									styles.segment,
+									{ borderColor: colors.borderSolid },
 									isSelected && {
 										backgroundColor: colors.card,
-										boxShadow: `0px 2px 4px ${colors.shadow}`,
-									},
+										boxShadow: `0px 2px 4px ${colors.shadow}`,		
+										borderColor: colors.border },
 								]}
 							>
 								<AppText
@@ -265,6 +266,7 @@ export function AddAddressSheet({
 								style={[
 									styles.chip,
 									{
+										borderColor: colors.borderSolid ,
 										backgroundColor: isSelected
 											? colors.foreground
 											: colors.inputBackground + "80",
@@ -363,7 +365,10 @@ function IconInput({
 		<View
 			style={[
 				styles.inputRow,
-				{ backgroundColor: colors.inputBackground + "80" },
+				{ 
+					backgroundColor: colors.inputBackground + "80" ,
+					borderColor: colors.borderSolid ,
+				},
 			]}
 		>
 			<Ionicons
@@ -381,8 +386,9 @@ function IconInput({
 				multiline={multiline}
 				style={[
 					styles.input,
+					
 					multiline && styles.inputMultiline,
-					{ color: colors.foreground },
+					{ color: colors.foreground ,},
 				]}
 			/>
 		</View>
@@ -393,14 +399,11 @@ const styles = StyleSheet.create({
 	full: { flex: 1 },
 	scroll: { flexShrink: 1 },
 	scrollContent: {
-		paddingHorizontal: spacing.xl,
-		paddingBottom: spacing.xxl,
 		gap: spacing.md,
 	},
 	fieldLabel: { marginBottom: -spacing.xs },
 	segmented: {
 		flexDirection: "row",
-		padding: 6,
 		borderRadius: 24,
 		marginBottom: spacing.sm,
 		backgroundColor: "transparent",
@@ -410,12 +413,15 @@ const styles = StyleSheet.create({
 		paddingVertical: 10,
 		borderRadius: 18,
 		alignItems: "center",
+		borderWidth: 1, 
+		marginHorizontal: 2,
 	},
 	inputRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		borderRadius: 20,
 		paddingHorizontal: spacing.md,
+		borderWidth: 1, 
 	},
 	inputIcon: { marginRight: spacing.sm },
 	input: {
@@ -455,6 +461,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.sm,
 		borderRadius: radii.pill,
+		borderWidth: 1, 
 	},
 	defaultRow: {
 		flexDirection: "row",

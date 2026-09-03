@@ -22,7 +22,8 @@ function OuterBar() {
 	if (!props) return null;
 	return (
 		<View style={{ zIndex: 1100 }}>
-			<RoleTabBar {...props} />
+			{/* Sin dueño mapeado (deep link) cae en fallbackTabName. */}
+			<RoleTabBar {...props} fallbackTabName="management" />
 		</View>
 	);
 }
@@ -44,6 +45,9 @@ export default function BusinessLayout() {
 				<Tabs
 					tabBar={(props) => <TabBarCapture {...props} />}
 					screenOptions={{ headerShown: false }}
+					/* El botón físico Android en un tab base vuelve al tab
+					   previo (historial real) en vez de saltar al primer tab. */
+					backBehavior="history"
 				>
 			<Tabs.Screen
 				name="products"
@@ -75,21 +79,7 @@ export default function BusinessLayout() {
 					),
 				}}
 			/>
-			<Tabs.Screen
-				name="business-profile"
-				options={{
-					title: strings.business.profile,
-					tabBarLabel: strings.business.profile,
-					href: null,
-					tabBarIcon: ({ color, size }) => (
-						<Ionicons name="person-outline" size={size} color={color} />
-					),
-				}}
-			/>
-			{/* Sub-secciones de un negocio concreto (payouts, cupones, ayuda…):
-			    navegan dentro del grupo para conservar la navbar. */}
-			<Tabs.Screen name="business/[id]" options={{ href: null }} />
-				</Tabs>
+		</Tabs>
 			</View>
 			<PortalHost name="TAB_SHEET" />
 			<OuterBar />

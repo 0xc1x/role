@@ -54,7 +54,7 @@ export default function HelpCategoryScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
-				<ScreenHeader title={content.title} />
+				<ScreenHeader title={content.title} fallback="/profile/help" />
 				{content.sections.map((sectionData) => (
 					<Card key={sectionData.title} style={styles.card}>
 						<AppText variant="bodyMedium" weight="bold" style={styles.sectionTitle}>

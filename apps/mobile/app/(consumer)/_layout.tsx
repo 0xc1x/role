@@ -38,6 +38,9 @@ export default function ConsumerLayout() {
 				<Tabs
 					tabBar={(props) => <TabBarCapture {...props} />}
 					screenOptions={{ headerShown: false }}
+					/* El botón físico Android en un tab base vuelve al tab
+					   previo (historial real) en vez de saltar al primer tab. */
+					backBehavior="history"
 				>
 			<Tabs.Screen
 				name="index"

@@ -43,5 +43,8 @@ yarn-error.*
 # agent-local config
 .claude/
 
+# vercel link (local)
+.vercel/
+
 # Firebase config generado desde .env (keys fuera del repo)
 public/firebase-config.js

@@ -14,6 +14,7 @@ import { AuthField } from "@/features/auth/presentation/AuthField";
 import { AuthScreenShell } from "@/features/auth/presentation/AuthScreenShell";
 import { SocialAuthButtons } from "@/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/features/auth/data/repository";
+import { useAuthStore } from "@/features/auth/store";
 
 export default function LoginScreen() {
 	const { colors } = useTheme();
@@ -57,6 +58,10 @@ export default function LoginScreen() {
 				email.trim(),
 				password,
 			);
+			// Escribir el perfil ANTES de navegar: los guards de (business) y el
+			// redirect de index leen el store, que si no se actualizaría solo vía
+			// el listener async de onAuthStateChange (carrera → vista customer).
+			useAuthStore.getState().setProfile(profile);
 			if (profile.role === "business" || profile.role === "admin") {
 				// cast: la ruta business no está publicada en los tipos generados aún
 				router.replace("/(business)/products" as Href);

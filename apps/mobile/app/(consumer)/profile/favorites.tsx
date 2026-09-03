@@ -52,6 +52,7 @@ export default function FavoritesScreen() {
 					<>
 						<ScreenHeader
 							title={strings.favorites.title}
+							fallback="/(consumer)/profile"
 							style={{ marginBottom: spacing.lg }}
 						/>
 						{favorites.length > 0 ? (
