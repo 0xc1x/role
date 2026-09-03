@@ -31,7 +31,10 @@ export function ResourceCreateDrawer({
 	triggerLabel: string;
 	submitLabel: string;
 	creatingLabel: string;
-	children: (props: { formId: string; onSuccess: () => void }) => React.ReactNode;
+	children: (props: {
+		formId: string;
+		onSuccess: () => void;
+	}) => React.ReactNode;
 }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [resetKey, setResetKey] = useState(0);
@@ -59,7 +62,9 @@ export function ResourceCreateDrawer({
 
 				<div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
 					{isOpen && (
-						<div key={resetKey}>{children({ formId, onSuccess: () => setIsOpen(false) })}</div>
+						<div key={resetKey}>
+							{children({ formId, onSuccess: () => setIsOpen(false) })}
+						</div>
 					)}
 				</div>
 
@@ -119,7 +124,9 @@ export function ResourceUpdateDrawer({
 					<DrawerDescription>{description}</DrawerDescription>
 				</DrawerHeader>
 
-				<div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">{children}</div>
+				<div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
+					{children}
+				</div>
 
 				<DrawerFooter>
 					<Button type="submit" form={formId} disabled={isMutating}>

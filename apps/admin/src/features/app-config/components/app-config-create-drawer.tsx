@@ -55,7 +55,15 @@ export function AppConfigCreateDrawer() {
 				</div>
 
 				<DrawerFooter>
-					<Button type="submit" form={FORM_ID} disabled={isMutating}>
+					<Button
+						type="button"
+						onClick={() =>
+							(
+								document.getElementById(FORM_ID) as HTMLFormElement | null
+							)?.requestSubmit()
+						}
+						disabled={isMutating}
+					>
 						{isMutating ? (
 							<>
 								<Spinner /> Creando
@@ -64,10 +72,8 @@ export function AppConfigCreateDrawer() {
 							"Crear"
 						)}
 					</Button>
-					<DrawerClose>
-						<Button variant="outline" className="w-full">
-							Cancelar
-						</Button>
+					<DrawerClose render={<Button variant="outline" className="w-full" />}>
+						Cancelar
 					</DrawerClose>
 				</DrawerFooter>
 			</DrawerContent>

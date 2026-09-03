@@ -151,9 +151,13 @@ function FormDrawer<Row, Values>(props: {
 	const [values, setValues] = useState<Values>(() => props.defaults(props.row));
 
 	const submit = async () => {
-		await props.onSubmit(values as never, props.row);
-		setOpen(false);
-		setValues(props.defaults(undefined));
+		try {
+			await props.onSubmit(values as never, props.row);
+			setOpen(false);
+			setValues(props.defaults(undefined));
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : "Error inesperado");
+		}
 	};
 
 	return (
@@ -304,6 +308,10 @@ function TemplatesTab() {
 								setPreviewId(null);
 								preview.mutate(t.id, {
 									onSuccess: () => setPreviewId(t.id),
+									onError: (err) =>
+										toast.error(
+											err instanceof Error ? err.message : "Error inesperado",
+										),
 								});
 							}}
 						>
@@ -551,8 +559,14 @@ function SegmentActions(props: {
 						<AlertDialogCancel>Cancelar</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={async () => {
-								await props.onRemove();
-								setConfirmOpen(false);
+								try {
+									await props.onRemove();
+									setConfirmOpen(false);
+								} catch (err) {
+									toast.error(
+										err instanceof Error ? err.message : "Error inesperado",
+									);
+								}
 							}}
 						>
 							{props.isRemoving ? <Spinner /> : null} Eliminar
@@ -637,13 +651,37 @@ function CampaignsTab() {
 					campaign={c}
 					templates={templates.data?.data ?? []}
 					segments={segments.data?.data ?? []}
-					onSend={() => mutations.send.mutate(c.id)}
-					onCancel={() => mutations.cancel.mutate(c.id)}
+					onSend={() =>
+						mutations.send.mutate(c.id, {
+							onError: (err) =>
+								toast.error(
+									err instanceof Error ? err.message : "Error inesperado",
+								),
+						})
+					}
+					onCancel={() =>
+						mutations.cancel.mutate(c.id, {
+							onError: (err) =>
+								toast.error(
+									err instanceof Error ? err.message : "Error inesperado",
+								),
+						})
+					}
 					onRemove={() => mutations.remove.mutateAsync(c.id)}
 					onUpdate={(payload) =>
 						mutations.update.mutateAsync({ id: c.id, body: payload })
 					}
-					onTest={(emails) => mutations.test.mutate({ id: c.id, emails })}
+					onTest={(emails) =>
+						mutations.test.mutate(
+							{ id: c.id, emails },
+							{
+								onError: (err) =>
+									toast.error(
+										err instanceof Error ? err.message : "Error inesperado",
+									),
+							},
+						)
+					}
 					busy={
 						mutations.send.isPending ||
 						mutations.cancel.isPending ||
@@ -922,8 +960,14 @@ function CampaignRowCard(props: {
 									size="sm"
 									disabled={props.busy}
 									onClick={async () => {
-										await props.onRemove();
-										setDrawer(null);
+										try {
+											await props.onRemove();
+											setDrawer(null);
+										} catch (err) {
+											toast.error(
+												err instanceof Error ? err.message : "Error inesperado",
+											);
+										}
 									}}
 								>
 									Eliminar
@@ -936,17 +980,23 @@ function CampaignRowCard(props: {
 									type="button"
 									disabled={props.busy}
 									onClick={async () => {
-										await props.onUpdate({
-											name: values.name,
-											template_id: values.template_id || null,
-											category: values.category,
-											subject_override: values.subject_override || null,
-											segment_ids: values.segment_ids,
-											include_user_ids: values.include_user_ids,
-											exclude_user_ids: values.exclude_user_ids,
-											scheduled_at: values.scheduled_at || null,
-										});
-										setDrawer(null);
+										try {
+											await props.onUpdate({
+												name: values.name,
+												template_id: values.template_id || null,
+												category: values.category,
+												subject_override: values.subject_override || null,
+												segment_ids: values.segment_ids,
+												include_user_ids: values.include_user_ids,
+												exclude_user_ids: values.exclude_user_ids,
+												scheduled_at: values.scheduled_at || null,
+											});
+											setDrawer(null);
+										} catch (err) {
+											toast.error(
+												err instanceof Error ? err.message : "Error inesperado",
+											);
+										}
 									}}
 								>
 									{props.busy ? <Spinner /> : null} Guardar cambios

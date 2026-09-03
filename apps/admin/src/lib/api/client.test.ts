@@ -1,27 +1,33 @@
-import { describe, expect, it, beforeEach, vi, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/config/env", () => ({
 	env: { VITE_API_URL: "http://localhost:4001/api/v1" },
 }));
 
 import {
-	getToken,
-	setToken,
-	getRefreshToken,
-	setRefreshToken,
-	getTokenExpiresAt,
-	setTokenExpiresAt,
-	clearAuth,
 	api,
+	clearAuth,
+	getRefreshToken,
+	getToken,
+	getTokenExpiresAt,
+	setRefreshToken,
+	setToken,
+	setTokenExpiresAt,
 } from "./client";
 
-function mockFetchOnce(response: Partial<Response> & { json: () => Promise<unknown> }) {
+function mockFetchOnce(
+	response: Partial<Response> & { json: () => Promise<unknown> },
+) {
 	const fetchMock = vi.fn().mockResolvedValue(response as Response);
 	vi.stubGlobal("fetch", fetchMock);
 	return fetchMock;
 }
 
-function jsonResponse(status: number, body: unknown, ok = status >= 200 && status < 300): Response {
+function jsonResponse(
+	status: number,
+	body: unknown,
+	ok = status >= 200 && status < 300,
+): Response {
 	return {
 		status,
 		ok,
@@ -32,20 +38,39 @@ function jsonResponse(status: number, body: unknown, ok = status >= 200 && statu
 
 class MemoryStorage implements Storage {
 	store = new Map<string, string>();
-	get length() { return this.store.size; }
-	clear() { this.store.clear(); }
-	getItem(k: string) { return this.store.get(k) ?? null; }
-	key(i: number) { return [...this.store.keys()][i] ?? null; }
-	removeItem(k: string) { this.store.delete(k); }
-	setItem(k: string, v: string) { this.store.set(k, v); }
+	get length() {
+		return this.store.size;
+	}
+	clear() {
+		this.store.clear();
+	}
+	getItem(k: string) {
+		return this.store.get(k) ?? null;
+	}
+	key(i: number) {
+		return [...this.store.keys()][i] ?? null;
+	}
+	removeItem(k: string) {
+		this.store.delete(k);
+	}
+	setItem(k: string, v: string) {
+		this.store.set(k, v);
+	}
 }
 
 function ensureStorage() {
 	if (typeof window !== "undefined" && !window.localStorage) {
-		Object.defineProperty(window, "localStorage", { value: new MemoryStorage(), writable: true });
+		Object.defineProperty(window, "localStorage", {
+			value: new MemoryStorage(),
+			writable: true,
+		});
 	}
-	if (typeof globalThis !== "undefined" && !(globalThis as unknown as { localStorage: unknown }).localStorage) {
-		(globalThis as unknown as { localStorage: Storage }).localStorage = new MemoryStorage();
+	if (
+		typeof globalThis !== "undefined" &&
+		!(globalThis as unknown as { localStorage: unknown }).localStorage
+	) {
+		(globalThis as unknown as { localStorage: Storage }).localStorage =
+			new MemoryStorage();
 	}
 }
 
@@ -101,8 +126,12 @@ describe("api request", () => {
 		await api.post("/test", { a: 1 }, { skipAuth: true });
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
-		expect((opts.headers as Record<string, string>)["Authorization"]).toBeUndefined();
-		expect((opts.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+		expect(
+			(opts.headers as Record<string, string>)["Authorization"],
+		).toBeUndefined();
+		expect((opts.headers as Record<string, string>)["Content-Type"]).toBe(
+			"application/json",
+		);
 	});
 
 	it("sends Authorization when token present", async () => {
@@ -110,7 +139,9 @@ describe("api request", () => {
 		const fetchMock = mockFetchOnce(jsonResponse(200, { data: 1 }));
 		await api.get("/categories");
 		const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
-		expect((opts.headers as Record<string, string>).Authorization).toBe("Bearer my-token");
+		expect((opts.headers as Record<string, string>).Authorization).toBe(
+			"Bearer my-token",
+		);
 	});
 
 	it("sends FormData without Content-Type", async () => {
@@ -120,7 +151,9 @@ describe("api request", () => {
 		const fetchMock = mockFetchOnce(jsonResponse(200, { url: "http://x" }));
 		await api.post("/upload/image", undefined, { formData: fd });
 		const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
-		expect((opts.headers as Record<string, string>)["Content-Type"]).toBeUndefined();
+		expect(
+			(opts.headers as Record<string, string>)["Content-Type"],
+		).toBeUndefined();
 		expect(opts.body).toBe(fd);
 	});
 
@@ -133,8 +166,16 @@ describe("api request", () => {
 		// 2) refresh request -> 200 with new tokens
 		// 3) retry -> 200
 		fetchMock
-			.mockResolvedValueOnce(jsonResponse(401, { message: "Unauthorized" }, false))
-			.mockResolvedValueOnce(jsonResponse(200, { access_token: "new", refresh_token: "new-r", expires_at: new Date(Date.now() + 3600000).toISOString() }))
+			.mockResolvedValueOnce(
+				jsonResponse(401, { message: "Unauthorized" }, false),
+			)
+			.mockResolvedValueOnce(
+				jsonResponse(200, {
+					access_token: "new",
+					refresh_token: "new-r",
+					expires_at: new Date(Date.now() + 3600000).toISOString(),
+				}),
+			)
 			.mockResolvedValueOnce(jsonResponse(200, { data: "ok" }));
 		vi.stubGlobal("fetch", fetchMock);
 
@@ -149,7 +190,9 @@ describe("api request", () => {
 		setRefreshToken("bad-refresh");
 		const fetchMock = vi.fn();
 		fetchMock
-			.mockResolvedValueOnce(jsonResponse(401, { message: "Unauthorized" }, false))
+			.mockResolvedValueOnce(
+				jsonResponse(401, { message: "Unauthorized" }, false),
+			)
 			.mockResolvedValueOnce(jsonResponse(401, { message: "bad" }, false));
 		vi.stubGlobal("fetch", fetchMock);
 
@@ -164,7 +207,13 @@ describe("api request", () => {
 		setTokenExpiresAt(new Date(Date.now() - 10 * 60 * 1000).toISOString());
 		const fetchMock = vi.fn();
 		fetchMock
-			.mockResolvedValueOnce(jsonResponse(200, { access_token: "new2", refresh_token: "new2-r", expires_at: new Date(Date.now() + 3600000).toISOString() }))
+			.mockResolvedValueOnce(
+				jsonResponse(200, {
+					access_token: "new2",
+					refresh_token: "new2-r",
+					expires_at: new Date(Date.now() + 3600000).toISOString(),
+				}),
+			)
 			.mockResolvedValueOnce(jsonResponse(200, { data: "after-refresh" }));
 		vi.stubGlobal("fetch", fetchMock);
 

@@ -1,6 +1,6 @@
 import type { CategoryDto } from "@0xc1x/role-commons";
-import { categoriesKeys } from "@/features/categories";
 import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
+import { categoriesKeys } from "@/features/categories";
 import { CategoryForm } from "../forms/category.form";
 
 export interface CategoryUpdateDrawerProps {

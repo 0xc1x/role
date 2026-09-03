@@ -3,15 +3,15 @@ import type {
 	ListTipsQuery,
 	UpdateTipDto,
 } from "@0xc1x/role-commons";
-import { tipsApi } from "../api/tips.api";
-import { tipsKeys } from "./tips.keys";
+import { useQuery } from "@tanstack/react-query";
 import {
 	createListOptions,
 	createUseCreate,
 	createUseDelete,
 	createUseUpdate,
 } from "@/lib/query/resource-helpers";
-import { useQuery } from "@tanstack/react-query";
+import { tipsApi } from "../api/tips.api";
+import { tipsKeys } from "./tips.keys";
 
 export const tipsListOptions = createListOptions(tipsKeys, tipsApi.list);
 

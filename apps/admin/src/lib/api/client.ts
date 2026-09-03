@@ -40,7 +40,8 @@ export const setToken = (v: string | null) => setItem(KEYS.token, v);
 export const getRefreshToken = () => getItem(KEYS.refresh);
 export const setRefreshToken = (v: string | null) => setItem(KEYS.refresh, v);
 export const getTokenExpiresAt = () => getItem(KEYS.expiresAt);
-export const setTokenExpiresAt = (v: string | null) => setItem(KEYS.expiresAt, v);
+export const setTokenExpiresAt = (v: string | null) =>
+	setItem(KEYS.expiresAt, v);
 
 export function clearAuth() {
 	const s = getStorage();
@@ -99,14 +100,20 @@ function isTokenExpired(): boolean {
 	return Date.now() >= expTime - 5 * 60 * 1000;
 }
 
-function buildHeaders(formData?: FormData, token?: string | null): Record<string, string> {
+function buildHeaders(
+	formData?: FormData,
+	token?: string | null,
+): Record<string, string> {
 	const h: Record<string, string> = {};
 	if (!formData) h["Content-Type"] = "application/json";
 	if (token) h.Authorization = `Bearer ${token}`;
 	return h;
 }
 
-function buildBody(opts?: { body?: unknown; formData?: FormData }): BodyInit | undefined {
+function buildBody(opts?: {
+	body?: unknown;
+	formData?: FormData;
+}): BodyInit | undefined {
 	if (opts?.formData) return opts.formData;
 	if (opts?.body) return JSON.stringify(opts.body);
 	return undefined;
@@ -139,7 +146,11 @@ async function request<T>(
 	const token = getToken();
 	const headers = buildHeaders(options?.formData, token);
 	const body = buildBody(options);
-	const response = await fetch(`${env.VITE_API_URL}${path}`, { method, headers, body });
+	const response = await fetch(`${env.VITE_API_URL}${path}`, {
+		method,
+		headers,
+		body,
+	});
 
 	if (response.status !== 401) {
 		if (!response.ok) return throwFromResponse(response);
@@ -150,7 +161,11 @@ async function request<T>(
 	if (refreshed) {
 		const newToken = getToken();
 		if (newToken) headers.Authorization = `Bearer ${newToken}`;
-		const retry = await fetch(`${env.VITE_API_URL}${path}`, { method, headers, body });
+		const retry = await fetch(`${env.VITE_API_URL}${path}`, {
+			method,
+			headers,
+			body,
+		});
 		if (retry.ok) return retry.json() as Promise<T>;
 		if (!retry.ok) return throwFromResponse(retry);
 	}

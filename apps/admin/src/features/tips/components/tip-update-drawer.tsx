@@ -1,6 +1,6 @@
 import type { TipDto } from "@0xc1x/role-commons";
-import { tipsKeys } from "@/features/tips";
 import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
+import { tipsKeys } from "@/features/tips";
 import { TipForm } from "../forms/tip.form";
 
 export interface TipUpdateDrawerProps {

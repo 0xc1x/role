@@ -11,6 +11,8 @@ import {
 	Megaphone,
 	Projector,
 	Settings2,
+	Store,
+	Ticket,
 	ToggleLeft,
 } from "lucide-react";
 
@@ -39,9 +41,19 @@ export const navMain: NavMainItem[] = [
 		url: "/home",
 	},
 	{
+		title: "Negocios",
+		url: "/negocios",
+		icon: Store,
+	},
+	{
 		title: "Categorias",
 		url: "/categorias",
 		icon: LayoutList,
+	},
+	{
+		title: "Cupones",
+		url: "/cupones",
+		icon: Ticket,
 	},
 	{
 		title: "Slides",
@@ -70,7 +82,7 @@ export const navMain: NavMainItem[] = [
 		items: [
 			{
 				title: "Push",
-				url: "#",
+				url: "/notificaciones-push",
 			},
 			{
 				title: "Whatsapp",
@@ -94,6 +106,10 @@ export const navMain: NavMainItem[] = [
 			{
 				title: "Gestión de correos",
 				url: "/emails",
+			},
+			{
+				title: "Envíos",
+				url: "/emails-sends",
 			},
 		],
 	},

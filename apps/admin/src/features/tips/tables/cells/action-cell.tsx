@@ -82,7 +82,10 @@ export function ActionCell({ row }: { row: Row<TipDto> }) {
 			<AlertDialog
 				open={!!deletingTip}
 				onOpenChange={(open) => {
-					if (!open) setDeletingTip(null);
+					if (!open) {
+						setDeletingTip(null);
+						deleteMutation.reset();
+					}
 				}}
 			>
 				<AlertDialogContent>
@@ -96,6 +99,11 @@ export function ActionCell({ row }: { row: Row<TipDto> }) {
 							.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
+					{deleteMutation.error && (
+						<p className="text-sm text-destructive">
+							{deleteMutation.error.message}
+						</p>
+					)}
 					<AlertDialogFooter>
 						<AlertDialogCancel disabled={deleteMutation.isPending}>
 							Cancelar

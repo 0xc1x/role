@@ -3,16 +3,15 @@ import type {
 	ListCategoriesQuery,
 	UpdateCategoryDto,
 } from "@0xc1x/role-commons";
-import { useMutation } from "@tanstack/react-query";
-import { categoriesApi } from "../api/categories.api";
-import { categoriesKeys } from "./categories.keys";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	createListOptions,
 	createUseCreate,
 	createUseDelete,
 	createUseUpdate,
 } from "@/lib/query/resource-helpers";
-import { useQuery } from "@tanstack/react-query";
+import { categoriesApi } from "../api/categories.api";
+import { categoriesKeys } from "./categories.keys";
 
 export const categoriesListOptions = createListOptions(
 	categoriesKeys,

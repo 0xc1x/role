@@ -85,8 +85,12 @@ export const columns: ColumnDef<SlideDto>[] = [
 	{
 		accessorKey: "redirect_url",
 		header: ({ column }) => (
-			<DataTableColumnHeader column={column} title="URL Redirecion" />
+			<DataTableColumnHeader column={column} title="Destino" />
 		),
+		cell: ({ row }) =>
+			row.original.type === "coupon"
+				? row.original.coupon_code
+				: row.original.redirect_url,
 	},
 	{
 		accessorKey: "color",

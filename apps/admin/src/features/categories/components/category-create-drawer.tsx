@@ -1,5 +1,5 @@
-import { categoriesKeys } from "@/features/categories";
 import { ResourceCreateDrawer } from "@/components/resource/resource-drawer";
+import { categoriesKeys } from "@/features/categories";
 import { CategoryForm } from "../forms/category.form";
 
 export function CategoryCreateDrawer() {

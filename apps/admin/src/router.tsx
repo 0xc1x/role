@@ -1,3 +1,4 @@
+import "zod/compile";
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
 import { getQueryClient } from "@/config/query-client";
 import { routeTree } from "./routeTree.gen";

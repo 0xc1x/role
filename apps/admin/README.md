@@ -1,12 +1,12 @@
-# role-front-admin
+# Rolé Admin (`apps/admin`)
 
-Admin SPA de **Role** — panel de administración construido con TanStack Start + Query + Form + Table.
+Panel de administración — TanStack Start + Query + Form + Table.
 
-## Arquitectura e implementación
+## Documentación
 
-- **Auditoría actual + plan de refactor (2026-07-21):** [ARCHITECTURE_AUDIT.md](./ARCHITECTURE_AUDIT.md) — verificación estructural, hallazgos priorizados y fases accionables para otro agente.
-- **Contratos API role-commons (2026-07-21):** [COMMONS_API_CONTRACTS_GUIDE.md](./COMMONS_API_CONTRACTS_GUIDE.md) — análisis de DTOs/schemas, parse de respuestas, plantilla para features y servicios futuros.
-- **Guía histórica de implementación (2026-07-20):** [IMPLEMENTATION_GUIDE.md](./IMPLEMENTATION_GUIDE.md) — contexto original; gran parte ya aplicada. Usar el audit para el trabajo pendiente.
+- [AGENTS.md](./AGENTS.md) — guía de agente (estructura feature-first, convenciones, comandos)
+- [../../docs/contracts.md](../../docs/contracts.md) — contratos compartidos (`packages/commons`)
+- [../../docs/architecture.md](../../docs/architecture.md) — topología del ecosistema
 
 ## Stack
 
@@ -19,15 +19,14 @@ Admin SPA de **Role** — panel de administración construido con TanStack Start
 | Tables | TanStack Table |
 | Styles | Tailwind CSS 4 + shadcn/Base UI |
 | HTTP client | `fetch` nativo |
-| Tipos compartidos | `@0xc1x/role-commons` |
+| Tipos compartidos | `@0xc1x/role-commons` (`workspace:*`) |
 | Lint / Format | Biome |
 | Tests | Vitest + Playwright |
 
 ## Requisitos
 
-- [Bun](https://bun.sh) >= 1.2 (package manager único)
-- `role-api` corriendo (ver su README para setup)
-- `role-commons` por `workspace:*` (monorepo) — nada que linkear
+- [Bun](https://bun.sh) >= 1.2 (package manager del monorepo)
+- API corriendo (`bun run dev:api` desde la raíz)
 
 ## Variables de entorno
 
@@ -35,7 +34,7 @@ Admin SPA de **Role** — panel de administración construido con TanStack Start
 |----------|---------|-----------|
 | `VITE_API_URL` | `http://localhost:4001/api/v1` | No |
 
-Copia `.env.example` a `.env` y ajusta si tu API corre en otro puerto.
+Copia `.env.example` a `.env` y ajusta si la API corre en otro puerto.
 
 ## Scripts
 
@@ -43,30 +42,26 @@ Copia `.env.example` a `.env` y ajusta si tu API corre en otro puerto.
 bun run dev             # Desarrollo (puerto 3000)
 bun run build           # Build producción
 bun run test            # Tests unitarios (Vitest)
-bun run typecheck       # TypeScript check (tsc --noEmit)
+bun run typecheck       # TypeScript check
 bun run check           # Lint + formato (Biome)
-bun run format          # Formatear código
-bun run lint            # Solo lint
 bun run generate-routes # Regenerar route tree
 bun run ci              # typecheck + check + test + build
 ```
 
-> ℹ️ Este proyecto usa **Bun** como package manager único.
-> No hay `package-lock.json` ni `pnpm-lock.yaml`.
-> Los scripts de CI asumen `bun install --frozen-lockfile`.
+Desde la raíz del monorepo: `bun run dev:admin`.
 
 ## Tests
 
 ### Unitarios (Vitest)
 
 ```bash
-bun test
-bun run test:watch  # modo watch
+bun run test
+bun run test:watch
 ```
 
 ### E2E (Playwright) — opcional
 
-Requiere credenciales de test configuradas en `.env`:
+Requiere credenciales en `.env`:
 
 ```
 PLAYWRIGHT_BASE_URL=http://localhost:3000
@@ -78,52 +73,32 @@ PLAYWRIGHT_ADMIN_PASSWORD=password123
 bun run test:e2e
 ```
 
-Si no hay credenciales, los tests se saltan automáticamente con un mensaje explicativo.
+Sin credenciales, los tests se omiten con un mensaje explicativo.
 
 ## Estructura de carpetas
 
 ```
 src/
 ├── components/
-│   ├── data-table/          # Componentes reutilizables de tabla (shell genérico)
-│   ├── layout/              # Layout principal (sidebar, nav, header, logo)
-│   ├── media/               # Componentes de imágenes (field, thumbnail)
-│   └── ui/                  # shadcn/Base UI primitives
-├── config/
-│   ├── env.ts               # Validación de env vars con Zod
-│   ├── navigation.ts        # Datos de navegación del sidebar
-│   └── query-client.ts      # Factory de QueryClient
-├── features/
-│   ├── auth/                # Auth feature (api, queries, forms, guards)
-│   └── categories/          # Categories feature (api, queries, forms, tables, components)
-├── hooks/                   # Hooks transversales de UI
-├── lib/
-│   ├── api/                 # Transporte HTTP (client, errors, helpers)
-│   └── utils.ts             # Utilidades genéricas (cn)
-└── routes/                  # TanStack Router file-based routes (thin: solo wiring)
-    ├── __root.tsx
-    ├── _layout.tsx
-    ├── _layout.home.tsx
-    ├── _layout.categorias.tsx
-    ├── index.tsx
-    ├── login.tsx
-    └── signup.tsx
+│   ├── data-table/     # Shell genérico de tabla
+│   ├── layout/         # Sidebar, nav, header
+│   └── ui/             # shadcn/Base UI
+├── config/             # env, navigation, query-client
+├── features/<name>/    # api, queries, forms, tables, components
+├── lib/api/            # HTTP client, errors
+└── routes/             # TanStack Router (thin wiring)
 ```
 
-## Features
-
-Cada feature sigue la misma estructura (ver [contrato §4.4](ARCHITECTURE_AUDIT.md#44-contrato-de-un-feature-checklist-al-crear-uno-nuevo)):
+## Patrón de feature
 
 ```
 features/<name>/
-├── api/           # Funciones de API puras tipadas con commons
-├── queries/       # TanStack Query keys + queryOptions + hooks
-├── forms/         # TanStack Form components (opcional)
-├── tables/        # TanStack Table columns + cells (NO el shell genérico)
-├── components/    # Drawers, dialogs del feature
-├── utils/         # Opcional
-└── index.ts       # API pública del feature (solo barrel exports)
+├── api/           # Funciones HTTP tipadas con commons
+├── queries/       # Query keys + queryOptions + hooks
+├── forms/         # TanStack Form (opcional)
+├── tables/        # Columnas y celdas
+├── components/    # Drawers, dialogs
+└── index.ts       # Barrel export público
 ```
 
-> Las rutas importan features **solo** vía `@/features/<name>` (barrel).
-> El DataTable shell genérico vive en `components/data-table/`.
+Las rutas importan features solo vía `@/features/<name>`.

@@ -4,8 +4,8 @@ import type {
 	SlideType,
 	UpdateSlideDto,
 } from "@0xc1x/role-commons";
-import { CreateSlideFormSchema } from "@0xc1x/role-commons";
-import { useForm } from "@tanstack/react-form";
+import { CreateSlideFormSchema, RedirectUrlSchema } from "@0xc1x/role-commons";
+import { useForm, useStore } from "@tanstack/react-form";
 import { z } from "zod";
 import { ImageField } from "@/components/media/image-field";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +34,7 @@ const SLIDE_TYPE_OPTIONS = [
 	{ value: "tip", label: "Tip" },
 	{ value: "info", label: "Info" },
 	{ value: "sponsor", label: "Sponsor" },
+	{ value: "coupon", label: "Coupon" },
 ] as const;
 
 /** Coincide con HexColorSchema de role-commons (#RGB / #RRGGBB). */
@@ -53,6 +54,24 @@ const slideFormSchema = CreateSlideFormSchema.omit({
 		.string()
 		.max(30)
 		.transform((v) => (v === "" ? null : v)),
+	// El input del form usa "" para “sin valor”; commons lo representa como
+	// null (RedirectUrlSchema.nullable()). Reusamos la validación de commons.
+	redirect_url: z
+		.string()
+		.transform((v) => (v === "" ? null : v))
+		.pipe(RedirectUrlSchema.nullable()),
+	// Código del cupón (solo type === "coupon"); "" se trata como null.
+	// Mismas reglas que coupon_code en role-commons (el .pipe no acepta
+	// el envoltorio optional del schema de commons).
+	coupon_code: z
+		.string()
+		.transform((v) => (v === "" ? null : v))
+		.pipe(
+			z.string()
+				.min(1, "El código de cupón no puede estar vacío")
+				.max(50, "El código de cupón no debe superar los 50 caracteres")
+				.nullable(),
+		),
 	text_color: z
 		.string()
 		.refine((v) => v === "" || HEX_REGEX.test(v), {
@@ -72,6 +91,22 @@ const slideFormSchema = CreateSlideFormSchema.omit({
 	// El form siempre provee estos valores; quitamos optional de commons.
 	active: z.boolean(),
 	priority: z.number().int().min(0),
+}).superRefine((value, ctx) => {
+	if (value.type === "coupon") {
+		if (!value.coupon_code) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["coupon_code"],
+				message: "Las slides de tipo cupón requieren un código",
+			});
+		}
+	} else if (!value.redirect_url) {
+		ctx.addIssue({
+			code: "custom",
+			path: ["redirect_url"],
+			message: "El destino es obligatorio (URL externa o ruta interna /)",
+		});
+	}
 });
 
 type SlideFormValues = z.input<typeof slideFormSchema>;
@@ -94,6 +129,7 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 			badge_text: slide?.badge_text ?? "",
 			cta_label: slide?.cta_label ?? "",
 			redirect_url: slide?.redirect_url ?? "",
+			coupon_code: slide?.coupon_code ?? "",
 			text_color: slide?.text_color ?? "",
 			button_color: slide?.button_color ?? "",
 			type: slide?.type ?? "info",
@@ -119,7 +155,15 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 				caption: value.caption,
 				badge_text: emptyToNull(value.badge_text as string | null | undefined),
 				cta_label: value.cta_label,
-				redirect_url: value.redirect_url,
+				// Cupón: sin destino; los demás tipos: sin código.
+				redirect_url:
+					value.type === "coupon"
+						? null
+						: emptyToNull(value.redirect_url as string | null | undefined),
+				coupon_code:
+					value.type === "coupon"
+						? emptyToNull(value.coupon_code as string | null | undefined)
+						: null,
 				text_color: emptyToNull(value.text_color as string | null | undefined),
 				button_color: emptyToNull(
 					value.button_color as string | null | undefined,
@@ -143,6 +187,9 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 			onSuccess?.();
 		},
 	});
+
+	// Habilita el render condicional del CTA según el tipo elegido.
+	const selectedType = useStore(form.store, (s) => s.values.type);
 
 	const formError =
 		createMutation.error ?? updateMutation.error ?? uploadMutation.error;
@@ -236,52 +283,6 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 				}}
 			</form.Field>
 
-			<form.Field name="cta_label">
-				{(field) => {
-					const isInvalid =
-						field.state.meta.isTouched && !field.state.meta.isValid;
-					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={field.name}>Call to Action</FieldLabel>
-							<Input
-								id={field.name}
-								name={field.name}
-								type="text"
-								placeholder="Texto del botón"
-								value={field.state.value ?? ""}
-								onBlur={field.handleBlur}
-								onChange={(e) => field.handleChange(e.target.value)}
-								aria-invalid={isInvalid}
-							/>
-							{isInvalid && <FieldError errors={field.state.meta.errors} />}
-						</Field>
-					);
-				}}
-			</form.Field>
-
-			<form.Field name="redirect_url">
-				{(field) => {
-					const isInvalid =
-						field.state.meta.isTouched && !field.state.meta.isValid;
-					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={field.name}>URL de redirección</FieldLabel>
-							<Input
-								id={field.name}
-								name={field.name}
-								type="url"
-								placeholder="https://..."
-								value={field.state.value ?? ""}
-								onBlur={field.handleBlur}
-								onChange={(e) => field.handleChange(e.target.value)}
-								aria-invalid={isInvalid}
-							/>
-							{isInvalid && <FieldError errors={field.state.meta.errors} />}
-						</Field>
-					);
-				}}
-			</form.Field>
-
 			<form.Field name="type">
 				{(field) => {
 					const isInvalid =
@@ -315,6 +316,81 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 					);
 				}}
 			</form.Field>
+
+			<form.Field name="cta_label">
+				{(field) => {
+					const isInvalid =
+						field.state.meta.isTouched && !field.state.meta.isValid;
+					return (
+						<Field data-invalid={isInvalid}>
+							<FieldLabel htmlFor={field.name}>Call to Action</FieldLabel>
+							<Input
+								id={field.name}
+								name={field.name}
+								type="text"
+								placeholder="Texto del botón"
+								value={field.state.value ?? ""}
+								onBlur={field.handleBlur}
+								onChange={(e) => field.handleChange(e.target.value)}
+								aria-invalid={isInvalid}
+							/>
+							{isInvalid && <FieldError errors={field.state.meta.errors} />}
+						</Field>
+					);
+				}}
+			</form.Field>
+
+			{selectedType === "coupon" ? (
+				<form.Field name="coupon_code">
+					{(field) => {
+						const isInvalid =
+							field.state.meta.isTouched && !field.state.meta.isValid;
+						return (
+							<Field data-invalid={isInvalid}>
+								<FieldLabel htmlFor={field.name}>Código del cupón</FieldLabel>
+								<Input
+									id={field.name}
+									name={field.name}
+									type="text"
+									placeholder="Ej. ROLE10"
+									value={field.state.value ?? ""}
+									onBlur={field.handleBlur}
+									onChange={(e) => field.handleChange(e.target.value)}
+									aria-invalid={isInvalid}
+								/>
+								{isInvalid && <FieldError errors={field.state.meta.errors} />}
+							</Field>
+						);
+					}}
+				</form.Field>
+			) : (
+				<form.Field name="redirect_url">
+					{(field) => {
+						const isInvalid =
+							field.state.meta.isTouched && !field.state.meta.isValid;
+						return (
+							<Field data-invalid={isInvalid}>
+								<FieldLabel htmlFor={field.name}>Destino</FieldLabel>
+								<Input
+									id={field.name}
+									name={field.name}
+									type="text"
+									placeholder="https://... o /explore"
+									value={field.state.value ?? ""}
+									onBlur={field.handleBlur}
+									onChange={(e) => field.handleChange(e.target.value)}
+									aria-invalid={isInvalid}
+								/>
+								<p className="text-xs text-muted-foreground">
+									URL externa (https://...) o ruta interna de la app (ej.{" "}
+									/explore).
+								</p>
+								{isInvalid && <FieldError errors={field.state.meta.errors} />}
+							</Field>
+						);
+					}}
+				</form.Field>
+			)}
 
 			<form.Field name="priority">
 				{(field) => {

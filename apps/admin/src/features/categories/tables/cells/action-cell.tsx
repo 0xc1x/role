@@ -86,7 +86,10 @@ export function ActionCell({ row }: { row: Row<CategoryDto> }) {
 			<AlertDialog
 				open={!!deletingCategory}
 				onOpenChange={(open) => {
-					if (!open) setDeletingCategory(null);
+					if (!open) {
+						setDeletingCategory(null);
+						deleteMutation.reset();
+					}
 				}}
 			>
 				<AlertDialogContent>
@@ -101,6 +104,11 @@ export function ActionCell({ row }: { row: Row<CategoryDto> }) {
 							.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
+					{deleteMutation.error && (
+						<p className="text-sm text-destructive">
+							{deleteMutation.error.message}
+						</p>
+					)}
 					<AlertDialogFooter>
 						<AlertDialogCancel disabled={deleteMutation.isPending}>
 							Cancelar

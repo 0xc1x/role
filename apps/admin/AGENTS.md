@@ -33,7 +33,7 @@ src/
 └── hooks/
 ```
 
-## Convenciones (no inventar — seguir `IMPLEMENTATION_GUIDE.md`)
+## Convenciones
 
 - **Resource module** (patrón obligatorio): feature = api + queries (query keys/`queryOptions`) + table/form.
 - **Forms con react-form + zod**: los schemas vienen de `commons` — la fuente de verdad es el contrato, no dupliques campos.

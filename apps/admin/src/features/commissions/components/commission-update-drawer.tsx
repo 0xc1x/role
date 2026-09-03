@@ -1,6 +1,6 @@
 import type { CommissionDto } from "@0xc1x/role-commons";
-import { commissionsKeys } from "@/features/commissions";
 import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
+import { commissionsKeys } from "@/features/commissions";
 import { CommissionForm } from "../forms/commission.form";
 
 export interface CommissionUpdateDrawerProps {

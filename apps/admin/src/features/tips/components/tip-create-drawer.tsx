@@ -1,5 +1,5 @@
-import { tipsKeys } from "@/features/tips";
 import { ResourceCreateDrawer } from "@/components/resource/resource-drawer";
+import { tipsKeys } from "@/features/tips";
 import { TipForm } from "../forms/tip.form";
 
 export function TipCreateDrawer() {

@@ -9,6 +9,7 @@ import {
 	type UpdateAppConfigDto,
 } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
+import { useState } from "react";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -36,6 +37,7 @@ const VALUE_TYPE_OPTIONS = [
 	{ value: "email", label: "Email" },
 	{ value: "url", label: "URL" },
 	{ value: "phone", label: "Teléfono" },
+	{ value: "json", label: "JSON" },
 ] as const;
 
 const CATEGORY_OPTIONS = APP_CONFIG_CATEGORIES.map((c) => ({
@@ -44,10 +46,13 @@ const CATEGORY_OPTIONS = APP_CONFIG_CATEGORIES.map((c) => ({
 }));
 
 /** El form trabaja con "" para descripción vacía; commons espera null.
- *  El form siempre provee todos los valores; quitamos defaults de commons. */
+ *  El form siempre provee todos los valores; quitamos defaults de commons.
+ *  value en el form es siempre string|number|boolean (json se edita como string JSON y se parsea en onSubmit). */
 const configFormSchema = CreateAppConfigFormSchema.omit({
 	description: true,
+	value: true,
 }).extend({
+	value: z.union([z.string(), z.number(), z.boolean()]),
 	value_type: z.enum(APP_CONFIG_VALUE_TYPES),
 	category: z.enum(APP_CONFIG_CATEGORIES),
 	is_public: z.boolean(),
@@ -71,11 +76,37 @@ export function AppConfigForm({
 }: AppConfigFormProps) {
 	const createMutation = useCreateAppConfig();
 	const updateMutation = useUpdateAppConfig();
+	const [localError, setLocalError] = useState<string | null>(null);
+
+	const initialValue = (() => {
+		if (config?.value === undefined) return "" as string | number | boolean;
+		if (config.value_type === "json" && typeof config.value !== "string") {
+			try {
+				return JSON.stringify(config.value, null, 2) as unknown as
+					| string
+					| number
+					| boolean;
+			} catch {
+				return String(config.value) as string | number | boolean;
+			}
+		}
+		if (Array.isArray(config.value)) {
+			try {
+				return JSON.stringify(config.value, null, 2) as unknown as
+					| string
+					| number
+					| boolean;
+			} catch {
+				return String(config.value) as string | number | boolean;
+			}
+		}
+		return config.value as string | number | boolean;
+	})();
 
 	const form = useForm({
 		defaultValues: {
 			key: config?.key ?? "",
-			value: config?.value ?? ("" as string | number | boolean),
+			value: initialValue,
 			value_type: (config?.value_type ?? "string") as AppConfigValueType,
 			category: (config?.category ?? "general") as AppConfigCategory,
 			label: config?.label ?? "",
@@ -85,16 +116,52 @@ export function AppConfigForm({
 		},
 		validators: { onSubmit: configFormSchema },
 		onSubmit: async ({ value }) => {
+			setLocalError(null);
 			const valueType = value.value_type;
-			let parsedValue: string | number | boolean = value.value;
+			let parsedValue:
+				| string
+				| number
+				| boolean
+				| string[]
+				| Record<string, unknown> = value.value as unknown as
+				| string
+				| number
+				| boolean
+				| string[]
+				| Record<string, unknown>;
 
-			if (valueType === "number") {
+			if ((valueType as string) === "number") {
 				parsedValue =
 					typeof value.value === "number" ? value.value : Number(value.value);
-			} else if (valueType === "boolean") {
+			} else if ((valueType as string) === "boolean") {
 				parsedValue = Boolean(value.value);
+			} else if ((valueType as string) === "json") {
+				if (typeof value.value === "string") {
+					const trimmed = (value.value as string).trim();
+					if (trimmed === "") {
+						setLocalError("El valor JSON no puede estar vacío");
+						return;
+					}
+					try {
+						parsedValue = JSON.parse(trimmed) as
+							| string[]
+							| Record<string, unknown>;
+					} catch {
+						setLocalError(
+							'JSON inválido. Ej: ["Quito","Guayaquil","Cuenca","Manta","Otra"]',
+						);
+						return;
+					}
+				} else {
+					parsedValue = value.value as unknown as
+						| string[]
+						| Record<string, unknown>;
+				}
 			} else {
-				parsedValue = String(value.value);
+				parsedValue = String(value.value) as unknown as
+					| string
+					| number
+					| boolean;
 			}
 
 			const payload = {
@@ -121,7 +188,7 @@ export function AppConfigForm({
 		},
 	});
 
-	const formError = createMutation.error ?? updateMutation.error;
+	const formError = localError ?? createMutation.error ?? updateMutation.error;
 	const valueType = form.state.values.value_type;
 
 	return (
@@ -136,11 +203,13 @@ export function AppConfigForm({
 		>
 			{formError && (
 				<p className="text-sm text-destructive">
-					{formError instanceof ApiClientError
-						? formError.message
-						: formError instanceof Error
+					{typeof formError === "string"
+						? formError
+						: formError instanceof ApiClientError
 							? formError.message
-							: "Error inesperado"}
+							: formError instanceof Error
+								? formError.message
+								: "Error inesperado"}
 				</p>
 			)}
 
@@ -201,13 +270,50 @@ export function AppConfigForm({
 								onValueChange={(v) => {
 									if (!v) return;
 									field.handleChange(v as AppConfigValueType);
-									if (v === "boolean") {
+									setLocalError(null);
+									if ((v as string) === "boolean") {
 										form.setFieldValue("value", false);
+									} else if ((v as string) === "json") {
+										const cur = form.getFieldValue("value");
+										if (Array.isArray(cur)) {
+											form.setFieldValue(
+												"value",
+												JSON.stringify(cur, null, 2) as unknown as typeof cur,
+											);
+										} else if (typeof cur === "object" && cur !== null) {
+											form.setFieldValue(
+												"value",
+												JSON.stringify(cur, null, 2) as unknown as typeof cur,
+											);
+										} else if (typeof cur !== "string") {
+											form.setFieldValue(
+												"value",
+												String(cur ?? "") as unknown as typeof cur,
+											);
+										}
 									} else if (
-										v === "number" &&
+										(v as string) === "number" &&
 										typeof form.state.values.value !== "number"
 									) {
 										form.setFieldValue("value", "");
+									} else if (
+										(v as string) !== "json" &&
+										typeof form.getFieldValue("value") === "string"
+									) {
+										// al salir de json, si era JSON string válido, intenta mantenerlo legible
+										const cur = form.getFieldValue(
+											"value",
+										) as unknown as string;
+										try {
+											const parsed = JSON.parse(cur);
+											if (Array.isArray(parsed))
+												form.setFieldValue(
+													"value",
+													parsed.join(", ") as unknown as typeof cur,
+												);
+										} catch {
+											// dejar como string
+										}
 									}
 								}}
 							>
@@ -257,7 +363,7 @@ export function AppConfigForm({
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 
-					if (valueType === "boolean") {
+					if ((valueType as string) === "boolean") {
 						const checked = Boolean(field.state.value);
 						return (
 							<Field>
@@ -272,6 +378,34 @@ export function AppConfigForm({
 										{checked ? "true" : "false"}
 									</Badge>
 								</div>
+							</Field>
+						);
+					}
+
+					if ((valueType as string) === "json") {
+						return (
+							<Field data-invalid={isInvalid}>
+								<FieldLabel htmlFor={field.name}>Valor (JSON)</FieldLabel>
+								<Textarea
+									id={field.name}
+									name={field.name}
+									placeholder='["Quito","Guayaquil","Cuenca","Manta","Otra"]'
+									rows={4}
+									value={String(field.state.value ?? "")}
+									onBlur={field.handleBlur}
+									onChange={(e) => {
+										setLocalError(null);
+										field.handleChange(
+											e.target.value as unknown as typeof field.state.value,
+										);
+									}}
+									aria-invalid={isInvalid}
+									className="font-mono text-sm"
+								/>
+								<p className="text-xs text-muted-foreground">
+									Debe ser JSON válido. Para ciudades usa un array de strings.
+								</p>
+								{isInvalid && <FieldError errors={field.state.meta.errors} />}
 							</Field>
 						);
 					}

@@ -64,7 +64,9 @@ export function createUseDelete(
 			mutationKey: keys.all as unknown as readonly unknown[],
 			mutationFn: (id: string) => apiRemove(id),
 			onSuccess: () => {
-				void qc.invalidateQueries({ queryKey: keys.all as unknown as readonly unknown[] });
+				void qc.invalidateQueries({
+					queryKey: keys.all as unknown as readonly unknown[],
+				});
 			},
 		});
 	};

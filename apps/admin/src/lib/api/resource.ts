@@ -10,7 +10,9 @@ export function createResourceApi<
 >(basePath: string) {
 	return {
 		list: (query?: TListQuery) =>
-			api.get<TPaginated>(`${basePath}${toSearchParams(query as unknown as Record<string, unknown>)}`),
+			api.get<TPaginated>(
+				`${basePath}${toSearchParams(query as unknown as Record<string, unknown>)}`,
+			),
 		getById: (id: string) => api.get<TDto>(`${basePath}/${id}`),
 		create: (body: TCreateDto) => api.post<TDto>(basePath, body),
 		update: (id: string, body: TUpdateDto) =>
