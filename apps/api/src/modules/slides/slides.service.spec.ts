@@ -9,14 +9,23 @@ jest.mock('@0xc1x/role-commons', () => ({
   paginatedDataFromQuery: jest.fn(),
 }));
 
-jest.mock('./mappers/slides.mapper');
+jest.mock('./mappers/slides.mapper', () => ({
+  toSlideDto: jest.fn(),
+  toSlideInsert: jest.fn(),
+  toSlideUpdate: jest.fn(),
+  SlideMapper: {
+    toDto: jest.fn(),
+    toInsert: jest.fn(),
+    toUpdate: jest.fn(),
+  },
+}));
 
 const makeRow = (overrides: Partial<SlideRow> = {}): SlideRow => ({
   id: 'a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d',
   title: 'Info Slide',
   caption: 'Welcome to the app',
   badge_text: null,
-  cta_label: null,
+  cta_label: '',
   redirect_url: null,
   coupon_code: null,
   image_url: 'https://example.com/slide.png',

@@ -429,7 +429,10 @@ export class CampaignsService {
       campaign.template_id!,
     );
     return {
-      subject: this.applySubjectOverride(campaign, template.subject),
+      subject: this.renderer.renderVariables(
+        this.applySubjectOverride(campaign, template.subject),
+        vars ?? {},
+      ),
       html: this.renderer.assemble({
         headerHtml: header?.html_content ?? null,
         bodyHtml: campaign.body_override ?? template.body_html,

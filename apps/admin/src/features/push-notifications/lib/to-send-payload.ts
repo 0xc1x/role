@@ -19,6 +19,8 @@ export function toSendPayload(values: SendFormValues) {
 }
 
 /** Indica si la selección actual tiene audiencia (para habilitar botones). */
-export function hasAudience(values: Pick<SendFormValues, "segment_ids" | "include_user_ids">) {
+export function hasAudience(
+	values: Pick<SendFormValues, "segment_ids" | "include_user_ids">,
+) {
 	return values.segment_ids.length > 0 || values.include_user_ids.length > 0;
 }

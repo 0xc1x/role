@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { PaginatedDataSchema, PaginationQuerySchema } from '../../_common/schemas/api.schema';
+import {
+  BooleanQuerySchema,
+  PaginatedDataSchema,
+  PaginationQuerySchema,
+} from '../../_common/schemas/api.schema';
 import { AppRoleSchema, TimestamptzSchema, UuidSchema } from '../../_common/schemas/common';
 
 export const ProfileSchema = z.object({
@@ -43,6 +47,8 @@ export const ListProfilesQuerySchema = PaginationQuerySchema.extend({
   subscribed_to: z
     .enum(['announcements', 'promotions', 'news'])
     .optional(),
+  /** Solo perfiles con al menos un device token de push activo. */
+  has_active_push_token: BooleanQuerySchema.optional(),
 });
 
 export const ProfileListResponseSchema = PaginatedDataSchema(ProfileSchema);

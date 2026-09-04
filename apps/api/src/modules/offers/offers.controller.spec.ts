@@ -28,6 +28,7 @@ describe('OffersController', () => {
           useValue: {
             list: jest.fn(),
             getById: jest.fn(),
+            getRandom: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
             remove: jest.fn(),
@@ -161,5 +162,28 @@ describe('OffersController', () => {
 
       expect(service.remove).toHaveBeenCalledWith(mockUser, 'o1');
     });
+  });
+});
+
+describe('OffersController.getRandom', () => {
+  test('delega en el servicio', async () => {
+    const module = await Test.createTestingModule({
+      controllers: [OffersController],
+      providers: [
+        {
+          provide: OffersService,
+          useValue: {
+            list: jest.fn(),
+            getById: jest.fn(),
+            getRandom: jest.fn(async () => ({ id: 'o1' })),
+            create: jest.fn(),
+            update: jest.fn(),
+            remove: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+    const controller = module.get(OffersController);
+    await expect(controller.getRandom()).resolves.toEqual({ id: 'o1' });
   });
 });

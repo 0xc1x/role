@@ -6,7 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { useUpdateCoupon } from "@/features/coupons/queries/coupons.queries";
 import { ActionCell } from "@/features/coupons/tables/cells/action-cell";
 
-const ActiveCellWrapper = ({ row }: { row: { original: CouponListItemDto } }) => {
+const ActiveCellWrapper = ({
+	row,
+}: {
+	row: { original: CouponListItemDto };
+}) => {
 	const updateMutation = useUpdateCoupon();
 	return (
 		<ActiveCell

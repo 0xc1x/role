@@ -5,6 +5,7 @@ export * from './business-locations';
 export * from './offers';
 export * from './offer-categories';
 export * from './orders';
+export * from './payouts';
 export * from './coupons';
 export * from './reviews';
 export * from './user-preferences';

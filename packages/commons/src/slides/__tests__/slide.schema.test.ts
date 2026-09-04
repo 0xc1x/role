@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { CreateSlideSchema } from '../schemas/slide.schema';
 import { SlideType } from '../enums/slide.enum';
 

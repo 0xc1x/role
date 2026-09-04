@@ -4,8 +4,18 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+	InputGroup,
+	InputGroupAddon,
+	InputGroupInput,
+} from "@/components/ui/input-group";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEmailSendsList } from "@/features/email-sends/queries/email-sends.queries";
 import { columns } from "@/features/email-sends/tables/email-sends.columns";
@@ -14,8 +24,24 @@ const schema = z.object({
 	page: z.coerce.number().int().positive().optional().default(1),
 	limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 	search: z.string().optional(),
-	status: z.enum(["pending", "queued", "processing", "sent", "delivered", "opened", "clicked", "bounced", "complained", "failed", "cancelled"]).optional(),
-	type: z.enum(["campaign", "transactional", "newsletter", "notification", "test"]).optional(),
+	status: z
+		.enum([
+			"pending",
+			"queued",
+			"processing",
+			"sent",
+			"delivered",
+			"opened",
+			"clicked",
+			"bounced",
+			"complained",
+			"failed",
+			"cancelled",
+		])
+		.optional(),
+	type: z
+		.enum(["campaign", "transactional", "newsletter", "notification", "test"])
+		.optional(),
 	source_type: z.string().nullable().optional(),
 });
 
@@ -34,7 +60,9 @@ function RouteComponent() {
 	useEffect(() => {
 		const t = setTimeout(() => {
 			if (searchInput !== (search.search ?? "")) {
-				navigate({ search: { ...search, search: searchInput || undefined, page: 1 } });
+				navigate({
+					search: { ...search, search: searchInput || undefined, page: 1 },
+				});
 			}
 		}, 300);
 		return () => clearTimeout(t);
@@ -53,8 +81,13 @@ function RouteComponent() {
 	if (isError) {
 		return (
 			<div className="px-6 py-4">
-				<p className="text-destructive">{error instanceof Error ? error.message : "Error"}</p>
-				<Button variant="outline" onClick={() => navigate({ search: { page: 1, limit: 20 } })}>
+				<p className="text-destructive">
+					{error instanceof Error ? error.message : "Error"}
+				</p>
+				<Button
+					variant="outline"
+					onClick={() => navigate({ search: { page: 1, limit: 20 } })}
+				>
 					Reintentar
 				</Button>
 			</div>
@@ -67,8 +100,21 @@ function RouteComponent() {
 			<div className="flex items-center justify-between flex-wrap gap-2">
 				<h1 className="font-bold text-xl">Emails Enviados</h1>
 				<div className="flex items-center gap-2 flex-wrap">
-					<Select value={search.type ?? "all"} onValueChange={(v) => navigate({ search: { ...search, type: v === "all" ? undefined : (v as never), page: 1 } })}>
-						<SelectTrigger className="w-36"><SelectValue placeholder="Tipo" /></SelectTrigger>
+					<Select
+						value={search.type ?? "all"}
+						onValueChange={(v) =>
+							navigate({
+								search: {
+									...search,
+									type: v === "all" ? undefined : (v as never),
+									page: 1,
+								},
+							})
+						}
+					>
+						<SelectTrigger className="w-36">
+							<SelectValue placeholder="Tipo" />
+						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="all">Todos tipos</SelectItem>
 							<SelectItem value="campaign">campaign</SelectItem>
@@ -78,17 +124,56 @@ function RouteComponent() {
 							<SelectItem value="test">test</SelectItem>
 						</SelectContent>
 					</Select>
-					<Select value={search.status ?? "all"} onValueChange={(v) => navigate({ search: { ...search, status: v === "all" ? undefined : (v as never), page: 1 } })}>
-						<SelectTrigger className="w-36"><SelectValue placeholder="Estado" /></SelectTrigger>
+					<Select
+						value={search.status ?? "all"}
+						onValueChange={(v) =>
+							navigate({
+								search: {
+									...search,
+									status: v === "all" ? undefined : (v as never),
+									page: 1,
+								},
+							})
+						}
+					>
+						<SelectTrigger className="w-36">
+							<SelectValue placeholder="Estado" />
+						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="all">Todos estados</SelectItem>
-							{["pending", "queued", "processing", "sent", "delivered", "opened", "clicked", "bounced", "failed", "cancelled"].map((s) => (
-								<SelectItem key={s} value={s}>{s}</SelectItem>
+							{[
+								"pending",
+								"queued",
+								"processing",
+								"sent",
+								"delivered",
+								"opened",
+								"clicked",
+								"bounced",
+								"failed",
+								"cancelled",
+							].map((s) => (
+								<SelectItem key={s} value={s}>
+									{s}
+								</SelectItem>
 							))}
 						</SelectContent>
 					</Select>
-					<Select value={search.source_type ?? "all"} onValueChange={(v) => navigate({ search: { ...search, source_type: v === "all" ? undefined : v, page: 1 } })}>
-						<SelectTrigger className="w-36"><SelectValue placeholder="Origen" /></SelectTrigger>
+					<Select
+						value={search.source_type ?? "all"}
+						onValueChange={(v) =>
+							navigate({
+								search: {
+									...search,
+									source_type: v === "all" ? undefined : v,
+									page: 1,
+								},
+							})
+						}
+					>
+						<SelectTrigger className="w-36">
+							<SelectValue placeholder="Origen" />
+						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="all">Todos orígenes</SelectItem>
 							<SelectItem value="campaign">campaign</SelectItem>
@@ -100,12 +185,24 @@ function RouteComponent() {
 						<InputGroupAddon align="inline-start">
 							<Search className="size-4 text-muted-foreground" />
 						</InputGroupAddon>
-						<InputGroupInput placeholder="Buscar email..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
+						<InputGroupInput
+							placeholder="Buscar email..."
+							value={searchInput}
+							onChange={(e) => setSearchInput(e.target.value)}
+						/>
 					</InputGroup>
 				</div>
 			</div>
 			<div className="mt-4">
-				<DataTable columns={columns} data={rows} meta={meta} onPageChange={(page) => navigate({ search: { ...search, page } })} onLimitChange={(limit) => navigate({ search: { ...search, page: 1, limit } })} />
+				<DataTable
+					columns={columns}
+					data={rows}
+					meta={meta}
+					onPageChange={(page) => navigate({ search: { ...search, page } })}
+					onLimitChange={(limit) =>
+						navigate({ search: { ...search, page: 1, limit } })
+					}
+				/>
 			</div>
 		</div>
 	);

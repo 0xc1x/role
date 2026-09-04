@@ -6,20 +6,13 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": [
-    "standalone",
-    "minimal-ui"
-  ],
+  "display_override": ["standalone", "minimal-ui", "window-controls-overlay"],
   "orientation": "portrait-primary",
   "background_color": "#bf1c19",
   "theme_color": "#bf1c19",
   "lang": "es",
   "dir": "ltr",
-  "categories": [
-    "food",
-    "shopping",
-    "lifestyle"
-  ],
+  "categories": ["food", "shopping", "lifestyle"],
   "prefer_related_applications": false,
   "icons": [
     {

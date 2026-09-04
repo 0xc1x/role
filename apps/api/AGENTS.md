@@ -36,8 +36,8 @@ src/
 
 ```sh
 bun run start:dev      # NestJS watch (SWC)
-bun run test           # jest
-bun run test:e2e       # jest e2e
+bun run test           # bun test --isolate src (aislamiento por archivo, como jest)
+bun run test:e2e       # e2e marketplace (requiere `docker compose up postgres-test`)
 bun run typecheck      # tsc --noEmit
 bun run openapi:export # regenerar openapi/
 bun run db:studio      # drizzle studio

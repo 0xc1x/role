@@ -4,7 +4,13 @@ import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiClientError } from "@/lib/api/errors";
 import { useUpdateBusiness } from "../queries/businesses.queries";
@@ -61,15 +67,22 @@ export function BusinessForm({
 		>
 			{formError && (
 				<p className="text-sm text-destructive">
-					{formError instanceof ApiClientError ? formError.message : "Error inesperado"}
+					{formError instanceof ApiClientError
+						? formError.message
+						: "Error inesperado"}
 				</p>
 			)}
 			<form.Field name="name">
 				{(field) => (
 					<Field>
 						<FieldLabel>Nombre</FieldLabel>
-						<Input value={field.state.value ?? ""} onChange={(e) => field.handleChange(e.target.value)} />
-						{field.state.meta.isTouched && !field.state.meta.isValid && <FieldError errors={field.state.meta.errors} />}
+						<Input
+							value={field.state.value ?? ""}
+							onChange={(e) => field.handleChange(e.target.value)}
+						/>
+						{field.state.meta.isTouched && !field.state.meta.isValid && (
+							<FieldError errors={field.state.meta.errors} />
+						)}
 					</Field>
 				)}
 			</form.Field>
@@ -77,8 +90,13 @@ export function BusinessForm({
 				{(field) => (
 					<Field>
 						<FieldLabel>Estado verificación</FieldLabel>
-						<Select value={field.state.value} onValueChange={(v) => field.handleChange(v as never)}>
-							<SelectTrigger><SelectValue /></SelectTrigger>
+						<Select
+							value={field.state.value}
+							onValueChange={(v) => field.handleChange(v as never)}
+						>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="pending">Pendiente</SelectItem>
 								<SelectItem value="approved">Aprobado</SelectItem>
@@ -92,7 +110,11 @@ export function BusinessForm({
 				{(field) => (
 					<Field>
 						<FieldLabel>Motivo rechazo (si aplica)</FieldLabel>
-						<Textarea value={field.state.value ?? ""} onChange={(e) => field.handleChange(e.target.value)} placeholder="Motivo..." />
+						<Textarea
+							value={field.state.value ?? ""}
+							onChange={(e) => field.handleChange(e.target.value)}
+							placeholder="Motivo..."
+						/>
 					</Field>
 				)}
 			</form.Field>

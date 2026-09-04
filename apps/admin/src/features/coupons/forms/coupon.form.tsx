@@ -2,8 +2,8 @@ import type { CouponDto, CouponType } from "@0xc1x/role-commons";
 import { CreateCouponBaseSchema } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
-import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Badge } from "@/components/ui/badge";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -72,9 +72,7 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 			type: coupon?.type ?? "percentage",
 			value: coupon ? String(coupon.value) : "",
 			min_order_amount:
-				coupon?.min_order_amount != null
-					? String(coupon.min_order_amount)
-					: "",
+				coupon?.min_order_amount != null ? String(coupon.min_order_amount) : "",
 			max_uses: coupon?.max_uses != null ? String(coupon.max_uses) : "",
 			expires_at: coupon?.expires_at ?? "",
 			is_active: coupon?.is_active ?? true,
@@ -87,9 +85,7 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 				type: value.type,
 				value: Number(value.value),
 				min_order_amount:
-					value.min_order_amount === ""
-						? null
-						: Number(value.min_order_amount),
+					value.min_order_amount === "" ? null : Number(value.min_order_amount),
 				max_uses: value.max_uses === "" ? null : Number(value.max_uses),
 				is_active: value.is_active ?? true,
 				expires_at: value.expires_at === "" ? null : value.expires_at,
@@ -229,11 +225,11 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 								onChange={(e) => field.handleChange(e.target.value)}
 								aria-invalid={isInvalid}
 							/>
-								<p className="text-xs text-muted-foreground">
-									{isPercentage
-										? "Porcentaje de descuento (1–100)"
-										: "Monto fijo de descuento en USD"}
-								</p>
+							<p className="text-xs text-muted-foreground">
+								{isPercentage
+									? "Porcentaje de descuento (1–100)"
+									: "Monto fijo de descuento en USD"}
+							</p>
 							{isInvalid && <FieldError errors={field.state.meta.errors} />}
 						</Field>
 					);

@@ -86,8 +86,8 @@
     "@types/google.maps": "^3.65.5",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "^57.0.6",
-    "typescript": "~6.0.3",
-    "vitest": "^4.1.10"
+    "bun-types": "^1.4.0",
+    "typescript": "~6.0.3"
   },
   "scripts": {
     "prestart": "bun scripts/generate-firebase-config.mjs",
@@ -96,7 +96,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "bun test src",
     "preexport:web": "bun scripts/generate-firebase-config.mjs",
     "export:web": "expo export --platform web",
     "deploy:web": "bun run preexport:web && expo export --platform web && bun scripts/fix-web-dist.mjs && cp vercel.json dist/ && cd dist && vercel --prod"

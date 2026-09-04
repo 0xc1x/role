@@ -4,8 +4,18 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+	InputGroup,
+	InputGroupAddon,
+	InputGroupInput,
+} from "@/components/ui/input-group";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessesList } from "@/features/businesses";
 import { columns } from "@/features/businesses/tables/businesses.columns";
@@ -32,7 +42,9 @@ function RouteComponent() {
 	useEffect(() => {
 		const t = setTimeout(() => {
 			if (searchInput !== (search.search ?? "")) {
-				navigate({ search: { ...search, search: searchInput || undefined, page: 1 } });
+				navigate({
+					search: { ...search, search: searchInput || undefined, page: 1 },
+				});
 			}
 		}, 300);
 		return () => clearTimeout(t);
@@ -51,8 +63,13 @@ function RouteComponent() {
 	if (isError) {
 		return (
 			<div className="px-6 py-4">
-				<p className="text-destructive">{error instanceof Error ? error.message : "Error"}</p>
-				<Button variant="outline" onClick={() => navigate({ search: { page: 1, limit: 20 } })}>
+				<p className="text-destructive">
+					{error instanceof Error ? error.message : "Error"}
+				</p>
+				<Button
+					variant="outline"
+					onClick={() => navigate({ search: { page: 1, limit: 20 } })}
+				>
 					Reintentar
 				</Button>
 			</div>
@@ -68,10 +85,18 @@ function RouteComponent() {
 					<Select
 						value={search.verification_status ?? "all"}
 						onValueChange={(v) =>
-							navigate({ search: { ...search, verification_status: v === "all" ? undefined : (v as never), page: 1 } })
+							navigate({
+								search: {
+									...search,
+									verification_status: v === "all" ? undefined : (v as never),
+									page: 1,
+								},
+							})
 						}
 					>
-						<SelectTrigger className="w-40"><SelectValue placeholder="Estado" /></SelectTrigger>
+						<SelectTrigger className="w-40">
+							<SelectValue placeholder="Estado" />
+						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="all">Todos</SelectItem>
 							<SelectItem value="pending">Pendiente</SelectItem>
@@ -83,12 +108,24 @@ function RouteComponent() {
 						<InputGroupAddon align="inline-start">
 							<Search className="size-4 text-muted-foreground" />
 						</InputGroupAddon>
-						<InputGroupInput placeholder="Buscar negocios..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
+						<InputGroupInput
+							placeholder="Buscar negocios..."
+							value={searchInput}
+							onChange={(e) => setSearchInput(e.target.value)}
+						/>
 					</InputGroup>
 				</div>
 			</div>
 			<div className="mt-4">
-				<DataTable columns={columns} data={rows} meta={meta} onPageChange={(page) => navigate({ search: { ...search, page } })} onLimitChange={(limit) => navigate({ search: { ...search, page: 1, limit } })} />
+				<DataTable
+					columns={columns}
+					data={rows}
+					meta={meta}
+					onPageChange={(page) => navigate({ search: { ...search, page } })}
+					onLimitChange={(limit) =>
+						navigate({ search: { ...search, page: 1, limit } })
+					}
+				/>
 			</div>
 		</div>
 	);

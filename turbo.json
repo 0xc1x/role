@@ -9,6 +9,9 @@
       "dependsOn": ["^build"]
     },
     "test": {},
+    "test:e2e": {
+      "dependsOn": ["^build"]
+    },
     "lint": {}
   }
 }

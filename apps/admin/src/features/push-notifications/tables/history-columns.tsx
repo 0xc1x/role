@@ -6,14 +6,6 @@ import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
 	Drawer,
 	DrawerClose,
 	DrawerContent,
@@ -21,6 +13,14 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "@/components/ui/drawer";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const TypeBadge = ({ type }: { type: string }) => {
 	const colors: Record<string, string> = {
@@ -41,7 +41,10 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 /** Drawer con el detalle completo del envío registrado. */
-function DetailDrawer(props: { item: PushNotificationDto; onClose: () => void }) {
+function DetailDrawer(props: {
+	item: PushNotificationDto;
+	onClose: () => void;
+}) {
 	const i = props.item;
 	return (
 		<Drawer open onOpenChange={(o) => !o && props.onClose()}>
@@ -70,9 +73,8 @@ function DetailDrawer(props: { item: PushNotificationDto; onClose: () => void })
 							Audiencia
 						</p>
 						<p className="text-xs">
-							{i.segment_ids.length} segmento(s) ·{" "}
-							{i.include_user_ids.length} usuario(s) incluidos ·{" "}
-							{i.exclude_user_ids.length} excluido(s)
+							{i.segment_ids.length} segmento(s) · {i.include_user_ids.length}{" "}
+							usuario(s) incluidos · {i.exclude_user_ids.length} excluido(s)
 						</p>
 					</div>
 					{Object.keys(i.data).length > 0 ? (
@@ -140,7 +142,10 @@ export const historyColumns: ColumnDef<PushNotificationDto>[] = [
 			<span className="text-sm">
 				{row.original.sent_count}/{row.original.total_targeted}
 				{row.original.failed_count > 0 ? (
-					<span className="text-red-600"> · {row.original.failed_count} fall.</span>
+					<span className="text-red-600">
+						{" "}
+						· {row.original.failed_count} fall.
+					</span>
 				) : null}
 			</span>
 		),
@@ -167,7 +172,9 @@ function HistoryActionCell({ item }: { item: PushNotificationDto }) {
 				<DropdownMenuContent align="end">
 					<DropdownMenuGroup>
 						<DropdownMenuLabel>Acciones</DropdownMenuLabel>
-						<DropdownMenuItem onClick={() => navigator.clipboard.writeText(item.id)}>
+						<DropdownMenuItem
+							onClick={() => navigator.clipboard.writeText(item.id)}
+						>
 							Copiar ID
 						</DropdownMenuItem>
 						<DropdownMenuItem onClick={() => setDetail(true)}>
@@ -176,7 +183,9 @@ function HistoryActionCell({ item }: { item: PushNotificationDto }) {
 					</DropdownMenuGroup>
 				</DropdownMenuContent>
 			</DropdownMenu>
-			{detail ? <DetailDrawer item={item} onClose={() => setDetail(false)} /> : null}
+			{detail ? (
+				<DetailDrawer item={item} onClose={() => setDetail(false)} />
+			) : null}
 		</>
 	);
 }

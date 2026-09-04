@@ -28,9 +28,8 @@ export function ActionCell({ row }: { row: Row<CouponListItemDto> }) {
 	const [editingCoupon, setEditingCoupon] = useState<CouponListItemDto | null>(
 		null,
 	);
-	const [deletingCoupon, setDeletingCoupon] = useState<CouponListItemDto | null>(
-		null,
-	);
+	const [deletingCoupon, setDeletingCoupon] =
+		useState<CouponListItemDto | null>(null);
 	const deleteMutation = useDeleteCoupon();
 
 	const handleConfirmDelete = () => {

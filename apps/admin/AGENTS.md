@@ -47,8 +47,7 @@ src/
 bun run dev             # Vite dev (:3000)
 bun run build           # build producción (vite + nitro)
 bun run generate-routes # regenerar route tree
-bun run test            # vitest
-bun run test:e2e        # playwright
+bun run test            # bun:test
 bun run typecheck       # tsc --noEmit
 bun run check           # biome (lint + format)
 ```

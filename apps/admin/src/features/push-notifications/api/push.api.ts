@@ -1,6 +1,6 @@
 import type {
-	PushNotificationPaginatedData,
 	PushNotificationDto,
+	PushNotificationPaginatedData,
 	PushSendResult,
 	PushTemplateDto,
 	PushTemplatePaginatedData,

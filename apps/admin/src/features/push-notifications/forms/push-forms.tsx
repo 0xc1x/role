@@ -1,4 +1,7 @@
-import { type PushTemplateDto, PUSH_NOTIFICATION_TYPES } from "@0xc1x/role-commons";
+import {
+	PUSH_NOTIFICATION_TYPES,
+	type PushTemplateDto,
+} from "@0xc1x/role-commons";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -84,12 +87,15 @@ export function PushTemplateFields({
 	);
 }
 
-export function pushTemplateDefaults(t?: PushTemplateDto): PushTemplateFormValues {
+export function pushTemplateDefaults(
+	t?: PushTemplateDto,
+): PushTemplateFormValues {
 	return {
 		name: t?.name ?? "",
 		title: t?.title ?? "",
 		body: t?.body ?? "",
-		link: ((t?.data as Record<string, unknown> | undefined)?.link as string) ?? "",
+		link:
+			((t?.data as Record<string, unknown> | undefined)?.link as string) ?? "",
 		is_active: t?.is_active ?? true,
 	};
 }

@@ -1,14 +1,18 @@
 import type { BusinessDto } from "@0xc1x/role-commons";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Badge } from "@/components/ui/badge";
-import { DataTableColumnHeader } from "@/components/data-table/column-header";
-import { ActionCell } from "@/features/businesses/tables/cells/action-cell";
 import { ActiveCell } from "@/components/data-table/cells/active-cell";
+import { DataTableColumnHeader } from "@/components/data-table/column-header";
+import { Badge } from "@/components/ui/badge";
 import { useUpdateBusiness } from "@/features/businesses/queries/businesses.queries";
+import { ActionCell } from "@/features/businesses/tables/cells/action-cell";
 
 const VerificationBadge = ({ status }: { status: string }) => {
 	const variant =
-		status === "approved" ? "default" : status === "pending" ? "secondary" : "destructive";
+		status === "approved"
+			? "default"
+			: status === "pending"
+				? "secondary"
+				: "destructive";
 	const color =
 		status === "approved"
 			? "bg-green-500/10 text-green-600 border-green-200"
@@ -28,7 +32,10 @@ const ActiveCellWrapper = ({ row }: { row: { original: BusinessDto } }) => {
 		<ActiveCell
 			active={row.original.is_active}
 			onToggle={(checked) =>
-				updateMutation.mutate({ id: row.original.id, body: { is_active: checked } })
+				updateMutation.mutate({
+					id: row.original.id,
+					body: { is_active: checked },
+				})
 			}
 			isPending={updateMutation.isPending}
 			label="Negocio"
@@ -39,20 +46,32 @@ const ActiveCellWrapper = ({ row }: { row: { original: BusinessDto } }) => {
 export const columns: ColumnDef<BusinessDto>[] = [
 	{
 		accessorKey: "name",
-		header: ({ column }) => <DataTableColumnHeader column={column} title="Negocio" />,
+		header: ({ column }) => (
+			<DataTableColumnHeader column={column} title="Negocio" />
+		),
 		cell: ({ row }) => (
 			<div className="font-medium">{row.getValue("name")}</div>
 		),
 	},
 	{
 		accessorKey: "type",
-		header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
-		cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.getValue("type")}</span>,
+		header: ({ column }) => (
+			<DataTableColumnHeader column={column} title="Tipo" />
+		),
+		cell: ({ row }) => (
+			<span className="text-sm text-muted-foreground">
+				{row.getValue("type")}
+			</span>
+		),
 	},
 	{
 		accessorKey: "verification_status",
-		header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-		cell: ({ row }) => <VerificationBadge status={row.getValue("verification_status")} />,
+		header: ({ column }) => (
+			<DataTableColumnHeader column={column} title="Estado" />
+		),
+		cell: ({ row }) => (
+			<VerificationBadge status={row.getValue("verification_status")} />
+		),
 	},
 	{
 		accessorKey: "is_active",
@@ -61,10 +80,16 @@ export const columns: ColumnDef<BusinessDto>[] = [
 	},
 	{
 		accessorKey: "created_at",
-		header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
+		header: ({ column }) => (
+			<DataTableColumnHeader column={column} title="Creado" />
+		),
 		cell: ({ row }) => {
 			const v = row.getValue("created_at") as string;
-			return <span className="text-sm text-muted-foreground">{new Date(v).toLocaleDateString("es-EC")}</span>;
+			return (
+				<span className="text-sm text-muted-foreground">
+					{new Date(v).toLocaleDateString("es-EC")}
+				</span>
+			);
 		},
 	},
 	{

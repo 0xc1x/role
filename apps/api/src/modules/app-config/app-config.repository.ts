@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, count, eq, ilike, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, or, type SQL } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import { appConfig } from '../../database/schema';
@@ -99,7 +99,7 @@ export class AppConfigRepository {
     }
     if (filter.search) {
       const term = `%${filter.search}%`;
-      filters.push(ilike(appConfig.key, term) || ilike(appConfig.label, term));
+      filters.push(or(ilike(appConfig.key, term), ilike(appConfig.label, term))!);
     }
 
     const where = filters.length > 0 ? and(...filters) : undefined;

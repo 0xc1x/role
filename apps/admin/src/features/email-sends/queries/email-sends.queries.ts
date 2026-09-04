@@ -1,4 +1,8 @@
-import type { EmailSendDto, EmailSendPaginatedData, ListSendsQuery } from "@0xc1x/role-commons";
+import type {
+	EmailSendDto,
+	EmailSendPaginatedData,
+	ListSendsQuery,
+} from "@0xc1x/role-commons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createUseUpdate } from "@/lib/query/resource-helpers";
 import { emailSendsApi } from "../api/email-sends.api";
@@ -17,10 +21,10 @@ export const emailSendsListOptions = (params?: ListSendsQuery) => ({
 	staleTime: 30_000,
 });
 
-export const useUpdateEmailSend = createUseUpdate<Partial<EmailSendDto>, EmailSendDto>(
-	emailSendsKeys,
-	emailSendsApi.update,
-);
+export const useUpdateEmailSend = createUseUpdate<
+	Partial<EmailSendDto>,
+	EmailSendDto
+>(emailSendsKeys, emailSendsApi.update);
 
 export function useRetryEmailSend() {
 	return useMutation({

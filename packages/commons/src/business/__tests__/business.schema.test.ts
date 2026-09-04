@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { CreateBusinessSchema } from '../schemas/business.schema';
 import { ListBusinessesQuerySchema } from '../schemas/business-query.schema';
 

@@ -3,15 +3,37 @@ import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiClientError } from "@/lib/api/errors";
 import { useUpdateEmailSend } from "../queries/email-sends.queries";
 
 const schema = z.object({
 	email: z.string().email().optional(),
-	status: z.enum(["pending", "queued", "processing", "sent", "delivered", "opened", "clicked", "bounced", "complained", "failed", "cancelled"]).optional(),
-	type: z.enum(["campaign", "transactional", "newsletter", "notification", "test"]).optional(),
+	status: z
+		.enum([
+			"pending",
+			"queued",
+			"processing",
+			"sent",
+			"delivered",
+			"opened",
+			"clicked",
+			"bounced",
+			"complained",
+			"failed",
+			"cancelled",
+		])
+		.optional(),
+	type: z
+		.enum(["campaign", "transactional", "newsletter", "notification", "test"])
+		.optional(),
 	source_type: z.string().nullable().optional(),
 	source_id: z.string().nullable().optional(),
 	attempts: z.any().optional(),
@@ -19,7 +41,15 @@ const schema = z.object({
 	error_message: z.string().nullable().optional(),
 });
 
-export function EmailSendForm({ formId, onSuccess, send }: { formId: string; onSuccess?: () => void; send: EmailSendDto }) {
+export function EmailSendForm({
+	formId,
+	onSuccess,
+	send,
+}: {
+	formId: string;
+	onSuccess?: () => void;
+	send: EmailSendDto;
+}) {
 	const updateMutation = useUpdateEmailSend();
 	const form = useForm({
 		defaultValues: {
@@ -77,7 +107,10 @@ export function EmailSendForm({ formId, onSuccess, send }: { formId: string; onS
 				{(field) => (
 					<Field>
 						<FieldLabel>Email</FieldLabel>
-						<Input value={field.state.value ?? ""} onChange={(e) => field.handleChange(e.target.value)} />
+						<Input
+							value={field.state.value ?? ""}
+							onChange={(e) => field.handleChange(e.target.value)}
+						/>
 					</Field>
 				)}
 			</form.Field>
@@ -85,8 +118,13 @@ export function EmailSendForm({ formId, onSuccess, send }: { formId: string; onS
 				{(field) => (
 					<Field>
 						<FieldLabel>Tipo</FieldLabel>
-						<Select value={field.state.value} onValueChange={(v) => field.handleChange(v as never)}>
-							<SelectTrigger><SelectValue /></SelectTrigger>
+						<Select
+							value={field.state.value}
+							onValueChange={(v) => field.handleChange(v as never)}
+						>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="campaign">campaign</SelectItem>
 								<SelectItem value="transactional">transactional</SelectItem>
@@ -102,11 +140,30 @@ export function EmailSendForm({ formId, onSuccess, send }: { formId: string; onS
 				{(field) => (
 					<Field>
 						<FieldLabel>Estado</FieldLabel>
-						<Select value={field.state.value} onValueChange={(v) => field.handleChange(v as never)}>
-							<SelectTrigger><SelectValue /></SelectTrigger>
+						<Select
+							value={field.state.value}
+							onValueChange={(v) => field.handleChange(v as never)}
+						>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
 							<SelectContent>
-								{["pending", "queued", "processing", "sent", "delivered", "opened", "clicked", "bounced", "complained", "failed", "cancelled"].map((s) => (
-									<SelectItem key={s} value={s}>{s}</SelectItem>
+								{[
+									"pending",
+									"queued",
+									"processing",
+									"sent",
+									"delivered",
+									"opened",
+									"clicked",
+									"bounced",
+									"complained",
+									"failed",
+									"cancelled",
+								].map((s) => (
+									<SelectItem key={s} value={s}>
+										{s}
+									</SelectItem>
 								))}
 							</SelectContent>
 						</Select>
@@ -117,7 +174,11 @@ export function EmailSendForm({ formId, onSuccess, send }: { formId: string; onS
 				{(field) => (
 					<Field>
 						<FieldLabel>Source Type</FieldLabel>
-						<Input value={field.state.value ?? ""} onChange={(e) => field.handleChange(e.target.value)} placeholder="campaign, business, contact" />
+						<Input
+							value={field.state.value ?? ""}
+							onChange={(e) => field.handleChange(e.target.value)}
+							placeholder="campaign, business, contact"
+						/>
 					</Field>
 				)}
 			</form.Field>
@@ -125,7 +186,10 @@ export function EmailSendForm({ formId, onSuccess, send }: { formId: string; onS
 				{(field) => (
 					<Field>
 						<FieldLabel>Source ID</FieldLabel>
-						<Input value={field.state.value ?? ""} onChange={(e) => field.handleChange(e.target.value)} />
+						<Input
+							value={field.state.value ?? ""}
+							onChange={(e) => field.handleChange(e.target.value)}
+						/>
 					</Field>
 				)}
 			</form.Field>
@@ -134,7 +198,13 @@ export function EmailSendForm({ formId, onSuccess, send }: { formId: string; onS
 					{(field) => (
 						<Field>
 							<FieldLabel>Intentos</FieldLabel>
-							<Input type="number" value={String(field.state.value ?? 0)} onChange={(e) => field.handleChange(Number(e.target.value) as never)} />
+							<Input
+								type="number"
+								value={String(field.state.value ?? 0)}
+								onChange={(e) =>
+									field.handleChange(Number(e.target.value) as never)
+								}
+							/>
 						</Field>
 					)}
 				</form.Field>
@@ -142,7 +212,13 @@ export function EmailSendForm({ formId, onSuccess, send }: { formId: string; onS
 					{(field) => (
 						<Field>
 							<FieldLabel>Max Intentos</FieldLabel>
-							<Input type="number" value={String(field.state.value ?? 5)} onChange={(e) => field.handleChange(Number(e.target.value) as never)} />
+							<Input
+								type="number"
+								value={String(field.state.value ?? 5)}
+								onChange={(e) =>
+									field.handleChange(Number(e.target.value) as never)
+								}
+							/>
 						</Field>
 					)}
 				</form.Field>
@@ -151,7 +227,10 @@ export function EmailSendForm({ formId, onSuccess, send }: { formId: string; onS
 				{(field) => (
 					<Field>
 						<FieldLabel>Error</FieldLabel>
-						<Textarea value={field.state.value ?? ""} onChange={(e) => field.handleChange(e.target.value)} />
+						<Textarea
+							value={field.state.value ?? ""}
+							onChange={(e) => field.handleChange(e.target.value)}
+						/>
 					</Field>
 				)}
 			</form.Field>

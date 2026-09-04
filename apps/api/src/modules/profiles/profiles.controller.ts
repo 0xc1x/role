@@ -41,10 +41,7 @@ export class ProfilesController {
     @Query(new ZodValidationPipe(ListProfilesQuerySchema))
     query: ListProfilesQuery,
   ): Promise<ProfilePaginatedData> {
-    return this.profilesService.list({
-      ...query,
-      subscribed_to: query.subscribed_to,
-    });
+    return this.profilesService.list(query);
   }
 
   @Get(':id')

@@ -64,7 +64,7 @@ Reglas derivadas:
 
 - **PRs pequeños y atómicos.** El monorepo permite actualizar contrato + consumidores en el mismo PR — hazlo, no versiones intermedias.
 - **Breaking changes en contratos**: actualizar TODOS los consumidores en el mismo PR (el compilador te dice dónde).
-- **Tests por cambio de lógica**: vitest (admin), jest (api); test mínimo por feature nueva.
+- **Tests por cambio de lógica**: `bun test` en todo el monorepo; test mínimo por feature nueva.
 - **No sobre-ingeniería**: reutiliza los patrones existentes (resource module en admin, mappers en api, schemas zod en commons); cero abstracciones especulativas.
 - **Seguridad por defecto**: nunca commitees secrets/env reales; valida input en fronteras (zod); RLS es la frontera de datos; no expongas filas de DB crudas por la API (usa mappers).
 
@@ -76,7 +76,7 @@ Ante conflictos: 1. Seguridad y permisos · 2. Correctitud del negocio · 3. Ope
 
 ```sh
 bun run typecheck   # turbo — incluye build de commons (d.ts para los consumidores)
-bun run test        # turbo — vitest (admin) + jest (api)
+bun run test        # turbo — bun:test en api, admin, landing, mobile y commons
 bun run build       # turbo — commons → consumidores
 ```
 

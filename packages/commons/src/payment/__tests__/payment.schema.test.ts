@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { CreatePaymentMethodSchema } from '../schemas/payment-method.schema';
 import { PayoutSchema } from '../schemas/payout.schema';
 

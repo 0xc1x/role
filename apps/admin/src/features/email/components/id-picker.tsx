@@ -22,13 +22,26 @@ function useDirectory(
 	kind: "usuarios" | "negocios",
 	search: string,
 	subscribedTo?: string,
+	withPushToken?: boolean,
 ): { options: PickerOption[]; isLoading: boolean } {
 	const debounced = useDebounce(search);
 	const profiles = useQuery({
-		queryKey: ["directory", "profiles", kind, debounced, subscribedTo],
+		queryKey: [
+			"directory",
+			"profiles",
+			kind,
+			debounced,
+			subscribedTo,
+			withPushToken,
+		],
 		queryFn: () =>
 			api.get<PaginatedData<ProfileDto>>(
-				`/profiles${toSearchParams({ limit: 10, search: debounced || undefined, subscribed_to: subscribedTo })}`,
+				`/profiles${toSearchParams({
+					limit: 10,
+					search: debounced || undefined,
+					subscribed_to: subscribedTo,
+					has_active_push_token: withPushToken || undefined,
+				})}`,
 			),
 		enabled: kind === "usuarios",
 	});
@@ -79,12 +92,15 @@ export function IdPicker(props: {
 	onChange: (ids: string[]) => void;
 	/** Solo muestra perfiles suscritos a esta categoría de marketing. */
 	subscribedTo?: string;
+	/** Solo muestra perfiles con device token de push activo (para envíos push). */
+	withPushToken?: boolean;
 }) {
 	const [search, setSearch] = useState("");
 	const { options, isLoading } = useDirectory(
 		props.kind,
 		search,
 		props.subscribedTo,
+		props.withPushToken,
 	);
 
 	const toggle = (id: string) =>

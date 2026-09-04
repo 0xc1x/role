@@ -10,8 +10,12 @@ import { ProfilesRepository, type ProfileRow } from './profiles.repository';
 export class ProfilesService {
   constructor(private readonly repository: ProfilesRepository) {}
 
-  async list(query: ListProfilesQuery & { subscribed_to?: string }) {
-    const { rows, total } = await this.repository.list({ ...query });
+  async list(query: ListProfilesQuery) {
+    const { rows, total } = await this.repository.list({
+      ...query,
+      subscribedTo: query.subscribed_to,
+      hasActivePushToken: query.has_active_push_token,
+    });
     return paginatedDataFromQuery(
       rows.map((row) => this.toDto(row)),
       { page: query.page, limit: query.limit },

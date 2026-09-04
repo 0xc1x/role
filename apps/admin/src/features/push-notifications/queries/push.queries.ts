@@ -45,7 +45,8 @@ export { useEmailSegments };
 
 export function usePushTemplateMutations() {
 	const qc = useQueryClient();
-	const invalidate = () => void qc.invalidateQueries({ queryKey: pushKeys.all });
+	const invalidate = () =>
+		void qc.invalidateQueries({ queryKey: pushKeys.all });
 	const onError = (err: Error) => toast.error(err.message);
 
 	return {
@@ -81,7 +82,8 @@ export function usePushTemplateMutations() {
 
 export function usePushSend() {
 	const qc = useQueryClient();
-	const invalidate = () => void qc.invalidateQueries({ queryKey: pushKeys.all });
+	const invalidate = () =>
+		void qc.invalidateQueries({ queryKey: pushKeys.all });
 	return useMutation({
 		mutationFn: (b: Parameters<typeof pushApi.send>[0]) => pushApi.send(b),
 		onSuccess: (res) => {

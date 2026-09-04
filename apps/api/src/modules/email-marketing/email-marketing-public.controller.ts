@@ -7,8 +7,8 @@ import {
   HttpStatus,
   Post,
   Query,
-  RawBodyRequest,
   Req,
+  type RawBodyRequest,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -107,9 +107,12 @@ export class EmailMarketingPublicController {
       .split(' ')
       .find((part) => part.startsWith('v1,'))
       ?.slice(3);
+    // timingSafeEqual lanza si las longitudes difieren: firma alterada → 400, no 500.
+    const expectedBuf = Buffer.from(expected);
+    const providedBuf = Buffer.from(provided ?? '');
     if (
-      !provided ||
-      !timingSafeEqual(Buffer.from(expected), Buffer.from(provided))
+      providedBuf.length !== expectedBuf.length ||
+      !timingSafeEqual(expectedBuf, providedBuf)
     ) {
       throw new BadRequestException('Firma inválida');
     }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { sendDefaults } from "../forms/push-forms";
 import { hasAudience, toSendPayload } from "./to-send-payload";
 
@@ -50,7 +50,11 @@ describe("toSendPayload", () => {
 describe("hasAudience", () => {
 	it("requiere segmentos o usuarios incluidos", () => {
 		expect(hasAudience({ segment_ids: [], include_user_ids: [] })).toBe(false);
-		expect(hasAudience({ segment_ids: [UUID], include_user_ids: [] })).toBe(true);
-		expect(hasAudience({ segment_ids: [], include_user_ids: [UUID] })).toBe(true);
+		expect(hasAudience({ segment_ids: [UUID], include_user_ids: [] })).toBe(
+			true,
+		);
+		expect(hasAudience({ segment_ids: [], include_user_ids: [UUID] })).toBe(
+			true,
+		);
 	});
 });

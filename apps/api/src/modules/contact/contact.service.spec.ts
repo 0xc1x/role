@@ -149,4 +149,17 @@ describe('ContactService', () => {
       }),
     );
   });
+
+  describe('ContactService.findContactTemplate', () => {
+    test('usa plantilla contacto-notificacion cuando existe', async () => {
+      emailRepo.listTemplates.mockResolvedValue({
+        rows: [{ id: 't1', name: 'contacto-notificacion' }, { id: 't2', name: 'otra' }],
+      });
+      emailRepo.findTemplateById.mockResolvedValue({ id: 't1', subject: 'Hola' });
+
+      await service.handle(baseDto);
+
+      expect(emailRepo.findTemplateById).toHaveBeenCalledWith('t1');
+    });
+  });
 });

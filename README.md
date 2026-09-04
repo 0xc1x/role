@@ -43,9 +43,13 @@ Decisiones de arquitectura documentadas en `docs/decisions/` (formato ADR ligero
 bun install                 # instala todo el workspace (genera bun.lock en la raíz)
 bun run build               # turbo: commons → api → admin (solo lo afectado)
 bun run typecheck           # turbo: typecheck de todos (requiere dist/ de commons)
-bun run test                # turbo: vitest (admin) + jest (api)
+bun run test                # turbo: bun:test en api, admin, landing, mobile y commons
+bun run test:e2e            # e2e marketplace (requiere postgres-test, ver abajo)
 bun run dev:api             # NestJS watch (swc)
 bun run dev:admin           # Vite dev :3000
+
+# Postgres efímero para tests con DB real (repositories + e2e):
+docker compose up -d postgres-test   # localhost:6432 (TEST_DATABASE_URL si difiere)
 ```
 
 Filtros turbo: `bun run build --filter=api...` (solo api y sus dependencias).

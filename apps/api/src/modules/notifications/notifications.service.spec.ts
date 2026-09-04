@@ -114,3 +114,18 @@ describe('NotificationsService (espejo send-push-notification)', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('NotificationsService lifecycle', () => {
+  test('onModuleInit directo sin REDIS_URL; destroy sin worker', async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        NotificationsService,
+        { provide: NotificationsRepository, useValue: {} },
+        { provide: ConfigService, useValue: { get: () => undefined } },
+      ],
+    }).compile();
+    const svc = module.get(NotificationsService);
+    await svc.onModuleInit();
+    await svc.onModuleDestroy();
+  });
+});

@@ -18,6 +18,8 @@ export interface ListProfilesFilter {
   role?: string;
   /** Solo perfiles con esta categoría habilitada y suscripción activa. */
   subscribedTo?: string;
+  /** Solo perfiles con al menos un device token de push activo. */
+  hasActivePushToken?: boolean;
 }
 
 /**
@@ -46,6 +48,14 @@ export class ProfilesRepository {
           select user_id from marketing_preferences
           where is_subscribed and ${f.subscribedTo} = any(categories)
         )`,
+      );
+    }
+    // Mismo criterio que el envío: tokens con is_active = true.
+    if (f.hasActivePushToken !== undefined) {
+      filters.push(
+        f.hasActivePushToken
+          ? sql`id in (select user_id from device_tokens where is_active)`
+          : sql`id not in (select user_id from device_tokens where is_active)`,
       );
     }
     const where = filters.length ? and(...filters) : undefined;

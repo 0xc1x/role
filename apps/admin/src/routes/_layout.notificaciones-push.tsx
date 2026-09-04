@@ -1,9 +1,14 @@
-import type { PushNotificationDto, PushSendResult, PushTemplateDto } from "@0xc1x/role-commons";
+import type {
+	PushNotificationDto,
+	PushSendResult,
+	PushTemplateDto,
+} from "@0xc1x/role-commons";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Pencil, Plus, Search, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { DataTable } from "@/components/data-table/data-table";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -27,7 +32,11 @@ import {
 } from "@/components/ui/drawer";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+	InputGroup,
+	InputGroupAddon,
+	InputGroupInput,
+} from "@/components/ui/input-group";
 import {
 	Select,
 	SelectContent,
@@ -42,12 +51,15 @@ import { IdPicker } from "@/features/email/components/id-picker";
 import {
 	PushTemplateFields,
 	type PushTemplateFormValues,
-	pushTemplateDefaults,
 	PushTypeSelect,
+	pushTemplateDefaults,
 	type SendFormValues,
 	sendDefaults,
 } from "@/features/push-notifications/forms/push-forms";
-import { hasAudience, toSendPayload } from "@/features/push-notifications/lib/to-send-payload";
+import {
+	hasAudience,
+	toSendPayload,
+} from "@/features/push-notifications/lib/to-send-payload";
 import {
 	pushListOptions,
 	useEmailSegments,
@@ -60,7 +72,6 @@ import {
 } from "@/features/push-notifications/queries/push.queries";
 import { historyColumns } from "@/features/push-notifications/tables/history-columns";
 import { tokenColumns } from "@/features/push-notifications/tables/tokens-columns";
-import { DataTable } from "@/components/data-table/data-table";
 
 const TABS = ["enviar", "plantillas", "historial", "dispositivos"] as const;
 type Tab = (typeof TABS)[number];
@@ -157,7 +168,14 @@ function FormDrawer<Row>(props: {
 				if (!o) setResetKey((k) => k + 1);
 			}}
 		>
-			<DrawerTrigger render={<Button size={props.row ? "icon" : undefined} variant={props.row ? "ghost" : undefined} />}>
+			<DrawerTrigger
+				render={
+					<Button
+						size={props.row ? "icon" : undefined}
+						variant={props.row ? "ghost" : undefined}
+					/>
+				}
+			>
 				{props.row ? <Pencil className="size-4" /> : <Plus />}{" "}
 				{props.row ? null : props.createLabel}
 			</DrawerTrigger>
@@ -197,7 +215,8 @@ function SendTab() {
 
 	const applyTemplate = (templateId: string) => {
 		const t = (templates.data?.data ?? []).find((x) => x.id === templateId);
-		const link = ((t?.data as Record<string, unknown> | undefined)?.link as string) ?? "";
+		const link =
+			((t?.data as Record<string, unknown> | undefined)?.link as string) ?? "";
 		setValues({
 			...values,
 			template_id: templateId,
@@ -207,7 +226,8 @@ function SendTab() {
 		});
 	};
 
-	const ready = hasAudience(values) && values.title.trim() && values.body.trim();
+	const ready =
+		hasAudience(values) && values.title.trim() && values.body.trim();
 
 	const requestAudience = () =>
 		audience.mutate({
@@ -289,29 +309,31 @@ function SendTab() {
 				<Field>
 					<FieldLabel>Segmentos destinatarios</FieldLabel>
 					<div className="space-y-1.5">
-						{(segments.data?.data ?? []).filter((s) => s.is_active).map((s) => {
-							const checked = values.segment_ids.includes(s.id);
-							return (
-								<label
-									key={s.id}
-									className="flex items-center gap-2 text-sm font-normal"
-								>
-									<input
-										type="checkbox"
-										checked={checked}
-										onChange={(e) =>
-											setValues({
-												...values,
-												segment_ids: e.target.checked
-													? [...values.segment_ids, s.id]
-													: values.segment_ids.filter((id) => id !== s.id),
-											})
-										}
-									/>
-									{s.name} ({s.type})
-								</label>
-							);
-						})}
+						{(segments.data?.data ?? [])
+							.filter((s) => s.is_active)
+							.map((s) => {
+								const checked = values.segment_ids.includes(s.id);
+								return (
+									<label
+										key={s.id}
+										className="flex items-center gap-2 text-sm font-normal"
+									>
+										<input
+											type="checkbox"
+											checked={checked}
+											onChange={(e) =>
+												setValues({
+													...values,
+													segment_ids: e.target.checked
+														? [...values.segment_ids, s.id]
+														: values.segment_ids.filter((id) => id !== s.id),
+												})
+											}
+										/>
+										{s.name} ({s.type})
+									</label>
+								);
+							})}
 					</div>
 				</Field>
 				<Field>
@@ -319,6 +341,7 @@ function SendTab() {
 					<IdPicker
 						label="Incluir usuarios"
 						kind="usuarios"
+						withPushToken
 						selectedIds={values.include_user_ids}
 						onChange={(ids) => setValues({ ...values, include_user_ids: ids })}
 					/>
@@ -328,6 +351,7 @@ function SendTab() {
 					<IdPicker
 						label="Excluir usuarios"
 						kind="usuarios"
+						withPushToken
 						selectedIds={values.exclude_user_ids}
 						onChange={(ids) => setValues({ ...values, exclude_user_ids: ids })}
 					/>
@@ -343,7 +367,9 @@ function SendTab() {
 						{audience.isPending ? <Spinner /> : null} Calcular alcance
 					</Button>
 					{audience.data ? (
-						<Badge variant={audience.data.total > 0 ? "default" : "destructive"}>
+						<Badge
+							variant={audience.data.total > 0 ? "default" : "destructive"}
+						>
 							Llegaría a {audience.data.total} dispositivo(s)
 						</Badge>
 					) : null}
@@ -356,7 +382,11 @@ function SendTab() {
 						>
 							Enviar prueba
 						</Button>
-						<Button size="sm" onClick={() => setConfirmOpen(true)} disabled={!ready}>
+						<Button
+							size="sm"
+							onClick={() => setConfirmOpen(true)}
+							disabled={!ready}
+						>
 							<Send className="size-4" /> Enviar
 						</Button>
 					</div>
@@ -389,10 +419,7 @@ function SendTab() {
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancelar</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={confirmSend}
-							disabled={send.isPending}
-						>
+						<AlertDialogAction onClick={confirmSend} disabled={send.isPending}>
 							{send.isPending ? <Spinner /> : null} Enviar
 						</AlertDialogAction>
 					</AlertDialogFooter>
@@ -445,15 +472,16 @@ function SendTestDrawer(props: {
 				</DrawerHeader>
 				<div className="space-y-4 overflow-y-auto p-4 max-h-[70vh]">
 					<p className="text-sm text-muted-foreground">
-						La prueba llega directo a los dispositivos de los usuarios
-						elegidos, sin pasar por preferencias ni horario de silencio, y no
-						se registra en el historial.
+						La prueba llega directo a los dispositivos de los usuarios elegidos,
+						sin pasar por preferencias ni horario de silencio, y no se registra
+						en el historial.
 					</p>
 					<Field>
 						<FieldLabel>Usuarios de prueba (máx. 10)</FieldLabel>
 						<IdPicker
 							label="Usuarios"
 							kind="usuarios"
+							withPushToken
 							selectedIds={testUsers}
 							onChange={setTestUsers}
 						/>
@@ -525,56 +553,62 @@ function TemplatesTab() {
 			</div>
 			{list.isLoading ? <Loading /> : null}
 			{(list.data?.data ?? []).map((t) => {
-				const link = ((t.data as Record<string, unknown> | undefined)?.link as string) ?? "";
+				const link =
+					((t.data as Record<string, unknown> | undefined)?.link as string) ??
+					"";
 				return (
-				<div
-					key={t.id}
-					className="flex items-center justify-between rounded-lg border p-3"
-				>
-					<div className="min-w-0">
-						<p className="font-medium">{t.name}</p>
-						<p className="truncate text-sm text-muted-foreground">
-							{t.title} — {t.body}
-						</p>
-						{link ? <p className="truncate text-xs text-muted-foreground">↗ {link}</p> : null}
+					<div
+						key={t.id}
+						className="flex items-center justify-between rounded-lg border p-3"
+					>
+						<div className="min-w-0">
+							<p className="font-medium">{t.name}</p>
+							<p className="truncate text-sm text-muted-foreground">
+								{t.title} — {t.body}
+							</p>
+							{link ? (
+								<p className="truncate text-xs text-muted-foreground">
+									↗ {link}
+								</p>
+							) : null}
+						</div>
+						<div className="flex items-center gap-2">
+							<Badge variant={t.is_active ? "default" : "secondary"}>
+								{t.is_active ? "activa" : "inactiva"}
+							</Badge>
+							<Button size="sm" variant="outline" onClick={() => setTesting(t)}>
+								Probar
+							</Button>
+							<FormDrawer
+								title={`Editar ${t.name}`}
+								createLabel=""
+								row={t}
+								defaults={pushTemplateDefaults}
+								fields={({ values, setValues }) => (
+									<PushTemplateFields values={values} setValues={setValues} />
+								)}
+								toPayload={(v) => ({
+									name: v.name,
+									title: v.title,
+									body: v.body,
+									is_active: v.is_active,
+									data: v.link.trim() ? { link: v.link.trim() } : {},
+								})}
+								onSubmit={(payload) =>
+									mutations.update.mutateAsync({ id: t.id, body: payload })
+								}
+								isPending={mutations.update.isPending}
+							/>
+							<Button
+								size="sm"
+								variant="ghost"
+								className="text-destructive"
+								onClick={() => setDeleting(t)}
+							>
+								<Trash2 className="size-4" />
+							</Button>
+						</div>
 					</div>
-					<div className="flex items-center gap-2">
-						<Badge variant={t.is_active ? "default" : "secondary"}>
-							{t.is_active ? "activa" : "inactiva"}
-						</Badge>
-						<Button size="sm" variant="outline" onClick={() => setTesting(t)}>
-							Probar
-						</Button>
-						<FormDrawer
-							title={`Editar ${t.name}`}
-							createLabel=""
-							row={t}
-							defaults={pushTemplateDefaults}
-							fields={({ values, setValues }) => (
-								<PushTemplateFields values={values} setValues={setValues} />
-							)}
-							toPayload={(v) => ({
-								name: v.name,
-								title: v.title,
-								body: v.body,
-								is_active: v.is_active,
-								data: v.link.trim() ? { link: v.link.trim() } : {},
-							})}
-							onSubmit={(payload) =>
-								mutations.update.mutateAsync({ id: t.id, body: payload })
-							}
-							isPending={mutations.update.isPending}
-						/>
-						<Button
-							size="sm"
-							variant="ghost"
-							className="text-destructive"
-							onClick={() => setDeleting(t)}
-						>
-							<Trash2 className="size-4" />
-						</Button>
-					</div>
-				</div>
 				);
 			})}
 
@@ -636,7 +670,12 @@ function TemplateTestDrawer(props: {
 		try {
 			const res = await props.test.mutateAsync({
 				id: props.template.id,
-				body: { user_ids: testUsers, title: props.template.title, body: props.template.body, type: "announcement" },
+				body: {
+					user_ids: testUsers,
+					title: props.template.title,
+					body: props.template.body,
+					type: "announcement",
+				},
 			});
 			setResult(res);
 			toast.success(
@@ -661,6 +700,7 @@ function TemplateTestDrawer(props: {
 						<IdPicker
 							label="Usuarios"
 							kind="usuarios"
+							withPushToken
 							selectedIds={testUsers}
 							onChange={setTestUsers}
 						/>

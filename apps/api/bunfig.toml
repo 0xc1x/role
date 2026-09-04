@@ -1,0 +1,6 @@
+[test]
+# Aislamiento por archivo (equivale al sandbox por archivo de jest:
+# los jest.mock de un spec no fugan a otros).
+# Sin umbral: el threshold de jest era promedio global y Bun lo exige
+# por archivo (más estricto); CI nunca lo usó como gate.
+coveragePathIgnorePatterns = ["**/*.spec.ts", "src/database/schema/**", "src/main.ts"]

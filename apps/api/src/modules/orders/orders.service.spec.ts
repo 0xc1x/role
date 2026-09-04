@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { OrdersService } from './orders.service';
 import { OrdersRepository } from './orders.repository';
 import { OffersRepository } from '../offers/offers.repository';
+import { NotificationHandlers } from '../notifications/notification.handlers';
 import type { OrderStatus } from '@0xc1x/role-commons';
 
 const mockAuthUser = {
@@ -850,5 +851,59 @@ describe('OrdersService', () => {
 
       expect(result.expired).toBe(0);
     });
+  });
+});
+describe('OrdersService.emitOrderChange (notificaciones)', () => {
+  test('flag activo dispara handler; rechazo no lanza', async () => {
+    const onOrderStatusChanged = jest.fn();
+    const module = await Test.createTestingModule({
+      providers: [
+        OrdersService,
+        {
+          provide: OrdersRepository,
+          useValue: {
+            transaction: jest.fn(),
+            findActiveByUserAndOffer: jest.fn(),
+            findByIdWithBusinessOwner: jest.fn(),
+            findByIdForUpdate: jest.fn(),
+            listForUser: jest.fn(),
+            listForBusiness: jest.fn(),
+            updateStatus: jest.fn(),
+            insertOrder: jest.fn(),
+            insertEvent: jest.fn(),
+            isBusinessOwner: jest.fn(),
+            findBusinessIdsOwnedBy: jest.fn(),
+            nextOrderNumber: jest.fn(),
+            findCommissionRate: jest.fn(),
+            findCouponByCodeForUpdate: jest.fn(),
+            incrementCouponUsedCount: jest.fn(),
+            accrueBusinessBalance: jest.fn(),
+          },
+        },
+        {
+          provide: OffersRepository,
+          useValue: {
+            findByIdForUpdate: jest.fn(),
+            decrementStock: jest.fn(),
+            incrementStock: jest.fn(),
+            findBusinessIdsOwnedBy: jest.fn(),
+            findOrderCandidatesToExpire: jest.fn(),
+          },
+        },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(true) } },
+        { provide: NotificationHandlers, useValue: { onOrderStatusChanged } },
+      ],
+    }).compile();
+    const svc = module.get(OrdersService);
+
+    onOrderStatusChanged.mockResolvedValue(undefined);
+    (svc as unknown as { emitOrderChange: (id: string) => void }).emitOrderChange('o1');
+    await new Promise((r) => setImmediate(r));
+    expect(onOrderStatusChanged).toHaveBeenCalledWith('o1');
+
+    onOrderStatusChanged.mockRejectedValue(new Error('expo down'));
+    (svc as unknown as { emitOrderChange: (id: string) => void }).emitOrderChange('o2');
+    await new Promise((r) => setImmediate(r));
+    expect(onOrderStatusChanged).toHaveBeenCalledWith('o2');
   });
 });

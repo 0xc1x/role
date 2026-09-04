@@ -34,10 +34,10 @@ apps/api ─────┘                └── apps/landing
 
 | App | Stack | Verificación |
 |---|---|---|
-| `apps/api` | NestJS 11, Drizzle ORM, jose (JWT), zod, swagger+scalar | `bun run typecheck` + `bun run test` (jest) |
-| `apps/admin` | TanStack Start/Router/Query/Form/Table, Tailwind 4 + shadcn/Base UI, Biome | `bun run typecheck` + `bun run check` + `bun run test` (vitest) |
+| `apps/api` | NestJS 11, Drizzle ORM, jose (JWT), zod, swagger+scalar | `bun run typecheck` + `bun run test` (bun:test --isolate) |
+| `apps/admin` | TanStack Start/Router/Query/Form/Table, Tailwind 4 + shadcn/Base UI, Biome | `bun run typecheck` + `bun run check` + `bun run test` (bun:test) |
 | `apps/landing` | TanStack Start (SSR — SEO critical), shadcn | igual que admin |
-| `apps/mobile` | Expo, expo-router, TanStack Query + Zustand, zod | typecheck + test (vitest) |
+| `apps/mobile` | Expo, expo-router, TanStack Query + Zustand, zod | typecheck + test (bun:test) |
 | `packages/commons` | zod 4, TS estricto, ESM | `bun run build` (tsc + fix-imports) |
 
 ## Límites y fronteras

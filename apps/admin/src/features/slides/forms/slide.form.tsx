@@ -47,67 +47,70 @@ function emptyToNull(value: string | null | undefined): string | null {
 
 const slideFormSchema = CreateSlideFormSchema.omit({
 	image_url: true,
-}).extend({
-	image: z.custom<File | string | null>(),
-	// Inputs del form usan "" para “sin valor”; el schema de commons espera null.
-	badge_text: z
-		.string()
-		.max(30)
-		.transform((v) => (v === "" ? null : v)),
-	// El input del form usa "" para “sin valor”; commons lo representa como
-	// null (RedirectUrlSchema.nullable()). Reusamos la validación de commons.
-	redirect_url: z
-		.string()
-		.transform((v) => (v === "" ? null : v))
-		.pipe(RedirectUrlSchema.nullable()),
-	// Código del cupón (solo type === "coupon"); "" se trata como null.
-	// Mismas reglas que coupon_code en role-commons (el .pipe no acepta
-	// el envoltorio optional del schema de commons).
-	coupon_code: z
-		.string()
-		.transform((v) => (v === "" ? null : v))
-		.pipe(
-			z.string()
-				.min(1, "El código de cupón no puede estar vacío")
-				.max(50, "El código de cupón no debe superar los 50 caracteres")
-				.nullable(),
-		),
-	text_color: z
-		.string()
-		.refine((v) => v === "" || HEX_REGEX.test(v), {
-			message:
-				"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
-		})
-		.transform((v) => (v === "" ? null : v)),
-	button_color: z
-		.string()
-		.refine((v) => v === "" || HEX_REGEX.test(v), {
-			message:
-				"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
-		})
-		.transform((v) => (v === "" ? null : v)),
-	start_at: z.string().transform((v) => (v === "" ? null : v)),
-	end_at: z.string().transform((v) => (v === "" ? null : v)),
-	// El form siempre provee estos valores; quitamos optional de commons.
-	active: z.boolean(),
-	priority: z.number().int().min(0),
-}).superRefine((value, ctx) => {
-	if (value.type === "coupon") {
-		if (!value.coupon_code) {
+})
+	.extend({
+		image: z.custom<File | string | null>(),
+		// Inputs del form usan "" para “sin valor”; el schema de commons espera null.
+		badge_text: z
+			.string()
+			.max(30)
+			.transform((v) => (v === "" ? null : v)),
+		// El input del form usa "" para “sin valor”; commons lo representa como
+		// null (RedirectUrlSchema.nullable()). Reusamos la validación de commons.
+		redirect_url: z
+			.string()
+			.transform((v) => (v === "" ? null : v))
+			.pipe(RedirectUrlSchema.nullable()),
+		// Código del cupón (solo type === "coupon"); "" se trata como null.
+		// Mismas reglas que coupon_code en role-commons (el .pipe no acepta
+		// el envoltorio optional del schema de commons).
+		coupon_code: z
+			.string()
+			.transform((v) => (v === "" ? null : v))
+			.pipe(
+				z
+					.string()
+					.min(1, "El código de cupón no puede estar vacío")
+					.max(50, "El código de cupón no debe superar los 50 caracteres")
+					.nullable(),
+			),
+		text_color: z
+			.string()
+			.refine((v) => v === "" || HEX_REGEX.test(v), {
+				message:
+					"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
+			})
+			.transform((v) => (v === "" ? null : v)),
+		button_color: z
+			.string()
+			.refine((v) => v === "" || HEX_REGEX.test(v), {
+				message:
+					"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
+			})
+			.transform((v) => (v === "" ? null : v)),
+		start_at: z.string().transform((v) => (v === "" ? null : v)),
+		end_at: z.string().transform((v) => (v === "" ? null : v)),
+		// El form siempre provee estos valores; quitamos optional de commons.
+		active: z.boolean(),
+		priority: z.number().int().min(0),
+	})
+	.superRefine((value, ctx) => {
+		if (value.type === "coupon") {
+			if (!value.coupon_code) {
+				ctx.addIssue({
+					code: "custom",
+					path: ["coupon_code"],
+					message: "Las slides de tipo cupón requieren un código",
+				});
+			}
+		} else if (!value.redirect_url) {
 			ctx.addIssue({
 				code: "custom",
-				path: ["coupon_code"],
-				message: "Las slides de tipo cupón requieren un código",
+				path: ["redirect_url"],
+				message: "El destino es obligatorio (URL externa o ruta interna /)",
 			});
 		}
-	} else if (!value.redirect_url) {
-		ctx.addIssue({
-			code: "custom",
-			path: ["redirect_url"],
-			message: "El destino es obligatorio (URL externa o ruta interna /)",
-		});
-	}
-});
+	});
 
 type SlideFormValues = z.input<typeof slideFormSchema>;
 

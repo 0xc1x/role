@@ -59,3 +59,27 @@ describe('RendererService', () => {
     expect(service.verifyUnsubscribeToken('u-2', signature)).toBe(false);
   });
 });
+
+describe('RendererService.unsubscribeUrl', () => {
+  test('construye URL con base configurada', async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        RendererService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) =>
+              key === 'UNSUBSCRIBE_URL_BASE'
+                ? 'https://role.app/baja'
+                : 'test-secret',
+            ),
+          },
+        },
+      ],
+    }).compile();
+    const svc = module.get(RendererService);
+    expect(svc.unsubscribeUrl('u-1')).toMatch(
+      /^https:\/\/role\.app\/baja\?t=u-1\./,
+    );
+  });
+});

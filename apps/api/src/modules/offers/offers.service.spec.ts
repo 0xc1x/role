@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { OffersService } from './offers.service';
+import { NotificationHandlers } from '../notifications/notification.handlers';
 import {
   OffersRepository,
   type OfferRow,
@@ -356,5 +357,69 @@ describe('OffersService', () => {
         NotFoundException,
       );
     });
+  });
+});
+
+describe('OffersService.create (notificación post-creación)', () => {
+  const makeModule = async (flag: boolean, onOfferCreated: jest.Mock) => {
+    const module = await Test.createTestingModule({
+      providers: [
+        OffersService,
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(flag) } },
+        {
+          provide: OffersRepository,
+          useValue: {
+            transaction: jest.fn(async (fn) => fn({})),
+            findMany: jest.fn(),
+            findById: jest.fn(),
+            findRandomActive: jest.fn(),
+            findDtoById: jest.fn(),
+            insert: jest.fn(async () => makeOfferRow({ title: 'N' })),
+            update: jest.fn(),
+            setCategories: jest.fn(),
+            findCategoryIds: jest.fn(async () => []),
+            isBusinessOwner: jest.fn(async () => true),
+            locationBelongsToBusiness: jest.fn(async () => true),
+            findActiveCategoryIds: jest.fn(async () => []),
+          },
+        },
+        { provide: NotificationHandlers, useValue: { onOfferCreated } },
+      ],
+    }).compile();
+    return module.get(OffersService);
+  };
+
+  const body = {
+    business_id: 'b1',
+    business_location_id: 'bl1',
+    title: 'N',
+    original_price: 10,
+    discounted_price: 5,
+    pickup_start: '2025-02-01T10:00:00Z',
+    pickup_end: '2025-02-01T12:00:00Z',
+    category_ids: [],
+  };
+  const user = { id: 'user-1', email: 't@t.com', role: 'business' as const };
+
+  test('flag activo dispara onOfferCreated; rechazo no lanza', async () => {
+    const onOfferCreated = jest.fn(async () => undefined);
+    const svc = await makeModule(true, onOfferCreated);
+    await svc.create(user, body);
+    expect(onOfferCreated).toHaveBeenCalled();
+
+    const failing = jest.fn(async () => {
+      throw new Error('expo down');
+    });
+    const svc2 = await makeModule(true, failing);
+    await svc2.create(user, body);
+    await new Promise((r) => setImmediate(r));
+    expect(failing).toHaveBeenCalled();
+  });
+
+  test('flag apagado no dispara', async () => {
+    const onOfferCreated = jest.fn();
+    const svc = await makeModule(false, onOfferCreated);
+    await svc.create(user, body);
+    expect(onOfferCreated).not.toHaveBeenCalled();
   });
 });

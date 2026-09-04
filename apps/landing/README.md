@@ -37,7 +37,7 @@ src/
 bun run dev            # vite dev :3001
 bun run typecheck      # tsc --noEmit
 bun run build          # vite build (SSR nitro)
-bun run test           # vitest
+bun run test           # bun:test
 bun run check          # biome check
 ```
 
