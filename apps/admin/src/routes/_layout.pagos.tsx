@@ -55,7 +55,7 @@ function RouteComponent() {
 			<p className="text-sm text-muted-foreground mt-1">
 				Cortes quincenales · fee congelado por orden · cron 1 y 16 a las 03:00
 			</p>
-			<div className="mt-4 border rounded-lg overflow-hidden">
+			<div className="mt-4 w-full max-w-full overflow-x-auto border rounded-lg">
 				<table className="w-full text-sm">
 					<thead className="bg-muted">
 						<tr>

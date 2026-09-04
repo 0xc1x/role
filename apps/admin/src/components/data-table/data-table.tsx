@@ -52,11 +52,11 @@ export function DataTable<TData, TValue>({
 	});
 
 	return (
-		<div>
+		<div className="w-full min-w-0 max-w-full">
 			<div className="flex items-center justify-end py-4">
 				<DataTableViewOptions table={table} />
 			</div>
-			<div className="overflow-hidden rounded-md border">
+			<div className="w-full max-w-full overflow-x-auto rounded-md border">
 				<Table>
 					<TableHeader>
 						{table.getHeaderGroups().map((headerGroup) => (
