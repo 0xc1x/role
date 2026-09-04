@@ -1,0 +1,144 @@
+name: Deploy staging
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: paths-filter
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      admin: ${{ steps.filter.outputs.admin }}
+      landing: ${{ steps.filter.outputs.landing }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'packages/commons/**'
+            admin:
+              - 'apps/admin/**'
+              - 'packages/commons/**'
+            landing:
+              - 'apps/landing/**'
+              - 'packages/commons/**'
+
+  deploy-api:
+    name: render · api staging
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.api == 'true' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 15
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: Wait for healthy API
+        env:
+          API_HEALTH_URL: ${{ secrets.API_HEALTH_URL }}
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsSL "$API_HEALTH_URL" >/dev/null; then
+              echo "API healthy"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "API did not become healthy in time" >&2
+          exit 1
+
+  deploy-admin:
+    name: vercel · admin staging
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.admin == 'true' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 20
+    env:
+      NITRO_PRESET: vercel
+    defaults:
+      run:
+        working-directory: apps/admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Cache Bun store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install (workspace root)
+        working-directory: .
+        run: bun install --frozen-lockfile
+
+      - name: Pull / build / deploy (preview)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
+        run: |
+          npx -y vercel@59 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          npx -y vercel@59 build --token="$VERCEL_TOKEN"
+          npx -y vercel@59 deploy --prebuilt --token="$VERCEL_TOKEN"
+
+  deploy-landing:
+    name: vercel · landing staging
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.landing == 'true' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 20
+    env:
+      NITRO_PRESET: vercel
+    defaults:
+      run:
+        working-directory: apps/landing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Cache Bun store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install (workspace root)
+        working-directory: .
+        run: bun install --frozen-lockfile
+
+      - name: Pull / build / deploy (preview)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_LANDING }}
+        run: |
+          npx -y vercel@59 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          npx -y vercel@59 build --token="$VERCEL_TOKEN"
+          npx -y vercel@59 deploy --prebuilt --token="$VERCEL_TOKEN"
