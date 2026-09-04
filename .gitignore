@@ -11,3 +11,5 @@ coverage/
 .opencode/
 .vercel
 .zcode
+# drizzle generated — no commitear el schema dump en repo público
+apps/api/drizzle/
