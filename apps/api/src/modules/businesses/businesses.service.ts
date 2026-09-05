@@ -3,8 +3,14 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createClient } from '@supabase/supabase-js';
+import type { Env } from '../../config/env.schema';
+import { profiles } from '../../database/schema';
 import {
   paginatedDataFromQuery,
   type BusinessDto,
@@ -13,6 +19,8 @@ import {
   type CreateBusinessLocationDto,
   type ListBusinessesQuery,
   type ListBusinessLocationsQuery,
+  type OnboardingBusinessRequest,
+  type OnboardingBusinessResponse,
   type PaginatedData,
   type UpdateBusinessDto,
   type UpdateBusinessLocationDto,
@@ -28,7 +36,19 @@ import { BusinessMapper } from './businesses.mapper';
 
 @Injectable()
 export class BusinessesService {
-  constructor(private readonly businessesRepository: BusinessesRepository) {}
+  private readonly logger = new Logger(BusinessesService.name);
+  private supabaseAdmin;
+
+  constructor(
+    private readonly businessesRepository: BusinessesRepository,
+    config: ConfigService<Env, true>,
+  ) {
+    this.supabaseAdmin = createClient(
+      config.get('SUPABASE_URL', { infer: true }),
+      config.get('SUPABASE_SERVICE_ROLE_KEY', { infer: true }),
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+  }
 
   async list(
     user: AuthUser,
@@ -60,8 +80,85 @@ export class BusinessesService {
     );
   }
 
-  async getById(user: AuthUser, id: string): Promise<BusinessDto> {
-    const row = await this.businessesRepository.findById(id);
+  /**
+   * Public business onboarding (landing): creates the auth user
+   * (role=business, email confirmation pending) + profile + business row
+   * (verification pending, inactive). Compensates the auth user if the
+   * DB writes fail so no orphan accounts remain.
+   */
+  async onboard(
+    body: OnboardingBusinessRequest,
+  ): Promise<OnboardingBusinessResponse> {
+    const { data, error } = await this.supabaseAdmin.auth.admin.createUser({
+      email: body.email,
+      password: body.password,
+      email_confirm: false,
+      user_metadata: { full_name: body.full_name, role: 'business' },
+    });
+    if (error || !data.user) {
+      if (error?.message?.includes('already')) {
+        throw new ConflictException('Email is already registered');
+      }
+      throw new InternalServerErrorException(
+        error?.message ?? 'Failed to create user',
+      );
+    }
+    const user = data.user;
+
+    try {
+      const slug = await this.generateUniqueSlug(body.business_name);
+      await this.businessesRepository.transaction(async (tx) => {
+        await tx.insert(profiles).values({
+          id: user.id,
+          email: body.email,
+          full_name: body.full_name,
+          role: 'business',
+        });
+        await this.businessesRepository.insert(tx, {
+          owner_id: user.id,
+          name: body.business_name,
+          type: 'restaurant',
+          slug,
+          phone: body.phone ?? null,
+          email: body.email,
+          is_active: false,
+          verification_status: 'pending',
+        });
+      });
+    } catch (err) {
+      const { error: deleteError } =
+        await this.supabaseAdmin.auth.admin.deleteUser(user.id);
+      if (deleteError) {
+        this.logger.warn(
+          `Onboarding compensation failed for user ${user.id}: ${deleteError.message}`,
+        );
+      }
+      throw err;
+    }
+
+    return {
+      message:
+        'Solicitud recibida. Tu negocio quedó en revisión y te avisaremos por correo.',
+    };
+  }
+
+  private async generateUniqueSlug(name: string): Promise<string> {
+    const base =
+      name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'negocio';
+    for (let i = 0; i < 5; i++) {
+      const slug = `${base}-${Math.floor(Math.random() * 10000)}`;
+      const existing = await this.businessesRepository.findBySlug(slug);
+      if (!existing) return slug;
+    }
+    throw new InternalServerErrorException('Could not generate business slug');
+  }
+
+  async getById(user: AuthUser, id: string): Promise<BusinessDto> {    const row = await this.businessesRepository.findById(id);
     if (!row) {
       throw new NotFoundException(`Business ${id} not found`);
     }

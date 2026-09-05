@@ -1,12 +1,18 @@
 // Genera public/firebase-config.js a partir de apps/mobile/.env
 // (patrón de fudi: tool/generate_firebase_config.dart). El archivo generado
 // está gitignored para no commitear las keys del proyecto Firebase.
+//
+// Para el deploy de la PWA (`vercel env pull .env.production.local`) se usa
+// `.env.production.local` si existe, así el bundle lleva las envs de producción
+// igual que hace Expo al inlinar EXPO_PUBLIC_* en `expo export`.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const envPath = join(root, ".env");
+const envPath = existsSync(join(root, ".env.production.local"))
+	? join(root, ".env.production.local")
+	: join(root, ".env");
 const outPath = join(root, "public", "firebase-config.js");
 
 const ENV_KEYS = {

@@ -13,7 +13,7 @@ import type {
 	EmbeddedLocation,
 	OfferDetail,
 } from "../domain/offer";
-import { haversineKm } from "../domain/offer";
+import { filterByDistance, haversineKm } from "../domain/offer";
 
 /**
  * The embedded PostgREST select that composes an offer with its
@@ -52,21 +52,21 @@ export const expiringSoonWindowHours = 3;
 type Row = Record<string, unknown>;
 
 export const offersRepository = {
-	async getPopularOffers(limit = 10): Promise<OfferDetail[]> {
-		const { data, error } = await activeQuery(null).limit(limit);
-		if (error) throw toAppError(error, "Error al cargar ofertas populares");
-		return toRows(data).map(mapOfferDetail);
+	async getPopularOffers(
+		radiusParams?: { lat: number; lng: number; radiusKm?: number },
+		limit = 10,
+	): Promise<OfferDetail[]> {
+		const all = await fetchActive();
+		return applyRadiusFilter(all, radiusParams).slice(0, limit);
 	},
 
 	async getPopularOffersFiltered(
 		category: string | null,
+		radiusParams?: { lat: number; lng: number; radiusKm?: number },
 		limit = 10,
 	): Promise<OfferDetail[]> {
-		const { data, error } = await activeQuery(category)
-			.order("created_at", { ascending: false })
-			.limit(limit);
-		if (error) throw toAppError(error, "Error al cargar ofertas populares");
-		return toRows(data).map(mapOfferDetail);
+		const all = await fetchActive({ category });
+		return applyRadiusFilter(all, radiusParams).slice(0, limit);
 	},
 
 	async getExpiringSoonOffers(
@@ -83,14 +83,7 @@ export const offersRepository = {
 				const end = new Date(o.offer.pickup_end);
 				return end > now && end < cutoff;
 			});
-			if (radiusParams) {
-				filtered = filterByDistance(
-					filtered,
-					radiusParams.lat,
-					radiusParams.lng,
-					radiusParams.radiusKm ?? 5,
-				);
-			}
+			filtered = applyRadiusFilter(filtered, radiusParams);
 			filtered.sort(
 				(a, b) =>
 					new Date(a.offer.pickup_end).getTime() -
@@ -107,15 +100,7 @@ export const offersRepository = {
 		limit = 5,
 	): Promise<OfferDetail[]> {
 		const all = await fetchActive();
-		let filtered = all;
-		if (radiusParams) {
-			filtered = filterByDistance(
-				all,
-				radiusParams.lat,
-				radiusParams.lng,
-				radiusParams.radiusKm ?? 5,
-			);
-		}
+		const filtered = applyRadiusFilter(all, radiusParams);
 		filtered.sort((a, b) => {
 			const da = a.offer.created_at
 				? new Date(a.offer.created_at).getTime()
@@ -456,19 +441,17 @@ function newBusinessSummary(offer: OfferDetail): BusinessSummary {
 	};
 }
 
-function filterByDistance(
+function applyRadiusFilter(
 	offers: OfferDetail[],
-	lat: number,
-	lng: number,
-	radiusKm: number,
+	radiusParams?: { lat: number; lng: number; radiusKm?: number },
 ): OfferDetail[] {
-	return offers.filter((o) => {
-		if (o.location == null) return false;
-		return (
-			haversineKm(lat, lng, o.location.latitude, o.location.longitude) <=
-			radiusKm
-		);
-	});
+	if (radiusParams == null) return offers;
+	return filterByDistance(
+		offers,
+		radiusParams.lat,
+		radiusParams.lng,
+		radiusParams.radiusKm ?? 5,
+	);
 }
 
 function distanceTo(offer: OfferDetail, lat: number, lng: number): number {

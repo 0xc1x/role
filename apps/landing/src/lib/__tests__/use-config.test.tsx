@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@/test-utils/dom";
 import { useConfig, usePlatformStats } from "../use-config";
 
@@ -24,8 +24,12 @@ function wrapper() {
 
 describe("useConfig", () => {
 	test("lee valor con fallback", async () => {
-		stubFetch({ "/app-config/public": [{ key: "a", value: "1", value_type: "string" }] });
-		const { result } = renderHook(() => useConfig("a", "fb"), { wrapper: wrapper() });
+		stubFetch({
+			"/app-config/public": [{ key: "a", value: "1", value_type: "string" }],
+		});
+		const { result } = renderHook(() => useConfig("a", "fb"), {
+			wrapper: wrapper(),
+		});
 		await waitFor(() => expect(result.current).toBe("1"));
 		const { result: r2 } = renderHook(() => useConfig("missing", "fb"), {
 			wrapper: wrapper(),
@@ -37,8 +41,18 @@ describe("useConfig", () => {
 
 describe("usePlatformStats", () => {
 	test("devuelve stats", async () => {
-		stubFetch({ "/stats/platform": { users: 10, businesses: 2, meals_saved: 5 } });
-		const { result } = renderHook(() => usePlatformStats(), { wrapper: wrapper() });
-		await waitFor(() => expect(result.current).toEqual({ users: 10, businesses: 2, meals_saved: 5 }));
+		stubFetch({
+			"/stats/platform": { users: 10, businesses: 2, meals_saved: 5 },
+		});
+		const { result } = renderHook(() => usePlatformStats(), {
+			wrapper: wrapper(),
+		});
+		await waitFor(() =>
+			expect(result.current).toEqual({
+				users: 10,
+				businesses: 2,
+				meals_saved: 5,
+			}),
+		);
 	});
 });

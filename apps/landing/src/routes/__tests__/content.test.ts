@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "bun:test";
 
 const ROUTES: Record<string, string> = {
 	// index.tsx delega a componentes; verificar su ensamblaje en vez de texto.

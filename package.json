@@ -14,9 +14,12 @@
     "lint": "turbo run lint",
     "dev:api": "bun run --cwd apps/api start:dev",
     "dev:admin": "bun run --cwd apps/admin dev",
-    "dev:commons": "bun run --cwd packages/commons typecheck"
+    "dev:commons": "bun run --cwd packages/commons typecheck",
+    "deploy:landing": "NITRO_PRESET=vercel bun run build --filter=role-landing... && bun run --cwd apps/landing deploy",
+    "deploy:mobile": "bun run --cwd packages/commons build && bun run --cwd apps/mobile deploy"
   },
   "devDependencies": {
-    "turbo": "^2.0.0"
+    "turbo": "^2.0.0",
+    "nitro": "npm:nitro-nightly@3.0.1-20260817-141030-4bfb35a7"
   }
 }

@@ -26,12 +26,13 @@ export function useOffer(id: string) {
 }
 
 export function usePopularOffers(limit = 10, category?: string | null) {
+	const { lat, lng, radiusKm, params } = useRadiusParams();
 	return useQuery({
-		queryKey: ["offers", "popular", category ?? "all"],
+		queryKey: ["offers", "popular", category ?? "all", lat, lng, radiusKm],
 		queryFn: () =>
 			category
-				? offersRepository.getPopularOffersFiltered(category, limit)
-				: offersRepository.getPopularOffers(limit),
+				? offersRepository.getPopularOffersFiltered(category, params, limit)
+				: offersRepository.getPopularOffers(params, limit),
 	});
 }
 
@@ -144,42 +145,26 @@ export function useCategoryStats() {
 }
 
 export function usePopularAreas() {
-	const profile = useAuthStore((s) => s.profile);
-	const { data: preferences } = usePreferences(profile?.id ?? "");
-	const address = useSelectedAddress();
-	const lat = address?.latitude;
-	const lng = address?.longitude;
-	const radiusKm = preferences?.notification_radius_km ?? 5;
+	const { lat, lng, radiusKm, params } = useRadiusParams();
 	return useQuery({
 		queryKey: ["areas", "popular", lat, lng, radiusKm],
-		queryFn: () =>
-			offersRepository.getPopularAreas(
-				lat != null && lng != null ? { lat, lng, radiusKm } : undefined,
-			),
+		queryFn: () => offersRepository.getPopularAreas(params),
 	});
 }
 
 export function useRecentOffers(limit = 5) {
+	const { lat, lng, radiusKm, params } = useRadiusParams();
 	return useQuery({
-		queryKey: ["offers", "recent", limit],
-		queryFn: () => offersRepository.getRecentOffers(undefined, limit),
+		queryKey: ["offers", "recent", limit, lat, lng, radiusKm],
+		queryFn: () => offersRepository.getRecentOffers(params, limit),
 	});
 }
 
 export function useNearbyBusinesses(limit = 5) {
-	const profile = useAuthStore((s) => s.profile);
-	const { data: preferences } = usePreferences(profile?.id ?? "");
-	const address = useSelectedAddress();
-	const lat = address?.latitude;
-	const lng = address?.longitude;
-	const radiusKm = preferences?.notification_radius_km ?? 5;
+	const { lat, lng, radiusKm, params } = useRadiusParams();
 	return useQuery({
 		queryKey: ["businesses", "nearby", limit, lat, lng, radiusKm],
-		queryFn: () =>
-			offersRepository.getNearbyBusinesses(
-				lat != null && lng != null ? { lat, lng, radiusKm } : undefined,
-				limit,
-			),
+		queryFn: () => offersRepository.getNearbyBusinesses(params, limit),
 	});
 }
 
@@ -187,6 +172,26 @@ export function useSelectedAddress() {
 	const profile = useAuthStore((s) => s.profile);
 	const { data: addresses } = useSavedAddresses(profile?.id ?? "");
 	return addresses?.find((a) => a.is_default);
+}
+
+/**
+ * Radio de las preferencias del usuario (notification_radius_km) anclado a
+ * su dirección default. Sin dirección no hay punto de referencia: los
+ * repositorios reciben undefined y devuelven resultados sin filtrar.
+ */
+function useRadiusParams() {
+	const profile = useAuthStore((s) => s.profile);
+	const { data: preferences } = usePreferences(profile?.id ?? "");
+	const address = useSelectedAddress();
+	const lat = address?.latitude;
+	const lng = address?.longitude;
+	const radiusKm = preferences?.notification_radius_km ?? 5;
+	return {
+		lat,
+		lng,
+		radiusKm,
+		params: lat != null && lng != null ? { lat, lng, radiusKm } : undefined,
+	};
 }
 
 export function useNearbyOffersHook(limit = 10, category?: string | null) {

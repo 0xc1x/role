@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
 	discountPercentage,
+	filterByDistance,
 	isOfferAvailable,
 	isOfferExpired,
 	isOfferOutOfStock,
@@ -100,5 +101,37 @@ describe("haversineKm", () => {
 		const km = haversineKm(19.4326, -99.1332, 19.4, -99.1);
 		expect(km).toBeGreaterThan(3);
 		expect(km).toBeLessThan(6);
+	});
+});
+
+describe("filterByDistance", () => {
+	const user = { lat: 19.4, lng: -99.1 };
+
+	function offerAt(id: string, lat: number, lng: number): OfferDetail {
+		const base = makeOffer({ id });
+		return {
+			...base,
+			location: { ...base.location!, id, latitude: lat, longitude: lng },
+		};
+	}
+
+	it("keeps offers inside the radius and drops the rest", () => {
+		const near = offerAt("near", 19.41, -99.1); // ~1.1 km
+		const far = offerAt("far", 19.6, -99.1); // ~22 km
+		const result = filterByDistance([near, far], user.lat, user.lng, 5);
+		expect(result.map((o) => o.offer.id)).toEqual(["near"]);
+	});
+
+	it("includes offers exactly at the distance limit", () => {
+		const same = offerAt("same", user.lat, user.lng);
+		expect(filterByDistance([same], user.lat, user.lng, 0)).toHaveLength(1);
+	});
+
+	it("drops offers without pickup location", () => {
+		const base = makeOffer({ id: "noloc" });
+		const withoutLocation: OfferDetail = { ...base, location: null };
+		expect(
+			filterByDistance([withoutLocation], user.lat, user.lng, 50),
+		).toHaveLength(0);
 	});
 });

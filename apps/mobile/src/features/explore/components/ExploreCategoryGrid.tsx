@@ -25,7 +25,7 @@ import {
 } from "@/features/hooks";
 import type { CategoryStat } from "@/features/offers/domain/offer";
 
-const INITIAL_COUNT = 5;
+const INITIAL_COUNT = 4;
 const ENTRY_ANIM_DURATION = 300;
 
 /**
@@ -51,13 +51,17 @@ export function ExploreCategoryGrid({
 	// y deben animar su entrada (mismo patrón que `_visibleIds` en fudi).
 	const visibleIds = useRef<Set<string>>(new Set());
 
-	const display = useMemo(() => {
-		const all = stats ?? [];
-		return showAll ? all : all.slice(0, INITIAL_COUNT);
-	}, [stats, showAll]);
+	const filteredStats = useMemo(
+		() => (stats ?? []).filter((cat) => cat.count > 0),
+		[stats],
+	);
 
-	const hasMore = (stats?.length ?? 0) > INITIAL_COUNT;
-	const remaining = (stats?.length ?? 0) - INITIAL_COUNT;
+	const display = useMemo(() => {
+		return showAll ? filteredStats : filteredStats.slice(0, INITIAL_COUNT);
+	}, [filteredStats, showAll]);
+
+	const hasMore = (filteredStats?.length ?? 0) > INITIAL_COUNT;
+	const remaining = (filteredStats?.length ?? 0) - INITIAL_COUNT;
 	const isDark = scheme === "dark";
 
 	const currentIds = useMemo<Set<string>>(() => {
@@ -95,16 +99,16 @@ export function ExploreCategoryGrid({
 		<View style={styles.container}>
 			{/* ── Áreas Populares ────────────────────────────────────── */}
 			{areas && areas.length > 0 ? (
-				<>
-					<AppText variant="h3" weight="bold">
-						{strings.explore.popularAreas}
-					</AppText>
-					<ScrollView
-						horizontal
-						showsHorizontalScrollIndicator={false}
-						style={{ marginTop: spacing.md }}
-						contentContainerStyle={styles.chipsRow}
-					>
+			<>
+				<AppText variant="h3" weight="bold">
+					{strings.explore.popularAreas}
+				</AppText>
+				<ScrollView
+					horizontal
+					showsHorizontalScrollIndicator={false}
+					style={{ marginTop: spacing.md }}
+					contentContainerStyle={styles.chipsRow}
+				>
 						{areas.map((area) => (
 							<View
 								key={area.name}
@@ -149,9 +153,9 @@ export function ExploreCategoryGrid({
 								</View>
 							</View>
 						))}
-					</ScrollView>
-				</>
-			) : null}
+				</ScrollView>
+			</>
+		) : null}
 
 			{/* ── Grid de categorías ─────────────────────────────────── */}
 			<AppText variant="h3" weight="bold" style={{ marginTop: spacing.lg }}>

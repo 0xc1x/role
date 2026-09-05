@@ -99,7 +99,8 @@
     "test": "bun test src",
     "preexport:web": "bun scripts/generate-firebase-config.mjs",
     "export:web": "expo export --platform web",
-    "deploy:web": "bun run preexport:web && expo export --platform web && bun scripts/fix-web-dist.mjs && cp vercel.json dist/ && cd dist && vercel --prod"
+    "build:vercel": "bun run preexport:web && expo export --platform web && bun scripts/fix-web-dist.mjs && bun scripts/build-vercel-output.mjs",
+    "deploy": "bun run build:vercel && vercel deploy --prebuilt --prod"
   },
   "trustedDependencies": [
     "@sentry/cli"

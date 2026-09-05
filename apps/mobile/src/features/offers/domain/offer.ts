@@ -111,6 +111,22 @@ export function isOfferExpired(
 	return now > new Date(offer.offer.pickup_end);
 }
 
+/** Offers whose pickup location is within `radiusKm` of the given point. */
+export function filterByDistance(
+	offers: OfferDetail[],
+	lat: number,
+	lng: number,
+	radiusKm: number,
+): OfferDetail[] {
+	return offers.filter((o) => {
+		if (o.location == null) return false;
+		return (
+			haversineKm(lat, lng, o.location.latitude, o.location.longitude) <=
+			radiusKm
+		);
+	});
+}
+
 /** Haversine distance in km between two coordinates. */
 export function haversineKm(
 	lat1: number,

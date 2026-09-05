@@ -1,6 +1,8 @@
 import { ForbiddenException, NotFoundException, ConflictException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { AuthUser } from '../../auth/auth.types';
+import { DRIZZLE } from '../../database/database.tokens';
 import { BusinessesService } from './businesses.service';
 import { BusinessesRepository } from './businesses.repository';
 import type { BusinessRow } from './businesses.repository';
@@ -54,6 +56,17 @@ describe('BusinessesService', () => {
       providers: [
         BusinessesService,
         { provide: BusinessesRepository, useValue: repository },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              ({
+                SUPABASE_URL: 'https://test.supabase.co',
+                SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+              })[key],
+          },
+        },
+        { provide: DRIZZLE, useValue: {} },
       ],
     }).compile();
     service = module.get(BusinessesService);

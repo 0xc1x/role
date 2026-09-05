@@ -56,6 +56,12 @@ Filtros turbo: `bun run build --filter=api...` (solo api y sus dependencias).
 
 CI en `.github/workflows/ci.yml` (typecheck + test + build con turbo).
 
+## Deploy
+
+API en **Render** (auto-deploy en push a main, blueprint en `render.yaml`); landing y
+PWA web de mobile en **Vercel** (CLI: `bun run deploy:landing` / `bun run deploy:mobile`).
+Guía completa en [`docs/deploy.md`](docs/deploy.md).
+
 ## Estado (verificado)
 
 - ✅ `bun install` — un solo `bun.lock` en la raíz; commons resuelve por `workspace:*`.

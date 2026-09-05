@@ -1,0 +1,58 @@
+# Blueprint de Render para la API de Rolé.
+# https://render.com/docs/blueprint-spec
+#
+# Opción A: Dashboard → New → Blueprint → conectar este repo.
+# Opción B: Web Service manual con los mismos build/start.
+#
+# envVars con sync: false → se cargan en el dashboard (nunca secrets en git).
+# PORT lo inyecta Render; la API lo lee.
+
+services:
+  - type: web
+    name: role-api
+    runtime: node
+    # Free tier: límite de memoria → NODE_OPTIONS + build por pasos + start con node.
+    buildCommand: bun install --frozen-lockfile && NODE_OPTIONS=--max-old-space-size=3072 bun run build --filter=@0xc1x/role-commons && cd apps/api && NODE_OPTIONS=--max-old-space-size=3072 bun run build
+    startCommand: cd apps/api && NODE_OPTIONS=--max-old-space-size=1536 node dist/src/main
+    healthCheckPath: /api/v1/health
+    # Deploys vía GitHub Actions (Deploy Hook), no por push directo.
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DOCS_USER
+        sync: false
+      - key: DOCS_PASSWORD
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: UNSUBSCRIBE_SECRET
+        sync: false
+      - key: UNSUBSCRIBE_URL_BASE
+        sync: false
+      - key: FCM_SERVICE_ACCOUNT
+        sync: false
+      - key: FCM_PROJECT_ID
+        sync: false
+      - key: EXPO_ACCESS_TOKEN
+        sync: false
