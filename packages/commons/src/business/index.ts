@@ -14,3 +14,4 @@ export * from './schemas/business-query.schema';
 export * from './schemas/business-hours.schema';
 export * from './schemas/business-location.schema';
 export * from './schemas/business-notification-preferences.schema';
+export * from './schemas/onboarding.schema';

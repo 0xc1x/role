@@ -1,9 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NITRO_PRESET"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".output/**"]
+      "outputs": ["dist/**", ".output/**", ".vercel/output/**"]
     },
     "typecheck": {
       "dependsOn": ["^build"]

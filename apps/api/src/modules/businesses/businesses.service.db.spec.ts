@@ -20,7 +20,14 @@ const stranger = () =>
 
 beforeAll(async () => {
   ctx = await createTestDb();
-  service = new BusinessesService(new BusinessesRepository(ctx.db));
+  const config = {
+    get: (key: string) =>
+      ({
+        SUPABASE_URL: 'https://test.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+      })[key],
+  } as never;
+  service = new BusinessesService(new BusinessesRepository(ctx.db), config);
   ownerId = await seedProfile(ctx.db);
   businessId = (await seedBusiness(ctx.db, ownerId)).id;
   await seedLocation(ctx.db, businessId);

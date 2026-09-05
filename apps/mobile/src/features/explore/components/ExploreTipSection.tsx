@@ -1,4 +1,4 @@
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
@@ -6,6 +6,7 @@ import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useRandomTip } from "@/features/tips/hooks";
+import { useState } from "react";
 
 /**
  * Banner de "Consejo del día" entre el grid de categorías y la lista de
@@ -15,6 +16,7 @@ export function ExploreTipSection() {
 	const { colors, scheme } = useTheme();
 	const isDark = scheme === "dark";
 	const { data: tip, isLoading } = useRandomTip();
+	const [isExpanded, setIsExpanded] = useState(false);
 
 	if (isLoading || !tip) return null;
 
@@ -32,32 +34,45 @@ export function ExploreTipSection() {
 					},
 				]}
 			>
-				<View style={styles.titleRow}>
-					<View
-						style={[
-							styles.bulbCircle,
-							{
-								backgroundColor: colors.card + (isDark ? "00" : "80"),
-								boxShadow: `0px 0px 12px ${colors.yellowDark}${isDark ? "33" : "4D"}`,
-							},
-						]}
-					>
-						<Ionicons
-							name="bulb"
-							size={20}
-							color={isDark ? colors.yellow : colors.yellowDark}
-						/>
-					</View>
-					<AppText variant="h4" weight="bold">
-						{strings.explore.tipTitle}
-					</AppText>
-				</View>
-				<AppText
-					variant="bodyMedium"
-					style={[styles.tipBody, { color: colors.foreground }]}
+				<TouchableOpacity
+					style={styles.titleRow}
+					activeOpacity={0.7}
+					onPress={() => setIsExpanded((prev) => !prev)}
 				>
-					{tip.content}
-				</AppText>
+					<View style={styles.titleLeft}>
+						<View
+							style={[
+								styles.bulbCircle,
+								{
+									backgroundColor: colors.card + (isDark ? "00" : "80"),
+									boxShadow: `0px 0px 12px ${colors.yellowDark}${isDark ? "33" : "4D"}`,
+								},
+							]}
+						>
+							<Ionicons
+								name="bulb"
+								size={20}
+								color={isDark ? colors.yellow : colors.yellowDark}
+							/>
+						</View>
+						<AppText variant="h4" weight="bold">
+							{strings.explore.tipTitle}
+						</AppText>
+					</View>
+					<Ionicons
+						name={isExpanded ? "chevron-up" : "chevron-down"}
+						size={20}
+						color={isDark ? colors.yellow : colors.yellowDark}
+					/>
+				</TouchableOpacity>
+				{isExpanded && (
+					<AppText
+						variant="bodyMedium"
+						style={[styles.tipBody, { color: colors.foreground }]}
+					>
+						{tip.content}
+					</AppText>
+				)}
 			</View>
 		</View>
 	);
@@ -76,7 +91,13 @@ const styles = StyleSheet.create({
 	titleRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: spacing.sm,
+		justifyContent: "space-between",
+		width: "100%",
+	},
+	titleLeft: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8, // ajusta según tu spacing habitual entre bulbCircle y el texto
 	},
 	bulbCircle: {
 		width: 32,

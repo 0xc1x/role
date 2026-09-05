@@ -1,27 +1,25 @@
 # Blueprint de Render para la API de Rolé.
 # https://render.com/docs/blueprint-spec
 #
-# Opción A: Render Dashboard → New → Blueprint → conectar este repo (usa este archivo).
-# Opción B: crear el Web Service manualmente copiando los comandos de abajo.
+# Opción A: Dashboard → New → Blueprint → conectar este repo.
+# Opción B: Web Service manual con los mismos build/start.
 #
-# Los env vars con `sync: false` NO tienen valor aquí: se cargan en el dashboard
-# (nunca commitear secrets). Render inyecta PORT automáticamente; la API lo lee.
+# envVars con sync: false → se cargan en el dashboard (nunca secrets en git).
+# PORT lo inyecta Render; la API lo lee.
 
 services:
   - type: web
     name: role-api
-    runtime: node # las imágenes nativas de Render incluyen bun
-    buildCommand: bun install --frozen-lockfile && bun run --cwd packages/commons build && bun run --cwd apps/api build
-    startCommand: bun run --cwd apps/api start:prod # node dist/main
+    runtime: node
+    # Free tier: límite de memoria → NODE_OPTIONS + build por pasos + start con node.
+    buildCommand: bun install --frozen-lockfile && NODE_OPTIONS=--max-old-space-size=3072 bun run build --filter=@0xc1x/role-commons && cd apps/api && NODE_OPTIONS=--max-old-space-size=3072 bun run build
+    startCommand: cd apps/api && NODE_OPTIONS=--max-old-space-size=1536 node dist/src/main
     healthCheckPath: /api/v1/health
-    # Auto-Deploy off: los deploys los ordena GitHub Actions vía Deploy Hook
-    # (staging: push a develop · prod: workflow_dispatch manual).
+    # Deploys vía GitHub Actions (Deploy Hook), no por push directo.
     autoDeploy: false
     envVars:
       - key: NODE_ENV
         value: production
-      # ─── Requeridos (env.schema.ts) ─────────────────────────────
-      # Pooler de Supabase recomendado: postgresql://postgres.<ref>:<pass>@aws-0-<region>.pooler.supabase.com:6543/postgres
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
@@ -32,21 +30,17 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      # URLs explícitas de Vercel landing + admin (en producción '*' lanza error).
-      # Actualizar si se agregan dominios custom.
       - key: CORS_ORIGINS
         sync: false
-      # Requeridos en producción para proteger /docs con Basic auth.
       - key: DOCS_USER
         sync: false
       - key: DOCS_PASSWORD
         sync: false
-      # ─── Opcionales (vacío = comportamiento por defecto) ────────
-      - key: SUPABASE_STORAGE_BUCKET # default: images
+      - key: SUPABASE_STORAGE_BUCKET
         sync: false
-      - key: REDIS_URL # vacío = colas en ejecución directa, sin BullMQ
+      - key: REDIS_URL
         sync: false
-      - key: RESEND_API_KEY # vacío = envío de emails deshabilitado
+      - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
         sync: false
@@ -54,7 +48,7 @@ services:
         sync: false
       - key: UNSUBSCRIBE_SECRET
         sync: false
-      - key: UNSUBSCRIBE_URL_BASE # debe apuntar a la URL pública de la API
+      - key: UNSUBSCRIBE_URL_BASE
         sync: false
       - key: FCM_SERVICE_ACCOUNT
         sync: false

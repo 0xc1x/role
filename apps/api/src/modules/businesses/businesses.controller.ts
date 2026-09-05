@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -17,8 +19,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { Throttle } from '@nestjs/throttler';
 import type { AuthUser } from '../../auth/auth.types';
 import { BusinessesService } from './businesses.service';
 import {
@@ -28,6 +32,7 @@ import {
   CreateBusinessLocationSchema,
   UpdateBusinessLocationSchema,
   ListBusinessLocationsQuerySchema,
+  OnboardingBusinessRequestSchema,
 } from '@0xc1x/role-commons';
 import type {
   CreateBusinessDto,
@@ -36,6 +41,7 @@ import type {
   CreateBusinessLocationDto,
   UpdateBusinessLocationDto,
   ListBusinessLocationsQuery,
+  OnboardingBusinessRequest,
 } from '@0xc1x/role-commons';
 
 @ApiTags('Businesses')
@@ -43,6 +49,19 @@ import type {
 @Controller('businesses')
 export class BusinessesController {
   constructor(private readonly businessesService: BusinessesService) {}
+
+  @Public()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @Post('onboarding')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Public business onboarding (landing)' })
+  @ApiCreatedResponse({ description: 'Onboarding request received' })
+  onboard(
+    @Body(new ZodValidationPipe(OnboardingBusinessRequestSchema))
+    body: OnboardingBusinessRequest,
+  ) {
+    return this.businessesService.onboard(body);
+  }
 
   @Get()
   @Roles('business', 'admin')
