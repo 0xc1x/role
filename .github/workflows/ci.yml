@@ -58,6 +58,9 @@ jobs:
         run: bun run test
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:6432/role_test
+          # Dummies para el validador zod de apps/mobile (los tests usan mocks, sin red)
+          EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
 
       - name: E2E marketplace
         run: bun run test:e2e
