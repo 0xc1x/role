@@ -11,6 +11,7 @@
     "generate-routes": "tsr generate",
     "build": "vite build",
     "build:vercel": "NITRO_PRESET=vercel vite build",
+    "deploy": "bunx vercel deploy --prebuilt --prod",
     "preview": "vite preview",
     "test": "bun test src",
     "test:watch": "bun test --watch src",

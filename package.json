@@ -12,10 +12,12 @@
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
     "lint": "turbo run lint",
+    "clean": "rm -rf .turbo node_modules/.cache apps/admin/.output apps/admin/.vercel/output apps/landing/.output apps/landing/.vercel/output apps/mobile/.vercel/output apps/mobile/dist apps/api/dist packages/commons/dist",
     "dev:api": "bun run --cwd apps/api start:dev",
     "dev:admin": "bun run --cwd apps/admin dev",
     "dev:commons": "bun run --cwd packages/commons typecheck",
     "deploy:landing": "NITRO_PRESET=vercel bun run build --filter=role-landing... && bun run --cwd apps/landing deploy",
+    "deploy:admin": "NITRO_PRESET=vercel bun run build --filter=role-front-admin... && bun run --cwd apps/admin deploy",
     "deploy:mobile": "bun run --cwd packages/commons build && bun run --cwd apps/mobile deploy"
   },
   "devDependencies": {
