@@ -54,6 +54,12 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Generate offline DDL mirror for API tests
+        working-directory: apps/api
+        run: bunx drizzle-kit generate
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:6432/role_test
+
       - name: Test
         run: bun run test
         env:
