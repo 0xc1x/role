@@ -76,7 +76,7 @@ jobs:
         working-directory: .
         run: bun install --frozen-lockfile
 
-      - name: Pull / build / deploy (prod)
+      - name: Pull Vercel env (production)
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -84,8 +84,20 @@ jobs:
         run: |
           : "${VERCEL_TOKEN:?secret VERCEL_TOKEN vacío}" "${VERCEL_ORG_ID:?secret VERCEL_ORG_ID vacío}" "${VERCEL_PROJECT_ID:?secret VERCEL_PROJECT_ID_* vacío}"
           bunx --package=vercel@59 vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          bunx --package=vercel@59 vercel build --prod --token="$VERCEL_TOKEN"
-          bunx --package=vercel@59 vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      # Build en el runner (workspace + commons disponibles).
+      - name: Build (production output)
+        working-directory: .
+        run: |
+          bun run build --filter=@0xc1x/role-commons
+          NITRO_PRESET=vercel bun run --cwd apps/admin build:vercel
+
+      - name: Deploy (prod, prebuilt)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
+        run: bunx --package=vercel@59 vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
   deploy-landing:
     name: vercel · landing production
@@ -117,7 +129,7 @@ jobs:
         working-directory: .
         run: bun install --frozen-lockfile
 
-      - name: Pull / build / deploy (prod)
+      - name: Pull Vercel env (production)
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -125,5 +137,17 @@ jobs:
         run: |
           : "${VERCEL_TOKEN:?secret VERCEL_TOKEN vacío}" "${VERCEL_ORG_ID:?secret VERCEL_ORG_ID vacío}" "${VERCEL_PROJECT_ID:?secret VERCEL_PROJECT_ID_* vacío}"
           bunx --package=vercel@59 vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          bunx --package=vercel@59 vercel build --prod --token="$VERCEL_TOKEN"
-          bunx --package=vercel@59 vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      # Build en el runner (workspace + commons disponibles).
+      - name: Build (production output)
+        working-directory: .
+        run: |
+          bun run build --filter=@0xc1x/role-commons
+          NITRO_PRESET=vercel bun run --cwd apps/landing build:vercel
+
+      - name: Deploy (prod, prebuilt)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_LANDING }}
+        run: bunx --package=vercel@59 vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

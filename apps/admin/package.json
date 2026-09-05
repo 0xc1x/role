@@ -10,6 +10,7 @@
     "dev": "vite dev --port 3000",
     "generate-routes": "tsr generate",
     "build": "vite build",
+    "build:vercel": "NITRO_PRESET=vercel vite build",
     "preview": "vite preview",
     "test": "bun test src",
     "test:watch": "bun test --watch src",
