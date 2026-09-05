@@ -83,9 +83,9 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
         run: |
           : "${VERCEL_TOKEN:?secret VERCEL_TOKEN vacío}" "${VERCEL_ORG_ID:?secret VERCEL_ORG_ID vacío}" "${VERCEL_PROJECT_ID:?secret VERCEL_PROJECT_ID_* vacío}"
-          npx -y vercel@59 pull --yes --environment=production --token="$VERCEL_TOKEN"
-          npx -y vercel@59 build --prod --token="$VERCEL_TOKEN"
-          npx -y vercel@59 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          npx -y --package=vercel@59 vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx -y --package=vercel@59 vercel build --prod --token="$VERCEL_TOKEN"
+          npx -y --package=vercel@59 vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
   deploy-landing:
     name: vercel · landing production
@@ -124,6 +124,6 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_LANDING }}
         run: |
           : "${VERCEL_TOKEN:?secret VERCEL_TOKEN vacío}" "${VERCEL_ORG_ID:?secret VERCEL_ORG_ID vacío}" "${VERCEL_PROJECT_ID:?secret VERCEL_PROJECT_ID_* vacío}"
-          npx -y vercel@59 pull --yes --environment=production --token="$VERCEL_TOKEN"
-          npx -y vercel@59 build --prod --token="$VERCEL_TOKEN"
-          npx -y vercel@59 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          npx -y --package=vercel@59 vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx -y --package=vercel@59 vercel build --prod --token="$VERCEL_TOKEN"
+          npx -y --package=vercel@59 vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
