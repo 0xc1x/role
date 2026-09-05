@@ -1,43 +1,25 @@
 name: Deploy staging
 
 on:
-  push:
-    branches: [develop]
   workflow_dispatch:
+    inputs:
+      skip_api:
+        description: 'Saltar Render API'
+        type: boolean
+        default: false
+      skip_frontends:
+        description: 'Saltar Vercel admin + landing'
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-staging
   cancel-in-progress: false
 
 jobs:
-  changes:
-    name: paths-filter
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      api: ${{ steps.filter.outputs.api }}
-      admin: ${{ steps.filter.outputs.admin }}
-      landing: ${{ steps.filter.outputs.landing }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            api:
-              - 'apps/api/**'
-              - 'packages/commons/**'
-            admin:
-              - 'apps/admin/**'
-              - 'packages/commons/**'
-            landing:
-              - 'apps/landing/**'
-              - 'packages/commons/**'
-
   deploy-api:
     name: render · api staging
-    needs: changes
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.api == 'true' }}
+    if: ${{ inputs.skip_api == false }}
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 15
@@ -66,8 +48,7 @@ jobs:
 
   deploy-admin:
     name: vercel · admin staging
-    needs: changes
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.admin == 'true' }}
+    if: ${{ inputs.skip_frontends == false }}
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 20
@@ -121,8 +102,7 @@ jobs:
 
   deploy-landing:
     name: vercel · landing staging
-    needs: changes
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.landing == 'true' }}
+    if: ${{ inputs.skip_frontends == false }}
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 20
