@@ -13,14 +13,8 @@ g.Event ??= happy.Event;
 g.CustomEvent ??= happy.CustomEvent;
 g.getComputedStyle ??= happy.getComputedStyle.bind(happy);
 
-export const {
-	render,
-	screen,
-	fireEvent,
-	waitFor,
-	cleanup,
-	renderHook,
-} = await import("@testing-library/react");
+export const { render, screen, fireEvent, waitFor, cleanup, renderHook } =
+	await import("@testing-library/react");
 // jest-dom solo registra matchers globales (sus .d.ts no son un módulo).
 // @ts-expect-error: importación solo por efectos laterales
 await import("@testing-library/jest-dom");

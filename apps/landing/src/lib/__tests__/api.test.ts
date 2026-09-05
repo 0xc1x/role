@@ -26,7 +26,10 @@ describe("apiGet", () => {
 
 	it("throws on non-ok", async () => {
 		stubFetch(
-			jest.fn().mockResolvedValue({ ok: false, status: 500 }) as unknown as typeof globalThis.fetch,
+			jest.fn().mockResolvedValue({
+				ok: false,
+				status: 500,
+			}) as unknown as typeof globalThis.fetch,
 		);
 		await expect(apiGet("/fail")).rejects.toThrow("respondió 500");
 	});
