@@ -15,15 +15,15 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "bun node_modules/typescript/bin/tsc -p tsconfig.json && bun scripts/fix-imports.mjs",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run build",
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
-    "test": "bun test src",
-    "docs:dev": "bun run openapi/serve.ts",
-    "docs:export": "bun -e \"const s=require('./openapi/spec');Bun.write('openapi.json',JSON.stringify(s.spec,null,2)).then(()=>console.log('✓ openapi.json exported'))\""
+    "test": "bun test src"
   },
   "dependencies": {
     "zod": "^4.5.4"

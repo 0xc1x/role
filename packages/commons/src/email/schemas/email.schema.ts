@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { BooleanQuerySchema, PaginatedDataSchema, PaginationQuerySchema } from '../../_common/schemas/api.schema';
 import { TimestamptzSchema, UuidSchema } from '../../_common/schemas/common';
 import {
+  CAMPAIGN_CHANNELS,
   CAMPAIGN_STATUSES,
   EMAIL_COMPONENT_TYPES,
   EMAIL_SEND_STATUSES,
@@ -153,9 +154,9 @@ export const AddSegmentUsersSchema = z.object({
 
 export const CampaignSchema = z.object({
   name: z.string().min(1).max(120),
+  /** Canal de entrega; decide qué plantilla y motor de envío usa la campaña. */
+  channel: z.enum(CAMPAIGN_CHANNELS).default('email'),
   template_id: UuidSchema.nullable(),
-  subject_override: z.string().max(200).nullable(),
-  body_override: z.string().nullable(),
   category: z.enum(MARKETING_CATEGORIES),
   segment_ids: z.array(UuidSchema),
   include_user_ids: z.array(UuidSchema),
@@ -170,6 +171,7 @@ export const CampaignDtoSchema = CampaignSchema.extend({
   sent_at: TimestamptzSchema.nullable(),
   total_recipients: z.number().int().nonnegative(),
   total_sent: z.number().int().nonnegative(),
+  total_failed: z.number().int().nonnegative(),
   total_delivered: z.number().int().nonnegative(),
   total_opened: z.number().int().nonnegative(),
   total_clicked: z.number().int().nonnegative(),
@@ -179,8 +181,6 @@ export const CampaignDtoSchema = CampaignSchema.extend({
 });
 
 export const CreateCampaignSchema = CampaignSchema.partial({
-  subject_override: true,
-  body_override: true,
   category: true,
   segment_ids: true,
   include_user_ids: true,
@@ -243,6 +243,29 @@ export const ListSendsQuerySchema = PaginationQuerySchema.extend({
 
 export const EmailSendListResponseSchema = PaginatedDataSchema(EmailSendDtoSchema);
 
+/** Override de preview de campaña (POST /email-marketing/campaigns/:id/preview). */
+export const PreviewCampaignRequestSchema = z.object({
+  subject: z.string().min(1).max(200).optional(),
+  body_html: z.string().min(1).optional(),
+});
+
+/** Campos mutables de un envío (PATCH /email-marketing/sends/:id). */
+export const UpdateEmailSendSchema = z
+  .object({
+    status: z.enum(EMAIL_SEND_STATUSES),
+    error_message: z.string().nullable(),
+    error_code: z.string().nullable(),
+    scheduled_at: TimestamptzSchema.nullable(),
+    queued_at: TimestamptzSchema.nullable(),
+    processed_at: TimestamptzSchema.nullable(),
+    sent_at: TimestamptzSchema.nullable(),
+    delivered_at: TimestamptzSchema.nullable(),
+    opened_at: TimestamptzSchema.nullable(),
+    clicked_at: TimestamptzSchema.nullable(),
+    bounced_at: TimestamptzSchema.nullable(),
+  })
+  .partial();
+
 // ─── Listas paginadas ──────────────────────────────────────────────────
 
 export const ListComponentsQuerySchema = PaginationQuerySchema.extend({
@@ -257,6 +280,7 @@ export const ListSegmentsQuerySchema = ListComponentsQuerySchema.extend({
 export const ListCampaignsQuerySchema = PaginationQuerySchema.extend({
   search: z.string().min(1).max(100).optional(),
   status: z.enum(CAMPAIGN_STATUSES).optional(),
+  channel: z.enum(CAMPAIGN_CHANNELS).optional(),
 });
 
 /** Respuestas de lista canónicas `{ data, meta }`. */

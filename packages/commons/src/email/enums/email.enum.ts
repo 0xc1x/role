@@ -14,6 +14,10 @@ export const CAMPAIGN_STATUSES = [
 ] as const;
 export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 
+/** Canal de entrega de una campaña (whatsapp a futuro). */
+export const CAMPAIGN_CHANNELS = ['email', 'push'] as const;
+export type CampaignChannel = (typeof CAMPAIGN_CHANNELS)[number];
+
 export const EMAIL_SEND_STATUSES = [
   'pending',
   'queued',

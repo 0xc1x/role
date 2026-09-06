@@ -23,7 +23,9 @@ import {
   ListComponentsQuerySchema,
   ListSegmentsQuerySchema,
   ListSendsQuerySchema,
+  PreviewCampaignRequestSchema,
   TestCampaignSchema,
+  UpdateEmailSendSchema,
   UpdateCampaignSchema,
   UpdateEmailComponentSchema,
   UpdateEmailTemplateSchema,
@@ -34,7 +36,6 @@ import type {
   CampaignPaginatedData,
   CreateCampaignDto,
   EmailComponentPaginatedData,
-  EmailSendDto,
   EmailTemplatePaginatedData,
   ListCampaignsQuery,
   ListComponentsQuery,
@@ -47,6 +48,8 @@ import type {
   UpdateEmailComponentDto,
   UpdateEmailTemplateDto,
   UpdateSegmentDto,
+  PreviewCampaignRequestDto,
+  UpdateEmailSendDto,
 } from '@0xc1x/role-commons';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -280,7 +283,8 @@ export class EmailMarketingController {
   @Post('campaigns/:id/preview')
   async previewCampaign(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body?: { subject?: string; body_html?: string },
+    @Body(new ZodValidationPipe(PreviewCampaignRequestSchema))
+    body?: PreviewCampaignRequestDto,
   ): Promise<RenderedEmail> {
     const campaign = await this.getCampaign(id);
     if (!campaign?.template_id) {
@@ -348,9 +352,20 @@ export class EmailMarketingController {
   @Patch('sends/:id')
   updateSend(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: Partial<EmailSendDto>,
+    @Body(new ZodValidationPipe(UpdateEmailSendSchema)) body: UpdateEmailSendDto,
   ) {
-    return this.repository.updateSend(id, body as never).then((row) => (row ? EmailMarketingMapper.toSendDto(row) : null));
+    // El drizzle insert espera Date para los *_at; el contrato zod viaja en ISO.
+    const values = Object.fromEntries(
+      Object.entries(body).map(([key, value]) => [
+        key,
+        typeof value === 'string' && key.endsWith('_at') && value !== ''
+          ? new Date(value)
+          : value,
+      ]),
+    );
+    return this.repository
+      .updateSend(id, values)
+      .then((row) => (row ? EmailMarketingMapper.toSendDto(row) : null));
   }
 
   @Post('sends/:id/retry')
