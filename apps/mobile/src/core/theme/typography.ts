@@ -1,45 +1,18 @@
-import { Platform } from 'react-native';
-
 /**
  * Rolé typography scale, ported from the Flutter design system
  * (Outfit headings + DM Sans body).
+ *
+ * Familias registradas por expo-font con el mismo nombre en todas las
+ * plataformas: no hace falta Platform.select.
  */
 export const fonts = {
-  heading: Platform.select({
-    ios: 'Outfit_600SemiBold',
-    android: 'Outfit_600SemiBold',
-    default: 'Outfit_600SemiBold',
-  }),
-  headingBold: Platform.select({
-    ios: 'Outfit_700Bold',
-    android: 'Outfit_700Bold',
-    default: 'Outfit_700Bold',
-  }),
-  headingExtraBold: Platform.select({
-    ios: 'Outfit_800ExtraBold',
-    android: 'Outfit_800ExtraBold',
-    default: 'Outfit_800ExtraBold',
-  }),
-  body: Platform.select({
-    ios: 'DMSans_400Regular',
-    android: 'DMSans_400Regular',
-    default: 'DMSans_400Regular',
-  }),
-  bodyMedium: Platform.select({
-    ios: 'DMSans_500Medium',
-    android: 'DMSans_500Medium',
-    default: 'DMSans_500Medium',
-  }),
-  bodySemiBold: Platform.select({
-    ios: 'DMSans_600SemiBold',
-    android: 'DMSans_600SemiBold',
-    default: 'DMSans_600SemiBold',
-  }),
-  bodyBold: Platform.select({
-    ios: 'DMSans_700Bold',
-    android: 'DMSans_700Bold',
-    default: 'DMSans_700Bold',
-  }),
+  heading: 'Outfit_600SemiBold',
+  headingBold: 'Outfit_700Bold',
+  headingExtraBold: 'Outfit_800ExtraBold',
+  body: 'DMSans_400Regular',
+  bodyMedium: 'DMSans_500Medium',
+  bodySemiBold: 'DMSans_600SemiBold',
+  bodyBold: 'DMSans_700Bold',
 } as const;
 
 export interface TypeStyle {

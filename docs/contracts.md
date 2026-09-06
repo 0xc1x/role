@@ -32,4 +32,10 @@ Cómo se modelan, versionan y validan los contratos compartidos del ecosistema.
 
 - La fuente de verdad es `packages/commons/AGENTS.md` (guía del paquete).
 - Nunca importes `commons` desde una ruta profunda inexistente: el paquete exporta desde el índice raíz (`exports` en `package.json`).
-- Validación client-side (admin/mobile) y server-side (api) usan los MISMOS schemas — no duplicar validaciones.
+- Validación server-side (api) y client-side (admin) usan los MISMOS schemas — no duplicar validaciones. Mobile no valida payloads de salida (Supabase + RLS es su frontera de datos, ADR-0002): sus formularios validan con reglas locales y los tipos vienen de commons; no arrastrar schemas de query de API a la app móvil sin necesidad real.
+
+## Convenciones verificadas en DB (2026-09)
+
+- **`active` vs `is_active` y `updated_at` nullable varían por tabla** — verificado contra Supabase/drizzle en la auditoría de 2026-09. No "normalizar" nombres en los contratos sin verificar primero el schema drizzle de `apps/api` y la tabla real.
+- **DTOs espejo de DB se conservan sin consumidor**: contratos de tablas con flujos aún desactivados (pagos, push, preferencias, consents) permanecen en `commons` — la API los adoptará al activarlos (ver política de purga en el AGENTS.md del paquete).
+- **Zod 4.5**: API canónica top-level (`z.email()`, `z.uuid()`, `z.url()`); `TimestamptzSchema` laxo a propósito (offsets `+00:00` de PostgREST); `.min`/`.max` cuentan code points (alineado con Postgres). Detalles en el AGENTS.md del paquete.
