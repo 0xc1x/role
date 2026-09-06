@@ -479,6 +479,7 @@ export const strings = {
 	notificationsSettings: {
 		title: "Notificaciones",
 		pushEnabled: "Dispositivo registrado para push",
+		registerFailed: "No se pudo registrar el dispositivo",
 		blockedBrowser:
 			"Las notificaciones están bloqueadas para este sitio. Habilítalas en el candado de la barra de direcciones → Notificaciones → Permitir, y vuelve a intentar.",
 		blockedDevice:

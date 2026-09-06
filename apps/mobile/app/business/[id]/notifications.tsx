@@ -1,9 +1,6 @@
-import { useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
-import { Platform, StyleSheet, View } from "react-native";
-import { toast } from "sonner-native";
-import * as Notifications from "expo-notifications";
+import { StyleSheet, View } from "react-native";
 
 import { Switch } from "@/components/ui/switch";
 import { strings } from "@/core/i18n/strings";
@@ -20,23 +17,11 @@ import {
 	useUpdateBusinessNotifications,
 } from "@/features/business/hooks";
 import { useAuthStore } from "@/features/auth/store";
-import { syncDeviceToken } from "@/features/notifications";
+import { usePushToggle } from "@/features/notifications/use-push-toggle";
 import type { BusinessNotificationPreferences } from "@0xc1x/role-commons";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
-
-async function ensurePushPermission(): Promise<"granted" | "denied"> {
-	if (Platform.OS === "web") {
-		if (typeof window === "undefined" || !("Notification" in window)) return "denied";
-		if (Notification.permission === "default") await Notification.requestPermission();
-		return Notification.permission === "granted" ? "granted" : "denied";
-	}
-	const current = await Notifications.getPermissionsAsync();
-	if (current.status === "granted") return "granted";
-	const requested = await Notifications.requestPermissionsAsync();
-	return requested.status === "granted" ? "granted" : "denied";
-}
 
 export default function BusinessNotificationsScreen() {
 	const { colors } = useTheme();
@@ -48,11 +33,10 @@ export default function BusinessNotificationsScreen() {
 	const update = useUpdateBusinessNotifications(businessId);
 	const profile = useAuthStore((s) => s.profile);
 	const userId = profile?.id ?? "";
-	// Lock del registro de push: mientras el token se registra el switch
-	// queda deshabilitado, así los toques repetidos no disparan registros.
-	const [registering, setRegistering] = useState(false);
-	const registeringRef = useRef(false);
-
+	// Lock anti doble-tap y flujo de registro viven en el hook compartido.
+	const { registering, enablePush } = usePushToggle(userId, async () => {
+		await update.mutateAsync({ push_enabled: true } as Partial<BusinessNotificationPreferences>);
+	});
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -64,38 +48,7 @@ export default function BusinessNotificationsScreen() {
 	) => {
 		if (key === "sms_enabled" || key === "whatsapp_enabled") return;
 		if (key === "push_enabled" && value && userId) {
-			if (registeringRef.current) return;
-			registeringRef.current = true;
-			setRegistering(true);
-			try {
-				const permission = await ensurePushPermission();
-				if (permission === "denied") {
-					toast.error(
-						Platform.OS === "web"
-							? strings.notificationsSettings.blockedBrowser
-							: strings.notificationsSettings.blockedDevice,
-						{ duration: 8000 },
-					);
-					return;
-				}
-				try {
-					const registered = await syncDeviceToken(userId);
-					if (!registered) return;
-					toast.success(strings.notificationsSettings.pushEnabled);
-				} catch (e) {
-					const code = (e as { code?: string }).code;
-					if (code !== "23505") {
-						toast.error(e instanceof Error ? e.message : "No se pudo registrar el dispositivo");
-						return;
-					}
-				}
-				await update
-					.mutateAsync({ push_enabled: true } as Partial<BusinessNotificationPreferences>)
-					.catch(() => {});
-			} finally {
-				registeringRef.current = false;
-				setRegistering(false);
-			}
+			await enablePush();
 			return;
 		}
 		update.mutate({ [key]: value } as Partial<BusinessNotificationPreferences>);
