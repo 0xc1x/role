@@ -54,6 +54,13 @@ export const envSchema = z.object({
   ENABLE_API_MIRROR_OFFERS: mirrorFlag(),
   /** Fase 2: notificaciones push espejo (Supabase edges siguen activas por defecto) */
   ENABLE_API_MIRROR_NOTIFICATIONS: mirrorFlag(),
+  /**
+   * Expiración de órdenes + restock (cada minuto). Excepción documentada en
+   * ADR-0008: Supabase no tiene expirador de órdenes propio (verificado:
+   * sin trigger ni cron SQL), así que este job es el único expirador mientras
+   * el móvil consuma Supabase directo. Default false como el resto de espejos.
+   */
+  ENABLE_JOBS_ORDERS_EXPIRATION: mirrorFlag(),
   /** BullMQ: URL de Redis para colas de notificaciones (vacío = ejecución directa sin cola) */
   REDIS_URL: z.string().default(''),
   /** FCM HTTP v1: JSON del service account de Firebase (vacío deshabilita envío web) */

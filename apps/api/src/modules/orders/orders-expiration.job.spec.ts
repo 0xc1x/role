@@ -1,10 +1,12 @@
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { OrdersExpirationJob } from './orders-expiration.job';
 import { OrdersService } from './orders.service';
 
 describe('OrdersExpirationJob', () => {
   let job: OrdersExpirationJob;
   let ordersService: jest.Mocked<Pick<OrdersService, 'expireStaleOrders'>>;
+  let config: { get: jest.Mock };
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -14,11 +16,24 @@ describe('OrdersExpirationJob', () => {
           provide: OrdersService,
           useValue: { expireStaleOrders: jest.fn() },
         },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn(() => true) },
+        },
       ],
     }).compile();
 
     job = module.get(OrdersExpirationJob);
     ordersService = module.get(OrdersService);
+    config = module.get(ConfigService);
+  });
+
+  it('dormido sin ENABLE_JOBS_ORDERS_EXPIRATION (el env debe activarlo en prod)', async () => {
+    config.get.mockReturnValue(false);
+
+    await job.handleExpireStaleOrders();
+
+    expect(ordersService.expireStaleOrders).not.toHaveBeenCalled();
   });
 
   it('expira órdenes vencidas y reporta el conteo', async () => {
