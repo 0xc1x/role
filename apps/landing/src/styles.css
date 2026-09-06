@@ -155,7 +155,7 @@
   --color-role-dark-muted: #9E9E9E;
   --color-role-dark-muted-soft: #6B7280;
   --font-heading: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
-  /* "Outfit", "Inter Variable", sans-serif; */
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   --font-editorial: "Playfair Display", "Georgia", serif;
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --shadow-soft: 0 1px 2px 0 rgb(26 23 20 / 0.04), 0 4px 16px -2px rgb(26 23 20 / 0.06);
@@ -242,20 +242,6 @@ body::before {
 }
 
 /* Font loading fallbacks */
-@font-face {
-  font-family: "Outfit";
-  font-weight: 600 800;
-  font-display: swap;
-  src: local("Outfit");
-}
-
-@font-face {
-  font-family: "DM Sans";
-  font-weight: 400 700;
-  font-display: swap;
-  src: local("DM Sans");
-}
-
 @font-face {
   font-family: "Playfair Display";
   font-weight: 400 700;

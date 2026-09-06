@@ -74,7 +74,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 				},
 				{
 					rel: "stylesheet",
-					href: "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap",
+					href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap",
 				},
 				{ rel: "icon", type: "image/svg+xml", href: "/icon.svg" },
 			],
