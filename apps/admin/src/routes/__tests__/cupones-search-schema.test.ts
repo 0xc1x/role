@@ -1,23 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { z } from "zod";
-
-const booleanSearch = z
-	.union([z.boolean(), z.enum(["true", "false"])])
-	.optional()
-	.transform((v) => {
-		if (v === undefined) return undefined;
-		if (typeof v === "boolean") return v;
-		return v === "true";
-	});
-
-const couponsSearchSchema = z.object({
-	page: z.coerce.number().int().positive().optional().default(1),
-	limit: z.coerce.number().int().min(1).max(100).optional().default(20),
-	search: z.string().optional(),
-	is_active: booleanSearch,
-	// true → solo globales; false → solo de negocio; undefined → todos.
-	global: booleanSearch,
-});
+import { ListCouponsQuerySchema as couponsSearchSchema } from "@0xc1x/role-commons";
 
 describe("couponsSearchSchema", () => {
 	test("defaults page and limit", () => {

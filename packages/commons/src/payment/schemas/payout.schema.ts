@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PaginationQuerySchema } from '../../_common/schemas/api.schema';
 import {
   DateSchema,
   PayoutStatusSchema,
@@ -41,3 +42,9 @@ export const UpdatePayoutSchema = z
     paid_at: TimestamptzSchema.nullable(),
   })
   .partial();
+
+/** Query del listado de payouts (API): mismos defaults que PaginationQuerySchema. */
+export const ListPayoutsQuerySchema = PaginationQuerySchema.extend({
+  business_id: UuidSchema.optional(),
+  status: PayoutStatusSchema.optional(),
+});

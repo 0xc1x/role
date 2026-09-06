@@ -19,12 +19,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessesList } from "@/features/businesses";
 import { columns } from "@/features/businesses/tables/businesses.columns";
+import { ListBusinessesQuerySchema } from "@0xc1x/role-commons";
 
-const schema = z.object({
-	page: z.coerce.number().int().positive().optional().default(1),
+// Igual que ListBusinessesQuerySchema pero con el page size de las tablas (10).
+const schema = ListBusinessesQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
-	search: z.string().optional(),
-	verification_status: z.enum(["pending", "approved", "rejected"]).optional(),
 });
 
 export const Route = createFileRoute("/_layout/negocios")({
@@ -68,7 +67,9 @@ function RouteComponent() {
 				</p>
 				<Button
 					variant="outline"
-					onClick={() => navigate({ search: { page: 1, limit: 10 } })}
+					onClick={() =>
+						navigate({ search: { page: 1, limit: 10, search: undefined } })
+					}
 				>
 					Reintentar
 				</Button>

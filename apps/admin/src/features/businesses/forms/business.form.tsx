@@ -1,5 +1,8 @@
 import type { BusinessDto } from "@0xc1x/role-commons";
-import { UpdateBusinessSchema } from "@0xc1x/role-commons";
+import {
+	BusinessVerificationStatusSchema,
+	UpdateBusinessSchema,
+} from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -17,7 +20,7 @@ import { useUpdateBusiness } from "../queries/businesses.queries";
 
 const formSchema = UpdateBusinessSchema.extend({
 	name: z.string().min(1).optional(),
-	verification_status: z.enum(["pending", "approved", "rejected"]).optional(),
+	verification_status: BusinessVerificationStatusSchema.optional(),
 	rejection_reason: z.string().nullable().optional(),
 });
 

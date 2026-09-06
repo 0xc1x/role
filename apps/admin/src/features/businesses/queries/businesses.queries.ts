@@ -2,6 +2,7 @@ import type {
 	CreateBusinessDto,
 	ListBusinessesQuery,
 	UpdateBusinessDto,
+	BusinessVerificationStatus,
 } from "@0xc1x/role-commons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -45,7 +46,7 @@ export function useVerifyBusiness() {
 			rejection_reason,
 		}: {
 			id: string;
-			verification_status: "approved" | "rejected" | "pending";
+			verification_status: BusinessVerificationStatus;
 			rejection_reason?: string | null;
 		}) =>
 			businessesApi.update(id, {

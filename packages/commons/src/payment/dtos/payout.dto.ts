@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type {
   CreatePayoutSchema,
+  ListPayoutsQuerySchema,
   PayoutSchema,
   UpdatePayoutSchema,
 } from '../schemas/payout.schema';
@@ -8,3 +9,4 @@ import type {
 export type PayoutDto = z.infer<typeof PayoutSchema>;
 export type CreatePayoutDto = z.infer<typeof CreatePayoutSchema>;
 export type UpdatePayoutDto = z.infer<typeof UpdatePayoutSchema>;
+export type ListPayoutsQuery = z.infer<typeof ListPayoutsQuerySchema>;
