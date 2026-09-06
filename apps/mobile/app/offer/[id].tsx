@@ -126,7 +126,6 @@ export default function OfferDetailScreen() {
 	const isDark = scheme === "dark";
 	const cardBg = isDark ? colors.card : colors.background;
 	const muted = colors.mutedForeground;
-	const border = colors.borderSolid;
 
 	return (
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
@@ -273,7 +272,7 @@ export default function OfferDetailScreen() {
 
 					{/* ── Sobre esta oferta ───────────────────────────────── */}
 					{data.offer.description || includes.length > 0 ? (
-						<InfoCard title={strings.offerDetail.aboutTitle} cardBg={cardBg} border={border}>
+						<InfoCard title={strings.offerDetail.aboutTitle}>
 							{data.offer.description ? (
 								<AppText
 									variant="bodyMedium"
@@ -308,8 +307,6 @@ export default function OfferDetailScreen() {
 					{allergens.length > 0 ? (
 						<InfoCard
 							title={strings.business.allergensTitle}
-							cardBg={cardBg}
-							border={border}
 						>
 							<View
 								style={[
@@ -334,8 +331,6 @@ export default function OfferDetailScreen() {
 					{/* ── Recogida ────────────────────────────────────────── */}
 					<InfoCard
 						title={strings.offerDetail.pickupSchedule}
-						cardBg={cardBg}
-						border={border}
 					>
 						<InfoRow
 							icon="calendar-outline"
@@ -375,8 +370,6 @@ export default function OfferDetailScreen() {
 					{/* ── Establecimiento ─────────────────────────────────── */}
 					<InfoCard
 						title={strings.offerDetail.establishment}
-						cardBg={cardBg}
-						border={border}
 						trailing={
 							<Pressable
 								onPress={() =>
@@ -582,24 +575,30 @@ function CategoryBadge({ label }: { label: string }) {
 	);
 }
 
+/**
+ * Variante flat de la Card del kit (sin sombra, radius 20, padding xl,
+ * fondo background/card según tema): existe porque la Card elevada del kit
+ * cambia el aspecto de esta pantalla. Revisar si el kit gana un variant
+ * "flat" antes de duplicar el patrón en otra pantalla.
+ */
 function InfoCard({
 	title,
 	trailing,
-	cardBg,
-	border,
 	children,
 }: {
 	title: string;
 	trailing?: ReactNode;
-	cardBg: string;
-	border: string;
 	children: ReactNode;
 }) {
+	const { colors, scheme } = useTheme();
 	return (
 		<View
 			style={[
 				styles.infoCard,
-				{ backgroundColor: cardBg, borderColor: border },
+				{
+					backgroundColor: scheme === "dark" ? colors.card : colors.background,
+					borderColor: colors.borderSolid,
+				},
 			]}
 		>
 			<View style={styles.infoCardHead}>
