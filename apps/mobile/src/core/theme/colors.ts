@@ -22,6 +22,8 @@ export interface ColorTokens {
 	foreground: string;
 	card: string;
 	cardForeground: string;
+	popover: string;
+	popoverForeground: string;
 	muted: string;
 	mutedForeground: string;
 	border: string;
@@ -133,6 +135,8 @@ const light: ColorTokens = {
 	foreground: "#1A1A18",
 	card: "#FFF5F5",
 	cardForeground: "#1A1A18",
+	popover: "#FFFFFF",
+	popoverForeground: "#1A1A18",
 	muted: "#FFF5F5",
 	mutedForeground: "#737373",
 	border: "#00000014",
@@ -233,6 +237,8 @@ const dark: ColorTokens = {
 	foreground: "#FAF9F7",
 	card: "#2C2C2C",
 	cardForeground: "#FAF9F7",
+	popover: "#2C2C2C",
+	popoverForeground: "#FAF9F7",
 	muted: "#2C2C2C",
 	mutedForeground: "#9E9E9E",
 	border: "#FFFFFF33",

@@ -7,6 +7,7 @@
     /* Modo de dark mode de css-interop: 'class' evita el error
        "Cannot manually set color scheme" en web. */
     --css-interop-darkMode: class;
+    /* css-vars:generated:start (fuente: src/core/theme/colors.ts — regenerar con: bun scripts/generate-css-vars.mjs) */
     --background: #faf9f7;
     --foreground: #1a1a18;
     --card: #fff5f5;
@@ -26,10 +27,12 @@
     --border: #00000014;
     --border-solid: #e5e5e5;
     --input: #ffffff;
-    --ring: #00000014;
+    --ring: #0000001a;
+/* css-vars:generated:end */
   }
 
   .dark {
+    /* css-vars:generated:start (fuente: src/core/theme/colors.ts — regenerar con: bun scripts/generate-css-vars.mjs) */
     --background: #121212;
     --foreground: #faf9f7;
     --card: #2c2c2c;
@@ -50,6 +53,7 @@
     --border-solid: #3d3d3d;
     --input: #2c2c2c;
     --ring: #ffffff33;
+/* css-vars:generated:end */
   }
 
   input,

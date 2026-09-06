@@ -97,7 +97,8 @@
 		"web": "expo start --web",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test --isolate src",
-		"preexport:web": "bun scripts/generate-firebase-config.mjs",
+		"generate:css-vars": "bun scripts/generate-css-vars.mjs",
+		"preexport:web": "bun scripts/generate-firebase-config.mjs && bun scripts/generate-css-vars.mjs",
 		"export:web": "expo export --platform web",
 		"build:vercel": "bun run preexport:web && expo export --platform web && bun scripts/fix-web-dist.mjs && bun scripts/build-vercel-output.mjs",
 		"deploy": "bun run build:vercel && vercel deploy --prebuilt --prod"
