@@ -68,6 +68,9 @@ describe('ReviewsService (espejo de triggers de rating)', () => {
     });
 
     expect(result.id).toBe('review-1');
+    // La respuesta pasa por mapper: fechas ISO y ratings numéricos
+    expect(result.created_at).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.product_rating).toBe(5);
     expect(repository.insert).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({

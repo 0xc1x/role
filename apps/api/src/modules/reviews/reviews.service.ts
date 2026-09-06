@@ -1,7 +1,9 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { ReviewDto } from '@0xc1x/role-commons';
 import type { Database } from '../../database/database.module';
 import type { AuthUser } from '../../auth/auth.types';
-import { ReviewsRepository, type ReviewRow } from './reviews.repository';
+import { ReviewsRepository } from './reviews.repository';
+import { ReviewMapper } from './reviews.mapper';
 
 @Injectable()
 export class ReviewsService {
@@ -15,7 +17,7 @@ export class ReviewsService {
       product_rating?: number | null;
       business_rating?: number | null;
     },
-  ): Promise<ReviewRow> {
+  ): Promise<ReviewDto> {
     return this.reviewsRepository.transaction(async (tx) => {
       const order = await this.reviewsRepository.findOrderById(
         tx,
@@ -40,7 +42,7 @@ export class ReviewsService {
       // Espejo de los triggers de rating (idempotente: recalcula promedios).
       await this.recalcRatings(tx, order.business_id, order.offer_id);
 
-      return review;
+      return ReviewMapper.toDto(review);
     });
   }
 
