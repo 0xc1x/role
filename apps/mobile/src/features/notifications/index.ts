@@ -1,8 +1,12 @@
 import { Platform } from "react-native";
 
-import { supabase } from "@/core/supabase/client";
 import { toAppError } from "@/core/error/mapper";
 import { env } from "@/core/config/env";
+import {
+	upsertDeviceToken,
+	deleteDeviceTokens,
+	type DeviceTokenPlatform,
+} from "./data/repository";
 
 type NotificationsModule = typeof import("expo-notifications");
 
@@ -64,23 +68,18 @@ export async function syncDeviceToken(
 	}
 	if (!token) return false;
 
-	const { error } = await supabase
-		.from("device_tokens")
-		.upsert(
-			{
-				user_id: userId,
-				token,
-				platform: Platform.OS,
-				is_active: true,
-			},
-			{ onConflict: "token" },
-		);
-	if (error) throw toAppError(error, "Error al registrar el dispositivo");
+	try {
+		// En builds soportados Platform.OS es ios|android|web; el cast solo
+		// satisface la union completa de react-native (macos/windows).
+		await upsertDeviceToken(userId, token, Platform.OS as DeviceTokenPlatform);
+	} catch (error) {
+		throw toAppError(error, "Error al registrar el dispositivo");
+	}
 	return true;
 }
 
 export async function removeDeviceToken(userId: string): Promise<void> {
-	await supabase.from("device_tokens").delete().eq("user_id", userId);
+	await deleteDeviceTokens(userId);
 }
 
 // ─── In-app notification handler (solo nativo) ──────────────────────

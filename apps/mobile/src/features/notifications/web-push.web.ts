@@ -1,5 +1,5 @@
-import { supabase } from "@/core/supabase/client";
 import { env } from "@/core/config/env";
+import { upsertDeviceToken } from "./data/repository";
 
 /**
  * Web push (PWA) via Firebase Cloud Messaging. Native uses expo-notifications
@@ -81,22 +81,14 @@ export async function syncWebPushToken(
 	});
 	if (!token) return false;
 
-	const { error } = await supabase
-		.from("device_tokens")
-		.upsert(
-			{
-				user_id: userId,
-				token,
-				platform: "web",
-				is_active: true,
-			},
-			{ onConflict: "token" },
-		);
-	if (error) {
+	try {
+		await upsertDeviceToken(userId, token, "web");
+	} catch (error) {
 		// 23505 = token duplicado: ya está registrado, es éxito para el flujo.
-		if (error.code === "23505") return true;
+		const code = (error as { code?: string }).code;
+		if (code === "23505") return true;
 		throw Object.assign(new Error("Error al registrar el dispositivo"), {
-			code: error.code,
+			code,
 		});
 	}
 

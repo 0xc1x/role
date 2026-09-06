@@ -18,7 +18,7 @@ mock.module("@/core/supabase/client", () => ({
 }));
 
 import { supabase } from "@/core/supabase/client";
-import { fetchAppConfig } from "@/features/config/api";
+import { fetchAppConfig } from "@/features/config/data/repository";
 
 describe("fetchAppConfig", () => {
 	test("mapea filas a mapa", async () => {
