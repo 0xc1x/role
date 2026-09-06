@@ -64,7 +64,10 @@ const styles = StyleSheet.create({
 		marginHorizontal: spacing.lg,
 		marginTop: spacing.lg,
 		marginBottom: spacing.xs,
-		height: 100,
+		// Sin altura fija: en pantallas finas el título ocupa 3 líneas y
+		// 100px fijos lo dejaban sin aire arriba/abajo. minHeight mantiene
+		// el tamaño habitual y el banner crece si el texto lo necesita.
+		minHeight: 100,
 		borderRadius: radii.xl,
 		overflow: "hidden",
 	},
@@ -73,6 +76,7 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.md,
 		paddingRight: 75 + spacing.lg,
 	},
 	iconContainer: {

@@ -747,7 +747,9 @@ export function ThemeOptionCard({
 				{
 					backgroundColor: isSelected ? colors.primary + "0D" : colors.card,
 					borderColor: isSelected ? colors.primary : colors.borderSolid,
-					borderWidth: isSelected ? 1.5 : 1,
+					// Ancho uniforme: 1.5 solo en seleccionada desplazaba
+					// la fila 1px al cambiar de opción.
+					borderWidth: 1,
 				},
 			]}
 		>
@@ -759,7 +761,10 @@ export function ThemeOptionCard({
 			<AppText
 				variant="bodySmall"
 				weight={isSelected ? "bold" : "regular"}
-				style={{ color: isSelected ? colors.primary : colors.foreground }}
+				style={{
+					color: isSelected ? colors.primary : colors.foreground,
+					textAlign: "center",
+				}}
 			>
 				{label}
 			</AppText>

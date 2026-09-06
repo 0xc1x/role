@@ -12,6 +12,9 @@ const DURATION_MS = 400;
 const HALF_MS = DURATION_MS / 2;
 const STRETCH_FACTOR = 0.18;
 const MAX_WIDTH = 480;
+// Ancho de item bajo el cual icono + label no caben en la píldora
+// (80% del item): se muestra solo icono, siempre centrado.
+const COMPACT_ITEM_WIDTH = 112;
 
 type RoleTabBarProps = BottomTabBarProps & {
 	/** Tab visible a resaltar cuando la ruta activa no está entre las rutas visibles (deep link). */
@@ -55,6 +58,9 @@ export default function RoleTabBar({
 	const barWidth = Math.min(measuredWidth, MAX_WIDTH);
 	const itemWidth = routes.length > 0 ? barWidth / routes.length : 0;
 	const pillWidth = itemWidth * 0.8;
+	// Barra comprimida (pantalla fina): icono + label (~90px) desbordan la
+	// ventana de la píldora y se ven recortados/descentrados. Solo icono.
+	const compact = itemWidth > 0 && itemWidth < COMPACT_ITEM_WIDTH;
 
 	const onTab = useCallback(
 		(index: number) => {
@@ -186,14 +192,16 @@ export default function RoleTabBar({
 									{icon
 										? icon({ color: colors.background, size: 24, focused: true })
 										: null}
-									<AppText
-										variant="bodyMedium"
-										weight="medium"
-										color={colors.background}
-										numberOfLines={1}
-									>
-										{labelFor(options, route.name)}
-									</AppText>
+									{compact ? null : (
+										<AppText
+											variant="bodyMedium"
+											weight="medium"
+											color={colors.background}
+											numberOfLines={1}
+										>
+											{labelFor(options, route.name)}
+										</AppText>
+									)}
 								</View>
 							);
 						})}
