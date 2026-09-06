@@ -3,7 +3,6 @@ import type { Order } from "@0xc1x/role-commons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Linking, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { useState } from "react";
-import QRCode from "react-native-qrcode-svg";
 
 import {
  AlertDialog,
@@ -30,6 +29,10 @@ import {
 	useWebPullToRefresh,
 } from "@/core/ui";
 import { useCancelOrder, useOrder } from "@/features/hooks";
+import {
+	PickupQr,
+	pickupQrValue,
+} from "@/features/orders/components/pickup-qr";
 import { orderStatusTone } from "@/features/orders/components/OrderCard";
 import {
 	isActiveStatus,
@@ -203,7 +206,6 @@ function DetailHeader({ order }: { order: Order }) {
 function PickupCodeCard({ order }: { order: Order }) {
 	const { colors } = useTheme();
 	if (!order.pickup_code) return null;
-	const qrValue = `role://order/${order.id}/${order.pickup_code}`;
 	return (
 		<View
 			style={[
@@ -217,19 +219,7 @@ function PickupCodeCard({ order }: { order: Order }) {
 			<AppText style={[styles.pickupCode, { color: colors.primary }]}>
 				{order.pickup_code}
 			</AppText>
-			<View
-				style={[
-					styles.qrBox,
-					{ borderColor: colors.borderSolid, backgroundColor: colors.card },
-				]}
-			>
-				<QRCode
-					value={qrValue}
-					size={176}
-					color={colors.qrForeground}
-					backgroundColor={colors.qrBackground}
-				/>
-			</View>
+			<PickupQr orderId={order.id} pickupCode={order.pickup_code} />
 			<AppText style={[styles.sectionNote, { color: colors.mutedForeground }]}>
 				{strings.orders.pickupCodeHint}
 			</AppText>
@@ -696,14 +686,6 @@ const styles = StyleSheet.create({
 		fontWeight: "800",
 		letterSpacing: 8,
 	},
-	qrBox: {
-		padding: spacing.md,
-		borderRadius: radii.lg,
-		borderWidth: 1,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-
 	businessTitleRow: {
 		flexDirection: "row",
 		alignItems: "center",
