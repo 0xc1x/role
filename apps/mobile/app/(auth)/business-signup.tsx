@@ -99,10 +99,10 @@ export default function BusinessSignupScreen() {
 				<TextField label={strings.auth.confirmPassword} value={confirm} onChangeText={setConfirm} secureTextEntry autoComplete="new-password" />
 
 				<AppText variant="labelSmall" weight="bold" style={{ marginTop: spacing.md }}>
-					Datos del negocio
+					{strings.business.signupDataTitle}
 				</AppText>
-				<TextField label="Nombre del negocio *" value={businessName} onChangeText={setBusinessName} autoComplete="name" />
-				<TextField label="Teléfono del negocio" value={businessPhone} onChangeText={setBusinessPhone} keyboardType="phone-pad" />
+				<TextField label={strings.business.businessName} value={businessName} onChangeText={setBusinessName} autoComplete="name" />
+				<TextField label={strings.business.signupPhoneLabel} value={businessPhone} onChangeText={setBusinessPhone} keyboardType="phone-pad" />
 
 				<Button label={strings.business.createBusiness} onPress={handleSignup} loading={loading} fullWidth style={{ marginTop: spacing.md }} />
 				<Link href="/login" style={[styles.link, { color: colors.primary }]}>

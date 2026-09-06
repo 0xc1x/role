@@ -28,7 +28,6 @@ export function BottomSheetModal({
 	title?: string;
 	footer?: ReactNode;
 	onClose: () => void;
-	maxHeight?: number | `${number}%`;
 	children: ReactNode;
 }) {
 	const { colors } = useTheme();

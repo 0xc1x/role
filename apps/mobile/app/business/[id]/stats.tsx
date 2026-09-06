@@ -474,11 +474,10 @@ function PeriodSummary({
 				variant="bodySmall"
 				style={{ color: colors.primaryForeground + "E6", marginTop: spacing.sm }}
 			>
-				{`Tus ventas han ${
-					stats.revenueChange >= 0 ? "crecido" : "decaído"
-				} un ${Math.abs(stats.revenueChange).toFixed(1)}% comparado con el período anterior. Has rescatado ${
-					stats.rescuedCount
-				} comidas, evitando el desperdicio de alimentos.`}
+				{`${(stats.revenueChange >= 0
+					? strings.business.statsGrowthUp
+					: strings.business.statsGrowthDown
+				).replace("{pct}", Math.abs(stats.revenueChange).toFixed(1))} ${strings.business.statsRescued.replace("{count}", String(stats.rescuedCount))}`}
 			</AppText>
 			<View style={styles.summaryRow}>
 				<View style={styles.flex1}>

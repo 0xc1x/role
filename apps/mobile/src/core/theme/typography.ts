@@ -59,6 +59,7 @@ export const typography = {
   bodySmall: { fontFamily: fonts.body, fontSize: 12, lineHeight: 16 },
   labelMedium: { fontFamily: fonts.bodyMedium, fontSize: 16, lineHeight: 24 },
   labelSmall: { fontFamily: fonts.bodyMedium, fontSize: 14 },
+  button: { fontFamily: fonts.bodyBold, fontSize: 16, lineHeight: 24 },
   price: { fontFamily: fonts.headingBold, fontSize: 18, fontWeight: '700' },
   priceOriginal: { fontFamily: fonts.body, fontSize: 14 },
   priceLarge: {

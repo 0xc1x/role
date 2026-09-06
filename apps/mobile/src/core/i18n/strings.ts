@@ -579,6 +579,8 @@ export const strings = {
 		deleteConfirmBody:
 			"Podrás volver a agregarla cuando la necesites. Esta acción no se puede deshacer.",
 		deleted: "Tarjeta eliminada",
+		comingSoon: "Próximamente",
+		comingSoonToast: "Se agregará próximamente",
 	},
 	business: {
 		title: "Mi negocio",
@@ -600,6 +602,9 @@ export const strings = {
 		statsThisYear: "Este año",
 		statsPreviousPeriod: "Período anterior",
 		statsNextPeriod: "Período siguiente",
+		statsGrowthUp: "Tus ventas han crecido un {pct}% comparado con el período anterior.",
+		statsGrowthDown: "Tus ventas han decaído un {pct}% comparado con el período anterior.",
+		statsRescued: "Has rescatado {count} comidas, evitando el desperdicio de alimentos.",
 		kpiRescued: "Rescatadas",
 		vsPrevious: "vs anterior",
 		dailyAvg: "Promedio diario",
@@ -620,6 +625,8 @@ export const strings = {
 		switchBusiness: "Cambiar de negocio",
 		noBusiness: "No tienes negocios registrados",
 		createBusiness: "Registrar negocio",
+		signupDataTitle: "Datos del negocio",
+		signupPhoneLabel: "Teléfono del negocio",
 		newBusinessTitle: "Crea tu negocio",
 		newBusinessSubtitle:
 			"Completa la información de tu negocio para empezar a vender",

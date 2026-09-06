@@ -24,11 +24,16 @@ import type { ColorTokens } from "@/core/theme/colors";
 import { strings } from "@/core/i18n/strings";
 import { spacing, radii } from "@/core/theme/spacing";
 import { fonts, typography, type TypeStyle } from "@/core/theme/typography";
+import { toAppError } from "@/core/error/mapper";
 import { AppText } from "./AppText";
 
 export { BottomSheetModal } from "./BottomSheetModal";
 export { AppText, type FontVariant, type FontWeight } from "./AppText";
 export { useWebPullToRefresh } from "./WebPullToRefresh";
+// InfoScreen y LegalScreen importan del barrel: exportarlas aquí crearía
+// un ciclo; se siguen importando por ruta directa.
+export { Logo } from "./Logo";
+export { default as RoleTabBar, BAR_HEIGHT } from "./RoleTabBar";
 
 export type { ColorTokens, TypeStyle };
 export { spacing, fonts, typography };
@@ -104,22 +109,18 @@ function buttonVariant(
 	labelColor: string;
 } {
 	const base: ViewStyle = {
-		borderRadius: 99,
+		borderRadius: radii.pill,
 		justifyContent: "center",
 		alignItems: "center",
-		paddingHorizontal: 24,
+		paddingHorizontal: spacing.lg,
 	};
-	const labelStyle: TextStyle = {
-		fontSize: 16,
-		fontWeight: "700" as const,
-		lineHeight: 24,
-	};
+	const labelStyle: TextStyle = { ...typography.button };
 	switch (variant) {
 		case "primary":
 			return {
 				base: { ...base, backgroundColor: colors.primary },
 				labelStyle,
-				labelColor: "#FFFFFF",
+				labelColor: colors.primaryForeground,
 			};
 		case "secondary":
 			return {
@@ -148,7 +149,7 @@ function buttonVariant(
 			return {
 				base: { ...base, backgroundColor: colors.destructive },
 				labelStyle,
-				labelColor: "#FFFFFF",
+				labelColor: colors.destructiveForeground,
 			};
 	}
 }
@@ -424,6 +425,7 @@ export function Card({ children, style, onPress }: CardProps) {
 		return (
 			<Pressable
 				onPress={onPress}
+				accessibilityRole="button"
 				style={({ pressed }) => [inner, pressed && { opacity: 0.9 }]}
 			>
 				{children}
@@ -622,10 +624,9 @@ export function ErrorState({
 	onRetry?: () => void;
 }) {
 	const { colors } = useTheme();
-	const message =
-		error instanceof Error
-			? error.message
-			: "Algo salió mal. Inténtalo de nuevo.";
+	// Nunca renderices error.message crudo: toAppError mapea PostgREST/red
+	// a la taxonomía de la app con copy es-ES.
+	const message = toAppError(error).message;
 	return (
 		<View style={styles.stateBox}>
 			<AppText
@@ -637,7 +638,7 @@ export function ErrorState({
 			</AppText>
 			{onRetry ? (
 				<Button
-					label="Reintentar"
+					label={strings.common.retry}
 					variant="outline"
 					onPress={onRetry}
 					style={{ alignSelf: "center", marginTop: margin(2) }}
@@ -692,7 +693,11 @@ export function SectionHeader({
 }
 
 // ─── Loading ────────────────────────────────────────────────────────
-export function LoadingView({ label = "Cargando..." }: { label?: string }) {
+export function LoadingView({
+	label = strings.common.loading,
+}: {
+	label?: string;
+}) {
 	const { colors } = useTheme();
 	return (
 		<View

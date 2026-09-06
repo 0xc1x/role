@@ -33,6 +33,7 @@ export interface ColorTokens {
 
 	// Semantic
 	destructive: string;
+	destructiveForeground: string;
 	destructiveVibrant: string;
 	destructiveSurface: string;
 	destructiveBorder: string;
@@ -133,6 +134,7 @@ const light: ColorTokens = {
 	surfaceBackground: "#F8FAFC",
 
 	destructive: "#901B35",
+	destructiveForeground: "#FFFFFF",
 	destructiveVibrant: "#EF4444",
 	destructiveSurface: "#FEE2E2",
 	destructiveBorder: "#FCA5A5",
@@ -227,6 +229,7 @@ const dark: ColorTokens = {
 	surfaceBackground: "#121212",
 
 	destructive: "#901B35",
+	destructiveForeground: "#FFFFFF",
 	destructiveVibrant: "#EF4444",
 	destructiveSurface: "#EF444433",
 	destructiveBorder: "#FCA5A5",

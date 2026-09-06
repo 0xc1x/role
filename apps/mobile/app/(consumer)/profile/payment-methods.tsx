@@ -156,7 +156,9 @@ export default function PaymentMethodsScreen() {
 
 				{showForm ? (
 					<Card style={{ marginTop: spacing.lg, gap: spacing.md }}>
-						<AppText variant="bodyMedium" weight="semiBold">Próximamente</AppText>
+						<AppText variant="bodyMedium" weight="semiBold">
+							{strings.paymentMethods.comingSoon}
+						</AppText>
 						{/* La alta de tarjetas se habilitará con el SDK del gateway (tokenización PCI — nunca almacenamos el número de tarjeta). */}
 						<Button label={strings.common.cancel} variant="outline" onPress={() => setShowForm(false)} fullWidth />
 					</Card>
@@ -165,7 +167,7 @@ export default function PaymentMethodsScreen() {
 						label={strings.paymentMethods.add}
 						variant="outline"
 						onPress={() => {
-							toast.info("Se agregará próximamente");
+							toast.info(strings.paymentMethods.comingSoonToast);
 							setShowForm(true);
 						}}
 						fullWidth

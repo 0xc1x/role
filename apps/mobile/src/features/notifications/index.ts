@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 
 import { supabase } from "@/core/supabase/client";
 import { toAppError } from "@/core/error/mapper";
+import { env } from "@/core/config/env";
 
 type NotificationsModule = typeof import("expo-notifications");
 
@@ -44,7 +45,7 @@ export async function syncDeviceToken(
 			if (requested.status !== "granted") return false;
 		}
 
-		const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? null;
+		const projectId = env.EXPO_PUBLIC_EAS_PROJECT_ID || null;
 		if (!projectId) {
 			// ponytail: sin proyecto EAS no hay token de Expo push (el error
 			// crudo de expo-installations llegaba hasta el toast). Solución
