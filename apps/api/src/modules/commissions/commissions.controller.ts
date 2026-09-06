@@ -23,19 +23,19 @@ import type {
   ListCommissionsQuery,
   UpdateCommissionDto,
 } from '@0xc1x/role-commons';
-import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CommissionsService } from './commissions.service';
 
 @ApiTags('Commissions')
+@ApiBearerAuth('bearer')
 @Controller('commissions')
 export class CommissionsController {
   constructor(private readonly commissionsService: CommissionsService) {}
 
-  @Public()
+  @Roles('admin')
   @Get()
-  @ApiOperation({ summary: 'List business commissions' })
+  @ApiOperation({ summary: 'List business commissions (admin)' })
   @ApiOkResponse({ description: 'Paginated commission list' })
   list(
     @Query(new ZodValidationPipe(ListCommissionsQuerySchema))
@@ -44,9 +44,9 @@ export class CommissionsController {
     return this.commissionsService.list(query);
   }
 
-  @Public()
+  @Roles('admin')
   @Get(':id')
-  @ApiOperation({ summary: 'Get the commission of a business' })
+  @ApiOperation({ summary: 'Get the commission of a business (admin)' })
   @ApiOkResponse({ description: 'Commission detail' })
   getById(@Param('id', ParseUUIDPipe) id: string): Promise<CommissionDto> {
     return this.commissionsService.getById(id);
