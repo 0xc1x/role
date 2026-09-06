@@ -199,9 +199,11 @@ export class OrdersRepository {
       sql`SELECT pg_advisory_xact_lock(hashtext('FD-' || to_char(now(), 'YYYY-MMDD')))`,
     );
     // ponytail: driver puede devolver filas o {rows}; normalizar como en payouts
+    // El secuencial arranca tras el prefijo `FD-YYYY-MMDD-` (13 chars), igual
+    // que generate_order_number en Supabase (equivalencia ADR-0008).
     const result = (await tx.execute(sql`
       SELECT 'FD-' || to_char(now(), 'YYYY-MMDD') || '-' || lpad((
-        COALESCE(MAX(CAST(SUBSTRING(order_number FROM 16) AS INTEGER)), 0) + 1
+        COALESCE(MAX(CAST(SUBSTRING(order_number FROM LENGTH('FD-' || to_char(now(), 'YYYY-MMDD') || '-') + 1) AS INTEGER)), 0) + 1
       )::text, 3, '0') AS order_number
       FROM ${orders}
       WHERE order_number LIKE 'FD-' || to_char(now(), 'YYYY-MMDD') || '-%'
