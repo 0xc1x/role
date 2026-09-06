@@ -9,9 +9,8 @@ import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { radii, spacing } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
-import { AppText, Button } from "@/core/ui";
+import { AppText, Button, TextField } from "@/core/ui";
 import { Logo } from "@/core/ui/Logo";
-import { AuthField } from "@/features/auth/presentation/AuthField";
 import { AuthScreenShell } from "@/features/auth/presentation/AuthScreenShell";
 import { SocialAuthButtons } from "@/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/features/auth/data/repository";
@@ -93,9 +92,9 @@ export default function LoginScreen() {
 				</AppText>
 			</View>
 
-			<AuthField
+			<TextField
 				label={strings.auth.email}
-				icon="mail-outline"
+				iconName="mail-outline"
 				value={email}
 				onChangeText={setEmail}
 				error={emailError}
@@ -106,13 +105,13 @@ export default function LoginScreen() {
 				textContentType="emailAddress"
 				returnKeyType="next"
 			/>
-			<AuthField
+			<TextField
 				label={strings.auth.password}
-				icon="lock-closed-outline"
+				iconName="lock-closed-outline"
 				value={password}
 				onChangeText={setPassword}
 				error={passwordError}
-				secure
+				secureToggle
 				autoComplete="current-password"
 				textContentType="password"
 				returnKeyType="done"
@@ -249,9 +248,9 @@ function ForgotPasswordDialog({
 					>
 						{strings.auth.resetDescription}
 					</AppText>
-					<AuthField
+					<TextField
 						label={strings.auth.email}
-						icon="mail-outline"
+						iconName="mail-outline"
 						value={email}
 						onChangeText={(t) => {
 							setEmail(t);

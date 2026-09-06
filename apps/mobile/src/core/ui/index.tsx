@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactElement, type ReactNode, type Ref } from "react";
+import { useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
 import {
 	Platform,
 	ActivityIndicator,
@@ -489,6 +489,10 @@ interface TextFieldProps extends TextInputProps {
 	hint?: string;
 	error?: string | null;
 	containerStyle?: StyleProp<ViewStyle>;
+	/** Icono de prefijo (Ionicons), usado por los formularios de auth. */
+	iconName?: keyof typeof Ionicons.glyphMap;
+	/** Toggle de visibilidad para contraseñas (junto a secureTextEntry). */
+	secureToggle?: boolean;
 }
 
 export function TextField({
@@ -497,49 +501,128 @@ export function TextField({
 	error,
 	containerStyle,
 	multiline,
+	iconName,
+	secureToggle,
 	...inputProps
 }: TextFieldProps) {
 	const { colors } = useTheme();
+	const [focused, setFocused] = useState(false);
+	const [obscured, setObscured] = useState(
+		secureToggle ? (inputProps.secureTextEntry ?? false) : false,
+	);
+	const labelNode = label ? (
+		<AppText
+			variant="labelSmall"
+			weight="semiBold"
+			style={[styles.fieldLabel, { color: colors.mutedForeground }]}
+		>
+			{label}
+		</AppText>
+	) : null;
+	const hintNode = error ? (
+		<AppText
+			variant="bodySmall"
+			style={{ color: colors.destructive, marginTop: 4 }}
+		>
+			{error}
+		</AppText>
+	) : hint ? (
+		<AppText
+			variant="bodySmall"
+			style={{ color: colors.mutedForeground, marginTop: 4 }}
+		>
+			{hint}
+		</AppText>
+	) : null;
+
+	if (iconName || secureToggle) {
+		const editable = inputProps.editable !== false;
+		return (
+			<View style={[styles.field, containerStyle]}>
+				{labelNode}
+				<View
+					style={[
+						styles.fieldRow,
+						{
+							backgroundColor: colors.inputBackground,
+							borderColor: error
+								? colors.destructive
+								: focused
+									? colors.primary
+									: colors.borderSolid,
+							opacity: editable ? 1 : 0.6,
+						},
+					]}
+				>
+					{iconName ? (
+						<Ionicons name={iconName} size={20} color={colors.mutedForeground} />
+					) : null}
+					<TextInput
+						placeholderTextColor={colors.mutedForeground}
+						onFocus={(e) => {
+							setFocused(true);
+							inputProps.onFocus?.(e);
+						}}
+						onBlur={(e) => {
+							setFocused(false);
+							inputProps.onBlur?.(e);
+						}}
+						style={[styles.fieldInput, { color: colors.foreground }]}
+						{...inputProps}
+						secureTextEntry={secureToggle ? obscured : inputProps.secureTextEntry}
+					/>
+					{secureToggle ? (
+						<Pressable
+							onPress={() => setObscured((s) => !s)}
+							hitSlop={8}
+							accessibilityRole="button"
+							accessibilityLabel={
+								obscured ? strings.auth.showPassword : strings.auth.hidePassword
+							}
+							style={styles.eyeButton}
+						>
+							<Ionicons
+								name={obscured ? "eye" : "eye-off"}
+								size={20}
+								color={colors.mutedForeground}
+							/>
+						</Pressable>
+					) : null}
+				</View>
+				{hintNode}
+			</View>
+		);
+	}
 	return (
 		<View style={[styles.field, containerStyle]}>
-			{label ? (
-				<AppText
-					variant="labelSmall"
-					weight="semiBold"
-					style={[styles.fieldLabel, { color: colors.mutedForeground }]}
-				>
-					{label}
-				</AppText>
-			) : null}
+			{labelNode}
 			<TextInput
 				placeholderTextColor={colors.mutedForeground}
 				multiline={multiline}
+				onFocus={(e) => {
+					setFocused(true);
+					inputProps.onFocus?.(e);
+				}}
+				onBlur={(e) => {
+					setFocused(false);
+					inputProps.onBlur?.(e);
+				}}
 				style={[
 					styles.input,
 					multiline && styles.inputMultiline,
 					{
 						backgroundColor: colors.inputBackground,
-						borderColor: error ? colors.destructive : colors.border,
+						borderColor: error
+							? colors.destructive
+							: focused
+								? colors.primary
+								: colors.border,
 						color: colors.foreground,
 					},
 				]}
 				{...inputProps}
 			/>
-			{error ? (
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.destructive, marginTop: 4 }}
-				>
-					{error}
-				</AppText>
-			) : hint && !error ? (
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.mutedForeground, marginTop: 4 }}
-				>
-					{hint}
-				</AppText>
-			) : null}
+			{hintNode}
 		</View>
 	);
 }
@@ -794,6 +877,21 @@ const styles = StyleSheet.create({
 	},
 	field: { marginBottom: spacing.md },
 	fieldLabel: { marginBottom: 6 },
+	fieldRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+		borderWidth: 1,
+		borderRadius: 18,
+		paddingHorizontal: 16,
+		paddingVertical: 12,
+	},
+	fieldInput: { flex: 1, minWidth: 0, fontSize: 15, paddingVertical: 0 },
+	eyeButton: {
+		padding: spacing.xs,
+		alignItems: "center",
+		justifyContent: "center",
+	},
 	input: {
 		borderRadius: 18,
 		borderWidth: 1,

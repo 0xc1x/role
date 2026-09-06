@@ -8,9 +8,8 @@ import { toAppError } from "@/core/error/mapper";
 import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { radii, spacing } from "@/core/theme/spacing";
-import { AppText, Button } from "@/core/ui";
+import { AppText, Button, TextField } from "@/core/ui";
 import { Logo } from "@/core/ui/Logo";
-import { AuthField } from "@/features/auth/presentation/AuthField";
 import { AuthScreenShell } from "@/features/auth/presentation/AuthScreenShell";
 import { SocialAuthButtons } from "@/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/features/auth/data/repository";
@@ -114,9 +113,9 @@ export default function SignupScreen() {
 				</AppText>
 			</View>
 
-			<AuthField
+			<TextField
 				label={strings.auth.fullName}
-				icon="person-outline"
+				iconName="person-outline"
 				value={fullName}
 				onChangeText={setFullName}
 				error={nameError}
@@ -124,9 +123,9 @@ export default function SignupScreen() {
 				textContentType="name"
 				returnKeyType="next"
 			/>
-			<AuthField
+			<TextField
 				label={strings.auth.email}
-				icon="mail-outline"
+				iconName="mail-outline"
 				value={email}
 				onChangeText={setEmail}
 				error={emailError}
@@ -136,13 +135,13 @@ export default function SignupScreen() {
 				textContentType="emailAddress"
 				returnKeyType="next"
 			/>
-			<AuthField
+			<TextField
 				label={strings.auth.password}
-				icon="lock-closed-outline"
+				iconName="lock-closed-outline"
 				value={password}
 				onChangeText={setPassword}
 				error={passwordError}
-				secure
+				secureToggle
 				hint={strings.auth.passwordMinHint}
 				autoComplete="new-password"
 				textContentType="newPassword"
