@@ -298,6 +298,28 @@ export function useUpdateOrderStatus(businessId: string) {
 	});
 }
 
+/**
+ * Business-side cancel via the `cancel_order` RPC (p_business_id): server
+ * rules and stock restock live in the DB. Invalidates offers too, since the
+ * cancel returns the reserved stock to the offer.
+ */
+export function useCancelBusinessOrder(businessId: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (orderId: string) =>
+			orderRepository.cancelOrderForBusiness(orderId, businessId),
+		onSuccess: (result) => {
+			if (result.success) {
+				void queryClient.invalidateQueries({
+					queryKey: businessOrdersKey(businessId),
+				});
+				void queryClient.invalidateQueries({ queryKey: ["orders"] });
+				void queryClient.invalidateQueries({ queryKey: ["offers"] });
+			}
+		},
+	});
+}
+
 /** Validates a pickup code (`validate_pickup_code` RPC); refetches on success. */
 export function useValidatePickupCode(businessId: string) {
 	const queryClient = useQueryClient();

@@ -124,6 +124,37 @@ export const orderRepository = {
 			throw toAppError(error, "Error al actualizar el estado del pedido");
 	},
 
+	/**
+	 * Cancels an order as the business via the `cancel_order` RPC
+	 * (`p_business_id`): ownership, rules and stock restock are server-side.
+	 */
+	async cancelOrderForBusiness(
+		orderId: string,
+		businessId: string,
+	): Promise<CancelOrderResult> {
+		try {
+			const { data, error } = await supabase.rpc("cancel_order", {
+				p_order_id: orderId,
+				p_business_id: businessId,
+			});
+			if (error) throw toAppError(error, "Error al cancelar el pedido");
+			const result = (data ?? {}) as Record<string, unknown>;
+			if (result.success === true) {
+				return {
+					success: true,
+					orderId: result.order_id ? String(result.order_id) : undefined,
+				};
+			}
+			return {
+				success: false,
+				errorCode: String(result.error ?? "UNKNOWN"),
+				message: String(result.message ?? "Error al cancelar"),
+			};
+		} catch (e) {
+			throw toAppError(e, "Error al cancelar el pedido");
+		}
+	},
+
 	/** Cancels an order via the `cancel_order` RPC (server-side rules). */
 	async cancelOrder(orderId: string): Promise<CancelOrderResult> {
 		const userId = await currentUserId();

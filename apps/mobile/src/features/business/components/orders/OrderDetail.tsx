@@ -50,6 +50,7 @@ import {
 	type OrderDetail,
 } from "@/features/orders/domain/order";
 import {
+	useCancelBusinessOrder,
 	useUpdateOrderStatus,
 	useValidatePickupCode,
 } from "@/features/business/hooks";
@@ -79,6 +80,9 @@ export function OrderDetail({
 	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 	const updateStatus = useUpdateOrderStatus(businessId);
 	const validate = useValidatePickupCode(businessId);
+	// El cancel del negocio va por el RPC `cancel_order` (p_business_id):
+	// reglas y devolución de stock viven server-side, no en UPDATE directo.
+	const cancelOrder = useCancelBusinessOrder(businessId);
 	const { order } = item;
 	const isTerminal = isTerminalStatus(order.status);
 	const pull = useWebPullToRefresh({
@@ -176,14 +180,16 @@ export function OrderDetail({
 						/>
 					) : null}
 
-					<Button
-						label={strings.business.ordersCancelOrder}
-						variant="outline"
-						size="lg"
-						onPress={confirmCancel}
-						loading={updateStatus.isPending}
-						fullWidth
-					/>
+					{order.status !== "picked_up" ? (
+						<Button
+							label={strings.business.ordersCancelOrder}
+							variant="outline"
+							size="lg"
+							onPress={confirmCancel}
+							loading={cancelOrder.isPending}
+							fullWidth
+						/>
+					) : null}
 				</View>
 			) : null}
 
@@ -238,10 +244,21 @@ export function OrderDetail({
 						</AlertDialogCancel>
 						<AlertDialogAction
 							onPress={() =>
-								updateStatus.mutate(
-								{ orderId: order.id, status: "cancelled" },
-								{ onSuccess: () => goBackOr("/(business)/orders") },
-								)
+								cancelOrder.mutate(order.id, {
+									onSuccess: (result) => {
+										if (result.success) {
+											setConfirmCancelOpen(false);
+											toast.success(strings.business.ordersCancelled);
+											goBackOr("/(business)/orders");
+										} else {
+											toast.error(
+												result.message ?? strings.business.ordersCancelError,
+											);
+										}
+									},
+									onError: () =>
+										toast.error(strings.business.ordersCancelError),
+								})
 							}
 						>
 							<Text>{strings.business.ordersCancelOrder}</Text>

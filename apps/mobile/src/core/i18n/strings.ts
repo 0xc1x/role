@@ -782,6 +782,8 @@ export const strings = {
 		ordersOrderedBy: "Cliente",
 		ordersCancelOrder: "Cancelar pedido",
 		ordersCancelConfirm: "¿Estás seguro de que deseas cancelar este pedido?",
+		ordersCancelled: "Pedido cancelado",
+		ordersCancelError: "No pudimos cancelar el pedido. Inténtalo de nuevo.",
 		ordersProductTitle: "Producto",
 		ordersCustomerInfo: "Información del cliente",
 		ordersName: "Nombre",
