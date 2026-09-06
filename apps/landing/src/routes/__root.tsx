@@ -1,5 +1,5 @@
 import type { QueryClient as QC } from "@tanstack/react-query";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
@@ -8,8 +8,10 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { createAppQueryClient } from "@/lib/query-client";
 import { absoluteUrl } from "@/lib/seo";
 import appCss from "../styles.css?url";
+import { CookieBanner } from "@/components/cookie-banner";
 
 export interface RouterContext {
 	queryClient: QC;
@@ -113,16 +115,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 	component: RootComponent,
 });
 
-function getQueryClient() {
-	return new QueryClient({
-		defaultOptions: {
-			queries: { staleTime: 30_000, gcTime: 5 * 60_000, retry: 1 },
-		},
-	});
-}
-
 function RootComponent() {
-	const queryClient = getQueryClient();
+	const queryClient = createAppQueryClient();
 
 	useEffect(() => {
 		const observer = new IntersectionObserver(
@@ -170,6 +164,7 @@ function RootComponent() {
 						Saltar al contenido
 					</a>
 					<Outlet />
+					<CookieBanner />
 					<Scripts />
 				</QueryClientProvider>
 			</body>

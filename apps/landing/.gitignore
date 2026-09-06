@@ -7,3 +7,7 @@ dist/
 .env
 .env.local
 .env.*.local
+
+# Generados en build por el plugin seoFiles de vite.config.ts
+public/robots.txt
+public/sitemap.xml

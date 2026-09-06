@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { Footer } from "@/components/footer";
 import { HeroBackground } from "@/components/hero-background";
@@ -211,12 +211,12 @@ function AboutPage() {
 								>
 									Consigue la app
 								</a>
-								<a
-									href="/for-business"
+								<Link
+									to="/for-business"
 									className="rounded-full border border-white/30 px-8 py-3 font-semibold text-white transition-colors duration-200 hover:bg-white/10"
 								>
 									Soy negocio
-								</a>
+								</Link>
 							</div>
 						</div>
 					</div>

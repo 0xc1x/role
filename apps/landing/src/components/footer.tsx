@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { LogoMark, Wordmark } from "@/components/brand";
 import { useConfig } from "@/lib/use-config";
 
@@ -49,14 +50,14 @@ export function Footer() {
 			<div className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-20">
 				<div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr]">
 					<div>
-						<a
-							href="/"
+						<Link
+							to="/"
 							className="inline-flex items-center gap-2 rounded-2xl bg-paper p-2"
 							aria-label="Rolé — Inicio"
 						>
 							<LogoMark className="h-5 w-auto text-ink" />
 							<Wordmark className="h-5 w-auto text-ink" />
-						</a>
+						</Link>
 						<p className="mt-5 max-w-sm text-sm leading-relaxed text-cream/70">
 							Rescatamos comida deliciosa del desperdicio y la ponemos a precios
 							increíbles. Menos desperdicio, más comunidad.
@@ -72,35 +73,35 @@ export function Footer() {
 						<p className="text-xs font-semibold uppercase tracking-[0.16em] text-cream/50">
 							Explorar
 						</p>
-						<ul className="mt-4 flex flex-col gap-2.5">
-							{EXPLORE.map((l) => (
-								<li key={l.href}>
-									<a
-										href={l.href}
-										className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
-									>
-										{l.label}
-									</a>
-								</li>
-							))}
-						</ul>
-					</div>
-					<div>
-						<p className="text-xs font-semibold uppercase tracking-[0.16em] text-cream/50">
-							Legal
-						</p>
-						<ul className="mt-4 flex flex-col gap-2.5">
-							{LEGAL.map((l) => (
-								<li key={l.href}>
-									<a
-										href={l.href}
-										className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
-									>
-										{l.label}
-									</a>
-								</li>
-							))}
-						</ul>
+							<ul className="mt-4 flex flex-col gap-2.5">
+								{EXPLORE.map((l) => (
+									<li key={l.href}>
+										<Link
+											to={l.href}
+											className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
+										>
+											{l.label}
+										</Link>
+									</li>
+								))}
+							</ul>
+						</div>
+						<div>
+							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-cream/50">
+								Legal
+							</p>
+							<ul className="mt-4 flex flex-col gap-2.5">
+								{LEGAL.map((l) => (
+									<li key={l.href}>
+										<Link
+											to={l.href}
+											className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
+										>
+											{l.label}
+										</Link>
+									</li>
+								))}
+							</ul>
 						<p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-cream/50">
 							Contacto
 						</p>

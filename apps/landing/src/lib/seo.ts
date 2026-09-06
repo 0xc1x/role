@@ -11,11 +11,14 @@ function normalizeSiteUrl(raw: string): string {
 }
 
 export function getSiteUrl(): string | undefined {
-	const fromVite = import.meta.env.VITE_SITE_URL as string | undefined;
+	// Cliente (Vite hornea VITE_* en build) con fallback opcional: nitro no
+	// reemplaza import.meta.env en el bundle SSR, ahí manda process.env.
+	const fromVite = import.meta.env?.VITE_SITE_URL as string | undefined;
 	if (fromVite) return normalizeSiteUrl(fromVite);
 	if (typeof process !== "undefined") {
-		const fromVercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-		if (fromVercel) return normalizeSiteUrl(fromVercel);
+		const fromNode =
+			process.env?.VITE_SITE_URL ?? process.env?.VERCEL_PROJECT_PRODUCTION_URL;
+		if (fromNode) return normalizeSiteUrl(fromNode);
 	}
 	return undefined;
 }

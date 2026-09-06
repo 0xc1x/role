@@ -2,7 +2,7 @@ import {
 	OnboardingBusinessRequestSchema,
 	type OnboardingBusinessResponse,
 } from "@0xc1x/role-commons";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { Footer } from "@/components/footer";
@@ -89,12 +89,12 @@ function BusinessSignupPage() {
 						para activarlo. Revisa tu correo para confirmar tu cuenta si es
 						necesario.
 					</p>
-					<a
-						href="/"
+					<Link
+						to="/"
 						className="mt-8 inline-block rounded-full bg-role-primary px-6 py-3 font-semibold text-white"
 					>
 						Volver al inicio
-					</a>
+					</Link>
 				</main>
 				<Footer />
 			</div>
@@ -114,8 +114,9 @@ function BusinessSignupPage() {
 				</p>
 				<form onSubmit={submit} className="mt-8 space-y-4">
 					<div>
-						<Label>Tu nombre *</Label>
+						<Label htmlFor="signup-name">Tu nombre *</Label>
 						<Input
+							id="signup-name"
 							value={fullName}
 							onChange={(e) => setFullName(e.target.value)}
 							placeholder="Nombre completo"
@@ -123,8 +124,9 @@ function BusinessSignupPage() {
 						/>
 					</div>
 					<div>
-						<Label>Email *</Label>
+						<Label htmlFor="signup-email">Email *</Label>
 						<Input
+							id="signup-email"
 							type="email"
 							value={email}
 							onChange={(e) => setEmail(e.target.value)}
@@ -133,8 +135,9 @@ function BusinessSignupPage() {
 						/>
 					</div>
 					<div>
-						<Label>Contraseña *</Label>
+						<Label htmlFor="signup-password">Contraseña *</Label>
 						<Input
+							id="signup-password"
 							type="password"
 							value={password}
 							onChange={(e) => setPassword(e.target.value)}
@@ -142,8 +145,9 @@ function BusinessSignupPage() {
 						/>
 					</div>
 					<div>
-						<Label>Confirmar contraseña *</Label>
+						<Label htmlFor="signup-confirm">Confirmar contraseña *</Label>
 						<Input
+							id="signup-confirm"
 							type="password"
 							value={confirm}
 							onChange={(e) => setConfirm(e.target.value)}
@@ -151,8 +155,9 @@ function BusinessSignupPage() {
 						/>
 					</div>
 					<div>
-						<Label>Nombre del negocio *</Label>
+						<Label htmlFor="signup-business">Nombre del negocio *</Label>
 						<Input
+							id="signup-business"
 							value={businessName}
 							onChange={(e) => setBusinessName(e.target.value)}
 							placeholder="Panadería La Espiga"
@@ -160,14 +165,15 @@ function BusinessSignupPage() {
 						/>
 					</div>
 					<div>
-						<Label>Teléfono</Label>
+						<Label htmlFor="signup-phone">Teléfono</Label>
 						<Input
+							id="signup-phone"
 							value={phone}
 							onChange={(e) => setPhone(e.target.value)}
 							placeholder="+593 ..."
 						/>
 					</div>
-					{error ? <p className="text-sm text-red-600">{error}</p> : null}
+					{error ? <p className="text-sm text-destructive">{error}</p> : null}
 					<Button
 						type="submit"
 						disabled={loading}

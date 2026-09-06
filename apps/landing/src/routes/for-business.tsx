@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Cta } from "@/components/cta";
 import { Footer } from "@/components/footer";
 import { HeroBackground } from "@/components/hero-background";
@@ -109,12 +109,12 @@ function ForBusinessPage() {
 								de registro, sin comisiones sobre el cobro.
 							</p>
 							<div className="mt-10 flex flex-wrap gap-4 reveal reveal-delay-3">
-								<a
-									href="/business-signup"
+								<Link
+									to="/business-signup"
 									className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 								>
 									Registrar mi negocio
-								</a>
+								</Link>
 								<a
 									href="mailto:negocios@role.app"
 									className="rounded-full border border-white/25 px-7 py-3 font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.98]"

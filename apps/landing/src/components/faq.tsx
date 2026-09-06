@@ -17,7 +17,7 @@ export const FAQ_ITEMS = [
 	},
 	{
 		q: "¿Dónde operan?",
-		a: "El lanzamiento cubre Santo Domingo. Pronto estaremos en más cerca de ti en más ciudades.",
+		a: "El lanzamiento cubre Santo Domingo. Pronto estaremos cerca de ti en más ciudades.",
 	},
 	{
 		q: "¿Cómo empiezo?",

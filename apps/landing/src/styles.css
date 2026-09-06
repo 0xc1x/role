@@ -391,8 +391,20 @@ body::before {
   .animate-drift-slow,
   .animate-float-y,
   .animate-menu-in,
-  .animate-item-in {
+  .animate-item-in,
+  .animate-bounce {
     animation: none;
+  }
+
+  /* Sin JS del reveal o con movimiento reducido: contenido siempre visible. */
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  html {
+    scroll-behavior: auto;
   }
 }
 

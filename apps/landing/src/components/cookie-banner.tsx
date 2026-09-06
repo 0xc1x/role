@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { Cookie, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,11 @@ export function CookieBanner() {
 		setVisible(false);
 	}
 
+	// Cerrar sin aceptar: solo esta sesión, sin persistir consentimiento.
+	function dismiss() {
+		setVisible(false);
+	}
+
 	if (!visible) {
 		return null;
 	}
@@ -52,8 +58,8 @@ export function CookieBanner() {
 							<Button
 								variant="ghost"
 								size="icon-sm"
-								onClick={accept}
-								aria-label="Cerrar aviso"
+								onClick={dismiss}
+								aria-label="Cerrar aviso sin aceptar"
 								className="rounded-lg text-role-muted-foreground hover:bg-role-muted hover:text-role-muted-foreground"
 							>
 								<X className="h-4 w-4" />
@@ -62,12 +68,12 @@ export function CookieBanner() {
 						<p className="mt-1.5 text-xs leading-relaxed text-role-muted-foreground">
 							Usamos cookies mínimas para garantizar tu sesión y recordar tus
 							preferencias. Conoce nuestra{" "}
-							<a
-								href="/privacy"
+							<Link
+								to="/privacy"
 								className="font-semibold text-role-primary underline hover:text-role-primary-hover"
 							>
 								política de privacidad
-							</a>
+							</Link>
 							.
 						</p>
 						<div className="mt-3.5 flex items-center gap-2">

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { Heart, MapPin } from "lucide-react";
@@ -49,7 +50,6 @@ export function Hero() {
 		>
 			{/* Background layers — atmospheric, warm-tinted */}
 			<div aria-hidden className="pointer-events-none absolute inset-0">
-				<div className="absolute inset-0 bg-[url('https://picsum.photos/seed/role-market/1920/1280')] bg-cover bg-center opacity-[0.12]" />
 				<div className="absolute inset-0 bg-gradient-to-br from-role-dark-bg via-role-dark-bg/92 to-role-primary-deep/25" />
 				<div className="absolute -top-40 -right-32 h-96 w-96 animate-drift rounded-full bg-role-primary/20 blur-3xl" />
 				<div className="absolute -bottom-48 -left-24 h-[30rem] w-[30rem] animate-drift-slow rounded-full bg-role-primary-deep/35 blur-3xl" />
@@ -82,11 +82,9 @@ export function Hero() {
 									-{discountPct}%
 								</Badge>
 							) : null}
-							{(offer as unknown as { stock?: number })?.stock != null &&
-							(offer as unknown as { stock: number }).stock <= 3 &&
-							(offer as unknown as { stock: number }).stock > 0 ? (
+							{offer && offer.stock > 0 && offer.stock <= 3 ? (
 								<Badge className="absolute bottom-2 left-2 rounded-full bg-role-primary-deep px-2.5 py-1 text-xs font-semibold text-white hover:bg-role-primary-deep">
-									¡Quedan {(offer as unknown as { stock: number }).stock}!
+									¡Quedan {offer.stock}!
 								</Badge>
 							) : null}
 							<div className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 shadow-sm">
@@ -107,9 +105,8 @@ export function Hero() {
 										</span>
 									</div>
 									<p className="mt-1 truncate text-xs text-role-muted-foreground">
-										{offer &&
-										(offer as unknown as { pickup_end?: string }).pickup_end
-											? `Recoge antes de las ${formatTime((offer as unknown as { pickup_end: string }).pickup_end)}`
+										{offer?.pickup_end
+											? `Recoge antes de las ${formatTime(offer.pickup_end)}`
 											: "Recoge antes de las 17:00"}
 									</p>
 								</div>
@@ -164,7 +161,7 @@ export function Hero() {
 						</Button>
 						<Button
 							variant="ghost"
-							render={<a href="/for-business" />}
+							render={<Link to="/for-business" />}
 							className="rounded-full border border-white/25 bg-transparent px-7 py-3 font-semibold text-white hover:bg-white hover:text-role-primary active:scale-[0.98]"
 						>
 							Para negocios

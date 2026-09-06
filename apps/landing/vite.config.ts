@@ -19,16 +19,17 @@ const INDEXABLE_ROUTES = [
 ];
 
 /**
- * Genera robots.txt y sitemap.xml en el outDir del build. El dominio viene de
- * VITE_SITE_URL o de VERCEL_PROJECT_PRODUCTION_URL (Vercel la inyecta en build);
- * sin dominio se omite el sitemap y robots.txt sale sin línea Sitemap.
+ * Genera robots.txt y sitemap.xml en publicDir al construir: nitro copia esa
+ * carpeta a .output/public y también quedan servidos en dev. El dominio viene
+ * de VITE_SITE_URL o de VERCEL_PROJECT_PRODUCTION_URL (Vercel la inyecta en
+ * build); sin dominio se omite el sitemap y robots.txt sale sin línea Sitemap.
  */
 function seoFiles(): Plugin {
-	let outDir = "dist";
+	let publicDir = "public";
 	return {
 		name: "role-seo-files",
 		configResolved(config) {
-			outDir = config.build.outDir || "dist";
+			publicDir = config.publicDir || "public";
 		},
 		closeBundle() {
 			const raw =
@@ -48,10 +49,10 @@ function seoFiles(): Plugin {
 				"",
 			].join("\n");
 			const writes = [
-				writeFile(path.join(outDir, "robots.txt"), robots),
+				writeFile(path.join(publicDir, "robots.txt"), robots),
 				site
 					? writeFile(
-							path.join(outDir, "sitemap.xml"),
+							path.join(publicDir, "sitemap.xml"),
 							[
 								'<?xml version="1.0" encoding="UTF-8"?>',
 								'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -64,7 +65,7 @@ function seoFiles(): Plugin {
 						)
 					: Promise.resolve(),
 			];
-			mkdir(path.resolve(outDir), { recursive: true })
+			mkdir(path.resolve(publicDir), { recursive: true })
 				.then(() => Promise.all(writes))
 				.catch((err) => {
 					console.warn("[seo] no se pudieron escribir robots/sitemap:", err);
