@@ -4,7 +4,7 @@ import { router } from "expo-router";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
-import { Button, EmptyState, ErrorState } from "@/core/ui";
+import { Button, EmptyState, ErrorState, useWebPullToRefresh } from "@/core/ui";
 import { SectionHeader } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
@@ -68,6 +68,11 @@ export default function ExploreScreen() {
 		lat: selectedAddress?.latitude ?? undefined,
 		lng: selectedAddress?.longitude ?? undefined,
 		searchQuery: debouncedSearch.length > 0 ? debouncedSearch : null,
+	});
+
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
 	});
 
 	const hasActiveFilters = hasActiveExploreFilters({
@@ -164,8 +169,12 @@ export default function ExploreScreen() {
 
 	return (
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
+			{pull.indicator}
 			<ScrollView
-				ref={scrollRef}
+				ref={(instance) => {
+					scrollRef.current = instance;
+					pull.ref(instance);
+				}}
 				style={styles.flex}
 				contentContainerStyle={styles.content}
 				showsVerticalScrollIndicator={false}

@@ -1,7 +1,7 @@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link, router, type Href } from "expo-router";
-import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { Animated, Pressable, RefreshControl, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -15,6 +15,7 @@ import {
 	ErrorState,
 	LoadingView,
 	Screen,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import { performSignOut } from "@/features/auth/sign-out";
@@ -233,7 +234,7 @@ function HistoryTab() {
 		<View style={{ gap: spacing.lg }}>
 			{upcoming.length > 0 ? (
 				<>
-					<AppText variant="h3" weight="bold">
+					<AppText variant="h1" weight="bold">
 						{strings.profile.upcomingOrders}
 					</AppText>
 					{upcoming.map((order) => (
@@ -245,7 +246,7 @@ function HistoryTab() {
 			{past.length > 0 ? (
 				<>
 					<View style={styles.pastHeader}>
-						<AppText variant="h3" weight="bold" style={styles.pastTitle}>
+						<AppText variant="h1" weight="bold" style={styles.pastTitle}>
 							{strings.profile.pastOrders}
 						</AppText>
 						<Link
@@ -284,7 +285,7 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
 		title: strings.profile.sectionAccount,
 		items: [
 			{ icon: "person-outline", label: strings.profile.editProfile, href: "/profile/edit" },
-			{ icon: "card-outline", label: strings.profile.paymentMethods, href: "/profile/payment-methods" },
+			// { icon: "card-outline", label: strings.profile.paymentMethods, href: "/profile/payment-methods" }, // Oculto hasta habilitar la pasarela de pagos
 			{ icon: "location-outline", label: strings.profile.savedAddresses, href: "/profile/addresses" },
 		],
 	},
@@ -389,6 +390,12 @@ function SignOutDialog() {
 export default function ProfileScreen() {
 	const { status, initialized, profile } = useAuthStore();
 	const [activeTab, setActiveTab] = useState<ProfileTab>("history");
+	const { colors } = useTheme();
+	const { refetch, isFetching } = useOrders();
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
 
 	// Redirect guests to login
 	useEffect(() => {
@@ -400,7 +407,21 @@ export default function ProfileScreen() {
 	if (!initialized || status === "guest") return null;
 
 	return (
-		<Screen scroll>
+		<Screen
+			scroll
+			scrollRef={activeTab === "history" ? pull.ref : undefined}
+			refreshControl={
+				activeTab === "history" ? (
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
+					/>
+				) : undefined
+			}
+		>
+			{activeTab === "history" ? pull.indicator : null}
 			<View style={styles.container}>
 				<AppText variant="h2" weight="bold">
 					{strings.profile.title}
@@ -442,7 +463,7 @@ const styles = StyleSheet.create({
 		height: 2,
 		borderRadius: 1,
 	},
-	pastHeader: { flexDirection: "row", alignItems: "center" },
+	pastHeader: { flexDirection: "row", alignItems: "center", paddingTop: spacing.xxl,},
 	pastTitle: { flex: 1 },
 	viewAll: { fontWeight: "600" },
 	menuCard: { padding: 0, overflow: "hidden" },

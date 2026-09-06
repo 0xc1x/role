@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactElement, type ReactNode, type Ref } from "react";
 import {
 	Platform,
 	ActivityIndicator,
@@ -10,6 +10,7 @@ import {
 	TextInput,
 	type TextInputProps,
 	View,
+	type RefreshControlProps,
 	type StyleProp,
 	type TextStyle,
 	type ViewStyle,
@@ -27,6 +28,7 @@ import { AppText } from "./AppText";
 
 export { BottomSheetModal } from "./BottomSheetModal";
 export { AppText, type FontVariant, type FontWeight } from "./AppText";
+export { useWebPullToRefresh } from "./WebPullToRefresh";
 
 export type { ColorTokens, TypeStyle };
 export { spacing, fonts, typography };
@@ -309,72 +311,6 @@ export function SearchBar({
 	);
 }
 
-// ─── SelectableChipsBar ─────────────────────────────────────────────
-interface SelectableChipsBarProps<T> {
-	items: T[];
-	selectedItem: T;
-	labelFor: (item: T) => string;
-	onSelect: (item: T) => void;
-	initialCount?: number;
-	paddingHorizontal?: number;
-	style?: StyleProp<ViewStyle>;
-}
-
-export function SelectableChipsBar<T>({
-	items,
-	selectedItem,
-	labelFor,
-	onSelect,
-	initialCount,
-	paddingHorizontal = spacing.lg,
-	style,
-}: SelectableChipsBarProps<T>) {
-	const { colors } = useTheme();
-	const hasLimit = initialCount != null && items.length > initialCount;
-	const displayItems = hasLimit ? items.slice(0, initialCount) : items;
-
-	return (
-		<View style={[styles.chipsBar, { paddingHorizontal }, style]}>
-			<ScrollView
-				horizontal
-				showsHorizontalScrollIndicator={false}
-				contentContainerStyle={styles.chipsBarContent}
-			>
-				{displayItems.map((item, index) => {
-					const selected = item === selectedItem;
-					return (
-						<Pressable
-							key={index}
-							onPress={() => onSelect(item)}
-							style={[
-								styles.chip,
-								{
-									backgroundColor: selected
-										? colors.greenDark
-										: colors.green + "4D",
-									borderColor: selected
-										? colors.greenDark
-										: colors.greenDark + "26",
-								},
-							]}
-						>
-							<AppText
-								variant="bodySmall"
-								weight={selected ? "semiBold" : "medium"}
-								style={{
-									color: selected ? colors.green : colors.greenDark + "B3",
-								}}
-							>
-								{labelFor(item)}
-							</AppText>
-						</Pressable>
-					);
-				})}
-			</ScrollView>
-		</View>
-	);
-}
-
 // ─── FilterChip (active filter with clear) ─────────────────────────
 export function FilterChip({
 	label,
@@ -505,6 +441,8 @@ interface ScreenProps {
 	style?: StyleProp<ViewStyle>;
 	keyboardShouldPersistTaps?: "handled" | "never" | "always";
 	edges?: Array<"top" | "bottom" | "left" | "right">;
+	refreshControl?: ReactElement<RefreshControlProps>;
+	scrollRef?: Ref<ScrollView>;
 }
 
 export function Screen({
@@ -514,6 +452,8 @@ export function Screen({
 	style,
 	keyboardShouldPersistTaps,
 	edges = ["top", "bottom"],
+	refreshControl,
+	scrollRef,
 }: ScreenProps) {
 	const { colors } = useTheme();
 	const bg = { backgroundColor: colors.background };
@@ -527,10 +467,12 @@ export function Screen({
 	return (
 		<SafeAreaView edges={edges} style={[styles.flex, bg]}>
 			<ScrollView
+				ref={scrollRef}
 				style={style}
 				contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
 				keyboardShouldPersistTaps={keyboardShouldPersistTaps}
 				showsVerticalScrollIndicator={false}
+				refreshControl={refreshControl}
 			>
 				{children}
 			</ScrollView>
@@ -931,22 +873,6 @@ const styles = StyleSheet.create({
 	},
 
 	// ── Chips ────────────────────────────────────────────────────
-	chipsBar: {
-		width: "100%",
-	},
-	chipsBarContent: {
-		gap: spacing.sm,
-		alignItems: "center",
-	},
-	chip: {
-		paddingHorizontal: spacing.lg,
-		paddingVertical: spacing.sm,
-		borderRadius: radii.md,
-		borderWidth: 1,
-		alignItems: "center",
-		justifyContent: "center",
-		minHeight: 40,
-	},
 	filterChip: {
 		flexDirection: "row",
 		alignItems: "center",

@@ -11,6 +11,7 @@ import {
 	LoadingView,
 	Screen,
 	ScreenHeader,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useFavorites } from "@/features/hooks";
 import type { OfferDetail } from "@/features/offers/domain/offer";
@@ -23,6 +24,10 @@ import { useTheme } from "@/core/theme";
 export default function FavoritesScreen() {
 	const { colors } = useTheme();
 	const { data, isLoading, isError, error, refetch, isFetching } = useFavorites();
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
 
 	if (isLoading) return <LoadingView />;
 	if (isError) return <ErrorState error={error} onRetry={refetch} />;
@@ -35,7 +40,9 @@ export default function FavoritesScreen() {
 
 	return (
 		<Screen>
+			{pull.indicator}
 			<FlatList
+				ref={pull.ref}
 				data={favorites}
 				keyExtractor={(item) => item.favoriteId}
 				contentContainerStyle={styles.list}

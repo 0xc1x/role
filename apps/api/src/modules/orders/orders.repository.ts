@@ -190,38 +190,6 @@ export class OrdersRepository {
   }
 
   /**
-   * Orders that should expire: pending/ready whose offer pickup window ended.
-   * Joined against offers via offer_id; caller filters by pickup_end.
-   */
-  async listExpirableIds(
-    tx: DbExecutor,
-    offerIdsWithEndedPickup: string[],
-  ): Promise<Array<typeof orders.$inferSelect>> {
-    if (offerIdsWithEndedPickup.length === 0) return [];
-    return tx
-      .select()
-      .from(orders)
-      .where(
-        and(
-          inArray(orders.offer_id, offerIdsWithEndedPickup),
-          inArray(orders.status, ['pending', 'ready_for_pickup']),
-        ),
-      )
-      .for('update');
-  }
-
-  async listPendingOrReadyWithEndedPickup(now: Date) {
-    // Deferred to service using offers repository join for pickup_end.
-    void now;
-    return this.db
-      .select({
-        order: orders,
-      })
-      .from(orders)
-      .where(inArray(orders.status, ['pending', 'ready_for_pickup']));
-  }
-
-  /**
    * Folio diario `FD-YYYY-MMDD-NNN` (espejo de `generate_order_number`).
    * El MAX+1 del SQL requiere lock para evitar colisiones concurrentes
    * (ADR-0008): advisory xact-lock por día en lugar de tabla de secuencias.

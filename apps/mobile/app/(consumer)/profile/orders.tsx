@@ -11,6 +11,7 @@ import {
 	Screen,
 	ScreenHeader,
 	SearchBar,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useOrders } from "@/features/hooks";
 import { OrderCard } from "@/features/orders/components/OrderCard";
@@ -30,6 +31,10 @@ export default function OrdersScreen() {
 	const [tab, setTab] = useState<OrdersTab>("active");
 	const [historyPeriod, setHistoryPeriod] = useState<"today" | "week" | "all">("week");
 	const [weekOffset, setWeekOffset] = useState(0);
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
 
 	const normalized = query.trim().toLowerCase();
 	const filtered = useMemo(() => {
@@ -81,6 +86,7 @@ export default function OrdersScreen() {
 
 	return (
 		<Screen>
+			{pull.indicator}
 			<View style={styles.header}>
 				<ScreenHeader title={strings.orders.title} fallback="/(consumer)/profile" />
 			</View>
@@ -113,6 +119,7 @@ export default function OrdersScreen() {
 			) : null}
 
 			<FlatList
+				ref={pull.ref}
 				data={list}
 				keyExtractor={(item) => item.order.id}
 				contentContainerStyle={styles.list}

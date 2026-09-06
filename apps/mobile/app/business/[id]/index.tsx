@@ -40,10 +40,11 @@ export default function BusinessHubScreen() {
 			label: strings.business.coupons,
 			route: `/business/${businessId}/coupons`,
 		},
-		{
-			label: strings.business.payments,
-			route: `/business/${businessId}/payouts`,
-		},
+		// Oculto hasta habilitar la pasarela de pagos
+		// {
+		// 	label: strings.business.payments,
+		// 	route: `/business/${businessId}/payouts`,
+		// },
 		{
 			label: strings.business.notifications,
 			route: `/business/${businessId}/notifications`,

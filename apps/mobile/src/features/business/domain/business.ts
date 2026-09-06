@@ -66,6 +66,41 @@ export interface BusinessReviewView {
 	comment: string | null;
 }
 
+/** Orderings for the full reviews screen. */
+export type ReviewFilter = "recent" | "recommended";
+
+/** Minimum Pack+Atención average for a review to count as a recommendation. */
+export const RECOMMENDED_REVIEW_MIN_RATING = 4;
+
+export function reviewAverageRating(
+	review: Pick<BusinessReviewView, "productRating" | "businessRating">,
+): number {
+	return (review.productRating + review.businessRating) / 2;
+}
+
+/** Más recientes primero; en "recommended" solo reseñas con promedio ≥ 4, mejor puntuadas primero. */
+export function filterBusinessReviews(
+	reviews: BusinessReviewView[],
+	filter: ReviewFilter,
+): BusinessReviewView[] {
+	const byDateDesc = (a: BusinessReviewView, b: BusinessReviewView) =>
+		reviewTime(b) - reviewTime(a);
+	if (filter === "recent") {
+		return [...reviews].sort(byDateDesc);
+	}
+	return reviews
+		.filter((r) => reviewAverageRating(r) >= RECOMMENDED_REVIEW_MIN_RATING)
+		.sort(
+			(a, b) =>
+				reviewAverageRating(b) - reviewAverageRating(a) || byDateDesc(a, b),
+		);
+}
+
+function reviewTime(review: BusinessReviewView): number {
+	const time = new Date(review.date).getTime();
+	return Number.isNaN(time) ? 0 : time;
+}
+
 /** Business profile composed with hours, reviews and rescue stats. */
 export interface BusinessProfileDetail {
 	business: Business;

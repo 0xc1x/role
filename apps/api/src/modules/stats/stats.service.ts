@@ -9,11 +9,25 @@ import { businesses, orders, profiles } from '../../database/schema';
 /** Estados que cuentan como "comida salvada" (orden entregada al usuario). */
 const MEALS_SAVED_STATUSES = ['completed', 'picked_up'] as const;
 
+/** TTL corto: el endpoint es público (hero de landing) y son 3 count(*) sin índice útil. */
+const CACHE_TTL_MS = 60_000;
+
 @Injectable()
 export class StatsService {
+  private cache: { value: PlatformStats; expiresAt: number } | null = null;
+
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   async getPlatformStats(): Promise<PlatformStats> {
+    if (this.cache && Date.now() < this.cache.expiresAt) {
+      return this.cache.value;
+    }
+    const stats = await this.computePlatformStats();
+    this.cache = { value: stats, expiresAt: Date.now() + CACHE_TTL_MS };
+    return stats;
+  }
+
+  private async computePlatformStats(): Promise<PlatformStats> {
     const [usersRow] = await this.db.select({ count: count() }).from(profiles);
     const [businessesRow] = await this.db
       .select({ count: count() })

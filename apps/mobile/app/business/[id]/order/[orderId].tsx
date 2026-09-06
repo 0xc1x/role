@@ -17,6 +17,7 @@ export default function BusinessOrderDetailScreen() {
 		isError,
 		error,
 		refetch,
+		isFetching,
 	} = useBusinessOrders(businessId);
 
 	const item = orders?.find((o) => o.order.id === orderId);
@@ -25,5 +26,12 @@ export default function BusinessOrderDetailScreen() {
 	if (isError || !item)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 
-	return <OrderDetail businessId={businessId} item={item} />;
+	return (
+		<OrderDetail
+			businessId={businessId}
+			item={item}
+			isRefreshing={isFetching}
+			onRefresh={() => void refetch()}
+		/>
+	);
 }

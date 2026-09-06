@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -23,17 +23,16 @@ import {
 	Screen,
 	ScreenHeader,
 	StatusBadge,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import {
 	formatDateTime,
 	formatMoney,
-	formatTime,
 } from "@/core/utils/formatters";
-import { categoryLabel, type OfferDetail } from "@/features/offers/domain/offer";
+import type { OfferDetail } from "@/features/offers/domain/offer";
 import { useDeleteOffer, useToggleOfferActive } from "@/features/business/hooks";
-
 /**
  * Product detail + performance stats (ported from Rolé v1
  * `BusinessProductDetailScreen`).
@@ -41,14 +40,22 @@ import { useDeleteOffer, useToggleOfferActive } from "@/features/business/hooks"
 export function ProductDetail({
 	businessId,
 	product,
+	isRefreshing,
+	onRefresh,
 }: {
 	businessId: string;
 	product: OfferDetail;
+	isRefreshing?: boolean;
+	onRefresh?: () => void;
 }) {
 	const { colors } = useTheme();
 	const [deleteOpen, setDeleteOpen] = useState(false);
 	const deleteOffer = useDeleteOffer(businessId);
 	const toggleActive = useToggleOfferActive(businessId);
+	const pull = useWebPullToRefresh({
+		onRefresh: onRefresh ?? (() => {}),
+		refreshing: isRefreshing ?? false,
+	});
 
 	const offer = product.offer;
 	const isActive = offer.is_active;
@@ -62,10 +69,24 @@ export function ProductDetail({
 						100,
 				)
 			: 0;
-	const categories = categoryLabel(product.categories);
+	const categories = product.categories;
 
 	return (
-		<Screen scroll>
+		<Screen
+			scroll
+			scrollRef={onRefresh ? pull.ref : undefined}
+			refreshControl={
+				onRefresh ? (
+					<RefreshControl
+						refreshing={isRefreshing ?? false}
+						onRefresh={onRefresh}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
+					/>
+				) : undefined
+			}
+		>
+			{onRefresh ? pull.indicator : null}
 			<View style={styles.content}>
 				<ScreenHeader title={strings.business.productDetailTitle} />
 				<View style={styles.headerRow}>
@@ -77,6 +98,24 @@ export function ProductDetail({
 						tone={isActive ? "success" : "neutral"}
 					/>
 				</View>
+
+				{categories.length > 0 ? (
+					<View style={styles.chipRow}>
+						{categories.map((c) => (
+							<View
+								key={c.id}
+								style={[styles.categoryChip, { backgroundColor: `${colors.primary}1A` }]}
+							>
+								<AppText
+									weight="semiBold"
+									style={{ color: colors.primary, fontSize: 11, letterSpacing: 0.5 }}
+								>
+									{c.emoji ? `${c.emoji} ${c.name}` : c.name}
+								</AppText>
+							</View>
+						))}
+					</View>
+				) : null}
 
 				<View style={styles.hero}>
 					{offer.image ? (
@@ -173,17 +212,38 @@ export function ProductDetail({
 					</View>
 					<View style={styles.grid}>
 						<InfoField label={strings.business.productStock} value={String(offer.stock)} />
+						<InfoField
+							label={strings.business.discount}
+							value={discount > 0 ? `-${discount}%` : "—"}
+						/>
+						<InfoField
+							label={strings.business.pickupFrom}
+							value={formatDateTime(offer.pickup_start)}
+						/>
 						<InfoField label={strings.business.availableUntil} value={formatDateTime(offer.pickup_end)} />
-						<InfoField label={strings.business.soldToday} value={String(sold)} />
+						<InfoField
+							label={strings.business.pickupLocation}
+							value={
+								product.location
+									? [product.location.name, product.location.address]
+											.filter(Boolean)
+											.join(" · ") || "—"
+									: "—"
+							}
+						/>
 						<InfoField
 							label={strings.business.status}
 							value={isActive ? strings.business.active : strings.business.inactive}
 						/>
+						<InfoField label={strings.business.soldToday} value={String(sold)} />
 						<InfoField
-							label={strings.business.pickupFrom}
-							value={formatTime(offer.pickup_start)}
+							label={strings.business.rating}
+							value={
+								offer.rating > 0
+									? `${offer.rating.toFixed(1)} (${offer.review_count})`
+									: "—"
+							}
 						/>
-						<InfoField label={strings.business.category} value={categories || "—"} />
 					</View>
 				</Card>
 
@@ -313,6 +373,16 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.sm,
+	},
+	chipRow: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		gap: spacing.sm,
+	},
+	categoryChip: {
+		paddingHorizontal: 10,
+		paddingVertical: 4,
+		borderRadius: radii.pill,
 	},
 	hero: {
 		height: 220,

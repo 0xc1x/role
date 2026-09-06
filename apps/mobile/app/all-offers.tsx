@@ -13,6 +13,7 @@ import {
 	EmptyState,
 	FilterChip,
 	SearchBar,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
@@ -57,6 +58,10 @@ export default function AllOffersScreen() {
 		searchQuery: debouncedSearch.length > 0 ? debouncedSearch : null,
 	});
 	const data = useMemo(() => infiniteData?.pages.flat() ?? [], [infiniteData]);
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: !!isFetching,
+	});
 
 	// Debounce the search input.
 	useEffect(() => {
@@ -96,6 +101,7 @@ export default function AllOffersScreen() {
 
 	return (
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
+			{pull.indicator}
 			{/* Header */}
 			<View style={styles.header}>
 				<View style={styles.headerRow}>
@@ -223,6 +229,7 @@ export default function AllOffersScreen() {
 				</View>
 			) : (
 				<FlatList
+					ref={pull.ref}
 					data={data}
 					keyExtractor={(item) => item.offer.id}
 					numColumns={2}

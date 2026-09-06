@@ -183,12 +183,13 @@ function QuickActionsGrid({ businessId }: { businessId: string }) {
 	} as const;
 
 	const grid = [
-		{
-			icon: <Ionicons name="card-outline" size={18} color={colors.foreground} />,
-			title: strings.business.quickPayments,
-			subtitle: strings.business.quickPaymentsSub,
-			route: `${base}/payouts`,
-		},
+		// Oculto hasta habilitar la pasarela de pagos
+		// {
+		// 	icon: <Ionicons name="card-outline" size={18} color={colors.foreground} />,
+		// 	title: strings.business.quickPayments,
+		// 	subtitle: strings.business.quickPaymentsSub,
+		// 	route: `${base}/payouts`,
+		// },
 		{
 			icon: <Ionicons name="pricetag-outline" size={18} color={colors.foreground} />,
 			title: strings.business.quickCoupons,
@@ -279,11 +280,12 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 			label: strings.business.notifications,
 			route: `${base}/notifications` as Href,
 		},
-		{
-			icon: <Ionicons name="card-outline" size={20} color={colors.mutedForeground} />,
-			label: strings.business.paymentMethods,
-			route: `${base}/payouts` as Href,
-		},
+		// Oculto hasta habilitar la pasarela de pagos
+		// {
+		// 	icon: <Ionicons name="card-outline" size={20} color={colors.mutedForeground} />,
+		// 	label: strings.business.paymentMethods,
+		// 	route: `${base}/payouts` as Href,
+		// },
 		{
 			icon: <Ionicons name="help-circle-outline" size={20} color={colors.mutedForeground} />,
 			label: strings.business.helpCenter,

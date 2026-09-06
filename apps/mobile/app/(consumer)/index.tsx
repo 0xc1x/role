@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { View, StyleSheet, RefreshControl, ScrollView, Platform } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
+import { useWebPullToRefresh } from "@/core/ui";
 import { Logo } from "@/core/ui/Logo";
 import { spacing } from "@/core/theme/spacing";
 import { queryClient } from "@/core/query/client";
@@ -24,7 +25,6 @@ const isWeb = Platform.OS === "web";
 export default function ConsumerHomeScreen() {
 	const [refreshing, setRefreshing] = useState(false);
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-	const scrollRef = useRef<ScrollView>(null);
 	const { colors } = useTheme();
 
 	const onRefresh = useCallback(async () => {
@@ -34,6 +34,7 @@ export default function ConsumerHomeScreen() {
 		await queryClient.invalidateQueries({ queryKey: ["categories"] });
 		setRefreshing(false);
 	}, []);
+	const pull = useWebPullToRefresh({ onRefresh: () => void onRefresh(), refreshing });
 
 	const openAllOffers = useCallback(
 		() =>
@@ -51,8 +52,9 @@ export default function ConsumerHomeScreen() {
 				<LocationSelector />
 				<Logo width={100} height={60} color={colors.primary} />
 			</View>
+			{pull.indicator}
 			<ScrollView
-				ref={scrollRef}
+				ref={pull.ref}
 				refreshControl={
 					<RefreshControl
 						refreshing={refreshing}

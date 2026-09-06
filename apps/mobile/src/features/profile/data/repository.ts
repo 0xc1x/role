@@ -22,6 +22,8 @@ import {
 
 const CO2_KG_PER_ORDER = 1.2;
 
+type Row = Record<string, unknown>;
+
 export const profileRepository = {
 	// ─── Saved addresses ──────────────────────────────────────────────
 	async getSavedAddresses(userId: string): Promise<SavedAddress[]> {
@@ -216,21 +218,14 @@ export const profileRepository = {
 
 	// ─── Stats & order history ────────────────────────────────────────
 	async getUserStats(userId: string): Promise<UserStats> {
-		const { data, error } = await supabase
-			.from("orders")
-			.select("price, original_price")
-			.eq("user_id", userId)
-			.neq("status", "cancelled");
+		const { data, error } = await supabase.rpc("user_order_stats", {
+			p_user_id: userId,
+		});
 		if (error) throw toAppError(error, "Error al calcular estadísticas");
-		let totalSaved = 0;
-		for (const row of data ?? []) {
-			const original = num(row.original_price) ?? 0;
-			const paid = num(row.price) ?? 0;
-			totalSaved += original - paid;
-		}
-		const count = (data ?? []).length;
+		const row = Array.isArray(data) ? ((data[0] ?? {}) as Row) : {};
+		const count = num(row.orders_count) ?? 0;
 		return {
-			total_saved_cents: totalSaved,
+			total_saved_cents: num(row.total_saved) ?? 0,
 			total_orders: count,
 			co2_saved_kg: count * CO2_KG_PER_ORDER,
 		};

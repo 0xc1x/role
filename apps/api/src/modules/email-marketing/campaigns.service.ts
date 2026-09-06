@@ -249,15 +249,24 @@ export class CampaignsService {
     const batch = await this.repository.findPendingBatch(20);
     // Filtrar solo transaccionales para no mezclar con campañas (estas van por processBatch)
     const transactional = batch.filter((r) => r.type !== 'campaign');
+    // Partes por plantilla cacheadas dentro del lote (antes: 3 SELECT por email).
+    const partsCache = new Map<
+      string,
+      Awaited<ReturnType<CampaignsService['loadParts']>>
+    >();
+    const partsFor = async (templateId: string | null) => {
+      if (!templateId) throw new Error('Plantilla no encontrada');
+      let parts = partsCache.get(templateId);
+      if (!parts) {
+        parts = await this.loadParts(templateId);
+        partsCache.set(templateId, parts);
+      }
+      return parts;
+    };
     for (const send of transactional) {
       try {
         await this.repository.markProcessing(send.id);
-        const template = await this.repository.findTemplateById(send.template_id);
-        if (!template) throw new Error('Plantilla no encontrada');
-        const [header, footer] = await Promise.all([
-          template.header_id ? this.repository.findComponentById(template.header_id) : Promise.resolve(null),
-          template.footer_id ? this.repository.findComponentById(template.footer_id) : Promise.resolve(null),
-        ]);
+        const { template, header, footer } = await partsFor(send.template_id);
         const vars = (send.variables_used as Record<string, string>) ?? {};
         const html = this.renderer.assemble({
           headerHtml: header?.html_content ?? null,
@@ -352,9 +361,13 @@ export class CampaignsService {
       campaign.id,
       BATCH_SIZE,
     );
+    // Partes constantes para todo el lote: 1 carga de plantilla+header+footer
+    // en vez de 3 SELECT por destinatario.
+    const parts = await this.loadParts(campaign.template_id!);
     for (const send of batch) {
       try {
-        const rendered = await this.renderCampaign(
+        const rendered = this.renderWithParts(
+          parts,
           campaign,
           (send.variables_used as Record<string, string> | null) ?? undefined,
         );
@@ -420,14 +433,22 @@ export class CampaignsService {
     return { template, header, footer };
   }
 
-  /** Ensambla el email final de una campaña con las variables dadas. */
+  /** Ensambla el email de una campaña con las variables dadas (carga partes cada vez: paths de uso único). */
   private async renderCampaign(
     campaign: CampaignRow,
     vars?: Record<string, string>,
   ): Promise<RenderedEmail> {
-    const { template, header, footer } = await this.loadParts(
-      campaign.template_id!,
-    );
+    const parts = await this.loadParts(campaign.template_id!);
+    return this.renderWithParts(parts, campaign, vars);
+  }
+
+  /** Render puro con partes ya cargadas — evita re-leer plantilla+header+footer por destinatario. */
+  private renderWithParts(
+    parts: Awaited<ReturnType<CampaignsService['loadParts']>>,
+    campaign: CampaignRow,
+    vars?: Record<string, string>,
+  ): RenderedEmail {
+    const { template, header, footer } = parts;
     return {
       subject: this.renderer.renderVariables(
         this.applySubjectOverride(campaign, template.subject),

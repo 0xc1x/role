@@ -3,6 +3,7 @@ import {
 	Image,
 	Modal,
 	Pressable,
+	RefreshControl,
 	StyleSheet,
 	View,
 	TouchableOpacity,
@@ -32,6 +33,7 @@ import {
 	ScreenHeader,
 	StatusBadge,
 	TextField,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
@@ -63,9 +65,13 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 export function OrderDetail({
 	businessId,
 	item,
+	isRefreshing,
+	onRefresh,
 }: {
 	businessId: string;
 	item: OrderDetail;
+	isRefreshing?: boolean;
+	onRefresh?: () => void;
 }) {
 	const { colors } = useTheme();
 	const [validateOpen, setValidateOpen] = useState(false);
@@ -75,6 +81,10 @@ export function OrderDetail({
 	const validate = useValidatePickupCode(businessId);
 	const { order } = item;
 	const isTerminal = isTerminalStatus(order.status);
+	const pull = useWebPullToRefresh({
+		onRefresh: onRefresh ?? (() => {}),
+		refreshing: isRefreshing ?? false,
+	});
 
 	const openScanner = () => {
 		setValidateOpen(false);
@@ -94,15 +104,27 @@ export function OrderDetail({
 
 	const confirmCancel = () => setConfirmCancelOpen(true);
 
-	return (
+		return (
 		<View style={styles.root}>
 			<Screen
 				scroll
+				scrollRef={onRefresh ? pull.ref : undefined}
 				contentContainerStyle={[
 					styles.content,
 					isTerminal ? null : { paddingBottom: 120 },
 				]}
+				refreshControl={
+					onRefresh ? (
+						<RefreshControl
+							refreshing={isRefreshing ?? false}
+							onRefresh={onRefresh}
+							tintColor={colors.primary}
+							colors={[colors.primary]}
+						/>
+					) : undefined
+				}
 			>
+				{onRefresh ? pull.indicator : null}
 				<View style={styles.headerRow}>
 					<ScreenHeader title={strings.business.orderDetail} />
 					<StatusBadge

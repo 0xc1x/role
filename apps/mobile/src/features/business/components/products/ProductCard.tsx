@@ -103,6 +103,7 @@ export function ProductCard({
 									<AppText
 										variant="labelSmall"
 										weight="semiBold"
+										numberOfLines={1}
 										style={{ color: colors.success }}
 									>
 										{strings.business.soldCount.replace("{n}", String(sold))}
@@ -150,18 +151,17 @@ export function ProductCard({
 								</AppText>
 							</View>
 						</View>
-					</View>
-
-					<View style={styles.price}>
-						<AppText variant="priceLarge" style={{ color: colors.primary }}>
-							{formatMoney(product.offer.discounted_price)}
-						</AppText>
-						<AppText
-							variant="priceOriginal"
-							style={[styles.original, { color: colors.mutedForeground }]}
-						>
-							{formatMoney(product.offer.original_price)}
-						</AppText>
+						<View style={styles.priceRow}>
+							<AppText variant="priceLarge" style={{ color: colors.primary }}>
+								{formatMoney(product.offer.discounted_price)}
+							</AppText>
+							<AppText
+								variant="priceOriginal"
+								style={[styles.original, { color: colors.mutedForeground }]}
+							>
+								{formatMoney(product.offer.original_price)}
+							</AppText>
+						</View>
 					</View>
 				</View>
 
@@ -260,7 +260,7 @@ function ActionButton({
 			<View style={[styles.actionIcon, { backgroundColor: colors.muted }]}>
 				<Ionicons name={icon} size={14} color={colors.foreground} />
 			</View>
-			<AppText variant="bodySmall" weight="semiBold">
+			<AppText variant="bodySmall" weight="semiBold" numberOfLines={1}>
 				{label}
 			</AppText>
 		</Pressable>
@@ -316,12 +316,11 @@ const styles = StyleSheet.create({
 	mainRow: {
 		flexDirection: "row",
 		gap: spacing.md,
-		padding: spacing.md,
 	},
+	// Sangrado completo hacia el borde izquierdo/superior/inferior de la card;
+	// el radio del contenedor recorta las esquinas.
 	imageWrap: {
-		width: 110,
-		height: 115,
-		borderRadius: radii.md,
+		width: 120,
 		overflow: "hidden",
 	},
 	image: {
@@ -344,7 +343,10 @@ const styles = StyleSheet.create({
 	},
 	info: {
 		flex: 1,
+		minWidth: 0,
 		gap: 4,
+		paddingVertical: spacing.md,
+		paddingRight: spacing.md,
 	},
 	statusRow: {
 		flexDirection: "row",
@@ -373,9 +375,11 @@ const styles = StyleSheet.create({
 		borderRadius: radii.sm,
 		backgroundColor: "rgba(0,0,0,0.04)",
 	},
-	price: {
-		alignItems: "flex-end",
-		justifyContent: "flex-start",
+	priceRow: {
+		flexDirection: "row",
+		alignItems: "baseline",
+		gap: spacing.sm,
+		marginTop: 2,
 	},
 	original: {
 		textDecorationLine: "line-through",
@@ -387,18 +391,15 @@ const styles = StyleSheet.create({
 	actions: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: spacing.sm + 2,
+		justifyContent: "space-between",
+		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.sm,
-		gap: spacing.sm,
 	},
 	action: {
-		flex: 1,
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "center",
 		gap: 6,
 		paddingVertical: spacing.sm,
-		borderRadius: radii.md,
 	},
 	actionIcon: {
 		width: 24,

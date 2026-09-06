@@ -143,14 +143,9 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
     expect(biz).toBeDefined();
   });
 
-  test('findByIdForUpdate y listExpirableIds', async () => {
+  test('findByIdForUpdate bloquea la orden', async () => {
     const order = await seedOrder(ctx.db, userId, offerId, businessId);
     const locked = await repo.transaction((tx) => repo.findByIdForUpdate(tx, order.id));
     expect(locked?.order.id).toBe(order.id);
-    const ids = await repo.transaction((tx) => repo.listExpirableIds(tx, [offerId]));
-    expect(ids.map((r) => r.id)).toContain(order.id);
-    expect(await repo.transaction((tx) => repo.listExpirableIds(tx, []))).toEqual([]);
-    const pending = await repo.listPendingOrReadyWithEndedPickup(new Date());
-    expect(pending.length).toBeGreaterThanOrEqual(1);
   });
 });

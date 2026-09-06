@@ -25,6 +25,15 @@ export function useBusinessProfile(businessId: string) {
 	});
 }
 
+/** Lista completa de reseñas del negocio (pantalla dedicada). */
+export function useBusinessReviews(businessId: string) {
+	return useQuery({
+		queryKey: ["businesses", businessId, "reviews"],
+		queryFn: () => businessRepository.getBusinessReviews(businessId),
+		enabled: businessId.length > 0,
+	});
+}
+
 export function useBusinessOffers(businessId: string) {
 	return useQuery({
 		queryKey: ["businesses", businessId, "offers"],

@@ -155,7 +155,7 @@ export const strings = {
 		couponCopied: "¡Código copiado!",
 		// ── Eco banner ──────────────────────────────────────────────
 		ecoBannerTitle: "Cada paquete que rescatas hace la diferencia",
-		ecoBannerBody: "Gracias por ayudar al planeta",
+		ecoBannerBody: "Gracias por ayudar la comunidad.",
 		// ── Stats del welcome ───────────────────────────────────────
 		statSaved: "Ahorrado",
 		statOrders: "Pedidos",
@@ -249,21 +249,18 @@ export const strings = {
 	},
 	offerDetail: {
 		savingsBadge: "Ahorras el {p}%",
+		saveAmount: "Ahorras {amount}",
 		onlyLeftBadge: "¡Solo quedan {n}!",
+		aboutTitle: "Sobre esta oferta",
 		establishment: "Establecimiento",
 		seeLocal: "Ver local",
-		locationStep: "Ubicación",
 		distanceFromYou: "A una distancia de {distance} de ti.",
 		pickupSchedule: "Horario de recogida",
-		pickupWindowText: "Pasa por tu pack hoy de {start} a {end}",
 		availablePacks: "Packs disponibles",
 		packsLeftText: "Quedan libres {stock} de los {initial} publicados inicialmente.",
-		counterInstructions: "Instrucciones en mostrador",
 		counterInstructionsText:
 			"Presenta tu código de reserva digital al personal antes del cierre de la ventana de tiempo. Ellos te entregarán el pack listo.",
 		whatIncludes: "¿Qué incluye este pack?",
-		includesFallback:
-			"Una bolsa sorpresa con excedentes de producción deliciosos y en perfecto estado higiénico del día.",
 		wasteHero: "Héroe del desperdicio",
 		wasteHeroText:
 			"Al salvar esta comida evitas que se desperdicien recursos valiosos y disminuyes de inmediato la emisión directa de CO₂.",
@@ -287,7 +284,10 @@ export const strings = {
 		businessHours: "Horarios comerciales",
 		reviewsTitle: "Reseñas",
 		noReviews: "Este negocio aún no tiene opiniones.",
-		seeMoreReviews: "Ver las {n} reseñas anteriores",
+		seeAllReviews: "Ver todas las reseñas ({n})",
+		filterRecent: "Más recientes",
+		filterRecommended: "Recomendaciones",
+		noFilteredReviews: "No hay reseñas que coincidan con este filtro.",
 		packRating: "Pack: {n}",
 		attentionRating: "Atención: {n}",
 		geolocation: "Geolocalización",
@@ -304,7 +304,7 @@ export const strings = {
 		applyCoupon: "Aplicar",
 		couponApplied: "Cupón aplicado",
 		invalidCoupon: "Cupón inválido o vencido",
-		couponUnavailable: "Este cupón ya no es válido",
+		couponUnavailable: "Cupón no disponible",
 		couponMinNotMet: "Monto mínimo para este cupón: {amount}",
 		pickupCodeTitle: "Tu código de recogida",
 		pickupCodeInfo:
@@ -318,7 +318,7 @@ export const strings = {
 		pickupDetailsTitle: "Detalles de recogida",
 		pickupAddressLabel: "Dirección del local",
 		pickupWindow: "{day} de {start} a {end}",
-		termsNote: "Términos y condiciones de Economía Circular aplicados.",
+		termsNote: "Términos y condiciones aplicados.",
 		reservationError:
 			"No pudimos confirmar tu reserva. Inténtalo de nuevo.",
 		reservationSuccessTitle: "¡Reserva Confirmada!",
@@ -356,11 +356,11 @@ export const strings = {
 		businessPhoneLabel: "Teléfono",
 		viewBusiness: "Ver comercio",
 		getDirections: "Cómo llegar",
-		productTitle: "Productos contratados",
-		summaryTitle: "Resumen económico",
-		originalPriceLabel: "Precio original establecido",
-		discountLabel: "Descuento circular aplicado",
-		totalLabel: "Monto total abonado",
+		productTitle: "Productos seleccionados",
+		summaryTitle: "Resumen del pedido",
+		originalPriceLabel: "Precio original",
+		discountLabel: "Descuento aplicado",
+		totalLabel: "Monto total",
 		ecoSaved: "Evitaste el desperdicio de alimentos y ahorraste {saved}.",
 		instructionsCompletedTitle: "Entrega completada",
 		instructionsCompletedBody:
@@ -412,7 +412,7 @@ export const strings = {
 		co2Saved: "Kg de CO₂ evitados",
 		historyTab: "Historial",
 		settingsTab: "Configuración",
-		upcomingOrders: "Próximos pedidos",
+		upcomingOrders: "Pedidos recientes",
 		pastOrders: "Pedidos anteriores",
 		viewAll: "Ver todo",
 		viewAllCount: "Ver todo ({n})",
@@ -692,6 +692,9 @@ export const strings = {
 		untilTime: "Hasta {time}",
 		category: "Categoría",
 		status: "Estado",
+		discount: "Descuento",
+		rating: "Valoración",
+		pickupLocation: "Punto de recogida",
 		includesTitle: "¿Qué incluye?",
 		allergensTitle: "Alérgenos",
 		productInfoBasic: "Información básica",
@@ -1010,11 +1013,12 @@ export const strings = {
 				answer:
 					"Ve a la sección de Productos, toca crear nuevo producto y completa la información requerida: nombre, descripción, precios, cantidad disponible y horario de recogida.",
 			},
-			{
-				question: "¿Cuándo recibo mis pagos?",
-				answer:
-					"Los pagos se procesan dos veces al mes (días 5 y 20). El dinero se transfiere a tu cuenta registrada en 2-3 días hábiles después del procesamiento.",
-			},
+			// Oculta hasta habilitar la pasarela de pagos
+			// {
+			// 	question: "¿Cuándo recibo mis pagos?",
+			// 	answer:
+			// 		"Los pagos se procesan dos veces al mes (días 5 y 20). El dinero se transfiere a tu cuenta registrada en 2-3 días hábiles después del procesamiento.",
+			// },
 			{
 				question: "¿Cómo valido un pedido en el momento de la recogida?",
 				answer:
@@ -1398,11 +1402,11 @@ export const strings = {
 				answer:
 					"Si llegas fuera del horario de recogida, el negocio puede negarse a entregarte el pedido. Te recomendamos llegar puntualmente. Si tienes un imprevisto, contacta al negocio directamente.",
 			},
-			{
-				question: "¿Qué métodos de pago aceptan?",
-				answer:
-					"Aceptamos tarjetas de crédito y débito principales. El pago se procesa de forma segura al momento de confirmar tu pedido.",
-			},
+			// {
+			// 	question: "¿Qué métodos de pago aceptan?",
+			// 	answer:
+			// 		"Aceptamos tarjetas de crédito y débito principales. El pago se procesa de forma segura al momento de confirmar tu pedido.",
+			// },
 			{
 				question: "¿Puedo obtener un reembolso?",
 				answer:
@@ -1424,11 +1428,11 @@ export const strings = {
 						description:
 							"Explora las ofertas disponibles cerca de ti en la pantalla de inicio o usando el mapa. Cada oferta muestra el precio, la cantidad disponible y el horario de recogida.",
 					},
-					{
-						title: "Seleccionar y pagar",
-						description:
-							"Toca la oferta que te interese, elige la cantidad y confirma tu pedido. El pago se procesa de forma segura al momento de confirmar.",
-					},
+					// {
+					// 	title: "Seleccionar y pagar",
+					// 	description:
+					// 		"Toca la oferta que te interese, elige la cantidad y confirma tu pedido. El pago se procesa de forma segura al momento de confirmar.",
+					// },
 					{
 						title: "Recibir código",
 						description:
@@ -1468,43 +1472,43 @@ export const strings = {
 			},
 		],
 		detailPaymentsTitle: "Pagos y reembolsos",
-		detailPaymentsSections: [
-			{
-				title: "Métodos de pago",
-				items: [
-					{
-						title: "Medios aceptados",
-						description:
-							"Aceptamos tarjetas de crédito y débito de las principales redes (Visa, Mastercard, American Express). El pago siempre se procesa de forma segura.",
-					},
-					{
-						title: "Seguridad",
-						description:
-							"Todos los pagos se procesan a través de pasarelas seguras con encriptación. No almacenamos información sensible de tu tarjeta.",
-					},
-				],
-			},
-			{
-				title: "Reembolsos",
-				items: [
-					{
-						title: "Casos elegibles",
-						description:
-							"Los reembolsos se procesan solo en casos excepcionales, como productos en mal estado, errores del negocio o pedidos no entregados por causas ajenas a ti.",
-					},
-					{
-						title: "Cómo solicitar",
-						description:
-							"Contacta a soporte dentro de las 24 horas posteriores a la recogida. Incluye los detalles de tu pedido y el motivo de tu solicitud.",
-					},
-					{
-						title: "Tiempo de procesamiento",
-						description:
-							"Una vez aprobado, el reembolso se verá reflejado en tu método de pago original en un plazo de 5 a 10 días hábiles.",
-					},
-				],
-			},
-		],
+		// detailPaymentsSections: [
+		// 	{
+		// 		title: "Métodos de pago",
+		// 		items: [
+		// 			{
+		// 				title: "Medios aceptados",
+		// 				description:
+		// 					"Aceptamos tarjetas de crédito y débito de las principales redes (Visa, Mastercard, American Express). El pago siempre se procesa de forma segura.",
+		// 			},
+		// 			{
+		// 				title: "Seguridad",
+		// 				description:
+		// 					"Todos los pagos se procesan a través de pasarelas seguras con encriptación. No almacenamos información sensible de tu tarjeta.",
+		// 			},
+		// 		],
+		// 	},
+		// 	{
+		// 		title: "Reembolsos",
+		// 		items: [
+		// 			{
+		// 				title: "Casos elegibles",
+		// 				description:
+		// 					"Los reembolsos se procesan solo en casos excepcionales, como productos en mal estado, errores del negocio o pedidos no entregados por causas ajenas a ti.",
+		// 			},
+		// 			{
+		// 				title: "Cómo solicitar",
+		// 				description:
+		// 					"Contacta a soporte dentro de las 24 horas posteriores a la recogida. Incluye los detalles de tu pedido y el motivo de tu solicitud.",
+		// 			},
+		// 			{
+		// 				title: "Tiempo de procesamiento",
+		// 				description:
+		// 					"Una vez aprobado, el reembolso se verá reflejado en tu método de pago original en un plazo de 5 a 10 días hábiles.",
+		// 			},
+		// 		],
+		// 	},
+		// ],
 		detailPoliciesTitle: "Políticas y privacidad",
 		detailPoliciesSections: [
 			{

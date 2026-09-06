@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { Order } from "@0xc1x/role-commons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Linking, Pressable, StyleSheet, View } from "react-native";
+import { Linking, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { useState } from "react";
 import QRCode from "react-native-qrcode-svg";
 
@@ -27,6 +27,7 @@ import {
 	LoadingView,
 	Screen,
 	StatusBadge,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useCancelOrder, useOrder } from "@/features/hooks";
 import { orderStatusTone } from "@/features/orders/components/OrderCard";
@@ -53,8 +54,13 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 export default function OrderDetailScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
-	const { data, isLoading, isError, error, refetch } = useOrder(id ?? "");
+	const { data, isLoading, isError, error, refetch, isFetching } = useOrder(id ?? "");
 	const cancel = useCancelOrder();
+	const { colors } = useTheme();
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
 
 	if (isLoading) return <LoadingView />;
 	if (isError || !data)
@@ -66,7 +72,19 @@ export default function OrderDetailScreen() {
 	const handleCancel = () => setConfirmCancelOpen(true);
 
 	return (
-		<Screen scroll>
+		<Screen
+			scroll
+			scrollRef={pull.ref}
+			refreshControl={
+				<RefreshControl
+					refreshing={isFetching}
+					onRefresh={() => void refetch()}
+					tintColor={colors.primary}
+					colors={[colors.primary]}
+				/>
+			}
+		>
+			{pull.indicator}
 			<View style={styles.container}>
 				<DetailHeader order={order} />
 
@@ -103,7 +121,7 @@ export default function OrderDetailScreen() {
 						<Button
 							label={strings.orders.orderAgain}
 							variant="primary"
-							onPress={() => void refetch()}
+							onPress={() => router.push(`/offer/${order.offer_id}`)}
 							fullWidth
 						/>
 						<Button

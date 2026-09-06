@@ -13,7 +13,6 @@ import type {
 	EmbeddedLocation,
 	OfferDetail,
 } from "../domain/offer";
-import { filterByDistance, haversineKm } from "../domain/offer";
 
 /**
  * The embedded PostgREST select that composes an offer with its
@@ -37,80 +36,51 @@ const OFFER_SELECT = `
   )
 `;
 
-/** Same select forcing an INNER join on offer_categories (used when
- * filtering by category — PostgREST only filters parents with !inner). */
-const OFFER_SELECT_INNER_CATEGORIES =
-	"id, business_id, business_location_id, title, description, image, " +
-	"original_price, discounted_price, stock, initial_stock, " +
-	"pickup_start, pickup_end, is_active, includes, allergens, rating, review_count, created_at, " +
-	"businesses:business_id(id, name, type, image, rating, review_count), " +
-	"business_locations:business_locations!offers_business_location_id_fkey(id, name, address, latitude, longitude, zone), " +
-	"offer_categories!inner(categories:categories!offer_categories_category_id_fkey(id, name, slug, emoji, image_url, active))";
-
 export const expiringSoonWindowHours = 3;
 
 type Row = Record<string, unknown>;
 
+/** Punto de referencia + radio (km) para el filtro geoespacial server-side. */
+type RadiusParams = { lat: number; lng: number; radiusKm?: number };
+
 export const offersRepository = {
-	async getPopularOffers(
-		radiusParams?: { lat: number; lng: number; radiusKm?: number },
-		limit = 10,
-	): Promise<OfferDetail[]> {
-		const all = await fetchActive();
-		return applyRadiusFilter(all, radiusParams).slice(0, limit);
+	async getPopularOffers(radiusParams?: RadiusParams, limit = 10): Promise<OfferDetail[]> {
+		return fetchOffersNear({
+			radiusParams,
+			limit,
+			errorLabel: "Error al cargar ofertas populares",
+		});
 	},
 
 	async getPopularOffersFiltered(
 		category: string | null,
-		radiusParams?: { lat: number; lng: number; radiusKm?: number },
+		radiusParams?: RadiusParams,
 		limit = 10,
 	): Promise<OfferDetail[]> {
-		const all = await fetchActive({ category });
-		return applyRadiusFilter(all, radiusParams).slice(0, limit);
-	},
-
-	async getExpiringSoonOffers(
-		radiusParams?: { lat: number; lng: number; radiusKm?: number },
-		limit = 5,
-	): Promise<OfferDetail[]> {
-		try {
-			const all = await fetchActive();
-			const now = new Date();
-			const cutoff = new Date(
-				now.getTime() + expiringSoonWindowHours * 3600_000,
-			);
-			let filtered = all.filter((o) => {
-				const end = new Date(o.offer.pickup_end);
-				return end > now && end < cutoff;
-			});
-			filtered = applyRadiusFilter(filtered, radiusParams);
-			filtered.sort(
-				(a, b) =>
-					new Date(a.offer.pickup_end).getTime() -
-					new Date(b.offer.pickup_end).getTime(),
-			);
-			return filtered.slice(0, limit);
-		} catch (e) {
-			throw toAppError(e, "Error al cargar ofertas por expirar");
-		}
-	},
-
-	async getRecentOffers(
-		radiusParams?: { lat: number; lng: number; radiusKm?: number },
-		limit = 5,
-	): Promise<OfferDetail[]> {
-		const all = await fetchActive();
-		const filtered = applyRadiusFilter(all, radiusParams);
-		filtered.sort((a, b) => {
-			const da = a.offer.created_at
-				? new Date(a.offer.created_at).getTime()
-				: 0;
-			const db = b.offer.created_at
-				? new Date(b.offer.created_at).getTime()
-				: 0;
-			return db - da;
+		return fetchOffersNear({
+			radiusParams,
+			category,
+			limit,
+			errorLabel: "Error al cargar ofertas populares",
 		});
-		return filtered.slice(0, limit);
+	},
+
+	async getExpiringSoonOffers(radiusParams?: RadiusParams, limit = 5): Promise<OfferDetail[]> {
+		return fetchOffersNear({
+			radiusParams,
+			sort: "pickup_end",
+			expiringWithinHours: expiringSoonWindowHours,
+			limit,
+			errorLabel: "Error al cargar ofertas por expirar",
+		});
+	},
+
+	async getRecentOffers(radiusParams?: RadiusParams, limit = 5): Promise<OfferDetail[]> {
+		return fetchOffersNear({
+			radiusParams,
+			limit,
+			errorLabel: "Error al cargar ofertas recientes",
+		});
 	},
 
 	async getNearbyOffers(params: {
@@ -121,17 +91,13 @@ export const offersRepository = {
 		category?: string | null;
 	}): Promise<OfferDetail[]> {
 		const { lat, lng, radiusKm = 5, limit = 20, category = null } = params;
-		const all = await fetchActive({ category });
-		return all
-			.filter((o) => {
-				if (o.location == null) return false;
-				return (
-					haversineKm(lat, lng, o.location.latitude, o.location.longitude) <=
-					radiusKm
-				);
-			})
-			.sort((a, b) => distanceTo(a, lat, lng) - distanceTo(b, lat, lng))
-			.slice(0, limit);
+		return fetchOffersNear({
+			radiusParams: { lat, lng, radiusKm },
+			category,
+			sort: "distance",
+			limit,
+			errorLabel: "Error al cargar ofertas cercanas",
+		});
 	},
 
 	async getFilteredOffers(params: {
@@ -152,44 +118,19 @@ export const offersRepository = {
 			page = 0,
 			limit,
 		} = params as typeof params & { page?: number; limit?: number };
-		let q = activeQuery(category);
-		if (maxPrice != null) q = q.lte("discounted_price", maxPrice);
-		if (searchQuery != null && searchQuery.length > 0) {
-			q = q.or(
-				`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`,
-			);
-		}
-		q = q.order("created_at", { ascending: false });
-		if (limit != null) {
-			const offset = page * limit;
-			q = q.range(offset, offset + limit - 1);
-		}
-		const { data, error } = await q;
-		if (error) throw toAppError(error, "Error al filtrar ofertas");
-		let offers = toRows(data).map(mapOfferDetail);
-
-		if (searchQuery != null && searchQuery.length > 0) {
-			const needle = searchQuery.toLowerCase();
-			offers = offers.filter(
-				(o) =>
-					o.business.name.toLowerCase().includes(needle) ||
-					o.offer.description?.toLowerCase().includes(needle),
-			);
-		}
-		if (maxDistanceKm != null && params.lat != null && params.lng != null) {
-			offers = offers.filter((o) => {
-				if (o.location == null) return false;
-				return (
-					haversineKm(
-						params.lat!,
-						params.lng!,
-						o.location.latitude,
-						o.location.longitude,
-					) <= maxDistanceKm
-				);
-			});
-		}
-		return offers;
+		const radiusParams =
+			maxDistanceKm != null && params.lat != null && params.lng != null
+				? { lat: params.lat, lng: params.lng, radiusKm: maxDistanceKm }
+				: undefined;
+		return fetchOffersNear({
+			radiusParams,
+			category,
+			maxPrice,
+			search: searchQuery != null && searchQuery.length > 0 ? searchQuery : null,
+			limit: limit ?? 100,
+			offset: page * (limit ?? 0),
+			errorLabel: "Error al filtrar ofertas",
+		});
 	},
 
 	async getOfferById(id: string): Promise<OfferDetail> {
@@ -221,32 +162,14 @@ export const offersRepository = {
 	},
 
 	async getCategoryStats(): Promise<CategoryStat[]> {
-		const [categories, rows] = await Promise.all([
-			this.getCategories(),
-			supabase
-				.from("offers")
-				.select("offer_categories(category_id)")
-				.eq("is_active", true)
-				.gt("stock", 0)
-				.gt("pickup_end", new Date().toISOString()),
-		]);
-		if (rows.error) throw toAppError(rows.error, "Error al cargar categorías");
-		const counts = new Map<string, number>();
-		for (const row of toRows(rows.data)) {
-			const pairs = row.offer_categories as Array<{
-				category_id?: string;
-			}> | null;
-			for (const pair of pairs ?? []) {
-				if (pair.category_id)
-					counts.set(pair.category_id, (counts.get(pair.category_id) ?? 0) + 1);
-			}
-		}
-		const stats: CategoryStat[] = categories.map((c) => ({
-			id: c.id,
-			name: c.name,
-			count: counts.get(c.id) ?? 0,
-			emoji: c.emoji ?? "",
-			imageUrl: c.image_url ?? "",
+		const { data, error } = await supabase.rpc("active_offer_category_counts");
+		if (error) throw toAppError(error, "Error al cargar categorías");
+		const stats: CategoryStat[] = toRows(data).map((c) => ({
+			id: String(c.id),
+			name: String(c.name),
+			count: numOrNull(c.active_count) ?? 0,
+			emoji: (c.emoji as string | null) ?? "",
+			imageUrl: (c.image_url as string | null) ?? "",
 		}));
 		stats.sort((a, b) => b.count - a.count);
 		return stats;
@@ -256,79 +179,29 @@ export const offersRepository = {
 		near?: { lat: number; lng: number; radiusKm?: number },
 	): Promise<AreaStat[]> {
 		try {
-			const { data, error } = await supabase
-				.from("offers")
-				.select(
-					"business_locations!offers_business_location_id_fkey(zone, latitude, longitude)",
-				)
-				.eq("is_active", true)
-				.gt("stock", 0)
-				.gt("pickup_end", new Date().toISOString())
-				.limit(5000);
+			const { data, error } = await supabase.rpc("popular_zones", {
+				p_lat: near?.lat ?? null,
+				p_lng: near?.lng ?? null,
+				p_radius_km: near?.radiusKm ?? 5,
+				p_limit: 5,
+			});
 			if (error) return [];
-			const counts = new Map<string, number>();
-			for (const row of toRows(data)) {
-				const loc = row.business_locations as Record<string, unknown> | null;
-				const zone = loc?.zone as string | null;
-				if (!zone || zone.length === 0) continue;
-				if (near) {
-					const lat = loc?.latitude as number | null;
-					const lng = loc?.longitude as number | null;
-					if (
-						lat == null ||
-						lng == null ||
-						haversineKm(near.lat, near.lng, lat, lng) >
-							(near.radiusKm ?? 5)
-					) {
-						continue;
-					}
-				}
-				counts.set(zone, (counts.get(zone) ?? 0) + 1);
-			}
-			return [...counts.entries()]
-				.map(([name, deals]) => ({ name, deals }))
-				.sort((a, b) => b.deals - a.deals)
-				.slice(0, 5);
+			return toRows(data).map((row) => ({
+				name: String(row.zone),
+				deals: numOrNull(row.deals) ?? 0,
+			}));
 		} catch {
 			return [];
 		}
 	},
 
-	async getNearbyBusinesses(
-		radiusParams?: { lat: number; lng: number; radiusKm?: number },
-		limit = 5,
-	): Promise<BusinessSummary[]> {
-		const all = await fetchActive();
-		const byId = new Map<string, BusinessSummary>();
-		for (const offer of all) {
-			const b = offer.business;
-			const distance =
-				offer.location != null && radiusParams
-					? haversineKm(
-							radiusParams.lat,
-							radiusParams.lng,
-							offer.location.latitude,
-							offer.location.longitude,
-						)
-					: null;
-			if (
-				radiusParams &&
-				(distance == null || distance > (radiusParams.radiusKm ?? 5))
-			)
-				continue;
-			const current = byId.get(b.id) ?? newBusinessSummary(offer);
-			if (
-				distance != null &&
-				(current.distanceKm == null || distance < current.distanceKm)
-			) {
-				current.distanceKm = distance;
-			}
-			current.activeDealsCount += 1;
-			byId.set(b.id, current);
-		}
-		return [...byId.values()]
-			.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
-			.slice(0, limit);
+	async getNearbyBusinesses(radiusParams?: RadiusParams, limit = 5): Promise<BusinessSummary[]> {
+		return fetchBusinessesNear({
+			radiusParams,
+			sort: "distance",
+			limit,
+			errorLabel: "Error al cargar negocios cercanos",
+		});
 	},
 
 	async getAllBusinesses(params: {
@@ -349,119 +222,110 @@ export const offersRepository = {
 			limit = 50,
 			page = 0,
 		} = params as typeof params & { page?: number };
-		// ponytail: paginado server-side — fetchActive con range para no traer todo
-		const all = await fetchActive(
-			page != null && limit != null ? { limit: limit * 3, offset: page * limit } : undefined,
-		);
-		const byId = new Map<string, BusinessSummary>();
-		for (const offer of all) {
-			const b = offer.business;
-			let distance: number | null = null;
-			if (lat != null && lng != null && offer.location != null) {
-				distance = haversineKm(
-					lat,
-					lng,
-					offer.location.latitude,
-					offer.location.longitude,
-				);
-				if (distance > radiusKm) continue;
-			}
-			if (type != null && b.type.toLowerCase() !== type.toLowerCase()) continue;
-			if (
-				searchQuery != null &&
-				searchQuery.length > 0 &&
-				!b.name.toLowerCase().includes(searchQuery.toLowerCase())
-			) {
-				continue;
-			}
-			const current = byId.get(b.id) ?? newBusinessSummary(offer);
-			if (
-				distance != null &&
-				(current.distanceKm == null || distance < current.distanceKm)
-			) {
-				current.distanceKm = distance;
-			}
-			current.activeDealsCount += 1;
-			byId.set(b.id, current);
-		}
-		return [...byId.values()]
-			.sort((a, b) => b.activeDealsCount - a.activeDealsCount)
-			.slice(0, limit);
-	},
+		return fetchBusinessesNear({
+			radiusParams: lat != null && lng != null ? { lat, lng, radiusKm } : undefined,
+			search: searchQuery != null && searchQuery.length > 0 ? searchQuery : null,
+			type,
+			sort: "deals",
+			limit,
+			offset: page * limit,
+			errorLabel: "Error al cargar negocios",
+		});
+		},
+	};
 
-	/** Full active offers (client-side filtering helpers). */
-	async getAllActiveOffers(category?: string | null): Promise<OfferDetail[]> {
-		return fetchActive({ category });
-	},
-};
-
-function activeQuery(category: string | null) {
-	const hasCategory = category != null && category.length > 0;
-	let q = supabase
-		.from("offers")
-		.select(hasCategory ? OFFER_SELECT_INNER_CATEGORIES : OFFER_SELECT)
-		.eq("is_active", true)
-		.gt("stock", 0)
-		.gt("pickup_end", new Date().toISOString());
-	if (hasCategory) q = q.eq("offer_categories.category_id", category);
-	return q;
-}
-
-async function fetchActive(options?: {
+/**
+ * active_offers_near: filtra (geo, categoría, precio, búsqueda, ventana de
+ * expiración), ordena y pagina en la base de datos — mismo shape embebido que
+ * OFFER_SELECT + distance_km. Con radiusParams ausente no hay filtro geo.
+ */
+async function fetchOffersNear(options: {
+	radiusParams?: RadiusParams;
 	category?: string | null;
+	sort?: "created_at" | "distance" | "pickup_end";
+	expiringWithinHours?: number;
+	maxPrice?: number | null;
+	search?: string | null;
 	limit?: number;
 	offset?: number;
+	errorLabel: string;
 }): Promise<OfferDetail[]> {
-	let q = activeQuery(options?.category ?? null);
-	q = q.order("created_at", { ascending: false });
-	if (options?.limit != null) {
-		const offset = options.offset ?? 0;
-		q = q.range(offset, offset + options.limit - 1);
-	}
-	const { data, error } = await q;
-	if (error) throw toAppError(error, "Error al cargar ofertas");
+	const {
+		radiusParams,
+		category = null,
+		sort = "created_at",
+		expiringWithinHours = null,
+		maxPrice = null,
+		search = null,
+		limit = 20,
+		offset = 0,
+		errorLabel,
+	} = options;
+	const { data, error } = await supabase.rpc("active_offers_near", {
+		p_lat: radiusParams?.lat ?? null,
+		p_lng: radiusParams?.lng ?? null,
+		p_radius_km: radiusParams?.radiusKm ?? null,
+		p_category_id: category,
+		p_sort: sort,
+		p_expiring_within_hours: expiringWithinHours,
+		p_max_price: maxPrice,
+		p_search: search,
+		p_limit: limit,
+		p_offset: offset,
+	});
+	if (error) throw toAppError(error, errorLabel);
 	return toRows(data).map(mapOfferDetail);
 }
 
-function newBusinessSummary(offer: OfferDetail): BusinessSummary {
+/** active_businesses_near: negocios deduplicados server-side con ubicación más cercana. */
+async function fetchBusinessesNear(options: {
+	radiusParams?: RadiusParams;
+	search?: string | null;
+	type?: string | null;
+	sort?: "deals" | "distance";
+	limit?: number;
+	offset?: number;
+	errorLabel: string;
+}): Promise<BusinessSummary[]> {
+	const {
+		radiusParams,
+		search = null,
+		type = null,
+		sort = "deals",
+		limit = 50,
+		offset = 0,
+		errorLabel,
+	} = options;
+	const { data, error } = await supabase.rpc("active_businesses_near", {
+		p_lat: radiusParams?.lat ?? null,
+		p_lng: radiusParams?.lng ?? null,
+		p_radius_km: radiusParams?.radiusKm ?? null,
+		p_search: search,
+		p_type: type,
+		p_sort: sort,
+		p_limit: limit,
+		p_offset: offset,
+	});
+	if (error) throw toAppError(error, errorLabel);
+	return toRows(data).map(mapBusinessSummary);
+}
+
+function mapBusinessSummary(row: Row): BusinessSummary {
 	return {
-		id: offer.business.id,
-		name: offer.business.name,
-		type: offer.business.type,
-		imageUrl: offer.business.image,
-		latitude: offer.location?.latitude ?? null,
-		longitude: offer.location?.longitude ?? null,
-		rating: offer.business.rating ?? 0,
-		address: offer.location?.address ?? "",
-		businessLocationId: offer.offer.business_location_id,
-		zone: offer.location?.zone ?? null,
-		reviewCount: offer.business.review_count ?? 0,
-		activeDealsCount: 0,
-		distanceKm: null,
+		id: String(row.id),
+		name: String(row.name ?? ""),
+		type: (row.type as string | null) ?? "other",
+		imageUrl: (row.image as string | null) ?? null,
+		latitude: numOrNull(row.latitude),
+		longitude: numOrNull(row.longitude),
+		rating: numOrNull(row.rating) ?? 0,
+		address: (row.address as string | null) ?? "",
+		businessLocationId: (row.business_location_id as string | null) ?? null,
+		zone: (row.zone as string | null) ?? null,
+		reviewCount: (row.review_count as number | null) ?? 0,
+		activeDealsCount: (row.active_deals_count as number | null) ?? 0,
+		distanceKm: numOrNull(row.distance_km),
 	};
-}
-
-function applyRadiusFilter(
-	offers: OfferDetail[],
-	radiusParams?: { lat: number; lng: number; radiusKm?: number },
-): OfferDetail[] {
-	if (radiusParams == null) return offers;
-	return filterByDistance(
-		offers,
-		radiusParams.lat,
-		radiusParams.lng,
-		radiusParams.radiusKm ?? 5,
-	);
-}
-
-function distanceTo(offer: OfferDetail, lat: number, lng: number): number {
-	if (offer.location == null) return Infinity;
-	return haversineKm(
-		lat,
-		lng,
-		offer.location.latitude,
-		offer.location.longitude,
-	);
 }
 
 function toRows(data: unknown): Row[] {

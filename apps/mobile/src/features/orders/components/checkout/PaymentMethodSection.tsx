@@ -6,17 +6,13 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, Card } from "@/core/ui";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
-import { useAuthStore } from "@/features/auth/store";
-import { usePaymentMethods } from "@/features/profile/hooks";
 
 /**
- * Selectable payment methods: cash (pay at pickup) + saved tokenized cards.
- * No real charge yet — selection is UI only until gateway SDK lands.
+ * Payment method selector: cash (pay at pickup) only.
+ * Saved cards stay hidden until the payment gateway is enabled.
  */
 export function PaymentMethodSection() {
 	const { colors } = useTheme();
-	const { profile } = useAuthStore();
-	const { data: methods } = usePaymentMethods(profile?.id ?? "");
 	const [selected, setSelected] = useState<string>("cash");
 
 	return (
@@ -48,28 +44,7 @@ export function PaymentMethodSection() {
 				/>
 			</Pressable>
 
-			{(methods ?? []).map((m) => (
-				<Pressable
-					key={m.id}
-					onPress={() => setSelected(m.id)}
-					style={[
-						styles.methodRow,
-						{ marginTop: spacing.sm,
-							backgroundColor: selected === m.id ? colors.primary + "14" : colors.inputBackground,
-							borderColor: selected === m.id ? colors.primary : colors.borderSolid,
-						},
-					]}
-				>
-					<View style={[styles.iconBox, { backgroundColor: colors.inputBackground }]}>
-						<Ionicons name="card-outline" size={18} color={colors.primary} />
-					</View>
-					<View style={{ flex: 1 }}>
-						<AppText variant="bodyMedium" weight="semiBold">•••• {m.last4}</AppText>
-						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>{m.cardHolder} · {m.expiryMonth}/{m.expiryYear}</AppText>
-					</View>
-					<Ionicons name={selected === m.id ? "radio-button-on" : "radio-button-off"} size={20} color={colors.primary} />
-				</Pressable>
-			))}
+			{/* Tarjetas guardadas: se muestran cuando la pasarela de pagos esté activa. */}
 
 			<AppText style={[styles.hint, { color: colors.mutedForeground }]}>
 				{strings.paymentMethods.payAtPickupHint}

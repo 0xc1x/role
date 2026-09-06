@@ -352,14 +352,15 @@ export default function BusinessHelpScreen() {
 			iconColor: colors.primary,
 			onPress: () => router.push(`/business/${id}/help/products`),
 		},
-		{
-			icon: "cash-outline",
-			label: strings.business.businessHelpPayments,
-			subtitle: strings.business.businessHelpPaymentsSub,
-			bgColor: colors.surfaceSuccess,
-			iconColor: colors.ecoGreen,
-			onPress: () => router.push(`/business/${id}/help/payments`),
-		},
+		// Sección de pagos oculta hasta habilitar la pasarela de pagos
+		// {
+		// 	icon: "cash-outline",
+		// 	label: strings.business.businessHelpPayments,
+		// 	subtitle: strings.business.businessHelpPaymentsSub,
+		// 	bgColor: colors.surfaceSuccess,
+		// 	iconColor: colors.ecoGreen,
+		// 	onPress: () => router.push(`/business/${id}/help/payments`),
+		// },
 		{
 			icon: "book-outline",
 			label: strings.business.businessHelpGuides,

@@ -10,13 +10,6 @@ import {
 } from "@/features/profile/hooks";
 
 // ─── Offers ─────────────────────────────────────────────────────────
-export function useActiveOffers(categoryId?: string | null) {
-	return useQuery({
-		queryKey: ["offers", "active", categoryId ?? "all"],
-		queryFn: () => offersRepository.getAllActiveOffers(categoryId ?? null),
-	});
-}
-
 export function useOffer(id: string) {
 	return useQuery({
 		queryKey: ["offers", id],
@@ -37,9 +30,10 @@ export function usePopularOffers(limit = 10, category?: string | null) {
 }
 
 export function useExpiringSoonOffers(limit = 5) {
+	const { lat, lng, radiusKm, params } = useRadiusParams();
 	return useQuery({
-		queryKey: ["offers", "expiring"],
-		queryFn: () => offersRepository.getExpiringSoonOffers(undefined, limit),
+		queryKey: ["offers", "expiring", limit, lat, lng, radiusKm],
+		queryFn: () => offersRepository.getExpiringSoonOffers(params, limit),
 	});
 }
 
@@ -195,25 +189,18 @@ function useRadiusParams() {
 }
 
 export function useNearbyOffersHook(limit = 10, category?: string | null) {
-	const selectedAddress = useSelectedAddress();
+	const { lat, lng, radiusKm, params } = useRadiusParams();
 	return useQuery({
-		queryKey: [
-			"offers",
-			"nearby",
-			selectedAddress?.latitude,
-			selectedAddress?.longitude,
-			limit,
-			category ?? "all",
-		],
+		queryKey: ["offers", "nearby", lat, lng, radiusKm, limit, category ?? "all"],
 		queryFn: () =>
 			offersRepository.getNearbyOffers({
-				lat: selectedAddress?.latitude ?? 0,
-				lng: selectedAddress?.longitude ?? 0,
-				radiusKm: 5,
+				lat: lat!,
+				lng: lng!,
+				radiusKm,
 				limit,
 				category: category ?? null,
 			}),
-		enabled: !!selectedAddress?.latitude && !!selectedAddress?.longitude,
+		enabled: lat != null && lng != null,
 	});
 }
 

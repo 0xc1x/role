@@ -172,12 +172,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }
     const pushAllowed = await this.repo.filterByConsumerPrefs(allowed, 'push_enabled' as never);
     if (pushAllowed.length === 0) return [];
-
-    const quietFiltered: string[] = [];
-    for (const id of pushAllowed) {
-      if (!(await this.repo.isInQuietHours(id))) quietFiltered.push(id);
-    }
-    return quietFiltered;
+    return this.repo.filterNotInQuietHours(pushAllowed);
   }
 
   /** Completa link/icon/badge/tag/image absolutos a partir de CORS_ORIGINS. */

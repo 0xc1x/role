@@ -5,12 +5,13 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
-import { AppText, CircleIconButton, goBackOr, SearchBar, SelectableChipsBar } from "@/core/ui";
+import { AppText, CircleIconButton, goBackOr, SearchBar, useWebPullToRefresh } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
 import { useAllBusinessesInfinite, useSelectedAddress } from "@/features/hooks";
 import { BusinessGridCard } from "@/features/business/components/BusinessGridCard";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
+import { ChipsBar } from "@/features/home/components/CategoryChips";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -34,6 +35,10 @@ export default function AllBusinessesScreen() {
 		selectedType,
 	);
 	const data = useMemo(() => infiniteData?.pages.flat() ?? [], [infiniteData]);
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: !!isFetching,
+	});
 
 	useEffect(() => {
 		const t = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
@@ -54,6 +59,7 @@ export default function AllBusinessesScreen() {
 
 	return (
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
+			{pull.indicator}
 			<View style={styles.header}>
 				<View style={styles.headerRow}>
 					<CircleIconButton
@@ -74,15 +80,16 @@ export default function AllBusinessesScreen() {
 				/>
 			</View>
 
-			<SelectableChipsBar
-				items={chipItems}
-				selectedItem={selectedChip}
-				labelFor={labelFor}
-				onSelect={(item) =>
-					setSelectedType(item === "all" ? null : item)
-				}
-				style={styles.chipsBar}
-			/>
+			<View style={styles.chipsBar}>
+				<ChipsBar
+					items={chipItems}
+					selectedId={selectedChip}
+					labelFor={labelFor}
+					onSelect={(item) =>
+						setSelectedType(item === "all" ? null : item)
+					}
+				/>
+			</View>
 
 			{isLoading ? (
 				<View style={styles.businessGrid}>
@@ -125,6 +132,7 @@ export default function AllBusinessesScreen() {
 				</View>
 			) : (
 				<FlatList
+					ref={pull.ref}
 					data={data}
 					keyExtractor={(item) => item.id}
 					numColumns={3}

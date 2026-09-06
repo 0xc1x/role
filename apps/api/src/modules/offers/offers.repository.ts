@@ -276,18 +276,16 @@ export class OffersRepository {
       query.lng !== undefined &&
       query.radius_km !== undefined
     ) {
+      // ST_DWithin sobre geog (geography) aprovecha el índice GIST de
+      // business_locations; la fórmula haversine previa hacía seq-scan con
+      // trigonometría por fila. PostGIS vive en el schema extensions y la
+      // columna geog no está en el espejo drizzle (ver business-locations.ts).
       filters.push(
-        sql`(
-          6371 * acos(
-            least(1.0, greatest(-1.0,
-              cos(radians(${query.lat}))
-              * cos(radians(${businessLocations.latitude}::double precision))
-              * cos(radians(${businessLocations.longitude}::double precision) - radians(${query.lng}))
-              + sin(radians(${query.lat}))
-              * sin(radians(${businessLocations.latitude}::double precision))
-            ))
-          )
-        ) <= ${query.radius_km}`,
+        sql`extensions.st_dwithin(
+          business_locations.geog,
+          extensions.st_setsrid(extensions.st_makepoint(${query.lng}, ${query.lat}), 4326)::extensions.geography,
+          ${query.radius_km} * 1000.0
+        )`,
       );
     }
 

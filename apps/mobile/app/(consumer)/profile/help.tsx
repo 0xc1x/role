@@ -336,14 +336,15 @@ export default function HelpScreen() {
 			iconColor: colors.ecoGreen,
 			onPress: () => router.push("/profile/help/orders"),
 		},
-		{
-			icon: "card-outline",
-			label: strings.helpCenter.categoryPayments,
-			subtitle: strings.helpCenter.categoryPaymentsSubtitle,
-			bgColor: colors.surfaceWarning,
-			iconColor: colors.warningOrange,
-			onPress: () => router.push("/profile/help/payments"),
-		},
+		// Categoría de pagos oculta hasta habilitar la pasarela de pagos
+		// {
+		// 	icon: "card-outline",
+		// 	label: strings.helpCenter.categoryPayments,
+		// 	subtitle: strings.helpCenter.categoryPaymentsSubtitle,
+		// 	bgColor: colors.surfaceWarning,
+		// 	iconColor: colors.warningOrange,
+		// 	onPress: () => router.push("/profile/help/payments"),
+		// },
 		{
 			icon: "shield-checkmark-outline",
 			label: strings.helpCenter.categoryPolicies,

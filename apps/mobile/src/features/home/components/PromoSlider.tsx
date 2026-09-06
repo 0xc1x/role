@@ -24,6 +24,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH - spacing.lg * 2;
 const CARD_HEIGHT = Math.min((CARD_WIDTH * 9) / 16, 220);
 const DOT_ANIM_DURATION = 250;
+// Tiempo sin nuevos eventos de onScroll para considerar que el scroll
+// ya se detuvo del todo (por inercia nativa, scroll táctil del navegador,
+// o el drag manual con mouse) y recién ahí forzar el snap.
+const SCROLL_SETTLE_DELAY = 120;
 
 export function PromoSlider() {
 	const { colors } = useTheme();
@@ -94,6 +98,25 @@ export function PromoSlider() {
 		scrollRef.current?.scrollTo({ x: clamped * step, animated: true });
 	}, [slides.length, step, setIndexFromSnap]);
 
+	// ── Coordinación de snap ─────────────────────────────────────────
+	const isUserInteractingRef = useRef(false);
+	const settleTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const clearSettleTimeout = useCallback(() => {
+		if (settleTimeout.current) {
+			clearTimeout(settleTimeout.current);
+			settleTimeout.current = null;
+		}
+	}, []);
+
+	useEffect(() => () => clearSettleTimeout(), [clearSettleTimeout]);
+
+	const handleTouchStart = useCallback(() => {
+		isUserInteractingRef.current = true;
+		clearSettleTimeout();
+		setIsPaused(true);
+	}, [clearSettleTimeout]);
+
 	useEffect(() => {
 		if (Platform.OS !== "web") return;
 		const area = dragAreaRef.current as unknown as HTMLElement | null;
@@ -104,6 +127,8 @@ export function PromoSlider() {
 		const handleDown = (e: MouseEvent) => {
 			dragStartX.current = e.pageX;
 			dragStartScrollX.current = scrollX.current;
+			isUserInteractingRef.current = true;
+			clearSettleTimeout();
 			setIsPaused(true);
 		};
 		const handleMove = (e: MouseEvent) => {
@@ -114,7 +139,12 @@ export function PromoSlider() {
 			scrollRef.current?.scrollTo({ x: newX, animated: false });
 		};
 		const handleUp = () => {
+			if (dragStartX.current == null) return;
 			dragStartX.current = null;
+			// Soltar el mouse es una señal explícita e inmediata acá (a
+			// diferencia del touch), así que no hace falta esperar el debounce.
+			clearSettleTimeout();
+			isUserInteractingRef.current = false;
 			setIsPaused(false);
 			snapToNearest();
 		};
@@ -133,11 +163,16 @@ export function PromoSlider() {
 		nativeEvent: { contentOffset: { x: number } };
 	}) => {
 		scrollX.current = event.nativeEvent.contentOffset.x;
-	};
-
-	const handleMomentumEnd = () => {
-		setIsPaused(false);
-		snapToNearest();
+		// Ignoramos los onScroll que vienen de un scrollTo programático
+		// (autoplay o tap en un dot): esos ya se posicionan solos y no
+		// necesitan que este debounce los "corrija".
+		if (!isUserInteractingRef.current) return;
+		clearSettleTimeout();
+		settleTimeout.current = setTimeout(() => {
+			isUserInteractingRef.current = false;
+			setIsPaused(false);
+			snapToNearest();
+		}, SCROLL_SETTLE_DELAY);
 	};
 
 	// Sin contenido activo (o mientras carga) el carrusel no se renderiza.
@@ -158,10 +193,7 @@ export function PromoSlider() {
 						pagingEnabled={false}
 						onScroll={handleScroll}
 						scrollEventThrottle={16}
-						onMomentumScrollBegin={() => setIsPaused(true)}
-						onMomentumScrollEnd={handleMomentumEnd}
-						onTouchStart={() => setIsPaused(true)}
-						onTouchEnd={handleMomentumEnd}
+						onTouchStart={handleTouchStart}
 						contentContainerStyle={{
 							paddingHorizontal: spacing.lg,
 							gap: spacing.sm,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import {
@@ -13,6 +13,7 @@ import {
 	LoadingView,
 	Screen,
 	SearchBar,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import {
@@ -51,6 +52,7 @@ export default function BusinessProductsScreen() {
 		isError,
 		error,
 		refetch,
+		isFetching,
 	} = useBusinessOffers(businessId);
 	const { data: categories } = useCategories();
 
@@ -58,6 +60,10 @@ export default function BusinessProductsScreen() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [categoryId, setCategoryId] = useState<string | null>(null);
 	const [sort, setSort] = useState<ProductsSort>("newest");
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
 
 	useEffect(() => {
 		setBranchId(null);
@@ -101,9 +107,19 @@ export default function BusinessProductsScreen() {
 				) : null}
 			</View>
 
+			{pull.indicator}
 			<ScrollView
+				ref={pull.ref}
 				showsVerticalScrollIndicator={false}
 				contentContainerStyle={styles.content}
+				refreshControl={
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
+					/>
+				}
 			>
 				<BusinessStatsRow stats={stats} />
 

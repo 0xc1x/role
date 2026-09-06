@@ -32,7 +32,9 @@ const CONTENT: Record<SectionKey, CategoryContent> = {
 	},
 	payments: {
 		title: strings.helpCenter.detailPaymentsTitle,
-		sections: strings.helpCenter.detailPaymentsSections,
+		// detailPaymentsSections está comentada en strings.ts mientras los
+		// pagos no están activos; la categoría resuelve sin secciones.
+		sections: [],
 	},
 	policies: {
 		title: strings.helpCenter.detailPoliciesTitle,

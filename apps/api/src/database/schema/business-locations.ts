@@ -8,6 +8,11 @@ import {
 } from 'drizzle-orm/pg-core';
 import { businesses } from './businesses';
 
+// Nota: la tabla tiene además la columna generada `geog` (geography PostGIS,
+// ADR-0010) que vive solo en Supabase. No se declara en el espejo porque el
+// espejo de test (postgres:16-alpine, sin postgis) no puede crearla; las
+// queries que la usan la referencian como SQL crudo.
+
 export const businessLocations = pgTable('business_locations', {
   id: uuid('id').primaryKey().defaultRandom(),
   business_id: uuid('business_id')

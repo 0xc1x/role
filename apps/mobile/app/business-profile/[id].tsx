@@ -20,8 +20,9 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useBusinessProfile } from "@/features/business/hooks";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import type { BusinessProfileDetail, BusinessReviewView } from "@/features/business/domain/business";
+import type { BusinessProfileDetail } from "@/features/business/domain/business";
 import { BusinessLocationMap } from "@/features/business/components/BusinessLocationMap";
+import { ReviewItem } from "@/features/business/components/ReviewItem";
 
 const HERO_HEIGHT = 240;
 
@@ -475,59 +476,25 @@ function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
 				profile.reviews.map((review) => <ReviewItem key={review.id} review={review} />)
 			)}
 
-			{(business.review_count ?? 0) > 3 ? (
-				<AppText
-					weight="bold"
-					style={{ color: colors.primary, textAlign: "center", marginTop: spacing.sm }}
+			{(business.review_count ?? 0) > 0 ? (
+				<Pressable
+					onPress={() =>
+						router.push(`/business-profile/${business.id}/reviews`)
+					}
+					hitSlop={8}
+					accessibilityRole="link"
 				>
-					{strings.businessProfile.seeMoreReviews.replace(
-						"{n}",
-						String(business.review_count ?? 0),
-					)}
-				</AppText>
+					<AppText
+						weight="bold"
+						style={{ color: colors.primary, textAlign: "center", marginTop: spacing.sm }}
+					>
+						{strings.businessProfile.seeAllReviews.replace(
+							"{n}",
+							String(business.review_count ?? 0),
+						)}
+					</AppText>
+				</Pressable>
 			) : null}
-		</View>
-	);
-}
-
-function ReviewItem({ review }: { review: BusinessReviewView }) {
-	const { colors } = useTheme();
-	const date = new Date(review.date);
-	const dateLabel = Number.isNaN(date.getTime())
-		? ""
-		: `${date.getDate()}/${date.getMonth() + 1}`;
-	return (
-		<View style={[styles.reviewItem, { borderBottomColor: colors.border }]}>
-			<View style={[styles.avatar, { backgroundColor: colors.muted }]}>
-				<Ionicons name="person-outline" size={16} color={colors.mutedForeground} />
-			</View>
-			<View style={{ width: spacing.sm }} />
-			<View style={{ flex: 1 }}>
-				<View style={styles.reviewHeaderRow}>
-					<AppText variant="labelSmall" weight="bold">
-						{review.userName}
-					</AppText>
-					<AppText style={{ color: colors.mutedForeground, fontSize: 12 }}>
-						{dateLabel}
-					</AppText>
-				</View>
-				<View style={styles.reviewRatingRow}>
-					<Ionicons name="fast-food-outline" size={12} color={colors.yellow} />
-					<AppText style={{ fontSize: 12 }}>
-						{strings.businessProfile.packRating.replace("{n}", String(review.productRating))}
-					</AppText>
-					<View style={{ width: spacing.md }} />
-					<Ionicons name="storefront-outline" size={12} color={colors.yellow} />
-					<AppText style={{ fontSize: 12 }}>
-						{strings.businessProfile.attentionRating.replace("{n}", String(review.businessRating))}
-					</AppText>
-				</View>
-				{review.comment ? (
-					<AppText style={{ color: colors.mutedForeground, lineHeight: 19, marginTop: 6 }}>
-						{review.comment}
-					</AppText>
-				) : null}
-			</View>
 		</View>
 	);
 }
@@ -647,7 +614,7 @@ const styles = StyleSheet.create({
 	},
 	card: {
 		width: "100%",
-		padding: spacing.xl,
+		padding: spacing.sm,
 		borderRadius: radii.xl,
 		backgroundColor: "transparent",
 		boxShadow: `0px 4px 12px #00000005`,	},
@@ -677,30 +644,6 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 8,
 		paddingVertical: 4,
 		borderRadius: 8,
-	},
-	reviewItem: {
-		flexDirection: "row",
-		alignItems: "flex-start",
-		paddingVertical: spacing.md,
-		borderBottomWidth: StyleSheet.hairlineWidth,
-	},
-	avatar: {
-		width: 36,
-		height: 36,
-		borderRadius: 18,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	reviewHeaderRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-	},
-	reviewRatingRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		marginTop: 2,
-		gap: 4,
 	},
 	routeButton: {
 		width: "100%",

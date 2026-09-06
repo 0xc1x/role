@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import {
@@ -13,6 +13,7 @@ import {
 	LoadingView,
 	Screen,
 	SearchBar,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import {
@@ -54,6 +55,7 @@ export default function BusinessOrdersScreen() {
 		isError,
 		error,
 		refetch,
+		isFetching,
 	} = useBusinessOrders(businessId);
 
 	const [tab, setTab] = useState<OrdersTab>("active");
@@ -63,6 +65,10 @@ export default function BusinessOrdersScreen() {
 	const [sort, setSort] = useState<OrdersSort>("newest");
 	const [historyPeriod, setHistoryPeriod] = useState<"today" | "week" | "all">("week");
 	const [weekOffset, setWeekOffset] = useState(0);
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
 
 	useEffect(() => {
 		setTab("active");
@@ -125,9 +131,19 @@ export default function BusinessOrdersScreen() {
 				) : null}
 			</View>
 
+			{pull.indicator}
 			<ScrollView
+				ref={pull.ref}
 				showsVerticalScrollIndicator={false}
 				contentContainerStyle={styles.content}
+				refreshControl={
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
+					/>
+				}
 			>
 				<OrderStatsRow stats={stats} />
 
