@@ -121,12 +121,24 @@ export const orderRepository = {
 		orderId: string,
 		status: OrderStatusType,
 	): Promise<void> {
-		const { error } = await supabase
-			.from("orders")
-			.update({ status })
-			.eq("id", orderId);
+		// RPC `set_order_status`: ownership + matriz de transiciones + restock
+		// en cancelación viven server-side (el UPDATE directo chocaba con el
+		// with_check de RLS para pending→cancelled).
+		const { data, error } = await supabase.rpc("set_order_status", {
+			p_order_id: orderId,
+			p_status: status,
+		});
 		if (error)
 			throw toAppError(error, "Error al actualizar el estado del pedido");
+		const result = (data ?? {}) as Record<string, unknown>;
+		if (result.success !== true) {
+			throw Errors.businessRule(
+				typeof result.message === "string"
+					? result.message
+					: "No se pudo actualizar el estado del pedido",
+				typeof result.error === "string" ? result.error : undefined,
+			);
+		}
 	},
 
 	/**

@@ -79,15 +79,26 @@ describe("orderRepository", () => {
 		).rejects.toThrow("boom");
 	});
 
-	test("updateOrderStatus hace UPDATE directo (solo transiciones operativas)", async () => {
-		const eqMock = jest.fn(async () => ({ error: null }));
-		const updateMock = jest.fn(() => ({ eq: eqMock }));
-		fromMock.mockReturnValue({ update: updateMock });
+	test("updateOrderStatus llama set_order_status (matriz server-side)", async () => {
+		rpcOk({ success: true, order_id: "order-1", status: "ready_for_pickup" });
 
 		await orderRepository.updateOrderStatus("order-1", "ready_for_pickup");
 
-		expect(fromMock).toHaveBeenCalledWith("orders");
-		expect(updateMock).toHaveBeenCalledWith({ status: "ready_for_pickup" });
-		expect(eqMock).toHaveBeenCalledWith("id", "order-1");
+		expect(rpcMock).toHaveBeenCalledWith("set_order_status", {
+			p_order_id: "order-1",
+			p_status: "ready_for_pickup",
+		});
+	});
+
+	test("updateOrderStatus lanza businessRule con el mensaje del RPC", async () => {
+		rpcOk({
+			success: false,
+			error: "INVALID_TRANSITION",
+			message: "Transición de estado no permitida",
+		});
+
+		await expect(
+			orderRepository.updateOrderStatus("order-1", "completed"),
+		).rejects.toThrow("Transición de estado no permitida");
 	});
 });
