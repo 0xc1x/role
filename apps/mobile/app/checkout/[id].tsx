@@ -3,6 +3,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
+import { useMutation } from "@tanstack/react-query";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button, ErrorState, LoadingView, Screen, ScreenHeader } from "@/core/ui";
@@ -41,8 +42,40 @@ export default function CheckoutScreen() {
 	const [couponInput, setCouponInput] = useState("");
 	const [couponError, setCouponError] = useState<string | null>(null);
 	const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
-	const [couponApplying, setCouponApplying] = useState(false);
 	const [confirmation, setConfirmation] = useState<ReservationSuccess | null>(null);
+
+	// Validación de cupón on-demand (no hay caché que invalidar): el repo
+	// trae el cupón y las reglas de negocio descartan en onSuccess.
+	const couponMutation = useMutation({
+		mutationFn: async (code: string) => {
+			const detail = offerDetail;
+			if (!detail) throw new Error("Oferta no disponible");
+			return orderRepository.getCouponByCode(code, detail.offer.business_id);
+		},
+		onSuccess: (coupon) => {
+			const detail = offerDetail;
+			if (!detail) return;
+			if (!coupon || !couponIsValid(coupon)) {
+				setCouponError(strings.checkout.couponUnavailable);
+				return;
+			}
+			if (
+				coupon.min_order_amount != null &&
+				detail.offer.discounted_price < coupon.min_order_amount
+			) {
+				setCouponError(
+					strings.checkout.couponMinNotMet.replace(
+						"{amount}",
+						formatMoney(coupon.min_order_amount),
+					),
+				);
+				return;
+			}
+			setAppliedCoupon(coupon);
+			setCouponError(null);
+		},
+		onError: () => setCouponError(strings.checkout.invalidCoupon),
+	});
 
 	if (isLoading) return <LoadingView />;
 	if (isError || !offerDetail)
@@ -55,35 +88,10 @@ export default function CheckoutScreen() {
 		: 0;
 	const total = Math.max(offer.discounted_price - couponDiscountValue, 0);
 
-	const applyCoupon = async () => {
+	const applyCoupon = () => {
 		const code = couponInput.trim().toUpperCase();
 		if (!code) return;
-		setCouponApplying(true);
-		try {
-			const coupon = await orderRepository.getCouponByCode(code, offer.business_id);
-			if (!coupon || !couponIsValid(coupon)) {
-				setCouponError(strings.checkout.couponUnavailable);
-				return;
-			}
-			if (
-				coupon.min_order_amount != null &&
-				offer.discounted_price < coupon.min_order_amount
-			) {
-				setCouponError(
-					strings.checkout.couponMinNotMet.replace(
-						"{amount}",
-						formatMoney(coupon.min_order_amount),
-					),
-				);
-				return;
-			}
-			setAppliedCoupon(coupon);
-			setCouponError(null);
-		} catch {
-			setCouponError(strings.checkout.invalidCoupon);
-		} finally {
-			setCouponApplying(false);
-		}
+		couponMutation.mutate(code);
 	};
 
 	const confirmReservation = () => {
@@ -138,7 +146,7 @@ export default function CheckoutScreen() {
 					}}
 					error={couponError}
 					applied={appliedCoupon}
-					applying={couponApplying}
+					applying={couponMutation.isPending}
 					onApply={() => void applyCoupon()}
 					onClear={() => {
 						setAppliedCoupon(null);

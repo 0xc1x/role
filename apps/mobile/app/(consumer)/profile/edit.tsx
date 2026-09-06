@@ -8,6 +8,7 @@ import { useMemo } from "react";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
+import { useMutation } from "@tanstack/react-query";
 
 import {
 	Avatar,
@@ -61,7 +62,6 @@ export default function EditProfileScreen() {
 	const [phone, setPhone] = useState(profile?.phone ?? "");
 	const [city, setCity] = useState(profile?.city ?? "");
 	const [cityOther, setCityOther] = useState("");
-	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	// Ciudades habilitadas desde app_config; se conserva la ciudad actual
@@ -87,7 +87,43 @@ export default function EditProfileScreen() {
 
 	if (!initialized || status === "guest" || !profile) return null;
 
-	const handleSave = async () => {
+	// El perfil vive en el store de sesión (Zustand), no en React Query:
+	// no hay caché que invalidar; el store se sincroniza con fetchProfile.
+	const save = useMutation({
+		mutationFn: async (input: {
+			fullName: string;
+			email: string;
+			phone: string | null;
+			city: string | null;
+		}) => {
+			await profileRepository.updateProfile(profile.id, {
+				full_name: input.fullName,
+				email: input.email,
+				phone: input.phone,
+				city: input.city,
+			});
+			const emailChanged = input.email !== profile.email;
+			if (emailChanged) {
+				await authRepository.updateEmail(input.email);
+			}
+			return { emailChanged };
+		},
+		onSuccess: async ({ emailChanged }) => {
+			const updated = await authRepository.fetchProfile(profile.id);
+			if (updated) setProfile(updated);
+			toast.success(
+				emailChanged
+					? strings.profileEdit.updatedWithEmailConfirmation
+					: strings.profileEdit.updated,
+			);
+			goBackOr("/(consumer)/profile");
+		},
+		onError: (e) => {
+			setError(toAppError(e, strings.common.error).message);
+		},
+	});
+
+	const handleSave = () => {
 		const trimmedName = name.trim();
 		const trimmedEmail = email.trim();
 		if (!trimmedName) {
@@ -103,34 +139,13 @@ export default function EditProfileScreen() {
 			return;
 		}
 
-		setLoading(true);
 		setError(null);
-		try {
-			await profileRepository.updateProfile(profile.id, {
-				full_name: trimmedName,
-				email: trimmedEmail,
-				phone: phone.trim() || null,
-				city: city === "Otra" ? cityOther.trim() : city.trim() || null,
-			});
-
-			const emailChanged = trimmedEmail !== profile.email;
-			if (emailChanged) {
-				await authRepository.updateEmail(trimmedEmail);
-			}
-
-			const updated = await authRepository.fetchProfile(profile.id);
-			if (updated) setProfile(updated);
-			toast.success(
-				emailChanged
-					? strings.profileEdit.updatedWithEmailConfirmation
-					: strings.profileEdit.updated,
-			);
-			goBackOr("/(consumer)/profile");
-		} catch (e) {
-			setError(toAppError(e, strings.common.error).message);
-		} finally {
-			setLoading(false);
-		}
+		save.mutate({
+			fullName: trimmedName,
+			email: trimmedEmail,
+			phone: phone.trim() || null,
+			city: city === "Otra" ? cityOther.trim() : city.trim() || null,
+		});
 	};
 
 	return (
@@ -223,7 +238,7 @@ export default function EditProfileScreen() {
 				<Button
 					label={strings.common.save}
 					onPress={() => void handleSave()}
-					loading={loading}
+					loading={save.isPending}
 					fullWidth
 					style={{ marginTop: spacing.md }}
 				/>
