@@ -42,6 +42,18 @@ export class AuthGuard implements CanActivate {
     );
   }
 
+  /** Cache con techo: purga expirados y, si sigue lleno, reinicia. */
+  private setCachedProfile(sub: string, entry: ProfileCacheEntry): void {
+    if (this.profileCache.size >= 500) {
+      const now = Date.now();
+      for (const [key, value] of this.profileCache) {
+        if (value.expiresAt <= now) this.profileCache.delete(key);
+      }
+      if (this.profileCache.size >= 500) this.profileCache.clear();
+    }
+    this.profileCache.set(sub, entry);
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
@@ -151,8 +163,8 @@ export class AuthGuard implements CanActivate {
       );
     }
 
-    // Cache the profile
-    this.profileCache.set(sub, {
+    // Cache the profile (con techo: evita crecimiento sin límite)
+    this.setCachedProfile(sub, {
       profile: {
         id: profile.id,
         email: profile.email,

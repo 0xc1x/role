@@ -20,6 +20,7 @@ const mockSupabaseAdmin = {
   auth: {
     admin: {
       createUser: jest.fn(),
+      signOut: jest.fn(),
     },
   },
 };
@@ -62,6 +63,7 @@ describe('AuthService', () => {
     mockSupabaseAnon.auth.refreshSession.mockReset();
     mockSupabaseAnon.auth.signOut.mockReset();
     mockSupabaseAdmin.auth.admin.createUser.mockReset();
+    mockSupabaseAdmin.auth.admin.signOut.mockReset();
 
     const module = await Test.createTestingModule({
       providers: [
@@ -157,27 +159,13 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('should create user and return tokens on success', async () => {
+    it('crea el usuario con verificación de email y sin insertar profiles', async () => {
       const mockUser = { id: 'new-user-1', email: 'new@test.com' };
-      const mockSession = {
-        access_token: 'access-token',
-        refresh_token: 'refresh-token',
-        expires_in: 3600,
-        expires_at: Math.floor(Date.now() / 1000) + 3600,
-      };
 
       mockSupabaseAdmin.auth.admin.createUser.mockResolvedValue({
         data: { user: mockUser },
         error: null,
       });
-
-      mockSupabaseAnon.auth.signInWithPassword.mockResolvedValue({
-        data: { user: mockUser, session: mockSession },
-        error: null,
-      });
-
-      mockDb.insert.mockReturnValue(mockDb);
-      mockDb.values.mockReturnValue(mockDb);
 
       const result = await service.register({
         email: 'new@test.com',
@@ -185,17 +173,20 @@ describe('AuthService', () => {
         full_name: 'New User',
       });
 
-      expect(result.access_token).toBe('access-token');
-      expect(result.user!.email).toBe('new@test.com');
-      expect(result.user!.full_name).toBe('New User');
-      expect(result.user!.role).toBe('user');
-      // Public register must never elevate privileges.
-      expect(mockDb.values).toHaveBeenCalledWith(
-        expect.objectContaining({ role: 'user' }),
+      // Registro con verificación por email y perfil vía trigger SQL.
+      expect(mockSupabaseAdmin.auth.admin.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email_confirm: false,
+          user_metadata: { full_name: 'New User' },
+        }),
       );
-      expect(mockDb.values).not.toHaveBeenCalledWith(
-        expect.objectContaining({ role: 'admin' }),
-      );
+      // El perfil lo crea handle_new_user: la API nunca inserta profiles
+      // (y por tanto nunca puede elevar privilegios).
+      expect(mockDb.insert).not.toHaveBeenCalled();
+      expect(mockSupabaseAnon.auth.signInWithPassword).not.toHaveBeenCalled();
+      expect(result.id).toBe('new-user-1');
+      expect(result.email).toBe('new@test.com');
+      expect(result.message).toContain('confirm your email');
     });
 
     it('should throw ConflictException when email already registered', async () => {
@@ -226,31 +217,6 @@ describe('AuthService', () => {
           full_name: 'New User',
         }),
       ).rejects.toThrow(InternalServerErrorException);
-    });
-
-    it('should return message when sign in fails after registration', async () => {
-      const mockUser = { id: 'new-user-1', email: 'new@test.com' };
-
-      mockSupabaseAdmin.auth.admin.createUser.mockResolvedValue({
-        data: { user: mockUser },
-        error: null,
-      });
-
-      mockSupabaseAnon.auth.signInWithPassword.mockResolvedValue({
-        data: { user: null, session: null },
-        error: { message: 'Sign in failed' },
-      });
-
-      mockDb.values.mockReturnValue(mockDb);
-
-      const result = await service.register({
-        email: 'new@test.com',
-        password: 'password123',
-        full_name: 'New User',
-      });
-
-      expect(result.message).toBe('Account created. Please sign in with your credentials.');
-      expect(result.id).toBe('new-user-1');
     });
   });
 
@@ -320,16 +286,52 @@ describe('AuthService', () => {
   });
 
   describe('logout', () => {
-    it('should return success message on logout', async () => {
-      mockSupabaseAnon.auth.signOut.mockResolvedValue({ error: null });
+    it('revoca la sesión real (refresh del token + signOut local en GoTrue)', async () => {
+      const mockSession = {
+        access_token: 'fresh-access-token',
+        refresh_token: 'rotated-refresh-token',
+      };
+
+      mockSupabaseAnon.auth.refreshSession.mockResolvedValue({
+        data: { user: {}, session: mockSession },
+        error: null,
+      });
+      mockSupabaseAdmin.auth.admin.signOut.mockResolvedValue({ error: null });
 
       const result = await service.logout({ refresh_token: 'any-token' });
 
+      expect(mockSupabaseAdmin.auth.admin.signOut).toHaveBeenCalledWith(
+        'fresh-access-token',
+        'local',
+      );
       expect(result.message).toBe('Logged out successfully');
     });
 
-    it('should throw InternalServerErrorException on signOut error', async () => {
-      mockSupabaseAnon.auth.signOut.mockResolvedValue({
+    it('tolera un refresh token inválido o ya revocado (idempotente)', async () => {
+      mockSupabaseAnon.auth.refreshSession.mockResolvedValue({
+        data: { user: null, session: null },
+        error: { message: 'Invalid Refresh Token' },
+      });
+
+      const result = await service.logout({ refresh_token: 'stale-token' });
+
+      expect(mockSupabaseAdmin.auth.admin.signOut).not.toHaveBeenCalled();
+      expect(result.message).toBe('Logged out successfully');
+    });
+
+    it('tolera logout sin refresh token', async () => {
+      const result = await service.logout({ refresh_token: '' });
+
+      expect(mockSupabaseAnon.auth.refreshSession).not.toHaveBeenCalled();
+      expect(result.message).toBe('Logged out successfully');
+    });
+
+    it('propaga InternalServerErrorException si GoTrue falla al revocar', async () => {
+      mockSupabaseAnon.auth.refreshSession.mockResolvedValue({
+        data: { user: {}, session: { access_token: 'acc' } },
+        error: null,
+      });
+      mockSupabaseAdmin.auth.admin.signOut.mockResolvedValue({
         error: { message: 'Sign out failed' },
       });
 
