@@ -1,10 +1,5 @@
-/** Row shape for `public.payment_events` */
-export interface PaymentEvent {
-  id: string;
-  payment_intent_id: string;
-  event_type: string;
-  gateway_event_id: string | null;
-  payload: Record<string, unknown>;
-  processed: boolean;
-  created_at: string;
-}
+import type { z } from 'zod';
+import type { PaymentEventSchema } from '../schemas/payment-event.schema';
+
+/** Row shape for `public.payment_events` — derivado del schema Zod (SSOT). */
+export type PaymentEvent = z.infer<typeof PaymentEventSchema>;

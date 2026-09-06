@@ -1,13 +1,8 @@
+import type { z } from 'zod';
+import type { CommissionSchema } from '../schemas/commission.schema';
+
 /**
- * Domain entity for a business commission.
+ * Row shape for a business commission — derivado del schema Zod (SSOT).
  * `commission_rate` is a fraction (0.1 = 10%). Timestamps are ISO-8601 strings.
  */
-export interface Commission {
-  id: string;
-  name: string;
-  slug: string;
-  commission_rate: number;
-  active: boolean;
-  has_pending_payouts: boolean;
-  updated_at: string | null;
-}
+export type Commission = z.infer<typeof CommissionSchema>;

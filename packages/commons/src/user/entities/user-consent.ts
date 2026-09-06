@@ -1,11 +1,5 @@
-/** Row shape for `public.user_consents` */
-export interface UserConsent {
-  id: string;
-  user_id: string;
-  consent_type: string;
-  granted: boolean;
-  granted_at: string | null;
-  revoked_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
+import type { z } from 'zod';
+import type { UserConsentSchema } from '../schemas/user-consent.schema';
+
+/** Row shape for `public.user_consents` — derivado del schema Zod (SSOT). */
+export type UserConsent = z.infer<typeof UserConsentSchema>;

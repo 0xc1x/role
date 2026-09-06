@@ -3,6 +3,7 @@ import {
 	type Coupon,
 	type Order,
 	type OrderStatus as OrderStatusType,
+	type ReserveOfferErrorCode,
 } from "@0xc1x/role-commons";
 
 export type { OrderStatusType };
@@ -157,7 +158,8 @@ export interface ReservationSuccess {
 
 export interface ReservationFailure {
 	ok: false;
-	errorCode: string;
+	/** Códigos del contrato `reserve_offer` en commons + guardas locales del repo. */
+	errorCode: ReserveOfferErrorCode | "NOT_AUTHENTICATED" | "UNKNOWN";
 	message: string;
 }
 

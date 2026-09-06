@@ -25,19 +25,9 @@ import type {
 } from "../domain/business";
 import { PAYOUT_FIELDS } from "../domain/business";
 import { notificationRepository } from "./notifications";
+import { OFFER_SELECT } from "@/features/offers/data/offer-select";
 
 export { isOfferOutOfStock };
-
-const OFFER_SELECT = `
-  id, business_id, business_location_id, title, description, image,
-  original_price, discounted_price, stock, initial_stock,
-  pickup_start, pickup_end, is_active, includes, allergens, rating, review_count,
-  businesses:business_id (id, name, type, image, rating, review_count),
-  business_locations:business_location_id (id, name, address, latitude, longitude, zone),
-  offer_categories (
-    categories:categories!offer_categories_category_id_fkey (id, name, slug, emoji, image_url, active)
-  )
-`;
 
 const DAY_LABELS: Record<string, string> = {
 	monday: "Lunes",

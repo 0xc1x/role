@@ -122,3 +122,35 @@ export const UpdateOfferSchema = CreateOfferFieldsSchema.partial()
 export const PatchOfferSchema = UpdateOfferSchema;
 
 export const OfferListResponseSchema = PaginatedDataSchema(OfferSchema);
+
+// ─── Embeds de la proyección "oferta con negocio" ───────────────────────────
+
+export const OfferBusinessEmbedSchema = z.object({
+  id: UuidSchema,
+  name: z.string().min(1),
+  slug: z.string().min(1),
+  image: z.string().nullable(),
+  rating: z.number().nullable(),
+});
+
+export const OfferLocationEmbedSchema = z.object({
+  id: UuidSchema,
+  name: z.string().min(1),
+  address: z.string().min(1),
+  latitude: z.number(),
+  longitude: z.number(),
+  zone: z.string().nullable(),
+});
+
+export const OfferCategoryEmbedSchema = z.object({
+  id: UuidSchema,
+  name: z.string().min(1),
+  slug: z.string().min(1),
+});
+
+/** Oferta + negocio + ubicación + categorías (listados de ofertas). */
+export const OfferWithBusinessSchema = OfferSchema.extend({
+  categories: z.array(OfferCategoryEmbedSchema),
+  business: OfferBusinessEmbedSchema,
+  location: OfferLocationEmbedSchema,
+});

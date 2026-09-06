@@ -49,6 +49,7 @@ import {
 	lastEventTimeFor,
 	type OrderDetail,
 } from "@/features/orders/domain/order";
+import type { OrderStatus } from "@0xc1x/role-commons";
 import {
 	useCancelBusinessOrder,
 	useUpdateOrderStatus,
@@ -375,14 +376,6 @@ interface TimelineEntry {
 	color: string;
 	background: string;
 }
-type OrderStatus =
-	| "pending"
-	| "confirmed"
-	| "ready_for_pickup"
-	| "picked_up"
-	| "completed"
-	| "cancelled"
-	| "expired";
 
 type TimelineIcon = TimelineEntry["icon"];
 

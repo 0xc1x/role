@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { AppRole } from '../../_common/enums/app-role';
 import type {
   InviteBusinessRequestSchema,
   LoginRequestSchema,
@@ -18,7 +19,8 @@ export interface AuthUser {
   email: string;
   full_name: string | null;
   avatar_url: string | null;
-  role: 'user' | 'business' | 'admin';
+  /** Rol del usuario: valor de APP_ROLES (misma fuente que el enum). */
+  role: AppRole;
 }
 
 export interface AuthResponse {

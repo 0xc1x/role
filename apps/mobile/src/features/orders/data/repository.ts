@@ -12,6 +12,7 @@ import type {
 	CancelOrderResult,
 	OrderDetail,
 	OrderStatusEvent,
+	ReservationFailure,
 	ReservationResult,
 } from "../domain/order";
 
@@ -71,9 +72,13 @@ export const orderRepository = {
 					discount: num(result.discount) ?? 0,
 				};
 			}
+			const rawErrorCode = result.error;
 			return {
 				ok: false,
-				errorCode: String(result.error ?? "UNKNOWN"),
+				errorCode:
+					typeof rawErrorCode === "string"
+						? (rawErrorCode as ReservationFailure["errorCode"])
+						: "UNKNOWN",
 				message: String(result.message ?? "Error al reservar"),
 			};
 		} catch (e) {
@@ -305,6 +310,10 @@ function mapOrderDetail(row: Row): OrderDetail {
 		pickup_code: String(row.pickup_code ?? ""),
 		pickup_time: (row.pickup_time as string | null) ?? null,
 		coupon_id: (row.coupon_id as string | null) ?? null,
+		commission_rate: num(row.commission_rate) ?? 0,
+		platform_fee: num(row.platform_fee) ?? 0,
+		net_amount: num(row.net_amount) ?? 0,
+		payout_id: (row.payout_id as string | null) ?? null,
 		created_at: String(row.created_at ?? ""),
 		updated_at: String(row.updated_at ?? ""),
 	};
