@@ -1,4 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner-native";
+import { strings } from "@/core/i18n/strings";
 
 import { useAuthStore } from "@/features/auth/store";
 import { offersRepository } from "@/features/offers/data/repository";
@@ -290,6 +292,7 @@ export function useCancelOrder() {
 			// Cancelar devuelve stock a la oferta.
 			queryClient.invalidateQueries({ queryKey: ["offers"] });
 		},
+		onError: () => toast.error(strings.orders.cancelError),
 	});
 }
 

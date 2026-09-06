@@ -347,6 +347,7 @@ export const strings = {
 		cancel: "Cancelar pedido",
 		cancelConfirm: "¿Cancelar este pedido?",
 		cancelled: "Pedido cancelado",
+		cancelError: "No pudimos cancelar el pedido. Inténtalo de nuevo.",
 		details: "Detalles",
 		yourCode: "Código de recogida",
 		pickupCodeHint:
@@ -784,6 +785,8 @@ export const strings = {
 		ordersCancelConfirm: "¿Estás seguro de que deseas cancelar este pedido?",
 		ordersCancelled: "Pedido cancelado",
 		ordersCancelError: "No pudimos cancelar el pedido. Inténtalo de nuevo.",
+		ordersStatusError: "No pudimos actualizar el pedido. Inténtalo de nuevo.",
+		ordersValidateError: "No pudimos validar el código. Inténtalo de nuevo.",
 		ordersProductTitle: "Producto",
 		ordersCustomerInfo: "Información del cliente",
 		ordersName: "Nombre",

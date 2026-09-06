@@ -96,7 +96,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "bun test src",
+    "test": "bun test --isolate src",
     "preexport:web": "bun scripts/generate-firebase-config.mjs",
     "export:web": "expo export --platform web",
     "build:vercel": "bun run preexport:web && expo export --platform web && bun scripts/fix-web-dist.mjs && bun scripts/build-vercel-output.mjs",

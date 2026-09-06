@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner-native";
+import { strings } from "@/core/i18n/strings";
 import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
 
 import {
@@ -295,6 +297,7 @@ export function useUpdateOrderStatus(businessId: string) {
 			});
 			void queryClient.invalidateQueries({ queryKey: ["orders"] });
 		},
+		onError: () => toast.error(strings.business.ordersStatusError),
 	});
 }
 
@@ -339,5 +342,6 @@ export function useValidatePickupCode(businessId: string) {
 				void queryClient.invalidateQueries({ queryKey: ["orders"] });
 			}
 		},
+		onError: () => toast.error(strings.business.ordersValidateError),
 	});
 }
