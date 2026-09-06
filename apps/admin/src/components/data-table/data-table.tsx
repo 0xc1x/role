@@ -56,7 +56,7 @@ export function DataTable<TData, TValue>({
 			<div className="flex items-center justify-end py-4">
 				<DataTableViewOptions table={table} />
 			</div>
-			<div className="w-full max-w-full overflow-x-auto rounded-md border">
+			<div className="h-[65vh] w-full max-w-full overflow-x-auto overflow-y-auto rounded-md border">
 				<Table>
 					<TableHeader>
 						{table.getHeaderGroups().map((headerGroup) => (

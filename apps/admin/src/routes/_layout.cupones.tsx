@@ -35,7 +35,7 @@ const booleanSearch = z
 
 const couponsSearchSchema = z.object({
 	page: z.coerce.number().int().positive().optional().default(1),
-	limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 	search: z.string().optional(),
 	is_active: booleanSearch,
 	// true → solo globales; false → solo de negocio; undefined → todos.

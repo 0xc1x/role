@@ -19,7 +19,7 @@ import {
 
 const tipsSearchSchema = z.object({
 	page: z.coerce.number().int().positive().optional().default(1),
-	limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 	search: z.string().optional(),
 	active: z
 		.union([z.boolean(), z.enum(["true", "false"])])

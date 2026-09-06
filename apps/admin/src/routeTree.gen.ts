@@ -12,19 +12,19 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as SignupRouteImport } from './routes/signup'
+import { Route as LayoutCampanasRouteImport } from './routes/_layout.campanas'
 import { Route as LayoutCategoriasRouteImport } from './routes/_layout.categorias'
 import { Route as LayoutComisionesRouteImport } from './routes/_layout.comisiones'
 import { Route as LayoutConfiguracionRouteImport } from './routes/_layout.configuracion'
 import { Route as LayoutConsejosRouteImport } from './routes/_layout.consejos'
 import { Route as LayoutCuponesRouteImport } from './routes/_layout.cupones'
-import { Route as LayoutEmailsRouteImport } from './routes/_layout.emails'
 import { Route as LayoutEmailsSendsRouteImport } from './routes/_layout.emails-sends'
 import { Route as LayoutHomeRouteImport } from './routes/_layout.home'
 import { Route as LayoutNegociosRouteImport } from './routes/_layout.negocios'
-import { Route as LayoutNotificacionesPushRouteImport } from './routes/_layout.notificaciones-push'
 import { Route as LayoutPagosRouteImport } from './routes/_layout.pagos'
 import { Route as LayoutSlidesRouteImport } from './routes/_layout.slides'
+import { Route as LayoutNotificacionesMailsRouteImport } from './routes/_layout.notificaciones.mails'
+import { Route as LayoutNotificacionesPushRouteImport } from './routes/_layout.notificaciones.push'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,10 +40,10 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => rootRouteImport,
+const LayoutCampanasRoute = LayoutCampanasRouteImport.update({
+  id: '/campanas',
+  path: '/campanas',
+  getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutCategoriasRoute = LayoutCategoriasRouteImport.update({
   id: '/categorias',
@@ -70,11 +70,6 @@ const LayoutCuponesRoute = LayoutCuponesRouteImport.update({
   path: '/cupones',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutEmailsRoute = LayoutEmailsRouteImport.update({
-  id: '/emails',
-  path: '/emails',
-  getParentRoute: () => LayoutRoute,
-} as any)
 const LayoutEmailsSendsRoute = LayoutEmailsSendsRouteImport.update({
   id: '/emails-sends',
   path: '/emails-sends',
@@ -90,12 +85,6 @@ const LayoutNegociosRoute = LayoutNegociosRouteImport.update({
   path: '/negocios',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutNotificacionesPushRoute =
-  LayoutNotificacionesPushRouteImport.update({
-    id: '/notificaciones-push',
-    path: '/notificaciones-push',
-    getParentRoute: () => LayoutRoute,
-  } as any)
 const LayoutPagosRoute = LayoutPagosRouteImport.update({
   id: '/pagos',
   path: '/pagos',
@@ -106,120 +95,131 @@ const LayoutSlidesRoute = LayoutSlidesRouteImport.update({
   path: '/slides',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutNotificacionesMailsRoute =
+  LayoutNotificacionesMailsRouteImport.update({
+    id: '/notificaciones/mails',
+    path: '/notificaciones/mails',
+    getParentRoute: () => LayoutRoute,
+  } as any)
+const LayoutNotificacionesPushRoute =
+  LayoutNotificacionesPushRouteImport.update({
+    id: '/notificaciones/push',
+    path: '/notificaciones/push',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/signup': typeof SignupRoute
+  '/campanas': typeof LayoutCampanasRoute
   '/categorias': typeof LayoutCategoriasRoute
   '/comisiones': typeof LayoutComisionesRoute
   '/configuracion': typeof LayoutConfiguracionRoute
   '/consejos': typeof LayoutConsejosRoute
   '/cupones': typeof LayoutCuponesRoute
-  '/emails': typeof LayoutEmailsRoute
   '/emails-sends': typeof LayoutEmailsSendsRoute
   '/home': typeof LayoutHomeRoute
   '/negocios': typeof LayoutNegociosRoute
-  '/notificaciones-push': typeof LayoutNotificacionesPushRoute
   '/pagos': typeof LayoutPagosRoute
   '/slides': typeof LayoutSlidesRoute
+  '/notificaciones/mails': typeof LayoutNotificacionesMailsRoute
+  '/notificaciones/push': typeof LayoutNotificacionesPushRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/signup': typeof SignupRoute
+  '/campanas': typeof LayoutCampanasRoute
   '/categorias': typeof LayoutCategoriasRoute
   '/comisiones': typeof LayoutComisionesRoute
   '/configuracion': typeof LayoutConfiguracionRoute
   '/consejos': typeof LayoutConsejosRoute
   '/cupones': typeof LayoutCuponesRoute
-  '/emails': typeof LayoutEmailsRoute
   '/emails-sends': typeof LayoutEmailsSendsRoute
   '/home': typeof LayoutHomeRoute
   '/negocios': typeof LayoutNegociosRoute
-  '/notificaciones-push': typeof LayoutNotificacionesPushRoute
   '/pagos': typeof LayoutPagosRoute
   '/slides': typeof LayoutSlidesRoute
+  '/notificaciones/mails': typeof LayoutNotificacionesMailsRoute
+  '/notificaciones/push': typeof LayoutNotificacionesPushRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_layout': typeof LayoutRouteWithChildren
   '/login': typeof LoginRoute
-  '/signup': typeof SignupRoute
+  '/_layout/campanas': typeof LayoutCampanasRoute
   '/_layout/categorias': typeof LayoutCategoriasRoute
   '/_layout/comisiones': typeof LayoutComisionesRoute
   '/_layout/configuracion': typeof LayoutConfiguracionRoute
   '/_layout/consejos': typeof LayoutConsejosRoute
   '/_layout/cupones': typeof LayoutCuponesRoute
-  '/_layout/emails': typeof LayoutEmailsRoute
   '/_layout/emails-sends': typeof LayoutEmailsSendsRoute
   '/_layout/home': typeof LayoutHomeRoute
   '/_layout/negocios': typeof LayoutNegociosRoute
-  '/_layout/notificaciones-push': typeof LayoutNotificacionesPushRoute
   '/_layout/pagos': typeof LayoutPagosRoute
   '/_layout/slides': typeof LayoutSlidesRoute
+  '/_layout/notificaciones/mails': typeof LayoutNotificacionesMailsRoute
+  '/_layout/notificaciones/push': typeof LayoutNotificacionesPushRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/login'
-    | '/signup'
+    | '/campanas'
     | '/categorias'
     | '/comisiones'
     | '/configuracion'
     | '/consejos'
     | '/cupones'
-    | '/emails'
     | '/emails-sends'
     | '/home'
     | '/negocios'
-    | '/notificaciones-push'
     | '/pagos'
     | '/slides'
+    | '/notificaciones/mails'
+    | '/notificaciones/push'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
-    | '/signup'
+    | '/campanas'
     | '/categorias'
     | '/comisiones'
     | '/configuracion'
     | '/consejos'
     | '/cupones'
-    | '/emails'
     | '/emails-sends'
     | '/home'
     | '/negocios'
-    | '/notificaciones-push'
     | '/pagos'
     | '/slides'
+    | '/notificaciones/mails'
+    | '/notificaciones/push'
   id:
     | '__root__'
     | '/'
     | '/_layout'
     | '/login'
-    | '/signup'
+    | '/_layout/campanas'
     | '/_layout/categorias'
     | '/_layout/comisiones'
     | '/_layout/configuracion'
     | '/_layout/consejos'
     | '/_layout/cupones'
-    | '/_layout/emails'
     | '/_layout/emails-sends'
     | '/_layout/home'
     | '/_layout/negocios'
-    | '/_layout/notificaciones-push'
     | '/_layout/pagos'
     | '/_layout/slides'
+    | '/_layout/notificaciones/mails'
+    | '/_layout/notificaciones/push'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LayoutRoute: typeof LayoutRouteWithChildren
   LoginRoute: typeof LoginRoute
-  SignupRoute: typeof SignupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -245,12 +245,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_layout/campanas': {
+      id: '/_layout/campanas'
+      path: '/campanas'
+      fullPath: '/campanas'
+      preLoaderRoute: typeof LayoutCampanasRouteImport
+      parentRoute: typeof LayoutRoute
     }
     '/_layout/categorias': {
       id: '/_layout/categorias'
@@ -287,13 +287,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutCuponesRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/emails': {
-      id: '/_layout/emails'
-      path: '/emails'
-      fullPath: '/emails'
-      preLoaderRoute: typeof LayoutEmailsRouteImport
-      parentRoute: typeof LayoutRoute
-    }
     '/_layout/emails-sends': {
       id: '/_layout/emails-sends'
       path: '/emails-sends'
@@ -315,13 +308,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutNegociosRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/notificaciones-push': {
-      id: '/_layout/notificaciones-push'
-      path: '/notificaciones-push'
-      fullPath: '/notificaciones-push'
-      preLoaderRoute: typeof LayoutNotificacionesPushRouteImport
-      parentRoute: typeof LayoutRoute
-    }
     '/_layout/pagos': {
       id: '/_layout/pagos'
       path: '/pagos'
@@ -336,37 +322,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutSlidesRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/notificaciones/mails': {
+      id: '/_layout/notificaciones/mails'
+      path: '/notificaciones/mails'
+      fullPath: '/notificaciones/mails'
+      preLoaderRoute: typeof LayoutNotificacionesMailsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/notificaciones/push': {
+      id: '/_layout/notificaciones/push'
+      path: '/notificaciones/push'
+      fullPath: '/notificaciones/push'
+      preLoaderRoute: typeof LayoutNotificacionesPushRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
 interface LayoutRouteChildren {
+  LayoutCampanasRoute: typeof LayoutCampanasRoute
   LayoutCategoriasRoute: typeof LayoutCategoriasRoute
   LayoutComisionesRoute: typeof LayoutComisionesRoute
   LayoutConfiguracionRoute: typeof LayoutConfiguracionRoute
   LayoutConsejosRoute: typeof LayoutConsejosRoute
   LayoutCuponesRoute: typeof LayoutCuponesRoute
-  LayoutEmailsRoute: typeof LayoutEmailsRoute
   LayoutEmailsSendsRoute: typeof LayoutEmailsSendsRoute
   LayoutHomeRoute: typeof LayoutHomeRoute
   LayoutNegociosRoute: typeof LayoutNegociosRoute
-  LayoutNotificacionesPushRoute: typeof LayoutNotificacionesPushRoute
   LayoutPagosRoute: typeof LayoutPagosRoute
   LayoutSlidesRoute: typeof LayoutSlidesRoute
+  LayoutNotificacionesMailsRoute: typeof LayoutNotificacionesMailsRoute
+  LayoutNotificacionesPushRoute: typeof LayoutNotificacionesPushRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutCampanasRoute: LayoutCampanasRoute,
   LayoutCategoriasRoute: LayoutCategoriasRoute,
   LayoutComisionesRoute: LayoutComisionesRoute,
   LayoutConfiguracionRoute: LayoutConfiguracionRoute,
   LayoutConsejosRoute: LayoutConsejosRoute,
   LayoutCuponesRoute: LayoutCuponesRoute,
-  LayoutEmailsRoute: LayoutEmailsRoute,
   LayoutEmailsSendsRoute: LayoutEmailsSendsRoute,
   LayoutHomeRoute: LayoutHomeRoute,
   LayoutNegociosRoute: LayoutNegociosRoute,
-  LayoutNotificacionesPushRoute: LayoutNotificacionesPushRoute,
   LayoutPagosRoute: LayoutPagosRoute,
   LayoutSlidesRoute: LayoutSlidesRoute,
+  LayoutNotificacionesMailsRoute: LayoutNotificacionesMailsRoute,
+  LayoutNotificacionesPushRoute: LayoutNotificacionesPushRoute,
 }
 
 const LayoutRouteWithChildren =
@@ -376,7 +378,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LayoutRoute: LayoutRouteWithChildren,
   LoginRoute: LoginRoute,
-  SignupRoute: SignupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

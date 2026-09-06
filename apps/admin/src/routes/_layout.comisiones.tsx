@@ -91,7 +91,7 @@ function RouteComponent() {
 					<Button
 						variant="outline"
 						onClick={() =>
-							navigate({ search: { page: 1, limit: 20, search: undefined } })
+							navigate({ search: { page: 1, limit: 10, search: undefined } })
 						}
 					>
 						Reintentar

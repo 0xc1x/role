@@ -22,7 +22,7 @@ import { columns } from "@/features/businesses/tables/businesses.columns";
 
 const schema = z.object({
 	page: z.coerce.number().int().positive().optional().default(1),
-	limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 	search: z.string().optional(),
 	verification_status: z.enum(["pending", "approved", "rejected"]).optional(),
 });
@@ -68,7 +68,7 @@ function RouteComponent() {
 				</p>
 				<Button
 					variant="outline"
-					onClick={() => navigate({ search: { page: 1, limit: 20 } })}
+					onClick={() => navigate({ search: { page: 1, limit: 10 } })}
 				>
 					Reintentar
 				</Button>

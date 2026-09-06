@@ -7,7 +7,6 @@ import {
 	Info,
 	LayoutList,
 	type LucideIcon,
-	Mail,
 	Megaphone,
 	Projector,
 	Settings2,
@@ -82,34 +81,19 @@ export const navMain: NavMainItem[] = [
 		items: [
 			{
 				title: "Push",
-				url: "/notificaciones-push",
-			},
-			{
-				title: "Whatsapp",
-				url: "#",
+				url: "/notificaciones/push",
 			},
 			{
 				title: "Mail",
-				url: "#",
-			},
-		],
-	},
-	{
-		title: "Correos",
-		url: "/emails",
-		icon: Mail,
-		items: [
-			{
-				title: "Plantillas",
-				url: "/emails?tab=plantillas",
-			},
-			{
-				title: "Gestión de correos",
-				url: "/emails",
+				url: "/notificaciones/mails",
 			},
 			{
 				title: "Envíos",
 				url: "/emails-sends",
+			},
+			{
+				title: "Whatsapp",
+				url: "#",
 			},
 		],
 	},
@@ -133,7 +117,7 @@ export const projects: NavProject[] = [
 	},
 	{
 		name: "Campañas de Marketing",
-		url: "/emails?tab=campanas",
+		url: "/campanas",
 		icon: Megaphone,
 	},
 	{

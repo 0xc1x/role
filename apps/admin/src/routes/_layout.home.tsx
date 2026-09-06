@@ -1,3 +1,4 @@
+import type { PlatformStats } from "@0xc1x/role-commons";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, ShoppingBag, Store, Users } from "lucide-react";
@@ -18,8 +19,6 @@ export const Route = createFileRoute("/_layout/home")({
 		],
 	}),
 });
-
-type PlatformStats = { users: number; businesses: number; meals: number };
 
 function usePlatformStats() {
 	return useQuery<PlatformStats>({
@@ -98,7 +97,7 @@ function HomePage() {
 		stats?.businesses ??
 		0;
 	const usersCount = stats?.users ?? 0;
-	const mealsCount = stats?.meals ?? 0;
+	const mealsCount = stats?.meals_saved ?? 0;
 
 	return (
 		<div className="w-full p-8 space-y-6">

@@ -76,7 +76,7 @@ import { tokenColumns } from "@/features/push-notifications/tables/tokens-column
 const TABS = ["enviar", "plantillas", "historial", "dispositivos"] as const;
 type Tab = (typeof TABS)[number];
 
-export const Route = createFileRoute("/_layout/notificaciones-push")({
+export const Route = createFileRoute("/_layout/notificaciones/push")({
 	validateSearch: (raw: Record<string, unknown>): { tab?: Tab } => {
 		const tab = typeof raw.tab === "string" ? raw.tab : undefined;
 		return TABS.includes(tab as Tab) ? { tab: tab as Tab } : {};
@@ -742,7 +742,7 @@ function TemplateTestDrawer(props: {
 
 function HistoryTab() {
 	const [page, setPage] = useState(1);
-	const [limit, setLimit] = useState(20);
+	const [limit, setLimit] = useState(10);
 	const [search, setSearch] = useState("");
 	const [type, setType] = useState<string>("all");
 	const { data, isLoading } = useQuery(
@@ -813,7 +813,7 @@ function HistoryTab() {
 
 function TokensTab() {
 	const [page, setPage] = useState(1);
-	const [limit, setLimit] = useState(20);
+	const [limit, setLimit] = useState(10);
 	const [search, setSearch] = useState("");
 	const [platform, setPlatform] = useState<string>("all");
 	const { data, isLoading } = useQuery(

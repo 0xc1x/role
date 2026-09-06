@@ -22,7 +22,7 @@ import { columns } from "@/features/email-sends/tables/email-sends.columns";
 
 const schema = z.object({
 	page: z.coerce.number().int().positive().optional().default(1),
-	limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 	search: z.string().optional(),
 	status: z
 		.enum([
@@ -86,7 +86,7 @@ function RouteComponent() {
 				</p>
 				<Button
 					variant="outline"
-					onClick={() => navigate({ search: { page: 1, limit: 20 } })}
+					onClick={() => navigate({ search: { page: 1, limit: 10 } })}
 				>
 					Reintentar
 				</Button>
