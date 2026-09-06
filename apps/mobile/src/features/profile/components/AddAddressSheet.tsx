@@ -15,6 +15,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, BottomSheetModal, Button } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { useSaveAddress, useUpdateAddress } from "@/features/profile/hooks";
 import { MapPickerView, type MapPickerResult } from "./MapPickerView";
 
@@ -198,7 +199,7 @@ export function AddAddressSheet({
 						{
 							borderColor: picked ? colors.primary : colors.borderSolid,
 							backgroundColor: picked
-								? colors.primary + "0F"
+								? withAlpha(colors.primary, 0.059)
 								: "transparent",
 							borderWidth: picked ? 2 : 1.5,
 						},
@@ -269,7 +270,7 @@ export function AddAddressSheet({
 										borderColor: colors.borderSolid ,
 										backgroundColor: isSelected
 											? colors.foreground
-											: colors.inputBackground + "80",
+											: withAlpha(colors.inputBackground, 0.502),
 									},
 								]}
 							>
@@ -366,7 +367,7 @@ function IconInput({
 			style={[
 				styles.inputRow,
 				{ 
-					backgroundColor: colors.inputBackground + "80" ,
+					backgroundColor: withAlpha(colors.inputBackground, 0.502) ,
 					borderColor: colors.borderSolid ,
 				},
 			]}

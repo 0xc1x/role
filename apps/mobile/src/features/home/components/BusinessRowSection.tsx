@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/core/theme";
 import { AppText, Card, SectionHeader } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { useNearbyBusinesses, useSelectedAddress } from "@/features/hooks";
 import { formatDistanceKm } from "@/core/utils/formatters";
 import { haversineKm, type BusinessSummary } from "@/features/offers/domain/offer";
@@ -51,7 +52,7 @@ function BusinessCard({ business }: BusinessCardProps) {
 					<View
 						style={[
 							styles.ratingBadge,
-							{ backgroundColor: colors.card + "EB" },
+							{ backgroundColor: withAlpha(colors.card, 0.922), boxShadow: `0px 1px 4px ${colors.shadow}` },
 						]}
 					>
 						<Ionicons name="star" size={14} color={colors.green} />
@@ -66,7 +67,7 @@ function BusinessCard({ business }: BusinessCardProps) {
 					<View
 						style={[
 							styles.distanceBadge,
-							{ backgroundColor: colors.card + "EB" },
+							{ backgroundColor: withAlpha(colors.card, 0.922), boxShadow: `0px 1px 4px ${colors.shadow}` },
 						]}
 					>
 						<Ionicons
@@ -237,7 +238,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.sm,
 		paddingVertical: 4,
 		borderRadius: radii.sm,
-		boxShadow: `0px 1px 4px #00000014`,	},
+		},
 	distanceBadge: {
 		position: "absolute",
 		bottom: spacing.sm,
@@ -248,7 +249,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.sm,
 		paddingVertical: 4,
 		borderRadius: radii.sm,
-		boxShadow: `0px 1px 4px #00000014`,	},
+		},
 	businessInfo: {
 		padding: 12,
 	},

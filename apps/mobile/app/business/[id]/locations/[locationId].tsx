@@ -14,6 +14,7 @@ import {
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { formatShortDate } from "@/core/utils/formatters";
 import { useBusinessLocation } from "@/features/business/hooks";
 import { BusinessLocationMap } from "@/features/business/components/BusinessLocationMap";
@@ -38,7 +39,7 @@ export default function BusinessLocationDetailScreen() {
 
 			{/* ── Hero ─────────────────────────────────────────────────── */}
 			<Card style={styles.hero}>
-				<View style={[styles.icon, { backgroundColor: colors.primary + "1A" }]}>
+				<View style={[styles.icon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}>
 					<Ionicons name="storefront" size={26} color={colors.primary} />
 				</View>
 				<View style={styles.heroText}>
@@ -58,7 +59,7 @@ export default function BusinessLocationDetailScreen() {
 							<View
 								style={[
 									styles.hqChip,
-									{ backgroundColor: colors.warning + "26" },
+									{ backgroundColor: withAlpha(colors.warning, 0.149) },
 								]}
 							>
 								<Ionicons name="star" size={11} color={colors.warning} />
@@ -131,7 +132,7 @@ export default function BusinessLocationDetailScreen() {
 			>
 				<View style={styles.actionRow}>
 					<View
-						style={[styles.actionIcon, { backgroundColor: colors.primary + "1A" }]}
+						style={[styles.actionIcon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}
 					>
 						<Ionicons
 							name="create-outline"
@@ -172,7 +173,7 @@ function InfoRow({
 	const { colors } = useTheme();
 	return (
 		<View style={[styles.infoRow, last && { marginBottom: 0 }]}>
-			<View style={[styles.infoIcon, { backgroundColor: colors.primary + "0D" }]}>
+			<View style={[styles.infoIcon, { backgroundColor: withAlpha(colors.primary, 0.051) }]}>
 				<Ionicons name={icon} size={14} color={colors.mutedForeground} />
 			</View>
 			<View style={styles.infoRowText}>

@@ -17,6 +17,7 @@ import { toast } from "sonner-native";
 
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { strings } from "@/core/i18n/strings";
 import { usePromoSlides, type PromoSlide } from "@/features/slides";
 
@@ -202,7 +203,7 @@ export function PromoSlider() {
 					>
 						{/* Clon de la primera slide al final para el loop continuo. */}
 						{[...slides, slides[0]].map((item, i) => (
-							<View key={i < slides.length ? item.id : `clone-${item.id}`} style={styles.card}>
+							<View key={i < slides.length ? item.id : `clone-${item.id}`} style={[styles.card, { boxShadow: `0px 8px 20px ${colors.shadow}` }]}>
 								<PromoCard item={item} />
 							</View>
 						))}
@@ -217,7 +218,7 @@ export function PromoSlider() {
 					isWrap={isWrapRef.current}
 					onPressDot={(index) => goTo(index)}
 					activeColor={colors.primary}
-					inactiveColor={colors.foreground + "33"}
+					inactiveColor={withAlpha(colors.foreground, 0.2)}
 				/>
 			)}
 		</View>
@@ -316,10 +317,10 @@ function PromoCard({ item }: { item: PromoSlide }) {
 		<View style={[styles.cardInner, { backgroundColor: colors.greenDark, flexDirection: "row" }]}>
 			{/* Lado izquierdo sólido — sin Blur ni overlay traslúcido */}
 			<View style={styles.cardLeft}>
-				<View style={styles.badge}>
+				<View style={[styles.badge, { backgroundColor: withAlpha(colors.onMedia, 0.14), borderColor: withAlpha(colors.onMedia, 0.18) }]}>
 					<Text
 						style={{
-							color: colors.greenDarkForeground + "B3",
+							color: withAlpha(colors.greenDarkForeground, 0.702),
 							fontSize: 11,
 							fontWeight: "600",
 							letterSpacing: 0.4,
@@ -358,7 +359,7 @@ function PromoCard({ item }: { item: PromoSlide }) {
 						onPress={handleCtaPress}
 						style={({ pressed }) => [
 							styles.promoButton,
-							{ backgroundColor: item.buttonColor ?? colors.primary },
+							{ backgroundColor: item.buttonColor ?? colors.primary, boxShadow: `0px 4px 12px ${colors.shadow}` },
 							pressed && styles.promoButtonPressed,
 						]}
 					>
@@ -398,7 +399,6 @@ const styles = StyleSheet.create({
 		height: CARD_HEIGHT,
 		borderRadius: radii.xl,
 		overflow: "hidden",
-		boxShadow: `0px 8px 20px #00000014`,
 	},
 	cardInner: {
 		flex: 1,
@@ -425,9 +425,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 10,
 		paddingVertical: 5,
 		borderRadius: radii.pill,
-		backgroundColor: "rgba(255,255,255,0.14)",
 		borderWidth: 1,
-		borderColor: "rgba(255,255,255,0.18)",
 	},
 	promoButton: {
 		height: 38,
@@ -435,7 +433,6 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: 16,
-		boxShadow: `0px 4px 12px #00000022`,
 	},
 	promoButtonPressed: {
 		opacity: 0.85,

@@ -17,6 +17,7 @@ import { useConfigValue } from "@/features/config";
 import { AppText, Card, Screen, ScreenHeader, SearchBar } from "@/core/ui";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -266,7 +267,7 @@ function ContactSupportCard({ onPress }: { onPress: () => void }) {
 	const { colors } = useTheme();
 	return (
 		<LinearGradient
-			colors={[colors.primary, `${colors.primary}CC`]}
+			colors={[colors.primary, `${withAlpha(colors.primary, 0.8)}`]}
 			start={{ x: 0, y: 0 }}
 			end={{ x: 1, y: 1 }}
 			style={styles.supportCard}
@@ -280,7 +281,7 @@ function ContactSupportCard({ onPress }: { onPress: () => void }) {
 			</AppText>
 			<AppText
 				variant="bodySmall"
-				style={{ color: `${colors.primaryForeground}E6`, marginTop: 2 }}
+				style={{ color: `${withAlpha(colors.primaryForeground, 0.902)}`, marginTop: 2 }}
 			>
 				{strings.helpCenter.contactSubtitle}
 			</AppText>

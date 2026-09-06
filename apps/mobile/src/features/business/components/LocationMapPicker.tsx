@@ -166,7 +166,7 @@ export function LocationMapPicker({
 					onPress={() => void useMyLocation()}
 					style={({ pressed }) => [
 						styles.actionButton,
-						{ backgroundColor: colors.card },
+						{ backgroundColor: colors.card, boxShadow: `0px 2px 4px ${colors.shadow}` },
 						pressed && { opacity: 0.85 },
 					]}
 					accessibilityRole="button"
@@ -182,7 +182,7 @@ export function LocationMapPicker({
 					onPress={() => setFullscreen(true)}
 					style={({ pressed }) => [
 						styles.actionButton,
-						{ backgroundColor: colors.card },
+						{ backgroundColor: colors.card, boxShadow: `0px 2px 4px ${colors.shadow}` },
 						pressed && { opacity: 0.85 },
 					]}
 					accessibilityRole="button"
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		elevation: 2,
-		boxShadow: `0px 2px 4px #00000026`,	},
+		},
 	fullscreen: { flex: 1 },
 	fullscreenBar: {
 		flexDirection: "row",

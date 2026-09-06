@@ -9,6 +9,7 @@ import Animated, {
 import { useTheme } from "@/core/theme";
 import { AppText } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { strings } from "@/core/i18n/strings";
 import { useCategoryStats } from "@/features/hooks";
 import type { CategoryStat } from "@/features/offers/domain/offer";
@@ -174,15 +175,15 @@ function AnimatedChip({
 				style={[
 					styles.chip,
 					{
-						backgroundColor: selected ? colors.greenDark : colors.green + "4D",
-						borderColor: selected ? colors.greenDark : colors.greenDark + "26",
+						backgroundColor: selected ? colors.greenDark : withAlpha(colors.green, 0.302),
+						borderColor: selected ? colors.greenDark : withAlpha(colors.greenDark, 0.149),
 					},
 				]}
 			>
 				<AppText
 					weight={selected ? "semiBold" : "medium"}
 					style={{
-						color: selected ? colors.green : colors.greenForeground + "90",
+						color: selected ? colors.green : withAlpha(colors.greenForeground, 0.565),
 					}}
 				>
 					{label}

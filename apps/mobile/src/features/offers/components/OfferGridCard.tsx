@@ -6,6 +6,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { formatDistanceKm, formatMoney } from "@/core/utils/formatters";
 import {
 	discountPercentage,
@@ -55,7 +56,7 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 						resizeMode="cover"
 					/>
 				) : (
-					<View style={[styles.image, styles.imagePlaceholder]} />
+					<View style={[styles.image, { backgroundColor: colors.borderSolid }]} />
 				)}
 				{discount >= 10 ? (
 					<View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
@@ -76,7 +77,7 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 					>
 						<AppText
 							style={{
-								color: "#FFFFFF",
+								color: colors.destructiveForeground,
 								fontSize: 10,
 								fontWeight: "600",
 							}}
@@ -154,9 +155,6 @@ const styles = StyleSheet.create({
 	image: {
 		width: "100%",
 		height: "100%",
-	},
-	imagePlaceholder: {
-		backgroundColor: "#E5E5E5",
 	},
 	discountBadge: {
 		position: "absolute",

@@ -53,12 +53,12 @@ export function OrdersFiltersControl({
 				<Ionicons
 					name="funnel-outline"
 					size={14}
-					color={status ? "#FFFFFF" : colors.mutedForeground}
+					color={status ? colors.primaryForeground : colors.mutedForeground}
 				/>
 				<AppText
 					variant="bodySmall"
 					weight="semiBold"
-					style={{ color: status ? "#FFFFFF" : colors.foreground }}
+					style={{ color: status ? colors.primaryForeground : colors.foreground }}
 				>
 					{strings.business.ordersFilter}
 				</AppText>

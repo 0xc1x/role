@@ -10,6 +10,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { formatMoney } from "@/core/utils/formatters";
 import {
 	discountPercentage,
@@ -122,7 +123,7 @@ export function ExploreMapView({
 					})}
 				</MapCanvas>
 			) : (
-				<View style={[styles.flex, styles.mapFallback]} />
+				<View style={[styles.flex, { backgroundColor: colors.borderSolid }]} />
 			)}
 
 			{/* ── Header ─────────────────────────────────────────────── */}
@@ -219,7 +220,7 @@ function MapOfferCard({
 					<Ionicons name="close" size={16} color={colors.foreground} />
 				</Pressable>
 				<LinearGradient
-					colors={["transparent", "rgba(0,0,0,0.4)"]}
+					colors={["transparent", withAlpha(colors.scrim, 0.4)]}
 					style={styles.selectedFade}
 				/>
 			</View>
@@ -276,7 +277,6 @@ const styles = StyleSheet.create({
 	flex: {
 		flex: 1,
 	},
-	mapFallback: { backgroundColor: "#e5e5e5" },
 	pricePill: {
 		paddingHorizontal: 10,
 		paddingVertical: 5,

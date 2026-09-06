@@ -5,6 +5,7 @@ import { StyleSheet, View } from "react-native";
 
 import { env } from "@/core/config/env";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 import type { MapCanvasHandle, MapCanvasProps } from "./MapCanvas.types";
 function zoomForDelta(delta: number): number {
 	const zoom = Math.round(Math.log2(360 / Math.max(delta, 0.0001)));
@@ -72,7 +73,13 @@ const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 							name="location"
 							size={40}
 							color={colors.primary}
-							style={styles.pin}
+							style={[
+								styles.pin,
+								{
+									// @ts-ignore — RN types aún no exponen textShadow unificado
+									textShadow: `0px 0px 3px ${withAlpha(colors.scrim, 0.2)}`,
+								},
+							]}
 						/>
 					</View>
 				) : null}
@@ -104,9 +111,5 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		zIndex: 10,
 	},
-	pin: {
-		marginTop: -30,
-		// @ts-ignore — RN types aún no exponen textShadow unificado
-		textShadow: "0px 0px 3px rgba(0,0,0,0.2)",
-	},
+	pin: { marginTop: -30 },
 });

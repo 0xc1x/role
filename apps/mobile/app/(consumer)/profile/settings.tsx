@@ -10,6 +10,7 @@ import { useAuthStore } from "@/features/auth/store";
 import { useTheme, type ThemeMode } from "@/core/theme";
 import { usePreferences, useUpdatePreferences } from "@/features/profile/hooks";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 
 const MODES: Array<{ key: ThemeMode; label: string; icon: string }> = [
 	{ key: "light", label: strings.settings.light, icon: "sunny-outline" },
@@ -82,7 +83,7 @@ export default function SettingsScreen() {
 					<View style={styles.radiusHeader}>
 						<SectionLabel>{strings.settings.maxDistance}</SectionLabel>
 						<View
-							style={[styles.radiusPill, { backgroundColor: colors.primary + "14" }]}
+							style={[styles.radiusPill, { backgroundColor: withAlpha(colors.primary, 0.078) }]}
 						>
 							<AppText
 								variant="labelSmall"

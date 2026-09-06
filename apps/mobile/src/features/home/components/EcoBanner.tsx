@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/core/theme";
 import { AppText } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { strings } from "@/core/i18n/strings";
 
 export function EcoBanner() {
@@ -35,7 +36,7 @@ export function EcoBanner() {
 					</AppText>
 					<AppText
 						style={{
-							color: colors.greenDarkForeground + "B3",
+							color: withAlpha(colors.greenDarkForeground, 0.702),
 							fontSize: 13,
 							marginTop: 6,
 						}}

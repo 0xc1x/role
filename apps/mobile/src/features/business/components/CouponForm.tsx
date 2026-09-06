@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { AppText, Button, Card, TextField } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { DateTimeField } from "./products/DateTimeFields";
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -129,8 +130,8 @@ export function CouponForm({
 						style={({ pressed }) => [
 							styles.generate,
 							{
-								borderColor: colors.primary + "80",
-								backgroundColor: colors.primary + "0A",
+								borderColor: withAlpha(colors.primary, 0.502),
+								backgroundColor: withAlpha(colors.primary, 0.039),
 							},
 							pressed && { opacity: 0.8 },
 						]}
@@ -314,7 +315,7 @@ function TypeOption({
 				{
 					borderColor: selected ? colors.primary : colors.borderSolid,
 					borderWidth: selected ? 1.5 : 1,
-					backgroundColor: selected ? colors.primary + "0D" : colors.card,
+					backgroundColor: selected ? withAlpha(colors.primary, 0.051) : colors.card,
 				},
 				pressed && { opacity: 0.85 },
 			]}

@@ -24,6 +24,7 @@ import { syncDeviceToken } from "@/features/notifications";
 import type { BusinessNotificationPreferences } from "@0xc1x/role-commons";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 
 async function ensurePushPermission(): Promise<"granted" | "denied"> {
 	if (Platform.OS === "web") {
@@ -116,18 +117,18 @@ export default function BusinessNotificationsScreen() {
 
 				{/* ── Info banner ─────────────────────────────────── */}
 				<View style={[styles.banner, { backgroundColor: colors.primary }]}>
-					<View style={styles.bannerIcon}>
-						<Ionicons name="notifications" size={24} color="#fff" />
+					<View style={[styles.bannerIcon, { backgroundColor: withAlpha(colors.greenDarkForeground, 0.2) }]}>
+						<Ionicons name="notifications" size={24} color={colors.greenDarkForeground} />
 					</View>
 					<View style={styles.bannerText}>
 						<AppText
 							variant="bodyMedium"
 							weight="semiBold"
-							style={{ color: "#fff" }}
+							style={{ color: colors.greenDarkForeground }}
 						>
 							{strings.business.notificationsBannerTitle}
 						</AppText>
-						<AppText variant="bodySmall" style={{ color: "#ffffffE6" }}>
+						<AppText variant="bodySmall" style={{ color: withAlpha(colors.greenDarkForeground, 0.902) }}>
 							{strings.business.notificationsBannerBody}
 						</AppText>
 					</View>
@@ -300,7 +301,6 @@ const styles = StyleSheet.create({
 		width: 48,
 		height: 48,
 		borderRadius: 24,
-		backgroundColor: "rgba(255,255,255,0.2)",
 		alignItems: "center",
 		justifyContent: "center",
 	},

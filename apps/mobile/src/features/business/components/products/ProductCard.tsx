@@ -18,6 +18,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, BottomSheetModal, StatusBadge } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { formatMoney, formatRelativeDay, formatTime } from "@/core/utils/formatters";
 import type { OfferDetail } from "@/features/offers/domain/offer";
 import { useDeleteOffer, useToggleOfferActive } from "@/features/business/hooks";
@@ -76,7 +77,7 @@ export function ProductCard({
 						{product.offer.image ? (
 							<Image source={{ uri: product.offer.image }} style={styles.image} />
 						) : (
-							<View style={[styles.image, styles.imagePlaceholder]}>
+							<View style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.borderSolid }]}>
 								<Ionicons
 									name="cube-outline"
 									size={28}
@@ -85,8 +86,8 @@ export function ProductCard({
 							</View>
 						)}
 						{!isActive ? (
-							<View style={[styles.imageOverlay, { backgroundColor: "rgba(0,0,0,0.56)" }]}>
-								<Ionicons name="eye-off" size={20} color="#FFFFFF" />
+							<View style={[styles.imageOverlay, { backgroundColor: withAlpha(colors.scrim, 0.56) }]}>
+								<Ionicons name="eye-off" size={20} color={colors.onMedia} />
 							</View>
 						) : null}
 					</View>
@@ -116,7 +117,7 @@ export function ProductCard({
 						</AppText>
 						<View style={styles.infoChips}>
 							{product.location?.name ? (
-								<View style={styles.infoChip}>
+								<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
 									<Ionicons
 										name="storefront-outline"
 										size={12}
@@ -131,7 +132,7 @@ export function ProductCard({
 									</AppText>
 								</View>
 							) : null}
-							<View style={styles.infoChip}>
+							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
 								<Ionicons name="time-outline" size={12} color={colors.mutedForeground} />
 								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 									{strings.business.untilTime.replace(
@@ -140,7 +141,7 @@ export function ProductCard({
 									)}
 								</AppText>
 							</View>
-							<View style={styles.infoChip}>
+							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
 								<Ionicons
 									name="cube-outline"
 									size={12}
@@ -328,7 +329,6 @@ const styles = StyleSheet.create({
 		height: "100%",
 	},
 	imagePlaceholder: {
-		backgroundColor: "#E5E5E5",
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -373,7 +373,6 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.sm,
 		paddingVertical: 2,
 		borderRadius: radii.sm,
-		backgroundColor: "rgba(0,0,0,0.04)",
 	},
 	priceRow: {
 		flexDirection: "row",

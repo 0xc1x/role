@@ -8,6 +8,7 @@ import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { AppText } from "@/core/ui";
 import { spacing } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -63,7 +64,7 @@ export function WelcomeBanner() {
 
 	if (!profile) return null;
 
-	const secondaryAlpha = colors.secondary + "1A";
+	const secondaryAlpha = withAlpha(colors.secondary, 0.102);
 
 	const firstName = getDisplayName(profile);
 

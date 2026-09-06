@@ -18,6 +18,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, CircleIconButton, goBackOr } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { useBusinessProfile } from "@/features/business/hooks";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
 import type { BusinessProfileDetail } from "@/features/business/domain/business";
@@ -155,7 +156,7 @@ export default function BusinessProfileScreen() {
 				)}
 				<LinearGradient
 					colors={[
-						"rgba(0,0,0,0.38)",
+						withAlpha(colors.scrim, 0.38),
 						"transparent",
 						colors.background,
 					]}
@@ -183,7 +184,7 @@ function BusinessHeader({ profile }: { profile: BusinessProfileDetail }) {
 	return (
 		<View>
 			<View style={styles.headerRow}>
-				<View style={[styles.logoBox, { backgroundColor: colors.background }]}>
+				<View style={[styles.logoBox, { backgroundColor: colors.background, boxShadow: `0px 8px 12px ${colors.shadow}` }]}>
 					{business.image ? (
 						<Image source={{ uri: business.image }} style={styles.logo} resizeMode="cover" />
 					) : (
@@ -193,7 +194,7 @@ function BusinessHeader({ profile }: { profile: BusinessProfileDetail }) {
 					)}
 				</View>
 				<View style={styles.headerText}>
-					<View style={[styles.typeBadge, { backgroundColor: `${colors.primary}1A` }]}>
+					<View style={[styles.typeBadge, { backgroundColor: `${withAlpha(colors.primary, 0.102)}` }]}>
 						<AppText
 							style={{
 								color: colors.primary,
@@ -268,7 +269,7 @@ function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
 			{profile.memberSince ? (
 				<AppText
 					style={{
-						color: `${colors.success}B3`,
+						color: `${withAlpha(colors.success, 0.702)}`,
 						fontSize: 11,
 						textAlign: "center",
 						marginTop: spacing.sm,
@@ -289,7 +290,7 @@ function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
 function AboutCard({ description }: { description: string }) {
 	const { colors } = useTheme();
 	return (
-		<View style={styles.card}>
+		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
 			<AppText variant="labelMedium" weight="bold">
 				{strings.businessProfile.aboutBusiness}
 			</AppText>
@@ -308,7 +309,7 @@ function ContactInfoCard({ profile }: { profile: BusinessProfileDetail }) {
 	const { colors } = useTheme();
 	const business = profile.business;
 	return (
-		<View style={styles.card}>
+		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
 			<AppText variant="labelMedium" weight="bold">
 				{strings.businessProfile.contactInfo}
 			</AppText>
@@ -421,7 +422,7 @@ function InfoRow({
 function HoursCard({ hours }: { hours: BusinessProfileDetail["hours"] }) {
 	const { colors } = useTheme();
 	return (
-		<View style={styles.card}>
+		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
 			<View style={styles.hoursTitleRow}>
 				<Ionicons name="time-outline" size={20} color={colors.primary} />
 				<View style={{ width: spacing.sm }} />
@@ -451,7 +452,7 @@ function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
 	const { colors } = useTheme();
 	const business = profile.business;
 	return (
-		<View style={styles.card}>
+		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
 			<View style={styles.reviewsHeaderRow}>
 				<AppText variant="labelMedium" weight="bold">
 					{strings.businessProfile.reviewsTitle}
@@ -506,7 +507,7 @@ function LocationCard({ profile }: { profile: BusinessProfileDetail }) {
 	const hasCoords = profile.latitude != null && profile.longitude != null;
 
 	return (
-		<View style={styles.card}>
+		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
 			<AppText variant="labelMedium" weight="bold">
 				{strings.businessProfile.geolocation}
 			</AppText>
@@ -578,7 +579,7 @@ const styles = StyleSheet.create({
 		height: 86,
 		borderRadius: radii.xl,
 		padding: 4,
-		boxShadow: `0px 8px 12px #0000000F`,	},
+		},
 	logo: {
 		width: "100%",
 		height: "100%",
@@ -617,7 +618,7 @@ const styles = StyleSheet.create({
 		padding: spacing.sm,
 		borderRadius: radii.xl,
 		backgroundColor: "transparent",
-		boxShadow: `0px 4px 12px #00000005`,	},
+		},
 	infoRow: {
 		flexDirection: "row",
 		alignItems: "flex-start",

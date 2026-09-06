@@ -24,6 +24,7 @@ import type { ColorTokens } from "@/core/theme/colors";
 import { strings } from "@/core/i18n/strings";
 import { spacing, radii } from "@/core/theme/spacing";
 import { fonts, typography, type TypeStyle } from "@/core/theme/typography";
+import { withAlpha } from "@/core/theme/alpha";
 import { toAppError } from "@/core/error/mapper";
 import { AppText } from "./AppText";
 
@@ -233,7 +234,7 @@ export function HeartButton({
 						width: size,
 						height: size,
 						backgroundColor: isFavorite
-							? `${colors.redAccent}26`
+							? `${withAlpha(colors.redAccent, 0.149)}`
 							: colors.card,
 						boxShadow: `0px 2px 8px ${colors.shadow}`,
 						transform: [{ scale: pressed ? 0.94 : 1 }],
@@ -326,8 +327,8 @@ export function FilterChip({
 			style={[
 				styles.filterChip,
 				{
-					backgroundColor: colors.secondary + "4D",
-					borderColor: colors.primary + "33",
+					backgroundColor: withAlpha(colors.secondary, 0.302),
+					borderColor: withAlpha(colors.primary, 0.2),
 				},
 			]}
 		>
@@ -750,7 +751,7 @@ export function ThemeOptionCard({
 			style={[
 				styles.themeCard,
 				{
-					backgroundColor: isSelected ? colors.primary + "0D" : colors.card,
+					backgroundColor: isSelected ? withAlpha(colors.primary, 0.051) : colors.card,
 					borderColor: isSelected ? colors.primary : colors.borderSolid,
 					// Ancho uniforme: 1.5 solo en seleccionada desplazaba
 					// la fila 1px al cambiar de opción.

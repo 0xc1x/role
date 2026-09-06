@@ -6,6 +6,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, Card } from "@/core/ui";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 
 /**
  * Payment method selector: cash (pay at pickup) only.
@@ -26,12 +27,12 @@ export function PaymentMethodSection() {
 				style={[
 					styles.methodRow,
 					{
-						backgroundColor: selected === "cash" ? colors.primary + "14" : colors.inputBackground,
+						backgroundColor: selected === "cash" ? withAlpha(colors.primary, 0.078) : colors.inputBackground,
 						borderColor: selected === "cash" ? colors.primary : colors.borderSolid,
 					},
 				]}
 			>
-				<View style={[styles.iconBox, { backgroundColor: colors.secondary + "4D" }]}>
+				<View style={[styles.iconBox, { backgroundColor: withAlpha(colors.secondary, 0.302) }]}>
 					<Ionicons name="cash-outline" size={18} color={colors.primary} />
 				</View>
 				<AppText variant="bodyMedium" weight="semiBold" style={styles.methodLabel}>

@@ -57,7 +57,7 @@ export function BusinessGridCard({
 						resizeMode="cover"
 					/>
 				) : (
-					<View style={[styles.image, styles.imagePlaceholder]}>
+					<View style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.borderSolid }]}>
 						<Ionicons name="storefront-outline" size={28} color={colors.mutedForeground} />
 					</View>
 				)}
@@ -122,7 +122,6 @@ const styles = StyleSheet.create({
 		height: "100%",
 	},
 	imagePlaceholder: {
-		backgroundColor: "#E5E5E5",
 		alignItems: "center",
 		justifyContent: "center",
 	},

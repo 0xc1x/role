@@ -88,7 +88,7 @@ function GestionContent({ businessId }: { businessId: string }) {
 					<Button
 						label={strings.business.editProfile}
 						variant="primary"
-						icon={<Ionicons name="create-outline" size={20} color="#fff" />}
+						icon={<Ionicons name="create-outline" size={20} color={colors.primaryForeground} />}
 						style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
 						onPress={() => router.push("/my-business/edit")}
 					/>
@@ -102,7 +102,7 @@ function GestionContent({ businessId }: { businessId: string }) {
 					<Button
 						label={strings.business.addLocation}
 						size="sm"
-						icon={<Ionicons name="add" size={16} color="#fff" />}
+						icon={<Ionicons name="add" size={16} color={colors.primaryForeground} />}
 						onPress={() =>
 							router.push(`/business/${businessId}/locations/create` as Href)
 						}

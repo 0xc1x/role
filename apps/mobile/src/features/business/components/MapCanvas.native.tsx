@@ -4,6 +4,7 @@ import { StyleSheet, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 import type { MapCanvasHandle, MapCanvasProps } from "./MapCanvas.types";
 
 const DEFAULT_REGION = {
@@ -63,7 +64,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(
 								name="location"
 								size={40}
 								color={colors.primary}
-								style={styles.pin}
+								style={[styles.pin, { textShadowColor: withAlpha(colors.scrim, 0.2) }]}
 							/>
 						</View>
 					</Marker>
@@ -77,5 +78,5 @@ const styles = StyleSheet.create({
 	map: { flex: 1 },
 	fullscreenMap: { flex: 1 },
 	pinShadow: { alignItems: "center", justifyContent: "center" },
-	pin: { marginTop: -30, textShadowColor: "rgba(0,0,0,0.2)", textShadowRadius: 3 },
+	pin: { marginTop: -30, textShadowRadius: 3 },
 });

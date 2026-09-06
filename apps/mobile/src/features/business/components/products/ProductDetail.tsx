@@ -27,6 +27,7 @@ import {
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import {
 	formatDateTime,
 	formatMoney,
@@ -104,7 +105,7 @@ export function ProductDetail({
 						{categories.map((c) => (
 							<View
 								key={c.id}
-								style={[styles.categoryChip, { backgroundColor: `${colors.primary}1A` }]}
+								style={[styles.categoryChip, { backgroundColor: `${withAlpha(colors.primary, 0.102)}` }]}
 							>
 								<AppText
 									weight="semiBold"
@@ -121,13 +122,13 @@ export function ProductDetail({
 					{offer.image ? (
 						<Image source={{ uri: offer.image }} style={styles.heroImage} />
 					) : (
-						<View style={[styles.heroImage, styles.heroPlaceholder]}>
+						<View style={[styles.heroImage, styles.heroPlaceholder, { backgroundColor: colors.borderSolid }]}>
 							<Ionicons name="cube-outline" size={40} color={colors.mutedForeground} />
 						</View>
 					)}
 					{!isActive ? (
-						<View style={[styles.inactiveOverlay, { backgroundColor: "rgba(0,0,0,0.56)" }]}>
-							<AppText variant="bodyMedium" weight="bold" color="#FFFFFF">
+						<View style={[styles.inactiveOverlay, { backgroundColor: withAlpha(colors.scrim, 0.56) }]}>
+							<AppText variant="bodyMedium" weight="bold" color={colors.onMedia}>
 								{strings.business.inactive}
 							</AppText>
 						</View>
@@ -136,7 +137,7 @@ export function ProductDetail({
 						<View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
 							<AppText
 								weight="bold"
-								color="#FFFFFF"
+								color={colors.primaryForeground}
 								style={{ fontSize: 13 }}
 							>
 								-{discount}% OFF
@@ -172,7 +173,7 @@ export function ProductDetail({
 				<View style={styles.quickActions}>
 					<Button
 						label={strings.common.edit}
-						icon={<Ionicons name="create-outline" size={18} color="#FFFFFF" />}
+						icon={<Ionicons name="create-outline" size={18} color={colors.primaryForeground} />}
 						style={{ flex: 1 }}
 						onPress={() =>
 							router.push(`/business/${businessId}/offer/${offer.id}/edit`)
@@ -274,7 +275,7 @@ export function ProductDetail({
 									key={item}
 									style={[styles.allergenChip, { backgroundColor: colors.warning }]}
 								>
-									<AppText variant="bodySmall" weight="semiBold" color="#FFFFFF">
+									<AppText variant="bodySmall" weight="semiBold" color={colors.yellowDarkForeground}>
 										{item}
 									</AppText>
 								</View>
@@ -396,7 +397,6 @@ const styles = StyleSheet.create({
 	heroPlaceholder: {
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#E5E5E5",
 	},
 	inactiveOverlay: {
 		position: "absolute",

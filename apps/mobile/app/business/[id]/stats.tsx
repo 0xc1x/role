@@ -21,6 +21,7 @@ import {
 import { formatMoney, formatPercent } from "@/core/utils/formatters";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 import type { BusinessStats } from "@/features/business/domain/business";
 
 const MONTH_ABBR = [
@@ -412,7 +413,7 @@ function TopProducts({ products }: { products: BusinessStats["topProducts"] }) {
 				products.map((product, index) => (
 					<View key={product.name} style={styles.productRow}>
 						<View
-							style={[styles.rankCircle, { backgroundColor: colors.primary + "1A" }]}
+							style={[styles.rankCircle, { backgroundColor: withAlpha(colors.primary, 0.102) }]}
 						>
 							<AppText
 								variant="bodySmall"
@@ -462,7 +463,7 @@ function PeriodSummary({
 		stats.ordersCount > 0 ? (stats.revenue / stats.ordersCount).toFixed(2) : "0.00";
 
 	return (
-		<View style={[styles.summary, { backgroundColor: colors.primary, boxShadow: `0px 4px 12px ${colors.primary}4D` }]}>
+		<View style={[styles.summary, { backgroundColor: colors.primary, boxShadow: `0px 4px 12px ${withAlpha(colors.primary, 0.302)}` }]}>
 			<AppText
 				variant="bodyMedium"
 				weight="semiBold"
@@ -472,7 +473,7 @@ function PeriodSummary({
 			</AppText>
 			<AppText
 				variant="bodySmall"
-				style={{ color: colors.primaryForeground + "E6", marginTop: spacing.sm }}
+				style={{ color: withAlpha(colors.primaryForeground, 0.902), marginTop: spacing.sm }}
 			>
 				{`${(stats.revenueChange >= 0
 					? strings.business.statsGrowthUp
@@ -483,7 +484,7 @@ function PeriodSummary({
 				<View style={styles.flex1}>
 					<AppText
 						variant="bodySmall"
-						style={{ color: colors.primaryForeground + "BF" }}
+						style={{ color: withAlpha(colors.primaryForeground, 0.749) }}
 					>
 						{strings.business.dailyAvg}
 					</AppText>
@@ -494,7 +495,7 @@ function PeriodSummary({
 				<View style={styles.flex1}>
 					<AppText
 						variant="bodySmall"
-						style={{ color: colors.primaryForeground + "BF" }}
+						style={{ color: withAlpha(colors.primaryForeground, 0.749) }}
 					>
 						{strings.business.avgTicket}
 					</AppText>

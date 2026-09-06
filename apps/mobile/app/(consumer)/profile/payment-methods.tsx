@@ -25,6 +25,7 @@ import { profileRepository } from "@/features/profile/data/repository";
 import type { PaymentMethodModel } from "@/features/profile/domain/profile";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 
 function PaymentMethodRow({
 	method,
@@ -50,7 +51,7 @@ function PaymentMethodRow({
 							•••• {method.last4}
 						</AppText>
 						{method.isDefault ? (
-							<View style={[styles.defaultBadge, { backgroundColor: colors.primary + "14" }]}>
+							<View style={[styles.defaultBadge, { backgroundColor: withAlpha(colors.primary, 0.078) }]}>
 								<AppText
 									style={{
 										fontSize: 10,

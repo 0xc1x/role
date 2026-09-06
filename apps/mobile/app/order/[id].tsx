@@ -48,6 +48,7 @@ import {
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import type { ColorTokens } from "@/core/theme/colors";
+import { withAlpha } from "@/core/theme/alpha";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -225,8 +226,8 @@ function PickupCodeCard({ order }: { order: Order }) {
 				<QRCode
 					value={qrValue}
 					size={176}
-					color="#131316"
-					backgroundColor={colors.card}
+					color={colors.qrForeground}
+					backgroundColor={colors.qrBackground}
 				/>
 			</View>
 			<AppText style={[styles.sectionNote, { color: colors.mutedForeground }]}>
@@ -256,7 +257,7 @@ function BusinessInfoCard({ item }: { item: OrderDetail }) {
 				<View
 					style={[
 						styles.businessIcon,
-						{ backgroundColor: colors.secondary + "4D" },
+						{ backgroundColor: withAlpha(colors.secondary, 0.302) },
 					]}
 				>
 					<Ionicons name="storefront-outline" size={18} color={colors.primary} />
@@ -509,7 +510,7 @@ function buildTimeline(
 			note: strings.orders.timelineConfirmedNote,
 			time: timeOf(["confirmed"], createdIso),
 			color: colors.primary,
-			background: colors.secondary + "4D",
+			background: withAlpha(colors.secondary, 0.302),
 		},
 	];
 
@@ -520,7 +521,7 @@ function buildTimeline(
 			note: strings.orders.timelineReadyNote,
 			time: timeOf(["ready_for_pickup"], readyIso),
 			color: colors.primary,
-			background: colors.secondary + "4D",
+			background: withAlpha(colors.secondary, 0.302),
 		});
 	}
 
@@ -634,8 +635,8 @@ function ReviewBanner() {
 			style={[
 				styles.reviewBanner,
 				{
-					backgroundColor: colors.secondary + "26",
-					borderColor: colors.secondary + "4D",
+					backgroundColor: withAlpha(colors.secondary, 0.149),
+					borderColor: withAlpha(colors.secondary, 0.302),
 				},
 			]}
 		>

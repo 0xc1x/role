@@ -16,6 +16,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, BottomSheetModal, Button } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { useValidatePickupCode } from "@/features/business/hooks";
 import { parsePickupQr } from "./qr";
 
@@ -172,14 +173,14 @@ function NativeScanner({
 				onBarcodeScanned={handleBarcode}
 			>
 				{status !== "idle" ? (
-					<View style={styles.scanOverlay}>
+					<View style={[styles.scanOverlay, { backgroundColor: withAlpha(colors.scrim, 0.54) }]}>
 						{status === "validating" ? (
 							<View style={styles.center}>
-								<ActivityIndicator color="#FFFFFF" size="large" />
+								<ActivityIndicator color={colors.onMedia} size="large" />
 								<AppText
 									variant="bodyMedium"
 									weight="semiBold"
-									style={{ color: "#FFFFFF", marginTop: spacing.md }}
+									style={{ color: colors.onMedia, marginTop: spacing.md }}
 								>
 									{strings.business.ordersValidatingCode}
 								</AppText>
@@ -194,7 +195,7 @@ function NativeScanner({
 								<AppText
 									variant="bodyMedium"
 									weight="bold"
-									style={{ color: "#FFFFFF", marginTop: spacing.md }}
+									style={{ color: colors.onMedia, marginTop: spacing.md }}
 								>
 									{strings.business.ordersScanSuccess}
 								</AppText>
@@ -209,7 +210,7 @@ function NativeScanner({
 								<AppText
 									variant="bodyMedium"
 									weight="bold"
-									style={{ color: "#FFFFFF", marginTop: spacing.md }}
+									style={{ color: colors.onMedia, marginTop: spacing.md }}
 								>
 									{strings.business.ordersScanInvalid}
 								</AppText>
@@ -217,7 +218,7 @@ function NativeScanner({
 									<AppText
 										variant="bodySmall"
 										numberOfLines={1}
-										style={{ color: "#FFFFFFCC", marginTop: 4 }}
+										style={{ color: withAlpha(colors.onMedia, 0.8), marginTop: 4 }}
 									>
 										{scanned}
 									</AppText>
@@ -233,7 +234,7 @@ function NativeScanner({
 										},
 									]}
 								>
-									<AppText variant="bodyMedium" weight="semiBold" color="#FFFFFF">
+									<AppText variant="bodyMedium" weight="semiBold" color={colors.onMedia}>
 										{strings.business.ordersScanAgain}
 									</AppText>
 								</Pressable>
@@ -276,7 +277,6 @@ const styles = StyleSheet.create({
 		bottom: 0,
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "rgba(0,0,0,0.54)",
 	},
 	scanAgain: {
 		paddingHorizontal: spacing.xl,

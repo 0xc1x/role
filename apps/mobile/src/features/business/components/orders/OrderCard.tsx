@@ -40,7 +40,7 @@ export function OrderCard({
 				{item.offerImageUrl ? (
 					<Image source={{ uri: item.offerImageUrl }} style={styles.thumb} />
 				) : (
-					<View style={[styles.thumb, styles.thumbPlaceholder]}>
+					<View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.borderSolid }]}>
 						<Ionicons
 							name="fast-food-outline"
 							size={26}
@@ -115,7 +115,6 @@ const styles = StyleSheet.create({
 	thumbPlaceholder: {
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#E5E5E5",
 	},
 	content: {
 		flex: 1,

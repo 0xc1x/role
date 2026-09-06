@@ -78,7 +78,7 @@ export default function BusinessProfileScreen() {
 						</AppText>
 						<Button
 							label={strings.business.editProfile}
-							icon={<Ionicons name="create-outline" size={20} color="#fff" />}
+							icon={<Ionicons name="create-outline" size={20} color={colors.primaryForeground} />}
 							style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
 							onPress={() => router.push("/my-business/edit")}
 						/>

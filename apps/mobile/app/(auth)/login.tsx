@@ -8,6 +8,7 @@ import { toAppError } from "@/core/error/mapper";
 import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { radii, spacing } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { AppText, Button } from "@/core/ui";
 import { Logo } from "@/core/ui/Logo";
 import { AuthField } from "@/features/auth/presentation/AuthField";
@@ -232,7 +233,7 @@ function ForgotPasswordDialog({
 
 	return (
 		<Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
-			<View style={styles.overlay}>
+			<View style={[styles.overlay, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}>
 				<View
 					style={[
 						styles.dialog,
@@ -305,7 +306,6 @@ const styles = StyleSheet.create({
 	switchLine: { textAlign: "center", marginTop: spacing.xl },
 	overlay: {
 		flex: 1,
-		backgroundColor: "rgba(0,0,0,0.4)",
 		alignItems: "center",
 		justifyContent: "center",
 		padding: spacing.xl,

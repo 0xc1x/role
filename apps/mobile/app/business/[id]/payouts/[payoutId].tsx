@@ -15,6 +15,7 @@ import {
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { useBusinessPayouts } from "@/features/business/hooks";
 import { PAYOUT_STATUS_LABELS } from "@/features/business/domain/business";
 import { formatMoney, formatMoneyPrecise } from "@/core/utils/formatters";
@@ -60,15 +61,15 @@ export default function BusinessPayoutDetailScreen() {
 				</View>
 			) : null}
 
-			<View style={styles.hero}>
+			<View style={[styles.hero, { backgroundColor: colors.ink }]}>
 				<AppText
 					variant="labelSmall"
 					weight="bold"
-					style={{ color: "#ffffffB3" }}
+					style={{ color: withAlpha(colors.onMedia, 0.702) }}
 				>
 					{strings.business.netTotal}
 				</AppText>
-				<AppText variant="h1" weight="bold" style={{ color: "#FFFFFF" }}>
+				<AppText variant="h1" weight="bold" style={{ color: colors.onMedia }}>
 					{formatMoney(payout.net_amount)}
 				</AppText>
 				{payout.status === "paid" && payout.paid_at ? (
@@ -216,7 +217,6 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.xl,
 		marginTop: spacing.lg,
 		gap: 4,
-		backgroundColor: "#1A1A18",
 		borderRadius: 12,
 	},
 	card: { marginTop: spacing.lg },

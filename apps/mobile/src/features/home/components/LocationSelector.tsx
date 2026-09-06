@@ -26,6 +26,7 @@ import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { AppText } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 
 export function LocationSelector() {
 	const { colors } = useTheme();
@@ -208,6 +209,7 @@ function DropdownPanel({
 				{
 					left: origin.x,
 					top: origin.y,
+					boxShadow: `0px 4px 20px ${colors.shadow}`,
 					backgroundColor: colors.card,
 					borderColor: colors.borderSolid,
 				},
@@ -312,14 +314,14 @@ function AddressItem({
 				style={[
 					styles.addressItem,
 					isSelected && {
-						backgroundColor: colors.destructiveVibrant + "0D",
+						backgroundColor: withAlpha(colors.destructiveVibrant, 0.051),
 					},
 				]}
 			>
 				<View
 					style={[
 						styles.addressIcon,
-						{ backgroundColor: colors.secondary + "1A" },
+						{ backgroundColor: withAlpha(colors.secondary, 0.102) },
 					]}
 				>
 					<Ionicons
@@ -378,7 +380,7 @@ const styles = StyleSheet.create({
 		maxWidth: 300,
 		borderRadius: radii.xl,
 		borderWidth: 1,
-		boxShadow: `0px 4px 20px #00000026`,	},
+		},
 	loadingBox: {
 		paddingHorizontal: spacing.lg,
 		paddingVertical: spacing.lg,

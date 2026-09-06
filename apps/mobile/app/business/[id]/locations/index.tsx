@@ -34,7 +34,7 @@ export default function BusinessLocationsScreen() {
 						label={strings.business.addLocation}
 						size="sm"
 						icon={
-							<Ionicons name="add" size={18} color="#fff" />
+							<Ionicons name="add" size={18} color={colors.primaryForeground} />
 						}
 						onPress={() =>
 							router.push(`/business/${businessId}/locations/create`)

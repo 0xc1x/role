@@ -125,7 +125,7 @@ export default function BusinessProductsScreen() {
 
 				<Button
 					label={strings.business.newProduct}
-					icon={<Ionicons name="add" size={20} color="#FFFFFF" />}
+					icon={<Ionicons name="add" size={20} color={colors.primaryForeground} />}
 					onPress={createRoute}
 					fullWidth
 					size="lg"

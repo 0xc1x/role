@@ -37,6 +37,7 @@ import {
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import {
 	formatMoneyPrecise,
 	formatShortDate,
@@ -162,7 +163,7 @@ export function OrderDetail({
 							variant="primary"
 							size="lg"
 							icon={
-								<Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+								<Ionicons name="checkmark-circle-outline" size={20} color={colors.primaryForeground} />
 							}
 							onPress={markReady}
 							loading={updateStatus.isPending}
@@ -175,7 +176,7 @@ export function OrderDetail({
 							label={strings.business.ordersValidateDelivery}
 							variant="primary"
 							size="lg"
-							icon={<Ionicons name="qr-code-outline" size={20} color="#FFFFFF" />}
+							icon={<Ionicons name="qr-code-outline" size={20} color={colors.primaryForeground} />}
 							onPress={() => setValidateOpen(true)}
 							fullWidth
 						/>
@@ -284,7 +285,7 @@ function ProductCard({ item }: { item: OrderDetail }) {
 				{item.offerImageUrl ? (
 					<Image source={{ uri: item.offerImageUrl }} style={styles.productImage} />
 				) : (
-					<View style={[styles.productImage, styles.productPlaceholder]}>
+					<View style={[styles.productImage, styles.productPlaceholder, { backgroundColor: colors.borderSolid }]}>
 						<Ionicons
 							name="fast-food-outline"
 							size={28}
@@ -617,7 +618,7 @@ function ValidateCodeDialog({
 			animationType="fade"
 			onRequestClose={onClose}
 		>
-			<View style={styles.backdrop}>
+			<View style={[styles.backdrop, { backgroundColor: withAlpha(colors.scrim, 0.5) }]}>
 				<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 				<View
 					style={[
@@ -711,7 +712,6 @@ const styles = StyleSheet.create({
 	productPlaceholder: {
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#E5E5E5",
 	},
 	productBody: {
 		flex: 1,
@@ -782,7 +782,6 @@ const styles = StyleSheet.create({
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
-		backgroundColor: "rgba(0,0,0,0.5)",
 		padding: spacing.xl,
 	},
 	dialog: {

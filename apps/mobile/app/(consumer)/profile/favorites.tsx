@@ -20,6 +20,7 @@ import type { FavoriteOffer } from "@/features/favorites/data/repository";
 import { formatMoney } from "@/core/utils/formatters";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 
 export default function FavoritesScreen() {
 	const { colors } = useTheme();
@@ -67,8 +68,8 @@ export default function FavoritesScreen() {
 								style={[
 									styles.banner,
 									{
-										backgroundColor: colors.secondary + "26",
-										borderColor: colors.secondary + "4D",
+										backgroundColor: withAlpha(colors.secondary, 0.149),
+										borderColor: withAlpha(colors.secondary, 0.302),
 									},
 								]}
 							>

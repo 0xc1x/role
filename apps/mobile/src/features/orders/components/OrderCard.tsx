@@ -17,6 +17,7 @@ import {
 } from "@/core/utils/formatters";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 
 /** Presentational mapping of order status → badge tone. */
 export function orderStatusTone(status: OrderStatusType): BadgeTone {
@@ -84,7 +85,7 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 						style={{
 							fontSize: 12,
 							fontWeight: "500",
-							color: colors.mutedForeground + "99",
+							color: withAlpha(colors.mutedForeground, 0.6),
 						}}
 					>
 						{strings.orders.orderNumber.replace("{n}", order.order_number)}
@@ -101,7 +102,7 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 						style={{
 							fontSize: 13,
 							fontWeight: "400",
-							color: colors.mutedForeground + "CC",
+							color: withAlpha(colors.mutedForeground, 0.8),
 						}}
 						numberOfLines={1}
 					>

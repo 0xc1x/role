@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/core/theme";
 import { AppText, Card, SectionHeader } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { strings } from "@/core/i18n/strings";
 import {
 	usePopularOffers,
@@ -215,7 +216,7 @@ export function OfferColumnSection({
 						<View
 							style={[
 								styles.locationPromptIcon,
-								{ backgroundColor: colors.primary + "14" },
+								{ backgroundColor: withAlpha(colors.primary, 0.078) },
 							]}
 						>
 							<Ionicons

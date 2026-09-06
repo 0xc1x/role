@@ -58,8 +58,8 @@ export function ConfirmationView({
 					<QRCode
 						value={qrValue}
 						size={176}
-						color="#131316"
-						backgroundColor={colors.card}
+						color={colors.qrForeground}
+						backgroundColor={colors.qrBackground}
 					/>
 				</View>
 				<AppText style={[styles.pickupCode, { color: colors.primary }]}>

@@ -17,6 +17,7 @@ import { syncDeviceToken } from "@/features/notifications";
 import type { ConsumerNotificationPreferences } from "@0xc1x/role-commons";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 
 type ToggleKey = Exclude<
 	keyof ConsumerNotificationPreferences,
@@ -304,8 +305,8 @@ export default function NotificationsSettingsScreen() {
 					style={[
 						styles.banner,
 						{
-							backgroundColor: colors.primary + "0F",
-							borderColor: colors.primary + "26",
+							backgroundColor: withAlpha(colors.primary, 0.059),
+							borderColor: withAlpha(colors.primary, 0.149),
 						},
 					]}
 				>

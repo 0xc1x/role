@@ -15,6 +15,7 @@ import Animated, {
 import { useTheme } from "@/core/theme";
 import { AppText, Card } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { strings } from "@/core/i18n/strings";
 import { useIsFavorite, useSelectedAddress, useToggleFavorite } from "@/features/hooks";
 import { useAuthStore } from "@/features/auth/store";
@@ -70,8 +71,9 @@ function AnimatedHeartButton({
 					styles.heartCircle,
 					{
 						backgroundColor: isFavorite
-							? colors.destructive + "26"
-							: colors.card + "E8",
+							? withAlpha(colors.destructive, 0.149)
+							: withAlpha(colors.card, 0.91),
+						boxShadow: `0px 2px 6px ${colors.shadow}`,
 					},
 				]}
 			>
@@ -126,7 +128,7 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 						resizeMode="cover"
 					/>
 				) : (
-					<View style={[styles.offerImage, styles.offerImagePlaceholder]} />
+					<View style={[styles.offerImage, { backgroundColor: colors.borderSolid }]} />
 				)}
 				{discount > 0 && (
 					<View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
@@ -147,7 +149,7 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 					>
 						<AppText
 							style={{
-								color: "#FFFFFF",
+								color: colors.destructiveForeground,
 								fontSize: 11,
 								fontWeight: "600",
 							}}
@@ -249,9 +251,6 @@ const styles = StyleSheet.create({
 		width: "100%",
 		height: 160,
 	},
-	offerImagePlaceholder: {
-		backgroundColor: "#E5E5E5", // ponytail: placeholder tokenizado en runtime via colors.muted — hex solo para StyleSheet estático
-	},
 	discountBadge: {
 		position: "absolute",
 		top: spacing.sm,
@@ -279,7 +278,7 @@ const styles = StyleSheet.create({
 		borderRadius: 15,
 		alignItems: "center",
 		justifyContent: "center",
-		boxShadow: `0px 2px 6px #0000001f`,	},
+		},
 	offerBody: {
 		padding: spacing.md,
 	},

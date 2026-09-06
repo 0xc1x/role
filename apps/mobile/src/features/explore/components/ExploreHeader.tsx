@@ -6,6 +6,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, SearchBar } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 
 /**
  * Header principal de la pantalla de Explorar (portado de fudi):
@@ -106,9 +107,9 @@ function ExploreHeaderPillButton({
 }) {
 	const { colors, scheme } = useTheme();
 	const pillColor = onBrand
-		? "rgba(255,255,255,0.18)"
+		? withAlpha(colors.onMedia, 0.18)
 		: scheme === "dark"
-			? colors.primaryForeground + "14"
+			? withAlpha(colors.primaryForeground, 0.078)
 			: colors.card;
 
 	return (

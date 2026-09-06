@@ -18,6 +18,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, CircleIconButton, goBackOr, HeartButton, useWebPullToRefresh } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
 import {
 	useOffer,
@@ -216,8 +217,8 @@ export default function OfferDetailScreen() {
 									styles.pill,
 									styles.onlyLeftPill,
 									{
-										backgroundColor: `${colors.destructive}1F`,
-										borderColor: `${colors.destructive}4D`,
+										backgroundColor: `${withAlpha(colors.destructive, 0.122)}`,
+										borderColor: `${withAlpha(colors.destructive, 0.302)}`,
 									},
 								]}
 							>
@@ -253,7 +254,7 @@ export default function OfferDetailScreen() {
 							<View
 								style={[
 									styles.savePill,
-									{ backgroundColor: `${colors.success}1A` },
+									{ backgroundColor: `${withAlpha(colors.success, 0.102)}` },
 								]}
 							>
 								<AppText
@@ -321,7 +322,7 @@ export default function OfferDetailScreen() {
 										key={item}
 										style={[styles.allergenChip, { backgroundColor: colors.warning }]}
 									>
-										<AppText variant="bodySmall" weight="semiBold" color="#FFFFFF">
+										<AppText variant="bodySmall" weight="semiBold" color={colors.yellowDarkForeground}>
 											{item}
 										</AppText>
 									</View>
@@ -356,7 +357,7 @@ export default function OfferDetailScreen() {
 									String(data.offer.initial_stock || data.offer.stock),
 								)}
 						/>
-						<View style={[styles.noteRow, { backgroundColor: `${colors.primary}0D` }]}>
+						<View style={[styles.noteRow, { backgroundColor: `${withAlpha(colors.primary, 0.051)}` }]}>
 							<Ionicons
 								name="information-circle-outline"
 								size={18}
@@ -385,7 +386,7 @@ export default function OfferDetailScreen() {
 								<View
 									style={[
 										styles.seeLocalPill,
-										{ backgroundColor: `${colors.primary}1A` },
+										{ backgroundColor: `${withAlpha(colors.primary, 0.102)}` },
 									]}
 								>
 									<AppText
@@ -405,7 +406,7 @@ export default function OfferDetailScreen() {
 									style={styles.businessLogo}
 								/>
 							) : (
-								<View style={[styles.businessLogo, styles.businessLogoPlaceholder]}>
+								<View style={[styles.businessLogo, styles.businessLogoPlaceholder, { backgroundColor: colors.borderSolid }]}>
 									<Ionicons name="storefront-outline" size={20} color={muted} />
 								</View>
 							)}
@@ -443,7 +444,7 @@ export default function OfferDetailScreen() {
 					</InfoCard>
 
 					{/* ── Card ecológica ───────────────────────────────────── */}
-					<View style={[styles.ecoCard, { backgroundColor: cardBg }]}>
+					<View style={[styles.ecoCard, { backgroundColor: cardBg, boxShadow: `0px 4px 10px ${colors.shadow}` }]}>
 						<Ionicons name="leaf-outline" size={28} color={colors.success} />
 						<AppText
 							variant="labelMedium"
@@ -486,7 +487,7 @@ export default function OfferDetailScreen() {
 				)}
 				<LinearGradient
 					colors={[
-						`${colors.foreground}73`,
+						`${withAlpha(colors.foreground, 0.451)}`,
 						"transparent",
 						colors.background,
 					]}
@@ -515,7 +516,7 @@ export default function OfferDetailScreen() {
 
 			{/* ── Barra de compra flotante inferior ─────────────────────── */}
 			<View style={[styles.bottomBarWrap, { bottom: insets.bottom + 16 }]}>
-				<View style={[styles.bottomBar, { backgroundColor: colors.card }]}>
+				<View style={[styles.bottomBar, { backgroundColor: colors.card, boxShadow: `0px 8px 24px ${colors.shadow}` }]}>
 					<View>
 						<AppText
 							style={{
@@ -538,7 +539,7 @@ export default function OfferDetailScreen() {
 							{
 								backgroundColor: available
 									? colors.primary
-									: `${colors.foreground}26`,
+									: `${withAlpha(colors.foreground, 0.149)}`,
 								transform: [{ scale: pressed ? 0.97 : 1 }],
 							},
 						]}
@@ -564,7 +565,7 @@ function CategoryBadge({ label }: { label: string }) {
 	const { colors } = useTheme();
 	return (
 		<View
-			style={[styles.categoryBadge, { backgroundColor: `${colors.primary}1A` }]}
+			style={[styles.categoryBadge, { backgroundColor: `${withAlpha(colors.primary, 0.102)}` }]}
 		>
 			<AppText
 				style={{
@@ -624,7 +625,7 @@ function InfoRow({
 	const { colors } = useTheme();
 	return (
 		<View style={styles.infoRow}>
-			<View style={[styles.infoRowIcon, { backgroundColor: `${colors.primary}14` }]}>
+			<View style={[styles.infoRowIcon, { backgroundColor: `${withAlpha(colors.primary, 0.078)}` }]}>
 				<Ionicons name={icon} size={15} color={colors.primary} />
 			</View>
 			<View style={styles.infoRowBody}>
@@ -809,7 +810,6 @@ const styles = StyleSheet.create({
 	businessLogoPlaceholder: {
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#E5E5E5",
 	},
 	businessMeta: {
 		flex: 1,
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
 		padding: spacing.xl,
 		borderRadius: 20,
 		marginTop: spacing.xl,
-		boxShadow: `0px 4px 10px #00000014`,	},
+		},
 	header: {
 		position: "absolute",
 		top: 0,
@@ -871,7 +871,7 @@ const styles = StyleSheet.create({
 		padding: 16,
 		borderRadius: 24,
 		minHeight: BOTTOM_BAR_HEIGHT,
-		boxShadow: `0px 8px 24px #00000014`,	},
+		},
 	saveButton: {
 		height: 52,
 		borderRadius: 16,

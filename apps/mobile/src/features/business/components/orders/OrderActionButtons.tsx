@@ -104,7 +104,7 @@ export function OrderActionButtons({
 			<Button
 				label={strings.business.ordersValidateAndDeliver}
 				variant="primary"
-				icon={<Ionicons name="qr-code-outline" size={18} color="#FFFFFF" />}
+				icon={<Ionicons name="qr-code-outline" size={18} color={colors.primaryForeground} />}
 				style={[styles.full, { backgroundColor: colors.success }]}
 				onPress={() => router.push(`/business/${businessId}/order/${order.id}`)}
 			/>

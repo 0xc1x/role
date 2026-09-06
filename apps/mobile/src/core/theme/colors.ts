@@ -110,6 +110,15 @@ export interface ColorTokens {
 	navyDark: string;
 	shadow: string;
 	cardShadow: string;
+	/** Base negra para velos sobre contenido (usar con withAlpha). */
+	scrim: string;
+	/** Blanco para texto/icono sobre cámara, mapa o foto (tema-invariante). */
+	onMedia: string;
+	/** Superficie de tinta para highlights monetarios (tema-invariante). */
+	ink: string;
+	/** QR de pickup fijo en ambos temas: el escáner necesita contraste estable. */
+	qrForeground: string;
+	qrBackground: string;
 }
 
 const light: ColorTokens = {
@@ -205,6 +214,11 @@ const light: ColorTokens = {
 	navyDark: "#04102D",
 	shadow: "#00000014",
 	cardShadow: "#FA47430A",
+	scrim: "#000000",
+	onMedia: "#FFFFFF",
+	ink: "#1A1A18",
+	qrForeground: "#131316",
+	qrBackground: "#FFFFFF",
 };
 
 const dark: ColorTokens = {
@@ -300,6 +314,11 @@ const dark: ColorTokens = {
 	navyDark: "#04102D",
 	shadow: "#00000000",
 	cardShadow: "#00000000",
+	scrim: "#000000",
+	onMedia: "#FFFFFF",
+	ink: "#1A1A18",
+	qrForeground: "#131316",
+	qrBackground: "#FFFFFF",
 };
 
 export const colorTokens: Record<ThemeScheme, ColorTokens> = { light, dark };
