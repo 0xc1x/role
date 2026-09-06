@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { Platform, StyleSheet, View } from "react-native";
@@ -46,6 +47,10 @@ export default function BusinessNotificationsScreen() {
 	const update = useUpdateBusinessNotifications(businessId);
 	const profile = useAuthStore((s) => s.profile);
 	const userId = profile?.id ?? "";
+	// Lock del registro de push: mientras el token se registra el switch
+	// queda deshabilitado, así los toques repetidos no disparan registros.
+	const [registering, setRegistering] = useState(false);
+	const registeringRef = useRef(false);
 
 	if (isLoading) return <LoadingView />;
 	if (isError)
@@ -58,27 +63,39 @@ export default function BusinessNotificationsScreen() {
 	) => {
 		if (key === "sms_enabled" || key === "whatsapp_enabled") return;
 		if (key === "push_enabled" && value && userId) {
-			const permission = await ensurePushPermission();
-			if (permission === "denied") {
-				toast.error(
-					Platform.OS === "web"
-						? strings.notificationsSettings.blockedBrowser
-						: strings.notificationsSettings.blockedDevice,
-					{ duration: 8000 },
-				);
-				return;
-			}
+			if (registeringRef.current) return;
+			registeringRef.current = true;
+			setRegistering(true);
 			try {
-				const registered = await syncDeviceToken(userId);
-				if (!registered) return;
-				toast.success(strings.notificationsSettings.pushEnabled);
-			} catch (e) {
-				const code = (e as { code?: string }).code;
-				if (code !== "23505") {
-					toast.error(e instanceof Error ? e.message : "No se pudo registrar el dispositivo");
+				const permission = await ensurePushPermission();
+				if (permission === "denied") {
+					toast.error(
+						Platform.OS === "web"
+							? strings.notificationsSettings.blockedBrowser
+							: strings.notificationsSettings.blockedDevice,
+						{ duration: 8000 },
+					);
 					return;
 				}
+				try {
+					const registered = await syncDeviceToken(userId);
+					if (!registered) return;
+					toast.success(strings.notificationsSettings.pushEnabled);
+				} catch (e) {
+					const code = (e as { code?: string }).code;
+					if (code !== "23505") {
+						toast.error(e instanceof Error ? e.message : "No se pudo registrar el dispositivo");
+						return;
+					}
+				}
+				await update
+					.mutateAsync({ push_enabled: true } as Partial<BusinessNotificationPreferences>)
+					.catch(() => {});
+			} finally {
+				registeringRef.current = false;
+				setRegistering(false);
 			}
+			return;
 		}
 		update.mutate({ [key]: value } as Partial<BusinessNotificationPreferences>);
 	};
@@ -202,6 +219,7 @@ export default function BusinessNotificationsScreen() {
 							onChange={(v) => toggle(item.key, v)}
 							showDivider
 							upcoming={Boolean((item as { upcoming?: boolean }).upcoming)}
+							disabled={item.key === "push_enabled" && registering}
 						/>
 					))}
 				</Card>
@@ -218,6 +236,7 @@ function ToggleRow({
 	onChange,
 	showDivider = false,
 	upcoming = false,
+	disabled = false,
 }: {
 	icon: keyof typeof Ionicons.glyphMap;
 	title: string;
@@ -226,6 +245,7 @@ function ToggleRow({
 	onChange: (v: boolean) => void;
 	showDivider?: boolean;
 	upcoming?: boolean;
+	disabled?: boolean;
 }) {
 	const { colors } = useTheme();
 	return (
@@ -261,7 +281,7 @@ function ToggleRow({
 					</AppText>
 				) : null}
 			</View>
-			<Switch checked={Boolean(value)} disabled={upcoming} onCheckedChange={onChange} />
+			<Switch checked={Boolean(value)} disabled={upcoming || disabled} onCheckedChange={onChange} />
 		</View>
 	);
 }
