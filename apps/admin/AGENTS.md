@@ -19,7 +19,7 @@ Panel de administración de Rolé: negocios, órdenes, ofertas, slides, categor�
 | HTTP | `fetch` nativo |
 | Tipos | `@0xc1x/role-commons` (`workspace:*`) |
 | Lint/Format | Biome |
-| Tests | Vitest + Playwright |
+| Tests | bun:test (`bun test src`) |
 
 ## Estructura (feature-first)
 

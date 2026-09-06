@@ -17,7 +17,7 @@
 | Origen en Supabase | Lógica | Fase |
 |---|---|---|
 | RPC `reserve_offer` | Transacción: stock, anti-duplicados, cupón, comisión, orden + evento | 1.1 |
-| RPC `cancel_order` / `validate_pickup_code` | Transiciones y validación de recogida | 1.1 |
+| RPC `cancel_order` / `validate_pickup_code` | Transiciones y validación de recogida. `cancel_order` acepta hoy `p_user_id` (consumidor) o `p_business_id` (negocio propietario); `validate_pickup_code` ya no inserta el evento manualmente (el trigger `on_order_status_change` es el único escritor) | 1.1 |
 | Función `generate_order_number` | Folio `FD-YYYY-MMDD-NNN` (secuencia diaria) | 1.1 |
 | Función `generate_pickup_code` | Código de recogida 6 chars | 1.1 |
 | Trigger `accrue_order_earnings` | Acumulación de earnings por orden | 1.2 |

@@ -33,3 +33,27 @@ Reglas de la migración:
 - **Secuencia diaria del folio**: el `MAX + 1` del SQL requiere lock en el API (`SELECT ... FOR UPDATE` o secuencia dedicada) para evitar colisiones concurrentes.
 - **La DB no queda "solo Postgres" hasta la fase 5 del roadmap**: los triggers de negocio persisten mientras el móvil consuma directo.
 - Revisar esta decisión al iniciar el cutover (fase 2.4 del roadmap) o si el costo de mantener el espejo supera el beneficio antes de llegar allí.
+
+## Notas de implementación (2026-09-05)
+
+- **Excepción documentada — expiración de órdenes**: Supabase no tiene expirador
+  de órdenes propio (verificado: sin trigger ni cron SQL para `orders`), así que
+  el job `OrdersExpirationJob` de la API es el único expirador mientras el móvil
+  consuma Supabase directo. Se gatea con `ENABLE_JOBS_ORDERS_EXPIRATION`
+  (default false como los demás espejos) y se activa en producción; no es un
+  espejo de SQL existente, es lógica de la API que sirve al flujo directo del
+  móvil hasta que exista su contraparte SQL o llegue el cutover.
+- **`cancel_order` con actor negocio**: la RPC acepta `p_user_id` (consumidor,
+  camino original) o `p_business_id` (negocio propietario, valida ownership vía
+  `businesses.owner_id = auth.uid()`); reglas y devolución de stock idénticas.
+  El negocio en mobile cancela por RPC, no por UPDATE directo a `orders`. La
+  RLS se endureció en la misma ronda: el negocio solo escribe
+  `confirmed`/`ready_for_pickup` por UPDATE, el consumidor solo `cancelled`
+  (el resto de transiciones vive en RPCs).
+- **`validate_pickup_code` sin insert de evento**: el trigger
+  `on_order_status_change` es el único escritor de `order_events`; la RPC
+  insertaba el evento manualmente y lo duplicaba en cada recogida.
+- **Equivalencia del folio**: el espejo del API usa la misma expresión
+  `LENGTH(prefix) + 1` que `generate_order_number` en Supabase (el corte
+  hardcodeado `FROM 16` solo tomaba el último dígito del secuencial y
+  colisionaba desde la 11ª orden del día).
