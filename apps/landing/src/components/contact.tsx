@@ -1,10 +1,14 @@
 import {
 	CONTACT_CITIES_FALLBACK,
+	type ContactRole,
+	type CreateContactDto,
+	CreateContactSchema,
 	getConfigStringArray,
 } from "@0xc1x/role-commons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
+import type { ZodError } from "zod";
 import { Eyebrow, Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,14 +25,12 @@ import { apiPost } from "@/lib/api";
 import { appConfigQueryOptions } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
-type WaitlistRole = "negocio" | "persona";
-
-const ROLES: { id: WaitlistRole; label: string }[] = [
+const ROLES: { id: ContactRole; label: string }[] = [
 	{ id: "negocio", label: "Tengo un local" },
 	{ id: "persona", label: "Quiero Rolé" },
 ];
 
-const COPY: Record<WaitlistRole, { title: string; body: string }> = {
+const COPY: Record<ContactRole, { title: string; body: string }> = {
 	negocio: {
 		title: "Pon tu local en el primer piloto de tu zona.",
 		body: "Te escribimos para armar el onboarding de Rolé. Sin newsletters semanales.",
@@ -39,14 +41,29 @@ const COPY: Record<WaitlistRole, { title: string; body: string }> = {
 	},
 };
 
-function isEmail(v: string) {
-	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+// Mismo contrato que valida el backend (SSOT): traducimos los issues de Zod
+// a feedback claro en español.
+const FIELD_MESSAGES: Record<string, string> = {
+	email: "Ingresa un correo válido.",
+	name: "Revisa tu nombre.",
+	city: "Selecciona una ciudad.",
+	city_other: "Indica la ciudad.",
+};
+
+function contactErrorMessage(error: ZodError): string {
+	const field = String(error.issues[0]?.path[0] ?? "");
+	return FIELD_MESSAGES[field] ?? "Completa los datos correctamente.";
 }
 
 const LS_LAST = "role-waitlist-last";
 
+// Tono "cream" de los campos del formulario: variante visual del Input del
+// catálogo (borde por sombra interna, anillo forest al enfocar).
+const inputCream =
+	"h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] placeholder:text-muted focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0";
+
 export function Contact() {
-	const [role, setRole] = useState<WaitlistRole>("negocio");
+	const [role, setRole] = useState<ContactRole>("negocio");
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
 	const [city, setCity] = useState("Quito");
@@ -56,19 +73,14 @@ export function Contact() {
 
 	const { data: configMap } = useQuery(appConfigQueryOptions);
 	const cities = getConfigStringArray(
-		configMap as Record<string, unknown> | undefined,
+		configMap,
 		"contact.cities",
 		CONTACT_CITIES_FALLBACK,
 	);
 
 	const mutation = useMutation({
-		mutationFn: (payload: {
-			name: string;
-			email: string;
-			role: WaitlistRole;
-			city: string;
-			city_other?: string;
-		}) => apiPost<{ ok: boolean }>("/contact", payload),
+		mutationFn: (payload: CreateContactDto) =>
+			apiPost<{ ok: boolean }>("/contact", payload),
 	});
 
 	useEffect(() => {
@@ -80,48 +92,32 @@ export function Contact() {
 		if (!cities.includes(city)) setCity(cities[0] ?? "Quito");
 	}, [cities, city]);
 
-	useEffect(() => {
-		const onRole = (e: Event) => {
-			const next = (e as CustomEvent<WaitlistRole>).detail;
-			if (next === "persona" || next === "negocio") setRole(next);
-		};
-		window.addEventListener("fudi:role", onRole);
-		return () => window.removeEventListener("fudi:role", onRole);
-	}, []);
-
 	function onSubmit(e: FormEvent) {
 		e.preventDefault();
 		setError(null);
-		const trimmed = email.trim().toLowerCase();
-		if (!isEmail(trimmed)) {
-			setError("Ingresa un correo válido.");
-			return;
-		}
-		if (city === "Otra" && !cityOther.trim()) {
-			setError("Indica la ciudad.");
+		const parsed = CreateContactSchema.safeParse({
+			name: name.trim(),
+			email: email.trim().toLowerCase(),
+			role,
+			city,
+			...(city === "Otra" ? { city_other: cityOther.trim() } : {}),
+		});
+		if (!parsed.success) {
+			setError(contactErrorMessage(parsed.error));
 			return;
 		}
 		if (!cities.includes(city)) {
 			setError("Ciudad no habilitada.");
 			return;
 		}
-		mutation.mutate(
-			{
-				name: name.trim(),
-				email: trimmed,
-				role,
-				city,
-				...(city === "Otra" ? { city_other: cityOther.trim() } : {}),
+		mutation.mutate(parsed.data, {
+			onSuccess: () => {
+				localStorage.setItem(LS_LAST, parsed.data.email);
+				setDone(parsed.data.email);
 			},
-			{
-				onSuccess: () => {
-					localStorage.setItem(LS_LAST, trimmed);
-					setDone(trimmed);
-				},
-				onError: (err: Error) =>
-					setError(err.message || "No pudimos enviar. Intenta de nuevo."),
-			},
-		);
+			onError: (err: Error) =>
+				setError(err.message || "No pudimos enviar. Intenta de nuevo."),
+		});
 	}
 
 	const copy = COPY[role];
@@ -182,6 +178,7 @@ export function Contact() {
 										key={r.id}
 										type="button"
 										variant="ghost"
+										aria-pressed={role === r.id}
 										onClick={() => setRole(r.id)}
 										className={cn(
 											"h-11 flex-1 rounded-xl px-2 text-xs font-medium transition-colors duration-150 sm:text-sm",
@@ -209,7 +206,7 @@ export function Contact() {
 									placeholder="Tu nombre"
 									value={name}
 									onChange={(e) => setName(e.target.value)}
-									className="h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] placeholder:text-muted focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0"
+									className={inputCream}
 								/>
 							</div>
 
@@ -231,7 +228,7 @@ export function Contact() {
 									value={email}
 									onChange={(e) => setEmail(e.target.value)}
 									aria-invalid={Boolean(error)}
-									className="h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] placeholder:text-muted focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0"
+									className={inputCream}
 								/>
 							</div>
 
@@ -240,7 +237,10 @@ export function Contact() {
 								<Select value={city} onValueChange={(v) => v && setCity(v)}>
 									<SelectTrigger
 										id="contact-city"
-										className="h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] data-placeholder:text-muted focus-visible:border-0 focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0 [&_svg]:text-muted"
+										className={cn(
+											inputCream,
+											"data-placeholder:text-muted focus-visible:border-0 [&_svg]:text-muted",
+										)}
 									>
 										<SelectValue placeholder="Selecciona ciudad" />
 									</SelectTrigger>
@@ -274,7 +274,7 @@ export function Contact() {
 										placeholder="Escribe tu ciudad"
 										value={cityOther}
 										onChange={(e) => setCityOther(e.target.value)}
-										className="h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] placeholder:text-muted focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0"
+										className={inputCream}
 									/>
 								</div>
 							) : null}

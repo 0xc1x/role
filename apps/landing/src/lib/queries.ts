@@ -2,22 +2,17 @@ import type {
 	AppConfigMap,
 	OfferWithBusiness,
 	PlatformStats,
+	PublicAppConfigDto,
 } from "@0xc1x/role-commons";
 import { queryOptions } from "@tanstack/react-query";
 
 import { apiGet } from "./api";
 
-export interface PublicConfigEntry {
-	key: string;
-	value: string | number | boolean;
-	value_type: string;
-}
-
 /** Lista pública clave→valor de configuración de la plataforma. */
 export const appConfigQueryOptions = queryOptions({
 	queryKey: ["app-config", "public"],
 	queryFn: () =>
-		apiGet<PublicConfigEntry[]>("/app-config/public").then((entries) => {
+		apiGet<PublicAppConfigDto[]>("/app-config/public").then((entries) => {
 			const map: AppConfigMap = {};
 			for (const entry of entries) map[entry.key] = entry.value;
 			return map;
