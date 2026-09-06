@@ -14,6 +14,12 @@ import { Eyebrow } from "@/components/section";
 import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/for-business")({
+	head: () => ({
+		meta: [
+			{ title: "Rolé para negocios" },
+			{ name: "description", content: "Recupera ingresos por tu comida excedente, atrae nuevos clientes y reduce tu desperdicio con Rolé." },
+		],
+	}),
 	component: ForBusinessPage,
 });
 

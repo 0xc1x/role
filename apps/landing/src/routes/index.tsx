@@ -16,6 +16,12 @@ import {
 } from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
+	head: () => ({
+		meta: [
+			{ title: "Rolé — rescata comida excedente cerca de ti" },
+			{ name: "description", content: "Descubre ofertas de comida excedente de negocios locales, salva comida buena de terminar en la basura y ahorra en tu día a día." },
+		],
+	}),
 	// SSR: config + stats reales se resuelven en el server para SEO.
 	loader: ({ context }) =>
 		Promise.all([

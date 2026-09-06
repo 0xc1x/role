@@ -1,9 +1,7 @@
 import {
-	CONTACT_CITIES_FALLBACK,
-	getConfigStringArray,
+	OnboardingBusinessRequestSchema,
 	type OnboardingBusinessResponse,
 } from "@0xc1x/role-commons";
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -12,18 +10,19 @@ import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { apiPost } from "@/lib/api";
-import { appConfigQueryOptions } from "@/lib/queries";
 
 export const Route = createFileRoute("/business-signup")({
+	head: () => ({
+		meta: [
+			{ title: "Registra tu negocio | Rolé" },
+			{
+				name: "description",
+				content:
+					"Únete a Rolé: publica tu comida excedente, recupera ingresos y consigue nuevos clientes.",
+			},
+		],
+	}),
 	component: BusinessSignupPage,
 });
 
@@ -34,45 +33,44 @@ function BusinessSignupPage() {
 	const [confirm, setConfirm] = useState("");
 	const [businessName, setBusinessName] = useState("");
 	const [phone, setPhone] = useState("");
-	const [city, setCity] = useState("");
-	const [cityOther, setCityOther] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [done, setDone] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	const { data: configMap } = useQuery(appConfigQueryOptions);
-	const cities = getConfigStringArray(
-		configMap,
-		"contact.cities",
-		CONTACT_CITIES_FALLBACK,
-	);
-
 	const submit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (
-			!fullName.trim() ||
-			!email.trim() ||
-			!password ||
-			password !== confirm ||
-			!businessName.trim()
-		) {
-			setError("Completa todos los campos y verifica la contraseña");
+		if (password !== confirm) {
+			setError("Las contraseñas no coinciden");
 			return;
 		}
-		if (city === "Otra" && !cityOther.trim()) {
-			setError("Indica la ciudad");
+		// Mismo contrato que valida el backend (SSOT): el error del server
+		// también se muestra, pero así el feedback es inmediato y en español.
+		const parsed = OnboardingBusinessRequestSchema.safeParse({
+			email: email.trim(),
+			password,
+			full_name: fullName.trim(),
+			business_name: businessName.trim(),
+			phone: phone.trim() || null,
+		});
+		if (!parsed.success) {
+			// Zod no sabe de español: mapeamos por campo para dar feedback claro.
+			const field = String(parsed.error.issues[0]?.path[0] ?? "");
+			const messages: Record<string, string> = {
+				email: "Ingresa un email válido",
+				password: "La contraseña debe tener al menos 8 caracteres",
+				full_name: "Ingresa tu nombre completo",
+				business_name: "Ingresa el nombre del negocio",
+			};
+			setError(messages[field] ?? "Completa todos los campos correctamente");
 			return;
 		}
 		setLoading(true);
 		setError(null);
 		try {
-			await apiPost<OnboardingBusinessResponse>("/businesses/onboarding", {
-				email: email.trim(),
-				password,
-				full_name: fullName.trim(),
-				business_name: businessName.trim(),
-				phone: phone.trim() || null,
-			});
+			await apiPost<OnboardingBusinessResponse>(
+				"/businesses/onboarding",
+				parsed.data,
+			);
 			setDone(true);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Error al registrar");
@@ -172,33 +170,6 @@ function BusinessSignupPage() {
 							placeholder="+593 ..."
 						/>
 					</div>
-					<div>
-						<Label>Ciudad</Label>
-						<Select value={city} onValueChange={(v) => v && setCity(v)}>
-							<SelectTrigger className="w-full">
-								<SelectValue placeholder="Selecciona ciudad" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectGroup>
-									{cities.map((c) => (
-										<SelectItem key={c} value={c}>
-											{c}
-										</SelectItem>
-									))}
-								</SelectGroup>
-							</SelectContent>
-						</Select>
-					</div>
-					{city === "Otra" ? (
-						<div>
-							<Label>¿Qué ciudad?</Label>
-							<Input
-								value={cityOther}
-								onChange={(e) => setCityOther(e.target.value)}
-								placeholder="Escribe tu ciudad"
-							/>
-						</div>
-					) : null}
 					{error ? <p className="text-sm text-red-600">{error}</p> : null}
 					<Button
 						type="submit"
@@ -209,8 +180,8 @@ function BusinessSignupPage() {
 					</Button>
 					<p className="text-xs text-role-muted-foreground text-center">
 						Al registrar, tu negocio quedará en <b>pendiente</b> y no será
-						visible hasta ser aprobado desde el admin. Se enviará email a ti y
-						al equipo.
+						visible hasta ser aprobado desde el admin. Recibirás un email para
+						confirmar tu cuenta y el equipo de Rolé te contactará.
 					</p>
 				</form>
 			</main>

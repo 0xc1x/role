@@ -7,6 +7,12 @@ import { Navbar } from "@/components/navbar";
 import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/privacy")({
+	head: () => ({
+		meta: [
+			{ title: "Privacidad | Rolé" },
+			{ name: "description", content: "Cómo tratamos tus datos personales en Rolé." },
+		],
+	}),
 	component: PrivacyPage,
 });
 

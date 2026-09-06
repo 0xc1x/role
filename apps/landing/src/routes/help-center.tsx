@@ -18,6 +18,12 @@ import {
 import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/help-center")({
+	head: () => ({
+		meta: [
+			{ title: "Centro de ayuda | Rolé" },
+			{ name: "description", content: "Respuestas sobre reservas, recogidas, pagos y tu cuenta en Rolé." },
+		],
+	}),
 	component: HelpCenterPage,
 });
 

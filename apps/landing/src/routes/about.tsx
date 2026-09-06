@@ -9,6 +9,12 @@ import { platformStatsQueryOptions } from "@/lib/queries";
 import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/about")({
+	head: () => ({
+		meta: [
+			{ title: "Sobre Rolé" },
+			{ name: "description", content: "Nuestra misión: que la comida excedente llegue a gente que la valora, no al contenedor." },
+		],
+	}),
 	loader: ({ context }) =>
 		context.queryClient
 			.ensureQueryData(platformStatsQueryOptions)

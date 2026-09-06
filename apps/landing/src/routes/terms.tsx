@@ -8,6 +8,12 @@ import { Eyebrow } from "@/components/section";
 import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/terms")({
+	head: () => ({
+		meta: [
+			{ title: "Términos | Rolé" },
+			{ name: "description", content: "Términos y condiciones de uso de Rolé." },
+		],
+	}),
 	component: TermsPage,
 });
 

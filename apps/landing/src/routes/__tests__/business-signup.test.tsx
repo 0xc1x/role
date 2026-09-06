@@ -66,9 +66,7 @@ describe("BusinessSignupPage", () => {
 		const { captured } = setup();
 		fireEvent.click(screen.getByRole("button", { name: "Registrar negocio" }));
 		expect(
-			await screen.findByText(
-				"Completa todos los campos y verifica la contraseña",
-			),
+			await screen.findByText("Ingresa un email válido"),
 		).toBeDefined();
 		expect(captured).toHaveLength(0);
 	});
