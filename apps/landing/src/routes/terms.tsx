@@ -5,15 +5,16 @@ import { HeroBackground } from "@/components/hero-background";
 import { ShieldIcon } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
+import { pageHead } from "@/lib/seo";
 import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/terms")({
-	head: () => ({
-		meta: [
-			{ title: "Términos | Rolé" },
-			{ name: "description", content: "Términos y condiciones de uso de Rolé." },
-		],
-	}),
+	head: () =>
+		pageHead(
+			"/terms",
+			"Términos | Rolé",
+			"Términos y condiciones de uso de Rolé.",
+		),
 	component: TermsPage,
 });
 

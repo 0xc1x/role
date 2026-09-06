@@ -6,15 +6,16 @@ import { HeartIcon, LeafIcon, SparkIcon, UsersIcon } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
 import { platformStatsQueryOptions } from "@/lib/queries";
+import { pageHead } from "@/lib/seo";
 import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/about")({
-	head: () => ({
-		meta: [
-			{ title: "Sobre Rolé" },
-			{ name: "description", content: "Nuestra misión: que la comida excedente llegue a gente que la valora, no al contenedor." },
-		],
-	}),
+	head: () =>
+		pageHead(
+			"/about",
+			"Sobre Rolé",
+			"Nuestra misión: que la comida excedente llegue a gente que la valora, no al contenedor.",
+		),
 	loader: ({ context }) =>
 		context.queryClient
 			.ensureQueryData(platformStatsQueryOptions)

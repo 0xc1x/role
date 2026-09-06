@@ -11,15 +11,16 @@ import {
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
+import { pageHead } from "@/lib/seo";
 import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/for-business")({
-	head: () => ({
-		meta: [
-			{ title: "Rolé para negocios" },
-			{ name: "description", content: "Recupera ingresos por tu comida excedente, atrae nuevos clientes y reduce tu desperdicio con Rolé." },
-		],
-	}),
+	head: () =>
+		pageHead(
+			"/for-business",
+			"Rolé para negocios",
+			"Recupera ingresos por tu comida excedente, atrae nuevos clientes y reduce tu desperdicio con Rolé.",
+		),
 	component: ForBusinessPage,
 });
 

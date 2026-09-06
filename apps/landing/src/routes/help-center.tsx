@@ -15,15 +15,16 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import { pageHead } from "@/lib/seo";
 import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/help-center")({
-	head: () => ({
-		meta: [
-			{ title: "Centro de ayuda | Rolé" },
-			{ name: "description", content: "Respuestas sobre reservas, recogidas, pagos y tu cuenta en Rolé." },
-		],
-	}),
+	head: () =>
+		pageHead(
+			"/help-center",
+			"Centro de ayuda | Rolé",
+			"Respuestas sobre reservas, recogidas, pagos y tu cuenta en Rolé.",
+		),
 	component: HelpCenterPage,
 });
 

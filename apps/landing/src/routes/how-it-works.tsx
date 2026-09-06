@@ -16,14 +16,15 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/how-it-works")({
-	head: () => ({
-		meta: [
-			{ title: "Cómo funciona Rolé" },
-			{ name: "description", content: "Reserva en la app, recoge en el negocio y salva comida: así de simple funciona Rolé." },
-		],
-	}),
+	head: () =>
+		pageHead(
+			"/how-it-works",
+			"Cómo funciona Rolé",
+			"Reserva en la app, recoge en el negocio y salva comida: así de simple funciona Rolé.",
+		),
 	component: HowItWorksPage,
 });
 

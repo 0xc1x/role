@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { Contact } from "@/components/contact";
 import { Cta } from "@/components/cta";
-import { Faq } from "@/components/faq";
+import { FAQ_ITEMS, Faq } from "@/components/faq";
 import { Features } from "@/components/features";
 import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
@@ -14,12 +14,27 @@ import {
 	platformStatsQueryOptions,
 	randomOfferQueryOptions,
 } from "@/lib/queries";
+import { pageHead } from "@/lib/seo";
+
+const FAQ_JSON_LD = {
+	"@context": "https://schema.org",
+	"@type": "FAQPage",
+	mainEntity: FAQ_ITEMS.map((item) => ({
+		"@type": "Question",
+		name: item.q,
+		acceptedAnswer: { "@type": "Answer", text: item.a },
+	})),
+};
 
 export const Route = createFileRoute("/")({
 	head: () => ({
-		meta: [
-			{ title: "Rolé — rescata comida excedente cerca de ti" },
-			{ name: "description", content: "Descubre ofertas de comida excedente de negocios locales, salva comida buena de terminar en la basura y ahorra en tu día a día." },
+		...pageHead(
+			"/",
+			"Rolé — rescata comida excedente cerca de ti",
+			"Descubre ofertas de comida excedente de negocios locales, salva comida buena de terminar en la basura y ahorra en tu día a día.",
+		),
+		scripts: [
+			{ type: "application/ld+json", children: JSON.stringify(FAQ_JSON_LD) },
 		],
 	}),
 	// SSR: config + stats reales se resuelven en el server para SEO.

@@ -4,15 +4,16 @@ import { Footer } from "@/components/footer";
 import { HeroBackground } from "@/components/hero-background";
 import { ShieldIcon } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
+import { pageHead } from "@/lib/seo";
 import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/privacy")({
-	head: () => ({
-		meta: [
-			{ title: "Privacidad | Rolé" },
-			{ name: "description", content: "Cómo tratamos tus datos personales en Rolé." },
-		],
-	}),
+	head: () =>
+		pageHead(
+			"/privacy",
+			"Privacidad | Rolé",
+			"Cómo tratamos tus datos personales en Rolé.",
+		),
 	component: PrivacyPage,
 });
 

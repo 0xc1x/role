@@ -6,7 +6,7 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 
-const ITEMS = [
+export const FAQ_ITEMS = [
 	{
 		q: "¿Füdi es lo mismo que Rolé?",
 		a: "No. Füdi es la compañía y la plataforma. Rolé es el primer producto: la app para usuarios y locales que rescatan excedente. Distro cubre distribución de corto radio y Lab, los modelos de demanda y merma.",
@@ -36,7 +36,7 @@ export function Faq() {
 					</h2>
 				</div>
 				<Accordion className="flex flex-col reveal reveal-delay-1">
-					{ITEMS.map((item, i) => (
+					{FAQ_ITEMS.map((item, i) => (
 						<AccordionItem
 							key={item.q}
 							value={item.q}
