@@ -51,7 +51,8 @@ describe('CommissionsRepository (DB real)', () => {
   });
 
   test('updateCommissionRate', async () => {
-    const updated = await repo.updateCommissionRate(ctx.db, businessId, 15);
-    expect(Number(updated?.commission_rate)).toBe(15);
+    // numeric(5,4) en BD: máximo 9.9999 (0.15 = 15%).
+    const updated = await repo.updateCommissionRate(ctx.db, businessId, 0.15);
+    expect(Number(updated?.commission_rate)).toBe(0.15);
   });
 });
