@@ -114,6 +114,16 @@ describe('EmailMarketingPublicController', () => {
       await expect(sendWebhook({ signature: 'v1,cualquiera' })).resolves.toEqual({ ok: true });
       expect(repository.applyResendEvent).toHaveBeenCalledWith(resendId, 'email.delivered');
     });
+
+    it('sin secret en producción rechaza en vez de aceptar eventos forjados', async () => {
+      env.RESEND_WEBHOOK_SECRET = undefined;
+      env.NODE_ENV = 'production';
+
+      await expect(sendWebhook({ signature: 'v1,cualquiera' })).rejects.toThrow(
+        'Webhook no configurado: falta RESEND_WEBHOOK_SECRET',
+      );
+      expect(repository.applyResendEvent).not.toHaveBeenCalled();
+    });
   });
 
   describe('unsubscribe', () => {

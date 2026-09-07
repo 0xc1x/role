@@ -5,6 +5,7 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  InternalServerErrorException,
   Post,
   Query,
   Req,
@@ -89,7 +90,17 @@ export class EmailMarketingPublicController {
     payload: string;
   }): void {
     const secret = this.config.get('RESEND_WEBHOOK_SECRET', { infer: true });
-    if (!secret) return; // dev sin secret: no se verifica
+    if (!secret) {
+      // Fail-closed: en dev sin secret se acepta sin verificar, pero en
+      // producción bootear sin secret no debería ser posible (validateEnv
+      // lo exige) — si llegó aquí, rechazar en vez de aceptar forjados.
+      if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+        throw new InternalServerErrorException(
+          'Webhook no configurado: falta RESEND_WEBHOOK_SECRET',
+        );
+      }
+      return;
+    }
 
     if (!input.id || !input.timestamp || !input.signatureHeader) {
       throw new BadRequestException('Faltan headers de firma svix');

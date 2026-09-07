@@ -95,6 +95,22 @@ export function validateEnv(config: Record<string, unknown>): Env {
     );
   }
 
+  // Fail-closed: sin estos secrets el webhook de Resend acepta eventos
+  // forjados y el token de desuscripción es computable para cualquier userId
+  // (HMAC con key vacía). En producción deben existir, aunque el envío esté
+  // deshabilitado (RESEND_API_KEY vacío).
+  if (env.NODE_ENV === 'production' && !env.RESEND_WEBHOOK_SECRET) {
+    throw new Error(
+      'RESEND_WEBHOOK_SECRET must be set in production to verify Resend webhooks',
+    );
+  }
+
+  if (env.NODE_ENV === 'production' && !env.UNSUBSCRIBE_SECRET) {
+    throw new Error(
+      'UNSUBSCRIBE_SECRET must be set in production to sign unsubscribe tokens',
+    );
+  }
+
   return env;
 }
 
