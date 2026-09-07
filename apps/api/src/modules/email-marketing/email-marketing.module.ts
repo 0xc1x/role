@@ -7,6 +7,7 @@ import { CampaignsService } from './campaigns.service';
 import { RecipientsService } from './recipients.service';
 import { RendererService } from './renderer.service';
 import { EmailExpeditionProcessor } from './email-expedition.processor';
+import { CampaignsCron } from './campaigns.cron';
 
 @Module({
   imports: [
@@ -27,7 +28,8 @@ import { EmailExpeditionProcessor } from './email-expedition.processor';
     RecipientsService,
     RendererService,
     EmailExpeditionProcessor,
+    CampaignsCron,
   ],
-  exports: [CampaignsService, RecipientsService],
+  exports: [CampaignsService, RecipientsService, EmailMarketingRepository],
 })
 export class EmailMarketingModule {}

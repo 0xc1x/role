@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -35,6 +36,9 @@ import type {
   CampaignDto,
   CampaignPaginatedData,
   CreateCampaignDto,
+  CreateEmailComponentDto,
+  CreateEmailTemplateDto,
+  CreateSegmentDto,
   EmailComponentPaginatedData,
   EmailTemplatePaginatedData,
   ListCampaignsQuery,
@@ -54,6 +58,7 @@ import type {
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../auth/auth.types';
+import type { emailSends } from '../../database/schema';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CampaignsService } from './campaigns.service';
 import { EmailMarketingRepository } from './email-marketing.repository';
@@ -88,19 +93,22 @@ export class EmailMarketingController {
   }
 
   @Post('components')
-  createComponent(
-    @Body(new ZodValidationPipe(CreateEmailComponentSchema)) body: any,
+  async createComponent(
+    @Body(new ZodValidationPipe(CreateEmailComponentSchema))
+    body: CreateEmailComponentDto,
   ) {
-    return this.repository.insertComponent(body);
+    const rows = await this.repository.insertComponent(body);
+    return EmailMarketingMapper.toComponentDto(rows[0]!);
   }
 
   @Patch('components/:id')
-  updateComponent(
+  async updateComponent(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(UpdateEmailComponentSchema))
     body: UpdateEmailComponentDto,
   ) {
-    return this.repository.updateComponent(id, body);
+    const row = await this.repository.updateComponent(id, body);
+    return row ? EmailMarketingMapper.toComponentDto(row) : null;
   }
 
   @Delete('components/:id')
@@ -140,7 +148,8 @@ export class EmailMarketingController {
 
   @Post('templates')
   async createTemplate(
-    @Body(new ZodValidationPipe(CreateEmailTemplateSchema)) body: any,
+    @Body(new ZodValidationPipe(CreateEmailTemplateSchema))
+    body: CreateEmailTemplateDto,
   ) {
     const rows = await this.repository.insertTemplate(body);
     return EmailMarketingMapper.toTemplateDto(rows[0]!);
@@ -175,30 +184,24 @@ export class EmailMarketingController {
 
   @Post('segments')
   async createSegment(
-    @Body(new ZodValidationPipe(CreateSegmentSchema)) body: any,
+    @Body(new ZodValidationPipe(CreateSegmentSchema)) body: CreateSegmentDto,
   ) {
-    const { user_ids, ...segment } = body as {
-      name: string;
-      description?: string | null;
-      type?: 'static' | 'dynamic';
-      filters?: unknown;
-      is_active?: boolean;
-      user_ids?: string[];
-    };
+    const { user_ids, ...segment } = body;
     const [row] = await this.repository.insertSegment(segment);
     if (!row) throw new Error('No se pudo crear el segmento');
     if (Array.isArray(user_ids) && user_ids.length > 0) {
       await this.repository.addSegmentUsers(row.id, user_ids);
     }
-    return row;
+    return EmailMarketingMapper.toSegmentDto(row);
   }
 
   @Patch('segments/:id')
-  updateSegment(
+  async updateSegment(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(UpdateSegmentSchema)) body: UpdateSegmentDto,
   ) {
-    return this.repository.updateSegment(id, body);
+    const row = await this.repository.updateSegment(id, body);
+    return row ? EmailMarketingMapper.toSegmentDto(row) : null;
   }
 
   @Delete('segments/:id')
@@ -253,31 +256,50 @@ export class EmailMarketingController {
   }
 
   @Post('campaigns')
-  createCampaign(
+  async createCampaign(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(CreateCampaignSchema)) body: CreateCampaignDto,
   ) {
-    return this.repository.insertCampaign({
+    await this.campaignsService.assertTemplateForChannel(
+      body.channel,
+      body.template_id,
+    );
+    const rows = await this.repository.insertCampaign({
       ...body,
       created_by: user.id,
       scheduled_at: body.scheduled_at ? new Date(body.scheduled_at) : null,
     });
+    return EmailMarketingMapper.toCampaignDto(rows[0]!);
   }
 
   @Patch('campaigns/:id')
-  updateCampaign(
+  async updateCampaign(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(UpdateCampaignSchema)) body: UpdateCampaignDto,
   ) {
     const { scheduled_at, ...rest } = body as UpdateCampaignDto & {
       scheduled_at?: string | null;
     };
-    return this.repository.updateCampaign(id, {
-      ...rest,
-      ...(scheduled_at !== undefined
-        ? { scheduled_at: scheduled_at ? new Date(scheduled_at) : null }
-        : {}),
-    });
+    if (body.template_id !== undefined || body.channel !== undefined) {
+      const current = await this.getCampaign(id);
+      const channel = body.channel ?? current?.channel ?? 'email';
+      const templateId =
+        body.template_id !== undefined
+          ? body.template_id
+          : (current?.template_id ?? null);
+      await this.campaignsService.assertTemplateForChannel(
+        channel,
+        templateId,
+      );
+    }
+    return this.repository
+      .updateCampaign(id, {
+        ...rest,
+        ...(scheduled_at !== undefined
+          ? { scheduled_at: scheduled_at ? new Date(scheduled_at) : null }
+          : {}),
+      })
+      .then((row) => (row ? EmailMarketingMapper.toCampaignDto(row) : null));
   }
 
   @Post('campaigns/:id/preview')
@@ -290,10 +312,15 @@ export class EmailMarketingController {
     if (!campaign?.template_id) {
       throw new Error('La campaña no tiene plantilla');
     }
+    if (campaign.channel === 'push') {
+      throw new BadRequestException(
+        'Las campañas push se previsualizan desde la plantilla push',
+      );
+    }
     return this.campaignsService.preview({
       templateId: campaign.template_id,
-      subjectOverride: body?.subject ?? campaign.subject_override,
-      bodyOverride: body?.body_html ?? campaign.body_override,
+      subjectOverride: body?.subject,
+      bodyOverride: body?.body_html,
     });
   }
 
@@ -373,14 +400,15 @@ export class EmailMarketingController {
   async retrySend(@Param('id', ParseUUIDPipe) id: string) {
     const row = await this.repository.findSendById(id);
     if (!row) throw new Error('Envío no encontrado');
-    await this.repository.updateSend(id, {
-      status: 'pending' as never,
-      scheduled_at: new Date() as never,
-      queued_at: new Date() as never,
-      attempts: 0 as never,
-      error_message: null as never,
-      error_code: null as never,
-    } as never);
+    const reset: Partial<typeof emailSends.$inferInsert> = {
+      status: 'pending',
+      scheduled_at: new Date(),
+      queued_at: new Date(),
+      attempts: 0,
+      error_message: null,
+      error_code: null,
+    };
+    await this.repository.updateSend(id, reset);
     return { ok: true };
   }
 }

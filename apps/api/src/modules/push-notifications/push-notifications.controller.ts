@@ -172,7 +172,8 @@ export class PushNotificationsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(UpdatePushTokenSchema)) body: UpdatePushTokenDto,
   ) {
-    return this.repository.updateToken(id, body);
+    const row = await this.repository.updateToken(id, body);
+    return row ? PushNotificationsMapper.toTokenDto(row) : null;
   }
 
   // ─── Historial ─────────────────────────────────────────────────────

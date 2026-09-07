@@ -76,9 +76,8 @@ export class EmailMarketingMapper {
     return {
       id: row.id,
       name: row.name,
+      channel: row.channel,
       template_id: row.template_id ?? null,
-      subject_override: row.subject_override ?? null,
-      body_override: row.body_override ?? null,
       category: row.category as CampaignDto['category'],
       segment_ids: row.segment_ids ?? [],
       include_user_ids: row.include_user_ids ?? [],
@@ -88,6 +87,7 @@ export class EmailMarketingMapper {
       sent_at: this.iso(row.sent_at),
       total_recipients: row.total_recipients ?? 0,
       total_sent: row.total_sent ?? 0,
+      total_failed: row.total_failed ?? 0,
       total_delivered: row.total_delivered ?? 0,
       total_opened: row.total_opened ?? 0,
       total_clicked: row.total_clicked ?? 0,

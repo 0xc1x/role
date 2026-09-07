@@ -207,10 +207,25 @@ describe('PushNotificationsController', () => {
       expect(out.data[0]).toMatchObject({ id: 'tok-1', user_email: 'ana@x.com' });
     });
 
-    it('updateToken delega', () => {
-      repository.updateToken.mockResolvedValue({ id: 'tok-1' } as never);
-      controller.updateToken('tok-1', { is_active: false } as never);
+    it('updateToken mapea a DTO', async () => {
+      repository.updateToken.mockResolvedValue(TOKEN_ROW as never);
+
+      const out = (await controller.updateToken('tok-1', { is_active: false } as never)) as {
+        id: string;
+        user_email: string;
+        created_at: string;
+      };
+
       expect(repository.updateToken).toHaveBeenCalledWith('tok-1', { is_active: false });
+      expect(out).toMatchObject({ id: 'tok-1', user_email: 'ana@x.com' });
+      expect(typeof out.created_at).toBe('string');
+    });
+
+    it('updateToken devuelve null cuando no existe', async () => {
+      repository.updateToken.mockResolvedValue(null as never);
+      await expect(
+        controller.updateToken('nope', { is_active: false } as never),
+      ).resolves.toBeNull();
     });
   });
 

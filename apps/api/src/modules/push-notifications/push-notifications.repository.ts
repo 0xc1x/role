@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -8,6 +9,7 @@ import {
   inArray,
   isNull,
   or,
+  sql,
   type SQL,
 } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
@@ -17,12 +19,14 @@ import {
   deviceTokens,
   profiles,
   pushNotifications,
+  pushSends,
   pushTemplates,
 } from '../../database/schema';
 
 export type PushTemplateRow = typeof pushTemplates.$inferSelect;
 export type PushNotificationRow = typeof pushNotifications.$inferSelect;
 export type PushTokenRow = typeof deviceTokens.$inferSelect;
+export type PushSendRow = typeof pushSends.$inferSelect;
 
 export interface PushListFilter {
   page: number;
@@ -186,19 +190,29 @@ export class PushNotificationsRepository {
   }
 
   async updateToken(id: string, values: { is_active: boolean }) {
-    const [row] = await this.db
+    const [updated] = await this.db
       .update(deviceTokens)
       .set({ ...values, updated_at: new Date() })
       .where(eq(deviceTokens.id, id))
-      .returning({
+      .returning({ id: deviceTokens.id });
+    if (!updated) return null;
+    // Join para el DTO (mismo shape que listTokens: sin exponer nada extra,
+    // con email/nombre para contexto admin).
+    const [row] = await this.db
+      .select({
         id: deviceTokens.id,
         user_id: deviceTokens.user_id,
+        user_email: profiles.email,
+        user_full_name: profiles.full_name,
         token: deviceTokens.token,
         platform: deviceTokens.platform,
         is_active: deviceTokens.is_active,
         created_at: deviceTokens.created_at,
         updated_at: deviceTokens.updated_at,
-      });
+      })
+      .from(deviceTokens)
+      .innerJoin(profiles, eq(profiles.id, deviceTokens.user_id))
+      .where(eq(deviceTokens.id, id));
     return row ?? null;
   }
 
@@ -256,5 +270,96 @@ export class PushNotificationsRepository {
       .from(profiles)
       .where(inArray(profiles.id, userIds));
     return rows.map((r) => r.id);
+  }
+
+  // ─── Ledger push_sends (campañas push) ─────────────────────────────
+
+  /** Inserta el ledger de destinatarios de una campaña (status pending). */
+  async insertPushSends(
+    rows: Array<{ campaign_id: string; user_id: string }>,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    // onConflictDoNothing: reenvío de campaña failed no duplica usuarios.
+    await this.db.insert(pushSends).values(rows).onConflictDoNothing();
+  }
+
+  async deletePushSendsByCampaign(campaignId: string): Promise<void> {
+    await this.db.delete(pushSends).where(eq(pushSends.campaign_id, campaignId));
+  }
+
+  async findQueuedPushBatch(
+    campaignId: string,
+    limit: number,
+  ): Promise<PushSendRow[]> {
+    return this.db
+      .select()
+      .from(pushSends)
+      .where(
+        and(
+          eq(pushSends.campaign_id, campaignId),
+          inArray(pushSends.status, ['pending', 'queued']),
+          sql`${pushSends.attempts} < ${pushSends.max_attempts}`,
+        ),
+      )
+      .orderBy(asc(pushSends.created_at))
+      .limit(limit);
+  }
+
+  async countQueuedPush(campaignId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(pushSends)
+      .where(
+        and(
+          eq(pushSends.campaign_id, campaignId),
+          inArray(pushSends.status, ['pending', 'queued']),
+          sql`${pushSends.attempts} < ${pushSends.max_attempts}`,
+        ),
+      );
+    return row?.value ?? 0;
+  }
+
+  async markPushSent(id: string): Promise<void> {
+    await this.db
+      .update(pushSends)
+      .set({ status: 'sent', sent_at: new Date(), last_error: null })
+      .where(eq(pushSends.id, id));
+  }
+
+  /** Reintento con backoff; failed definitivo al agotar max_attempts. */
+  async markPushFailed(id: string, error: string): Promise<void> {
+    const [row] = await this.db
+      .update(pushSends)
+      .set({
+        attempts: sql`${pushSends.attempts} + 1`,
+        last_error: error.slice(0, 500),
+      })
+      .where(eq(pushSends.id, id))
+      .returning();
+    if (!row) return;
+    const exhausted = row.attempts >= row.max_attempts;
+    await this.db
+      .update(pushSends)
+      .set({ status: exhausted ? 'failed' : 'queued' })
+      .where(eq(pushSends.id, id));
+  }
+
+  /** Recalcula contadores de campaña desde push_sends (auto-consistente). */
+  async recountPushStats(campaignId: string): Promise<void> {
+    await this.db.execute(sql`
+      update campaigns c set
+        total_recipients = s.total,
+        total_sent = s.sent,
+        total_failed = s.failed,
+        updated_at = now()
+      from (
+        select
+          count(*) as total,
+          count(*) filter (where status = 'sent') as sent,
+          count(*) filter (where status = 'failed') as failed
+        from push_sends where campaign_id = ${campaignId}::uuid
+      ) s
+      where c.id = ${campaignId}
+    `);
   }
 }

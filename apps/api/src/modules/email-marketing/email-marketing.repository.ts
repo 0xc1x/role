@@ -289,37 +289,48 @@ export class EmailMarketingRepository {
     return rows.map((r) => r.id);
   }
 
-  /** Destinatarios suscritos dentro de un set de IDs para una categoría. */
-  findSubscribedRecipients(
+  /**
+   * Destinatarios suscritos dentro de un set de IDs para una categoría.
+   * Chunk del inArray en lotes de 1000: un solo inArray de 50k UUIDs es un
+   * payload de MBs con plan pobre (Postgres admite 65k parámetros).
+   */
+  async findSubscribedRecipients(
     ids: string[],
     category: string,
   ): Promise<{ user_id: string; email: string; full_name: string | null }[]> {
     if (ids.length === 0) return Promise.resolve([]);
-    return this.db
-      .select({
-        user_id: sql<string>`p.id`,
-        email: sql<string>`lower(p.email)`,
-        full_name: sql<string | null>`p.full_name`,
-      })
-      .from(sql`profiles p`)
-      .innerJoin(
-        marketingPreferences,
-        eq(marketingPreferences.user_id, sql`p.id`),
-      )
-      .where(
-        and(
-          inArray(sql`p.id`, ids),
-          eq(marketingPreferences.is_subscribed, true),
-          arrayContains(marketingPreferences.categories, [category]),
-        ),
-      );
+    const out: { user_id: string; email: string; full_name: string | null }[] = [];
+    for (let i = 0; i < ids.length; i += 1000) {
+      const chunk = ids.slice(i, i + 1000);
+      const rows = await this.db
+        .select({
+          user_id: sql<string>`p.id`,
+          email: sql<string>`lower(p.email)`,
+          full_name: sql<string | null>`p.full_name`,
+        })
+        .from(sql`profiles p`)
+        .innerJoin(
+          marketingPreferences,
+          eq(marketingPreferences.user_id, sql`p.id`),
+        )
+        .where(
+          and(
+            inArray(sql`p.id`, chunk),
+            eq(marketingPreferences.is_subscribed, true),
+            arrayContains(marketingPreferences.categories, [category]),
+          ),
+        );
+      out.push(...rows);
+    }
+    return out;
   }
 
   // ─── Campañas ──────────────────────────────────────────────────────
 
-  async listCampaigns(f: ListFilter & { status?: string }) {
+  async listCampaigns(f: ListFilter & { status?: string; channel?: string }) {
     const filters: SQL[] = [isNull(campaigns.deleted_at)];
     if (f.status) filters.push(sql`status = ${f.status}`);
+    if (f.channel) filters.push(sql`channel = ${f.channel}`);
     if (f.search) filters.push(ilike(campaigns.name, `%${f.search}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(campaigns, where, f);
@@ -364,9 +375,18 @@ export class EmailMarketingRepository {
 
   // ─── Envíos (la cola) ──────────────────────────────────────────────
 
-  insertSends(values: (typeof emailSends.$inferInsert)[]): Promise<SendRow[]> {
+  /** Inserta envíos en lotes de 1000 (un solo INSERT gigante revienta el plan). */
+  async insertSends(values: (typeof emailSends.$inferInsert)[]): Promise<SendRow[]> {
     if (values.length === 0) return Promise.resolve([]);
-    return this.db.insert(emailSends).values(values).returning();
+    const out: SendRow[] = [];
+    for (let i = 0; i < values.length; i += 1000) {
+      const rows = await this.db
+        .insert(emailSends)
+        .values(values.slice(i, i + 1000))
+        .returning();
+      out.push(...rows);
+    }
+    return out;
   }
 
   /** Lote de envíos pendientes — BD fuente de verdad, BullMQ solo ejecuta. */
@@ -512,6 +532,7 @@ export class EmailMarketingRepository {
       update campaigns c set
         total_recipients = s.total,
         total_sent = s.sent,
+        total_failed = s.failed,
         total_delivered = s.delivered,
         total_opened = s.opened,
         total_clicked = s.clicked,
@@ -521,6 +542,7 @@ export class EmailMarketingRepository {
         select
           count(*) as total,
           count(*) filter (where status <> 'pending' and status <> 'queued') as sent,
+          count(*) filter (where status = 'failed') as failed,
           count(*) filter (where status in ('delivered','opened','clicked')) as delivered,
           count(*) filter (where status in ('opened','clicked')) as opened,
           count(*) filter (where status = 'clicked') as clicked,

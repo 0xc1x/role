@@ -38,8 +38,7 @@ const makeCampaign = (overrides: Partial<CampaignRow> = {}): CampaignRow =>
     name: 'Campaña',
     description: null,
     template_id: null,
-    subject_override: null,
-    body_override: null,
+    channel: 'email',
     category: 'announcements',
     segment_ids: [],
     include_user_ids: [],
@@ -143,6 +142,7 @@ describe('EmailMarketingController', () => {
         {
           provide: CampaignsService,
           useValue: {
+            assertTemplateForChannel: jest.fn(),
             preview: jest.fn(),
             test: jest.fn(),
             testTemplate: jest.fn(),
@@ -162,15 +162,18 @@ describe('EmailMarketingController', () => {
   });
 
   describe('campaigns: create/update con auditoría y fechas', () => {
-    it('createCampaign inyecta created_by y convierte scheduled_at a Date', () => {
+    it('createCampaign inyecta created_by y convierte scheduled_at a Date', async () => {
+      repository.insertCampaign.mockResolvedValue([makeCampaign()]);
       const body = {
         name: 'Lanzamiento',
+        channel: 'email',
+        template_id: 't-1',
         category: 'announcements',
         segment_ids: ['seg-1'],
         scheduled_at: '2025-06-01T10:00:00.000Z',
       };
 
-      controller.createCampaign({ id: 'admin-1' } as never, body as never);
+      await controller.createCampaign({ id: 'admin-1' } as never, body as never);
 
       expect(repository.insertCampaign).toHaveBeenCalledWith({
         ...body,
@@ -179,9 +182,12 @@ describe('EmailMarketingController', () => {
       });
     });
 
-    it('createCampaign sin scheduled_at guarda null', () => {
-      controller.createCampaign({ id: 'admin-1' } as never, {
+    it('createCampaign sin scheduled_at guarda null', async () => {
+      repository.insertCampaign.mockResolvedValue([makeCampaign()]);
+      await controller.createCampaign({ id: 'admin-1' } as never, {
         name: 'Lanzamiento',
+        channel: 'email',
+        template_id: 't-1',
         category: 'announcements',
       } as never);
 
@@ -191,6 +197,7 @@ describe('EmailMarketingController', () => {
     });
 
     it('updateCampaign convierte scheduled_at cuando viene', () => {
+      repository.updateCampaign.mockResolvedValue(makeCampaign() as never);
       controller.updateCampaign(CAMPAIGN_ID, {
         scheduled_at: '2025-06-01T10:00:00.000Z',
       } as never);
@@ -201,6 +208,7 @@ describe('EmailMarketingController', () => {
     });
 
     it('updateCampaign con scheduled_at null la desprograma', () => {
+      repository.updateCampaign.mockResolvedValue(makeCampaign() as never);
       controller.updateCampaign(CAMPAIGN_ID, { scheduled_at: null } as never);
 
       expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
@@ -209,6 +217,7 @@ describe('EmailMarketingController', () => {
     });
 
     it('updateCampaign sin scheduled_at no toca el campo', () => {
+      repository.updateCampaign.mockResolvedValue(makeCampaign() as never);
       controller.updateCampaign(CAMPAIGN_ID, { name: 'Nuevo nombre' } as never);
 
       expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
@@ -235,13 +244,9 @@ describe('EmailMarketingController', () => {
   });
 
   describe('previewCampaign', () => {
-    it('delega con los overrides guardados de la campaña', async () => {
+    it('delega el preview a la plantilla de la campaña', async () => {
       repository.getCampaignById.mockResolvedValue(
-        makeCampaign({
-          template_id: 't-1',
-          subject_override: 'Asunto guardado',
-          body_override: '<p>Body guardado</p>',
-        }),
+        makeCampaign({ template_id: 't-1' }),
       );
       campaignsService.preview.mockResolvedValue({ subject: 'x', html: 'y', variables_used: [] });
 
@@ -249,8 +254,8 @@ describe('EmailMarketingController', () => {
 
       expect(campaignsService.preview).toHaveBeenCalledWith({
         templateId: 't-1',
-        subjectOverride: 'Asunto guardado',
-        bodyOverride: '<p>Body guardado</p>',
+        subjectOverride: undefined,
+        bodyOverride: undefined,
       });
     });
 
@@ -405,14 +410,21 @@ describe('EmailMarketingController', () => {
       deleted_at: null,
     };
 
-    it('componentes: create/update/remove delegan', async () => {
+    it('componentes: create/update/remove mapean a DTO', async () => {
       const comp = makeComponent();
-      repository.insertComponent.mockResolvedValue(comp);
-      await expect(controller.createComponent({} as never)).resolves.toBe(comp);
-      repository.updateComponent.mockResolvedValue(comp);
+      repository.insertComponent.mockResolvedValue([comp] as never);
+      await expect(controller.createComponent({} as never)).resolves.toMatchObject({
+        id: comp.id,
+        created_at: '2025-01-01T00:00:00.000Z',
+      });
+      repository.updateComponent.mockResolvedValue(comp as never);
       await expect(
         controller.updateComponent(comp.id, {} as never),
-      ).resolves.toBe(comp);
+      ).resolves.toMatchObject({ id: comp.id });
+      repository.updateComponent.mockResolvedValue(null as never);
+      await expect(
+        controller.updateComponent(comp.id, {} as never),
+      ).resolves.toBeNull();
       repository.deleteComponent.mockResolvedValue(true);
       await expect(controller.removeComponent(comp.id)).resolves.toBe(true);
     });
@@ -440,12 +452,17 @@ describe('EmailMarketingController', () => {
       expect(campaignsService.testTemplate).toHaveBeenCalledWith('t1', ['a@b.cl']);
     });
 
-    it('segmentos: list/update/remove/set/add delegan', async () => {
+    it('segmentos: list/update/remove/set/add mapean a DTO', async () => {
       repository.listSegments.mockResolvedValue({ rows: [segRow], total: 1 });
       const listed = await controller.listSegments({ page: 1, limit: 10 } as never);
       expect(listed.data).toHaveLength(1);
-      repository.updateSegment.mockResolvedValue(segRow);
-      await expect(controller.updateSegment('s1', {} as never)).resolves.toBe(segRow);
+      repository.updateSegment.mockResolvedValue(segRow as never);
+      await expect(controller.updateSegment('s1', {} as never)).resolves.toMatchObject({
+        id: 's1',
+        created_at: '2025-01-01T00:00:00.000Z',
+      });
+      repository.updateSegment.mockResolvedValue(null as never);
+      await expect(controller.updateSegment('s1', {} as never)).resolves.toBeNull();
       repository.deleteSegment.mockResolvedValue(true);
       await expect(controller.removeSegment('s1')).resolves.toBe(true);
       repository.replaceSegmentUsers.mockResolvedValue(undefined);
