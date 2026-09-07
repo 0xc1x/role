@@ -1,5 +1,6 @@
 import {
 	PUSH_NOTIFICATION_TYPES,
+	type PushNotificationType,
 	type PushTemplateDto,
 } from "@0xc1x/role-commons";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -106,7 +107,7 @@ export interface SendFormValues {
 	template_id: string;
 	title: string;
 	body: string;
-	type: string;
+	type: PushNotificationType;
 	link: string;
 	segment_ids: string[];
 	include_user_ids: string[];
@@ -131,11 +132,14 @@ export function PushTypeSelect({
 	value,
 	onChange,
 }: {
-	value: string;
-	onChange: (v: string) => void;
+	value: PushNotificationType;
+	onChange: (v: PushNotificationType) => void;
 }) {
 	return (
-		<Select value={value} onValueChange={(v) => v && onChange(v)}>
+		<Select
+			value={value}
+			onValueChange={(v) => v && onChange(v as PushNotificationType)}
+		>
 			<SelectTrigger>
 				<SelectValue />
 			</SelectTrigger>

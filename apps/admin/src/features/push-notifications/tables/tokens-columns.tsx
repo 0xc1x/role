@@ -17,21 +17,19 @@ import {
 import { useUpdatePushToken } from "../queries/push.queries";
 
 const PlatformBadge = ({ platform }: { platform: string }) => {
-	const colors: Record<string, string> = {
-		ios: "bg-gray-500/10 text-gray-700 border-gray-200",
-		android: "bg-green-500/10 text-green-600 border-green-200",
-		web: "bg-blue-500/10 text-blue-600 border-blue-200",
+	const variants: Record<string, "secondary" | "success" | "info"> = {
+		ios: "secondary",
+		android: "success",
+		web: "info",
 	};
-	return <Badge className={colors[platform] ?? ""}>{platform}</Badge>;
+	return <Badge variant={variants[platform] ?? "secondary"}>{platform}</Badge>;
 };
 
 function TokenActions({ item }: { item: PushTokenDto }) {
 	const update = useUpdatePushToken();
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger
-				render={<Button variant="ghost" className="h-8 w-8 p-0" />}
-			>
+			<DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
 				<span className="sr-only">Abrir menú</span>
 				<MoreHorizontal className="size-4" />
 			</DropdownMenuTrigger>

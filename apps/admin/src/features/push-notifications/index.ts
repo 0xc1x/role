@@ -1,8 +1,4 @@
-export {
-	type PushAudienceBody,
-	type PushSendBody,
-	pushApi,
-} from "./api/push.api";
+export { pushApi } from "./api/push.api";
 export {
 	PushTemplateFields,
 	type PushTemplateFormValues,

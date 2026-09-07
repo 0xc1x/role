@@ -23,9 +23,7 @@ export function ActionCell({ row }: { row: Row<EmailSendDto> }) {
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger
-					render={<Button variant="ghost" className="h-8 w-8 p-0" />}
-				>
+				<DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
 					<span className="sr-only">Abrir menú</span>
 					<MoreHorizontal className="h-4 w-4" />
 				</DropdownMenuTrigger>

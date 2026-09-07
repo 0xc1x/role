@@ -23,21 +23,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const TypeBadge = ({ type }: { type: string }) => {
-	const colors: Record<string, string> = {
-		announcement: "bg-blue-500/10 text-blue-600 border-blue-200",
-		promo: "bg-amber-500/10 text-amber-600 border-amber-200",
-		system: "bg-purple-500/10 text-purple-600 border-purple-200",
+	const variants: Record<string, "info" | "warning" | "secondary"> = {
+		announcement: "info",
+		promo: "warning",
+		system: "secondary",
 	};
-	return <Badge className={colors[type] ?? ""}>{type}</Badge>;
+	return <Badge variant={variants[type] ?? "secondary"}>{type}</Badge>;
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
-	const map: Record<string, string> = {
-		sent: "bg-green-500/10 text-green-600 border-green-200",
-		partial: "bg-amber-500/10 text-amber-600 border-amber-200",
-		failed: "bg-red-500/10 text-red-600 border-red-200",
+	const map: Record<
+		string,
+		"success" | "warning" | "destructive" | "secondary"
+	> = {
+		sent: "success",
+		partial: "warning",
+		failed: "destructive",
 	};
-	return <Badge className={map[status] ?? ""}>{status}</Badge>;
+	return <Badge variant={map[status] ?? "secondary"}>{status}</Badge>;
 };
 
 /** Drawer con el detalle completo del envío registrado. */
@@ -142,7 +145,7 @@ export const historyColumns: ColumnDef<PushNotificationDto>[] = [
 			<span className="text-sm">
 				{row.original.sent_count}/{row.original.total_targeted}
 				{row.original.failed_count > 0 ? (
-					<span className="text-red-600">
+					<span className="text-destructive">
 						{" "}
 						· {row.original.failed_count} fall.
 					</span>
@@ -163,9 +166,7 @@ function HistoryActionCell({ item }: { item: PushNotificationDto }) {
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger
-					render={<Button variant="ghost" className="h-8 w-8 p-0" />}
-				>
+				<DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
 					<span className="sr-only">Abrir menú</span>
 					<MoreHorizontal className="size-4" />
 				</DropdownMenuTrigger>

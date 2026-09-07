@@ -75,6 +75,25 @@ export const navMain: NavMainItem[] = [
 		icon: BadgeDollarSign,
 	},
 	{
+		title: "Campañas de Marketing",
+		url: "#",
+		icon: Megaphone,
+		items: [
+			{
+				title: "Mails",
+				url: "/campanas/mails",
+			},
+			{
+				title: "Push",
+				url: "/campanas/push",
+			},
+			{
+				title: "Segmentos",
+				url: "/campanas/segmentos",
+			},
+		],
+	},
+	{
 		title: "Notificaciones",
 		url: "#",
 		icon: BellRing,
@@ -86,10 +105,6 @@ export const navMain: NavMainItem[] = [
 			{
 				title: "Mail",
 				url: "/notificaciones/mails",
-			},
-			{
-				title: "Envíos",
-				url: "/emails-sends",
 			},
 			{
 				title: "Whatsapp",
@@ -114,11 +129,6 @@ export const projects: NavProject[] = [
 		name: "Feature Flags",
 		url: "#",
 		icon: ToggleLeft,
-	},
-	{
-		name: "Campañas de Marketing",
-		url: "/campanas",
-		icon: Megaphone,
 	},
 	{
 		name: "Anuncios",

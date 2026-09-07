@@ -2,6 +2,7 @@ import {
 	type EmailComponentDto,
 	type EmailTemplateDto,
 	MARKETING_CATEGORIES,
+	type MarketingCategory,
 	SEGMENT_FILTER_FIELDS,
 	SEGMENT_TYPES,
 	type SegmentDto,
@@ -138,7 +139,7 @@ export function TemplateFields({
 	);
 }
 
-export interface TemplateFormValues {
+interface TemplateFormValues {
 	name: string;
 	subject: string;
 	body_html: string;
@@ -167,7 +168,7 @@ export interface SegmentFormValues {
 	description: string;
 	type: "static" | "dynamic";
 	filtersJson: string;
-	category: string;
+	category: MarketingCategory;
 	user_ids: string[];
 	is_active: boolean;
 }
@@ -211,7 +212,7 @@ export function SegmentFields({
 						if (!v) return;
 						setValues({
 							...values,
-							category: v,
+							category: v as MarketingCategory,
 							// Cambiar categoría limpia la selección para evitar
 							// mezclar usuarios que no cumplen la nueva.
 							user_ids: [],

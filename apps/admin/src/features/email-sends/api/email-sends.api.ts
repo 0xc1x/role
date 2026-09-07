@@ -2,6 +2,7 @@ import type {
 	EmailSendDto,
 	EmailSendPaginatedData,
 	ListSendsQuery,
+	UpdateEmailSendDto,
 } from "@0xc1x/role-commons";
 import { api } from "@/lib/api/client";
 import { createResourceApi } from "@/lib/api/resource";
@@ -9,7 +10,7 @@ import { createResourceApi } from "@/lib/api/resource";
 const base = createResourceApi<
 	EmailSendDto,
 	never,
-	Partial<EmailSendDto>,
+	UpdateEmailSendDto,
 	ListSendsQuery,
 	EmailSendPaginatedData
 >("/email-marketing/sends");
