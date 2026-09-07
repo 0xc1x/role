@@ -467,6 +467,8 @@ export class OffersRepository {
    * Orders in pending/ready_for_pickup whose offer pickup_end has passed.
    * Recommended DB indexes (Supabase): offers(is_active, pickup_end), offers(business_id),
    * orders(status, offer_id), orders(user_id, offer_id, status).
+   * Tope 500 por corrida: sin LIMIT un backlog grande solapa el tick de cada
+   * minuto consigo mismo (una transacción por orden en el service).
    */
   async findOrderCandidatesToExpire(
     now: Date,
@@ -480,7 +482,8 @@ export class OffersRepository {
           inArray(orders.status, ['pending', 'ready_for_pickup']),
           lte(offers.pickup_end, now),
         ),
-      );
+      )
+      .limit(500);
     return rows;
   }
 
