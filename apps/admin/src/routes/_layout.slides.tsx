@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { slidesColumns } from "@/features/slides";
-import { SlideCreateDrawer } from "@/features/slides/components/slide-create-drawler";
+import { SlideCreateDrawer } from "@/features/slides/components/slide-create-drawer";
 import {
 	slidesListOptions,
 	useSlideList,

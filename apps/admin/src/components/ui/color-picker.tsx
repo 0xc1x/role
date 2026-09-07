@@ -144,7 +144,7 @@ const PRESET_COLORS = [
  * Desestructurar un número lanza "is not iterable".
  */
 function firstSliderValue(v: number | readonly number[]): number {
-	return typeof v === "number" ? v : v[0];
+	return typeof v === "number" ? v : (v[0] ?? 0);
 }
 
 // --- Área 2D Saturación / Valor ---
@@ -162,9 +162,9 @@ function SaturationArea({ hsva, onChange }: SaturationAreaProps) {
 			if (!containerRef.current) return;
 			const rect = containerRef.current.getBoundingClientRect();
 			const clientX =
-				"touches" in event ? event.touches[0].clientX : event.clientX;
+				"touches" in event ? (event.touches[0]?.clientX ?? 0) : event.clientX;
 			const clientY =
-				"touches" in event ? event.touches[0].clientY : event.clientY;
+				"touches" in event ? (event.touches[0]?.clientY ?? 0) : event.clientY;
 
 			const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
 			const y = Math.max(0, Math.min(rect.height, clientY - rect.top));

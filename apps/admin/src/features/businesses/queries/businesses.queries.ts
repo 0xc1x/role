@@ -1,8 +1,8 @@
 import type {
+	BusinessVerificationStatus,
 	CreateBusinessDto,
 	ListBusinessesQuery,
 	UpdateBusinessDto,
-	BusinessVerificationStatus,
 } from "@0xc1x/role-commons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {

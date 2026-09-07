@@ -15,12 +15,16 @@ export function ThemeToggle() {
 		<DropdownMenu>
 			<DropdownMenuTrigger
 				render={
-					<SidebarMenuButton className="w-full data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground" />
+					<SidebarMenuButton className="w-full data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground" />
 				}
 			>
 				<Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
 				<Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-				<span className="">Cambiar tema</span>
+				{/* Oculto en sidebar colapsado: aunque overflow-hidden lo recorta,
+				    seguía ocupando espacio en el flex (gap-2) y desplazaba el icono */}
+				<span className="group-data-[collapsible=icon]:hidden">
+					Cambiar tema
+				</span>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
 				<DropdownMenuItem onClick={() => setTheme("light")}>

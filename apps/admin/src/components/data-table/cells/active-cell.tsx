@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import {
 	Tooltip,
@@ -24,16 +24,18 @@ export function ActiveCell({
 		<div className="flex items-center gap-2">
 			<TooltipProvider delay={1000}>
 				<Tooltip>
-					<TooltipTrigger>
-						<span className="inline-flex cursor-pointer items-center">
-							<Switch
-								checked={active}
-								onCheckedChange={onToggle}
-								disabled={isPending}
-								aria-label={`${label} ${active ? "activa" : "inactiva"}`}
-								className="data-checked:border-emerald-500 data-checked:bg-emerald-500 data-unchecked:border-red-500 data-unchecked:bg-red-500 dark:data-unchecked:border-red-600 dark:data-unchecked:bg-red-600"
-							/>
-						</span>
+					<TooltipTrigger
+						render={
+							<span className="inline-flex cursor-pointer items-center" />
+						}
+					>
+						<Switch
+							checked={active}
+							onCheckedChange={onToggle}
+							disabled={isPending}
+							aria-label={`${label} ${active ? "activa" : "inactiva"}`}
+							className="data-checked:border-success data-checked:bg-success data-unchecked:border-destructive data-unchecked:bg-destructive"
+						/>
 					</TooltipTrigger>
 					<TooltipContent
 						side="top"
@@ -41,7 +43,7 @@ export function ActiveCell({
 					>
 						<span
 							className={`size-1.5 rounded-full ${
-								active ? "bg-emerald-500" : "bg-red-500"
+								active ? "bg-success" : "bg-destructive"
 							}`}
 						/>
 						{active ? `${label} activa` : `${label} inactiva`}
@@ -50,8 +52,8 @@ export function ActiveCell({
 			</TooltipProvider>
 
 			<span className="flex size-3.5 shrink-0 items-center justify-center">
-				<Loader2
-					className={`size-3.5 animate-spin text-muted-foreground transition-opacity ${
+				<Spinner
+					className={`transition-opacity ${
 						isPending ? "opacity-100" : "opacity-0"
 					}`}
 				/>

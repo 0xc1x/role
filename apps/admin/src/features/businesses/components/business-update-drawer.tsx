@@ -1,14 +1,7 @@
 import type { BusinessDto } from "@0xc1x/role-commons";
-import { Button } from "@/components/ui/button";
-import {
-	Drawer,
-	DrawerContent,
-	DrawerDescription,
-	DrawerFooter,
-	DrawerHeader,
-	DrawerTitle,
-} from "@/components/ui/drawer";
+import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
 import { BusinessForm } from "../forms/business.form";
+import { businessesKeys } from "../queries/businesses.keys";
 
 export function BusinessUpdateDrawer({
 	business,
@@ -21,28 +14,17 @@ export function BusinessUpdateDrawer({
 }) {
 	const formId = `business-update-${business.id}`;
 	return (
-		<Drawer open={isOpen} onOpenChange={(o) => !o && onClose()}>
-			<DrawerContent>
-				<DrawerHeader>
-					<DrawerTitle>Editar negocio</DrawerTitle>
-					<DrawerDescription>{business.name}</DrawerDescription>
-				</DrawerHeader>
-				<div className="px-4">
-					<BusinessForm
-						formId={formId}
-						business={business}
-						onSuccess={onClose}
-					/>
-				</div>
-				<DrawerFooter>
-					<Button variant="outline" onClick={onClose}>
-						Cancelar
-					</Button>
-					<Button type="submit" form={formId}>
-						Guardar
-					</Button>
-				</DrawerFooter>
-			</DrawerContent>
-		</Drawer>
+		<ResourceUpdateDrawer
+			formId={formId}
+			mutationKey={businessesKeys.all}
+			title="Editar negocio"
+			description={business.name}
+			isOpen={isOpen}
+			onClose={onClose}
+			submitLabel="Guardar"
+			updatingLabel="Guardando"
+		>
+			<BusinessForm formId={formId} business={business} onSuccess={onClose} />
+		</ResourceUpdateDrawer>
 	);
 }

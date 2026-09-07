@@ -149,7 +149,7 @@ describe("api request", () => {
 			RequestInit,
 		];
 		expect(
-			(opts.headers as Record<string, string>)["Authorization"],
+			(opts.headers as Record<string, string>).Authorization,
 		).toBeUndefined();
 		expect((opts.headers as Record<string, string>)["Content-Type"]).toBe(
 			"application/json",
@@ -236,6 +236,6 @@ describe("api request", () => {
 		const res = await api.get("/categories");
 		expect(res).toEqual({ data: "after-refresh" });
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(fetchMock.mock.calls[0][0]).not.toContain("/auth/refresh");
+		expect(fetchMock.mock.calls[0]?.[0]).not.toContain("/auth/refresh");
 	});
 });

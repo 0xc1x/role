@@ -3,10 +3,9 @@ import {
 	APP_CONFIG_VALUE_TYPES,
 	type AppConfigCategory,
 	type AppConfigDto,
+	type AppConfigValueSchema,
 	type AppConfigValueType,
-	type CreateAppConfigDto,
 	CreateAppConfigFormSchema,
-	type UpdateAppConfigDto,
 } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
@@ -69,6 +68,27 @@ interface AppConfigFormProps {
 	config?: AppConfigDto;
 }
 
+type FormValue = string | number | boolean;
+type ParsedValue = z.infer<typeof AppConfigValueSchema>;
+
+/** JSONB → editable: primitivos pasan; arrays/objetos se editan como string JSON. */
+function toFormValue(config?: AppConfigDto): FormValue {
+	const value = config?.value;
+	if (value === undefined || value === null) return "";
+	if (
+		typeof value === "string" ||
+		typeof value === "number" ||
+		typeof value === "boolean"
+	) {
+		return value;
+	}
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return String(value);
+	}
+}
+
 export function AppConfigForm({
 	formId,
 	onSuccess,
@@ -78,35 +98,10 @@ export function AppConfigForm({
 	const updateMutation = useUpdateAppConfig();
 	const [localError, setLocalError] = useState<string | null>(null);
 
-	const initialValue = (() => {
-		if (config?.value === undefined) return "" as string | number | boolean;
-		if (config.value_type === "json" && typeof config.value !== "string") {
-			try {
-				return JSON.stringify(config.value, null, 2) as unknown as
-					| string
-					| number
-					| boolean;
-			} catch {
-				return String(config.value) as string | number | boolean;
-			}
-		}
-		if (Array.isArray(config.value)) {
-			try {
-				return JSON.stringify(config.value, null, 2) as unknown as
-					| string
-					| number
-					| boolean;
-			} catch {
-				return String(config.value) as string | number | boolean;
-			}
-		}
-		return config.value as string | number | boolean;
-	})();
-
 	const form = useForm({
 		defaultValues: {
 			key: config?.key ?? "",
-			value: initialValue,
+			value: toFormValue(config),
 			value_type: (config?.value_type ?? "string") as AppConfigValueType,
 			category: (config?.category ?? "general") as AppConfigCategory,
 			label: config?.label ?? "",
@@ -117,57 +112,46 @@ export function AppConfigForm({
 		validators: { onSubmit: configFormSchema },
 		onSubmit: async ({ value }) => {
 			setLocalError(null);
-			const valueType = value.value_type;
-			let parsedValue:
-				| string
-				| number
-				| boolean
-				| string[]
-				| Record<string, unknown> = value.value as unknown as
-				| string
-				| number
-				| boolean
-				| string[]
-				| Record<string, unknown>;
-
-			if ((valueType as string) === "number") {
-				parsedValue =
-					typeof value.value === "number" ? value.value : Number(value.value);
-			} else if ((valueType as string) === "boolean") {
-				parsedValue = Boolean(value.value);
-			} else if ((valueType as string) === "json") {
-				if (typeof value.value === "string") {
-					const trimmed = (value.value as string).trim();
+			let parsedValue: ParsedValue;
+			switch (value.value_type) {
+				case "number": {
+					parsedValue =
+						typeof value.value === "number" ? value.value : Number(value.value);
+					break;
+				}
+				case "boolean": {
+					parsedValue = Boolean(value.value);
+					break;
+				}
+				case "json": {
+					const raw =
+						typeof value.value === "string"
+							? value.value
+							: JSON.stringify(value.value);
+					const trimmed = raw.trim();
 					if (trimmed === "") {
 						setLocalError("El valor JSON no puede estar vacío");
 						return;
 					}
 					try {
-						parsedValue = JSON.parse(trimmed) as
-							| string[]
-							| Record<string, unknown>;
+						parsedValue = JSON.parse(trimmed) as ParsedValue;
 					} catch {
 						setLocalError(
 							'JSON inválido. Ej: ["Quito","Guayaquil","Cuenca","Manta","Otra"]',
 						);
 						return;
 					}
-				} else {
-					parsedValue = value.value as unknown as
-						| string[]
-						| Record<string, unknown>;
+					break;
 				}
-			} else {
-				parsedValue = String(value.value) as unknown as
-					| string
-					| number
-					| boolean;
+				default: {
+					parsedValue = String(value.value);
+				}
 			}
 
 			const payload = {
 				key: value.key,
 				value: parsedValue,
-				value_type: valueType,
+				value_type: value.value_type,
 				category: value.category,
 				label: value.label,
 				description: value.description || null,
@@ -177,12 +161,9 @@ export function AppConfigForm({
 
 			if (config) {
 				const { key: _key, ...body } = payload;
-				await updateMutation.mutateAsync({
-					key: config.key,
-					body: body as UpdateAppConfigDto,
-				});
+				await updateMutation.mutateAsync({ key: config.key, body });
 			} else {
-				await createMutation.mutateAsync(payload as CreateAppConfigDto);
+				await createMutation.mutateAsync(payload);
 			}
 			onSuccess?.();
 		},
@@ -269,50 +250,40 @@ export function AppConfigForm({
 								value={field.state.value}
 								onValueChange={(v) => {
 									if (!v) return;
-									field.handleChange(v as AppConfigValueType);
+									const nextType = v as AppConfigValueType;
+									field.handleChange(nextType);
 									setLocalError(null);
-									if ((v as string) === "boolean") {
+									if (nextType === "boolean") {
 										form.setFieldValue("value", false);
-									} else if ((v as string) === "json") {
-										const cur = form.getFieldValue("value");
-										if (Array.isArray(cur)) {
-											form.setFieldValue(
-												"value",
-												JSON.stringify(cur, null, 2) as unknown as typeof cur,
-											);
-										} else if (typeof cur === "object" && cur !== null) {
-											form.setFieldValue(
-												"value",
-												JSON.stringify(cur, null, 2) as unknown as typeof cur,
-											);
-										} else if (typeof cur !== "string") {
-											form.setFieldValue(
-												"value",
-												String(cur ?? "") as unknown as typeof cur,
-											);
+									} else if (nextType === "json") {
+										const current = form.getFieldValue("value");
+										if (typeof current !== "string") {
+											try {
+												form.setFieldValue(
+													"value",
+													JSON.stringify(current, null, 2),
+												);
+											} catch {
+												form.setFieldValue("value", String(current ?? ""));
+											}
 										}
 									} else if (
-										(v as string) === "number" &&
+										nextType === "number" &&
 										typeof form.state.values.value !== "number"
 									) {
 										form.setFieldValue("value", "");
-									} else if (
-										(v as string) !== "json" &&
-										typeof form.getFieldValue("value") === "string"
-									) {
-										// al salir de json, si era JSON string válido, intenta mantenerlo legible
-										const cur = form.getFieldValue(
-											"value",
-										) as unknown as string;
-										try {
-											const parsed = JSON.parse(cur);
-											if (Array.isArray(parsed))
-												form.setFieldValue(
-													"value",
-													parsed.join(", ") as unknown as typeof cur,
-												);
-										} catch {
-											// dejar como string
+									} else {
+										// tipos texto/email/url/phone: si venía de json como string JSON válido, intenta mantenerlo legible
+										const current = form.getFieldValue("value");
+										if (typeof current === "string") {
+											try {
+												const parsed = JSON.parse(current);
+												if (Array.isArray(parsed)) {
+													form.setFieldValue("value", parsed.join(", "));
+												}
+											} catch {
+												// dejar como string
+											}
 										}
 									}
 								}}
@@ -363,7 +334,7 @@ export function AppConfigForm({
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 
-					if ((valueType as string) === "boolean") {
+					if (valueType === "boolean") {
 						const checked = Boolean(field.state.value);
 						return (
 							<Field>
@@ -382,7 +353,7 @@ export function AppConfigForm({
 						);
 					}
 
-					if ((valueType as string) === "json") {
+					if (valueType === "json") {
 						return (
 							<Field data-invalid={isInvalid}>
 								<FieldLabel htmlFor={field.name}>Valor (JSON)</FieldLabel>
@@ -395,9 +366,7 @@ export function AppConfigForm({
 									onBlur={field.handleBlur}
 									onChange={(e) => {
 										setLocalError(null);
-										field.handleChange(
-											e.target.value as unknown as typeof field.state.value,
-										);
+										field.handleChange(e.target.value);
 									}}
 									aria-invalid={isInvalid}
 									className="font-mono text-sm"

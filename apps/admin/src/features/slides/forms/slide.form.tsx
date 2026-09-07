@@ -8,7 +8,7 @@ import { CreateSlideFormSchema, RedirectUrlSchema } from "@0xc1x/role-commons";
 import { useForm, useStore } from "@tanstack/react-form";
 import { z } from "zod";
 import { ImageField } from "@/components/media/image-field";
-import { Badge } from "@/components/ui/badge";
+import { StatusSwitch } from "@/components/status-switch";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -21,7 +21,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { ApiClientError } from "@/lib/api/errors";
 import {
 	useCreateSlide,
@@ -579,19 +578,10 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 						return (
 							<Field>
 								<FieldLabel>Estado</FieldLabel>
-								<div className="flex items-center gap-3">
-									<Switch
-										checked={isActive}
-										onCheckedChange={(checked) => field.handleChange(checked)}
-										className="data-checked:border-emerald-500 data-checked:bg-emerald-500 data-unchecked:border-red-500 data-unchecked:bg-red-500 dark:data-unchecked:border-red-600 dark:data-unchecked:bg-red-600"
-									/>
-									<Badge
-										variant={isActive ? "default" : "destructive"}
-										className={isActive ? "bg-green-500/10 text-green-600" : ""}
-									>
-										{isActive ? "Activo" : "Inactivo"}
-									</Badge>
-								</div>
+								<StatusSwitch
+									checked={isActive}
+									onCheckedChange={(checked) => field.handleChange(checked)}
+								/>
 							</Field>
 						);
 					}}

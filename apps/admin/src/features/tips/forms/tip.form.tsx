@@ -1,9 +1,8 @@
 import { CreateTipSchema, type TipDto } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
-import { Badge } from "@/components/ui/badge";
+import { StatusSwitch } from "@/components/status-switch";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiClientError } from "@/lib/api/errors";
 import { useCreateTip, useUpdateTip } from "../queries/tips.queries";
@@ -97,19 +96,10 @@ export function TipForm({ formId, onSuccess, tip }: TipFormProps) {
 						return (
 							<Field>
 								<FieldLabel>Estado</FieldLabel>
-								<div className="flex items-center gap-3">
-									<Switch
-										checked={isActive}
-										onCheckedChange={(checked) => field.handleChange(checked)}
-										className="data-checked:border-emerald-500 data-checked:bg-emerald-500 data-unchecked:border-red-500 data-unchecked:bg-red-500 dark:data-unchecked:border-red-600 dark:data-unchecked:bg-red-600"
-									/>
-									<Badge
-										variant={isActive ? "default" : "destructive"}
-										className={isActive ? "bg-green-500/10 text-green-600" : ""}
-									>
-										{isActive ? "Activo" : "Inactivo"}
-									</Badge>
-								</div>
+								<StatusSwitch
+									checked={isActive}
+									onCheckedChange={(checked) => field.handleChange(checked)}
+								/>
 							</Field>
 						);
 					}}

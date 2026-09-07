@@ -1,4 +1,4 @@
-import { Loader2, Pencil, UploadCloud, X } from "lucide-react";
+import { Pencil, UploadCloud, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { usePreviewUrl } from "@/components/media/image-field";
 import { ImageThumbnail } from "@/components/media/image-thumbnail";
@@ -8,6 +8,7 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ImageCellProps {
 	imageUrl: string | null;
@@ -46,6 +47,9 @@ export function ImageCell({ imageUrl, name, onSave }: ImageCellProps) {
 				render={
 					<button
 						type="button"
+						aria-label={
+							imageUrl ? `Cambiar imagen de ${name}` : `Subir imagen de ${name}`
+						}
 						className="rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					/>
 				}
@@ -146,7 +150,7 @@ export function ImageCell({ imageUrl, name, onSave }: ImageCellProps) {
 					>
 						{isPending ? (
 							<>
-								<Loader2 className="size-4 animate-spin" />
+								<Spinner />
 								Guardando...
 							</>
 						) : (

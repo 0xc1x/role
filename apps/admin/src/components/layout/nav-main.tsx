@@ -67,7 +67,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
 							>
 								{item.icon && <item.icon />}
 								<span className="min-w-0 flex-1 truncate">{item.title}</span>
-								<ChevronRight className="ml-auto shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+								<ChevronRight className="ml-auto shrink-0 transition-transform duration-200 group-data-[open]/collapsible:rotate-90" />
 							</CollapsibleTrigger>
 
 							<CollapsibleContent className="w-full">

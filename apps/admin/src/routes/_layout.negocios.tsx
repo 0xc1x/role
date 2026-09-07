@@ -1,3 +1,7 @@
+import {
+	type BusinessVerificationStatus,
+	ListBusinessesQuerySchema,
+} from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -19,7 +23,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessesList } from "@/features/businesses";
 import { columns } from "@/features/businesses/tables/businesses.columns";
-import { ListBusinessesQuerySchema } from "@0xc1x/role-commons";
 
 // Igual que ListBusinessesQuerySchema pero con el page size de las tablas (10).
 const schema = ListBusinessesQuerySchema.extend({
@@ -89,7 +92,8 @@ function RouteComponent() {
 							navigate({
 								search: {
 									...search,
-									verification_status: v === "all" ? undefined : (v as never),
+									verification_status:
+										v === "all" ? undefined : (v as BusinessVerificationStatus),
 									page: 1,
 								},
 							})

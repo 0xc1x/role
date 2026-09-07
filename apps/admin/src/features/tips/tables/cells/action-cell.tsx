@@ -1,6 +1,6 @@
 import type { TipDto } from "@0xc1x/role-commons";
 import type { Row } from "@tanstack/react-table";
-import { Loader2, MoreHorizontal, Pen, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pen, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
 	AlertDialog,
@@ -22,6 +22,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Spinner } from "@/components/ui/spinner";
 import { TipUpdateDrawer, useDeleteTip } from "@/features/tips";
 
 export function ActionCell({ row }: { row: Row<TipDto> }) {
@@ -40,9 +41,7 @@ export function ActionCell({ row }: { row: Row<TipDto> }) {
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger
-					render={<Button variant="ghost" className="h-8 w-8 p-0" />}
-				>
+				<DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
 					<span className="sr-only">Abrir menú</span>
 					<MoreHorizontal className="h-4 w-4" />
 				</DropdownMenuTrigger>
@@ -115,7 +114,7 @@ export function ActionCell({ row }: { row: Row<TipDto> }) {
 						>
 							{deleteMutation.isPending ? (
 								<>
-									<Loader2 className="size-4 animate-spin" />
+									<Spinner />
 									Eliminando...
 								</>
 							) : (

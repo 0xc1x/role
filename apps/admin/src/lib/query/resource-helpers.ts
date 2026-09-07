@@ -23,7 +23,7 @@ export function createUseCreate<TBody, TData>(
 	return () => {
 		const qc = useQueryClient();
 		return useMutation({
-			mutationKey: keys.all as unknown as readonly unknown[],
+			mutationKey: keys.all,
 			mutationFn: (body: TBody) => apiCreate(body),
 			onSuccess: () => {
 				void qc.invalidateQueries({ queryKey: keys.lists() });
@@ -43,7 +43,7 @@ export function createUseUpdate<TBody, TData extends { id: string }>(
 	return () => {
 		const qc = useQueryClient();
 		return useMutation({
-			mutationKey: keys.all as unknown as readonly unknown[],
+			mutationKey: keys.all,
 			mutationFn: ({ id, body }: { id: string; body: TBody }) =>
 				apiUpdate(id, body),
 			onSuccess: (data) => {
@@ -61,11 +61,11 @@ export function createUseDelete(
 	return () => {
 		const qc = useQueryClient();
 		return useMutation({
-			mutationKey: keys.all as unknown as readonly unknown[],
+			mutationKey: keys.all,
 			mutationFn: (id: string) => apiRemove(id),
 			onSuccess: () => {
 				void qc.invalidateQueries({
-					queryKey: keys.all as unknown as readonly unknown[],
+					queryKey: keys.all,
 				});
 			},
 		});

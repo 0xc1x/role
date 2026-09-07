@@ -28,7 +28,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							size="lg"
-							className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground [&_svg]:size-[unset]"
+							className="data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground [&_svg]:size-[unset]"
 						>
 							<Logo variant="icon" size={40} />
 							<div className="grid flex-1 text-left text-sm leading-tight">

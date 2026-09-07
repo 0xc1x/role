@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
+	DrawerBody,
 	DrawerClose,
 	DrawerContent,
 	DrawerDescription,
@@ -60,13 +61,13 @@ export function ResourceCreateDrawer({
 					<DrawerDescription>{description}</DrawerDescription>
 				</DrawerHeader>
 
-				<div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
+				<DrawerBody>
 					{isOpen && (
 						<div key={resetKey}>
 							{children({ formId, onSuccess: () => setIsOpen(false) })}
 						</div>
 					)}
-				</div>
+				</DrawerBody>
 
 				<DrawerFooter>
 					<Button type="submit" form={formId} disabled={isMutating}>
@@ -124,9 +125,7 @@ export function ResourceUpdateDrawer({
 					<DrawerDescription>{description}</DrawerDescription>
 				</DrawerHeader>
 
-				<div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
-					{children}
-				</div>
+				<DrawerBody>{children}</DrawerBody>
 
 				<DrawerFooter>
 					<Button type="submit" form={formId} disabled={isMutating}>

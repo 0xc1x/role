@@ -34,12 +34,7 @@ export const columns: ColumnDef<CommissionDto>[] = [
 		accessorKey: "active",
 		header: "Estado",
 		cell: ({ row }) => (
-			<Badge
-				variant={row.original.active ? "default" : "destructive"}
-				className={
-					row.original.active ? "bg-green-500/10 text-green-600" : undefined
-				}
-			>
+			<Badge variant={row.original.active ? "success" : "destructive"}>
 				{row.original.active ? "Activo" : "Inactivo"}
 			</Badge>
 		),

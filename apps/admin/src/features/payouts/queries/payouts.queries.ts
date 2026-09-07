@@ -1,3 +1,4 @@
+import type { ListPayoutsQuery } from "@0xc1x/role-commons";
 import {
 	queryOptions,
 	useMutation,
@@ -7,18 +8,14 @@ import {
 import { payoutsApi } from "../api/payouts.api";
 import { payoutsKeys } from "./payouts.keys";
 
-export const payoutsListOptions = (
-	params?: Record<string, string | number | undefined>,
-) =>
+export const payoutsListOptions = (params?: ListPayoutsQuery) =>
 	queryOptions({
 		queryKey: payoutsKeys.list(params),
 		queryFn: () => payoutsApi.list(params),
 		staleTime: 30_000,
 	});
 
-export function usePayoutsList(
-	params?: Record<string, string | number | undefined>,
-) {
+export function usePayoutsList(params?: ListPayoutsQuery) {
 	return useQuery(payoutsListOptions(params));
 }
 

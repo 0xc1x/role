@@ -1,4 +1,7 @@
-import type { BusinessDto } from "@0xc1x/role-commons";
+import type {
+	BusinessDto,
+	BusinessVerificationStatus,
+} from "@0xc1x/role-commons";
 import {
 	BusinessVerificationStatusSchema,
 	UpdateBusinessSchema,
@@ -50,7 +53,7 @@ export function BusinessForm({
 					name: value.name || undefined,
 					verification_status: value.verification_status,
 					rejection_reason: value.rejection_reason || null,
-				} as never,
+				},
 			});
 			onSuccess?.();
 		},
@@ -95,7 +98,9 @@ export function BusinessForm({
 						<FieldLabel>Estado verificación</FieldLabel>
 						<Select
 							value={field.state.value}
-							onValueChange={(v) => field.handleChange(v as never)}
+							onValueChange={(v) =>
+								field.handleChange(v as BusinessVerificationStatus)
+							}
 						>
 							<SelectTrigger>
 								<SelectValue />
