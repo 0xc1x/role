@@ -22,7 +22,12 @@ async function loadInitSql(): Promise<string> {
   const entries = await readdir(dir);
   const folder = entries.find((e) => e !== 'meta' && !e.startsWith('.'));
   if (!folder) throw new Error('Sin migraciones en drizzle/');
-  return readFile(join(dir, folder, 'migration.sql'), 'utf8');
+  const raw = await readFile(join(dir, folder, 'migration.sql'), 'utf8');
+  // drizzle-kit pull envuelve el SQL en /* ... */ ("uncomment to run"); lo desenvolvemos.
+  const open = raw.indexOf('/*');
+  const close = raw.lastIndexOf('*/');
+  if (open === -1 || close === -1 || close < open) return raw;
+  return raw.slice(0, open) + raw.slice(open + 2, close) + raw.slice(close + 2);
 }
 
 const INIT_SQL = loadInitSql();
@@ -47,14 +52,27 @@ export async function createTestDb(): Promise<TestDbContext> {
   base.pathname = `/${dbName}`;
   const client = postgres(base.toString(), { prepare: false, max: 5 });
   await client`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
-  // Lotes para no pagar un roundtrip por statement (~100 en la migración).
-  const migration = await INIT_SQL;
-  const stmts = migration
-    .split('--> statement-breakpoint')
+  // El espejo de test corre en postgres pelado: sin auth/PostGIS ni roles de
+  // Supabase. Policies, grants y FKs enteras a auth.users se descartan; las
+  // FKs inline dentro de CREATE TABLE pierden solo el REFERENCES (la columna
+  // queda). geog ya se excluyó del baseline a mano (memoria workflow DDL).
+  const parts = (await INIT_SQL).split('--> statement-breakpoint')
     .map((s) => s.trim())
-    .filter(Boolean);
-  for (let i = 0; i < stmts.length; i += 25) {
-    await client.unsafe(stmts.slice(i, i + 25).join(';\n'));
+    .filter(Boolean)
+    .filter(
+      (s) =>
+        !/CREATE\s+POLICY|^\s*GRANT\s|^\s*REVOKE\s|auth\.(uid|jwt|role)\(/i.test(
+          s,
+        ),
+    )
+    .filter(
+      (s) => !/ADD CONSTRAINT[^;]*REFERENCES\s+"?auth"?\."?users"?/i.test(s),
+    )
+    .map((s) =>
+      s.replace(/\s*REFERENCES\s+"?auth"?\."?users"?\s*\([^)]*\)/g, ''),
+    );
+  for (let i = 0; i < parts.length; i += 25) {
+    await client.unsafe(parts.slice(i, i + 25).join(';\n'));
   }
 
   const db: TestDatabase = drizzle({ client });
