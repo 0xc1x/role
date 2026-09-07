@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import {
   consumerNotificationPreferences,
   deviceTokens,
@@ -55,7 +56,7 @@ export class PushNotificationsRepository {
     const filters: SQL[] = [isNull(pushTemplates.deleted_at)];
     if (f.active !== undefined)
       filters.push(eq(pushTemplates.is_active, f.active));
-    if (f.search) filters.push(ilike(pushTemplates.name, `%${f.search}%`));
+    if (f.search) filters.push(ilike(pushTemplates.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     const [totalRow] = await this.db
       .select({ c: count() })
@@ -116,7 +117,7 @@ export class PushNotificationsRepository {
   ) {
     const filters: SQL[] = [];
     if (f.type) filters.push(eq(pushNotifications.type, f.type));
-    if (f.search) filters.push(ilike(pushNotifications.title, `%${f.search}%`));
+    if (f.search) filters.push(ilike(pushNotifications.title, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     const [totalRow] = await this.db
       .select({ c: count() })
@@ -153,7 +154,7 @@ export class PushNotificationsRepository {
     if (f.active !== undefined)
       filters.push(eq(deviceTokens.is_active, f.active));
     if (f.search) {
-      const term = `%${f.search}%`;
+      const term = `%${escapeLike(f.search)}%`;
       const searchFilter = or(
         ilike(profiles.email, term),
         ilike(profiles.full_name, term),

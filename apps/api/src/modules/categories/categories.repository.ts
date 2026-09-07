@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, ilike, isNull, ne, type SQL } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import { categories } from '../../database/schema';
 
 /** Row as stored in Postgres (Date timestamps). */
@@ -124,7 +125,7 @@ export class CategoriesRepository {
       filters.push(eq(categories.active, filter.active));
     }
     if (filter.search) {
-      filters.push(ilike(categories.name, `%${filter.search}%`));
+      filters.push(ilike(categories.name, `%${escapeLike(filter.search)}%`));
     }
 
     const where = and(...filters);

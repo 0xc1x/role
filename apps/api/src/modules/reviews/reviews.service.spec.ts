@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ReviewsService } from './reviews.service';
 import { ReviewsRepository } from './reviews.repository';
@@ -42,6 +42,7 @@ describe('ReviewsService (espejo de triggers de rating)', () => {
           useValue: {
             transaction: jest.fn(),
             findOrderById: jest.fn(),
+            findByUserAndOrder: jest.fn().mockResolvedValue(null),
             insert: jest.fn(),
             recalcBusinessRating: jest.fn(),
             recalcOfferRating: jest.fn(),
@@ -103,5 +104,26 @@ describe('ReviewsService (espejo de triggers de rating)', () => {
     await expect(
       service.create(mockUser, { order_id: 'order-1' }),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('rechaza reseñar pedidos no completados', async () => {
+    repository.findOrderById.mockResolvedValue(makeOrder({ status: 'pending' }));
+
+    await expect(
+      service.create(mockUser, { order_id: 'order-1' }),
+    ).rejects.toThrow(BadRequestException);
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+
+  it('idempotente: segunda reseña devuelve la existente sin insertar', async () => {
+    repository.findOrderById.mockResolvedValue(makeOrder());
+    repository.findByUserAndOrder.mockResolvedValue(makeReviewRow());
+
+    const result = await service.create(mockUser, { order_id: 'order-1' });
+
+    expect(result.id).toBe('review-1');
+    expect(repository.insert).not.toHaveBeenCalled();
+    expect(repository.recalcBusinessRating).not.toHaveBeenCalled();
+    expect(repository.recalcOfferRating).not.toHaveBeenCalled();
   });
 });

@@ -15,3 +15,4 @@ export * from './stats';
 export * from './email';
 export * from './contact';
 export * from './push';
+export * from './upload';

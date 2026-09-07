@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import { tips } from '../../database/schema';
 
 /** Row as stored in Postgres (Date timestamps). */
@@ -93,7 +94,7 @@ export class TipsRepository {
       filters.push(eq(tips.active, filter.active));
     }
     if (filter.search) {
-      filters.push(ilike(tips.content, `%${filter.search}%`));
+      filters.push(ilike(tips.content, `%${escapeLike(filter.search)}%`));
     }
 
     const where = and(...filters);

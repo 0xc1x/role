@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import {
   campaigns,
   emailComponents,
@@ -60,7 +61,7 @@ export class EmailMarketingRepository {
     const filters: SQL[] = [isNull(emailComponents.deleted_at)];
     if (f.active !== undefined)
       filters.push(eq(emailComponents.is_active, f.active));
-    if (f.search) filters.push(ilike(emailComponents.name, `%${f.search}%`));
+    if (f.search) filters.push(ilike(emailComponents.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailComponents, where, f);
   }
@@ -108,7 +109,7 @@ export class EmailMarketingRepository {
     const filters: SQL[] = [isNull(emailTemplates.deleted_at)];
     if (f.active !== undefined)
       filters.push(eq(emailTemplates.is_active, f.active));
-    if (f.search) filters.push(ilike(emailTemplates.name, `%${f.search}%`));
+    if (f.search) filters.push(ilike(emailTemplates.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailTemplates, where, f);
   }
@@ -154,7 +155,7 @@ export class EmailMarketingRepository {
     const filters: SQL[] = [isNull(segments.deleted_at)];
     if (f.category) filters.push(eq(segments.category, f.category));
     if (f.active !== undefined) filters.push(eq(segments.is_active, f.active));
-    if (f.search) filters.push(ilike(segments.name, `%${f.search}%`));
+    if (f.search) filters.push(ilike(segments.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(segments, where, f);
   }
@@ -278,7 +279,7 @@ export class EmailMarketingRepository {
         case 'lte':
           return sql`${col} <= ${val}`;
         default:
-          return sql`${col}::text ilike ${`%${val}%`}`;
+          return sql`${col}::text ilike ${`%${escapeLike(val)}%`}`;
       }
     });
     const rows = await this.db
@@ -331,7 +332,7 @@ export class EmailMarketingRepository {
     const filters: SQL[] = [isNull(campaigns.deleted_at)];
     if (f.status) filters.push(sql`status = ${f.status}`);
     if (f.channel) filters.push(sql`channel = ${f.channel}`);
-    if (f.search) filters.push(ilike(campaigns.name, `%${f.search}%`));
+    if (f.search) filters.push(ilike(campaigns.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(campaigns, where, f);
   }
@@ -511,7 +512,7 @@ export class EmailMarketingRepository {
     if (f.type) filters.push(eq(emailSends.type, f.type as SendRow['type']));
     if (f.source_type) filters.push(eq(emailSends.source_type, f.source_type));
     if (f.source_id) filters.push(eq(emailSends.source_id, f.source_id));
-    if (f.search) filters.push(ilike(emailSends.email, `%${f.search}%`));
+    if (f.search) filters.push(ilike(emailSends.email, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailSends, where, f);
   }

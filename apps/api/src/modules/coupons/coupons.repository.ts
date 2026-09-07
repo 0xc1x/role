@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import { businesses, coupons } from '../../database/schema';
 
 /** Row as stored in Postgres (Date timestamps, numeric as string). */
@@ -129,7 +130,7 @@ export class CouponsRepository {
       filters.push(isNotNull(coupons.business_id));
     }
     if (filter.search) {
-      const term = `%${filter.search}%`;
+      const term = `%${escapeLike(filter.search)}%`;
       const searchFilter = or(
         ilike(coupons.code, term),
         ilike(coupons.name, term),

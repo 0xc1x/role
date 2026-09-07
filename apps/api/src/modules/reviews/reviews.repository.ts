@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import {
@@ -51,6 +51,20 @@ export class ReviewsRepository {
     const [row] = await tx.insert(reviews).values(values).returning();
     if (!row) throw new Error('Failed to insert review');
     return row;
+  }
+
+  /** Reseña existente del usuario para la orden (idempotencia del create). */
+  async findByUserAndOrder(
+    tx: Database,
+    userId: string,
+    orderId: string,
+  ): Promise<ReviewRow | null> {
+    const [row] = await tx
+      .select()
+      .from(reviews)
+      .where(and(eq(reviews.user_id, userId), eq(reviews.order_id, orderId)))
+      .limit(1);
+    return row ?? null;
   }
 
   /**

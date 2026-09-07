@@ -28,7 +28,11 @@ beforeAll(async () => {
   businessId = biz.id;
   const loc = await seedLocation(ctx.db, businessId);
   offerId = (await seedOffer(ctx.db, businessId, loc.id)).id;
-  orderId = (await seedOrder(ctx.db, userId, offerId, businessId)).id;
+  orderId = (
+    await seedOrder(ctx.db, userId, offerId, businessId, {
+      status: 'completed',
+    })
+  ).id;
 });
 
 afterAll(async () => {
@@ -60,6 +64,29 @@ describe('ReviewsService (DB real)', () => {
     await expect(
       service.create(authUser(stranger), { order_id: orderId }),
     ).rejects.toThrow();
+  });
+
+  test('create en pedido no completado → BadRequest; duplicada → existente', async () => {
+    const pendingId = (
+      await seedOrder(ctx.db, userId, offerId, businessId, {
+        status: 'pending',
+      })
+    ).id;
+    await expect(
+      service.create(authUser(userId), { order_id: pendingId }),
+    ).rejects.toThrow(/completados/);
+
+    const first = await service.create(authUser(userId), {
+      order_id: orderId,
+      business_rating: 5,
+    });
+    const second = await service.create(authUser(userId), {
+      order_id: orderId,
+      business_rating: 1,
+      comment: 'intento duplicado',
+    });
+    expect(second.id).toBe(first.id);
+    expect(second.business_rating).toBe(5);
   });
 
   test('recalculateRatings no falla', async () => {

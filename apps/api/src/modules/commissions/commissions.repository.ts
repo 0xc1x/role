@@ -12,6 +12,7 @@ import {
 } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import { businesses } from '../../database/schema/businesses';
 import { payouts } from '../../database/schema/payouts';
 
@@ -78,7 +79,7 @@ export class CommissionsRepository {
     const offset = (filter.page - 1) * filter.limit;
     const filters: SQL[] = [];
     if (filter.search) {
-      filters.push(ilike(businesses.name, `%${filter.search}%`));
+      filters.push(ilike(businesses.name, `%${escapeLike(filter.search)}%`));
     }
     const where = filters.length ? and(...filters) : undefined;
 

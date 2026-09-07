@@ -21,21 +21,25 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { IsOptional } from 'class-validator';
+import {
+  UploadImageBodySchema,
+  type UploadImageBodyDto,
+} from '@0xc1x/role-commons';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { UploadService } from './upload.service';
 
 const FIVE_MB = 5 * 1024 * 1024;
 
+/** Solo documentación Swagger del multipart (la validación real es Zod). */
 class UploadImageBody {
   @ApiProperty({
     type: 'string',
     format: 'binary',
     description: 'Archivo de imagen (jpeg, png, webp)',
   })
-  file: any;
+  file: unknown;
 
-  @IsOptional()
   @ApiPropertyOptional({
     description:
       'Nombre del bucket en Supabase (opcional, por defecto el del .env)',
@@ -43,7 +47,6 @@ class UploadImageBody {
   })
   bucket?: string;
 
-  @IsOptional()
   @ApiPropertyOptional({
     description:
       'Carpeta dentro del bucket (opcional, por defecto "categories")',
@@ -112,7 +115,8 @@ export class UploadController {
       }),
     )
     file: Express.Multer.File,
-    @Body() body: UploadImageBody,
+    @Body(new ZodValidationPipe(UploadImageBodySchema))
+    body: UploadImageBodyDto,
   ): Promise<{ url: string }> {
     const result = await this.uploadService.uploadImage(file, {
       bucket: body.bucket,
