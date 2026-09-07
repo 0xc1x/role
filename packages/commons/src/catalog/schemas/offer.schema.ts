@@ -1,11 +1,11 @@
 import { z } from 'zod';
+import { PaginatedDataSchema } from '../../_common/schemas/api.schema';
 import {
   NonNegativeIntSchema,
   PositiveNumberSchema,
   TimestamptzSchema,
   UuidSchema,
 } from '../../_common/schemas/common';
-import { PaginatedDataSchema } from '../../_common/schemas/api.schema';
 
 export const OfferSchema = z.object({
   id: UuidSchema,

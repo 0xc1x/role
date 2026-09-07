@@ -11,7 +11,7 @@ export * from './commissions';
 export * from './tips';
 export * from './slides';
 export * from './config';
-export * from './stats'
-export * from './email'
-export * from './contact'
-export * from './push'
+export * from './stats';
+export * from './email';
+export * from './contact';
+export * from './push';

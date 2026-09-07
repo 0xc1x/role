@@ -8,7 +8,7 @@ import { AppRoleSchema, TimestamptzSchema, UuidSchema } from '../../_common/sche
 
 export const ProfileSchema = z.object({
   id: UuidSchema,
-  email: z.string().email(),
+  email: z.email(),
   full_name: z.string().nullable(),
   avatar_url: z.string().nullable(),
   phone: z.string().nullable(),
@@ -20,7 +20,7 @@ export const ProfileSchema = z.object({
 
 export const CreateProfileSchema = z.object({
   id: UuidSchema,
-  email: z.string().email(),
+  email: z.email(),
   full_name: z.string().nullable().optional(),
   avatar_url: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
@@ -30,7 +30,7 @@ export const CreateProfileSchema = z.object({
 
 export const UpdateProfileSchema = z
   .object({
-    email: z.string().email(),
+    email: z.email(),
     full_name: z.string().nullable(),
     avatar_url: z.string().nullable(),
     phone: z.string().nullable(),

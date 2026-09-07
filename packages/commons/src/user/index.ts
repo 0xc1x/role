@@ -12,6 +12,8 @@ export * from './entities/profile';
 export * from './entities/saved-address';
 export * from './entities/user-consent';
 export * from './entities/user-preferences';
+export * from './enums/consent-type';
+export * from './enums/theme-mode';
 export * from './schemas/consumer-notification-preferences.schema';
 export * from './schemas/device-token.schema';
 export * from './schemas/favorite.schema';

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ORDER_STATUSES } from '../enums/order-status';
+import { PaginationQuerySchema } from '../../_common/schemas/api.schema';
 import { UuidSchema } from '../../_common/schemas/common';
 
 export const CreateOrderRequestSchema = z.object({
@@ -17,16 +18,12 @@ export const ValidatePickupCodeSchema = z.object({
   pickup_code: z.string().min(1),
 });
 
-export const ListOrdersQuerySchema = z.object({
+export const ListOrdersQuerySchema = PaginationQuerySchema.extend({
   status: z.enum(ORDER_STATUSES).optional(),
-  page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
 /** Business portal: list orders for one of the caller's businesses. */
-export const ListBusinessOrdersQuerySchema = z.object({
+export const ListBusinessOrdersQuerySchema = PaginationQuerySchema.extend({
   business_id: UuidSchema.optional(),
   status: z.enum(ORDER_STATUSES).optional(),
-  page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });

@@ -3,10 +3,10 @@ import type { PaginatedData } from '../../_common/dtos/api.dto';
 import type {
   CouponSchema,
   CouponListItemSchema,
+  CouponListResponseSchema,
   CreateCouponSchema,
   UpdateCouponSchema,
   ListCouponsQuerySchema,
-  CouponListResponseSchema,
 } from '../schemas/coupon.schema';
 
 /** Wire DTO for a coupon resource (matches {@link CouponSchema}). */

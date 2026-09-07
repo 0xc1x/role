@@ -59,9 +59,3 @@ export type EmailTemplatePaginatedData = PaginatedData<EmailTemplateDto>;
 export type SegmentPaginatedData = PaginatedData<SegmentDto>;
 export type CampaignPaginatedData = PaginatedData<CampaignDto>;
 export type EmailSendPaginatedData = PaginatedData<EmailSendDto>;
-export type {
-  CampaignListResponseSchema,
-  EmailComponentListResponseSchema,
-  EmailTemplateListResponseSchema,
-  SegmentListResponseSchema,
-};

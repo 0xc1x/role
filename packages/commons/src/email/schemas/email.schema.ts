@@ -195,7 +195,7 @@ export const UpdateCampaignSchema = CampaignSchema.partial().refine(
 
 /** Envío de prueba: emails fijos, mismo pipeline de render. */
 export const TestCampaignSchema = z.object({
-  emails: z.array(z.string().email()).min(1).max(10),
+  emails: z.array(z.email()).min(1).max(10),
   overrides: z
     .object({
       subject: z.string().max(200).optional(),
@@ -213,7 +213,7 @@ export const EmailSendDtoSchema = z.object({
   source_id: UuidSchema.nullable(),
   template_id: UuidSchema,
   user_id: UuidSchema.nullable(),
-  email: z.string().email(),
+  email: z.email(),
   variables_used: z.record(z.string(), z.unknown()).nullable().optional(),
   resend_id: z.string().nullable(),
   status: z.enum(EMAIL_SEND_STATUSES),

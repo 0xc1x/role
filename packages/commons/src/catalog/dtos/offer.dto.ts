@@ -2,13 +2,13 @@ import type { z } from 'zod';
 import type { PaginatedData } from '../../_common/dtos/api.dto';
 import type { ListOffersQuerySchema } from '../schemas/offer-query.schema';
 import type {
-  ViewOfferSchema,
   CreateOfferSchema,
+  OfferListResponseSchema,
   OfferSchema,
   OfferWithBusinessSchema,
-  UpdateOfferSchema,
   PatchOfferSchema,
-  OfferListResponseSchema,
+  UpdateOfferSchema,
+  ViewOfferSchema,
 } from '../schemas/offer.schema';
 
 export type OfferDto = z.infer<typeof OfferSchema>;

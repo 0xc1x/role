@@ -54,3 +54,4 @@ export const ListTipsQuerySchema = PaginationQuerySchema.extend({
 
 /** Canonical list response: `{ data: Tip[], meta: PaginationMeta }`. */
 export const TipListResponseSchema = PaginatedDataSchema(TipSchema);
+

@@ -30,20 +30,6 @@ export const PaginationMetaSchema = z.object({
   total_pages: z.number().int().nonnegative(),
 });
 
-export const ApiErrorSchema = z.object({
-  code: z.string().min(1),
-  message: z.string().min(1),
-  details: z.record(z.string(), z.unknown()).nullable(),
-});
-
-/** Envelope for a single resource (optional; Nest often returns `data` bare). */
-export const ApiResponseSchema = <T extends z.ZodTypeAny>(data: T) =>
-  z.object({
-    success: z.boolean(),
-    data,
-    error: ApiErrorSchema.nullable(),
-  });
-
 /**
  * Canonical paginated list body used by Role API list endpoints:
  * `{ data: T[], meta: PaginationMeta }`
@@ -52,15 +38,4 @@ export const PaginatedDataSchema = <T extends z.ZodTypeAny>(item: T) =>
   z.object({
     data: z.array(item),
     meta: PaginationMetaSchema,
-  });
-
-/**
- * Alternate envelope with `success` + `pagination` (for clients that prefer it).
- * Prefer {@link PaginatedDataSchema} for Nest HTTP APIs.
- */
-export const PaginatedResponseSchema = <T extends z.ZodTypeAny>(item: T) =>
-  z.object({
-    success: z.literal(true),
-    data: z.array(item),
-    pagination: PaginationMetaSchema,
   });

@@ -19,7 +19,7 @@ const RESERVE_OFFER_ERRORS = RESERVE_OFFER_ERROR_CODES;
 
 export const ReserveOfferResultSchema = z.object({
   success: z.literal(true),
-  order_id: z.string().uuid(),
+  order_id: z.uuid(),
   order_number: z.string(),
   pickup_code: z.string(),
   price: z.number(),

@@ -11,7 +11,7 @@ import { PAYMENT_INTENT_STATUSES } from '../../payment/enums/payment-intent-stat
 import { PAYOUT_STATUSES } from '../../payment/enums/payout-status';
 
 /** UUID string (matches Postgres `uuid`) */
-export const UuidSchema = z.string().uuid();
+export const UuidSchema = z.uuid();
 
 /** ISO-8601 timestamptz as returned by Supabase/PostgREST */
 export const TimestamptzSchema = z.string().min(1);

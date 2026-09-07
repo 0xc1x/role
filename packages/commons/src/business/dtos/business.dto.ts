@@ -4,10 +4,7 @@ import type {
   CreateBusinessSchema,
   UpdateBusinessSchema,
 } from '../schemas/business.schema';
-import type {
-  OnboardingBusinessRequestSchema,
-  OnboardingBusinessResponseSchema,
-} from '../schemas/onboarding.schema';
+import type { OnboardingBusinessRequestSchema, OnboardingBusinessResponseSchema } from '../schemas/onboarding.schema';
 
 export type BusinessDto = z.infer<typeof BusinessSchema>;
 export type CreateBusinessDto = z.infer<typeof CreateBusinessSchema>;

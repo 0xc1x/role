@@ -8,5 +8,5 @@ import type {
 
 export type ReviewDto = z.infer<typeof ReviewSchema>;
 export type CreateReviewDto = z.infer<typeof CreateReviewSchema>;
-export type CreateReviewRequestDto = z.infer<typeof CreateReviewRequestSchema>;
 export type UpdateReviewDto = z.infer<typeof UpdateReviewSchema>;
+export type CreateReviewRequestDto = z.infer<typeof CreateReviewRequestSchema>;
