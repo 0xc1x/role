@@ -7,6 +7,7 @@ import {
 	DrawerBody,
 	DrawerClose,
 	DrawerContent,
+	DrawerDescription,
 	DrawerFooter,
 	DrawerHeader,
 	DrawerTitle,
@@ -22,7 +23,9 @@ import { Spinner } from "@/components/ui/spinner";
  */
 export function FormDrawer<TValues, TPayload, Row>(props: {
 	title: string;
+	description?: string;
 	createLabel: string;
+	submitLabel?: string;
 	row?: Row;
 	defaults: (row?: Row) => TValues;
 	fields: (ctx: {
@@ -56,6 +59,7 @@ export function FormDrawer<TValues, TPayload, Row>(props: {
 				setOpen(o);
 				if (!o) setResetKey((k) => k + 1);
 			}}
+			swipeDirection="right"
 		>
 			<DrawerTrigger
 				render={
@@ -71,13 +75,17 @@ export function FormDrawer<TValues, TPayload, Row>(props: {
 			<DrawerContent key={resetKey}>
 				<DrawerHeader>
 					<DrawerTitle>{props.title}</DrawerTitle>
+					{props.description && (
+						<DrawerDescription>{props.description}</DrawerDescription>
+					)}
 				</DrawerHeader>
 				<DrawerBody>
 					{open ? props.fields({ values, setValues }) : null}
 				</DrawerBody>
 				<DrawerFooter>
 					<Button type="button" onClick={submit} disabled={props.isPending}>
-						{props.isPending ? <Spinner /> : null} Guardar
+						{props.isPending ? <Spinner /> : null}{" "}
+						{props.submitLabel ?? "Guardar"}
 					</Button>
 					<DrawerClose>
 						<Button variant="outline" className="w-full">

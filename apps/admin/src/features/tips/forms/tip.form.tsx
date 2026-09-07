@@ -10,10 +10,7 @@ import { useCreateTip, useUpdateTip } from "../queries/tips.queries";
 // active siempre boolean en el formulario (sin default de creación).
 const tipFormSchema = CreateTipSchema.extend({ active: z.boolean() });
 
-type TipFormValues = {
-	content: string;
-	active: boolean;
-};
+type TipFormValues = z.infer<typeof tipFormSchema>;
 
 interface TipFormProps {
 	formId: string;

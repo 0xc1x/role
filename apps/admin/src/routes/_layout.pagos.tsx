@@ -1,17 +1,17 @@
+import { ListPayoutsQuerySchema } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+	payoutsColumns,
 	payoutsListOptions,
 	useGeneratePayouts,
 	usePayoutsList,
-} from "@/features/payouts/queries/payouts.queries";
-import { payoutsColumns } from "@/features/payouts/tables/payouts.columns";
+} from "@/features/payouts";
 
-const pagosSearchSchema = z.object({
-	page: z.coerce.number().int().positive().optional().default(1),
+const pagosSearchSchema = ListPayoutsQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 });
 

@@ -3,7 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import * as z from "zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -24,10 +24,7 @@ import { clearAuth, useLogin } from "@/features/auth";
 // Límites del contrato (`LoginRequestSchema`); mensajes propios para la UX.
 const loginSchema = LoginRequestSchema.extend({
 	email: z.email("Email inválido"),
-	password: z
-		.string()
-		.min(1, "La contraseña es obligatoria")
-		.min(6, "La contraseña debe tener al menos 6 caracteres"),
+	password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
 export function LoginForm() {

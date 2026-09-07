@@ -2,6 +2,7 @@ import {
 	EMAIL_SEND_STATUSES,
 	type EmailSendDto,
 	type EmailSendStatus,
+	UpdateEmailSendSchema,
 } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import { Fragment } from "react";
@@ -24,7 +25,6 @@ const schema = z.object({
 	// El form trabaja con ""; el payload envía null si queda vacío.
 	error_message: z.string(),
 });
-
 /** Contexto de solo lectura: el API ignora estos campos en el PATCH. */
 function ReadOnlyInfo({ send }: { send: EmailSendDto }) {
 	const rows: Array<[label: string, value: string]> = [
@@ -66,13 +66,14 @@ export function EmailSendForm({
 		},
 		validators: { onSubmit: schema },
 		onSubmit: async ({ value }) => {
+			// Valida contra el contrato antes de enviar.
+			const body = UpdateEmailSendSchema.parse({
+				status: value.status,
+				error_message: value.error_message === "" ? null : value.error_message,
+			});
 			await updateMutation.mutateAsync({
 				id: send.id,
-				body: {
-					status: value.status,
-					error_message:
-						value.error_message === "" ? null : value.error_message,
-				},
+				body,
 			});
 			onSuccess?.();
 		},

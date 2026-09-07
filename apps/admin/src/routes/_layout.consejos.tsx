@@ -1,4 +1,4 @@
-import { BooleanQuerySchema } from "@0xc1x/role-commons";
+import { ListTipsQuerySchema } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -18,11 +18,8 @@ import {
 	useTipsList,
 } from "@/features/tips";
 
-const tipsSearchSchema = z.object({
-	page: z.coerce.number().int().positive().optional().default(1),
+const tipsSearchSchema = ListTipsQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
-	search: z.string().optional(),
-	active: BooleanQuerySchema,
 });
 
 export const Route = createFileRoute("/_layout/consejos")({

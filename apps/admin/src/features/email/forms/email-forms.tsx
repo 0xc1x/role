@@ -7,6 +7,7 @@ import {
 	SEGMENT_TYPES,
 	type SegmentDto,
 	SegmentFiltersSchema,
+	type SegmentType,
 } from "@0xc1x/role-commons";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -166,7 +167,7 @@ export function templateDefaults(t?: EmailTemplateDto): TemplateFormValues {
 export interface SegmentFormValues {
 	name: string;
 	description: string;
-	type: "static" | "dynamic";
+	type: SegmentType;
 	filtersJson: string;
 	category: MarketingCategory;
 	user_ids: string[];

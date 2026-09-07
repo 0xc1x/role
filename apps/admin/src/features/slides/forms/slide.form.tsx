@@ -4,7 +4,11 @@ import type {
 	SlideType,
 	UpdateSlideDto,
 } from "@0xc1x/role-commons";
-import { CreateSlideFormSchema, RedirectUrlSchema } from "@0xc1x/role-commons";
+import {
+	CreateSlideFormSchema,
+	HexColorSchema,
+	RedirectUrlSchema,
+} from "@0xc1x/role-commons";
 import { useForm, useStore } from "@tanstack/react-form";
 import { z } from "zod";
 import { ImageField } from "@/components/media/image-field";
@@ -36,8 +40,8 @@ const SLIDE_TYPE_OPTIONS = [
 	{ value: "coupon", label: "Coupon" },
 ] as const;
 
-/** Coincide con HexColorSchema de role-commons (#RGB / #RRGGBB). */
-const HEX_REGEX = /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/;
+/** Reusa HexColorSchema de commons (#RGB / #RRGGBB); "" = sin valor. */
+const emptyHexToNull = HexColorSchema.nullable();
 
 function emptyToNull(value: string | null | undefined): string | null {
 	if (value == null || value === "") return null;
@@ -75,14 +79,14 @@ const slideFormSchema = CreateSlideFormSchema.omit({
 			),
 		text_color: z
 			.string()
-			.refine((v) => v === "" || HEX_REGEX.test(v), {
+			.refine((v) => v === "" || emptyHexToNull.safeParse(v).success, {
 				message:
 					"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
 			})
 			.transform((v) => (v === "" ? null : v)),
 		button_color: z
 			.string()
-			.refine((v) => v === "" || HEX_REGEX.test(v), {
+			.refine((v) => v === "" || emptyHexToNull.safeParse(v).success, {
 				message:
 					"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
 			})
@@ -428,7 +432,7 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 				{(field) => {
 					const rawValue = field.state.value ?? "";
 					const hasFormatError =
-						rawValue.length > 0 && !HEX_REGEX.test(rawValue);
+						rawValue.length > 0 && !emptyHexToNull.safeParse(rawValue).success;
 					const formErrors = field.state.meta.errors ?? [];
 					const isInvalid =
 						(field.state.meta.isTouched && formErrors.length > 0) ||
@@ -476,7 +480,7 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 				{(field) => {
 					const rawValue = field.state.value ?? "";
 					const hasFormatError =
-						rawValue.length > 0 && !HEX_REGEX.test(rawValue);
+						rawValue.length > 0 && !emptyHexToNull.safeParse(rawValue).success;
 					const formErrors = field.state.meta.errors ?? [];
 					const isInvalid =
 						(field.state.meta.isTouched && formErrors.length > 0) ||

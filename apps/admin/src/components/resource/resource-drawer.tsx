@@ -50,7 +50,7 @@ export function ResourceCreateDrawer({
 			}}
 			swipeDirection="right"
 		>
-			<DrawerTrigger render={<Button variant="ghost" className="shadow-sm" />}>
+			<DrawerTrigger render={<Button />}>
 				<Plus />
 				{triggerLabel}
 			</DrawerTrigger>

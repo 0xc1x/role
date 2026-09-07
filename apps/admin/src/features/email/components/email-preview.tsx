@@ -1,4 +1,4 @@
-/** Preview renderizado de un email (lienzo blanco, altura única). */
+/** Preview renderizado de un email (lienzo blanco intencional: los mails se diseñan sobre blanco). */
 export function EmailPreview({
 	html,
 	title = "preview",

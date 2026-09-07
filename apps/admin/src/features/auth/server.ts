@@ -1,4 +1,5 @@
 import type { AuthUser } from "@0xc1x/role-commons";
+import { AuthResponseSchema } from "@0xc1x/role-commons";
 import { createServerFn } from "@tanstack/react-start";
 import {
 	deleteCookie,
@@ -30,9 +31,7 @@ export interface AdminClientSession {
 	user: AuthUser;
 }
 
-interface ApiSessionResponse extends AdminClientSession {
-	refresh_token: string;
-}
+const ApiSessionSchema = AuthResponseSchema;
 
 async function apiPost(
 	path: string,
@@ -59,8 +58,14 @@ async function apiPost(
 	return { ok: true, json };
 }
 
-function persistRefreshCookie(session: ApiSessionResponse) {
+function persistRefreshCookie(session: { refresh_token: string }) {
 	setCookie(REFRESH_COOKIE, session.refresh_token, COOKIE_OPTIONS);
+}
+
+function parseApiSession(json: unknown) {
+	const parsed = ApiSessionSchema.safeParse(json);
+	if (!parsed.success) throw new Error("Respuesta de autenticación inválida");
+	return parsed.data;
 }
 
 export const loginFn = createServerFn({ method: "POST" })
@@ -68,7 +73,7 @@ export const loginFn = createServerFn({ method: "POST" })
 	.handler(async ({ data }): Promise<AdminClientSession> => {
 		const res = await apiPost("/auth/login", data);
 		if (!res.ok) throw new Error(res.message);
-		const session = res.json as ApiSessionResponse;
+		const session = parseApiSession(res.json);
 		persistRefreshCookie(session);
 		return {
 			access_token: session.access_token,
@@ -91,7 +96,7 @@ export const refreshFn = createServerFn({ method: "POST" }).handler(
 			deleteCookie(REFRESH_COOKIE, { path: COOKIE_OPTIONS.path });
 			return null;
 		}
-		const session = res.json as ApiSessionResponse;
+		const session = parseApiSession(res.json);
 		persistRefreshCookie(session);
 		return {
 			access_token: session.access_token,

@@ -18,7 +18,7 @@ export function StatusSwitch(props: {
 				onCheckedChange={props.onCheckedChange}
 				disabled={props.disabled}
 				aria-label={props.checked ? activeLabel : inactiveLabel}
-				className="data-checked:border-success data-checked:bg-success data-unchecked:border-destructive data-unchecked:bg-destructive"
+				tone="status"
 			/>
 			<Badge variant={props.checked ? "success" : "destructive"}>
 				{props.checked ? activeLabel : inactiveLabel}

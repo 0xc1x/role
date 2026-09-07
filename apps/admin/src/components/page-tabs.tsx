@@ -35,18 +35,25 @@ export function PageTabs<T extends string>(props: {
 	};
 
 	return (
-		<div role="tablist" aria-label="Secciones" className="flex gap-2">
+		<div
+			role="tablist"
+			aria-label="Secciones"
+			aria-orientation="horizontal"
+			className="flex gap-2"
+		>
 			{props.tabs.map((t) => {
 				const selected = t === props.value;
 				return (
 					<Button
 						key={t}
+						id={`tab-${t}`}
 						ref={(el) => {
 							if (el) refs.current.set(t, el);
 							else refs.current.delete(t);
 						}}
 						role="tab"
 						aria-selected={selected}
+						aria-controls={`panel-${t}`}
 						tabIndex={selected ? 0 : -1}
 						variant={selected ? "default" : "ghost"}
 						size="sm"

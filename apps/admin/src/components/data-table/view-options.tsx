@@ -31,7 +31,7 @@ export function DataTableViewOptions<TData>({
 				<Settings2 />
 				Visualizar columnas
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="w-[150px]">
+			<DropdownMenuContent align="end" className="w-38">
 				<DropdownMenuGroup>
 					<DropdownMenuLabel>Alternar columnas</DropdownMenuLabel>
 					<DropdownMenuSeparator />

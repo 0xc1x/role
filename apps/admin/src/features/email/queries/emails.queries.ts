@@ -7,14 +7,11 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { emailApi } from "../api/emails.api";
+import { emailKeys } from "./email.keys";
+
+export { emailKeys };
 
 type ListQ = Parameters<typeof emailApi.listComponents>[0];
-
-export const emailKeys = {
-	all: ["email"] as const,
-	list: (resource: string, q?: Record<string, unknown>) =>
-		[...emailKeys.all, resource, q] as const,
-};
 
 // ─── listas ────────────────────────────────────────────────────────────
 export const emailListOptions = {

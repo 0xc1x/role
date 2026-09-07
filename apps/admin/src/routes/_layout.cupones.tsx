@@ -1,4 +1,4 @@
-import { BooleanQuerySchema } from "@0xc1x/role-commons";
+import { ListCouponsQuerySchema } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -25,13 +25,8 @@ import {
 	useCouponsList,
 } from "@/features/coupons";
 
-const couponsSearchSchema = z.object({
-	page: z.coerce.number().int().positive().optional().default(1),
+const couponsSearchSchema = ListCouponsQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
-	search: z.string().optional(),
-	is_active: BooleanQuerySchema,
-	// true → solo globales; false → solo de negocio; undefined → todos.
-	global: BooleanQuerySchema,
 });
 
 export const Route = createFileRoute("/_layout/cupones")({

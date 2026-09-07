@@ -34,13 +34,15 @@ export function DataTablePagination({
 	return (
 		<div className="flex items-center justify-between pt-2">
 			<div className="flex items-center gap-2">
-				<p className="text-sm font-medium">Mostrar</p>
+				<label htmlFor="datatable-limit" className="text-sm font-medium">
+					Mostrar
+				</label>
 				<Select
 					value={`${limit}`}
 					onValueChange={(value) => onLimitChange?.(Number(value))}
 				>
-					<SelectTrigger className="h-8 w-[70px]">
-						<SelectValue placeholder={limit} />
+					<SelectTrigger id="datatable-limit" className="h-8 w-20">
+						<SelectValue placeholder={`${limit}`} />
 					</SelectTrigger>
 					<SelectContent side="top">
 						{[10, 20, 50, 100].map((n) => (
@@ -77,7 +79,7 @@ export function DataTablePagination({
 					<span className="sr-only">Ir a la página anterior</span>
 					<ChevronLeft />
 				</Button>
-				<div className="flex w-[100px] items-center justify-center text-sm font-medium">
+				<div className="flex w-25 items-center justify-center text-sm font-medium">
 					Página {page} de {totalPages}
 				</div>
 				<Button

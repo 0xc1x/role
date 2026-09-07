@@ -1,4 +1,4 @@
-import { BooleanQuerySchema } from "@0xc1x/role-commons";
+import { ListCategoriesQuerySchema } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -18,11 +18,8 @@ import {
 	useCategoriesList,
 } from "@/features/categories";
 
-const categoriesSearchSchema = z.object({
-	page: z.coerce.number().int().positive().optional().default(1),
+const categoriesSearchSchema = ListCategoriesQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
-	search: z.string().optional(),
-	active: BooleanQuerySchema,
 });
 
 export const Route = createFileRoute("/_layout/categorias")({

@@ -96,7 +96,9 @@ export function pushTemplateDefaults(
 		title: t?.title ?? "",
 		body: t?.body ?? "",
 		link:
-			((t?.data as Record<string, unknown> | undefined)?.link as string) ?? "",
+			typeof t?.data === "object" && t.data !== null
+				? String((t.data as Record<string, unknown>).link ?? "")
+				: "",
 		is_active: t?.is_active ?? true,
 	};
 }

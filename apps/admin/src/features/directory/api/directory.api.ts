@@ -1,14 +1,15 @@
 import type {
 	BusinessDto,
+	ListProfilesQuery,
 	PaginatedData,
 	ProfileDto,
 } from "@0xc1x/role-commons";
 import { api } from "@/lib/api/client";
 import { toSearchParams } from "@/lib/api/http";
 
-export type DirectoryProfilesQuery = {
-	limit?: number;
-	search?: string;
+export type DirectoryProfilesQuery = Partial<
+	Omit<ListProfilesQuery, "subscribed_to">
+> & {
 	subscribed_to?: string;
 	has_active_push_token?: boolean;
 };

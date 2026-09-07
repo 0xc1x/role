@@ -56,7 +56,12 @@ export function DataTable<TData, TValue>({
 			<div className="flex items-center justify-end py-4">
 				<DataTableViewOptions table={table} />
 			</div>
-			<div className="h-[65vh] w-full max-w-full overflow-x-auto overflow-y-auto rounded-md border">
+			<section
+				aria-label="Tabla de resultados"
+				// biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be keyboard-focusable
+				tabIndex={0}
+				className="h-[65vh] w-full max-w-full overflow-x-auto overflow-y-auto rounded-md border"
+			>
 				<Table>
 					<TableHeader>
 						{table.getHeaderGroups().map((headerGroup) => (
@@ -105,7 +110,7 @@ export function DataTable<TData, TValue>({
 						)}
 					</TableBody>
 				</Table>
-			</div>
+			</section>
 			<DataTablePagination
 				meta={meta}
 				onPageChange={onPageChange}

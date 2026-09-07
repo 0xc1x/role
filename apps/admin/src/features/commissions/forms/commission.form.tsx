@@ -1,4 +1,5 @@
 import type { CommissionDto } from "@0xc1x/role-commons";
+import { UpdateCommissionSchema } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -37,9 +38,13 @@ export function CommissionForm({
 		} as CommissionFormValues,
 		validators: { onSubmit: commissionFormSchema },
 		onSubmit: async ({ value }) => {
+			// El form trabaja en % (0-100); el contrato espera fracción (0-1).
+			const body = UpdateCommissionSchema.parse({
+				commission_rate: Number(value.percent) / 100,
+			});
 			await updateMutation.mutateAsync({
 				id: commission.id,
-				body: { commission_rate: Number(value.percent) / 100 },
+				body,
 			});
 			onSuccess?.();
 		},
