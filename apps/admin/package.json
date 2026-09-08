@@ -8,6 +8,8 @@
   },
   "scripts": {
     "dev": "vite dev --port 3000",
+    "dev:fresh": "rm -rf node_modules/.vite && vite dev --port 3000",
+    "clean": "rm -rf node_modules/.vite dist .output",
     "generate-routes": "tsr generate",
     "build": "vite build",
     "build:vercel": "NITRO_PRESET=vercel vite build",
