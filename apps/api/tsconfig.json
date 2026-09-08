@@ -28,10 +28,14 @@
     "removeComments": true,
     "sourceMap": true
   },
+  "include": ["src/**/*"],
   "exclude": [
     "node_modules",
     "dist",
+    "test",
+    "scripts",
     "**/*.spec.ts",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "drizzle.config.ts"
   ]
 }
