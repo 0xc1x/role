@@ -1,9 +1,7 @@
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-
-import { Heart, MapPin } from "lucide-react";
-
-import { BagIcon } from "@/components/icons";
+import { Link } from "@tanstack/react-router";
+import { HeroBackground } from "@/components/hero-background";
+import { BagIcon, HeartIcon, MapPinIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,13 +46,8 @@ export function Hero() {
 			data-hero
 			className="relative min-h-[100vh] flex items-center overflow-hidden bg-role-dark-bg text-white"
 		>
-			{/* Background layers — atmospheric, warm-tinted */}
-			<div aria-hidden className="pointer-events-none absolute inset-0">
-				<div className="absolute inset-0 bg-gradient-to-br from-role-dark-bg via-role-dark-bg/92 to-role-primary-deep/25" />
-				<div className="absolute -top-40 -right-32 h-96 w-96 animate-drift rounded-full bg-role-primary/20 blur-3xl" />
-				<div className="absolute -bottom-48 -left-24 h-[30rem] w-[30rem] animate-drift-slow rounded-full bg-role-primary-deep/35 blur-3xl" />
-				<div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_38%,_rgb(18_18_18)_100%)]" />
-			</div>
+			{/* Background layers — canonical HeroBackground */}
+			<HeroBackground />
 
 			{/* Floating offer — mirrors mobile OfferCard (OfferCard.tsx:90) */}
 			<div
@@ -64,12 +57,16 @@ export function Hero() {
 			>
 				<div className="relative w-full animate-float-y">
 					<div className="absolute inset-0 translate-y-3 rounded-xl bg-role-primary/20 blur-2xl" />
-					<Card className="relative overflow-hidden rounded-xl border border-role-border/50 bg-white p-0 shadow-[0_6px_16px_rgba(18,18,18,0.12)] gap-0">
+					<Card className="relative overflow-hidden rounded-xl border border-role-border/50 bg-white p-0 shadow-raised gap-0">
 						<div className="relative h-40 w-full bg-role-muted">
 							{offer?.image ? (
 								<img
 									src={offer.image}
 									alt={offer.title}
+									loading="lazy"
+									decoding="async"
+									width={320}
+									height={160}
 									className="h-full w-full object-cover"
 								/>
 							) : (
@@ -78,17 +75,23 @@ export function Hero() {
 								</div>
 							)}
 							{discountPct > 0 ? (
-								<Badge className="absolute right-2 top-2 rounded-full bg-role-primary px-2.5 py-1 text-xs font-bold text-white hover:bg-role-primary">
+								<Badge
+									variant="brand"
+									className="absolute right-2 top-2 rounded-full px-2.5 py-1 text-xs font-bold"
+								>
 									-{discountPct}%
 								</Badge>
 							) : null}
 							{offer && offer.stock > 0 && offer.stock <= 3 ? (
-								<Badge className="absolute bottom-2 left-2 rounded-full bg-role-primary-deep px-2.5 py-1 text-xs font-semibold text-white hover:bg-role-primary-deep">
+								<Badge
+									variant="brand-deep"
+									className="absolute bottom-2 left-2 rounded-full px-2.5 py-1 text-xs font-semibold"
+								>
 									¡Quedan {offer.stock}!
 								</Badge>
 							) : null}
 							<div className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 shadow-sm">
-								<Heart className="h-4 w-4 text-role-muted-foreground" />
+								<HeartIcon className="h-4 w-4 text-role-muted-foreground" />
 							</div>
 						</div>
 						<CardContent className="p-4">
@@ -98,7 +101,7 @@ export function Hero() {
 										{offer?.title ?? "Bolsa sorpresa"}
 									</p>
 									<div className="mt-1.5 flex items-center gap-1">
-										<MapPin className="h-3 w-3 shrink-0 text-role-muted-foreground" />
+										<MapPinIcon className="h-3 w-3 shrink-0 text-role-muted-foreground" />
 										<span className="truncate text-xs text-role-muted-foreground">
 											{offer?.business.name ?? "Comercios locales"}
 											{offer?.location.zone ? ` · ${offer.location.zone}` : ""}
@@ -143,7 +146,7 @@ export function Hero() {
 					</h1>
 
 					{/* Subheadline */}
-					<p className="max-w-lg text-lg leading-relaxed text-white/80 reveal reveal-delay-2">
+					<p className="max-w-lg text-lg leading-relaxed text-white/85 reveal reveal-delay-2">
 						Rolé conecta comercios locales con excedente de comida y personas
 						que quieren rescatar el excedente de restaurantes, panaderías y
 						mercados; fresco, cercano y a un tercio del precio. Recoges el mismo
@@ -153,16 +156,16 @@ export function Hero() {
 					{/* CTAs */}
 					<div className="flex flex-wrap items-center gap-4 reveal reveal-delay-3">
 						<Button
-							variant="ghost"
+							variant="brand"
 							render={<a href="role://" />}
 							className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow hover:bg-white hover:text-role-primary hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 						>
 							Consigue la app
 						</Button>
 						<Button
-							variant="ghost"
+							variant="brand-outline"
 							render={<Link to="/for-business" />}
-							className="rounded-full border border-white/25 bg-transparent px-7 py-3 font-semibold text-white hover:bg-white hover:text-role-primary active:scale-[0.98]"
+							className="rounded-full px-7 py-3 font-semibold"
 						>
 							Para negocios
 						</Button>
@@ -179,7 +182,7 @@ export function Hero() {
 									<dd className="font-heading text-2xl font-bold tabular-nums md:text-3xl">
 										{s.value}
 									</dd>
-									<p className="mt-1 text-sm text-white/55">{s.label}</p>
+									<dd className="mt-1 text-sm text-white/70">{s.label}</dd>
 								</div>
 								{idx < STATS.length - 1 ? (
 									<Separator
@@ -208,7 +211,7 @@ export function Hero() {
 					strokeWidth="1.5"
 					strokeLinecap="round"
 					strokeLinejoin="round"
-					className="text-white/40"
+					className="text-white/60"
 				>
 					<path d="M12 5v14M19 12l-7 7-7-7" />
 				</svg>

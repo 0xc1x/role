@@ -11,6 +11,7 @@ import {
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
+import { platformStatsQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
 import { usePlatformStats } from "@/lib/use-config";
 
@@ -21,6 +22,10 @@ export const Route = createFileRoute("/for-business")({
 			"Rolé para negocios",
 			"Recupera ingresos por tu comida excedente, atrae nuevos clientes y reduce tu desperdicio con Rolé.",
 		),
+	loader: ({ context }) =>
+		context.queryClient
+			.ensureQueryData(platformStatsQueryOptions)
+			.catch(() => undefined),
 	component: ForBusinessPage,
 });
 
@@ -122,7 +127,7 @@ function ForBusinessPage() {
 									Hablar con ventas
 								</a>
 							</div>
-							<p className="mt-5 text-sm text-white/55 reveal reveal-delay-4">
+							<p className="mt-5 text-sm text-white/70 reveal reveal-delay-4">
 								Un representante responde en menos de 24 horas.
 							</p>
 						</div>
@@ -134,7 +139,7 @@ function ForBusinessPage() {
 									<dd className="font-heading text-3xl font-bold tabular-nums text-role-primary md:text-4xl">
 										{s.value}
 									</dd>
-									<dt className="mt-1 text-sm text-white/55">{s.label}</dt>
+									<dt className="mt-1 text-sm text-white/70">{s.label}</dt>
 								</div>
 							))}
 						</dl>
@@ -193,7 +198,7 @@ function ForBusinessPage() {
 											aria-hidden="true"
 										/>
 									) : null}
-									<p className="font-display text-4xl font-medium text-forest/30">
+									<p className="font-display text-4xl font-medium text-forest/60">
 										{s.n}
 									</p>
 									<h3 className="mt-4 font-display text-xl font-medium tracking-tight">
@@ -246,7 +251,7 @@ function ForBusinessPage() {
 							</span>
 							<span>
 								<span className="block text-sm font-semibold">Carlos Ruiz</span>
-								<span className="block text-xs text-muted">
+								<span className="block text-xs text-sage">
 									Panadería La Espiga
 								</span>
 							</span>

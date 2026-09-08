@@ -7,11 +7,11 @@ import {
 	Outlet,
 	Scripts,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { CookieBanner } from "@/components/cookie-banner";
 import { createAppQueryClient } from "@/lib/query-client";
 import { absoluteUrl } from "@/lib/seo";
 import appCss from "../styles.css?url";
-import { CookieBanner } from "@/components/cookie-banner";
 
 export interface RouterContext {
 	queryClient: QC;
@@ -34,6 +34,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			meta: [
 				{ charSet: "utf-8" },
 				{ name: "viewport", content: "width=device-width, initial-scale=1" },
+				{ name: "theme-color", content: "#121212" },
+				{ property: "og:locale", content: "es_EC" },
 				{ title: "Rolé — Rescata comida deliciosa a precio increíble" },
 				{
 					name: "description",
@@ -76,7 +78,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 				},
 				{
 					rel: "stylesheet",
-					href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap",
+					href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap",
 				},
 				{ rel: "icon", type: "image/svg+xml", href: "/icon.svg" },
 			],
@@ -116,9 +118,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-	const queryClient = createAppQueryClient();
+	// Un solo QueryClient por montaje: el prefetch SSR del router se reutiliza.
+	const [queryClient] = useState(() => createAppQueryClient());
 
 	useEffect(() => {
+		document.documentElement.classList.add("js");
 		const observer = new IntersectionObserver(
 			(entries) => {
 				for (const entry of entries) {

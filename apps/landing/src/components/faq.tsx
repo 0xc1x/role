@@ -8,8 +8,8 @@ import {
 
 export const FAQ_ITEMS = [
 	{
-		q: "¿Füdi es lo mismo que Rolé?",
-		a: "No. Füdi es la compañía y la plataforma. Rolé es el primer producto: la app para usuarios y locales que rescatan excedente. Distro cubre distribución de corto radio y Lab, los modelos de demanda y merma.",
+		q: "¿Qué es Rolé?",
+		a: "Rolé es la app para rescatar excedente de comida: los comercios publican lo que les sobró del día y las personas lo reservan gratis y lo recogen pagando directo en el comercio.",
 	},
 	{
 		q: "¿Cuánto cuesta?",

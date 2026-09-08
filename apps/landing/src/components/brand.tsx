@@ -14,7 +14,7 @@ export function Wordmark({ className, ...props }: LogoProps) {
 			clipRule="evenodd"
 			strokeLinecap="round"
 			className={className}
-			aria-hidden
+			aria-hidden="true"
 			focusable={false}
 			{...props}
 		>
@@ -109,7 +109,7 @@ export function LogoMark({ className, ...props }: LogoProps) {
 			clipRule="evenodd"
 			strokeLinecap="round"
 			className={className}
-			aria-hidden
+			aria-hidden="true"
 			focusable={false}
 			{...props}
 		>

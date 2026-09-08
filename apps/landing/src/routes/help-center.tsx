@@ -123,7 +123,7 @@ function HelpCenterPage() {
 				>
 					<HeroBackground />
 					<div className="relative mx-auto max-w-4xl">
-						<Eyebrow> Ayuda</Eyebrow>
+						<Eyebrow>Ayuda</Eyebrow>
 						<h1 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 							Centro de ayuda
 						</h1>

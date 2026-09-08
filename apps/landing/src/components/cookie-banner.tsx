@@ -22,6 +22,15 @@ export function CookieBanner() {
 		}
 	}, []);
 
+	useEffect(() => {
+		if (!visible) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setVisible(false);
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [visible]);
+
 	function accept() {
 		try {
 			window.localStorage.setItem(STORAGE_KEY, "accepted");
@@ -42,6 +51,7 @@ export function CookieBanner() {
 
 	return (
 		<Card
+			role="region"
 			aria-label="Aviso de cookies"
 			className="fixed inset-x-0 bottom-0 z-[60] gap-0 rounded-none border-t border-role-border bg-white/95 p-0 shadow-card-hover backdrop-blur-xl md:bottom-6 md:left-auto md:right-6 md:w-[26rem] md:rounded-3xl md:border"
 		>

@@ -41,9 +41,9 @@ export function Footer() {
 
 	const SOCIAL = [
 		{ label: "Instagram", href: instagram },
-		{ label: "Twitter", href: twitter },
+		{ label: "X", href: twitter },
 		{ label: "LinkedIn", href: linkedin },
-	];
+	].filter((s) => s.href && s.href !== "#");
 
 	return (
 		<footer className="bg-ink pb-24 text-cream md:pb-0">
@@ -73,35 +73,35 @@ export function Footer() {
 						<p className="text-xs font-semibold uppercase tracking-[0.16em] text-cream/50">
 							Explorar
 						</p>
-							<ul className="mt-4 flex flex-col gap-2.5">
-								{EXPLORE.map((l) => (
-									<li key={l.href}>
-										<Link
-											to={l.href}
-											className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
-										>
-											{l.label}
-										</Link>
-									</li>
-								))}
-							</ul>
-						</div>
-						<div>
-							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-cream/50">
-								Legal
-							</p>
-							<ul className="mt-4 flex flex-col gap-2.5">
-								{LEGAL.map((l) => (
-									<li key={l.href}>
-										<Link
-											to={l.href}
-											className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
-										>
-											{l.label}
-										</Link>
-									</li>
-								))}
-							</ul>
+						<ul className="mt-4 flex flex-col gap-2.5">
+							{EXPLORE.map((l) => (
+								<li key={l.href}>
+									<Link
+										to={l.href}
+										className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
+									>
+										{l.label}
+									</Link>
+								</li>
+							))}
+						</ul>
+					</div>
+					<div>
+						<p className="text-xs font-semibold uppercase tracking-[0.16em] text-cream/50">
+							Legal
+						</p>
+						<ul className="mt-4 flex flex-col gap-2.5">
+							{LEGAL.map((l) => (
+								<li key={l.href}>
+									<Link
+										to={l.href}
+										className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
+									>
+										{l.label}
+									</Link>
+								</li>
+							))}
+						</ul>
 						<p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-cream/50">
 							Contacto
 						</p>
@@ -123,7 +123,7 @@ export function Footer() {
 				</div>
 				<div className="mt-16 flex flex-col gap-3 border-t border-cream/10 pt-6 text-xs text-cream/50 sm:flex-row sm:items-center sm:justify-between">
 					<p>
-						© {new Date().getFullYear()} Füdi. Todos los derechos reservados.
+						© {new Date().getFullYear()} Rolé. Todos los derechos reservados.
 					</p>
 					<div className="flex gap-6">
 						{SOCIAL.map((s) => (

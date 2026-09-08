@@ -80,7 +80,7 @@ export function Contact() {
 
 	const mutation = useMutation({
 		mutationFn: (payload: CreateContactDto) =>
-			apiPost<{ ok: boolean }>("/contact", payload),
+			apiPost<unknown>("/contact", payload),
 	});
 
 	useEffect(() => {
@@ -151,12 +151,12 @@ export function Contact() {
 							</p>
 							<Button
 								type="button"
-								variant="ghost"
+								variant="outline"
 								onClick={() => {
 									setDone(null);
 									setEmail("");
 								}}
-								className="h-11 rounded-xl bg-transparent px-5 text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.14)] hover:bg-ink/5 hover:text-ink"
+								className="h-11 rounded-xl px-5 text-ink"
 							>
 								Usar otro correo
 							</Button>
@@ -228,12 +228,18 @@ export function Contact() {
 									value={email}
 									onChange={(e) => setEmail(e.target.value)}
 									aria-invalid={Boolean(error)}
+									aria-describedby={error ? "contact-error" : undefined}
 									className={inputCream}
 								/>
 							</div>
 
 							<div className="flex flex-col gap-1.5">
-								<Label className="text-sm font-medium text-ink">Ciudad</Label>
+								<Label
+									htmlFor="contact-city"
+									className="text-sm font-medium text-ink"
+								>
+									Ciudad
+								</Label>
 								<Select value={city} onValueChange={(v) => v && setCity(v)}>
 									<SelectTrigger
 										id="contact-city"
@@ -280,16 +286,20 @@ export function Contact() {
 							) : null}
 
 							{error ? (
-								<p className="text-sm text-danger" role="alert">
+								<p
+									id="contact-error"
+									className="text-sm text-danger"
+									role="alert"
+								>
 									{error}
 								</p>
 							) : null}
 
 							<Button
-								variant="ghost"
+								variant="forest"
 								type="submit"
 								disabled={mutation.isPending}
-								className="mt-1 h-12 w-full rounded-xl bg-forest px-6 text-sm font-medium text-cream hover:bg-forest-hover hover:text-cream active:scale-[0.98] disabled:opacity-60"
+								className="mt-1 h-12 w-full rounded-xl px-6 text-sm font-medium"
 							>
 								{mutation.isPending ? "Enviando…" : "Enviar"}
 							</Button>

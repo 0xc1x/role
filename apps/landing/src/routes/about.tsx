@@ -198,7 +198,7 @@ function AboutPage() {
 						</div>
 						<div className="relative reveal">
 							<h2 className="font-heading text-3xl font-bold tracking-tight md:text-4xl">
-								Únete al rol
+								Únete a Rolé
 							</h2>
 							<p className="mx-auto mt-4 max-w-lg text-lg text-white/85">
 								Rescata comida deliciosa a precio increíble o registra tu

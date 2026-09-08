@@ -55,16 +55,18 @@ export const Route = createFileRoute("/")({
 
 function LandingPage() {
 	return (
-		<main id="main" className="min-h-screen">
+		<div className="min-h-screen">
 			<Navbar />
-			<Hero />
-			<Features />
-			<HowItWorks />
-			<Testimonials />
-			<Faq />
-			<Contact />
-			<Cta />
+			<main id="main">
+				<Hero />
+				<Features />
+				<HowItWorks />
+				<Testimonials />
+				<Faq />
+				<Contact />
+				<Cta />
+			</main>
 			<Footer />
-		</main>
+		</div>
 	);
 }

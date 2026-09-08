@@ -142,6 +142,8 @@
   --color-cream: #faf9f6;
   --color-ink: #12241a;
   --color-ink-soft: #3d5248;
+  /* Alias sin colisión con shadcn (`--color-muted` resuelve a sage en landing, oklch en admin) */
+  --color-sage: #66756d;
   --color-muted: #66756d;
   --color-forest: #04542d;
   --color-forest-hover: #056b39;
@@ -159,6 +161,7 @@
   --font-editorial: "Playfair Display", "Georgia", serif;
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --shadow-soft: 0 1px 2px 0 rgb(26 23 20 / 0.04), 0 4px 16px -2px rgb(26 23 20 / 0.06);
+  --shadow-card: 0 1px 2px 0 rgb(26 23 20 / 0.04), 0 4px 16px -2px rgb(26 23 20 / 0.06);
   --shadow-raised: 0 2px 4px 0 rgb(26 23 20 / 0.05), 0 14px 36px -10px rgb(26 23 20 / 0.14);
   --shadow-card-hover: 0 8px 24px -6px rgb(191 28 25 / 0.14), 0 18px 44px -12px rgb(26 23 20 / 0.14);
   --shadow-glow: 0 12px 48px -8px rgb(191 28 25 / 0.45);
@@ -249,15 +252,20 @@ body::before {
   src: local("Playfair Display");
 }
 
-/* Reveal animations */
+/* Reveal animations — visible por defecto (SEO/no-JS); solo se oculta con html.js */
 .reveal {
+  opacity: 1;
+  transform: none;
+}
+
+html.js .reveal {
   opacity: 0;
   transform: translateY(30px);
   transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.reveal.visible,
-.reveal[data-revealed="true"] {
+html.js .reveal.visible,
+html.js .reveal[data-revealed="true"] {
   opacity: 1;
   transform: translateY(0);
 }
@@ -397,6 +405,7 @@ body::before {
   }
 
   /* Sin JS del reveal o con movimiento reducido: contenido siempre visible. */
+  html.js .reveal,
   .reveal {
     opacity: 1;
     transform: none;

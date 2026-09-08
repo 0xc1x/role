@@ -1,9 +1,9 @@
 import {
 	OnboardingBusinessRequestSchema,
-	type OnboardingBusinessResponse,
+	OnboardingBusinessResponseSchema,
 } from "@0xc1x/role-commons";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 
 import { Footer } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
@@ -14,12 +14,14 @@ import { apiPost } from "@/lib/api";
 import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/business-signup")({
-	head: () =>
-		pageHead(
+	head: () => ({
+		...pageHead(
 			"/business-signup",
 			"Registra tu negocio | Rolé",
 			"Únete a Rolé: publica tu comida excedente, recupera ingresos y consigue nuevos clientes.",
 		),
+		meta: [{ name: "robots", content: "noindex, nofollow" }],
+	}),
 	component: BusinessSignupPage,
 });
 
@@ -34,7 +36,7 @@ function BusinessSignupPage() {
 	const [done, setDone] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	const submit = async (e: React.FormEvent) => {
+	const submit = async (e: FormEvent) => {
 		e.preventDefault();
 		if (password !== confirm) {
 			setError("Las contraseñas no coinciden");
@@ -64,10 +66,8 @@ function BusinessSignupPage() {
 		setLoading(true);
 		setError(null);
 		try {
-			await apiPost<OnboardingBusinessResponse>(
-				"/businesses/onboarding",
-				parsed.data,
-			);
+			const raw = await apiPost<unknown>("/businesses/onboarding", parsed.data);
+			OnboardingBusinessResponseSchema.parse(raw);
 			setDone(true);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Error al registrar");
@@ -80,7 +80,10 @@ function BusinessSignupPage() {
 		return (
 			<div className="min-h-screen">
 				<Navbar />
-				<main className="mx-auto max-w-xl px-6 pt-36 pb-24 text-center">
+				<main
+					id="main"
+					className="mx-auto max-w-xl px-6 pt-36 pb-24 text-center"
+				>
 					<h1 className="font-heading text-3xl font-bold">
 						¡Recibimos tu solicitud!
 					</h1>
@@ -104,7 +107,7 @@ function BusinessSignupPage() {
 	return (
 		<div className="min-h-screen">
 			<Navbar />
-			<main className="mx-auto max-w-xl px-6 pt-32 pb-24">
+			<main id="main" className="mx-auto max-w-xl px-6 pt-32 pb-24">
 				<h1 className="font-heading text-3xl font-bold">
 					Registrar mi negocio
 				</h1>
@@ -173,7 +176,15 @@ function BusinessSignupPage() {
 							placeholder="+593 ..."
 						/>
 					</div>
-					{error ? <p className="text-sm text-destructive">{error}</p> : null}
+					{error ? (
+						<p
+							role="alert"
+							aria-live="polite"
+							className="text-sm text-destructive"
+						>
+							{error}
+						</p>
+					) : null}
 					<Button
 						type="submit"
 						disabled={loading}

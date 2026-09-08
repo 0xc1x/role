@@ -6,8 +6,10 @@ import { z } from "zod";
  */
 const EnvSchema = z.object({
 	VITE_API_URL: z.url().optional(),
+	VITE_SITE_URL: z.string().optional(),
 });
 
 export const env = EnvSchema.parse({
 	VITE_API_URL: import.meta.env.VITE_API_URL,
+	VITE_SITE_URL: import.meta.env.VITE_SITE_URL,
 });

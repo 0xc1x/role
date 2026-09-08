@@ -8,8 +8,8 @@ const STEPS = [
 	},
 	{
 		n: "02",
-		title: "Reservas y pagas en la app",
-		body: "Ves qué hay cerca, a cuánto y hasta cuándo. Reservas tu bolsa sorpresa y pagas desde Rolé — sin filas ni llamadas.",
+		title: "Reservas gratis en la app",
+		body: "Ves qué hay cerca, a cuánto y hasta cuándo. Reservas tu bolsa sorpresa gratis — sin filas ni llamadas. Pagas directo en el comercio al recoger.",
 	},
 	{
 		n: "03",
@@ -36,7 +36,7 @@ export function HowItWorks() {
 								aria-hidden="true"
 							/>
 						) : null}
-						<p className="font-display text-4xl font-medium text-forest/30">
+						<p className="font-display text-4xl font-medium text-forest/60">
 							{s.n}
 						</p>
 						<h3 className="mt-4 font-display text-xl font-medium tracking-tight">

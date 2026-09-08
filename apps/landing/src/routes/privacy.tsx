@@ -80,11 +80,7 @@ function PrivacyPage() {
 				month: "long",
 				day: "numeric",
 			})
-		: new Date().toLocaleDateString("es-MX", {
-				year: "numeric",
-				month: "long",
-				day: "numeric",
-			});
+		: null;
 
 	return (
 		<div className="min-h-screen">
@@ -113,10 +109,12 @@ function PrivacyPage() {
 								Transparencia total sobre qué datos recopilamos, cómo los usamos
 								y qué control tienes. Sin letra pequeña.
 							</p>
-							<div className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm text-white/80 backdrop-blur-sm reveal reveal-delay-2">
-								<span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-								Última actualización: {updatedDate}
-							</div>
+							{updatedDate ? (
+								<div className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm text-white/80 backdrop-blur-sm reveal reveal-delay-2">
+									<span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+									Última actualización: {updatedDate}
+								</div>
+							) : null}
 						</div>
 					</div>
 				</section>

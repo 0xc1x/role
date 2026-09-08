@@ -9,6 +9,7 @@ mock.module("@/components/footer", () => ({ Footer: () => null }));
 mock.module("@tanstack/react-router", () => ({
 	createFileRoute: () => (options: unknown) => ({ options }),
 	Link: (props: { children?: React.ReactNode; className?: string }) => (
+		// biome-ignore lint/a11y/useValidAnchor: mock de test sin router
 		<a className={props.className}>{props.children}</a>
 	),
 }));

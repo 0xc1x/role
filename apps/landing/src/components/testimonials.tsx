@@ -53,14 +53,14 @@ export function Testimonials() {
 								</Avatar>
 								<span>
 									<span className="block text-sm font-semibold">{s.name}</span>
-									<span className="block text-xs text-muted">{s.role}</span>
+									<span className="block text-xs text-sage">{s.role}</span>
 								</span>
 							</figcaption>
 						</CardContent>
 					</Card>
 				))}
 			</div>
-			<p className="mt-6 text-xs text-muted reveal reveal-delay-4">
+			<p className="mt-6 text-xs text-sage reveal reveal-delay-4">
 				Relatos de piloto. Los nombres de locales se anonimizan hasta el
 				lanzamiento público.
 			</p>
