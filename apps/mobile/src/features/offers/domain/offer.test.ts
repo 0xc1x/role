@@ -7,6 +7,7 @@ import {
 	isOfferExpired,
 	isOfferOutOfStock,
 	haversineKm,
+	splitList,
 } from "@/features/offers/domain/offer";
 import type { OfferDetail } from "@/features/offers/domain/offer";
 
@@ -133,5 +134,13 @@ describe("filterByDistance", () => {
 		expect(
 			filterByDistance([withoutLocation], user.lat, user.lng, 50),
 		).toHaveLength(0);
+	});
+});
+
+describe("splitList", () => {
+	it("separa por coma y limpia", () => {
+		expect(splitList("a, b ,c")).toEqual(["a", "b", "c"]);
+		expect(splitList("")).toEqual([]);
+		expect(splitList("  , , ")).toEqual([]);
 	});
 });

@@ -2,6 +2,8 @@ import { View, StyleSheet, FlatList, Image, Pressable } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import { Skeleton } from "@/components/ui/skeleton";
+import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { AppText, Card, SectionHeader } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
@@ -123,21 +125,19 @@ function BusinessSkeleton() {
 				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
 			]}
 		>
-			<View style={[styles.businessImage, { backgroundColor: colors.muted }]} />
+			<Skeleton style={styles.businessImage} />
 			<View style={styles.businessInfo}>
-				<View
+				<Skeleton
 					style={{
 						height: 16,
 						width: "85%",
-						backgroundColor: colors.muted,
 						borderRadius: 4,
 					}}
 				/>
-				<View
+				<Skeleton
 					style={{
 						height: 10,
 						width: "55%",
-						backgroundColor: colors.muted,
 						borderRadius: 4,
 						marginTop: 8,
 					}}
@@ -160,7 +160,7 @@ export function BusinessRowSection({
 	return (
 		<View style={styles.container}>
 			<SectionHeader
-				title="Negocios Cerca"
+				title={strings.home.negociosCerca}
 				icon={<Ionicons name="storefront-outline" size={18} color={colors.primary} />}
 				onSeeAll={onSeeAll}
 			/>
@@ -178,7 +178,7 @@ export function BusinessRowSection({
 					variant="bodyMedium"
 					style={{ color: colors.mutedForeground, paddingHorizontal: spacing.xl }}
 				>
-					Error al cargar negocios
+					{strings.home.businessLoadError}
 				</AppText>
 			) : businesses && businesses.length > 0 ? (
 				<FlatList

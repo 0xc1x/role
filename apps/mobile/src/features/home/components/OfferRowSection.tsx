@@ -1,6 +1,7 @@
 import { View, StyleSheet, FlatList } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/core/theme";
 import { AppText, Card, SectionHeader } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
@@ -37,31 +38,28 @@ function OfferSkeleton({ fullWidth = false }: { fullWidth?: boolean }) {
 				fullWidth && styles.offerFull,
 			]}
 		>
-			<View style={[styles.offerImage, { backgroundColor: colors.muted }]} />
+			<Skeleton style={styles.offerImage} />
 			<View style={styles.offerBody}>
-				<View
+				<Skeleton
 					style={{
 						height: 14,
 						width: "70%",
-						backgroundColor: colors.muted,
 						borderRadius: 4,
 						marginBottom: 8,
 					}}
 				/>
-				<View
+				<Skeleton
 					style={{
 						height: 10,
 						width: "55%",
-						backgroundColor: colors.muted,
 						borderRadius: 4,
 						marginBottom: 8,
 					}}
 				/>
-				<View
+				<Skeleton
 					style={{
 						height: 10,
 						width: "60%",
-						backgroundColor: colors.muted,
 						borderRadius: 4,
 					}}
 				/>

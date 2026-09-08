@@ -1,11 +1,16 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner-native";
+import type { Coupon } from "@0xc1x/role-commons";
 import { strings } from "@/core/i18n/strings";
+import { formatMoney } from "@/core/utils/formatters";
 
 import { useAuthStore } from "@/features/auth/store";
 import { offersRepository } from "@/features/offers/data/repository";
 import { favoritesRepository } from "@/features/favorites/data/repository";
 import { orderRepository } from "@/features/orders/data/repository";
+import { couponDiscount, couponIsValid } from "@/features/orders/domain/order";
+import type { OfferDetail } from "@/features/offers/domain/offer";
 import {
 	useSavedAddresses,
 	usePreferences,
@@ -194,14 +199,16 @@ export function useNearbyOffersHook(limit = 10, category?: string | null) {
 	const { lat, lng, radiusKm, params } = useRadiusParams();
 	return useQuery({
 		queryKey: ["offers", "nearby", lat, lng, radiusKm, limit, category ?? "all"],
-		queryFn: () =>
-			offersRepository.getNearbyOffers({
-				lat: lat!,
-				lng: lng!,
+		queryFn: () => {
+			if (lat == null || lng == null) throw new Error("Ubicación requerida");
+			return offersRepository.getNearbyOffers({
+				lat,
+				lng,
 				radiusKm,
 				limit,
 				category: category ?? null,
-			}),
+			});
+		},
 		enabled: lat != null && lng != null,
 	});
 }
@@ -209,18 +216,26 @@ export function useNearbyOffersHook(limit = 10, category?: string | null) {
 // ─── Favorites ──────────────────────────────────────────────────────
 export function useFavorites() {
 	const profile = useAuthStore((s) => s.profile);
+	const profileId = profile?.id;
 	return useQuery({
-		queryKey: ["favorites", "list", profile?.id],
-		queryFn: () => favoritesRepository.getFavorites(profile!.id),
+		queryKey: ["favorites", "list", profileId],
+		queryFn: () => {
+			if (!profileId) throw new Error("Sesión requerida");
+			return favoritesRepository.getFavorites(profileId);
+		},
 		enabled: !!profile,
 	});
 }
 
 export function useFavoriteOfferIds() {
 	const profile = useAuthStore((s) => s.profile);
+	const profileId = profile?.id;
 	return useQuery({
-		queryKey: ["favorites", "ids", profile?.id],
-		queryFn: () => favoritesRepository.getFavoriteOfferIds(profile!.id),
+		queryKey: ["favorites", "ids", profileId],
+		queryFn: () => {
+			if (!profileId) throw new Error("Sesión requerida");
+			return favoritesRepository.getFavoriteOfferIds(profileId);
+		},
 		enabled: !!profile,
 	});
 }
@@ -235,15 +250,17 @@ export function useToggleFavorite() {
 	const profile = useAuthStore((s) => s.profile);
 	return useMutation({
 		mutationFn: async (offerId: string) => {
+			const profileId = profile?.id;
+			if (!profileId) throw new Error("Sesión requerida");
 			const ids = queryClient.getQueryData<Set<string>>([
 				"favorites",
 				"ids",
-				profile!.id,
+				profileId,
 			]);
 			if (ids?.has(offerId) ?? false) {
-				await favoritesRepository.removeFavoriteByOfferId(offerId, profile!.id);
+				await favoritesRepository.removeFavoriteByOfferId(offerId, profileId);
 			} else {
-				await favoritesRepository.addFavorite(profile!.id, offerId);
+				await favoritesRepository.addFavorite(profileId, offerId);
 			}
 		},
 		onSuccess: () => {
@@ -255,9 +272,13 @@ export function useToggleFavorite() {
 // ─── Orders ─────────────────────────────────────────────────────────
 export function useOrders() {
 	const profile = useAuthStore((s) => s.profile);
+	const profileId = profile?.id;
 	return useQuery({
-		queryKey: ["orders", profile?.id],
-		queryFn: () => orderRepository.getUserOrders(profile!.id),
+		queryKey: ["orders", profileId],
+		queryFn: () => {
+			if (!profileId) throw new Error("Sesión requerida");
+			return orderRepository.getUserOrders(profileId);
+		},
 		enabled: !!profile,
 	});
 }
@@ -294,6 +315,77 @@ export function useCancelOrder() {
 		},
 		onError: () => toast.error(strings.orders.cancelError),
 	});
+}
+
+/** Validación de cupón on-demand (sin caché que invalidar). */
+export function useApplyCoupon(offerDetail: OfferDetail | undefined) {
+	const [couponInput, setCouponInput] = useState("");
+	const [couponError, setCouponError] = useState<string | null>(null);
+	const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+
+	const mutation = useMutation({
+		mutationFn: async (code: string) => {
+			if (!offerDetail) throw new Error("Oferta no disponible");
+			return orderRepository.getCouponByCode(code, offerDetail.offer.business_id);
+		},
+		onSuccess: (coupon) => {
+			if (!offerDetail) return;
+			if (!coupon || !couponIsValid(coupon)) {
+				setCouponError(strings.checkout.couponUnavailable);
+				return;
+			}
+			if (
+				coupon.min_order_amount != null &&
+				offerDetail.offer.discounted_price < coupon.min_order_amount
+			) {
+				setCouponError(
+					strings.checkout.couponMinNotMet.replace(
+						"{amount}",
+						formatMoney(coupon.min_order_amount),
+					),
+				);
+				return;
+			}
+			setAppliedCoupon(coupon);
+			setCouponError(null);
+		},
+		onError: () => setCouponError(strings.checkout.invalidCoupon),
+	});
+
+	const applyCoupon = () => {
+		const code = couponInput.trim().toUpperCase();
+		if (!code) return;
+		mutation.mutate(code);
+	};
+
+	const clearCoupon = () => {
+		setAppliedCoupon(null);
+		setCouponInput("");
+	};
+
+	const changeInput = (value: string) => {
+		setCouponInput(value);
+		setCouponError(null);
+	};
+
+	const discount = appliedCoupon && offerDetail
+		? couponDiscount(appliedCoupon, offerDetail.offer.discounted_price)
+		: 0;
+	const total = offerDetail
+		? Math.max(offerDetail.offer.discounted_price - discount, 0)
+		: 0;
+
+	return {
+		couponInput,
+		couponError,
+		appliedCoupon,
+		applying: mutation.isPending,
+		discount,
+		total,
+		applyCoupon,
+		clearCoupon,
+		changeInput,
+	};
 }
 
 export function useSubmitReview() {

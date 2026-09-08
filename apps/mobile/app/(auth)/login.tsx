@@ -14,6 +14,7 @@ import { Logo } from "@/core/ui/Logo";
 import { AuthScreenShell } from "@/features/auth/presentation/AuthScreenShell";
 import { SocialAuthButtons } from "@/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/features/auth/data/repository";
+import { validateLoginForm } from "@/features/auth/domain/validation";
 import { useAuthStore } from "@/features/auth/store";
 
 export default function LoginScreen() {
@@ -28,24 +29,10 @@ export default function LoginScreen() {
 	const [showReset, setShowReset] = useState(false);
 
 	const validate = () => {
-		const trimmed = email.trim();
-		let ok = true;
-		if (!trimmed) {
-			setEmailError(strings.auth.requiredEmail);
-			ok = false;
-		} else if (!trimmed.includes("@")) {
-			setEmailError(strings.auth.invalidEmail);
-			ok = false;
-		} else {
-			setEmailError(null);
-		}
-		if (!password) {
-			setPasswordError(strings.auth.requiredPassword);
-			ok = false;
-		} else {
-			setPasswordError(null);
-		}
-		return ok;
+		const result = validateLoginForm(email, password);
+		setEmailError(result.emailError);
+		setPasswordError(result.passwordError);
+		return result.ok;
 	};
 
 	const handleLogin = async () => {

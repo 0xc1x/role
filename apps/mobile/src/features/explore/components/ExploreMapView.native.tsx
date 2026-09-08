@@ -77,10 +77,11 @@ export function ExploreMapView({
 	useEffect(() => {
 		if (!mapReady || hasFitted || locatedOffers.length === 0) return;
 		setHasFitted(true);
-		const coords = locatedOffers.slice(0, 20).map((o) => ({
-			latitude: o.location!.latitude,
-			longitude: o.location!.longitude,
-		}));
+		const coords = locatedOffers.slice(0, 20).flatMap((o) =>
+			o.location != null
+				? [{ latitude: o.location.latitude, longitude: o.location.longitude }]
+				: [],
+		);
 		mapRef.current?.fitToCoordinates(coords, {
 			edgePadding: { top: 120, right: 48, bottom: 120, left: 48 },
 			animated: true,
@@ -149,12 +150,14 @@ export function ExploreMapView({
 			>
 				{locatedOffers.map((offer) => {
 					const selected = selectedOffer?.offer.id === offer.offer.id;
+					const loc = offer.location;
+					if (loc == null) return null;
 					return (
 						<Marker
 							key={`${offer.offer.id}-${selected ? "sel" : "def"}`}
 							coordinate={{
-								latitude: offer.location!.latitude,
-								longitude: offer.location!.longitude,
+								latitude: loc.latitude,
+								longitude: loc.longitude,
 							}}
 							onPress={() => setSelectedOffer(offer)}
 							tracksViewChanges={false}
@@ -240,11 +243,11 @@ export function ExploreMapView({
 
 			{/* ── Controles de zoom + mi ubicación ─────────────────────── */}
 			<View style={[styles.zoomControls, { top: 96, backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}>
-				<Pressable onPress={zoomIn} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel="zoom in">
+				<Pressable onPress={zoomIn} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel={strings.explore.zoomIn}>
 					<Ionicons name="add" size={20} color={colors.foreground} />
 				</Pressable>
 				<View style={[styles.zoomDivider, { backgroundColor: colors.border }]} />
-				<Pressable onPress={zoomOut} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel="zoom out">
+				<Pressable onPress={zoomOut} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel={strings.explore.zoomOut}>
 					<Ionicons name="remove" size={20} color={colors.foreground} />
 				</Pressable>
 			</View>

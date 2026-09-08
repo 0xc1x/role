@@ -20,8 +20,11 @@ import { toast } from "sonner-native";
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button, Card, EmptyState, Screen, ScreenHeader } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
-import { usePaymentMethods } from "@/features/profile/hooks";
-import { profileRepository } from "@/features/profile/data/repository";
+import {
+	useDeletePaymentMethod,
+	usePaymentMethods,
+	useSetDefaultPaymentMethod,
+} from "@/features/profile/hooks";
 import type { PaymentMethodModel } from "@/features/profile/domain/profile";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
@@ -103,7 +106,9 @@ function PaymentMethodRow({
 export default function PaymentMethodsScreen() {
 	const { profile, status, initialized } = useAuthStore();
 	const userId = profile?.id ?? "";
-	const { data: methods, refetch } = usePaymentMethods(userId);
+	const { data: methods } = usePaymentMethods(userId);
+	const setDefaultMutation = useSetDefaultPaymentMethod(userId);
+	const deleteMutation = useDeletePaymentMethod(userId);
 	const [showForm, setShowForm] = useState(false);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -117,15 +122,11 @@ export default function PaymentMethodsScreen() {
 	if (!initialized || status === "guest") return null;
 
 	const setDefault = (id: string) => {
-		void profileRepository
-			.setDefaultPaymentMethod(userId, id)
-			.then(() => refetch());
+		setDefaultMutation.mutate(id);
 	};
 
 	const deleteMethod = (id: string) => {
-		void profileRepository
-			.deletePaymentMethod(userId, id)
-			.then(() => refetch());
+		deleteMutation.mutate(id);
 	};
 
 	return (

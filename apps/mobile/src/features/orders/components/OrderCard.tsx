@@ -3,12 +3,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, StatusBadge, type BadgeTone } from "@/core/ui";
+import { AppText, StatusBadge } from "@/core/ui";
 import {
 	isActiveStatus,
 	orderStatusLabels,
+	orderStatusTone,
 	type OrderDetail,
-	type OrderStatusType,
 } from "@/features/orders/domain/order";
 import {
 	formatMoneyPrecise,
@@ -18,26 +18,6 @@ import {
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
-
-/** Presentational mapping of order status → badge tone. */
-export function orderStatusTone(status: OrderStatusType): BadgeTone {
-	switch (status) {
-		case "pending":
-			return "warning";
-		case "confirmed":
-			return "info";
-		case "ready_for_pickup":
-			return "brand";
-		case "picked_up":
-			return "info";
-		case "completed":
-			return "success";
-		case "cancelled":
-			return "neutral";
-		case "expired":
-			return "danger";
-	}
-}
 
 /** Ledger card for the orders list and the profile history (port of ProfileOrderCard). */
 export function OrderCard({ item }: { item: OrderDetail }) {

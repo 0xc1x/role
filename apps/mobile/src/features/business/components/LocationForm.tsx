@@ -122,7 +122,7 @@ export function LocationForm({
 				value={phone}
 				onChangeText={setPhone}
 				keyboardType="phone-pad"
-				placeholder="+593 98 765 4321"
+				placeholder={strings.business.locationPhoneHint}
 			/>
 
 			{error ? (

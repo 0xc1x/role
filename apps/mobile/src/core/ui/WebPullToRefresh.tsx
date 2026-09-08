@@ -59,7 +59,8 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 			gestureRef.current = null;
 			return;
 		}
-		const touch = e.touches[0]!;
+		const touch = e.touches[0];
+		if (!touch) return;
 		gestureRef.current = {
 			startY: touch.clientY,
 			startX: touch.clientX,
@@ -73,7 +74,8 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 		const gesture = gestureRef.current;
 		const node = nodeRef.current;
 		if (!gesture || gesture.dead || e.touches.length > 1 || !node) return;
-		const touch = e.touches[0]!;
+		const touch = e.touches[0];
+		if (!touch) return;
 		const dy = touch.clientY - gesture.startY;
 		const dx = touch.clientX - gesture.startX;
 

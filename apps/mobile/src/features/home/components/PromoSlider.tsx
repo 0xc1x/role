@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	View,
-	Text,
 	StyleSheet,
 	ScrollView,
 	Image,
@@ -18,6 +17,7 @@ import { toast } from "sonner-native";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
+import { AppText, Button } from "@/core/ui";
 import { strings } from "@/core/i18n/strings";
 import { usePromoSlides, type PromoSlide } from "@/features/slides";
 
@@ -318,61 +318,48 @@ function PromoCard({ item }: { item: PromoSlide }) {
 			{/* Lado izquierdo sólido — sin Blur ni overlay traslúcido */}
 			<View style={styles.cardLeft}>
 				<View style={[styles.badge, { backgroundColor: withAlpha(colors.onMedia, 0.14), borderColor: withAlpha(colors.onMedia, 0.18) }]}>
-					<Text
+					<AppText
+						weight="semiBold"
 						style={{
-							color: withAlpha(colors.greenDarkForeground, 0.702),
+							color: withAlpha(colors.greenDarkForeground, 0.7),
 							fontSize: 11,
-							fontWeight: "600",
 							letterSpacing: 0.4,
 						}}
 					>
 						{badgeLabel.toUpperCase()}
-					</Text>
+					</AppText>
 				</View>
 				<View style={{ gap: 6 }}>
-					<Text
+					<AppText
+						weight="bold"
 						style={{
 							color: textColor,
 							fontSize: 18,
-							fontWeight: "700",
 							letterSpacing: -0.3,
 							lineHeight: 22,
 						}}
 					>
 						{item.title}
-					</Text>
-					<Text
+					</AppText>
+					<AppText
 						numberOfLines={2}
 						style={{
-							color: textColor + "CC",
+							color: withAlpha(textColor, 0.8),
 							fontSize: 12,
 							lineHeight: 16,
 						}}
 					>
 						{item.caption}
-					</Text>
+					</AppText>
 				</View>
 				{item.ctaLabel &&
 				(item.type === "coupon" ? item.couponCode : item.redirectUrl) ? (
-					<Pressable
-						accessibilityRole="button"
+					<Button
+						label={item.ctaLabel}
 						onPress={handleCtaPress}
-						style={({ pressed }) => [
-							styles.promoButton,
-							{ backgroundColor: item.buttonColor ?? colors.primary, boxShadow: `0px 4px 12px ${colors.shadow}` },
-							pressed && styles.promoButtonPressed,
-						]}
-					>
-						<Text
-							style={{
-								color: colors.primaryForeground,
-								fontSize: 14,
-								fontWeight: "700",
-							}}
-						>
-							{item.ctaLabel}
-						</Text>
-					</Pressable>
+						size="sm"
+						style={{ backgroundColor: item.buttonColor ?? colors.primary }}
+					/>
 				) : null}
 			</View>
 			{/* Lado derecho imagen limpia — sin velo */}
@@ -426,17 +413,6 @@ const styles = StyleSheet.create({
 		paddingVertical: 5,
 		borderRadius: radii.pill,
 		borderWidth: 1,
-	},
-	promoButton: {
-		height: 38,
-		borderRadius: radii.pill,
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: 16,
-	},
-	promoButtonPressed: {
-		opacity: 0.85,
-		transform: [{ scale: 0.98 }],
 	},
 	dotsContainer: {
 		flexDirection: "row",

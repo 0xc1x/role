@@ -1,21 +1,10 @@
-import { useRef } from "react";
 import { View, StyleSheet, Image, Pressable } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect } from "react";
-import Animated, {
-	useSharedValue,
-	useAnimatedStyle,
-	withSequence,
-	withSpring,
-	withTiming,
-	Easing,
-} from "react-native-reanimated";
 
 import { useTheme } from "@/core/theme";
-import { AppText, Card } from "@/core/ui";
+import { AppText, Card, HeartButton } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
 import { strings } from "@/core/i18n/strings";
 import { useIsFavorite, useSelectedAddress, useToggleFavorite } from "@/features/hooks";
 import { useAuthStore } from "@/features/auth/store";
@@ -28,65 +17,6 @@ import {
 
 function dealPrice(value: number): string {
 	return `$${value.toFixed(2)}`;
-}
-
-function AnimatedHeartButton({
-	isFavorite,
-	onPress,
-}: {
-	isFavorite: boolean;
-	onPress: () => void;
-}) {
-	const { colors } = useTheme();
-	const scale = useSharedValue(1);
-	const prevFavorite = useRef(isFavorite);
-
-	useEffect(() => {
-		if (prevFavorite.current !== isFavorite) {
-			prevFavorite.current = isFavorite;
-			scale.value = withSequence(
-				withTiming(0.65, {
-					duration: 100,
-					easing: Easing.in(Easing.quad),
-				}),
-				withTiming(1.4, {
-					duration: 160,
-					easing: Easing.out(Easing.quad),
-				}),
-				withSpring(1, { damping: 12, stiffness: 200 }),
-			);
-		}
-	}, [isFavorite, scale]);
-
-	const heartStyle = useAnimatedStyle(() => ({
-		transform: [{ scale: scale.value }],
-	}));
-
-	return (
-		<Animated.View style={heartStyle}>
-			<Pressable
-				onPress={onPress}
-				hitSlop={6}
-				style={[
-					styles.heartCircle,
-					{
-						backgroundColor: isFavorite
-							? withAlpha(colors.destructive, 0.149)
-							: withAlpha(colors.card, 0.91),
-						boxShadow: `0px 2px 6px ${colors.shadow}`,
-					},
-				]}
-			>
-				<Ionicons
-					name={isFavorite ? "heart" : "heart-outline"}
-					size={18}
-					color={
-						isFavorite ? colors.destructiveVibrant : colors.mutedForeground
-					}
-				/>
-			</Pressable>
-		</Animated.View>
-	);
 }
 
 /** Card de oferta canónica (home, explorar, favoritos). */
@@ -148,9 +78,9 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 						style={[styles.lowStockBadge, { backgroundColor: colors.destructive }]}
 					>
 						<AppText
+							variant="caption"
 							style={{
 								color: colors.destructiveForeground,
-								fontSize: 11,
 								fontWeight: "600",
 							}}
 						>
@@ -163,9 +93,11 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 				)}
 				{profile && (
 					<View style={styles.heartButton}>
-						<AnimatedHeartButton
+						<HeartButton
 							isFavorite={isFavorite}
 							onPress={() => toggleFavorite.mutate(offer.offer.id)}
+							size={36}
+							iconSize={18}
 						/>
 					</View>
 				)}
@@ -189,7 +121,8 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 							/>
 							<AppText
 								numberOfLines={1}
-								style={{ color: colors.mutedForeground, fontSize: 11 }}
+								variant="caption"
+								style={{ color: colors.mutedForeground }}
 							>
 								{distance
 									? `${distance} · ${offer.business.name}`
@@ -198,7 +131,8 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 						</View>
 						{pickupTime ? (
 							<AppText
-								style={{ color: colors.mutedForeground, fontSize: 11 }}
+								variant="caption"
+								style={{ color: colors.mutedForeground }}
 							>
 								{strings.offers.pickupBefore.replace("{time}", pickupTime)}
 							</AppText>
@@ -272,13 +206,6 @@ const styles = StyleSheet.create({
 		top: spacing.sm,
 		left: spacing.sm,
 	},
-	heartCircle: {
-		width: 30,
-		height: 30,
-		borderRadius: 15,
-		alignItems: "center",
-		justifyContent: "center",
-		},
 	offerBody: {
 		padding: spacing.md,
 	},

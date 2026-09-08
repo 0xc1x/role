@@ -19,6 +19,7 @@ mock.module("@/core/supabase/client", () => ({
 
 import { supabase } from "@/core/supabase/client";
 import { fetchAppConfig } from "@/features/config/data/repository";
+import { AppError } from "@/core/error/app-error";
 
 describe("fetchAppConfig", () => {
 	test("mapea filas a mapa", async () => {
@@ -33,12 +34,17 @@ describe("fetchAppConfig", () => {
 		await expect(fetchAppConfig()).resolves.toEqual({ a: 1 });
 	});
 
-	test("propaga error de supabase", async () => {
+	test("propaga error de supabase como AppError", async () => {
 		const eq2 = jest.fn(async () => ({ data: null, error: { message: "boom" } }));
 		const eq1 = jest.fn(() => ({ eq: eq2 }));
 		(supabase.from as unknown as Mock<(...args: never[]) => unknown>).mockReturnValue({
 			select: jest.fn(() => ({ eq: eq1 })),
 		});
-		await expect(fetchAppConfig()).rejects.toThrow("boom");
+		const err = await fetchAppConfig().then(
+			() => null,
+			(e: unknown) => e,
+		);
+		expect(err).toBeInstanceOf(AppError);
+		expect((err as AppError).kind).toBe("unknown");
 	});
 });

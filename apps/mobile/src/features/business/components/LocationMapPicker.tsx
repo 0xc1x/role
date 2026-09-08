@@ -9,12 +9,12 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { env } from "@/core/config/env";
 import { reverseGeocode } from "@/core/utils/geocode";
-import type { MapCanvasHandle } from "./MapCanvas.types";
+import type { MapCanvasHandle } from "@/core/ui/MapCanvas.types";
 
 const RMap = lazy(() =>
 	(Platform.OS === "web"
-		? import("./MapCanvas.web")
-		: import("./MapCanvas.native")
+		? import("@/core/ui/MapCanvas.web")
+		: import("@/core/ui/MapCanvas.native")
 	).then((m) => ({ default: m.MapCanvas })),
 );
 

@@ -30,6 +30,8 @@ export const typography = {
   bodyLarge: { fontFamily: fonts.body, fontSize: 16, lineHeight: 24 },
   bodyMedium: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
   bodySmall: { fontFamily: fonts.body, fontSize: 12, lineHeight: 16 },
+  caption: { fontFamily: fonts.body, fontSize: 11, lineHeight: 15 },
+  tiny: { fontFamily: fonts.body, fontSize: 10, lineHeight: 13 },
   labelMedium: { fontFamily: fonts.bodyMedium, fontSize: 16, lineHeight: 24 },
   labelSmall: { fontFamily: fonts.bodyMedium, fontSize: 14 },
   button: { fontFamily: fonts.bodyBold, fontSize: 16, lineHeight: 24 },

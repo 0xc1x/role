@@ -1,4 +1,5 @@
 import { env } from "@/core/config/env";
+import { Errors } from "@/core/error/app-error";
 import { upsertDeviceToken } from "./data/repository";
 
 /**
@@ -47,7 +48,7 @@ export async function syncWebPushToken(
 	) {
 		// Sin esto, @firebase/installations lanza el criptico
 		// "installations/missing-app-config-values".
-		throw new Error(
+		throw Errors.unknown(
 			"Push web no configurado: faltan EXPO_PUBLIC_FIREBASE_* en .env",
 		);
 	}

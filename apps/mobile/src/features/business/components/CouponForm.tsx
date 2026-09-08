@@ -17,7 +17,7 @@ const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function randomCode(length = 8): string {
 	let result = "";
 	for (let i = 0; i < length; i++) {
-		result += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]!;
+		result += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)] ?? "X";
 	}
 	return result;
 }
@@ -116,7 +116,7 @@ export function CouponForm({
 						containerStyle={styles.codeField}
 						value={code}
 						onChangeText={(text) => setCode(text.replace(/\s/g, "").toUpperCase())}
-						placeholder="EJ. PROMO2026"
+						placeholder={strings.business.couponCodeHint}
 						autoCapitalize="characters"
 						maxLength={20}
 						error={
@@ -195,7 +195,7 @@ export function CouponForm({
 					value={minOrder}
 					onChangeText={(text) => setMinOrder(text.replace(/[^0-9.]/g, ""))}
 					keyboardType="decimal-pad"
-					placeholder="0.00"
+					placeholder={strings.business.couponMinAmountHint}
 				/>
 				<AppText variant="bodySmall" style={{ color: colors.mutedForeground, marginTop: -8 }}>
 					{strings.business.couponMinPurchaseHint}

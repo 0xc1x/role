@@ -809,10 +809,13 @@ function groupHours(
 ): HoursRange[] {
 	if (entries.length === 0) return [];
 	const result: HoursRange[] = [];
-	let start = entries[0]!;
-	let end = entries[0]!;
+	const first = entries[0];
+	if (!first) return [];
+	let start = first;
+	let end = first;
 	for (let i = 1; i < entries.length; i++) {
-		const entry = entries[i]!;
+		const entry = entries[i];
+		if (!entry) continue;
 		if (
 			entry.open_time === end.open_time &&
 			entry.close_time === end.close_time &&
@@ -888,7 +891,9 @@ async function insertBusinessHours(
 function toDbTime(time: string): string {
 	const parts = time.split(":");
 	if (parts.length === 2) {
-		return `${parts[0]!.padStart(2, "0")}:${parts[1]!.padStart(2, "0")}:00`;
+		const hh = parts[0] ?? "00";
+	const mm = parts[1] ?? "00";
+	return `${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:00`;
 	}
 	return "00:00:00";
 }

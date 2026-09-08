@@ -1,6 +1,7 @@
 import type { AppConfigMap } from "@0xc1x/role-commons";
 
 import { supabase } from "@/core/supabase/client";
+import { toAppError } from "@/core/error/mapper";
 
 /**
  * Lee la configuración pública directamente de Supabase (RLS permite
@@ -13,7 +14,7 @@ export async function fetchAppConfig(): Promise<AppConfigMap> {
     .eq("active", true)
     .eq("is_public", true);
 
-  if (error) throw new Error(error.message);
+  if (error) throw toAppError(error);
 
   const map: AppConfigMap = {};
   for (const row of data ?? []) {

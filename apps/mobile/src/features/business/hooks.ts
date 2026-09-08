@@ -9,6 +9,8 @@ import {
 	saveOffer,
 } from "@/features/business/data/repository";
 import { notificationRepository } from "@/features/business/data/notifications";
+// Los writes de pedidos (RPCs) viven en el repo de orders; estos hooks solo
+// orquestan vistas del rol negocio sobre esa API.
 import { orderRepository } from "@/features/orders/data/repository";
 
 export function useBusinesses(ownerId: string) {

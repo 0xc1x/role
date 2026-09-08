@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
-import { Button, EmptyState, ErrorState, useWebPullToRefresh } from "@/core/ui";
+import { Button, EmptyState, ErrorState, LoadingView, useWebPullToRefresh } from "@/core/ui";
 import { SectionHeader } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing } from "@/core/theme/spacing";
@@ -16,18 +16,15 @@ import {
 	type OfferFilterState,
 } from "@/features/offers/components/OfferFiltersSheet";
 import { ExploreHeader } from "@/features/explore/components/ExploreHeader";
-import { ExploreActiveFiltersBar, type ActiveFilterKey } from "@/features/explore/components/ExploreActiveFiltersBar";
+import { ExploreActiveFiltersBar } from "@/features/explore/components/ExploreActiveFiltersBar";
 import { ExploreCategoryGrid } from "@/features/explore/components/ExploreCategoryGrid";
 import { ExploreTipSection } from "@/features/explore/components/ExploreTipSection";
 import { OfferCard } from "@/features/offers/components/OfferCard";
 import { ExploreMapView } from "@/features/explore/components/ExploreMapView";
 import {
-	emptyExploreFilters,
 	hasActiveExploreFilters,
-	type ExploreFilterState,
 } from "@/features/explore/exploreTypes";
-
-const SEARCH_DEBOUNCE_MS = 400;
+import { useExploreFilters } from "@/features/explore/hooks";
 
 export default function ExploreScreen() {
 	const { colors } = useTheme();
@@ -37,19 +34,22 @@ export default function ExploreScreen() {
 	const isGuest = !profile;
 	const prefRadius = preferences?.notification_radius_km ?? 5;
 
-	const [search, setSearch] = useState("");
-	const [debouncedSearch, setDebouncedSearch] = useState("");
-	const [filters, setFilters] = useState<ExploreFilterState>(emptyExploreFilters);
+	const {
+		search,
+		setSearch,
+		debouncedSearch,
+		setDebouncedSearch,
+		filters,
+		setFilters,
+		selectedCategory,
+		handleCategoryTap,
+		clearFilter,
+		clearAllFilters,
+		applySheetFilters,
+	} = useExploreFilters();
 	const [sheetVisible, setSheetVisible] = useState(false);
-	const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 	const [viewModeMap, setViewModeMap] = useState(false);
 	const scrollRef = useRef<ScrollView>(null);
-
-	// Debounce la búsqueda como en fudi (400ms).
-	useEffect(() => {
-		const t = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
-		return () => clearTimeout(t);
-	}, [search]);
 
 	const activeFilters: OfferFilterState = useMemo(
 		() => ({
@@ -80,49 +80,19 @@ export default function ExploreScreen() {
 		searchQuery: debouncedSearch,
 	});
 
-	const applyFilters = useCallback((next: ExploreFilterState) => {
-		setFilters(next);
-	}, []);
-
 	const openFilterSheet = useCallback(() => setSheetVisible(true), []);
 	const closeFilterSheet = useCallback(() => setSheetVisible(false), []);
 	const toggleViewMode = useCallback(() => setViewModeMap((m) => !m), []);
 
-	const handleCategoryTap = useCallback((categoryId: string) => {
-		setSelectedCategory((current) => {
-			if (current === categoryId) {
-				// Deseleccionar: limpia la categoría y sigue en la vista actual.
-				setFilters((f) => ({ ...f, category: null }));
-				return null;
-			}
-			// Seleccionar: aplica el filtro y cambia al mapa (como en fudi).
-			setFilters((f) => ({ ...f, category: categoryId }));
-			setViewModeMap(true);
-			return categoryId;
-		});
-	}, []);
-
-	const clearFilter = useCallback((key: ActiveFilterKey) => {
-		if (key === "searchQuery") {
-			setSearch("");
-			setDebouncedSearch("");
-			setFilters((f) => ({ ...f, searchQuery: "" }));
-			return;
-		}
-		setFilters((f) => ({ ...f, [key]: null }));
-		if (key === "category") setSelectedCategory(null);
-	}, []);
-
-	const clearAllFilters = useCallback(() => {
-		setSearch("");
-		setDebouncedSearch("");
-		setSelectedCategory(null);
-		setFilters(emptyExploreFilters);
-	}, []);
-
-	const applySheetFilters = useCallback((sheetFilters: OfferFilterState) => {
-		setFilters((f) => ({ ...f, ...sheetFilters }));
-	}, []);
+	const handleCategoryTapWithMap = useCallback(
+		(categoryId: string) => {
+			// Seleccionar: aplica el filtro y cambia al mapa; deseleccionar:
+			// limpia la categoría y sigue en la vista actual.
+			if (selectedCategory !== categoryId) setViewModeMap(true);
+			handleCategoryTap(categoryId);
+		},
+		[selectedCategory, handleCategoryTap],
+	);
 
 	const handleCollapseCategories = useCallback(() => {
 		// deja que LayoutAnimation arranque y luego hace scroll suave arriba
@@ -142,20 +112,24 @@ export default function ExploreScreen() {
 		}
 		return (
 			<View style={styles.flex}>
-				<ExploreMapView
-					offers={data ?? []}
-					filters={{ ...filters, searchQuery: debouncedSearch }}
-					userLocation={
-						selectedAddress?.latitude != null
-							? {
-									latitude: selectedAddress.latitude,
-									longitude: selectedAddress.longitude,
-								}
-							: null
-					}
-					onBack={toggleViewMode}
-					onFilterTap={openFilterSheet}
-				/>
+				{isLoading && !data ? (
+					<LoadingView />
+				) : (
+					<ExploreMapView
+						offers={data ?? []}
+						filters={{ ...filters, searchQuery: debouncedSearch }}
+						userLocation={
+							selectedAddress?.latitude != null
+								? {
+										latitude: selectedAddress.latitude,
+										longitude: selectedAddress.longitude,
+									}
+								: null
+						}
+						onBack={toggleViewMode}
+						onFilterTap={openFilterSheet}
+					/>
+				)}
 				{sheetVisible ? (
 					<OfferFiltersSheet
 						current={activeFilters}
@@ -205,7 +179,7 @@ export default function ExploreScreen() {
 
 				<ExploreCategoryGrid
 					selectedCategory={selectedCategory}
-					onCategoryTap={handleCategoryTap}
+					onCategoryTap={handleCategoryTapWithMap}
 					onCollapse={handleCollapseCategories}
 				/>
 

@@ -5,7 +5,9 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
+	Button,
 	Card,
+	EmptyState,
 	ErrorState,
 	LoadingView,
 	Screen,
@@ -16,6 +18,8 @@ import { useBusinesses, useBusinessStats } from "@/features/business/hooks";
 import {
 	statsDaysInRange,
 	statsRangeFor,
+	statsRangeLabel,
+	statsViewModel,
 	type StatsPeriod,
 } from "@/features/business/domain/stats";
 import { formatMoney, formatPercent } from "@/core/utils/formatters";
@@ -23,27 +27,6 @@ import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
 import type { BusinessStats } from "@/features/business/domain/business";
-
-const MONTH_ABBR = [
-	"ene", "feb", "mar", "abr", "may", "jun",
-	"jul", "ago", "sep", "oct", "nov", "dic",
-];
-
-function rangeLabel(period: StatsPeriod, offset: number): string {
-	if (offset === 0) {
-		if (period === "week") return strings.business.statsThisWeek;
-		if (period === "month") return strings.business.statsThisMonth;
-		return strings.business.statsThisYear;
-	}
-	const { start, end } = statsRangeFor(period, offset);
-	if (period === "year") return String(end.getFullYear());
-	if (period === "month")
-		return `${MONTH_ABBR[start.getMonth()]} ${start.getFullYear()}`;
-	const sameYear = start.getFullYear() === end.getFullYear();
-	const day = (d: Date) =>
-		`${d.getDate()} ${MONTH_ABBR[d.getMonth()]}${sameYear ? "" : ` ${d.getFullYear()}`}`;
-	return `${day(start)} – ${day(end)} ${end.getFullYear()}`;
-}
 
 export default function BusinessStatsScreen() {
 	const { colors } = useTheme();
@@ -70,7 +53,28 @@ export default function BusinessStatsScreen() {
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!stats || !business) return null;
+	if (!stats || !business)
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+					<ScreenHeader
+						title={strings.business.statistics}
+						fallback="/(business)/management"
+					/>
+					<EmptyState
+						title={strings.business.noSalesInPeriod}
+						message={strings.business.noSalesProducts}
+						action={
+							<Button
+								label={strings.common.retry}
+								variant="outline"
+								onPress={() => void refetch()}
+							/>
+						}
+					/>
+				</View>
+			</Screen>
+		);
 
 	return (
 		<Screen scroll>
@@ -215,7 +219,11 @@ function PeriodSelector({
 						numberOfLines={1}
 						style={{ color: colors.mutedForeground }}
 					>
-						{rangeLabel(period, offset)}
+						{statsRangeLabel(period, offset, {
+							thisWeek: strings.business.statsThisWeek,
+							thisMonth: strings.business.statsThisMonth,
+							thisYear: strings.business.statsThisYear,
+						})}
 					</AppText>
 				</View>
 				<Pressable
@@ -270,7 +278,7 @@ function KpiCard({
 	return (
 		<Card style={styles.kpi}>
 			<View style={styles.kpiHeader}>
-				<View style={[styles.kpiIcon, { backgroundColor: color + "26" }]}>
+				<View style={[styles.kpiIcon, { backgroundColor: withAlpha(color, 0.15) }]}>
 					<Ionicons name={icon} size={16} color={color} />
 				</View>
 				<AppText variant="bodySmall" numberOfLines={1} style={styles.flex1}>
@@ -458,9 +466,9 @@ function PeriodSummary({
 	days: number;
 }) {
 	const { colors } = useTheme();
-	const dailyAvg = stats.revenue > 0 ? (stats.revenue / days).toFixed(2) : "0.00";
-	const ticketAvg =
-		stats.ordersCount > 0 ? (stats.revenue / stats.ordersCount).toFixed(2) : "0.00";
+	const vm = statsViewModel(stats);
+	const dailyAvg = vm.dailyAvg(days);
+	const ticketAvg = vm.avgTicket;
 
 	return (
 		<View style={[styles.summary, { backgroundColor: colors.primary, boxShadow: `0px 4px 12px ${withAlpha(colors.primary, 0.302)}` }]}>

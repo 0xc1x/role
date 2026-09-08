@@ -13,6 +13,7 @@ import { Logo } from "@/core/ui/Logo";
 import { AuthScreenShell } from "@/features/auth/presentation/AuthScreenShell";
 import { SocialAuthButtons } from "@/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/features/auth/data/repository";
+import { validateSignupForm } from "@/features/auth/domain/validation";
 
 const BENEFITS = [
 	strings.auth.benefitSave,
@@ -34,34 +35,11 @@ export default function SignupScreen() {
 	const [loading, setLoading] = useState(false);
 
 	const validate = () => {
-		const name = fullName.trim();
-		const mail = email.trim();
-		let ok = true;
-		if (!name) {
-			setNameError(strings.auth.requiredName);
-			ok = false;
-		} else {
-			setNameError(null);
-		}
-		if (!mail) {
-			setEmailError(strings.auth.requiredEmail);
-			ok = false;
-		} else if (!mail.includes("@")) {
-			setEmailError(strings.auth.invalidEmail);
-			ok = false;
-		} else {
-			setEmailError(null);
-		}
-		if (!password) {
-			setPasswordError(strings.auth.requiredPassword);
-			ok = false;
-		} else if (password.length < 8) {
-			setPasswordError(strings.auth.passwordMinError);
-			ok = false;
-		} else {
-			setPasswordError(null);
-		}
-		return ok;
+		const result = validateSignupForm(fullName, email, password);
+		setNameError(result.nameError);
+		setEmailError(result.emailError);
+		setPasswordError(result.passwordError);
+		return result.ok;
 	};
 
 	const handleSignup = async () => {

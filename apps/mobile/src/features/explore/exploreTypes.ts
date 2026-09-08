@@ -1,4 +1,4 @@
-import type { OfferFilterState } from "@/features/offers/components/OfferFiltersSheet";
+import type { OfferFilterState } from "@/features/offers/domain/offer";
 
 /** Filtros de Explorar: filtros del sheet + término de búsqueda libre. */
 export interface ExploreFilterState extends OfferFilterState {

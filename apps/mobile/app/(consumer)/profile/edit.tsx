@@ -8,7 +8,6 @@ import { useMemo } from "react";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
-import { useMutation } from "@tanstack/react-query";
 
 import {
 	Avatar,
@@ -34,7 +33,7 @@ import {
 } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import { useAppConfig } from "@/features/config";
-import { profileRepository } from "@/features/profile/data/repository";
+import { useSaveProfileWithEmail } from "@/features/profile/hooks";
 import { authRepository } from "@/features/auth/data/repository";
 import { toAppError } from "@/core/error/mapper";
 import { spacing } from "@/core/theme/spacing";
@@ -46,9 +45,9 @@ function initialsOf(profile: UserProfile): string {
 	if (!name) return "F";
 	const parts = name.split(/\s+/);
 	if (parts.length >= 2) {
-		return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+		return `${parts[0]?.[0] ?? "F"}${parts[1]?.[0] ?? ""}`.toUpperCase();
 	}
-	return parts[0][0]!.toUpperCase();
+	return (parts[0]?.[0] ?? "F").toUpperCase();
 }
 
 const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -89,39 +88,13 @@ export default function EditProfileScreen() {
 
 	// El perfil vive en el store de sesión (Zustand), no en React Query:
 	// no hay caché que invalidar; el store se sincroniza con fetchProfile.
-	const save = useMutation({
-		mutationFn: async (input: {
-			fullName: string;
-			email: string;
-			phone: string | null;
-			city: string | null;
-		}) => {
-			await profileRepository.updateProfile(profile.id, {
-				full_name: input.fullName,
-				email: input.email,
-				phone: input.phone,
-				city: input.city,
-			});
-			const emailChanged = input.email !== profile.email;
-			if (emailChanged) {
-				await authRepository.updateEmail(input.email);
-			}
-			return { emailChanged };
+	const saveProfile = useSaveProfileWithEmail(profile.id, profile.email);
+	const save = {
+		get isPending() {
+			return saveProfile.isPending;
 		},
-		onSuccess: async ({ emailChanged }) => {
-			const updated = await authRepository.fetchProfile(profile.id);
-			if (updated) setProfile(updated);
-			toast.success(
-				emailChanged
-					? strings.profileEdit.updatedWithEmailConfirmation
-					: strings.profileEdit.updated,
-			);
-			goBackOr("/(consumer)/profile");
-		},
-		onError: (e) => {
-			setError(toAppError(e, strings.common.error).message);
-		},
-	});
+		mutate: saveProfile.mutate,
+	};
 
 	const handleSave = () => {
 		const trimmedName = name.trim();
@@ -140,12 +113,30 @@ export default function EditProfileScreen() {
 		}
 
 		setError(null);
-		save.mutate({
-			fullName: trimmedName,
-			email: trimmedEmail,
-			phone: phone.trim() || null,
-			city: city === "Otra" ? cityOther.trim() : city.trim() || null,
-		});
+		save.mutate(
+			{
+				fullName: trimmedName,
+				email: trimmedEmail,
+				phone: phone.trim() || null,
+				city: city === "Otra" ? cityOther.trim() : city.trim() || null,
+			},
+			{
+				onSuccess: ({ emailChanged }) => {
+					void authRepository.fetchProfile(profile.id).then((updated) => {
+						if (updated) setProfile(updated);
+					});
+					toast.success(
+						emailChanged
+							? strings.profileEdit.updatedWithEmailConfirmation
+							: strings.profileEdit.updated,
+					);
+					goBackOr("/(consumer)/profile");
+				},
+				onError: (e) => {
+					setError(toAppError(e, strings.common.error).message);
+				},
+			},
+		);
 	};
 
 	return (

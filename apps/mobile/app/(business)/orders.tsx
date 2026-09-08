@@ -27,7 +27,8 @@ import {
 	type OrdersSort,
 	type OrdersTab,
 } from "@/features/business/domain/orders";
-import { orderStatusLabels } from "@/features/orders/domain/order";
+import { orderStatusLabels, filterByHistoryPeriod, type HistoryPeriod } from "@/features/orders/domain/order";
+import { HistoryDateFilter } from "@/features/orders/components/HistoryDateFilter";
 import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
 import { BranchSelector } from "@/features/business/components/products/BranchSelector";
 import { OrderStatsRow } from "@/features/business/components/orders/OrderStatsRow";
@@ -63,7 +64,7 @@ export default function BusinessOrdersScreen() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [status, setStatus] = useState<OrderStatusType | null>(null);
 	const [sort, setSort] = useState<OrdersSort>("newest");
-	const [historyPeriod, setHistoryPeriod] = useState<"today" | "week" | "all">("week");
+	const [historyPeriod, setHistoryPeriod] = useState<HistoryPeriod>("week");
 	const [weekOffset, setWeekOffset] = useState(0);
 	const pull = useWebPullToRefresh({
 		onRefresh: () => void refetch(),
@@ -95,23 +96,7 @@ export default function BusinessOrdersScreen() {
 	});
 	const filtered = useMemo(() => {
 		if (tab !== "history" || historyPeriod === "all") return baseFiltered;
-		const now = new Date();
-		if (historyPeriod === "today") {
-			const start = new Date(now); start.setHours(0,0,0,0);
-			const end = new Date(now); end.setHours(23,59,59,999);
-			return baseFiltered.filter((i) => {
-				const d = new Date(i.order.created_at);
-				return d >= start && d <= end;
-			});
-		}
-		const base = new Date(now); base.setDate(base.getDate() + weekOffset * 7);
-		const day = base.getDay() === 0 ? 7 : base.getDay();
-		const monday = new Date(base); monday.setDate(base.getDate() - day + 1); monday.setHours(0,0,0,0);
-		const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23,59,59,999);
-		return baseFiltered.filter((i) => {
-			const d = new Date(i.order.created_at);
-			return d >= monday && d <= sunday;
-		});
+		return filterByHistoryPeriod(baseFiltered, historyPeriod, weekOffset);
 	}, [baseFiltered, tab, historyPeriod, weekOffset]);
 
 	const isHistory = tab === "history";
@@ -235,70 +220,6 @@ export default function BusinessOrdersScreen() {
 		</Screen>
 	);
 }
-
-function HistoryDateFilter({
-	period,
-	weekOffset,
-	onPeriodChange,
-	onWeekChange,
-}: {
-	period: "today" | "week" | "all";
-	weekOffset: number;
-	onPeriodChange: (p: "today" | "week" | "all") => void;
-	onWeekChange: (o: number) => void;
-}) {
-	const { colors } = useTheme();
-	const now = new Date();
-	const base = new Date(now);
-	base.setDate(base.getDate() + weekOffset * 7);
-	const day = base.getDay() === 0 ? 7 : base.getDay();
-	const monday = new Date(base);
-	monday.setDate(base.getDate() - day + 1);
-	const sunday = new Date(monday);
-	sunday.setDate(monday.getDate() + 6);
-	const fmt = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-	const weekLabel = weekOffset === 0 ? "Esta semana" : `${fmt(monday)} - ${fmt(sunday)}`;
-	const isFutureWeek = weekOffset >= 0;
-	return (
-		<View style={historyStyles.wrap}>
-			<View style={historyStyles.chipsRow}>
-				{([
-					{ k: "week" as const, l: "Semana" },
-					{ k: "today" as const, l: "Hoy" },
-					{ k: "all" as const, l: "Todo" },
-				] as const).map((c) => {
-					const sel = period === c.k;
-					return (
-						<Pressable key={c.k} onPress={() => onPeriodChange(c.k)} style={[historyStyles.chip, { borderColor: sel ? colors.primary : colors.borderSolid, backgroundColor: sel ? colors.primary : colors.card }]}>
-							<AppText variant="bodySmall" weight={sel ? "bold" : "regular"} style={{ color: sel ? colors.primaryForeground : colors.mutedForeground }}>
-								{c.l}
-							</AppText>
-						</Pressable>
-					);
-				})}
-			</View>
-			{period === "week" ? (
-				<View style={historyStyles.weekRow}>
-					<Pressable onPress={() => onWeekChange(weekOffset - 1)} hitSlop={8} style={historyStyles.weekBtn}>
-						<Ionicons name="chevron-back" size={18} color={colors.foreground} />
-					</Pressable>
-					<AppText variant="bodySmall" weight="semiBold" style={{ color: colors.foreground }}>{weekLabel}</AppText>
-					<Pressable onPress={() => !isFutureWeek && onWeekChange(weekOffset + 1)} hitSlop={8} style={[historyStyles.weekBtn, isFutureWeek && { opacity: 0.3 }]} disabled={isFutureWeek}>
-						<Ionicons name="chevron-forward" size={18} color={colors.foreground} />
-					</Pressable>
-				</View>
-			) : null}
-		</View>
-	);
-}
-
-const historyStyles = StyleSheet.create({
-	wrap: { paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, gap: spacing.sm },
-	chipsRow: { flexDirection: "row", gap: spacing.sm },
-	chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-	weekRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.xs },
-	weekBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-});
 
 const styles = StyleSheet.create({
 	header: {

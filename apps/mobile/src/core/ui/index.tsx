@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
 import {
-	Platform,
 	ActivityIndicator,
-	Animated,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -18,6 +16,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useNavigation, type Href } from "expo-router";
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withSequence,
+	withSpring,
+	withTiming,
+	Easing,
+} from "react-native-reanimated";
 
 import { useTheme } from "@/core/theme";
 import type { ColorTokens } from "@/core/theme/colors";
@@ -194,7 +200,7 @@ export function CircleIconButton({
 	);
 }
 
-// ─── Heart toggle button (floating favorite) ─────────────────────
+// ─── Heart toggle button (floating favorite, reanimated pop) ─────
 export function HeartButton({
 	isFavorite,
 	onPress,
@@ -209,21 +215,26 @@ export function HeartButton({
 	accessibilityLabel?: string;
 }) {
 	const { colors } = useTheme();
-	const scale = useRef(new Animated.Value(1)).current;
+	const scale = useSharedValue(1);
+	const prevFavorite = useRef(isFavorite);
 
 	useEffect(() => {
-		if (!isFavorite) return;
-		scale.setValue(0.65);
-		Animated.spring(scale, {
-			toValue: 1,
-			friction: 3,
-			tension: 160,
-			useNativeDriver: Platform.OS !== "web",
-		}).start();
+		if (prevFavorite.current !== isFavorite) {
+			prevFavorite.current = isFavorite;
+			scale.value = withSequence(
+				withTiming(0.65, { duration: 100, easing: Easing.in(Easing.quad) }),
+				withTiming(1.4, { duration: 160, easing: Easing.out(Easing.quad) }),
+				withSpring(1, { damping: 12, stiffness: 200 }),
+			);
+		}
 	}, [isFavorite, scale]);
 
+	const heartStyle = useAnimatedStyle(() => ({
+		transform: [{ scale: scale.value }],
+	}));
+
 	return (
-		<Animated.View style={{ transform: [{ scale }] }}>
+		<Animated.View style={heartStyle}>
 			<Pressable
 				onPress={onPress}
 				accessibilityRole="button"

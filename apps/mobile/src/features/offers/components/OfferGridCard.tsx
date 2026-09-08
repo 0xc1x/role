@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
+import { AppText, HeartButton } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
@@ -61,10 +61,10 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 				{discount >= 10 ? (
 					<View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
 						<AppText
+							variant="caption"
+							weight="bold"
 							style={{
 								color: colors.primaryForeground,
-								fontSize: 11,
-								fontWeight: "700",
 							}}
 						>
 							-{discount}%
@@ -76,10 +76,10 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 						style={[styles.lowStockBadge, { backgroundColor: colors.destructive }]}
 					>
 						<AppText
+							variant="tiny"
+							weight="semiBold"
 							style={{
 								color: colors.destructiveForeground,
-								fontSize: 10,
-								fontWeight: "600",
 							}}
 						>
 							{strings.offers.onlyLeft.replace(
@@ -89,19 +89,14 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 						</AppText>
 					</View>
 				) : null}
-				<Pressable
-					onPress={() => toggleFavorite.mutate(offer.offer.id)}
-					hitSlop={6}
-					style={[styles.heart, { backgroundColor: colors.card }]}
-				>
-					<Ionicons
-						name={isFavorite ? "heart" : "heart-outline"}
-						size={16}
-						color={
-							isFavorite ? colors.destructiveVibrant : colors.mutedForeground
-						}
+				<View style={styles.heart}>
+					<HeartButton
+						isFavorite={isFavorite}
+						onPress={() => toggleFavorite.mutate(offer.offer.id)}
+						size={30}
+						iconSize={16}
 					/>
-				</Pressable>
+				</View>
 			</View>
 			<View style={styles.body}>
 				<AppText
@@ -113,9 +108,9 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 					{offer.business.name}
 				</AppText>
 				<AppText
-					variant="bodySmall"
+					variant="caption"
 					numberOfLines={1}
-					style={{ color: colors.mutedForeground, fontSize: 11 }}
+					style={{ color: colors.mutedForeground }}
 				>
 					{offer.offer.title}
 				</AppText>
@@ -124,8 +119,8 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 						{formatMoney(offer.offer.discounted_price)}
 					</AppText>
 					<AppText
-						variant="priceOriginal"
-						style={{ color: colors.mutedForeground, fontSize: 11 }}
+						variant="caption"
+						style={{ color: colors.mutedForeground }}
 					>
 						{formatMoney(offer.offer.original_price)}
 					</AppText>
@@ -133,7 +128,7 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 				{distance ? (
 					<View style={styles.distanceRow}>
 						<Ionicons name="location-outline" size={10} color={colors.mutedForeground} />
-						<AppText style={{ color: colors.mutedForeground, fontSize: 10 }}>
+						<AppText variant="tiny" style={{ color: colors.mutedForeground }}>
 							{distance}
 						</AppText>
 					</View>

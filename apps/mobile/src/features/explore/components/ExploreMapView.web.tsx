@@ -23,7 +23,7 @@ import {
 import { useCategories } from "@/features/hooks";
 import { env } from "@/core/config/env";
 // Static import: this file is web-only.
-import { MapCanvas } from "@/features/business/components/MapCanvas.web";
+import { MapCanvas } from "@/core/ui/MapCanvas.web";
 
 const FALLBACK_COORD = { latitude: -1.8312, longitude: -78.1834 };
 
@@ -83,12 +83,14 @@ export function ExploreMapView({
 					{locatedOffers.map((offer) => {
 						const selected =
 							selectedOffer?.offer.id === offer.offer.id;
+						const loc = offer.location;
+						if (loc == null) return null;
 						return (
 							<AdvancedMarker
 								key={`${offer.offer.id}-${selected ? "sel" : "def"}`}
 								position={{
-									lat: offer.location!.latitude,
-									lng: offer.location!.longitude,
+									lat: loc.latitude,
+									lng: loc.longitude,
 								}}
 								onClick={() => setSelectedOffer(offer)}
 							>

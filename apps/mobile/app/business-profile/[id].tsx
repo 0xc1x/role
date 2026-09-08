@@ -1,38 +1,40 @@
-import { useEffect, useRef, useState } from "react";
-import { router, useLocalSearchParams } from "expo-router";
+import { useRef } from "react";
+import { useLocalSearchParams } from "expo-router";
 import {
-	ActivityIndicator,
 	Animated,
-	Image,
-	Linking,
-	Pressable,
 	ScrollView,
 	StyleSheet,
 	View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, CircleIconButton, goBackOr } from "@/core/ui";
+import { ErrorState, LoadingView } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { spacing } from "@/core/theme/spacing";
 import { useBusinessProfile } from "@/features/business/hooks";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import type { BusinessProfileDetail } from "@/features/business/domain/business";
-import { BusinessLocationMap } from "@/features/business/components/BusinessLocationMap";
-import { ReviewItem } from "@/features/business/components/ReviewItem";
+import { ProfileHero } from "@/features/business/components/profile/ProfileHero";
+import {
+	AboutCard,
+	BusinessHeader,
+	StatsCard,
+} from "@/features/business/components/profile/ProfileHeader";
+import {
+	ContactInfoCard,
+	HoursCard,
+} from "@/features/business/components/profile/ProfileContact";
+import {
+	LocationCard,
+	ReviewsCard,
+} from "@/features/business/components/profile/ProfileSocial";
 
 const HERO_HEIGHT = 240;
 
 export default function BusinessProfileScreen() {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const businessId = id ?? "";
-	const { data: profile, isLoading, isError, refetch } = useBusinessProfile(businessId);
+	const { data: profile, isLoading, isError, error, refetch } = useBusinessProfile(businessId);
 
 	const scrollY = useRef(new Animated.Value(0)).current;
 	const headerHeight = scrollY.interpolate({
@@ -46,6 +48,7 @@ export default function BusinessProfileScreen() {
 		extrapolateRight: "clamp",
 	});
 
+	// Full-bleed hero: sin <Screen> para que el cover ocupe el notch.
 	if (isLoading) {
 		return (
 			<View
@@ -54,7 +57,7 @@ export default function BusinessProfileScreen() {
 					{ backgroundColor: colors.background, paddingTop: insets.top },
 				]}
 			>
-				<ActivityIndicator size="large" color={colors.primary} />
+				<LoadingView />
 			</View>
 		);
 	}
@@ -67,31 +70,7 @@ export default function BusinessProfileScreen() {
 					{ backgroundColor: colors.background, paddingTop: insets.top },
 				]}
 			>
-				<Ionicons
-					name="location-outline"
-					size={64}
-					color={colors.mutedForeground}
-				/>
-				<AppText variant="h3" weight="bold" style={{ marginTop: spacing.md }}>
-					{strings.businessProfile.notFoundTitle}
-				</AppText>
-				<AppText
-					style={{ color: colors.mutedForeground, textAlign: "center", marginTop: spacing.xs }}
-				>
-					{strings.businessProfile.notFoundBody}
-				</AppText>
-				<Pressable onPress={() => void refetch()}>
-					<View
-						style={[
-							styles.retryPill,
-							{ backgroundColor: colors.foreground },
-						]}
-					>
-						<AppText style={{ color: colors.background }}>
-							{strings.common.retry}
-						</AppText>
-					</View>
-				</Pressable>
+				<ErrorState error={error} onRetry={() => void refetch()} />
 			</View>
 		);
 	}
@@ -141,416 +120,14 @@ export default function BusinessProfileScreen() {
 				</View>
 			</ScrollView>
 
-			{/* ── Cover + gradiente ──────────────────────────────────────── */}
-			<Animated.View
-				style={[styles.header, { height: headerHeight, opacity: headerOpacity, pointerEvents: "none" }]}
-			>
-				{profile.business.cover_image ? (
-					<Image
-						source={{ uri: profile.business.cover_image }}
-						style={styles.headerImage}
-						resizeMode="cover"
-					/>
-				) : (
-					<View style={[styles.headerImage, { backgroundColor: colors.primary }]} />
-				)}
-				<LinearGradient
-					colors={[
-						withAlpha(colors.scrim, 0.38),
-						"transparent",
-						colors.background,
-					]}
-					locations={[0, 0.4, 1]}
-					style={styles.headerGradient}
-				/>
-			</Animated.View>
-
-			{/* ── Controles superiores flotantes ─────────────────────────── */}
-			<View style={[styles.topBar, { top: insets.top + spacing.xl }]}>
-				<CircleIconButton
-					icon={<Ionicons name="chevron-back" size={20} color={colors.foreground} />}
-					onPress={() => goBackOr("/(consumer)")}
-				/>
-			</View>
-		</View>
-	);
-}
-
-// ─── Cabecera del negocio ───────────────────────────────────────────
-
-function BusinessHeader({ profile }: { profile: BusinessProfileDetail }) {
-	const { colors } = useTheme();
-	const business = profile.business;
-	return (
-		<View>
-			<View style={styles.headerRow}>
-				<View style={[styles.logoBox, { backgroundColor: colors.background, boxShadow: `0px 8px 12px ${colors.shadow}` }]}>
-					{business.image ? (
-						<Image source={{ uri: business.image }} style={styles.logo} resizeMode="cover" />
-					) : (
-						<View style={[styles.logo, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]}>
-							<Ionicons name="storefront-outline" size={28} color={colors.mutedForeground} />
-						</View>
-					)}
-				</View>
-				<View style={styles.headerText}>
-					<View style={[styles.typeBadge, { backgroundColor: `${withAlpha(colors.primary, 0.102)}` }]}>
-						<AppText
-							style={{
-								color: colors.primary,
-								fontWeight: "700",
-								letterSpacing: 0.8,
-								fontSize: 11,
-								textTransform: "uppercase",
-							}}
-						>
-							{BUSINESS_TYPE_LABELS[business.type] ?? business.type}
-						</AppText>
-					</View>
-					<AppText
-						variant="h4"
-						weight="extraBold"
-						style={{ letterSpacing: -0.8, marginTop: 6 }}
-					>
-						{business.name}
-					</AppText>
-				</View>
-			</View>
-
-			<View style={[styles.ratingRow, { marginTop: spacing.md }]}>
-				<Ionicons name="star" size={20} color={colors.yellow} />
-				<AppText variant="bodyMedium" weight="bold">
-					{(business.rating ?? 0).toFixed(1)}
-				</AppText>
-				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-					{strings.businessProfile.communityReviews.replace(
-						"{n}",
-						String(business.review_count ?? 0),
-					)}
-				</AppText>
-			</View>
-		</View>
-	);
-}
-
-// ─── Stats / impacto ────────────────────────────────────────────────
-
-function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
-	const { colors } = useTheme();
-	return (
-		<View
-			style={[
-				styles.statsCard,
-				{
-					backgroundColor: colors.surfaceSuccess,
-					borderColor: colors.surfaceSuccessBorder,
-				},
-			]}
-		>
-			<View style={styles.statsRow}>
-				<Ionicons name="leaf-outline" size={24} color={colors.successDark} />
-				<AppText
-					style={{
-						fontSize: 32,
-						fontWeight: "800",
-						color: colors.successDark,
-						marginLeft: spacing.sm,
-					}}
-				>
-					{profile.totalRescued}
-				</AppText>
-			</View>
-			<AppText
-				weight="bold"
-				style={{ color: colors.success, textAlign: "center", marginTop: spacing.xs }}
-			>
-				{strings.businessProfile.rescuedFromWaste}
-			</AppText>
-			{profile.memberSince ? (
-				<AppText
-					style={{
-						color: `${withAlpha(colors.success, 0.702)}`,
-						fontSize: 11,
-						textAlign: "center",
-						marginTop: spacing.sm,
-					}}
-				>
-					{strings.businessProfile.partnerSince.replace(
-						"{date}",
-						profile.memberSince,
-					)}
-				</AppText>
-			) : null}
-		</View>
-	);
-}
-
-// ─── Acerca del local ───────────────────────────────────────────────
-
-function AboutCard({ description }: { description: string }) {
-	const { colors } = useTheme();
-	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<AppText variant="labelMedium" weight="bold">
-				{strings.businessProfile.aboutBusiness}
-			</AppText>
-			<AppText
-				style={{ color: colors.mutedForeground, lineHeight: 21, marginTop: spacing.sm }}
-			>
-				{description}
-			</AppText>
-		</View>
-	);
-}
-
-// ─── Información de contacto ────────────────────────────────────────
-
-function ContactInfoCard({ profile }: { profile: BusinessProfileDetail }) {
-	const { colors } = useTheme();
-	const business = profile.business;
-	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<AppText variant="labelMedium" weight="bold">
-				{strings.businessProfile.contactInfo}
-			</AppText>
-			<View style={{ height: spacing.lg }} />
-
-			<InfoRow
-				icon="location-outline"
-				label={strings.businessProfile.address}
-				text={profile.address ?? strings.businessProfile.notAvailable}
-				trailing={
-					profile.latitude != null && profile.longitude != null ? (
-						<Pressable
-							onPress={() => void openMaps(profile.latitude!, profile.longitude!)}
-						>
-							<AppText weight="bold" style={{ color: colors.primary }}>
-								{strings.businessProfile.directions}
-							</AppText>
-						</Pressable>
-					) : null
-				}
+			<ProfileHero
+				coverImage={profile.business.cover_image}
+				headerHeight={headerHeight}
+				headerOpacity={headerOpacity}
+				topOffset={insets.top + spacing.xl}
 			/>
-
-			{business.phone?.length ? (
-				<>
-					<View style={{ height: spacing.md }} />
-					<InfoRow
-						icon="call-outline"
-						label={strings.businessProfile.phone}
-						text={business.phone}
-						onPress={() => void openUrl(`tel:${business.phone}`)}
-						isLink
-					/>
-				</>
-			) : null}
-
-			{business.email?.length ? (
-				<>
-					<View style={{ height: spacing.md }} />
-					<InfoRow
-						icon="mail-outline"
-						label={strings.businessProfile.email}
-						text={business.email}
-						onPress={() => void openUrl(`mailto:${business.email}`)}
-						isLink
-					/>
-				</>
-			) : null}
-
-			{business.website?.length ? (
-				<>
-					<View style={{ height: spacing.md }} />
-					<InfoRow
-						icon="globe-outline"
-						label={strings.businessProfile.website}
-						text={business.website}
-						onPress={() => {
-							const url = business.website!.startsWith("http")
-								? business.website!
-								: `https://${business.website!}`;
-							void openUrl(url);
-						}}
-						isLink
-					/>
-				</>
-			) : null}
 		</View>
 	);
-}
-
-function InfoRow({
-	icon,
-	label,
-	text,
-	onPress,
-	isLink,
-	trailing,
-}: {
-	icon: keyof typeof Ionicons.glyphMap;
-	label: string;
-	text: string;
-	onPress?: () => void;
-	isLink?: boolean;
-	trailing?: React.ReactNode;
-}) {
-	const { colors } = useTheme();
-	return (
-		<View style={styles.infoRow}>
-			<Ionicons name={icon} size={18} color={colors.primary} style={{ marginTop: 2 }} />
-			<View style={{ width: spacing.sm }} />
-			<View style={{ flex: 1 }}>
-				<AppText style={{ color: colors.mutedForeground, fontSize: 12 }}>
-					{label}
-				</AppText>
-				<Pressable onPress={onPress} disabled={!isLink}>
-					<AppText
-						weight={isLink ? "bold" : undefined}
-						style={{ color: isLink ? colors.primary : colors.foreground, marginTop: 2 }}
-					>
-						{text}
-					</AppText>
-					{trailing ? <View style={{ marginTop: 4 }}>{trailing}</View> : null}
-				</Pressable>
-			</View>
-		</View>
-	);
-}
-
-// ─── Horarios comerciales ───────────────────────────────────────────
-
-function HoursCard({ hours }: { hours: BusinessProfileDetail["hours"] }) {
-	const { colors } = useTheme();
-	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<View style={styles.hoursTitleRow}>
-				<Ionicons name="time-outline" size={20} color={colors.primary} />
-				<View style={{ width: spacing.sm }} />
-				<AppText weight="semiBold">{strings.businessProfile.businessHours}</AppText>
-			</View>
-			<View style={{ height: spacing.md }} />
-			{hours.map((h) => {
-				const closed = h.hoursDisplay === strings.businessProfile.closed;
-				return (
-					<View key={h.dayRange} style={[styles.hoursRow, { borderBottomColor: colors.border }]}>
-						<AppText weight="medium">{h.dayRange}</AppText>
-						<AppText
-							style={{ color: closed ? colors.destructive : colors.mutedForeground }}
-						>
-							{h.hoursDisplay}
-						</AppText>
-					</View>
-				);
-			})}
-		</View>
-	);
-}
-
-// ─── Reseñas ────────────────────────────────────────────────────────
-
-function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
-	const { colors } = useTheme();
-	const business = profile.business;
-	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<View style={styles.reviewsHeaderRow}>
-				<AppText variant="labelMedium" weight="bold">
-					{strings.businessProfile.reviewsTitle}
-				</AppText>
-				<View style={[styles.ratingBadge, { backgroundColor: colors.surfaceWarning }]}>
-					<Ionicons name="star" size={14} color={colors.yellowDark} />
-					<View style={{ width: 4 }} />
-					<AppText weight="bold" style={{ color: colors.yellowDark }}>
-						{(business.rating ?? 0).toFixed(1)}
-					</AppText>
-				</View>
-			</View>
-			<View style={{ height: spacing.lg }} />
-
-			{profile.reviews.length === 0 ? (
-				<View style={{ paddingVertical: spacing.lg }}>
-					<AppText style={{ color: colors.mutedForeground, textAlign: "center" }}>
-						{strings.businessProfile.noReviews}
-					</AppText>
-				</View>
-			) : (
-				profile.reviews.map((review) => <ReviewItem key={review.id} review={review} />)
-			)}
-
-			{(business.review_count ?? 0) > 0 ? (
-				<Pressable
-					onPress={() =>
-						router.push(`/business-profile/${business.id}/reviews`)
-					}
-					hitSlop={8}
-					accessibilityRole="link"
-				>
-					<AppText
-						weight="bold"
-						style={{ color: colors.primary, textAlign: "center", marginTop: spacing.sm }}
-					>
-						{strings.businessProfile.seeAllReviews.replace(
-							"{n}",
-							String(business.review_count ?? 0),
-						)}
-					</AppText>
-				</Pressable>
-			) : null}
-		</View>
-	);
-}
-
-// ─── Geolocalización ────────────────────────────────────────────────
-
-function LocationCard({ profile }: { profile: BusinessProfileDetail }) {
-	const { colors } = useTheme();
-	const hasCoords = profile.latitude != null && profile.longitude != null;
-
-	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<AppText variant="labelMedium" weight="bold">
-				{strings.businessProfile.geolocation}
-			</AppText>
-			<AppText style={{ color: colors.mutedForeground, marginTop: spacing.xs }}>
-				{profile.address ?? ""}
-			</AppText>
-
-			{hasCoords ? (
-				<>
-					<View style={{ height: spacing.lg }} />
-					<BusinessLocationMap
-						latitude={profile.latitude!}
-						longitude={profile.longitude!}
-						onPress={() => void openMaps(profile.latitude!, profile.longitude!)}
-					/>
-					<View style={{ height: spacing.md }} />
-				</>
-			) : null}
-
-			{hasCoords ? (
-				<Pressable
-					onPress={() => void openMaps(profile.latitude!, profile.longitude!)}
-					style={[styles.routeButton, { backgroundColor: colors.primary }]}
-				>
-					<AppText weight="bold" style={{ color: colors.primaryForeground }}>
-						{strings.businessProfile.routeInMaps}
-					</AppText>
-				</Pressable>
-			) : null}
-		</View>
-	);
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────
-
-async function openMaps(latitude: number, longitude: number) {
-	await Linking.openURL(
-		`https://maps.google.com/?q=${latitude},${longitude}`,
-	).catch(() => {});
-}
-
-async function openUrl(url: string) {
-	await Linking.openURL(url).catch(() => {});
 }
 
 const styles = StyleSheet.create({
@@ -561,123 +138,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		paddingHorizontal: spacing.xl,
 	},
-	retryPill: {
-		paddingHorizontal: 24,
-		paddingVertical: 12,
-		borderRadius: 12,
-		marginTop: spacing.xl,
-	},
 	content: {
 		paddingHorizontal: spacing.xl,
-	},
-	headerRow: {
-		flexDirection: "row",
-		alignItems: "flex-start",
-	},
-	logoBox: {
-		width: 86,
-		height: 86,
-		borderRadius: radii.xl,
-		padding: 4,
-		},
-	logo: {
-		width: "100%",
-		height: "100%",
-		borderRadius: radii.xl,
-	},
-	headerText: {
-		flex: 1,
-		marginLeft: spacing.md,
-		paddingTop: spacing.sm,
-	},
-	typeBadge: {
-		alignSelf: "flex-start",
-		paddingHorizontal: 8,
-		paddingVertical: 3,
-		borderRadius: 6,
-	},
-	ratingRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-	},
-	statsCard: {
-		width: "100%",
-		padding: spacing.xl,
-		borderRadius: radii.xl,
-		borderWidth: 1,
-		alignItems: "center",
-	},
-	statsRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	card: {
-		width: "100%",
-		padding: spacing.sm,
-		borderRadius: radii.xl,
-		backgroundColor: "transparent",
-		},
-	infoRow: {
-		flexDirection: "row",
-		alignItems: "flex-start",
-	},
-	hoursTitleRow: {
-		flexDirection: "row",
-		alignItems: "center",
-	},
-	hoursRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		paddingVertical: spacing.sm,
-		borderBottomWidth: StyleSheet.hairlineWidth,
-	},
-	reviewsHeaderRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-	},
-	ratingBadge: {
-		flexDirection: "row",
-		alignItems: "center",
-		paddingHorizontal: 8,
-		paddingVertical: 4,
-		borderRadius: 8,
-	},
-	routeButton: {
-		width: "100%",
-		paddingVertical: 14,
-		borderRadius: 16,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	header: {
-		position: "absolute",
-		top: 0,
-		left: 0,
-		right: 0,
-		overflow: "hidden",
-	},
-	headerImage: {
-		width: "100%",
-		height: "100%",
-		position: "absolute",
-	},
-	headerGradient: {
-		position: "absolute",
-		left: 0,
-		right: 0,
-		top: 0,
-		bottom: 0,
-	},
-	topBar: {
-		position: "absolute",
-		left: spacing.xl,
-		right: spacing.xl,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
 	},
 });

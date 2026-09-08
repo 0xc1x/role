@@ -8,6 +8,7 @@ import { spacing, radii } from "@/core/theme/spacing";
 import { formatDistanceKm } from "@/core/utils/formatters";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
 import type { BusinessSummary } from "@/features/offers/domain/offer";
+import { haversineKm } from "@/features/offers/domain/offer";
 
 export function BusinessGridCard({
 	business,
@@ -26,7 +27,7 @@ export function BusinessGridCard({
 		business.latitude != null &&
 		business.longitude != null
 			? formatDistanceKm(
-					haversine(
+					haversineKm(
 						userLat,
 						userLng,
 						business.latitude,
@@ -72,7 +73,7 @@ export function BusinessGridCard({
 				{distance ? (
 					<View style={[styles.distanceBadge, { backgroundColor: colors.card }]}>
 						<Ionicons name="location-outline" size={11} color={colors.mutedForeground} />
-						<AppText style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground }}>
+						<AppText variant="caption" weight="semiBold" style={{ color: colors.mutedForeground }}>
 							{distance}
 						</AppText>
 					</View>
@@ -84,10 +85,10 @@ export function BusinessGridCard({
 				</AppText>
 				<AppText
 					numberOfLines={1}
+					variant="caption"
+					weight="medium"
 					style={{
 						color: colors.mutedForeground,
-						fontSize: 11,
-						fontWeight: "500",
 					}}
 				>
 					{typeLabel.toUpperCase()}
@@ -95,17 +96,6 @@ export function BusinessGridCard({
 			</View>
 		</Pressable>
 	);
-}
-
-function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
-	const toRad = (deg: number) => (deg * Math.PI) / 180;
-	const dLat = toRad(lat2 - lat1);
-	const dLng = toRad(lng2 - lng1);
-	const a =
-		Math.sin(dLat / 2) ** 2 +
-		Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-	return 6371 * c;
 }
 
 const styles = StyleSheet.create({

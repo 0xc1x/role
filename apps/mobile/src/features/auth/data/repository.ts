@@ -1,4 +1,5 @@
 import { supabase } from '@/core/supabase/client';
+import { env } from '@/core/config/env';
 import { Errors } from '@/core/error/app-error';
 
 import type { UserProfile } from '../domain/user';
@@ -81,7 +82,7 @@ export const authRepository = {
   async sendPasswordResetEmail(email: string): Promise<void> {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo:
-        process.env.EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL || undefined,
+        env.EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL || undefined,
     });
     if (error) throw mapAuthError(error);
   },

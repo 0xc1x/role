@@ -12,7 +12,7 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { formatDateTime, formatMoney } from "@/core/utils/formatters";
 import { orderStatusLabels } from "@/features/orders/domain/order";
-import { orderStatusTone } from "@/features/orders/components/OrderCard";
+import { orderStatusTone } from "@/features/orders/domain/order";
 import { isActiveStatus } from "@/features/orders/domain/order";
 import type { OrderDetail } from "@/features/orders/domain/order";
 import { OrderActionButtons } from "./OrderActionButtons";

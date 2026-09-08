@@ -4,7 +4,6 @@ import {
 	Pressable,
 	ScrollView,
 	StyleSheet,
-	TextInput,
 	View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,7 +11,7 @@ import { toast } from "sonner-native";
 import type { AddressType, SavedAddress } from "@0xc1x/role-commons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal, Button } from "@/core/ui";
+import { AppText, BottomSheetModal, Button, TextField } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
@@ -189,7 +188,6 @@ export function AddAddressSheet({
 					value={label}
 					onChangeText={setLabel}
 					placeholder={strings.addresses.nameHint}
-				 colors={colors}
 				/>
 
 				<Pressable
@@ -251,7 +249,6 @@ export function AddAddressSheet({
 					value={addressText}
 					onChangeText={setAddressText}
 					placeholder={strings.addresses.addressHint}
-					colors={colors}
 				/>
 
 				<FieldLabel>{strings.addresses.housingType}</FieldLabel>
@@ -301,7 +298,6 @@ export function AddAddressSheet({
 					value={references}
 					onChangeText={setReferences}
 					placeholder={strings.addresses.referencesHint}
-					colors={colors}
 					multiline
 				/>
 
@@ -352,47 +348,23 @@ function IconInput({
 	value,
 	onChangeText,
 	placeholder,
-	colors,
 	multiline,
 }: {
 	icon: keyof typeof Ionicons.glyphMap;
 	value: string;
 	onChangeText: (text: string) => void;
 	placeholder: string;
-	colors: ReturnType<typeof useTheme>["colors"];
 	multiline?: boolean;
 }) {
 	return (
-		<View
-			style={[
-				styles.inputRow,
-				{ 
-					backgroundColor: withAlpha(colors.inputBackground, 0.502) ,
-					borderColor: colors.borderSolid ,
-				},
-			]}
-		>
-			<Ionicons
-				name={icon}
-				size={20}
-				color={colors.mutedForeground}
-				style={styles.inputIcon}
-			/>
-			<TextInput
-				value={value}
-				onChangeText={onChangeText}
-				placeholder={placeholder}
-				placeholderTextColor={colors.mutedForeground}
-				autoCapitalize="sentences"
-				multiline={multiline}
-				style={[
-					styles.input,
-					
-					multiline && styles.inputMultiline,
-					{ color: colors.foreground ,},
-				]}
-			/>
-		</View>
+		<TextField
+			value={value}
+			onChangeText={onChangeText}
+			placeholder={placeholder}
+			iconName={icon}
+			autoCapitalize="sentences"
+			multiline={multiline}
+		/>
 	);
 }
 
@@ -416,23 +388,6 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		borderWidth: 1, 
 		marginHorizontal: 2,
-	},
-	inputRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		borderRadius: 20,
-		paddingHorizontal: spacing.md,
-		borderWidth: 1, 
-	},
-	inputIcon: { marginRight: spacing.sm },
-	input: {
-		flex: 1,
-		paddingVertical: spacing.md,
-		fontSize: 15,
-	},
-	inputMultiline: {
-		minHeight: 64,
-		textAlignVertical: "top",
 	},
 	mapCard: {
 		flexDirection: "row",

@@ -7,19 +7,14 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useCategories } from "@/features/hooks";
 import type { EmbeddedCategory } from "@/features/offers/domain/offer";
+import {
+	emptyOfferFilters,
+	type OfferFilterState,
+} from "@/features/offers/domain/offer";
 import { Ionicons } from "@expo/vector-icons";
 
-export interface OfferFilterState {
-	category: string | null;
-	maxPrice: number | null;
-	maxDistanceKm: number | null;
-}
-
-export const emptyOfferFilters: OfferFilterState = {
-	category: null,
-	maxPrice: null,
-	maxDistanceKm: null,
-};
+export type { OfferFilterState };
+export { emptyOfferFilters };
 
 const DISTANCE_OPTIONS = [2, 5, 10] as const;
 const PRICE_OPTIONS = [2, 5, 10] as const;

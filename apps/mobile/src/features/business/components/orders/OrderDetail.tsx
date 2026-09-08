@@ -44,7 +44,7 @@ import {
 	formatTime,
 } from "@/core/utils/formatters";
 import { orderStatusLabels } from "@/features/orders/domain/order";
-import { orderStatusTone } from "@/features/orders/components/OrderCard";
+import { orderStatusTone } from "@/features/orders/domain/order";
 import {
 	isTerminalStatus,
 	lastEventTimeFor,
