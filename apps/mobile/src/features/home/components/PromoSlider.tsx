@@ -13,7 +13,6 @@ import {
 import { type Href, router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { toast } from "sonner-native";
-
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
@@ -25,9 +24,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH - spacing.lg * 2;
 const CARD_HEIGHT = Math.min((CARD_WIDTH * 9) / 16, 220);
 const DOT_ANIM_DURATION = 250;
-// Tiempo sin nuevos eventos de onScroll para considerar que el scroll
-// ya se detuvo del todo (por inercia nativa, scroll táctil del navegador,
-// o el drag manual con mouse) y recién ahí forzar el snap.
 const SCROLL_SETTLE_DELAY = 120;
 
 export function PromoSlider() {
@@ -35,69 +31,120 @@ export function PromoSlider() {
 	const { data: slides = [] } = usePromoSlides();
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [isPaused, setIsPaused] = useState(false);
+
 	const scrollRef = useRef<ScrollView>(null);
 	const step = CARD_WIDTH + spacing.sm;
 
-	// Detecta el salto de "loop" (última slide -> primera) para no animar
-	// el indicador cruzando hacia atrás por todos los dots intermedios.
+	// ── Loop infinito ────────────────────────────────────────────────
+	const total = slides.length;
+	const hasLoop = total > 1;
+
+	const loopSlides = hasLoop
+		? [slides[total - 1], ...slides, slides[0]]
+		: slides;
+
+	// offset real dentro del ScrollView (1 = primera slide real)
+	const toScrollX = useCallback(
+		(logicalIndex: number) => (hasLoop ? logicalIndex + 1 : logicalIndex) * step,
+		[hasLoop, step],
+	);
+
 	const prevIndexRef = useRef(0);
 	const isWrapRef = useRef(false);
 
 	const goTo = useCallback(
-		(index: number, animated = true) => {
-			const total = slides.length;
+		(logicalIndex: number, animated = true) => {
 			if (total === 0) {
 				setCurrentIndex(0);
 				return;
 			}
-			const nextIndex = ((index % total) + total) % total;
-			isWrapRef.current = prevIndexRef.current === total - 1 && nextIndex === 0;
-			prevIndexRef.current = nextIndex;
-			setCurrentIndex(nextIndex);
+			const next = ((logicalIndex % total) + total) % total;
+			isWrapRef.current =
+				(prevIndexRef.current === total - 1 && next === 0) ||
+				(prevIndexRef.current === 0 && next === total - 1);
+			prevIndexRef.current = next;
+			setCurrentIndex(next);
 			scrollRef.current?.scrollTo({
-				x: index * step,
+				x: toScrollX(next),
 				animated,
 			});
 		},
-		[step, slides.length],
+		[total, toScrollX],
 	);
 
+	// Posicionar en la primera slide real al montar / cuando llegan datos
+	const didInit = useRef(false);
 	useEffect(() => {
+		if (total === 0 || didInit.current) return;
+		didInit.current = true;
+		// Sin animación para no “parpadear”
+		requestAnimationFrame(() => {
+			scrollRef.current?.scrollTo({ x: toScrollX(0), animated: false });
+		});
+	}, [total, toScrollX]);
+
+	// Autoplay
+	useEffect(() => {
+		if (!hasLoop) return;
 		const interval = setInterval(() => {
-			if (!isPaused && slides.length > 1) {
+			if (!isPaused) {
 				goTo(currentIndex + 1);
 			}
 		}, 5000);
 		return () => clearInterval(interval);
-	}, [currentIndex, isPaused, goTo]);
+	}, [currentIndex, isPaused, goTo, hasLoop]);
 
-	const scrollX = useRef(0);
+	const scrollX = useRef(hasLoop ? step : 0); // empezamos en la primera real
 	const dragStartX = useRef<number | null>(null);
 	const dragStartScrollX = useRef(0);
 	const dragAreaRef = useRef<View>(null);
 
 	const setIndexFromSnap = useCallback(
-		(index: number) => {
-			const total = slides.length;
-			const isWrap = prevIndexRef.current === total - 1 && index === 0;
+		(logicalIndex: number) => {
+			const isWrap =
+				(prevIndexRef.current === total - 1 && logicalIndex === 0) ||
+				(prevIndexRef.current === 0 && logicalIndex === total - 1);
 			isWrapRef.current = isWrap;
-			prevIndexRef.current = index;
-			setCurrentIndex(index);
+			prevIndexRef.current = logicalIndex;
+			setCurrentIndex(logicalIndex);
 		},
-		[slides.length],
+		[total],
 	);
 
-	const snapToNearest = useCallback(() => {
-		const index = Math.round(scrollX.current / step);
-		if (index >= slides.length) {
-			setIndexFromSnap(0);
-			scrollRef.current?.scrollTo({ x: 0, animated: true });
+	/** Convierte offset de scroll → índice lógico [0..total-1] y corrige clones. */
+	const normalizeAndSnap = useCallback(() => {
+		if (total === 0) return;
+
+		let rawIndex = Math.round(scrollX.current / step);
+
+		if (!hasLoop) {
+			const clamped = Math.max(0, Math.min(rawIndex, total - 1));
+			setIndexFromSnap(clamped);
+			scrollRef.current?.scrollTo({ x: clamped * step, animated: true });
 			return;
 		}
-		const clamped = Math.max(0, Math.min(index, slides.length - 1));
-		setIndexFromSnap(clamped);
-		scrollRef.current?.scrollTo({ x: clamped * step, animated: true });
-	}, [slides.length, step, setIndexFromSnap]);
+
+		if (rawIndex <= 0) {
+			// Estamos en el clon de la izquierda → saltar a la última real
+			const logical = total - 1;
+			setIndexFromSnap(logical);
+			scrollRef.current?.scrollTo({ x: toScrollX(logical), animated: false });
+			scrollX.current = toScrollX(logical);
+			return;
+		}
+
+		if (rawIndex >= total + 1) {
+			setIndexFromSnap(0);
+			scrollRef.current?.scrollTo({ x: toScrollX(0), animated: false });
+			scrollX.current = toScrollX(0);
+			return;
+		}
+
+		// Slide real
+		const logical = rawIndex - 1;
+		setIndexFromSnap(logical);
+		scrollRef.current?.scrollTo({ x: toScrollX(logical), animated: true });
+	}, [total, hasLoop, step, toScrollX, setIndexFromSnap]);
 
 	// ── Coordinación de snap ─────────────────────────────────────────
 	const isUserInteractingRef = useRef(false);
@@ -118,12 +165,13 @@ export function PromoSlider() {
 		setIsPaused(true);
 	}, [clearSettleTimeout]);
 
+	// Drag con mouse (web)
 	useEffect(() => {
 		if (Platform.OS !== "web") return;
 		const area = dragAreaRef.current as unknown as HTMLElement | null;
 		if (!area) return;
 
-		const maxScroll = step * slides.length;
+		const maxScroll = step * (hasLoop ? total + 1 : total - 1);
 
 		const handleDown = (e: MouseEvent) => {
 			dragStartX.current = e.pageX;
@@ -132,6 +180,7 @@ export function PromoSlider() {
 			clearSettleTimeout();
 			setIsPaused(true);
 		};
+
 		const handleMove = (e: MouseEvent) => {
 			if (dragStartX.current == null) return;
 			const dx = e.pageX - dragStartX.current;
@@ -139,15 +188,14 @@ export function PromoSlider() {
 			scrollX.current = newX;
 			scrollRef.current?.scrollTo({ x: newX, animated: false });
 		};
+
 		const handleUp = () => {
 			if (dragStartX.current == null) return;
 			dragStartX.current = null;
-			// Soltar el mouse es una señal explícita e inmediata acá (a
-			// diferencia del touch), así que no hace falta esperar el debounce.
 			clearSettleTimeout();
 			isUserInteractingRef.current = false;
 			setIsPaused(false);
-			snapToNearest();
+			normalizeAndSnap();
 		};
 
 		area.addEventListener("mousedown", handleDown);
@@ -158,25 +206,22 @@ export function PromoSlider() {
 			window.removeEventListener("mousemove", handleMove);
 			window.removeEventListener("mouseup", handleUp);
 		};
-	}, [snapToNearest, step, slides.length]);
+	}, [normalizeAndSnap, step, total, hasLoop, clearSettleTimeout]);
 
 	const handleScroll = (event: {
 		nativeEvent: { contentOffset: { x: number } };
 	}) => {
 		scrollX.current = event.nativeEvent.contentOffset.x;
-		// Ignoramos los onScroll que vienen de un scrollTo programático
-		// (autoplay o tap en un dot): esos ya se posicionan solos y no
-		// necesitan que este debounce los "corrija".
 		if (!isUserInteractingRef.current) return;
+
 		clearSettleTimeout();
 		settleTimeout.current = setTimeout(() => {
 			isUserInteractingRef.current = false;
 			setIsPaused(false);
-			snapToNearest();
+			normalizeAndSnap();
 		}, SCROLL_SETTLE_DELAY);
 	};
 
-	// Sin contenido activo (o mientras carga) el carrusel no se renderiza.
 	if (slides.length === 0) return null;
 
 	return (
@@ -201,9 +246,22 @@ export function PromoSlider() {
 						}}
 						style={{ height: CARD_HEIGHT }}
 					>
-						{/* Clon de la primera slide al final para el loop continuo. */}
-						{[...slides, slides[0]].map((item, i) => (
-							<View key={i < slides.length ? item.id : `clone-${item.id}`} style={[styles.card, { boxShadow: `0px 8px 20px ${colors.shadow}` }]}>
+						{loopSlides.map((item, i) => (
+							<View
+								key={
+									hasLoop
+										? i === 0
+											? `clone-last-${item.id}`
+											: i === loopSlides.length - 1
+												? `clone-first-${item.id}`
+												: item.id
+										: item.id
+								}
+								style={[
+									styles.card,
+									{ boxShadow: `0px 8px 20px ${colors.shadow}` },
+								]}
+							>
 								<PromoCard item={item} />
 							</View>
 						))}
@@ -225,7 +283,7 @@ export function PromoSlider() {
 	);
 }
 
-// ─── DotsIndicator ──────────────────────────────────────────────────
+// ─── DotsIndicator (sin cambios) ────────────────────────────────────
 function DotsIndicator({
 	count,
 	activeIndex,
@@ -241,7 +299,6 @@ function DotsIndicator({
 	activeColor: string;
 	inactiveColor: string;
 }) {
-	// Un Animated.Value por dot (0 = inactivo, 1 = activo).
 	const animsRef = useRef<Animated.Value[]>([]);
 	if (animsRef.current.length !== count) {
 		animsRef.current = Array.from(
@@ -254,9 +311,6 @@ function DotsIndicator({
 		const animations = animsRef.current.map((anim, i) =>
 			Animated.timing(anim, {
 				toValue: i === activeIndex ? 1 : 0,
-				// En el salto de loop (última -> primera) no animamos:
-				// el carrusel ya "avanzó" visualmente hacia el clon, así
-				// que el indicador solo debe reflejar el estado final.
 				duration: isWrap ? 0 : DOT_ANIM_DURATION,
 				useNativeDriver: false,
 			}),
@@ -285,6 +339,7 @@ function DotsIndicator({
 	);
 }
 
+// ─── PromoCard (sin cambios) ────────────────────────────────────────
 function PromoCard({ item }: { item: PromoSlide }) {
 	const { colors } = useTheme();
 	const badgeLabel =
@@ -305,7 +360,6 @@ function PromoCard({ item }: { item: PromoSlide }) {
 			return;
 		}
 		if (!item.redirectUrl) return;
-		// Convención: "/" = ruta interna de la app (ej. /explore); resto, URL externa.
 		if (item.redirectUrl.startsWith("/")) {
 			router.push(item.redirectUrl as Href);
 			return;
@@ -314,10 +368,22 @@ function PromoCard({ item }: { item: PromoSlide }) {
 	};
 
 	return (
-		<View style={[styles.cardInner, { backgroundColor: colors.greenDark, flexDirection: "row" }]}>
-			{/* Lado izquierdo sólido — sin Blur ni overlay traslúcido */}
+		<View
+			style={[
+				styles.cardInner,
+				{ backgroundColor: colors.greenDark, flexDirection: "row" },
+			]}
+		>
 			<View style={styles.cardLeft}>
-				<View style={[styles.badge, { backgroundColor: withAlpha(colors.onMedia, 0.14), borderColor: withAlpha(colors.onMedia, 0.18) }]}>
+				<View
+					style={[
+						styles.badge,
+						{
+							backgroundColor: withAlpha(colors.onMedia, 0.14),
+							borderColor: withAlpha(colors.onMedia, 0.18),
+						},
+					]}
+				>
 					<AppText
 						weight="semiBold"
 						style={{
@@ -362,12 +428,24 @@ function PromoCard({ item }: { item: PromoSlide }) {
 					/>
 				) : null}
 			</View>
-			{/* Lado derecho imagen limpia — sin velo */}
 			<View style={styles.cardRight}>
 				{item.imageUrl ? (
-					<Image source={{ uri: item.imageUrl }} style={styles.cardRightImage} resizeMode="cover" />
+					<Image
+						source={{ uri: item.imageUrl }}
+						style={styles.cardRightImage}
+						resizeMode="cover"
+					/>
 				) : (
-					<View style={[styles.cardRightImage, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]} />
+					<View
+						style={[
+							styles.cardRightImage,
+							{
+								backgroundColor: colors.muted,
+								alignItems: "center",
+								justifyContent: "center",
+							},
+						]}
+					/>
 				)}
 			</View>
 		</View>

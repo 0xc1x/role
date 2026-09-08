@@ -45,118 +45,147 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 		? formatTime(offer.offer.pickup_end)
 		: "";
 
-	return (
-		<View>
+return (
+		<View style={styles.wrapper}>
 			<Card
 				style={styles.offerCard}
 				onPress={() => router.push(`/offer/${offer.offer.id}`)}
 			>
-			<View style={styles.offerImageWrap}>
-				{offer.offer.image ? (
-					<Image
-						source={{ uri: offer.offer.image }}
-						style={styles.offerImage}
-						resizeMode="cover"
-					/>
-				) : (
-					<View style={[styles.offerImage, { backgroundColor: colors.borderSolid }]} />
-				)}
-				{discount > 0 && (
-					<View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
-						<AppText
-							style={{
-								color: colors.primaryForeground,
-								fontSize: 12,
-								fontWeight: "700",
-							}}
+				{/* Imagen */}
+				<View style={styles.offerImageWrap}>
+					{offer.offer.image ? (
+						<Image
+							source={{ uri: offer.offer.image }}
+							style={styles.offerImage}
+							resizeMode="cover"
+						/>
+					) : (
+						<View
+							style={[styles.offerImage, { backgroundColor: colors.borderSolid }]}
+						/>
+					)}
+
+					{discount > 0 && (
+						<View
+							style={[styles.discountBadge, { backgroundColor: colors.primary }]}
 						>
-							-{discount}%
-						</AppText>
-					</View>
-				)}
-				{offer.offer.stock <= 3 && (
-					<View
-						style={[styles.lowStockBadge, { backgroundColor: colors.destructive }]}
-					>
-						<AppText
-							variant="caption"
-							style={{
-								color: colors.destructiveForeground,
-								fontWeight: "600",
-							}}
-						>
-							{strings.offers.onlyLeft.replace(
-								"{n}",
-								String(offer.offer.stock),
-							)}
-						</AppText>
-					</View>
-				)}
-			</View>
-			<View style={styles.offerBody}>
-				<View style={styles.offerBodyRow}>
-					<View style={styles.offerInfo}>
-						<AppText
-							variant="h4"
-							weight="bold"
-							numberOfLines={2}
-							style={{ fontSize: 15, lineHeight: 19 }}
-						>
-							{offer.offer.title}
-						</AppText>
-						<View style={styles.metaRow}>
-							<Ionicons
-								name="location-outline"
-								size={12}
-								color={colors.mutedForeground}
-							/>
-							<AppText
-								numberOfLines={1}
-								variant="caption"
-								style={{ color: colors.mutedForeground }}
-							>
-								{distance
-									? `${distance} · ${offer.business.name}`
-									: offer.business.name}
-							</AppText>
-						</View>
-						{pickupTime ? (
-							<AppText
-								variant="caption"
-								style={{ color: colors.mutedForeground }}
-							>
-								{strings.offers.pickupBefore.replace("{time}", pickupTime)}
-							</AppText>
-						) : null}
-					</View>
-					<View style={styles.offerPrice}>
-						{offer.offer.original_price > 0 ? (
 							<AppText
 								style={{
-									textDecorationLine: "line-through",
-									color: colors.mutedForeground,
+									color: colors.primaryForeground,
 									fontSize: 12,
-									lineHeight: 14,
+									fontWeight: "700",
 								}}
 							>
-								{dealPrice(offer.offer.original_price)}
+								-{discount}%
 							</AppText>
-						) : null}
-						<AppText
-							variant="priceLarge"
-							style={{
-								color: colors.primary,
-								fontSize: 20,
-								lineHeight: 24,
-								fontWeight: "800",
-							}}
+						</View>
+					)}
+
+					{offer.offer.stock <= 3 && (
+						<View
+							style={[
+								styles.lowStockBadge,
+								{ backgroundColor: colors.destructive },
+							]}
 						>
-							{dealPrice(offer.offer.discounted_price)}
-						</AppText>
+							<AppText
+								variant="caption"
+								style={{
+									color: colors.destructiveForeground,
+									fontWeight: "600",
+								}}
+							>
+								{strings.offers.onlyLeft.replace(
+									"{n}",
+									String(offer.offer.stock),
+								)}
+							</AppText>
+						</View>
+					)}
+				</View>
+
+				{/* Body con altura fija de contenido */}
+				<View style={styles.offerBody}>
+					<View style={styles.offerBodyRow}>
+						<View style={styles.offerInfo}>
+							{/* Título siempre 2 líneas → altura constante */}
+							<AppText
+								variant="h4"
+								weight="bold"
+								numberOfLines={2}
+								style={styles.title}
+							>
+								{offer.offer.title}
+							</AppText>
+
+							<View style={styles.metaBlock}>
+								<View style={styles.metaRow}>
+									<Ionicons
+										name="location-outline"
+										size={12}
+										color={colors.mutedForeground}
+									/>
+									<AppText
+										numberOfLines={1}
+										variant="caption"
+										style={{ color: colors.mutedForeground, flex: 1 }}
+									>
+										{distance
+											? `${distance} · ${offer.business.name}`
+											: offer.business.name}
+									</AppText>
+								</View>
+
+								{/* Reserva espacio aunque no haya pickupTime */}
+								<AppText
+									variant="caption"
+									style={{
+										color: colors.mutedForeground,
+										opacity: pickupTime ? 1 : 0,
+									}}
+									numberOfLines={1}
+								>
+									{pickupTime
+										? strings.offers.pickupBefore.replace("{time}", pickupTime)
+										: " "}
+								</AppText>
+							</View>
+						</View>
+
+						<View style={styles.offerPrice}>
+							{offer.offer.original_price > 0 ? (
+								<AppText
+									style={{
+										textDecorationLine: "line-through",
+										color: colors.mutedForeground,
+										fontSize: 12,
+										lineHeight: 14,
+									}}
+								>
+									{dealPrice(offer.offer.original_price)}
+								</AppText>
+							) : (
+								// Reserva espacio del precio tachado
+								<AppText style={{ fontSize: 12, lineHeight: 14, opacity: 0 }}>
+									{" "}
+								</AppText>
+							)}
+							<AppText
+								variant="priceLarge"
+								style={{
+									color: colors.primary,
+									fontSize: 25,
+									lineHeight: 24,
+									fontWeight: "800",
+								}}
+							>
+								{dealPrice(offer.offer.discounted_price)}
+							</AppText>
+						</View>
 					</View>
 				</View>
-			</View>
-		</Card>
+			</Card>
+
 			{/* Hermano absoluto: evita <button> anidado en web */}
 			{profile && (
 				<View style={styles.heartButton}>
@@ -173,6 +202,9 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 }
 
 const styles = StyleSheet.create({
+	wrapper: {
+		flex: 1,
+	},
 	offerCard: {
 		padding: 0,
 		overflow: "hidden",
@@ -212,23 +244,34 @@ const styles = StyleSheet.create({
 	},
 	offerBody: {
 		padding: spacing.md,
+		minHeight: 96,
 	},
 	offerBodyRow: {
 		flexDirection: "row",
 		alignItems: "flex-end",
+		flex: 1,
 	},
 	offerInfo: {
 		flex: 4,
 		paddingRight: spacing.sm,
 	},
-	offerPrice: {
-		flex: 2,
-		alignItems: "flex-end",
+	title: {
+		fontSize: 15,
+		lineHeight: 19,
+		height: 38,
+	},
+	metaBlock: {
+		marginTop: 6,
+		gap: 2,
 	},
 	metaRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 3,
-		marginTop: 6,
+	},
+	offerPrice: {
+		flex: 2,
+		alignItems: "flex-end",
+		justifyContent: "flex-end",
 	},
 });
