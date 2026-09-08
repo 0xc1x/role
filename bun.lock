@@ -238,7 +238,6 @@
         "sonner-native": "^0.26.5",
         "tailwind-merge": "^3.6.0",
         "tailwindcss": "^3.4",
-        "vercel": "^59.11.1",
         "zod": "^4.5.4",
         "zustand": "^5.0.14",
       },
@@ -249,6 +248,7 @@
         "babel-preset-expo": "^57.0.6",
         "bun-types": "^1.4.0",
         "typescript": "~6.0.3",
+        "vercel": "^59.11.1",
       },
     },
     "packages/commons": {
