@@ -36,7 +36,7 @@ export const ReserveOfferErrorSchema = z.object({
   message: z.string(),
 });
 
-export const ReserveOfferResponseSchema = z.union([
+export const ReserveOfferResponseSchema = z.discriminatedUnion('success', [
   ReserveOfferResultSchema,
   ReserveOfferErrorSchema,
 ]);
