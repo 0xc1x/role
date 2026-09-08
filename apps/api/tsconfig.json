@@ -4,6 +4,7 @@
     "moduleResolution": "node",
     "target": "ES2023",
     "outDir": "./dist",
+    "rootDir": "./src",
     "baseUrl": "./",
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
