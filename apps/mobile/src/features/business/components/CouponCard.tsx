@@ -171,7 +171,13 @@ export function CouponCard({
 				animationType="fade"
 				onRequestClose={() => setMenuOpen(false)}
 			>
-				<Pressable style={[styles.overlay, { backgroundColor: withAlpha(colors.scrim, 0.4) }]} onPress={() => setMenuOpen(false)}>
+				<View style={styles.overlay}>
+					<Pressable
+						style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}
+						onPress={() => setMenuOpen(false)}
+						accessibilityRole="button"
+						accessibilityLabel={strings.common.close}
+					/>
 					<View style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 						<MenuItem
 							icon="create-outline"
@@ -211,7 +217,7 @@ export function CouponCard({
 							}}
 						/>
 					</View>
-				</Pressable>
+				</View>
 			</Modal>
 
 			{/* ── Confirm delete ─────────────────────────────────── */}

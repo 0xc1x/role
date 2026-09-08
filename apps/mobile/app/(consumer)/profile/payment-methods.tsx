@@ -41,55 +41,61 @@ function PaymentMethodRow({
 }) {
 	const { colors } = useTheme();
 	return (
-		<Card onPress={method.isDefault ? undefined : () => onSetDefault(method.id)}>
+		<Card>
 			<View style={styles.row}>
-				<View
-					style={[styles.iconCircle, { backgroundColor: colors.inputBackground }]}
+				<Pressable
+					onPress={method.isDefault ? undefined : () => onSetDefault(method.id)}
+					disabled={method.isDefault}
+					accessibilityRole="button"
+					style={styles.rowMain}
 				>
-					<Ionicons name="card-outline" size={20} color={colors.primary} />
-				</View>
-				<View style={styles.cardText}>
-					<View style={styles.cardTitleRow}>
-						<AppText variant="bodyMedium" weight="semiBold">
-							•••• {method.last4}
-						</AppText>
-						{method.isDefault ? (
-							<View style={[styles.defaultBadge, { backgroundColor: withAlpha(colors.primary, 0.078) }]}>
-								<AppText
-									style={{
-										fontSize: 10,
-										fontWeight: "700",
-										color: colors.primary,
-									}}
-								>
-									{strings.paymentMethods.default}
-								</AppText>
-							</View>
-						) : null}
-					</View>
-					<AppText
-						variant="bodySmall"
-						numberOfLines={1}
-						style={{ color: colors.mutedForeground }}
+					<View
+						style={[styles.iconCircle, { backgroundColor: colors.inputBackground }]}
 					>
-						{method.cardHolder} · {method.expiryMonth}/{method.expiryYear}
-					</AppText>
-					{!method.isDefault ? (
+						<Ionicons name="card-outline" size={20} color={colors.primary} />
+					</View>
+					<View style={styles.cardText}>
+						<View style={styles.cardTitleRow}>
+							<AppText variant="bodyMedium" weight="semiBold">
+								•••• {method.last4}
+							</AppText>
+							{method.isDefault ? (
+								<View style={[styles.defaultBadge, { backgroundColor: withAlpha(colors.primary, 0.078) }]}>
+									<AppText
+										variant="tiny"
+										weight="bold"
+										style={{
+											color: colors.primary,
+										}}
+									>
+										{strings.paymentMethods.default}
+									</AppText>
+								</View>
+							) : null}
+						</View>
 						<AppText
 							variant="bodySmall"
-							weight="semiBold"
-							style={{ color: colors.primary }}
+							numberOfLines={1}
+							style={{ color: colors.mutedForeground }}
 						>
-							{strings.paymentMethods.setDefault}
+							{method.cardHolder} · {method.expiryMonth}/{method.expiryYear}
 						</AppText>
-					) : null}
-				</View>
+						{!method.isDefault ? (
+							<AppText
+								variant="bodySmall"
+								weight="semiBold"
+								style={{ color: colors.primary }}
+							>
+								{strings.paymentMethods.setDefault}
+							</AppText>
+						) : null}
+					</View>
+				</Pressable>
 				<Pressable
 					hitSlop={8}
-					onPress={(e) => {
-						e.stopPropagation();
-						onDelete(method.id);
-					}}
+					onPress={() => onDelete(method.id)}
+					accessibilityRole="button"
+					accessibilityLabel={strings.paymentMethods.delete}
 					style={styles.deleteButton}
 				>
 					<Ionicons
@@ -210,6 +216,7 @@ export default function PaymentMethodsScreen() {
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl },
 	row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+	rowMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md },
 	iconCircle: {
 		width: 40,
 		height: 40,

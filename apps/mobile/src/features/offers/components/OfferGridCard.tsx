@@ -37,8 +37,7 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 			: "";
 
 	return (
-		<Pressable
-			onPress={() => router.push(`/offer/${offer.offer.id}`)}
+		<View
 			style={[
 				styles.card,
 				{
@@ -48,6 +47,10 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 				},
 			]}
 		>
+			<Pressable
+				onPress={() => router.push(`/offer/${offer.offer.id}`)}
+				style={styles.pressArea}
+			>
 			<View style={styles.imageWrap}>
 				{offer.offer.image ? (
 					<Image
@@ -89,14 +92,6 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 						</AppText>
 					</View>
 				) : null}
-				<View style={styles.heart}>
-					<HeartButton
-						isFavorite={isFavorite}
-						onPress={() => toggleFavorite.mutate(offer.offer.id)}
-						size={30}
-						iconSize={16}
-					/>
-				</View>
 			</View>
 			<View style={styles.body}>
 				<AppText
@@ -134,7 +129,17 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 					</View>
 				) : null}
 			</View>
-		</Pressable>
+			</Pressable>
+			{/* Hermano absoluto: evita <button> anidado en web */}
+			<View style={styles.heart}>
+				<HeartButton
+					isFavorite={isFavorite}
+					onPress={() => toggleFavorite.mutate(offer.offer.id)}
+					size={30}
+					iconSize={16}
+				/>
+			</View>
+		</View>
 	);
 }
 
@@ -143,6 +148,9 @@ const styles = StyleSheet.create({
 		borderRadius: radii.lg,
 		borderWidth: StyleSheet.hairlineWidth,
 		overflow: "hidden",
+	},
+	pressArea: {
+		flex: 1,
 	},
 	imageWrap: {
 		aspectRatio: 1.25,
@@ -172,11 +180,7 @@ const styles = StyleSheet.create({
 		position: "absolute",
 		top: spacing.sm,
 		right: spacing.sm,
-		width: 30,
-		height: 30,
-		borderRadius: 15,
-		alignItems: "center",
-		justifyContent: "center",
+		zIndex: 1,
 	},
 	body: {
 		padding: spacing.sm,

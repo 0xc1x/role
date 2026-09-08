@@ -46,10 +46,11 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 		: "";
 
 	return (
-		<Card
-			style={styles.offerCard}
-			onPress={() => router.push(`/offer/${offer.offer.id}`)}
-		>
+		<View>
+			<Card
+				style={styles.offerCard}
+				onPress={() => router.push(`/offer/${offer.offer.id}`)}
+			>
 			<View style={styles.offerImageWrap}>
 				{offer.offer.image ? (
 					<Image
@@ -89,16 +90,6 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 								String(offer.offer.stock),
 							)}
 						</AppText>
-					</View>
-				)}
-				{profile && (
-					<View style={styles.heartButton}>
-						<HeartButton
-							isFavorite={isFavorite}
-							onPress={() => toggleFavorite.mutate(offer.offer.id)}
-							size={36}
-							iconSize={18}
-						/>
 					</View>
 				)}
 			</View>
@@ -166,6 +157,18 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 				</View>
 			</View>
 		</Card>
+			{/* Hermano absoluto: evita <button> anidado en web */}
+			{profile && (
+				<View style={styles.heartButton}>
+					<HeartButton
+						isFavorite={isFavorite}
+						onPress={() => toggleFavorite.mutate(offer.offer.id)}
+						size={36}
+						iconSize={18}
+					/>
+				</View>
+			)}
+		</View>
 	);
 }
 
@@ -205,6 +208,7 @@ const styles = StyleSheet.create({
 		position: "absolute",
 		top: spacing.sm,
 		left: spacing.sm,
+		zIndex: 1,
 	},
 	offerBody: {
 		padding: spacing.md,

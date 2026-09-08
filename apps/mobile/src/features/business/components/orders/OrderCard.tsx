@@ -1,4 +1,4 @@
-import { Image, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -33,10 +33,12 @@ export function OrderCard({
 	const isActive = isActiveStatus(order.status);
 
 	return (
-		<Card
-			onPress={() => router.push(`/business/${businessId}/order/${order.id}`)}
-		>
-			<View style={styles.body}>
+		<Card>
+			<Pressable
+				onPress={() => router.push(`/business/${businessId}/order/${order.id}`)}
+				accessibilityRole="button"
+			>
+				<View style={styles.body}>
 				{item.offerImageUrl ? (
 					<Image source={{ uri: item.offerImageUrl }} style={styles.thumb} />
 				) : (
@@ -90,7 +92,8 @@ export function OrderCard({
 						/>
 					</View>
 				</View>
-			</View>
+				</View>
+			</Pressable>
 
 			{isActive ? (
 				<>

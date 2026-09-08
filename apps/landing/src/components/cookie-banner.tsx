@@ -10,12 +10,12 @@ export function CookieBanner() {
 	const [visible, setVisible] = useState(false);
 
 	useEffect(() => {
-		let stored = "accepted";
+		let stored: string | null = null;
 		try {
-			stored = window.localStorage.getItem(STORAGE_KEY) ?? "accepted";
+			stored = window.localStorage.getItem(STORAGE_KEY);
 		} catch {
 			// storage no disponible (SSR/privacidad): mostrar el banner
-			stored = "";
+			stored = null;
 		}
 		if (stored !== "accepted") {
 			setVisible(true);

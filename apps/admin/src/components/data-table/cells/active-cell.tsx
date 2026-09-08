@@ -21,7 +21,6 @@ export function ActiveCell({
 				checked={active}
 				onCheckedChange={onToggle}
 				disabled={isPending}
-				size="sm"
 				tone="status"
 				aria-label={`${label} ${active ? "activa" : "inactiva"}`}
 				title={active ? `${label} activa` : `${label} inactiva`}

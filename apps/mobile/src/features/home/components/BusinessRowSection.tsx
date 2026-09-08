@@ -1,4 +1,4 @@
-import { View, StyleSheet, FlatList, Image, Pressable } from "react-native";
+import { View, StyleSheet, FlatList, Image } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
