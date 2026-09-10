@@ -250,7 +250,7 @@ export class NotificationHandlers {
     return sent;
   }
 
-  async cleanupOldTokens(): Promise<number> {
+  cleanupOldTokens(): Promise<number> {
     return this.repo.cleanupOldTokens();
   }
 }

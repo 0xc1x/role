@@ -42,9 +42,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
         details = obj.details;
       }
     } else if (exception instanceof Error) {
+      const cause = exception.cause;
       this.logger.error({
         message: exception.message,
         stack: exception.stack,
+        ...(cause !== undefined
+          ? {
+              cause:
+                cause instanceof Error
+                  ? { name: cause.name, message: cause.message }
+                  : String(cause),
+            }
+          : {}),
         requestId,
         path: request.url,
         method: request.method,

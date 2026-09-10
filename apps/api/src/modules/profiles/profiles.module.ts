@@ -6,6 +6,5 @@ import { ProfilesRepository } from './profiles.repository';
 @Module({
   controllers: [ProfilesController],
   providers: [ProfilesService, ProfilesRepository],
-  exports: [ProfilesService, ProfilesRepository],
 })
 export class ProfilesModule {}

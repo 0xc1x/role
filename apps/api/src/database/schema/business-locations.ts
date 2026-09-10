@@ -17,7 +17,7 @@ export const businessLocations = pgTable('business_locations', {
   id: uuid('id').primaryKey().defaultRandom(),
   business_id: uuid('business_id')
     .notNull()
-    .references(() => businesses.id),
+    .references(() => businesses.id, { onDelete: 'no action' }),
   name: text('name').notNull(),
   address: text('address').notNull(),
   phone: text('phone'),

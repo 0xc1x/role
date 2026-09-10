@@ -24,7 +24,6 @@ import { Test } from '@nestjs/testing';
 import { EmailMarketingController } from './email-marketing.controller';
 import { CampaignsService } from './campaigns.service';
 import {
-  EmailMarketingRepository,
   type CampaignRow,
   type ComponentRow,
   type SendRow,
@@ -104,16 +103,24 @@ const makeSend = (overrides: Partial<SendRow> = {}): SendRow =>
 
 describe('EmailMarketingController', () => {
   let controller: EmailMarketingController;
-  let repository: jest.Mocked<EmailMarketingRepository>;
-  let campaignsService: jest.Mocked<Pick<CampaignsService, 'preview' | 'test' | 'testTemplate' | 'countAudience' | 'send' | 'cancel' | 'listSends'>>;
+  let campaignsService: jest.Mocked<Pick<CampaignsService, 'assertTemplateForChannel' | 'preview' | 'test' | 'testTemplate' | 'countAudience' | 'send' | 'cancel' | 'listSends' | 'getCampaign' | 'listComponents' | 'insertComponent' | 'updateComponent' | 'deleteComponent' | 'listTemplates' | 'insertTemplate' | 'updateTemplate' | 'deleteTemplate' | 'listSegments' | 'insertSegment' | 'updateSegment' | 'deleteSegment' | 'getSegmentUserIds' | 'replaceSegmentUsers' | 'addSegmentUsers' | 'listCampaigns' | 'insertCampaign' | 'updateCampaign' | 'deleteCampaign' | 'listAllSends' | 'findSendById' | 'updateSend'>>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       controllers: [EmailMarketingController],
       providers: [
         {
-          provide: EmailMarketingRepository,
+          provide: CampaignsService,
           useValue: {
+            assertTemplateForChannel: jest.fn(),
+            preview: jest.fn(),
+            test: jest.fn(),
+            testTemplate: jest.fn(),
+            countAudience: jest.fn(),
+            send: jest.fn(),
+            cancel: jest.fn(),
+            listSends: jest.fn(),
+            getCampaign: jest.fn(),
             listComponents: jest.fn(),
             insertComponent: jest.fn(),
             updateComponent: jest.fn(),
@@ -130,40 +137,25 @@ describe('EmailMarketingController', () => {
             replaceSegmentUsers: jest.fn(),
             addSegmentUsers: jest.fn(),
             listCampaigns: jest.fn(),
-            getCampaignById: jest.fn(),
             insertCampaign: jest.fn(),
             updateCampaign: jest.fn(),
             deleteCampaign: jest.fn(),
-            listSends: jest.fn(),
+            listAllSends: jest.fn(),
             findSendById: jest.fn(),
             updateSend: jest.fn(),
-          },
-        },
-        {
-          provide: CampaignsService,
-          useValue: {
-            assertTemplateForChannel: jest.fn(),
-            preview: jest.fn(),
-            test: jest.fn(),
-            testTemplate: jest.fn(),
-            countAudience: jest.fn(),
-            send: jest.fn(),
-            cancel: jest.fn(),
-            listSends: jest.fn(),
           },
         },
       ],
     }).compile();
 
     controller = module.get(EmailMarketingController);
-    repository = module.get(EmailMarketingRepository);
     campaignsService = module.get(CampaignsService);
     jest.clearAllMocks();
   });
 
   describe('campaigns: create/update con auditoría y fechas', () => {
     it('createCampaign inyecta created_by y convierte scheduled_at a Date', async () => {
-      repository.insertCampaign.mockResolvedValue([makeCampaign()]);
+      campaignsService.insertCampaign.mockResolvedValue([makeCampaign()]);
       const body = {
         name: 'Lanzamiento',
         channel: 'email',
@@ -175,7 +167,7 @@ describe('EmailMarketingController', () => {
 
       await controller.createCampaign({ id: 'admin-1' } as never, body as never);
 
-      expect(repository.insertCampaign).toHaveBeenCalledWith({
+      expect(campaignsService.insertCampaign).toHaveBeenCalledWith({
         ...body,
         created_by: 'admin-1',
         scheduled_at: new Date('2025-06-01T10:00:00.000Z'),
@@ -183,7 +175,7 @@ describe('EmailMarketingController', () => {
     });
 
     it('createCampaign sin scheduled_at guarda null', async () => {
-      repository.insertCampaign.mockResolvedValue([makeCampaign()]);
+      campaignsService.insertCampaign.mockResolvedValue([makeCampaign()]);
       await controller.createCampaign({ id: 'admin-1' } as never, {
         name: 'Lanzamiento',
         channel: 'email',
@@ -191,36 +183,36 @@ describe('EmailMarketingController', () => {
         category: 'announcements',
       } as never);
 
-      expect(repository.insertCampaign).toHaveBeenCalledWith(
+      expect(campaignsService.insertCampaign).toHaveBeenCalledWith(
         expect.objectContaining({ scheduled_at: null }),
       );
     });
 
     it('updateCampaign convierte scheduled_at cuando viene', () => {
-      repository.updateCampaign.mockResolvedValue(makeCampaign() as never);
+      campaignsService.updateCampaign.mockResolvedValue(makeCampaign() as never);
       controller.updateCampaign(CAMPAIGN_ID, {
         scheduled_at: '2025-06-01T10:00:00.000Z',
       } as never);
 
-      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
+      expect(campaignsService.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
         scheduled_at: new Date('2025-06-01T10:00:00.000Z'),
       });
     });
 
     it('updateCampaign con scheduled_at null la desprograma', () => {
-      repository.updateCampaign.mockResolvedValue(makeCampaign() as never);
+      campaignsService.updateCampaign.mockResolvedValue(makeCampaign() as never);
       controller.updateCampaign(CAMPAIGN_ID, { scheduled_at: null } as never);
 
-      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
+      expect(campaignsService.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
         scheduled_at: null,
       });
     });
 
     it('updateCampaign sin scheduled_at no toca el campo', () => {
-      repository.updateCampaign.mockResolvedValue(makeCampaign() as never);
+      campaignsService.updateCampaign.mockResolvedValue(makeCampaign() as never);
       controller.updateCampaign(CAMPAIGN_ID, { name: 'Nuevo nombre' } as never);
 
-      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
+      expect(campaignsService.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
         name: 'Nuevo nombre',
       });
     });
@@ -228,7 +220,7 @@ describe('EmailMarketingController', () => {
 
   describe('getCampaign', () => {
     it('mapea la fila a DTO', async () => {
-      repository.getCampaignById.mockResolvedValue(makeCampaign());
+      campaignsService.getCampaign.mockResolvedValue(makeCampaign());
 
       const out = await controller.getCampaign(CAMPAIGN_ID);
 
@@ -238,14 +230,14 @@ describe('EmailMarketingController', () => {
     });
 
     it('devuelve null cuando no existe', async () => {
-      repository.getCampaignById.mockResolvedValue(null);
+      campaignsService.getCampaign.mockResolvedValue(null);
       await expect(controller.getCampaign(CAMPAIGN_ID)).resolves.toBeNull();
     });
   });
 
   describe('previewCampaign', () => {
     it('delega el preview a la plantilla de la campaña', async () => {
-      repository.getCampaignById.mockResolvedValue(
+      campaignsService.getCampaign.mockResolvedValue(
         makeCampaign({ template_id: 't-1' }),
       );
       campaignsService.preview.mockResolvedValue({ subject: 'x', html: 'y', variables_used: [] });
@@ -260,7 +252,7 @@ describe('EmailMarketingController', () => {
     });
 
     it('falla si la campaña no tiene plantilla', async () => {
-      repository.getCampaignById.mockResolvedValue(makeCampaign({ template_id: null }));
+      campaignsService.getCampaign.mockResolvedValue(makeCampaign({ template_id: null }));
       await expect(controller.previewCampaign(CAMPAIGN_ID)).rejects.toThrow(
         'La campaña no tiene plantilla',
       );
@@ -299,15 +291,15 @@ describe('EmailMarketingController', () => {
     });
 
     it('removeCampaign hace soft delete', () => {
-      repository.deleteCampaign.mockResolvedValue(true);
+      campaignsService.deleteCampaign.mockResolvedValue(true);
       controller.removeCampaign(CAMPAIGN_ID);
-      expect(repository.deleteCampaign).toHaveBeenCalledWith(CAMPAIGN_ID);
+      expect(campaignsService.deleteCampaign).toHaveBeenCalledWith(CAMPAIGN_ID);
     });
   });
 
   describe('sends', () => {
     it('listAllSends mapea filas a DTO', async () => {
-      repository.listSends.mockResolvedValue({ rows: [makeSend()], total: 1 });
+      campaignsService.listAllSends.mockResolvedValue({ rows: [makeSend()], total: 1 });
 
       const out = (await controller.listAllSends({ page: 1, limit: 10 } as never)) as {
         data: { id: string }[];
@@ -319,11 +311,11 @@ describe('EmailMarketingController', () => {
     });
 
     it('retrySend re-arma el envío para reintento', async () => {
-      repository.findSendById.mockResolvedValue(makeSend({ status: 'failed', attempts: 5 }));
+      campaignsService.findSendById.mockResolvedValue(makeSend({ status: 'failed', attempts: 5 }));
 
       const out = await controller.retrySend('s-1');
 
-      expect(repository.updateSend).toHaveBeenCalledWith(
+      expect(campaignsService.updateSend).toHaveBeenCalledWith(
         's-1',
         expect.objectContaining({ status: 'pending', attempts: 0, error_message: null }),
       );
@@ -331,14 +323,14 @@ describe('EmailMarketingController', () => {
     });
 
     it('retrySend falla si el envío no existe', async () => {
-      repository.findSendById.mockResolvedValue(null);
+      campaignsService.findSendById.mockResolvedValue(null);
       await expect(controller.retrySend('nope')).rejects.toThrow('Envío no encontrado');
     });
   });
 
   describe('segmentos', () => {
     it('createSegment crea y agrega miembros cuando vienen user_ids', async () => {
-      repository.insertSegment.mockResolvedValue([
+      campaignsService.insertSegment.mockResolvedValue([
         makeComponent({ id: 'seg-1' }) as never,
       ]);
 
@@ -347,29 +339,29 @@ describe('EmailMarketingController', () => {
         user_ids: ['u-1', 'u-2'],
       } as never);
 
-      expect(repository.insertSegment).toHaveBeenCalledWith(
+      expect(campaignsService.insertSegment).toHaveBeenCalledWith(
         expect.not.objectContaining({ user_ids: expect.anything() }),
       );
-      expect(repository.addSegmentUsers).toHaveBeenCalledWith('seg-1', ['u-1', 'u-2']);
+      expect(campaignsService.addSegmentUsers).toHaveBeenCalledWith('seg-1', ['u-1', 'u-2']);
     });
 
     it('createSegment sin user_ids no toca miembros', async () => {
-      repository.insertSegment.mockResolvedValue([makeComponent({ id: 'seg-1' }) as never]);
+      campaignsService.insertSegment.mockResolvedValue([makeComponent({ id: 'seg-1' }) as never]);
 
       await controller.createSegment({ name: 'Todos' } as never);
 
-      expect(repository.addSegmentUsers).not.toHaveBeenCalled();
+      expect(campaignsService.addSegmentUsers).not.toHaveBeenCalled();
     });
 
     it('getSegmentUsers devuelve los ids', async () => {
-      repository.getSegmentUserIds.mockResolvedValue(['u-1']);
+      campaignsService.getSegmentUserIds.mockResolvedValue(['u-1']);
       await expect(controller.getSegmentUsers('seg-1')).resolves.toEqual(['u-1']);
     });
   });
 
   describe('componentes', () => {
     it('listComponents mapea a DTO con meta', async () => {
-      repository.listComponents.mockResolvedValue({ rows: [makeComponent()], total: 1 });
+      campaignsService.listComponents.mockResolvedValue({ rows: [makeComponent()], total: 1 });
 
       const out = (await controller.listComponents({ page: 1, limit: 10 } as never)) as {
         data: { id: string }[];
@@ -412,37 +404,37 @@ describe('EmailMarketingController', () => {
 
     it('componentes: create/update/remove mapean a DTO', async () => {
       const comp = makeComponent();
-      repository.insertComponent.mockResolvedValue([comp] as never);
+      campaignsService.insertComponent.mockResolvedValue([comp] as never);
       await expect(controller.createComponent({} as never)).resolves.toMatchObject({
         id: comp.id,
         created_at: '2025-01-01T00:00:00.000Z',
       });
-      repository.updateComponent.mockResolvedValue(comp as never);
+      campaignsService.updateComponent.mockResolvedValue(comp as never);
       await expect(
         controller.updateComponent(comp.id, {} as never),
       ).resolves.toMatchObject({ id: comp.id });
-      repository.updateComponent.mockResolvedValue(null as never);
+      campaignsService.updateComponent.mockResolvedValue(null as never);
       await expect(
         controller.updateComponent(comp.id, {} as never),
       ).resolves.toBeNull();
-      repository.deleteComponent.mockResolvedValue(true);
+      campaignsService.deleteComponent.mockResolvedValue(true);
       await expect(controller.removeComponent(comp.id)).resolves.toBe(true);
     });
 
     it('plantillas: list/create/update/remove + render/test delegan', async () => {
-      repository.listTemplates.mockResolvedValue({ rows: [tplRow], total: 1 });
+      campaignsService.listTemplates.mockResolvedValue({ rows: [tplRow], total: 1 });
       const listed = await controller.listTemplates({ page: 1, limit: 10 } as never);
       expect(listed.data).toHaveLength(1);
-      repository.insertTemplate.mockResolvedValue([tplRow]);
+      campaignsService.insertTemplate.mockResolvedValue([tplRow]);
       const created = await controller.createTemplate({} as never);
       expect(created).toMatchObject({ id: 't1' });
-      repository.updateTemplate.mockResolvedValue(tplRow);
+      campaignsService.updateTemplate.mockResolvedValue(tplRow);
       expect(
         await controller.updateTemplate('t1', {} as never),
       ).toMatchObject({ id: 't1' });
-      repository.updateTemplate.mockResolvedValue(null);
+      campaignsService.updateTemplate.mockResolvedValue(null);
       expect(await controller.updateTemplate('t1', {} as never)).toBeNull();
-      repository.deleteTemplate.mockResolvedValue(true);
+      campaignsService.deleteTemplate.mockResolvedValue(true);
       await expect(controller.removeTemplate('t1')).resolves.toBe(true);
 
       campaignsService.testTemplate.mockResolvedValue({ ok: true });
@@ -453,32 +445,32 @@ describe('EmailMarketingController', () => {
     });
 
     it('segmentos: list/update/remove/set/add mapean a DTO', async () => {
-      repository.listSegments.mockResolvedValue({ rows: [segRow], total: 1 });
+      campaignsService.listSegments.mockResolvedValue({ rows: [segRow], total: 1 });
       const listed = await controller.listSegments({ page: 1, limit: 10 } as never);
       expect(listed.data).toHaveLength(1);
-      repository.updateSegment.mockResolvedValue(segRow as never);
+      campaignsService.updateSegment.mockResolvedValue(segRow as never);
       await expect(controller.updateSegment('s1', {} as never)).resolves.toMatchObject({
         id: 's1',
         created_at: '2025-01-01T00:00:00.000Z',
       });
-      repository.updateSegment.mockResolvedValue(null as never);
+      campaignsService.updateSegment.mockResolvedValue(null as never);
       await expect(controller.updateSegment('s1', {} as never)).resolves.toBeNull();
-      repository.deleteSegment.mockResolvedValue(true);
+      campaignsService.deleteSegment.mockResolvedValue(true);
       await expect(controller.removeSegment('s1')).resolves.toBe(true);
-      repository.replaceSegmentUsers.mockResolvedValue(undefined);
+      campaignsService.replaceSegmentUsers.mockResolvedValue(undefined);
       await controller.setSegmentUsers('s1', { user_ids: ['u1'] });
-      expect(repository.replaceSegmentUsers).toHaveBeenCalledWith('s1', ['u1']);
-      repository.addSegmentUsers.mockResolvedValue(undefined);
+      expect(campaignsService.replaceSegmentUsers).toHaveBeenCalledWith('s1', ['u1']);
+      campaignsService.addSegmentUsers.mockResolvedValue(undefined);
       await controller.addSegmentUsers('s1', { user_ids: ['u2'] });
-      expect(repository.addSegmentUsers).toHaveBeenCalledWith('s1', ['u2']);
+      expect(campaignsService.addSegmentUsers).toHaveBeenCalledWith('s1', ['u2']);
     });
 
     it('updateSend delega y mapea', async () => {
-      repository.updateSend.mockResolvedValue(makeSend());
+      campaignsService.updateSend.mockResolvedValue(makeSend());
       await expect(controller.updateSend('s-1', {} as never)).resolves.toMatchObject({
         id: 's-1',
       });
-      repository.updateSend.mockResolvedValue(null);
+      campaignsService.updateSend.mockResolvedValue(null);
       await expect(controller.updateSend('s-1', {} as never)).resolves.toBeNull();
     });
   });
@@ -490,14 +482,10 @@ describe('EmailMarketingController.listCampaigns', () => {
       controllers: [EmailMarketingController],
       providers: [
         {
-          provide: EmailMarketingRepository,
+          provide: CampaignsService,
           useValue: {
             listCampaigns: jest.fn(async () => ({ rows: [makeCampaign()], total: 1 })),
           },
-        },
-        {
-          provide: CampaignsService,
-          useValue: {},
         },
       ],
     }).compile();

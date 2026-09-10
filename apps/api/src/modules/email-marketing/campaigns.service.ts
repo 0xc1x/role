@@ -20,9 +20,20 @@ import type { Env } from '../../config/env.schema';
 import type { CampaignChannelDispatcher } from '../../common/campaigns/campaign-dispatcher.port';
 import { MAX_AUDIENCE_SIZE, RecipientsService } from './recipients.service';
 import { RendererService } from './renderer.service';
-import { EmailMarketingRepository } from './email-marketing.repository';
+import {
+  EmailMarketingRepository,
+  type ListFilter,
+  type ListSegmentsFilter,
+} from './email-marketing.repository';
 import { EmailMarketingMapper } from './mappers/email-marketing.mapper';
 import type { CampaignRow } from './email-marketing.repository';
+import type {
+  campaigns,
+  emailComponents,
+  emailSends,
+  emailTemplates,
+  segments,
+} from '../../database/schema';
 
 const BATCH_SIZE = 50;
 
@@ -266,8 +277,124 @@ export class CampaignsService {
     return EmailMarketingMapper.toCampaignDto(updated!);
   }
 
-  async getCampaign(campaignId: string) {
+  getCampaign(campaignId: string) {
     return this.repository.getCampaignById(campaignId);
+  }
+
+  // ─── CRUD delegado (los controllers no tocan el repository) ───
+
+  listComponents(f: ListFilter) {
+    return this.repository.listComponents(f);
+  }
+
+  insertComponent(values: typeof emailComponents.$inferInsert) {
+    return this.repository.insertComponent(values);
+  }
+
+  updateComponent(
+    id: string,
+    values: Partial<typeof emailComponents.$inferInsert>,
+  ) {
+    return this.repository.updateComponent(id, values);
+  }
+
+  deleteComponent(id: string) {
+    return this.repository.deleteComponent(id);
+  }
+
+  listTemplates(f: ListFilter) {
+    return this.repository.listTemplates(f);
+  }
+
+  insertTemplate(values: typeof emailTemplates.$inferInsert) {
+    return this.repository.insertTemplate(values);
+  }
+
+  updateTemplate(
+    id: string,
+    values: Partial<typeof emailTemplates.$inferInsert>,
+  ) {
+    return this.repository.updateTemplate(id, values);
+  }
+
+  deleteTemplate(id: string) {
+    return this.repository.deleteTemplate(id);
+  }
+
+  listSegments(f: ListSegmentsFilter) {
+    return this.repository.listSegments(f);
+  }
+
+  insertSegment(values: typeof segments.$inferInsert) {
+    return this.repository.insertSegment(values);
+  }
+
+  updateSegment(id: string, values: Partial<typeof segments.$inferInsert>) {
+    return this.repository.updateSegment(id, values);
+  }
+
+  deleteSegment(id: string) {
+    return this.repository.deleteSegment(id);
+  }
+
+  getSegmentUserIds(segmentId: string): Promise<string[]> {
+    return this.repository.getSegmentUserIds(segmentId);
+  }
+
+  replaceSegmentUsers(segmentId: string, userIds: string[]) {
+    return this.repository.replaceSegmentUsers(segmentId, userIds);
+  }
+
+  addSegmentUsers(segmentId: string, userIds: string[]) {
+    return this.repository.addSegmentUsers(segmentId, userIds);
+  }
+
+  listCampaigns(f: ListFilter & { status?: string; channel?: string }) {
+    return this.repository.listCampaigns(f);
+  }
+
+  insertCampaign(values: typeof campaigns.$inferInsert) {
+    return this.repository.insertCampaign(values);
+  }
+
+  updateCampaign(
+    id: string,
+    values: Partial<typeof campaigns.$inferInsert>,
+  ) {
+    return this.repository.updateCampaign(id, values);
+  }
+
+  deleteCampaign(id: string) {
+    return this.repository.deleteCampaign(id);
+  }
+
+  listAllSends(
+    f: ListFilter & {
+      status?: string;
+      type?: string;
+      source_type?: string | null;
+      source_id?: string | null;
+    },
+  ) {
+    return this.repository.listSends(f);
+  }
+
+  findSendById(id: string) {
+    return this.repository.findSendById(id);
+  }
+
+  updateSend(id: string, values: Partial<typeof emailSends.$inferInsert>) {
+    return this.repository.updateSend(id, values);
+  }
+
+  /** Webhook de Resend (ruta pública) → estado del envío. */
+  applyResendEvent(resendId: string, eventType: string): Promise<void> {
+    return this.repository.applyResendEvent(resendId, eventType);
+  }
+
+  /** Baja por enlace del footer (ruta pública). */
+  unsubscribe(userId: string): Promise<void> {
+    return this.repository.unsubscribe(userId);
   }
 
   /**

@@ -238,7 +238,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async sendToToken(
+  private sendToToken(
     target: { token: string; platform: string },
     payload: PushPayload,
   ): Promise<boolean> {

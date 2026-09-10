@@ -6,6 +6,5 @@ import { SlidesRepository } from './slides.repository';
 @Module({
   controllers: [SlidesController],
   providers: [SlidesService, SlidesRepository],
-  exports: [SlidesService, SlidesRepository],
 })
 export class SlidesModule {}

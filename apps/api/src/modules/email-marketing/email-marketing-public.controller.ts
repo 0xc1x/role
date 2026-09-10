@@ -17,7 +17,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { Env } from '../../config/env.schema';
 import { Public } from '../../common/decorators/public.decorator';
 import { RendererService } from './renderer.service';
-import { EmailMarketingRepository } from './email-marketing.repository';
+import { CampaignsService } from './campaigns.service';
 
 /**
  * Rutas públicas del módulo: webhook de Resend y desuscripción por enlace.
@@ -26,7 +26,7 @@ import { EmailMarketingRepository } from './email-marketing.repository';
 @Controller('email-marketing')
 export class EmailMarketingPublicController {
   constructor(
-    private readonly repository: EmailMarketingRepository,
+    private readonly campaignsService: CampaignsService,
     private readonly renderer: RendererService,
     private readonly config: ConfigService<Env, true>,
   ) {}
@@ -54,7 +54,7 @@ export class EmailMarketingPublicController {
     const resendId = event.data?.id;
     if (!resendId || !event.type) return { ok: true };
 
-    await this.repository.applyResendEvent(resendId, event.type);
+    await this.campaignsService.applyResendEvent(resendId, event.type);
     return { ok: true };
   }
 
@@ -70,7 +70,7 @@ export class EmailMarketingPublicController {
     if (!this.renderer.verifyUnsubscribeToken(userId, signature)) {
       throw new BadRequestException('Token inválido');
     }
-    await this.repository.unsubscribe(userId);
+    await this.campaignsService.unsubscribe(userId);
     return `
       <!doctype html>
       <html lang="es">

@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
@@ -14,6 +15,14 @@ describe('UploadController', () => {
           provide: UploadService,
           useValue: {
             uploadImage: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) =>
+              key === 'NODE_ENV' ? 'test' : undefined,
+            ),
           },
         },
       ],

@@ -9,7 +9,7 @@ import { ReviewMapper } from './reviews.mapper';
 export class ReviewsService {
   constructor(private readonly reviewsRepository: ReviewsRepository) {}
 
-  async create(
+  create(
     user: AuthUser,
     input: {
       order_id: string;

@@ -2,8 +2,13 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { CreatePushSendDto, PushSendResult, PushTestDto } from '@0xc1x/role-commons';
 import { RecipientsService } from '../email-marketing/recipients.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { PushNotificationsRepository } from './push-notifications.repository';
+import {
+  PushNotificationsRepository,
+  type ListTokensFilter,
+  type PushListFilter,
+} from './push-notifications.repository';
 import type { PushSendReport } from '../notifications/notifications.service';
+import type { pushTemplates } from '../../database/schema';
 
 const NAME_VARIABLE = /\{\{\s*nombre\s*\}\}/gi;
 
@@ -119,6 +124,43 @@ export class PushAdminService {
       body: template.body,
       data: (template.data as Record<string, unknown>) ?? undefined,
     });
+  }
+
+  // ─── CRUD delegado (el controller no toca el repository) ───
+
+  listTemplates(f: PushListFilter) {
+    return this.pushRepo.listTemplates(f);
+  }
+
+  insertTemplate(values: typeof pushTemplates.$inferInsert) {
+    return this.pushRepo.insertTemplate(values);
+  }
+
+  updateTemplate(
+    id: string,
+    values: Partial<typeof pushTemplates.$inferInsert>,
+  ) {
+    return this.pushRepo.updateTemplate(id, values);
+  }
+
+  deleteTemplate(id: string) {
+    return this.pushRepo.deleteTemplate(id);
+  }
+
+  listTokens(f: ListTokensFilter) {
+    return this.pushRepo.listTokens(f);
+  }
+
+  updateToken(id: string, values: { is_active: boolean }) {
+    return this.pushRepo.updateToken(id, values);
+  }
+
+  listNotifications(f: PushListFilter & { type?: string }) {
+    return this.pushRepo.listNotifications(f);
+  }
+
+  findNotificationById(id: string) {
+    return this.pushRepo.findNotificationById(id);
   }
 
   /** Sustituye `{{nombre}}` (espacio si el perfil no tiene nombre). */

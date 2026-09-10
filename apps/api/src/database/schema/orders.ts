@@ -15,13 +15,13 @@ export const orders = pgTable('orders', {
   id: uuid('id').primaryKey().defaultRandom(),
   user_id: uuid('user_id')
     .notNull()
-    .references(() => profiles.id),
+    .references(() => profiles.id, { onDelete: 'no action' }),
   offer_id: uuid('offer_id')
     .notNull()
-    .references(() => offers.id),
+    .references(() => offers.id, { onDelete: 'no action' }),
   business_id: uuid('business_id')
     .notNull()
-    .references(() => businesses.id),
+    .references(() => businesses.id, { onDelete: 'no action' }),
   order_number: text('order_number').notNull().unique(),
   status: orderStatusEnum('status').notNull().default('pending'),
   price: numeric('price', { precision: 12, scale: 2 }).notNull(),
@@ -54,10 +54,10 @@ export const orderEvents = pgTable('order_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   order_id: uuid('order_id')
     .notNull()
-    .references(() => orders.id),
+    .references(() => orders.id, { onDelete: 'no action' }),
   status: orderStatusEnum('status').notNull(),
   previous_status: orderStatusEnum('previous_status'),
-  changed_by: uuid('changed_by').references(() => profiles.id),
+  changed_by: uuid('changed_by').references(() => profiles.id, { onDelete: 'no action' }),
   reason: text('reason'),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
   created_at: timestamp('created_at', { withTimezone: true })

@@ -33,7 +33,7 @@ export type Database = PostgresJsDatabase;
         }),
     },
   ],
-  exports: [DRIZZLE, POSTGRES_CLIENT],
+  exports: [DRIZZLE],
 })
 export class DatabaseModule implements OnModuleDestroy {
   constructor(@Inject(POSTGRES_CLIENT) private readonly client: Sql) {}

@@ -80,7 +80,7 @@ export class AppConfigRepository {
   /**
    * Lista pública: solo filas activas y públicas. Usada por landing/mobile.
    */
-  async listPublic(executor: DbExecutor = this.db): Promise<AppConfigRow[]> {
+  listPublic(executor: DbExecutor = this.db): Promise<AppConfigRow[]> {
     return executor
       .select()
       .from(appConfig)

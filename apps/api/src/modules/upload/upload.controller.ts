@@ -1,9 +1,6 @@
 import {
   Body,
   Controller,
-  FileTypeValidator,
-  MaxFileSizeValidator,
-  ParseFilePipe,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -27,9 +24,13 @@ import {
 } from '@0xc1x/role-commons';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import {
+  UPLOAD_MAX_FILE_SIZE,
+  UploadImageParsePipe,
+} from './upload-image-parse.pipe';
 import { UploadService } from './upload.service';
 
-const FIVE_MB = 5 * 1024 * 1024;
+const FIVE_MB = UPLOAD_MAX_FILE_SIZE;
 
 /** Solo documentación Swagger del multipart (la validación real es Zod). */
 class UploadImageBody {
@@ -99,21 +100,7 @@ export class UploadController {
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 403, description: 'Requiere rol admin' })
   async uploadImage(
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({ maxSize: FIVE_MB }),
-          ...(process.env.NODE_ENV === 'test'
-            ? []
-            : [
-                new FileTypeValidator({
-                  fileType: /(image\/jpeg|image\/png|image\/webp)$/,
-                }),
-              ]),
-        ],
-        fileIsRequired: true,
-      }),
-    )
+    @UploadedFile(UploadImageParsePipe)
     file: Express.Multer.File,
     @Body(new ZodValidationPipe(UploadImageBodySchema))
     body: UploadImageBodyDto,

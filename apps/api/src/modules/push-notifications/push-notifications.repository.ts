@@ -235,8 +235,8 @@ export class PushNotificationsRepository {
   }
 
   /** Nombres de perfil para renderizar `{{nombre}}` por destinatario. */
-  async findProfileNames(userIds: string[]): Promise<ProfileName[]> {
-    if (userIds.length === 0) return [];
+  findProfileNames(userIds: string[]): Promise<ProfileName[]> {
+    if (userIds.length === 0) return Promise.resolve([]);
     return this.db
       .select({
         user_id: profiles.id,
@@ -288,7 +288,7 @@ export class PushNotificationsRepository {
     await this.db.delete(pushSends).where(eq(pushSends.campaign_id, campaignId));
   }
 
-  async findQueuedPushBatch(
+  findQueuedPushBatch(
     campaignId: string,
     limit: number,
   ): Promise<PushSendRow[]> {

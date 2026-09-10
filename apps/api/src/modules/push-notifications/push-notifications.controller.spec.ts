@@ -16,7 +16,6 @@ import { paginatedDataFromQuery } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
 import { PushNotificationsController } from './push-notifications.controller';
 import { PushAdminService } from './push-admin.service';
-import { PushNotificationsRepository } from './push-notifications.repository';
 
 const TEMPLATE_ROW = {
   id: 'tpl-1',
@@ -62,9 +61,13 @@ const NOTIFICATION_ROW = {
 
 describe('PushNotificationsController', () => {
   let controller: PushNotificationsController;
-  let repository: jest.Mocked<
+  let pushAdminService: jest.Mocked<
     Pick<
-      PushNotificationsRepository,
+      PushAdminService,
+      | 'testTemplate'
+      | 'countAudience'
+      | 'send'
+      | 'test'
       | 'listTemplates'
       | 'insertTemplate'
       | 'updateTemplate'
@@ -75,9 +78,6 @@ describe('PushNotificationsController', () => {
       | 'findNotificationById'
     >
   >;
-  let pushAdminService: jest.Mocked<
-    Pick<PushAdminService, 'testTemplate' | 'countAudience' | 'send' | 'test'>
-  >;
   const admin: AuthUser = { id: 'admin-1', role: 'admin', email: 'a@x.com' };
 
   beforeEach(async () => {
@@ -85,8 +85,12 @@ describe('PushNotificationsController', () => {
       controllers: [PushNotificationsController],
       providers: [
         {
-          provide: PushNotificationsRepository,
+          provide: PushAdminService,
           useValue: {
+            testTemplate: jest.fn(),
+            countAudience: jest.fn(),
+            send: jest.fn(),
+            test: jest.fn(),
             listTemplates: jest.fn(),
             insertTemplate: jest.fn(),
             updateTemplate: jest.fn(),
@@ -97,20 +101,10 @@ describe('PushNotificationsController', () => {
             findNotificationById: jest.fn(),
           },
         },
-        {
-          provide: PushAdminService,
-          useValue: {
-            testTemplate: jest.fn(),
-            countAudience: jest.fn(),
-            send: jest.fn(),
-            test: jest.fn(),
-          },
-        },
       ],
     }).compile();
 
     controller = module.get(PushNotificationsController);
-    repository = module.get(PushNotificationsRepository);
     pushAdminService = module.get(PushAdminService);
     jest.clearAllMocks();
     (paginatedDataFromQuery as jest.Mock).mockImplementation(
@@ -123,7 +117,7 @@ describe('PushNotificationsController', () => {
 
   describe('plantillas', () => {
     it('listTemplates mapea filas a DTO paginado', async () => {
-      repository.listTemplates.mockResolvedValue({ rows: [TEMPLATE_ROW], total: 1 } as never);
+      pushAdminService.listTemplates.mockResolvedValue({ rows: [TEMPLATE_ROW], total: 1 } as never);
 
       const out = (await controller.listTemplates({ page: 1, limit: 20 } as never)) as {
         data: { id: string; created_at: string }[];
@@ -136,7 +130,7 @@ describe('PushNotificationsController', () => {
     });
 
     it('createTemplate inyecta created_by y data default', async () => {
-      repository.insertTemplate.mockResolvedValue([TEMPLATE_ROW] as never);
+      pushAdminService.insertTemplate.mockResolvedValue([TEMPLATE_ROW] as never);
 
       await controller.createTemplate(admin, {
         name: 'Promo',
@@ -144,20 +138,20 @@ describe('PushNotificationsController', () => {
         body: 'B',
       } as never);
 
-      expect(repository.insertTemplate).toHaveBeenCalledWith(
+      expect(pushAdminService.insertTemplate).toHaveBeenCalledWith(
         expect.objectContaining({ created_by: 'admin-1', data: {} }),
       );
     });
 
     it('updateTemplate devuelve null si la fila no existe', async () => {
-      repository.updateTemplate.mockResolvedValue(null);
+      pushAdminService.updateTemplate.mockResolvedValue(null);
       await expect(controller.updateTemplate('tpl-1', { title: 'x' } as never)).resolves.toBeNull();
     });
 
     it('removeTemplate delega', () => {
-      repository.deleteTemplate.mockResolvedValue(true);
+      pushAdminService.deleteTemplate.mockResolvedValue(true);
       controller.removeTemplate('tpl-1');
-      expect(repository.deleteTemplate).toHaveBeenCalledWith('tpl-1');
+      expect(pushAdminService.deleteTemplate).toHaveBeenCalledWith('tpl-1');
     });
   });
 
@@ -198,7 +192,7 @@ describe('PushNotificationsController', () => {
 
   describe('dispositivos', () => {
     it('listTokens mapea el join a DTO', async () => {
-      repository.listTokens.mockResolvedValue({ rows: [TOKEN_ROW], total: 1 } as never);
+      pushAdminService.listTokens.mockResolvedValue({ rows: [TOKEN_ROW], total: 1 } as never);
 
       const out = (await controller.listTokens({ page: 1, limit: 20 } as never)) as {
         data: { id: string; user_email: string }[];
@@ -208,7 +202,7 @@ describe('PushNotificationsController', () => {
     });
 
     it('updateToken mapea a DTO', async () => {
-      repository.updateToken.mockResolvedValue(TOKEN_ROW as never);
+      pushAdminService.updateToken.mockResolvedValue(TOKEN_ROW as never);
 
       const out = (await controller.updateToken('tok-1', { is_active: false } as never)) as {
         id: string;
@@ -216,13 +210,13 @@ describe('PushNotificationsController', () => {
         created_at: string;
       };
 
-      expect(repository.updateToken).toHaveBeenCalledWith('tok-1', { is_active: false });
+      expect(pushAdminService.updateToken).toHaveBeenCalledWith('tok-1', { is_active: false });
       expect(out).toMatchObject({ id: 'tok-1', user_email: 'ana@x.com' });
       expect(typeof out.created_at).toBe('string');
     });
 
     it('updateToken devuelve null cuando no existe', async () => {
-      repository.updateToken.mockResolvedValue(null as never);
+      pushAdminService.updateToken.mockResolvedValue(null as never);
       await expect(
         controller.updateToken('nope', { is_active: false } as never),
       ).resolves.toBeNull();
@@ -231,7 +225,7 @@ describe('PushNotificationsController', () => {
 
   describe('historial', () => {
     it('listNotifications mapea filas a DTO paginado', async () => {
-      repository.listNotifications.mockResolvedValue({ rows: [NOTIFICATION_ROW], total: 1 } as never);
+      pushAdminService.listNotifications.mockResolvedValue({ rows: [NOTIFICATION_ROW], total: 1 } as never);
 
       const out = (await controller.listNotifications({ page: 1, limit: 20 } as never)) as {
         data: { id: string; status: string }[];
@@ -241,7 +235,7 @@ describe('PushNotificationsController', () => {
     });
 
     it('getNotification devuelve null cuando no existe', async () => {
-      repository.findNotificationById.mockResolvedValue(null);
+      pushAdminService.findNotificationById.mockResolvedValue(null);
       await expect(controller.getNotification('nope')).resolves.toBeNull();
     });
   });

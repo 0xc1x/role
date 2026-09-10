@@ -5,6 +5,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -146,7 +147,10 @@ export const segmentUsers = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index('idx_segment_users_user').on(t.user_id)],
+  (t) => [
+    primaryKey({ columns: [t.segment_id, t.user_id] }),
+    index('idx_segment_users_user').on(t.user_id),
+  ],
 );
 
 // ─── Campañas (multi-canal: email | push; whatsapp a futuro) ──────────

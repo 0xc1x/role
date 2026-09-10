@@ -21,8 +21,12 @@ export class CampaignsCron {
         this.logger.log(`processTick procesó ${processed} envíos`);
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const cause = err instanceof Error ? err.cause : undefined;
+      const causeMsg =
+        cause instanceof Error ? cause.message : cause ?? undefined;
       this.logger.error(
-        `processTick falló: ${err instanceof Error ? err.message : String(err)}`,
+        `processTick falló: ${message}${causeMsg ? ` (causa: ${causeMsg})` : ''}`,
       );
     }
   }

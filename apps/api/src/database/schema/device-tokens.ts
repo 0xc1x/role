@@ -12,7 +12,7 @@ export const deviceTokens = pgTable('device_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
   user_id: uuid('user_id')
     .notNull()
-    .references(() => profiles.id),
+    .references(() => profiles.id, { onDelete: 'no action' }),
   token: text('token').notNull().unique(),
   platform: text('platform').notNull().$type<'ios' | 'android' | 'web'>(),
   device_info: jsonb('device_info')

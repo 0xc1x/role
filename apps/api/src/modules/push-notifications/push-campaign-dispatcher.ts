@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
   Optional,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -28,7 +29,9 @@ const NAME_VARIABLE = /\{\{\s*nombre\s*\}\}/g;
  * processBatch() ramifiquen por canal sin acoplar los módulos.
  */
 @Injectable()
-export class PushCampaignDispatcher implements CampaignChannelDispatcher {
+export class PushCampaignDispatcher
+  implements CampaignChannelDispatcher, OnModuleInit
+{
   private readonly logger = new Logger(PushCampaignDispatcher.name);
   readonly channel = 'push' as const;
 

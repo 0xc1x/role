@@ -71,7 +71,7 @@ export class PayoutsRepository {
    * completed sin payout por negocio, crea payout pending, backfillea fee/net
    * legacy y recalcula el balance. Mismo comportamiento, mismo orden.
    */
-  async generate(): Promise<number> {
+  generate(): Promise<number> {
     return this.db.transaction(async (tx) => {
       const groups = await tx
         .select({

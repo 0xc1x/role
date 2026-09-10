@@ -56,7 +56,7 @@ export class EmailMarketingRepository {
 
   // ─── Componentes ───────────────────────────────────────────────────
 
-  async listComponents(f: ListFilter) {
+  listComponents(f: ListFilter) {
     // Grid muestra inactivos; solo oculta eliminados.
     const filters: SQL[] = [isNull(emailComponents.deleted_at)];
     if (f.active !== undefined)
@@ -104,7 +104,7 @@ export class EmailMarketingRepository {
 
   // ─── Plantillas ────────────────────────────────────────────────────
 
-  async listTemplates(f: ListFilter) {
+  listTemplates(f: ListFilter) {
     // Grid muestra inactivos; solo oculta eliminados.
     const filters: SQL[] = [isNull(emailTemplates.deleted_at)];
     if (f.active !== undefined)
@@ -150,7 +150,7 @@ export class EmailMarketingRepository {
 
   // ─── Segmentos ─────────────────────────────────────────────────────
 
-  async listSegments(f: ListSegmentsFilter) {
+  listSegments(f: ListSegmentsFilter) {
     // Grid muestra inactivos; solo oculta eliminados.
     const filters: SQL[] = [isNull(segments.deleted_at)];
     if (f.category) filters.push(eq(segments.category, f.category));
@@ -328,7 +328,7 @@ export class EmailMarketingRepository {
 
   // ─── Campañas ──────────────────────────────────────────────────────
 
-  async listCampaigns(f: ListFilter & { status?: string; channel?: string }) {
+  listCampaigns(f: ListFilter & { status?: string; channel?: string }) {
     const filters: SQL[] = [isNull(campaigns.deleted_at)];
     if (f.status) filters.push(sql`status = ${f.status}`);
     if (f.channel) filters.push(sql`channel = ${f.channel}`);
@@ -506,7 +506,7 @@ export class EmailMarketingRepository {
     return this.paginate(emailSends, and(...filters), f);
   }
 
-  async listSends(f: ListFilter & { status?: string; type?: string; source_type?: string | null; source_id?: string | null; search?: string }) {
+  listSends(f: ListFilter & { status?: string; type?: string; source_type?: string | null; source_id?: string | null; search?: string }) {
     const filters: SQL[] = [];
     if (f.status) filters.push(eq(emailSends.status, f.status as SendRow['status']));
     if (f.type) filters.push(eq(emailSends.type, f.type as SendRow['type']));

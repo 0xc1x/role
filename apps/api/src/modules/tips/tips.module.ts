@@ -6,6 +6,5 @@ import { TipsService } from './tips.service';
 @Module({
   controllers: [TipsController],
   providers: [TipsService, TipsRepository],
-  exports: [TipsService, TipsRepository],
 })
 export class TipsModule {}

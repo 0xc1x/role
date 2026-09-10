@@ -9,6 +9,6 @@ import { OffersService } from './offers.service';
   imports: [forwardRef(() => NotificationsModule)],
   controllers: [OffersController],
   providers: [OffersService, OffersRepository, OffersExpirationJob],
-  exports: [OffersService, OffersRepository],
+  exports: [OffersRepository],
 })
 export class OffersModule {}

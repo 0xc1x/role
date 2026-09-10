@@ -6,6 +6,6 @@ import { AppConfigRepository } from './app-config.repository';
 @Module({
   controllers: [AppConfigController],
   providers: [AppConfigService, AppConfigRepository],
-  exports: [AppConfigService, AppConfigRepository],
+  exports: [AppConfigRepository],
 })
 export class AppConfigModule {}

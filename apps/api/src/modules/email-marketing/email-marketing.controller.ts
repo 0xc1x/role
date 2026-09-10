@@ -6,6 +6,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -61,7 +62,6 @@ import type { AuthUser } from '../../auth/auth.types';
 import type { emailSends } from '../../database/schema';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CampaignsService } from './campaigns.service';
-import { EmailMarketingRepository } from './email-marketing.repository';
 import { EmailMarketingMapper } from './mappers/email-marketing.mapper';
 
 /**
@@ -73,10 +73,7 @@ import { EmailMarketingMapper } from './mappers/email-marketing.mapper';
 @ApiBearerAuth('bearer')
 @Controller('email-marketing')
 export class EmailMarketingController {
-  constructor(
-    private readonly repository: EmailMarketingRepository,
-    private readonly campaignsService: CampaignsService,
-  ) {}
+  constructor(private readonly campaignsService: CampaignsService) {}
 
   // ─── Componentes ───────────────────────────────────────────────────
 
@@ -86,7 +83,7 @@ export class EmailMarketingController {
     @Query(new ZodValidationPipe(ListComponentsQuerySchema))
     q: ListComponentsQuery,
   ): Promise<EmailComponentPaginatedData> {
-    return this.repository.listComponents(q).then(({ rows, total }) => ({
+    return this.campaignsService.listComponents(q).then(({ rows, total }) => ({
       data: rows.map((r) => EmailMarketingMapper.toComponentDto(r)),
       meta: { page: q.page, limit: q.limit, total },
     })) as Promise<EmailComponentPaginatedData>;
@@ -97,7 +94,7 @@ export class EmailMarketingController {
     @Body(new ZodValidationPipe(CreateEmailComponentSchema))
     body: CreateEmailComponentDto,
   ) {
-    const rows = await this.repository.insertComponent(body);
+    const rows = await this.campaignsService.insertComponent(body);
     return EmailMarketingMapper.toComponentDto(rows[0]!);
   }
 
@@ -107,13 +104,13 @@ export class EmailMarketingController {
     @Body(new ZodValidationPipe(UpdateEmailComponentSchema))
     body: UpdateEmailComponentDto,
   ) {
-    const row = await this.repository.updateComponent(id, body);
+    const row = await this.campaignsService.updateComponent(id, body);
     return row ? EmailMarketingMapper.toComponentDto(row) : null;
   }
 
   @Delete('components/:id')
   removeComponent(@Param('id', ParseUUIDPipe) id: string) {
-    return this.repository.deleteComponent(id);
+    return this.campaignsService.deleteComponent(id);
   }
 
   // ─── Plantillas ────────────────────────────────────────────────────
@@ -123,7 +120,7 @@ export class EmailMarketingController {
     @Query(new ZodValidationPipe(ListComponentsQuerySchema))
     q: ListComponentsQuery,
   ): Promise<EmailTemplatePaginatedData> {
-    return this.repository.listTemplates(q).then(({ rows, total }) => ({
+    return this.campaignsService.listTemplates(q).then(({ rows, total }) => ({
       data: rows.map((r) => EmailMarketingMapper.toTemplateDto(r)),
       meta: { page: q.page, limit: q.limit, total },
     })) as Promise<EmailTemplatePaginatedData>;
@@ -151,7 +148,7 @@ export class EmailMarketingController {
     @Body(new ZodValidationPipe(CreateEmailTemplateSchema))
     body: CreateEmailTemplateDto,
   ) {
-    const rows = await this.repository.insertTemplate(body);
+    const rows = await this.campaignsService.insertTemplate(body);
     return EmailMarketingMapper.toTemplateDto(rows[0]!);
   }
 
@@ -161,13 +158,13 @@ export class EmailMarketingController {
     @Body(new ZodValidationPipe(UpdateEmailTemplateSchema))
     body: UpdateEmailTemplateDto,
   ) {
-    const row = await this.repository.updateTemplate(id, body);
+    const row = await this.campaignsService.updateTemplate(id, body);
     return row ? EmailMarketingMapper.toTemplateDto(row) : null;
   }
 
   @Delete('templates/:id')
   removeTemplate(@Param('id', ParseUUIDPipe) id: string) {
-    return this.repository.deleteTemplate(id);
+    return this.campaignsService.deleteTemplate(id);
   }
 
   // ─── Segmentos ─────────────────────────────────────────────────────
@@ -176,7 +173,7 @@ export class EmailMarketingController {
   listSegments(
     @Query(new ZodValidationPipe(ListSegmentsQuerySchema)) q: ListSegmentsQuery,
   ): Promise<SegmentPaginatedData> {
-    return this.repository.listSegments(q).then(({ rows, total }) => ({
+    return this.campaignsService.listSegments(q).then(({ rows, total }) => ({
       data: rows.map((r) => EmailMarketingMapper.toSegmentDto(r)),
       meta: { page: q.page, limit: q.limit, total },
     })) as Promise<SegmentPaginatedData>;
@@ -187,10 +184,10 @@ export class EmailMarketingController {
     @Body(new ZodValidationPipe(CreateSegmentSchema)) body: CreateSegmentDto,
   ) {
     const { user_ids, ...segment } = body;
-    const [row] = await this.repository.insertSegment(segment);
+    const [row] = await this.campaignsService.insertSegment(segment);
     if (!row) throw new Error('No se pudo crear el segmento');
     if (Array.isArray(user_ids) && user_ids.length > 0) {
-      await this.repository.addSegmentUsers(row.id, user_ids);
+      await this.campaignsService.addSegmentUsers(row.id, user_ids);
     }
     return EmailMarketingMapper.toSegmentDto(row);
   }
@@ -200,18 +197,18 @@ export class EmailMarketingController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(UpdateSegmentSchema)) body: UpdateSegmentDto,
   ) {
-    const row = await this.repository.updateSegment(id, body);
+    const row = await this.campaignsService.updateSegment(id, body);
     return row ? EmailMarketingMapper.toSegmentDto(row) : null;
   }
 
   @Delete('segments/:id')
   removeSegment(@Param('id', ParseUUIDPipe) id: string) {
-    return this.repository.deleteSegment(id);
+    return this.campaignsService.deleteSegment(id);
   }
 
   @Get('segments/:id/users')
   getSegmentUsers(@Param('id', ParseUUIDPipe) id: string): Promise<string[]> {
-    return this.repository.getSegmentUserIds(id);
+    return this.campaignsService.getSegmentUserIds(id);
   }
 
   @Put('segments/:id/users')
@@ -221,7 +218,7 @@ export class EmailMarketingController {
     @Body(new ZodValidationPipe(AddSegmentUsersSchema))
     body: { user_ids: string[] },
   ) {
-    return this.repository.replaceSegmentUsers(id, body.user_ids);
+    return this.campaignsService.replaceSegmentUsers(id, body.user_ids);
   }
 
   @Post('segments/:id/users')
@@ -230,7 +227,7 @@ export class EmailMarketingController {
     @Body(new ZodValidationPipe(AddSegmentUsersSchema))
     body: { user_ids: string[] },
   ) {
-    return this.repository.addSegmentUsers(id, body.user_ids);
+    return this.campaignsService.addSegmentUsers(id, body.user_ids);
   }
 
   // ─── Campañas ──────────────────────────────────────────────────────
@@ -240,7 +237,7 @@ export class EmailMarketingController {
     @Query(new ZodValidationPipe(ListCampaignsQuerySchema))
     q: ListCampaignsQuery,
   ): Promise<CampaignPaginatedData> {
-    return this.repository.listCampaigns(q).then(({ rows, total }) => ({
+    return this.campaignsService.listCampaigns(q).then(({ rows, total }) => ({
       data: rows.map((r) => EmailMarketingMapper.toCampaignDto(r)),
       meta: { page: q.page, limit: q.limit, total },
     })) as Promise<CampaignPaginatedData>;
@@ -250,8 +247,8 @@ export class EmailMarketingController {
   getCampaign(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<CampaignDto | null> {
-    return this.repository
-      .getCampaignById(id)
+    return this.campaignsService
+      .getCampaign(id)
       .then((row) => (row ? EmailMarketingMapper.toCampaignDto(row) : null));
   }
 
@@ -264,7 +261,7 @@ export class EmailMarketingController {
       body.channel,
       body.template_id,
     );
-    const rows = await this.repository.insertCampaign({
+    const rows = await this.campaignsService.insertCampaign({
       ...body,
       created_by: user.id,
       scheduled_at: body.scheduled_at ? new Date(body.scheduled_at) : null,
@@ -282,17 +279,18 @@ export class EmailMarketingController {
     };
     if (body.template_id !== undefined || body.channel !== undefined) {
       const current = await this.getCampaign(id);
-      const channel = body.channel ?? current?.channel ?? 'email';
+      if (!current) throw new NotFoundException('Campaña no encontrada');
+      const channel = body.channel ?? current.channel;
       const templateId =
         body.template_id !== undefined
           ? body.template_id
-          : (current?.template_id ?? null);
+          : (current.template_id ?? null);
       await this.campaignsService.assertTemplateForChannel(
         channel,
         templateId,
       );
     }
-    return this.repository
+    return this.campaignsService
       .updateCampaign(id, {
         ...rest,
         ...(scheduled_at !== undefined
@@ -335,7 +333,7 @@ export class EmailMarketingController {
 
   @Delete('campaigns/:id')
   removeCampaign(@Param('id', ParseUUIDPipe) id: string) {
-    return this.repository.deleteCampaign(id);
+    return this.campaignsService.deleteCampaign(id);
   }
 
   @Post('campaigns/:id/audience')
@@ -368,9 +366,7 @@ export class EmailMarketingController {
   listAllSends(
     @Query(new ZodValidationPipe(ListSendsQuerySchema)) q: ListSendsQuery,
   ) {
-    return this.repository
-      .listSends(q)
-      .then(({ rows, total }) => ({
+    return this.campaignsService.listAllSends(q).then(({ rows, total }) => ({
         data: rows.map((r) => EmailMarketingMapper.toSendDto(r)),
         meta: { page: q.page, limit: q.limit, total },
       })) as Promise<never>;
@@ -390,7 +386,7 @@ export class EmailMarketingController {
           : value,
       ]),
     );
-    return this.repository
+    return this.campaignsService
       .updateSend(id, values)
       .then((row) => (row ? EmailMarketingMapper.toSendDto(row) : null));
   }
@@ -398,7 +394,7 @@ export class EmailMarketingController {
   @Post('sends/:id/retry')
   @HttpCode(HttpStatus.OK)
   async retrySend(@Param('id', ParseUUIDPipe) id: string) {
-    const row = await this.repository.findSendById(id);
+    const row = await this.campaignsService.findSendById(id);
     if (!row) throw new Error('Envío no encontrado');
     const reset: Partial<typeof emailSends.$inferInsert> = {
       status: 'pending',
@@ -408,7 +404,7 @@ export class EmailMarketingController {
       error_message: null,
       error_code: null,
     };
-    await this.repository.updateSend(id, reset);
+    await this.campaignsService.updateSend(id, reset);
     return { ok: true };
   }
 }

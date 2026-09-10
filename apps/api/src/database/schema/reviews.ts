@@ -13,11 +13,11 @@ export const reviews = pgTable('reviews', {
   id: uuid('id').primaryKey().defaultRandom(),
   user_id: uuid('user_id')
     .notNull()
-    .references(() => profiles.id),
+    .references(() => profiles.id, { onDelete: 'no action' }),
   business_id: uuid('business_id')
     .notNull()
-    .references(() => businesses.id),
-  order_id: uuid('order_id').references(() => orders.id),
+    .references(() => businesses.id, { onDelete: 'no action' }),
+  order_id: uuid('order_id').references(() => orders.id, { onDelete: 'no action' }),
   rating: integer('rating'),
   comment: text('comment'),
   product_rating: integer('product_rating'),
