@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { pushTemplateDefaults, sendDefaults } from "../push-forms";
+import { pushTemplateDefaults, sendDefaults } from "../push-defaults";
 
 describe("pushTemplateDefaults", () => {
 	test("defaults vacíos sin plantilla", () => {

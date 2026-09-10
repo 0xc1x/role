@@ -1,10 +1,8 @@
 import { Loading } from "@/components/loading";
 import { FormDrawer } from "@/components/resource/form-drawer";
 import { Badge } from "@/components/ui/badge";
-import {
-	ComponentFields,
-	componentDefaults,
-} from "@/features/email/forms/email-forms";
+import { componentDefaults } from "@/features/email/forms/email-defaults";
+import { ComponentFields } from "@/features/email/forms/email-forms";
 import {
 	useComponentMutations,
 	useEmailComponents,

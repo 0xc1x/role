@@ -1,5 +1,5 @@
 import { Send } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
 	AlertDialog,
@@ -27,10 +27,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { IdPicker } from "@/features/email/components/id-picker";
 import { SendTestDrawer } from "@/features/push-notifications/components/send-test-drawer";
+import { sendDefaults } from "@/features/push-notifications/forms/push-defaults";
 import {
 	PushTypeSelect,
 	type SendFormValues,
-	sendDefaults,
 } from "@/features/push-notifications/forms/push-forms";
 import {
 	hasAudience,
@@ -69,6 +69,13 @@ export function SendTab() {
 
 	const ready =
 		hasAudience(values) && values.title.trim() && values.body.trim();
+
+	const activeSegments = (segments.data?.data ?? []).filter((s) => s.is_active);
+	// Lookup O(1) para el checklist; los writes siguen con el array.
+	const selectedIds = useMemo(
+		() => new Set(values.segment_ids),
+		[values.segment_ids],
+	);
 
 	const requestAudience = () =>
 		audience.mutate({
@@ -150,33 +157,31 @@ export function SendTab() {
 				<Field>
 					<FieldLabel>Segmentos destinatarios</FieldLabel>
 					<div className="space-y-1.5">
-						{(segments.data?.data ?? [])
-							.filter((s) => s.is_active)
-							.map((s) => {
-								const checked = values.segment_ids.includes(s.id);
-								const toggle = () =>
-									setValues({
-										...values,
-										segment_ids: checked
-											? values.segment_ids.filter((id) => id !== s.id)
-											: [...values.segment_ids, s.id],
-									});
-								return (
-									<div
-										key={s.id}
-										className="flex items-center gap-2 text-sm font-normal"
-									>
-										<Checkbox
-											checked={checked}
-											onCheckedChange={toggle}
-											aria-label={s.name}
-										/>
-										<span>
-											{s.name} ({s.type})
-										</span>
-									</div>
-								);
-							})}
+						{activeSegments.map((s) => {
+							const checked = selectedIds.has(s.id);
+							const toggle = () =>
+								setValues({
+									...values,
+									segment_ids: checked
+										? values.segment_ids.filter((id) => id !== s.id)
+										: [...values.segment_ids, s.id],
+								});
+							return (
+								<div
+									key={s.id}
+									className="flex items-center gap-2 text-sm font-normal"
+								>
+									<Checkbox
+										checked={checked}
+										onCheckedChange={toggle}
+										aria-label={s.name}
+									/>
+									<span>
+										{s.name} ({s.type})
+									</span>
+								</div>
+							);
+						})}
 					</div>
 				</Field>
 				<Field>

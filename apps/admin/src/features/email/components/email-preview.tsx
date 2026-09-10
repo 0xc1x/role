@@ -10,6 +10,9 @@ export function EmailPreview({
 		<iframe
 			title={title}
 			srcDoc={html}
+			// Preview de HTML de mails: sin scripts ni acceso al parent.
+			// Los estilos inline/<style> e imágenes siguen funcionando.
+			sandbox=""
 			className="h-96 w-full rounded-lg border bg-white"
 		/>
 	);

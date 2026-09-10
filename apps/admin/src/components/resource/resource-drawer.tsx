@@ -15,6 +15,32 @@ import {
 } from "@/components/ui/drawer";
 import { Spinner } from "@/components/ui/spinner";
 
+function DrawerSubmitButton({
+	formId,
+	mutationKey,
+	pendingLabel,
+	submitLabel,
+}: {
+	formId: string;
+	mutationKey: readonly unknown[];
+	pendingLabel: string;
+	submitLabel: string;
+}) {
+	const isMutating = useIsMutating({ mutationKey }) > 0;
+
+	return (
+		<Button type="submit" form={formId} disabled={isMutating}>
+			{isMutating ? (
+				<>
+					<Spinner /> {pendingLabel}
+				</>
+			) : (
+				submitLabel
+			)}
+		</Button>
+	);
+}
+
 export function ResourceCreateDrawer({
 	formId,
 	mutationKey,
@@ -39,7 +65,6 @@ export function ResourceCreateDrawer({
 }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [resetKey, setResetKey] = useState(0);
-	const isMutating = useIsMutating({ mutationKey }) > 0;
 
 	return (
 		<Drawer
@@ -70,15 +95,12 @@ export function ResourceCreateDrawer({
 				</DrawerBody>
 
 				<DrawerFooter>
-					<Button type="submit" form={formId} disabled={isMutating}>
-						{isMutating ? (
-							<>
-								<Spinner /> {creatingLabel}
-							</>
-						) : (
-							submitLabel
-						)}
-					</Button>
+					<DrawerSubmitButton
+						formId={formId}
+						mutationKey={mutationKey}
+						pendingLabel={creatingLabel}
+						submitLabel={submitLabel}
+					/>
 					<DrawerClose>
 						<Button variant="outline" className="w-full">
 							Cancelar
@@ -111,8 +133,6 @@ export function ResourceUpdateDrawer({
 	updatingLabel: string;
 	children: React.ReactNode;
 }) {
-	const isMutating = useIsMutating({ mutationKey }) > 0;
-
 	return (
 		<Drawer
 			open={isOpen}
@@ -128,15 +148,12 @@ export function ResourceUpdateDrawer({
 				<DrawerBody>{children}</DrawerBody>
 
 				<DrawerFooter>
-					<Button type="submit" form={formId} disabled={isMutating}>
-						{isMutating ? (
-							<>
-								<Spinner /> {updatingLabel}
-							</>
-						) : (
-							submitLabel
-						)}
-					</Button>
+					<DrawerSubmitButton
+						formId={formId}
+						mutationKey={mutationKey}
+						pendingLabel={updatingLabel}
+						submitLabel={submitLabel}
+					/>
 					<DrawerClose>
 						<Button variant="outline" className="w-full">
 							Cancelar

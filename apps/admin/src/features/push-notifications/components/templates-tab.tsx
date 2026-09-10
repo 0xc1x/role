@@ -18,10 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { TemplateTestDrawer } from "@/features/push-notifications/components/template-test-drawer";
-import {
-	PushTemplateFields,
-	pushTemplateDefaults,
-} from "@/features/push-notifications/forms/push-forms";
+import { pushTemplateDefaults } from "@/features/push-notifications/forms/push-defaults";
+import { PushTemplateFields } from "@/features/push-notifications/forms/push-forms";
 import {
 	usePushTemplateMutations,
 	usePushTemplates,

@@ -22,28 +22,34 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const TypeBadge = ({ type }: { type: string }) => {
-	const variants: Record<string, "info" | "warning" | "secondary"> = {
-		announcement: "info",
-		promo: "warning",
-		system: "secondary",
-	};
-	return <Badge variant={variants[type] ?? "secondary"}>{type}</Badge>;
+const TYPE_VARIANTS: Record<string, "info" | "warning" | "secondary"> = {
+	announcement: "info",
+	promo: "warning",
+	system: "secondary",
 };
 
+const TypeBadge = ({ type }: { type: string }) => {
+	return <Badge variant={TYPE_VARIANTS[type] ?? "secondary"}>{type}</Badge>;
+};
+
+const STATUS_VARIANTS: Record<
+	string,
+	"success" | "warning" | "destructive" | "secondary"
+> = {
+	sent: "success",
+	partial: "warning",
+	failed: "destructive",
+};
+
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- cell badges colocated with column defs (TanStack Table idiom)
 const StatusBadge = ({ status }: { status: string }) => {
-	const map: Record<
-		string,
-		"success" | "warning" | "destructive" | "secondary"
-	> = {
-		sent: "success",
-		partial: "warning",
-		failed: "destructive",
-	};
-	return <Badge variant={map[status] ?? "secondary"}>{status}</Badge>;
+	return (
+		<Badge variant={STATUS_VARIANTS[status] ?? "secondary"}>{status}</Badge>
+	);
 };
 
 /** Drawer con el detalle completo del envío registrado. */
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- action cell + drawer colocated with column defs (TanStack Table idiom)
 function DetailDrawer(props: {
 	item: PushNotificationDto;
 	onClose: () => void;
@@ -161,6 +167,7 @@ export const historyColumns: ColumnDef<PushNotificationDto>[] = [
 	},
 ];
 
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- action cell colocated with column defs (TanStack Table idiom)
 function HistoryActionCell({ item }: { item: PushNotificationDto }) {
 	const [detail, setDetail] = useState(false);
 	return (

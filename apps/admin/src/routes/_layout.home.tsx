@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, ShoppingBag, Store, Users } from "lucide-react";
+import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { useAuthUser } from "@/features/auth";
 import { useBusinessesList } from "@/features/businesses";
 import { useEmailSendsList } from "@/features/email-sends";
 import { usePlatformStats } from "@/features/stats";
+import { formatBusinessDate } from "@/lib/dates";
 
 export const Route = createFileRoute("/_layout/home")({
 	component: HomePage,
@@ -31,6 +33,117 @@ const PENDING_SENDS_QUERY = {
 	page: 1,
 } as const;
 
+type BusinessItem = NonNullable<
+	ReturnType<typeof useBusinessesList>["data"]
+>["data"][number];
+type EmailSendItem = NonNullable<
+	ReturnType<typeof useEmailSendsList>["data"]
+>["data"][number];
+type PendingBusinessView = Pick<BusinessItem, "id" | "name"> & {
+	createdAt: string;
+};
+
+function HomeLoadingSkeleton() {
+	return (
+		<div className="w-full p-8 space-y-6">
+			<Skeleton className="h-10 w-72" />
+			<div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-8">
+				{[1, 2, 3, 4].map((n) => (
+					<div key={n} className="rounded-lg border p-6 space-y-2">
+						<Skeleton className="h-6 w-16" />
+						<Skeleton className="h-8 w-12" />
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- route-colocated cards, single-use in HomePage
+function PendingBusinessesCard({
+	businesses,
+}: {
+	businesses: PendingBusinessView[];
+}) {
+	return (
+		<Card>
+			<CardHeader className="flex flex-row items-center justify-between">
+				<CardTitle>Negocios recientes pendientes</CardTitle>
+				<Link
+					to="/negocios"
+					search={{ page: 1, limit: 10, verification_status: "pending" }}
+				>
+					<Button variant="ghost" size="sm">
+						Ver todo <ArrowRight className="ml-1 h-4 w-4" />
+					</Button>
+				</Link>
+			</CardHeader>
+			<CardContent>
+				{businesses.length ? (
+					<ul className="space-y-3">
+						{businesses.map((b) => (
+							<li
+								key={b.id}
+								className="flex items-center justify-between border-b pb-2 last:border-0"
+							>
+								<span className="font-medium text-sm">{b.name}</span>
+								<span className="text-xs text-muted-foreground">
+									{b.createdAt}
+								</span>
+							</li>
+						))}
+					</ul>
+				) : (
+					<p className="text-sm text-muted-foreground">
+						No hay pendientes — ¡todo al día!
+					</p>
+				)}
+			</CardContent>
+		</Card>
+	);
+}
+
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- route-colocated cards, single-use in HomePage
+function QueuedEmailsCard({ emails }: { emails: EmailSendItem[] }) {
+	return (
+		<Card>
+			<CardHeader className="flex flex-row items-center justify-between">
+				<CardTitle>Emails en cola</CardTitle>
+				<Link
+					to="/notificaciones/mails"
+					search={{ tab: "envios", status: "pending" }}
+				>
+					<Button variant="ghost" size="sm">
+						Ver todo <ArrowRight className="ml-1 h-4 w-4" />
+					</Button>
+				</Link>
+			</CardHeader>
+			<CardContent>
+				{emails.length ? (
+					<ul className="space-y-3">
+						{emails.map((e) => (
+							<li
+								key={e.id}
+								className="flex items-center justify-between border-b pb-2 last:border-0"
+							>
+								<span className="text-sm truncate max-w-[180px]">
+									{e.email}
+								</span>
+								<Badge variant="secondary" className="text-xs">
+									{e.status}
+								</Badge>
+							</li>
+						))}
+					</ul>
+				) : (
+					<p className="text-sm text-muted-foreground">Cola vacía</p>
+				)}
+			</CardContent>
+		</Card>
+	);
+}
+
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- route file owns HomePage + its loading skeleton
 function HomePage() {
 	const { data: user, isLoading: authLoading } = useAuthUser();
 	const { data: stats, isLoading: statsLoading } = usePlatformStats();
@@ -38,36 +151,31 @@ function HomePage() {
 	const { data: pendingData, isLoading: pendingLoading } = useBusinessesList(
 		PENDING_BUSINESSES_QUERY,
 	);
-	const { data: pendingMeta } = useBusinessesList({
-		verification_status: "pending",
-		limit: 1,
-		page: 1,
-	});
 	const { data: totalData } = useBusinessesList({ limit: 1, page: 1 });
 	const { data: emailsData } = useEmailSendsList(PENDING_SENDS_QUERY);
 
+	const pendingBusinesses: PendingBusinessView[] = useMemo(
+		() =>
+			(pendingData?.data ?? []).slice(0, 5).map((b) => ({
+				id: b.id,
+				name: b.name,
+				createdAt: formatBusinessDate(b.created_at),
+			})),
+		[pendingData],
+	);
+	const queuedEmails: EmailSendItem[] = useMemo(
+		() => (emailsData?.data ?? []).slice(0, 5),
+		[emailsData],
+	);
+
 	if (authLoading) {
-		return (
-			<div className="w-full p-8 space-y-6">
-				<Skeleton className="h-10 w-72" />
-				<div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-8">
-					{[1, 2, 3, 4].map((n) => (
-						<div key={n} className="rounded-lg border p-6 space-y-2">
-							<Skeleton className="h-6 w-16" />
-							<Skeleton className="h-8 w-12" />
-						</div>
-					))}
-				</div>
-			</div>
-		);
+		return <HomeLoadingSkeleton />;
 	}
 
-	const pendingCount = pendingMeta?.meta.total ?? pendingData?.meta.total ?? 0;
+	const pendingCount = pendingData?.meta.total ?? 0;
 	const totalBusinesses = totalData?.meta.total ?? stats?.businesses ?? 0;
 	const usersCount = stats?.users ?? 0;
 	const mealsCount = stats?.meals_saved ?? 0;
-	const pendingBusinesses = (pendingData?.data ?? []).slice(0, 5);
-	const queuedEmails = (emailsData?.data ?? []).slice(0, 5);
 
 	return (
 		<div className="w-full p-8 space-y-6">
@@ -147,74 +255,8 @@ function HomePage() {
 			</div>
 
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between">
-						<CardTitle>Negocios recientes pendientes</CardTitle>
-						<Link
-							to="/negocios"
-							search={{ page: 1, limit: 10, verification_status: "pending" }}
-						>
-							<Button variant="ghost" size="sm">
-								Ver todo <ArrowRight className="ml-1 h-4 w-4" />
-							</Button>
-						</Link>
-					</CardHeader>
-					<CardContent>
-						{pendingBusinesses.length ? (
-							<ul className="space-y-3">
-								{pendingBusinesses.map((b) => (
-									<li
-										key={b.id}
-										className="flex items-center justify-between border-b pb-2 last:border-0"
-									>
-										<span className="font-medium text-sm">{b.name}</span>
-										<span className="text-xs text-muted-foreground">
-											{new Date(b.created_at).toLocaleDateString("es-EC")}
-										</span>
-									</li>
-								))}
-							</ul>
-						) : (
-							<p className="text-sm text-muted-foreground">
-								No hay pendientes — ¡todo al día!
-							</p>
-						)}
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between">
-						<CardTitle>Emails en cola</CardTitle>
-						<Link
-							to="/notificaciones/mails"
-							search={{ tab: "envios", status: "pending" }}
-						>
-							<Button variant="ghost" size="sm">
-								Ver todo <ArrowRight className="ml-1 h-4 w-4" />
-							</Button>
-						</Link>
-					</CardHeader>
-					<CardContent>
-						{queuedEmails.length ? (
-							<ul className="space-y-3">
-								{queuedEmails.map((e) => (
-									<li
-										key={e.id}
-										className="flex items-center justify-between border-b pb-2 last:border-0"
-									>
-										<span className="text-sm truncate max-w-[180px]">
-											{e.email}
-										</span>
-										<Badge variant="secondary" className="text-xs">
-											{e.status}
-										</Badge>
-									</li>
-								))}
-							</ul>
-						) : (
-							<p className="text-sm text-muted-foreground">Cola vacía</p>
-						)}
-					</CardContent>
-				</Card>
+				<PendingBusinessesCard businesses={pendingBusinesses} />
+				<QueuedEmailsCard emails={queuedEmails} />
 			</div>
 		</div>
 	);

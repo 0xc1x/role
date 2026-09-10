@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useState } from "react";
 import {
 	Attachment,
 	AttachmentAction,
@@ -22,19 +22,23 @@ function formatFileSize(bytes: number) {
 
 export function usePreviewUrl(file: File | string | null) {
 	const isFile = file instanceof File;
-	const url = useMemo(() => {
-		if (!file) return null;
-		if (isFile) return URL.createObjectURL(file);
-		return file;
-	}, [file, isFile]);
+	const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
 	useEffect(() => {
+		if (!(file instanceof File)) {
+			setObjectUrl(null);
+			return;
+		}
+		const url = URL.createObjectURL(file);
+		setObjectUrl(url);
 		return () => {
-			if (url && isFile) URL.revokeObjectURL(url);
+			URL.revokeObjectURL(url);
 		};
-	}, [url, isFile]);
+	}, [file]);
 
-	return url;
+	if (!file) return null;
+	if (!isFile) return file;
+	return objectUrl;
 }
 
 export interface ImageFieldProps {

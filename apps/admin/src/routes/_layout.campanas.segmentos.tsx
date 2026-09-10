@@ -7,10 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SegmentActions } from "@/features/email/components/segment-actions";
 import { SegmentEditDrawer } from "@/features/email/components/segment-edit-drawer";
-import {
-	SegmentFields,
-	segmentDefaults,
-} from "@/features/email/forms/email-forms";
+import { segmentDefaults } from "@/features/email/forms/email-defaults";
+import { SegmentFields } from "@/features/email/forms/email-forms";
 import {
 	useEmailSegments,
 	useSegmentMutations,

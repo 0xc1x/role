@@ -35,6 +35,7 @@ export function useUpdateSlide() {
 }
 
 export function useUploadImage() {
+	// react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation -- upload returns URL used directly in form, no cached list goes stale
 	return useMutation({
 		mutationFn: (file: File) => slidesApi.uploadImage(file, "slides"),
 	});

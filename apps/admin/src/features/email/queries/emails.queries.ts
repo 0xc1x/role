@@ -129,11 +129,15 @@ export function useSetSegmentUsers() {
 	});
 }
 
+/** Error de mutación → toast. Pura y sin closure: vive a nivel módulo. */
+function notifyMutationError(err: Error) {
+	toast.error(err.message);
+}
+
 export function useCampaignMutations() {
 	const qc = useQueryClient();
 	const invalidate = () =>
 		void qc.invalidateQueries({ queryKey: emailKeys.all });
-	const onError = (err: Error) => toast.error(err.message);
 
 	return {
 		create: useMutation({
@@ -143,7 +147,7 @@ export function useCampaignMutations() {
 				toast.success("Campaña creada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		update: useMutation({
 			mutationKey: emailKeys.all,
@@ -153,14 +157,14 @@ export function useCampaignMutations() {
 				toast.success("Campaña actualizada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		test: useMutation({
 			mutationKey: emailKeys.all,
 			mutationFn: ({ id, emails }: { id: string; emails: string[] }) =>
 				emailApi.testCampaign(id, { emails }),
 			onSuccess: invalidate,
-			onError,
+			onError: notifyMutationError,
 		}),
 		send: useMutation({
 			mutationKey: emailKeys.all,
@@ -171,7 +175,7 @@ export function useCampaignMutations() {
 				);
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		cancel: useMutation({
 			mutationKey: emailKeys.all,
@@ -180,7 +184,7 @@ export function useCampaignMutations() {
 				toast.success("Envío cancelado");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		remove: useMutation({
 			mutationKey: emailKeys.all,
@@ -189,13 +193,14 @@ export function useCampaignMutations() {
 				toast.success("Campaña eliminada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 	};
 }
 
 /** Alcance real de una campaña (bajo demanda). */
 export function useAudience() {
+	// react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation -- on-demand POST read, result used directly, no cached query goes stale
 	return useMutation({
 		mutationFn: (id: string) => emailApi.audience(id),
 	});

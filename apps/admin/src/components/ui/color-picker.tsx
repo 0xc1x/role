@@ -1,8 +1,14 @@
 "use client";
 
 import { Pipette } from "lucide-react";
-import type { MouseEvent, TouchEvent } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { KeyboardEvent, MouseEvent, TouchEvent } from "react";
+import {
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -198,13 +204,45 @@ function SaturationArea({ hsva, onChange }: SaturationAreaProps) {
 
 	const pureHueHex = hsvaToHex({ h: hsva.h, s: 100, v: 100, a: 1 });
 
+	const handleKeyDown = (e: KeyboardEvent) => {
+		const step = e.shiftKey ? 10 : 1;
+		let s = hsva.s;
+		let v = hsva.v;
+		switch (e.key) {
+			case "ArrowRight":
+				s = Math.min(100, s + step);
+				break;
+			case "ArrowLeft":
+				s = Math.max(0, s - step);
+				break;
+			case "ArrowUp":
+				v = Math.min(100, v + step);
+				break;
+			case "ArrowDown":
+				v = Math.max(0, v - step);
+				break;
+			default:
+				return;
+		}
+		e.preventDefault();
+		onChange(s, v);
+	};
+
 	return (
 		<div
 			ref={containerRef}
+			role="slider"
+			tabIndex={0}
+			aria-label="Saturación y brillo"
+			aria-valuemin={0}
+			aria-valuemax={100}
+			aria-valuenow={hsva.s}
+			aria-valuetext={`Saturación ${hsva.s}%, brillo ${hsva.v}%`}
 			className="relative h-36 w-full cursor-crosshair select-none overflow-hidden rounded-md"
 			style={{ backgroundColor: pureHueHex }}
 			onMouseDown={handlePointerDown}
 			onTouchStart={handlePointerDown}
+			onKeyDown={handleKeyDown}
 		>
 			<div className="absolute inset-0 bg-gradient-to-r from-white to-transparent" />
 			<div className="absolute inset-0 bg-gradient-to-t from-black to-transparent" />
@@ -245,6 +283,14 @@ export function ColorPicker({
 }: ColorPickerProps) {
 	const [open, setOpen] = useState(false);
 	const [hsva, setHsva] = useState<HSVA>(() => hexToHsva(value || "#000000"));
+	// EyeDropper solo existe en el cliente. useSyncExternalStore devuelve
+	// false en SSR y en el primer paint del cliente (getServerSnapshot),
+	// por lo que no hay mismatch de hidratación y no se necesita useEffect.
+	const eyeDropperSupported = useSyncExternalStore(
+		() => () => {},
+		() => "EyeDropper" in window,
+		() => false,
+	);
 
 	useEffect(() => {
 		if (value) {
@@ -337,7 +383,7 @@ export function ColorPicker({
 					)}
 
 					<div className="flex items-center gap-2 pt-1">
-						{typeof window !== "undefined" && "EyeDropper" in window && (
+						{eyeDropperSupported && (
 							<Button
 								type="button"
 								variant="outline"
@@ -380,6 +426,8 @@ export function ColorPicker({
 							<button
 								key={preset}
 								type="button"
+								aria-label={`Elegir color ${preset}`}
+								title={preset}
 								className="size-6 rounded-md border border-black/10 transition-transform hover:scale-110 focus:outline-none focus:ring-1 focus:ring-ring"
 								style={{ backgroundColor: preset }}
 								onClick={() => updateColor(hexToHsva(preset))}

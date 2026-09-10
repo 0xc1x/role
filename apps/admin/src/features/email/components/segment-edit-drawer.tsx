@@ -1,10 +1,10 @@
 import type { SegmentDto } from "@0xc1x/role-commons";
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
+import { segmentDefaults } from "@/features/email/forms/email-defaults";
 import {
 	SegmentFields,
 	type SegmentFormValues,
-	segmentDefaults,
 } from "@/features/email/forms/email-forms";
 import {
 	emailKeys,
@@ -59,6 +59,11 @@ export function SegmentEditDrawer(props: {
 		props.onClose();
 	};
 
+	const handleSubmit = (e: FormEvent) => {
+		e.preventDefault();
+		void save();
+	};
+
 	return (
 		<ResourceUpdateDrawer
 			formId={FORM_ID}
@@ -70,14 +75,7 @@ export function SegmentEditDrawer(props: {
 			submitLabel="Guardar cambios"
 			updatingLabel="Guardando"
 		>
-			<form
-				id={FORM_ID}
-				onSubmit={(e) => {
-					e.preventDefault();
-					void save();
-				}}
-				className="space-y-4"
-			>
+			<form id={FORM_ID} onSubmit={handleSubmit} className="space-y-4">
 				{members.isLoading ? (
 					<p className="text-sm text-muted-foreground">Cargando miembros…</p>
 				) : (

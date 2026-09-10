@@ -104,13 +104,16 @@ function PushCampaignsPage() {
 				))}
 			</div>
 
-			<PushCampaignEditDrawer
-				campaign={editing}
-				templates={templates.data?.data ?? []}
-				segments={segments.data?.data ?? []}
-				mutations={mutations}
-				onClose={() => setEditing(null)}
-			/>
+			{editing ? (
+				<PushCampaignEditDrawer
+					key={editing.id}
+					campaign={editing}
+					templates={templates.data?.data ?? []}
+					segments={segments.data?.data ?? []}
+					mutations={mutations}
+					onClose={() => setEditing(null)}
+				/>
+			) : null}
 
 			<PushTestDrawer
 				campaign={testing}

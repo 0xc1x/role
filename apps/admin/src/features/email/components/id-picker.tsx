@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,11 @@ export function IdPicker(props: {
 		search,
 		props.subscribedTo,
 		props.withPushToken,
+	);
+	// Lookup O(1) para el checklist; los writes siguen con el array.
+	const selectedSet = useMemo(
+		() => new Set(props.selectedIds),
+		[props.selectedIds],
 	);
 
 	const toggle = (id: string) =>
@@ -75,7 +80,7 @@ export function IdPicker(props: {
 					<p className="p-2 text-xs text-muted-foreground">Sin resultados</p>
 				) : null}
 				{options.map((opt) => {
-					const checked = props.selectedIds.includes(opt.id);
+					const checked = selectedSet.has(opt.id);
 					return (
 						<div
 							key={opt.id}

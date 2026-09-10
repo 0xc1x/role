@@ -3,6 +3,7 @@ import {
 	type MarketingCategory,
 	type SegmentDto,
 } from "@0xc1x/role-commons";
+import { useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,11 @@ export function PushCampaignFields({
 	// Solo segmentos de la misma categoría que la campaña.
 	const matchingSegments = segments.filter(
 		(s) => s.is_active && s.category === values.category,
+	);
+	// Lookup O(1) para el checklist; los writes siguen con el array.
+	const selectedIds = useMemo(
+		() => new Set(values.segment_ids),
+		[values.segment_ids],
 	);
 	const selectedTemplate = templates.find((t) => t.id === values.template_id);
 	return (
@@ -104,7 +110,7 @@ export function PushCampaignFields({
 				) : (
 					<div className="space-y-1.5">
 						{matchingSegments.map((s) => {
-							const checked = values.segment_ids.includes(s.id);
+							const checked = selectedIds.has(s.id);
 							const toggle = () =>
 								setValues({
 									...values,

@@ -5,10 +5,8 @@ import { FormDrawer } from "@/components/resource/form-drawer";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { TestPanel } from "@/features/email/components/test-panel";
-import {
-	TemplateFields,
-	templateDefaults,
-} from "@/features/email/forms/email-forms";
+import { templateDefaults } from "@/features/email/forms/email-defaults";
+import { TemplateFields } from "@/features/email/forms/email-forms";
 import {
 	useEmailComponents,
 	useEmailTemplates,

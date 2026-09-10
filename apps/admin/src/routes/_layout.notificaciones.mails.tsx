@@ -1,14 +1,17 @@
-import { ListSendsQuerySchema } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
 import { PageTabs } from "@/components/page-tabs";
 import { ComponentsTab } from "@/features/email/components/components-tab";
 import { EnviosTab } from "@/features/email/components/envios-tab";
 import { SendTab } from "@/features/email/components/send-tab";
 import { TemplatesTab } from "@/features/email/components/templates-tab";
+import {
+	MAIL_TABS,
+	type MailTab,
+	mailsSearchSchema,
+} from "@/features/email/mails-search";
 
-const TABS = ["enviar", "plantillas", "componentes", "envios"] as const;
-type Tab = (typeof TABS)[number];
+const TABS = MAIL_TABS;
+type Tab = MailTab;
 
 const TAB_LABELS: Record<Tab, string> = {
 	enviar: "Enviar",
@@ -16,13 +19,6 @@ const TAB_LABELS: Record<Tab, string> = {
 	componentes: "Componentes",
 	envios: "Envíos",
 };
-
-export const mailsSearchSchema = ListSendsQuerySchema.extend({
-	tab: z.enum(TABS).optional(),
-	// Paginación opcional en la URL (los tabs aplican sus defaults).
-	page: z.coerce.number().int().positive().optional(),
-	limit: z.coerce.number().int().min(1).max(100).optional(),
-});
 
 export const Route = createFileRoute("/_layout/notificaciones/mails")({
 	validateSearch: (raw) => mailsSearchSchema.parse(raw),

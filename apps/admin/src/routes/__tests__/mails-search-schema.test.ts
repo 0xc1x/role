@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mailsSearchSchema } from "../_layout.notificaciones.mails";
+import { mailsSearchSchema } from "@/features/email/mails-search";
 
 describe("mailsSearchSchema", () => {
 	test("tab ausente por defecto", () => {

@@ -45,16 +45,17 @@ async function apiPost(
 		},
 		body: JSON.stringify(body),
 	});
-	const json = (await res.json().catch(() => null)) as
-		| (Record<string, unknown> & { message?: unknown })
-		| null;
 	if (!res.ok) {
+		const errJson = (await res.json().catch(() => null)) as
+			| (Record<string, unknown> & { message?: unknown })
+			| null;
 		const message =
-			typeof json?.message === "string"
-				? json.message
+			typeof errJson?.message === "string"
+				? errJson.message
 				: `API ${path} respondió ${res.status}`;
 		return { ok: false, message };
 	}
+	const json = (await res.json().catch(() => null)) as unknown;
 	return { ok: true, json };
 }
 

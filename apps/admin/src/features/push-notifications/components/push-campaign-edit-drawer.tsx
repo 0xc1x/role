@@ -1,5 +1,5 @@
 import type { CampaignDto, SegmentDto } from "@0xc1x/role-commons";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,22 +20,18 @@ import type { useCampaignMutations } from "@/features/email/queries/emails.queri
 import { PushCampaignFields } from "@/features/push-notifications/components/push-campaign-fields";
 
 export function PushCampaignEditDrawer(props: {
-	campaign: CampaignDto | null;
+	campaign: CampaignDto;
 	templates: Array<{ id: string; name: string; title: string; body: string }>;
 	segments: SegmentDto[];
 	mutations: ReturnType<typeof useCampaignMutations>;
 	onClose: () => void;
 }) {
+	// El padre renderiza con key={campaign.id}: cada campaña monta un estado
+	// fresco y no se necesita sincronización por efecto.
 	const c = props.campaign;
 	const [values, setValues] = useState<CampaignFormValues>(() =>
-		campaignDefaults(c ?? undefined),
+		campaignDefaults(c),
 	);
-
-	useEffect(() => {
-		if (c) setValues(campaignDefaults(c));
-	}, [c]);
-
-	if (!c) return null;
 
 	const save = async () => {
 		try {
@@ -43,6 +39,7 @@ export function PushCampaignEditDrawer(props: {
 				id: c.id,
 				body: {
 					name: values.name,
+					channel: c.channel,
 					template_id: values.template_id || null,
 					category: values.category,
 					segment_ids: values.segment_ids,

@@ -16,15 +16,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUpdatePushToken } from "../queries/push.queries";
 
-const PlatformBadge = ({ platform }: { platform: string }) => {
-	const variants: Record<string, "secondary" | "success" | "info"> = {
-		ios: "secondary",
-		android: "success",
-		web: "info",
-	};
-	return <Badge variant={variants[platform] ?? "secondary"}>{platform}</Badge>;
+const PLATFORM_VARIANTS: Record<string, "secondary" | "success" | "info"> = {
+	ios: "secondary",
+	android: "success",
+	web: "info",
 };
 
+const PlatformBadge = ({ platform }: { platform: string }) => {
+	return (
+		<Badge variant={PLATFORM_VARIANTS[platform] ?? "secondary"}>
+			{platform}
+		</Badge>
+	);
+};
+
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- action cell colocated with column defs (TanStack Table idiom)
 function TokenActions({ item }: { item: PushTokenDto }) {
 	const update = useUpdatePushToken();
 	return (
@@ -122,6 +128,7 @@ export const tokenColumns: ColumnDef<PushTokenDto>[] = [
 	},
 ];
 
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- active cell colocated with column defs (TanStack Table idiom)
 function TokenActiveCell({ item }: { item: PushTokenDto }) {
 	const update = useUpdatePushToken();
 	return (

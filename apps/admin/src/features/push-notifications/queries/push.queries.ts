@@ -57,11 +57,15 @@ export { useEmailSegments };
 
 // ─── mutaciones de plantillas ──────────────────────────────────────────
 
+/** Error de mutación → toast. Pura y sin closure: vive a nivel módulo. */
+function notifyMutationError(err: Error) {
+	toast.error(err.message);
+}
+
 export function usePushTemplateMutations() {
 	const qc = useQueryClient();
 	const invalidate = () =>
 		void qc.invalidateQueries({ queryKey: pushKeys.all });
-	const onError = (err: Error) => toast.error(err.message);
 
 	return {
 		create: useMutation({
@@ -70,7 +74,7 @@ export function usePushTemplateMutations() {
 				toast.success("Plantilla creada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		update: useMutation({
 			mutationFn: ({ id, body }: { id: string; body: UpdatePushTemplateDto }) =>
@@ -79,7 +83,7 @@ export function usePushTemplateMutations() {
 				toast.success("Plantilla actualizada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		remove: useMutation({
 			mutationFn: (id: string) => pushApi.removeTemplate(id),
@@ -87,7 +91,7 @@ export function usePushTemplateMutations() {
 				toast.success("Plantilla eliminada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 	};
 }
@@ -137,6 +141,7 @@ export function usePushTestTemplate() {
 }
 
 export function usePushAudience() {
+	// react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation -- on-demand POST read, result used directly, no cached query goes stale
 	return useMutation({
 		mutationFn: (b: Parameters<typeof pushApi.audience>[0]) =>
 			pushApi.audience(b),

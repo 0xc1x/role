@@ -3,7 +3,7 @@ import {
 	componentDefaults,
 	segmentDefaults,
 	templateDefaults,
-} from "../email-forms";
+} from "../email-defaults";
 
 describe("templateDefaults", () => {
 	test("vacío y desde plantilla", () => {

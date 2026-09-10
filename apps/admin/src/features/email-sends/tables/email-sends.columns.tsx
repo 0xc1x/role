@@ -4,33 +4,39 @@ import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
 import { ActionCell } from "@/features/email-sends/tables/cells/action-cell";
 
+const TYPE_VARIANTS: Record<
+	string,
+	"info" | "secondary" | "success" | "warning"
+> = {
+	campaign: "info",
+	transactional: "secondary",
+	newsletter: "success",
+	notification: "warning",
+	test: "secondary",
+};
+
 const TypeBadge = ({ type }: { type: string }) => {
-	const variants: Record<string, "info" | "secondary" | "success" | "warning"> =
-		{
-			campaign: "info",
-			transactional: "secondary",
-			newsletter: "success",
-			notification: "warning",
-			test: "secondary",
-		};
-	return <Badge variant={variants[type] ?? "secondary"}>{type}</Badge>;
+	return <Badge variant={TYPE_VARIANTS[type] ?? "secondary"}>{type}</Badge>;
+};
+
+const STATUS_VARIANTS: Record<
+	string,
+	"info" | "secondary" | "success" | "warning" | "destructive"
+> = {
+	pending: "warning",
+	queued: "info",
+	processing: "info",
+	sent: "success",
+	delivered: "success",
+	failed: "destructive",
+	cancelled: "secondary",
+	bounced: "warning",
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
-	const map: Record<
-		string,
-		"info" | "secondary" | "success" | "warning" | "destructive"
-	> = {
-		pending: "warning",
-		queued: "info",
-		processing: "info",
-		sent: "success",
-		delivered: "success",
-		failed: "destructive",
-		cancelled: "secondary",
-		bounced: "warning",
-	};
-	return <Badge variant={map[status] ?? "secondary"}>{status}</Badge>;
+	return (
+		<Badge variant={STATUS_VARIANTS[status] ?? "secondary"}>{status}</Badge>
+	);
 };
 
 export const columns: ColumnDef<EmailSendDto>[] = [
