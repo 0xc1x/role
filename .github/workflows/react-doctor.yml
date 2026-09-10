@@ -7,12 +7,27 @@
 name: React Doctor
 
 on:
-  # En PRs reporta solo lo que el cambio introduce (vs merge-base).
+  # Solo corre si el cambio toca alguna app React o los contratos
+  # (commons los consumen todas). Un PR solo-API no gasta este run.
+  # Un solo job con project "*" cubre admin+landing+mobile; si algún
+  # día quieres un check por app, duplica el job con project: "admin".
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "apps/admin/**"
+      - "apps/landing/**"
+      - "apps/mobile/**"
+      - "packages/commons/**"
+      - ".github/workflows/react-doctor.yml"
   # En main solo registra el score (tendencia); nunca falla por deuda vieja.
   push:
     branches: ["main"]
+    paths:
+      - "apps/admin/**"
+      - "apps/landing/**"
+      - "apps/mobile/**"
+      - "packages/commons/**"
+      - ".github/workflows/react-doctor.yml"
 
 permissions:
   contents: read

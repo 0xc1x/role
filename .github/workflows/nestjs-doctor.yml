@@ -7,12 +7,22 @@
 name: nestjs-doctor
 
 on:
-  # Revisa el PR y reporta solo lo que el cambio introduce (vs merge-base).
+  # Solo corre si el cambio toca el API o los contratos (commons los
+  # consumen todos, así que también disparan). Un PR solo-front no
+  # gasta este run.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "apps/api/**"
+      - "packages/commons/**"
+      - ".github/workflows/nestjs-doctor.yml"
   # En main solo registra el score (tendencia); nunca falla por deuda vieja.
   push:
     branches: ["main"]
+    paths:
+      - "apps/api/**"
+      - "packages/commons/**"
+      - ".github/workflows/nestjs-doctor.yml"
 
 permissions:
   contents: read
