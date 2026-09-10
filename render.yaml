@@ -13,7 +13,7 @@ services:
     runtime: node
     # Free tier: límite de memoria → NODE_OPTIONS + build por pasos + start con node.
     buildCommand: bun install --frozen-lockfile && NODE_OPTIONS=--max-old-space-size=3072 bun run build --filter=@0xc1x/role-commons && cd apps/api && NODE_OPTIONS=--max-old-space-size=3072 bun run build
-    startCommand: cd apps/api && NODE_OPTIONS=--max-old-space-size=1536 node dist/src/main
+    startCommand: cd apps/api && NODE_OPTIONS=--max-old-space-size=1536 node dist/main
     healthCheckPath: /api/v1/health
     # Deploys vía GitHub Actions (Deploy Hook), no por push directo.
     autoDeploy: false

@@ -1,0 +1,51 @@
+# nestjs-doctor — health score y review del API NestJS en cada pull request.
+#
+# Docs:   https://nestjs.doctor/docs/ci
+# Gates:  https://nestjs.doctor/docs/ci/gates
+# Source: https://github.com/RoloBits/nestjs-doctor
+
+name: nestjs-doctor
+
+on:
+  # Revisa el PR y reporta solo lo que el cambio introduce (vs merge-base).
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  # En main solo registra el score (tendencia); nunca falla por deuda vieja.
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+# Un nuevo commit cancela el run anterior: el comentario matchea el head.
+concurrency:
+  group: nestjs-doctor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 le da al scan el historial para hallar el merge-base.
+      # Con checkout shallow el scope degraded reporta todo en archivos
+      # tocados en vez de solo lo introducido.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: RoloBits/nestjs-doctor@v1
+        with:
+          # Monorepo: el proyecto NestJS vive en apps/api (raíz no es NestJS).
+          directory: apps/api
+          # Gate 1 (hallazgos): falla con cualquier error o warning nuevo.
+          # El API está en 100/100 sin issues. Para relajar: "error" (solo
+          # errores) o "none" (advisory).
+          blocking: warning
+          # Gate 2 (score global 0-100, siempre del proyecto entero):
+          # falla si el score baja de 100. Para piso tolerante: "90".
+          min-score: "100"
+          # scope: changed es el default (solo lo introducido por el PR).
+          # Demás inputs: comment, review-comments, commit-status, sarif,
+          # config, version. Ref: https://nestjs.doctor/docs/ci
