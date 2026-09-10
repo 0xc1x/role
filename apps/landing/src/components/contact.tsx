@@ -78,6 +78,7 @@ export function Contact() {
 		CONTACT_CITIES_FALLBACK,
 	);
 
+	// react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation -- fire-and-forget signup, result handled via localStorage + local state, no cached query goes stale
 	const mutation = useMutation({
 		mutationFn: (payload: CreateContactDto) =>
 			apiPost<unknown>("/contact", payload),

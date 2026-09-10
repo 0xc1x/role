@@ -2,13 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { Contact } from "@/components/contact";
 import { Cta } from "@/components/cta";
-import { FAQ_ITEMS, Faq } from "@/components/faq";
+import { Faq } from "@/components/faq";
 import { Features } from "@/components/features";
 import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
 import { Navbar } from "@/components/navbar";
 import { Testimonials } from "@/components/testimonials";
+import { FAQ_ITEMS } from "@/lib/faq";
 import {
 	appConfigQueryOptions,
 	platformStatsQueryOptions,
@@ -27,16 +28,7 @@ const FAQ_JSON_LD = {
 };
 
 export const Route = createFileRoute("/")({
-	head: () => ({
-		...pageHead(
-			"/",
-			"Rolé — rescata comida excedente cerca de ti",
-			"Descubre ofertas de comida excedente de negocios locales, salva comida buena de terminar en la basura y ahorra en tu día a día.",
-		),
-		scripts: [
-			{ type: "application/ld+json", children: JSON.stringify(FAQ_JSON_LD) },
-		],
-	}),
+	component: LandingPage,
 	// SSR: config + stats reales se resuelven en el server para SEO.
 	loader: ({ context }) =>
 		Promise.all([
@@ -50,7 +42,16 @@ export const Route = createFileRoute("/")({
 				.ensureQueryData(randomOfferQueryOptions)
 				.catch(() => undefined),
 		]),
-	component: LandingPage,
+	head: () => ({
+		...pageHead(
+			"/",
+			"Rolé — rescata comida excedente cerca de ti",
+			"Descubre ofertas de comida excedente de negocios locales, salva comida buena de terminar en la basura y ahorra en tu día a día.",
+		),
+		scripts: [
+			{ type: "application/ld+json", children: JSON.stringify(FAQ_JSON_LD) },
+		],
+	}),
 });
 
 function LandingPage() {

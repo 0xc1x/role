@@ -10,17 +10,17 @@ import { pageHead } from "@/lib/seo";
 import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/about")({
+	component: AboutPage,
+	loader: ({ context }) =>
+		context.queryClient
+			.ensureQueryData(platformStatsQueryOptions)
+			.catch(() => undefined),
 	head: () =>
 		pageHead(
 			"/about",
 			"Sobre Rolé",
 			"Nuestra misión: que la comida excedente llegue a gente que la valora, no al contenedor.",
 		),
-	loader: ({ context }) =>
-		context.queryClient
-			.ensureQueryData(platformStatsQueryOptions)
-			.catch(() => undefined),
-	component: AboutPage,
 });
 
 const numberFormat = new Intl.NumberFormat("es-EC");
@@ -207,7 +207,7 @@ function AboutPage() {
 							<div className="mt-9 flex flex-wrap justify-center gap-4">
 								<a
 									href="role://"
-									className="rounded-full bg-white px-8 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
+									className="rounded-full bg-white px-8 py-3 font-semibold text-role-primary shadow-dark-glow transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 								>
 									Consigue la app
 								</a>

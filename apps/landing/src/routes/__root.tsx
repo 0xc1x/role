@@ -108,7 +108,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			</p>
 			<Link
 				to="/"
-				className="mt-8 rounded-full bg-role-primary px-7 py-3 font-semibold text-white transition-all duration-200 hover:bg-role-primary-hover hover:shadow-glow active:scale-[0.98]"
+				className="mt-8 rounded-full bg-role-primary px-7 py-3 font-semibold text-white transition-[background-color,box-shadow,transform] duration-200 hover:bg-role-primary-hover hover:shadow-glow active:scale-[0.98]"
 			>
 				Volver al inicio
 			</Link>
@@ -121,6 +121,7 @@ function RootComponent() {
 	// Un solo QueryClient por montaje: el prefetch SSR del router se reutiliza.
 	const [queryClient] = useState(() => createAppQueryClient());
 
+	// react-doctor-disable-next-line react-doctor/effect-needs-cleanup -- cleanup below disconnects both IntersectionObserver and MutationObserver
 	useEffect(() => {
 		document.documentElement.classList.add("js");
 		const observer = new IntersectionObserver(

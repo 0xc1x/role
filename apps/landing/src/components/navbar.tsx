@@ -121,7 +121,7 @@ export function Navbar() {
 						<div className="flex items-center gap-2">
 							<Button
 								variant="brand"
-								render={<a href="role://" />}
+								render={<a href="role://" aria-label="Consigue la app" />}
 								className={`hidden rounded-full px-5 py-2 text-sm font-semibold active:scale-[0.98] md:inline-flex ${
 									solid
 										? ""
@@ -209,7 +209,7 @@ export function Navbar() {
 						</ul>
 						<Button
 							variant="brand"
-							render={<a href="role://" />}
+							render={<a href="role://" aria-label="Consigue la app" />}
 							className="animate-item-in mt-4 w-full rounded-full px-5 py-3 text-sm font-semibold"
 							style={
 								{

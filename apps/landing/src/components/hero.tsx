@@ -157,7 +157,7 @@ export function Hero() {
 					<div className="flex flex-wrap items-center gap-4 reveal reveal-delay-3">
 						<Button
 							variant="brand"
-							render={<a href="role://" />}
+							render={<a href="role://" aria-label="Consigue la app" />}
 							className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow hover:bg-white hover:text-role-primary hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 						>
 							Consigue la app

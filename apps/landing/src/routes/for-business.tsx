@@ -11,22 +11,23 @@ import {
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
+import { StepsGrid } from "@/components/steps-grid";
 import { platformStatsQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
 import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/for-business")({
+	component: ForBusinessPage,
+	loader: ({ context }) =>
+		context.queryClient
+			.ensureQueryData(platformStatsQueryOptions)
+			.catch(() => undefined),
 	head: () =>
 		pageHead(
 			"/for-business",
 			"Rolé para negocios",
 			"Recupera ingresos por tu comida excedente, atrae nuevos clientes y reduce tu desperdicio con Rolé.",
 		),
-	loader: ({ context }) =>
-		context.queryClient
-			.ensureQueryData(platformStatsQueryOptions)
-			.catch(() => undefined),
-	component: ForBusinessPage,
 });
 
 const BENEFITS = [
@@ -116,13 +117,13 @@ function ForBusinessPage() {
 							<div className="mt-10 flex flex-wrap gap-4 reveal reveal-delay-3">
 								<Link
 									to="/business-signup"
-									className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
+									className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 								>
 									Registrar mi negocio
 								</Link>
 								<a
 									href="mailto:negocios@role.app"
-									className="rounded-full border border-white/25 px-7 py-3 font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.98]"
+									className="rounded-full border border-white/25 px-7 py-3 font-semibold text-white transition-[background-color,box-shadow,transform] duration-200 hover:bg-white/10 active:scale-[0.98]"
 								>
 									Hablar con ventas
 								</a>
@@ -186,30 +187,7 @@ function ForBusinessPage() {
 								Tres pasos. Menos de 24 horas para estar activo y vendiendo.
 							</p>
 						</div>
-						<ol className="mt-14 grid gap-6 md:grid-cols-3">
-							{PROCESS.map((s, i) => (
-								<li
-									key={s.n}
-									className={`relative reveal reveal-delay-${i + 1}`}
-								>
-									{i < PROCESS.length - 1 ? (
-										<span
-											className="pointer-events-none absolute left-[4.5rem] right-[-0.75rem] top-6 hidden h-px bg-line md:block"
-											aria-hidden="true"
-										/>
-									) : null}
-									<p className="font-display text-4xl font-medium text-forest/60">
-										{s.n}
-									</p>
-									<h3 className="mt-4 font-display text-xl font-medium tracking-tight">
-										{s.title}
-									</h3>
-									<p className="mt-2 text-sm leading-relaxed text-ink-soft">
-										{s.body}
-									</p>
-								</li>
-							))}
-						</ol>
+						<StepsGrid steps={PROCESS} />
 					</div>
 				</section>
 

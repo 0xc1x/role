@@ -100,7 +100,7 @@ export function Cta({
 					<div className="mt-9 flex flex-wrap justify-center gap-4">
 						<Button
 							variant={isPrimary ? "default" : "brand"}
-							render={<a href={primaryHref} />}
+							render={<a href={primaryHref} aria-label={primaryLabel} />}
 							className={`inline-flex items-center gap-2 rounded-full px-8 py-3 font-semibold active:scale-[0.98] ${styles.primaryButton}`}
 						>
 							{primaryIcon}
@@ -118,7 +118,9 @@ export function Cta({
 							) : (
 								<Button
 									variant="ghost"
-									render={<a href={secondaryHref} />}
+									render={
+										<a href={secondaryHref} aria-label={secondaryLabel} />
+									}
 									className={`rounded-full px-8 py-3 font-semibold ${styles.secondaryButton}`}
 								>
 									{secondaryLabel}
