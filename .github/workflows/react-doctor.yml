@@ -1,0 +1,51 @@
+# React Doctor — validación de los 3 proyectos React del monorepo
+# (admin, landing, mobile/Expo) en cada pull request.
+#
+# Docs: https://www.react.doctor/docs/ci-and-prs/github-actions-setup
+# Source: https://github.com/millionco/react-doctor
+
+name: React Doctor
+
+on:
+  # En PRs reporta solo lo que el cambio introduce (vs merge-base).
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  # En main solo registra el score (tendencia); nunca falla por deuda vieja.
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+
+# Un nuevo commit cancela el scan anterior: solo se ve el último run.
+concurrency:
+  group: react-doctor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  react-doctor:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 es obligatorio para scope changed: sin historial no
+      # hay merge-base y el reporte cae a "todo en archivos tocados".
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: millionco/react-doctor@v2
+        with:
+          # Monorepo: escanea todos los proyectos React (admin, landing,
+          # mobile). Mobile lleva su propio doctor.config.json con las
+          # reglas ruidosas de Expo desactivadas.
+          project: "*"
+          # Gate: falla con cualquier hallazgo nuevo (los 3 proyectos
+          # están en 100/100). Para relajar a solo errores: "error".
+          # Para volver a advisory: "none".
+          blocking: warning
+          # scope: changed es el default (solo lo introducido por el PR).
+          # Para auditar el repo entero: "full".
+          # Demás inputs: comment, review-comments, commit-status, version.
+          # Ref: https://www.react.doctor/docs/reference/github-action-reference
