@@ -22,16 +22,15 @@ export function useExploreFilters() {
 		return () => clearTimeout(t);
 	}, [search]);
 
-	const handleCategoryTap = useCallback((categoryId: string) => {
-		setSelectedCategory((current) => {
-			if (current === categoryId) {
-				setFilters((f) => ({ ...f, category: null }));
-				return null;
-			}
-			setFilters((f) => ({ ...f, category: categoryId }));
-			return categoryId;
-		});
-	}, []);
+	const handleCategoryTap = useCallback(
+		(categoryId: string) => {
+			// Toggle fuera del updater: los updaters deben ser puros.
+			const next = selectedCategory === categoryId ? null : categoryId;
+			setSelectedCategory(next);
+			setFilters((f) => ({ ...f, category: next }));
+		},
+		[selectedCategory],
+	);
 
 	const clearFilter = useCallback((key: ActiveFilterKey) => {
 		if (key === "searchQuery") {

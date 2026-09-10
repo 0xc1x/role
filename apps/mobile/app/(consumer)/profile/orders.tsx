@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
@@ -55,6 +55,13 @@ export default function OrdersScreen() {
 		if (tab !== "past") return past;
 		return filterByHistoryPeriod(past, historyPeriod, weekOffset);
 	}, [past, tab, historyPeriod, weekOffset]);
+
+	const renderItem = useCallback(
+		({ item }: { item: ComponentProps<typeof OrderCard>["item"] }) => (
+			<OrderRow item={item} />
+		),
+		[],
+	);
 
 	if (isLoading) return <LoadingView />;
 	if (isError) return <ErrorState error={error} onRetry={refetch} />;
@@ -119,11 +126,19 @@ export default function OrdersScreen() {
 						message={strings.orders.emptySearchHint}
 					/>
 				}
-				renderItem={({ item }) => <OrderCard item={item} />}
-			/>
-		</Screen>
+			renderItem={renderItem}
+		/>
+	</Screen>
 	);
 }
+
+const OrderRow = memo(function OrderRow({
+	item,
+}: {
+	item: ComponentProps<typeof OrderCard>["item"];
+}) {
+	return <OrderCard item={item} />;
+});
 
 // ─── Tabs ────────────────────────────────────────────────────────────
 

@@ -212,7 +212,7 @@ function ToggleRow({
 				},
 			]}
 		>
-			<View style={[{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: (colors as unknown as Record<string, string>).inputBackground ?? colors.muted } as never]}>
+			<View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: (colors as unknown as Record<string, string>).inputBackground ?? colors.muted } as never}>
 				<Ionicons name={icon} size={18} color={upcoming ? colors.mutedForeground : colors.primary} />
 			</View>
 			<View style={styles.toggleText}>

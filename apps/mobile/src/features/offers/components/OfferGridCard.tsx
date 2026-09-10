@@ -1,4 +1,5 @@
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -56,7 +57,7 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 					<Image
 						source={{ uri: offer.offer.image }}
 						style={styles.image}
-						resizeMode="cover"
+						contentFit="cover"
 					/>
 				) : (
 					<View style={[styles.image, { backgroundColor: colors.borderSolid }]} />

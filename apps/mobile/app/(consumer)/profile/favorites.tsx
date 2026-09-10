@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { memo, useCallback } from "react";
 import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
@@ -29,6 +30,11 @@ export default function FavoritesScreen() {
 		onRefresh: () => void refetch(),
 		refreshing: isFetching,
 	});
+
+	const renderItem = useCallback(
+		({ item }: { item: FavoriteOffer }) => <FavoriteRow item={item} />,
+		[],
+	);
 
 	if (isLoading) return <LoadingView />;
 	if (isError) return <ErrorState error={error} onRetry={refetch} />;
@@ -105,11 +111,15 @@ export default function FavoritesScreen() {
 						}
 					/>
 				}
-				renderItem={({ item }) => <OfferCard offer={toOfferDetail(item)} />}
-			/>
-		</Screen>
+			renderItem={renderItem}
+		/>
+	</Screen>
 	);
 }
+
+const FavoriteRow = memo(function FavoriteRow({ item }: { item: FavoriteOffer }) {
+	return <OfferCard offer={toOfferDetail(item)} />;
+});
 
 // ─── Mapper ──────────────────────────────────────────────────────────
 

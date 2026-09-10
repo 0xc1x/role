@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	Pressable,
@@ -94,32 +94,40 @@ function NativeScanner({
 
 	const ignoreScan = status !== "idle";
 
+	const callbacksRef = useRef({ onValidated, onClose });
+	useEffect(() => {
+		callbacksRef.current = { onValidated, onClose };
+	});
+
 	useEffect(() => {
 		if (status !== "success") return;
 		const timer = setTimeout(() => {
-			onValidated();
-			onClose();
+			callbacksRef.current.onValidated();
+			callbacksRef.current.onClose();
 		}, 1100);
 		return () => clearTimeout(timer);
-	}, [status, onValidated, onClose]);
+	}, [status]);
 
-	const handleBarcode = ({ data }: BarcodeScanningResult) => {
-		if (ignoreScan) return;
-		setScanned(data);
-		const parsed = parsePickupQr(data, orderId);
-		if (!parsed) {
-			setStatus("error");
-			return;
-		}
-		setStatus("validating");
-		validate.mutate(
-			{ orderId: parsed.orderId, pickupCode: parsed.pickupCode },
-			{
-				onSuccess: (result) => setStatus(result.success ? "success" : "error"),
-				onError: () => setStatus("error"),
-			},
-		);
-	};
+	const handleBarcode = useCallback(
+		({ data }: BarcodeScanningResult) => {
+			if (ignoreScan) return;
+			setScanned(data);
+			const parsed = parsePickupQr(data, orderId);
+			if (!parsed) {
+				setStatus("error");
+				return;
+			}
+			setStatus("validating");
+			validate.mutate(
+				{ orderId: parsed.orderId, pickupCode: parsed.pickupCode },
+				{
+					onSuccess: (result) => setStatus(result.success ? "success" : "error"),
+					onError: () => setStatus("error"),
+				},
+			);
+		},
+		[ignoreScan, orderId, validate],
+	);
 
 	const reset = () => {
 		setScanned(null);

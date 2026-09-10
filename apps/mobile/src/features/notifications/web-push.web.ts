@@ -53,9 +53,8 @@ export async function syncWebPushToken(
 		);
 	}
 
-	const { getApps, initializeApp } = await import("firebase/app");
-	const { getMessaging, getToken, onMessage, isSupported, deleteToken } =
-		await import("firebase/messaging");
+	const [{ getApps, initializeApp }, { getMessaging, getToken, onMessage, isSupported, deleteToken }] =
+		await Promise.all([import("firebase/app"), import("firebase/messaging")]);
 
 	if (!(await isSupported())) return false;
 

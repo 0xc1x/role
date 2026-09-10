@@ -23,7 +23,9 @@ export async function fetchPromoSlides(): Promise<PromoSlide[]> {
 
   if (error) throw toAppError(error);
 
-  return ((data ?? []) as SlideRow[])
-    .filter((row) => isInValidityWindow(row))
-    .map(toPromoSlide);
+  const slides: PromoSlide[] = [];
+  for (const row of ((data ?? []) as SlideRow[])) {
+    if (isInValidityWindow(row)) slides.push(toPromoSlide(row));
+  }
+  return slides;
 }

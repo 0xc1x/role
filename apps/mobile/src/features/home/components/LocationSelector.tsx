@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	Platform,
-	Dimensions,
 	View,
 	StyleSheet,
 	Animated,
 	Pressable,
+	useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Portal } from "@rn-primitives/portal";
@@ -41,7 +41,8 @@ export function LocationSelector() {
 	const [menuOrigin, setMenuOrigin] = useState<{ x: number; y: number } | null>(
 		null,
 	);
-	const [chevronRotation] = useState(new Animated.Value(0));
+	const [chevronRotation] = useState(() => new Animated.Value(0));
+	const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 	const triggerRef = useRef<View>(null);
 
 	const toggleDropdown = () => {
@@ -55,14 +56,13 @@ export function LocationSelector() {
 			triggerRef.current?.measureInWindow((x, y, width, height) => {
 				const panelWidth = 300;
 				const panelHeight = 380;
-				const window = Dimensions.get("window");
 				const panelX = Math.max(
 					8,
-					Math.min(x, window.width - panelWidth - 8),
+					Math.min(x, windowWidth - panelWidth - 8),
 				);
 				const panelY = Math.max(
 					8,
-					Math.min(y + height + 6, window.height - panelHeight - 8),
+					Math.min(y + height + 6, windowHeight - panelHeight - 8),
 				);
 				setMenuOrigin({ x: panelX, y: panelY });
 				setIsOpen(true);

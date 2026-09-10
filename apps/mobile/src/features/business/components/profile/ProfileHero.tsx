@@ -1,4 +1,5 @@
-import { Animated, Image, StyleSheet, View } from "react-native";
+import { Animated, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -28,7 +29,7 @@ export function ProfileHero({
 					<Image
 						source={{ uri: coverImage }}
 						style={styles.headerImage}
-						resizeMode="cover"
+						contentFit="cover"
 					/>
 				) : (
 					<View style={[styles.headerImage, { backgroundColor: colors.primary }]} />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,13 +21,62 @@ import { useCategories, useFilteredOffersInfinite, useSelectedAddress } from "@/
 import { useAuthStore } from "@/features/auth/store";
 import { usePreferences } from "@/features/profile/hooks";
 import { OfferGridCard } from "@/features/offers/components/OfferGridCard";
+import { OfferFiltersSheet } from "@/features/offers/components/OfferFiltersSheet";
 import {
-	OfferFiltersSheet,
 	emptyOfferFilters,
 	type OfferFilterState,
-} from "@/features/offers/components/OfferFiltersSheet";
+} from "@/features/offers/domain/offer";
 
 const SEARCH_DEBOUNCE_MS = 400;
+
+const SKELETON_DATA = [0, 1, 2, 3, 4, 5];
+
+type OfferGridItem = ComponentProps<typeof OfferGridCard>["offer"];
+
+const SkeletonRow = memo(function SkeletonRow() {
+	return <Skeleton style={styles.skeletonCard} />;
+});
+
+function renderSkeletonItem() {
+	return <SkeletonRow />;
+}
+
+const OfferRow = memo(function OfferRow({ item }: { item: OfferGridItem }) {
+	return (
+		<View style={styles.gridItem}>
+			<OfferGridCard offer={item} />
+		</View>
+	);
+});
+
+function ListFooter({
+	isFetchingNextPage,
+	hasNextPage,
+	hasData,
+}: {
+	isFetchingNextPage: boolean;
+	hasNextPage: boolean;
+	hasData: boolean;
+}) {
+	const { colors } = useTheme();
+	if (isFetchingNextPage) {
+		return (
+			<View style={{ padding: spacing.lg, alignItems: "center" }}>
+				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					Cargando más…
+				</AppText>
+			</View>
+		);
+	}
+	if (hasNextPage || !hasData) return null;
+	return (
+		<View style={{ padding: spacing.lg, alignItems: "center" }}>
+			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+				No hay más ofertas
+			</AppText>
+		</View>
+	);
+}
 
 export default function AllOffersScreen() {
 	const { colors } = useTheme();
@@ -98,6 +147,26 @@ export default function AllOffersScreen() {
 		setDebouncedSearch("");
 		setFilters(emptyOfferFilters);
 	}, []);
+
+	const renderItem = useCallback(
+		({ item }: { item: OfferGridItem }) => <OfferRow item={item} />,
+		[],
+	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+	const listFooter = useMemo(
+		() => (
+			<ListFooter
+				isFetchingNextPage={isFetchingNextPage}
+				hasNextPage={hasNextPage ?? false}
+				hasData={data.length > 0}
+			/>
+		),
+		[isFetchingNextPage, hasNextPage, data.length],
+	);
 
 	return (
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
@@ -191,13 +260,13 @@ export default function AllOffersScreen() {
 			) : isLoading ? (
 				<View style={styles.gridContainer}>
 					<FlatList
-						data={[0, 1, 2, 3, 4, 5]}
+						data={SKELETON_DATA}
 						keyExtractor={(i) => String(i)}
 						numColumns={2}
 						columnWrapperStyle={styles.gridRow}
 						contentContainerStyle={styles.gridContent}
 						scrollEnabled={false}
-						renderItem={() => <Skeleton style={styles.skeletonCard} />}
+						renderItem={renderSkeletonItem}
 					/>
 				</View>
 			) : isError ? (
@@ -237,30 +306,10 @@ export default function AllOffersScreen() {
 					contentContainerStyle={styles.gridContent}
 					showsVerticalScrollIndicator={false}
 					refreshControl={<RefreshControl refreshing={!!isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
-					onEndReached={() => {
-						if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-					}}
+					onEndReached={handleEndReached}
 					onEndReachedThreshold={0.5}
-					ListFooterComponent={
-						isFetchingNextPage ? (
-							<View style={{ padding: spacing.lg, alignItems: "center" }}>
-								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-									Cargando más…
-								</AppText>
-							</View>
-						) : hasNextPage ? null : data.length > 0 ? (
-							<View style={{ padding: spacing.lg, alignItems: "center" }}>
-								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-									No hay más ofertas
-								</AppText>
-							</View>
-						) : null
-					}
-					renderItem={({ item }) => (
-						<View style={styles.gridItem}>
-							<OfferGridCard offer={item} />
-						</View>
-					)}
+					ListFooterComponent={listFooter}
+					renderItem={renderItem}
 				/>
 			)}
 

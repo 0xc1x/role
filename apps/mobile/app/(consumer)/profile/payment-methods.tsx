@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useEffect } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
@@ -123,17 +123,31 @@ export default function PaymentMethodsScreen() {
 		if (initialized && status === "guest") {
 			router.replace("/login");
 		}
-	}, [status, initialized, router]);
+	}, [status, initialized]);
 
-	if (!initialized || status === "guest") return null;
-
-	const setDefault = (id: string) => {
-		setDefaultMutation.mutate(id);
-	};
+	const setDefault = useCallback(
+		(id: string) => {
+			setDefaultMutation.mutate(id);
+		},
+		[setDefaultMutation],
+	);
 
 	const deleteMethod = (id: string) => {
 		deleteMutation.mutate(id);
 	};
+
+	const renderItem = useCallback(
+		({ item }: { item: PaymentMethodModel }) => (
+			<PaymentMethodRow
+				method={item}
+				onSetDefault={setDefault}
+				onDelete={setDeleteId}
+			/>
+		),
+		[setDefault],
+	);
+
+	if (!initialized || status === "guest") return null;
 
 	return (
 		<Screen scroll>
@@ -152,13 +166,7 @@ export default function PaymentMethodsScreen() {
 						keyExtractor={(m) => m.id}
 						contentContainerStyle={{ marginTop: spacing.lg, gap: spacing.md }}
 						scrollEnabled={false}
-						renderItem={({ item }) => (
-							<PaymentMethodRow
-								method={item}
-								onSetDefault={setDefault}
-								onDelete={setDeleteId}
-							/>
-						)}
+						renderItem={renderItem}
 					/>
 				)}
 

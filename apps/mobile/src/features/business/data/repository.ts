@@ -645,7 +645,9 @@ async function uploadImage(
 		let bytes: ArrayBuffer;
 		if (Platform.OS === "web") {
 			// expo-image-picker devuelve blob:/data: URIs — hay que fetchearlos.
-			bytes = await (await fetch(uri)).arrayBuffer();
+			const response = await fetch(uri);
+			if (!response.ok) throw new Error(`fetch imagen: ${response.status}`);
+			bytes = await response.arrayBuffer();
 		} else {
 			bytes = await new File(uri).arrayBuffer();
 		}

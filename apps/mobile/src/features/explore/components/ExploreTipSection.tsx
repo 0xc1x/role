@@ -43,19 +43,27 @@ export function ExploreTipSection() {
 				>
 					<View style={styles.titleLeft}>
 						<View
-							style={[
-								styles.bulbCircle,
-								{
-									backgroundColor: withAlpha(colors.card, isDark ? 0 : 0.5),
-									boxShadow: `0px 0px 12px ${withAlpha(colors.yellowDark, isDark ? 0.2 : 0.3)}`,
-								},
-							]}
+						style={[
+							styles.bulbCircle,
+							{
+							backgroundColor: isExpanded
+								? withAlpha(colors.yellow, isDark ? 0.25 : 0.35)
+								: withAlpha(colors.card, isDark ? 0 : 0.5),
+							boxShadow: isExpanded
+								? `0px 0px 16px ${withAlpha(colors.yellowDark, isDark ? 0.55 : 0.45)}`
+								: `0px 0px 8px ${withAlpha(colors.yellowDark, isDark ? 0.15 : 0.2)}`,
+							},
+						]}
 						>
 							<Ionicons
 								name="bulb"
 								size={20}
-								color={isDark ? colors.yellow : colors.yellowDark}
-							/>
+								color={
+								isExpanded
+									? (isDark ? colors.yellow : colors.yellowDark)
+									: withAlpha(isDark ? colors.yellow : colors.yellowDark, 0.55)
+								}
+						/>
 						</View>
 						<AppText variant="h4" weight="bold">
 							{strings.explore.tipTitle}

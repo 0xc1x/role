@@ -10,7 +10,7 @@ import { formatCount, formatMoney } from "@/core/utils/formatters";
 import type { UserProfile } from "@/features/auth/domain/user";
 import { useProfileStats } from "@/features/profile/hooks";
 
-export function initialsOf(profile: UserProfile): string {
+function initialsOf(profile: UserProfile): string {
 	const name = profile.fullName?.trim();
 	if (!name) return "F";
 	const parts = name.split(/\s+/);

@@ -1,4 +1,5 @@
-import { View, StyleSheet, Image, Pressable } from "react-native";
+import { View, StyleSheet, Pressable } from "react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -57,7 +58,7 @@ return (
 						<Image
 							source={{ uri: offer.offer.image }}
 							style={styles.offerImage}
-							resizeMode="cover"
+							contentFit="cover"
 						/>
 					) : (
 						<View

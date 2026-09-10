@@ -1,14 +1,13 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
-	Image,
 	Modal,
 	Pressable,
 	RefreshControl,
 	StyleSheet,
 	View,
-	TouchableOpacity,
 	Linking
 } from "react-native";
+import { Image } from "expo-image";
 import { toast } from "sonner-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -92,15 +91,18 @@ export function OrderDetail({
 		refreshing: isRefreshing ?? false,
 	});
 
-	const openScanner = () => {
+	// Estables: PickupScannerSheet re-suscribe su efecto si cambian.
+	const openScanner = useCallback(() => {
 		setValidateOpen(false);
 		setScannerOpen(true);
-	};
+	}, []);
 
-	const handleScannedValidation = () => {
+	const handleScannedValidation = useCallback(() => {
 		setScannerOpen(false);
 		toast.success(strings.business.ordersDeliverySuccess);
-	};
+	}, []);
+
+	const closeScanner = useCallback(() => setScannerOpen(false), []);
 
 	const markReady = () =>
 		updateStatus.mutate({
@@ -222,7 +224,7 @@ export function OrderDetail({
 				<PickupScannerSheet
 					businessId={businessId}
 					orderId={order.id}
-					onClose={() => setScannerOpen(false)}
+					onClose={closeScanner}
 					onValidated={handleScannedValidation}
 				/>
 			) : null}
@@ -325,17 +327,17 @@ function CustomerInfoCard({ item }: { item: OrderDetail }) {
 				label={strings.business.ordersName}
 				text={item.customerName ?? strings.business.ordersNoName}
 			/>
-			<TouchableOpacity
-				onPress={handleCall}
-				disabled={!item.customerPhone}
-				activeOpacity={0.6}
-			>
-				<InfoRow
-					icon="call-outline"
-					label={strings.business.phone}
-					text={item.customerPhone ?? strings.business.ordersNoPhone}
-				/>
-			</TouchableOpacity>
+		<Pressable
+			onPress={handleCall}
+			disabled={!item.customerPhone}
+			style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+		>
+			<InfoRow
+				icon="call-outline"
+				label={strings.business.phone}
+				text={item.customerPhone ?? strings.business.ordersNoPhone}
+			/>
+		</Pressable>
 		</Card>
 	);
 }
@@ -484,7 +486,7 @@ function TimelineCard({ item }: { item: OrderDetail }) {
 			</View>
 			{entries.map((entry, index) => (
 				<TimelineEntryRow
-					key={`${entry.title}-${index}`}
+					key={entry.title}
 					entry={entry}
 					isLast={index === entries.length - 1}
 				/>

@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { memo, useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
@@ -19,7 +20,6 @@ import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 
 export default function BusinessDashboardScreen() {
-	const { colors } = useTheme();
 	const profile = useAuthStore((s) => s.profile);
 	const {
 		data: businesses,
@@ -28,6 +28,17 @@ export default function BusinessDashboardScreen() {
 		error,
 		refetch,
 	} = useBusinesses(profile?.id ?? "");
+
+	const handleBusinessPress = useCallback((businessId: string) => {
+		router.push(`/business/${businessId}`);
+	}, []);
+
+	const renderItem = useCallback(
+		({ item }: { item: NonNullable<typeof businesses>[number] }) => (
+			<BusinessCardRow item={item} onPress={handleBusinessPress} />
+		),
+		[handleBusinessPress],
+	);
 
 	if (isLoading) return <LoadingView />;
 	if (isError)
@@ -56,30 +67,38 @@ export default function BusinessDashboardScreen() {
 					data={businesses}
 					keyExtractor={(item) => item.id}
 					contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}
-					renderItem={({ item }) => (
-						<Card onPress={() => router.push(`/business/${item.id}`)}>
-							<AppText variant="h4" weight="bold">
-								{item.name}
-							</AppText>
-							<AppText
-								variant="bodySmall"
-								style={{ color: colors.mutedForeground }}
-							>
-								{BUSINESS_TYPE_LABELS[item.type] ?? item.type}
-							</AppText>
-							<View style={{ marginTop: spacing.sm }}>
-								<StatusBadge
-									label={item.is_active ? "Activo" : "Inactivo"}
-									tone={item.is_active ? "success" : "neutral"}
-								/>
-							</View>
-						</Card>
-					)}
+					renderItem={renderItem}
 				/>
 			)}
 		</Screen>
 	);
 }
+
+const BusinessCardRow = memo(function BusinessCardRow({
+	item,
+	onPress,
+}: {
+	item: NonNullable<ReturnType<typeof useBusinesses>["data"]>[number];
+	onPress: (businessId: string) => void;
+}) {
+	const { colors } = useTheme();
+	return (
+		<Card onPress={() => onPress(item.id)}>
+			<AppText variant="h4" weight="bold">
+				{item.name}
+			</AppText>
+			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+				{BUSINESS_TYPE_LABELS[item.type] ?? item.type}
+			</AppText>
+			<View style={{ marginTop: spacing.sm }}>
+				<StatusBadge
+					label={item.is_active ? "Activo" : "Inactivo"}
+					tone={item.is_active ? "success" : "neutral"}
+				/>
+			</View>
+		</Card>
+	);
+});
 
 const styles = StyleSheet.create({
 	header: {

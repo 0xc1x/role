@@ -40,9 +40,21 @@ export default function RoleTabBar({
 
 	const [measuredWidth, setMeasuredWidth] = useState(0);
 
-	const left = useRef(new Animated.Value(0)).current;
-	const stretch = useRef(new Animated.Value(0)).current;
-	const origin = useRef(new Animated.Value(0)).current;
+	const leftRef = useRef<Animated.Value | null>(null);
+	if (leftRef.current === null) {
+		leftRef.current = new Animated.Value(0);
+	}
+	const left = leftRef.current;
+	const stretchRef = useRef<Animated.Value | null>(null);
+	if (stretchRef.current === null) {
+		stretchRef.current = new Animated.Value(0);
+	}
+	const stretch = stretchRef.current;
+	const originRef = useRef<Animated.Value | null>(null);
+	if (originRef.current === null) {
+		originRef.current = new Animated.Value(0);
+	}
+	const origin = originRef.current;
 	const initialized = useRef(false);
 
 	const routes = useMemo(

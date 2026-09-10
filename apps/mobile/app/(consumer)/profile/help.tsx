@@ -137,7 +137,11 @@ function CategoriesCard({ categories }: { categories: Category[] }) {
 
 function FaqChevron({ expanded }: { expanded: boolean }) {
 	const { colors } = useTheme();
-	const rotation = useRef(new Animated.Value(0)).current;
+	const rotationRef = useRef<Animated.Value | null>(null);
+	if (rotationRef.current === null) {
+		rotationRef.current = new Animated.Value(0);
+	}
+	const rotation = rotationRef.current;
 
 	useEffect(() => {
 		Animated.timing(rotation, {
@@ -229,7 +233,7 @@ function FaqCard({
 					const id = String(index);
 					return (
 						<FaqRow
-							key={id}
+							key={faq.question}
 							question={faq.question}
 							answer={faq.answer}
 							expanded={expandedId === id}
@@ -305,6 +309,19 @@ function ScheduleInfo() {
 	);
 }
 
+async function launchUrl(url: string, errorKey: "mailError" | "callError") {
+	try {
+		const canOpen = await Linking.canOpenURL(url);
+		if (!canOpen) {
+			toast.error(strings.helpCenter[errorKey]);
+			return;
+		}
+		await Linking.openURL(url);
+	} catch {
+		toast.error(strings.helpCenter[errorKey]);
+	}
+}
+
 export default function HelpScreen() {
 	const { colors } = useTheme();
 	const { status, initialized } = useAuthStore();
@@ -366,19 +383,6 @@ export default function HelpScreen() {
 		);
 	}, [query]);
 
-	async function launchUrl(url: string, errorKey: "mailError" | "callError") {
-		try {
-			const canOpen = await Linking.canOpenURL(url);
-			if (!canOpen) {
-				toast.error(strings.helpCenter[errorKey]);
-				return;
-			}
-			await Linking.openURL(url);
-		} catch {
-			toast.error(strings.helpCenter[errorKey]);
-		}
-	}
-
 	const openEmail = () =>
 		void launchUrl(
 			`mailto:${supportEmail}?subject=${encodeURIComponent(strings.helpCenter.mailSubject)}`,
@@ -392,7 +396,7 @@ export default function HelpScreen() {
 		if (initialized && status === "guest") {
 			router.replace("/login");
 		}
-	}, [status, initialized, router]);
+	}, [status, initialized]);
 
 	if (!initialized || status === "guest") return null;
 

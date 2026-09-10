@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { useEffect } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
@@ -43,20 +43,17 @@ export default function AddressesScreen() {
 	const remove = useDeleteAddress(profile?.id ?? "");
 	const [showAddSheet, setShowAddSheet] = useState(false);
 	const [editTarget, setEditTarget] = useState<SavedAddress | null>(null);
+	const [deleteTarget, setDeleteTarget] = useState<{
+		id: string;
+		label: string;
+	} | null>(null);
 
 	// Redirect guests to login
 	useEffect(() => {
 		if (initialized && status === "guest") {
 			router.replace("/login");
 		}
-	}, [status, initialized, router]);
-
-	if (!initialized || status === "guest") return null;
-
-	const [deleteTarget, setDeleteTarget] = useState<{
-		id: string;
-		label: string;
-	} | null>(null);
+	}, [status, initialized]);
 
 	const handleDelete = useCallback(
 		(id: string) => {
@@ -65,6 +62,27 @@ export default function AddressesScreen() {
 		},
 		[remove, refetch],
 	);
+
+	const handleEditPress = useCallback((item: SavedAddress) => {
+		setEditTarget(item);
+	}, []);
+
+	const handleDeletePress = useCallback((id: string, label: string) => {
+		setDeleteTarget({ id, label });
+	}, []);
+
+	const renderItem = useCallback(
+		({ item }: { item: SavedAddress }) => (
+			<AddressCard
+				item={item}
+				onEdit={handleEditPress}
+				onDelete={handleDeletePress}
+			/>
+		),
+		[handleEditPress, handleDeletePress],
+	);
+
+	if (!initialized || status === "guest") return null;
 
 	return (
 		<Screen>
@@ -115,56 +133,7 @@ export default function AddressesScreen() {
 						data={data}
 						keyExtractor={(item) => String(item.id)}
 						contentContainerStyle={{ gap: spacing.md }}
-						renderItem={({ item }) => (
-							<Card>
-								<View style={styles.cardHeader}>
-									<View style={styles.cardHeaderLeft}>
-										<AppText variant="bodyMedium" weight="semiBold">
-											{item.label}
-										</AppText>
-										{item.is_default ? (
-											<StatusBadge
-												label={strings.addresses.default}
-												tone="brand"
-											/>
-										) : null}
-									</View>
-								<View style={styles.cardActions}>
-									<Button
-										label={strings.common.delete}
-										variant="ghost"
-										size="sm"
-										onPress={() =>
-											setDeleteTarget({
-												id: String(item.id),
-												label: item.label,
-											})
-										}
-									/>
-									<Button
-										label={strings.addresses.edit}
-										variant="ghost"
-										size="sm"
-										onPress={() => setEditTarget(item)}
-									/>
-								</View>
-								</View>
-								<AppText
-									variant="bodySmall"
-									style={{ color: colors.mutedForeground }}
-								>
-									{item.address}
-								</AppText>
-								{item.references ? (
-									<AppText
-										variant="bodySmall"
-										style={{ color: colors.mutedForeground }}
-									>
-										{item.references}
-									</AppText>
-								) : null}
-							</Card>
-						)}
+						renderItem={renderItem}
 					/>
 				)}
 			</View>
@@ -217,6 +186,66 @@ export default function AddressesScreen() {
 	);
 }
 
+const AddressCard = memo(function AddressCard({
+	item,
+	onEdit,
+	onDelete,
+}: {
+	item: SavedAddress;
+	onEdit: (item: SavedAddress) => void;
+	onDelete: (id: string, label: string) => void;
+}) {
+	const { colors } = useTheme();
+	return (
+		<Card>
+			<View style={styles.cardHeader}>
+				<AppText variant="bodyMedium" weight="semiBold">
+					{item.label}
+				</AppText>
+				{item.is_default ? (
+					<StatusBadge label={strings.addresses.default} tone="brand" />
+				) : null}
+			</View>
+			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+				{item.address}
+			</AppText>
+			{item.references ? (
+				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					{item.references}
+				</AppText>
+			) : null}
+
+			<View style={[styles.footerDivider, { backgroundColor: colors.muted }]} />
+
+			<View style={styles.footerActions}>
+				<Pressable
+					onPress={() => onEdit(item)}
+					style={[styles.footerButton, { borderColor: colors.border }]}
+				>
+					<AppText variant="bodySmall" weight="medium">
+						{strings.addresses.edit}
+					</AppText>
+				</Pressable>
+
+				<Pressable
+					onPress={() => onDelete(String(item.id), item.label)}
+					style={[
+						styles.footerButton,
+						{
+							backgroundColor: colors.destructive ?? "#e5484d",
+							borderColor: colors.destructive ?? "#e5484d",
+						},
+					]}
+				>
+					<AppText variant="bodySmall" weight="medium">
+						{strings.common.delete}
+					</AppText>
+				</Pressable>
+			</View>
+		</Card>
+	);
+});
+
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, flex: 1, gap: spacing.lg },
 	header: { marginBottom: -spacing.md },
@@ -244,8 +273,24 @@ const styles = StyleSheet.create({
 		gap: spacing.sm,
 		flexShrink: 1,
 	},
-	cardActions: {
-		flexDirection: "column",
-		alignItems: "flex-end",
+	footerDivider: {
+		height: 1,
+		marginTop: spacing.md,
+		marginBottom: spacing.sm,
+		opacity: 0.4,
+	},
+	footerActions: {
+		flexDirection: "row",
+		gap: spacing.sm,
+	},
+	footerButton: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 6,
+		height: 40,
+		borderWidth: StyleSheet.hairlineWidth,
+		borderRadius: radii.md,
 	},
 });

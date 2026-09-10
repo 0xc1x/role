@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import {
@@ -79,6 +79,30 @@ export default function BusinessOrdersScreen() {
 		setSort("newest");
 	}, [businessId]);
 
+	const filtered = useMemo(() => {
+		const baseFiltered = filterAndSortOrders(orders ?? [], {
+			tab,
+			branchId,
+			status,
+			searchQuery,
+			sort,
+		});
+		if (tab !== "history" || historyPeriod === "all") return baseFiltered;
+		return filterByHistoryPeriod(baseFiltered, historyPeriod, weekOffset);
+	}, [orders, tab, branchId, status, searchQuery, sort, historyPeriod, weekOffset]);
+
+	const renderItem = useCallback(
+		({ item }: { item: (typeof filtered)[number] }) => (
+			<OrderCard businessId={businessId} item={item} />
+		),
+		[businessId],
+	);
+
+	const renderSeparator = useCallback(
+		() => <View style={styles.separator} />,
+		[],
+	);
+
 	if (businessesLoading || !business) {
 		if (!businessesLoading && !business) {
 			return <NoBusinessPrompt />;
@@ -87,17 +111,6 @@ export default function BusinessOrdersScreen() {
 	}
 
 	const stats = orderStats(orders ?? []);
-	const baseFiltered = filterAndSortOrders(orders ?? [], {
-		tab,
-		branchId,
-		status,
-		searchQuery,
-		sort,
-	});
-	const filtered = useMemo(() => {
-		if (tab !== "history" || historyPeriod === "all") return baseFiltered;
-		return filterByHistoryPeriod(baseFiltered, historyPeriod, weekOffset);
-	}, [baseFiltered, tab, historyPeriod, weekOffset]);
 
 	const isHistory = tab === "history";
 
@@ -117,8 +130,12 @@ export default function BusinessOrdersScreen() {
 			</View>
 
 			{pull.indicator}
-			<ScrollView
+			<FlatList
 				ref={pull.ref}
+				data={filtered}
+				keyExtractor={(item) => item.order.id}
+				renderItem={renderItem}
+				ItemSeparatorComponent={renderSeparator}
 				showsVerticalScrollIndicator={false}
 				contentContainerStyle={styles.content}
 				refreshControl={
@@ -129,94 +146,93 @@ export default function BusinessOrdersScreen() {
 						colors={[colors.primary]}
 					/>
 				}
-			>
-				<OrderStatsRow stats={stats} />
+				ListHeaderComponent={
+					<View style={styles.headerContainer}>
+						<OrderStatsRow stats={stats} />
 
-				<OrdersTabs tab={tab} onChange={setTab} />
+						<OrdersTabs tab={tab} onChange={setTab} />
 
-				{isHistory ? (
-					<HistoryDateFilter
-						period={historyPeriod}
-						weekOffset={weekOffset}
-						onPeriodChange={(p) => {
-							setHistoryPeriod(p);
-							if (p !== "week") setWeekOffset(0);
-						}}
-						onWeekChange={setWeekOffset}
-					/>
-				) : null}
+						{isHistory ? (
+							<HistoryDateFilter
+								period={historyPeriod}
+								weekOffset={weekOffset}
+								onPeriodChange={(p) => {
+									setHistoryPeriod(p);
+									if (p !== "week") setWeekOffset(0);
+								}}
+								onWeekChange={setWeekOffset}
+							/>
+						) : null}
 
-				<View style={styles.searchRow}>
-					<SearchBar
-						value={searchQuery}
-						onChangeText={setSearchQuery}
-						placeholder={strings.business.ordersSearchHint}
-						containerStyle={styles.searchBarFull}
-					/>
-				</View>
-				<View style={styles.filterRow}>
-					<OrdersFiltersControl status={status} onApply={setStatus} />
-					<OrdersSortControl value={sort} onChange={setSort} />
-				</View>
+						<View style={styles.searchRow}>
+							<SearchBar
+								value={searchQuery}
+								onChangeText={setSearchQuery}
+								placeholder={strings.business.ordersSearchHint}
+								containerStyle={styles.searchBarFull}
+							/>
+						</View>
+						<View style={styles.filterRow}>
+							<OrdersFiltersControl status={status} onApply={setStatus} />
+							<OrdersSortControl value={sort} onChange={setSort} />
+						</View>
 
-				{status ? (
-					<View style={styles.chipsRow}>
-						<FilterChip
-							label={orderStatusLabels[status]}
-							onClear={() => setStatus(null)}
-						/>
+						{status ? (
+							<View style={styles.chipsRow}>
+								<FilterChip
+									label={orderStatusLabels[status]}
+									onClear={() => setStatus(null)}
+								/>
+							</View>
+						) : null}
+
+						{isLoading ? <LoadingView /> : null}
+						{isError ? (
+							<ErrorState error={error} onRetry={() => void refetch()} />
+						) : null}
+
+						{!isLoading && !isError && orders && orders.length === 0 ? (
+							<EmptyState
+								icon={
+									<Ionicons
+										name="bag-handle-outline"
+										size={28}
+										color={colors.mutedForeground}
+									/>
+								}
+								title={
+									isHistory
+										? strings.business.ordersNoHistoryTitle
+										: strings.business.ordersNoActiveTitle
+								}
+								message={
+									isHistory
+										? strings.business.ordersNoHistoryBody
+										: strings.business.ordersNoActiveBody
+								}
+							/>
+						) : null}
+
+						{!isLoading &&
+						!isError &&
+						orders &&
+						orders.length > 0 &&
+						filtered.length === 0 ? (
+							<EmptyState
+								icon={
+									<Ionicons
+										name="search-outline"
+										size={28}
+										color={colors.mutedForeground}
+									/>
+								}
+								title={strings.allOffers.noResultsTitle}
+								message={strings.allOffers.noResultsBody}
+							/>
+						) : null}
 					</View>
-				) : null}
-
-				{isLoading ? <LoadingView /> : null}
-				{isError ? (
-					<ErrorState error={error} onRetry={() => void refetch()} />
-				) : null}
-
-				{!isLoading && !isError && orders && orders.length === 0 ? (
-					<EmptyState
-						icon={
-							<Ionicons
-								name="bag-handle-outline"
-								size={28}
-								color={colors.mutedForeground}
-							/>
-						}
-						title={
-							isHistory
-								? strings.business.ordersNoHistoryTitle
-								: strings.business.ordersNoActiveTitle
-						}
-						message={
-							isHistory
-								? strings.business.ordersNoHistoryBody
-								: strings.business.ordersNoActiveBody
-						}
-					/>
-				) : null}
-
-				{!isLoading &&
-				!isError &&
-				orders &&
-				orders.length > 0 &&
-				filtered.length === 0 ? (
-					<EmptyState
-						icon={
-							<Ionicons
-								name="search-outline"
-								size={28}
-								color={colors.mutedForeground}
-							/>
-						}
-						title={strings.allOffers.noResultsTitle}
-						message={strings.allOffers.noResultsBody}
-					/>
-				) : null}
-
-				{filtered.map((item) => (
-					<OrderCard key={item.order.id} businessId={businessId} item={item} />
-				))}
-			</ScrollView>
+				}
+			/>
 		</Screen>
 	);
 }
@@ -230,10 +246,16 @@ const styles = StyleSheet.create({
 		paddingTop: spacing.xl,
 		paddingBottom: spacing.md,
 	},
+	headerContainer: {
+		gap: spacing.md,
+		marginBottom: spacing.md,
+	},
+	separator: {
+		height: spacing.md,
+	},
 	content: {
 		paddingHorizontal: spacing.xl,
 		paddingBottom: spacing.xxl,
-		gap: spacing.md,
 	},
 	searchRow: {
 		width: "100%",

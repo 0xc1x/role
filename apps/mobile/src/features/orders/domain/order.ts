@@ -9,6 +9,11 @@ import type { BadgeTone } from "@/core/ui";
 
 export type { OrderStatusType };
 
+/** Valor escaneable del QR de recogida (contrato con el escáner del negocio). */
+export function pickupQrValue(orderId: string, pickupCode: string): string {
+	return `role://order/${orderId}/${pickupCode}`;
+}
+
 export const orderStatusLabels: Record<OrderStatusType, string> = {
 	pending: "Pendiente",
 	confirmed: "Confirmado",
@@ -114,9 +119,10 @@ export function lastEventTimeFor(
 	statuses: readonly OrderStatusType[],
 	fallback: string,
 ): string {
+	const wanted = new Set(statuses);
 	let last: string | null = null;
 	for (const event of events) {
-		if (!statuses.includes(event.status)) continue;
+		if (!wanted.has(event.status)) continue;
 		if (last == null || event.created_at > last) last = event.created_at;
 	}
 	return last ?? fallback;

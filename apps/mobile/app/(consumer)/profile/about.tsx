@@ -157,7 +157,7 @@ export default function AboutScreen() {
 		if (initialized && status === "guest") {
 			router.replace("/login");
 		}
-	}, [status, initialized, router]);
+	}, [status, initialized]);
 
 	if (!initialized || status === "guest") return null;
 

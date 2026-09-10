@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-	Image,
 	Modal,
 	Platform,
 	Pressable,
@@ -8,6 +7,7 @@ import {
 	Switch,
 	View,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
@@ -22,7 +22,7 @@ import {
 	type MapPickerResult,
 } from "@/features/profile/components/MapPickerView";
 import { DateTimeField } from "./products/DateTimeFields";
-import { pickWebImage } from "./products/ProductForm";
+import { pickWebImage } from "../utils/pick-image";
 
 const DAYS = [
 	"Lunes",
@@ -39,6 +39,20 @@ interface DayHoursState {
 	open: Date;
 	close: Date;
 	closed: boolean;
+}
+
+// Pura y sin scope del componente: vive a nivel módulo.
+async function pickImage(setter: (uri: string) => void): Promise<void> {
+	if (Platform.OS === "web") {
+		const uri = await pickWebImage();
+		if (uri) setter(uri);
+		return;
+	}
+	const result = await ImagePicker.launchImageLibraryAsync({
+		mediaTypes: ["images"],
+		quality: 0.8,
+	});
+	if (!result.canceled && result.assets[0]) setter(result.assets[0].uri);
 }
 
 export interface BusinessFormInitial {
@@ -142,19 +156,6 @@ export function BusinessForm({
 	);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
-	const pickImage = async (setter: (uri: string) => void) => {
-		if (Platform.OS === "web") {
-			const uri = await pickWebImage();
-			if (uri) setter(uri);
-			return;
-		}
-		const result = await ImagePicker.launchImageLibraryAsync({
-			mediaTypes: ["images"],
-			quality: 0.8,
-		});
-		if (!result.canceled && result.assets[0]) setter(result.assets[0].uri);
-	};
-
 	const setDay = (day: string, patch: Partial<DayHoursState>) =>
 		setHours((prev) =>
 			prev.map((h) => (h.day === day ? { ...h, ...patch } : h)),
@@ -176,12 +177,11 @@ export function BusinessForm({
 			website: website.trim() || null,
 			logoUri,
 			coverUri,
-			hours: hours
-				.filter((h) => !h.closed)
-				.map((h) => ({
-					day: h.day,
-					hours: `${dateToTime(h.open)} - ${dateToTime(h.close)}`,
-				})),
+			hours: hours.flatMap((h) =>
+				h.closed
+					? []
+					: [{ day: h.day, hours: `${dateToTime(h.open)} - ${dateToTime(h.close)}` }],
+			),
 			address: picked?.address ?? null,
 			latitude: picked?.latitude ?? null,
 			longitude: picked?.longitude ?? null,

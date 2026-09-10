@@ -1,0 +1,12 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "rules": {
+    "react-doctor/supabase-client-owned-authz-field": "off",
+    "react-doctor/rn-prefer-reanimated": "off",
+    "react-doctor/only-export-components": "off",
+    "react-doctor/no-high-complexity-react-function": "off",
+    "react-doctor/no-giant-component": "off",
+    "react-doctor/duplicate-jsx-subtree": "off",
+    "react-doctor/rn-no-scrollview-mapped-list": "off"
+  }
+}

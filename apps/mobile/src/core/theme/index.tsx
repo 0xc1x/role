@@ -48,7 +48,9 @@ export function ThemeProvider({
 	const [mode, setModeState] = useState<ThemeMode>("system");
 	const [hydrated, setHydrated] = useState(false);
 	const onHydratedRef = useRef(onHydrated);
-	onHydratedRef.current = onHydrated;
+	useEffect(() => {
+		onHydratedRef.current = onHydrated;
+	});
 
 	// Hydrate the persisted preference once on mount.
 	useEffect(() => {

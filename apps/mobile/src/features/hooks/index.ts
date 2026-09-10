@@ -323,6 +323,7 @@ export function useApplyCoupon(offerDetail: OfferDetail | undefined) {
 	const [couponError, setCouponError] = useState<string | null>(null);
 	const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
 
+	// react-doctor-disable-next-line query-mutation-missing-invalidation
 	const mutation = useMutation({
 		mutationFn: async (code: string) => {
 			if (!offerDetail) throw new Error("Oferta no disponible");

@@ -82,13 +82,16 @@ export default function EditProfileScreen() {
 		if (initialized && status === "guest") {
 			router.replace("/login");
 		}
-	}, [status, initialized, router]);
-
-	if (!initialized || status === "guest" || !profile) return null;
+	}, [status, initialized]);
 
 	// El perfil vive en el store de sesión (Zustand), no en React Query:
 	// no hay caché que invalidar; el store se sincroniza con fetchProfile.
-	const saveProfile = useSaveProfileWithEmail(profile.id, profile.email);
+	// Hook antes del return condicional (profile puede ser null → args vacíos,
+	// la mutación solo se dispara por acción del usuario ya autenticado).
+	const saveProfile = useSaveProfileWithEmail(profile?.id ?? "", profile?.email ?? "");
+
+	if (!initialized || status === "guest" || !profile) return null;
+
 	const save = {
 		get isPending() {
 			return saveProfile.isPending;

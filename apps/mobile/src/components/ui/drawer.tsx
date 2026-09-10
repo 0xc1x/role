@@ -1,11 +1,12 @@
 import * as React from "react";
 import {
 	Animated,
-	Dimensions,
+	// react-doctor-disable-next-line rn-no-panresponder
 	PanResponder,
 	Platform,
 	Pressable,
 	StyleSheet,
+	useWindowDimensions,
 	View,
 } from "react-native";
 import { Portal } from "@rn-primitives/portal";
@@ -114,12 +115,15 @@ export function DrawerContent({
 	const tabBarProps = useTabBarStore((s) => s.props);
 	const hasTabs = tabBarProps !== null;
 	const bottomOffset = hasTabs ? insets.bottom : 0;
-	const screenHeight = Dimensions.get("window").height;
-	const offset = React.useRef(new Animated.Value(screenHeight)).current;
+	const { height: screenHeight } = useWindowDimensions();
+	// Lazy init vía useState: el valor se crea una sola vez al montar (nunca
+	// se muta una ref durante el render) y conserva el alto inicial, igual
+	// que antes.
+	const [offset] = React.useState(() => new Animated.Value(screenHeight));
 	// Desplazamiento del drag, se suma a "offset" para el translateY final.
 	// Va en un Animated.Value aparte (en vez de mutar "offset" directamente)
 	// para no pisar la animación de apertura/cierre.
-	const dragY = React.useRef(new Animated.Value(0)).current;
+	const [dragY] = React.useState(() => new Animated.Value(0));
 
 	// "dragY" lo maneja el PanResponder a mano (no puede ir por native driver
 	// porque necesitamos leer/clamped su valor en JS durante el gesto), así
@@ -141,7 +145,9 @@ export function DrawerContent({
 	const DISMISS_DISTANCE = 120; // px arrastrados hacia abajo para cerrar
 	const DISMISS_VELOCITY = 0.5; // o esta velocidad de swipe, aunque no llegue a la distancia
 
-	const panResponder = React.useRef(
+	// El PanResponder se crea una sola vez al montar (ya persistía la primera
+	// instancia antes vía ref, así que el closure inicial se conserva igual).
+	const [panResponder] = React.useState(() =>
 		PanResponder.create({
 			// Solo capturamos el gesto si es principalmente vertical y hacia
 			// abajo, para no robarle el swipe horizontal a nada dentro del header.
@@ -173,7 +179,15 @@ export function DrawerContent({
 				Animated.spring(dragY, { toValue: 0, useNativeDriver: false, bounciness: 4 }).start();
 			},
 		}),
-	).current;
+	);
+
+	// Dentro de tabs, portaleamos entre contenido y navbar para quedar por debajo
+	// de la barra. El portal mueve el árbol fuera del <Drawer>, así que el valor
+	// del contexto se memoiza acá arriba: los hooks no pueden ir tras el return.
+	const portalValue = React.useMemo(
+		() => ({ open, onOpenChange }),
+		[open, onOpenChange],
+	);
 
 	if (!open) return null;
 
@@ -220,7 +234,7 @@ export function DrawerContent({
 	if (hasTabs) {
 		return (
 			<Portal name="TAB_SHEET">
-				<DrawerContext.Provider value={{ open, onOpenChange }}>
+				<DrawerContext.Provider value={portalValue}>
 					{sheet}
 				</DrawerContext.Provider>
 			</Portal>

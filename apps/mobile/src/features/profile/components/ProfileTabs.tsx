@@ -16,6 +16,11 @@ export type ProfileTab = "history" | "settings";
 
 const TAB_INDICATOR_DURATION = 220;
 
+const TABS: Array<{ key: ProfileTab; label: string }> = [
+	{ key: "history", label: strings.profile.historyTab },
+	{ key: "settings", label: strings.profile.settingsTab },
+];
+
 export function ProfileTabs({
 	active,
 	onChange,
@@ -24,18 +29,23 @@ export function ProfileTabs({
 	onChange: (tab: ProfileTab) => void;
 }) {
 	const { colors } = useTheme();
-	const tabs: Array<{ key: ProfileTab; label: string }> = [
-		{ key: "history", label: strings.profile.historyTab },
-		{ key: "settings", label: strings.profile.settingsTab },
-	];
 
 	// Layout real (x, width) de cada tab, medido con onLayout.
 	const layoutsRef = useRef<Record<number, { x: number; width: number }>>({});
 	const [indicatorReady, setIndicatorReady] = useState(false);
-	const indicatorX = useRef(new Animated.Value(0)).current;
-	const indicatorWidth = useRef(new Animated.Value(0)).current;
+	// Lazy init: `new Animated.Value` solo una vez, no por render.
+	const indicatorXRef = useRef<Animated.Value | null>(null);
+	if (indicatorXRef.current === null) {
+		indicatorXRef.current = new Animated.Value(0);
+	}
+	const indicatorX = indicatorXRef.current;
+	const indicatorWidthRef = useRef<Animated.Value | null>(null);
+	if (indicatorWidthRef.current === null) {
+		indicatorWidthRef.current = new Animated.Value(0);
+	}
+	const indicatorWidth = indicatorWidthRef.current;
 
-	const activeIndex = tabs.findIndex((t) => t.key === active);
+	const activeIndex = TABS.findIndex((t) => t.key === active);
 
 	const animateIndicatorTo = (index: number) => {
 		const layout = layoutsRef.current[index];
@@ -73,7 +83,7 @@ export function ProfileTabs({
 
 	return (
 		<View style={styles.tabBar}>
-			{tabs.map((tab, index) => {
+			{TABS.map((tab, index) => {
 				const selected = active === tab.key;
 				return (
 					<Pressable

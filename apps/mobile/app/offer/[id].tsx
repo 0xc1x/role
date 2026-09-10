@@ -40,7 +40,11 @@ export default function OfferDetailScreen() {
 		onRefresh: () => void refetch(),
 		refreshing: !!isFetching,
 	});
-	const scrollY = useRef(new Animated.Value(0)).current;
+	const scrollYRef = useRef<Animated.Value | null>(null);
+	if (scrollYRef.current === null) {
+		scrollYRef.current = new Animated.Value(0);
+	}
+	const scrollY = scrollYRef.current;
 	const headerHeight = scrollY.interpolate({
 		inputRange: [0, HERO_HEIGHT],
 		outputRange: [HERO_HEIGHT, 0],

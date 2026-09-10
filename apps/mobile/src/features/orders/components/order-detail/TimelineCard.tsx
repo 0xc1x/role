@@ -125,7 +125,7 @@ export function TimelineCard({
 			</View>
 			{sections.map((section, index) => (
 				<TimelineSectionRow
-					key={`${section.title}-${index}`}
+					key={section.title}
 					section={section}
 					isLast={index === sections.length - 1}
 				/>

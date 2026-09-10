@@ -664,7 +664,7 @@ export const strings = {
 		productTitle: "Título",
 		productDescription: "Descripción",
 		productPrice: "Precio original",
-		productDiscountedPrice: "Precio con descuento",
+		productDiscountedPrice: "Precio final",
 		productStock: "Stock",
 		productCategories: "Categorías",
 		productIncludes: "Incluye",

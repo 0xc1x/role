@@ -3,7 +3,6 @@ import {
 	Platform,
 	Animated,
 	Easing,
-	Image,
 	LayoutAnimation,
 	Pressable,
 	ScrollView,
@@ -12,6 +11,7 @@ import {
 	type StyleProp,
 	type ViewStyle,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -88,7 +88,7 @@ export function ExploreCategoryGrid({
 	const selectedBackground = withAlpha(colors.primary, 0.2);
 	const selectedShadow = `0px 4px 10px ${withAlpha(colors.redAccent, 0.149)}`;
 	const baseText = colors.foreground;
-	const mutedText = baseText + (isDark ? "99" : "80");
+	const mutedText = withAlpha(baseText, isDark ? 0.6 : 0.5);
 
 	const toggleExpand = () => {
 		const willCollapse = showAll;
@@ -249,8 +249,10 @@ function CategoryFadeSlideIn({
 	children: ReactNode;
 	style?: StyleProp<ViewStyle>;
 }) {
-	const opacity = useRef(new Animated.Value(animate ? 0 : 1)).current;
-	const translateY = useRef(new Animated.Value(animate ? 10 : 0)).current;
+	// Lazy init vía useState: se crean una sola vez al montar (sin mutar
+	// refs durante el render). Si `animate` es false aparecen en estado final.
+	const [opacity] = useState(() => new Animated.Value(animate ? 0 : 1));
+	const [translateY] = useState(() => new Animated.Value(animate ? 10 : 0));
 
 	useEffect(() => {
 		if (!animate) return;
@@ -314,18 +316,20 @@ function ExploreCategoryCard({
 					<Image
 						source={{ uri: category.imageUrl }}
 						style={styles.categoryImage}
-						resizeMode="cover"
+						contentFit="cover"
 					/>
 					<LinearGradient
-						colors={["transparent", cardBackground]}
-						start={{ x: 0.2, y: 0 }}
+						colors={["transparent", withAlpha(cardBackground, 0.85), cardBackground]}
+						locations={[0, 0.55, 1]}
+						start={{ x: 0, y: 0 }}
 						end={{ x: 1, y: 0 }}
 						style={styles.categoryFade}
 					/>
 				</View>
 			) : null}
 			<View style={styles.categoryText}>
-				<AppText variant="h4" weight="bold" numberOfLines={2}>
+				<AppText variant="h4" weight="bold" numberOfLines={2}
+					style={{ fontSize: 15, lineHeight: 19 }}>
 					{category.name}
 				</AppText>
 				<AppText variant="bodySmall" style={{ color: mutedText, marginTop: 6 }}>
@@ -386,7 +390,7 @@ const styles = StyleSheet.create({
 		top: 0,
 		bottom: 0,
 		right: 0,
-		width: 100,
+		width: 80,
 		overflow: "hidden",
 	},
 	categoryImage: {
@@ -398,8 +402,8 @@ const styles = StyleSheet.create({
 		inset: 0,
 	},
 	categoryText: {
-		paddingLeft: 16,
-		paddingRight: 90,
+		paddingLeft: 14,
+		paddingRight: 72,
 	},
 	expandCard: {
 		height: 85,

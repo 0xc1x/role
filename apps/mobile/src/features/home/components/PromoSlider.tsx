@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	View,
 	StyleSheet,
 	ScrollView,
-	Image,
 	Dimensions,
 	Pressable,
 	Platform,
 	Linking,
 	Animated,
 } from "react-native";
+import { Image } from "expo-image";
 import { type Href, router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { toast } from "sonner-native";
@@ -77,22 +77,32 @@ export function PromoSlider() {
 	useEffect(() => {
 		if (total === 0 || didInit.current) return;
 		didInit.current = true;
+		const initialX = hasLoop ? step : 0;
 		// Sin animación para no “parpadear”
 		requestAnimationFrame(() => {
-			scrollRef.current?.scrollTo({ x: toScrollX(0), animated: false });
+			scrollRef.current?.scrollTo({ x: initialX, animated: false });
 		});
-	}, [total, toScrollX]);
+	}, [total, hasLoop, step]);
+
+	const currentIndexRef = useRef(currentIndex);
+	useEffect(() => {
+		currentIndexRef.current = currentIndex;
+	}, [currentIndex]);
+	const goToRef = useRef(goTo);
+	useEffect(() => {
+		goToRef.current = goTo;
+	}, [goTo]);
 
 	// Autoplay
 	useEffect(() => {
 		if (!hasLoop) return;
 		const interval = setInterval(() => {
 			if (!isPaused) {
-				goTo(currentIndex + 1);
+				goToRef.current(currentIndexRef.current + 1);
 			}
 		}, 5000);
 		return () => clearInterval(interval);
-	}, [currentIndex, isPaused, goTo, hasLoop]);
+	}, [isPaused, hasLoop]);
 
 	const scrollX = useRef(hasLoop ? step : 0); // empezamos en la primera real
 	const dragStartX = useRef<number | null>(null);
@@ -165,6 +175,11 @@ export function PromoSlider() {
 		setIsPaused(true);
 	}, [clearSettleTimeout]);
 
+	const normalizeAndSnapRef = useRef(normalizeAndSnap);
+	useEffect(() => {
+		normalizeAndSnapRef.current = normalizeAndSnap;
+	}, [normalizeAndSnap]);
+
 	// Drag con mouse (web)
 	useEffect(() => {
 		if (Platform.OS !== "web") return;
@@ -195,7 +210,7 @@ export function PromoSlider() {
 			clearSettleTimeout();
 			isUserInteractingRef.current = false;
 			setIsPaused(false);
-			normalizeAndSnap();
+			normalizeAndSnapRef.current();
 		};
 
 		area.addEventListener("mousedown", handleDown);
@@ -206,21 +221,24 @@ export function PromoSlider() {
 			window.removeEventListener("mousemove", handleMove);
 			window.removeEventListener("mouseup", handleUp);
 		};
-	}, [normalizeAndSnap, step, total, hasLoop, clearSettleTimeout]);
+	}, [step, total, hasLoop, clearSettleTimeout]);
 
-	const handleScroll = (event: {
-		nativeEvent: { contentOffset: { x: number } };
-	}) => {
-		scrollX.current = event.nativeEvent.contentOffset.x;
-		if (!isUserInteractingRef.current) return;
+	// Solo escribe refs por frame; el setState vive en el timeout con
+	// debounce (no hay setState por evento de scroll).
+	const handleScroll = useCallback(
+		(event: { nativeEvent: { contentOffset: { x: number } } }) => {
+			scrollX.current = event.nativeEvent.contentOffset.x;
+			if (!isUserInteractingRef.current) return;
 
-		clearSettleTimeout();
-		settleTimeout.current = setTimeout(() => {
-			isUserInteractingRef.current = false;
-			setIsPaused(false);
-			normalizeAndSnap();
-		}, SCROLL_SETTLE_DELAY);
-	};
+			clearSettleTimeout();
+			settleTimeout.current = setTimeout(() => {
+				isUserInteractingRef.current = false;
+				setIsPaused(false);
+				normalizeAndSnap();
+			}, SCROLL_SETTLE_DELAY);
+		},
+		[clearSettleTimeout, normalizeAndSnap],
+	);
 
 	if (slides.length === 0) return null;
 
@@ -299,38 +317,39 @@ function DotsIndicator({
 	activeColor: string;
 	inactiveColor: string;
 }) {
-	const animsRef = useRef<Animated.Value[]>([]);
-	if (animsRef.current.length !== count) {
-		animsRef.current = Array.from(
-			{ length: count },
-			(_, i) => new Animated.Value(i === activeIndex ? 1 : 0),
-		);
-	}
+	const dotItems = useMemo(
+		() =>
+			Array.from({ length: count }, (_, i) => ({
+				id: `promo-dot-${i}`,
+				anim: new Animated.Value(0),
+			})),
+		[count],
+	);
 
 	useEffect(() => {
-		const animations = animsRef.current.map((anim, i) =>
-			Animated.timing(anim, {
+		const animations = dotItems.map((item, i) =>
+			Animated.timing(item.anim, {
 				toValue: i === activeIndex ? 1 : 0,
 				duration: isWrap ? 0 : DOT_ANIM_DURATION,
 				useNativeDriver: false,
 			}),
 		);
 		Animated.parallel(animations).start();
-	}, [activeIndex, isWrap]);
+	}, [activeIndex, isWrap, dotItems]);
 
 	return (
 		<View style={styles.dotsContainer}>
-			{animsRef.current.map((anim, index) => {
-				const width = anim.interpolate({
+			{dotItems.map((item, index) => {
+				const width = item.anim.interpolate({
 					inputRange: [0, 1],
 					outputRange: [8, 22],
 				});
-				const backgroundColor = anim.interpolate({
+				const backgroundColor = item.anim.interpolate({
 					inputRange: [0, 1],
 					outputRange: [inactiveColor, activeColor],
 				});
 				return (
-					<Pressable key={index} onPress={() => onPressDot(index)} hitSlop={6}>
+					<Pressable key={item.id} onPress={() => onPressDot(index)} hitSlop={6}>
 						<Animated.View style={[styles.dot, { width, backgroundColor }]} />
 					</Pressable>
 				);
@@ -374,66 +393,81 @@ function PromoCard({ item }: { item: PromoSlide }) {
 				{ backgroundColor: colors.greenDark, flexDirection: "row" },
 			]}
 		>
+			{/* Columna izquierda */}
 			<View style={styles.cardLeft}>
-				<View
-					style={[
-						styles.badge,
-						{
-							backgroundColor: withAlpha(colors.onMedia, 0.14),
-							borderColor: withAlpha(colors.onMedia, 0.18),
-						},
-					]}
-				>
-					<AppText
-						weight="semiBold"
-						style={{
-							color: withAlpha(colors.greenDarkForeground, 0.7),
-							fontSize: 11,
-							letterSpacing: 0.4,
-						}}
+				{/* Badge + textos (crecen y se reparten el espacio) */}
+				<View style={styles.cardLeftContent}>
+					<View
+						style={[
+							styles.badge,
+							{
+								backgroundColor: withAlpha(colors.onMedia, 0.14),
+								borderColor: withAlpha(colors.onMedia, 0.18),
+							},
+						]}
 					>
-						{badgeLabel.toUpperCase()}
-					</AppText>
-				</View>
-				<View style={{ gap: 6 }}>
+						<AppText
+							weight="semiBold"
+							style={{
+								color: withAlpha(colors.greenDarkForeground, 0.7),
+								fontSize: 11,
+								letterSpacing: 0.4,
+							}}
+						>
+							{badgeLabel.toUpperCase()}
+						</AppText>
+					</View>
+
 					<AppText
 						weight="bold"
+						numberOfLines={1}
 						style={{
 							color: textColor,
-							fontSize: 18,
+							fontSize: 17,
 							letterSpacing: -0.3,
-							lineHeight: 22,
+							lineHeight: 21,
+							marginTop: 6,
 						}}
 					>
 						{item.title}
 					</AppText>
+
 					<AppText
-						numberOfLines={2}
+						numberOfLines={3}
 						style={{
 							color: withAlpha(textColor, 0.8),
 							fontSize: 12,
 							lineHeight: 16,
+							marginTop: 4,
+							flexShrink: 1,
 						}}
 					>
 						{item.caption}
 					</AppText>
 				</View>
+
+				{/* Botón siempre abajo */}
 				{item.ctaLabel &&
 				(item.type === "coupon" ? item.couponCode : item.redirectUrl) ? (
 					<Button
 						label={item.ctaLabel}
 						onPress={handleCtaPress}
 						size="sm"
-						style={{ backgroundColor: item.buttonColor ?? colors.primary }}
+						style={{
+							backgroundColor: item.buttonColor ?? colors.primary,
+							marginTop: 8,
+						}}
 					/>
 				) : null}
 			</View>
+
+			{/* Columna derecha (imagen) */}
 			<View style={styles.cardRight}>
 				{item.imageUrl ? (
 					<Image
 						source={{ uri: item.imageUrl }}
 						style={styles.cardRightImage}
-						resizeMode="cover"
+						contentFit="cover"
 					/>
 				) : (
 					<View
@@ -471,14 +505,17 @@ const styles = StyleSheet.create({
 		overflow: "hidden",
 	},
 	cardLeft: {
-		width: "54%",
-		paddingHorizontal: 18,
-		paddingVertical: 16,
+		width: "55%",
+		paddingHorizontal: 14,
+		paddingVertical: 12,
 		justifyContent: "space-between",
-		gap: 10,
+	},
+	cardLeftContent: {
+		flex: 1,
+		justifyContent: "flex-start",
 	},
 	cardRight: {
-		width: "46%",
+		width: "45%",
 		overflow: "hidden",
 	},
 	cardRightImage: {
@@ -488,7 +525,7 @@ const styles = StyleSheet.create({
 	badge: {
 		alignSelf: "flex-start",
 		paddingHorizontal: 10,
-		paddingVertical: 5,
+		paddingVertical: 4,
 		borderRadius: radii.pill,
 		borderWidth: 1,
 	},

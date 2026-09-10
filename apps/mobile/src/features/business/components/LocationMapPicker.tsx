@@ -281,8 +281,8 @@ const styles = StyleSheet.create({
 		borderRadius: 19,
 		alignItems: "center",
 		justifyContent: "center",
-		elevation: 2,
-		},
+		boxShadow: "0px 2px 4px rgba(0, 0, 0, 0.25)",
+	},
 	fullscreen: { flex: 1 },
 	fullscreenBar: {
 		flexDirection: "row",

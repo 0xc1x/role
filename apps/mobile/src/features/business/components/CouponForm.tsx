@@ -68,7 +68,7 @@ export function CouponForm({
 	const [maxUses, setMaxUses] = useState(
 		initial?.max_uses != null ? String(initial.max_uses) : "",
 	);
-	const [expiry, setExpiry] = useState<Date | null>(
+	const [expiry, setExpiry] = useState<Date | null>(() =>
 		initial?.expires_at ? new Date(initial.expires_at) : null,
 	);
 	const [isActive, setIsActive] = useState(initial?.is_active ?? true);

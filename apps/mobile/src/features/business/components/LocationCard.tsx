@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card, StatusBadge } from "@/core/ui";

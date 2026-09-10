@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
-	Image,
 	Pressable,
 	StyleSheet,
 	View,
 } from "react-native";
+import { Image } from "expo-image";
 import MapView, { Marker, type Region } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -59,7 +59,8 @@ export function ExploreMapView({
 		longitudeDelta: userLocation ? 0.4 : ECUADOR_CENTER.longitudeDelta,
 	}));
 	const [mapReady, setMapReady] = useState(false);
-	const [hasFitted, setHasFitted] = useState(false);
+	// Solo se lee/escribe en el efecto de fit: ref, no estado.
+	const hasFittedRef = useRef(false);
 	const [selectedOffer, setSelectedOffer] = useState<OfferDetail | null>(null);
 
 	const locatedOffers = offers.filter((o) => o.location != null);
@@ -75,8 +76,8 @@ export function ExploreMapView({
 
 	// Fit a las ofertas una sola vez cuando aparecen.
 	useEffect(() => {
-		if (!mapReady || hasFitted || locatedOffers.length === 0) return;
-		setHasFitted(true);
+		if (!mapReady || hasFittedRef.current || locatedOffers.length === 0) return;
+		hasFittedRef.current = true;
 		const coords = locatedOffers.slice(0, 20).flatMap((o) =>
 			o.location != null
 				? [{ latitude: o.location.latitude, longitude: o.location.longitude }]
@@ -87,7 +88,7 @@ export function ExploreMapView({
 			animated: true,
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [mapReady, hasFitted, offers]);
+	}, [mapReady, offers]);
 
 	// Deseleccionar al tocar el mapa.
 	const handleMapPress = () => setSelectedOffer(null);
@@ -312,7 +313,7 @@ function MapOfferCard({
 					<Image
 						source={{ uri: offer.offer.image }}
 						style={styles.selectedImage}
-						resizeMode="cover"
+						contentFit="cover"
 					/>
 				) : (
 					<View style={[styles.selectedImage, { backgroundColor: colors.surfaceMuted }]} />

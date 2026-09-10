@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -408,7 +409,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	menuList: {
-		gap: 8, paddingHorizontal: spacing.xl 
+		gap: 8,
 	},
 	menuRow: {
 		flexDirection: "row",

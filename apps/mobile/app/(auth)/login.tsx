@@ -168,35 +168,27 @@ export default function LoginScreen() {
 					{strings.auth.signupFree}
 				</Text>
 			</AppText>
-			<ForgotPasswordDialog
-				visible={showReset}
-				initialEmail={email}
-				onClose={() => setShowReset(false)}
-			/>
+			{showReset ? (
+				<ForgotPasswordDialog
+					initialEmail={email}
+					onClose={() => setShowReset(false)}
+				/>
+			) : null}
 		</AuthScreenShell>
 	);
 }
 
 function ForgotPasswordDialog({
-	visible,
 	initialEmail,
 	onClose,
 }: {
-	visible: boolean;
 	initialEmail: string;
 	onClose: () => void;
 }) {
 	const { colors } = useTheme();
-	const [email, setEmail] = useState("");
+	const [email, setEmail] = useState(initialEmail);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
-
-	useEffect(() => {
-		if (visible) {
-			setEmail(initialEmail);
-			setError(null);
-		}
-	}, [visible, initialEmail]);
 
 	const send = async () => {
 		const trimmed = email.trim();
@@ -218,7 +210,7 @@ function ForgotPasswordDialog({
 	};
 
 	return (
-		<Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
+		<Modal transparent animationType="fade" visible onRequestClose={onClose}>
 			<View style={[styles.overlay, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}>
 				<View
 					style={[

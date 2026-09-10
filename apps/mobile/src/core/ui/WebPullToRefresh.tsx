@@ -42,17 +42,11 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 	const nodeRef = useRef<HTMLElement | null>(null);
 	const gestureRef = useRef<Gesture | null>(null);
 	const onRefreshRef = useRef(onRefresh);
-	onRefreshRef.current = onRefresh;
+	useEffect(() => {
+		onRefreshRef.current = onRefresh;
+	});
 
-	const detach = useCallback(() => {
-		const node = nodeRef.current;
-		nodeRef.current = null;
-		if (!node) return;
-		node.removeEventListener("touchstart", handleTouchStart);
-		node.removeEventListener("touchmove", handleTouchMove);
-		node.removeEventListener("touchend", handleTouchEnd);
-		node.removeEventListener("touchcancel", handleTouchEnd);
-	}, []);
+	const [node, setNode] = useState<HTMLElement | null>(null);
 
 	const handleTouchStart = useCallback((e: TouchEvent) => {
 		if (e.touches.length > 1) {
@@ -72,8 +66,8 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 
 	const handleTouchMove = useCallback((e: TouchEvent) => {
 		const gesture = gestureRef.current;
-		const node = nodeRef.current;
-		if (!gesture || gesture.dead || e.touches.length > 1 || !node) return;
+		const currentNode = nodeRef.current;
+		if (!gesture || gesture.dead || e.touches.length > 1 || !currentNode) return;
 		const touch = e.touches[0];
 		if (!touch) return;
 		const dy = touch.clientY - gesture.startY;
@@ -85,7 +79,7 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 				gesture.dead = true;
 				return;
 			}
-			if (dy < START_SLOP || node.scrollTop > 1) return;
+			if (dy < START_SLOP || currentNode.scrollTop > 1) return;
 			gesture.pulling = true;
 		}
 		gesture.lastDy = dy;
@@ -109,29 +103,35 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 		setPull(0);
 	}, []);
 
-	const ref = useCallback(
-		(instance: unknown) => {
-			if (Platform.OS !== "web") return;
-			detach();
-			const node = resolveScrollableNode(instance);
-			if (!node) return;
-			nodeRef.current = node;
-			node.style.overscrollBehaviorY = "contain";
-			node.addEventListener("touchstart", handleTouchStart, {
-				passive: true,
-			});
-			node.addEventListener("touchmove", handleTouchMove, {
-				passive: false,
-			});
-			node.addEventListener("touchend", handleTouchEnd, { passive: true });
-			node.addEventListener("touchcancel", handleTouchEnd, {
-				passive: true,
-			});
-		},
-		[detach, handleTouchStart, handleTouchMove, handleTouchEnd],
-	);
+	const ref = useCallback((instance: unknown) => {
+		if (Platform.OS !== "web") return;
+		const resolved = resolveScrollableNode(instance);
+		setNode(resolved);
+	}, []);
 
-	useEffect(() => detach, [detach]);
+	useEffect(() => {
+		if (Platform.OS !== "web" || !node) return;
+		nodeRef.current = node;
+		node.style.overscrollBehaviorY = "contain";
+		node.addEventListener("touchstart", handleTouchStart, {
+			passive: true,
+		});
+		node.addEventListener("touchmove", handleTouchMove, {
+			passive: false,
+		});
+		node.addEventListener("touchend", handleTouchEnd, { passive: true });
+		node.addEventListener("touchcancel", handleTouchEnd, {
+			passive: true,
+		});
+
+		return () => {
+			nodeRef.current = null;
+			node.removeEventListener("touchstart", handleTouchStart);
+			node.removeEventListener("touchmove", handleTouchMove);
+			node.removeEventListener("touchend", handleTouchEnd);
+			node.removeEventListener("touchcancel", handleTouchEnd);
+		};
+	}, [node, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
 	const visible = refreshing || pull > 0;
 	const indicator = visible ? (

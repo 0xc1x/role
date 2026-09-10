@@ -11,12 +11,12 @@ import { z } from "zod";
  */
 const envSchema = z.object({
 	/** Supabase project URL (https://<project>.supabase.co) */
-	EXPO_PUBLIC_SUPABASE_URL: z.string().url(),
+	EXPO_PUBLIC_SUPABASE_URL: z.url(),
 	/** Supabase anon (public) key */
 	EXPO_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
 	/** Sentry DSN — optional, empty disables crash reporting (nativo + web) */
 	EXPO_PUBLIC_SENTRY_DSN: z
-		.union([z.string().url(), z.literal("")])
+		.union([z.url(), z.literal("")])
 		.optional()
 		.default(""),
 	/** Google Maps API key — required for the explore map on native */
@@ -35,7 +35,7 @@ const envSchema = z.object({
 	/** VAPID key para suscribir clientes web a FCM */
 	EXPO_PUBLIC_FIREBASE_VAPID_KEY: z.string().optional().default(""),
 	/** API BFF URL para notificaciones admin (opcional en mobile) */
-	EXPO_PUBLIC_API_URL: z.string().url().optional().or(z.literal("")).default(""),
+	EXPO_PUBLIC_API_URL: z.url().optional().or(z.literal("")).default(""),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

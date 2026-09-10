@@ -3,11 +3,7 @@ import QRCode from "react-native-qrcode-svg";
 
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
-
-/** Valor escaneable del QR de recogida (contrato con el escáner del negocio). */
-export function pickupQrValue(orderId: string, pickupCode: string): string {
-	return `role://order/${orderId}/${pickupCode}`;
-}
+import { pickupQrValue } from "@/features/orders/domain/order";
 
 /**
  * QR del pickup code compartido por el detalle del pedido y el ticket

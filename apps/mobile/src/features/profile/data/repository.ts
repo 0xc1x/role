@@ -292,10 +292,13 @@ export const profileRepository = {
 		if (method.isDefault) {
 			await supabase.from('payment_methods').update({ is_default: false }).eq('user_id', userId);
 		}
+		const randomSuffix = typeof globalThis.crypto?.randomUUID === 'function'
+			? globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+			: `${Date.now().toString(36)}`;
 		const { error } = await supabase.from('payment_methods').insert({
 			user_id: userId,
 			gateway: 'place_to_pay',
-			gateway_token: `tok_sim_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+			gateway_token: `tok_sim_${Date.now()}_${randomSuffix}`,
 			brand: method.brand || 'visa',
 			last4: method.last4,
 			exp_month: Number(method.expiryMonth) || 12,

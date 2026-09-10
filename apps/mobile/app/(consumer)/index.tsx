@@ -29,10 +29,13 @@ export default function ConsumerHomeScreen() {
 
 	const onRefresh = useCallback(async () => {
 		setRefreshing(true);
-		await queryClient.invalidateQueries({ queryKey: ["offers"] });
-		await queryClient.invalidateQueries({ queryKey: ["businesses"] });
-		await queryClient.invalidateQueries({ queryKey: ["categories"] });
-		setRefreshing(false);
+		try {
+			await queryClient.invalidateQueries({ queryKey: ["offers"] });
+			await queryClient.invalidateQueries({ queryKey: ["businesses"] });
+			await queryClient.invalidateQueries({ queryKey: ["categories"] });
+		} finally {
+			setRefreshing(false);
+		}
 	}, []);
 	const pull = useWebPullToRefresh({ onRefresh: () => void onRefresh(), refreshing });
 

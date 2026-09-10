@@ -147,6 +147,12 @@ export default function BusinessStatsScreen() {
 
 // ─── Selector de período ─────────────────────────────────────────────
 
+const PERIOD_OPTIONS: Array<{ key: StatsPeriod; label: string }> = [
+	{ key: "week", label: strings.business.statsWeek },
+	{ key: "month", label: strings.business.statsMonth },
+	{ key: "year", label: strings.business.statsYear },
+];
+
 function PeriodSelector({
 	period,
 	offset,
@@ -159,11 +165,7 @@ function PeriodSelector({
 	onOffsetChange: (o: number) => void;
 }) {
 	const { colors } = useTheme();
-	const options: { key: StatsPeriod; label: string }[] = [
-		{ key: "week", label: strings.business.statsWeek },
-		{ key: "month", label: strings.business.statsMonth },
-		{ key: "year", label: strings.business.statsYear },
-	];
+	const options = PERIOD_OPTIONS;
 	const isCurrent = offset >= 0;
 
 	return (

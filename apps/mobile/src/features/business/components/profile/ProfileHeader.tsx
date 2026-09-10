@@ -1,4 +1,5 @@
-import { Image, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
@@ -17,7 +18,7 @@ export function BusinessHeader({ profile }: { profile: BusinessProfileDetail }) 
 			<View style={styles.headerRow}>
 				<View style={[styles.logoBox, { backgroundColor: colors.background, boxShadow: `0px 8px 12px ${colors.shadow}` }]}>
 					{business.image ? (
-						<Image source={{ uri: business.image }} style={styles.logo} resizeMode="cover" />
+						<Image source={{ uri: business.image }} style={styles.logo} contentFit="cover" />
 					) : (
 						<View style={[styles.logo, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]}>
 							<Ionicons name="storefront-outline" size={28} color={colors.mutedForeground} />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +16,63 @@ import { ChipsBar } from "@/features/home/components/CategoryChips";
 const SEARCH_DEBOUNCE_MS = 400;
 
 const BUSINESS_TYPES = Object.keys(BUSINESS_TYPE_LABELS);
+
+const SKELETON_DATA = [0, 1, 2];
+
+type BusinessGridItem = ComponentProps<typeof BusinessGridCard>["business"];
+
+const SkeletonRow = memo(function SkeletonRow() {
+	return <Skeleton style={styles.skeletonCard} />;
+});
+
+function renderSkeletonItem() {
+	return <SkeletonRow />;
+}
+
+const BusinessRow = memo(function BusinessRow({
+	item,
+	userLat,
+	userLng,
+}: {
+	item: BusinessGridItem;
+	userLat: number | undefined;
+	userLng: number | undefined;
+}) {
+	return (
+		<View style={styles.businessItem}>
+			<BusinessGridCard business={item} userLat={userLat} userLng={userLng} />
+		</View>
+	);
+});
+
+function ListFooter({
+	isFetchingNextPage,
+	hasNextPage,
+	hasData,
+}: {
+	isFetchingNextPage: boolean;
+	hasNextPage: boolean;
+	hasData: boolean;
+}) {
+	const { colors } = useTheme();
+	if (isFetchingNextPage) {
+		return (
+			<View style={{ padding: spacing.lg, alignItems: "center" }}>
+				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					Cargando más…
+				</AppText>
+			</View>
+		);
+	}
+	if (hasNextPage || !hasData) return null;
+	return (
+		<View style={{ padding: spacing.lg, alignItems: "center" }}>
+			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+				No hay más negocios
+			</AppText>
+		</View>
+	);
+}
 
 export default function AllBusinessesScreen() {
 	const { colors } = useTheme();
@@ -57,6 +114,31 @@ export default function AllBusinessesScreen() {
 		[],
 	);
 
+	const userLat = selectedAddress?.latitude;
+	const userLng = selectedAddress?.longitude;
+
+	const renderItem = useCallback(
+		({ item }: { item: BusinessGridItem }) => (
+			<BusinessRow item={item} userLat={userLat} userLng={userLng} />
+		),
+		[userLat, userLng],
+	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+	const listFooter = useMemo(
+		() => (
+			<ListFooter
+				isFetchingNextPage={isFetchingNextPage}
+				hasNextPage={hasNextPage ?? false}
+				hasData={data.length > 0}
+			/>
+		),
+		[isFetchingNextPage, hasNextPage, data.length],
+	);
+
 	return (
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
 			{pull.indicator}
@@ -94,13 +176,13 @@ export default function AllBusinessesScreen() {
 			{isLoading ? (
 				<View style={styles.businessGrid}>
 					<FlatList
-						data={[0, 1, 2]}
+						data={SKELETON_DATA}
 						keyExtractor={(i) => String(i)}
 						numColumns={3}
 						columnWrapperStyle={styles.businessRow}
 						contentContainerStyle={styles.businessContent}
 						scrollEnabled={false}
-						renderItem={() => <Skeleton style={styles.skeletonCard} />}
+						renderItem={renderSkeletonItem}
 					/>
 				</View>
 			) : isError ? (
@@ -135,39 +217,15 @@ export default function AllBusinessesScreen() {
 					ref={pull.ref}
 					data={data}
 					keyExtractor={(item) => item.id}
-					numColumns={3}
+					numColumns={2}
 					columnWrapperStyle={styles.businessRow}
 					contentContainerStyle={styles.businessContent}
 					showsVerticalScrollIndicator={false}
 					refreshControl={<RefreshControl refreshing={!!isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
-					onEndReached={() => {
-						if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-					}}
+					onEndReached={handleEndReached}
 					onEndReachedThreshold={0.5}
-					ListFooterComponent={
-						isFetchingNextPage ? (
-							<View style={{ padding: spacing.lg, alignItems: "center" }}>
-								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-									Cargando más…
-								</AppText>
-							</View>
-						) : hasNextPage ? null : data.length > 0 ? (
-							<View style={{ padding: spacing.lg, alignItems: "center" }}>
-								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-									No hay más negocios
-								</AppText>
-							</View>
-						) : null
-					}
-					renderItem={({ item }) => (
-						<View style={styles.businessItem}>
-							<BusinessGridCard
-								business={item}
-								userLat={selectedAddress?.latitude}
-								userLng={selectedAddress?.longitude}
-							/>
-						</View>
-					)}
+					ListFooterComponent={listFooter}
+					renderItem={renderItem}
 				/>
 			)}
 		</View>

@@ -3,11 +3,11 @@ import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button } from "@/core/ui";
-import { PickupQr, pickupQrValue } from "@/features/orders/components/pickup-qr";
+import { PickupQr } from "@/features/orders/components/pickup-qr";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import type { EmbeddedBusiness, EmbeddedLocation } from "@/features/offers/domain/offer";
-import type { ReservationSuccess } from "@/features/orders/domain/order";
+import { type ReservationSuccess, pickupQrValue } from "@/features/orders/domain/order";
 
 interface ConfirmationViewProps {
 	result: ReservationSuccess;

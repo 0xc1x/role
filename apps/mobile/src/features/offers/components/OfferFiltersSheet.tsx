@@ -14,7 +14,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 export type { OfferFilterState };
-export { emptyOfferFilters };
 
 const DISTANCE_OPTIONS = [2, 5, 10] as const;
 const PRICE_OPTIONS = [2, 5, 10] as const;

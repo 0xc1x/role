@@ -1,18 +1,21 @@
-const MXN = { style: "currency", currency: "MXN" } as const;
+const mxnWhole = new Intl.NumberFormat("es-MX", {
+	style: "currency",
+	currency: "MXN",
+	minimumFractionDigits: 0,
+	maximumFractionDigits: 0,
+});
+const mxnPrecise = new Intl.NumberFormat("es-MX", {
+	style: "currency",
+	currency: "MXN",
+	minimumFractionDigits: 2,
+});
 
 export function formatMoney(value: number): string {
-	return new Intl.NumberFormat("es-MX", {
-		...MXN,
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(value);
+	return mxnWhole.format(value);
 }
 
 export function formatMoneyPrecise(value: number): string {
-	return new Intl.NumberFormat("es-MX", {
-		...MXN,
-		minimumFractionDigits: 2,
-	}).format(value);
+	return mxnPrecise.format(value);
 }
 
 export function formatPercent(value: number): string {
