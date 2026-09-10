@@ -8,6 +8,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, Screen, ScreenHeader } from "@/core/ui";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 import { useAuthStore } from "@/features/auth/store";
 import { usePlatformStats } from "@/features/profile/hooks";
 
@@ -17,7 +18,7 @@ function Hero() {
 	const { colors } = useTheme();
 	return (
 		<LinearGradient
-			colors={[`${colors.secondary}4D`, `${colors.secondary}1A`, `${colors.primary}1A`]}
+			colors={[`${withAlpha(colors.secondary, 0.302)}`, `${withAlpha(colors.secondary, 0.102)}`, `${withAlpha(colors.primary, 0.102)}`]}
 			start={{ x: 0, y: 0 }}
 			end={{ x: 1, y: 1 }}
 			style={styles.hero}
@@ -62,7 +63,7 @@ function ValueCard({
 	const { colors } = useTheme();
 	return (
 		<View style={[styles.valueCard, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
-			<View style={[styles.valueIcon, { backgroundColor: `${colors.secondary}4D` }]}>
+			<View style={[styles.valueIcon, { backgroundColor: `${withAlpha(colors.secondary, 0.302)}` }]}>
 				<Ionicons name={icon} size={24} color={colors.primary} />
 			</View>
 			<View style={styles.valueBody}>
@@ -156,7 +157,7 @@ export default function AboutScreen() {
 		if (initialized && status === "guest") {
 			router.replace("/login");
 		}
-	}, [status, initialized, router]);
+	}, [status, initialized]);
 
 	if (!initialized || status === "guest") return null;
 

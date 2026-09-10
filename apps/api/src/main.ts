@@ -1,11 +1,11 @@
 import 'zod/compile';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe, type RawBodyRequest } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
-import type { NextFunction, Request, Response } from 'express';
+import type { Express, NextFunction, Request, Response } from 'express';
 import { json } from 'express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
@@ -19,6 +19,11 @@ async function bootstrap() {
 
   const config = app.get(ConfigService<Env, true>);
   const port = config.get('PORT', { infer: true });
+
+  // Render (y cualquier LB) termina TLS en un proxy: sin esto req.ip es el
+  // proxy y el Throttler colapsa a un solo bucket compartido por todos.
+  const expressApp = app.getHttpAdapter().getInstance() as Express;
+  expressApp.set('trust proxy', 1);
   const corsOrigins = parseCorsOrigins(
     config.get('CORS_ORIGINS', { infer: true }),
   );
@@ -36,7 +41,17 @@ async function bootstrap() {
   );
 
   app.use(helmet());
-  app.use(json({ limit: '1mb' }));
+  // rawBody alimenta la verificación de firma svix del webhook de Resend
+  // (email-marketing-public.controller). Sin verify, req.rawBody queda vacío
+  // y toda firma es inválida en producción.
+  app.use(
+    json({
+      limit: '1mb',
+      verify: (req, _res, buf) => {
+        (req as unknown as RawBodyRequest<Request>).rawBody = buf;
+      },
+    }),
+  );
   app.use((req: Request, res: Response, next: NextFunction) => {
     const incoming = req.headers['x-request-id'];
     const requestId =

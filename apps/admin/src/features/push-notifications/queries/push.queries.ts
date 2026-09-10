@@ -1,41 +1,55 @@
 import type {
-	PushNotificationPaginatedData,
-	PushTemplatePaginatedData,
-	PushTokenPaginatedData,
+	CreatePushTemplateDto,
+	ListPushNotificationsQuery,
+	ListPushTemplatesQuery,
+	ListPushTokensQuery,
+	UpdatePushTemplateDto,
 } from "@0xc1x/role-commons";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	keepPreviousData,
+	queryOptions,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useEmailSegments } from "@/features/email/queries/emails.queries";
 import { pushApi } from "../api/push.api";
 import { pushKeys } from "./push.keys";
 
-type ListQ = Record<string, string | number | boolean | null | undefined>;
-
 // ─── listas ────────────────────────────────────────────────────────────
 
 export const pushListOptions = {
-	history: (q?: ListQ) => ({
-		queryKey: pushKeys.list("history", q),
-		queryFn: () => pushApi.listHistory(q),
-	}),
-	templates: (q?: ListQ) => ({
-		queryKey: pushKeys.list("templates", q),
-		queryFn: () => pushApi.listTemplates(q),
-	}),
-	tokens: (q?: ListQ) => ({
-		queryKey: pushKeys.list("tokens", q),
-		queryFn: () => pushApi.listTokens(q),
-	}),
+	history: (q?: ListPushNotificationsQuery) =>
+		queryOptions({
+			queryKey: pushKeys.list("history", q),
+			queryFn: () => pushApi.listHistory(q),
+			staleTime: 30_000,
+			placeholderData: keepPreviousData,
+		}),
+	templates: (q?: ListPushTemplatesQuery) =>
+		queryOptions({
+			queryKey: pushKeys.list("templates", q),
+			queryFn: () => pushApi.listTemplates(q),
+			staleTime: 30_000,
+		}),
+	tokens: (q?: ListPushTokensQuery) =>
+		queryOptions({
+			queryKey: pushKeys.list("tokens", q),
+			queryFn: () => pushApi.listTokens(q),
+			staleTime: 30_000,
+			placeholderData: keepPreviousData,
+		}),
 };
 
-export function usePushHistory(q?: ListQ) {
-	return useQuery<PushNotificationPaginatedData>(pushListOptions.history(q));
+export function usePushHistory(q?: ListPushNotificationsQuery) {
+	return useQuery(pushListOptions.history(q));
 }
-export function usePushTemplates(q?: ListQ) {
-	return useQuery<PushTemplatePaginatedData>(pushListOptions.templates(q));
+export function usePushTemplates(q?: ListPushTemplatesQuery) {
+	return useQuery(pushListOptions.templates(q));
 }
-export function usePushTokens(q?: ListQ) {
-	return useQuery<PushTokenPaginatedData>(pushListOptions.tokens(q));
+export function usePushTokens(q?: ListPushTokensQuery) {
+	return useQuery(pushListOptions.tokens(q));
 }
 
 /** Segmentos compartidos con el módulo de correos (misma tabla). */
@@ -43,29 +57,33 @@ export { useEmailSegments };
 
 // ─── mutaciones de plantillas ──────────────────────────────────────────
 
+/** Error de mutación → toast. Pura y sin closure: vive a nivel módulo. */
+function notifyMutationError(err: Error) {
+	toast.error(err.message);
+}
+
 export function usePushTemplateMutations() {
 	const qc = useQueryClient();
 	const invalidate = () =>
 		void qc.invalidateQueries({ queryKey: pushKeys.all });
-	const onError = (err: Error) => toast.error(err.message);
 
 	return {
 		create: useMutation({
-			mutationFn: (b: unknown) => pushApi.createTemplate(b),
+			mutationFn: (b: CreatePushTemplateDto) => pushApi.createTemplate(b),
 			onSuccess: () => {
 				toast.success("Plantilla creada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		update: useMutation({
-			mutationFn: ({ id, body }: { id: string; body: unknown }) =>
+			mutationFn: ({ id, body }: { id: string; body: UpdatePushTemplateDto }) =>
 				pushApi.updateTemplate(id, body),
 			onSuccess: () => {
 				toast.success("Plantilla actualizada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		remove: useMutation({
 			mutationFn: (id: string) => pushApi.removeTemplate(id),
@@ -73,7 +91,7 @@ export function usePushTemplateMutations() {
 				toast.success("Plantilla eliminada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 	};
 }
@@ -123,6 +141,7 @@ export function usePushTestTemplate() {
 }
 
 export function usePushAudience() {
+	// react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation -- on-demand POST read, result used directly, no cached query goes stale
 	return useMutation({
 		mutationFn: (b: Parameters<typeof pushApi.audience>[0]) =>
 			pushApi.audience(b),

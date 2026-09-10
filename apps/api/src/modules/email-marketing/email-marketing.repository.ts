@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import {
   campaigns,
   emailComponents,
@@ -55,12 +56,12 @@ export class EmailMarketingRepository {
 
   // ─── Componentes ───────────────────────────────────────────────────
 
-  async listComponents(f: ListFilter) {
+  listComponents(f: ListFilter) {
     // Grid muestra inactivos; solo oculta eliminados.
     const filters: SQL[] = [isNull(emailComponents.deleted_at)];
     if (f.active !== undefined)
       filters.push(eq(emailComponents.is_active, f.active));
-    if (f.search) filters.push(ilike(emailComponents.name, `%${f.search}%`));
+    if (f.search) filters.push(ilike(emailComponents.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailComponents, where, f);
   }
@@ -103,12 +104,12 @@ export class EmailMarketingRepository {
 
   // ─── Plantillas ────────────────────────────────────────────────────
 
-  async listTemplates(f: ListFilter) {
+  listTemplates(f: ListFilter) {
     // Grid muestra inactivos; solo oculta eliminados.
     const filters: SQL[] = [isNull(emailTemplates.deleted_at)];
     if (f.active !== undefined)
       filters.push(eq(emailTemplates.is_active, f.active));
-    if (f.search) filters.push(ilike(emailTemplates.name, `%${f.search}%`));
+    if (f.search) filters.push(ilike(emailTemplates.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailTemplates, where, f);
   }
@@ -149,12 +150,12 @@ export class EmailMarketingRepository {
 
   // ─── Segmentos ─────────────────────────────────────────────────────
 
-  async listSegments(f: ListSegmentsFilter) {
+  listSegments(f: ListSegmentsFilter) {
     // Grid muestra inactivos; solo oculta eliminados.
     const filters: SQL[] = [isNull(segments.deleted_at)];
     if (f.category) filters.push(eq(segments.category, f.category));
     if (f.active !== undefined) filters.push(eq(segments.is_active, f.active));
-    if (f.search) filters.push(ilike(segments.name, `%${f.search}%`));
+    if (f.search) filters.push(ilike(segments.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(segments, where, f);
   }
@@ -278,7 +279,7 @@ export class EmailMarketingRepository {
         case 'lte':
           return sql`${col} <= ${val}`;
         default:
-          return sql`${col}::text ilike ${`%${val}%`}`;
+          return sql`${col}::text ilike ${`%${escapeLike(val)}%`}`;
       }
     });
     const rows = await this.db
@@ -289,38 +290,49 @@ export class EmailMarketingRepository {
     return rows.map((r) => r.id);
   }
 
-  /** Destinatarios suscritos dentro de un set de IDs para una categoría. */
-  findSubscribedRecipients(
+  /**
+   * Destinatarios suscritos dentro de un set de IDs para una categoría.
+   * Chunk del inArray en lotes de 1000: un solo inArray de 50k UUIDs es un
+   * payload de MBs con plan pobre (Postgres admite 65k parámetros).
+   */
+  async findSubscribedRecipients(
     ids: string[],
     category: string,
   ): Promise<{ user_id: string; email: string; full_name: string | null }[]> {
     if (ids.length === 0) return Promise.resolve([]);
-    return this.db
-      .select({
-        user_id: sql<string>`p.id`,
-        email: sql<string>`lower(p.email)`,
-        full_name: sql<string | null>`p.full_name`,
-      })
-      .from(sql`profiles p`)
-      .innerJoin(
-        marketingPreferences,
-        eq(marketingPreferences.user_id, sql`p.id`),
-      )
-      .where(
-        and(
-          inArray(sql`p.id`, ids),
-          eq(marketingPreferences.is_subscribed, true),
-          arrayContains(marketingPreferences.categories, [category]),
-        ),
-      );
+    const out: { user_id: string; email: string; full_name: string | null }[] = [];
+    for (let i = 0; i < ids.length; i += 1000) {
+      const chunk = ids.slice(i, i + 1000);
+      const rows = await this.db
+        .select({
+          user_id: sql<string>`p.id`,
+          email: sql<string>`lower(p.email)`,
+          full_name: sql<string | null>`p.full_name`,
+        })
+        .from(sql`profiles p`)
+        .innerJoin(
+          marketingPreferences,
+          eq(marketingPreferences.user_id, sql`p.id`),
+        )
+        .where(
+          and(
+            inArray(sql`p.id`, chunk),
+            eq(marketingPreferences.is_subscribed, true),
+            arrayContains(marketingPreferences.categories, [category]),
+          ),
+        );
+      out.push(...rows);
+    }
+    return out;
   }
 
   // ─── Campañas ──────────────────────────────────────────────────────
 
-  async listCampaigns(f: ListFilter & { status?: string }) {
+  listCampaigns(f: ListFilter & { status?: string; channel?: string }) {
     const filters: SQL[] = [isNull(campaigns.deleted_at)];
     if (f.status) filters.push(sql`status = ${f.status}`);
-    if (f.search) filters.push(ilike(campaigns.name, `%${f.search}%`));
+    if (f.channel) filters.push(sql`channel = ${f.channel}`);
+    if (f.search) filters.push(ilike(campaigns.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(campaigns, where, f);
   }
@@ -364,9 +376,18 @@ export class EmailMarketingRepository {
 
   // ─── Envíos (la cola) ──────────────────────────────────────────────
 
-  insertSends(values: (typeof emailSends.$inferInsert)[]): Promise<SendRow[]> {
+  /** Inserta envíos en lotes de 1000 (un solo INSERT gigante revienta el plan). */
+  async insertSends(values: (typeof emailSends.$inferInsert)[]): Promise<SendRow[]> {
     if (values.length === 0) return Promise.resolve([]);
-    return this.db.insert(emailSends).values(values).returning();
+    const out: SendRow[] = [];
+    for (let i = 0; i < values.length; i += 1000) {
+      const rows = await this.db
+        .insert(emailSends)
+        .values(values.slice(i, i + 1000))
+        .returning();
+      out.push(...rows);
+    }
+    return out;
   }
 
   /** Lote de envíos pendientes — BD fuente de verdad, BullMQ solo ejecuta. */
@@ -485,13 +506,13 @@ export class EmailMarketingRepository {
     return this.paginate(emailSends, and(...filters), f);
   }
 
-  async listSends(f: ListFilter & { status?: string; type?: string; source_type?: string | null; source_id?: string | null; search?: string }) {
+  listSends(f: ListFilter & { status?: string; type?: string; source_type?: string | null; source_id?: string | null; search?: string }) {
     const filters: SQL[] = [];
     if (f.status) filters.push(eq(emailSends.status, f.status as SendRow['status']));
     if (f.type) filters.push(eq(emailSends.type, f.type as SendRow['type']));
     if (f.source_type) filters.push(eq(emailSends.source_type, f.source_type));
     if (f.source_id) filters.push(eq(emailSends.source_id, f.source_id));
-    if (f.search) filters.push(ilike(emailSends.email, `%${f.search}%`));
+    if (f.search) filters.push(ilike(emailSends.email, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailSends, where, f);
   }
@@ -512,6 +533,7 @@ export class EmailMarketingRepository {
       update campaigns c set
         total_recipients = s.total,
         total_sent = s.sent,
+        total_failed = s.failed,
         total_delivered = s.delivered,
         total_opened = s.opened,
         total_clicked = s.clicked,
@@ -521,6 +543,7 @@ export class EmailMarketingRepository {
         select
           count(*) as total,
           count(*) filter (where status <> 'pending' and status <> 'queued') as sent,
+          count(*) filter (where status = 'failed') as failed,
           count(*) filter (where status in ('delivered','opened','clicked')) as delivered,
           count(*) filter (where status in ('opened','clicked')) as opened,
           count(*) filter (where status = 'clicked') as clicked,

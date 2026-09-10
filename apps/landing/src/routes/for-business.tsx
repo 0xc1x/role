@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Cta } from "@/components/cta";
 import { Footer } from "@/components/footer";
 import { HeroBackground } from "@/components/hero-background";
@@ -11,10 +11,23 @@ import {
 } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
+import { StepsGrid } from "@/components/steps-grid";
+import { platformStatsQueryOptions } from "@/lib/queries";
+import { pageHead } from "@/lib/seo";
 import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/for-business")({
 	component: ForBusinessPage,
+	loader: ({ context }) =>
+		context.queryClient
+			.ensureQueryData(platformStatsQueryOptions)
+			.catch(() => undefined),
+	head: () =>
+		pageHead(
+			"/for-business",
+			"Rolé para negocios",
+			"Recupera ingresos por tu comida excedente, atrae nuevos clientes y reduce tu desperdicio con Rolé.",
+		),
 });
 
 const BENEFITS = [
@@ -102,20 +115,20 @@ function ForBusinessPage() {
 								de registro, sin comisiones sobre el cobro.
 							</p>
 							<div className="mt-10 flex flex-wrap gap-4 reveal reveal-delay-3">
-								<a
-									href="/business-signup"
-									className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
+								<Link
+									to="/business-signup"
+									className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 								>
 									Registrar mi negocio
-								</a>
+								</Link>
 								<a
 									href="mailto:negocios@role.app"
-									className="rounded-full border border-white/25 px-7 py-3 font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.98]"
+									className="rounded-full border border-white/25 px-7 py-3 font-semibold text-white transition-[background-color,box-shadow,transform] duration-200 hover:bg-white/10 active:scale-[0.98]"
 								>
 									Hablar con ventas
 								</a>
 							</div>
-							<p className="mt-5 text-sm text-white/55 reveal reveal-delay-4">
+							<p className="mt-5 text-sm text-white/70 reveal reveal-delay-4">
 								Un representante responde en menos de 24 horas.
 							</p>
 						</div>
@@ -127,7 +140,7 @@ function ForBusinessPage() {
 									<dd className="font-heading text-3xl font-bold tabular-nums text-role-primary md:text-4xl">
 										{s.value}
 									</dd>
-									<dt className="mt-1 text-sm text-white/55">{s.label}</dt>
+									<dt className="mt-1 text-sm text-white/70">{s.label}</dt>
 								</div>
 							))}
 						</dl>
@@ -174,30 +187,7 @@ function ForBusinessPage() {
 								Tres pasos. Menos de 24 horas para estar activo y vendiendo.
 							</p>
 						</div>
-						<ol className="mt-14 grid gap-6 md:grid-cols-3">
-							{PROCESS.map((s, i) => (
-								<li
-									key={s.n}
-									className={`relative reveal reveal-delay-${i + 1}`}
-								>
-									{i < PROCESS.length - 1 ? (
-										<span
-											className="pointer-events-none absolute left-[4.5rem] right-[-0.75rem] top-6 hidden h-px bg-line md:block"
-											aria-hidden="true"
-										/>
-									) : null}
-									<p className="font-display text-4xl font-medium text-forest/30">
-										{s.n}
-									</p>
-									<h3 className="mt-4 font-display text-xl font-medium tracking-tight">
-										{s.title}
-									</h3>
-									<p className="mt-2 text-sm leading-relaxed text-ink-soft">
-										{s.body}
-									</p>
-								</li>
-							))}
-						</ol>
+						<StepsGrid steps={PROCESS} />
 					</div>
 				</section>
 
@@ -239,7 +229,7 @@ function ForBusinessPage() {
 							</span>
 							<span>
 								<span className="block text-sm font-semibold">Carlos Ruiz</span>
-								<span className="block text-xs text-muted">
+								<span className="block text-xs text-sage">
 									Panadería La Espiga
 								</span>
 							</span>

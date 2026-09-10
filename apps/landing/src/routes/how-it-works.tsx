@@ -16,8 +16,15 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/how-it-works")({
+	head: () =>
+		pageHead(
+			"/how-it-works",
+			"Cómo funciona Rolé",
+			"Reserva en la app, recoge en el negocio y salva comida: así de simple funciona Rolé.",
+		),
 	component: HowItWorksPage,
 });
 
@@ -103,13 +110,13 @@ function HowItWorksPage() {
 						<div className="mt-10 flex flex-wrap gap-4 reveal reveal-delay-3">
 							<a
 								href="role://"
-								className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
+								className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 							>
 								Consigue la app
 							</a>
 							<Link
 								to="/for-business"
-								className="rounded-full border border-white/25 px-7 py-3 font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.98]"
+								className="rounded-full border border-white/25 px-7 py-3 font-semibold text-white transition-[background-color,box-shadow,transform] duration-200 hover:bg-white/10 active:scale-[0.98]"
 							>
 								Soy negocio
 							</Link>

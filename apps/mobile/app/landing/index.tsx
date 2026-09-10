@@ -16,7 +16,7 @@ export default function LandingScreen() {
 					<AppText
 						variant="h1"
 						weight="extraBold"
-						style={{ color: "#fff", textAlign: "center" }}
+						style={{ color: colors.primaryForeground, textAlign: "center" }}
 					>
 						{strings.landing.heroTitleA}
 						<AppText
@@ -29,7 +29,7 @@ export default function LandingScreen() {
 					</AppText>
 					<AppText
 						variant="bodyLarge"
-						style={{ color: "#FFF", opacity: 0.9, textAlign: "center" }}
+						style={{ color: colors.primaryForeground, opacity: 0.9, textAlign: "center" }}
 					>
 						{strings.landing.heroBody}
 					</AppText>
@@ -140,7 +140,7 @@ export default function LandingScreen() {
 										{ backgroundColor: colors.primary },
 									]}
 								>
-									<AppText variant="h4" weight="bold" style={{ color: "#fff" }}>
+									<AppText variant="h4" weight="bold" style={{ color: colors.primaryForeground }}>
 										{s.step}
 									</AppText>
 								</View>

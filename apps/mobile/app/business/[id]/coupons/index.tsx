@@ -73,7 +73,7 @@ export default function BusinessCouponsScreen() {
 				<Button
 					label={strings.business.couponNew}
 					size="sm"
-					icon={<Ionicons name="add" size={18} color="#fff" />}
+					icon={<Ionicons name="add" size={18} color={colors.primaryForeground} />}
 					style={styles.newButton}
 					onPress={() =>
 						router.push(`/business/${businessId}/coupons/new`)

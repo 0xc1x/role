@@ -3,9 +3,16 @@ import {
 	type Coupon,
 	type Order,
 	type OrderStatus as OrderStatusType,
+	type ReserveOfferErrorCode,
 } from "@0xc1x/role-commons";
+import type { BadgeTone } from "@/core/ui";
 
 export type { OrderStatusType };
+
+/** Valor escaneable del QR de recogida (contrato con el escáner del negocio). */
+export function pickupQrValue(orderId: string, pickupCode: string): string {
+	return `role://order/${orderId}/${pickupCode}`;
+}
 
 export const orderStatusLabels: Record<OrderStatusType, string> = {
 	pending: "Pendiente",
@@ -30,6 +37,26 @@ export function isTerminalStatus(status: OrderStatusType): boolean {
 
 export function isActiveStatus(status: OrderStatusType): boolean {
 	return !TERMINAL.has(status);
+}
+
+/** Presentational mapping of order status → badge tone (pure, shared consumer/business). */
+export function orderStatusTone(status: OrderStatusType): BadgeTone {
+	switch (status) {
+		case "pending":
+			return "warning";
+		case "confirmed":
+			return "info";
+		case "ready_for_pickup":
+			return "brand";
+		case "picked_up":
+			return "info";
+		case "completed":
+			return "success";
+		case "cancelled":
+			return "neutral";
+		case "expired":
+			return "danger";
+	}
 }
 
 /** Legal status transitions per the order lifecycle in commons. */
@@ -92,9 +119,10 @@ export function lastEventTimeFor(
 	statuses: readonly OrderStatusType[],
 	fallback: string,
 ): string {
+	const wanted = new Set(statuses);
 	let last: string | null = null;
 	for (const event of events) {
-		if (!statuses.includes(event.status)) continue;
+		if (!wanted.has(event.status)) continue;
 		if (last == null || event.created_at > last) last = event.created_at;
 	}
 	return last ?? fallback;
@@ -157,7 +185,8 @@ export interface ReservationSuccess {
 
 export interface ReservationFailure {
 	ok: false;
-	errorCode: string;
+	/** Códigos del contrato `reserve_offer` en commons + guardas locales del repo. */
+	errorCode: ReserveOfferErrorCode | "NOT_AUTHENTICATED" | "UNKNOWN";
 	message: string;
 }
 
@@ -168,4 +197,51 @@ export interface CancelOrderResult {
 	orderId?: string;
 	errorCode?: string;
 	message?: string;
+}
+
+// ─── History date filter (shared consumer/business) ───────────────────
+
+export type HistoryPeriod = "today" | "week" | "all";
+
+/** Lunes 00:00 → domingo 23:59 de la semana con offset (0 = actual). */
+export function getWeekRange(now: Date, weekOffset: number): { monday: Date; sunday: Date } {
+	const base = new Date(now);
+	base.setDate(base.getDate() + weekOffset * 7);
+	const day = base.getDay() === 0 ? 7 : base.getDay();
+	const monday = new Date(base);
+	monday.setDate(base.getDate() - day + 1);
+	monday.setHours(0, 0, 0, 0);
+	const sunday = new Date(monday);
+	sunday.setDate(monday.getDate() + 6);
+	sunday.setHours(23, 59, 59, 999);
+	return { monday, sunday };
+}
+
+export function formatDayMonth(d: Date): string {
+	return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Filtra items con `order.created_at` según período del historial. */
+export function filterByHistoryPeriod<T extends { order: Pick<Order, "created_at"> }>(
+	items: readonly T[],
+	period: HistoryPeriod,
+	weekOffset: number,
+	now: Date = new Date(),
+): T[] {
+	if (period === "all") return [...items];
+	if (period === "today") {
+		const start = new Date(now);
+		start.setHours(0, 0, 0, 0);
+		const end = new Date(now);
+		end.setHours(23, 59, 59, 999);
+		return items.filter((i) => {
+			const d = new Date(i.order.created_at);
+			return d >= start && d <= end;
+		});
+	}
+	const { monday, sunday } = getWeekRange(now, weekOffset);
+	return items.filter((i) => {
+		const d = new Date(i.order.created_at);
+		return d >= monday && d <= sunday;
+	});
 }

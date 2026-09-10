@@ -12,6 +12,7 @@ import type {
 	CancelOrderResult,
 	OrderDetail,
 	OrderStatusEvent,
+	ReservationFailure,
 	ReservationResult,
 } from "../domain/order";
 
@@ -71,9 +72,13 @@ export const orderRepository = {
 					discount: num(result.discount) ?? 0,
 				};
 			}
+			const rawErrorCode = result.error;
 			return {
 				ok: false,
-				errorCode: String(result.error ?? "UNKNOWN"),
+				errorCode:
+					typeof rawErrorCode === "string"
+						? (rawErrorCode as ReservationFailure["errorCode"])
+						: "UNKNOWN",
 				message: String(result.message ?? "Error al reservar"),
 			};
 		} catch (e) {
@@ -116,12 +121,55 @@ export const orderRepository = {
 		orderId: string,
 		status: OrderStatusType,
 	): Promise<void> {
-		const { error } = await supabase
-			.from("orders")
-			.update({ status })
-			.eq("id", orderId);
+		// RPC `set_order_status`: ownership + matriz de transiciones + restock
+		// en cancelación viven server-side (el UPDATE directo chocaba con el
+		// with_check de RLS para pending→cancelled).
+		const { data, error } = await supabase.rpc("set_order_status", {
+			p_order_id: orderId,
+			p_status: status,
+		});
 		if (error)
 			throw toAppError(error, "Error al actualizar el estado del pedido");
+		const result = (data ?? {}) as Record<string, unknown>;
+		if (result.success !== true) {
+			throw Errors.businessRule(
+				typeof result.message === "string"
+					? result.message
+					: "No se pudo actualizar el estado del pedido",
+				typeof result.error === "string" ? result.error : undefined,
+			);
+		}
+	},
+
+	/**
+	 * Cancels an order as the business via the `cancel_order` RPC
+	 * (`p_business_id`): ownership, rules and stock restock are server-side.
+	 */
+	async cancelOrderForBusiness(
+		orderId: string,
+		businessId: string,
+	): Promise<CancelOrderResult> {
+		try {
+			const { data, error } = await supabase.rpc("cancel_order", {
+				p_order_id: orderId,
+				p_business_id: businessId,
+			});
+			if (error) throw toAppError(error, "Error al cancelar el pedido");
+			const result = (data ?? {}) as Record<string, unknown>;
+			if (result.success === true) {
+				return {
+					success: true,
+					orderId: result.order_id ? String(result.order_id) : undefined,
+				};
+			}
+			return {
+				success: false,
+				errorCode: String(result.error ?? "UNKNOWN"),
+				message: String(result.message ?? "Error al cancelar"),
+			};
+		} catch (e) {
+			throw toAppError(e, "Error al cancelar el pedido");
+		}
 	},
 
 	/** Cancels an order via the `cancel_order` RPC (server-side rules). */
@@ -274,6 +322,10 @@ function mapOrderDetail(row: Row): OrderDetail {
 		pickup_code: String(row.pickup_code ?? ""),
 		pickup_time: (row.pickup_time as string | null) ?? null,
 		coupon_id: (row.coupon_id as string | null) ?? null,
+		commission_rate: num(row.commission_rate) ?? 0,
+		platform_fee: num(row.platform_fee) ?? 0,
+		net_amount: num(row.net_amount) ?? 0,
+		payout_id: (row.payout_id as string | null) ?? null,
 		created_at: String(row.created_at ?? ""),
 		updated_at: String(row.updated_at ?? ""),
 	};

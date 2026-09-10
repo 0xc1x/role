@@ -7,6 +7,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DataTable } from "@/components/data-table/data-table";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Button } from "@/components/ui/button";
 import {
 	InputGroup,
@@ -20,9 +21,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { slidesColumns } from "@/features/slides";
-import { SlideCreateDrawer } from "@/features/slides/components/slide-create-drawler";
+import { SlideCreateDrawer } from "@/features/slides/components/slide-create-drawer";
 import {
 	slidesListOptions,
 	useSlideList,
@@ -74,20 +74,7 @@ function RouteComponent() {
 		return () => clearTimeout(timer);
 	}, [searchInput, search.search, search.limit, search.active, navigate]);
 	if (isLoading) {
-		return (
-			<div className="px-6 py-4 space-y-4">
-				<div className="flex items-center justify-between">
-					<Skeleton className="h-8 w-48" />
-					<Skeleton className="h-10 w-32" />
-				</div>
-				<Skeleton className="h-6 w-24" />
-				<div className="space-y-2">
-					{[1, 2, 3, 4, 5].map((n) => (
-						<Skeleton key={n} className="h-12 w-full" />
-					))}
-				</div>
-			</div>
-		);
+		return <PageSkeleton />;
 	}
 
 	if (isError) {

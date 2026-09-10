@@ -7,7 +7,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { ThemeProvider } from "next-themes";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useSyncExternalStore } from "react";
 import { getQueryClient } from "@/config/query-client";
 import appCss from "../styles.css?url";
 
@@ -74,11 +74,13 @@ const TanStackRouterDevtoolsPanel = lazy(() =>
 );
 
 function Devtools() {
-	const [mounted, setMounted] = useState(false);
-
-	useEffect(() => {
-		setMounted(true);
-	}, []);
+	// Solo cliente: SSR y primer paint devuelven false (getServerSnapshot),
+	// así el HTML hidratado coincide y los devtools lazy aparecen tras el mount.
+	const mounted = useSyncExternalStore(
+		() => () => {},
+		() => true,
+		() => false,
+	);
 
 	if (!mounted) return null;
 

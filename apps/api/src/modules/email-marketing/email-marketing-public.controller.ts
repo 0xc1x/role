@@ -5,6 +5,7 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  InternalServerErrorException,
   Post,
   Query,
   Req,
@@ -16,7 +17,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { Env } from '../../config/env.schema';
 import { Public } from '../../common/decorators/public.decorator';
 import { RendererService } from './renderer.service';
-import { EmailMarketingRepository } from './email-marketing.repository';
+import { CampaignsService } from './campaigns.service';
 
 /**
  * Rutas públicas del módulo: webhook de Resend y desuscripción por enlace.
@@ -25,7 +26,7 @@ import { EmailMarketingRepository } from './email-marketing.repository';
 @Controller('email-marketing')
 export class EmailMarketingPublicController {
   constructor(
-    private readonly repository: EmailMarketingRepository,
+    private readonly campaignsService: CampaignsService,
     private readonly renderer: RendererService,
     private readonly config: ConfigService<Env, true>,
   ) {}
@@ -53,7 +54,7 @@ export class EmailMarketingPublicController {
     const resendId = event.data?.id;
     if (!resendId || !event.type) return { ok: true };
 
-    await this.repository.applyResendEvent(resendId, event.type);
+    await this.campaignsService.applyResendEvent(resendId, event.type);
     return { ok: true };
   }
 
@@ -69,7 +70,7 @@ export class EmailMarketingPublicController {
     if (!this.renderer.verifyUnsubscribeToken(userId, signature)) {
       throw new BadRequestException('Token inválido');
     }
-    await this.repository.unsubscribe(userId);
+    await this.campaignsService.unsubscribe(userId);
     return `
       <!doctype html>
       <html lang="es">
@@ -89,7 +90,17 @@ export class EmailMarketingPublicController {
     payload: string;
   }): void {
     const secret = this.config.get('RESEND_WEBHOOK_SECRET', { infer: true });
-    if (!secret) return; // dev sin secret: no se verifica
+    if (!secret) {
+      // Fail-closed: en dev sin secret se acepta sin verificar, pero en
+      // producción bootear sin secret no debería ser posible (validateEnv
+      // lo exige) — si llegó aquí, rechazar en vez de aceptar forjados.
+      if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+        throw new InternalServerErrorException(
+          'Webhook no configurado: falta RESEND_WEBHOOK_SECRET',
+        );
+      }
+      return;
+    }
 
     if (!input.id || !input.timestamp || !input.signatureHeader) {
       throw new BadRequestException('Faltan headers de firma svix');

@@ -12,7 +12,7 @@ export const businessNotificationPreferences = pgTable(
   {
     business_id: uuid('business_id')
       .primaryKey()
-      .references(() => businesses.id),
+      .references(() => businesses.id, { onDelete: 'no action' }),
     push_enabled: boolean('push_enabled').notNull().default(true),
     email_enabled: boolean('email_enabled').notNull().default(true),
     sms_enabled: boolean('sms_enabled').notNull().default(false),

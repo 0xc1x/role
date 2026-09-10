@@ -14,6 +14,13 @@ g.Node ??= happy.Node;
 g.Event ??= happy.Event;
 g.CustomEvent ??= happy.CustomEvent;
 g.getComputedStyle ??= happy.getComputedStyle.bind(happy);
+g.MutationObserver ??= happy.MutationObserver;
+// Base UI usa requestAnimationFrame para transiciones (happy-dom no lo define).
+if (typeof g.requestAnimationFrame !== "function") {
+	g.requestAnimationFrame = ((cb: FrameRequestCallback) =>
+		setTimeout(() => cb(Date.now()), 0)) as unknown;
+	g.cancelAnimationFrame = ((id: number) => clearTimeout(id)) as unknown;
+}
 
 export const { render, screen, fireEvent, waitFor, cleanup, renderHook } =
 	await import("@testing-library/react");

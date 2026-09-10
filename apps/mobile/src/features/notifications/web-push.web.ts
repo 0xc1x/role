@@ -1,5 +1,6 @@
-import { supabase } from "@/core/supabase/client";
 import { env } from "@/core/config/env";
+import { Errors } from "@/core/error/app-error";
+import { upsertDeviceToken } from "./data/repository";
 
 /**
  * Web push (PWA) via Firebase Cloud Messaging. Native uses expo-notifications
@@ -47,14 +48,13 @@ export async function syncWebPushToken(
 	) {
 		// Sin esto, @firebase/installations lanza el criptico
 		// "installations/missing-app-config-values".
-		throw new Error(
+		throw Errors.unknown(
 			"Push web no configurado: faltan EXPO_PUBLIC_FIREBASE_* en .env",
 		);
 	}
 
-	const { getApps, initializeApp } = await import("firebase/app");
-	const { getMessaging, getToken, onMessage, isSupported, deleteToken } =
-		await import("firebase/messaging");
+	const [{ getApps, initializeApp }, { getMessaging, getToken, onMessage, isSupported, deleteToken }] =
+		await Promise.all([import("firebase/app"), import("firebase/messaging")]);
 
 	if (!(await isSupported())) return false;
 
@@ -81,22 +81,14 @@ export async function syncWebPushToken(
 	});
 	if (!token) return false;
 
-	const { error } = await supabase
-		.from("device_tokens")
-		.upsert(
-			{
-				user_id: userId,
-				token,
-				platform: "web",
-				is_active: true,
-			},
-			{ onConflict: "token" },
-		);
-	if (error) {
+	try {
+		await upsertDeviceToken(userId, token, "web");
+	} catch (error) {
 		// 23505 = token duplicado: ya está registrado, es éxito para el flujo.
-		if (error.code === "23505") return true;
+		const code = (error as { code?: string }).code;
+		if (code === "23505") return true;
 		throw Object.assign(new Error("Error al registrar el dispositivo"), {
-			code: error.code,
+			code,
 		});
 	}
 

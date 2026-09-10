@@ -33,6 +33,7 @@ export const useUpdateCategory = createUseUpdate<
 >(categoriesKeys, categoriesApi.update);
 
 export function useUploadImage() {
+	// react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation -- upload returns URL used directly in form, no cached list goes stale
 	return useMutation({
 		mutationFn: (file: File) => categoriesApi.uploadImage(file),
 	});

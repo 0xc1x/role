@@ -4,6 +4,15 @@ import { fireEvent, render, screen } from "@/test-utils/dom";
 
 mock.module("@/components/navbar", () => ({ Navbar: () => null }));
 mock.module("@/components/footer", () => ({ Footer: () => null }));
+// La página usa <Link> del router; fuera de un RouterProvider crashea React.
+// Para el test basta un Link tonto y un createFileRoute que devuelva options.
+mock.module("@tanstack/react-router", () => ({
+	createFileRoute: () => (options: unknown) => ({ options }),
+	Link: (props: { children?: React.ReactNode; className?: string }) => (
+		// biome-ignore lint/a11y/useValidAnchor: mock de test sin router
+		<a className={props.className}>{props.children}</a>
+	),
+}));
 
 import { Route } from "../business-signup";
 
@@ -65,11 +74,7 @@ describe("BusinessSignupPage", () => {
 	test("valida campos requeridos y contraseñas", async () => {
 		const { captured } = setup();
 		fireEvent.click(screen.getByRole("button", { name: "Registrar negocio" }));
-		expect(
-			await screen.findByText(
-				"Completa todos los campos y verifica la contraseña",
-			),
-		).toBeDefined();
+		expect(await screen.findByText("Ingresa un email válido")).toBeDefined();
 		expect(captured).toHaveLength(0);
 	});
 

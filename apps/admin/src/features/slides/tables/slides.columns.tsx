@@ -70,11 +70,14 @@ export const columns: ColumnDef<SlideDto>[] = [
 		),
 	},
 	{
-		accessorKey: "badge",
+		accessorKey: "badge_text",
 		header: ({ column }) => (
 			<DataTableColumnHeader column={column} title="Badge" />
 		),
-		cell: ({ row }) => <Badge>{row.getValue("badge_text")}</Badge>,
+		cell: ({ row }) => {
+			const text = row.getValue<string | null>("badge_text");
+			return text ? <Badge>{text}</Badge> : null;
+		},
 	},
 	{
 		accessorKey: "cta",

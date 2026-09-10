@@ -163,3 +163,50 @@ export function usePaymentMethods(userId: string) {
 		enabled: userId.length > 0,
 	});
 }
+
+export function useSetDefaultPaymentMethod(userId: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (id: string) =>
+			profileRepository.setDefaultPaymentMethod(userId, id),
+		onSuccess: () =>
+			void queryClient.invalidateQueries({ queryKey: ["paymentMethods", userId] }),
+	});
+}
+
+export function useDeletePaymentMethod(userId: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (id: string) => profileRepository.deletePaymentMethod(userId, id),
+		onSuccess: () =>
+			void queryClient.invalidateQueries({ queryKey: ["paymentMethods", userId] }),
+	});
+}
+
+/** Guarda perfil + email (store de sesión se sincroniza vía fetchProfile). */
+export function useSaveProfileWithEmail(userId: string, currentEmail: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (input: {
+			fullName: string;
+			email: string;
+			phone: string | null;
+			city: string | null;
+		}) => {
+			await profileRepository.updateProfile(userId, {
+				full_name: input.fullName,
+				email: input.email,
+				phone: input.phone,
+				city: input.city,
+			});
+			const emailChanged = input.email !== currentEmail;
+			if (emailChanged) {
+				await authRepository.updateEmail(input.email);
+			}
+			return { emailChanged };
+		},
+		onSuccess: () => {
+			void queryClient.invalidateQueries({ queryKey: ["userStats", userId] });
+		},
+	});
+}

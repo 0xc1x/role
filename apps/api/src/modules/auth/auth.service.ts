@@ -105,7 +105,11 @@ export class AuthService {
     const { data, error } = await this.supabaseAdmin.auth.admin.createUser({
       email: body.email,
       password: body.password,
-      email_confirm: true,
+      // Verificación por email: sin confirmar no hay sesión. El trigger
+      // handle_new_user crea la fila profiles con full_name del metadata y
+      // sus triggers crean preferencias/consents (equivalencia ADR-0008).
+      email_confirm: false,
+      user_metadata: { full_name: body.full_name },
     });
 
     if (error) {
@@ -115,45 +119,12 @@ export class AuthService {
       throw new InternalServerErrorException(error.message);
     }
 
-    const user = data.user;
-
-    await this.db.insert(profiles).values({
-      id: user.id,
-      email: body.email,
-      full_name: body.full_name,
-      role: 'user',
-    });
-
-    const { data: signInData, error: signInError } =
-      await this.supabaseAnon.auth.signInWithPassword({
-        email: body.email,
-        password: body.password,
-      });
-
-    if (signInError || !signInData.session) {
-      return {
-        id: user.id,
-        email: body.email,
-        message: 'Account created. Please sign in with your credentials.',
-      };
-    }
-
-    const session = signInData.session;
-
+    // El perfil lo crea el trigger handle_new_user sobre auth.users: un
+    // INSERT local colisionaría por PK con el trigger activo.
     return {
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
-      expires_in: session.expires_in,
-      expires_at: session.expires_at
-        ? new Date(session.expires_at * 1000).toISOString()
-        : null,
-      user: {
-        id: user.id,
-        email: body.email,
-        full_name: body.full_name,
-        avatar_url: null,
-        role: 'user' as const,
-      },
+      id: data.user.id,
+      email: data.user.email,
+      message: 'Account created. Please confirm your email and sign in.',
     };
   }
 
@@ -206,15 +177,25 @@ export class AuthService {
     };
   }
 
-  async logout(_body: LogoutRequest): Promise<{ message: string }> {
-    // Refresh/access tokens are client-held; global signOut clears server session cookies if any.
-    void _body;
-    const { error } = await this.supabaseAnon.auth.signOut({
-      scope: 'global',
-    });
+  async logout(body: LogoutRequest): Promise<{ message: string }> {
+    // Revocación real: intercambia el refresh por un access y pide a GoTrue
+    // cerrar esa sesión (scope local). Un refresh ya revocado o expirado no
+    // es un error de logout (idempotente).
+    if (body.refresh_token) {
+      const { data, error } = await this.supabaseAnon.auth.refreshSession({
+        refresh_token: body.refresh_token,
+      });
 
-    if (error) {
-      throw new InternalServerErrorException(error.message);
+      if (!error && data.session) {
+        const { error: signOutError } =
+          await this.supabaseAdmin.auth.admin.signOut(
+            data.session.access_token,
+            'local',
+          );
+        if (signOutError) {
+          throw new InternalServerErrorException(signOutError.message);
+        }
+      }
     }
 
     return { message: 'Logged out successfully' };

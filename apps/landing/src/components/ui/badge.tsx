@@ -10,6 +10,8 @@ const badgeVariants = cva(
 		variants: {
 			variant: {
 				default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+				brand: "bg-role-primary text-white [a]:hover:bg-role-primary-hover",
+				"brand-deep": "bg-role-primary-deep text-white",
 				secondary:
 					"bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
 				destructive:
@@ -49,4 +51,4 @@ function Badge({
 	});
 }
 
-export { Badge, badgeVariants };
+export { Badge };

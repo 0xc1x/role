@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
@@ -37,13 +37,14 @@ export function LocationForm({
 	const [address, setAddress] = useState(initial?.address ?? "");
 	const [phone, setPhone] = useState(initial?.phone ?? "");
 	const [zone, setZone] = useState<string | null>(initial?.zone ?? null);
-	const [lat, setLat] = useState(initial?.latitude ?? 0);
-	const [lng, setLng] = useState(initial?.longitude ?? 0);
+	// Solo se leen en el submit: refs, no estado (evitan re-renders por mover el pin).
+	const latRef = useRef(initial?.latitude ?? 0);
+	const lngRef = useRef(initial?.longitude ?? 0);
 	const [touched, setTouched] = useState(Boolean(initial));
 
 	const onMapRegion = (region: MapRegion) => {
-		setLat(region.latitude);
-		setLng(region.longitude);
+		latRef.current = region.latitude;
+		lngRef.current = region.longitude;
 		setTouched(true);
 		if (region.address) setAddress(region.address);
 		if (region.zone) setZone(region.zone);
@@ -122,7 +123,7 @@ export function LocationForm({
 				value={phone}
 				onChangeText={setPhone}
 				keyboardType="phone-pad"
-				placeholder="+593 98 765 4321"
+				placeholder={strings.business.locationPhoneHint}
 			/>
 
 			{error ? (
@@ -145,8 +146,8 @@ export function LocationForm({
 						name: name.trim(),
 						address: address.trim(),
 						phone: phone.trim() || "",
-						latitude: lat,
-						longitude: lng,
+						latitude: latRef.current,
+						longitude: lngRef.current,
 						zone,
 					})
 				}

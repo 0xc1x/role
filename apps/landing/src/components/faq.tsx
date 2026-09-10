@@ -5,25 +5,7 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
-
-const ITEMS = [
-	{
-		q: "¿Füdi es lo mismo que Rolé?",
-		a: "No. Füdi es la compañía y la plataforma. Rolé es el primer producto: la app para usuarios y locales que rescatan excedente. Distro cubre distribución de corto radio y Lab, los modelos de demanda y merma.",
-	},
-	{
-		q: "¿Cuánto cuesta?",
-		a: "Rolé para quien rescata no tiene suscripción. Los locales eligen un plan y una comisión por bolsa. Te armamos una propuesta, no un precio genérico.",
-	},
-	{
-		q: "¿Dónde operan?",
-		a: "El lanzamiento cubre Santo Domingo. Pronto estaremos en más cerca de ti en más ciudades.",
-	},
-	{
-		q: "¿Cómo empiezo?",
-		a: "Si eres un local, entra a Rolé y pide acceso, o déjanos tus datos y armamos un piloto de unas cuantas semanas.",
-	},
-];
+import { FAQ_ITEMS } from "@/lib/faq";
 
 export function Faq() {
 	return (
@@ -36,7 +18,7 @@ export function Faq() {
 					</h2>
 				</div>
 				<Accordion className="flex flex-col reveal reveal-delay-1">
-					{ITEMS.map((item, i) => (
+					{FAQ_ITEMS.map((item, i) => (
 						<AccordionItem
 							key={item.q}
 							value={item.q}

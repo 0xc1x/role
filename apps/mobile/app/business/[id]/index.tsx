@@ -1,4 +1,5 @@
 import { type Href, router, useLocalSearchParams } from "expo-router";
+import { memo, useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
@@ -20,6 +21,17 @@ export default function BusinessHubScreen() {
 		refetch,
 	} = useBusinessProfile(businessId);
 
+	const handleMenuPress = useCallback((route: string) => {
+		router.push(route as Href);
+	}, []);
+
+	const renderItem = useCallback(
+		({ item }: { item: { label: string; route: string } }) => (
+			<MenuRow label={item.label} route={item.route} onPress={handleMenuPress} />
+		),
+		[handleMenuPress],
+	);
+
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -40,10 +52,11 @@ export default function BusinessHubScreen() {
 			label: strings.business.coupons,
 			route: `/business/${businessId}/coupons`,
 		},
-		{
-			label: strings.business.payments,
-			route: `/business/${businessId}/payouts`,
-		},
+		// Oculto hasta habilitar la pasarela de pagos
+		// {
+		// 	label: strings.business.payments,
+		// 	route: `/business/${businessId}/payouts`,
+		// },
 		{
 			label: strings.business.notifications,
 			route: `/business/${businessId}/notifications`,
@@ -101,21 +114,33 @@ export default function BusinessHubScreen() {
 					scrollEnabled={false}
 					keyExtractor={(item) => item.label}
 					ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-					renderItem={({ item }) => (
-						<Card onPress={() => router.push(item.route as Href)}>
-							<View style={styles.rowBetween}>
-								<AppText variant="bodyMedium">{item.label}</AppText>
-								<AppText variant="bodyMedium" style={{ color: "gray" }}>
-									›
-								</AppText>
-							</View>
-						</Card>
-					)}
+					renderItem={renderItem}
 				/>
 			</View>
 		</Screen>
 	);
 }
+
+const MenuRow = memo(function MenuRow({
+	label,
+	route,
+	onPress,
+}: {
+	label: string;
+	route: string;
+	onPress: (route: string) => void;
+}) {
+	return (
+		<Card onPress={() => onPress(route)}>
+			<View style={styles.rowBetween}>
+				<AppText variant="bodyMedium">{label}</AppText>
+				<AppText variant="bodyMedium" style={{ color: "gray" }}>
+					›
+				</AppText>
+			</View>
+		</Card>
+	);
+});
 
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, flex: 1 },

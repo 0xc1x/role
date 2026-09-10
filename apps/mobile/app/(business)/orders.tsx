@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import {
@@ -13,6 +13,7 @@ import {
 	LoadingView,
 	Screen,
 	SearchBar,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import {
@@ -26,7 +27,8 @@ import {
 	type OrdersSort,
 	type OrdersTab,
 } from "@/features/business/domain/orders";
-import { orderStatusLabels } from "@/features/orders/domain/order";
+import { orderStatusLabels, filterByHistoryPeriod, type HistoryPeriod } from "@/features/orders/domain/order";
+import { HistoryDateFilter } from "@/features/orders/components/HistoryDateFilter";
 import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
 import { BranchSelector } from "@/features/business/components/products/BranchSelector";
 import { OrderStatsRow } from "@/features/business/components/orders/OrderStatsRow";
@@ -54,6 +56,7 @@ export default function BusinessOrdersScreen() {
 		isError,
 		error,
 		refetch,
+		isFetching,
 	} = useBusinessOrders(businessId);
 
 	const [tab, setTab] = useState<OrdersTab>("active");
@@ -61,8 +64,12 @@ export default function BusinessOrdersScreen() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [status, setStatus] = useState<OrderStatusType | null>(null);
 	const [sort, setSort] = useState<OrdersSort>("newest");
-	const [historyPeriod, setHistoryPeriod] = useState<"today" | "week" | "all">("week");
+	const [historyPeriod, setHistoryPeriod] = useState<HistoryPeriod>("week");
 	const [weekOffset, setWeekOffset] = useState(0);
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
 
 	useEffect(() => {
 		setTab("active");
@@ -72,6 +79,30 @@ export default function BusinessOrdersScreen() {
 		setSort("newest");
 	}, [businessId]);
 
+	const filtered = useMemo(() => {
+		const baseFiltered = filterAndSortOrders(orders ?? [], {
+			tab,
+			branchId,
+			status,
+			searchQuery,
+			sort,
+		});
+		if (tab !== "history" || historyPeriod === "all") return baseFiltered;
+		return filterByHistoryPeriod(baseFiltered, historyPeriod, weekOffset);
+	}, [orders, tab, branchId, status, searchQuery, sort, historyPeriod, weekOffset]);
+
+	const renderItem = useCallback(
+		({ item }: { item: (typeof filtered)[number] }) => (
+			<OrderCard businessId={businessId} item={item} />
+		),
+		[businessId],
+	);
+
+	const renderSeparator = useCallback(
+		() => <View style={styles.separator} />,
+		[],
+	);
+
 	if (businessesLoading || !business) {
 		if (!businessesLoading && !business) {
 			return <NoBusinessPrompt />;
@@ -80,33 +111,6 @@ export default function BusinessOrdersScreen() {
 	}
 
 	const stats = orderStats(orders ?? []);
-	const baseFiltered = filterAndSortOrders(orders ?? [], {
-		tab,
-		branchId,
-		status,
-		searchQuery,
-		sort,
-	});
-	const filtered = useMemo(() => {
-		if (tab !== "history" || historyPeriod === "all") return baseFiltered;
-		const now = new Date();
-		if (historyPeriod === "today") {
-			const start = new Date(now); start.setHours(0,0,0,0);
-			const end = new Date(now); end.setHours(23,59,59,999);
-			return baseFiltered.filter((i) => {
-				const d = new Date(i.order.created_at);
-				return d >= start && d <= end;
-			});
-		}
-		const base = new Date(now); base.setDate(base.getDate() + weekOffset * 7);
-		const day = base.getDay() === 0 ? 7 : base.getDay();
-		const monday = new Date(base); monday.setDate(base.getDate() - day + 1); monday.setHours(0,0,0,0);
-		const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23,59,59,999);
-		return baseFiltered.filter((i) => {
-			const d = new Date(i.order.created_at);
-			return d >= monday && d <= sunday;
-		});
-	}, [baseFiltered, tab, historyPeriod, weekOffset]);
 
 	const isHistory = tab === "history";
 
@@ -125,164 +129,113 @@ export default function BusinessOrdersScreen() {
 				) : null}
 			</View>
 
-			<ScrollView
+			{pull.indicator}
+			<FlatList
+				ref={pull.ref}
+				data={filtered}
+				keyExtractor={(item) => item.order.id}
+				renderItem={renderItem}
+				ItemSeparatorComponent={renderSeparator}
 				showsVerticalScrollIndicator={false}
 				contentContainerStyle={styles.content}
-			>
-				<OrderStatsRow stats={stats} />
-
-				<OrdersTabs tab={tab} onChange={setTab} />
-
-				{isHistory ? (
-					<HistoryDateFilter
-						period={historyPeriod}
-						weekOffset={weekOffset}
-						onPeriodChange={(p) => {
-							setHistoryPeriod(p);
-							if (p !== "week") setWeekOffset(0);
-						}}
-						onWeekChange={setWeekOffset}
+				refreshControl={
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
 					/>
-				) : null}
+				}
+				ListHeaderComponent={
+					<View style={styles.headerContainer}>
+						<OrderStatsRow stats={stats} />
 
-				<View style={styles.searchRow}>
-					<SearchBar
-						value={searchQuery}
-						onChangeText={setSearchQuery}
-						placeholder={strings.business.ordersSearchHint}
-						containerStyle={styles.searchBarFull}
-					/>
-				</View>
-				<View style={styles.filterRow}>
-					<OrdersFiltersControl status={status} onApply={setStatus} />
-					<OrdersSortControl value={sort} onChange={setSort} />
-				</View>
+						<OrdersTabs tab={tab} onChange={setTab} />
 
-				{status ? (
-					<View style={styles.chipsRow}>
-						<FilterChip
-							label={orderStatusLabels[status]}
-							onClear={() => setStatus(null)}
-						/>
+						{isHistory ? (
+							<HistoryDateFilter
+								period={historyPeriod}
+								weekOffset={weekOffset}
+								onPeriodChange={(p) => {
+									setHistoryPeriod(p);
+									if (p !== "week") setWeekOffset(0);
+								}}
+								onWeekChange={setWeekOffset}
+							/>
+						) : null}
+
+						<View style={styles.searchRow}>
+							<SearchBar
+								value={searchQuery}
+								onChangeText={setSearchQuery}
+								placeholder={strings.business.ordersSearchHint}
+								containerStyle={styles.searchBarFull}
+							/>
+						</View>
+						<View style={styles.filterRow}>
+							<OrdersFiltersControl status={status} onApply={setStatus} />
+							<OrdersSortControl value={sort} onChange={setSort} />
+						</View>
+
+						{status ? (
+							<View style={styles.chipsRow}>
+								<FilterChip
+									label={orderStatusLabels[status]}
+									onClear={() => setStatus(null)}
+								/>
+							</View>
+						) : null}
+
+						{isLoading ? <LoadingView /> : null}
+						{isError ? (
+							<ErrorState error={error} onRetry={() => void refetch()} />
+						) : null}
+
+						{!isLoading && !isError && orders && orders.length === 0 ? (
+							<EmptyState
+								icon={
+									<Ionicons
+										name="bag-handle-outline"
+										size={28}
+										color={colors.mutedForeground}
+									/>
+								}
+								title={
+									isHistory
+										? strings.business.ordersNoHistoryTitle
+										: strings.business.ordersNoActiveTitle
+								}
+								message={
+									isHistory
+										? strings.business.ordersNoHistoryBody
+										: strings.business.ordersNoActiveBody
+								}
+							/>
+						) : null}
+
+						{!isLoading &&
+						!isError &&
+						orders &&
+						orders.length > 0 &&
+						filtered.length === 0 ? (
+							<EmptyState
+								icon={
+									<Ionicons
+										name="search-outline"
+										size={28}
+										color={colors.mutedForeground}
+									/>
+								}
+								title={strings.allOffers.noResultsTitle}
+								message={strings.allOffers.noResultsBody}
+							/>
+						) : null}
 					</View>
-				) : null}
-
-				{isLoading ? <LoadingView /> : null}
-				{isError ? (
-					<ErrorState error={error} onRetry={() => void refetch()} />
-				) : null}
-
-				{!isLoading && !isError && orders && orders.length === 0 ? (
-					<EmptyState
-						icon={
-							<Ionicons
-								name="bag-handle-outline"
-								size={28}
-								color={colors.mutedForeground}
-							/>
-						}
-						title={
-							isHistory
-								? strings.business.ordersNoHistoryTitle
-								: strings.business.ordersNoActiveTitle
-						}
-						message={
-							isHistory
-								? strings.business.ordersNoHistoryBody
-								: strings.business.ordersNoActiveBody
-						}
-					/>
-				) : null}
-
-				{!isLoading &&
-				!isError &&
-				orders &&
-				orders.length > 0 &&
-				filtered.length === 0 ? (
-					<EmptyState
-						icon={
-							<Ionicons
-								name="search-outline"
-								size={28}
-								color={colors.mutedForeground}
-							/>
-						}
-						title={strings.allOffers.noResultsTitle}
-						message={strings.allOffers.noResultsBody}
-					/>
-				) : null}
-
-				{filtered.map((item) => (
-					<OrderCard key={item.order.id} businessId={businessId} item={item} />
-				))}
-			</ScrollView>
+				}
+			/>
 		</Screen>
 	);
 }
-
-function HistoryDateFilter({
-	period,
-	weekOffset,
-	onPeriodChange,
-	onWeekChange,
-}: {
-	period: "today" | "week" | "all";
-	weekOffset: number;
-	onPeriodChange: (p: "today" | "week" | "all") => void;
-	onWeekChange: (o: number) => void;
-}) {
-	const { colors } = useTheme();
-	const now = new Date();
-	const base = new Date(now);
-	base.setDate(base.getDate() + weekOffset * 7);
-	const day = base.getDay() === 0 ? 7 : base.getDay();
-	const monday = new Date(base);
-	monday.setDate(base.getDate() - day + 1);
-	const sunday = new Date(monday);
-	sunday.setDate(monday.getDate() + 6);
-	const fmt = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-	const weekLabel = weekOffset === 0 ? "Esta semana" : `${fmt(monday)} - ${fmt(sunday)}`;
-	const isFutureWeek = weekOffset >= 0;
-	return (
-		<View style={historyStyles.wrap}>
-			<View style={historyStyles.chipsRow}>
-				{([
-					{ k: "week" as const, l: "Semana" },
-					{ k: "today" as const, l: "Hoy" },
-					{ k: "all" as const, l: "Todo" },
-				] as const).map((c) => {
-					const sel = period === c.k;
-					return (
-						<Pressable key={c.k} onPress={() => onPeriodChange(c.k)} style={[historyStyles.chip, { borderColor: sel ? colors.primary : colors.borderSolid, backgroundColor: sel ? colors.primary : colors.card }]}>
-							<AppText variant="bodySmall" weight={sel ? "bold" : "regular"} style={{ color: sel ? colors.primaryForeground : colors.mutedForeground }}>
-								{c.l}
-							</AppText>
-						</Pressable>
-					);
-				})}
-			</View>
-			{period === "week" ? (
-				<View style={historyStyles.weekRow}>
-					<Pressable onPress={() => onWeekChange(weekOffset - 1)} hitSlop={8} style={historyStyles.weekBtn}>
-						<Ionicons name="chevron-back" size={18} color={colors.foreground} />
-					</Pressable>
-					<AppText variant="bodySmall" weight="semiBold" style={{ color: colors.foreground }}>{weekLabel}</AppText>
-					<Pressable onPress={() => !isFutureWeek && onWeekChange(weekOffset + 1)} hitSlop={8} style={[historyStyles.weekBtn, isFutureWeek && { opacity: 0.3 }]} disabled={isFutureWeek}>
-						<Ionicons name="chevron-forward" size={18} color={colors.foreground} />
-					</Pressable>
-				</View>
-			) : null}
-		</View>
-	);
-}
-
-const historyStyles = StyleSheet.create({
-	wrap: { paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, gap: spacing.sm },
-	chipsRow: { flexDirection: "row", gap: spacing.sm },
-	chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-	weekRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.xs },
-	weekBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-});
 
 const styles = StyleSheet.create({
 	header: {
@@ -293,10 +246,16 @@ const styles = StyleSheet.create({
 		paddingTop: spacing.xl,
 		paddingBottom: spacing.md,
 	},
+	headerContainer: {
+		gap: spacing.md,
+		marginBottom: spacing.md,
+	},
+	separator: {
+		height: spacing.md,
+	},
 	content: {
 		paddingHorizontal: spacing.xl,
 		paddingBottom: spacing.xxl,
-		gap: spacing.md,
 	},
 	searchRow: {
 		width: "100%",

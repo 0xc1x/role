@@ -1,4 +1,6 @@
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { Eyebrow, Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 
 type CtaProps = {
@@ -43,7 +45,7 @@ const VARIANT_STYLES = {
 export function Cta({
 	variant = "primary",
 	eyebrow = "¿Listo para unirte?",
-	title = "Únete al rol hoy mismo",
+	title = "Únete a Rolé hoy mismo",
 	body = "Descarga la app, encuentra ofertas cerca de ti y empieza a salvar comida hoy mismo.",
 	primaryLabel = "Abrir Rolé",
 	primaryHref = "role://",
@@ -55,9 +57,10 @@ export function Cta({
 }: CtaProps) {
 	const isPrimary = variant === "primary";
 	const styles = VARIANT_STYLES[variant];
+	const secondaryInternal = secondaryHref?.startsWith("/") ?? false;
 
 	return (
-		<section className="mx-auto max-w-6xl px-6 pb-32 pt-24">
+		<Section className="mx-auto max-w-6xl">
 			<div
 				className={`relative overflow-hidden rounded-[var(--radius-section)] px-8 py-20 text-center md:px-16 ${styles.section}`}
 			>
@@ -75,17 +78,13 @@ export function Cta({
 
 				<div className="relative reveal">
 					{icon ? (
-						<div aria-hidden className="mb-4 flex justify-center">
+						<div aria-hidden="true" className="mb-4 flex justify-center">
 							{icon}
 						</div>
 					) : null}
 
 					{eyebrow ? (
-						<p
-							className={`mb-4 text-sm font-semibold uppercase tracking-widest ${styles.eyebrow}`}
-						>
-							{eyebrow}
-						</p>
+						<Eyebrow className={styles.eyebrow}>{eyebrow}</Eyebrow>
 					) : null}
 
 					<h2
@@ -100,21 +99,33 @@ export function Cta({
 
 					<div className="mt-9 flex flex-wrap justify-center gap-4">
 						<Button
-							variant="ghost"
-							render={<a href={primaryHref} />}
+							variant={isPrimary ? "default" : "brand"}
+							render={<a href={primaryHref} aria-label={primaryLabel} />}
 							className={`inline-flex items-center gap-2 rounded-full px-8 py-3 font-semibold active:scale-[0.98] ${styles.primaryButton}`}
 						>
 							{primaryIcon}
 							{primaryLabel}
 						</Button>
 						{secondaryLabel && secondaryHref ? (
-							<Button
-								variant="ghost"
-								render={<a href={secondaryHref} />}
-								className={`rounded-full px-8 py-3 font-semibold ${styles.secondaryButton}`}
-							>
-								{secondaryLabel}
-							</Button>
+							secondaryInternal ? (
+								<Button
+									variant="ghost"
+									render={<Link to={secondaryHref} />}
+									className={`rounded-full px-8 py-3 font-semibold ${styles.secondaryButton}`}
+								>
+									{secondaryLabel}
+								</Button>
+							) : (
+								<Button
+									variant="ghost"
+									render={
+										<a href={secondaryHref} aria-label={secondaryLabel} />
+									}
+									className={`rounded-full px-8 py-3 font-semibold ${styles.secondaryButton}`}
+								>
+									{secondaryLabel}
+								</Button>
+							)
 						) : null}
 					</div>
 
@@ -123,6 +134,6 @@ export function Cta({
 					) : null}
 				</div>
 			</div>
-		</section>
+		</Section>
 	);
 }

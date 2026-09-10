@@ -10,6 +10,5 @@ import { OrdersService } from './orders.service';
   imports: [OffersModule, forwardRef(() => NotificationsModule)],
   controllers: [OrdersController],
   providers: [OrdersService, OrdersRepository, OrdersExpirationJob],
-  exports: [OrdersService, OrdersRepository],
 })
 export class OrdersModule {}

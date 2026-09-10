@@ -190,38 +190,6 @@ export class OrdersRepository {
   }
 
   /**
-   * Orders that should expire: pending/ready whose offer pickup window ended.
-   * Joined against offers via offer_id; caller filters by pickup_end.
-   */
-  async listExpirableIds(
-    tx: DbExecutor,
-    offerIdsWithEndedPickup: string[],
-  ): Promise<Array<typeof orders.$inferSelect>> {
-    if (offerIdsWithEndedPickup.length === 0) return [];
-    return tx
-      .select()
-      .from(orders)
-      .where(
-        and(
-          inArray(orders.offer_id, offerIdsWithEndedPickup),
-          inArray(orders.status, ['pending', 'ready_for_pickup']),
-        ),
-      )
-      .for('update');
-  }
-
-  async listPendingOrReadyWithEndedPickup(now: Date) {
-    // Deferred to service using offers repository join for pickup_end.
-    void now;
-    return this.db
-      .select({
-        order: orders,
-      })
-      .from(orders)
-      .where(inArray(orders.status, ['pending', 'ready_for_pickup']));
-  }
-
-  /**
    * Folio diario `FD-YYYY-MMDD-NNN` (espejo de `generate_order_number`).
    * El MAX+1 del SQL requiere lock para evitar colisiones concurrentes
    * (ADR-0008): advisory xact-lock por día en lugar de tabla de secuencias.
@@ -231,9 +199,11 @@ export class OrdersRepository {
       sql`SELECT pg_advisory_xact_lock(hashtext('FD-' || to_char(now(), 'YYYY-MMDD')))`,
     );
     // ponytail: driver puede devolver filas o {rows}; normalizar como en payouts
+    // El secuencial arranca tras el prefijo `FD-YYYY-MMDD-` (13 chars), igual
+    // que generate_order_number en Supabase (equivalencia ADR-0008).
     const result = (await tx.execute(sql`
       SELECT 'FD-' || to_char(now(), 'YYYY-MMDD') || '-' || lpad((
-        COALESCE(MAX(CAST(SUBSTRING(order_number FROM 16) AS INTEGER)), 0) + 1
+        COALESCE(MAX(CAST(SUBSTRING(order_number FROM LENGTH('FD-' || to_char(now(), 'YYYY-MMDD') || '-') + 1) AS INTEGER)), 0) + 1
       )::text, 3, '0') AS order_number
       FROM ${orders}
       WHERE order_number LIKE 'FD-' || to_char(now(), 'YYYY-MMDD') || '-%'

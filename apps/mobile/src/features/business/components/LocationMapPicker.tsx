@@ -9,12 +9,12 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { env } from "@/core/config/env";
 import { reverseGeocode } from "@/core/utils/geocode";
-import type { MapCanvasHandle } from "./MapCanvas.types";
+import type { MapCanvasHandle } from "@/core/ui/MapCanvas.types";
 
 const RMap = lazy(() =>
 	(Platform.OS === "web"
-		? import("./MapCanvas.web")
-		: import("./MapCanvas.native")
+		? import("@/core/ui/MapCanvas.web")
+		: import("@/core/ui/MapCanvas.native")
 	).then((m) => ({ default: m.MapCanvas })),
 );
 
@@ -166,7 +166,7 @@ export function LocationMapPicker({
 					onPress={() => void useMyLocation()}
 					style={({ pressed }) => [
 						styles.actionButton,
-						{ backgroundColor: colors.card },
+						{ backgroundColor: colors.card, boxShadow: `0px 2px 4px ${colors.shadow}` },
 						pressed && { opacity: 0.85 },
 					]}
 					accessibilityRole="button"
@@ -182,7 +182,7 @@ export function LocationMapPicker({
 					onPress={() => setFullscreen(true)}
 					style={({ pressed }) => [
 						styles.actionButton,
-						{ backgroundColor: colors.card },
+						{ backgroundColor: colors.card, boxShadow: `0px 2px 4px ${colors.shadow}` },
 						pressed && { opacity: 0.85 },
 					]}
 					accessibilityRole="button"
@@ -281,8 +281,8 @@ const styles = StyleSheet.create({
 		borderRadius: 19,
 		alignItems: "center",
 		justifyContent: "center",
-		elevation: 2,
-		boxShadow: `0px 2px 4px #00000026`,	},
+		boxShadow: "0px 2px 4px rgba(0, 0, 0, 0.25)",
+	},
 	fullscreen: { flex: 1 },
 	fullscreenBar: {
 		flexDirection: "row",

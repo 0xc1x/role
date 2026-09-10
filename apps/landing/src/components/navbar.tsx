@@ -74,7 +74,7 @@ export function Navbar() {
 			<header
 				className={`fixed inset-x-0 top-0 z-50 border-b ${open ? "transition-none" : "transition-all duration-500"} ${
 					headerSolid
-						? "border-role-border/40 bg-white shadow-[0_10px_17px_-5px_rgb(76_80_133_0.2)]"
+						? "border-role-border/40 bg-white shadow-soft"
 						: "border-white/10 bg-transparent backdrop-blur-[15px]"
 				}`}
 			>
@@ -120,11 +120,11 @@ export function Navbar() {
 
 						<div className="flex items-center gap-2">
 							<Button
-								variant="ghost"
-								render={<a href="role://" />}
-								className={`hidden rounded-full px-5 py-2 text-sm font-semibold hover:text-current active:scale-[0.98] md:inline-flex ${
+								variant="brand"
+								render={<a href="role://" aria-label="Consigue la app" />}
+								className={`hidden rounded-full px-5 py-2 text-sm font-semibold active:scale-[0.98] md:inline-flex ${
 									solid
-										? "bg-role-primary text-white shadow-soft hover:bg-role-primary-hover hover:text-white hover:shadow-glow"
+										? ""
 										: "bg-white text-role-primary shadow-dark-glow hover:bg-white/90 hover:text-role-primary"
 								}`}
 							>
@@ -139,7 +139,6 @@ export function Navbar() {
 								aria-label={open ? "Cerrar menú" : "Abrir menú"}
 								className={`rounded-full md:hidden ${headerSolid ? "text-role-foreground hover:bg-role-muted hover:text-role-foreground" : "text-white hover:bg-white/10 hover:text-white"}`}
 							>
-								{/* biome-ignore lint/a11y/noSvgWithoutTitle: icono decorativo */}
 								<svg
 									width="20"
 									height="20"
@@ -148,7 +147,7 @@ export function Navbar() {
 									stroke="currentColor"
 									strokeWidth="2"
 									strokeLinecap="round"
-									aria-hidden
+									aria-hidden="true"
 									focusable="false"
 								>
 									{open ? (
@@ -209,9 +208,9 @@ export function Navbar() {
 							})}
 						</ul>
 						<Button
-							variant="ghost"
-							render={<a href="role://" />}
-							className="animate-item-in mt-4 w-full rounded-full bg-role-primary px-5 py-3 text-sm font-semibold text-white hover:bg-role-primary-hover hover:text-white active:scale-[0.98]"
+							variant="brand"
+							render={<a href="role://" aria-label="Consigue la app" />}
+							className="animate-item-in mt-4 w-full rounded-full px-5 py-3 text-sm font-semibold"
 							style={
 								{
 									animationDelay: `${NAV.length * 60}ms`,

@@ -1,18 +1,5 @@
-import type { OrderStatus } from '../enums/order-status';
+import type { z } from 'zod';
+import type { OrderSchema } from '../schemas/order.schema';
 
-/** Row shape for `public.orders` */
-export interface Order {
-  id: string;
-  user_id: string;
-  offer_id: string;
-  business_id: string;
-  order_number: string;
-  status: OrderStatus;
-  price: number;
-  original_price: number;
-  pickup_code: string;
-  pickup_time: string | null;
-  coupon_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
+/** Row shape for `public.orders` — derivado del schema Zod (SSOT). */
+export type Order = z.infer<typeof OrderSchema>;

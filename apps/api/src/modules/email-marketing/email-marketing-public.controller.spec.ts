@@ -9,7 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'node:crypto';
 import { EmailMarketingPublicController } from './email-marketing-public.controller';
 import { RendererService } from './renderer.service';
-import { EmailMarketingRepository } from './email-marketing.repository';
+import { CampaignsService } from './campaigns.service';
 
 const SECRET = Buffer.from('svix-test-secret').toString('base64');
 const resendId = 're_123456';
@@ -28,7 +28,7 @@ function webhookRequest(payload: string) {
 
 describe('EmailMarketingPublicController', () => {
   let controller: EmailMarketingPublicController;
-  let repository: jest.Mocked<Pick<EmailMarketingRepository, 'applyResendEvent' | 'unsubscribe'>>;
+  let campaignsService: jest.Mocked<Pick<CampaignsService, 'applyResendEvent' | 'unsubscribe'>>;
   let renderer: { verifyUnsubscribeToken: jest.Mock };
   let config: { get: jest.Mock };
   let env: Record<string, string | undefined>;
@@ -57,7 +57,7 @@ describe('EmailMarketingPublicController', () => {
       controllers: [EmailMarketingPublicController],
       providers: [
         {
-          provide: EmailMarketingRepository,
+          provide: CampaignsService,
           useValue: { applyResendEvent: jest.fn(), unsubscribe: jest.fn() },
         },
         { provide: RendererService, useValue: { verifyUnsubscribeToken: jest.fn() } },
@@ -66,7 +66,7 @@ describe('EmailMarketingPublicController', () => {
     }).compile();
 
     controller = module.get(EmailMarketingPublicController);
-    repository = module.get(EmailMarketingRepository);
+    campaignsService = module.get(CampaignsService);
     renderer = module.get(RendererService);
     config = module.get(ConfigService);
     jest.clearAllMocks();
@@ -77,14 +77,14 @@ describe('EmailMarketingPublicController', () => {
       const out = await sendWebhook({});
 
       expect(out).toEqual({ ok: true });
-      expect(repository.applyResendEvent).toHaveBeenCalledWith(resendId, 'email.delivered');
+      expect(campaignsService.applyResendEvent).toHaveBeenCalledWith(resendId, 'email.delivered');
     });
 
     it('rechaza firma inválida', async () => {
       await expect(sendWebhook({ signature: 'v1,tampered' })).rejects.toThrow(
         BadRequestException,
       );
-      expect(repository.applyResendEvent).not.toHaveBeenCalled();
+      expect(campaignsService.applyResendEvent).not.toHaveBeenCalled();
     });
 
     it('rechaza cuando faltan headers de firma', async () => {
@@ -105,14 +105,24 @@ describe('EmailMarketingPublicController', () => {
       const out = await sendWebhook({ payload: JSON.stringify({ type: 'email.sent' }) });
 
       expect(out).toEqual({ ok: true });
-      expect(repository.applyResendEvent).not.toHaveBeenCalled();
+      expect(campaignsService.applyResendEvent).not.toHaveBeenCalled();
     });
 
     it('sin secret configurado (dev) no verifica firma', async () => {
       env.RESEND_WEBHOOK_SECRET = undefined;
 
       await expect(sendWebhook({ signature: 'v1,cualquiera' })).resolves.toEqual({ ok: true });
-      expect(repository.applyResendEvent).toHaveBeenCalledWith(resendId, 'email.delivered');
+      expect(campaignsService.applyResendEvent).toHaveBeenCalledWith(resendId, 'email.delivered');
+    });
+
+    it('sin secret en producción rechaza en vez de aceptar eventos forjados', async () => {
+      env.RESEND_WEBHOOK_SECRET = undefined;
+      env.NODE_ENV = 'production';
+
+      await expect(sendWebhook({ signature: 'v1,cualquiera' })).rejects.toThrow(
+        'Webhook no configurado: falta RESEND_WEBHOOK_SECRET',
+      );
+      expect(campaignsService.applyResendEvent).not.toHaveBeenCalled();
     });
   });
 
@@ -129,7 +139,7 @@ describe('EmailMarketingPublicController', () => {
       renderer.verifyUnsubscribeToken.mockReturnValue(false);
 
       await expect(controller.unsubscribe('u-1.mala-firma')).rejects.toThrow('Token inválido');
-      expect(repository.unsubscribe).not.toHaveBeenCalled();
+      expect(campaignsService.unsubscribe).not.toHaveBeenCalled();
     });
 
     it('verifica el token HMAC y da de baja', async () => {
@@ -138,7 +148,7 @@ describe('EmailMarketingPublicController', () => {
       const html = await controller.unsubscribe('u-1.firma-valida');
 
       expect(renderer.verifyUnsubscribeToken).toHaveBeenCalledWith('u-1', 'firma-valida');
-      expect(repository.unsubscribe).toHaveBeenCalledWith('u-1');
+      expect(campaignsService.unsubscribe).toHaveBeenCalledWith('u-1');
       expect(html).toContain('Has sido dado de baja');
     });
   });

@@ -25,19 +25,9 @@ import type {
 } from "../domain/business";
 import { PAYOUT_FIELDS } from "../domain/business";
 import { notificationRepository } from "./notifications";
+import { OFFER_SELECT } from "@/features/offers/data/offer-select";
 
 export { isOfferOutOfStock };
-
-const OFFER_SELECT = `
-  id, business_id, business_location_id, title, description, image,
-  original_price, discounted_price, stock, initial_stock,
-  pickup_start, pickup_end, is_active, includes, allergens, rating, review_count,
-  businesses:business_id (id, name, type, image, rating, review_count),
-  business_locations:business_location_id (id, name, address, latitude, longitude, zone),
-  offer_categories (
-    categories:categories!offer_categories_category_id_fkey (id, name, slug, emoji, image_url, active)
-  )
-`;
 
 const DAY_LABELS: Record<string, string> = {
 	monday: "Lunes",
@@ -111,7 +101,7 @@ export const businessRepository = {
 			hoursResult,
 			reviewResult,
 			locationResult,
-			ordersResult,
+			rescuedResult,
 		] = await Promise.all([
 			supabase
 				.from("businesses")
@@ -138,11 +128,11 @@ export const businessRepository = {
 				.eq("business_id", businessId)
 				.eq("is_headquarter", true)
 				.maybeSingle(),
-			supabase
-				.from("orders")
-				.select("id")
-				.eq("business_id", businessId)
-				.eq("status", "completed"),
+			// Conteo server-side (RPC): antes traía todos los ids de órdenes
+			// completadas solo para .length.
+			supabase.rpc("business_completed_orders_count", {
+				p_business_id: businessId,
+			}),
 		]);
 
 		if (businessResult.error || !businessResult.data) {
@@ -168,12 +158,24 @@ export const businessRepository = {
 			longitude: headquarter ? num(headquarter.longitude) : null,
 			zone: (headquarter?.zone as string | null) ?? null,
 			memberSince: formatMemberSince(business.created_at),
-			totalRescued: Array.isArray(ordersResult.data)
-				? ordersResult.data.length
-				: 0,
+			totalRescued: num(rescuedResult.data) ?? 0,
 			hours: groupHours(hourEntries),
 			reviews: toReviewViews(reviewResult.data),
 		};
+	},
+
+	/** Todas las reseñas del negocio (pantalla dedicada de reseñas). */
+	async getBusinessReviews(businessId: string): Promise<BusinessReviewView[]> {
+		const { data, error } = await supabase
+			.from("reviews")
+			.select(
+				`id, product_rating, business_rating, comment, created_at,
+        profiles!reviews_user_id_fkey (full_name)`,
+			)
+			.eq("business_id", businessId)
+			.order("created_at", { ascending: false });
+		if (error) throw toAppError(error, "Error al cargar las reseñas");
+		return toReviewViews(data);
 	},
 
 	/** Horarios crudos por día (para el formulario de edición). */
@@ -492,18 +494,26 @@ export const businessRepository = {
 		const prevStart = new Date(start.getTime() - durationMs);
 		const prevEnd = start;
 
-		const [currentOrders, previousOrders, businessResult] = await Promise.all([
-			fetchCompletedOrders(businessId, start, end),
-			fetchCompletedOrders(businessId, prevStart, prevEnd),
+		const salesParams = (from: Date, to: Date) => ({
+			p_business_id: businessId,
+			p_from: from.toISOString(),
+			p_to: to.toISOString(),
+		});
+		const [currentResult, previousResult, businessResult] = await Promise.all([
+			supabase.rpc("business_sales_stats", salesParams(start, end)),
+			supabase.rpc("business_sales_stats", salesParams(prevStart, prevEnd)),
 			supabase
 				.from("businesses")
 				.select("rating")
 				.eq("id", businessId)
 				.single(),
 		]);
+		if (currentResult.error) {
+			throw toAppError(currentResult.error, "Error al calcular estadísticas");
+		}
 
-		const current = periodStats(currentOrders);
-		const previous = periodStats(previousOrders);
+		const current = mapSalesStats(currentResult.data);
+		const previous = mapSalesStats(previousResult.data);
 		const rating = businessResult.error
 			? 0
 			: (num(businessResult.data?.rating) ?? 0);
@@ -516,8 +526,8 @@ export const businessRepository = {
 			revenueChange: change(current.revenue, previous.revenue),
 			ordersChange: change(current.count, previous.count),
 			rescuedChange: change(current.count, previous.count),
-			topProducts: topProducts(currentOrders),
-			dailyStats: dailyStats(currentOrders, start, end),
+			topProducts: current.topProducts,
+			dailyStats: dailyStats(current.daily, start, end),
 		};
 	},
 };
@@ -635,7 +645,9 @@ async function uploadImage(
 		let bytes: ArrayBuffer;
 		if (Platform.OS === "web") {
 			// expo-image-picker devuelve blob:/data: URIs — hay que fetchearlos.
-			bytes = await (await fetch(uri)).arrayBuffer();
+			const response = await fetch(uri);
+			if (!response.ok) throw new Error(`fetch imagen: ${response.status}`);
+			bytes = await response.arrayBuffer();
 		} else {
 			bytes = await new File(uri).arrayBuffer();
 		}
@@ -654,49 +666,52 @@ async function uploadImage(
 	}
 }
 
-async function fetchCompletedOrders(
-	businessId: string,
-	start: Date,
-	end: Date,
-): Promise<Row[]> {
-	const { data, error } = await supabase
-		.from("orders")
-		.select("id, price, created_at, offers(title)")
-		.eq("business_id", businessId)
-		.eq("status", "completed")
-		.gte("created_at", start.toISOString())
-		.lte("created_at", end.toISOString());
-	if (error) throw toAppError(error, "Error al calcular estadísticas");
-	return toRows(data);
+/** Fila que devuelve business_sales_stats (agregación server-side). */
+interface SalesStatsRow {
+	orders_count?: unknown;
+	revenue?: unknown;
+	top_products?: unknown;
+	daily?: unknown;
 }
 
-function periodStats(orders: Row[]): { revenue: number; count: number } {
-	let revenue = 0;
-	for (const order of orders) revenue += num(order.price) ?? 0;
-	return { revenue, count: orders.length };
+interface DailyRpcRow {
+	day: string; // YYYY-MM-DD (UTC)
+	orders: number;
+	revenue: number;
+}
+
+function mapSalesStats(data: unknown): {
+	revenue: number;
+	count: number;
+	topProducts: TopProductStat[];
+	daily: DailyRpcRow[];
+} {
+	const row = (Array.isArray(data) ? data[0] : null) as SalesStatsRow | null;
+	const topProducts = Array.isArray(row?.top_products)
+		? (row.top_products as Row[]).map((p) => ({
+				name: String(p.name ?? "Desconocido"),
+				sold: num(p.sold) ?? 0,
+				revenue: num(p.revenue) ?? 0,
+			}))
+		: [];
+	const daily = Array.isArray(row?.daily)
+		? (row.daily as Row[]).map((d) => ({
+				day: String(d.day ?? ""),
+				orders: num(d.orders) ?? 0,
+				revenue: num(d.revenue) ?? 0,
+			}))
+		: [];
+	return {
+		revenue: num(row?.revenue) ?? 0,
+		count: num(row?.orders_count) ?? 0,
+		topProducts,
+		daily,
+	};
 }
 
 function change(current: number, previous: number): number {
 	if (previous === 0) return current > 0 ? 100 : 0;
 	return ((current - previous) / previous) * 100;
-}
-
-function topProducts(orders: Row[]): TopProductStat[] {
-	const map = new Map<string, { sold: number; revenue: number }>();
-	for (const order of orders) {
-		const offer = order.offers as Row | null;
-		const title = String(offer?.title ?? "Desconocido");
-		const price = num(order.price) ?? 0;
-		const current = map.get(title) ?? { sold: 0, revenue: 0 };
-		map.set(title, {
-			sold: current.sold + 1,
-			revenue: current.revenue + price,
-		});
-	}
-	return [...map.entries()]
-		.map(([name, v]) => ({ name, sold: v.sold, revenue: v.revenue }))
-		.sort((a, b) => b.sold - a.sold)
-		.slice(0, 5);
 }
 
 type Aggregation = "day" | "week" | "month";
@@ -744,8 +759,13 @@ function bucketLabel(key: string, agg: Aggregation): string {
 	return MONTHS_FULL[Number(m) - 1] ?? key;
 }
 
+/**
+ * Serie del período a partir de los días UTC que agrega la DB
+ * (business_sales_stats). El bucketing día/semana/mes y las etiquetas se
+ * resuelven en cliente como antes; los días sin ventas quedan en 0.
+ */
 function dailyStats(
-	orders: Row[],
+	days: DailyRpcRow[],
 	startDate: Date,
 	endDate: Date,
 ): DailyStat[] {
@@ -763,14 +783,14 @@ function dailyStats(
 			dataMap.set(key, { count: 0, revenue: 0 });
 		}
 	}
-	for (const order of orders) {
-		const date = new Date(String(order.created_at));
-		const key = bucketKey(date, agg);
+	for (const row of days) {
+		const [y, m, d] = row.day.split("-").map(Number);
+		const key = bucketKey(new Date(y ?? 0, (m ?? 1) - 1, d ?? 1), agg);
 		const current = dataMap.get(key);
 		if (current) {
 			dataMap.set(key, {
-				count: current.count + 1,
-				revenue: current.revenue + (num(order.price) ?? 0),
+				count: current.count + row.orders,
+				revenue: current.revenue + row.revenue,
 			});
 		}
 	}
@@ -791,10 +811,13 @@ function groupHours(
 ): HoursRange[] {
 	if (entries.length === 0) return [];
 	const result: HoursRange[] = [];
-	let start = entries[0]!;
-	let end = entries[0]!;
+	const first = entries[0];
+	if (!first) return [];
+	let start = first;
+	let end = first;
 	for (let i = 1; i < entries.length; i++) {
-		const entry = entries[i]!;
+		const entry = entries[i];
+		if (!entry) continue;
 		if (
 			entry.open_time === end.open_time &&
 			entry.close_time === end.close_time &&
@@ -870,7 +893,9 @@ async function insertBusinessHours(
 function toDbTime(time: string): string {
 	const parts = time.split(":");
 	if (parts.length === 2) {
-		return `${parts[0]!.padStart(2, "0")}:${parts[1]!.padStart(2, "0")}:00`;
+		const hh = parts[0] ?? "00";
+	const mm = parts[1] ?? "00";
+	return `${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:00`;
 	}
 	return "00:00:00";
 }

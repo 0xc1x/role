@@ -1,6 +1,6 @@
 import {
 	PUSH_NOTIFICATION_TYPES,
-	type PushTemplateDto,
+	type PushNotificationType,
 } from "@0xc1x/role-commons";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -87,43 +87,17 @@ export function PushTemplateFields({
 	);
 }
 
-export function pushTemplateDefaults(
-	t?: PushTemplateDto,
-): PushTemplateFormValues {
-	return {
-		name: t?.name ?? "",
-		title: t?.title ?? "",
-		body: t?.body ?? "",
-		link:
-			((t?.data as Record<string, unknown> | undefined)?.link as string) ?? "",
-		is_active: t?.is_active ?? true,
-	};
-}
-
 // ─── Envío manual ─────────────────────────────────────────────────────
 
 export interface SendFormValues {
 	template_id: string;
 	title: string;
 	body: string;
-	type: string;
+	type: PushNotificationType;
 	link: string;
 	segment_ids: string[];
 	include_user_ids: string[];
 	exclude_user_ids: string[];
-}
-
-export function sendDefaults(): SendFormValues {
-	return {
-		template_id: "",
-		title: "",
-		body: "",
-		type: "announcement",
-		link: "",
-		segment_ids: [],
-		include_user_ids: [],
-		exclude_user_ids: [],
-	};
 }
 
 /** Selector de tipo reutilizado por el formulario de envío y el de prueba. */
@@ -131,11 +105,14 @@ export function PushTypeSelect({
 	value,
 	onChange,
 }: {
-	value: string;
-	onChange: (v: string) => void;
+	value: PushNotificationType;
+	onChange: (v: PushNotificationType) => void;
 }) {
 	return (
-		<Select value={value} onValueChange={(v) => v && onChange(v)}>
+		<Select
+			value={value}
+			onValueChange={(v) => v && onChange(v as PushNotificationType)}
+		>
 			<SelectTrigger>
 				<SelectValue />
 			</SelectTrigger>

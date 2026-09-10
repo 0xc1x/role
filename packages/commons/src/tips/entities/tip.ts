@@ -1,12 +1,8 @@
+import type { z } from 'zod';
+import type { TipSchema } from '../schemas/tip.schema';
+
 /**
- * Domain entity for a tip.
- * Timestamps are ISO-8601 strings on the wire (same as {@link TipDto}).
+ * Row shape for `public.tips` — derivado del schema Zod (SSOT).
+ * Timestamps are ISO-8601 strings on the wire (same as TipDto).
  */
-export interface Tip {
-  id: string;
-  content: string;
-  active: boolean;
-  created_at: string;
-  updated_at: string | null;
-  deleted_at: string | null;
-}
+export type Tip = z.infer<typeof TipSchema>;

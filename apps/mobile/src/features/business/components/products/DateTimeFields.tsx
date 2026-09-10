@@ -134,15 +134,17 @@ export function DateTimeField({
 	);
 }
 
+const fieldDateFormatter = new Intl.DateTimeFormat("es-MX", {
+	weekday: "short",
+	day: "numeric",
+	month: "short",
+});
+
 function formatField(date: Date, mode: Mode): string {
 	if (mode === "time") {
 		return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 	}
-	return new Intl.DateTimeFormat("es-MX", {
-		weekday: "short",
-		day: "numeric",
-		month: "short",
-	}).format(date);
+	return fieldDateFormatter.format(date);
 }
 
 function pad(n: number): string {

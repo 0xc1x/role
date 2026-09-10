@@ -35,9 +35,3 @@ export type ListPushTokensQuery = z.infer<typeof ListPushTokensQuerySchema>;
 export type PushTemplatePaginatedData = PaginatedData<PushTemplateDto>;
 export type PushNotificationPaginatedData = PaginatedData<PushNotificationDto>;
 export type PushTokenPaginatedData = PaginatedData<PushTokenDto>;
-
-export type {
-  PushNotificationListResponseSchema,
-  PushTemplateListResponseSchema,
-  PushTokenListResponseSchema,
-} from '../schemas/push.schema';

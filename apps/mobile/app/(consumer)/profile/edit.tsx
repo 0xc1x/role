@@ -33,7 +33,7 @@ import {
 } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import { useAppConfig } from "@/features/config";
-import { profileRepository } from "@/features/profile/data/repository";
+import { useSaveProfileWithEmail } from "@/features/profile/hooks";
 import { authRepository } from "@/features/auth/data/repository";
 import { toAppError } from "@/core/error/mapper";
 import { spacing } from "@/core/theme/spacing";
@@ -45,9 +45,9 @@ function initialsOf(profile: UserProfile): string {
 	if (!name) return "F";
 	const parts = name.split(/\s+/);
 	if (parts.length >= 2) {
-		return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+		return `${parts[0]?.[0] ?? "F"}${parts[1]?.[0] ?? ""}`.toUpperCase();
 	}
-	return parts[0][0]!.toUpperCase();
+	return (parts[0]?.[0] ?? "F").toUpperCase();
 }
 
 const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -61,7 +61,6 @@ export default function EditProfileScreen() {
 	const [phone, setPhone] = useState(profile?.phone ?? "");
 	const [city, setCity] = useState(profile?.city ?? "");
 	const [cityOther, setCityOther] = useState("");
-	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	// Ciudades habilitadas desde app_config; se conserva la ciudad actual
@@ -83,11 +82,24 @@ export default function EditProfileScreen() {
 		if (initialized && status === "guest") {
 			router.replace("/login");
 		}
-	}, [status, initialized, router]);
+	}, [status, initialized]);
+
+	// El perfil vive en el store de sesión (Zustand), no en React Query:
+	// no hay caché que invalidar; el store se sincroniza con fetchProfile.
+	// Hook antes del return condicional (profile puede ser null → args vacíos,
+	// la mutación solo se dispara por acción del usuario ya autenticado).
+	const saveProfile = useSaveProfileWithEmail(profile?.id ?? "", profile?.email ?? "");
 
 	if (!initialized || status === "guest" || !profile) return null;
 
-	const handleSave = async () => {
+	const save = {
+		get isPending() {
+			return saveProfile.isPending;
+		},
+		mutate: saveProfile.mutate,
+	};
+
+	const handleSave = () => {
 		const trimmedName = name.trim();
 		const trimmedEmail = email.trim();
 		if (!trimmedName) {
@@ -103,34 +115,31 @@ export default function EditProfileScreen() {
 			return;
 		}
 
-		setLoading(true);
 		setError(null);
-		try {
-			await profileRepository.updateProfile(profile.id, {
-				full_name: trimmedName,
+		save.mutate(
+			{
+				fullName: trimmedName,
 				email: trimmedEmail,
 				phone: phone.trim() || null,
 				city: city === "Otra" ? cityOther.trim() : city.trim() || null,
-			});
-
-			const emailChanged = trimmedEmail !== profile.email;
-			if (emailChanged) {
-				await authRepository.updateEmail(trimmedEmail);
-			}
-
-			const updated = await authRepository.fetchProfile(profile.id);
-			if (updated) setProfile(updated);
-			toast.success(
-				emailChanged
-					? strings.profileEdit.updatedWithEmailConfirmation
-					: strings.profileEdit.updated,
-			);
-			goBackOr("/(consumer)/profile");
-		} catch (e) {
-			setError(toAppError(e, strings.common.error).message);
-		} finally {
-			setLoading(false);
-		}
+			},
+			{
+				onSuccess: ({ emailChanged }) => {
+					void authRepository.fetchProfile(profile.id).then((updated) => {
+						if (updated) setProfile(updated);
+					});
+					toast.success(
+						emailChanged
+							? strings.profileEdit.updatedWithEmailConfirmation
+							: strings.profileEdit.updated,
+					);
+					goBackOr("/(consumer)/profile");
+				},
+				onError: (e) => {
+					setError(toAppError(e, strings.common.error).message);
+				},
+			},
+		);
 	};
 
 	return (
@@ -223,7 +232,7 @@ export default function EditProfileScreen() {
 				<Button
 					label={strings.common.save}
 					onPress={() => void handleSave()}
-					loading={loading}
+					loading={save.isPending}
 					fullWidth
 					style={{ marginTop: spacing.md }}
 				/>

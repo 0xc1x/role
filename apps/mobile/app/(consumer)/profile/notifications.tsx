@@ -1,8 +1,6 @@
 import { useEffect } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { toast } from "sonner-native";
-import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Switch } from "@/components/ui/switch";
@@ -13,10 +11,10 @@ import {
 	useNotificationPreferences,
 	useUpdateNotificationPreferences,
 } from "@/features/profile/hooks";
-import { syncDeviceToken } from "@/features/notifications";
-import type { ConsumerNotificationPreferences } from "@0xc1x/role-commons";
+import { usePushToggle } from "@/features/notifications/use-push-toggle";import type { ConsumerNotificationPreferences } from "@0xc1x/role-commons";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 
 type ToggleKey = Exclude<
 	keyof ConsumerNotificationPreferences,
@@ -87,26 +85,6 @@ const SMART_ALERTS: ToggleConfig[] = [
 	},
 ];
 
-/**
- * Estado real del permiso, pidiéndolo solo si está en "default".
- * "denied" es pegajoso (el navegador/SO nunca vuelve a preguntar).
- */
-async function ensurePushPermission(): Promise<"granted" | "denied"> {
-	if (Platform.OS === "web") {
-		if (typeof window === "undefined" || !("Notification" in window)) {
-			return "denied";
-		}
-		if (Notification.permission === "default") {
-			await Notification.requestPermission();
-		}
-		return Notification.permission === "granted" ? "granted" : "denied";
-	}
-	const current = await Notifications.getPermissionsAsync();
-	if (current.status === "granted") return "granted";
-	const requested = await Notifications.requestPermissionsAsync();
-	return requested.status === "granted" ? "granted" : "denied";
-}
-
 function SectionTitle({ children }: { children: string }) {
 	const { colors } = useTheme();
 	return (
@@ -124,13 +102,16 @@ function NotificationRow({
 	config,
 	value,
 	onToggle,
+	registering,
 }: {
 	config: ToggleConfig;
 	value: boolean;
 	onToggle: (config: ToggleConfig, value: boolean) => void;
+	registering?: boolean;
 }) {
 	const { colors } = useTheme();
-	const disabled = config.upcoming;
+	const disabled =
+		config.upcoming || (config.key === "push_enabled" && Boolean(registering));
 
 	return (
 		<View style={[styles.toggleRow, disabled && styles.toggleRowDisabled]}>
@@ -196,10 +177,12 @@ function ToggleCard({
 	configs,
 	prefs,
 	onToggle,
+	registering,
 }: {
 	configs: ToggleConfig[];
 	prefs: ConsumerNotificationPreferences | undefined;
 	onToggle: (config: ToggleConfig, value: boolean) => void;
+	registering?: boolean;
 }) {
 	const { colors } = useTheme();
 	return (
@@ -213,6 +196,7 @@ function ToggleCard({
 						config={config}
 						value={Boolean(prefs?.[config.key])}
 						onToggle={onToggle}
+						registering={registering}
 					/>
 				</View>
 			))}
@@ -226,45 +210,26 @@ export default function NotificationsSettingsScreen() {
 	const userId = profile?.id ?? "";
 	const { data: prefs } = useNotificationPreferences(userId);
 	const update = useUpdateNotificationPreferences(userId);
-
+	// Lock anti doble-tap y flujo de registro viven en el hook compartido.
+	const { registering, enablePush } = usePushToggle(userId, async () => {
+		await update.mutateAsync({
+			push_enabled: true,
+		} as Partial<ConsumerNotificationPreferences>);
+	});
 	// Redirect guests to login
 	useEffect(() => {
 		if (initialized && status === "guest") {
 			router.replace("/login");
 		}
-	}, [status, initialized, router]);
+	}, [status, initialized]);
 
 	if (!initialized || status === "guest") return null;
 
 	const toggle = async (config: ToggleConfig, value: boolean) => {
 		if (config.upcoming) return;
 		if (config.key === "push_enabled" && value) {
-			const permission = await ensurePushPermission();
-			if (permission === "denied") {
-				// Permiso pegajoso: ni el navegador ni el SO volverán a
-				// preguntar; guiamos al usuario a desbloquearlo manualmente.
-				toast.error(
-					Platform.OS === "web"
-						? strings.notificationsSettings.blockedBrowser
-						: strings.notificationsSettings.blockedDevice,
-					{ duration: 8000 },
-				);
-				return;
-			}
-			try {
-				const registered = await syncDeviceToken(userId);
-				if (!registered) return; // Permiso denegado — sin toast.
-				toast.success(strings.notificationsSettings.pushEnabled);
-			} catch (e) {
-				// 23505 = el token ya estaba registrado: igual de válido.
-				const code = (e as { code?: string }).code;
-				if (code !== "23505") {
-					toast.error(
-						e instanceof Error ? e.message : strings.common.error,
-					);
-					return;
-				}
-			}
+			await enablePush();
+			return;
 		}
 		update.mutate({
 			[config.key]: value,
@@ -280,8 +245,8 @@ export default function NotificationsSettingsScreen() {
 					style={[
 						styles.banner,
 						{
-							backgroundColor: colors.primary + "0F",
-							borderColor: colors.primary + "26",
+							backgroundColor: withAlpha(colors.primary, 0.059),
+							borderColor: withAlpha(colors.primary, 0.149),
 						},
 					]}
 				>
@@ -300,7 +265,12 @@ export default function NotificationsSettingsScreen() {
 				</View>
 
 				<SectionTitle>{strings.notificationsSettings.channelsSection}</SectionTitle>
-				<ToggleCard configs={CHANNELS} prefs={prefs} onToggle={toggle} />
+				<ToggleCard
+					configs={CHANNELS}
+					prefs={prefs}
+					onToggle={toggle}
+					registering={registering}
+				/>
 
 				<SectionTitle>{strings.notificationsSettings.smartSection}</SectionTitle>
 				<ToggleCard configs={SMART_ALERTS} prefs={prefs} onToggle={toggle} />

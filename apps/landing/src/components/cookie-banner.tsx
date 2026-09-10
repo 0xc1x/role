@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { Cookie, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,17 +10,26 @@ export function CookieBanner() {
 	const [visible, setVisible] = useState(false);
 
 	useEffect(() => {
-		let stored = "accepted";
+		let stored: string | null = null;
 		try {
-			stored = window.localStorage.getItem(STORAGE_KEY) ?? "accepted";
+			stored = window.localStorage.getItem(STORAGE_KEY);
 		} catch {
 			// storage no disponible (SSR/privacidad): mostrar el banner
-			stored = "";
+			stored = null;
 		}
 		if (stored !== "accepted") {
 			setVisible(true);
 		}
 	}, []);
+
+	useEffect(() => {
+		if (!visible) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setVisible(false);
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [visible]);
 
 	function accept() {
 		try {
@@ -30,12 +40,18 @@ export function CookieBanner() {
 		setVisible(false);
 	}
 
+	// Cerrar sin aceptar: solo esta sesión, sin persistir consentimiento.
+	function dismiss() {
+		setVisible(false);
+	}
+
 	if (!visible) {
 		return null;
 	}
 
 	return (
 		<Card
+			role="region"
 			aria-label="Aviso de cookies"
 			className="fixed inset-x-0 bottom-0 z-[60] gap-0 rounded-none border-t border-role-border bg-white/95 p-0 shadow-card-hover backdrop-blur-xl md:bottom-6 md:left-auto md:right-6 md:w-[26rem] md:rounded-3xl md:border"
 		>
@@ -52,8 +68,8 @@ export function CookieBanner() {
 							<Button
 								variant="ghost"
 								size="icon-sm"
-								onClick={accept}
-								aria-label="Cerrar aviso"
+								onClick={dismiss}
+								aria-label="Cerrar aviso sin aceptar"
 								className="rounded-lg text-role-muted-foreground hover:bg-role-muted hover:text-role-muted-foreground"
 							>
 								<X className="h-4 w-4" />
@@ -62,12 +78,12 @@ export function CookieBanner() {
 						<p className="mt-1.5 text-xs leading-relaxed text-role-muted-foreground">
 							Usamos cookies mínimas para garantizar tu sesión y recordar tus
 							preferencias. Conoce nuestra{" "}
-							<a
-								href="/privacy"
+							<Link
+								to="/privacy"
 								className="font-semibold text-role-primary underline hover:text-role-primary-hover"
 							>
 								política de privacidad
-							</a>
+							</Link>
 							.
 						</p>
 						<div className="mt-3.5 flex items-center gap-2">

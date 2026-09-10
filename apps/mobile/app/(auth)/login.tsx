@@ -8,12 +8,13 @@ import { toAppError } from "@/core/error/mapper";
 import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { radii, spacing } from "@/core/theme/spacing";
-import { AppText, Button } from "@/core/ui";
+import { withAlpha } from "@/core/theme/alpha";
+import { AppText, Button, TextField } from "@/core/ui";
 import { Logo } from "@/core/ui/Logo";
-import { AuthField } from "@/features/auth/presentation/AuthField";
 import { AuthScreenShell } from "@/features/auth/presentation/AuthScreenShell";
 import { SocialAuthButtons } from "@/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/features/auth/data/repository";
+import { validateLoginForm } from "@/features/auth/domain/validation";
 import { useAuthStore } from "@/features/auth/store";
 
 export default function LoginScreen() {
@@ -28,24 +29,10 @@ export default function LoginScreen() {
 	const [showReset, setShowReset] = useState(false);
 
 	const validate = () => {
-		const trimmed = email.trim();
-		let ok = true;
-		if (!trimmed) {
-			setEmailError(strings.auth.requiredEmail);
-			ok = false;
-		} else if (!trimmed.includes("@")) {
-			setEmailError(strings.auth.invalidEmail);
-			ok = false;
-		} else {
-			setEmailError(null);
-		}
-		if (!password) {
-			setPasswordError(strings.auth.requiredPassword);
-			ok = false;
-		} else {
-			setPasswordError(null);
-		}
-		return ok;
+		const result = validateLoginForm(email, password);
+		setEmailError(result.emailError);
+		setPasswordError(result.passwordError);
+		return result.ok;
 	};
 
 	const handleLogin = async () => {
@@ -92,9 +79,9 @@ export default function LoginScreen() {
 				</AppText>
 			</View>
 
-			<AuthField
+			<TextField
 				label={strings.auth.email}
-				icon="mail-outline"
+				iconName="mail-outline"
 				value={email}
 				onChangeText={setEmail}
 				error={emailError}
@@ -105,13 +92,13 @@ export default function LoginScreen() {
 				textContentType="emailAddress"
 				returnKeyType="next"
 			/>
-			<AuthField
+			<TextField
 				label={strings.auth.password}
-				icon="lock-closed-outline"
+				iconName="lock-closed-outline"
 				value={password}
 				onChangeText={setPassword}
 				error={passwordError}
-				secure
+				secureToggle
 				autoComplete="current-password"
 				textContentType="password"
 				returnKeyType="done"
@@ -181,35 +168,27 @@ export default function LoginScreen() {
 					{strings.auth.signupFree}
 				</Text>
 			</AppText>
-			<ForgotPasswordDialog
-				visible={showReset}
-				initialEmail={email}
-				onClose={() => setShowReset(false)}
-			/>
+			{showReset ? (
+				<ForgotPasswordDialog
+					initialEmail={email}
+					onClose={() => setShowReset(false)}
+				/>
+			) : null}
 		</AuthScreenShell>
 	);
 }
 
 function ForgotPasswordDialog({
-	visible,
 	initialEmail,
 	onClose,
 }: {
-	visible: boolean;
 	initialEmail: string;
 	onClose: () => void;
 }) {
 	const { colors } = useTheme();
-	const [email, setEmail] = useState("");
+	const [email, setEmail] = useState(initialEmail);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
-
-	useEffect(() => {
-		if (visible) {
-			setEmail(initialEmail);
-			setError(null);
-		}
-	}, [visible, initialEmail]);
 
 	const send = async () => {
 		const trimmed = email.trim();
@@ -231,8 +210,8 @@ function ForgotPasswordDialog({
 	};
 
 	return (
-		<Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
-			<View style={styles.overlay}>
+		<Modal transparent animationType="fade" visible onRequestClose={onClose}>
+			<View style={[styles.overlay, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}>
 				<View
 					style={[
 						styles.dialog,
@@ -248,9 +227,9 @@ function ForgotPasswordDialog({
 					>
 						{strings.auth.resetDescription}
 					</AppText>
-					<AuthField
+					<TextField
 						label={strings.auth.email}
-						icon="mail-outline"
+						iconName="mail-outline"
 						value={email}
 						onChangeText={(t) => {
 							setEmail(t);
@@ -305,7 +284,6 @@ const styles = StyleSheet.create({
 	switchLine: { textAlign: "center", marginTop: spacing.xl },
 	overlay: {
 		flex: 1,
-		backgroundColor: "rgba(0,0,0,0.4)",
 		alignItems: "center",
 		justifyContent: "center",
 		padding: spacing.xl,

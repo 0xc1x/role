@@ -70,12 +70,22 @@ describe('OrdersRepository (DB real)', () => {
     expect(other).toBeNull();
   });
 
-  test('nextOrderNumber genera folio único creciente', async () => {
-    const n1 = await repo.transaction((tx) => repo.nextOrderNumber(tx));
-    expect(n1).toMatch(/^FD-/);
-    await seedOrder(ctx.db, userId, offerId, businessId, { order_number: n1 });
-    const n2 = await repo.transaction((tx) => repo.nextOrderNumber(tx));
-    expect(n2).not.toBe(n1);
+  test('nextOrderNumber genera folios únicos y crecientes (12 el mismo día)', async () => {
+    // Regresión del off-by-two del SUBSTRING: con el corte en el último dígito,
+    // el folio 010 aportaba 0 al MAX y la 11ª orden colisionaba (unique).
+    const folios: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const n = await repo.transaction((tx) => repo.nextOrderNumber(tx));
+      expect(n).toMatch(/^FD-\d{4}-\d{4}-\d{3}$/);
+      expect(folios).not.toContain(n);
+      const prev = folios.at(-1);
+      if (prev) {
+        expect(Number(n.slice(-3))).toBeGreaterThan(Number(prev.slice(-3)));
+      }
+      folios.push(n);
+      await seedOrder(ctx.db, userId, offerId, businessId, { order_number: n });
+    }
+    expect(folios).toHaveLength(12);
   });
 
   test('insertEvent registra evento', async () => {
@@ -143,14 +153,9 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
     expect(biz).toBeDefined();
   });
 
-  test('findByIdForUpdate y listExpirableIds', async () => {
+  test('findByIdForUpdate bloquea la orden', async () => {
     const order = await seedOrder(ctx.db, userId, offerId, businessId);
     const locked = await repo.transaction((tx) => repo.findByIdForUpdate(tx, order.id));
     expect(locked?.order.id).toBe(order.id);
-    const ids = await repo.transaction((tx) => repo.listExpirableIds(tx, [offerId]));
-    expect(ids.map((r) => r.id)).toContain(order.id);
-    expect(await repo.transaction((tx) => repo.listExpirableIds(tx, []))).toEqual([]);
-    const pending = await repo.listPendingOrReadyWithEndedPickup(new Date());
-    expect(pending.length).toBeGreaterThanOrEqual(1);
   });
 });

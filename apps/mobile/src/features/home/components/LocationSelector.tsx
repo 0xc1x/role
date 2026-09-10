@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	Platform,
-	Dimensions,
 	View,
 	StyleSheet,
 	Animated,
 	Pressable,
+	useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Portal } from "@rn-primitives/portal";
@@ -26,6 +26,7 @@ import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { AppText } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 
 export function LocationSelector() {
 	const { colors } = useTheme();
@@ -40,7 +41,8 @@ export function LocationSelector() {
 	const [menuOrigin, setMenuOrigin] = useState<{ x: number; y: number } | null>(
 		null,
 	);
-	const [chevronRotation] = useState(new Animated.Value(0));
+	const [chevronRotation] = useState(() => new Animated.Value(0));
+	const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 	const triggerRef = useRef<View>(null);
 
 	const toggleDropdown = () => {
@@ -54,14 +56,13 @@ export function LocationSelector() {
 			triggerRef.current?.measureInWindow((x, y, width, height) => {
 				const panelWidth = 300;
 				const panelHeight = 380;
-				const window = Dimensions.get("window");
 				const panelX = Math.max(
 					8,
-					Math.min(x, window.width - panelWidth - 8),
+					Math.min(x, windowWidth - panelWidth - 8),
 				);
 				const panelY = Math.max(
 					8,
-					Math.min(y + height + 6, window.height - panelHeight - 8),
+					Math.min(y + height + 6, windowHeight - panelHeight - 8),
 				);
 				setMenuOrigin({ x: panelX, y: panelY });
 				setIsOpen(true);
@@ -208,6 +209,7 @@ function DropdownPanel({
 				{
 					left: origin.x,
 					top: origin.y,
+					boxShadow: `0px 4px 20px ${colors.shadow}`,
 					backgroundColor: colors.card,
 					borderColor: colors.borderSolid,
 				},
@@ -312,14 +314,14 @@ function AddressItem({
 				style={[
 					styles.addressItem,
 					isSelected && {
-						backgroundColor: colors.destructiveVibrant + "0D",
+						backgroundColor: withAlpha(colors.destructiveVibrant, 0.051),
 					},
 				]}
 			>
 				<View
 					style={[
 						styles.addressIcon,
-						{ backgroundColor: colors.secondary + "1A" },
+						{ backgroundColor: withAlpha(colors.secondary, 0.102) },
 					]}
 				>
 					<Ionicons
@@ -378,7 +380,7 @@ const styles = StyleSheet.create({
 		maxWidth: 300,
 		borderRadius: radii.xl,
 		borderWidth: 1,
-		boxShadow: `0px 4px 20px #00000026`,	},
+		},
 	loadingBox: {
 		paddingHorizontal: spacing.lg,
 		paddingVertical: spacing.lg,

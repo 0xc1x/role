@@ -1,15 +1,16 @@
+import { ListCategoriesQuerySchema } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Button } from "@/components/ui/button";
 import {
 	InputGroup,
 	InputGroupAddon,
 	InputGroupInput,
 } from "@/components/ui/input-group";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
 	CategoryCreateDrawer,
 	categoriesColumns,
@@ -17,18 +18,8 @@ import {
 	useCategoriesList,
 } from "@/features/categories";
 
-const categoriesSearchSchema = z.object({
-	page: z.coerce.number().int().positive().optional().default(1),
-	limit: z.coerce.number().int().min(1).max(100).optional().default(20),
-	search: z.string().optional(),
-	active: z
-		.union([z.boolean(), z.enum(["true", "false"])])
-		.optional()
-		.transform((v) => {
-			if (v === undefined) return undefined;
-			if (typeof v === "boolean") return v;
-			return v === "true";
-		}),
+const categoriesSearchSchema = ListCategoriesQuerySchema.extend({
+	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 });
 
 export const Route = createFileRoute("/_layout/categorias")({
@@ -79,20 +70,7 @@ function RouteComponent() {
 	}, [searchInput, search.search, search.limit, search.active, navigate]);
 
 	if (isLoading) {
-		return (
-			<div className="px-6 py-4 space-y-4">
-				<div className="flex items-center justify-between">
-					<Skeleton className="h-8 w-48" />
-					<Skeleton className="h-10 w-32" />
-				</div>
-				<Skeleton className="h-6 w-24" />
-				<div className="space-y-2">
-					{[1, 2, 3, 4, 5].map((n) => (
-						<Skeleton key={n} className="h-12 w-full" />
-					))}
-				</div>
-			</div>
-		);
+		return <PageSkeleton />;
 	}
 
 	if (isError) {

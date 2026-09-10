@@ -1,11 +1,11 @@
 import {
 	type EmailComponentDto,
-	type EmailTemplateDto,
 	MARKETING_CATEGORIES,
+	type MarketingCategory,
 	SEGMENT_FILTER_FIELDS,
 	SEGMENT_TYPES,
-	type SegmentDto,
 	SegmentFiltersSchema,
+	type SegmentType,
 } from "@0xc1x/role-commons";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -148,26 +148,14 @@ export interface TemplateFormValues {
 	is_active: boolean;
 }
 
-export function templateDefaults(t?: EmailTemplateDto): TemplateFormValues {
-	return {
-		name: t?.name ?? "",
-		subject: t?.subject ?? "",
-		body_html: t?.body_html ?? "",
-		header_id: t?.header_id ?? null,
-		footer_id: t?.footer_id ?? null,
-		variables: t?.variables ?? [],
-		is_active: t?.is_active ?? true,
-	};
-}
-
 // ─── Segmento ─────────────────────────────────────────────────────────
 
 export interface SegmentFormValues {
 	name: string;
 	description: string;
-	type: "static" | "dynamic";
+	type: SegmentType;
 	filtersJson: string;
-	category: string;
+	category: MarketingCategory;
 	user_ids: string[];
 	is_active: boolean;
 }
@@ -211,7 +199,7 @@ export function SegmentFields({
 						if (!v) return;
 						setValues({
 							...values,
-							category: v,
+							category: v as MarketingCategory,
 							// Cambiar categoría limpia la selección para evitar
 							// mezclar usuarios que no cumplen la nueva.
 							user_ids: [],
@@ -295,18 +283,6 @@ export function SegmentFields({
 	);
 }
 
-export function segmentDefaults(s?: SegmentDto): SegmentFormValues {
-	return {
-		name: s?.name ?? "",
-		description: s?.description ?? "",
-		type: s?.type ?? "dynamic",
-		filtersJson: s?.filters ? JSON.stringify(s.filters, null, 2) : "",
-		category: s?.category ?? "announcements",
-		user_ids: [],
-		is_active: s?.is_active ?? true,
-	};
-}
-
 // ─── Header / Footer ──────────────────────────────────────────────────
 
 export interface ComponentFormValues {
@@ -379,13 +355,4 @@ export function ComponentFields({
 			</Field>
 		</>
 	);
-}
-
-export function componentDefaults(c?: EmailComponentDto): ComponentFormValues {
-	return {
-		name: c?.name ?? "",
-		type: c?.type ?? "header",
-		html_content: c?.html_content ?? "",
-		is_active: c?.is_active ?? true,
-	};
 }

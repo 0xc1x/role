@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { AppText, Button, Card, TextField } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { DateTimeField } from "./products/DateTimeFields";
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -16,7 +17,7 @@ const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function randomCode(length = 8): string {
 	let result = "";
 	for (let i = 0; i < length; i++) {
-		result += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]!;
+		result += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)] ?? "X";
 	}
 	return result;
 }
@@ -67,7 +68,7 @@ export function CouponForm({
 	const [maxUses, setMaxUses] = useState(
 		initial?.max_uses != null ? String(initial.max_uses) : "",
 	);
-	const [expiry, setExpiry] = useState<Date | null>(
+	const [expiry, setExpiry] = useState<Date | null>(() =>
 		initial?.expires_at ? new Date(initial.expires_at) : null,
 	);
 	const [isActive, setIsActive] = useState(initial?.is_active ?? true);
@@ -115,7 +116,7 @@ export function CouponForm({
 						containerStyle={styles.codeField}
 						value={code}
 						onChangeText={(text) => setCode(text.replace(/\s/g, "").toUpperCase())}
-						placeholder="EJ. PROMO2026"
+						placeholder={strings.business.couponCodeHint}
 						autoCapitalize="characters"
 						maxLength={20}
 						error={
@@ -129,8 +130,8 @@ export function CouponForm({
 						style={({ pressed }) => [
 							styles.generate,
 							{
-								borderColor: colors.primary + "80",
-								backgroundColor: colors.primary + "0A",
+								borderColor: withAlpha(colors.primary, 0.502),
+								backgroundColor: withAlpha(colors.primary, 0.039),
 							},
 							pressed && { opacity: 0.8 },
 						]}
@@ -194,7 +195,7 @@ export function CouponForm({
 					value={minOrder}
 					onChangeText={(text) => setMinOrder(text.replace(/[^0-9.]/g, ""))}
 					keyboardType="decimal-pad"
-					placeholder="0.00"
+					placeholder={strings.business.couponMinAmountHint}
 				/>
 				<AppText variant="bodySmall" style={{ color: colors.mutedForeground, marginTop: -8 }}>
 					{strings.business.couponMinPurchaseHint}
@@ -314,7 +315,7 @@ function TypeOption({
 				{
 					borderColor: selected ? colors.primary : colors.borderSolid,
 					borderWidth: selected ? 1.5 : 1,
-					backgroundColor: selected ? colors.primary + "0D" : colors.card,
+					backgroundColor: selected ? withAlpha(colors.primary, 0.051) : colors.card,
 				},
 				pressed && { opacity: 0.85 },
 			]}

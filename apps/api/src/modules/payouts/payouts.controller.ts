@@ -8,18 +8,13 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { z } from 'zod';
-import { PayoutStatusSchema } from '@0xc1x/role-commons';
+import {
+  ListPayoutsQuerySchema,
+  type ListPayoutsQuery,
+} from '@0xc1x/role-commons';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { PayoutsService } from './payouts.service';
-
-const ListQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  business_id: z.string().uuid().optional(),
-  status: PayoutStatusSchema.optional(),
-});
 
 @ApiTags('Payouts')
 @Controller('payouts')
@@ -31,8 +26,8 @@ export class PayoutsController {
   @Get()
   @ApiOperation({ summary: 'List payouts (admin)' })
   list(
-    @Query(new ZodValidationPipe(ListQuerySchema))
-    q: z.infer<typeof ListQuerySchema>,
+    @Query(new ZodValidationPipe(ListPayoutsQuerySchema))
+    q: ListPayoutsQuery,
   ) {
     return this.service.list(q);
   }

@@ -1,4 +1,5 @@
 import { supabase } from "@/core/supabase/client";
+import { toAppError } from "@/core/error/mapper";
 
 import { isInValidityWindow, toPromoSlide, type PromoSlide, type SlideRow } from "../domain/slide";
 
@@ -20,9 +21,11 @@ export async function fetchPromoSlides(): Promise<PromoSlide[]> {
     .in("type", [...PROMO_SLIDE_TYPES])
     .order("priority", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (error) throw toAppError(error);
 
-  return ((data ?? []) as SlideRow[])
-    .filter((row) => isInValidityWindow(row))
-    .map(toPromoSlide);
+  const slides: PromoSlide[] = [];
+  for (const row of ((data ?? []) as SlideRow[])) {
+    if (isInValidityWindow(row)) slides.push(toPromoSlide(row));
+  }
+  return slides;
 }

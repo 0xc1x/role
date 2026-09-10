@@ -4,7 +4,7 @@ import { CONTACT_ROLES } from '../enums/contact.enum';
 export const CreateContactSchema = z
   .object({
     name: z.string().trim().max(120).optional().default(''),
-    email: z.string().trim().toLowerCase().email().max(254),
+    email: z.pipe(z.string().trim().toLowerCase(), z.email().max(254)),
     role: z.enum(CONTACT_ROLES),
     city: z.string().trim().min(1).max(100),
     city_other: z.string().trim().min(1).max(100).optional(),

@@ -39,21 +39,16 @@ export function filterAndSortOrders(
 	const query = f.searchQuery.trim().toLowerCase();
 
 	return orders
-		.filter((item) =>
-			f.tab === "active"
-				? isActiveStatus(item.order.status)
-				: !isActiveStatus(item.order.status),
-		)
-		.filter(
-			(item) =>
-				f.branchId === null ||
-				item.businessLocationId === f.branchId,
-		)
-		.filter(
-			(item) =>
-				f.status === null || item.order.status === f.status,
-		)
 		.filter((item) => {
+			const tabOk =
+				f.tab === "active"
+					? isActiveStatus(item.order.status)
+					: !isActiveStatus(item.order.status);
+			if (!tabOk) return false;
+			if (f.branchId !== null && item.businessLocationId !== f.branchId) {
+				return false;
+			}
+			if (f.status !== null && item.order.status !== f.status) return false;
 			if (query.length === 0) return true;
 			return (
 				item.order.order_number.toLowerCase().includes(query) ||

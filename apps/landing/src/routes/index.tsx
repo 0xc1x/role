@@ -9,13 +9,26 @@ import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
 import { Navbar } from "@/components/navbar";
 import { Testimonials } from "@/components/testimonials";
+import { FAQ_ITEMS } from "@/lib/faq";
 import {
 	appConfigQueryOptions,
 	platformStatsQueryOptions,
 	randomOfferQueryOptions,
 } from "@/lib/queries";
+import { pageHead } from "@/lib/seo";
+
+const FAQ_JSON_LD = {
+	"@context": "https://schema.org",
+	"@type": "FAQPage",
+	mainEntity: FAQ_ITEMS.map((item) => ({
+		"@type": "Question",
+		name: item.q,
+		acceptedAnswer: { "@type": "Answer", text: item.a },
+	})),
+};
 
 export const Route = createFileRoute("/")({
+	component: LandingPage,
 	// SSR: config + stats reales se resuelven en el server para SEO.
 	loader: ({ context }) =>
 		Promise.all([
@@ -29,21 +42,32 @@ export const Route = createFileRoute("/")({
 				.ensureQueryData(randomOfferQueryOptions)
 				.catch(() => undefined),
 		]),
-	component: LandingPage,
+	head: () => ({
+		...pageHead(
+			"/",
+			"Rolé — rescata comida excedente cerca de ti",
+			"Descubre ofertas de comida excedente de negocios locales, salva comida buena de terminar en la basura y ahorra en tu día a día.",
+		),
+		scripts: [
+			{ type: "application/ld+json", children: JSON.stringify(FAQ_JSON_LD) },
+		],
+	}),
 });
 
 function LandingPage() {
 	return (
-		<main id="main" className="min-h-screen">
+		<div className="min-h-screen">
 			<Navbar />
-			<Hero />
-			<Features />
-			<HowItWorks />
-			<Testimonials />
-			<Faq />
-			<Contact />
-			<Cta />
+			<main id="main">
+				<Hero />
+				<Features />
+				<HowItWorks />
+				<Testimonials />
+				<Faq />
+				<Contact />
+				<Cta />
+			</main>
 			<Footer />
-		</main>
+		</div>
 	);
 }

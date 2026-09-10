@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import {
   consumerNotificationPreferences,
   profiles,
@@ -36,7 +37,7 @@ export class ProfilesRepository {
     const filters: SQL[] = [];
     if (f.role) filters.push(eq(profiles.role, f.role as ProfileRow['role']));
     if (f.search) {
-      const term = `%${f.search}%`;
+      const term = `%${escapeLike(f.search)}%`;
       filters.push(
         or(ilike(profiles.email, term), ilike(profiles.full_name, term))!,
       );

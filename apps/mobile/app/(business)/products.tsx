@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import {
@@ -13,6 +13,7 @@ import {
 	LoadingView,
 	Screen,
 	SearchBar,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
 import {
@@ -51,6 +52,7 @@ export default function BusinessProductsScreen() {
 		isError,
 		error,
 		refetch,
+		isFetching,
 	} = useBusinessOffers(businessId);
 	const { data: categories } = useCategories();
 
@@ -58,6 +60,10 @@ export default function BusinessProductsScreen() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [categoryId, setCategoryId] = useState<string | null>(null);
 	const [sort, setSort] = useState<ProductsSort>("newest");
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
 
 	useEffect(() => {
 		setBranchId(null);
@@ -66,6 +72,25 @@ export default function BusinessProductsScreen() {
 		setSort("newest");
 	}, [businessId]);
 
+	const filtered = filterAndSortProducts(offers ?? [], {
+		branchId,
+		searchQuery,
+		categoryId,
+		sort,
+	});
+
+	const renderItem = useCallback(
+		({ item: product }: { item: (typeof filtered)[number] }) => (
+			<ProductCard businessId={businessId} product={product} />
+		),
+		[businessId],
+	);
+
+	const renderSeparator = useCallback(
+		() => <View style={styles.separator} />,
+		[],
+	);
+
 	if (businessesLoading || !business) {
 		if (!businessesLoading && !business) {
 			return <NoBusinessPrompt />;
@@ -73,12 +98,6 @@ export default function BusinessProductsScreen() {
 		return <LoadingView />;
 	}
 
-	const filtered = filterAndSortProducts(offers ?? [], {
-		branchId,
-		searchQuery,
-		categoryId,
-		sort,
-	});
 	const stats = productStats(offers ?? []);
 	const activeCategoryName = categories?.find(
 		(c) => c.id === categoryId,
@@ -101,93 +120,102 @@ export default function BusinessProductsScreen() {
 				) : null}
 			</View>
 
-			<ScrollView
+			{pull.indicator}
+			<FlatList
+				ref={pull.ref}
+				data={filtered}
+				keyExtractor={(product) => product.offer.id}
+				renderItem={renderItem}
+				ItemSeparatorComponent={renderSeparator}
 				showsVerticalScrollIndicator={false}
 				contentContainerStyle={styles.content}
-			>
-				<BusinessStatsRow stats={stats} />
-
-				<Button
-					label={strings.business.newProduct}
-					icon={<Ionicons name="add" size={20} color="#FFFFFF" />}
-					onPress={createRoute}
-					fullWidth
-					size="lg"
-					style={styles.cta}
-				/>
-
-				<View style={styles.sectionHeader}>
-					<AppText variant="h4" weight="bold">
-						{strings.business.allProducts}
-					</AppText>
-					<ProductsSortControl value={sort} onChange={setSort} />
-				</View>
-
-				<View style={styles.searchRow}>
-					<SearchBar
-						value={searchQuery}
-						onChangeText={setSearchQuery}
-						placeholder={strings.business.searchProducts}
-						containerStyle={styles.searchBarFull}
+				refreshControl={
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
 					/>
-				</View>
-				<View style={styles.filterRow}>
-					<ProductFilters activeCategoryId={categoryId} onApply={setCategoryId} />
-				</View>
+				}
+				ListHeaderComponent={
+					<View style={styles.headerContainer}>
+						<BusinessStatsRow stats={stats} />
 
-				{categoryId ? (
-					<View style={styles.chipsRow}>
-						<FilterChip
-							label={activeCategoryName ?? categoryId}
-							onClear={() => setCategoryId(null)}
+						<Button
+							label={strings.business.newProduct}
+							icon={<Ionicons name="add" size={20} color={colors.primaryForeground} />}
+							onPress={createRoute}
+							fullWidth
+							size="lg"
+							style={styles.cta}
 						/>
+
+						<View style={styles.sectionHeader}>
+							<AppText variant="h4" weight="bold">
+								{strings.business.allProducts}
+							</AppText>
+							<ProductsSortControl value={sort} onChange={setSort} />
+						</View>
+
+						<View style={styles.searchRow}>
+							<SearchBar
+								value={searchQuery}
+								onChangeText={setSearchQuery}
+								placeholder={strings.business.searchProducts}
+								containerStyle={styles.searchBarFull}
+							/>
+						</View>
+						<View style={styles.filterRow}>
+							<ProductFilters activeCategoryId={categoryId} onApply={setCategoryId} />
+						</View>
+
+						{categoryId ? (
+							<View style={styles.chipsRow}>
+								<FilterChip
+									label={activeCategoryName ?? categoryId}
+									onClear={() => setCategoryId(null)}
+								/>
+							</View>
+						) : null}
+
+						{isLoading ? <LoadingView /> : null}
+						{isError ? (
+							<ErrorState error={error} onRetry={() => void refetch()} />
+						) : null}
+
+						{!isLoading && !isError && offers && offers.length === 0 ? (
+							<EmptyState
+								icon={
+									<Ionicons
+										name="cube-outline"
+										size={28}
+										color={colors.mutedForeground}
+									/>
+								}
+								title={strings.business.noProductsTitle}
+								message={strings.business.noProductsBody}
+								action={
+									<Button
+										label={strings.business.createFirstProduct}
+										onPress={createRoute}
+									/>
+								}
+							/>
+						) : null}
+
+						{!isLoading &&
+						!isError &&
+						offers &&
+						offers.length > 0 &&
+						filtered.length === 0 ? (
+							<EmptyState
+								title={strings.allOffers.noResultsTitle}
+								message={strings.allOffers.noResultsBody}
+							/>
+						) : null}
 					</View>
-				) : null}
-
-				{isLoading ? <LoadingView /> : null}
-				{isError ? (
-					<ErrorState error={error} onRetry={() => void refetch()} />
-				) : null}
-
-				{!isLoading && !isError && offers && offers.length === 0 ? (
-					<EmptyState
-						icon={
-							<Ionicons
-								name="cube-outline"
-								size={28}
-								color={colors.mutedForeground}
-							/>
-						}
-						title={strings.business.noProductsTitle}
-						message={strings.business.noProductsBody}
-						action={
-							<Button
-								label={strings.business.createFirstProduct}
-								onPress={createRoute}
-							/>
-						}
-					/>
-				) : null}
-
-				{!isLoading &&
-				!isError &&
-				offers &&
-				offers.length > 0 &&
-				filtered.length === 0 ? (
-					<EmptyState
-						title={strings.allOffers.noResultsTitle}
-						message={strings.allOffers.noResultsBody}
-					/>
-				) : null}
-
-				{filtered.map((product) => (
-					<ProductCard
-						key={product.offer.id}
-						businessId={businessId}
-						product={product}
-					/>
-				))}
-			</ScrollView>
+				}
+			/>
 		</Screen>
 	);
 }
@@ -201,10 +229,16 @@ const styles = StyleSheet.create({
 		paddingTop: spacing.xl,
 		paddingBottom: spacing.md,
 	},
+	headerContainer: {
+		gap: spacing.md,
+		marginBottom: spacing.md,
+	},
+	separator: {
+		height: spacing.md,
+	},
 	content: {
 		paddingHorizontal: spacing.xl,
 		paddingBottom: spacing.xxl,
-		gap: spacing.md,
 	},
 	cta: {
 		marginTop: spacing.xs,

@@ -50,7 +50,7 @@ import {
   segmentUsers,
   segments,
 } from './email-marketing';
-import { pushNotifications, pushTemplates } from './push-notifications';
+import { pushNotifications, pushSends, pushTemplates } from './push-notifications';
 import { payouts } from './payouts';
 
 /** Schema map passed to drizzle() for typed queries. */
@@ -85,6 +85,7 @@ export const schema = {
   emailSends,
   pushTemplates,
   pushNotifications,
+  pushSends,
 };
 
 export type DatabaseSchema = typeof schema;

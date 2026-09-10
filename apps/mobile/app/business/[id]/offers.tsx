@@ -1,5 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { FlatList, Image, StyleSheet, View } from "react-native";
+import { memo, useCallback } from "react";
+import { FlatList, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 
 import { strings } from "@/core/i18n/strings";
 import {
@@ -24,6 +26,13 @@ export default function BusinessOffersScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const { data, isLoading, isError, error, refetch } = useBusinessOffers(
 		id ?? "",
+	);
+
+	const renderItem = useCallback(
+		({ item }: { item: NonNullable<typeof data>[number] }) => (
+			<BusinessOfferRow item={item} businessId={id ?? ""} />
+		),
+		[id],
 	);
 
 	if (isLoading) return <LoadingView />;
@@ -52,46 +61,46 @@ export default function BusinessOffersScreen() {
 					data={data}
 					keyExtractor={(item) => item.offer.id}
 					contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}
-					renderItem={({ item }) => {
-						const discount = discountPercentage(item.offer);
-						return (
-							<Card
-								onPress={() =>
-									router.push(`/business/${id}/offer/${item.offer.id}`)
-								}
-							>
-								<View style={styles.row}>
-									{item.offer.image ? (
-										<Image
-											source={{ uri: item.offer.image }}
-											style={styles.image}
-										/>
-									) : null}
-									<View style={{ flex: 1, gap: 2 }}>
-										<AppText variant="h4" weight="bold" numberOfLines={1}>
-											{item.offer.title}
-										</AppText>
-										<AppText
-											variant="bodySmall"
-											style={{ color: colors.mutedForeground }}
-										>
-											{formatMoney(item.offer.discounted_price)} · {discount}%
-											OFF
-										</AppText>
-										<StatusBadge
-											label={item.offer.is_active ? "Activo" : "Inactivo"}
-											tone={item.offer.is_active ? "success" : "neutral"}
-										/>
-									</View>
-								</View>
-							</Card>
-						);
-					}}
+					renderItem={renderItem}
 				/>
 			)}
 		</Screen>
 	);
 }
+
+const BusinessOfferRow = memo(function BusinessOfferRow({
+	item,
+	businessId,
+}: {
+	item: NonNullable<ReturnType<typeof useBusinessOffers>["data"]>[number];
+	businessId: string;
+}) {
+	const { colors } = useTheme();
+	const discount = discountPercentage(item.offer);
+	return (
+		<Card
+			onPress={() => router.push(`/business/${businessId}/offer/${item.offer.id}`)}
+		>
+			<View style={styles.row}>
+				{item.offer.image ? (
+					<Image source={{ uri: item.offer.image }} style={styles.image} />
+				) : null}
+				<View style={styles.offerBody}>
+					<AppText variant="h4" weight="bold" numberOfLines={1}>
+						{item.offer.title}
+					</AppText>
+					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+						{formatMoney(item.offer.discounted_price)} · {discount}% OFF
+					</AppText>
+					<StatusBadge
+						label={item.offer.is_active ? "Activo" : "Inactivo"}
+						tone={item.offer.is_active ? "success" : "neutral"}
+					/>
+				</View>
+			</View>
+		</Card>
+	);
+});
 
 const styles = StyleSheet.create({
 	header: {
@@ -103,5 +112,6 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.md,
 	},
 	row: { flexDirection: "row", gap: spacing.md },
+	offerBody: { flex: 1, gap: 2 },
 	image: { width: 64, height: 64, borderRadius: 10 },
 });

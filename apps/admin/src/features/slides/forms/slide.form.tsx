@@ -4,11 +4,16 @@ import type {
 	SlideType,
 	UpdateSlideDto,
 } from "@0xc1x/role-commons";
-import { CreateSlideFormSchema, RedirectUrlSchema } from "@0xc1x/role-commons";
+import {
+	CreateSlideFormSchema,
+	HexColorSchema,
+	RedirectUrlSchema,
+} from "@0xc1x/role-commons";
 import { useForm, useStore } from "@tanstack/react-form";
+import type { ComponentProps, FormEvent } from "react";
 import { z } from "zod";
 import { ImageField } from "@/components/media/image-field";
-import { Badge } from "@/components/ui/badge";
+import { StatusSwitch } from "@/components/status-switch";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -21,7 +26,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { ApiClientError } from "@/lib/api/errors";
 import {
 	useCreateSlide,
@@ -37,8 +41,8 @@ const SLIDE_TYPE_OPTIONS = [
 	{ value: "coupon", label: "Coupon" },
 ] as const;
 
-/** Coincide con HexColorSchema de role-commons (#RGB / #RRGGBB). */
-const HEX_REGEX = /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/;
+/** Reusa HexColorSchema de commons (#RGB / #RRGGBB); "" = sin valor. */
+const emptyHexToNull = HexColorSchema.nullable();
 
 function emptyToNull(value: string | null | undefined): string | null {
 	if (value == null || value === "") return null;
@@ -76,14 +80,14 @@ const slideFormSchema = CreateSlideFormSchema.omit({
 			),
 		text_color: z
 			.string()
-			.refine((v) => v === "" || HEX_REGEX.test(v), {
+			.refine((v) => v === "" || emptyHexToNull.safeParse(v).success, {
 				message:
 					"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
 			})
 			.transform((v) => (v === "" ? null : v)),
 		button_color: z
 			.string()
-			.refine((v) => v === "" || HEX_REGEX.test(v), {
+			.refine((v) => v === "" || emptyHexToNull.safeParse(v).success, {
 				message:
 					"El color debe tener un formato hexadecimal válido (ej. #FF0000)",
 			})
@@ -113,6 +117,7 @@ const slideFormSchema = CreateSlideFormSchema.omit({
 	});
 
 type SlideFormValues = z.input<typeof slideFormSchema>;
+type SlideSubmitValue = z.output<typeof slideFormSchema>;
 
 interface SlideFormProps {
 	formId: string;
@@ -120,64 +125,84 @@ interface SlideFormProps {
 	slide?: SlideDto;
 }
 
-export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
+/** Construye el payload del API desde los valores validados (lógica pura). */
+function toSlidePayload(value: SlideSubmitValue) {
+	return {
+		title: value.title,
+		caption: value.caption,
+		badge_text: emptyToNull(value.badge_text as string | null | undefined),
+		cta_label: value.cta_label,
+		// Cupón: sin destino; los demás tipos: sin código.
+		redirect_url:
+			value.type === "coupon"
+				? null
+				: emptyToNull(value.redirect_url as string | null | undefined),
+		coupon_code:
+			value.type === "coupon"
+				? emptyToNull(value.coupon_code as string | null | undefined)
+				: null,
+		text_color: emptyToNull(value.text_color as string | null | undefined),
+		button_color: emptyToNull(value.button_color as string | null | undefined),
+		type: value.type,
+		active: value.active ?? true,
+		priority: value.priority ?? 0,
+		start_at: emptyToNull(value.start_at as string | null | undefined),
+		end_at: emptyToNull(value.end_at as string | null | undefined),
+	};
+}
+
+/** Resuelve la URL final de la imagen: sube el File o reutiliza la URL existente. */
+async function resolveImageUrl(
+	image: SlideFormValues["image"],
+	upload: (file: File) => Promise<{ url: string }>,
+): Promise<string | null> {
+	if (image instanceof File) {
+		const { url } = await upload(image);
+		return url;
+	}
+	return typeof image === "string" ? image : null;
+}
+
+function slideDefaultValues(slide?: SlideDto): SlideFormValues {
+	return {
+		title: slide?.title ?? "",
+		caption: slide?.caption ?? "",
+		badge_text: slide?.badge_text ?? "",
+		cta_label: slide?.cta_label ?? "",
+		redirect_url: slide?.redirect_url ?? "",
+		coupon_code: slide?.coupon_code ?? "",
+		text_color: slide?.text_color ?? "",
+		button_color: slide?.button_color ?? "",
+		type: slide?.type ?? "info",
+		active: slide?.active ?? true,
+		priority: slide?.priority ?? 0,
+		start_at: slide?.start_at ?? "",
+		end_at: slide?.end_at ?? "",
+		image: (slide?.image_url ?? null) as File | string | null,
+	};
+}
+
+function useSlideForm({
+	slide,
+	onSuccess,
+}: {
+	slide?: SlideDto;
+	onSuccess?: () => void;
+}) {
 	const createMutation = useCreateSlide();
 	const updateMutation = useUpdateSlide();
 	const uploadMutation = useUploadImage();
 
 	const form = useForm({
-		defaultValues: {
-			title: slide?.title ?? "",
-			caption: slide?.caption ?? "",
-			badge_text: slide?.badge_text ?? "",
-			cta_label: slide?.cta_label ?? "",
-			redirect_url: slide?.redirect_url ?? "",
-			coupon_code: slide?.coupon_code ?? "",
-			text_color: slide?.text_color ?? "",
-			button_color: slide?.button_color ?? "",
-			type: slide?.type ?? "info",
-			active: slide?.active ?? true,
-			priority: slide?.priority ?? 0,
-			start_at: slide?.start_at ?? "",
-			end_at: slide?.end_at ?? "",
-			image: (slide?.image_url ?? null) as File | string | null,
-		} satisfies SlideFormValues,
+		defaultValues: slideDefaultValues(slide) satisfies SlideFormValues,
 		validators: { onSubmit: slideFormSchema },
 		onSubmit: async ({ value }) => {
-			let imageUrl: string | null = null;
+			const imageUrl = await resolveImageUrl(
+				value.image,
+				uploadMutation.mutateAsync,
+			);
 
-			if (value.image instanceof File) {
-				const { url } = await uploadMutation.mutateAsync(value.image);
-				imageUrl = url;
-			} else if (typeof value.image === "string") {
-				imageUrl = value.image;
-			}
-
-			const payload = {
-				title: value.title,
-				caption: value.caption,
-				badge_text: emptyToNull(value.badge_text as string | null | undefined),
-				cta_label: value.cta_label,
-				// Cupón: sin destino; los demás tipos: sin código.
-				redirect_url:
-					value.type === "coupon"
-						? null
-						: emptyToNull(value.redirect_url as string | null | undefined),
-				coupon_code:
-					value.type === "coupon"
-						? emptyToNull(value.coupon_code as string | null | undefined)
-						: null,
-				text_color: emptyToNull(value.text_color as string | null | undefined),
-				button_color: emptyToNull(
-					value.button_color as string | null | undefined,
-				),
-				type: value.type,
-				active: value.active ?? true,
-				priority: value.priority ?? 0,
-				start_at: emptyToNull(value.start_at as string | null | undefined),
-				end_at: emptyToNull(value.end_at as string | null | undefined),
-				image_url: imageUrl,
-			};
+			const payload = { ...toSlidePayload(value), image_url: imageUrl };
 
 			if (slide) {
 				await updateMutation.mutateAsync({
@@ -194,29 +219,29 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 	// Habilita el render condicional del CTA según el tipo elegido.
 	const selectedType = useStore(form.store, (s) => s.values.type);
 
-	const formError =
+	const error =
 		createMutation.error ?? updateMutation.error ?? uploadMutation.error;
+	return { form, error, selectedType };
+}
 
+type SlideFormApi = ReturnType<typeof useSlideForm>["form"];
+
+function SlideFormError({ error }: { error: unknown }) {
+	if (!error) return null;
 	return (
-		<form
-			id={formId}
-			onSubmit={(e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				form.handleSubmit();
-			}}
-			className="space-y-4"
-		>
-			{formError && (
-				<p className="text-sm text-destructive">
-					{formError instanceof ApiClientError
-						? formError.message
-						: formError instanceof Error
-							? formError.message
-							: "Error inesperado"}
-				</p>
-			)}
+		<p className="text-sm text-destructive">
+			{error instanceof ApiClientError
+				? error.message
+				: error instanceof Error
+					? error.message
+					: "Error inesperado"}
+		</p>
+	);
+}
 
+function SlideContentSection({ form }: { form: SlideFormApi }) {
+	return (
+		<>
 			<form.Field name="title">
 				{(field) => {
 					const isInvalid =
@@ -319,7 +344,83 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 					);
 				}}
 			</form.Field>
+		</>
+	);
+}
 
+interface CtaFieldProps {
+	fieldName: string;
+	value: string;
+	isInvalid: boolean;
+	errors: ComponentProps<typeof FieldError>["errors"];
+	onBlur: () => void;
+	onChange: (value: string) => void;
+}
+
+function CouponCodeField({
+	fieldName,
+	value,
+	isInvalid,
+	errors,
+	onBlur,
+	onChange,
+}: CtaFieldProps) {
+	return (
+		<Field data-invalid={isInvalid}>
+			<FieldLabel htmlFor={fieldName}>Código del cupón</FieldLabel>
+			<Input
+				id={fieldName}
+				name={fieldName}
+				type="text"
+				placeholder="Ej. ROLE10"
+				value={value}
+				onBlur={onBlur}
+				onChange={(e) => onChange(e.target.value)}
+				aria-invalid={isInvalid}
+			/>
+			{isInvalid && <FieldError errors={errors} />}
+		</Field>
+	);
+}
+
+function RedirectUrlField({
+	fieldName,
+	value,
+	isInvalid,
+	errors,
+	onBlur,
+	onChange,
+}: CtaFieldProps) {
+	return (
+		<Field data-invalid={isInvalid}>
+			<FieldLabel htmlFor={fieldName}>Destino</FieldLabel>
+			<Input
+				id={fieldName}
+				name={fieldName}
+				type="text"
+				placeholder="https://... o /explore"
+				value={value}
+				onBlur={onBlur}
+				onChange={(e) => onChange(e.target.value)}
+				aria-invalid={isInvalid}
+			/>
+			<p className="text-xs text-muted-foreground">
+				URL externa (https://...) o ruta interna de la app (ej. /explore).
+			</p>
+			{isInvalid && <FieldError errors={errors} />}
+		</Field>
+	);
+}
+
+function SlideCtaSection({
+	form,
+	selectedType,
+}: {
+	form: SlideFormApi;
+	selectedType: SlideType;
+}) {
+	return (
+		<>
 			<form.Field name="cta_label">
 				{(field) => {
 					const isInvalid =
@@ -345,56 +446,102 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 
 			{selectedType === "coupon" ? (
 				<form.Field name="coupon_code">
-					{(field) => {
-						const isInvalid =
-							field.state.meta.isTouched && !field.state.meta.isValid;
-						return (
-							<Field data-invalid={isInvalid}>
-								<FieldLabel htmlFor={field.name}>Código del cupón</FieldLabel>
-								<Input
-									id={field.name}
-									name={field.name}
-									type="text"
-									placeholder="Ej. ROLE10"
-									value={field.state.value ?? ""}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-									aria-invalid={isInvalid}
-								/>
-								{isInvalid && <FieldError errors={field.state.meta.errors} />}
-							</Field>
-						);
-					}}
+					{(field) => (
+						<CouponCodeField
+							fieldName={field.name}
+							value={field.state.value ?? ""}
+							isInvalid={
+								field.state.meta.isTouched && !field.state.meta.isValid
+							}
+							errors={field.state.meta.errors}
+							onBlur={field.handleBlur}
+							onChange={(next) => field.handleChange(next)}
+						/>
+					)}
 				</form.Field>
 			) : (
 				<form.Field name="redirect_url">
-					{(field) => {
-						const isInvalid =
-							field.state.meta.isTouched && !field.state.meta.isValid;
-						return (
-							<Field data-invalid={isInvalid}>
-								<FieldLabel htmlFor={field.name}>Destino</FieldLabel>
-								<Input
-									id={field.name}
-									name={field.name}
-									type="text"
-									placeholder="https://... o /explore"
-									value={field.state.value ?? ""}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-									aria-invalid={isInvalid}
-								/>
-								<p className="text-xs text-muted-foreground">
-									URL externa (https://...) o ruta interna de la app (ej.{" "}
-									/explore).
-								</p>
-								{isInvalid && <FieldError errors={field.state.meta.errors} />}
-							</Field>
-						);
-					}}
+					{(field) => (
+						<RedirectUrlField
+							fieldName={field.name}
+							value={field.state.value ?? ""}
+							isInvalid={
+								field.state.meta.isTouched && !field.state.meta.isValid
+							}
+							errors={field.state.meta.errors}
+							onBlur={field.handleBlur}
+							onChange={(next) => field.handleChange(next)}
+						/>
+					)}
 				</form.Field>
 			)}
+		</>
+	);
+}
 
+function SlideColorField({
+	form,
+	name,
+	label,
+}: {
+	form: SlideFormApi;
+	name: "text_color" | "button_color";
+	label: string;
+}) {
+	return (
+		<form.Field name={name}>
+			{(field) => {
+				const rawValue = field.state.value ?? "";
+				const hasFormatError =
+					rawValue.length > 0 && !emptyHexToNull.safeParse(rawValue).success;
+				const formErrors = field.state.meta.errors ?? [];
+				const isInvalid =
+					(field.state.meta.isTouched && formErrors.length > 0) ||
+					hasFormatError;
+
+				return (
+					<Field data-invalid={isInvalid} className="space-y-1.5">
+						<div className="flex items-center justify-between">
+							<FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+							{rawValue && (
+								<span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground uppercase">
+									{rawValue}
+								</span>
+							)}
+						</div>
+						<div
+							className={
+								isInvalid
+									? "[&_button]:border-destructive [&_button]:ring-destructive/20"
+									: undefined
+							}
+						>
+							<ColorPicker
+								value={rawValue || undefined}
+								onChange={(val) => field.handleChange(val)}
+								onBlur={field.handleBlur}
+							/>
+						</div>
+						{isInvalid && (
+							<p className="pt-0.5 text-xs font-medium text-destructive">
+								{hasFormatError
+									? "Formato hexadecimal inválido (ej. #3B82F6)."
+									: null}
+								{!hasFormatError && formErrors.length > 0 ? (
+									<FieldError errors={formErrors} />
+								) : null}
+							</p>
+						)}
+					</Field>
+				);
+			}}
+		</form.Field>
+	);
+}
+
+function SlideAppearanceSection({ form }: { form: SlideFormApi }) {
+	return (
+		<>
 			<form.Field name="priority">
 				{(field) => {
 					const isInvalid =
@@ -425,102 +572,19 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 				}}
 			</form.Field>
 
-			<form.Field name="text_color">
-				{(field) => {
-					const rawValue = field.state.value ?? "";
-					const hasFormatError =
-						rawValue.length > 0 && !HEX_REGEX.test(rawValue);
-					const formErrors = field.state.meta.errors ?? [];
-					const isInvalid =
-						(field.state.meta.isTouched && formErrors.length > 0) ||
-						hasFormatError;
+			<SlideColorField form={form} name="text_color" label="Color del texto" />
+			<SlideColorField
+				form={form}
+				name="button_color"
+				label="Color del botón"
+			/>
+		</>
+	);
+}
 
-					return (
-						<Field data-invalid={isInvalid} className="space-y-1.5">
-							<div className="flex items-center justify-between">
-								<FieldLabel htmlFor={field.name}>Color del texto</FieldLabel>
-								{rawValue && (
-									<span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground uppercase">
-										{rawValue}
-									</span>
-								)}
-							</div>
-							<div
-								className={
-									isInvalid
-										? "[&_button]:border-destructive [&_button]:ring-destructive/20"
-										: undefined
-								}
-							>
-								<ColorPicker
-									value={rawValue || undefined}
-									onChange={(val) => field.handleChange(val)}
-									onBlur={field.handleBlur}
-								/>
-							</div>
-							{isInvalid && (
-								<p className="pt-0.5 text-xs font-medium text-destructive">
-									{hasFormatError
-										? "Formato hexadecimal inválido (ej. #3B82F6)."
-										: null}
-									{!hasFormatError && formErrors.length > 0 ? (
-										<FieldError errors={formErrors} />
-									) : null}
-								</p>
-							)}
-						</Field>
-					);
-				}}
-			</form.Field>
-
-			<form.Field name="button_color">
-				{(field) => {
-					const rawValue = field.state.value ?? "";
-					const hasFormatError =
-						rawValue.length > 0 && !HEX_REGEX.test(rawValue);
-					const formErrors = field.state.meta.errors ?? [];
-					const isInvalid =
-						(field.state.meta.isTouched && formErrors.length > 0) ||
-						hasFormatError;
-
-					return (
-						<Field data-invalid={isInvalid} className="space-y-1.5">
-							<div className="flex items-center justify-between">
-								<FieldLabel htmlFor={field.name}>Color del botón</FieldLabel>
-								{rawValue && (
-									<span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground uppercase">
-										{rawValue}
-									</span>
-								)}
-							</div>
-							<div
-								className={
-									isInvalid
-										? "[&_button]:border-destructive [&_button]:ring-destructive/20"
-										: undefined
-								}
-							>
-								<ColorPicker
-									value={rawValue || undefined}
-									onChange={(val) => field.handleChange(val)}
-									onBlur={field.handleBlur}
-								/>
-							</div>
-							{isInvalid && (
-								<p className="pt-0.5 text-xs font-medium text-destructive">
-									{hasFormatError
-										? "Formato hexadecimal inválido (ej. #3B82F6)."
-										: null}
-									{!hasFormatError && formErrors.length > 0 ? (
-										<FieldError errors={formErrors} />
-									) : null}
-								</p>
-							)}
-						</Field>
-					);
-				}}
-			</form.Field>
-
+function SlideScheduleSection({ form }: { form: SlideFormApi }) {
+	return (
+		<>
 			<form.Field name="start_at">
 				{(field) => {
 					const isInvalid =
@@ -558,45 +622,63 @@ export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
 					);
 				}}
 			</form.Field>
+		</>
+	);
+}
 
-			<form.Field name="image">
-				{(field) => (
-					<ImageField
-						label="Imagen de la slide"
-						currentFile={field.state.value}
-						isInvalid={field.state.meta.isTouched && !field.state.meta.isValid}
-						errors={field.state.meta.errors}
-						onBlur={field.handleBlur}
-						onChange={(file) => field.handleChange(file)}
-					/>
-				)}
-			</form.Field>
-
-			{slide && (
-				<form.Field name="active">
-					{(field) => {
-						const isActive = field.state.value;
-						return (
-							<Field>
-								<FieldLabel>Estado</FieldLabel>
-								<div className="flex items-center gap-3">
-									<Switch
-										checked={isActive}
-										onCheckedChange={(checked) => field.handleChange(checked)}
-										className="data-checked:border-emerald-500 data-checked:bg-emerald-500 data-unchecked:border-red-500 data-unchecked:bg-red-500 dark:data-unchecked:border-red-600 dark:data-unchecked:bg-red-600"
-									/>
-									<Badge
-										variant={isActive ? "default" : "destructive"}
-										className={isActive ? "bg-green-500/10 text-green-600" : ""}
-									>
-										{isActive ? "Activo" : "Inactivo"}
-									</Badge>
-								</div>
-							</Field>
-						);
-					}}
-				</form.Field>
+function SlideMediaSection({ form }: { form: SlideFormApi }) {
+	return (
+		<form.Field name="image">
+			{(field) => (
+				<ImageField
+					label="Imagen de la slide"
+					currentFile={field.state.value}
+					isInvalid={field.state.meta.isTouched && !field.state.meta.isValid}
+					errors={field.state.meta.errors}
+					onBlur={field.handleBlur}
+					onChange={(file) => field.handleChange(file)}
+				/>
 			)}
+		</form.Field>
+	);
+}
+
+function SlideStatusSection({ form }: { form: SlideFormApi }) {
+	return (
+		<form.Field name="active">
+			{(field) => {
+				const isActive = field.state.value;
+				return (
+					<Field>
+						<FieldLabel>Estado</FieldLabel>
+						<StatusSwitch
+							checked={isActive}
+							onCheckedChange={(checked) => field.handleChange(checked)}
+						/>
+					</Field>
+				);
+			}}
+		</form.Field>
+	);
+}
+
+export function SlideForm({ formId, onSuccess, slide }: SlideFormProps) {
+	const { form, error, selectedType } = useSlideForm({ slide, onSuccess });
+	const handleSubmit = (e: FormEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		form.handleSubmit();
+	};
+
+	return (
+		<form id={formId} onSubmit={handleSubmit} className="space-y-4">
+			<SlideFormError error={error} />
+			<SlideContentSection form={form} />
+			<SlideCtaSection form={form} selectedType={selectedType} />
+			<SlideAppearanceSection form={form} />
+			<SlideScheduleSection form={form} />
+			<SlideMediaSection form={form} />
+			{slide && <SlideStatusSection form={form} />}
 		</form>
 	);
 }

@@ -24,7 +24,7 @@ apps/api ─────┘                └── apps/landing
 
 ## Flujos de datos
 
-**Registro de negocio (landing)**: el negocio se registra desde la landing (TanStack Start) → insert directo a Supabase con `is_active=false` → el admin verifica los datos personalmente (admin → API → actualiza estado) → el móvil muestra el negocio cuando RLS lo permite.
+**Registro de negocio (landing)**: el negocio se registra desde la landing (TanStack Start) → `POST /businesses/onboarding` en la API (validación zod + rate limit) → la API crea el auth user y el negocio con `is_active=false, verification_status='pending'` vía `service_role` server-side → el admin verifica los datos personalmente (admin → API → actualiza estado) → el móvil muestra el negocio cuando RLS lo permite. La landing no toca Supabase: solo consume la API.
 
 **Catálogo y órdenes (móvil)**: el móvil lee/crea ofertas, órdenes y reservas directo contra Supabase (queries y RLS nativas). La API posee las reglas transaccionales (stock, ciclo de vida de órdenes) para admin/landing.
 

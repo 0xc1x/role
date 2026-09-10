@@ -93,3 +93,4 @@ export const ListAppConfigQuerySchema = PaginationQuerySchema.extend({
 
 /** Canonical list response: `{ data: AppConfig[], meta }`. */
 export const AppConfigListResponseSchema = PaginatedDataSchema(AppConfigSchema);
+

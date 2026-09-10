@@ -10,6 +10,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { formatMoney } from "@/core/utils/formatters";
 import {
 	discountPercentage,
@@ -22,7 +23,7 @@ import {
 import { useCategories } from "@/features/hooks";
 import { env } from "@/core/config/env";
 // Static import: this file is web-only.
-import { MapCanvas } from "@/features/business/components/MapCanvas.web";
+import { MapCanvas } from "@/core/ui/MapCanvas.web";
 
 const FALLBACK_COORD = { latitude: -1.8312, longitude: -78.1834 };
 
@@ -82,12 +83,14 @@ export function ExploreMapView({
 					{locatedOffers.map((offer) => {
 						const selected =
 							selectedOffer?.offer.id === offer.offer.id;
+						const loc = offer.location;
+						if (loc == null) return null;
 						return (
 							<AdvancedMarker
 								key={`${offer.offer.id}-${selected ? "sel" : "def"}`}
 								position={{
-									lat: offer.location!.latitude,
-									lng: offer.location!.longitude,
+									lat: loc.latitude,
+									lng: loc.longitude,
 								}}
 								onClick={() => setSelectedOffer(offer)}
 							>
@@ -122,7 +125,7 @@ export function ExploreMapView({
 					})}
 				</MapCanvas>
 			) : (
-				<View style={[styles.flex, styles.mapFallback]} />
+				<View style={[styles.flex, { backgroundColor: colors.borderSolid }]} />
 			)}
 
 			{/* ── Header ─────────────────────────────────────────────── */}
@@ -219,7 +222,7 @@ function MapOfferCard({
 					<Ionicons name="close" size={16} color={colors.foreground} />
 				</Pressable>
 				<LinearGradient
-					colors={["transparent", "rgba(0,0,0,0.4)"]}
+					colors={["transparent", withAlpha(colors.scrim, 0.4)]}
 					style={styles.selectedFade}
 				/>
 			</View>
@@ -276,7 +279,6 @@ const styles = StyleSheet.create({
 	flex: {
 		flex: 1,
 	},
-	mapFallback: { backgroundColor: "#e5e5e5" },
 	pricePill: {
 		paddingHorizontal: 10,
 		paddingVertical: 5,

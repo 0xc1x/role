@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Contrato de respuesta del espejo de la RPC `reserve_offer` de Supabase.
  * Debe mantenerse idéntico al jsonb que devuelve el SQL (ADR-0008).
  */
-const RESERVE_OFFER_ERRORS = [
+export const RESERVE_OFFER_ERROR_CODES = [
   'OFFER_NOT_FOUND',
   'OFFER_OUT_OF_STOCK',
   'OFFER_EXPIRED',
@@ -13,9 +13,13 @@ const RESERVE_OFFER_ERRORS = [
   'COUPON_MIN_NOT_MET',
 ] as const;
 
+export type ReserveOfferErrorCode = (typeof RESERVE_OFFER_ERROR_CODES)[number];
+
+const RESERVE_OFFER_ERRORS = RESERVE_OFFER_ERROR_CODES;
+
 export const ReserveOfferResultSchema = z.object({
   success: z.literal(true),
-  order_id: z.string().uuid(),
+  order_id: z.uuid(),
   order_number: z.string(),
   pickup_code: z.string(),
   price: z.number(),
@@ -32,7 +36,7 @@ export const ReserveOfferErrorSchema = z.object({
   message: z.string(),
 });
 
-export const ReserveOfferResponseSchema = z.union([
+export const ReserveOfferResponseSchema = z.discriminatedUnion('success', [
   ReserveOfferResultSchema,
   ReserveOfferErrorSchema,
 ]);

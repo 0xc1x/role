@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { statsDaysInRange, statsRangeFor } from "./stats";
+import { statsDaysInRange, statsRangeFor, statsRangeLabel, statsViewModel } from "./stats";
 
 describe("statsRangeFor", () => {
 	it("current week runs from Monday to now", () => {
@@ -80,5 +80,38 @@ describe("statsDaysInRange", () => {
 	it("counts the real month length", () => {
 		const now = new Date(2026, 3, 10, 12, 0);
 		expect(statsDaysInRange(statsRangeFor("month", -1, now))).toBe(31); // marzo
+	});
+});
+
+describe("statsRangeLabel", () => {
+	const labels = { thisWeek: "TW", thisMonth: "TM", thisYear: "TY" };
+	it("offset 0 usa etiquetas", () => {
+		const now = new Date(2026, 8, 2, 15, 30);
+		expect(statsRangeLabel("week", 0, labels, now)).toBe("TW");
+		expect(statsRangeLabel("month", 0, labels, now)).toBe("TM");
+		expect(statsRangeLabel("year", 0, labels, now)).toBe("TY");
+	});
+	it("month pasado muestra mes y año", () => {
+		const now = new Date(2026, 8, 2, 15, 30);
+		expect(statsRangeLabel("month", -1, labels, now)).toBe("ago 2026");
+	});
+	it("year pasado muestra año", () => {
+		const now = new Date(2026, 8, 2, 15, 30);
+		expect(statsRangeLabel("year", -1, labels, now)).toBe("2025");
+	});
+});
+
+describe("statsViewModel", () => {
+	it("calcula promedios y rating", () => {
+		const vm = statsViewModel({ revenue: 100, ordersCount: 4, avgRating: 4.5 });
+		expect(vm.dailyAvg(10)).toBe("10.00");
+		expect(vm.avgTicket).toBe("25.00");
+		expect(vm.rating).toBe("4.5");
+	});
+	it("ceros sin dividir", () => {
+		const vm = statsViewModel({ revenue: 0, ordersCount: 0, avgRating: null });
+		expect(vm.dailyAvg(0)).toBe("0.00");
+		expect(vm.avgTicket).toBe("0.00");
+		expect(vm.rating).toBe("0.0");
 	});
 });

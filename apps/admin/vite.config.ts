@@ -17,13 +17,7 @@ const config = defineConfig({
 	optimizeDeps: {
 		include: ["@0xc1x/role-commons"],
 	},
-	plugins: [
-		devtools(),
-		nitro(),
-		tailwindcss(),
-		tanstackStart(),
-		viteReact(),
-	],
+	plugins: [devtools(), nitro(), tailwindcss(), tanstackStart(), viteReact()],
 });
 
 export default config;

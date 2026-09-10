@@ -1,11 +1,13 @@
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
+import { AppText, HeartButton } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { formatDistanceKm, formatMoney } from "@/core/utils/formatters";
 import {
 	discountPercentage,
@@ -36,8 +38,7 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 			: "";
 
 	return (
-		<Pressable
-			onPress={() => router.push(`/offer/${offer.offer.id}`)}
+		<View
 			style={[
 				styles.card,
 				{
@@ -47,23 +48,27 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 				},
 			]}
 		>
+			<Pressable
+				onPress={() => router.push(`/offer/${offer.offer.id}`)}
+				style={styles.pressArea}
+			>
 			<View style={styles.imageWrap}>
 				{offer.offer.image ? (
 					<Image
 						source={{ uri: offer.offer.image }}
 						style={styles.image}
-						resizeMode="cover"
+						contentFit="cover"
 					/>
 				) : (
-					<View style={[styles.image, styles.imagePlaceholder]} />
+					<View style={[styles.image, { backgroundColor: colors.borderSolid }]} />
 				)}
 				{discount >= 10 ? (
 					<View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
 						<AppText
+							variant="caption"
+							weight="bold"
 							style={{
 								color: colors.primaryForeground,
-								fontSize: 11,
-								fontWeight: "700",
 							}}
 						>
 							-{discount}%
@@ -75,10 +80,10 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 						style={[styles.lowStockBadge, { backgroundColor: colors.destructive }]}
 					>
 						<AppText
+							variant="tiny"
+							weight="semiBold"
 							style={{
-								color: "#FFFFFF",
-								fontSize: 10,
-								fontWeight: "600",
+								color: colors.destructiveForeground,
 							}}
 						>
 							{strings.offers.onlyLeft.replace(
@@ -88,19 +93,6 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 						</AppText>
 					</View>
 				) : null}
-				<Pressable
-					onPress={() => toggleFavorite.mutate(offer.offer.id)}
-					hitSlop={6}
-					style={[styles.heart, { backgroundColor: colors.card }]}
-				>
-					<Ionicons
-						name={isFavorite ? "heart" : "heart-outline"}
-						size={16}
-						color={
-							isFavorite ? colors.destructiveVibrant : colors.mutedForeground
-						}
-					/>
-				</Pressable>
 			</View>
 			<View style={styles.body}>
 				<AppText
@@ -112,9 +104,9 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 					{offer.business.name}
 				</AppText>
 				<AppText
-					variant="bodySmall"
+					variant="caption"
 					numberOfLines={1}
-					style={{ color: colors.mutedForeground, fontSize: 11 }}
+					style={{ color: colors.mutedForeground }}
 				>
 					{offer.offer.title}
 				</AppText>
@@ -123,8 +115,8 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 						{formatMoney(offer.offer.discounted_price)}
 					</AppText>
 					<AppText
-						variant="priceOriginal"
-						style={{ color: colors.mutedForeground, fontSize: 11 }}
+						variant="caption"
+						style={{ color: colors.mutedForeground }}
 					>
 						{formatMoney(offer.offer.original_price)}
 					</AppText>
@@ -132,13 +124,23 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 				{distance ? (
 					<View style={styles.distanceRow}>
 						<Ionicons name="location-outline" size={10} color={colors.mutedForeground} />
-						<AppText style={{ color: colors.mutedForeground, fontSize: 10 }}>
+						<AppText variant="tiny" style={{ color: colors.mutedForeground }}>
 							{distance}
 						</AppText>
 					</View>
 				) : null}
 			</View>
-		</Pressable>
+			</Pressable>
+			{/* Hermano absoluto: evita <button> anidado en web */}
+			<View style={styles.heart}>
+				<HeartButton
+					isFavorite={isFavorite}
+					onPress={() => toggleFavorite.mutate(offer.offer.id)}
+					size={30}
+					iconSize={16}
+				/>
+			</View>
+		</View>
 	);
 }
 
@@ -148,15 +150,15 @@ const styles = StyleSheet.create({
 		borderWidth: StyleSheet.hairlineWidth,
 		overflow: "hidden",
 	},
+	pressArea: {
+		flex: 1,
+	},
 	imageWrap: {
 		aspectRatio: 1.25,
 	},
 	image: {
 		width: "100%",
 		height: "100%",
-	},
-	imagePlaceholder: {
-		backgroundColor: "#E5E5E5",
 	},
 	discountBadge: {
 		position: "absolute",
@@ -179,11 +181,7 @@ const styles = StyleSheet.create({
 		position: "absolute",
 		top: spacing.sm,
 		right: spacing.sm,
-		width: 30,
-		height: 30,
-		borderRadius: 15,
-		alignItems: "center",
-		justifyContent: "center",
+		zIndex: 1,
 	},
 	body: {
 		padding: spacing.sm,

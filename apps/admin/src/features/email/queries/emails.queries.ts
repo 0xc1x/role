@@ -1,3 +1,4 @@
+import type { CreateCampaignDto, UpdateCampaignDto } from "@0xc1x/role-commons";
 import {
 	queryOptions,
 	useMutation,
@@ -6,35 +7,32 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { emailApi } from "../api/emails.api";
+import { emailKeys } from "./email.keys";
+
+export { emailKeys };
 
 type ListQ = Parameters<typeof emailApi.listComponents>[0];
-
-const keys = {
-	all: ["email"] as const,
-	list: (resource: string, q?: Record<string, unknown>) =>
-		[...keys.all, resource, q] as const,
-};
 
 // ─── listas ────────────────────────────────────────────────────────────
 export const emailListOptions = {
 	components: (q?: ListQ) =>
 		queryOptions({
-			queryKey: keys.list("components", q),
+			queryKey: emailKeys.list("components", q),
 			queryFn: () => emailApi.listComponents(q),
 		}),
 	templates: (q?: ListQ) =>
 		queryOptions({
-			queryKey: keys.list("templates", q),
+			queryKey: emailKeys.list("templates", q),
 			queryFn: () => emailApi.listTemplates(q),
 		}),
 	segments: (q?: ListQ) =>
 		queryOptions({
-			queryKey: keys.list("segments", q),
+			queryKey: emailKeys.list("segments", q),
 			queryFn: () => emailApi.listSegments(q),
 		}),
 	campaigns: (q?: ListQ) =>
 		queryOptions({
-			queryKey: keys.list("campaigns", q),
+			queryKey: emailKeys.list("campaigns", q),
 			queryFn: () => emailApi.listCampaigns(q),
 		}),
 };
@@ -53,57 +51,57 @@ export function useEmailSegments() {
  * Mutaciones genéricas del módulo: cualquier cambio invalida las cuatro
  * listas (el módulo es pequeño; la precisión de invalidación no paga).
  */
-function useResourceMutations(
-	resource: "components" | "templates" | "segments",
-) {
+function useResourceMutations<TCreate, TUpdate>(api: {
+	create: (b: TCreate) => Promise<unknown>;
+	update: (id: string, b: TUpdate) => Promise<unknown>;
+	remove: (id: string) => Promise<unknown>;
+}) {
 	const qc = useQueryClient();
-	const invalidate = () => void qc.invalidateQueries({ queryKey: keys.all });
-	// ponytail: firma común explícita para poder unir los tres recursos
-	const api = {
-		components: {
-			create: emailApi.createComponent,
-			update: emailApi.updateComponent,
-			remove: emailApi.removeComponent,
-		},
-		templates: {
-			create: emailApi.createTemplate,
-			update: emailApi.updateTemplate,
-			remove: emailApi.removeTemplate,
-		},
-		segments: {
-			create: emailApi.createSegment,
-			update: emailApi.updateSegment,
-			remove: emailApi.removeSegment,
-		},
-	}[resource] as {
-		create: (b: unknown) => Promise<unknown>;
-		update: (id: string, body: unknown) => Promise<unknown>;
-		remove: (id: string) => Promise<unknown>;
-	};
+	const invalidate = () =>
+		void qc.invalidateQueries({ queryKey: emailKeys.all });
 	return {
 		create: useMutation({
-			mutationFn: (b: unknown) => api.create(b),
+			mutationKey: emailKeys.all,
+			mutationFn: (b: TCreate) => api.create(b),
 			onSuccess: invalidate,
 		}),
 		update: useMutation({
-			mutationFn: ({ id, body }: { id: string; body: unknown }) =>
+			mutationKey: emailKeys.all,
+			mutationFn: ({ id, body }: { id: string; body: TUpdate }) =>
 				api.update(id, body),
 			onSuccess: invalidate,
 		}),
 		remove: useMutation({
+			mutationKey: emailKeys.all,
 			mutationFn: (id: string) => api.remove(id),
 			onSuccess: invalidate,
 		}),
 	};
 }
 
-export const useComponentMutations = () => useResourceMutations("components");
-export const useTemplateMutations = () => useResourceMutations("templates");
+export const useComponentMutations = () =>
+	useResourceMutations({
+		create: emailApi.createComponent,
+		update: emailApi.updateComponent,
+		remove: emailApi.removeComponent,
+	});
+export const useTemplateMutations = () =>
+	useResourceMutations({
+		create: emailApi.createTemplate,
+		update: emailApi.updateTemplate,
+		remove: emailApi.removeTemplate,
+	});
 export const useSegmentMutations = () => {
 	const qc = useQueryClient();
-	const invalidate = () => void qc.invalidateQueries({ queryKey: keys.all });
-	const base = useResourceMutations("segments");
+	const invalidate = () =>
+		void qc.invalidateQueries({ queryKey: emailKeys.all });
+	const base = useResourceMutations({
+		create: emailApi.createSegment,
+		update: emailApi.updateSegment,
+		remove: emailApi.removeSegment,
+	});
 	const setUsers = useMutation({
+		mutationKey: emailKeys.all,
 		mutationFn: ({ id, user_ids }: { id: string; user_ids: string[] }) =>
 			emailApi.setSegmentUsers(id, user_ids),
 		onSuccess: invalidate,
@@ -131,36 +129,45 @@ export function useSetSegmentUsers() {
 	});
 }
 
+/** Error de mutación → toast. Pura y sin closure: vive a nivel módulo. */
+function notifyMutationError(err: Error) {
+	toast.error(err.message);
+}
+
 export function useCampaignMutations() {
 	const qc = useQueryClient();
-	const invalidate = () => void qc.invalidateQueries({ queryKey: keys.all });
-	const onError = (err: Error) => toast.error(err.message);
+	const invalidate = () =>
+		void qc.invalidateQueries({ queryKey: emailKeys.all });
 
 	return {
 		create: useMutation({
-			mutationFn: (b: unknown) => emailApi.createCampaign(b),
+			mutationKey: emailKeys.all,
+			mutationFn: (b: CreateCampaignDto) => emailApi.createCampaign(b),
 			onSuccess: () => {
 				toast.success("Campaña creada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		update: useMutation({
-			mutationFn: ({ id, body }: { id: string; body: unknown }) =>
+			mutationKey: emailKeys.all,
+			mutationFn: ({ id, body }: { id: string; body: UpdateCampaignDto }) =>
 				emailApi.updateCampaign(id, body),
 			onSuccess: () => {
 				toast.success("Campaña actualizada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		test: useMutation({
+			mutationKey: emailKeys.all,
 			mutationFn: ({ id, emails }: { id: string; emails: string[] }) =>
 				emailApi.testCampaign(id, { emails }),
 			onSuccess: invalidate,
-			onError,
+			onError: notifyMutationError,
 		}),
 		send: useMutation({
+			mutationKey: emailKeys.all,
 			mutationFn: (id: string) => emailApi.sendCampaign(id),
 			onSuccess: (res) => {
 				toast.success(
@@ -168,29 +175,32 @@ export function useCampaignMutations() {
 				);
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		cancel: useMutation({
+			mutationKey: emailKeys.all,
 			mutationFn: (id: string) => emailApi.cancelCampaign(id),
 			onSuccess: () => {
 				toast.success("Envío cancelado");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 		remove: useMutation({
+			mutationKey: emailKeys.all,
 			mutationFn: (id: string) => emailApi.removeCampaign(id),
 			onSuccess: () => {
 				toast.success("Campaña eliminada");
 				invalidate();
 			},
-			onError,
+			onError: notifyMutationError,
 		}),
 	};
 }
 
 /** Alcance real de una campaña (bajo demanda). */
 export function useAudience() {
+	// react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation -- on-demand POST read, result used directly, no cached query goes stale
 	return useMutation({
 		mutationFn: (id: string) => emailApi.audience(id),
 	});

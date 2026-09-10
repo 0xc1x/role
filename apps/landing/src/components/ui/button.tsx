@@ -10,6 +10,12 @@ const buttonVariants = cva(
 		variants: {
 			variant: {
 				default: "bg-primary text-primary-foreground hover:bg-primary/80",
+				brand:
+					"bg-role-primary text-white shadow-soft hover:bg-role-primary-hover hover:text-white hover:shadow-glow active:scale-[0.98]",
+				"brand-outline":
+					"border border-white/25 bg-transparent text-white hover:bg-white hover:text-role-primary active:scale-[0.98]",
+				forest:
+					"bg-forest text-cream hover:bg-forest-hover hover:text-cream active:scale-[0.98] disabled:opacity-60",
 				outline:
 					"border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-transparent dark:hover:bg-input/30",
 				secondary:
@@ -62,4 +68,4 @@ function Button({
 	);
 }
 
-export { Button, buttonVariants };
+export { Button };

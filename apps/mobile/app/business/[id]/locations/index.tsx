@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
@@ -23,6 +24,30 @@ export default function BusinessLocationsScreen() {
 	const { data, isLoading, isError, error, refetch } =
 		useBusinessLocations(businessId);
 
+	const handleLocationPress = useCallback(
+		(locationId: string) => {
+			router.push(`/business/${businessId}/locations/${locationId}`);
+		},
+		[businessId],
+	);
+
+	const renderItem = useCallback(
+		({
+			item,
+		}: {
+			item: NonNullable<typeof data>[number];
+		}) => (
+			<LocationCard
+				name={item.name}
+				address={item.address}
+				phone={item.phone}
+				isActive={item.is_active}
+				onPress={() => handleLocationPress(item.id)}
+			/>
+		),
+		[handleLocationPress],
+	);
+
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
@@ -34,7 +59,7 @@ export default function BusinessLocationsScreen() {
 						label={strings.business.addLocation}
 						size="sm"
 						icon={
-							<Ionicons name="add" size={18} color="#fff" />
+							<Ionicons name="add" size={18} color={colors.primaryForeground} />
 						}
 						onPress={() =>
 							router.push(`/business/${businessId}/locations/create`)
@@ -71,17 +96,7 @@ export default function BusinessLocationsScreen() {
 						ItemSeparatorComponent={() => (
 							<View style={{ height: spacing.md }} />
 						)}
-						renderItem={({ item }) => (
-							<LocationCard
-								name={item.name}
-								address={item.address}
-								phone={item.phone}
-								isActive={item.is_active}
-								onPress={() =>
-									router.push(`/business/${businessId}/locations/${item.id}`)
-								}
-							/>
-						)}
+						renderItem={renderItem}
 					/>
 				)}
 			</View>

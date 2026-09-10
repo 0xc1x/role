@@ -112,9 +112,7 @@ export const columns: ColumnDef<CouponListItemDto>[] = [
 		cell: ({ row }) => {
 			const { business_id, business_name } = row.original;
 			if (business_id === null) {
-				return (
-					<Badge className="bg-emerald-500/10 text-emerald-600">Global</Badge>
-				);
+				return <Badge variant="success">Global</Badge>;
 			}
 			return (
 				<span className="text-muted-foreground">

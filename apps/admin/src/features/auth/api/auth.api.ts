@@ -1,43 +1,27 @@
-import type {
-	AuthResponse,
-	AuthUser,
-	LoginRequest,
-	RegisterRequest,
-} from "@0xc1x/role-commons";
-import {
-	api,
-	clearAuth,
-	setRefreshToken,
-	setToken,
-	setTokenExpiresAt,
-} from "@/lib/api/client";
+import type { AuthUser, LoginRequest } from "@0xc1x/role-commons";
+import { api, clearAuth, setToken, setTokenExpiresAt } from "@/lib/api/client";
+import type { AdminClientSession } from "../server";
+import { loginFn, logoutFn } from "../server";
 
-function persistSession(response: AuthResponse) {
-	setToken(response.access_token);
-	setRefreshToken(response.refresh_token);
-	setTokenExpiresAt(response.expires_at);
-}
+export type { AdminClientSession };
 
-export async function login(body: LoginRequest): Promise<AuthResponse> {
-	const response = await api.post<AuthResponse>("/auth/login", body, {
-		skipAuth: true,
-	});
-	persistSession(response);
-	return response;
-}
-
-export async function register(body: RegisterRequest): Promise<AuthResponse> {
-	const response = await api.post<AuthResponse>("/auth/register", body, {
-		skipAuth: true,
-	});
-	persistSession(response);
-	return response;
+/**
+ * Login vía server function: el refresh token queda en cookie httpOnly y el
+ * cliente solo persiste el access token de vida corta.
+ */
+export async function login(body: LoginRequest): Promise<AdminClientSession> {
+	const session = await loginFn({ data: body });
+	setToken(session.access_token);
+	setTokenExpiresAt(session.expires_at);
+	return session;
 }
 
 export async function getMe(): Promise<{ user: AuthUser }> {
 	return api.get<{ user: AuthUser }>("/auth/me");
 }
 
-export function logout() {
+/** Revoca el refresh token en la API (vía server fn) y limpia el cliente. */
+export async function logout() {
+	await logoutFn();
 	clearAuth();
 }

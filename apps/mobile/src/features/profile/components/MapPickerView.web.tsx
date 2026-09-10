@@ -10,8 +10,8 @@ import { spacing, radii } from "@/core/theme/spacing";
 import { env } from "@/core/config/env";
 import { reverseGeocode } from "@/core/utils/geocode";
 // Static import: this file is web-only, so the Google Maps canvas loads with it.
-import { MapCanvas } from "@/features/business/components/MapCanvas.web";
-import type { MapCanvasHandle } from "@/features/business/components/MapCanvas.types";
+import { MapCanvas } from "@/core/ui/MapCanvas.web";
+import type { MapCanvasHandle } from "@/core/ui/MapCanvas.types";
 import type { MapPickerResult } from "./MapPickerView";
 
 export function MapPickerView({

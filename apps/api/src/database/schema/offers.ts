@@ -14,10 +14,10 @@ export const offers = pgTable('offers', {
   id: uuid('id').primaryKey().defaultRandom(),
   business_id: uuid('business_id')
     .notNull()
-    .references(() => businesses.id),
+    .references(() => businesses.id, { onDelete: 'no action' }),
   business_location_id: uuid('business_location_id')
     .notNull()
-    .references(() => businessLocations.id),
+    .references(() => businessLocations.id, { onDelete: 'no action' }),
   title: text('title').notNull(),
   description: text('description'),
   image: text('image'),

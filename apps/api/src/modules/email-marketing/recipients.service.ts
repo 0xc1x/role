@@ -11,6 +11,11 @@ export interface Recipient {
   fullName: string | null;
 }
 
+/** Lote máximo por query con inArray (Postgres admite 65k params; 1k = plan pobre evitado). */
+export const AUDIENCE_QUERY_CHUNK = 1000;
+/** Tope de audiencia por envío: más que esto revienta el INSERT y el plan. */
+export const MAX_AUDIENCE_SIZE = 50_000;
+
 /**
  * Resolución de destinatarios:
  * segment_ids (estáticos/dinámicos) ∪ include − exclude, filtrando SIEMPRE

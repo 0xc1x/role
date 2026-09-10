@@ -1,7 +1,7 @@
 import { getConfigValue } from "@0xc1x/role-commons";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import { fetchAppConfig } from "./api";
+import { fetchAppConfig } from "./data/repository";
 
 export const APP_CONFIG_QUERY_KEY = ["app-config"] as const;
 

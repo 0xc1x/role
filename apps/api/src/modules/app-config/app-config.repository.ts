@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, eq, ilike, or, type SQL } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import { appConfig } from '../../database/schema';
 
 /** Row as stored in Postgres. */
@@ -79,7 +80,7 @@ export class AppConfigRepository {
   /**
    * Lista pública: solo filas activas y públicas. Usada por landing/mobile.
    */
-  async listPublic(executor: DbExecutor = this.db): Promise<AppConfigRow[]> {
+  listPublic(executor: DbExecutor = this.db): Promise<AppConfigRow[]> {
     return executor
       .select()
       .from(appConfig)
@@ -98,7 +99,7 @@ export class AppConfigRepository {
       filters.push(eq(appConfig.category, filter.category));
     }
     if (filter.search) {
-      const term = `%${filter.search}%`;
+      const term = `%${escapeLike(filter.search)}%`;
       filters.push(or(ilike(appConfig.key, term), ilike(appConfig.label, term))!);
     }
 

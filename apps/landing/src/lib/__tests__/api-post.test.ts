@@ -35,6 +35,15 @@ describe("apiPost", () => {
 		await expect(apiPost("/x", {})).rejects.toThrow("Requerido");
 	});
 
+	test("error con message en lista usa el primero", async () => {
+		globalThis.fetch = (async () =>
+			new Response(JSON.stringify({ message: ["Campo requerido"] }), {
+				status: 400,
+				headers: { "Content-Type": "application/json" },
+			})) as unknown as typeof fetch;
+		await expect(apiPost("/x", {})).rejects.toThrow("Campo requerido");
+	});
+
 	test("error no-json usa texto", async () => {
 		globalThis.fetch = (async () =>
 			new Response("Fallo interno", {

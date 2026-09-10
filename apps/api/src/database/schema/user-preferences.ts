@@ -13,7 +13,7 @@ export const userPreferences = pgTable('user_preferences', {
   id: uuid('id').primaryKey().defaultRandom(),
   user_id: uuid('user_id')
     .notNull()
-    .references(() => profiles.id),
+    .references(() => profiles.id, { onDelete: 'no action' }),
   notification_radius_km: integer('notification_radius_km').default(5),
   favorite_categories: text('favorite_categories')
     .array()
@@ -33,7 +33,7 @@ export const consumerNotificationPreferences = pgTable(
   {
     user_id: uuid('user_id')
       .primaryKey()
-      .references(() => profiles.id),
+      .references(() => profiles.id, { onDelete: 'no action' }),
     push_enabled: boolean('push_enabled').notNull().default(true),
     email_enabled: boolean('email_enabled').notNull().default(true),
     sms_enabled: boolean('sms_enabled').notNull().default(false),
@@ -67,7 +67,7 @@ export const userConsents = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     user_id: uuid('user_id')
       .notNull()
-      .references(() => profiles.id),
+      .references(() => profiles.id, { onDelete: 'no action' }),
     consent_type: text('consent_type').notNull(),
     granted: boolean('granted').notNull().default(false),
     granted_at: timestamp('granted_at', { withTimezone: true }),

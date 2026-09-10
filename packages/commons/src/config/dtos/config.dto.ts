@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import type { PaginatedData } from '../../_common/dtos/api.dto';
-import {
+import type {
   AppConfigListResponseSchema,
   AppConfigSchema,
   CreateAppConfigSchema,

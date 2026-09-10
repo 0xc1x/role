@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -18,6 +19,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, BottomSheetModal, StatusBadge } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { formatMoney, formatRelativeDay, formatTime } from "@/core/utils/formatters";
 import type { OfferDetail } from "@/features/offers/domain/offer";
 import { useDeleteOffer, useToggleOfferActive } from "@/features/business/hooks";
@@ -76,7 +78,7 @@ export function ProductCard({
 						{product.offer.image ? (
 							<Image source={{ uri: product.offer.image }} style={styles.image} />
 						) : (
-							<View style={[styles.image, styles.imagePlaceholder]}>
+							<View style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.borderSolid }]}>
 								<Ionicons
 									name="cube-outline"
 									size={28}
@@ -85,8 +87,8 @@ export function ProductCard({
 							</View>
 						)}
 						{!isActive ? (
-							<View style={[styles.imageOverlay, { backgroundColor: "rgba(0,0,0,0.56)" }]}>
-								<Ionicons name="eye-off" size={20} color="#FFFFFF" />
+							<View style={[styles.imageOverlay, { backgroundColor: withAlpha(colors.scrim, 0.56) }]}>
+								<Ionicons name="eye-off" size={20} color={colors.onMedia} />
 							</View>
 						) : null}
 					</View>
@@ -103,6 +105,7 @@ export function ProductCard({
 									<AppText
 										variant="labelSmall"
 										weight="semiBold"
+										numberOfLines={1}
 										style={{ color: colors.success }}
 									>
 										{strings.business.soldCount.replace("{n}", String(sold))}
@@ -115,7 +118,7 @@ export function ProductCard({
 						</AppText>
 						<View style={styles.infoChips}>
 							{product.location?.name ? (
-								<View style={styles.infoChip}>
+								<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
 									<Ionicons
 										name="storefront-outline"
 										size={12}
@@ -130,7 +133,7 @@ export function ProductCard({
 									</AppText>
 								</View>
 							) : null}
-							<View style={styles.infoChip}>
+							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
 								<Ionicons name="time-outline" size={12} color={colors.mutedForeground} />
 								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 									{strings.business.untilTime.replace(
@@ -139,7 +142,7 @@ export function ProductCard({
 									)}
 								</AppText>
 							</View>
-							<View style={styles.infoChip}>
+							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
 								<Ionicons
 									name="cube-outline"
 									size={12}
@@ -150,18 +153,17 @@ export function ProductCard({
 								</AppText>
 							</View>
 						</View>
-					</View>
-
-					<View style={styles.price}>
-						<AppText variant="priceLarge" style={{ color: colors.primary }}>
-							{formatMoney(product.offer.discounted_price)}
-						</AppText>
-						<AppText
-							variant="priceOriginal"
-							style={[styles.original, { color: colors.mutedForeground }]}
-						>
-							{formatMoney(product.offer.original_price)}
-						</AppText>
+						<View style={styles.priceRow}>
+							<AppText variant="priceLarge" style={{ color: colors.primary }}>
+								{formatMoney(product.offer.discounted_price)}
+							</AppText>
+							<AppText
+								variant="priceOriginal"
+								style={[styles.original, { color: colors.mutedForeground }]}
+							>
+								{formatMoney(product.offer.original_price)}
+							</AppText>
+						</View>
 					</View>
 				</View>
 
@@ -260,7 +262,7 @@ function ActionButton({
 			<View style={[styles.actionIcon, { backgroundColor: colors.muted }]}>
 				<Ionicons name={icon} size={14} color={colors.foreground} />
 			</View>
-			<AppText variant="bodySmall" weight="semiBold">
+			<AppText variant="bodySmall" weight="semiBold" numberOfLines={1}>
 				{label}
 			</AppText>
 		</Pressable>
@@ -316,12 +318,11 @@ const styles = StyleSheet.create({
 	mainRow: {
 		flexDirection: "row",
 		gap: spacing.md,
-		padding: spacing.md,
 	},
+	// Sangrado completo hacia el borde izquierdo/superior/inferior de la card;
+	// el radio del contenedor recorta las esquinas.
 	imageWrap: {
-		width: 110,
-		height: 115,
-		borderRadius: radii.md,
+		width: 120,
 		overflow: "hidden",
 	},
 	image: {
@@ -329,7 +330,6 @@ const styles = StyleSheet.create({
 		height: "100%",
 	},
 	imagePlaceholder: {
-		backgroundColor: "#E5E5E5",
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -344,7 +344,10 @@ const styles = StyleSheet.create({
 	},
 	info: {
 		flex: 1,
+		minWidth: 0,
 		gap: 4,
+		paddingVertical: spacing.md,
+		paddingRight: spacing.md,
 	},
 	statusRow: {
 		flexDirection: "row",
@@ -371,11 +374,12 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.sm,
 		paddingVertical: 2,
 		borderRadius: radii.sm,
-		backgroundColor: "rgba(0,0,0,0.04)",
 	},
-	price: {
-		alignItems: "flex-end",
-		justifyContent: "flex-start",
+	priceRow: {
+		flexDirection: "row",
+		alignItems: "baseline",
+		gap: spacing.sm,
+		marginTop: 2,
 	},
 	original: {
 		textDecorationLine: "line-through",
@@ -387,18 +391,15 @@ const styles = StyleSheet.create({
 	actions: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: spacing.sm + 2,
+		justifyContent: "space-between",
+		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.sm,
-		gap: spacing.sm,
 	},
 	action: {
-		flex: 1,
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "center",
 		gap: 6,
 		paddingVertical: spacing.sm,
-		borderRadius: radii.md,
 	},
 	actionIcon: {
 		width: 24,
@@ -408,7 +409,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	menuList: {
-		gap: 8, paddingHorizontal: spacing.xl 
+		gap: 8,
 	},
 	menuRow: {
 		flexDirection: "row",

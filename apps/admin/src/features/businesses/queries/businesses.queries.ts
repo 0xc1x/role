@@ -1,4 +1,5 @@
 import type {
+	BusinessVerificationStatus,
 	CreateBusinessDto,
 	ListBusinessesQuery,
 	UpdateBusinessDto,
@@ -45,7 +46,7 @@ export function useVerifyBusiness() {
 			rejection_reason,
 		}: {
 			id: string;
-			verification_status: "approved" | "rejected" | "pending";
+			verification_status: BusinessVerificationStatus;
 			rejection_reason?: string | null;
 		}) =>
 			businessesApi.update(id, {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { sendDefaults } from "../forms/push-forms";
+import { sendDefaults } from "../forms/push-defaults";
 import { hasAudience, toSendPayload } from "./to-send-payload";
 
 const UUID = "8f3a1c2e-4b5d-4e6f-8a9b-0c1d2e3f4a5b";

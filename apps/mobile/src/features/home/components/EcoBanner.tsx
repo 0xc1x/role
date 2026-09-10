@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/core/theme";
 import { AppText } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { strings } from "@/core/i18n/strings";
 
 export function EcoBanner() {
@@ -35,7 +36,7 @@ export function EcoBanner() {
 					</AppText>
 					<AppText
 						style={{
-							color: colors.greenDarkForeground + "B3",
+							color: withAlpha(colors.greenDarkForeground, 0.702),
 							fontSize: 13,
 							marginTop: 6,
 						}}
@@ -64,7 +65,10 @@ const styles = StyleSheet.create({
 		marginHorizontal: spacing.lg,
 		marginTop: spacing.lg,
 		marginBottom: spacing.xs,
-		height: 100,
+		// Sin altura fija: en pantallas finas el título ocupa 3 líneas y
+		// 100px fijos lo dejaban sin aire arriba/abajo. minHeight mantiene
+		// el tamaño habitual y el banner crece si el texto lo necesita.
+		minHeight: 100,
 		borderRadius: radii.xl,
 		overflow: "hidden",
 	},
@@ -73,6 +77,7 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.md,
 		paddingRight: 75 + spacing.lg,
 	},
 	iconContainer: {

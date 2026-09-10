@@ -22,6 +22,8 @@ export interface ColorTokens {
 	foreground: string;
 	card: string;
 	cardForeground: string;
+	popover: string;
+	popoverForeground: string;
 	muted: string;
 	mutedForeground: string;
 	border: string;
@@ -33,6 +35,7 @@ export interface ColorTokens {
 
 	// Semantic
 	destructive: string;
+	destructiveForeground: string;
 	destructiveVibrant: string;
 	destructiveSurface: string;
 	destructiveBorder: string;
@@ -109,6 +112,15 @@ export interface ColorTokens {
 	navyDark: string;
 	shadow: string;
 	cardShadow: string;
+	/** Base negra para velos sobre contenido (usar con withAlpha). */
+	scrim: string;
+	/** Blanco para texto/icono sobre cámara, mapa o foto (tema-invariante). */
+	onMedia: string;
+	/** Superficie de tinta para highlights monetarios (tema-invariante). */
+	ink: string;
+	/** QR de pickup fijo en ambos temas: el escáner necesita contraste estable. */
+	qrForeground: string;
+	qrBackground: string;
 }
 
 const light: ColorTokens = {
@@ -123,6 +135,8 @@ const light: ColorTokens = {
 	foreground: "#1A1A18",
 	card: "#FFF5F5",
 	cardForeground: "#1A1A18",
+	popover: "#FFFFFF",
+	popoverForeground: "#1A1A18",
 	muted: "#FFF5F5",
 	mutedForeground: "#737373",
 	border: "#00000014",
@@ -133,6 +147,7 @@ const light: ColorTokens = {
 	surfaceBackground: "#F8FAFC",
 
 	destructive: "#901B35",
+	destructiveForeground: "#FFFFFF",
 	destructiveVibrant: "#EF4444",
 	destructiveSurface: "#FEE2E2",
 	destructiveBorder: "#FCA5A5",
@@ -203,6 +218,11 @@ const light: ColorTokens = {
 	navyDark: "#04102D",
 	shadow: "#00000014",
 	cardShadow: "#FA47430A",
+	scrim: "#000000",
+	onMedia: "#FFFFFF",
+	ink: "#1A1A18",
+	qrForeground: "#131316",
+	qrBackground: "#FFFFFF",
 };
 
 const dark: ColorTokens = {
@@ -217,6 +237,8 @@ const dark: ColorTokens = {
 	foreground: "#FAF9F7",
 	card: "#2C2C2C",
 	cardForeground: "#FAF9F7",
+	popover: "#2C2C2C",
+	popoverForeground: "#FAF9F7",
 	muted: "#2C2C2C",
 	mutedForeground: "#9E9E9E",
 	border: "#FFFFFF33",
@@ -227,6 +249,7 @@ const dark: ColorTokens = {
 	surfaceBackground: "#121212",
 
 	destructive: "#901B35",
+	destructiveForeground: "#FFFFFF",
 	destructiveVibrant: "#EF4444",
 	destructiveSurface: "#EF444433",
 	destructiveBorder: "#FCA5A5",
@@ -297,6 +320,11 @@ const dark: ColorTokens = {
 	navyDark: "#04102D",
 	shadow: "#00000000",
 	cardShadow: "#00000000",
+	scrim: "#000000",
+	onMedia: "#FFFFFF",
+	ink: "#1A1A18",
+	qrForeground: "#131316",
+	qrBackground: "#FFFFFF",
 };
 
 export const colorTokens: Record<ThemeScheme, ColorTokens> = { light, dark };

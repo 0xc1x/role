@@ -1,14 +1,15 @@
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, StatusBadge, type BadgeTone } from "@/core/ui";
+import { AppText, StatusBadge } from "@/core/ui";
 import {
 	isActiveStatus,
 	orderStatusLabels,
+	orderStatusTone,
 	type OrderDetail,
-	type OrderStatusType,
 } from "@/features/orders/domain/order";
 import {
 	formatMoneyPrecise,
@@ -17,26 +18,7 @@ import {
 } from "@/core/utils/formatters";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
-
-/** Presentational mapping of order status → badge tone. */
-export function orderStatusTone(status: OrderStatusType): BadgeTone {
-	switch (status) {
-		case "pending":
-			return "warning";
-		case "confirmed":
-			return "info";
-		case "ready_for_pickup":
-			return "brand";
-		case "picked_up":
-			return "info";
-		case "completed":
-			return "success";
-		case "cancelled":
-			return "neutral";
-		case "expired":
-			return "danger";
-	}
-}
+import { withAlpha } from "@/core/theme/alpha";
 
 /** Ledger card for the orders list and the profile history (port of ProfileOrderCard). */
 export function OrderCard({ item }: { item: OrderDetail }) {
@@ -84,7 +66,7 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 						style={{
 							fontSize: 12,
 							fontWeight: "500",
-							color: colors.mutedForeground + "99",
+							color: withAlpha(colors.mutedForeground, 0.6),
 						}}
 					>
 						{strings.orders.orderNumber.replace("{n}", order.order_number)}
@@ -101,7 +83,7 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 						style={{
 							fontSize: 13,
 							fontWeight: "400",
-							color: colors.mutedForeground + "CC",
+							color: withAlpha(colors.mutedForeground, 0.8),
 						}}
 						numberOfLines={1}
 					>

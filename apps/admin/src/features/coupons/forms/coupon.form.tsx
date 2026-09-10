@@ -1,8 +1,9 @@
 import type { CouponDto, CouponType } from "@0xc1x/role-commons";
 import { CreateCouponBaseSchema } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
+import type { ReactNode } from "react";
 import { z } from "zod";
-import { Badge } from "@/components/ui/badge";
+import { StatusSwitch } from "@/components/status-switch";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { ApiClientError } from "@/lib/api/errors";
 import { useCreateCoupon, useUpdateCoupon } from "../queries/coupons.queries";
 
@@ -60,6 +60,29 @@ interface CouponFormProps {
 	formId: string;
 	onSuccess?: () => void;
 	coupon?: CouponDto;
+}
+
+/** Shell compartido Field + label + error de los 7 campos del formulario. */
+function FieldShell({
+	name,
+	label,
+	errors,
+	isInvalid,
+	children,
+}: {
+	name: string;
+	label: string;
+	errors: Array<{ message?: string } | undefined>;
+	isInvalid: boolean;
+	children: ReactNode;
+}) {
+	return (
+		<Field data-invalid={isInvalid}>
+			<FieldLabel htmlFor={name}>{label}</FieldLabel>
+			{children}
+			{isInvalid && <FieldError errors={errors} />}
+		</Field>
+	);
 }
 
 export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
@@ -127,8 +150,12 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={field.name}>Código</FieldLabel>
+						<FieldShell
+							name={field.name}
+							label="Código"
+							errors={field.state.meta.errors}
+							isInvalid={isInvalid}
+						>
 							<Input
 								id={field.name}
 								name={field.name}
@@ -142,8 +169,7 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 								}
 								aria-invalid={isInvalid}
 							/>
-							{isInvalid && <FieldError errors={field.state.meta.errors} />}
-						</Field>
+						</FieldShell>
 					);
 				}}
 			</form.Field>
@@ -153,8 +179,12 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={field.name}>Nombre</FieldLabel>
+						<FieldShell
+							name={field.name}
+							label="Nombre"
+							errors={field.state.meta.errors}
+							isInvalid={isInvalid}
+						>
 							<Input
 								id={field.name}
 								name={field.name}
@@ -165,8 +195,7 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 								onChange={(e) => field.handleChange(e.target.value)}
 								aria-invalid={isInvalid}
 							/>
-							{isInvalid && <FieldError errors={field.state.meta.errors} />}
-						</Field>
+						</FieldShell>
 					);
 				}}
 			</form.Field>
@@ -176,8 +205,12 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={field.name}>Tipo</FieldLabel>
+						<FieldShell
+							name={field.name}
+							label="Tipo"
+							errors={field.state.meta.errors}
+							isInvalid={isInvalid}
+						>
 							<Select
 								value={field.state.value}
 								onValueChange={(v) => {
@@ -199,8 +232,7 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 									))}
 								</SelectContent>
 							</Select>
-							{isInvalid && <FieldError errors={field.state.meta.errors} />}
-						</Field>
+						</FieldShell>
 					);
 				}}
 			</form.Field>
@@ -211,8 +243,12 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					const isPercentage = form.state.values.type === "percentage";
 					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={field.name}>Valor</FieldLabel>
+						<FieldShell
+							name={field.name}
+							label="Valor"
+							errors={field.state.meta.errors}
+							isInvalid={isInvalid}
+						>
 							<Input
 								id={field.name}
 								name={field.name}
@@ -230,8 +266,7 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 									? "Porcentaje de descuento (1–100)"
 									: "Monto fijo de descuento en USD"}
 							</p>
-							{isInvalid && <FieldError errors={field.state.meta.errors} />}
-						</Field>
+						</FieldShell>
 					);
 				}}
 			</form.Field>
@@ -241,8 +276,12 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={field.name}>Monto mínimo (USD)</FieldLabel>
+						<FieldShell
+							name={field.name}
+							label="Monto mínimo (USD)"
+							errors={field.state.meta.errors}
+							isInvalid={isInvalid}
+						>
 							<Input
 								id={field.name}
 								name={field.name}
@@ -255,8 +294,7 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 								onChange={(e) => field.handleChange(e.target.value)}
 								aria-invalid={isInvalid}
 							/>
-							{isInvalid && <FieldError errors={field.state.meta.errors} />}
-						</Field>
+						</FieldShell>
 					);
 				}}
 			</form.Field>
@@ -266,8 +304,12 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={field.name}>Usos máximos</FieldLabel>
+						<FieldShell
+							name={field.name}
+							label="Usos máximos"
+							errors={field.state.meta.errors}
+							isInvalid={isInvalid}
+						>
 							<Input
 								id={field.name}
 								name={field.name}
@@ -280,8 +322,7 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 								onChange={(e) => field.handleChange(e.target.value)}
 								aria-invalid={isInvalid}
 							/>
-							{isInvalid && <FieldError errors={field.state.meta.errors} />}
-						</Field>
+						</FieldShell>
 					);
 				}}
 			</form.Field>
@@ -291,15 +332,18 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 					const isInvalid =
 						field.state.meta.isTouched && !field.state.meta.isValid;
 					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={field.name}>Fecha de expiración</FieldLabel>
+						<FieldShell
+							name={field.name}
+							label="Fecha de expiración"
+							errors={field.state.meta.errors}
+							isInvalid={isInvalid}
+						>
 							<DateTimePicker
 								value={field.state.value ?? ""}
 								onChange={(v) => field.handleChange(v)}
 								placeholder="Sin expiración"
 							/>
-							{isInvalid && <FieldError errors={field.state.meta.errors} />}
-						</Field>
+						</FieldShell>
 					);
 				}}
 			</form.Field>
@@ -311,19 +355,10 @@ export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 						return (
 							<Field>
 								<FieldLabel>Estado</FieldLabel>
-								<div className="flex items-center gap-3">
-									<Switch
-										checked={isActive}
-										onCheckedChange={(checked) => field.handleChange(checked)}
-										className="data-checked:border-emerald-500 data-checked:bg-emerald-500 data-unchecked:border-red-500 data-unchecked:bg-red-500 dark:data-unchecked:border-red-600 dark:data-unchecked:bg-red-600"
-									/>
-									<Badge
-										variant={isActive ? "default" : "destructive"}
-										className={isActive ? "bg-green-500/10 text-green-600" : ""}
-									>
-										{isActive ? "Activo" : "Inactivo"}
-									</Badge>
-								</div>
+								<StatusSwitch
+									checked={isActive ?? true}
+									onCheckedChange={(checked) => field.handleChange(checked)}
+								/>
 							</Field>
 						);
 					}}

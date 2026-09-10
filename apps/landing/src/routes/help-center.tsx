@@ -15,9 +15,16 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import { pageHead } from "@/lib/seo";
 import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/help-center")({
+	head: () =>
+		pageHead(
+			"/help-center",
+			"Centro de ayuda | Rolé",
+			"Respuestas sobre reservas, recogidas, pagos y tu cuenta en Rolé.",
+		),
 	component: HelpCenterPage,
 });
 
@@ -116,7 +123,7 @@ function HelpCenterPage() {
 				>
 					<HeroBackground />
 					<div className="relative mx-auto max-w-4xl">
-						<Eyebrow> Ayuda</Eyebrow>
+						<Eyebrow>Ayuda</Eyebrow>
 						<h1 className="font-display text-3xl font-medium tracking-[-0.03em] sm:text-4xl md:text-5xl">
 							Centro de ayuda
 						</h1>

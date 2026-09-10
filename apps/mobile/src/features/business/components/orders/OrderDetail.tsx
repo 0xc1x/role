@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
-	Image,
 	Modal,
 	Pressable,
+	RefreshControl,
 	StyleSheet,
 	View,
-	TouchableOpacity,
 	Linking
 } from "react-native";
+import { Image } from "expo-image";
 import { toast } from "sonner-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -32,22 +32,26 @@ import {
 	ScreenHeader,
 	StatusBadge,
 	TextField,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import {
 	formatMoneyPrecise,
 	formatShortDate,
 	formatTime,
 } from "@/core/utils/formatters";
 import { orderStatusLabels } from "@/features/orders/domain/order";
-import { orderStatusTone } from "@/features/orders/components/OrderCard";
+import { orderStatusTone } from "@/features/orders/domain/order";
 import {
 	isTerminalStatus,
 	lastEventTimeFor,
 	type OrderDetail,
 } from "@/features/orders/domain/order";
+import type { OrderStatus } from "@0xc1x/role-commons";
 import {
+	useCancelBusinessOrder,
 	useUpdateOrderStatus,
 	useValidatePickupCode,
 } from "@/features/business/hooks";
@@ -63,9 +67,13 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 export function OrderDetail({
 	businessId,
 	item,
+	isRefreshing,
+	onRefresh,
 }: {
 	businessId: string;
 	item: OrderDetail;
+	isRefreshing?: boolean;
+	onRefresh?: () => void;
 }) {
 	const { colors } = useTheme();
 	const [validateOpen, setValidateOpen] = useState(false);
@@ -73,18 +81,28 @@ export function OrderDetail({
 	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 	const updateStatus = useUpdateOrderStatus(businessId);
 	const validate = useValidatePickupCode(businessId);
+	// El cancel del negocio va por el RPC `cancel_order` (p_business_id):
+	// reglas y devolución de stock viven server-side, no en UPDATE directo.
+	const cancelOrder = useCancelBusinessOrder(businessId);
 	const { order } = item;
 	const isTerminal = isTerminalStatus(order.status);
+	const pull = useWebPullToRefresh({
+		onRefresh: onRefresh ?? (() => {}),
+		refreshing: isRefreshing ?? false,
+	});
 
-	const openScanner = () => {
+	// Estables: PickupScannerSheet re-suscribe su efecto si cambian.
+	const openScanner = useCallback(() => {
 		setValidateOpen(false);
 		setScannerOpen(true);
-	};
+	}, []);
 
-	const handleScannedValidation = () => {
+	const handleScannedValidation = useCallback(() => {
 		setScannerOpen(false);
 		toast.success(strings.business.ordersDeliverySuccess);
-	};
+	}, []);
+
+	const closeScanner = useCallback(() => setScannerOpen(false), []);
 
 	const markReady = () =>
 		updateStatus.mutate({
@@ -94,15 +112,27 @@ export function OrderDetail({
 
 	const confirmCancel = () => setConfirmCancelOpen(true);
 
-	return (
+		return (
 		<View style={styles.root}>
 			<Screen
 				scroll
+				scrollRef={onRefresh ? pull.ref : undefined}
 				contentContainerStyle={[
 					styles.content,
 					isTerminal ? null : { paddingBottom: 120 },
 				]}
+				refreshControl={
+					onRefresh ? (
+						<RefreshControl
+							refreshing={isRefreshing ?? false}
+							onRefresh={onRefresh}
+							tintColor={colors.primary}
+							colors={[colors.primary]}
+						/>
+					) : undefined
+				}
 			>
+				{onRefresh ? pull.indicator : null}
 				<View style={styles.headerRow}>
 					<ScreenHeader title={strings.business.orderDetail} />
 					<StatusBadge
@@ -135,7 +165,7 @@ export function OrderDetail({
 							variant="primary"
 							size="lg"
 							icon={
-								<Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+								<Ionicons name="checkmark-circle-outline" size={20} color={colors.primaryForeground} />
 							}
 							onPress={markReady}
 							loading={updateStatus.isPending}
@@ -148,20 +178,22 @@ export function OrderDetail({
 							label={strings.business.ordersValidateDelivery}
 							variant="primary"
 							size="lg"
-							icon={<Ionicons name="qr-code-outline" size={20} color="#FFFFFF" />}
+							icon={<Ionicons name="qr-code-outline" size={20} color={colors.primaryForeground} />}
 							onPress={() => setValidateOpen(true)}
 							fullWidth
 						/>
 					) : null}
 
-					<Button
-						label={strings.business.ordersCancelOrder}
-						variant="outline"
-						size="lg"
-						onPress={confirmCancel}
-						loading={updateStatus.isPending}
-						fullWidth
-					/>
+					{order.status !== "picked_up" ? (
+						<Button
+							label={strings.business.ordersCancelOrder}
+							variant="outline"
+							size="lg"
+							onPress={confirmCancel}
+							loading={cancelOrder.isPending}
+							fullWidth
+						/>
+					) : null}
 				</View>
 			) : null}
 
@@ -192,7 +224,7 @@ export function OrderDetail({
 				<PickupScannerSheet
 					businessId={businessId}
 					orderId={order.id}
-					onClose={() => setScannerOpen(false)}
+					onClose={closeScanner}
 					onValidated={handleScannedValidation}
 				/>
 			) : null}
@@ -216,10 +248,21 @@ export function OrderDetail({
 						</AlertDialogCancel>
 						<AlertDialogAction
 							onPress={() =>
-								updateStatus.mutate(
-								{ orderId: order.id, status: "cancelled" },
-								{ onSuccess: () => goBackOr("/(business)/orders") },
-								)
+								cancelOrder.mutate(order.id, {
+									onSuccess: (result) => {
+										if (result.success) {
+											setConfirmCancelOpen(false);
+											toast.success(strings.business.ordersCancelled);
+											goBackOr("/(business)/orders");
+										} else {
+											toast.error(
+												result.message ?? strings.business.ordersCancelError,
+											);
+										}
+									},
+									onError: () =>
+										toast.error(strings.business.ordersCancelError),
+								})
 							}
 						>
 							<Text>{strings.business.ordersCancelOrder}</Text>
@@ -244,7 +287,7 @@ function ProductCard({ item }: { item: OrderDetail }) {
 				{item.offerImageUrl ? (
 					<Image source={{ uri: item.offerImageUrl }} style={styles.productImage} />
 				) : (
-					<View style={[styles.productImage, styles.productPlaceholder]}>
+					<View style={[styles.productImage, styles.productPlaceholder, { backgroundColor: colors.borderSolid }]}>
 						<Ionicons
 							name="fast-food-outline"
 							size={28}
@@ -284,17 +327,17 @@ function CustomerInfoCard({ item }: { item: OrderDetail }) {
 				label={strings.business.ordersName}
 				text={item.customerName ?? strings.business.ordersNoName}
 			/>
-			<TouchableOpacity
-				onPress={handleCall}
-				disabled={!item.customerPhone}
-				activeOpacity={0.6}
-			>
-				<InfoRow
-					icon="call-outline"
-					label={strings.business.phone}
-					text={item.customerPhone ?? strings.business.ordersNoPhone}
-				/>
-			</TouchableOpacity>
+		<Pressable
+			onPress={handleCall}
+			disabled={!item.customerPhone}
+			style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+		>
+			<InfoRow
+				icon="call-outline"
+				label={strings.business.phone}
+				text={item.customerPhone ?? strings.business.ordersNoPhone}
+			/>
+		</Pressable>
 		</Card>
 	);
 }
@@ -336,14 +379,6 @@ interface TimelineEntry {
 	color: string;
 	background: string;
 }
-type OrderStatus =
-	| "pending"
-	| "confirmed"
-	| "ready_for_pickup"
-	| "picked_up"
-	| "completed"
-	| "cancelled"
-	| "expired";
 
 type TimelineIcon = TimelineEntry["icon"];
 
@@ -451,7 +486,7 @@ function TimelineCard({ item }: { item: OrderDetail }) {
 			</View>
 			{entries.map((entry, index) => (
 				<TimelineEntryRow
-					key={`${entry.title}-${index}`}
+					key={entry.title}
 					entry={entry}
 					isLast={index === entries.length - 1}
 				/>
@@ -585,7 +620,7 @@ function ValidateCodeDialog({
 			animationType="fade"
 			onRequestClose={onClose}
 		>
-			<View style={styles.backdrop}>
+			<View style={[styles.backdrop, { backgroundColor: withAlpha(colors.scrim, 0.5) }]}>
 				<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 				<View
 					style={[
@@ -679,7 +714,6 @@ const styles = StyleSheet.create({
 	productPlaceholder: {
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#E5E5E5",
 	},
 	productBody: {
 		flex: 1,
@@ -750,7 +784,6 @@ const styles = StyleSheet.create({
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
-		backgroundColor: "rgba(0,0,0,0.5)",
 		padding: spacing.xl,
 	},
 	dialog: {

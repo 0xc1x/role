@@ -37,7 +37,7 @@ export function AuthScreenShell({
 					{title}
 				</AppText>
 			</View>
-			<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
+			<View style={[styles.divider, { backgroundColor: colors.background }]} />
 			<ScrollView
 				contentContainerStyle={styles.scrollContent}
 				keyboardShouldPersistTaps="handled"
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.md,
 	},
 	headerTitle: { flex: 1 },
-	divider: { height: StyleSheet.hairlineWidth },
+	divider: { height: StyleSheet.hairlineWidth , },
 	scrollContent: {
 		flexGrow: 1,
 		alignItems: "center",

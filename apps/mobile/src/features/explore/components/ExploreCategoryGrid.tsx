@@ -3,7 +3,6 @@ import {
 	Platform,
 	Animated,
 	Easing,
-	Image,
 	LayoutAnimation,
 	Pressable,
 	ScrollView,
@@ -12,6 +11,7 @@ import {
 	type StyleProp,
 	type ViewStyle,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -19,6 +19,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import {
 	useCategoryStats,
 	usePopularAreas,
@@ -84,9 +85,10 @@ export function ExploreCategoryGrid({
 	});
 
 	const cellBackground = colors.surfaceMuted;
-	const selectedBackground = colors.primary + "33";
+	const selectedBackground = withAlpha(colors.primary, 0.2);
+	const selectedShadow = `0px 4px 10px ${withAlpha(colors.redAccent, 0.149)}`;
 	const baseText = colors.foreground;
-	const mutedText = baseText + (isDark ? "99" : "80");
+	const mutedText = withAlpha(baseText, isDark ? 0.6 : 0.5);
 
 	const toggleExpand = () => {
 		const willCollapse = showAll;
@@ -117,7 +119,7 @@ export function ExploreCategoryGrid({
 									{
 										backgroundColor: isDark
 											? colors.surfaceMuted
-											: colors.green + "4D",
+											: withAlpha(colors.green, 0.302),
 									},
 								]}
 							>
@@ -129,7 +131,7 @@ export function ExploreCategoryGrid({
 								<AppText
 									variant="bodySmall"
 									weight="semiBold"
-									style={{ color: isDark ? baseText : colors.greenDark + "B3" }}
+									style={{ color: isDark ? baseText : withAlpha(colors.greenDark, 0.702) }}
 								>
 									{area.name}
 								</AppText>
@@ -138,8 +140,8 @@ export function ExploreCategoryGrid({
 										styles.countBadge,
 										{
 											backgroundColor: isDark
-												? colors.primaryForeground + "1A"
-												: colors.greenMidDark + "1A",
+												? withAlpha(colors.primaryForeground, 0.102)
+												: withAlpha(colors.greenMidDark, 0.102),
 										},
 									]}
 								>
@@ -173,6 +175,7 @@ export function ExploreCategoryGrid({
 							isSelected={selectedCategory === cat.id}
 							background={cellBackground}
 							selectedBackground={selectedBackground}
+							selectedShadow={selectedShadow}
 							borderColor={
 								selectedCategory === cat.id
 									? colors.redAccent
@@ -200,7 +203,7 @@ export function ExploreCategoryGrid({
 								},
 							]}
 						>
-							<View style={[styles.expandIcon, { backgroundColor: colors.primary + "1A" }]}>
+							<View style={[styles.expandIcon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}>
 								<Ionicons
 									name={showAll ? "chevron-up" : "chevron-down"}
 									size={22}
@@ -246,8 +249,10 @@ function CategoryFadeSlideIn({
 	children: ReactNode;
 	style?: StyleProp<ViewStyle>;
 }) {
-	const opacity = useRef(new Animated.Value(animate ? 0 : 1)).current;
-	const translateY = useRef(new Animated.Value(animate ? 10 : 0)).current;
+	// Lazy init vía useState: se crean una sola vez al montar (sin mutar
+	// refs durante el render). Si `animate` es false aparecen en estado final.
+	const [opacity] = useState(() => new Animated.Value(animate ? 0 : 1));
+	const [translateY] = useState(() => new Animated.Value(animate ? 10 : 0));
 
 	useEffect(() => {
 		if (!animate) return;
@@ -279,6 +284,7 @@ function ExploreCategoryCard({
 	isSelected,
 	background,
 	selectedBackground,
+	selectedShadow,
 	borderColor,
 	mutedText,
 	onPress,
@@ -287,6 +293,7 @@ function ExploreCategoryCard({
 	isSelected: boolean;
 	background: string;
 	selectedBackground: string;
+	selectedShadow: string;
 	borderColor: string;
 	mutedText: string;
 	onPress: () => void;
@@ -301,7 +308,7 @@ function ExploreCategoryCard({
 					backgroundColor: cardBackground,
 					borderColor,
 				},
-				isSelected && styles.selectedShadow,
+				isSelected && { boxShadow: selectedShadow },
 			]}
 		>
 			{category.imageUrl ? (
@@ -309,18 +316,20 @@ function ExploreCategoryCard({
 					<Image
 						source={{ uri: category.imageUrl }}
 						style={styles.categoryImage}
-						resizeMode="cover"
+						contentFit="cover"
 					/>
 					<LinearGradient
-						colors={["transparent", cardBackground]}
-						start={{ x: 0.2, y: 0 }}
+						colors={["transparent", withAlpha(cardBackground, 0.85), cardBackground]}
+						locations={[0, 0.55, 1]}
+						start={{ x: 0, y: 0 }}
 						end={{ x: 1, y: 0 }}
 						style={styles.categoryFade}
 					/>
 				</View>
 			) : null}
 			<View style={styles.categoryText}>
-				<AppText variant="h4" weight="bold" numberOfLines={2}>
+				<AppText variant="h4" weight="bold" numberOfLines={2}
+					style={{ fontSize: 15, lineHeight: 19 }}>
 					{category.name}
 				</AppText>
 				<AppText variant="bodySmall" style={{ color: mutedText, marginTop: 6 }}>
@@ -376,15 +385,12 @@ const styles = StyleSheet.create({
 		overflow: "hidden",
 		justifyContent: "center",
 	},
-	selectedShadow: {
-		boxShadow: "0px 4px 10px #FF4B4B26",
-	},
 	categoryImageWrap: {
 		position: "absolute",
 		top: 0,
 		bottom: 0,
 		right: 0,
-		width: 100,
+		width: 80,
 		overflow: "hidden",
 	},
 	categoryImage: {
@@ -396,8 +402,8 @@ const styles = StyleSheet.create({
 		inset: 0,
 	},
 	categoryText: {
-		paddingLeft: 16,
-		paddingRight: 90,
+		paddingLeft: 14,
+		paddingRight: 72,
 	},
 	expandCard: {
 		height: 85,

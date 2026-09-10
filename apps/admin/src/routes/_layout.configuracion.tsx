@@ -3,13 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DataTable } from "@/components/data-table/data-table";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Button } from "@/components/ui/button";
 import {
 	InputGroup,
 	InputGroupAddon,
 	InputGroupInput,
 } from "@/components/ui/input-group";
-import { Skeleton } from "@/components/ui/skeleton";
 import { appConfigColumns } from "@/features/app-config";
 import { AppConfigCreateDrawer } from "@/features/app-config/components/app-config-create-drawer";
 import {
@@ -72,20 +72,7 @@ function RouteComponent() {
 	]);
 
 	if (isLoading) {
-		return (
-			<div className="px-6 py-4 space-y-4">
-				<div className="flex items-center justify-between">
-					<Skeleton className="h-8 w-48" />
-					<Skeleton className="h-10 w-32" />
-				</div>
-				<Skeleton className="h-6 w-24" />
-				<div className="space-y-2">
-					{[1, 2, 3, 4, 5].map((n) => (
-						<Skeleton key={n} className="h-12 w-full" />
-					))}
-				</div>
-			</div>
-		);
+		return <PageSkeleton />;
 	}
 
 	if (isError) {
@@ -103,7 +90,7 @@ function RouteComponent() {
 							navigate({
 								search: {
 									page: 1,
-									limit: 20,
+									limit: 10,
 									search: undefined,
 									category: undefined,
 									active: undefined,

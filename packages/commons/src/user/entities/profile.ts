@@ -1,14 +1,5 @@
-import type { AppRole } from '../../_common/enums/app-role';
+import type { z } from 'zod';
+import type { ProfileSchema } from '../schemas/profile.schema';
 
-/** Row shape for `public.profiles` */
-export interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  phone: string | null;
-  role: AppRole;
-  city: string | null;
-  created_at: string;
-  updated_at: string;
-}
+/** Row shape for `public.profiles` — derivado del schema Zod (SSOT). */
+export type Profile = z.infer<typeof ProfileSchema>;

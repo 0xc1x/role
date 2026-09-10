@@ -31,6 +31,10 @@ function makeOrder(
 		pickup_code: "123456",
 		pickup_time: null,
 		coupon_id: null,
+		commission_rate: 0.1,
+		platform_fee: 5,
+		net_amount: 45,
+		payout_id: null,
 		created_at: overrides.createdAt ?? "2026-08-16T10:00:00.000Z",
 		updated_at: overrides.createdAt ?? "2026-08-16T10:00:00.000Z",
 	};

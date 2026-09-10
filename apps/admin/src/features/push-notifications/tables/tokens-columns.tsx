@@ -16,22 +16,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUpdatePushToken } from "../queries/push.queries";
 
-const PlatformBadge = ({ platform }: { platform: string }) => {
-	const colors: Record<string, string> = {
-		ios: "bg-gray-500/10 text-gray-700 border-gray-200",
-		android: "bg-green-500/10 text-green-600 border-green-200",
-		web: "bg-blue-500/10 text-blue-600 border-blue-200",
-	};
-	return <Badge className={colors[platform] ?? ""}>{platform}</Badge>;
+const PLATFORM_VARIANTS: Record<string, "secondary" | "success" | "info"> = {
+	ios: "secondary",
+	android: "success",
+	web: "info",
 };
 
+const PlatformBadge = ({ platform }: { platform: string }) => {
+	return (
+		<Badge variant={PLATFORM_VARIANTS[platform] ?? "secondary"}>
+			{platform}
+		</Badge>
+	);
+};
+
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- action cell colocated with column defs (TanStack Table idiom)
 function TokenActions({ item }: { item: PushTokenDto }) {
 	const update = useUpdatePushToken();
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger
-				render={<Button variant="ghost" className="h-8 w-8 p-0" />}
-			>
+			<DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
 				<span className="sr-only">Abrir menú</span>
 				<MoreHorizontal className="size-4" />
 			</DropdownMenuTrigger>
@@ -124,6 +128,7 @@ export const tokenColumns: ColumnDef<PushTokenDto>[] = [
 	},
 ];
 
+// react-doctor-disable-next-line react-doctor/no-multi-component-file -- active cell colocated with column defs (TanStack Table idiom)
 function TokenActiveCell({ item }: { item: PushTokenDto }) {
 	const update = useUpdatePushToken();
 	return (

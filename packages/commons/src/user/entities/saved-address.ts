@@ -1,17 +1,5 @@
-import type { AddressType } from '../../_common/enums/address-type';
+import type { z } from 'zod';
+import type { SavedAddressSchema } from '../schemas/saved-address.schema';
 
-/** Row shape for `public.saved_addresses` */
-export interface SavedAddress {
-  id: string;
-  user_id: string;
-  label: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  is_default: boolean;
-  type: AddressType;
-  references: string | null;
-  housing_type: string | null;
-  created_at: string;
-  updated_at: string;
-}
+/** Row shape for `public.saved_addresses` — derivado del schema Zod (SSOT). */
+export type SavedAddress = z.infer<typeof SavedAddressSchema>;

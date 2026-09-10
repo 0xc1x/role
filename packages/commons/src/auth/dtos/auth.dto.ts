@@ -1,5 +1,7 @@
 import type { z } from 'zod';
 import type {
+  AuthResponseSchema,
+  AuthUserSchema,
   InviteBusinessRequestSchema,
   LoginRequestSchema,
   LogoutRequestSchema,
@@ -12,19 +14,5 @@ export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 export type RefreshRequest = z.infer<typeof RefreshRequestSchema>;
 export type LogoutRequest = z.infer<typeof LogoutRequestSchema>;
 export type InviteBusinessRequest = z.infer<typeof InviteBusinessRequestSchema>;
-
-export interface AuthUser {
-  id: string;
-  email: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  role: 'user' | 'business' | 'admin';
-}
-
-export interface AuthResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  expires_at: string | null;
-  user: AuthUser;
-}
+export type AuthUser = z.infer<typeof AuthUserSchema>;
+export type AuthResponse = z.infer<typeof AuthResponseSchema>;

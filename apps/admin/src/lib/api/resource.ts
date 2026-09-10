@@ -5,15 +5,12 @@ export function createResourceApi<
 	TDto,
 	TCreateDto,
 	TUpdateDto,
-	TListQuery,
+	TListQuery extends Record<string, unknown>,
 	TPaginated,
 >(basePath: string) {
 	return {
 		list: (query?: TListQuery) =>
-			api.get<TPaginated>(
-				`${basePath}${toSearchParams(query as unknown as Record<string, unknown>)}`,
-			),
-		getById: (id: string) => api.get<TDto>(`${basePath}/${id}`),
+			api.get<TPaginated>(`${basePath}${toSearchParams(query)}`),
 		create: (body: TCreateDto) => api.post<TDto>(basePath, body),
 		update: (id: string, body: TUpdateDto) =>
 			api.patch<TDto>(`${basePath}/${id}`, body),

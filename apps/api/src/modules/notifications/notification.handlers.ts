@@ -137,6 +137,7 @@ export class NotificationHandlers {
   }
 
   async pickupReminders(): Promise<number> {
+    // Tope de seguridad: sin límite, el join crece con la tabla de órdenes.
     const candidates = await this.db
       .select({
         id: orders.id,
@@ -151,22 +152,31 @@ export class NotificationHandlers {
           gte(offers.pickup_end, sql`now()`),
           lte(offers.pickup_end, sql`now() + interval '2 hours'`),
         ),
-      );
+      )
+      .limit(500);
 
-    let sent = 0;
-    for (const c of candidates) {
-      const [existing] = await this.db
-        .select({ id: orderEvents.id })
+    // Dedupe en 1 query para todo el lote (antes: 1 SELECT por candidato).
+    const alreadyReminded = new Set<string>();
+    if (candidates.length > 0) {
+      const existing = await this.db
+        .select({ order_id: orderEvents.order_id })
         .from(orderEvents)
         .where(
           and(
-            eq(orderEvents.order_id, c.id),
+            inArray(
+              orderEvents.order_id,
+              candidates.map((c) => c.id),
+            ),
             sql`${orderEvents.metadata}->>'dedupe' = 'pickup_reminder'`,
             sql`${orderEvents.created_at} > now() - interval '24 hours'`,
           ),
-        )
-        .limit(1);
-      if (existing) continue;
+        );
+      for (const row of existing) alreadyReminded.add(row.order_id);
+    }
+
+    let sent = 0;
+    for (const c of candidates) {
+      if (alreadyReminded.has(c.id)) continue;
 
       await this.notificationsService.send(
         [c.user_id],
@@ -240,7 +250,7 @@ export class NotificationHandlers {
     return sent;
   }
 
-  async cleanupOldTokens(): Promise<number> {
+  cleanupOldTokens(): Promise<number> {
     return this.repo.cleanupOldTokens();
   }
 }

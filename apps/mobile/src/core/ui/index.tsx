@@ -1,8 +1,6 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
 import {
-	Platform,
 	ActivityIndicator,
-	Animated,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -10,6 +8,7 @@ import {
 	TextInput,
 	type TextInputProps,
 	View,
+	type RefreshControlProps,
 	type StyleProp,
 	type TextStyle,
 	type ViewStyle,
@@ -17,16 +16,31 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useNavigation, type Href } from "expo-router";
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withSequence,
+	withSpring,
+	withTiming,
+	Easing,
+} from "react-native-reanimated";
 
 import { useTheme } from "@/core/theme";
 import type { ColorTokens } from "@/core/theme/colors";
 import { strings } from "@/core/i18n/strings";
 import { spacing, radii } from "@/core/theme/spacing";
 import { fonts, typography, type TypeStyle } from "@/core/theme/typography";
+import { withAlpha } from "@/core/theme/alpha";
+import { toAppError } from "@/core/error/mapper";
 import { AppText } from "./AppText";
 
 export { BottomSheetModal } from "./BottomSheetModal";
 export { AppText, type FontVariant, type FontWeight } from "./AppText";
+export { useWebPullToRefresh } from "./WebPullToRefresh";
+// InfoScreen y LegalScreen importan del barrel: exportarlas aquí crearía
+// un ciclo; se siguen importando por ruta directa.
+export { Logo } from "./Logo";
+export { default as RoleTabBar, BAR_HEIGHT } from "./RoleTabBar";
 
 export type { ColorTokens, TypeStyle };
 export { spacing, fonts, typography };
@@ -102,22 +116,18 @@ function buttonVariant(
 	labelColor: string;
 } {
 	const base: ViewStyle = {
-		borderRadius: 99,
+		borderRadius: radii.pill,
 		justifyContent: "center",
 		alignItems: "center",
-		paddingHorizontal: 24,
+		paddingHorizontal: spacing.lg,
 	};
-	const labelStyle: TextStyle = {
-		fontSize: 16,
-		fontWeight: "700" as const,
-		lineHeight: 24,
-	};
+	const labelStyle: TextStyle = { ...typography.button };
 	switch (variant) {
 		case "primary":
 			return {
 				base: { ...base, backgroundColor: colors.primary },
 				labelStyle,
-				labelColor: "#FFFFFF",
+				labelColor: colors.primaryForeground,
 			};
 		case "secondary":
 			return {
@@ -146,7 +156,7 @@ function buttonVariant(
 			return {
 				base: { ...base, backgroundColor: colors.destructive },
 				labelStyle,
-				labelColor: "#FFFFFF",
+				labelColor: colors.destructiveForeground,
 			};
 	}
 }
@@ -190,7 +200,7 @@ export function CircleIconButton({
 	);
 }
 
-// ─── Heart toggle button (floating favorite) ─────────────────────
+// ─── Heart toggle button (floating favorite, reanimated pop) ─────
 export function HeartButton({
 	isFavorite,
 	onPress,
@@ -205,21 +215,26 @@ export function HeartButton({
 	accessibilityLabel?: string;
 }) {
 	const { colors } = useTheme();
-	const scale = useRef(new Animated.Value(1)).current;
+	const scale = useSharedValue(1);
+	const prevFavorite = useRef(isFavorite);
 
 	useEffect(() => {
-		if (!isFavorite) return;
-		scale.setValue(0.65);
-		Animated.spring(scale, {
-			toValue: 1,
-			friction: 3,
-			tension: 160,
-			useNativeDriver: Platform.OS !== "web",
-		}).start();
+		if (prevFavorite.current !== isFavorite) {
+			prevFavorite.current = isFavorite;
+			scale.value = withSequence(
+				withTiming(0.65, { duration: 100, easing: Easing.in(Easing.quad) }),
+				withTiming(1.4, { duration: 160, easing: Easing.out(Easing.quad) }),
+				withSpring(1, { damping: 12, stiffness: 200 }),
+			);
+		}
 	}, [isFavorite, scale]);
 
+	const heartStyle = useAnimatedStyle(() => ({
+		transform: [{ scale: scale.value }],
+	}));
+
 	return (
-		<Animated.View style={{ transform: [{ scale }] }}>
+		<Animated.View style={heartStyle}>
 			<Pressable
 				onPress={onPress}
 				accessibilityRole="button"
@@ -230,7 +245,7 @@ export function HeartButton({
 						width: size,
 						height: size,
 						backgroundColor: isFavorite
-							? `${colors.redAccent}26`
+							? `${withAlpha(colors.redAccent, 0.149)}`
 							: colors.card,
 						boxShadow: `0px 2px 8px ${colors.shadow}`,
 						transform: [{ scale: pressed ? 0.94 : 1 }],
@@ -309,72 +324,6 @@ export function SearchBar({
 	);
 }
 
-// ─── SelectableChipsBar ─────────────────────────────────────────────
-interface SelectableChipsBarProps<T> {
-	items: T[];
-	selectedItem: T;
-	labelFor: (item: T) => string;
-	onSelect: (item: T) => void;
-	initialCount?: number;
-	paddingHorizontal?: number;
-	style?: StyleProp<ViewStyle>;
-}
-
-export function SelectableChipsBar<T>({
-	items,
-	selectedItem,
-	labelFor,
-	onSelect,
-	initialCount,
-	paddingHorizontal = spacing.lg,
-	style,
-}: SelectableChipsBarProps<T>) {
-	const { colors } = useTheme();
-	const hasLimit = initialCount != null && items.length > initialCount;
-	const displayItems = hasLimit ? items.slice(0, initialCount) : items;
-
-	return (
-		<View style={[styles.chipsBar, { paddingHorizontal }, style]}>
-			<ScrollView
-				horizontal
-				showsHorizontalScrollIndicator={false}
-				contentContainerStyle={styles.chipsBarContent}
-			>
-				{displayItems.map((item, index) => {
-					const selected = item === selectedItem;
-					return (
-						<Pressable
-							key={index}
-							onPress={() => onSelect(item)}
-							style={[
-								styles.chip,
-								{
-									backgroundColor: selected
-										? colors.greenDark
-										: colors.green + "4D",
-									borderColor: selected
-										? colors.greenDark
-										: colors.greenDark + "26",
-								},
-							]}
-						>
-							<AppText
-								variant="bodySmall"
-								weight={selected ? "semiBold" : "medium"}
-								style={{
-									color: selected ? colors.green : colors.greenDark + "B3",
-								}}
-							>
-								{labelFor(item)}
-							</AppText>
-						</Pressable>
-					);
-				})}
-			</ScrollView>
-		</View>
-	);
-}
-
 // ─── FilterChip (active filter with clear) ─────────────────────────
 export function FilterChip({
 	label,
@@ -389,8 +338,8 @@ export function FilterChip({
 			style={[
 				styles.filterChip,
 				{
-					backgroundColor: colors.secondary + "4D",
-					borderColor: colors.primary + "33",
+					backgroundColor: withAlpha(colors.secondary, 0.302),
+					borderColor: withAlpha(colors.primary, 0.2),
 				},
 			]}
 		>
@@ -488,6 +437,7 @@ export function Card({ children, style, onPress }: CardProps) {
 		return (
 			<Pressable
 				onPress={onPress}
+				accessibilityRole="button"
 				style={({ pressed }) => [inner, pressed && { opacity: 0.9 }]}
 			>
 				{children}
@@ -505,6 +455,8 @@ interface ScreenProps {
 	style?: StyleProp<ViewStyle>;
 	keyboardShouldPersistTaps?: "handled" | "never" | "always";
 	edges?: Array<"top" | "bottom" | "left" | "right">;
+	refreshControl?: ReactElement<RefreshControlProps>;
+	scrollRef?: Ref<ScrollView>;
 }
 
 export function Screen({
@@ -514,6 +466,8 @@ export function Screen({
 	style,
 	keyboardShouldPersistTaps,
 	edges = ["top", "bottom"],
+	refreshControl,
+	scrollRef,
 }: ScreenProps) {
 	const { colors } = useTheme();
 	const bg = { backgroundColor: colors.background };
@@ -527,10 +481,12 @@ export function Screen({
 	return (
 		<SafeAreaView edges={edges} style={[styles.flex, bg]}>
 			<ScrollView
+				ref={scrollRef}
 				style={style}
 				contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
 				keyboardShouldPersistTaps={keyboardShouldPersistTaps}
 				showsVerticalScrollIndicator={false}
+				refreshControl={refreshControl}
 			>
 				{children}
 			</ScrollView>
@@ -544,6 +500,10 @@ interface TextFieldProps extends TextInputProps {
 	hint?: string;
 	error?: string | null;
 	containerStyle?: StyleProp<ViewStyle>;
+	/** Icono de prefijo (Ionicons), usado por los formularios de auth. */
+	iconName?: keyof typeof Ionicons.glyphMap;
+	/** Toggle de visibilidad para contraseñas (junto a secureTextEntry). */
+	secureToggle?: boolean;
 }
 
 export function TextField({
@@ -552,49 +512,128 @@ export function TextField({
 	error,
 	containerStyle,
 	multiline,
+	iconName,
+	secureToggle,
 	...inputProps
 }: TextFieldProps) {
 	const { colors } = useTheme();
+	const [focused, setFocused] = useState(false);
+	const [obscured, setObscured] = useState(
+		secureToggle ? (inputProps.secureTextEntry ?? false) : false,
+	);
+	const labelNode = label ? (
+		<AppText
+			variant="labelSmall"
+			weight="semiBold"
+			style={[styles.fieldLabel, { color: colors.mutedForeground }]}
+		>
+			{label}
+		</AppText>
+	) : null;
+	const hintNode = error ? (
+		<AppText
+			variant="bodySmall"
+			style={{ color: colors.destructive, marginTop: 4 }}
+		>
+			{error}
+		</AppText>
+	) : hint ? (
+		<AppText
+			variant="bodySmall"
+			style={{ color: colors.mutedForeground, marginTop: 4 }}
+		>
+			{hint}
+		</AppText>
+	) : null;
+
+	if (iconName || secureToggle) {
+		const editable = inputProps.editable !== false;
+		return (
+			<View style={[styles.field, containerStyle]}>
+				{labelNode}
+				<View
+					style={[
+						styles.fieldRow,
+						{
+							backgroundColor: colors.inputBackground,
+							borderColor: error
+								? colors.destructive
+								: focused
+									? colors.primary
+									: colors.borderSolid,
+							opacity: editable ? 1 : 0.6,
+						},
+					]}
+				>
+					{iconName ? (
+						<Ionicons name={iconName} size={20} color={colors.mutedForeground} />
+					) : null}
+					<TextInput
+						placeholderTextColor={colors.mutedForeground}
+						onFocus={(e) => {
+							setFocused(true);
+							inputProps.onFocus?.(e);
+						}}
+						onBlur={(e) => {
+							setFocused(false);
+							inputProps.onBlur?.(e);
+						}}
+						style={[styles.fieldInput, { color: colors.foreground }]}
+						{...inputProps}
+						secureTextEntry={secureToggle ? obscured : inputProps.secureTextEntry}
+					/>
+					{secureToggle ? (
+						<Pressable
+							onPress={() => setObscured((s) => !s)}
+							hitSlop={8}
+							accessibilityRole="button"
+							accessibilityLabel={
+								obscured ? strings.auth.showPassword : strings.auth.hidePassword
+							}
+							style={styles.eyeButton}
+						>
+							<Ionicons
+								name={obscured ? "eye" : "eye-off"}
+								size={20}
+								color={colors.mutedForeground}
+							/>
+						</Pressable>
+					) : null}
+				</View>
+				{hintNode}
+			</View>
+		);
+	}
 	return (
 		<View style={[styles.field, containerStyle]}>
-			{label ? (
-				<AppText
-					variant="labelSmall"
-					weight="semiBold"
-					style={[styles.fieldLabel, { color: colors.mutedForeground }]}
-				>
-					{label}
-				</AppText>
-			) : null}
+			{labelNode}
 			<TextInput
 				placeholderTextColor={colors.mutedForeground}
 				multiline={multiline}
+				onFocus={(e) => {
+					setFocused(true);
+					inputProps.onFocus?.(e);
+				}}
+				onBlur={(e) => {
+					setFocused(false);
+					inputProps.onBlur?.(e);
+				}}
 				style={[
 					styles.input,
 					multiline && styles.inputMultiline,
 					{
 						backgroundColor: colors.inputBackground,
-						borderColor: error ? colors.destructive : colors.border,
+						borderColor: error
+							? colors.destructive
+							: focused
+								? colors.primary
+								: colors.border,
 						color: colors.foreground,
 					},
 				]}
 				{...inputProps}
 			/>
-			{error ? (
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.destructive, marginTop: 4 }}
-				>
-					{error}
-				</AppText>
-			) : hint && !error ? (
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.mutedForeground, marginTop: 4 }}
-				>
-					{hint}
-				</AppText>
-			) : null}
+			{hintNode}
 		</View>
 	);
 }
@@ -680,10 +719,9 @@ export function ErrorState({
 	onRetry?: () => void;
 }) {
 	const { colors } = useTheme();
-	const message =
-		error instanceof Error
-			? error.message
-			: "Algo salió mal. Inténtalo de nuevo.";
+	// Nunca renderices error.message crudo: toAppError mapea PostgREST/red
+	// a la taxonomía de la app con copy es-ES.
+	const message = toAppError(error).message;
 	return (
 		<View style={styles.stateBox}>
 			<AppText
@@ -695,7 +733,7 @@ export function ErrorState({
 			</AppText>
 			{onRetry ? (
 				<Button
-					label="Reintentar"
+					label={strings.common.retry}
 					variant="outline"
 					onPress={onRetry}
 					style={{ alignSelf: "center", marginTop: margin(2) }}
@@ -750,7 +788,11 @@ export function SectionHeader({
 }
 
 // ─── Loading ────────────────────────────────────────────────────────
-export function LoadingView({ label = "Cargando..." }: { label?: string }) {
+export function LoadingView({
+	label = strings.common.loading,
+}: {
+	label?: string;
+}) {
 	const { colors } = useTheme();
 	return (
 		<View
@@ -803,9 +845,11 @@ export function ThemeOptionCard({
 			style={[
 				styles.themeCard,
 				{
-					backgroundColor: isSelected ? colors.primary + "0D" : colors.card,
+					backgroundColor: isSelected ? withAlpha(colors.primary, 0.051) : colors.card,
 					borderColor: isSelected ? colors.primary : colors.borderSolid,
-					borderWidth: isSelected ? 1.5 : 1,
+					// Ancho uniforme: 1.5 solo en seleccionada desplazaba
+					// la fila 1px al cambiar de opción.
+					borderWidth: 1,
 				},
 			]}
 		>
@@ -817,7 +861,10 @@ export function ThemeOptionCard({
 			<AppText
 				variant="bodySmall"
 				weight={isSelected ? "bold" : "regular"}
-				style={{ color: isSelected ? colors.primary : colors.foreground }}
+				style={{
+					color: isSelected ? colors.primary : colors.foreground,
+					textAlign: "center",
+				}}
 			>
 				{label}
 			</AppText>
@@ -841,6 +888,21 @@ const styles = StyleSheet.create({
 	},
 	field: { marginBottom: spacing.md },
 	fieldLabel: { marginBottom: 6 },
+	fieldRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+		borderWidth: 1,
+		borderRadius: 18,
+		paddingHorizontal: 16,
+		paddingVertical: 12,
+	},
+	fieldInput: { flex: 1, minWidth: 0, fontSize: 15, paddingVertical: 0 },
+	eyeButton: {
+		padding: spacing.xs,
+		alignItems: "center",
+		justifyContent: "center",
+	},
 	input: {
 		borderRadius: 18,
 		borderWidth: 1,
@@ -931,22 +993,6 @@ const styles = StyleSheet.create({
 	},
 
 	// ── Chips ────────────────────────────────────────────────────
-	chipsBar: {
-		width: "100%",
-	},
-	chipsBarContent: {
-		gap: spacing.sm,
-		alignItems: "center",
-	},
-	chip: {
-		paddingHorizontal: spacing.lg,
-		paddingVertical: spacing.sm,
-		borderRadius: radii.md,
-		borderWidth: 1,
-		alignItems: "center",
-		justifyContent: "center",
-		minHeight: 40,
-	},
 	filterChip: {
 		flexDirection: "row",
 		alignItems: "center",

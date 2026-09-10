@@ -1,85 +1,9 @@
-import type { PaginatedData, ProfileDto } from "@0xc1x/role-commons";
-import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { api } from "@/lib/api/client";
-import { toSearchParams } from "@/lib/api/http";
-
-interface BusinessDto {
-	id: string;
-	name: string;
-	email?: string;
-}
-
-interface PickerOption {
-	id: string;
-	label: string;
-}
-
-function useDirectory(
-	kind: "usuarios" | "negocios",
-	search: string,
-	subscribedTo?: string,
-	withPushToken?: boolean,
-): { options: PickerOption[]; isLoading: boolean } {
-	const debounced = useDebounce(search);
-	const profiles = useQuery({
-		queryKey: [
-			"directory",
-			"profiles",
-			kind,
-			debounced,
-			subscribedTo,
-			withPushToken,
-		],
-		queryFn: () =>
-			api.get<PaginatedData<ProfileDto>>(
-				`/profiles${toSearchParams({
-					limit: 10,
-					search: debounced || undefined,
-					subscribed_to: subscribedTo,
-					has_active_push_token: withPushToken || undefined,
-				})}`,
-			),
-		enabled: kind === "usuarios",
-	});
-	const businesses = useQuery({
-		queryKey: ["directory", "businesses", kind, debounced],
-		queryFn: () =>
-			api.get<PaginatedData<BusinessDto>>(
-				`/businesses${toSearchParams({ limit: 10, search: debounced || undefined, is_active: true })}`,
-			),
-		enabled: kind === "negocios",
-	});
-
-	if (kind === "usuarios") {
-		return {
-			options: (profiles.data?.data ?? []).map((p) => ({
-				id: p.id,
-				label: `${p.full_name ?? "Sin nombre"} · ${p.email}`,
-			})),
-			isLoading: profiles.isFetching,
-		};
-	}
-	return {
-		options: (businesses.data?.data ?? []).map((b) => ({
-			id: b.id,
-			label: b.name,
-		})),
-		isLoading: businesses.isFetching,
-	};
-}
-
-function useDebounce(value: string): string {
-	const [debounced, setDebounced] = useState(value);
-	useEffect(() => {
-		const t = setTimeout(() => setDebounced(value), 300);
-		return () => clearTimeout(t);
-	}, [value]);
-	return debounced;
-}
+import { useDirectory } from "@/features/directory";
 
 /**
  * Multi-select de usuarios/negocios con búsqueda.
@@ -101,6 +25,11 @@ export function IdPicker(props: {
 		search,
 		props.subscribedTo,
 		props.withPushToken,
+	);
+	// Lookup O(1) para el checklist; los writes siguen con el array.
+	const selectedSet = useMemo(
+		() => new Set(props.selectedIds),
+		[props.selectedIds],
 	);
 
 	const toggle = (id: string) =>
@@ -136,8 +65,14 @@ export function IdPicker(props: {
 				value={search}
 				onChange={(e) => setSearch(e.target.value)}
 				placeholder={`Buscar ${props.kind.toLowerCase()}…`}
+				aria-label={`Buscar ${props.kind.toLowerCase()}`}
 			/>
-			<div className="max-h-40 overflow-y-auto rounded-lg border">
+			<div
+				role="listbox"
+				aria-multiselectable
+				aria-label={props.label}
+				className="max-h-40 overflow-y-auto rounded-lg border"
+			>
 				{isLoading ? (
 					<p className="p-2 text-xs text-muted-foreground">Buscando…</p>
 				) : null}
@@ -145,19 +80,29 @@ export function IdPicker(props: {
 					<p className="p-2 text-xs text-muted-foreground">Sin resultados</p>
 				) : null}
 				{options.map((opt) => {
-					const checked = props.selectedIds.includes(opt.id);
+					const checked = selectedSet.has(opt.id);
 					return (
-						<label
+						<div
 							key={opt.id}
-							className="flex cursor-pointer items-center gap-2 border-b px-2 py-1.5 text-sm last:border-b-0 hover:bg-muted/50"
+							role="option"
+							aria-selected={checked}
+							tabIndex={0}
+							onClick={() => toggle(opt.id)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									toggle(opt.id);
+								}
+							}}
+							className="flex cursor-pointer items-center gap-2 border-b px-2 py-1.5 text-sm outline-none last:border-b-0 hover:bg-muted/50 focus-visible:bg-muted/50"
 						>
-							<input
-								type="checkbox"
+							<Checkbox
 								checked={checked}
-								onChange={() => toggle(opt.id)}
+								onCheckedChange={() => toggle(opt.id)}
+								aria-label={opt.label}
 							/>
 							<span className="truncate">{opt.label}</span>
-						</label>
+						</div>
 					);
 				})}
 			</div>

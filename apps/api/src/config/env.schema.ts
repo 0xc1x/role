@@ -54,6 +54,13 @@ export const envSchema = z.object({
   ENABLE_API_MIRROR_OFFERS: mirrorFlag(),
   /** Fase 2: notificaciones push espejo (Supabase edges siguen activas por defecto) */
   ENABLE_API_MIRROR_NOTIFICATIONS: mirrorFlag(),
+  /**
+   * Expiración de órdenes + restock (cada minuto). Excepción documentada en
+   * ADR-0008: Supabase no tiene expirador de órdenes propio (verificado:
+   * sin trigger ni cron SQL), así que este job es el único expirador mientras
+   * el móvil consuma Supabase directo. Default false como el resto de espejos.
+   */
+  ENABLE_JOBS_ORDERS_EXPIRATION: mirrorFlag(),
   /** BullMQ: URL de Redis para colas de notificaciones (vacío = ejecución directa sin cola) */
   REDIS_URL: z.string().default(''),
   /** FCM HTTP v1: JSON del service account de Firebase (vacío deshabilita envío web) */
@@ -85,6 +92,22 @@ export function validateEnv(config: Record<string, unknown>): Env {
   if (env.NODE_ENV === 'production' && (!env.DOCS_USER || !env.DOCS_PASSWORD)) {
     throw new Error(
       'DOCS_USER and DOCS_PASSWORD must be set in production to protect /docs',
+    );
+  }
+
+  // Fail-closed: sin estos secrets el webhook de Resend acepta eventos
+  // forjados y el token de desuscripción es computable para cualquier userId
+  // (HMAC con key vacía). En producción deben existir, aunque el envío esté
+  // deshabilitado (RESEND_API_KEY vacío).
+  if (env.NODE_ENV === 'production' && !env.RESEND_WEBHOOK_SECRET) {
+    throw new Error(
+      'RESEND_WEBHOOK_SECRET must be set in production to verify Resend webhooks',
+    );
+  }
+
+  if (env.NODE_ENV === 'production' && !env.UNSUBSCRIBE_SECRET) {
+    throw new Error(
+      'UNSUBSCRIBE_SECRET must be set in production to sign unsubscribe tokens',
     );
   }
 

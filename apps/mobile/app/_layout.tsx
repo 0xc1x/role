@@ -55,6 +55,15 @@ function RootLayout() {
 	});
 	const initialize = useAuthStore((s) => s.initialize);
 	const [configReady, setConfigReady] = useState(false);
+	const [themeReady, setThemeReady] = useState(false);
+	const authInitialized = useAuthStore((s) => s.initialized);
+	// Guardia anti-bloqueo: la splash nunca retiene más de 6s aunque
+	// alguna señal local se cuelgue (red lenta en enrichProfile, etc.).
+	const [splashExpired, setSplashExpired] = useState(false);
+	useEffect(() => {
+		const timeout = setTimeout(() => setSplashExpired(true), 6000);
+		return () => clearTimeout(timeout);
+	}, []);
 
 	useEffect(() => {
 		// analytics ya se auto-inicializó en index.ts (nativo + web).
@@ -98,11 +107,29 @@ function RootLayout() {
 		};
 	}, []);
 
+	// La splash (nativa + overlay #boot-splash) se sostiene hasta que el
+	// primer frame real puede pintarse: fuentes, config, tema hidratado y
+	// sesión inicial resuelta. No se esperan queries de pantallas (offers,
+	// businesses…): en mala red colgarían la splash; esas usan skeletons.
+	const splashReady =
+		(fontsLoaded && configReady && themeReady && authInitialized) ||
+		splashExpired;
+
 	useEffect(() => {
-		if (fontsLoaded && configReady) {
-			void SplashScreen.hideAsync();
+		if (!splashReady) return;
+		if (typeof document !== "undefined") {
+			// Fundido para evitar el corte brusco marca → app.
+			const el = document.getElementById("boot-splash");
+			if (el) {
+				el.style.transition = "opacity 250ms ease";
+				window.setTimeout(() => {
+					el.style.opacity = "0";
+				}, 30);
+				window.setTimeout(() => el.remove(), 350);
+			}
 		}
-	}, [fontsLoaded, configReady]);
+		void SplashScreen.hideAsync();
+	}, [splashReady]);
 
 	// Registro automático de push post-login (una vez por usuario).
 	// Sin requestPermission: los navegadores auto-deniegan prompts sin
@@ -134,7 +161,7 @@ function RootLayout() {
 	return (
 		<Sentry.ErrorBoundary fallback={() => <></>}>
 			<GestureHandlerRootView style={{ flex: 1 }}>
-				<ThemeProvider>
+				<ThemeProvider onHydrated={() => setThemeReady(true)}>
 					<QueryClientProvider client={queryClient}>
 						<Stack
 							screenOptions={{

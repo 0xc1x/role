@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Image, Platform, Pressable, StyleSheet, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
@@ -17,6 +18,7 @@ import { useCategories } from "@/features/hooks";
 import { useBusinessLocations, useSaveOffer } from "@/features/business/hooks";
 import type { OfferDetail } from "@/features/offers/domain/offer";
 import { DateTimeField } from "./DateTimeFields";
+import { pickWebImage } from "../../utils/pick-image";
 
 /**
  * Shared create/edit product form (ported from Rolé v1
@@ -46,9 +48,10 @@ export function ProductForm({
 	);
 	const [includes, setIncludes] = useState(product?.offer.includes ?? "");
 	const [allergens, setAllergens] = useState(product?.offer.allergens ?? "");
-	const [categoryIds, setCategoryIds] = useState<string[]>(
+	const [categoryIds, setCategoryIds] = useState<string[]>(() =>
 		product?.categories.map((c) => c.id) ?? [],
 	);
+	const selectedCategoryIds = useMemo(() => new Set(categoryIds), [categoryIds]);
 	const [locationId, setLocationId] = useState(
 		product?.offer.business_location_id ?? "",
 	);
@@ -59,10 +62,10 @@ export function ProductForm({
 		product ? String(product.offer.discounted_price) : "",
 	);
 	const [stock, setStock] = useState(product ? String(product.offer.stock) : "");
-	const [pickupStart, setPickupStart] = useState<Date>(
+	const [pickupStart, setPickupStart] = useState<Date>(() =>
 		product ? new Date(product.offer.pickup_start) : defaultPickup(true),
 	);
-	const [pickupEnd, setPickupEnd] = useState<Date>(
+	const [pickupEnd, setPickupEnd] = useState<Date>(() =>
 		product ? new Date(product.offer.pickup_end) : defaultPickup(false),
 	);
 	const [errors, setErrors] = useState<Record<string, string>>({});
@@ -204,7 +207,7 @@ export function ProductForm({
 					</AppText>
 					<View style={styles.optionsWrap}>
 						{(categories ?? []).map((category) => {
-							const selected = categoryIds.includes(category.id);
+							const selected = selectedCategoryIds.has(category.id);
 							return (
 								<Pressable
 									key={category.id}
@@ -469,30 +472,6 @@ function defaultPickup(isStart: boolean): Date {
 	return date;
 }
 
-// ponytail: expo-image-picker en web abre el diálogo con un click sintético
-// sin user activation → nunca abre y el await queda colgado. Input nativo
-// con click() síncrono dentro del handler; migrar de vuelta si upstream lo
-// arregla.
-export function pickWebImage(): Promise<string | null> {
-	return new Promise((resolve) => {
-		const input = document.createElement("input");
-		input.type = "file";
-		input.accept = "image/*";
-		let done = false;
-		const finish = (value: string | null) => {
-			if (done) return;
-			done = true;
-			resolve(value);
-			input.remove();
-		};
-		input.onchange = () =>
-			finish(input.files?.[0] ? URL.createObjectURL(input.files[0]) : null);
-		input.oncancel = () => finish(null);
-		document.body.appendChild(input);
-		input.click();
-	});
-}
-
 function FormSection({
 	title,
 	children,
@@ -575,8 +554,10 @@ const styles = StyleSheet.create({
 		gap: spacing.md,
 	},
 	discountBadge: {
-		alignSelf: "flex-start",
-		paddingHorizontal: spacing.md,
+		alignSelf: "auto",
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: spacing.xl,
 		paddingVertical: spacing.xs + 2,
 		borderRadius: radii.pill,
 	},

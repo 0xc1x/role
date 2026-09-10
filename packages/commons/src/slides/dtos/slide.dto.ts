@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import type { PaginatedData } from '../../_common/dtos/api.dto'
-import {
+import type {
     CreateSlideSchema,
     ListSlidesQuerySchema,
     PatchSlideSchema,
@@ -16,8 +16,7 @@ export type CreateSlideDto = z.infer<typeof CreateSlideSchema>;
 export type UpdateSlideDto = z.infer<typeof UpdateSlideSchema>;
 export type ViewSlideDto = z.infer<typeof ViewSlideSchema>;
 export type PatchSlideDto = z.infer<typeof PatchSlideSchema>;
-export type ListSlideQuery = z.infer<typeof ListSlidesQuerySchema>;
-
 export type SlideListResponse = z.infer<typeof SlideListResponseSchema>;
+export type ListSlideQuery = z.infer<typeof ListSlidesQuerySchema>;
 
 export type SlidePaginatedData = PaginatedData<SlideDto>;

@@ -29,8 +29,20 @@ describe("apiGet", () => {
 			jest.fn().mockResolvedValue({
 				ok: false,
 				status: 500,
+				text: () => Promise.resolve(""),
 			}) as unknown as typeof globalThis.fetch,
 		);
 		await expect(apiGet("/fail")).rejects.toThrow("respondió 500");
+	});
+
+	it("throws con message del backend en lista", async () => {
+		stubFetch(
+			jest.fn().mockResolvedValue({
+				ok: false,
+				status: 400,
+				text: () => Promise.resolve(JSON.stringify({ message: ["Mal"] })),
+			}) as unknown as typeof globalThis.fetch,
+		);
+		await expect(apiGet("/fail")).rejects.toThrow("Mal");
 	});
 });

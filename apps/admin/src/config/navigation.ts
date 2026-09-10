@@ -7,7 +7,6 @@ import {
 	Info,
 	LayoutList,
 	type LucideIcon,
-	Mail,
 	Megaphone,
 	Projector,
 	Settings2,
@@ -76,40 +75,40 @@ export const navMain: NavMainItem[] = [
 		icon: BadgeDollarSign,
 	},
 	{
+		title: "Campañas de Marketing",
+		url: "#",
+		icon: Megaphone,
+		items: [
+			{
+				title: "Mails",
+				url: "/campanas/mails",
+			},
+			{
+				title: "Push",
+				url: "/campanas/push",
+			},
+			{
+				title: "Segmentos",
+				url: "/campanas/segmentos",
+			},
+		],
+	},
+	{
 		title: "Notificaciones",
 		url: "#",
 		icon: BellRing,
 		items: [
 			{
 				title: "Push",
-				url: "/notificaciones-push",
+				url: "/notificaciones/push",
+			},
+			{
+				title: "Mail",
+				url: "/notificaciones/mails",
 			},
 			{
 				title: "Whatsapp",
 				url: "#",
-			},
-			{
-				title: "Mail",
-				url: "#",
-			},
-		],
-	},
-	{
-		title: "Correos",
-		url: "/emails",
-		icon: Mail,
-		items: [
-			{
-				title: "Plantillas",
-				url: "/emails?tab=plantillas",
-			},
-			{
-				title: "Gestión de correos",
-				url: "/emails",
-			},
-			{
-				title: "Envíos",
-				url: "/emails-sends",
 			},
 		],
 	},
@@ -130,11 +129,6 @@ export const projects: NavProject[] = [
 		name: "Feature Flags",
 		url: "#",
 		icon: ToggleLeft,
-	},
-	{
-		name: "Campañas de Marketing",
-		url: "/emails?tab=campanas",
-		icon: Megaphone,
 	},
 	{
 		name: "Anuncios",

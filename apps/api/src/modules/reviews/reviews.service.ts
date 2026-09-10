@@ -1,13 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { ReviewDto } from '@0xc1x/role-commons';
 import type { Database } from '../../database/database.module';
 import type { AuthUser } from '../../auth/auth.types';
-import { ReviewsRepository, type ReviewRow } from './reviews.repository';
+import { ReviewsRepository } from './reviews.repository';
+import { ReviewMapper } from './reviews.mapper';
 
 @Injectable()
 export class ReviewsService {
   constructor(private readonly reviewsRepository: ReviewsRepository) {}
 
-  async create(
+  create(
     user: AuthUser,
     input: {
       order_id: string;
@@ -15,7 +17,7 @@ export class ReviewsService {
       product_rating?: number | null;
       business_rating?: number | null;
     },
-  ): Promise<ReviewRow> {
+  ): Promise<ReviewDto> {
     return this.reviewsRepository.transaction(async (tx) => {
       const order = await this.reviewsRepository.findOrderById(
         tx,
@@ -27,6 +29,20 @@ export class ReviewsService {
       if (order.user_id !== user.id) {
         throw new ForbiddenException('You can only review your own orders');
       }
+      if (order.status !== 'completed') {
+        throw new BadRequestException(
+          'Solo se pueden reseñar pedidos completados',
+        );
+      }
+
+      // Idempotente: el móvil hace upsert por (user_id, order_id); un segundo
+      // POST devuelve la reseña existente en vez de duplicar o caer en 500.
+      const existing = await this.reviewsRepository.findByUserAndOrder(
+        tx,
+        user.id,
+        order.id,
+      );
+      if (existing) return ReviewMapper.toDto(existing);
 
       const review = await this.reviewsRepository.insert(tx, {
         user_id: user.id,
@@ -40,7 +56,7 @@ export class ReviewsService {
       // Espejo de los triggers de rating (idempotente: recalcula promedios).
       await this.recalcRatings(tx, order.business_id, order.offer_id);
 
-      return review;
+      return ReviewMapper.toDto(review);
     });
   }
 

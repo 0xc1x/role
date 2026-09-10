@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner-native";
+import { strings } from "@/core/i18n/strings";
 import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
 
 import {
@@ -7,6 +9,8 @@ import {
 	saveOffer,
 } from "@/features/business/data/repository";
 import { notificationRepository } from "@/features/business/data/notifications";
+// Los writes de pedidos (RPCs) viven en el repo de orders; estos hooks solo
+// orquestan vistas del rol negocio sobre esa API.
 import { orderRepository } from "@/features/orders/data/repository";
 
 export function useBusinesses(ownerId: string) {
@@ -21,6 +25,15 @@ export function useBusinessProfile(businessId: string) {
 	return useQuery({
 		queryKey: ["businesses", businessId],
 		queryFn: () => businessRepository.getBusinessProfile(businessId),
+		enabled: businessId.length > 0,
+	});
+}
+
+/** Lista completa de reseñas del negocio (pantalla dedicada). */
+export function useBusinessReviews(businessId: string) {
+	return useQuery({
+		queryKey: ["businesses", businessId, "reviews"],
+		queryFn: () => businessRepository.getBusinessReviews(businessId),
 		enabled: businessId.length > 0,
 	});
 }
@@ -286,6 +299,29 @@ export function useUpdateOrderStatus(businessId: string) {
 			});
 			void queryClient.invalidateQueries({ queryKey: ["orders"] });
 		},
+		onError: () => toast.error(strings.business.ordersStatusError),
+	});
+}
+
+/**
+ * Business-side cancel via the `cancel_order` RPC (p_business_id): server
+ * rules and stock restock live in the DB. Invalidates offers too, since the
+ * cancel returns the reserved stock to the offer.
+ */
+export function useCancelBusinessOrder(businessId: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (orderId: string) =>
+			orderRepository.cancelOrderForBusiness(orderId, businessId),
+		onSuccess: (result) => {
+			if (result.success) {
+				void queryClient.invalidateQueries({
+					queryKey: businessOrdersKey(businessId),
+				});
+				void queryClient.invalidateQueries({ queryKey: ["orders"] });
+				void queryClient.invalidateQueries({ queryKey: ["offers"] });
+			}
+		},
 	});
 }
 
@@ -308,5 +344,6 @@ export function useValidatePickupCode(businessId: string) {
 				void queryClient.invalidateQueries({ queryKey: ["orders"] });
 			}
 		},
+		onError: () => toast.error(strings.business.ordersValidateError),
 	});
 }

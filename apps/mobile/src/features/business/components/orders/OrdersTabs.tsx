@@ -6,6 +6,11 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import type { OrdersTab } from "@/features/business/domain/orders";
 
+const TABS: Array<{ key: OrdersTab; label: string }> = [
+	{ key: "active", label: strings.business.ordersTabActive },
+	{ key: "history", label: strings.business.ordersTabHistory },
+];
+
 /**
  * Activos / Historial segmented control
  * (ported from Rolé v1 `TabSelector`).
@@ -18,10 +23,6 @@ export function OrdersTabs({
 	onChange: (tab: OrdersTab) => void;
 }) {
 	const { colors } = useTheme();
-	const tabs: Array<{ key: OrdersTab; label: string }> = [
-		{ key: "active", label: strings.business.ordersTabActive },
-		{ key: "history", label: strings.business.ordersTabHistory },
-	];
 
 	return (
 		<View
@@ -30,7 +31,7 @@ export function OrdersTabs({
 				{ backgroundColor: colors.inputBackground, borderColor: colors.borderSolid },
 			]}
 		>
-			{tabs.map((item) => {
+			{TABS.map((item) => {
 				const selected = item.key === tab;
 				return (
 					<Pressable

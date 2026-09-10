@@ -10,7 +10,7 @@ import {
     UuidSchema,
 } from '../../_common/schemas/common';
 
-const HexColorSchema = z.string().regex(/^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/, {
+export const HexColorSchema = z.string().regex(/^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/, {
     message: 'El color debe tener un formato hexadecimal válido (ej. #FF0000)',
 });
 

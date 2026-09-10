@@ -1,26 +1,26 @@
-import { BadgePercent, Earth, Salad, Zap } from "lucide-react";
+import { LeafIcon, SparkIcon, StoreIcon, TagIcon } from "@/components/icons";
 
 import { Eyebrow, Section } from "@/components/section";
 import { Card, CardContent } from "@/components/ui/card";
 
 const FEATURES = [
 	{
-		icon: Salad,
+		icon: LeafIcon,
 		title: "Reduce el desperdicio",
 		body: "Ayuda a restaurantes y comercios a reducir el desperdicio de alimentos mientras ahorras dinero. Cada bolsa rescatada cuenta.",
 	},
 	{
-		icon: BadgePercent,
+		icon: TagIcon,
 		title: "Ahorra hasta 70%",
 		body: "Obtén productos de calidad a precios increíbles. Paga menos de la mitad del precio original.",
 	},
 	{
-		icon: Earth,
+		icon: StoreIcon,
 		title: "Impacto positivo",
 		body: "Cada compra que haces ayuda al planeta y apoya a los comercios locales de tu ciudad.",
 	},
 	{
-		icon: Zap,
+		icon: SparkIcon,
 		title: "Fácil y rápido",
 		body: "Reserva en segundos, recoge cuando te convenga. Todo desde tu móvil.",
 	},

@@ -76,19 +76,30 @@ export class NotificationsRepository {
     });
   }
 
-  async isInQuietHours(userId: string): Promise<boolean> {
-    const [row] = await this.db
+  /**
+   * Excluye los usuarios cuyo quiet-hours cubre la hora actual del servidor.
+   * 1 query para todo el lote (antes: 1 SELECT por usuario en el fanout).
+   * Sin fila o sin ventana configurada = permitido.
+   */
+  async filterNotInQuietHours(userIds: string[]): Promise<string[]> {
+    if (userIds.length === 0) return [];
+    const rows = await this.db
       .select({
+        user_id: consumerNotificationPreferences.user_id,
         from: consumerNotificationPreferences.quiet_hours_from,
         to: consumerNotificationPreferences.quiet_hours_to,
       })
       .from(consumerNotificationPreferences)
-      .where(eq(consumerNotificationPreferences.user_id, userId))
-      .limit(1);
-    if (!row?.from || !row?.to) return false;
+      .where(inArray(consumerNotificationPreferences.user_id, userIds));
+    const quietMap = new Map(rows.map((r) => [r.user_id, r]));
+
     const now = new Date();
     const cur = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
     // Simple range check (does not handle overnight wrap, ponytail simplification)
-    return cur >= row.from && cur <= row.to;
+    return userIds.filter((id) => {
+      const row = quietMap.get(id);
+      if (!row?.from || !row?.to) return true;
+      return !(cur >= row.from && cur <= row.to);
+    });
   }
 }

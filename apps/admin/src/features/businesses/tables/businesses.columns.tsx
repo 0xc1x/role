@@ -9,21 +9,11 @@ import { ActionCell } from "@/features/businesses/tables/cells/action-cell";
 const VerificationBadge = ({ status }: { status: string }) => {
 	const variant =
 		status === "approved"
-			? "default"
+			? "success"
 			: status === "pending"
-				? "secondary"
+				? "warning"
 				: "destructive";
-	const color =
-		status === "approved"
-			? "bg-green-500/10 text-green-600 border-green-200"
-			: status === "pending"
-				? "bg-amber-500/10 text-amber-600 border-amber-200"
-				: "bg-red-500/10 text-red-600 border-red-200";
-	return (
-		<Badge variant={variant} className={color}>
-			{status}
-		</Badge>
-	);
+	return <Badge variant={variant}>{status}</Badge>;
 };
 
 const ActiveCellWrapper = ({ row }: { row: { original: BusinessDto } }) => {

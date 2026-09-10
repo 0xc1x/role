@@ -1,5 +1,6 @@
-import { Loader2, Pencil, UploadCloud, X } from "lucide-react";
+import { Pencil, UploadCloud, X } from "lucide-react";
 import { useRef, useState } from "react";
+import { ImageDropzone } from "@/components/media/image-dropzone";
 import { usePreviewUrl } from "@/components/media/image-field";
 import { ImageThumbnail } from "@/components/media/image-thumbnail";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ImageCellProps {
 	imageUrl: string | null;
@@ -46,6 +48,9 @@ export function ImageCell({ imageUrl, name, onSave }: ImageCellProps) {
 				render={
 					<button
 						type="button"
+						aria-label={
+							imageUrl ? `Cambiar imagen de ${name}` : `Subir imagen de ${name}`
+						}
 						className="rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					/>
 				}
@@ -75,30 +80,20 @@ export function ImageCell({ imageUrl, name, onSave }: ImageCellProps) {
 							type="button"
 							aria-label="Quitar imagen"
 							onClick={() => setFile(null)}
-							className="absolute top-2 right-2 rounded-full bg-background/80 p-1 shadow-sm transition hover:bg-background"
+							className="absolute top-2 right-2 rounded-full bg-background/80 p-1 shadow-sm transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 						>
 							<X className="size-3.5" />
 						</button>
 					</div>
 				) : (
-					<div className="relative flex h-40 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/20 transition hover:bg-muted/50">
-						<input
-							type="file"
-							accept="image/*"
-							className="absolute inset-0 z-10 cursor-pointer opacity-0"
-							onChange={(e) => {
-								const newFile = e.target.files?.[0] || null;
-								if (newFile) setFile(newFile);
-							}}
-						/>
-						<UploadCloud className="mb-2 size-6 text-muted-foreground" />
-						<p className="text-xs font-medium text-foreground">
-							Selecciona o arrastra una imagen
-						</p>
-						<p className="mt-1 text-xs text-muted-foreground">
-							PNG, JPG o WEBP hasta 5MB
-						</p>
-					</div>
+					<ImageDropzone
+						id={`image-cell-upload-${name}`}
+						inputLabel={`Seleccionar imagen de ${name}`}
+						className="h-40"
+						onSelect={(newFile) => {
+							if (newFile) setFile(newFile);
+						}}
+					/>
 				)}
 
 				{previewUrl && (
@@ -146,7 +141,7 @@ export function ImageCell({ imageUrl, name, onSave }: ImageCellProps) {
 					>
 						{isPending ? (
 							<>
-								<Loader2 className="size-4 animate-spin" />
+								<Spinner />
 								Guardando...
 							</>
 						) : (

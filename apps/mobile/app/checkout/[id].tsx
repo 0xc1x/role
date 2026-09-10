@@ -1,4 +1,3 @@
-import type { Coupon } from "@0xc1x/role-commons";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
@@ -9,13 +8,10 @@ import { AppText, Button, ErrorState, LoadingView, Screen, ScreenHeader } from "
 import { formatMoney } from "@/core/utils/formatters";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
-import { useOffer, useReserveOffer } from "@/features/hooks";
+import { useApplyCoupon, useOffer, useReserveOffer } from "@/features/hooks";
 import {
-	couponDiscount,
-	couponIsValid,
 	type ReservationSuccess,
 } from "@/features/orders/domain/order";
-import { orderRepository } from "@/features/orders/data/repository";
 import { isOfferAvailable } from "@/features/offers/domain/offer";
 import {
 	CouponSection,
@@ -37,11 +33,16 @@ export default function CheckoutScreen() {
 		refetch,
 	} = useOffer(id ?? "");
 	const reserve = useReserveOffer();
-
-	const [couponInput, setCouponInput] = useState("");
-	const [couponError, setCouponError] = useState<string | null>(null);
-	const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
-	const [couponApplying, setCouponApplying] = useState(false);
+	const {
+		couponInput,
+		couponError,
+		appliedCoupon,
+		applying,
+		total,
+		applyCoupon,
+		clearCoupon,
+		changeInput,
+	} = useApplyCoupon(offerDetail ?? undefined);
 	const [confirmation, setConfirmation] = useState<ReservationSuccess | null>(null);
 
 	if (isLoading) return <LoadingView />;
@@ -50,41 +51,6 @@ export default function CheckoutScreen() {
 
 	const { offer, business, location } = offerDetail;
 	const isAvailable = isOfferAvailable(offerDetail);
-	const couponDiscountValue = appliedCoupon
-		? couponDiscount(appliedCoupon, offer.discounted_price)
-		: 0;
-	const total = Math.max(offer.discounted_price - couponDiscountValue, 0);
-
-	const applyCoupon = async () => {
-		const code = couponInput.trim().toUpperCase();
-		if (!code) return;
-		setCouponApplying(true);
-		try {
-			const coupon = await orderRepository.getCouponByCode(code, offer.business_id);
-			if (!coupon || !couponIsValid(coupon)) {
-				setCouponError(strings.checkout.couponUnavailable);
-				return;
-			}
-			if (
-				coupon.min_order_amount != null &&
-				offer.discounted_price < coupon.min_order_amount
-			) {
-				setCouponError(
-					strings.checkout.couponMinNotMet.replace(
-						"{amount}",
-						formatMoney(coupon.min_order_amount),
-					),
-				);
-				return;
-			}
-			setAppliedCoupon(coupon);
-			setCouponError(null);
-		} catch {
-			setCouponError(strings.checkout.invalidCoupon);
-		} finally {
-			setCouponApplying(false);
-		}
-	};
 
 	const confirmReservation = () => {
 		reserve.mutate(
@@ -132,18 +98,12 @@ export default function CheckoutScreen() {
 				<PickupDetailsCard offer={offer} location={location} />
 				<CouponSection
 					input={couponInput}
-					onChangeInput={(value) => {
-						setCouponInput(value);
-						setCouponError(null);
-					}}
+					onChangeInput={changeInput}
 					error={couponError}
 					applied={appliedCoupon}
-					applying={couponApplying}
+					applying={applying}
 					onApply={() => void applyCoupon()}
-					onClear={() => {
-						setAppliedCoupon(null);
-						setCouponInput("");
-					}}
+					onClear={clearCoupon}
 				/>
 				<PaymentMethodSection />
 				<PriceBreakdownCard offer={offer} appliedCoupon={appliedCoupon} />
@@ -171,7 +131,7 @@ export default function CheckoutScreen() {
 					fullWidth
 					size="lg"
 				/>
-				<AppText style={[styles.termsNote, { color: colors.mutedForeground }]}>
+				<AppText variant="caption" style={[styles.termsNote, { color: colors.mutedForeground }]}>
 					{strings.checkout.termsNote}
 				</AppText>
 			</View>
@@ -198,5 +158,5 @@ const styles = StyleSheet.create({
 		alignItems: "baseline",
 		justifyContent: "space-between",
 	},
-	termsNote: { fontSize: 11, textAlign: "center", lineHeight: 15 },
+	termsNote: { textAlign: "center" },
 });

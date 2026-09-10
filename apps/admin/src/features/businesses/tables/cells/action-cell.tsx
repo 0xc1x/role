@@ -1,6 +1,6 @@
 import type { BusinessDto } from "@0xc1x/role-commons";
 import type { Row } from "@tanstack/react-table";
-import { Check, Loader2, MoreHorizontal, Pen, X } from "lucide-react";
+import { Check, MoreHorizontal, Pen, X } from "lucide-react";
 import { useState } from "react";
 import {
 	AlertDialog,
@@ -22,6 +22,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { BusinessUpdateDrawer } from "@/features/businesses/components/business-update-drawer";
 import { useVerifyBusiness } from "@/features/businesses/queries/businesses.queries";
@@ -53,9 +54,7 @@ export function ActionCell({ row }: { row: Row<BusinessDto> }) {
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger
-					render={<Button variant="ghost" className="h-8 w-8 p-0" />}
-				>
+				<DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
 					<span className="sr-only">Abrir menú</span>
 					<MoreHorizontal className="h-4 w-4" />
 				</DropdownMenuTrigger>
@@ -128,7 +127,7 @@ export function ActionCell({ row }: { row: Row<BusinessDto> }) {
 						>
 							{verifyMutation.isPending ? (
 								<>
-									<Loader2 className="size-4 animate-spin" />
+									<Spinner />
 									Rechazando...
 								</>
 							) : (

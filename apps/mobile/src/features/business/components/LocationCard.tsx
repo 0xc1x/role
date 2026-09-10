@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card, StatusBadge } from "@/core/ui";
@@ -24,8 +25,12 @@ export function LocationCard({
 }) {
 	const { colors } = useTheme();
 	return (
-		<Card onPress={onPress} style={styles.card}>
-			<View style={styles.body}>
+		<Card style={styles.card}>
+			<Pressable
+				onPress={onPress}
+				accessibilityRole="button"
+			>
+				<View style={styles.body}>
 				<View style={[styles.icon, { backgroundColor: colors.muted }]}>
 					{imageUrl ? (
 						<Image source={{ uri: imageUrl }} style={styles.iconImage} />
@@ -44,7 +49,7 @@ export function LocationCard({
 							{name}
 						</AppText>
 						<StatusBadge
-							label={isActive ? "Activo" : "Inactivo"}
+							label={isActive ? strings.business.active : strings.business.inactive}
 							tone={isActive ? "success" : "neutral"}
 						/>
 					</View>
@@ -79,8 +84,10 @@ export function LocationCard({
 					) : null}
 				</View>
 			</View>
+			</Pressable>
 			<Pressable
 				onPress={onPress}
+				accessibilityRole="button"
 				style={({ pressed }) => [
 					styles.footer,
 					{ borderTopColor: colors.borderSolid },

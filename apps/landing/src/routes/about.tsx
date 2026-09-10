@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { Footer } from "@/components/footer";
 import { HeroBackground } from "@/components/hero-background";
@@ -6,14 +6,21 @@ import { HeartIcon, LeafIcon, SparkIcon, UsersIcon } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
 import { platformStatsQueryOptions } from "@/lib/queries";
+import { pageHead } from "@/lib/seo";
 import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/about")({
+	component: AboutPage,
 	loader: ({ context }) =>
 		context.queryClient
 			.ensureQueryData(platformStatsQueryOptions)
 			.catch(() => undefined),
-	component: AboutPage,
+	head: () =>
+		pageHead(
+			"/about",
+			"Sobre Rolé",
+			"Nuestra misión: que la comida excedente llegue a gente que la valora, no al contenedor.",
+		),
 });
 
 const numberFormat = new Intl.NumberFormat("es-EC");
@@ -191,7 +198,7 @@ function AboutPage() {
 						</div>
 						<div className="relative reveal">
 							<h2 className="font-heading text-3xl font-bold tracking-tight md:text-4xl">
-								Únete al rol
+								Únete a Rolé
 							</h2>
 							<p className="mx-auto mt-4 max-w-lg text-lg text-white/85">
 								Rescata comida deliciosa a precio increíble o registra tu
@@ -200,16 +207,16 @@ function AboutPage() {
 							<div className="mt-9 flex flex-wrap justify-center gap-4">
 								<a
 									href="role://"
-									className="rounded-full bg-white px-8 py-3 font-semibold text-role-primary shadow-dark-glow transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
+									className="rounded-full bg-white px-8 py-3 font-semibold text-role-primary shadow-dark-glow transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 								>
 									Consigue la app
 								</a>
-								<a
-									href="/for-business"
+								<Link
+									to="/for-business"
 									className="rounded-full border border-white/30 px-8 py-3 font-semibold text-white transition-colors duration-200 hover:bg-white/10"
 								>
 									Soy negocio
-								</a>
+								</Link>
 							</div>
 						</div>
 					</div>

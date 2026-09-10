@@ -37,7 +37,7 @@ function Stars({
 				>
 					<AppText
 						variant="h1"
-						style={{ color: n <= value ? colors.warning : colors.muted }}
+						style={{ color: n <= value ? colors.warning : colors.foreground, }}
 					>
 						★
 					</AppText>
@@ -79,7 +79,7 @@ export default function ReviewOrderScreen() {
 		<Screen scroll keyboardShouldPersistTaps="handled">
 			<View style={styles.container}>
 				<ScreenHeader title={strings.orders.writeReview} />
-				<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+				<AppText variant="bodyMedium" style={{ color: colors.mutedForeground, paddingTop: spacing.xl }}>
 					{data.offerTitle} · {data.businessName}
 				</AppText>
 

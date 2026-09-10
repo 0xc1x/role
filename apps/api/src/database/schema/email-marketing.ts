@@ -5,6 +5,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -45,6 +46,10 @@ export const emailSendTypeEnum = pgEnum('email_send_type', [
   'newsletter',
   'notification',
   'test',
+]);
+export const campaignChannelEnum = pgEnum('campaign_channel', [
+  'email',
+  'push',
 ]);
 
 // ─── Componentes (header / footer) ─────────────────────────────────────
@@ -142,20 +147,22 @@ export const segmentUsers = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index('idx_segment_users_user').on(t.user_id)],
+  (t) => [
+    primaryKey({ columns: [t.segment_id, t.user_id] }),
+    index('idx_segment_users_user').on(t.user_id),
+  ],
 );
 
-// ─── Campañas ─────────────────────────────────────────────────────────
+// ─── Campañas (multi-canal: email | push; whatsapp a futuro) ──────────
+// template_id es polimórfico sin FK: channel decide la tabla de plantillas
+// (email_templates | push_templates); la validez se valida en el servicio.
 export const campaigns = pgTable(
   'campaigns',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
-    template_id: uuid('template_id').references(() => emailTemplates.id, {
-      onDelete: 'set null',
-    }),
-    subject_override: text('subject_override'),
-    body_override: text('body_override'),
+    channel: campaignChannelEnum('channel').notNull().default('email'),
+    template_id: uuid('template_id'),
     category: text('category').notNull().default('announcements'),
     segment_ids: uuid('segment_ids')
       .array()
@@ -171,6 +178,7 @@ export const campaigns = pgTable(
     sent_at: timestamp('sent_at', { withTimezone: true }),
     total_recipients: integer('total_recipients').default(0),
     total_sent: integer('total_sent').default(0),
+    total_failed: integer('total_failed').default(0),
     total_delivered: integer('total_delivered').default(0),
     total_opened: integer('total_opened').default(0),
     total_clicked: integer('total_clicked').default(0),

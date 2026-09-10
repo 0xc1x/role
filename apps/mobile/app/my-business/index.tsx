@@ -32,6 +32,12 @@ function Row({ label, value }: { label: string; value: string | null }) {
 	);
 }
 
+const THEME_MODES: Array<{ key: ThemeMode; label: string; icon: string }> = [
+	{ key: "light", label: strings.settings.light, icon: "sunny-outline" },
+	{ key: "dark", label: strings.settings.dark, icon: "moon-outline" },
+	{ key: "system", label: strings.settings.system, icon: "phone-portrait-outline" },
+];
+
 export default function BusinessProfileScreen() {
 	const { colors, mode, setMode } = useTheme();
 	const profile = useAuthStore((s) => s.profile);
@@ -47,11 +53,7 @@ export default function BusinessProfileScreen() {
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 
 	const b = data?.business;
-	const MODES: Array<{ key: ThemeMode; label: string; icon: string }> = [
-		{ key: "light", label: strings.settings.light, icon: "sunny-outline" },
-		{ key: "dark", label: strings.settings.dark, icon: "moon-outline" },
-		{ key: "system", label: strings.settings.system, icon: "phone-portrait-outline" },
-	];
+	const MODES = THEME_MODES;
 
 	return (
 		<Screen scroll>
@@ -78,7 +80,7 @@ export default function BusinessProfileScreen() {
 						</AppText>
 						<Button
 							label={strings.business.editProfile}
-							icon={<Ionicons name="create-outline" size={20} color="#fff" />}
+							icon={<Ionicons name="create-outline" size={20} color={colors.primaryForeground} />}
 							style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
 							onPress={() => router.push("/my-business/edit")}
 						/>

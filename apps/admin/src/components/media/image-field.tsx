@@ -1,5 +1,5 @@
-import { UploadCloud, X } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
 	Attachment,
 	AttachmentAction,
@@ -10,6 +10,7 @@ import {
 	AttachmentTitle,
 } from "@/components/ui/attachment";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { ImageDropzone } from "./image-dropzone";
 
 function formatFileSize(bytes: number) {
 	if (bytes === 0) return "0 Bytes";
@@ -21,19 +22,23 @@ function formatFileSize(bytes: number) {
 
 export function usePreviewUrl(file: File | string | null) {
 	const isFile = file instanceof File;
-	const url = useMemo(() => {
-		if (!file) return null;
-		if (isFile) return URL.createObjectURL(file);
-		return file;
-	}, [file, isFile]);
+	const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
 	useEffect(() => {
+		if (!(file instanceof File)) {
+			setObjectUrl(null);
+			return;
+		}
+		const url = URL.createObjectURL(file);
+		setObjectUrl(url);
 		return () => {
-			if (url && isFile) URL.revokeObjectURL(url);
+			URL.revokeObjectURL(url);
 		};
-	}, [url, isFile]);
+	}, [file]);
 
-	return url;
+	if (!file) return null;
+	if (!isFile) return file;
+	return objectUrl;
 }
 
 export interface ImageFieldProps {
@@ -47,7 +52,7 @@ export interface ImageFieldProps {
 	onBlur: () => void;
 	/** Handler de cambio: recibe el archivo nuevo o null al quitarlo. */
 	onChange: (file: File | null) => void;
-	/** Label del campo. Por defecto "Imagen de la Categoría". */
+	/** Label del campo. Por defecto "Imagen". */
 	label?: string;
 	/** Input id/htmlFor. Por defecto "image-upload". */
 	id?: string;
@@ -70,7 +75,7 @@ export function ImageField({
 	errors,
 	onBlur,
 	onChange,
-	label = "Imagen de la Categoría",
+	label = "Imagen",
 	id = "image-upload",
 }: ImageFieldProps) {
 	const isFile = currentFile instanceof File;
@@ -81,28 +86,13 @@ export function ImageField({
 			<FieldLabel htmlFor={id}>{label}</FieldLabel>
 
 			{!currentFile ? (
-				<div className="relative group flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/20 rounded-lg hover:bg-muted/50 transition cursor-pointer">
-					<input
-						id={id}
-						type="file"
-						accept="image/*"
-						className="absolute inset-0 opacity-0 cursor-pointer z-10"
-						onBlur={onBlur}
-						onChange={(e) => {
-							const file = e.target.files?.[0] || null;
-							onChange(file);
-						}}
-					/>
-					<div className="flex flex-col items-center justify-center p-4 text-center">
-						<UploadCloud className="h-8 w-8 text-muted-foreground group-hover:text-primary transition mb-2" />
-						<p className="text-sm font-medium text-foreground">
-							Selecciona o arrastra una imagen
-						</p>
-						<p className="text-xs text-muted-foreground mt-1">
-							PNG, JPG o WEBP hasta 5MB
-						</p>
-					</div>
-				</div>
+				<ImageDropzone
+					id={id}
+					inputLabel={`${label}: seleccionar imagen`}
+					className="h-32"
+					onBlur={onBlur}
+					onSelect={(file) => onChange(file)}
+				/>
 			) : (
 				<Attachment orientation="horizontal">
 					<AttachmentMedia variant="image">

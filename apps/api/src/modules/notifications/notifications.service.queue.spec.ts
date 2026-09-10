@@ -55,7 +55,7 @@ describe('NotificationsService con BullMQ (mocks)', () => {
         NotificationsService,
         {
           provide: NotificationsRepository,
-          useValue: { findActiveTokens, filterByConsumerPrefs: jest.fn(async (ids: string[]) => ids), isInQuietHours: jest.fn(async () => false) },
+          useValue: { findActiveTokens, filterByConsumerPrefs: jest.fn(async (ids: string[]) => ids), filterNotInQuietHours: jest.fn(async (ids: string[]) => ids) },
         },
         withRedis,
       ],

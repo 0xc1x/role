@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
-	Image,
 	Pressable,
 	StyleSheet,
 	View,
 } from "react-native";
+import { Image } from "expo-image";
 import MapView, { Marker, type Region } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -16,6 +16,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { formatMoney, formatTime } from "@/core/utils/formatters";
 import {
 	discountPercentage,
@@ -58,7 +59,8 @@ export function ExploreMapView({
 		longitudeDelta: userLocation ? 0.4 : ECUADOR_CENTER.longitudeDelta,
 	}));
 	const [mapReady, setMapReady] = useState(false);
-	const [hasFitted, setHasFitted] = useState(false);
+	// Solo se lee/escribe en el efecto de fit: ref, no estado.
+	const hasFittedRef = useRef(false);
 	const [selectedOffer, setSelectedOffer] = useState<OfferDetail | null>(null);
 
 	const locatedOffers = offers.filter((o) => o.location != null);
@@ -74,18 +76,19 @@ export function ExploreMapView({
 
 	// Fit a las ofertas una sola vez cuando aparecen.
 	useEffect(() => {
-		if (!mapReady || hasFitted || locatedOffers.length === 0) return;
-		setHasFitted(true);
-		const coords = locatedOffers.slice(0, 20).map((o) => ({
-			latitude: o.location!.latitude,
-			longitude: o.location!.longitude,
-		}));
+		if (!mapReady || hasFittedRef.current || locatedOffers.length === 0) return;
+		hasFittedRef.current = true;
+		const coords = locatedOffers.slice(0, 20).flatMap((o) =>
+			o.location != null
+				? [{ latitude: o.location.latitude, longitude: o.location.longitude }]
+				: [],
+		);
 		mapRef.current?.fitToCoordinates(coords, {
 			edgePadding: { top: 120, right: 48, bottom: 120, left: 48 },
 			animated: true,
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [mapReady, hasFitted, offers]);
+	}, [mapReady, offers]);
 
 	// Deseleccionar al tocar el mapa.
 	const handleMapPress = () => setSelectedOffer(null);
@@ -148,12 +151,14 @@ export function ExploreMapView({
 			>
 				{locatedOffers.map((offer) => {
 					const selected = selectedOffer?.offer.id === offer.offer.id;
+					const loc = offer.location;
+					if (loc == null) return null;
 					return (
 						<Marker
 							key={`${offer.offer.id}-${selected ? "sel" : "def"}`}
 							coordinate={{
-								latitude: offer.location!.latitude,
-								longitude: offer.location!.longitude,
+								latitude: loc.latitude,
+								longitude: loc.longitude,
 							}}
 							onPress={() => setSelectedOffer(offer)}
 							tracksViewChanges={false}
@@ -217,7 +222,7 @@ export function ExploreMapView({
 							styles.headerButton,
 							{
 								backgroundColor: filters.category != null || filters.maxDistanceKm != null || filters.maxPrice != null
-									? colors.primary + "1A"
+									? withAlpha(colors.primary, 0.102)
 									: colors.surfaceMuted,
 								borderWidth: filters.category != null || filters.maxDistanceKm != null || filters.maxPrice != null ? 1.5 : 0,
 								borderColor: colors.primary,
@@ -239,11 +244,11 @@ export function ExploreMapView({
 
 			{/* ── Controles de zoom + mi ubicación ─────────────────────── */}
 			<View style={[styles.zoomControls, { top: 96, backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}>
-				<Pressable onPress={zoomIn} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel="zoom in">
+				<Pressable onPress={zoomIn} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel={strings.explore.zoomIn}>
 					<Ionicons name="add" size={20} color={colors.foreground} />
 				</Pressable>
 				<View style={[styles.zoomDivider, { backgroundColor: colors.border }]} />
-				<Pressable onPress={zoomOut} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel="zoom out">
+				<Pressable onPress={zoomOut} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel={strings.explore.zoomOut}>
 					<Ionicons name="remove" size={20} color={colors.foreground} />
 				</Pressable>
 			</View>
@@ -308,7 +313,7 @@ function MapOfferCard({
 					<Image
 						source={{ uri: offer.offer.image }}
 						style={styles.selectedImage}
-						resizeMode="cover"
+						contentFit="cover"
 					/>
 				) : (
 					<View style={[styles.selectedImage, { backgroundColor: colors.surfaceMuted }]} />
@@ -327,7 +332,7 @@ function MapOfferCard({
 					<Ionicons name="close" size={16} color={colors.foreground} />
 				</Pressable>
 				<LinearGradient
-					colors={["transparent", "rgba(0,0,0,0.4)"]}
+					colors={["transparent", withAlpha(colors.scrim, 0.4)]}
 					style={styles.selectedFade}
 				/>
 			</View>

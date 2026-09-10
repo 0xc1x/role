@@ -48,8 +48,7 @@ const makeCampaign = (overrides: Partial<CampaignRow> = {}): CampaignRow =>
     name: 'Campaña test',
     description: null,
     template_id: TEMPLATE_ID,
-    subject_override: null,
-    body_override: null,
+    channel: 'email',
     category: 'announcements',
     segment_ids: ['seg-1'],
     include_user_ids: [],
@@ -350,6 +349,18 @@ describe('CampaignsService', () => {
       await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(BadRequestException);
     });
 
+    it('rechaza audiencias gigantes con error claro (tope 50_000)', async () => {
+      recipients.resolve.mockResolvedValue(
+        Array.from({ length: 50_001 }, (_, i) => ({
+          userId: `u-${i}`,
+          email: `u-${i}@x.com`,
+          fullName: null,
+        })),
+      );
+      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(/demasiado grande/);
+      expect(repository.insertSends).not.toHaveBeenCalled();
+    });
+
     it('al reintentar una failed limpia los envíos del intento anterior', async () => {
       repository.getCampaignById.mockResolvedValue(makeCampaign({ status: 'failed' }));
 
@@ -471,7 +482,8 @@ describe('CampaignsService', () => {
       expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, { status: 'failed' });
     });
 
-    it('procesa lotes de campañas en sending', async () => {
+    it('procesa lotes de campañas en sending solo sin Redis (fallback)', async () => {
+      env.REDIS_URL = undefined;
       repository.listCampaigns.mockResolvedValue({
         rows: [makeCampaign({ status: 'sending', total_recipients: 3 })],
         total: 1,
@@ -488,6 +500,22 @@ describe('CampaignsService', () => {
         status: 'sent',
         sent_at: expect.any(Date),
       });
+    });
+
+    it('con REDIS_URL no drena sending (BullMQ es dueño) pero sí transaccionales', async () => {
+      repository.listCampaigns.mockResolvedValue({
+        rows: [makeCampaign({ status: 'sending', total_recipients: 3 })],
+        total: 1,
+      });
+      const tx = makeSend({ type: 'transactional', source_type: 'business_verification' });
+      repository.findPendingBatch.mockResolvedValue([tx]);
+      resendSend.mockResolvedValue({ data: { id: 're_1' }, error: null });
+
+      const out = await service.processTick();
+
+      expect(repository.findQueuedBatch).not.toHaveBeenCalled();
+      expect(out.processed).toBe(1);
+      expect(repository.markSent).toHaveBeenCalledWith('s-1', 're_1');
     });
   });
 
@@ -567,20 +595,6 @@ describe('CampaignsService', () => {
       await service.processBatch(makeCampaign({ status: 'sending' }));
 
       expect(queue.add).not.toHaveBeenCalled();
-    });
-
-    it('usa el subject_override de la campaña sobre el de la plantilla', async () => {
-      repository.findQueuedBatch.mockResolvedValue([makeSend()]);
-      repository.countQueued.mockResolvedValue(1);
-      repository.getCampaignById.mockResolvedValue(
-        makeCampaign({ status: 'sending', subject_override: '  Lanzamos  ' }),
-      );
-
-      await service.processBatch(makeCampaign({ status: 'sending', subject_override: '  Lanzamos  ' }));
-
-      expect(resendSend).toHaveBeenCalledWith(
-        expect.objectContaining({ subject: 'Lanzamos' }),
-      );
     });
 
     it('falla el envío individual sin cortar el lote', async () => {

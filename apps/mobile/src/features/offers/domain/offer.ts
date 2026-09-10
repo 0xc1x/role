@@ -73,6 +73,27 @@ export interface AreaStat {
 	deals: number;
 }
 
+/** Filter state for the offers sheet (owned by domain; UI imports it). */
+export interface OfferFilterState {
+	category: string | null;
+	maxPrice: number | null;
+	maxDistanceKm: number | null;
+}
+
+export const emptyOfferFilters: OfferFilterState = {
+	category: null,
+	maxPrice: null,
+	maxDistanceKm: null,
+};
+
+/** Split de listas separadas por coma (includes/allergens del offer). */
+export function splitList(value: string): string[] {
+	return value
+		.split(",")
+		.map((item) => item.trim())
+		.filter(Boolean);
+}
+
 // ─── Derived helpers (pure) ───────────────────────────────────────────
 
 export function discountPercentage(

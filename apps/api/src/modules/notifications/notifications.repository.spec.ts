@@ -68,8 +68,8 @@ describe('NotificationsRepository (DB real)', () => {
     ).toEqual([userA]);
   });
 
-  test('isInQuietHours falso sin preferencias', async () => {
-    expect(await repo.isInQuietHours(userA)).toBe(false);
+  test('filterNotInQuietHours: sin preferencias = permitido, con ventana = excluido', async () => {
+    expect(await repo.filterNotInQuietHours([userA])).toEqual([userA]);
     await ctx.db
       .insert(consumerNotificationPreferences)
       .values({
@@ -78,6 +78,6 @@ describe('NotificationsRepository (DB real)', () => {
         quiet_hours_to: '23:59:59',
       })
       .onConflictDoNothing();
-    expect(await repo.isInQuietHours(userA)).toBe(true);
+    expect(await repo.filterNotInQuietHours([userA, userB])).toEqual([userB]);
   });
 });

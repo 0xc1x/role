@@ -1,5 +1,11 @@
-import type { BusinessDto } from "@0xc1x/role-commons";
-import { UpdateBusinessSchema } from "@0xc1x/role-commons";
+import type {
+	BusinessDto,
+	BusinessVerificationStatus,
+} from "@0xc1x/role-commons";
+import {
+	BusinessVerificationStatusSchema,
+	UpdateBusinessSchema,
+} from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -17,7 +23,7 @@ import { useUpdateBusiness } from "../queries/businesses.queries";
 
 const formSchema = UpdateBusinessSchema.extend({
 	name: z.string().min(1).optional(),
-	verification_status: z.enum(["pending", "approved", "rejected"]).optional(),
+	verification_status: BusinessVerificationStatusSchema.optional(),
 	rejection_reason: z.string().nullable().optional(),
 });
 
@@ -47,7 +53,7 @@ export function BusinessForm({
 					name: value.name || undefined,
 					verification_status: value.verification_status,
 					rejection_reason: value.rejection_reason || null,
-				} as never,
+				},
 			});
 			onSuccess?.();
 		},
@@ -92,7 +98,9 @@ export function BusinessForm({
 						<FieldLabel>Estado verificación</FieldLabel>
 						<Select
 							value={field.state.value}
-							onValueChange={(v) => field.handleChange(v as never)}
+							onValueChange={(v) =>
+								field.handleChange(v as BusinessVerificationStatus)
+							}
 						>
 							<SelectTrigger>
 								<SelectValue />

@@ -17,6 +17,7 @@ import { AppText, Card, Screen, ScreenHeader, SearchBar } from "@/core/ui";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import type { ColorTokens } from "@/core/theme/colors";
+import { withAlpha } from "@/core/theme/alpha";
 import { useAuthStore } from "@/features/auth/store";
 import { useConfigValue } from "@/features/config";
 
@@ -136,7 +137,11 @@ function CategoriesCard({ categories }: { categories: Category[] }) {
 
 function FaqChevron({ expanded }: { expanded: boolean }) {
 	const { colors } = useTheme();
-	const rotation = useRef(new Animated.Value(0)).current;
+	const rotationRef = useRef<Animated.Value | null>(null);
+	if (rotationRef.current === null) {
+		rotationRef.current = new Animated.Value(0);
+	}
+	const rotation = rotationRef.current;
 
 	useEffect(() => {
 		Animated.timing(rotation, {
@@ -228,7 +233,7 @@ function FaqCard({
 					const id = String(index);
 					return (
 						<FaqRow
-							key={id}
+							key={faq.question}
 							question={faq.question}
 							answer={faq.answer}
 							expanded={expandedId === id}
@@ -245,7 +250,7 @@ function ContactSupportCard({ onPress }: { onPress: () => void }) {
 	const { colors } = useTheme();
 	return (
 		<LinearGradient
-			colors={[colors.primary, `${colors.primary}CC`]}
+			colors={[colors.primary, `${withAlpha(colors.primary, 0.8)}`]}
 			start={{ x: 0, y: 0 }}
 			end={{ x: 1, y: 1 }}
 			style={styles.supportCard}
@@ -259,7 +264,7 @@ function ContactSupportCard({ onPress }: { onPress: () => void }) {
 			</AppText>
 			<AppText
 				variant="bodySmall"
-				style={{ color: `${colors.primaryForeground}E6`, marginTop: 2 }}
+				style={{ color: `${withAlpha(colors.primaryForeground, 0.902)}`, marginTop: 2 }}
 			>
 				{strings.helpCenter.contactSubtitle}
 			</AppText>
@@ -304,6 +309,19 @@ function ScheduleInfo() {
 	);
 }
 
+async function launchUrl(url: string, errorKey: "mailError" | "callError") {
+	try {
+		const canOpen = await Linking.canOpenURL(url);
+		if (!canOpen) {
+			toast.error(strings.helpCenter[errorKey]);
+			return;
+		}
+		await Linking.openURL(url);
+	} catch {
+		toast.error(strings.helpCenter[errorKey]);
+	}
+}
+
 export default function HelpScreen() {
 	const { colors } = useTheme();
 	const { status, initialized } = useAuthStore();
@@ -336,14 +354,15 @@ export default function HelpScreen() {
 			iconColor: colors.ecoGreen,
 			onPress: () => router.push("/profile/help/orders"),
 		},
-		{
-			icon: "card-outline",
-			label: strings.helpCenter.categoryPayments,
-			subtitle: strings.helpCenter.categoryPaymentsSubtitle,
-			bgColor: colors.surfaceWarning,
-			iconColor: colors.warningOrange,
-			onPress: () => router.push("/profile/help/payments"),
-		},
+		// Categoría de pagos oculta hasta habilitar la pasarela de pagos
+		// {
+		// 	icon: "card-outline",
+		// 	label: strings.helpCenter.categoryPayments,
+		// 	subtitle: strings.helpCenter.categoryPaymentsSubtitle,
+		// 	bgColor: colors.surfaceWarning,
+		// 	iconColor: colors.warningOrange,
+		// 	onPress: () => router.push("/profile/help/payments"),
+		// },
 		{
 			icon: "shield-checkmark-outline",
 			label: strings.helpCenter.categoryPolicies,
@@ -364,19 +383,6 @@ export default function HelpScreen() {
 		);
 	}, [query]);
 
-	async function launchUrl(url: string, errorKey: "mailError" | "callError") {
-		try {
-			const canOpen = await Linking.canOpenURL(url);
-			if (!canOpen) {
-				toast.error(strings.helpCenter[errorKey]);
-				return;
-			}
-			await Linking.openURL(url);
-		} catch {
-			toast.error(strings.helpCenter[errorKey]);
-		}
-	}
-
 	const openEmail = () =>
 		void launchUrl(
 			`mailto:${supportEmail}?subject=${encodeURIComponent(strings.helpCenter.mailSubject)}`,
@@ -390,7 +396,7 @@ export default function HelpScreen() {
 		if (initialized && status === "guest") {
 			router.replace("/login");
 		}
-	}, [status, initialized, router]);
+	}, [status, initialized]);
 
 	if (!initialized || status === "guest") return null;
 

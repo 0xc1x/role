@@ -8,12 +8,12 @@ import { toAppError } from "@/core/error/mapper";
 import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { radii, spacing } from "@/core/theme/spacing";
-import { AppText, Button } from "@/core/ui";
+import { AppText, Button, TextField } from "@/core/ui";
 import { Logo } from "@/core/ui/Logo";
-import { AuthField } from "@/features/auth/presentation/AuthField";
 import { AuthScreenShell } from "@/features/auth/presentation/AuthScreenShell";
 import { SocialAuthButtons } from "@/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/features/auth/data/repository";
+import { validateSignupForm } from "@/features/auth/domain/validation";
 
 const BENEFITS = [
 	strings.auth.benefitSave,
@@ -35,34 +35,11 @@ export default function SignupScreen() {
 	const [loading, setLoading] = useState(false);
 
 	const validate = () => {
-		const name = fullName.trim();
-		const mail = email.trim();
-		let ok = true;
-		if (!name) {
-			setNameError(strings.auth.requiredName);
-			ok = false;
-		} else {
-			setNameError(null);
-		}
-		if (!mail) {
-			setEmailError(strings.auth.requiredEmail);
-			ok = false;
-		} else if (!mail.includes("@")) {
-			setEmailError(strings.auth.invalidEmail);
-			ok = false;
-		} else {
-			setEmailError(null);
-		}
-		if (!password) {
-			setPasswordError(strings.auth.requiredPassword);
-			ok = false;
-		} else if (password.length < 8) {
-			setPasswordError(strings.auth.passwordMinError);
-			ok = false;
-		} else {
-			setPasswordError(null);
-		}
-		return ok;
+		const result = validateSignupForm(fullName, email, password);
+		setNameError(result.nameError);
+		setEmailError(result.emailError);
+		setPasswordError(result.passwordError);
+		return result.ok;
 	};
 
 	const handleSignup = async () => {
@@ -114,9 +91,9 @@ export default function SignupScreen() {
 				</AppText>
 			</View>
 
-			<AuthField
+			<TextField
 				label={strings.auth.fullName}
-				icon="person-outline"
+				iconName="person-outline"
 				value={fullName}
 				onChangeText={setFullName}
 				error={nameError}
@@ -124,9 +101,9 @@ export default function SignupScreen() {
 				textContentType="name"
 				returnKeyType="next"
 			/>
-			<AuthField
+			<TextField
 				label={strings.auth.email}
-				icon="mail-outline"
+				iconName="mail-outline"
 				value={email}
 				onChangeText={setEmail}
 				error={emailError}
@@ -136,13 +113,13 @@ export default function SignupScreen() {
 				textContentType="emailAddress"
 				returnKeyType="next"
 			/>
-			<AuthField
+			<TextField
 				label={strings.auth.password}
-				icon="lock-closed-outline"
+				iconName="lock-closed-outline"
 				value={password}
 				onChangeText={setPassword}
 				error={passwordError}
-				secure
+				secureToggle
 				hint={strings.auth.passwordMinHint}
 				autoComplete="new-password"
 				textContentType="newPassword"

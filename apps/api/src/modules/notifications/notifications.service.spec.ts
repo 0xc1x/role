@@ -18,7 +18,7 @@ describe('NotificationsService (espejo send-push-notification)', () => {
             findActiveTokens: jest.fn(),
             deactivateToken: jest.fn(),
             filterByConsumerPrefs: jest.fn(),
-            isInQuietHours: jest.fn(),
+            filterNotInQuietHours: jest.fn(async (ids: string[]) => ids),
           },
         },
         { provide: ConfigService, useValue: { get } },
@@ -41,7 +41,7 @@ describe('NotificationsService (espejo send-push-notification)', () => {
     repo.filterByConsumerPrefs
       .mockResolvedValueOnce(['u1']) // prefFlag none
       .mockResolvedValueOnce(['u1']); // push_enabled
-    repo.isInQuietHours.mockResolvedValue(false);
+    repo.filterNotInQuietHours.mockResolvedValue(['u1']);
     repo.findActiveTokens.mockResolvedValue([
       { user_id: 'u1', token: 'ExponentPushToken[xxx]', platform: 'android' },
     ]);
@@ -62,7 +62,7 @@ describe('NotificationsService (espejo send-push-notification)', () => {
 
   it('desactiva token muerto (Expo DeviceNotRegistered)', async () => {
     repo.filterByConsumerPrefs.mockResolvedValue(['u1']);
-    repo.isInQuietHours.mockResolvedValue(false);
+    repo.filterNotInQuietHours.mockResolvedValue(['u1']);
     repo.findActiveTokens.mockResolvedValue([
       { user_id: 'u1', token: 'ExponentPushToken[dead]', platform: 'android' },
     ]);
@@ -81,7 +81,7 @@ describe('NotificationsService (espejo send-push-notification)', () => {
 
   it('sin FCM_SERVICE_ACCOUNT hace mock success (no deactivate)', async () => {
     repo.filterByConsumerPrefs.mockResolvedValue(['u1']);
-    repo.isInQuietHours.mockResolvedValue(false);
+    repo.filterNotInQuietHours.mockResolvedValue(['u1']);
     repo.findActiveTokens.mockResolvedValue([
       { user_id: 'u1', token: 'web-token', platform: 'web' },
     ]);
@@ -94,7 +94,7 @@ describe('NotificationsService (espejo send-push-notification)', () => {
 
   it('FCM con private_key truncada cuenta como fallo y no desactiva el token', async () => {
     repo.filterByConsumerPrefs.mockResolvedValue(['u1']);
-    repo.isInQuietHours.mockResolvedValue(false);
+    repo.filterNotInQuietHours.mockResolvedValue(['u1']);
     repo.findActiveTokens.mockResolvedValue([
       { user_id: 'u1', token: 'web-token', platform: 'web' },
     ]);

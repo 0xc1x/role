@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { View, StyleSheet, FlatList, Pressable } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactElement } from "react";
+import { View, StyleSheet, FlatList, Pressable, type StyleProp, type ViewStyle } from "react-native";
 import Animated, {
 	useSharedValue,
 	useAnimatedStyle,
@@ -9,6 +9,7 @@ import Animated, {
 import { useTheme } from "@/core/theme";
 import { AppText } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { strings } from "@/core/i18n/strings";
 import { useCategoryStats } from "@/features/hooks";
 import type { CategoryStat } from "@/features/offers/domain/offer";
@@ -46,17 +47,17 @@ export function CategoryChips({
 	const remaining = allStats.length - INITIAL_COUNT;
 
 	const selectedId = selectedCategory === null ? "all" : selectedCategory;
-
-	const renderChip = (item: CategoryStat) => {
-		const selected = item.id === selectedId;
-		return (
-			<AnimatedChip
-				item={item}
-				selected={selected}
-				onPress={() => onCategorySelect(item.id === "all" ? null : item.id)}
-			/>
-		);
-	};
+	const names = useMemo(
+		() => new Map(allStats.map((s) => [s.id, s.name] as const)),
+		[allStats],
+	);
+	const itemIds = useMemo(() => displayStats.map((s) => s.id), [displayStats]);
+	const handleSelect = useCallback(
+		(id: string) => onCategorySelect(id === "all" ? null : id),
+		[onCategorySelect],
+	);
+	const labelFor = useCallback((id: string) => names.get(id) ?? id, [names]);
+	const toggleShowAll = useCallback(() => setShowAll((v) => !v), []);
 
 	if (isLoading) {
 		return (
@@ -75,54 +76,121 @@ export function CategoryChips({
 	const showLess = showAll && remaining > 0;
 
 	return (
-		<View style={styles.container}>
+		<ChipsBar
+			items={itemIds}
+			selectedId={selectedId}
+			onSelect={handleSelect}
+			labelFor={labelFor}
+			style={styles.container}
+			footer={
+				showMore || showLess ? (
+					<Pressable
+						onPress={toggleShowAll}
+						style={[
+							styles.moreChip,
+							{ borderColor: colors.borderSolid },
+						]}
+					>
+						<AppText
+							weight="semiBold"
+							style={{ color: colors.mutedForeground }}
+						>
+							{showMore
+								? strings.home.seeMoreCategories.replace(
+										"{n}",
+										String(remaining),
+									)
+								: strings.home.seeLess}
+						</AppText>
+					</Pressable>
+				) : null
+			}
+		/>
+	);
+}
+
+/** Fila horizontal genérica de chips seleccionables (sin datos). */
+export function ChipsBar({
+	items,
+	selectedId,
+	onSelect,
+	labelFor,
+	style,
+	footer,
+}: {
+	items: string[];
+	selectedId: string;
+	onSelect: (id: string) => void;
+	labelFor: (id: string) => string;
+	style?: StyleProp<ViewStyle>;
+	footer?: ReactElement | ComponentType | null;
+}) {
+	const renderItem = useCallback(
+		({ item }: { item: string }) => (
+			<ChipRowItem
+				id={item}
+				selectedId={selectedId}
+				onSelect={onSelect}
+				labelFor={labelFor}
+			/>
+		),
+		[selectedId, onSelect, labelFor],
+	);
+	return (
+		<View style={style}>
 			<FlatList
-				data={displayStats}
-				keyExtractor={(item) => item.id}
+				data={items}
+				keyExtractor={chipKeyExtractor}
 				horizontal
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.listContent}
-				ListFooterComponent={
-					showMore || showLess ? (
-						<Pressable
-							onPress={() => setShowAll((v) => !v)}
-							style={[
-								styles.moreChip,
-								{ borderColor: colors.borderSolid },
-							]}
-						>
-							<AppText
-								weight="semiBold"
-								style={{ color: colors.mutedForeground }}
-							>
-								{showMore
-									? strings.home.seeMoreCategories.replace(
-											"{n}",
-											String(remaining),
-										)
-									: strings.home.seeLess}
-							</AppText>
-						</Pressable>
-					) : null
-				}
-				renderItem={({ item }) => renderChip(item)}
+				ListFooterComponent={footer ?? undefined}
+				renderItem={renderItem}
 			/>
 		</View>
 	);
 }
 
-function AnimatedChip({
-	item,
-	selected,
-	onPress,
+function chipKeyExtractor(id: string): string {
+	return id;
+}
+
+function ChipRowItem({
+	id,
+	selectedId,
+	onSelect,
+	labelFor,
 }: {
-	item: CategoryStat;
+	id: string;
+	selectedId: string;
+	onSelect: (id: string) => void;
+	labelFor: (id: string) => string;
+}) {
+	return (
+		<AnimatedChip
+			id={id}
+			label={labelFor(id)}
+			selected={id === selectedId}
+			onSelect={onSelect}
+		/>
+	);
+}
+
+function AnimatedChip({
+	id,
+	label,
+	selected,
+	onSelect,
+}: {
+	id: string;
+	label: string;
 	selected: boolean;
-	onPress: () => void;
+	onSelect: (id: string) => void;
 }) {
 	const { colors } = useTheme();
 	const scale = useSharedValue(1);
 	const prevSelected = useRef(selected);
+	const handlePress = useCallback(() => onSelect(id), [id, onSelect]);
 
 	useEffect(() => {
 		if (prevSelected.current !== selected) {
@@ -143,22 +211,22 @@ function AnimatedChip({
 	return (
 		<Animated.View style={animatedStyle}>
 			<Pressable
-				onPress={onPress}
+				onPress={handlePress}
 				style={[
 					styles.chip,
 					{
-						backgroundColor: selected ? colors.greenDark : colors.green + "4D",
-						borderColor: selected ? colors.greenDark : colors.greenDark + "26",
+						backgroundColor: selected ? colors.greenDark : withAlpha(colors.green, 0.18),
+						borderColor: selected ? colors.greenDark : withAlpha(colors.green, 0.25),
 					},
 				]}
 			>
 				<AppText
 					weight={selected ? "semiBold" : "medium"}
 					style={{
-						color: selected ? colors.green : colors.greenDark + "B3",
+						color: selected ? colors.green : withAlpha(colors.green, 0.95),
 					}}
 				>
-					{item.name}
+					{label}
 				</AppText>
 			</Pressable>
 		</Animated.View>

@@ -38,17 +38,22 @@ export function filterAndSortProducts(
 ): OfferDetail[] {
 	const query = filters.searchQuery.trim().toLowerCase();
 	return offers
-		.filter((o) =>
-			filters.branchId
-				? o.offer.business_location_id === filters.branchId
-				: true,
-		)
-		.filter((o) => !query || o.offer.title.toLowerCase().includes(query))
-		.filter((o) =>
-			filters.categoryId
-				? o.categories.some((c) => c.id === filters.categoryId)
-				: true,
-		)
+		.filter((o) => {
+			if (
+				filters.branchId &&
+				o.offer.business_location_id !== filters.branchId
+			) {
+				return false;
+			}
+			if (query && !o.offer.title.toLowerCase().includes(query)) return false;
+			if (
+				filters.categoryId &&
+				!o.categories.some((c) => c.id === filters.categoryId)
+			) {
+				return false;
+			}
+			return true;
+		})
 		.sort(bySort(filters.sort));
 }
 
@@ -64,12 +69,10 @@ export function productStats(offers: OfferDetail[]): ProductStats {
 	let soldToday = 0;
 	let availableCount = 0;
 	for (const o of offers) {
-		if (o.offer.is_active) activeCount += 1;
-		soldToday += Math.max(
-			0,
-			(o.offer.initial_stock ?? o.offer.stock) - o.offer.stock,
-		);
-		availableCount += o.offer.stock;
+		const offer = o.offer;
+		if (offer.is_active) activeCount += 1;
+		soldToday += Math.max(0, (offer.initial_stock ?? offer.stock) - offer.stock);
+		availableCount += offer.stock;
 	}
 	return { activeCount, soldToday, availableCount };
 }

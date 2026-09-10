@@ -6,18 +6,20 @@ import { AppText, Button, Card, Screen } from "@/core/ui";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 
+const BENEFITS = [
+	{
+		title: strings.landing.featureReduce,
+		body: strings.landing.featureReduceBody,
+	},
+	{
+		title: strings.landing.featureImpact,
+		body: strings.landing.featureImpactBody,
+	},
+];
+
 export default function LandingForBusinessScreen() {
 	const { colors } = useTheme();
-	const benefits = [
-		{
-			title: strings.landing.featureReduce,
-			body: strings.landing.featureReduceBody,
-		},
-		{
-			title: strings.landing.featureImpact,
-			body: strings.landing.featureImpactBody,
-		},
-	];
+	const benefits = BENEFITS;
 	return (
 		<Screen scroll>
 			<View style={styles.container}>

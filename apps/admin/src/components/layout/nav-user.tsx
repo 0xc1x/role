@@ -48,7 +48,7 @@ export function NavUser({
 						render={
 							<SidebarMenuButton
 								size="lg"
-								className="w-full data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+								className="w-full data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground"
 							/>
 						}
 					>
@@ -68,7 +68,7 @@ export function NavUser({
 						<ChevronsUpDown className="ml-auto size-4" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
-						className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+						className="w-56 rounded-lg"
 						side={isMobile ? "bottom" : "right"}
 						align="end"
 						sideOffset={4}

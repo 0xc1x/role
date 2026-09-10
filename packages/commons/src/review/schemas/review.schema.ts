@@ -32,3 +32,14 @@ export const UpdateReviewSchema = z
     business_rating: RatingSchema.nullable(),
   })
   .partial();
+
+/**
+ * Request del endpoint `POST /reviews` (API): user_id y business_id los
+ * deriva el server a partir de la orden, el cliente nunca los envía.
+ */
+export const CreateReviewRequestSchema = z.object({
+  order_id: UuidSchema,
+  comment: z.string().max(2000).nullable().optional(),
+  product_rating: RatingSchema.nullable().optional(),
+  business_rating: RatingSchema.nullable().optional(),
+});

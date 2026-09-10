@@ -1,5 +1,7 @@
 import { ImageOff } from "lucide-react";
 import { useState } from "react";
+import { AttachmentMedia } from "@/components/ui/attachment";
+import { cn } from "@/lib/utils";
 
 export interface ImageThumbnailProps {
 	/** URL de la imagen a mostrar. */
@@ -29,17 +31,15 @@ export function ImageThumbnail({
 	const [hasError, setHasError] = useState(false);
 
 	return (
-		<div
-			className={
-				"relative shrink-0 overflow-hidden rounded-md border border-border bg-muted" +
-				(className ? ` ${className}` : "")
-			}
+		<AttachmentMedia
+			variant="image"
+			className={cn("size-10", className)}
 			style={{ width: size, height: size }}
 		>
 			{hasError ? (
-				<div className="flex h-full w-full items-center justify-center">
+				<span className="flex h-full w-full items-center justify-center">
 					<ImageOff className="h-4 w-4 text-muted-foreground" />
-				</div>
+				</span>
 			) : (
 				<img
 					src={src}
@@ -48,6 +48,6 @@ export function ImageThumbnail({
 					onError={() => setHasError(true)}
 				/>
 			)}
-		</div>
+		</AttachmentMedia>
 	);
 }

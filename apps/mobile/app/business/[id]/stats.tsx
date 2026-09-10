@@ -5,7 +5,9 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
+	Button,
 	Card,
+	EmptyState,
 	ErrorState,
 	LoadingView,
 	Screen,
@@ -16,33 +18,15 @@ import { useBusinesses, useBusinessStats } from "@/features/business/hooks";
 import {
 	statsDaysInRange,
 	statsRangeFor,
+	statsRangeLabel,
+	statsViewModel,
 	type StatsPeriod,
 } from "@/features/business/domain/stats";
 import { formatMoney, formatPercent } from "@/core/utils/formatters";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 import type { BusinessStats } from "@/features/business/domain/business";
-
-const MONTH_ABBR = [
-	"ene", "feb", "mar", "abr", "may", "jun",
-	"jul", "ago", "sep", "oct", "nov", "dic",
-];
-
-function rangeLabel(period: StatsPeriod, offset: number): string {
-	if (offset === 0) {
-		if (period === "week") return strings.business.statsThisWeek;
-		if (period === "month") return strings.business.statsThisMonth;
-		return strings.business.statsThisYear;
-	}
-	const { start, end } = statsRangeFor(period, offset);
-	if (period === "year") return String(end.getFullYear());
-	if (period === "month")
-		return `${MONTH_ABBR[start.getMonth()]} ${start.getFullYear()}`;
-	const sameYear = start.getFullYear() === end.getFullYear();
-	const day = (d: Date) =>
-		`${d.getDate()} ${MONTH_ABBR[d.getMonth()]}${sameYear ? "" : ` ${d.getFullYear()}`}`;
-	return `${day(start)} – ${day(end)} ${end.getFullYear()}`;
-}
 
 export default function BusinessStatsScreen() {
 	const { colors } = useTheme();
@@ -69,7 +53,28 @@ export default function BusinessStatsScreen() {
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!stats || !business) return null;
+	if (!stats || !business)
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+					<ScreenHeader
+						title={strings.business.statistics}
+						fallback="/(business)/management"
+					/>
+					<EmptyState
+						title={strings.business.noSalesInPeriod}
+						message={strings.business.noSalesProducts}
+						action={
+							<Button
+								label={strings.common.retry}
+								variant="outline"
+								onPress={() => void refetch()}
+							/>
+						}
+					/>
+				</View>
+			</Screen>
+		);
 
 	return (
 		<Screen scroll>
@@ -142,6 +147,12 @@ export default function BusinessStatsScreen() {
 
 // ─── Selector de período ─────────────────────────────────────────────
 
+const PERIOD_OPTIONS: Array<{ key: StatsPeriod; label: string }> = [
+	{ key: "week", label: strings.business.statsWeek },
+	{ key: "month", label: strings.business.statsMonth },
+	{ key: "year", label: strings.business.statsYear },
+];
+
 function PeriodSelector({
 	period,
 	offset,
@@ -154,11 +165,7 @@ function PeriodSelector({
 	onOffsetChange: (o: number) => void;
 }) {
 	const { colors } = useTheme();
-	const options: { key: StatsPeriod; label: string }[] = [
-		{ key: "week", label: strings.business.statsWeek },
-		{ key: "month", label: strings.business.statsMonth },
-		{ key: "year", label: strings.business.statsYear },
-	];
+	const options = PERIOD_OPTIONS;
 	const isCurrent = offset >= 0;
 
 	return (
@@ -214,7 +221,11 @@ function PeriodSelector({
 						numberOfLines={1}
 						style={{ color: colors.mutedForeground }}
 					>
-						{rangeLabel(period, offset)}
+						{statsRangeLabel(period, offset, {
+							thisWeek: strings.business.statsThisWeek,
+							thisMonth: strings.business.statsThisMonth,
+							thisYear: strings.business.statsThisYear,
+						})}
 					</AppText>
 				</View>
 				<Pressable
@@ -269,7 +280,7 @@ function KpiCard({
 	return (
 		<Card style={styles.kpi}>
 			<View style={styles.kpiHeader}>
-				<View style={[styles.kpiIcon, { backgroundColor: color + "26" }]}>
+				<View style={[styles.kpiIcon, { backgroundColor: withAlpha(color, 0.15) }]}>
 					<Ionicons name={icon} size={16} color={color} />
 				</View>
 				<AppText variant="bodySmall" numberOfLines={1} style={styles.flex1}>
@@ -412,7 +423,7 @@ function TopProducts({ products }: { products: BusinessStats["topProducts"] }) {
 				products.map((product, index) => (
 					<View key={product.name} style={styles.productRow}>
 						<View
-							style={[styles.rankCircle, { backgroundColor: colors.primary + "1A" }]}
+							style={[styles.rankCircle, { backgroundColor: withAlpha(colors.primary, 0.102) }]}
 						>
 							<AppText
 								variant="bodySmall"
@@ -457,12 +468,12 @@ function PeriodSummary({
 	days: number;
 }) {
 	const { colors } = useTheme();
-	const dailyAvg = stats.revenue > 0 ? (stats.revenue / days).toFixed(2) : "0.00";
-	const ticketAvg =
-		stats.ordersCount > 0 ? (stats.revenue / stats.ordersCount).toFixed(2) : "0.00";
+	const vm = statsViewModel(stats);
+	const dailyAvg = vm.dailyAvg(days);
+	const ticketAvg = vm.avgTicket;
 
 	return (
-		<View style={[styles.summary, { backgroundColor: colors.primary, boxShadow: `0px 4px 12px ${colors.primary}4D` }]}>
+		<View style={[styles.summary, { backgroundColor: colors.primary, boxShadow: `0px 4px 12px ${withAlpha(colors.primary, 0.302)}` }]}>
 			<AppText
 				variant="bodyMedium"
 				weight="semiBold"
@@ -472,19 +483,18 @@ function PeriodSummary({
 			</AppText>
 			<AppText
 				variant="bodySmall"
-				style={{ color: colors.primaryForeground + "E6", marginTop: spacing.sm }}
+				style={{ color: withAlpha(colors.primaryForeground, 0.902), marginTop: spacing.sm }}
 			>
-				{`Tus ventas han ${
-					stats.revenueChange >= 0 ? "crecido" : "decaído"
-				} un ${Math.abs(stats.revenueChange).toFixed(1)}% comparado con el período anterior. Has rescatado ${
-					stats.rescuedCount
-				} comidas, evitando el desperdicio de alimentos.`}
+				{`${(stats.revenueChange >= 0
+					? strings.business.statsGrowthUp
+					: strings.business.statsGrowthDown
+				).replace("{pct}", Math.abs(stats.revenueChange).toFixed(1))} ${strings.business.statsRescued.replace("{count}", String(stats.rescuedCount))}`}
 			</AppText>
 			<View style={styles.summaryRow}>
 				<View style={styles.flex1}>
 					<AppText
 						variant="bodySmall"
-						style={{ color: colors.primaryForeground + "BF" }}
+						style={{ color: withAlpha(colors.primaryForeground, 0.749) }}
 					>
 						{strings.business.dailyAvg}
 					</AppText>
@@ -495,7 +505,7 @@ function PeriodSummary({
 				<View style={styles.flex1}>
 					<AppText
 						variant="bodySmall"
-						style={{ color: colors.primaryForeground + "BF" }}
+						style={{ color: withAlpha(colors.primaryForeground, 0.749) }}
 					>
 						{strings.business.avgTicket}
 					</AppText>

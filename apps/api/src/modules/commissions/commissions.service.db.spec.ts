@@ -25,14 +25,17 @@ describe('CommissionsService (DB real)', () => {
     expect(list.data.length).toBeGreaterThanOrEqual(1);
     expect(await service.getById(businessId)).toMatchObject({ id: businessId });
     await expect(service.getById('00000000-0000-0000-0000-000000000000')).rejects.toThrow();
-    const updated = await service.update(businessId, { commission_rate: 20 });
-    expect(updated.commission_rate).toBe(20);
+    // numeric(5,4) en BD: máximo 9.9999 (0.2 = 20%).
+    const updated = await service.update(businessId, { commission_rate: 0.2 });
+    expect(updated.commission_rate).toBe(0.2);
   });
 
   test('update con pagos pendientes → Conflict', async () => {
     await ctx.db.execute(
       `insert into payouts (business_id, period_start, period_end, gross_amount, platform_fee, net_amount, status) values ('${businessId}', '2025-01-01', '2025-01-15', 100, 10, 90, 'pending')`,
     );
-    await expect(service.update(businessId, { commission_rate: 25 })).rejects.toThrow();
+    await expect(
+      service.update(businessId, { commission_rate: 25 }),
+    ).rejects.toThrow();
   });
 });

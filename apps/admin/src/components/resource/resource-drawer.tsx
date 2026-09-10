@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
+	DrawerBody,
 	DrawerClose,
 	DrawerContent,
 	DrawerDescription,
@@ -13,6 +14,32 @@ import {
 	DrawerTrigger,
 } from "@/components/ui/drawer";
 import { Spinner } from "@/components/ui/spinner";
+
+function DrawerSubmitButton({
+	formId,
+	mutationKey,
+	pendingLabel,
+	submitLabel,
+}: {
+	formId: string;
+	mutationKey: readonly unknown[];
+	pendingLabel: string;
+	submitLabel: string;
+}) {
+	const isMutating = useIsMutating({ mutationKey }) > 0;
+
+	return (
+		<Button type="submit" form={formId} disabled={isMutating}>
+			{isMutating ? (
+				<>
+					<Spinner /> {pendingLabel}
+				</>
+			) : (
+				submitLabel
+			)}
+		</Button>
+	);
+}
 
 export function ResourceCreateDrawer({
 	formId,
@@ -38,7 +65,6 @@ export function ResourceCreateDrawer({
 }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [resetKey, setResetKey] = useState(0);
-	const isMutating = useIsMutating({ mutationKey }) > 0;
 
 	return (
 		<Drawer
@@ -49,7 +75,7 @@ export function ResourceCreateDrawer({
 			}}
 			swipeDirection="right"
 		>
-			<DrawerTrigger render={<Button variant="ghost" className="shadow-sm" />}>
+			<DrawerTrigger render={<Button />}>
 				<Plus />
 				{triggerLabel}
 			</DrawerTrigger>
@@ -60,24 +86,21 @@ export function ResourceCreateDrawer({
 					<DrawerDescription>{description}</DrawerDescription>
 				</DrawerHeader>
 
-				<div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
+				<DrawerBody>
 					{isOpen && (
 						<div key={resetKey}>
 							{children({ formId, onSuccess: () => setIsOpen(false) })}
 						</div>
 					)}
-				</div>
+				</DrawerBody>
 
 				<DrawerFooter>
-					<Button type="submit" form={formId} disabled={isMutating}>
-						{isMutating ? (
-							<>
-								<Spinner /> {creatingLabel}
-							</>
-						) : (
-							submitLabel
-						)}
-					</Button>
+					<DrawerSubmitButton
+						formId={formId}
+						mutationKey={mutationKey}
+						pendingLabel={creatingLabel}
+						submitLabel={submitLabel}
+					/>
 					<DrawerClose>
 						<Button variant="outline" className="w-full">
 							Cancelar
@@ -110,8 +133,6 @@ export function ResourceUpdateDrawer({
 	updatingLabel: string;
 	children: React.ReactNode;
 }) {
-	const isMutating = useIsMutating({ mutationKey }) > 0;
-
 	return (
 		<Drawer
 			open={isOpen}
@@ -124,20 +145,15 @@ export function ResourceUpdateDrawer({
 					<DrawerDescription>{description}</DrawerDescription>
 				</DrawerHeader>
 
-				<div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
-					{children}
-				</div>
+				<DrawerBody>{children}</DrawerBody>
 
 				<DrawerFooter>
-					<Button type="submit" form={formId} disabled={isMutating}>
-						{isMutating ? (
-							<>
-								<Spinner /> {updatingLabel}
-							</>
-						) : (
-							submitLabel
-						)}
-					</Button>
+					<DrawerSubmitButton
+						formId={formId}
+						mutationKey={mutationKey}
+						pendingLabel={updatingLabel}
+						submitLabel={submitLabel}
+					/>
 					<DrawerClose>
 						<Button variant="outline" className="w-full">
 							Cancelar

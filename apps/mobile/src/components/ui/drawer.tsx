@@ -1,10 +1,12 @@
 import * as React from "react";
 import {
 	Animated,
-	Dimensions,
+	// react-doctor-disable-next-line rn-no-panresponder
+	PanResponder,
 	Platform,
 	Pressable,
 	StyleSheet,
+	useWindowDimensions,
 	View,
 } from "react-native";
 import { Portal } from "@rn-primitives/portal";
@@ -113,18 +115,79 @@ export function DrawerContent({
 	const tabBarProps = useTabBarStore((s) => s.props);
 	const hasTabs = tabBarProps !== null;
 	const bottomOffset = hasTabs ? insets.bottom : 0;
-	const offset = React.useRef(new Animated.Value(Dimensions.get("window").height)).current;
+	const { height: screenHeight } = useWindowDimensions();
+	// Lazy init vía useState: el valor se crea una sola vez al montar (nunca
+	// se muta una ref durante el render) y conserva el alto inicial, igual
+	// que antes.
+	const [offset] = React.useState(() => new Animated.Value(screenHeight));
+	// Desplazamiento del drag, se suma a "offset" para el translateY final.
+	// Va en un Animated.Value aparte (en vez de mutar "offset" directamente)
+	// para no pisar la animación de apertura/cierre.
+	const [dragY] = React.useState(() => new Animated.Value(0));
 
+	// "dragY" lo maneja el PanResponder a mano (no puede ir por native driver
+	// porque necesitamos leer/clamped su valor en JS durante el gesto), así
+	// que forzamos useNativeDriver:false también acá para poder combinarlo
+	// con "offset" en el mismo transform sin que React Native se queje por
+	// mezclar un nodo nativo con uno manejado por JS.
 	React.useEffect(() => {
 		if (!open) return;
+		dragY.setValue(0);
 		const anim = Animated.timing(offset, {
 			toValue: 0,
 			duration: 280,
-			useNativeDriver: Platform.OS !== "web",
+			useNativeDriver: false,
 		});
 		anim.start();
 		return () => anim.stop();
-	}, [open, offset]);
+	}, [open, offset, dragY]);
+
+	const DISMISS_DISTANCE = 120; // px arrastrados hacia abajo para cerrar
+	const DISMISS_VELOCITY = 0.5; // o esta velocidad de swipe, aunque no llegue a la distancia
+
+	// El PanResponder se crea una sola vez al montar (ya persistía la primera
+	// instancia antes vía ref, así que el closure inicial se conserva igual).
+	const [panResponder] = React.useState(() =>
+		PanResponder.create({
+			// Solo capturamos el gesto si es principalmente vertical y hacia
+			// abajo, para no robarle el swipe horizontal a nada dentro del header.
+			onMoveShouldSetPanResponder: (_, gestureState) =>
+				gestureState.dy > 4 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+			onPanResponderMove: (_, gestureState) => {
+				if (gestureState.dy > 0) {
+					dragY.setValue(gestureState.dy);
+				}
+			},
+			onPanResponderRelease: (_, gestureState) => {
+				const shouldDismiss =
+					gestureState.dy > DISMISS_DISTANCE || gestureState.vy > DISMISS_VELOCITY;
+				if (shouldDismiss) {
+					Animated.timing(dragY, {
+						toValue: screenHeight,
+						duration: 200,
+						useNativeDriver: false,
+					}).start(() => onOpenChange(false));
+				} else {
+					Animated.spring(dragY, {
+						toValue: 0,
+						useNativeDriver: false,
+						bounciness: 4,
+					}).start();
+				}
+			},
+			onPanResponderTerminate: () => {
+				Animated.spring(dragY, { toValue: 0, useNativeDriver: false, bounciness: 4 }).start();
+			},
+		}),
+	);
+
+	// Dentro de tabs, portaleamos entre contenido y navbar para quedar por debajo
+	// de la barra. El portal mueve el árbol fuera del <Drawer>, así que el valor
+	// del contexto se memoiza acá arriba: los hooks no pueden ir tras el return.
+	const portalValue = React.useMemo(
+		() => ({ open, onOpenChange }),
+		[open, onOpenChange],
+	);
 
 	if (!open) return null;
 
@@ -146,14 +209,19 @@ export function DrawerContent({
 						overflow: "hidden",
 						width: "100%",
 						paddingBottom: bottomOffset,
-						transform: [{ translateY: offset }],
+						transform: [{ translateY: Animated.add(offset, dragY) }],
 					},
 					{ zIndex: 1001 } as any,
 				]}
 				className={cn("bg-card", className)}
 				{...props}
 			>
-				<View style={{ paddingTop: spacing.md, alignItems: "center" }}>
+				<View
+					{...panResponder.panHandlers}
+					// hitSlop-like: agrandamos el área táctil de la barrita hacia abajo
+					// para que sea más fácil de agarrar sin tocar el contenido.
+					style={{ paddingTop: spacing.md, paddingBottom: spacing.sm, alignItems: "center" }}
+				>
 					<View style={{ width: 48, height: 5, borderRadius: 2.5, backgroundColor: colors.borderSolid }} />
 				</View>
 				{children}
@@ -166,7 +234,7 @@ export function DrawerContent({
 	if (hasTabs) {
 		return (
 			<Portal name="TAB_SHEET">
-				<DrawerContext.Provider value={{ open, onOpenChange }}>
+				<DrawerContext.Provider value={portalValue}>
 					{sheet}
 				</DrawerContext.Provider>
 			</Portal>

@@ -1,4 +1,5 @@
-import { Image, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -12,7 +13,7 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { formatDateTime, formatMoney } from "@/core/utils/formatters";
 import { orderStatusLabels } from "@/features/orders/domain/order";
-import { orderStatusTone } from "@/features/orders/components/OrderCard";
+import { orderStatusTone } from "@/features/orders/domain/order";
 import { isActiveStatus } from "@/features/orders/domain/order";
 import type { OrderDetail } from "@/features/orders/domain/order";
 import { OrderActionButtons } from "./OrderActionButtons";
@@ -33,14 +34,16 @@ export function OrderCard({
 	const isActive = isActiveStatus(order.status);
 
 	return (
-		<Card
-			onPress={() => router.push(`/business/${businessId}/order/${order.id}`)}
-		>
-			<View style={styles.body}>
+		<Card>
+			<Pressable
+				onPress={() => router.push(`/business/${businessId}/order/${order.id}`)}
+				accessibilityRole="button"
+			>
+				<View style={styles.body}>
 				{item.offerImageUrl ? (
 					<Image source={{ uri: item.offerImageUrl }} style={styles.thumb} />
 				) : (
-					<View style={[styles.thumb, styles.thumbPlaceholder]}>
+					<View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.borderSolid }]}>
 						<Ionicons
 							name="fast-food-outline"
 							size={26}
@@ -90,7 +93,8 @@ export function OrderCard({
 						/>
 					</View>
 				</View>
-			</View>
+				</View>
+			</Pressable>
 
 			{isActive ? (
 				<>
@@ -115,7 +119,6 @@ const styles = StyleSheet.create({
 	thumbPlaceholder: {
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#E5E5E5",
 	},
 	content: {
 		flex: 1,

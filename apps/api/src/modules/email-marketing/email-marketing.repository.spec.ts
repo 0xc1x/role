@@ -183,6 +183,37 @@ describe('EmailMarketingRepository consultas (DB real)', () => {
     expect(Array.isArray(due)).toBe(true);
   });
 
+  test('insertSends en lotes: más de 1000 filas en una llamada', async () => {
+    const [t] = await repo.insertTemplate({ name: 'TChunk', subject: 'S', body_html: 'B' });
+    if (!t) throw new Error('sin plantilla');
+    const [camp] = await repo.insertCampaign({ name: 'CChunk', template_id: t.id });
+    if (!camp) throw new Error('sin campaña');
+    const sends = await repo.insertSends(
+      Array.from({ length: 1001 }, (_, i) => ({
+        type: 'campaign' as const,
+        source_type: 'campaign' as const,
+        source_id: camp.id,
+        template_id: t.id,
+        email: `chunk${i}@q.cl`,
+      })),
+    );
+    expect(sends).toHaveLength(1001);
+    expect(await repo.countQueued(camp.id)).toBe(1001);
+    await repo.deleteSendsByCampaign(camp.id);
+  });
+
+  test('findSubscribedRecipients parte el inArray en chunks (1001 ids, 2 queries)', async () => {
+    const u = await seedProfile(ctx.db);
+    await ctx.db.execute(
+      `insert into marketing_preferences (user_id, is_subscribed, categories) values ('${u}', true, ARRAY['promotions'])
+       on conflict (user_id) do update set is_subscribed = true, categories = ARRAY['promotions']`,
+    );
+    const ids = Array.from({ length: 1000 }, () => randomUUID());
+    ids.push(u);
+    const rows = await repo.findSubscribedRecipients(ids, 'promotions');
+    expect(rows.map((r) => r.user_id)).toEqual([u]);
+  });
+
   test('findQueuedBatch/findPendingBatch/listSends/updateSend', async () => {
     const [t] = await repo.insertTemplate({ name: 'T3', subject: 'S', body_html: 'B' });
     if (!t) throw new Error('sin plantilla');

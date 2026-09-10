@@ -7,6 +7,8 @@ import {
 	couponIsExpired,
 	couponIsExhausted,
 	lastEventTimeFor,
+	filterByHistoryPeriod,
+	orderStatusTone,
 	type OrderStatusEvent,
 } from "@/features/orders/domain/order";
 
@@ -94,5 +96,42 @@ describe("coupon helpers", () => {
 	it("detects exhaustion", () => {
 		expect(couponIsExhausted({ max_uses: 10, used_count: 10 })).toBe(true);
 		expect(couponIsExhausted({ max_uses: 10, used_count: 5 })).toBe(false);
+	});
+});
+
+describe("history filter", () => {
+	const items = [
+		{ order: { created_at: "2026-09-01T12:00:00Z" } },
+		{ order: { created_at: "2026-09-08T12:00:00Z" } },
+	] as const;
+
+	it("all devuelve todo", () => {
+		expect(
+			filterByHistoryPeriod([...items], "all", 0, new Date("2026-09-08T12:00:00Z")),
+		).toHaveLength(2);
+	});
+
+	it("today filtra por día", () => {
+		const res = filterByHistoryPeriod(
+			[...items],
+			"today",
+			0,
+			new Date("2026-09-08T12:00:00Z"),
+		);
+		expect(res).toHaveLength(1);
+	});
+
+	it("week usa lunes-domingo con offset", () => {
+		// 2026-09-08 es martes: semana actual contiene solo el item del 08.
+		const now = new Date("2026-09-08T12:00:00Z");
+		expect(filterByHistoryPeriod([...items], "week", 0, now)).toHaveLength(1);
+		// Offset -1: semana del 31/08-06/09 contiene el item del 01/09.
+		expect(filterByHistoryPeriod([...items], "week", -1, now)).toHaveLength(1);
+	});
+
+	it("orderStatusTone mapea estados", () => {
+		expect(orderStatusTone("pending")).toBe("warning");
+		expect(orderStatusTone("completed")).toBe("success");
+		expect(orderStatusTone("expired")).toBe("danger");
 	});
 });

@@ -9,6 +9,7 @@ import { strings } from "@/core/i18n/strings";
 import { AppText, Card, StatusBadge } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import {
 	couponIsExpired,
 	couponIsExhausted,
@@ -95,8 +96,8 @@ export function CouponCard({
 						style={[
 							styles.code,
 							{
-								borderColor: colors.primary + "26",
-								backgroundColor: colors.primary + "0F",
+								borderColor: withAlpha(colors.primary, 0.149),
+								backgroundColor: withAlpha(colors.primary, 0.059),
 							},
 						]}
 					>
@@ -170,7 +171,13 @@ export function CouponCard({
 				animationType="fade"
 				onRequestClose={() => setMenuOpen(false)}
 			>
-				<Pressable style={styles.overlay} onPress={() => setMenuOpen(false)}>
+				<View style={styles.overlay}>
+					<Pressable
+						style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}
+						onPress={() => setMenuOpen(false)}
+						accessibilityRole="button"
+						accessibilityLabel={strings.common.close}
+					/>
 					<View style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 						<MenuItem
 							icon="create-outline"
@@ -210,7 +217,7 @@ export function CouponCard({
 							}}
 						/>
 					</View>
-				</Pressable>
+				</View>
 			</Modal>
 
 			{/* ── Confirm delete ─────────────────────────────────── */}
@@ -220,7 +227,7 @@ export function CouponCard({
 				animationType="fade"
 				onRequestClose={() => setConfirmDelete(false)}
 			>
-				<View style={styles.overlay}>
+				<View style={[styles.overlay, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}>
 					<View style={[styles.menu, styles.confirm, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 						<AppText variant="h3" weight="bold">
 							{strings.business.couponDeleteTitle}
@@ -248,7 +255,7 @@ export function CouponCard({
 								<AppText
 									variant="bodyMedium"
 									weight="bold"
-									style={{ color: "#fff" }}
+									style={{ color: colors.destructiveForeground }}
 								>
 									{busy ? strings.business.couponDeleting : strings.business.couponDeleteConfirm}
 								</AppText>
@@ -364,7 +371,6 @@ const styles = StyleSheet.create({
 	},
 	overlay: {
 		flex: 1,
-		backgroundColor: "rgba(0,0,0,0.4)",
 		justifyContent: "center",
 		alignItems: "center",
 		padding: spacing.xl,

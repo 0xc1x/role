@@ -7,6 +7,7 @@ import { AppText, Button, Screen, TextField } from "@/core/ui";
 import { authRepository } from "@/features/auth/data/repository";
 import { businessRepository } from "@/features/business/data/repository";
 import { toAppError } from "@/core/error/mapper";
+import { Errors } from "@/core/error/app-error";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 
@@ -24,7 +25,7 @@ export default function BusinessSignupScreen() {
 
 	const handleSignup = async () => {
 		if (!fullName.trim() || !email.trim() || !password || password !== confirm || !businessName.trim()) {
-			setError("Completa todos los campos y verifica la contraseña");
+			setError(strings.auth.completeFields);
 			return;
 		}
 		setLoading(true);
@@ -40,7 +41,7 @@ export default function BusinessSignupScreen() {
 			});
 
 			const ownerId = (result as unknown as { userId: string }).userId || result.profile?.id;
-			if (!ownerId) throw new Error("No se pudo obtener el usuario");
+			if (!ownerId) throw Errors.unknown(strings.auth.signupFailed);
 
 			// Crear negocio en estado pendiente incluso si requiere confirmación (service_role, trigger encola emails)
 			await businessRepository.createBusiness({
@@ -99,10 +100,10 @@ export default function BusinessSignupScreen() {
 				<TextField label={strings.auth.confirmPassword} value={confirm} onChangeText={setConfirm} secureTextEntry autoComplete="new-password" />
 
 				<AppText variant="labelSmall" weight="bold" style={{ marginTop: spacing.md }}>
-					Datos del negocio
+					{strings.business.signupDataTitle}
 				</AppText>
-				<TextField label="Nombre del negocio *" value={businessName} onChangeText={setBusinessName} autoComplete="name" />
-				<TextField label="Teléfono del negocio" value={businessPhone} onChangeText={setBusinessPhone} keyboardType="phone-pad" />
+				<TextField label={strings.business.businessName} value={businessName} onChangeText={setBusinessName} autoComplete="name" />
+				<TextField label={strings.business.signupPhoneLabel} value={businessPhone} onChangeText={setBusinessPhone} keyboardType="phone-pad" />
 
 				<Button label={strings.business.createBusiness} onPress={handleSignup} loading={loading} fullWidth style={{ marginTop: spacing.md }} />
 				<Link href="/login" style={[styles.link, { color: colors.primary }]}>

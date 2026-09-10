@@ -187,6 +187,16 @@ function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
 	);
 }
 
+function DrawerBody({ className, ...props }: React.ComponentProps<"div">) {
+	return (
+		<div
+			data-slot="drawer-body"
+			className={cn("max-h-[70vh] space-y-4 overflow-y-auto p-4", className)}
+			{...props}
+		/>
+	);
+}
+
 function DrawerTitle({ className, ...props }: DrawerPrimitive.Title.Props) {
 	return (
 		<DrawerPrimitive.Title
@@ -222,6 +232,7 @@ export {
 	DrawerClose,
 	DrawerContent,
 	DrawerHeader,
+	DrawerBody,
 	DrawerFooter,
 	DrawerTitle,
 	DrawerDescription,

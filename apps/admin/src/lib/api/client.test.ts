@@ -12,13 +12,21 @@ mock.module("@/config/env", () => ({
 	env: { VITE_API_URL: "http://localhost:4001/api/v1" },
 }));
 
+/**
+ * El refresh token vive en cookie httpOnly: el cliente refresca vía server
+ * function (features/auth/server). En tests se mockea el módulo server.
+ */
+const refreshFnMock = jest.fn();
+
+mock.module("@/features/auth/server", () => ({
+	refreshFn: (...args: unknown[]) => refreshFnMock(...args),
+}));
+
 import {
 	api,
 	clearAuth,
-	getRefreshToken,
 	getToken,
 	getTokenExpiresAt,
-	setRefreshToken,
 	setToken,
 	setTokenExpiresAt,
 } from "./client";
@@ -98,6 +106,7 @@ describe("storage helpers", () => {
 		window.localStorage.clear();
 		(globalThis as unknown as { localStorage: Storage }).localStorage.clear?.();
 		unstubFetch();
+		refreshFnMock.mockReset();
 	});
 
 	it("get/set/clear token", () => {
@@ -108,20 +117,11 @@ describe("storage helpers", () => {
 		expect(getToken()).toBeNull();
 	});
 
-	it("get/set refresh token", () => {
-		setRefreshToken("r1");
-		expect(getRefreshToken()).toBe("r1");
-		clearAuth();
-		expect(getRefreshToken()).toBeNull();
-	});
-
-	it("clearAuth removes all keys", () => {
+	it("clearAuth removes all client-side keys (el refresh vive en cookie)", () => {
 		setToken("t");
-		setRefreshToken("r");
 		setTokenExpiresAt(new Date(Date.now() + 100000).toISOString());
 		clearAuth();
 		expect(getToken()).toBeNull();
-		expect(getRefreshToken()).toBeNull();
 		expect(getTokenExpiresAt()).toBeNull();
 	});
 });
@@ -132,6 +132,7 @@ describe("api request", () => {
 		window.localStorage.clear();
 		(globalThis as unknown as { localStorage: Storage }).localStorage.clear?.();
 		unstubFetch();
+		refreshFnMock.mockReset();
 	});
 
 	afterEach(() => {
@@ -148,7 +149,7 @@ describe("api request", () => {
 			RequestInit,
 		];
 		expect(
-			(opts.headers as Record<string, string>)["Authorization"],
+			(opts.headers as Record<string, string>).Authorization,
 		).toBeUndefined();
 		expect((opts.headers as Record<string, string>)["Content-Type"]).toBe(
 			"application/json",
@@ -184,69 +185,57 @@ describe("api request", () => {
 		expect(opts.body).toBe(fd);
 	});
 
-	it("retries once on 401 with refresh success", async () => {
+	it("retries once on 401 with refresh success (server fn)", async () => {
 		setToken("old");
-		setRefreshToken("refresh-123");
-		// first call: 401, second call after refresh: success, plus refresh endpoint call
+		// 1) original request -> 401, 2) retry -> 200 (el refresh va por server fn)
 		const fetchMock = jest.fn();
-		// 1) original request -> 401
-		// 2) refresh request -> 200 with new tokens
-		// 3) retry -> 200
 		fetchMock
 			.mockResolvedValueOnce(
 				jsonResponse(401, { message: "Unauthorized" }, false),
-			)
-			.mockResolvedValueOnce(
-				jsonResponse(200, {
-					access_token: "new",
-					refresh_token: "new-r",
-					expires_at: new Date(Date.now() + 3600000).toISOString(),
-				}),
 			)
 			.mockResolvedValueOnce(jsonResponse(200, { data: "ok" }));
 		stubFetch(fetchMock as unknown as typeof globalThis.fetch);
+		refreshFnMock.mockResolvedValue({
+			access_token: "new",
+			expires_at: new Date(Date.now() + 3600000).toISOString(),
+		});
 
 		const res = await api.get<{ data: string }>("/categories");
 		expect(res).toEqual({ data: "ok" });
-		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 		expect(getToken()).toBe("new");
 	});
 
-	it("clears auth and throws on 401 refresh failure", async () => {
+	it("clears auth and throws on 401 when refresh returns null", async () => {
 		setToken("old");
-		setRefreshToken("bad-refresh");
 		const fetchMock = jest.fn();
-		fetchMock
-			.mockResolvedValueOnce(
-				jsonResponse(401, { message: "Unauthorized" }, false),
-			)
-			.mockResolvedValueOnce(jsonResponse(401, { message: "bad" }, false));
+		fetchMock.mockResolvedValueOnce(
+			jsonResponse(401, { message: "Unauthorized" }, false),
+		);
 		stubFetch(fetchMock as unknown as typeof globalThis.fetch);
+		refreshFnMock.mockResolvedValue(null);
 
 		await expect(api.get("/categories")).rejects.toMatchObject({ status: 401 });
 		expect(getToken()).toBeNull();
 	});
 
-	it("pre-refresh when token expired", async () => {
+	it("pre-refresh when token expired (sin fetch del endpoint de refresh)", async () => {
 		// expired 10 min ago
 		setToken("expired");
-		setRefreshToken("ref");
 		setTokenExpiresAt(new Date(Date.now() - 10 * 60 * 1000).toISOString());
 		const fetchMock = jest.fn();
-		fetchMock
-			.mockResolvedValueOnce(
-				jsonResponse(200, {
-					access_token: "new2",
-					refresh_token: "new2-r",
-					expires_at: new Date(Date.now() + 3600000).toISOString(),
-				}),
-			)
-			.mockResolvedValueOnce(jsonResponse(200, { data: "after-refresh" }));
+		fetchMock.mockResolvedValueOnce(
+			jsonResponse(200, { data: "after-refresh" }),
+		);
 		stubFetch(fetchMock as unknown as typeof globalThis.fetch);
+		refreshFnMock.mockResolvedValue({
+			access_token: "new2",
+			expires_at: new Date(Date.now() + 3600000).toISOString(),
+		});
 
 		const res = await api.get("/categories");
 		expect(res).toEqual({ data: "after-refresh" });
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(fetchMock.mock.calls[0][0]).toContain("/auth/refresh");
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock.mock.calls[0]?.[0]).not.toContain("/auth/refresh");
 	});
 });

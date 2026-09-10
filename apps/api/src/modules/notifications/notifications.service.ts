@@ -172,12 +172,50 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }
     const pushAllowed = await this.repo.filterByConsumerPrefs(allowed, 'push_enabled' as never);
     if (pushAllowed.length === 0) return [];
+    return this.repo.filterNotInQuietHours(pushAllowed);
+  }
 
-    const quietFiltered: string[] = [];
-    for (const id of pushAllowed) {
-      if (!(await this.repo.isInQuietHours(id))) quietFiltered.push(id);
-    }
-    return quietFiltered;
+  /**
+   * Entrega a usuarios concretos con resultado POR USUARIO (campañas push):
+   * aplica push_enabled + tokens activos, sin quiet hours (una campaña
+   * programada ya venció su ventana de programación). Usuarios sin tokens
+   * activos no aparecen en el mapa — el llamador los cuenta como fallidos.
+   */
+  async deliverToUsers(
+    userIds: string[],
+    payload: PushPayload,
+    render?: (userId: string) => PushPayload,
+  ): Promise<Map<string, { sent: number; failed: number }>> {
+    const result = new Map<string, { sent: number; failed: number }>();
+    if (userIds.length === 0) return result;
+    const allowed = await this.repo.filterByConsumerPrefs(
+      userIds,
+      'push_enabled' as never,
+    );
+    if (allowed.length === 0) return result;
+    const targets = await this.repo.findActiveTokens(allowed);
+    await Promise.allSettled(
+      targets.map(async (t) => {
+        const base = render ? render(t.user_id) : payload;
+        const r = result.get(t.user_id) ?? { sent: 0, failed: 0 };
+        try {
+          const ok = await this.sendToToken(t, this.enrichPayload(base));
+          if (ok) {
+            r.sent += 1;
+          } else {
+            r.failed += 1;
+            await this.repo.deactivateToken(t.token);
+          }
+        } catch (err) {
+          r.failed += 1;
+          this.logger.warn(
+            `Push failed ${t.platform} ${t.token.slice(0, 10)}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        result.set(t.user_id, r);
+      }),
+    );
+    return result;
   }
 
   /** Completa link/icon/badge/tag/image absolutos a partir de CORS_ORIGINS. */
@@ -200,7 +238,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async sendToToken(
+  private sendToToken(
     target: { token: string; platform: string },
     payload: PushPayload,
   ): Promise<boolean> {

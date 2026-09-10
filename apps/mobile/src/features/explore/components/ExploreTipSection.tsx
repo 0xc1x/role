@@ -1,10 +1,11 @@
-import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
+import { AppText, Card } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { useRandomTip } from "@/features/tips/hooks";
 import { useState } from "react";
 
@@ -21,39 +22,48 @@ export function ExploreTipSection() {
 	if (isLoading || !tip) return null;
 
 	const cardBackground = isDark ? colors.surfaceWarning : colors.yellowLight;
-	const cardBorder = colors.yellowDark + (isDark ? "4D" : "33");
+	const cardBorder = withAlpha(colors.yellowDark, isDark ? 0.3 : 0.2);
 
 	return (
 		<View style={styles.wrap}>
-			<View
+			<Card
 				style={[
 					styles.card,
 					{
 						backgroundColor: cardBackground,
 						borderColor: cardBorder,
+						borderWidth: 1,
 					},
 				]}
 			>
-				<TouchableOpacity
+				<Pressable
 					style={styles.titleRow}
-					activeOpacity={0.7}
 					onPress={() => setIsExpanded((prev) => !prev)}
+					accessibilityRole="button"
 				>
 					<View style={styles.titleLeft}>
 						<View
-							style={[
-								styles.bulbCircle,
-								{
-									backgroundColor: colors.card + (isDark ? "00" : "80"),
-									boxShadow: `0px 0px 12px ${colors.yellowDark}${isDark ? "33" : "4D"}`,
-								},
-							]}
+						style={[
+							styles.bulbCircle,
+							{
+							backgroundColor: isExpanded
+								? withAlpha(colors.yellow, isDark ? 0.25 : 0.35)
+								: withAlpha(colors.card, isDark ? 0 : 0.5),
+							boxShadow: isExpanded
+								? `0px 0px 16px ${withAlpha(colors.yellowDark, isDark ? 0.55 : 0.45)}`
+								: `0px 0px 8px ${withAlpha(colors.yellowDark, isDark ? 0.15 : 0.2)}`,
+							},
+						]}
 						>
 							<Ionicons
 								name="bulb"
 								size={20}
-								color={isDark ? colors.yellow : colors.yellowDark}
-							/>
+								color={
+								isExpanded
+									? (isDark ? colors.yellow : colors.yellowDark)
+									: withAlpha(isDark ? colors.yellow : colors.yellowDark, 0.55)
+								}
+						/>
 						</View>
 						<AppText variant="h4" weight="bold">
 							{strings.explore.tipTitle}
@@ -64,7 +74,7 @@ export function ExploreTipSection() {
 						size={20}
 						color={isDark ? colors.yellow : colors.yellowDark}
 					/>
-				</TouchableOpacity>
+				</Pressable>
 				{isExpanded && (
 					<AppText
 						variant="bodyMedium"
@@ -73,7 +83,7 @@ export function ExploreTipSection() {
 						{tip.content}
 					</AppText>
 				)}
-			</View>
+			</Card>
 		</View>
 	);
 }
@@ -97,7 +107,7 @@ const styles = StyleSheet.create({
 	titleLeft: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8, // ajusta según tu spacing habitual entre bulbCircle y el texto
+		gap: spacing.sm,
 	},
 	bulbCircle: {
 		width: 32,

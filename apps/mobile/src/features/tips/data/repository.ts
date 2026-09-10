@@ -1,4 +1,5 @@
 import { supabase } from "@/core/supabase/client";
+import { toAppError } from "@/core/error/mapper";
 
 import { toTip, type DailyTip, type TipRow } from "../domain/tip";
 
@@ -9,7 +10,7 @@ import { toTip, type DailyTip, type TipRow } from "../domain/tip";
 export async function fetchRandomTip(): Promise<DailyTip | null> {
   const { data, error } = await supabase.rpc("get_random_tip");
 
-  if (error) throw new Error(error.message);
+  if (error) throw toAppError(error);
 
   return data ? toTip(data as TipRow) : null;
 }

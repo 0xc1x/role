@@ -1,14 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
-import QRCode from "react-native-qrcode-svg";
-
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button } from "@/core/ui";
+import { PickupQr } from "@/features/orders/components/pickup-qr";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import type { EmbeddedBusiness, EmbeddedLocation } from "@/features/offers/domain/offer";
-import type { ReservationSuccess } from "@/features/orders/domain/order";
+import { type ReservationSuccess, pickupQrValue } from "@/features/orders/domain/order";
 
 interface ConfirmationViewProps {
 	result: ReservationSuccess;
@@ -26,7 +25,6 @@ export function ConfirmationView({
 	location,
 }: ConfirmationViewProps) {
 	const { colors } = useTheme();
-	const qrValue = `role://order/${result.orderId}/${result.pickupCode}`;
 
 	return (
 		<View style={styles.wrap}>
@@ -49,19 +47,7 @@ export function ConfirmationView({
 				<AppText style={[styles.ticketLabel, { color: colors.mutedForeground }]}>
 					{strings.checkout.ticketTitle.toUpperCase()}
 				</AppText>
-				<View
-					style={[
-						styles.qrBox,
-						{ borderColor: colors.borderSolid, backgroundColor: colors.card },
-					]}
-				>
-					<QRCode
-						value={qrValue}
-						size={176}
-						color="#131316"
-						backgroundColor={colors.card}
-					/>
-				</View>
+				<PickupQr orderId={result.orderId} pickupCode={result.pickupCode} />
 				<AppText style={[styles.pickupCode, { color: colors.primary }]}>
 					{result.pickupCode}
 				</AppText>
@@ -131,13 +117,6 @@ const styles = StyleSheet.create({
 		fontSize: 12,
 		fontWeight: "700",
 		letterSpacing: 1.2,
-	},
-	qrBox: {
-		padding: spacing.md,
-		borderRadius: radii.lg,
-		borderWidth: 1,
-		alignItems: "center",
-		justifyContent: "center",
 	},
 	pickupCode: {
 		fontSize: 32,

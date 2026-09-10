@@ -33,7 +33,7 @@ export function DataTableColumnHeader<TData, TValue>({
 						<Button
 							variant="ghost"
 							size="sm"
-							className="-ml-3 h-8 data-[state=open]:bg-accent"
+							className="-ml-3 h-8 data-[popup-open]:bg-accent"
 						/>
 					}
 				>
@@ -49,16 +49,16 @@ export function DataTableColumnHeader<TData, TValue>({
 				<DropdownMenuContent align="start">
 					<DropdownMenuItem onClick={() => column.toggleSorting(false)}>
 						<ArrowUp />
-						Asc
+						Ascendente
 					</DropdownMenuItem>
 					<DropdownMenuItem onClick={() => column.toggleSorting(true)}>
 						<ArrowDown />
-						Desc
+						Descendente
 					</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
 						<EyeOff />
-						Hide
+						Ocultar
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>

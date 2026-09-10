@@ -1,16 +1,8 @@
+import type { z } from 'zod';
+import type { CategorySchema } from '../schemas/category.schema';
+
 /**
- * Domain entity for a category.
- * Timestamps are ISO-8601 strings on the wire (same as {@link CategoryDto}).
+ * Row shape for `public.categories` — derivado del schema Zod (SSOT).
+ * Timestamps are ISO-8601 strings on the wire (same as CategoryDto).
  */
-export interface Category {
-  id: string;
-  name: string;
-  description: string | null;
-  emoji: string | null;
-  slug: string;
-  image_url: string | null;
-  active: boolean;
-  created_at: string;
-  updated_at: string | null;
-  deleted_at: string | null;
-}
+export type Category = z.infer<typeof CategorySchema>;

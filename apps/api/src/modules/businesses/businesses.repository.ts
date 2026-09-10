@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import {
   businessLocations,
   businessNotificationPreferences,
@@ -196,7 +197,7 @@ export class BusinessesRepository {
     }
 
     if (query.search) {
-      filters.push(sql`${businesses.name} ILIKE ${`%${query.search}%`}`);
+      filters.push(sql`${businesses.name} ILIKE ${`%${escapeLike(query.search)}%`}`);
     }
 
     const where = filters.length ? and(...filters) : undefined;

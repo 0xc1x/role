@@ -8,11 +8,18 @@ export default function OfferDetailScreen() {
 	const { id, offerId } = useLocalSearchParams<{ id: string; offerId: string }>();
 	const businessId = id ?? "";
 
-	const { data: product, isLoading, isError, error, refetch } = useOffer(offerId ?? "");
+	const { data: product, isLoading, isError, error, refetch, isFetching } = useOffer(offerId ?? "");
 
 	if (isLoading) return <LoadingView />;
 	if (isError || !product)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 
-	return <ProductDetail businessId={businessId} product={product} />;
+	return (
+		<ProductDetail
+			businessId={businessId}
+			product={product}
+			isRefreshing={isFetching}
+			onRefresh={() => void refetch()}
+		/>
+	);
 }

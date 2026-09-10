@@ -3,13 +3,17 @@ jest.mock('@0xc1x/role-commons', () => ({
   UpdateCommissionSchema: {},
 }));
 
+import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { CommissionsController } from './commissions.controller';
 import { CommissionsService } from './commissions.service';
+import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
+import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 
 describe('CommissionsController', () => {
   let controller: CommissionsController;
   let service: jest.Mocked<CommissionsService>;
+  let reflector: Reflector;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -24,6 +28,21 @@ describe('CommissionsController', () => {
 
     controller = module.get(CommissionsController);
     service = module.get(CommissionsService);
+    reflector = module.get(Reflector);
+  });
+
+  it('las tarifas de negocio no son públicas (requieren admin)', () => {
+    for (const handler of [
+      controller.list,
+      controller.getById,
+      controller.update,
+    ]) {
+      const metadata = reflector.get(ROLES_KEY, handler);
+      expect(metadata).toEqual(['admin']);
+      expect(
+        reflector.get(IS_PUBLIC_KEY, handler),
+      ).toBeUndefined();
+    }
   });
 
   it('list pasa el query', () => {

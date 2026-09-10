@@ -13,7 +13,7 @@ export const payouts = pgTable('payouts', {
   id: uuid('id').primaryKey().defaultRandom(),
   business_id: uuid('business_id')
     .notNull()
-    .references(() => businesses.id),
+    .references(() => businesses.id, { onDelete: 'no action' }),
   period_start: date('period_start').notNull(),
   period_end: date('period_end').notNull(),
   gross_amount: numeric('gross_amount', { precision: 12, scale: 2 }).notNull(),

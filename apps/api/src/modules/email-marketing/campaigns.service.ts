@@ -17,11 +17,23 @@ import {
   type TestCampaignDto,
 } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
-import { RecipientsService } from './recipients.service';
+import type { CampaignChannelDispatcher } from '../../common/campaigns/campaign-dispatcher.port';
+import { MAX_AUDIENCE_SIZE, RecipientsService } from './recipients.service';
 import { RendererService } from './renderer.service';
-import { EmailMarketingRepository } from './email-marketing.repository';
+import {
+  EmailMarketingRepository,
+  type ListFilter,
+  type ListSegmentsFilter,
+} from './email-marketing.repository';
 import { EmailMarketingMapper } from './mappers/email-marketing.mapper';
 import type { CampaignRow } from './email-marketing.repository';
+import type {
+  campaigns,
+  emailComponents,
+  emailSends,
+  emailTemplates,
+  segments,
+} from '../../database/schema';
 
 const BATCH_SIZE = 50;
 
@@ -34,6 +46,8 @@ const BATCH_SIZE = 50;
 export class CampaignsService {
   private readonly logger = new Logger(CampaignsService.name);
   private readonly resend: Resend | null;
+  /** Dispatchers por canal (push se auto-registra; email va inline). */
+  private readonly channelDispatchers = new Map<string, CampaignChannelDispatcher>();
 
   constructor(
     private readonly repository: EmailMarketingRepository,
@@ -44,6 +58,38 @@ export class CampaignsService {
   ) {
     const apiKey = this.config.get('RESEND_API_KEY', { infer: true });
     this.resend = apiKey ? new Resend(apiKey) : null;
+  }
+
+  /** Registro de dispatcher de canal (lo llama el módulo dueño del canal). */
+  registerChannelDispatcher(dispatcher: CampaignChannelDispatcher): void {
+    this.channelDispatchers.set(dispatcher.channel, dispatcher);
+    this.logger.log(`Canal de campañas registrado: ${dispatcher.channel}`);
+  }
+
+  private channelDispatcher(channel: string): CampaignChannelDispatcher | null {
+    return this.channelDispatchers.get(channel) ?? null;
+  }
+
+  /** Valida que la plantilla indicada exista según el canal de la campaña. */
+  async assertTemplateForChannel(
+    channel: string,
+    templateId: string | null,
+  ): Promise<void> {
+    if (!templateId) {
+      throw new BadRequestException('La campaña requiere una plantilla');
+    }
+    if (channel === 'push') {
+      const dispatcher = this.channelDispatcher('push');
+      if (!dispatcher) {
+        throw new BadRequestException('Canal push no disponible');
+      }
+      await dispatcher.assertTemplate(templateId);
+      return;
+    }
+    const template = await this.repository.findTemplateById(templateId);
+    if (!template) {
+      throw new BadRequestException('Plantilla de email no encontrada');
+    }
   }
 
   /** Render completo (header+body+footer) con vars de ejemplo (admin UI). */
@@ -89,6 +135,11 @@ export class CampaignsService {
     dto: TestCampaignDto,
   ): Promise<{ sent: number }> {
     const campaign = await this.getCampaignOrFail(campaignId);
+    if (campaign.channel !== 'email') {
+      throw new BadRequestException(
+        'Las campañas push se prueban con el test de plantillas push',
+      );
+    }
     if (!campaign.template_id) {
       throw new BadRequestException('La campaña no tiene plantilla');
     }
@@ -98,8 +149,7 @@ export class CampaignsService {
       unsubscribe_url: this.renderer.unsubscribeUrl('test'),
     };
     const rendered = await this.renderCampaign(campaign, vars);
-    // Un solo asunto: override con contenido, si no el de la plantilla.
-    rendered.subject = `[TEST] ${this.applySubjectOverride(campaign, rendered.subject)}`;
+    rendered.subject = `[TEST] ${rendered.subject}`;
     if (dto.overrides?.body_html) {
       const { header, footer } = await this.loadParts(campaign.template_id);
       rendered.html = this.renderer.assemble({
@@ -155,6 +205,16 @@ export class CampaignsService {
     if (!campaign.template_id) {
       throw new BadRequestException('La campaña no tiene plantilla');
     }
+    // Canales no-email delegan en su dispatcher (audiencia y ledger propios).
+    if (campaign.channel !== 'email') {
+      const dispatcher = this.channelDispatcher(campaign.channel);
+      if (!dispatcher) {
+        throw new BadRequestException(
+          `Canal ${campaign.channel} no disponible`,
+        );
+      }
+      return dispatcher.enqueueAndStart(campaign);
+    }
     if (!campaign.segment_ids?.length && !campaign.include_user_ids?.length) {
       throw new BadRequestException(
         'Selecciona al menos un segmento o usuarios incluidos',
@@ -171,6 +231,11 @@ export class CampaignsService {
     if (recipients.length === 0) {
       throw new BadRequestException(
         'Ningún destinatario cumple los criterios: revisa que los segmentos tengan usuarios y que estén suscritos a la categoría de la campaña',
+      );
+    }
+    if (recipients.length > MAX_AUDIENCE_SIZE) {
+      throw new BadRequestException(
+        `Audiencia demasiado grande (${recipients.length}): el máximo por envío es ${MAX_AUDIENCE_SIZE} — reduce los segmentos`,
       );
     }
     if (campaign.status === 'failed') {
@@ -212,13 +277,131 @@ export class CampaignsService {
     return EmailMarketingMapper.toCampaignDto(updated!);
   }
 
-  async getCampaign(campaignId: string) {
+  getCampaign(campaignId: string) {
     return this.repository.getCampaignById(campaignId);
   }
 
+  // ─── CRUD delegado (los controllers no tocan el repository) ───
+
+  listComponents(f: ListFilter) {
+    return this.repository.listComponents(f);
+  }
+
+  insertComponent(values: typeof emailComponents.$inferInsert) {
+    return this.repository.insertComponent(values);
+  }
+
+  updateComponent(
+    id: string,
+    values: Partial<typeof emailComponents.$inferInsert>,
+  ) {
+    return this.repository.updateComponent(id, values);
+  }
+
+  deleteComponent(id: string) {
+    return this.repository.deleteComponent(id);
+  }
+
+  listTemplates(f: ListFilter) {
+    return this.repository.listTemplates(f);
+  }
+
+  insertTemplate(values: typeof emailTemplates.$inferInsert) {
+    return this.repository.insertTemplate(values);
+  }
+
+  updateTemplate(
+    id: string,
+    values: Partial<typeof emailTemplates.$inferInsert>,
+  ) {
+    return this.repository.updateTemplate(id, values);
+  }
+
+  deleteTemplate(id: string) {
+    return this.repository.deleteTemplate(id);
+  }
+
+  listSegments(f: ListSegmentsFilter) {
+    return this.repository.listSegments(f);
+  }
+
+  insertSegment(values: typeof segments.$inferInsert) {
+    return this.repository.insertSegment(values);
+  }
+
+  updateSegment(id: string, values: Partial<typeof segments.$inferInsert>) {
+    return this.repository.updateSegment(id, values);
+  }
+
+  deleteSegment(id: string) {
+    return this.repository.deleteSegment(id);
+  }
+
+  getSegmentUserIds(segmentId: string): Promise<string[]> {
+    return this.repository.getSegmentUserIds(segmentId);
+  }
+
+  replaceSegmentUsers(segmentId: string, userIds: string[]) {
+    return this.repository.replaceSegmentUsers(segmentId, userIds);
+  }
+
+  addSegmentUsers(segmentId: string, userIds: string[]) {
+    return this.repository.addSegmentUsers(segmentId, userIds);
+  }
+
+  listCampaigns(f: ListFilter & { status?: string; channel?: string }) {
+    return this.repository.listCampaigns(f);
+  }
+
+  insertCampaign(values: typeof campaigns.$inferInsert) {
+    return this.repository.insertCampaign(values);
+  }
+
+  updateCampaign(
+    id: string,
+    values: Partial<typeof campaigns.$inferInsert>,
+  ) {
+    return this.repository.updateCampaign(id, values);
+  }
+
+  deleteCampaign(id: string) {
+    return this.repository.deleteCampaign(id);
+  }
+
+  listAllSends(
+    f: ListFilter & {
+      status?: string;
+      type?: string;
+      source_type?: string | null;
+      source_id?: string | null;
+    },
+  ) {
+    return this.repository.listSends(f);
+  }
+
+  findSendById(id: string) {
+    return this.repository.findSendById(id);
+  }
+
+  updateSend(id: string, values: Partial<typeof emailSends.$inferInsert>) {
+    return this.repository.updateSend(id, values);
+  }
+
+  /** Webhook de Resend (ruta pública) → estado del envío. */
+  applyResendEvent(resendId: string, eventType: string): Promise<void> {
+    return this.repository.applyResendEvent(resendId, eventType);
+  }
+
+  /** Baja por enlace del footer (ruta pública). */
+  unsubscribe(userId: string): Promise<void> {
+    return this.repository.unsubscribe(userId);
+  }
+
   /**
-   * Tick del cron: campañas programadas vencidas + un lote de la cola.
-   * Con BullMQ este método queda como fallback sin-Redis; el flujo normal es vía queue.
+   * Tick del cron: campañas programadas vencidas + transaccionales siempre;
+   * drenado de `sending` solo sin BullMQ. Con REDIS_URL los lotes sending son
+   * del worker (email-expedition.processor) — el tick los tocaría en paralelo
+   * sobre el mismo SELECT sin claim atómico y duplicaría envíos.
    */
   async processTick(): Promise<{ processed: number }> {
     let processed = 0;
@@ -227,17 +410,29 @@ export class CampaignsService {
         await this.send(due.id);
       } catch (err) {
         this.logger.error(`Campaña programada ${due.id} falló`, err);
-        void this.repository.updateCampaign(due.id, { status: 'failed' });
+        try {
+          await this.repository.updateCampaign(due.id, { status: 'failed' });
+        } catch (updateErr) {
+          this.logger.error(
+            `No se pudo marcar failed ${due.id}: ${updateErr instanceof Error ? updateErr.message : String(updateErr)}`,
+          );
+        }
       }
     }
 
-    const sending = await this.repository.listCampaigns({
-      page: 1,
-      limit: BATCH_SIZE,
-      status: 'sending',
-    });
-    for (const campaign of sending.rows) {
-      processed += await this.processBatch(campaign);
+    // BullMQ es dueño de los lotes sending cuando hay Redis; sin Redis el
+    // tick es el único drenador (fallback dev).
+    const useQueue =
+      !!this.config.get('REDIS_URL', { infer: true }) && !!this.queue;
+    if (!useQueue) {
+      const sending = await this.repository.listCampaigns({
+        page: 1,
+        limit: BATCH_SIZE,
+        status: 'sending',
+      });
+      for (const campaign of sending.rows) {
+        processed += await this.processBatch(campaign);
+      }
     }
     // Transaccionales pendientes (BD fuente de verdad, BullMQ solo ejecuta)
     processed += await this.processTransactionalBatch();
@@ -249,15 +444,24 @@ export class CampaignsService {
     const batch = await this.repository.findPendingBatch(20);
     // Filtrar solo transaccionales para no mezclar con campañas (estas van por processBatch)
     const transactional = batch.filter((r) => r.type !== 'campaign');
+    // Partes por plantilla cacheadas dentro del lote (antes: 3 SELECT por email).
+    const partsCache = new Map<
+      string,
+      Awaited<ReturnType<CampaignsService['loadParts']>>
+    >();
+    const partsFor = async (templateId: string | null) => {
+      if (!templateId) throw new Error('Plantilla no encontrada');
+      let parts = partsCache.get(templateId);
+      if (!parts) {
+        parts = await this.loadParts(templateId);
+        partsCache.set(templateId, parts);
+      }
+      return parts;
+    };
     for (const send of transactional) {
       try {
         await this.repository.markProcessing(send.id);
-        const template = await this.repository.findTemplateById(send.template_id);
-        if (!template) throw new Error('Plantilla no encontrada');
-        const [header, footer] = await Promise.all([
-          template.header_id ? this.repository.findComponentById(template.header_id) : Promise.resolve(null),
-          template.footer_id ? this.repository.findComponentById(template.footer_id) : Promise.resolve(null),
-        ]);
+        const { template, header, footer } = await partsFor(send.template_id);
         const vars = (send.variables_used as Record<string, string>) ?? {};
         const html = this.renderer.assemble({
           headerHtml: header?.html_content ?? null,
@@ -348,19 +552,24 @@ export class CampaignsService {
 
   /** Envía un lote de la cola; marca fin de campaña cuando vacía. Público para el processor BullMQ. */
   async processBatch(campaign: CampaignRow): Promise<number> {
+    // Canales no-email delegan en su dispatcher.
+    if (campaign.channel !== 'email') {
+      const dispatcher = this.channelDispatcher(campaign.channel);
+      if (!dispatcher) return 0;
+      return dispatcher.processBatch(campaign);
+    }
     const batch = await this.repository.findQueuedBatch(
       campaign.id,
       BATCH_SIZE,
     );
+    // Partes constantes para todo el lote: 1 carga de plantilla+header+footer
+    // en vez de 3 SELECT por destinatario.
+    const parts = await this.loadParts(campaign.template_id!);
     for (const send of batch) {
       try {
-        const rendered = await this.renderCampaign(
-          campaign,
+        const rendered = this.renderWithParts(
+          parts,
           (send.variables_used as Record<string, string> | null) ?? undefined,
-        );
-        rendered.subject = this.applySubjectOverride(
-          campaign,
-          rendered.subject,
         );
         const result = await this.deliver(send.email, rendered);
         await this.repository.markSent(send.id, result);
@@ -420,22 +629,26 @@ export class CampaignsService {
     return { template, header, footer };
   }
 
-  /** Ensambla el email final de una campaña con las variables dadas. */
+  /** Ensambla el email de una campaña con las variables dadas (carga partes cada vez: paths de uso único). */
   private async renderCampaign(
     campaign: CampaignRow,
     vars?: Record<string, string>,
   ): Promise<RenderedEmail> {
-    const { template, header, footer } = await this.loadParts(
-      campaign.template_id!,
-    );
+    const parts = await this.loadParts(campaign.template_id!);
+    return this.renderWithParts(parts, vars);
+  }
+
+  /** Render puro con partes ya cargadas — evita re-leer plantilla+header+footer por destinatario. */
+  private renderWithParts(
+    parts: Awaited<ReturnType<CampaignsService['loadParts']>>,
+    vars?: Record<string, string>,
+  ): RenderedEmail {
+    const { template, header, footer } = parts;
     return {
-      subject: this.renderer.renderVariables(
-        this.applySubjectOverride(campaign, template.subject),
-        vars ?? {},
-      ),
+      subject: this.renderer.renderVariables(template.subject, vars ?? {}),
       html: this.renderer.assemble({
         headerHtml: header?.html_content ?? null,
-        bodyHtml: campaign.body_override ?? template.body_html,
+        bodyHtml: template.body_html,
         footerHtml: footer?.html_content ?? null,
         vars: vars ?? {},
       }),
@@ -443,15 +656,6 @@ export class CampaignsService {
         ? (template.variables as string[])
         : [],
     };
-  }
-
-  /** Un solo criterio de asunto: override si tiene contenido, si no fallback. */
-  private applySubjectOverride(
-    campaign: CampaignRow,
-    fallback: string,
-  ): string {
-    const override = campaign.subject_override?.trim();
-    return override ? override : fallback;
   }
 
   private async getCampaignOrFail(id: string) {

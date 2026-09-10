@@ -1,4 +1,5 @@
-import { Image, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card } from "@/core/ui";

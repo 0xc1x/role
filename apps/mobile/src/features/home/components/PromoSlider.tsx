@@ -1,22 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	View,
-	Text,
 	StyleSheet,
 	ScrollView,
-	Image,
 	Dimensions,
 	Pressable,
 	Platform,
 	Linking,
 	Animated,
 } from "react-native";
+import { Image } from "expo-image";
 import { type Href, router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { toast } from "sonner-native";
-
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
+import { AppText, Button } from "@/core/ui";
 import { strings } from "@/core/i18n/strings";
 import { usePromoSlides, type PromoSlide } from "@/features/slides";
 
@@ -24,88 +24,178 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH - spacing.lg * 2;
 const CARD_HEIGHT = Math.min((CARD_WIDTH * 9) / 16, 220);
 const DOT_ANIM_DURATION = 250;
+const SCROLL_SETTLE_DELAY = 120;
 
 export function PromoSlider() {
 	const { colors } = useTheme();
 	const { data: slides = [] } = usePromoSlides();
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [isPaused, setIsPaused] = useState(false);
+
 	const scrollRef = useRef<ScrollView>(null);
 	const step = CARD_WIDTH + spacing.sm;
 
-	// Detecta el salto de "loop" (última slide -> primera) para no animar
-	// el indicador cruzando hacia atrás por todos los dots intermedios.
+	// ── Loop infinito ────────────────────────────────────────────────
+	const total = slides.length;
+	const hasLoop = total > 1;
+
+	const loopSlides = hasLoop
+		? [slides[total - 1], ...slides, slides[0]]
+		: slides;
+
+	// offset real dentro del ScrollView (1 = primera slide real)
+	const toScrollX = useCallback(
+		(logicalIndex: number) => (hasLoop ? logicalIndex + 1 : logicalIndex) * step,
+		[hasLoop, step],
+	);
+
 	const prevIndexRef = useRef(0);
 	const isWrapRef = useRef(false);
 
 	const goTo = useCallback(
-		(index: number, animated = true) => {
-			const total = slides.length;
+		(logicalIndex: number, animated = true) => {
 			if (total === 0) {
 				setCurrentIndex(0);
 				return;
 			}
-			const nextIndex = ((index % total) + total) % total;
-			isWrapRef.current = prevIndexRef.current === total - 1 && nextIndex === 0;
-			prevIndexRef.current = nextIndex;
-			setCurrentIndex(nextIndex);
+			const next = ((logicalIndex % total) + total) % total;
+			isWrapRef.current =
+				(prevIndexRef.current === total - 1 && next === 0) ||
+				(prevIndexRef.current === 0 && next === total - 1);
+			prevIndexRef.current = next;
+			setCurrentIndex(next);
 			scrollRef.current?.scrollTo({
-				x: index * step,
+				x: toScrollX(next),
 				animated,
 			});
 		},
-		[step, slides.length],
+		[total, toScrollX],
 	);
 
+	// Posicionar en la primera slide real al montar / cuando llegan datos
+	const didInit = useRef(false);
 	useEffect(() => {
+		if (total === 0 || didInit.current) return;
+		didInit.current = true;
+		const initialX = hasLoop ? step : 0;
+		// Sin animación para no “parpadear”
+		requestAnimationFrame(() => {
+			scrollRef.current?.scrollTo({ x: initialX, animated: false });
+		});
+	}, [total, hasLoop, step]);
+
+	const currentIndexRef = useRef(currentIndex);
+	useEffect(() => {
+		currentIndexRef.current = currentIndex;
+	}, [currentIndex]);
+	const goToRef = useRef(goTo);
+	useEffect(() => {
+		goToRef.current = goTo;
+	}, [goTo]);
+
+	// Autoplay
+	useEffect(() => {
+		if (!hasLoop) return;
 		const interval = setInterval(() => {
-			if (!isPaused && slides.length > 1) {
-				goTo(currentIndex + 1);
+			if (!isPaused) {
+				goToRef.current(currentIndexRef.current + 1);
 			}
 		}, 5000);
 		return () => clearInterval(interval);
-	}, [currentIndex, isPaused, goTo]);
+	}, [isPaused, hasLoop]);
 
-	const scrollX = useRef(0);
+	const scrollX = useRef(hasLoop ? step : 0); // empezamos en la primera real
 	const dragStartX = useRef<number | null>(null);
 	const dragStartScrollX = useRef(0);
 	const dragAreaRef = useRef<View>(null);
 
 	const setIndexFromSnap = useCallback(
-		(index: number) => {
-			const total = slides.length;
-			const isWrap = prevIndexRef.current === total - 1 && index === 0;
+		(logicalIndex: number) => {
+			const isWrap =
+				(prevIndexRef.current === total - 1 && logicalIndex === 0) ||
+				(prevIndexRef.current === 0 && logicalIndex === total - 1);
 			isWrapRef.current = isWrap;
-			prevIndexRef.current = index;
-			setCurrentIndex(index);
+			prevIndexRef.current = logicalIndex;
+			setCurrentIndex(logicalIndex);
 		},
-		[slides.length],
+		[total],
 	);
 
-	const snapToNearest = useCallback(() => {
-		const index = Math.round(scrollX.current / step);
-		if (index >= slides.length) {
-			setIndexFromSnap(0);
-			scrollRef.current?.scrollTo({ x: 0, animated: true });
+	/** Convierte offset de scroll → índice lógico [0..total-1] y corrige clones. */
+	const normalizeAndSnap = useCallback(() => {
+		if (total === 0) return;
+
+		let rawIndex = Math.round(scrollX.current / step);
+
+		if (!hasLoop) {
+			const clamped = Math.max(0, Math.min(rawIndex, total - 1));
+			setIndexFromSnap(clamped);
+			scrollRef.current?.scrollTo({ x: clamped * step, animated: true });
 			return;
 		}
-		const clamped = Math.max(0, Math.min(index, slides.length - 1));
-		setIndexFromSnap(clamped);
-		scrollRef.current?.scrollTo({ x: clamped * step, animated: true });
-	}, [slides.length, step, setIndexFromSnap]);
 
+		if (rawIndex <= 0) {
+			// Estamos en el clon de la izquierda → saltar a la última real
+			const logical = total - 1;
+			setIndexFromSnap(logical);
+			scrollRef.current?.scrollTo({ x: toScrollX(logical), animated: false });
+			scrollX.current = toScrollX(logical);
+			return;
+		}
+
+		if (rawIndex >= total + 1) {
+			setIndexFromSnap(0);
+			scrollRef.current?.scrollTo({ x: toScrollX(0), animated: false });
+			scrollX.current = toScrollX(0);
+			return;
+		}
+
+		// Slide real
+		const logical = rawIndex - 1;
+		setIndexFromSnap(logical);
+		scrollRef.current?.scrollTo({ x: toScrollX(logical), animated: true });
+	}, [total, hasLoop, step, toScrollX, setIndexFromSnap]);
+
+	// ── Coordinación de snap ─────────────────────────────────────────
+	const isUserInteractingRef = useRef(false);
+	const settleTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const clearSettleTimeout = useCallback(() => {
+		if (settleTimeout.current) {
+			clearTimeout(settleTimeout.current);
+			settleTimeout.current = null;
+		}
+	}, []);
+
+	useEffect(() => () => clearSettleTimeout(), [clearSettleTimeout]);
+
+	const handleTouchStart = useCallback(() => {
+		isUserInteractingRef.current = true;
+		clearSettleTimeout();
+		setIsPaused(true);
+	}, [clearSettleTimeout]);
+
+	const normalizeAndSnapRef = useRef(normalizeAndSnap);
+	useEffect(() => {
+		normalizeAndSnapRef.current = normalizeAndSnap;
+	}, [normalizeAndSnap]);
+
+	// Drag con mouse (web)
 	useEffect(() => {
 		if (Platform.OS !== "web") return;
 		const area = dragAreaRef.current as unknown as HTMLElement | null;
 		if (!area) return;
 
-		const maxScroll = step * slides.length;
+		const maxScroll = step * (hasLoop ? total + 1 : total - 1);
 
 		const handleDown = (e: MouseEvent) => {
 			dragStartX.current = e.pageX;
 			dragStartScrollX.current = scrollX.current;
+			isUserInteractingRef.current = true;
+			clearSettleTimeout();
 			setIsPaused(true);
 		};
+
 		const handleMove = (e: MouseEvent) => {
 			if (dragStartX.current == null) return;
 			const dx = e.pageX - dragStartX.current;
@@ -113,10 +203,14 @@ export function PromoSlider() {
 			scrollX.current = newX;
 			scrollRef.current?.scrollTo({ x: newX, animated: false });
 		};
+
 		const handleUp = () => {
+			if (dragStartX.current == null) return;
 			dragStartX.current = null;
+			clearSettleTimeout();
+			isUserInteractingRef.current = false;
 			setIsPaused(false);
-			snapToNearest();
+			normalizeAndSnapRef.current();
 		};
 
 		area.addEventListener("mousedown", handleDown);
@@ -127,20 +221,25 @@ export function PromoSlider() {
 			window.removeEventListener("mousemove", handleMove);
 			window.removeEventListener("mouseup", handleUp);
 		};
-	}, [snapToNearest, step, slides.length]);
+	}, [step, total, hasLoop, clearSettleTimeout]);
 
-	const handleScroll = (event: {
-		nativeEvent: { contentOffset: { x: number } };
-	}) => {
-		scrollX.current = event.nativeEvent.contentOffset.x;
-	};
+	// Solo escribe refs por frame; el setState vive en el timeout con
+	// debounce (no hay setState por evento de scroll).
+	const handleScroll = useCallback(
+		(event: { nativeEvent: { contentOffset: { x: number } } }) => {
+			scrollX.current = event.nativeEvent.contentOffset.x;
+			if (!isUserInteractingRef.current) return;
 
-	const handleMomentumEnd = () => {
-		setIsPaused(false);
-		snapToNearest();
-	};
+			clearSettleTimeout();
+			settleTimeout.current = setTimeout(() => {
+				isUserInteractingRef.current = false;
+				setIsPaused(false);
+				normalizeAndSnap();
+			}, SCROLL_SETTLE_DELAY);
+		},
+		[clearSettleTimeout, normalizeAndSnap],
+	);
 
-	// Sin contenido activo (o mientras carga) el carrusel no se renderiza.
 	if (slides.length === 0) return null;
 
 	return (
@@ -158,19 +257,29 @@ export function PromoSlider() {
 						pagingEnabled={false}
 						onScroll={handleScroll}
 						scrollEventThrottle={16}
-						onMomentumScrollBegin={() => setIsPaused(true)}
-						onMomentumScrollEnd={handleMomentumEnd}
-						onTouchStart={() => setIsPaused(true)}
-						onTouchEnd={handleMomentumEnd}
+						onTouchStart={handleTouchStart}
 						contentContainerStyle={{
 							paddingHorizontal: spacing.lg,
 							gap: spacing.sm,
 						}}
 						style={{ height: CARD_HEIGHT }}
 					>
-						{/* Clon de la primera slide al final para el loop continuo. */}
-						{[...slides, slides[0]].map((item, i) => (
-							<View key={i < slides.length ? item.id : `clone-${item.id}`} style={styles.card}>
+						{loopSlides.map((item, i) => (
+							<View
+								key={
+									hasLoop
+										? i === 0
+											? `clone-last-${item.id}`
+											: i === loopSlides.length - 1
+												? `clone-first-${item.id}`
+												: item.id
+										: item.id
+								}
+								style={[
+									styles.card,
+									{ boxShadow: `0px 8px 20px ${colors.shadow}` },
+								]}
+							>
 								<PromoCard item={item} />
 							</View>
 						))}
@@ -185,14 +294,14 @@ export function PromoSlider() {
 					isWrap={isWrapRef.current}
 					onPressDot={(index) => goTo(index)}
 					activeColor={colors.primary}
-					inactiveColor={colors.foreground + "33"}
+					inactiveColor={withAlpha(colors.foreground, 0.2)}
 				/>
 			)}
 		</View>
 	);
 }
 
-// ─── DotsIndicator ──────────────────────────────────────────────────
+// ─── DotsIndicator (sin cambios) ────────────────────────────────────
 function DotsIndicator({
 	count,
 	activeIndex,
@@ -208,42 +317,39 @@ function DotsIndicator({
 	activeColor: string;
 	inactiveColor: string;
 }) {
-	// Un Animated.Value por dot (0 = inactivo, 1 = activo).
-	const animsRef = useRef<Animated.Value[]>([]);
-	if (animsRef.current.length !== count) {
-		animsRef.current = Array.from(
-			{ length: count },
-			(_, i) => new Animated.Value(i === activeIndex ? 1 : 0),
-		);
-	}
+	const dotItems = useMemo(
+		() =>
+			Array.from({ length: count }, (_, i) => ({
+				id: `promo-dot-${i}`,
+				anim: new Animated.Value(0),
+			})),
+		[count],
+	);
 
 	useEffect(() => {
-		const animations = animsRef.current.map((anim, i) =>
-			Animated.timing(anim, {
+		const animations = dotItems.map((item, i) =>
+			Animated.timing(item.anim, {
 				toValue: i === activeIndex ? 1 : 0,
-				// En el salto de loop (última -> primera) no animamos:
-				// el carrusel ya "avanzó" visualmente hacia el clon, así
-				// que el indicador solo debe reflejar el estado final.
 				duration: isWrap ? 0 : DOT_ANIM_DURATION,
 				useNativeDriver: false,
 			}),
 		);
 		Animated.parallel(animations).start();
-	}, [activeIndex, isWrap]);
+	}, [activeIndex, isWrap, dotItems]);
 
 	return (
 		<View style={styles.dotsContainer}>
-			{animsRef.current.map((anim, index) => {
-				const width = anim.interpolate({
+			{dotItems.map((item, index) => {
+				const width = item.anim.interpolate({
 					inputRange: [0, 1],
 					outputRange: [8, 22],
 				});
-				const backgroundColor = anim.interpolate({
+				const backgroundColor = item.anim.interpolate({
 					inputRange: [0, 1],
 					outputRange: [inactiveColor, activeColor],
 				});
 				return (
-					<Pressable key={index} onPress={() => onPressDot(index)} hitSlop={6}>
+					<Pressable key={item.id} onPress={() => onPressDot(index)} hitSlop={6}>
 						<Animated.View style={[styles.dot, { width, backgroundColor }]} />
 					</Pressable>
 				);
@@ -252,6 +358,7 @@ function DotsIndicator({
 	);
 }
 
+// ─── PromoCard (sin cambios) ────────────────────────────────────────
 function PromoCard({ item }: { item: PromoSlide }) {
 	const { colors } = useTheme();
 	const badgeLabel =
@@ -272,7 +379,6 @@ function PromoCard({ item }: { item: PromoSlide }) {
 			return;
 		}
 		if (!item.redirectUrl) return;
-		// Convención: "/" = ruta interna de la app (ej. /explore); resto, URL externa.
 		if (item.redirectUrl.startsWith("/")) {
 			router.push(item.redirectUrl as Href);
 			return;
@@ -281,73 +387,99 @@ function PromoCard({ item }: { item: PromoSlide }) {
 	};
 
 	return (
-		<View style={[styles.cardInner, { backgroundColor: colors.greenDark, flexDirection: "row" }]}>
-			{/* Lado izquierdo sólido — sin Blur ni overlay traslúcido */}
+		<View
+			style={[
+				styles.cardInner,
+				{ backgroundColor: colors.greenDark, flexDirection: "row" },
+			]}
+		>
+			{/* Columna izquierda */}
 			<View style={styles.cardLeft}>
-				<View style={styles.badge}>
-					<Text
-						style={{
-							color: colors.greenDarkForeground + "B3",
-							fontSize: 11,
-							fontWeight: "600",
-							letterSpacing: 0.4,
-						}}
+				{/* Badge + textos (crecen y se reparten el espacio) */}
+				<View style={styles.cardLeftContent}>
+					<View
+						style={[
+							styles.badge,
+							{
+								backgroundColor: withAlpha(colors.onMedia, 0.14),
+								borderColor: withAlpha(colors.onMedia, 0.18),
+							},
+						]}
 					>
-						{badgeLabel.toUpperCase()}
-					</Text>
-				</View>
-				<View style={{ gap: 6 }}>
-					<Text
+						<AppText
+							weight="semiBold"
+							style={{
+								color: withAlpha(colors.greenDarkForeground, 0.7),
+								fontSize: 11,
+								letterSpacing: 0.4,
+							}}
+						>
+							{badgeLabel.toUpperCase()}
+						</AppText>
+					</View>
+
+					<AppText
+						weight="bold"
+						numberOfLines={1}
 						style={{
 							color: textColor,
-							fontSize: 18,
-							fontWeight: "700",
+							fontSize: 17,
 							letterSpacing: -0.3,
-							lineHeight: 22,
+							lineHeight: 21,
+							marginTop: 6,
 						}}
 					>
 						{item.title}
-					</Text>
-					<Text
-						numberOfLines={2}
+					</AppText>
+
+					<AppText
+						numberOfLines={3}
 						style={{
-							color: textColor + "CC",
+							color: withAlpha(textColor, 0.8),
 							fontSize: 12,
 							lineHeight: 16,
+							marginTop: 4,
+							flexShrink: 1,
 						}}
 					>
 						{item.caption}
-					</Text>
+					</AppText>
 				</View>
+
+				{/* Botón siempre abajo */}
 				{item.ctaLabel &&
 				(item.type === "coupon" ? item.couponCode : item.redirectUrl) ? (
-					<Pressable
-						accessibilityRole="button"
+					<Button
+						label={item.ctaLabel}
 						onPress={handleCtaPress}
-						style={({ pressed }) => [
-							styles.promoButton,
-							{ backgroundColor: item.buttonColor ?? colors.primary },
-							pressed && styles.promoButtonPressed,
-						]}
-					>
-						<Text
-							style={{
-								color: colors.primaryForeground,
-								fontSize: 14,
-								fontWeight: "700",
-							}}
-						>
-							{item.ctaLabel}
-						</Text>
-					</Pressable>
+						size="sm"
+						style={{
+							backgroundColor: item.buttonColor ?? colors.primary,
+							marginTop: 8,
+						}}
+					/>
 				) : null}
 			</View>
-			{/* Lado derecho imagen limpia — sin velo */}
+
+			{/* Columna derecha (imagen) */}
 			<View style={styles.cardRight}>
 				{item.imageUrl ? (
-					<Image source={{ uri: item.imageUrl }} style={styles.cardRightImage} resizeMode="cover" />
+					<Image
+						source={{ uri: item.imageUrl }}
+						style={styles.cardRightImage}
+						contentFit="cover"
+					/>
 				) : (
-					<View style={[styles.cardRightImage, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]} />
+					<View
+						style={[
+							styles.cardRightImage,
+							{
+								backgroundColor: colors.muted,
+								alignItems: "center",
+								justifyContent: "center",
+							},
+						]}
+					/>
 				)}
 			</View>
 		</View>
@@ -366,7 +498,6 @@ const styles = StyleSheet.create({
 		height: CARD_HEIGHT,
 		borderRadius: radii.xl,
 		overflow: "hidden",
-		boxShadow: `0px 8px 20px #00000014`,
 	},
 	cardInner: {
 		flex: 1,
@@ -374,14 +505,17 @@ const styles = StyleSheet.create({
 		overflow: "hidden",
 	},
 	cardLeft: {
-		width: "54%",
-		paddingHorizontal: 18,
-		paddingVertical: 16,
+		width: "55%",
+		paddingHorizontal: 14,
+		paddingVertical: 12,
 		justifyContent: "space-between",
-		gap: 10,
+	},
+	cardLeftContent: {
+		flex: 1,
+		justifyContent: "flex-start",
 	},
 	cardRight: {
-		width: "46%",
+		width: "45%",
 		overflow: "hidden",
 	},
 	cardRightImage: {
@@ -391,23 +525,9 @@ const styles = StyleSheet.create({
 	badge: {
 		alignSelf: "flex-start",
 		paddingHorizontal: 10,
-		paddingVertical: 5,
+		paddingVertical: 4,
 		borderRadius: radii.pill,
-		backgroundColor: "rgba(255,255,255,0.14)",
 		borderWidth: 1,
-		borderColor: "rgba(255,255,255,0.18)",
-	},
-	promoButton: {
-		height: 38,
-		borderRadius: radii.pill,
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: 16,
-		boxShadow: `0px 4px 12px #00000022`,
-	},
-	promoButtonPressed: {
-		opacity: 0.85,
-		transform: [{ scale: 0.98 }],
 	},
 	dotsContainer: {
 		flexDirection: "row",

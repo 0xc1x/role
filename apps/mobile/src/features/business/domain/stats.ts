@@ -50,3 +50,47 @@ export function statsDaysInRange(range: { start: Date; end: Date }): number {
 		DAY_MS;
 	return Math.round(days) + 1;
 }
+
+const MONTH_ABBR = [
+	"ene", "feb", "mar", "abr", "may", "jun",
+	"jul", "ago", "sep", "oct", "nov", "dic",
+] as const;
+
+/** Human label for a stats period+offset (labels injected to keep i18n in UI). */
+export function statsRangeLabel(
+	period: StatsPeriod,
+	offset: number,
+	labels: { thisWeek: string; thisMonth: string; thisYear: string },
+	now: Date = new Date(),
+): string {
+	if (offset === 0) {
+		if (period === "week") return labels.thisWeek;
+		if (period === "month") return labels.thisMonth;
+		return labels.thisYear;
+	}
+	const { start, end } = statsRangeFor(period, offset, now);
+	if (period === "year") return String(end.getFullYear());
+	if (period === "month")
+		return `${MONTH_ABBR[start.getMonth()]} ${start.getFullYear()}`;
+	const sameYear = start.getFullYear() === end.getFullYear();
+	const day = (d: Date) =>
+		`${d.getDate()} ${MONTH_ABBR[d.getMonth()]}${sameYear ? "" : ` ${d.getFullYear()}`}`;
+	return `${day(start)} – ${day(end)} ${end.getFullYear()}`;
+}
+
+/** KPIs derivados del agregado (puros, testeables). */
+export function statsViewModel(stats: {
+	revenue: number;
+	ordersCount: number;
+	avgRating: number | null;
+}): { dailyAvg: (days: number) => string; avgTicket: string; rating: string } {
+	return {
+		dailyAvg: (days: number) =>
+			stats.revenue > 0 && days > 0 ? (stats.revenue / days).toFixed(2) : "0.00",
+		avgTicket:
+			stats.ordersCount > 0
+				? (stats.revenue / stats.ordersCount).toFixed(2)
+				: "0.00",
+		rating: (stats.avgRating ?? 0).toFixed(1),
+	};
+}

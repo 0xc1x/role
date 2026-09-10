@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { memo, useCallback } from "react";
 import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
@@ -11,6 +12,7 @@ import {
 	LoadingView,
 	Screen,
 	ScreenHeader,
+	useWebPullToRefresh,
 } from "@/core/ui";
 import { useFavorites } from "@/features/hooks";
 import type { OfferDetail } from "@/features/offers/domain/offer";
@@ -19,10 +21,20 @@ import type { FavoriteOffer } from "@/features/favorites/data/repository";
 import { formatMoney } from "@/core/utils/formatters";
 import { spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
+import { withAlpha } from "@/core/theme/alpha";
 
 export default function FavoritesScreen() {
 	const { colors } = useTheme();
 	const { data, isLoading, isError, error, refetch, isFetching } = useFavorites();
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
+
+	const renderItem = useCallback(
+		({ item }: { item: FavoriteOffer }) => <FavoriteRow item={item} />,
+		[],
+	);
 
 	if (isLoading) return <LoadingView />;
 	if (isError) return <ErrorState error={error} onRetry={refetch} />;
@@ -35,7 +47,9 @@ export default function FavoritesScreen() {
 
 	return (
 		<Screen>
+			{pull.indicator}
 			<FlatList
+				ref={pull.ref}
 				data={favorites}
 				keyExtractor={(item) => item.favoriteId}
 				contentContainerStyle={styles.list}
@@ -60,8 +74,8 @@ export default function FavoritesScreen() {
 								style={[
 									styles.banner,
 									{
-										backgroundColor: colors.secondary + "26",
-										borderColor: colors.secondary + "4D",
+										backgroundColor: withAlpha(colors.secondary, 0.149),
+										borderColor: withAlpha(colors.secondary, 0.302),
 									},
 								]}
 							>
@@ -97,11 +111,15 @@ export default function FavoritesScreen() {
 						}
 					/>
 				}
-				renderItem={({ item }) => <OfferCard offer={toOfferDetail(item)} />}
-			/>
-		</Screen>
+			renderItem={renderItem}
+		/>
+	</Screen>
 	);
 }
+
+const FavoriteRow = memo(function FavoriteRow({ item }: { item: FavoriteOffer }) {
+	return <OfferCard offer={toOfferDetail(item)} />;
+});
 
 // ─── Mapper ──────────────────────────────────────────────────────────
 

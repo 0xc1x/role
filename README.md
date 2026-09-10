@@ -28,8 +28,12 @@ Decisiones de arquitectura documentadas en `docs/decisions/` (formato ADR ligero
 | ADR-0003 | Bundle ID `com.xcix.role` — renombrar a la empresa pre-release |
 | ADR-0004 | Landing = marketing/SEO + onboarding con verificación manual |
 | ADR-0005 | Monorepo — unificación de api/admin/commons/mobile en un solo repo |
+| ADR-0008 | La API NestJS se convierte en espejo de la lógica de negocio de Supabase |
+| ADR-0009 | Login social en mobile |
+| ADR-0010 | Queries geográficas con PostGIS vía RPC |
 
-**Pendiente**: tri-state de verificación de negocio (`pending/active/rejected`) antes de congelar schemas.
+El tri-state de verificación de negocio (`pending/approved/rejected`) ya está
+implementado en `commons` y en la API; convive con el boolean `is_active`.
 
 ## Para agentes
 
@@ -71,7 +75,7 @@ Guía completa en [`docs/deploy.md`](docs/deploy.md).
 - ✅ `admin` **typecheck** + biome check.
 - ✅ `mobile` **typecheck** (tsc estricto, EXIT 0) + **tests** (vitest: dominio de ofertas y órdenes) — scaffold completo: auth, ofertas, órdenes, favoritos, perfil, negocio, landing in-app.
 - ✅ `landing` **typecheck** (tsc EXIT 0) + **build** (vite + nitro, SSR) + biome check — 8 rutas: `/`, `/about`, `/how-it-works`, `/for-business`, `/help-center`, `/privacy`, `/terms`, 404. Deep links `role://` a la app.
-- ✅ `api` **tests** (jest) — 13 suites / 776 tests verdes; fixes: mapper de commons a `packages/commons`, transform de ESM-only (`jose`) en jest.config, tipos en 3 specs.
+- ✅ `api` **tests** (bun test --isolate) — specs co-ubicados por módulo (controller/service/repository/mapper) + specs `.db` contra Postgres real + e2e del ciclo del marketplace.
 
 ### Workaround: alias nitro en la raíz
 

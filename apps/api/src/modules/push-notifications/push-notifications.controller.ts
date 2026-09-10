@@ -46,7 +46,6 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthUser } from '../../auth/auth.types';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { PushAdminService } from './push-admin.service';
-import { PushNotificationsRepository } from './push-notifications.repository';
 import { PushNotificationsMapper } from './push-notifications.mapper';
 
 /**
@@ -59,10 +58,7 @@ import { PushNotificationsMapper } from './push-notifications.mapper';
 @ApiBearerAuth('bearer')
 @Controller('push-notifications')
 export class PushNotificationsController {
-  constructor(
-    private readonly repository: PushNotificationsRepository,
-    private readonly pushAdminService: PushAdminService,
-  ) {}
+  constructor(private readonly pushAdminService: PushAdminService) {}
 
   // ─── Plantillas ────────────────────────────────────────────────────
 
@@ -71,7 +67,7 @@ export class PushNotificationsController {
     @Query(new ZodValidationPipe(ListPushTemplatesQuerySchema))
     q: ListPushTemplatesQuery,
   ): Promise<PushTemplatePaginatedData> {
-    return this.repository.listTemplates(q).then(({ rows, total }) =>
+    return this.pushAdminService.listTemplates(q).then(({ rows, total }) =>
       paginatedDataFromQuery(
         rows.map((r) => PushNotificationsMapper.toTemplateDto(r)),
         q,
@@ -86,7 +82,7 @@ export class PushNotificationsController {
     @Body(new ZodValidationPipe(CreatePushTemplateSchema))
     body: CreatePushTemplateDto,
   ): Promise<PushTemplateDto | null> {
-    const [row] = await this.repository.insertTemplate({
+    const [row] = await this.pushAdminService.insertTemplate({
       ...body,
       data: body.data ?? {},
       created_by: user.id,
@@ -100,13 +96,13 @@ export class PushNotificationsController {
     @Body(new ZodValidationPipe(UpdatePushTemplateSchema))
     body: UpdatePushTemplateDto,
   ): Promise<PushTemplateDto | null> {
-    const row = await this.repository.updateTemplate(id, body);
+    const row = await this.pushAdminService.updateTemplate(id, body);
     return row ? PushNotificationsMapper.toTemplateDto(row) : null;
   }
 
   @Delete('templates/:id')
   removeTemplate(@Param('id', ParseUUIDPipe) id: string) {
-    return this.repository.deleteTemplate(id);
+    return this.pushAdminService.deleteTemplate(id);
   }
 
   @Post('templates/:id/test')
@@ -158,7 +154,7 @@ export class PushNotificationsController {
   listTokens(
     @Query(new ZodValidationPipe(ListPushTokensQuerySchema)) q: ListPushTokensQuery,
   ): Promise<PushTokenPaginatedData> {
-    return this.repository.listTokens(q).then(({ rows, total }) =>
+    return this.pushAdminService.listTokens(q).then(({ rows, total }) =>
       paginatedDataFromQuery(
         rows.map((r) => PushNotificationsMapper.toTokenDto(r)),
         q,
@@ -172,7 +168,8 @@ export class PushNotificationsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(UpdatePushTokenSchema)) body: UpdatePushTokenDto,
   ) {
-    return this.repository.updateToken(id, body);
+    const row = await this.pushAdminService.updateToken(id, body);
+    return row ? PushNotificationsMapper.toTokenDto(row) : null;
   }
 
   // ─── Historial ─────────────────────────────────────────────────────
@@ -182,7 +179,7 @@ export class PushNotificationsController {
     @Query(new ZodValidationPipe(ListPushNotificationsQuerySchema))
     q: ListPushNotificationsQuery,
   ): Promise<PushNotificationPaginatedData> {
-    return this.repository.listNotifications(q).then(({ rows, total }) =>
+    return this.pushAdminService.listNotifications(q).then(({ rows, total }) =>
       paginatedDataFromQuery(
         rows.map((r) => PushNotificationsMapper.toNotificationDto(r)),
         q,
@@ -195,7 +192,7 @@ export class PushNotificationsController {
   async getNotification(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<PushNotificationDto | null> {
-    const row = await this.repository.findNotificationById(id);
+    const row = await this.pushAdminService.findNotificationById(id);
     return row ? PushNotificationsMapper.toNotificationDto(row) : null;
   }
 }

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { LogoMark, Wordmark } from "@/components/brand";
 import { useConfig } from "@/lib/use-config";
 
@@ -40,23 +41,23 @@ export function Footer() {
 
 	const SOCIAL = [
 		{ label: "Instagram", href: instagram },
-		{ label: "Twitter", href: twitter },
+		{ label: "X", href: twitter },
 		{ label: "LinkedIn", href: linkedin },
-	];
+	].filter((s) => s.href && s.href !== "#");
 
 	return (
 		<footer className="bg-ink pb-24 text-cream md:pb-0">
 			<div className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-20">
 				<div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr]">
 					<div>
-						<a
-							href="/"
+						<Link
+							to="/"
 							className="inline-flex items-center gap-2 rounded-2xl bg-paper p-2"
 							aria-label="Rolé — Inicio"
 						>
 							<LogoMark className="h-5 w-auto text-ink" />
 							<Wordmark className="h-5 w-auto text-ink" />
-						</a>
+						</Link>
 						<p className="mt-5 max-w-sm text-sm leading-relaxed text-cream/70">
 							Rescatamos comida deliciosa del desperdicio y la ponemos a precios
 							increíbles. Menos desperdicio, más comunidad.
@@ -75,12 +76,12 @@ export function Footer() {
 						<ul className="mt-4 flex flex-col gap-2.5">
 							{EXPLORE.map((l) => (
 								<li key={l.href}>
-									<a
-										href={l.href}
+									<Link
+										to={l.href}
 										className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
 									>
 										{l.label}
-									</a>
+									</Link>
 								</li>
 							))}
 						</ul>
@@ -92,12 +93,12 @@ export function Footer() {
 						<ul className="mt-4 flex flex-col gap-2.5">
 							{LEGAL.map((l) => (
 								<li key={l.href}>
-									<a
-										href={l.href}
+									<Link
+										to={l.href}
 										className="text-sm text-cream/80 transition-colors duration-150 hover:text-cream"
 									>
 										{l.label}
-									</a>
+									</Link>
 								</li>
 							))}
 						</ul>
@@ -122,7 +123,7 @@ export function Footer() {
 				</div>
 				<div className="mt-16 flex flex-col gap-3 border-t border-cream/10 pt-6 text-xs text-cream/50 sm:flex-row sm:items-center sm:justify-between">
 					<p>
-						© {new Date().getFullYear()} Füdi. Todos los derechos reservados.
+						© {new Date().getFullYear()} Rolé. Todos los derechos reservados.
 					</p>
 					<div className="flex gap-6">
 						{SOCIAL.map((s) => (

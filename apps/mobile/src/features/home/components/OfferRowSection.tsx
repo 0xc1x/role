@@ -1,9 +1,12 @@
+import { useCallback } from "react";
 import { View, StyleSheet, FlatList } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/core/theme";
 import { AppText, Card, SectionHeader } from "@/core/ui";
 import { spacing, radii } from "@/core/theme/spacing";
+import { withAlpha } from "@/core/theme/alpha";
 import { strings } from "@/core/i18n/strings";
 import {
 	usePopularOffers,
@@ -36,35 +39,54 @@ function OfferSkeleton({ fullWidth = false }: { fullWidth?: boolean }) {
 				fullWidth && styles.offerFull,
 			]}
 		>
-			<View style={[styles.offerImage, { backgroundColor: colors.muted }]} />
+			<Skeleton style={styles.offerImage} />
 			<View style={styles.offerBody}>
-				<View
+				<Skeleton
 					style={{
 						height: 14,
 						width: "70%",
-						backgroundColor: colors.muted,
 						borderRadius: 4,
 						marginBottom: 8,
 					}}
 				/>
-				<View
+				<Skeleton
 					style={{
 						height: 10,
 						width: "55%",
-						backgroundColor: colors.muted,
 						borderRadius: 4,
 						marginBottom: 8,
 					}}
 				/>
-				<View
+				<Skeleton
 					style={{
 						height: 10,
 						width: "60%",
-						backgroundColor: colors.muted,
 						borderRadius: 4,
 					}}
 				/>
 			</View>
+		</View>
+	);
+}
+
+const SKELETON_ROWS = [0, 1, 2];
+
+function skeletonKeyExtractor(item: number): string {
+	return `skeleton-${item}`;
+}
+
+function offerKeyExtractor(item: OfferDetail): string {
+	return item.offer.id;
+}
+
+function SkeletonRowItem() {
+	return <OfferSkeleton />;
+}
+
+function OfferRowItem({ item }: { item: OfferDetail }) {
+	return (
+		<View style={styles.rowCard}>
+			<OfferCard offer={item} />
 		</View>
 	);
 }
@@ -85,6 +107,11 @@ function OfferRowView({
 	isError: boolean;
 }) {
 	const { colors } = useTheme();
+	const renderSkeletonItem = useCallback(() => <SkeletonRowItem />, []);
+	const renderOfferItem = useCallback(
+		({ item }: { item: OfferDetail }) => <OfferRowItem item={item} />,
+		[],
+	);
 
 	if (!isLoading && !isError && offers && offers.length === 0) return null;
 
@@ -93,12 +120,12 @@ function OfferRowView({
 			<SectionHeader title={title} icon={icon} onSeeAll={onSeeAll} />
 			{isLoading ? (
 				<FlatList
-					data={Array.from({ length: 3 })}
-					keyExtractor={(_, i) => `skeleton-${i}`}
+					data={SKELETON_ROWS}
+					keyExtractor={skeletonKeyExtractor}
 					horizontal
 					showsHorizontalScrollIndicator={false}
 					contentContainerStyle={styles.rowContent}
-					renderItem={() => <OfferSkeleton />}
+					renderItem={renderSkeletonItem}
 				/>
 			) : isError ? (
 				<AppText
@@ -110,83 +137,88 @@ function OfferRowView({
 			) : (
 				<FlatList
 					data={offers}
-					keyExtractor={(item) => item.offer.id}
+					keyExtractor={offerKeyExtractor}
 					horizontal
 					showsHorizontalScrollIndicator={false}
 					contentContainerStyle={styles.rowContent}
-					renderItem={({ item }) => (
-						<View style={{ width: 260, height: ROW_CARD_HEIGHT }}>
-							<OfferCard offer={item} />
-						</View>
-					)}
+					renderItem={renderOfferItem}
 				/>
 			)}
 		</View>
 	);
 }
 
-export function OfferRowSection({
-	type,
-	title,
-	icon,
-	limit = 10,
-	category = null,
-	onSeeAll,
-}: OfferRowSectionProps) {
-	switch (type) {
-		case "popular": {
-			const q = usePopularOffers(limit, category);
-			return (
-				<OfferRowView
-					title={title}
-					icon={icon}
-					onSeeAll={onSeeAll}
-					offers={q.data}
-					isLoading={q.isLoading}
-					isError={q.isError}
-				/>
-			);
-		}
-		case "expiring": {
-			const q = useExpiringSoonOffers(limit);
-			return (
-				<OfferRowView
-					title={title}
-					icon={icon}
-					onSeeAll={onSeeAll}
-					offers={q.data}
-					isLoading={q.isLoading}
-					isError={q.isError}
-				/>
-			);
-		}
-		case "recent": {
-			const q = useRecentOffers(limit);
-			return (
-				<OfferRowView
-					title={title}
-					icon={icon}
-					onSeeAll={onSeeAll}
-					offers={q.data}
-					isLoading={q.isLoading}
-					isError={q.isError}
-				/>
-			);
-		}
-		case "nearby": {
-			const q = useNearbyOffersHook(limit, category);
-			return (
-				<OfferRowView
-					title={title}
-					icon={icon}
-					onSeeAll={onSeeAll}
-					offers={q.data}
-					isLoading={q.isLoading}
-					isError={q.isError}
-				/>
-			);
-		}
+// Cada sección llama a su hook en un componente propio: los hooks nunca
+// van dentro de ramas condicionales del switch.
+export function OfferRowSection(props: OfferRowSectionProps) {
+	switch (props.type) {
+		case "popular":
+			return <PopularRow {...props} />;
+		case "expiring":
+			return <ExpiringRow {...props} />;
+		case "recent":
+			return <RecentRow {...props} />;
+		case "nearby":
+			return <NearbyRow {...props} />;
 	}
+}
+
+type RowProps = Omit<OfferRowSectionProps, "type">;
+
+function PopularRow({ title, icon, limit = 10, category = null, onSeeAll }: RowProps) {
+	const q = usePopularOffers(limit, category);
+	return (
+		<OfferRowView
+			title={title}
+			icon={icon}
+			onSeeAll={onSeeAll}
+			offers={q.data}
+			isLoading={q.isLoading}
+			isError={q.isError}
+		/>
+	);
+}
+
+function ExpiringRow({ title, icon, limit = 10, onSeeAll }: RowProps) {
+	const q = useExpiringSoonOffers(limit);
+	return (
+		<OfferRowView
+			title={title}
+			icon={icon}
+			onSeeAll={onSeeAll}
+			offers={q.data}
+			isLoading={q.isLoading}
+			isError={q.isError}
+		/>
+	);
+}
+
+function RecentRow({ title, icon, limit = 10, onSeeAll }: RowProps) {
+	const q = useRecentOffers(limit);
+	return (
+		<OfferRowView
+			title={title}
+			icon={icon}
+			onSeeAll={onSeeAll}
+			offers={q.data}
+			isLoading={q.isLoading}
+			isError={q.isError}
+		/>
+	);
+}
+
+function NearbyRow({ title, icon, limit = 10, category = null, onSeeAll }: RowProps) {
+	const q = useNearbyOffersHook(limit, category);
+	return (
+		<OfferRowView
+			title={title}
+			icon={icon}
+			onSeeAll={onSeeAll}
+			offers={q.data}
+			isLoading={q.isLoading}
+			isError={q.isError}
+		/>
+	);
 }
 
 export function OfferColumnSection({
@@ -215,7 +247,7 @@ export function OfferColumnSection({
 						<View
 							style={[
 								styles.locationPromptIcon,
-								{ backgroundColor: colors.primary + "14" },
+								{ backgroundColor: withAlpha(colors.primary, 0.078) },
 							]}
 						>
 							<Ionicons
@@ -283,6 +315,10 @@ const styles = StyleSheet.create({
 	rowContent: {
 		paddingHorizontal: spacing.lg,
 		gap: spacing.md,
+	},
+	rowCard: {
+		width: 260,
+		height: ROW_CARD_HEIGHT,
 	},
 	offerFull: {
 		width: "100%",

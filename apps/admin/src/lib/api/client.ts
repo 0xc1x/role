@@ -3,7 +3,6 @@ import { ApiClientError, throwFromResponse } from "./errors";
 
 const KEYS = {
 	token: "role_admin_auth_token",
-	refresh: "role_admin_refresh_token",
 	expiresAt: "role_admin_token_expires_at",
 } as const;
 
@@ -37,8 +36,6 @@ function setItem(key: string, value: string | null) {
 
 export const getToken = () => getItem(KEYS.token);
 export const setToken = (v: string | null) => setItem(KEYS.token, v);
-export const getRefreshToken = () => getItem(KEYS.refresh);
-export const setRefreshToken = (v: string | null) => setItem(KEYS.refresh, v);
 export const getTokenExpiresAt = () => getItem(KEYS.expiresAt);
 export const setTokenExpiresAt = (v: string | null) =>
 	setItem(KEYS.expiresAt, v);
@@ -54,10 +51,11 @@ export function clearAuth() {
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
 
+/**
+ * El refresh token vive en una cookie httpOnly (features/auth/server.ts): el
+ * cliente no puede leerlo, solo pedir la rotación vía server function.
+ */
 async function attemptTokenRefresh(): Promise<boolean> {
-	const refreshToken = getRefreshToken();
-	if (!refreshToken) return false;
-
 	if (isRefreshing && refreshPromise) {
 		return refreshPromise;
 	}
@@ -65,21 +63,14 @@ async function attemptTokenRefresh(): Promise<boolean> {
 	isRefreshing = true;
 	refreshPromise = (async () => {
 		try {
-			const response = await fetch(`${env.VITE_API_URL}/auth/refresh`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ refresh_token: refreshToken }),
-			});
-
-			if (!response.ok) {
+			const { refreshFn } = await import("@/features/auth/server");
+			const session = await refreshFn();
+			if (!session) {
 				clearAuth();
 				return false;
 			}
-
-			const data = await response.json();
-			setToken(data.access_token);
-			setRefreshToken(data.refresh_token);
-			setTokenExpiresAt(data.expires_at);
+			setToken(session.access_token);
+			setTokenExpiresAt(session.expires_at);
 			return true;
 		} catch {
 			clearAuth();

@@ -1,8 +1,8 @@
-import type { LoginRequest, RegisterRequest } from "@0xc1x/role-commons";
+import type { LoginRequest } from "@0xc1x/role-commons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { getToken } from "@/lib/api/client";
-import { logout as apiLogout, getMe, login, register } from "../api/auth.api";
+import { logout as apiLogout, getMe, login } from "../api/auth.api";
 import { authKeys } from "./auth.keys";
 
 export function useAuthUser() {
@@ -28,21 +28,12 @@ export function useLogin() {
 	});
 }
 
-export function useRegister() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: (body: RegisterRequest) => register(body),
-		onSuccess: (data) => {
-			queryClient.setQueryData(authKeys.me(), data.user);
-		},
-	});
-}
-
 export function useLogout() {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
-	return () => {
-		apiLogout();
+	return async () => {
+		// Revoca el refresh token en la API (cookie httpOnly) y limpia el cliente.
+		await apiLogout();
 		queryClient.clear();
 		navigate({ to: "/login" });
 	};

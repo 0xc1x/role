@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+const tones = {
+	paper: "bg-paper text-ink",
+	cream: "bg-cream text-ink",
+	forest: "bg-forest text-cream",
+} as const;
+
 export function Section({
 	id,
 	children,
@@ -12,12 +18,6 @@ export function Section({
 	className?: string;
 	tone?: "paper" | "cream" | "forest";
 }) {
-	const tones = {
-		paper: "bg-paper text-ink",
-		cream: "bg-cream text-ink",
-		forest: "bg-forest text-cream",
-	} as const;
-
 	return (
 		<section
 			id={id}

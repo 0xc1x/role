@@ -4,6 +4,7 @@ import {
 	useContext,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 	type PropsWithChildren,
 } from "react";
@@ -38,17 +39,25 @@ async function loadPersistedMode(): Promise<ThemeMode> {
 	return "system";
 }
 
-export function ThemeProvider({ children }: PropsWithChildren) {
+export function ThemeProvider({
+	children,
+	onHydrated,
+}: PropsWithChildren<{ onHydrated?: () => void }>) {
 	const systemScheme: ThemeScheme =
 		useColorScheme() === "dark" ? "dark" : "light";
 	const [mode, setModeState] = useState<ThemeMode>("system");
 	const [hydrated, setHydrated] = useState(false);
+	const onHydratedRef = useRef(onHydrated);
+	useEffect(() => {
+		onHydratedRef.current = onHydrated;
+	});
 
 	// Hydrate the persisted preference once on mount.
 	useEffect(() => {
 		void loadPersistedMode().then((m) => {
 			setModeState(m);
 			setHydrated(true);
+			onHydratedRef.current?.();
 		});
 	}, []);
 

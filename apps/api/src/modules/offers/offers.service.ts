@@ -24,9 +24,16 @@ import type { OfferUpdate } from './offers.repository';
 import { OffersRepository } from './offers.repository';
 import { OfferMapper } from './offers.mapper';
 
+/** TTL corto: ORDER BY random() es full-scan por request del hero de landing. */
+const RANDOM_TTL_MS = 60_000;
+
 @Injectable()
 export class OffersService {
   private readonly logger = new Logger(OffersService.name);
+  private randomCache: {
+    value: OfferWithBusiness | null;
+    expiresAt: number;
+  } | null = null;
 
   constructor(
     private readonly offersRepository: OffersRepository,
@@ -66,10 +73,16 @@ export class OffersService {
   /**
    * Oferta activa aleatoria con stock y pickup vigente.
    * `null` si no hay ofertas publicables (la landing muestra fallback).
+   * Cache 60s: ORDER BY random() es un full-scan por request del hero.
    */
   async getRandom(): Promise<OfferWithBusiness | null> {
+    if (this.randomCache && Date.now() < this.randomCache.expiresAt) {
+      return this.randomCache.value;
+    }
     const row = await this.offersRepository.findRandomActive();
-    return row ? OfferMapper.toResponse(row) : null;
+    const value = row ? OfferMapper.toResponse(row) : null;
+    this.randomCache = { value, expiresAt: Date.now() + RANDOM_TTL_MS };
+    return value;
   }
 
   async create(user: AuthUser, body: CreateOfferDto): Promise<OfferDto> {
