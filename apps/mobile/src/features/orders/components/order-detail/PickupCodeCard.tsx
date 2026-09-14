@@ -1,10 +1,12 @@
 import type { Order } from "@0xc1x/role-commons";
+import * as Clipboard from "expo-clipboard";
 import { StyleSheet, View } from "react-native";
+import { toast } from "sonner-native";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
+import { AppText, Button } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import {
 	PickupQr,
 } from "@/features/orders/components/pickup-qr";
@@ -12,6 +14,13 @@ import {
 export function PickupCodeCard({ order }: { order: Order }) {
 	const { colors } = useTheme();
 	if (!order.pickup_code) return null;
+
+	const handleCopy = () => {
+		void Clipboard.setStringAsync(order.pickup_code).then(() => {
+			toast.success(strings.orders.codeCopied);
+		});
+	};
+
 	return (
 		<View
 			style={[
@@ -19,14 +28,29 @@ export function PickupCodeCard({ order }: { order: Order }) {
 				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
 			]}
 		>
-			<AppText style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+			<AppText
+				variant="caption"
+				weight="bold"
+				style={[styles.sectionLabel, { color: colors.mutedForeground }]}
+			>
 				{strings.orders.yourCode.toUpperCase()}
 			</AppText>
-			<AppText style={[styles.pickupCode, { color: colors.primary }]}>
-				{order.pickup_code}
-			</AppText>
 			<PickupQr orderId={order.id} pickupCode={order.pickup_code} />
-			<AppText style={[styles.sectionNote, { color: colors.mutedForeground }]}>
+			<View style={styles.codeRow}>
+				<AppText style={[styles.pickupCode, { color: colors.primary }]}>
+					{order.pickup_code}
+				</AppText>
+				<Button
+					label={strings.orders.copyCode}
+					variant="outline"
+					size="sm"
+					onPress={handleCopy}
+				/>
+			</View>
+			<AppText
+				variant="bodySmall"
+				style={[styles.sectionNote, { color: colors.mutedForeground }]}
+			>
 				{strings.orders.pickupCodeHint}
 			</AppText>
 		</View>
@@ -35,11 +59,18 @@ export function PickupCodeCard({ order }: { order: Order }) {
 
 const styles = StyleSheet.create({
 	pickupCard: {
-		borderRadius: 24,
+		borderRadius: radii.lg,
 		borderWidth: 1,
 		padding: spacing.lg,
 		alignItems: "center",
 		gap: spacing.md,
+	},
+	codeRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: spacing.md,
+		flexWrap: "wrap",
 	},
 	// Display one-off: código de recogida (no es escala tipográfica).
 	pickupCode: {
@@ -48,13 +79,10 @@ const styles = StyleSheet.create({
 		letterSpacing: 8,
 	},
 	sectionLabel: {
-		fontSize: 12,
-		fontWeight: "700",
 		letterSpacing: 1.2,
 		marginBottom: spacing.xs,
 	},
 	sectionNote: {
-		fontSize: 12,
 		textAlign: "center",
 	},
 });

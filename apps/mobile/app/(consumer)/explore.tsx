@@ -7,7 +7,7 @@ import { strings } from "@/core/i18n/strings";
 import { Button, EmptyState, ErrorState, LoadingView, useWebPullToRefresh } from "@/core/ui";
 import { SectionHeader } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useFilteredOffers, useSelectedAddress } from "@/features/hooks";
 import { useAuthStore } from "@/features/auth/store";
 import { usePreferences } from "@/features/profile/hooks";
@@ -249,6 +249,6 @@ const styles = StyleSheet.create({
 	},
 	skeleton: {
 		height: 260,
-		borderRadius: 16,
+		borderRadius: radii.md,
 	},
 });

@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card, Screen, ScreenHeader } from "@/core/ui";
 import { useAuthStore } from "@/features/auth/store";
@@ -12,7 +13,7 @@ import {
 	useUpdateNotificationPreferences,
 } from "@/features/profile/hooks";
 import { usePushToggle } from "@/features/notifications/use-push-toggle";import type { ConsumerNotificationPreferences } from "@0xc1x/role-commons";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
 
@@ -208,7 +209,7 @@ export default function NotificationsSettingsScreen() {
 	const { colors } = useTheme();
 	const { profile, status, initialized } = useAuthStore();
 	const userId = profile?.id ?? "";
-	const { data: prefs } = useNotificationPreferences(userId);
+	const { data: prefs, isLoading: prefsLoading } = useNotificationPreferences(userId);
 	const update = useUpdateNotificationPreferences(userId);
 	// Lock anti doble-tap y flujo de registro viven en el hook compartido.
 	const { registering, enablePush } = usePushToggle(userId, async () => {
@@ -265,15 +266,23 @@ export default function NotificationsSettingsScreen() {
 				</View>
 
 				<SectionTitle>{strings.notificationsSettings.channelsSection}</SectionTitle>
-				<ToggleCard
-					configs={CHANNELS}
-					prefs={prefs}
-					onToggle={toggle}
-					registering={registering}
-				/>
+				{prefsLoading ? (
+					<Skeleton style={{ height: 248, borderRadius: radii.lg }} />
+				) : (
+					<ToggleCard
+						configs={CHANNELS}
+						prefs={prefs}
+						onToggle={toggle}
+						registering={registering}
+					/>
+				)}
 
 				<SectionTitle>{strings.notificationsSettings.smartSection}</SectionTitle>
-				<ToggleCard configs={SMART_ALERTS} prefs={prefs} onToggle={toggle} />
+				{prefsLoading ? (
+					<Skeleton style={{ height: 248, borderRadius: radii.lg }} />
+				) : (
+					<ToggleCard configs={SMART_ALERTS} prefs={prefs} onToggle={toggle} />
+				)}
 			</View>
 		</Screen>
 	);
@@ -286,7 +295,7 @@ const styles = StyleSheet.create({
 		alignItems: "flex-start",
 		gap: spacing.md,
 		padding: spacing.lg,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		borderWidth: 1,
 	},
 	bannerText: { flex: 1, lineHeight: 18 },
@@ -303,7 +312,7 @@ const styles = StyleSheet.create({
 	iconCircle: {
 		width: 36,
 		height: 36,
-		borderRadius: 18,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -317,6 +326,6 @@ const styles = StyleSheet.create({
 	upcomingBadge: {
 		paddingHorizontal: 6,
 		paddingVertical: 2,
-		borderRadius: 6,
+		borderRadius: radii.sm,
 	},
 });

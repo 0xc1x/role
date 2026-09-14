@@ -2,10 +2,11 @@ import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
 import { formatCount, formatMoney } from "@/core/utils/formatters";
 import type { UserProfile } from "@/features/auth/domain/user";
 import { useProfileStats } from "@/features/profile/hooks";
@@ -58,7 +59,7 @@ function StatCard({ value, label }: { value: string; label: string }) {
 
 export function ProfileHeader({ profile }: { profile: UserProfile }) {
 	const { colors } = useTheme();
-	const { data: stats } = useProfileStats(profile.id);
+	const { data: stats, isLoading: statsLoading } = useProfileStats(profile.id);
 
 	return (
 		<View style={{ gap: spacing.lg }}>
@@ -74,20 +75,31 @@ export function ProfileHeader({ profile }: { profile: UserProfile }) {
 				</View>
 			</View>
 
-			<View style={styles.statsRow}>
-				<StatCard
-					value={formatMoney(Math.round((stats?.total_saved_cents ?? 0) / 100))}
-					label={strings.profile.totalSaved}
-				/>
-				<StatCard
-					value={formatCount(stats?.total_orders ?? 0)}
-					label={strings.profile.totalOrders}
-				/>
-				<StatCard
-					value={`${(stats?.co2_saved_kg ?? 0).toFixed(1)} kg`}
-					label={strings.profile.co2Saved}
-				/>
-			</View>
+			{statsLoading ? (
+				<View style={styles.statsRow}>
+					{[0, 1, 2].map((i) => (
+						<Skeleton
+							key={`profile-stat-skeleton-${i}`}
+							style={styles.statSkeleton}
+						/>
+					))}
+				</View>
+			) : (
+				<View style={styles.statsRow}>
+					<StatCard
+						value={formatMoney(Math.round((stats?.total_saved_cents ?? 0) / 100))}
+						label={strings.profile.totalSaved}
+					/>
+					<StatCard
+						value={formatCount(stats?.total_orders ?? 0)}
+						label={strings.profile.totalOrders}
+					/>
+					<StatCard
+						value={`${(stats?.co2_saved_kg ?? 0).toFixed(1)} kg`}
+						label={strings.profile.co2Saved}
+					/>
+				</View>
+			)}
 		</View>
 	);
 }
@@ -99,7 +111,12 @@ const styles = StyleSheet.create({
 		flex: 1,
 		gap: 2,
 		padding: spacing.md,
-		borderRadius: 16,
+		borderRadius: radii.lg,
 		alignItems: "center",
+	},
+	statSkeleton: {
+		flex: 1,
+		height: 76,
+		borderRadius: radii.lg,
 	},
 });

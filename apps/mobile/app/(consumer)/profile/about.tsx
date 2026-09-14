@@ -6,7 +6,8 @@ import { router } from "expo-router";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Screen, ScreenHeader } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
+import { Skeleton } from "@/components/ui/skeleton";
+import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
 import { useAuthStore } from "@/features/auth/store";
@@ -116,11 +117,28 @@ function Principles() {
 
 function Stats() {
 	const { colors } = useTheme();
-	const { data } = usePlatformStats();
+	const { data, isLoading } = usePlatformStats();
 	// Fallback a valores de strings si RPC falla / aún carga (no bloquea UI)
 	const users = data?.users ?? 15;
 	const businesses = data?.businesses ?? 13;
 	const meals = data?.meals ?? 7;
+	if (isLoading && !data) {
+		return (
+			<View style={styles.section}>
+				<AppText variant="h2" weight="bold" style={[styles.centered, styles.sectionTitle]}>
+					{strings.aboutScreen.statsTitle}
+				</AppText>
+				<View style={styles.statsGrid}>
+					{[0, 1, 2].map((i) => (
+						<Skeleton
+							key={`about-stat-skeleton-${i}`}
+							style={{ flex: 1, minWidth: 90, height: 76, borderRadius: radii.lg }}
+						/>
+					))}
+				</View>
+			</View>
+		);
+	}
 	const items = [
 		{ value: `${users}+`, label: strings.aboutScreen.statUsers },
 		{ value: `${businesses}+`, label: strings.aboutScreen.statBusinesses },
@@ -209,12 +227,12 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.md,
 		padding: 20,
-		borderRadius: 24,
+		borderRadius: radii.lg,
 		borderWidth: 1,
 	},
 	valueIcon: {
 		padding: spacing.md,
-		borderRadius: 999,
+		borderRadius: radii.lg,
 	},
 	valueBody: { flex: 1, gap: 4 },
 	statsGrid: {

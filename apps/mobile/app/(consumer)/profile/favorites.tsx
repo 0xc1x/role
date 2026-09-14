@@ -9,17 +9,17 @@ import {
 	Button,
 	EmptyState,
 	ErrorState,
-	LoadingView,
 	Screen,
 	ScreenHeader,
 	useWebPullToRefresh,
 } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useFavorites } from "@/features/hooks";
 import type { OfferDetail } from "@/features/offers/domain/offer";
 import { OfferCard } from "@/features/offers/components/OfferCard";
 import type { FavoriteOffer } from "@/features/favorites/data/repository";
 import { formatMoney } from "@/core/utils/formatters";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
 
@@ -36,7 +36,25 @@ export default function FavoritesScreen() {
 		[],
 	);
 
-	if (isLoading) return <LoadingView />;
+	if (isLoading) {
+		return (
+			<Screen>
+				<View style={styles.list}>
+					<ScreenHeader
+						title={strings.favorites.title}
+						fallback="/(consumer)/profile"
+						style={{ marginBottom: spacing.lg }}
+					/>
+					{[0, 1].map((i) => (
+						<Skeleton
+							key={`favorite-skeleton-${i}`}
+							style={{ height: 256, borderRadius: radii.lg }}
+						/>
+					))}
+				</View>
+			</Screen>
+		);
+	}
 	if (isError) return <ErrorState error={error} onRetry={refetch} />;
 
 	const favorites = data ?? [];
@@ -171,7 +189,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		borderWidth: 1,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		padding: spacing.md,
 		marginBottom: spacing.md,
 	},

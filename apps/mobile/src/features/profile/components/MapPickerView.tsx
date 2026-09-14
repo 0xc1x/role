@@ -11,6 +11,8 @@ import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { strings } from "@/core/i18n/strings";
+import { composeShortAddress } from "@/core/utils/geocode";
+import { getMapStyle } from "@/core/theme/map-style";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
@@ -37,7 +39,7 @@ export function MapPickerView({
 	onCancel: () => void;
 	onConfirm: (result: MapPickerResult) => void;
 }) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const insets = useSafeAreaInsets();
 	// Uncontrolled map (initialRegion only): a controlled `region` prop fights
 	// the user's pan gestures and snaps the camera back mid-drag.
@@ -96,16 +98,14 @@ export function MapPickerView({
 				longitude,
 			});
 			const place = results[0];
-			const parts = [
-				place?.street,
-				place?.streetNumber,
-				place?.district,
-				place?.city,
-				place?.region,
-			]
-				.map((part) => part?.trim())
-				.filter((part): part is string => typeof part === "string" && part.length > 0);
-			setResolvedAddress(parts.join(", ") || null);
+			setResolvedAddress(
+				composeShortAddress({
+					street: place?.street,
+					streetNumber: place?.streetNumber,
+					city: place?.city,
+					postcode: place?.postalCode,
+				}) || null,
+			);
 		} catch {
 			setResolvedAddress(null);
 		} finally {
@@ -131,6 +131,7 @@ export function MapPickerView({
 				showsUserLocation
 				showsMyLocationButton={false}
 				loadingEnabled
+				customMapStyle={getMapStyle(scheme)}
 			/>
 
 			<View style={[styles.centerMarker, { pointerEvents: "none" }]}>
@@ -146,7 +147,7 @@ export function MapPickerView({
 						{ backgroundColor: colors.card, marginTop: insets.top },
 					]}
 				>
-					<Ionicons name="chevron-back" size={20} color={colors.foreground} />
+					<Ionicons name="chevron-back" size={22} color={colors.foreground} />
 				</Pressable>
 				<AppText
 					variant="h4"
@@ -248,7 +249,7 @@ const styles = StyleSheet.create({
 	roundButton: {
 		width: 36,
 		height: 36,
-		borderRadius: 18,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 		borderWidth: 1,
@@ -277,7 +278,7 @@ const styles = StyleSheet.create({
 		right: spacing.md,
 		width: 44,
 		height: 44,
-		borderRadius: 22,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 		borderWidth: 1,

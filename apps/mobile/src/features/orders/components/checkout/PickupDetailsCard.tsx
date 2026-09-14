@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card } from "@/core/ui";
 import { formatRelativeDay, formatTime } from "@/core/utils/formatters";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import type { EmbeddedLocation } from "@/features/offers/domain/offer";
 import type { Offer } from "@0xc1x/role-commons";
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		borderWidth: 1,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		padding: spacing.md,
 		marginTop: spacing.sm,
 	},

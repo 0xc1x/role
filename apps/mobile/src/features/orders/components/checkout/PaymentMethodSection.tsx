@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
 
@@ -66,13 +66,13 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		borderWidth: 1,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		padding: spacing.md,
 	},
 	iconBox: {
 		width: 32,
 		height: 32,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},

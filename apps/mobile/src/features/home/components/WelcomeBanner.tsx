@@ -7,7 +7,7 @@ import { useProfileStats } from "@/features/profile/hooks";
 import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
 import { AppText } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -149,14 +149,14 @@ const styles = StyleSheet.create({
 	statCircle: {
 		width: 100,
 		height: 100,
-		borderRadius: 50,
+		borderRadius: radii.xxxl,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	statIcon: {
 		width: 28,
 		height: 28,
-		borderRadius: 14,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 		marginBottom: 2,

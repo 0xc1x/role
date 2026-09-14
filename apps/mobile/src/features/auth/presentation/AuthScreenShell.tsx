@@ -29,7 +29,7 @@ export function AuthScreenShell({
 		>
 			<View style={styles.header}>
 				<CircleIconButton
-					icon={<Ionicons name="chevron-back" size={20} color={colors.foreground} />}
+					icon={<Ionicons name="chevron-back" size={22} color={colors.foreground} />}
 					onPress={() => goBackOr("/")}
 					accessibilityLabel={strings.common.back}
 				/>

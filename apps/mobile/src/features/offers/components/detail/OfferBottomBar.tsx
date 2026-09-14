@@ -7,6 +7,7 @@ import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
 import { formatMoneyPrecise } from "@/core/utils/formatters";
 import type { OfferDetail } from "@/features/offers/domain/offer";
+import { radii } from "@/core/theme/spacing";
 
 const BOTTOM_BAR_HEIGHT = 92;
 
@@ -78,12 +79,12 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "space-between",
 		padding: 16,
-		borderRadius: 24,
+		borderRadius: radii.xl,
 		minHeight: BOTTOM_BAR_HEIGHT,
 	},
 	saveButton: {
 		height: 52,
-		borderRadius: 16,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: 24,

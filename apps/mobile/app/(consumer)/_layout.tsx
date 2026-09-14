@@ -63,6 +63,16 @@ export default function ConsumerLayout() {
 				}}
 			/>
 			<Tabs.Screen
+				name="orders"
+				options={{
+					title: strings.orders.tabTitle,
+					tabBarLabel: strings.orders.tabTitle,
+					tabBarIcon: ({ color, size }) => (
+						<Ionicons name="receipt-outline" size={size} color={color} />
+					),
+				}}
+			/>
+			<Tabs.Screen
 				name="profile"
 				options={{
 					title: strings.profile.title,

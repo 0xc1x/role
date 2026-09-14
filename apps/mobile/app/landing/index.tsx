@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button, Card, Screen } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 
 export default function LandingScreen() {
@@ -213,14 +213,14 @@ const styles = StyleSheet.create({
 	stepBadge: {
 		width: 32,
 		height: 32,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	cta: {
 		marginTop: spacing.xl,
 		marginHorizontal: spacing.xl,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		padding: spacing.xl,
 		gap: spacing.md,
 		alignItems: "center",

@@ -19,6 +19,7 @@ import { toast } from "sonner-native";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button, Card, EmptyState, Screen, ScreenHeader } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/features/auth/store";
 import {
 	useDeletePaymentMethod,
@@ -26,7 +27,7 @@ import {
 	useSetDefaultPaymentMethod,
 } from "@/features/profile/hooks";
 import type { PaymentMethodModel } from "@/features/profile/domain/profile";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
 
@@ -112,7 +113,7 @@ function PaymentMethodRow({
 export default function PaymentMethodsScreen() {
 	const { profile, status, initialized } = useAuthStore();
 	const userId = profile?.id ?? "";
-	const { data: methods } = usePaymentMethods(userId);
+	const { data: methods, isLoading } = usePaymentMethods(userId);
 	const setDefaultMutation = useSetDefaultPaymentMethod(userId);
 	const deleteMutation = useDeletePaymentMethod(userId);
 	const [showForm, setShowForm] = useState(false);
@@ -154,7 +155,16 @@ export default function PaymentMethodsScreen() {
 			<View style={styles.container}>
 				<ScreenHeader title={strings.profile.paymentMethods} fallback="/(consumer)/profile" />
 
-				{!methods || methods.length === 0 ? (
+				{isLoading ? (
+					<View style={{ marginTop: spacing.lg, gap: spacing.md }}>
+						{[0, 1].map((i) => (
+							<Skeleton
+								key={`payment-skeleton-${i}`}
+								style={{ height: 84, borderRadius: radii.lg }}
+							/>
+						))}
+					</View>
+				) : !methods || methods.length === 0 ? (
 					<EmptyState
 						title={strings.paymentMethods.empty}
 						message={strings.paymentMethods.payAtPickupHint}
@@ -228,7 +238,7 @@ const styles = StyleSheet.create({
 	iconCircle: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -241,12 +251,12 @@ const styles = StyleSheet.create({
 	defaultBadge: {
 		paddingHorizontal: 6,
 		paddingVertical: 2,
-		borderRadius: 4,
+		borderRadius: radii.sm,
 	},
 	deleteButton: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 	},

@@ -75,7 +75,20 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 						))}
 					</View>
 					{data.offer.rating > 0 ? (
-						<View style={styles.ratingRow}>
+						<Pressable
+							onPress={() =>
+								router.push({
+									pathname: "/business-profile/[id]/reviews",
+									params: {
+										id: data.offer.business_id,
+										offerId: data.offer.id,
+									},
+								})
+							}
+							hitSlop={8}
+							accessibilityRole="link"
+							style={styles.ratingRow}
+						>
 							<Ionicons name="star" size={18} color={colors.yellow} />
 							<AppText variant="bodyMedium" weight="bold">
 								{data.offer.rating.toFixed(1)}
@@ -86,7 +99,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 							>
 								({data.offer.review_count})
 							</AppText>
-						</View>
+						</Pressable>
 					) : null}
 				</View>
 			) : null}
@@ -332,7 +345,14 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 					</View>
 				</View>
 				{(data.business.rating ?? 0) > 0 ? (
-					<View style={styles.businessRatingRow}>
+					<Pressable
+						onPress={() =>
+							router.push(`/business-profile/${data.offer.business_id}/reviews`)
+						}
+						hitSlop={8}
+						accessibilityRole="link"
+						style={styles.businessRatingRow}
+					>
 						<Ionicons name="star" size={16} color={colors.yellow} />
 						<AppText variant="bodyMedium" weight="bold">
 							{(data.business.rating ?? 0).toFixed(1)}
@@ -340,7 +360,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 						<AppText variant="bodySmall" style={{ color: muted }}>
 							({data.business.review_count})
 						</AppText>
-					</View>
+					</Pressable>
 				) : null}
 				<View style={styles.addressRow}>
 					<Ionicons name="location-outline" size={16} color={muted} />
@@ -414,7 +434,7 @@ const styles = StyleSheet.create({
 	pill: {
 		paddingHorizontal: 12,
 		paddingVertical: 6,
-		borderRadius: 99,
+		borderRadius: radii.pill,
 	},
 	onlyLeftPill: {
 		borderWidth: 1,
@@ -461,7 +481,7 @@ const styles = StyleSheet.create({
 	seeLocalPill: {
 		paddingHorizontal: 12,
 		paddingVertical: 6,
-		borderRadius: 8,
+		borderRadius: radii.sm,
 	},
 	businessHead: {
 		flexDirection: "row",
@@ -495,7 +515,7 @@ const styles = StyleSheet.create({
 		width: "100%",
 		alignItems: "center",
 		padding: spacing.xl,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		marginTop: spacing.xl,
 	},
 });

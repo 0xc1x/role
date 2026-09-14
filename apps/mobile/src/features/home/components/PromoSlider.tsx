@@ -17,6 +17,7 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
 import { AppText, Button } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import { usePromoSlides, type PromoSlide } from "@/features/slides";
 
@@ -28,7 +29,7 @@ const SCROLL_SETTLE_DELAY = 120;
 
 export function PromoSlider() {
 	const { colors } = useTheme();
-	const { data: slides = [] } = usePromoSlides();
+	const { data: slides = [], isLoading } = usePromoSlides();
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [isPaused, setIsPaused] = useState(false);
 
@@ -240,6 +241,22 @@ export function PromoSlider() {
 		[clearSettleTimeout, normalizeAndSnap],
 	);
 
+	if (isLoading) {
+		return (
+			<View style={styles.container}>
+				<View style={{ paddingHorizontal: spacing.lg }}>
+					<Skeleton
+						style={{
+							width: CARD_WIDTH,
+							height: CARD_HEIGHT,
+							borderRadius: radii.xl,
+						}}
+					/>
+				</View>
+			</View>
+		);
+	}
+
 	if (slides.length === 0) return null;
 
 	return (
@@ -369,6 +386,9 @@ function PromoCard({ item }: { item: PromoSlide }) {
 				? strings.home.promoCoupon
 				: strings.home.promoTips);
 	const textColor = item.textColor ?? colors.greenDarkForeground;
+	const hasCta = Boolean(
+		item.ctaLabel && (item.type === "coupon" ? item.couponCode : item.redirectUrl),
+	);
 
 	const handleCtaPress = () => {
 		if (item.type === "coupon") {
@@ -396,7 +416,7 @@ function PromoCard({ item }: { item: PromoSlide }) {
 			{/* Columna izquierda */}
 			<View style={styles.cardLeft}>
 				{/* Badge + textos (crecen y se reparten el espacio) */}
-				<View style={styles.cardLeftContent}>
+				<View style={[styles.cardLeftContent, { justifyContent: hasCta ? "flex-start" : "center" }]}>
 					<View
 						style={[
 							styles.badge,
@@ -420,7 +440,7 @@ function PromoCard({ item }: { item: PromoSlide }) {
 
 					<AppText
 						weight="bold"
-						numberOfLines={1}
+						numberOfLines={hasCta ? 1 : 2}
 						style={{
 							color: textColor,
 							fontSize: 17,
@@ -433,7 +453,7 @@ function PromoCard({ item }: { item: PromoSlide }) {
 					</AppText>
 
 					<AppText
-						numberOfLines={3}
+						numberOfLines={hasCta ? 3 : 6}
 						style={{
 							color: withAlpha(textColor, 0.8),
 							fontSize: 12,
@@ -447,10 +467,9 @@ function PromoCard({ item }: { item: PromoSlide }) {
 				</View>
 
 				{/* Botón siempre abajo */}
-				{item.ctaLabel &&
-				(item.type === "coupon" ? item.couponCode : item.redirectUrl) ? (
+				{hasCta ? (
 					<Button
-						label={item.ctaLabel}
+						label={item.ctaLabel ?? ""}
 						onPress={handleCtaPress}
 						size="sm"
 						style={{
@@ -537,6 +556,6 @@ const styles = StyleSheet.create({
 	},
 	dot: {
 		height: 8,
-		borderRadius: 4,
+		borderRadius: radii.pill,
 	},
 });

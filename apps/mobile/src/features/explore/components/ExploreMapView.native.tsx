@@ -18,6 +18,7 @@ import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
 import { formatMoney, formatTime } from "@/core/utils/formatters";
+import { getMapStyle } from "@/core/theme/map-style";
 import {
 	discountPercentage,
 	type OfferDetail,
@@ -48,7 +49,7 @@ export function ExploreMapView({
 	onBack: () => void;
 	onFilterTap: () => void;
 }) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const mapRef = useRef<MapView>(null);
 	const { data: categories } = useCategories();
 
@@ -148,6 +149,7 @@ export function ExploreMapView({
 				pitchEnabled={false}
 				rotateEnabled={false}
 				onPress={handleMapPress}
+				customMapStyle={getMapStyle(scheme)}
 			>
 				{locatedOffers.map((offer) => {
 					const selected = selectedOffer?.offer.id === offer.offer.id;
@@ -428,7 +430,7 @@ const styles = StyleSheet.create({
 	headerButton: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -457,7 +459,7 @@ const styles = StyleSheet.create({
 		right: spacing.lg,
 		width: 44,
 		height: 44,
-		borderRadius: 22,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -494,7 +496,7 @@ const styles = StyleSheet.create({
 	legendDot: {
 		width: 12,
 		height: 12,
-		borderRadius: 6,
+		borderRadius: radii.sm,
 	},
 	pricePill: {
 		paddingHorizontal: 10,
@@ -532,7 +534,7 @@ const styles = StyleSheet.create({
 		right: spacing.sm,
 		width: 28,
 		height: 28,
-		borderRadius: 14,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},

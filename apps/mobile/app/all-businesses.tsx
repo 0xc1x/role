@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import { AppText, CircleIconButton, goBackOr, SearchBar, useWebPullToRefresh } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useAllBusinessesInfinite, useSelectedAddress } from "@/features/hooks";
 import { BusinessGridCard } from "@/features/business/components/BusinessGridCard";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
 	skeletonCard: {
 		flex: 1,
 		height: 200,
-		borderRadius: 16,
+		borderRadius: radii.md,
 	},
 	centerBox: {
 		flex: 1,
@@ -280,6 +280,6 @@ const styles = StyleSheet.create({
 		marginTop: spacing.lg,
 		paddingHorizontal: 24,
 		paddingVertical: spacing.md,
-		borderRadius: 12,
+		borderRadius: radii.md,
 	},
 });

@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
 	successMessage: { textAlign: "center" },
 
 	ticket: {
-		borderRadius: 20,
+		borderRadius: radii.xl,
 		borderWidth: 1.5,
 		padding: spacing.lg,
 		alignItems: "center",

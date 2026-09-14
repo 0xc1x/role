@@ -6,6 +6,7 @@ import Slider from "@react-native-community/slider";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card, Screen, ScreenHeader, SectionTitle, ThemeOptionCard} from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/features/auth/store";
 import { useTheme, type ThemeMode } from "@/core/theme";
 import { usePreferences, useUpdatePreferences } from "@/features/profile/hooks";
@@ -38,7 +39,7 @@ export default function SettingsScreen() {
 	const { mode, setMode, colors } = useTheme();
 	const { profile, status, initialized } = useAuthStore();
 	const userId = profile?.id ?? "";
-	const { data: prefs } = usePreferences(userId);
+	const { data: prefs, isLoading: prefsLoading } = usePreferences(userId);
 	const updatePrefs = useUpdatePreferences(userId);
 	const [radius, setRadius] = useState(5);
 
@@ -79,6 +80,9 @@ export default function SettingsScreen() {
 				</View>
 
 				<SectionTitle>{strings.settings.searchRadius}</SectionTitle>
+				{prefsLoading ? (
+					<Skeleton style={{ height: 148, borderRadius: radii.lg }} />
+				) : (
 				<Card style={styles.radiusCard}>
 					<View style={styles.radiusHeader}>
 						<SectionLabel>{strings.settings.maxDistance}</SectionLabel>
@@ -112,6 +116,7 @@ export default function SettingsScreen() {
 						{strings.settings.searchRadiusHint}
 					</AppText>
 				</Card>
+				)}
 
 
 			</View>

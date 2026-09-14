@@ -399,10 +399,46 @@ export function useSubmitReview() {
 			businessRating: number;
 			comment?: string;
 		}) => orderRepository.submitReview(input),
-		onSuccess: () => {
+		onSuccess: (_data, variables) => {
 			queryClient.invalidateQueries({ queryKey: ["orders"] });
+			queryClient.invalidateQueries({ queryKey: ["my-reviews"] });
+			queryClient.invalidateQueries({
+				queryKey: ["reviews", "order", variables.orderId],
+			});
 			// El rating vive en la fila del negocio.
 			void queryClient.invalidateQueries({ queryKey: ["businesses"] });
 		},
+	});
+}
+
+/** Reseñas del usuario actual (pantalla Mis reseñas). */
+export function useMyReviews() {
+	const profile = useAuthStore((s) => s.profile);
+	return useQuery({
+		queryKey: ["my-reviews", profile?.id],
+		queryFn: () => orderRepository.getMyReviews(),
+		enabled: !!profile,
+	});
+}
+
+/** Reseña de un pedido (precarga del editor / detalle negocio read-only). */
+export function useReviewByOrder(orderId: string) {
+	return useQuery({
+		queryKey: ["reviews", "order", orderId],
+		queryFn: () => orderRepository.getReviewByOrderId(orderId),
+		enabled: orderId.length > 0,
+	});
+}
+
+export function useDeleteReview() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (reviewId: string) => orderRepository.deleteReview(reviewId),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["my-reviews"] });
+			queryClient.invalidateQueries({ queryKey: ["orders"] });
+			void queryClient.invalidateQueries({ queryKey: ["businesses"] });
+		},
+		onError: () => toast.error(strings.orders.deleteReviewError),
 	});
 }

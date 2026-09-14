@@ -22,6 +22,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
@@ -36,7 +37,7 @@ import { useAppConfig } from "@/features/config";
 import { useSaveProfileWithEmail } from "@/features/profile/hooks";
 import { authRepository } from "@/features/auth/data/repository";
 import { toAppError } from "@/core/error/mapper";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import type { UserProfile } from "@/features/auth/domain/user";
 
@@ -90,7 +91,21 @@ export default function EditProfileScreen() {
 	// la mutación solo se dispara por acción del usuario ya autenticado).
 	const saveProfile = useSaveProfileWithEmail(profile?.id ?? "", profile?.email ?? "");
 
-	if (!initialized || status === "guest" || !profile) return null;
+	if (!initialized || !profile) {
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+					<ScreenHeader title={strings.profileEdit.title} fallback="/(consumer)/profile" />
+					<Skeleton style={styles.skeletonAvatar} />
+					{[0, 1, 2, 3].map((i) => (
+						<Skeleton key={`profile-form-skeleton-${i}`} style={styles.skeletonField} />
+					))}
+					<Skeleton style={styles.skeletonCta} />
+				</View>
+			</Screen>
+		);
+	}
+	if (status === "guest") return null;
 
 	const save = {
 		get isPending() {
@@ -246,4 +261,12 @@ const styles = StyleSheet.create({
 	avatarWrap: { alignItems: "center", gap: spacing.xs },
 	field: { marginBottom: 0 },
 	fieldLabel: { marginBottom: 6 },
+	skeletonAvatar: {
+		width: 96,
+		height: 96,
+		borderRadius: radii.md,
+		alignSelf: "center",
+	},
+	skeletonField: { height: 56, borderRadius: radii.md },
+	skeletonCta: { height: 48, borderRadius: radii.md, marginTop: spacing.sm },
 });

@@ -1,12 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { Order } from "@0xc1x/role-commons";
-import { StyleSheet, View } from "react-native";
+import { useState } from "react";
+import {
+	LayoutAnimation,
+	Platform,
+	Pressable,
+	StyleSheet,
+	UIManager,
+	View,
+} from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card } from "@/core/ui";
 import { useTheme } from "@/core/theme";
 import type { ColorTokens } from "@/core/theme/colors";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
 import {
 	formatShortDate,
@@ -19,6 +27,13 @@ import {
 } from "@/features/orders/domain/order";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
+
+if (
+	Platform.OS === "android" &&
+	UIManager.setLayoutAnimationEnabledExperimental
+) {
+	UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export interface TimelineSection {
 	icon: IoniconName;
@@ -115,21 +130,40 @@ export function TimelineCard({
 }) {
 	const { colors } = useTheme();
 	const sections = buildTimeline(order, events, colors);
+	const [collapsed, setCollapsed] = useState(true);
+
+	const toggle = () => {
+		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+		setCollapsed((v) => !v);
+	};
+
 	return (
 		<Card style={styles.cardBlock}>
-			<View style={styles.timelineHeader}>
-				<Ionicons name="calendar-outline" size={20} color={colors.primary} />
-				<AppText variant="h4" weight="bold">
+			<Pressable
+				onPress={toggle}
+				accessibilityRole="button"
+				accessibilityState={{ expanded: !collapsed }}
+				style={styles.timelineHeader}
+			>
+				<Ionicons name="calendar-outline" size={20} color={colors.mutedForeground} />
+				<AppText variant="h4" weight="bold" style={styles.timelineTitle}>
 					{strings.orders.timelineTitle}
 				</AppText>
-			</View>
-			{sections.map((section, index) => (
-				<TimelineSectionRow
-					key={section.title}
-					section={section}
-					isLast={index === sections.length - 1}
+				<Ionicons
+					name={collapsed ? "chevron-forward" : "chevron-down"}
+					size={20}
+					color={colors.mutedForeground}
 				/>
-			))}
+			</Pressable>
+			{collapsed
+				? null
+				: sections.map((section, index) => (
+						<TimelineSectionRow
+							key={section.title}
+							section={section}
+							isLast={index === sections.length - 1}
+						/>
+					))}
 		</Card>
 	);
 }
@@ -180,12 +214,13 @@ const styles = StyleSheet.create({
 		gap: spacing.sm,
 		marginBottom: spacing.xs,
 	},
+	timelineTitle: { flex: 1 },
 	timelineRow: { flexDirection: "row", gap: spacing.md },
 	timelineRail: { alignItems: "center" },
 	timelineDot: {
 		width: 36,
 		height: 36,
-		borderRadius: 18,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},

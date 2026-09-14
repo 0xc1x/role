@@ -93,6 +93,7 @@ export interface OrderDetail {
 	offerTitle: string;
 	offerImageUrl: string | null;
 	businessName: string;
+	businessImageUrl: string | null;
 	businessAddress: string | null;
 	businessPhone: string | null;
 	businessLocationId: string | null;
@@ -107,6 +108,19 @@ export interface OrderDetail {
 export interface OrderStatusEvent {
 	status: OrderStatusType;
 	created_at: string;
+}
+
+/** Reseña propia del usuario con contexto del pedido/negocio (pantalla Mis reseñas). */
+export interface MyReviewView {
+	id: string;
+	orderId: string;
+	businessId: string;
+	businessName: string;
+	offerTitle: string;
+	productRating: number;
+	businessRating: number;
+	comment: string | null;
+	date: string;
 }
 
 /**

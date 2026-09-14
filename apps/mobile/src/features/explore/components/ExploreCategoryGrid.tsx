@@ -17,6 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
@@ -44,8 +45,8 @@ export function ExploreCategoryGrid({
 	onCollapse?: () => void;
 }) {
 	const { colors, scheme } = useTheme();
-	const { data: areas } = usePopularAreas();
-	const { data: stats } = useCategoryStats();
+	const { data: areas, isLoading: isLoadingAreas } = usePopularAreas();
+	const { data: stats, isLoading: isLoadingStats } = useCategoryStats();
 	const [showAll, setShowAll] = useState(false);
 
 	// IDs visibles en el frame anterior: los que NO estaban son "nuevos"
@@ -96,6 +97,39 @@ export function ExploreCategoryGrid({
 		setShowAll((s) => !s);
 		if (willCollapse) onCollapse?.();
 	};
+
+	if (isLoadingAreas || isLoadingStats) {
+		return (
+			<View style={styles.container}>
+				<AppText variant="h3" weight="bold">
+					{strings.explore.popularAreas}
+				</AppText>
+				<View
+					style={[
+						styles.chipsRow,
+						{ flexDirection: "row", marginTop: spacing.md },
+					]}
+				>
+					{[0, 1, 2].map((i) => (
+						<Skeleton
+							key={`area-skeleton-${i}`}
+							style={{ width: 120, height: 36, borderRadius: radii.md }}
+						/>
+					))}
+				</View>
+				<AppText variant="h3" weight="bold" style={{ marginTop: spacing.lg }}>
+					{strings.explore.categories}
+				</AppText>
+				<View style={styles.grid}>
+					{[0, 1, 2, 3].map((i) => (
+						<View key={`category-skeleton-${i}`} style={styles.gridItem}>
+							<Skeleton style={{ height: 85, borderRadius: radii.lg }} />
+						</View>
+					))}
+				</View>
+			</View>
+		);
+	}
 
 	return (
 		<View style={styles.container}>
@@ -362,7 +396,7 @@ const styles = StyleSheet.create({
 	countBadge: {
 		minWidth: 20,
 		height: 20,
-		borderRadius: 10,
+		borderRadius: radii.sm,
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: 5,
@@ -380,7 +414,7 @@ const styles = StyleSheet.create({
 	},
 	categoryCard: {
 		height: 85,
-		borderRadius: 20,
+		borderRadius: radii.xl,
 		borderWidth: 1,
 		overflow: "hidden",
 		justifyContent: "center",
@@ -411,13 +445,13 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 16,
-		gap: 10,
+		paddingHorizontal: spacing.lg,
+		gap: spacing.md,
 	},
 	expandIcon: {
 		width: 44,
 		height: 44,
-		borderRadius: 22,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},

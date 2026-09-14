@@ -16,7 +16,7 @@ import {
 	useWebPullToRefresh,
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useCategories, useFilteredOffersInfinite, useSelectedAddress } from "@/features/hooks";
 import { useAuthStore } from "@/features/auth/store";
 import { usePreferences } from "@/features/profile/hooks";
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
 		alignSelf: "flex-start",
 		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.sm,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		borderWidth: 1,
 	},
 	activeDot: {
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
 	skeletonCard: {
 		flex: 1,
 		height: 220,
-		borderRadius: 16,
+		borderRadius: radii.md,
 	},	centerBox: {
 		flex: 1,
 		alignItems: "center",
@@ -396,6 +396,6 @@ const styles = StyleSheet.create({
 		marginTop: spacing.lg,
 		paddingHorizontal: 24,
 		paddingVertical: spacing.md,
-		borderRadius: 12,
+		borderRadius: radii.md,
 	},
 });

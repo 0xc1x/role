@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
@@ -19,7 +20,15 @@ export function ExploreTipSection() {
 	const { data: tip, isLoading } = useRandomTip();
 	const [isExpanded, setIsExpanded] = useState(false);
 
-	if (isLoading || !tip) return null;
+	if (isLoading) {
+		return (
+			<View style={styles.wrap}>
+				<Skeleton style={styles.tipSkeleton} />
+			</View>
+		);
+	}
+
+	if (!tip) return null;
 
 	const cardBackground = isDark ? colors.surfaceWarning : colors.yellowLight;
 	const cardBorder = withAlpha(colors.yellowDark, isDark ? 0.3 : 0.2);
@@ -112,12 +121,17 @@ const styles = StyleSheet.create({
 	bulbCircle: {
 		width: 32,
 		height: 32,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	tipBody: {
 		marginTop: spacing.md,
 		lineHeight: 20,
+	},
+	tipSkeleton: {
+		// Altura colapsada: padding lg*2 + fila título (bulb 32).
+		height: 64,
+		borderRadius: radii.xl,
 	},
 });

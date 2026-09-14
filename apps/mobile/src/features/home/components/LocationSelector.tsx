@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
 	addressIcon: {
 		width: 28,
 		height: 28,
-		borderRadius: 14,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
 	selectedDot: {
 		width: 8,
 		height: 8,
-		borderRadius: 4,
+		borderRadius: radii.sm,
 		marginTop: 4,
 	},
 	divider: {

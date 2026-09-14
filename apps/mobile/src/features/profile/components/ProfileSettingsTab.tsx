@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { SignOutSection } from "@/features/auth/presentation/SignOutSection";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -35,6 +35,7 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
 		items: [
 			{ icon: "notifications-outline", label: strings.profile.notifications, href: "/profile/notifications" },
 			{ icon: "heart-outline", label: strings.favorites.title, href: "/profile/favorites" },
+			{ icon: "star-outline", label: strings.orders.myReviews, href: "/profile/reviews" },
 			{ icon: "settings-outline", label: strings.profile.settings, href: "/profile/settings" },
 		],
 	},
@@ -64,7 +65,7 @@ export function SettingsTab() {
 	return (
 		<View style={{ gap: spacing.lg }}>
 			{SETTINGS_GROUPS.map((group) => (
-				<View key={group.title} style={{ gap: spacing.sm }}>
+				<View key={group.title} style={{ gap: spacing.sm, paddingBottom: spacing.xl }}>
 					<AppText
 						variant="labelSmall"
 						weight="bold"
@@ -85,7 +86,7 @@ export function SettingsTab() {
 }
 
 const styles = StyleSheet.create({
-	menuCard: { padding: 0, overflow: "hidden" },
+	menuCard: { padding: 0, overflow: "hidden", borderRadius: radii.xl },
 	iconRow: {
 		flexDirection: "row",
 		alignItems: "center",

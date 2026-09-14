@@ -45,7 +45,7 @@ function OfferSkeleton({ fullWidth = false }: { fullWidth?: boolean }) {
 					style={{
 						height: 14,
 						width: "70%",
-						borderRadius: 4,
+						borderRadius: radii.sm,
 						marginBottom: 8,
 					}}
 				/>
@@ -53,7 +53,7 @@ function OfferSkeleton({ fullWidth = false }: { fullWidth?: boolean }) {
 					style={{
 						height: 10,
 						width: "55%",
-						borderRadius: 4,
+						borderRadius: radii.sm,
 						marginBottom: 8,
 					}}
 				/>
@@ -61,7 +61,7 @@ function OfferSkeleton({ fullWidth = false }: { fullWidth?: boolean }) {
 					style={{
 						height: 10,
 						width: "60%",
-						borderRadius: 4,
+						borderRadius: radii.sm,
 					}}
 				/>
 			</View>
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
 	locationPromptIcon: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 	},

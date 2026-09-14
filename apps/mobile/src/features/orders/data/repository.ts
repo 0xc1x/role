@@ -10,6 +10,7 @@ import { Errors } from "@/core/error/app-error";
 
 import type {
 	CancelOrderResult,
+	MyReviewView,
 	OrderDetail,
 	OrderStatusEvent,
 	ReservationFailure,
@@ -26,7 +27,7 @@ const ORDER_SELECT = `
     title, image, business_location_id,
     business_locations:business_location_id (address)
   ),
-  businesses!inner (name, phone),
+  businesses!inner (name, phone, image, cover_image),
   profiles!orders_user_id_fkey (full_name, phone, email)
 `;
 
@@ -298,6 +299,48 @@ export const orderRepository = {
 		);
 		if (error) throw toAppError(error, "Error al publicar la reseña");
 	},
+
+	/** Reseñas del usuario actual con contexto de negocio/oferta (Mis reseñas). */
+	async getMyReviews(): Promise<MyReviewView[]> {
+		const userId = await currentUserId();
+		if (!userId)
+			throw Errors.unauthorized("Debes iniciar sesión para ver tus reseñas");
+		const { data, error } = await supabase
+			.from("reviews")
+			.select(
+				`id, order_id, business_id, product_rating, business_rating, comment, created_at,
+        businesses!inner (name),
+        orders!reviews_order_id_fkey (offers (title))`,
+			)
+			.eq("user_id", userId)
+			.order("created_at", { ascending: false });
+		if (error) throw toAppError(error, "Error al cargar tus reseñas");
+		return toRows(data).map(mapMyReview);
+	},
+
+	/** Reseña de un pedido (detalle negocio read-only / precarga del editor). */
+	async getReviewByOrderId(orderId: string): Promise<MyReviewView | null> {
+		const { data, error } = await supabase
+			.from("reviews")
+			.select(
+				`id, order_id, business_id, product_rating, business_rating, comment, created_at,
+        businesses!inner (name),
+        orders!reviews_order_id_fkey (offers (title))`,
+			)
+			.eq("order_id", orderId)
+			.maybeSingle();
+		if (error) throw toAppError(error, "Error al cargar la reseña");
+		if (!data) return null;
+		return mapMyReview(data as unknown as Row);
+	},
+
+	async deleteReview(reviewId: string): Promise<void> {
+		const { error } = await supabase
+			.from("reviews")
+			.delete()
+			.eq("id", reviewId);
+		if (error) throw toAppError(error, "Error al eliminar la reseña");
+	},
 };
 
 function mapOrderDetail(row: Row): OrderDetail {
@@ -335,6 +378,10 @@ function mapOrderDetail(row: Row): OrderDetail {
 		offerTitle: String(offer.title ?? "Oferta"),
 		offerImageUrl: (offer.image as string | null) ?? null,
 		businessName: String(business.name ?? "Negocio"),
+		businessImageUrl:
+			(business.image as string | null) ??
+			(business.cover_image as string | null) ??
+			null,
 		businessAddress: (location?.address as string | null) ?? null,
 		businessPhone: (business.phone as string | null) ?? null,
 		businessLocationId: (offer.business_location_id as string | null) ?? null,
@@ -342,6 +389,23 @@ function mapOrderDetail(row: Row): OrderDetail {
 		customerPhone: (customer?.phone as string | null) ?? null,
 		customerEmail: customerEmail,
 		events: mapStatusEvents(row.order_events),
+	};
+}
+
+function mapMyReview(row: Row): MyReviewView {
+	const business = (row.businesses ?? {}) as Row;
+	const order = (row.orders ?? {}) as Row;
+	const offer = (order.offers ?? {}) as Row;
+	return {
+		id: String(row.id),
+		orderId: String(row.order_id ?? ""),
+		businessId: String(row.business_id ?? ""),
+		businessName: String(business.name ?? "Negocio"),
+		offerTitle: String(offer.title ?? "Oferta"),
+		productRating: num(row.product_rating) ?? 0,
+		businessRating: num(row.business_rating) ?? 0,
+		comment: (row.comment as string | null) ?? null,
+		date: String(row.created_at ?? ""),
 	};
 }
 

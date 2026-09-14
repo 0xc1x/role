@@ -96,12 +96,12 @@ const styles = StyleSheet.create({
 	categoryBadge: {
 		paddingHorizontal: 10,
 		paddingVertical: 4,
-		borderRadius: 6,
+		borderRadius: radii.sm,
 	},
 	infoCard: {
 		width: "100%",
 		borderWidth: 1,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		padding: spacing.xl,
 		gap: spacing.lg,
 		marginTop: spacing.xl,

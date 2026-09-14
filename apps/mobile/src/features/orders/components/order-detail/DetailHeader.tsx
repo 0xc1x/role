@@ -3,10 +3,11 @@ import type { Order } from "@0xc1x/role-commons";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, goBackOr, StatusBadge } from "@/core/ui";
+import { AppText, CircleIconButton, goBackOr, StatusBadge } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import {
+	isActiveStatus,
 	orderStatusLabels,
 	orderStatusTone,
 } from "@/features/orders/domain/order";
@@ -16,18 +17,13 @@ export function DetailHeader({ order }: { order: Order }) {
 	return (
 		<View style={styles.header}>
 			<View style={styles.headerLeft}>
-				<Pressable
-					onPress={() => goBackOr("/(consumer)/profile/orders")}
-					hitSlop={8}
-					accessibilityRole="button"
-					accessibilityLabel={strings.common.back}
-					style={[
-						styles.headerBack,
-						{ backgroundColor: colors.card, borderColor: colors.borderSolid },
-					]}
-				>
-					<Ionicons name="chevron-back" size={20} color={colors.foreground} />
-				</Pressable>
+				<CircleIconButton
+						icon={
+							<Ionicons name="chevron-back" size={22} color={colors.foreground} />
+						}
+						onPress={() => goBackOr("/(consumer)")}
+						accessibilityLabel={strings.common.back}
+					/>
 				<View>
 					<AppText variant="h3" weight="bold">
 						{strings.orders.detailTitle}
@@ -40,6 +36,7 @@ export function DetailHeader({ order }: { order: Order }) {
 			<StatusBadge
 				label={orderStatusLabels[order.status]}
 				tone={orderStatusTone(order.status)}
+				dot={isActiveStatus(order.status)}
 			/>
 		</View>
 	);
@@ -61,7 +58,7 @@ const styles = StyleSheet.create({
 	headerBack: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.xxl,
 		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",

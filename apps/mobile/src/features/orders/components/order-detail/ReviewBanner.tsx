@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
 
 export function ReviewBanner() {
@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
 		alignItems: "flex-start",
 		gap: spacing.sm,
 		borderWidth: 1,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		padding: spacing.md,
 	},
 	reviewBannerBody: { flex: 1 },

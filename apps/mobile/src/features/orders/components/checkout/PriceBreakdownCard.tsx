@@ -5,7 +5,7 @@ import { StyleSheet, View } from "react-native";
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card } from "@/core/ui";
 import { formatMoney, formatMoneyPrecise } from "@/core/utils/formatters";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { couponDiscount } from "@/features/orders/domain/order";
 
@@ -70,9 +70,9 @@ export function PriceBreakdownCard({ offer, appliedCoupon }: PriceBreakdownCardP
 					},
 				]}
 			>
-				<Ionicons name="leaf-outline" size={18} color={colors.success} />
+				<Ionicons name="cash-outline" size={18} color={colors.success} />
 				<AppText style={[styles.ecoText, { color: colors.success }]}>
-					{strings.orders.ecoSaved.replace(
+					{strings.orders.moneySaved.replace(
 						"{saved}",
 						formatMoneyPrecise(offerDiscount + coupon),
 					)}
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		borderWidth: 1,
-		borderRadius: 12,
+		borderRadius: radii.lg,
 		padding: spacing.md,
 		marginTop: spacing.sm,
 	},

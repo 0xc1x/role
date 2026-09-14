@@ -22,11 +22,11 @@ import {
 	Card,
 	EmptyState,
 	ErrorState,
-	LoadingView,
 	Screen,
 	ScreenHeader,
 	StatusBadge,
 } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/features/auth/store";
 import { useSavedAddresses, useDeleteAddress } from "@/features/profile/hooks";
 import { AddAddressSheet } from "@/features/profile/components/AddAddressSheet";
@@ -112,7 +112,14 @@ export default function AddressesScreen() {
 				</View>
 
 				{isLoading ? (
-					<LoadingView />
+					<View style={{ gap: spacing.md }}>
+						{[0, 1].map((i) => (
+							<Skeleton
+								key={`address-skeleton-${i}`}
+								style={{ height: 120, borderRadius: radii.lg }}
+							/>
+						))}
+					</View>
 				) : isError ? (
 					<ErrorState error={error} onRetry={() => void refetch()} />
 				) : !data || data.length === 0 ? (
@@ -255,7 +262,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		gap: spacing.sm,
 		height: 54,
-		borderRadius: 16,
+		borderRadius: radii.md,
 	},
 	infoBanner: {
 		padding: spacing.md,

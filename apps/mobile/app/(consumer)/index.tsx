@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { View, StyleSheet, RefreshControl, ScrollView, Platform } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { strings } from "@/core/i18n/strings";
 import { useTheme } from "@/core/theme";
@@ -26,6 +27,11 @@ export default function ConsumerHomeScreen() {
 	const [refreshing, setRefreshing] = useState(false);
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 	const { colors } = useTheme();
+	// Installed iOS PWA draws under the status bar (black-translucent +
+	// viewport-fit=cover): offset the bar by the real inset. Zero on
+	// Android web, so Android is visually unchanged. Same hook/pattern
+	// as ExploreHeader and ExploreMapView.web.
+	const insets = useSafeAreaInsets();
 
 	const onRefresh = useCallback(async () => {
 		setRefreshing(true);
@@ -51,7 +57,7 @@ export default function ConsumerHomeScreen() {
 
 	return (
 		<View style={{ flex: 1, backgroundColor: colors.background }}>
-			<View style={[styles.topBar, { borderBottomColor: colors.background }]}>
+			<View style={[styles.topBar, { borderBottomColor: colors.background, paddingTop: insets.top }]}>
 				<LocationSelector />
 				<Logo width={100} height={60} color={colors.primary} />
 			</View>

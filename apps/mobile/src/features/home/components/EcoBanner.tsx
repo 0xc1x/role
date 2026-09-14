@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
 	iconContainer: {
 		width: 52,
 		height: 52,
-		borderRadius: 26,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
 	leafDecoration: {
 		width: 75,
 		height: 75,
-		borderRadius: 37.5,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},

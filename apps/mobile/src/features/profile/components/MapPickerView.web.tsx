@@ -99,7 +99,7 @@ export function MapPickerView({
 						hitSlop={8}
 						style={[styles.roundButton, { backgroundColor: colors.card }]}
 					>
-						<Ionicons name="chevron-back" size={20} color={colors.foreground} />
+						<Ionicons name="chevron-back" size={22} color={colors.foreground} />
 					</Pressable>
 					<AppText variant="h4" weight="bold" numberOfLines={1} style={styles.headerTitle}>
 						{strings.addresses.pickLocationTitle}
@@ -131,7 +131,7 @@ export function MapPickerView({
 						{ backgroundColor: colors.card, marginTop: insets.top },
 					]}
 				>
-					<Ionicons name="chevron-back" size={20} color={colors.foreground} />
+					<Ionicons name="chevron-back" size={22} color={colors.foreground} />
 				</Pressable>
 				<AppText
 					variant="h4"
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
 	roundButton: {
 		width: 36,
 		height: 36,
-		borderRadius: 18,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
 		right: spacing.md,
 		width: 44,
 		height: 44,
-		borderRadius: 22,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},

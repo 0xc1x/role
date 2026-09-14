@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
 	headerButton: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
 	legendDot: {
 		width: 12,
 		height: 12,
-		borderRadius: 6,
+		borderRadius: radii.sm,
 	},
 	selectedCard: {
 		position: "absolute",
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
 		right: spacing.sm,
 		width: 28,
 		height: 28,
-		borderRadius: 14,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},

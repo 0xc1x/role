@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Linking, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, Button, Card } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
 import {
 	formatShortDate,
@@ -32,15 +33,30 @@ export function BusinessInfoCard({ item }: { item: OrderDetail }) {
 
 	return (
 		<Card style={styles.cardBlock}>
+			<AppText
+				variant="caption"
+				weight="bold"
+				style={[styles.sectionLabel, { color: colors.mutedForeground }]}
+			>
+				{strings.orders.businessTitle.toUpperCase()}
+			</AppText>
 			<View style={styles.businessTitleRow}>
-				<View
-					style={[
-						styles.businessIcon,
-						{ backgroundColor: withAlpha(colors.secondary, 0.302) },
-					]}
-				>
-					<Ionicons name="storefront-outline" size={18} color={colors.primary} />
-				</View>
+				{item.businessImageUrl ? (
+					<Image
+						source={{ uri: item.businessImageUrl }}
+						style={styles.businessLogo}
+						contentFit="cover"
+					/>
+				) : (
+					<View
+						style={[
+							styles.businessIcon,
+							{ backgroundColor: withAlpha(colors.secondary, 0.302) },
+						]}
+					>
+						<Ionicons name="storefront-outline" size={18} color={colors.primary} />
+					</View>
+				)}
 				<AppText
 					variant="h4"
 					weight="bold"
@@ -74,22 +90,22 @@ export function BusinessInfoCard({ item }: { item: OrderDetail }) {
 			) : null}
 
 			<View style={styles.businessActions}>
-				<Button
-					label={strings.orders.viewBusiness}
-					variant="secondary"
-					size="sm"
-					style={styles.businessActionBtn}
-					onPress={() => router.push(`/business-profile/${order.business_id}`)}
-				/>
 				{isActive ? (
 					<Button
 						label={strings.orders.getDirections}
-						variant="outline"
+						variant="primary"
 						size="sm"
 						style={styles.businessActionBtn}
 						onPress={openDirections}
 					/>
 				) : null}
+				<Button
+					label={strings.orders.viewBusiness}
+					variant="outline"
+					size="sm"
+					style={styles.businessActionBtn}
+					onPress={() => router.push(`/business-profile/${order.business_id}`)}
+				/>
 			</View>
 		</Card>
 	);
@@ -122,6 +138,7 @@ export function InfoRow({
 
 const styles = StyleSheet.create({
 	cardBlock: { gap: spacing.sm },
+	sectionLabel: { letterSpacing: 1.2 },
 	businessTitleRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -131,9 +148,14 @@ const styles = StyleSheet.create({
 	businessIcon: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
+	},
+	businessLogo: {
+		width: 40,
+		height: 40,
+		borderRadius: radii.lg,
 	},
 	businessName: { flex: 1 },
 	businessActions: {

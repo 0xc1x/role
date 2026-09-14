@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import {
 	formatDayMonth,
 	getWeekRange,
@@ -73,7 +73,7 @@ export function HistoryDateFilter({
 						hitSlop={8}
 						style={styles.weekBtn}
 					>
-						<Ionicons name="chevron-back" size={18} color={colors.foreground} />
+						<Ionicons name="chevron-back" size={22} color={colors.foreground} />
 					</Pressable>
 					<AppText
 						variant="bodySmall"
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
 	chip: {
 		paddingHorizontal: 14,
 		paddingVertical: 8,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		borderWidth: 1,
 	},
 	weekRow: {
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
 	weekBtn: {
 		width: 32,
 		height: 32,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
