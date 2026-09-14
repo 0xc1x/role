@@ -542,10 +542,10 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.sm,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		borderWidth: 1,
-		paddingHorizontal: 16,
-		paddingVertical: 12,
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.md,
 		minHeight: 46,
 	},
 	priceRow: {

@@ -214,6 +214,6 @@ const styles = StyleSheet.create({
 	statusDot: {
 		width: 10,
 		height: 10,
-		borderRadius: 5,
+		borderRadius: radii.xs,
 	},
 });

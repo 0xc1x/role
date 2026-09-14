@@ -14,6 +14,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText, BottomSheetModal, StatusBadge } from "@/core/ui";
@@ -244,6 +245,41 @@ export function ProductCard({
 	);
 }
 
+/**
+ * Skeleton con las dimensiones aproximadas de la card real
+ * (imagen 120 + columna info + fila de acciones).
+ * Mismo patrón que BusinessGridCardSkeleton / OfferSkeleton.
+ */
+export function ProductCardSkeleton() {
+	const { colors } = useTheme();
+	return (
+		<View
+			style={[
+				styles.card,
+				{
+					backgroundColor: colors.card,
+					borderColor: colors.borderSolid,
+				},
+			]}
+		>
+			<View style={styles.mainRow}>
+				<Skeleton style={styles.skeletonImage} />
+				<View style={styles.skeletonInfo}>
+					<Skeleton style={styles.skeletonTitle} />
+					<Skeleton style={styles.skeletonLine} />
+					<Skeleton style={styles.skeletonPrice} />
+				</View>
+			</View>
+			<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
+			<View style={styles.actions}>
+				{[0, 1, 2].map((i) => (
+					<Skeleton key={`product-action-skeleton-${i}`} style={styles.skeletonAction} />
+				))}
+			</View>
+		</View>
+	);
+}
+
 function ActionButton({
 	icon,
 	label,
@@ -404,7 +440,7 @@ const styles = StyleSheet.create({
 	actionIcon: {
 		width: 24,
 		height: 24,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -419,5 +455,37 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.md,
 		borderRadius: radii.lg,
 		borderWidth: 1,
+	},
+	skeletonImage: {
+		width: 120,
+		minHeight: 148,
+	},
+	skeletonInfo: {
+		flex: 1,
+		minWidth: 0,
+		gap: spacing.sm,
+		paddingVertical: spacing.md,
+		paddingRight: spacing.md,
+		justifyContent: "center",
+	},
+	skeletonTitle: {
+		height: 16,
+		width: "80%",
+		borderRadius: radii.sm,
+	},
+	skeletonLine: {
+		height: 12,
+		width: "60%",
+		borderRadius: radii.sm,
+	},
+	skeletonPrice: {
+		height: 16,
+		width: "40%",
+		borderRadius: radii.sm,
+	},
+	skeletonAction: {
+		height: 28,
+		flex: 1,
+		borderRadius: radii.sm,
 	},
 });

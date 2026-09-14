@@ -10,11 +10,11 @@ import {
 	EmptyState,
 	ErrorState,
 	FilterChip,
-	LoadingView,
 	Screen,
 	SearchBar,
 	useWebPullToRefresh,
 } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/features/auth/store";
 import {
 	useBusinesses,
@@ -31,9 +31,9 @@ import { BranchSelector } from "@/features/business/components/products/BranchSe
 import { BusinessStatsRow } from "@/features/business/components/products/BusinessStatsRow";
 import { ProductsSortControl } from "@/features/business/components/products/ProductsSortControl";
 import { ProductFilters } from "@/features/business/components/products/ProductFilters";
-import { ProductCard } from "@/features/business/components/products/ProductCard";
+import { ProductCard, ProductCardSkeleton } from "@/features/business/components/products/ProductCard";
 import { useCategories } from "@/features/hooks";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 
 export default function BusinessProductsScreen() {
@@ -95,7 +95,23 @@ export default function BusinessProductsScreen() {
 		if (!businessesLoading && !business) {
 			return <NoBusinessPrompt />;
 		}
-		return <LoadingView />;
+		return (
+			<Screen>
+				<View style={styles.header}>
+					<Skeleton style={styles.skeletonTitle} />
+					<Skeleton style={styles.skeletonPill} />
+				</View>
+				<View style={styles.content}>
+					<Skeleton style={styles.statsSkeleton} />
+					<Skeleton style={styles.ctaSkeleton} />
+					<View style={styles.listSkeleton}>
+						{[0, 1, 2].map((i) => (
+							<ProductCardSkeleton key={`products-skeleton-${i}`} />
+						))}
+					</View>
+				</View>
+			</Screen>
+		);
 	}
 
 	const stats = productStats(offers ?? []);
@@ -139,7 +155,11 @@ export default function BusinessProductsScreen() {
 				}
 				ListHeaderComponent={
 					<View style={styles.headerContainer}>
-						<BusinessStatsRow stats={stats} />
+						{isLoading ? (
+							<Skeleton style={styles.statsSkeleton} />
+						) : (
+							<BusinessStatsRow stats={stats} />
+						)}
 
 						<Button
 							label={strings.business.newProduct}
@@ -178,7 +198,13 @@ export default function BusinessProductsScreen() {
 							</View>
 						) : null}
 
-						{isLoading ? <LoadingView /> : null}
+						{isLoading ? (
+							<View style={styles.listSkeleton}>
+								{[0, 1, 2].map((i) => (
+									<ProductCardSkeleton key={`products-skeleton-${i}`} />
+								))}
+							</View>
+						) : null}
 						{isError ? (
 							<ErrorState error={error} onRetry={() => void refetch()} />
 						) : null}
@@ -264,5 +290,27 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		flexWrap: "wrap",
 		gap: spacing.sm,
+	},
+	skeletonTitle: {
+		height: 28,
+		width: "40%",
+		borderRadius: radii.sm,
+	},
+	skeletonPill: {
+		width: 120,
+		height: 36,
+		borderRadius: radii.pill,
+	},
+	statsSkeleton: {
+		height: 104,
+		borderRadius: radii.xl,
+	},
+	ctaSkeleton: {
+		height: 48,
+		borderRadius: radii.lg,
+		marginTop: spacing.xs,
+	},
+	listSkeleton: {
+		gap: spacing.md,
 	},
 });

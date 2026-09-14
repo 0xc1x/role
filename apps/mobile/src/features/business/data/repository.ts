@@ -117,7 +117,8 @@ export const businessRepository = {
 				.from("reviews")
 				.select(
 					`id, user_id, business_id, order_id, rating, comment, product_rating, business_rating, created_at,
-            profiles!reviews_user_id_fkey (full_name)`,
+            profiles!reviews_user_id_fkey (full_name),
+            orders!reviews_order_id_fkey (offer_id, offers (title))`,
 				)
 				.eq("business_id", businessId)
 				.order("created_at", { ascending: false })
@@ -169,8 +170,9 @@ export const businessRepository = {
 		const { data, error } = await supabase
 			.from("reviews")
 			.select(
-				`id, product_rating, business_rating, comment, created_at,
-        profiles!reviews_user_id_fkey (full_name)`,
+				`id, order_id, product_rating, business_rating, comment, created_at,
+        profiles!reviews_user_id_fkey (full_name),
+        orders!reviews_order_id_fkey (offer_id, offers (title))`,
 			)
 			.eq("business_id", businessId)
 			.order("created_at", { ascending: false });
@@ -925,6 +927,8 @@ function toReviewViews(data: unknown): BusinessReviewView[] {
 	return data.map((entry) => {
 		const row = entry as Row;
 		const profile = row.profiles as Row | null;
+		const order = row.orders as Row | null;
+		const offer = (order?.offers ?? null) as Row | null;
 		return {
 			id: String(row.id ?? ""),
 			userName: String(profile?.full_name ?? "Cliente"),
@@ -932,6 +936,11 @@ function toReviewViews(data: unknown): BusinessReviewView[] {
 			businessRating: num(row.business_rating) ?? 0,
 			date: String(row.created_at ?? ""),
 			comment: (row.comment as string | null) ?? null,
+			orderId: (row.order_id as string | null) ?? null,
+			offerId:
+				order?.offer_id != null ? String(order.offer_id) : null,
+			offerTitle:
+				offer?.title != null ? String(offer.title) : null,
 		};
 	});
 }

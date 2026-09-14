@@ -2,10 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import { AppText, Card, StatusBadge } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
 
 export function LocationCard({
 	name,
@@ -107,6 +108,40 @@ export function LocationCard({
 	);
 }
 
+/**
+ * Skeleton con las dimensiones aproximadas de la card real
+ * (icono 72 + columna info + footer).
+ * Mismo patrón que ProductCardSkeleton / BusinessGridCardSkeleton.
+ */
+export function LocationCardSkeleton() {
+	const { colors } = useTheme();
+	return (
+		<View
+			style={[
+				styles.card,
+				{
+					backgroundColor: colors.card,
+					borderColor: colors.borderSolid,
+					borderWidth: 1,
+					borderRadius: radii.lg,
+				},
+			]}
+		>
+			<View style={styles.body}>
+				<Skeleton style={styles.skeletonIcon} />
+				<View style={styles.skeletonInfo}>
+					<Skeleton style={styles.skeletonTitle} />
+					<Skeleton style={styles.skeletonLine} />
+					<Skeleton style={styles.skeletonLineShort} />
+				</View>
+			</View>
+			<View style={[styles.footer, { borderTopColor: colors.borderSolid }]}>
+				<Skeleton style={styles.skeletonFooter} />
+			</View>
+		</View>
+	);
+}
+
 const styles = StyleSheet.create({
 	card: { padding: 0, overflow: "hidden" },
 	body: {
@@ -117,7 +152,7 @@ const styles = StyleSheet.create({
 	icon: {
 		width: 72,
 		height: 72,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 		overflow: "hidden",
@@ -138,6 +173,36 @@ const styles = StyleSheet.create({
 		justifyContent: "space-between",
 		gap: spacing.sm,
 	},
-	rowStart: { flexDirection: "row", alignItems: "center", gap: 4 },
+	rowStart: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
 	flex1: { flex: 1 },
+	skeletonIcon: {
+		width: 72,
+		height: 72,
+		borderRadius: radii.lg,
+	},
+	skeletonInfo: {
+		flex: 1,
+		gap: spacing.sm,
+		justifyContent: "center",
+	},
+	skeletonTitle: {
+		height: 16,
+		width: "60%",
+		borderRadius: radii.sm,
+	},
+	skeletonLine: {
+		height: 12,
+		width: "85%",
+		borderRadius: radii.sm,
+	},
+	skeletonLineShort: {
+		height: 12,
+		width: "40%",
+		borderRadius: radii.sm,
+	},
+	skeletonFooter: {
+		height: 14,
+		width: "50%",
+		borderRadius: radii.sm,
+	},
 });

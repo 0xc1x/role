@@ -17,7 +17,7 @@ import {
 import { useBusinessOffers } from "@/features/business/hooks";
 import { discountPercentage } from "@/features/offers/domain/offer";
 import { formatMoney } from "@/core/utils/formatters";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 
 /** Business offer list (from hub menu). */
@@ -113,5 +113,5 @@ const styles = StyleSheet.create({
 	},
 	row: { flexDirection: "row", gap: spacing.md },
 	offerBody: { flex: 1, gap: 2 },
-	image: { width: 64, height: 64, borderRadius: 10 },
+	image: { width: 64, height: 64, borderRadius: radii.sm },
 });

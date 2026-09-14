@@ -14,7 +14,7 @@ import {
 	StatusBadge,
 } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
 import { useBusinessPayouts } from "@/features/business/hooks";
 import { PAYOUT_STATUS_LABELS } from "@/features/business/domain/business";
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.xl,
 		marginTop: spacing.lg,
 		gap: 4,
-		borderRadius: 12,
+		borderRadius: radii.md,
 	},
 	card: { marginTop: spacing.lg },
 	row: {

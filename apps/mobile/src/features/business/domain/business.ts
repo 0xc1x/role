@@ -64,6 +64,11 @@ export interface BusinessReviewView {
 	businessRating: number;
 	date: string;
 	comment: string | null;
+	/** Pedido que originó la reseña (null si RLS no expone el join). */
+	orderId: string | null;
+	/** Producto reseñado (null si RLS no expone el join). */
+	offerId: string | null;
+	offerTitle: string | null;
 }
 
 /** Orderings for the full reviews screen. */

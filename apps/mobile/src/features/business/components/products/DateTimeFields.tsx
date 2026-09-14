@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 
 type Mode = "date" | "time";
 
@@ -179,10 +179,10 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.sm,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		borderWidth: 1,
-		paddingHorizontal: 16,
-		paddingVertical: 12,
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.md,
 		minHeight: 46,
 	},
 });

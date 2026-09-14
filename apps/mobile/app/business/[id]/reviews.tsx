@@ -4,7 +4,13 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Button, EmptyState, Screen, ScreenHeader } from "@/core/ui";
+import {
+	AppText,
+	Button,
+	EmptyState,
+	Screen,
+	ScreenHeader,
+} from "@/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
@@ -56,23 +62,25 @@ export default function BusinessReviewsScreen() {
 	return (
 		<Screen scroll contentContainerStyle={styles.content}>
 			<ScreenHeader
-				title={offerTitle ?? strings.businessProfile.reviewsTitle}
-				fallback="/(consumer)"
+				title={
+					offerTitle ?? strings.businessProfile.reviewsTitle
+				}
+				fallback={`/business/${businessId}`}
 			/>
 
 			{offerTitle == null ? (
-			<View style={styles.summaryRow}>
-				<View style={[styles.ratingBadge, { backgroundColor: colors.surfaceWarning }]}>
-					<Ionicons name="star" size={16} color={colors.yellowDark} />
-					<View style={{ width: 4 }} />
-					<AppText weight="bold" style={{ color: colors.yellowDark }}>
-						{rating.toFixed(1)}
+				<View style={styles.summaryRow}>
+					<View style={[styles.ratingBadge, { backgroundColor: colors.surfaceWarning }]}>
+						<Ionicons name="star" size={16} color={colors.yellowDark} />
+						<View style={{ width: 4 }} />
+						<AppText weight="bold" style={{ color: colors.yellowDark }}>
+							{rating.toFixed(1)}
+						</AppText>
+					</View>
+					<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+						{strings.businessProfile.communityReviews.replace("{n}", String(reviewCount))}
 					</AppText>
 				</View>
-				<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
-					{strings.businessProfile.communityReviews.replace("{n}", String(reviewCount))}
-				</AppText>
-			</View>
 			) : null}
 
 			<View style={styles.chipsRow}>
@@ -151,7 +159,7 @@ export default function BusinessReviewsScreen() {
 					)}
 					variant="outline"
 					fullWidth
-					onPress={() => router.replace(`/business-profile/${businessId}/reviews`)}
+					onPress={() => router.replace(`/business/${businessId}/reviews`)}
 				/>
 			) : null}
 		</Screen>

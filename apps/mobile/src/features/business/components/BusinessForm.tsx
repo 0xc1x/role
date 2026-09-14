@@ -104,7 +104,7 @@ function dateToTime(d: Date): string {
 
 /**
  * Formulario compartido de negocio: creación (business-new) y edición
- * (my-business/edit). Los campos son los que soportan
+ * (business/profile/edit). Los campos son los que soportan
  * createBusiness/updateBusiness del repository.
  */
 export function BusinessForm({
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.sm,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		borderWidth: 1,
 		paddingHorizontal: 16,
 		paddingVertical: 12,

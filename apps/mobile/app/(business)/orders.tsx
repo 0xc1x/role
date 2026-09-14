@@ -4,13 +4,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
 	AppText,
 	Button,
 	EmptyState,
 	ErrorState,
 	FilterChip,
-	LoadingView,
 	Screen,
 	SearchBar,
 	useWebPullToRefresh,
@@ -31,12 +31,12 @@ import { orderStatusLabels, filterByHistoryPeriod, type HistoryPeriod } from "@/
 import { HistoryDateFilter } from "@/features/orders/components/HistoryDateFilter";
 import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
 import { BranchSelector } from "@/features/business/components/products/BranchSelector";
-import { OrderStatsRow } from "@/features/business/components/orders/OrderStatsRow";
+import { OrderStatsRow, OrderStatsRowSkeleton } from "@/features/business/components/orders/OrderStatsRow";
 import { OrdersTabs } from "@/features/business/components/orders/OrdersTabs";
 import { OrdersSortControl } from "@/features/business/components/orders/OrdersSortControl";
 import { OrdersFiltersControl } from "@/features/business/components/orders/OrdersFiltersControl";
-import { OrderCard } from "@/features/business/components/orders/OrderCard";
-import { spacing } from "@/core/theme/spacing";
+import { OrderCard, OrderCardSkeleton } from "@/features/business/components/orders/OrderCard";
+import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
 
@@ -49,7 +49,7 @@ export default function BusinessOrdersScreen() {
 	const business = businesses?.[0];
 	const businessId = business?.id ?? "";
 
-	const { data: locations } = useBusinessLocations(businessId);
+	const { data: locations, isLoading: locationsLoading } = useBusinessLocations(businessId);
 	const {
 		data: orders,
 		isLoading,
@@ -107,7 +107,7 @@ export default function BusinessOrdersScreen() {
 		if (!businessesLoading && !business) {
 			return <NoBusinessPrompt />;
 		}
-		return <LoadingView />;
+		return <BusinessOrdersSkeleton />;
 	}
 
 	const stats = orderStats(orders ?? []);
@@ -120,7 +120,9 @@ export default function BusinessOrdersScreen() {
 				<AppText variant="h2" weight="bold">
 					{strings.business.ordersTitle}
 				</AppText>
-				{locations && locations.length > 0 ? (
+				{locationsLoading ? (
+					<Skeleton style={styles.branchSkeleton} />
+				) : locations && locations.length > 0 ? (
 					<BranchSelector
 						locations={locations}
 						selectedId={branchId}
@@ -148,7 +150,11 @@ export default function BusinessOrdersScreen() {
 				}
 				ListHeaderComponent={
 					<View style={styles.headerContainer}>
-						<OrderStatsRow stats={stats} />
+						{isLoading ? (
+							<OrderStatsRowSkeleton />
+						) : (
+							<OrderStatsRow stats={stats} />
+						)}
 
 						<OrdersTabs tab={tab} onChange={setTab} />
 
@@ -186,7 +192,13 @@ export default function BusinessOrdersScreen() {
 							</View>
 						) : null}
 
-						{isLoading ? <LoadingView /> : null}
+						{isLoading ? (
+							<View style={styles.loadingList}>
+								{[0, 1, 2].map((i) => (
+									<OrderCardSkeleton key={`order-skeleton-${i}`} />
+								))}
+							</View>
+						) : null}
 						{isError ? (
 							<ErrorState error={error} onRetry={() => void refetch()} />
 						) : null}
@@ -237,6 +249,32 @@ export default function BusinessOrdersScreen() {
 	);
 }
 
+/**
+ * Skeleton con las dimensiones aproximadas de la pantalla de pedidos
+ * (header + stats + tabs + búsqueda + lista de OrderCards).
+ * Mismo patrón que GestionContentSkeleton / ExploreCategoryGrid.
+ */
+function BusinessOrdersSkeleton() {
+	return (
+		<Screen>
+			<View style={styles.header}>
+				<Skeleton style={styles.skeletonTitle} />
+				<Skeleton style={styles.branchSkeleton} />
+			</View>
+			<View style={styles.content}>
+				<OrderStatsRowSkeleton />
+				<Skeleton style={styles.skeletonTabs} />
+				<Skeleton style={styles.skeletonSearch} />
+				<View style={styles.loadingList}>
+					{[0, 1, 2].map((i) => (
+						<OrderCardSkeleton key={`business-orders-skeleton-${i}`} />
+					))}
+				</View>
+			</View>
+		</Screen>
+	);
+}
+
 const styles = StyleSheet.create({
 	header: {
 		flexDirection: "row",
@@ -273,5 +311,28 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		flexWrap: "wrap",
 		gap: spacing.sm,
+	},
+	branchSkeleton: {
+		width: 140,
+		height: 36,
+		borderRadius: radii.pill,
+	},
+	loadingList: {
+		gap: spacing.md,
+	},
+	skeletonTitle: {
+		height: 28,
+		width: "40%",
+		borderRadius: radii.sm,
+	},
+	skeletonTabs: {
+		height: 40,
+		width: "100%",
+		borderRadius: radii.pill,
+	},
+	skeletonSearch: {
+		height: 48,
+		width: "100%",
+		borderRadius: radii.lg,
 	},
 });

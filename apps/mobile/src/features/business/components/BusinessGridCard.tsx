@@ -142,14 +142,14 @@ export function BusinessGridCardSkeleton({ style }: { style?: StyleProp<ViewStyl
 					style={{
 						height: 16,
 						width: "85%",
-						borderRadius: 4,
+						borderRadius: radii.sm,
 					}}
 				/>
 				<Skeleton
 					style={{
 						height: 10,
 						width: "55%",
-						borderRadius: 4,
+						borderRadius: radii.sm,
 						marginTop: 8,
 					}}
 				/>

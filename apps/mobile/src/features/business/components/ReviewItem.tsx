@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import type { BusinessReviewView } from "@/features/business/domain/business";
 
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
 	avatar: {
 		width: 36,
 		height: 36,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},

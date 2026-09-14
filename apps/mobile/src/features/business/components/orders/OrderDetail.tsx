@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
 	infoIcon: {
 		width: 36,
 		height: 36,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
 	timelineDot: {
 		width: 38,
 		height: 38,
-		borderRadius: 19,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},

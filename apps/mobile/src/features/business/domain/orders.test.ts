@@ -43,6 +43,7 @@ function makeOrder(
 		offerTitle: overrides.offerTitle ?? "Pack Sorpresa",
 		offerImageUrl: null,
 		businessName: "Negocio",
+		businessImageUrl: null,
 		businessAddress: null,
 		businessPhone: null,
 		businessLocationId: overrides.businessLocationId ?? null,

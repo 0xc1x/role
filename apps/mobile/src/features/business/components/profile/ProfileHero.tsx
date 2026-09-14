@@ -47,7 +47,7 @@ export function ProfileHero({
 
 			<View style={[styles.topBar, { top: topOffset }]}>
 				<CircleIconButton
-					icon={<Ionicons name="chevron-back" size={20} color={colors.foreground} />}
+					icon={<Ionicons name="chevron-back" size={22} color={colors.foreground} />}
 					onPress={() => goBackOr("/(consumer)")}
 				/>
 			</View>

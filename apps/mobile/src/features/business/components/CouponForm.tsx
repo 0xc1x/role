@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
 		gap: spacing.sm,
 		paddingHorizontal: spacing.lg,
 		paddingVertical: 12,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		borderWidth: 1,
 	},
 	statusCard: { paddingVertical: spacing.md },

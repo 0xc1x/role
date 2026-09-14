@@ -5,10 +5,10 @@ import { strings } from "@/core/i18n/strings";
 import {
 	ErrorState,
 	goBackOr,
-	LoadingView,
 	Screen,
 	ScreenHeader,
 } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/features/auth/store";
 import {
 	useBusinesses,
@@ -17,10 +17,9 @@ import {
 	useUpdateBusiness,
 } from "@/features/business/hooks";
 import { BusinessForm } from "@/features/business/components/BusinessForm";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
 
-/** Edición del negocio con paridad total: mismos campos que la creación. */
-export default function BusinessEditScreen() {
+/** Edición del negocio con paridad total: mismos campos que la creación. */export default function BusinessEditScreen() {
 	const profile = useAuthStore((s) => s.profile);
 	const { data: businesses } = useBusinesses(profile?.id ?? "");
 	const businessId = businesses?.[0]?.id ?? "";
@@ -30,17 +29,17 @@ export default function BusinessEditScreen() {
 	const { data: hours } = useBusinessHours(businessId);
 	const update = useUpdateBusiness(businessId);
 
-	if (isLoading) return <LoadingView />;
+	if (isLoading) return <BusinessFormSkeleton />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!data) return <LoadingView />;
+	if (!data) return <BusinessFormSkeleton />;
 
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
 				<ScreenHeader
 					title={strings.business.editBusinessTitle}
-					fallback="/my-business"
+					fallback="/(business)/management"
 				/>
 				<BusinessForm
 					// key: el form hidrata su estado al montar; remonta cuando
@@ -67,7 +66,7 @@ export default function BusinessEditScreen() {
 						update.mutate(input, {
 							onSuccess: () => {
 								toast.success(strings.business.businessCreated);
-								goBackOr("/my-business");
+								goBackOr("/(business)/management");
 							},
 							onError: (e) =>
 								toast.error(
@@ -83,6 +82,25 @@ export default function BusinessEditScreen() {
 	);
 }
 
+function BusinessFormSkeleton() {
+	return (
+		<Screen scroll>
+			<View style={styles.container}>
+				<ScreenHeader
+					title={strings.business.editBusinessTitle}
+					fallback="/(business)/management"
+				/>
+				{[0, 1, 2, 3, 4].map((i) => (
+					<Skeleton key={`business-form-skeleton-${i}`} style={styles.skeletonField} />
+				))}
+				<Skeleton style={styles.skeletonCta} />
+			</View>
+		</Screen>
+	);
+}
+
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, gap: spacing.md },
+	skeletonField: { height: 56, borderRadius: radii.md },
+	skeletonCta: { height: 48, borderRadius: radii.md, marginTop: spacing.sm },
 });

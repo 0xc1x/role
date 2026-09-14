@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { strings } from "@/core/i18n/strings";
 import { AppText } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 
 export function QuickActionsGrid({ businessId }: { businessId: string }) {
 	const { colors } = useTheme();
@@ -31,6 +31,12 @@ export function QuickActionsGrid({ businessId }: { businessId: string }) {
 			title: strings.business.quickCoupons,
 			subtitle: strings.business.quickCouponsSub,
 			route: `${base}/coupons`,
+		},
+		{
+			icon: <Ionicons name="star-outline" size={18} color={colors.foreground} />,
+			title: strings.business.quickReviews,
+			subtitle: strings.business.quickReviewsSub,
+			route: `${base}/reviews`,
 		},
 		{
 			icon: <Ionicons name="notifications-outline" size={18} color={colors.foreground} />,
@@ -114,7 +120,7 @@ const styles = StyleSheet.create({
 		justifyContent: "space-between",
 		padding: spacing.md,
 		borderWidth: 1,
-		borderRadius: 16,
+		borderRadius: radii.lg,
 	},
 	quickTile: {
 		flexDirection: "row",
@@ -125,20 +131,20 @@ const styles = StyleSheet.create({
 		gap: spacing.xs,
 		padding: spacing.md,
 		borderWidth: 1,
-		borderRadius: 16,
+		borderRadius: radii.md,
 	},
 	quickInfo: { flexShrink: 1, gap: 2 },
 	quickIconLarge: {
 		width: 34,
 		height: 34,
-		borderRadius: 8,
+		borderRadius: radii.sm,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	quickIcon: {
 		width: 34,
 		height: 34,
-		borderRadius: 8,
+		borderRadius: radii.sm,
 		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",

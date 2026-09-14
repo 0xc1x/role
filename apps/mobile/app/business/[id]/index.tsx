@@ -3,10 +3,11 @@ import { memo, useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
-import { AppText, Card, ErrorState, LoadingView, Screen } from "@/core/ui";
+import { AppText, Card, ErrorState, Screen } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessProfile } from "@/features/business/hooks";
 import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 
 export default function BusinessHubScreen() {
@@ -32,7 +33,20 @@ export default function BusinessHubScreen() {
 		[handleMenuPress],
 	);
 
-	if (isLoading) return <LoadingView />;
+	if (isLoading) {
+		return (
+			<Screen scroll>
+				<View style={[styles.container, styles.skeletonWrap]}>
+					<Skeleton style={styles.skeletonTitle} />
+					<Skeleton style={styles.skeletonSubtitle} />
+					<Skeleton style={styles.skeletonCard} />
+					{[0, 1, 2].map((i) => (
+						<Skeleton key={`hub-menu-skeleton-${i}`} style={styles.skeletonRow} />
+					))}
+				</View>
+			</Screen>
+		);
+	}
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 	if (!profile) return null;
@@ -149,4 +163,9 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "space-between",
 	},
+	skeletonTitle: { height: 28, width: "60%", borderRadius: radii.md },
+	skeletonSubtitle: { height: 16, width: "80%", borderRadius: radii.md },
+	skeletonCard: { height: 120, borderRadius: radii.lg, marginTop: spacing.md },
+	skeletonRow: { height: 56, borderRadius: radii.lg },
+	skeletonWrap: { gap: spacing.md },
 });

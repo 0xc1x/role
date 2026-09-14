@@ -15,7 +15,7 @@ import { toast } from "sonner-native";
 import { strings } from "@/core/i18n/strings";
 import { useConfigValue } from "@/features/config";
 import { AppText, Card, Screen, ScreenHeader, SearchBar } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
 
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
 		gap: spacing.sm,
 		paddingVertical: spacing.md,
 		borderWidth: 1,
-		borderRadius: 24,
+		borderRadius: radii.xl,
 	},
 	card: { padding: 0, overflow: "hidden" },
 	cardTitle: { padding: spacing.lg },
@@ -474,18 +474,18 @@ const styles = StyleSheet.create({
 	categoryIcon: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	faqRow: { alignItems: "flex-start" },
 	supportCard: {
-		borderRadius: 24,
+		borderRadius: radii.xl,
 		padding: spacing.lg,
 		gap: spacing.xs,
 	},
 	supportButton: {
-		borderRadius: 12,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 		paddingVertical: spacing.sm,

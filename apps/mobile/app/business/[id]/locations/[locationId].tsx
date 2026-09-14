@@ -7,11 +7,11 @@ import {
 	AppText,
 	Card,
 	ErrorState,
-	LoadingView,
 	Screen,
 	ScreenHeader,
 	StatusBadge,
 } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/core/theme";
 import { spacing, radii } from "@/core/theme/spacing";
 import { withAlpha } from "@/core/theme/alpha";
@@ -28,7 +28,19 @@ export default function BusinessLocationDetailScreen() {
 	const { data: location, isLoading, isError, error, refetch } =
 		useBusinessLocation(locationId ?? "");
 
-	if (isLoading) return <LoadingView />;
+	if (isLoading) {
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+					<ScreenHeader title={strings.business.locationDetail} />
+					<Skeleton style={styles.skeletonHero} />
+					<Skeleton style={styles.skeletonMap} />
+					<Skeleton style={styles.skeletonCard} />
+					<Skeleton style={styles.skeletonCard} />
+				</View>
+			</Screen>
+		);
+	}
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 	if (!location) return null;
@@ -202,7 +214,7 @@ const styles = StyleSheet.create({
 	icon: {
 		width: 52,
 		height: 52,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -231,7 +243,7 @@ const styles = StyleSheet.create({
 	infoIcon: {
 		width: 30,
 		height: 30,
-		borderRadius: 10,
+		borderRadius: radii.sm,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -244,9 +256,24 @@ const styles = StyleSheet.create({
 	actionIcon: {
 		width: 38,
 		height: 38,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	flex1: { flex: 1 },
+	skeletonHero: {
+		height: 110,
+		borderRadius: radii.lg,
+		marginTop: spacing.lg,
+	},
+	skeletonMap: {
+		height: 180,
+		borderRadius: radii.lg,
+		marginTop: spacing.lg,
+	},
+	skeletonCard: {
+		height: 90,
+		borderRadius: radii.lg,
+		marginTop: spacing.lg,
+	},
 });

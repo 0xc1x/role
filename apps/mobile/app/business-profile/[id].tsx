@@ -8,9 +8,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ErrorState, LoadingView } from "@/core/ui";
+import { ErrorState } from "@/core/ui";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { spacing, radii } from "@/core/theme/spacing";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessProfile } from "@/features/business/hooks";
 import { ProfileHero } from "@/features/business/components/profile/ProfileHero";
 import {
@@ -55,13 +56,17 @@ export default function BusinessProfileScreen() {
 	// Full-bleed hero: sin <Screen> para que el cover ocupe el notch.
 	if (isLoading) {
 		return (
-			<View
-				style={[
-					styles.centerBox,
-					{ backgroundColor: colors.background, paddingTop: insets.top },
-				]}
-			>
-				<LoadingView />
+			<View style={[styles.flex, { backgroundColor: colors.background }]}>
+				<Skeleton style={[styles.heroSkeleton, { height: HERO_HEIGHT }]} />
+				<View style={styles.content}>
+					<Skeleton style={styles.skeletonTitle} />
+					<View style={{ height: spacing.xl }} />
+					<Skeleton style={styles.skeletonCard} />
+					<View style={{ height: spacing.lg }} />
+					<Skeleton style={styles.skeletonCard} />
+					<View style={{ height: spacing.lg }} />
+					<Skeleton style={styles.skeletonCard} />
+				</View>
 			</View>
 		);
 	}
@@ -145,4 +150,7 @@ const styles = StyleSheet.create({
 	content: {
 		paddingHorizontal: spacing.xl,
 	},
+	heroSkeleton: { width: "100%", borderRadius: 0 },
+	skeletonTitle: { height: 28, width: "60%", borderRadius: radii.md },
+	skeletonCard: { height: 120, borderRadius: radii.lg },
 });

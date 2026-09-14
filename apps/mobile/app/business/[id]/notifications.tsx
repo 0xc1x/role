@@ -212,7 +212,7 @@ function ToggleRow({
 				},
 			]}
 		>
-			<View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: (colors as unknown as Record<string, string>).inputBackground ?? colors.muted } as never}>
+			<View style={{ width: 36, height: 36, borderRadius: radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: (colors as unknown as Record<string, string>).inputBackground ?? colors.muted } as never}>
 				<Ionicons name={icon} size={18} color={upcoming ? colors.mutedForeground : colors.primary} />
 			</View>
 			<View style={styles.toggleText}>
@@ -221,7 +221,7 @@ function ToggleRow({
 						{title}
 					</AppText>
 					{upcoming ? (
-						<View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: colors.inputBackground }}>
+						<View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: radii.sm, backgroundColor: colors.inputBackground }}>
 							<AppText style={{ fontSize: 10, fontWeight: "600", color: colors.mutedForeground }}>{strings.notificationsSettings.upcoming}</AppText>
 						</View>
 					) : null}
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
 	bannerIcon: {
 		width: 48,
 		height: 48,
-		borderRadius: 24,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},

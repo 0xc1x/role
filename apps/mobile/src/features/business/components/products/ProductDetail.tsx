@@ -35,6 +35,7 @@ import {
 } from "@/core/utils/formatters";
 import type { OfferDetail } from "@/features/offers/domain/offer";
 import { useDeleteOffer, useToggleOfferActive } from "@/features/business/hooks";
+import { OfferReviewsCard } from "@/features/business/components/OfferReviewsCard";
 /**
  * Product detail + performance stats (ported from Rolé v1
  * `BusinessProductDetailScreen`).
@@ -249,6 +250,8 @@ export function ProductDetail({
 					</View>
 				</Card>
 
+				<OfferReviewsCard businessId={businessId} offerId={offer.id} />
+
 				{offer.includes ? (
 					<Card style={styles.card}>
 						<AppText variant="h4" weight="bold">
@@ -432,7 +435,7 @@ const styles = StyleSheet.create({
 	statIcon: {
 		width: 30,
 		height: 30,
-		borderRadius: 15,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 		marginBottom: spacing.xs,

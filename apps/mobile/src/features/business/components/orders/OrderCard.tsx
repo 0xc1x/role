@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { strings } from "@/core/i18n/strings";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
 	AppText,
 	Card,
@@ -106,6 +107,38 @@ export function OrderCard({
 	);
 }
 
+/**
+ * Skeleton con las dimensiones aproximadas de la card real
+ * (thumb 76 + columna info + fila inferior).
+ * Mismo patrón que ProductCardSkeleton / LocationCardSkeleton.
+ */
+export function OrderCardSkeleton() {
+	const { colors } = useTheme();
+	return (
+		<View
+			style={[
+				styles.skeletonCard,
+				{
+					backgroundColor: colors.card,
+					borderColor: colors.borderSolid,
+				},
+			]}
+		>
+			<View style={styles.body}>
+				<Skeleton style={styles.skeletonThumb} />
+				<View style={styles.skeletonContent}>
+					<Skeleton style={styles.skeletonTitle} />
+					<Skeleton style={styles.skeletonLine} />
+					<View style={styles.bottomRow}>
+						<Skeleton style={styles.skeletonDate} />
+						<Skeleton style={styles.skeletonBadge} />
+					</View>
+				</View>
+			</View>
+		</View>
+	);
+}
+
 const styles = StyleSheet.create({
 	body: {
 		flexDirection: "row",
@@ -141,10 +174,45 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "space-between",
 		gap: spacing.sm,
-		marginTop: 4,
+		marginTop: spacing.xs,
 	},
 	divider: {
 		height: StyleSheet.hairlineWidth,
 		marginVertical: spacing.md,
+	},
+	skeletonCard: {
+		borderRadius: radii.xl,
+		borderWidth: 1,
+		padding: spacing.lg,
+	},
+	skeletonThumb: {
+		width: 76,
+		height: 76,
+		borderRadius: radii.lg,
+	},
+	skeletonContent: {
+		flex: 1,
+		gap: spacing.sm,
+		justifyContent: "center",
+	},
+	skeletonTitle: {
+		height: 16,
+		width: "70%",
+		borderRadius: radii.sm,
+	},
+	skeletonLine: {
+		height: 12,
+		width: "45%",
+		borderRadius: radii.sm,
+	},
+	skeletonDate: {
+		height: 12,
+		width: "35%",
+		borderRadius: radii.sm,
+	},
+	skeletonBadge: {
+		height: 22,
+		width: 72,
+		borderRadius: radii.pill,
 	},
 });

@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/core/i18n/strings";
 import {
 	AppText,
@@ -9,7 +10,6 @@ import {
 	Card,
 	EmptyState,
 	ErrorState,
-	LoadingView,
 	Screen,
 	ScreenHeader,
 } from "@/core/ui";
@@ -80,13 +80,34 @@ export default function BusinessCouponsScreen() {
 					}
 				/>
 
-				{isLoading ? (
-					<LoadingView />
-				) : isError ? (
-					<ErrorState error={error} onRetry={() => void refetch()} />
-				) : !data ? (
-					<LoadingView />
-				) : (
+			{isLoading ? (
+				<CouponsSkeleton />
+			) : isError ? (
+				<ErrorState error={error} onRetry={() => void refetch()} />
+			) : !data || data.length === 0 ? (
+				<Card style={styles.emptyCard}>
+					<EmptyState
+						icon={
+							<Ionicons
+								name="pricetag-outline"
+								size={40}
+								color={colors.mutedForeground}
+							/>
+						}
+						title={strings.business.noCoupons}
+						message={strings.business.noCouponsBody}
+						action={
+							<Button
+								label={strings.business.couponCreateFirst}
+								onPress={() =>
+									router.push(`/business/${businessId}/coupons/new`)
+								}
+								style={{ marginTop: spacing.md }}
+							/>
+						}
+					/>
+				</Card>
+			) : (
 					<>
 						<View style={styles.stats}>
 							<StatCard
@@ -110,87 +131,78 @@ export default function BusinessCouponsScreen() {
 							/>
 						</View>
 
-						{data.length === 0 ? (
-							<Card style={styles.emptyCard}>
-								<EmptyState
-									icon={
-										<Ionicons
-											name="pricetag-outline"
-											size={40}
-											color={colors.mutedForeground}
-										/>
-									}
-									title={strings.business.noCoupons}
-									message={strings.business.noCouponsBody}
-									action={
-										<Button
-											label={strings.business.couponCreateFirst}
-											onPress={() =>
-												router.push(
-													`/business/${businessId}/coupons/new`,
-												)
-											}
-											style={{ marginTop: spacing.md }}
-										/>
-									}
-								/>
-							</Card>
-						) : (
-							<>
-								<AppText
-									variant="labelSmall"
-									weight="bold"
-									style={{ marginTop: spacing.lg, marginBottom: spacing.md }}
-								>
-									{strings.business.couponsHistory}
-								</AppText>
-								{data.map((coupon) => (
-									<CouponCard
-										key={coupon.id}
-										coupon={coupon}
-										businessId={businessId}
-									/>
-								))}
-							</>
-						)}
-
-						<View
-							style={[
-								styles.tips,
-								{
-									marginTop: spacing.lg,
-									backgroundColor: colors.surfaceMuted,
-								},
-							]}
+						<AppText
+							variant="labelSmall"
+							weight="bold"
+							style={{ marginTop: spacing.lg, marginBottom: spacing.md }}
 						>
-							<AppText variant="labelSmall" weight="bold" style={{ marginBottom: spacing.sm }}>
-								{strings.business.couponTipsTitle}
-							</AppText>
-							{strings.business.couponTips.map((tip) => (
-								<View key={tip} style={styles.tip}>
-									<Ionicons
-										name="checkmark-circle-outline"
-										size={14}
-										color={colors.success}
-									/>
-									<AppText
-										variant="bodySmall"
-										style={{ color: colors.mutedForeground, flex: 1 }}
-									>
-										{tip}
-									</AppText>
-								</View>
-							))}
-						</View>
+							{strings.business.couponsHistory}
+						</AppText>
+						{data.map((coupon) => (
+							<CouponCard
+								key={coupon.id}
+								coupon={coupon}
+								businessId={businessId}
+							/>
+						))}
 					</>
 				)}
+
+				<View
+					style={[
+						styles.tips,
+						{
+							marginTop: spacing.lg,
+							backgroundColor: colors.surfaceMuted,
+						},
+					]}
+				>
+					<AppText variant="labelSmall" weight="bold" style={{ marginBottom: spacing.sm }}>
+						{strings.business.couponTipsTitle}
+					</AppText>
+					{strings.business.couponTips.map((tip) => (
+						<View key={tip} style={styles.tip}>
+							<Ionicons
+								name="checkmark-circle-outline"
+								size={14}
+								color={colors.success}
+							/>
+							<AppText
+								variant="bodySmall"
+								style={{ color: colors.mutedForeground, flex: 1 }}
+							>
+								{tip}
+							</AppText>
+						</View>
+					))}
+				</View>
 			</View>
 		</Screen>
 	);
 }
 
-const styles = StyleSheet.create({
-	container: { padding: spacing.xl, flex: 1 },
+function CouponsSkeleton() {
+	return (
+		<View style={styles.skeletonWrap}>
+			<View style={styles.stats}>
+				{[0, 1, 2].map((i) => (
+					<Skeleton
+						key={`coupon-stat-skeleton-${i}`}
+						style={styles.skeletonStat}
+					/>
+				))}
+			</View>
+			{[0, 1].map((i) => (
+				<Skeleton
+					key={`coupon-skeleton-${i}`}
+					style={styles.skeletonCard}
+				/>
+			))}
+		</View>
+	);
+}
+
+const styles = StyleSheet.create({	container: { padding: spacing.xl, flex: 1 },
 	newButton: { alignSelf: "flex-end", marginTop: spacing.md },
 	stats: {
 		flexDirection: "row",
@@ -215,4 +227,7 @@ const styles = StyleSheet.create({
 		alignItems: "flex-start",
 		gap: spacing.xs,
 	},
+	skeletonWrap: { gap: spacing.md },
+	skeletonStat: { flex: 1, height: 64, borderRadius: radii.md },
+	skeletonCard: { height: 148, borderRadius: radii.lg, marginTop: spacing.md },
 });
