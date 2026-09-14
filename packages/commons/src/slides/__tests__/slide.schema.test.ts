@@ -39,10 +39,13 @@ describe('CreateSlideSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects non-coupon slide without redirect_url', () => {
+  it('accepts non-coupon slide without redirect_url (optional destination)', () => {
     expect(
       CreateSlideSchema.safeParse(validSlide({ redirect_url: null })).success,
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      CreateSlideSchema.safeParse(validSlide({ redirect_url: '' })).success,
+    ).toBe(true);
   });
 
   it('accepts coupon slide with code and no destination', () => {

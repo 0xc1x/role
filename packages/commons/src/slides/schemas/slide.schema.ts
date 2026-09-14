@@ -47,18 +47,18 @@ const slideCouponCodeRefinement = {
     },
 };
 
-/** El destino es obligatorio salvo para cupones, que no admiten URL. */
+/** El destino es opcional salvo para cupones, que no admiten URL. */
 const slideRedirectRefinement = {
     refine: (data: { type?: SlideType; redirect_url?: string | null }) => {
         if (data.type === SlideType.COUPON) {
             return data.redirect_url == null || data.redirect_url === "";
         }
-        // Update parcial sin type: el destino se valida solo por formato.
-        if (data.type === undefined) return true;
-        return Boolean(data.redirect_url);
+        // Destino opcional: si se omite no se mostrará botón en mobile.
+        // El formato se valida en RedirectUrlSchema; update parcial sin type también lo permite.
+        return true;
     },
     params: {
-        message: "El destino es obligatorio salvo para cupones (que no admiten URL)",
+        message: "El destino es opcional salvo para cupones (que no admiten URL)",
         path: ["redirect_url"],
     },
 };
@@ -79,7 +79,11 @@ const SlideBaseSchema = z.object({
     cta_label: z.string()
         .min(1, "El texto del botón no puede estar vacío")
         .max(50, "El texto del botón no debe superar los 50 caracteres"),
-    redirect_url: RedirectUrlSchema.nullable(),
+    // "" se normaliza a null (forms y API usan "" para "sin valor"; ver slides.mapper).
+    redirect_url: z
+        .union([RedirectUrlSchema, z.literal('')])
+        .nullable()
+        .transform((v) => (v === '' ? null : v)),
     coupon_code: z.string()
         .min(1, "El código de cupón no puede estar vacío")
         .max(50, "El código de cupón no debe superar los 50 caracteres")
