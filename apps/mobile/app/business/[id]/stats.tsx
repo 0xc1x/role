@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { strings } from "@/core/i18n/strings";
@@ -9,10 +10,10 @@ import {
 	Card,
 	EmptyState,
 	ErrorState,
-	LoadingView,
 	Screen,
 	ScreenHeader,
 } from "@/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/features/auth/store";
 import { useBusinesses, useBusinessStats } from "@/features/business/hooks";
 import {
@@ -50,7 +51,31 @@ export default function BusinessStatsScreen() {
 		refetch,
 	} = useBusinessStats(business?.id ?? "", range.start, range.end);
 
-	if (isLoading) return <LoadingView />;
+	if (isLoading) {
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+				<ScreenHeader
+					title={strings.business.statistics}
+					fallback="/(business)/management"
+				/>
+				<Skeleton style={styles.skeletonSubtitle} />
+				<View style={styles.skeletonPeriodRow}>
+					{[0, 1, 2].map((i) => (
+						<Skeleton key={`stats-period-skeleton-${i}`} style={styles.skeletonPeriodChip} />
+					))}
+				</View>
+				<View style={styles.kpiGrid}>
+						{[0, 1, 2, 3].map((i) => (
+							<Skeleton key={`stats-kpi-skeleton-${i}`} style={styles.skeletonKpi} />
+						))}
+					</View>
+					<Skeleton style={styles.skeletonChart} />
+					<Skeleton style={styles.skeletonChart} />
+				</View>
+			</Screen>
+		);
+	}
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 	if (!stats || !business)
@@ -132,6 +157,9 @@ export default function BusinessStatsScreen() {
 						change={null}
 						icon="star-outline"
 						colorKey="info"
+						onPress={() =>
+							router.push(`/business/${business?.id}/reviews`)
+						}
 					/>
 				</View>
 
@@ -207,7 +235,7 @@ function PeriodSelector({
 					accessibilityLabel={strings.business.statsPreviousPeriod}
 					style={styles.navBtn}
 				>
-					<Ionicons name="chevron-back" size={18} color={colors.foreground} />
+					<Ionicons name="chevron-back" size={22} color={colors.foreground} />
 				</Pressable>
 				<View style={styles.rangeLabel}>
 					<Ionicons
@@ -264,12 +292,14 @@ function KpiCard({
 	change,
 	icon,
 	colorKey,
+	onPress,
 }: {
 	label: string;
 	value: string;
 	change: number | null;
 	icon: keyof typeof Ionicons.glyphMap;
 	colorKey: "success" | "primary" | "warning" | "info";
+	onPress?: () => void;
 }) {
 	const { colors } = useTheme();
 	const color = kpiColor(colors, colorKey);
@@ -278,6 +308,12 @@ function KpiCard({
 		change == null ? colors.mutedForeground : positive ? colors.success : colors.destructive;
 
 	return (
+		<Pressable
+			onPress={onPress}
+			disabled={onPress == null}
+			accessibilityRole={onPress ? "link" : undefined}
+			style={styles.kpiPressable}
+		>
 		<Card style={styles.kpi}>
 			<View style={styles.kpiHeader}>
 				<View style={[styles.kpiIcon, { backgroundColor: withAlpha(color, 0.15) }]}>
@@ -315,6 +351,7 @@ function KpiCard({
 				</View>
 			) : null}
 		</Card>
+		</Pressable>
 	);
 }
 
@@ -543,7 +580,7 @@ const styles = StyleSheet.create({
 	navBtn: {
 		width: 32,
 		height: 32,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -554,6 +591,7 @@ const styles = StyleSheet.create({
 		marginTop: spacing.lg,
 	},
 	kpi: { flexBasis: "47%", flex: 1, gap: 6 },
+	kpiPressable: { flexBasis: "47%", flexGrow: 1, flexShrink: 1 },
 	kpiHeader: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -562,7 +600,7 @@ const styles = StyleSheet.create({
 	kpiIcon: {
 		width: 30,
 		height: 30,
-		borderRadius: 8,
+		borderRadius: radii.sm,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -592,11 +630,11 @@ const styles = StyleSheet.create({
 	chartValues: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
 	chartTrack: {
 		height: 8,
-		borderRadius: 4,
+		borderRadius: radii.sm,
 		marginTop: spacing.xs,
 		overflow: "hidden",
 	},
-	chartBar: { height: "100%", borderRadius: 4 },
+	chartBar: { height: "100%", borderRadius: radii.sm },
 	productRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -606,7 +644,7 @@ const styles = StyleSheet.create({
 	rankCircle: {
 		width: 28,
 		height: 28,
-		borderRadius: 14,
+		borderRadius: radii.pill,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -621,4 +659,28 @@ const styles = StyleSheet.create({
 		marginTop: spacing.md,
 	},
 	flex1: { flex: 1 },
+	skeletonKpi: {
+		flexBasis: "47%",
+		flexGrow: 1,
+		flexShrink: 1,
+		height: 110,
+		borderRadius: radii.lg,
+	},
+	skeletonSubtitle: {
+		height: 16,
+		width: "70%",
+		borderRadius: radii.sm,
+		marginTop: spacing.lg,
+	},
+	skeletonPeriodRow: {
+		flexDirection: "row",
+		gap: spacing.sm,
+		marginTop: spacing.sm,
+	},
+	skeletonPeriodChip: {
+		flex: 1,
+		height: 38,
+		borderRadius: radii.pill,
+	},
+	skeletonChart: { height: 180, borderRadius: radii.lg, marginTop: spacing.lg },
 });
