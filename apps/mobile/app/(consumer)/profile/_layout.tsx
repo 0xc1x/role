@@ -6,7 +6,6 @@ export default function ProfileLayout() {
 		<Stack screenOptions={{ headerShown: false }}>
 			<Stack.Screen name="index" />
 			<Stack.Screen name="favorites" />
-			<Stack.Screen name="orders" />
 			<Stack.Screen name="edit" />
 			<Stack.Screen name="addresses" />
 			<Stack.Screen name="payment-methods" />
