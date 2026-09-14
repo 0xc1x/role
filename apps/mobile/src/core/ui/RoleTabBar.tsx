@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Pressable, StyleSheet, View } from "react-native";
+import {
+	Animated,
+	Easing,
+	Platform,
+	Pressable,
+	StyleSheet,
+	View,
+} from "react-native";
 import type { BottomTabBarProps } from "expo-router/build/react-navigation/bottom-tabs";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/core/theme";
 import { radii } from "@/core/theme/spacing";
@@ -36,7 +44,23 @@ export default function RoleTabBar({
 	...props
 }: RoleTabBarProps) {
 	const { colors } = useTheme();
-	const insets = props.insets;
+	// props.insets llega vía tabbar-store y puede quedar stale (solo se
+	// actualiza al cambiar de tab): el hook es la fuente viva del inset
+	// inferior. Math.max mantiene Android (insets 0) pixel-idéntico.
+	const safeInsets = useSafeAreaInsets();
+	const bottomInset = Math.max(safeInsets.bottom, props.insets.bottom ?? 0);
+	// Web (mobile Safari): no hay <SafeAreaProvider> ancestro en la app, así
+	// que useSafeAreaInsets() devuelve 0 para siempre y el hook JS nunca ve
+	// el inset CSS. Se lee directo de CSS con env(); RN Web pasa el string
+	// tal cual a style.paddingBottom. El max() conserva bottomInset como
+	// piso por si el hook aporta algo en el futuro. En nativo se conserva
+	// el number del hook, así Android queda pixel-idéntico (0 → sin extra).
+	const paddingBottom = Platform.select({
+		// Justificación del cast: los tipos de RN no modelan strings CSS
+		// arbitrarios como max()/env(), pero RN Web los aplica al DOM.
+		web: `max(${bottomInset}px, env(safe-area-inset-bottom, 0px))` as unknown as number,
+		default: bottomInset,
+	});
 
 	const [measuredWidth, setMeasuredWidth] = useState(0);
 
@@ -156,7 +180,7 @@ export default function RoleTabBar({
 				{
 					backgroundColor: colors.background,
 					borderTopColor: colors.borderSolid,
-					paddingBottom: insets.bottom,
+					paddingBottom,
 					zIndex: 1100,
 				},
 			]}

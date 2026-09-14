@@ -3,6 +3,27 @@ export interface ReverseGeocodeResult {
 	zone: string | null;
 }
 
+export interface ShortAddressParts {
+	street?: string | null;
+	streetNumber?: string | null;
+	city?: string | null;
+	postcode?: string | null;
+}
+
+/**
+ * "Calle 123, Quito, 230106": solo calle + ciudad + código postal.
+ * Sin provincia ni país (así lo pide el negocio para las direcciones).
+ */
+export function composeShortAddress(parts: ShortAddressParts): string {
+	const street = [parts.street, parts.streetNumber]
+		.map((part) => part?.trim())
+		.filter((part): part is string => typeof part === "string" && part.length > 0)
+		.join(" ");
+	return [street, parts.city?.trim(), parts.postcode?.trim()]
+		.filter((part): part is string => typeof part === "string" && part.length > 0)
+		.join(", ");
+}
+
 // ponytail: single-process cache + 1 req/s throttle so Nominatim's public
 // API doesn't 429 us while dragging; swap to a paid geocoder if limits bite.
 const cache = new Map<string, ReverseGeocodeResult>();
@@ -40,6 +61,8 @@ export async function reverseGeocode({
 			const data = (await response.json()) as {
 				display_name?: string;
 				address?: {
+					road?: string;
+					house_number?: string;
 					neighbourhood?: string;
 					quarter?: string;
 					city_district?: string;
@@ -47,6 +70,7 @@ export async function reverseGeocode({
 					city?: string;
 					town?: string;
 					village?: string;
+					postcode?: string;
 				};
 			};
 			const address = data.address ?? {};
@@ -59,7 +83,14 @@ export async function reverseGeocode({
 				address.town ??
 				address.village ??
 				null;
-			const result = { displayName: data.display_name ?? "", zone };
+			const displayName =
+				composeShortAddress({
+					street: address.road,
+					streetNumber: address.house_number,
+					city: address.city ?? address.town ?? address.village,
+					postcode: address.postcode,
+				}) || (data.display_name ?? "");
+			const result = { displayName, zone };
 			if (result.displayName) cache.set(key, result);
 			return result;
 		} catch {

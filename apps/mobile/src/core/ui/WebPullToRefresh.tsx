@@ -8,6 +8,7 @@ import {
 } from "react-native";
 
 import { useTheme } from "@/core/theme";
+import { radii } from "../theme/spacing";
 
 // Umbrales en px (distancia de dedo, antes del factor 0.5 del indicador).
 const START_SLOP = 10;
@@ -89,7 +90,9 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 		}
 		// preventDefault solo durante el pull: frena el rubber-band del
 		// navegador sin interferir el scroll normal ni gestos horizontales.
-		e.preventDefault();
+		// Guard cancelable: si el scroll ya empezó el evento no se puede
+		// cancelar y Chrome loguea una intervención.
+		if (e.cancelable) e.preventDefault();
 		setPull(Math.min(dy * 0.5, MAX_PULL));
 	}, []);
 
@@ -192,7 +195,7 @@ const styles = StyleSheet.create({
 	pill: {
 		width: 36,
 		height: 36,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",

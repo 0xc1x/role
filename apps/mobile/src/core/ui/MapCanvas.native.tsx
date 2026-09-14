@@ -5,6 +5,7 @@ import MapView, { Marker } from "react-native-maps";
 
 import { useTheme } from "@/core/theme";
 import { withAlpha } from "@/core/theme/alpha";
+import { getMapStyle } from "@/core/theme/map-style";
 import type { MapCanvasHandle, MapCanvasProps } from "./MapCanvas.types";
 
 const DEFAULT_REGION = {
@@ -22,7 +23,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(
 		{ coords, fullscreen = false, onRegionChange, children, centerPin = true },
 		ref,
 	) {
-		const { colors } = useTheme();
+		const { colors, scheme } = useTheme();
 		const mapRef = useRef<MapView>(null);
 
 		useImperativeHandle(
@@ -55,6 +56,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(
 				}
 				showsUserLocation={!fullscreen}
 				showsCompass={false}
+				customMapStyle={getMapStyle(scheme)}
 			>
 				{children}
 				{centerPin ? (

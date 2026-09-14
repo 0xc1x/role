@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "./AppText";
 import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/core/theme/spacing";
 import {
 	Drawer,
 	DrawerClose,
@@ -52,7 +52,7 @@ export function BottomSheetModal({
 								style={{
 									width: 32,
 									height: 32,
-									borderRadius: 16,
+									borderRadius: radii.md,
 									alignItems: "center",
 									justifyContent: "center",
 									backgroundColor: colors.inputBackground,
@@ -63,9 +63,21 @@ export function BottomSheetModal({
 						</View>
 					</DrawerHeader>
 				) : null}
-				<View style={{ gap: spacing.sm, paddingHorizontal: spacing.xl }}>
+				{/* Body con scroll: el contenido largo (ej. formulario de
+				dirección) hace scroll sin tapar el footer. El sheet sigue
+				cerrándose por arrastre desde la barrita del Drawer. */}
+				<ScrollView
+					style={{ flex: 1 }}
+					contentContainerStyle={{
+						gap: spacing.sm,
+						paddingHorizontal: spacing.xl,
+						paddingBottom: spacing.md,
+					}}
+					keyboardShouldPersistTaps="handled"
+					showsVerticalScrollIndicator={false}
+				>
 					{children}
-				</View>
+				</ScrollView>
 				<DrawerFooter style={{ paddingHorizontal: spacing.md, paddingTop: 6 }}>
 					{footer ? (footer) : null}
 				</DrawerFooter>

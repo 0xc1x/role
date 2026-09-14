@@ -19,6 +19,7 @@ import { router, useNavigation, type Href } from "expo-router";
 import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
+	withRepeat,
 	withSequence,
 	withSpring,
 	withTiming,
@@ -100,7 +101,12 @@ export function Button({
 			) : (
 				<View style={styles.row}>
 					{icon}
-					<Text style={[labelStyle, { color: labelColor }]}>{label}</Text>
+					<Text
+						style={[labelStyle, { color: labelColor }]}
+						numberOfLines={1}
+					>
+						{label}
+					</Text>
 				</View>
 			)}
 		</Pressable>
@@ -399,7 +405,7 @@ export function ScreenHeader({ title, onBack, fallback, style }: ScreenHeaderPro
 					{ backgroundColor: colors.card, borderColor: colors.borderSolid },
 				]}
 			>
-				<Ionicons name="chevron-back" size={20} color={colors.foreground} />
+				<Ionicons name="chevron-back" size={22} color={colors.foreground} />
 			</Pressable>
 			{title ? (
 				<AppText
@@ -650,9 +656,12 @@ export type BadgeTone =
 export function StatusBadge({
 	label,
 	tone = "neutral",
+	dot = false,
 }: {
 	label: string;
 	tone?: BadgeTone;
+	/** Punto pulsante del estado (header del detalle del pedido). */
+	dot?: boolean;
 }) {
 	const { colors } = useTheme();
 	const toneMap: Record<BadgeTone, { bg: string; fg: string }> = {
@@ -664,8 +673,32 @@ export function StatusBadge({
 		info: { bg: colors.infoSurface, fg: colors.info },
 	};
 	const t = toneMap[tone];
+	const opacity = useSharedValue(1);
+	useEffect(() => {
+		if (dot) {
+			opacity.value = withRepeat(
+				withTiming(0.35, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+				-1,
+				true,
+			);
+		}
+	}, [dot, opacity]);
+	const dotStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 	return (
-		<View style={[styles.badge, { backgroundColor: t.bg }]}>
+		<View
+			style={[
+				styles.badge,
+				{
+					backgroundColor: t.bg,
+					borderColor: withAlpha(t.fg, 0.35),
+				},
+			]}
+		>
+			{dot ? (
+				<Animated.View
+					style={[styles.badgeDot, { backgroundColor: t.fg }, dotStyle]}
+				/>
+			) : null}
 			<AppText variant="bodySmall" weight="semiBold" style={{ color: t.fg }}>
 				{label}
 			</AppText>
@@ -877,12 +910,12 @@ const styles = StyleSheet.create({
 	flex: { flex: 1 },
 	scrollContent: { paddingBottom: 32 },
 	card: {
-		borderRadius: 24,
+		borderRadius: radii.md,
 		borderWidth: 1,
 		padding: 16,
 	},
 	circleButton: {
-		borderRadius: 99,
+		borderRadius: radii.pill,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -893,7 +926,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		borderWidth: 1,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		paddingHorizontal: 16,
 		paddingVertical: 12,
 	},
@@ -904,7 +937,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	input: {
-		borderRadius: 18,
+		borderRadius: radii.md,
 		borderWidth: 1,
 		paddingHorizontal: 16,
 		paddingVertical: 12,
@@ -912,10 +945,19 @@ const styles = StyleSheet.create({
 	},
 	inputMultiline: { minHeight: 96, textAlignVertical: "top" },
 	badge: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
 		paddingHorizontal: 10,
 		paddingVertical: 4,
-		borderRadius: 999,
+		borderRadius: radii.pill,
+		borderWidth: 1,
 		alignSelf: "flex-start",
+	},
+	badgeDot: {
+		width: 6,
+		height: 6,
+		borderRadius: radii.sm,
 	},
 	stateBox: {
 		alignItems: "center",
@@ -926,7 +968,7 @@ const styles = StyleSheet.create({
 	stateIcon: {
 		width: 56,
 		height: 56,
-		borderRadius: 28,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 		marginBottom: spacing.sm,
@@ -964,7 +1006,7 @@ const styles = StyleSheet.create({
 	screenHeaderBack: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.xxl,
 		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",
@@ -978,7 +1020,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		paddingHorizontal: spacing.md,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		borderWidth: 1,
 	},
 	// minWidth: 0 permite que el input encoja dentro de filas flex en web
@@ -987,7 +1029,7 @@ const styles = StyleSheet.create({
 	searchClear: {
 		width: 24,
 		height: 24,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
