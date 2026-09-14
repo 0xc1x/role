@@ -14,3 +14,5 @@ coverage/
 .pi
 # drizzle generated — no commitear el schema dump en repo público
 apps/api/drizzle/
+# Local AI runtime state
+.atl/

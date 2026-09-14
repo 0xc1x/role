@@ -16,7 +16,10 @@
     "dev:admin": "bun run --cwd apps/admin dev",
     "dev:commons": "bun run --cwd packages/commons typecheck",
     "deploy:landing": "NITRO_PRESET=vercel bun run build --filter=role-landing... && bun run --cwd apps/landing deploy",
-    "deploy:mobile": "bun run --cwd packages/commons build && bun run --cwd apps/mobile deploy"
+    "deploy:mobile": "bun run --cwd packages/commons build && bun run --cwd apps/mobile deploy",
+    "doctor:api": "npx -y nestjs-doctor@latest apps/api",
+    "doctor:react": "npx -y react-doctor@latest --yes --scope changed --base origin/main",
+    "doctor": "bun run doctor:api && bun run doctor:react"
   },
   "devDependencies": {
     "nitro": "npm:nitro-nightly@3.0.1-20260817-141030-4bfb35a7",
