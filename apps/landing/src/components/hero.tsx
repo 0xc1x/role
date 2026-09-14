@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { randomOfferQueryOptions } from "@/lib/queries";
+import { useStoreLink } from "@/lib/store-links";
 import { usePlatformStats } from "@/lib/use-config";
 
 const numberFormat = new Intl.NumberFormat("es-EC");
@@ -29,6 +30,7 @@ function formatTime(iso?: string | null): string {
 
 export function Hero() {
 	const stats = usePlatformStats();
+	const storeLink = useStoreLink();
 	const { data: offer } = useQuery(randomOfferQueryOptions);
 
 	const STATS = [
@@ -60,11 +62,12 @@ export function Hero() {
 					<Card className="relative overflow-hidden rounded-xl border border-role-border/50 bg-white p-0 shadow-raised gap-0">
 						<div className="relative h-40 w-full bg-role-muted">
 							{offer?.image ? (
-								<img
-									src={offer.image}
-									alt={offer.title}
-									loading="lazy"
-									decoding="async"
+							<img
+								src={offer.image}
+								alt={offer.title}
+								loading="eager"
+								fetchPriority="high"
+								decoding="async"
 									width={320}
 									height={160}
 									className="h-full w-full object-cover"
@@ -157,7 +160,7 @@ export function Hero() {
 					<div className="flex flex-wrap items-center gap-4 reveal reveal-delay-3">
 						<Button
 							variant="brand"
-							render={<a href="role://" aria-label="Consigue la app" />}
+							render={<a href={storeLink} aria-label="Consigue la app" />}
 							className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow hover:bg-white hover:text-role-primary hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 						>
 							Consigue la app
@@ -179,10 +182,12 @@ export function Hero() {
 									className={`px-5 ${idx === 0 ? "pl-0" : ""} ${idx === STATS.length - 1 ? "pr-0" : ""}`}
 								>
 									<dt className="sr-only">{s.label}</dt>
-									<dd className="font-heading text-2xl font-bold tabular-nums md:text-3xl">
-										{s.value}
+									<dd>
+										<p className="font-heading text-2xl font-bold tabular-nums md:text-3xl">
+											{s.value}
+										</p>
+										<p className="mt-1 text-sm text-white/70">{s.label}</p>
 									</dd>
-									<dd className="mt-1 text-sm text-white/70">{s.label}</dd>
 								</div>
 								{idx < STATS.length - 1 ? (
 									<Separator

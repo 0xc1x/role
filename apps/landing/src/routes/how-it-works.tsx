@@ -17,14 +17,19 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { pageHead } from "@/lib/seo";
+import { useStoreLink } from "@/lib/store-links";
 
 export const Route = createFileRoute("/how-it-works")({
-	head: () =>
-		pageHead(
+	head: () => ({
+		...pageHead(
 			"/how-it-works",
 			"Cómo funciona Rolé",
 			"Reserva en la app, recoge en el negocio y salva comida: así de simple funciona Rolé.",
 		),
+		scripts: [
+			{ type: "application/ld+json", children: JSON.stringify(FAQ_JSON_LD) },
+		],
+	}),
 	component: HowItWorksPage,
 });
 
@@ -85,7 +90,18 @@ const FAQ = [
 	},
 ];
 
+const FAQ_JSON_LD = {
+	"@context": "https://schema.org",
+	"@type": "FAQPage",
+	mainEntity: FAQ.map((item) => ({
+		"@type": "Question",
+		name: item.q,
+		acceptedAnswer: { "@type": "Answer", text: item.a },
+	})),
+};
+
 function HowItWorksPage() {
+	const storeLink = useStoreLink();
 	return (
 		<div className="min-h-screen">
 			<Navbar />
@@ -109,7 +125,7 @@ function HowItWorksPage() {
 						</p>
 						<div className="mt-10 flex flex-wrap gap-4 reveal reveal-delay-3">
 							<a
-								href="role://"
+								href={storeLink}
 								className="rounded-full bg-white px-7 py-3 font-semibold text-role-primary shadow-dark-glow transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 							>
 								Consigue la app

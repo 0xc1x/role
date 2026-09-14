@@ -14,14 +14,17 @@ import { apiPost } from "@/lib/api";
 import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/business-signup")({
-	head: () => ({
-		...pageHead(
+	head: () => {
+		const base = pageHead(
 			"/business-signup",
 			"Registra tu negocio | Rolé",
 			"Únete a Rolé: publica tu comida excedente, recupera ingresos y consigue nuevos clientes.",
-		),
-		meta: [{ name: "robots", content: "noindex, nofollow" }],
-	}),
+		);
+		return {
+			...base,
+			meta: [...base.meta, { name: "robots", content: "noindex, nofollow" }],
+		};
+	},
 	component: BusinessSignupPage,
 });
 

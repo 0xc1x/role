@@ -19,12 +19,16 @@ import { pageHead } from "@/lib/seo";
 import { useConfig } from "@/lib/use-config";
 
 export const Route = createFileRoute("/help-center")({
-	head: () =>
-		pageHead(
+	head: () => ({
+		...pageHead(
 			"/help-center",
 			"Centro de ayuda | Rolé",
 			"Respuestas sobre reservas, recogidas, pagos y tu cuenta en Rolé.",
 		),
+		scripts: [
+			{ type: "application/ld+json", children: JSON.stringify(FAQ_JSON_LD) },
+		],
+	}),
 	component: HelpCenterPage,
 });
 
@@ -84,6 +88,18 @@ const CATEGORIES = [
 		],
 	},
 ];
+
+const FAQ_JSON_LD = {
+	"@context": "https://schema.org",
+	"@type": "FAQPage",
+	mainEntity: CATEGORIES.flatMap((cat) =>
+		cat.items.map((item) => ({
+			"@type": "Question",
+			name: item.q,
+			acceptedAnswer: { "@type": "Answer", text: item.a },
+		})),
+	),
+};
 
 function useContactOptions() {
 	const holaEmail = useConfig("contact.hola_email", "hola@role.app");

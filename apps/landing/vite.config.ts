@@ -15,14 +15,15 @@ const INDEXABLE_ROUTES = [
 	"/about",
 	"/privacy",
 	"/terms",
-	"/business-signup",
 ];
 
 /**
  * Genera robots.txt y sitemap.xml en publicDir al construir: nitro copia esa
  * carpeta a .output/public y también quedan servidos en dev. El dominio viene
  * de VITE_SITE_URL o de VERCEL_PROJECT_PRODUCTION_URL (Vercel la inyecta en
- * build); sin dominio se omite el sitemap y robots.txt sale sin línea Sitemap.
+ * build); sin dominio se usa https://role.app como fallback con un warning
+ * ruidoso para no emitir nunca un robots.txt sin línea Sitemap.
+ * /business-signup es noindex y por eso no entra al sitemap.
  */
 function seoFiles(): Plugin {
 	let publicDir = "public";
@@ -34,36 +35,35 @@ function seoFiles(): Plugin {
 		closeBundle() {
 			const raw =
 				process.env.VITE_SITE_URL ?? process.env.VERCEL_PROJECT_PRODUCTION_URL;
-			const site = raw
-				? `https://${raw.replace(/\/+$/, "").replace(/^https?:\/\//, "")}`
+			const normalized = raw
+				? raw.replace(/\/+$/, "").replace(/^(?!https?:\/\/)/, "https://")
 				: undefined;
-			if (!site) {
+			const site = normalized ?? "https://role.app";
+			if (!normalized) {
 				console.warn(
-					"[seo] sin VITE_SITE_URL/VERCEL_PROJECT_PRODUCTION_URL: no se genera sitemap.xml",
+					"[seo] falta VITE_SITE_URL/VERCEL_PROJECT_PRODUCTION_URL: usando fallback https://role.app para robots.txt y sitemap.xml",
 				);
 			}
 			const robots = [
 				"User-agent: *",
 				"Allow: /",
-				...(site ? [`Sitemap: ${site}/sitemap.xml`] : []),
+				`Sitemap: ${site}/sitemap.xml`,
 				"",
 			].join("\n");
 			const writes = [
 				writeFile(path.join(publicDir, "robots.txt"), robots),
-				site
-					? writeFile(
-							path.join(publicDir, "sitemap.xml"),
-							[
-								'<?xml version="1.0" encoding="UTF-8"?>',
-								'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-								...INDEXABLE_ROUTES.map(
-									(route) => `<url><loc>${site}${route}</loc></url>`,
-								),
-								"</urlset>",
-								"",
-							].join("\n"),
-						)
-					: Promise.resolve(),
+				writeFile(
+					path.join(publicDir, "sitemap.xml"),
+					[
+						'<?xml version="1.0" encoding="UTF-8"?>',
+						'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+						...INDEXABLE_ROUTES.map(
+							(route) => `<url><loc>${site}${route}</loc></url>`,
+						),
+						"</urlset>",
+						"",
+					].join("\n"),
+				),
 			];
 			mkdir(path.resolve(publicDir), { recursive: true })
 				.then(() => Promise.all(writes))

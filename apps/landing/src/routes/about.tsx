@@ -7,6 +7,7 @@ import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
 import { platformStatsQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
+import { useStoreLink } from "@/lib/store-links";
 import { usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/about")({
@@ -55,6 +56,7 @@ const VALUES = [
 
 function AboutPage() {
 	const stats = usePlatformStats();
+	const storeLink = useStoreLink();
 	const IMPACT = [
 		{ value: formatStat(stats?.users), label: "usuarios activos" },
 		{ value: formatStat(stats?.businesses), label: "comercios aliados" },
@@ -146,12 +148,15 @@ function AboutPage() {
 									key={i.label}
 									className={`rounded-[var(--radius-card)] bg-white p-8 shadow-soft reveal reveal-delay-${idx + 1}`}
 								>
-									<dd className="font-heading text-3xl font-bold tabular-nums text-role-primary md:text-4xl">
-										{i.value}
+									<dt className="sr-only">{i.label}</dt>
+									<dd>
+										<p className="font-heading text-3xl font-bold tabular-nums text-role-primary md:text-4xl">
+											{i.value}
+										</p>
+										<p className="mt-2 text-sm text-role-muted-foreground">
+											{i.label}
+										</p>
 									</dd>
-									<dt className="mt-2 text-sm text-role-muted-foreground">
-										{i.label}
-									</dt>
 								</div>
 							))}
 						</dl>
@@ -206,7 +211,7 @@ function AboutPage() {
 							</p>
 							<div className="mt-9 flex flex-wrap justify-center gap-4">
 								<a
-									href="role://"
+									href={storeLink}
 									className="rounded-full bg-white px-8 py-3 font-semibold text-role-primary shadow-dark-glow transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.98]"
 								>
 									Consigue la app

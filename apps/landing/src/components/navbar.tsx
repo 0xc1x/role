@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { Wordmark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
+import { useStoreLink } from "@/lib/store-links";
 import {
 	Drawer,
 	DrawerContent,
@@ -32,6 +33,7 @@ export function Navbar() {
 	const [pastHero, setPastHero] = useState(false);
 	const [heroBottom, setHeroBottom] = useState(0);
 	const matchRoute = useMatchRoute();
+	const storeLink = useStoreLink();
 	const pathname = useRouterState({ select: (s) => s.location.pathname });
 
 	// Mide dónde termina el hero de la ruta actual: la navbar cambia
@@ -121,8 +123,8 @@ export function Navbar() {
 						<div className="flex items-center gap-2">
 							<Button
 								variant="brand"
-								render={<a href="role://" aria-label="Consigue la app" />}
-								className={`hidden rounded-full px-5 py-2 text-sm font-semibold active:scale-[0.98] md:inline-flex ${
+							render={<a href={storeLink} aria-label="Consigue la app" />}
+							className={`hidden rounded-full px-5 py-2 text-sm font-semibold active:scale-[0.98] md:inline-flex ${
 									solid
 										? ""
 										: "bg-white text-role-primary shadow-dark-glow hover:bg-white/90 hover:text-role-primary"
@@ -209,7 +211,7 @@ export function Navbar() {
 						</ul>
 						<Button
 							variant="brand"
-							render={<a href="role://" aria-label="Consigue la app" />}
+							render={<a href={storeLink} aria-label="Consigue la app" />}
 							className="animate-item-in mt-4 w-full rounded-full px-5 py-3 text-sm font-semibold"
 							style={
 								{
