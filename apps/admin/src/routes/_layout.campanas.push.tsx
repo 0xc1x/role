@@ -86,6 +86,7 @@ function PushCampaignsPage() {
 						campaign={c}
 						onEdit={() => setEditing(c)}
 						onSend={() => setConfirmSend(c)}
+						onResend={() => mutations.resend.mutate(c)}
 						onCancel={() =>
 							mutations.cancel.mutate(c.id, {
 								onError: (err) =>
@@ -95,10 +96,13 @@ function PushCampaignsPage() {
 							})
 						}
 						onTest={() => setTesting(c)}
+						onRemove={() => mutations.remove.mutateAsync(c.id)}
 						busy={
 							mutations.send.isPending ||
+							mutations.resend.isPending ||
 							mutations.cancel.isPending ||
-							mutations.update.isPending
+							mutations.update.isPending ||
+							mutations.remove.isPending
 						}
 					/>
 				))}

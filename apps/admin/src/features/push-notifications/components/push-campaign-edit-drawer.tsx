@@ -69,13 +69,15 @@ export function PushCampaignEditDrawer(props: {
 					/>
 				</DrawerBody>
 				<DrawerFooter>
-					<Button
-						type="button"
-						onClick={save}
-						disabled={props.mutations.update.isPending}
-					>
-						{props.mutations.update.isPending ? <Spinner /> : null} Guardar
-					</Button>
+					<div className="flex w-full items-center justify-end">
+						<Button
+							type="button"
+							onClick={save}
+							disabled={props.mutations.update.isPending}
+						>
+							{props.mutations.update.isPending ? <Spinner /> : null} Guardar
+						</Button>
+					</div>
 					<DrawerClose>
 						<Button variant="outline" className="w-full">
 							Cancelar
