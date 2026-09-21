@@ -5,8 +5,8 @@ import type { OrderStatus } from "@0xc1x/role-commons";
 import {
 	filterAndSortOrders,
 	orderStats,
-} from "@/features/business/domain/orders";
-import type { OrderDetail } from "@/features/orders/domain/order";
+} from "@/src/features/business/domain/orders";
+import type { OrderDetail } from "@/src/features/orders/domain/order";
 
 function makeOrder(
 	overrides: {

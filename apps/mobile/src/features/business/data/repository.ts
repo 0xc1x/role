@@ -5,15 +5,16 @@ import type {
 	BusinessType,
 	Coupon,
 	Payout,
+	PayoutStatus,
 } from "@0xc1x/role-commons";
 import { File } from "expo-file-system";
 
-import { supabase } from "@/core/supabase/client";
-import { toAppError } from "@/core/error/mapper";
-import { Errors } from "@/core/error/app-error";
+import { supabase } from "@/src/core/supabase/client";
+import { toAppError } from "@/src/core/error/mapper";
+import { Errors } from "@/src/core/error/app-error";
 
-import type { OfferDetail } from "@/features/offers/domain/offer";
-import { isOfferOutOfStock } from "@/features/offers/domain/offer";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
+import { isOfferOutOfStock } from "@/src/features/offers/domain/offer";
 
 import type {
 	BusinessProfileDetail,
@@ -25,7 +26,7 @@ import type {
 } from "../domain/business";
 import { PAYOUT_FIELDS } from "../domain/business";
 import { notificationRepository } from "./notifications";
-import { OFFER_SELECT } from "@/features/offers/data/offer-select";
+import { OFFER_SELECT } from "@/src/features/offers/data/offer-select";
 
 export { isOfferOutOfStock };
 
@@ -82,16 +83,118 @@ const MONTHS_FULL = [
 
 type Row = Record<string, unknown>;
 
+/** Server-side list params for business reviews (offer filter goes through the `orders!inner` join). */
+export interface BusinessReviewListParams {
+	offerId?: string | null;
+	limit?: number;
+	offset?: number;
+}
+
+/** Server-side list params for coupons (`is_active` filter + `.range()` paging). */
+export interface CouponListParams {
+	isActive?: boolean;
+	limit?: number;
+	offset?: number;
+}
+
+/** Server-side list params for payouts (`status` filter + `.range()` paging). */
+export interface PayoutListParams {
+	status?: PayoutStatus;
+	limit?: number;
+	offset?: number;
+}
+
+const REVIEW_SELECT = `id, order_id, product_rating, business_rating, comment, created_at,
+        profiles!reviews_user_id_fkey (full_name),
+        orders!reviews_order_id_fkey (offer_id, offers (title))`;
+
+const REVIEW_SELECT_BY_OFFER = `id, order_id, product_rating, business_rating, comment, created_at,
+        profiles!reviews_user_id_fkey (full_name),
+        orders!reviews_order_id_fkey!inner (offer_id, offers (title))`;
+
+/** Server-side list params for the business catalog (PostgREST filters + `.range()` paging). */
+export interface BusinessOfferListParams {
+	locationId?: string | null;
+	search?: string;
+	isActive?: boolean;
+	/** M2M via `offer_categories`: server `!inner` filter (no client filtering over pages). */
+	categoryId?: string | null;
+	/** Server `order()` column (base columns only — no client re-sort over pages). */
+	orderBy?: "created_at" | "title" | "discounted_price" | "stock";
+	ascending?: boolean;
+	limit?: number;
+	offset?: number;
+}
+
+// Same shape as OFFER_SELECT but with an inner categories join so the
+// `offer_categories.category_id` eq filters parent rows server-side.
+const OFFER_SELECT_BY_CATEGORY = OFFER_SELECT.replace(
+	"offer_categories (",
+	"offer_categories!inner (",
+);
+
 export const businessRepository = {
 	// ─── Catalog (offers CRUD + images) ───────────────────────────────
-	async getBusinessOffers(businessId: string): Promise<OfferDetail[]> {
-		const { data, error } = await supabase
+	async getBusinessOffers(
+		businessId: string,
+		params: BusinessOfferListParams = {},
+	): Promise<OfferDetail[]> {
+		let query = supabase
 			.from("offers")
-			.select(OFFER_SELECT)
-			.eq("business_id", businessId)
-			.order("created_at", { ascending: false });
+			.select(
+				params.categoryId != null ? OFFER_SELECT_BY_CATEGORY : OFFER_SELECT,
+			)
+			.eq("business_id", businessId);
+		if (params.locationId != null)
+			query = query.eq("business_location_id", params.locationId);
+		if (params.isActive != null) query = query.eq("is_active", params.isActive);
+		if (params.categoryId != null)
+			query = query.eq("offer_categories.category_id", params.categoryId);
+		const search = params.search?.trim();
+		if (search) query = query.ilike("title", `%${escapeLike(search)}%`);
+		let paged = query.order(params.orderBy ?? "created_at", {
+			ascending: params.ascending ?? false,
+		});
+		if (params.limit != null) {
+			const offset = params.offset ?? 0;
+			paged = paged.range(offset, offset + params.limit - 1);
+		}
+		const { data, error } = await paged;
 		if (error) throw toAppError(error, "Error al cargar el catálogo");
 		return toRows(data).map(mapOfferDetail);
+	},
+
+	/** Server-side head count with the same filters (no rows fetched). */
+	async countBusinessOffers(
+		businessId: string,
+		params: BusinessOfferListParams = {},
+	): Promise<number> {
+		// The category eq needs its embed in the select to resolve (same
+		// !inner trick as the reviews count with `orders!inner`).
+		const hasCategory = params.categoryId != null;
+		let query = supabase
+			.from("offers")
+			.select(
+				hasCategory ? "id,offer_categories!inner(category_id)" : "id",
+				{ count: "exact", head: true },
+			)
+			.eq("business_id", businessId);
+		if (params.locationId != null)
+			query = query.eq("business_location_id", params.locationId);
+		if (params.isActive != null) query = query.eq("is_active", params.isActive);
+		if (hasCategory)
+			query = query.eq(
+				"offer_categories.category_id",
+				params.categoryId as string,
+			);
+		const search = params.search?.trim();
+		if (search) query = query.ilike("title", `%${escapeLike(search)}%`);
+		const { count, error } = (await query) as unknown as {
+			count: number | null;
+			error: unknown;
+		};
+		if (error) throw toAppError(error, "Error al contar el catálogo");
+		return count ?? 0;
 	},
 
 	// ─── Business profile ─────────────────────────────────────────────
@@ -166,18 +269,48 @@ export const businessRepository = {
 	},
 
 	/** Todas las reseñas del negocio (pantalla dedicada de reseñas). */
-	async getBusinessReviews(businessId: string): Promise<BusinessReviewView[]> {
-		const { data, error } = await supabase
+	async getBusinessReviews(
+		businessId: string,
+		params: BusinessReviewListParams = {},
+	): Promise<BusinessReviewView[]> {
+		const offerId = params.offerId ?? null;
+		let query = supabase
 			.from("reviews")
-			.select(
-				`id, order_id, product_rating, business_rating, comment, created_at,
-        profiles!reviews_user_id_fkey (full_name),
-        orders!reviews_order_id_fkey (offer_id, offers (title))`,
-			)
-			.eq("business_id", businessId)
-			.order("created_at", { ascending: false });
+			.select(offerId ? REVIEW_SELECT_BY_OFFER : REVIEW_SELECT)
+			.eq("business_id", businessId);
+		if (offerId) query = query.eq("orders.offer_id", offerId);
+		let paged = query.order("created_at", { ascending: false });
+		if (params.limit != null) {
+			const offset = params.offset ?? 0;
+			paged = paged.range(offset, offset + params.limit - 1);
+		}
+		const { data, error } = await paged;
 		if (error) throw toAppError(error, "Error al cargar las reseñas");
 		return toReviewViews(data);
+	},
+
+	/** Server-side head count with the same filters (no rows fetched). */
+	async countBusinessReviews(
+		businessId: string,
+		params: BusinessReviewListParams = {},
+	): Promise<number> {
+		const offerId = params.offerId ?? null;
+		let query = supabase
+			.from("reviews")
+			.select(
+				offerId
+					? "id,orders!reviews_order_id_fkey!inner(offer_id)"
+					: "id",
+				{ count: "exact", head: true },
+			)
+			.eq("business_id", businessId);
+		if (offerId) query = query.eq("orders.offer_id", offerId);
+		const { count, error } = (await query) as unknown as {
+			count: number | null;
+			error: unknown;
+		};
+		if (error) throw toAppError(error, "Error al contar reseñas");
+		return count ?? 0;
 	},
 
 	/** Horarios crudos por día (para el formulario de edición). */
@@ -413,14 +546,41 @@ export const businessRepository = {
 	},
 
 	// ─── Coupons ──────────────────────────────────────────────────────
-	async getCoupons(businessId: string): Promise<Coupon[]> {
-		const { data, error } = await supabase
+	async getCoupons(
+		businessId: string,
+		params: CouponListParams = {},
+	): Promise<Coupon[]> {
+		let query = supabase
 			.from("coupons")
 			.select("*")
-			.eq("business_id", businessId)
-			.order("created_at", { ascending: false });
+			.eq("business_id", businessId);
+		if (params.isActive != null) query = query.eq("is_active", params.isActive);
+		let paged = query.order("created_at", { ascending: false });
+		if (params.limit != null) {
+			const offset = params.offset ?? 0;
+			paged = paged.range(offset, offset + params.limit - 1);
+		}
+		const { data, error } = await paged;
 		if (error) throw toAppError(error, "Error al cargar cupones");
 		return (data ?? []) as unknown as Coupon[];
+	},
+
+	/** Server-side head count with the same filters (no rows fetched). */
+	async countCoupons(
+		businessId: string,
+		params: CouponListParams = {},
+	): Promise<number> {
+		let query = supabase
+			.from("coupons")
+			.select("id", { count: "exact", head: true })
+			.eq("business_id", businessId);
+		if (params.isActive != null) query = query.eq("is_active", params.isActive);
+		const { count, error } = (await query) as unknown as {
+			count: number | null;
+			error: unknown;
+		};
+		if (error) throw toAppError(error, "Error al contar cupones");
+		return count ?? 0;
 	},
 
 	async upsertCoupon(
@@ -474,14 +634,65 @@ export const businessRepository = {
 	},
 
 	// ─── Payouts ──────────────────────────────────────────────────────
-	async getPayouts(businessId: string): Promise<Payout[]> {
+	async getPayouts(
+		businessId: string,
+		params: PayoutListParams = {},
+	): Promise<Payout[]> {
+		let query = supabase
+			.from("payouts")
+			.select(PAYOUT_FIELDS)
+			.eq("business_id", businessId);
+		if (params.status != null) query = query.eq("status", params.status);
+		let paged = query.order("period_end", { ascending: false });
+		if (params.limit != null) {
+			const offset = params.offset ?? 0;
+			paged = paged.range(offset, offset + params.limit - 1);
+		}
+		const { data, error } = await paged;
+		if (error) throw toAppError(error, "Error al cargar pagos");
+		return (data ?? []) as unknown as Payout[];
+	},
+
+	/** Single payout by id (detail screen — no list fetch). */
+	async getPayout(payoutId: string): Promise<Payout | null> {
 		const { data, error } = await supabase
 			.from("payouts")
 			.select(PAYOUT_FIELDS)
+			.eq("id", payoutId)
+			.maybeSingle();
+		if (error) throw toAppError(error, "Error al cargar el pago");
+		return (data ?? null) as unknown as Payout | null;
+	},
+
+	/**
+	 * Exact balance totals over ALL payouts (single bounded fetch — payouts
+	 * settle quincenales, so rows stay tiny; no sum aggregate exists
+	 * server-side). Used by the balance cards so they stay exact under any
+	 * list filter.
+	 */
+	async getPayoutTotals(businessId: string): Promise<{
+		paid: number;
+		paidCount: number;
+		pending: number;
+	}> {
+		const { data, error } = await supabase
+			.from("payouts")
+			.select("net_amount,status")
 			.eq("business_id", businessId)
-			.order("period_end", { ascending: false });
+			.limit(1000);
 		if (error) throw toAppError(error, "Error al cargar pagos");
-		return (data ?? []) as unknown as Payout[];
+		let paid = 0;
+		let paidCount = 0;
+		let pending = 0;
+		for (const row of toRows(data)) {
+			if (row.status === "paid") {
+				paid += num(row.net_amount) ?? 0;
+				paidCount += 1;
+			} else if (row.status === "pending" || row.status === "processing") {
+				pending += num(row.net_amount) ?? 0;
+			}
+		}
+		return { paid, paidCount, pending };
 	},
 
 	// ─── Stats ────────────────────────────────────────────────────────
@@ -726,36 +937,36 @@ function resolveAggregation(totalDays: number): Aggregation {
 
 function bucketKey(d: Date, agg: Aggregation): string {
 	if (agg === "day")
-		return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+		return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
 	if (agg === "week") {
 		const monday = new Date(d);
-		monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-		const jan1 = new Date(monday.getFullYear(), 0, 1);
+		monday.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+		const jan1 = new Date(Date.UTC(monday.getUTCFullYear(), 0, 1));
 		const weekNum =
 			Math.floor((monday.getTime() - jan1.getTime()) / (7 * 86400000)) + 1;
-		return `${monday.getFullYear()}-W${weekNum}`;
+		return `${monday.getUTCFullYear()}-W${weekNum}`;
 	}
-	return `${d.getFullYear()}-${d.getMonth() + 1}`;
+	return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
 }
 
 function bucketLabel(key: string, agg: Aggregation): string {
 	if (agg === "day") {
 		const [y, m, d] = key.split("-").map(Number);
 		const names = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-		return names[new Date(y ?? 0, (m ?? 1) - 1, d ?? 1).getDay()] ?? key;
+		return names[new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).getUTCDay()] ?? key;
 	}
 	if (agg === "week") {
 		const [yearPart, weekPart] = key.split("-W");
 		const y = Number(yearPart);
 		const weekNum = Number(weekPart);
-		const jan1 = new Date(y, 0, 1);
+		const jan1 = new Date(Date.UTC(y, 0, 1));
 		const monday = new Date(jan1.getTime() + (weekNum - 1) * 7 * 86400000);
 		const saturday = new Date(monday.getTime() + 6 * 86400000);
-		if (monday.getFullYear() !== y) return `Sem ${weekNum}`;
-		if (monday.getMonth() === saturday.getMonth()) {
-			return `${monday.getDate()}–${saturday.getDate()} ${MONTHS_SHORT[monday.getMonth()]}`;
+		if (monday.getUTCFullYear() !== y) return `Sem ${weekNum}`;
+		if (monday.getUTCMonth() === saturday.getUTCMonth()) {
+			return `${monday.getUTCDate()}–${saturday.getUTCDate()} ${MONTHS_SHORT[monday.getUTCMonth()]}`;
 		}
-		return `${monday.getDate()} ${MONTHS_SHORT[monday.getMonth()]} – ${saturday.getDate()} ${MONTHS_SHORT[saturday.getMonth()]}`;
+		return `${monday.getUTCDate()} ${MONTHS_SHORT[monday.getUTCMonth()]} – ${saturday.getUTCDate()} ${MONTHS_SHORT[saturday.getUTCMonth()]}`;
 	}
 	const [, m] = key.split("-");
 	return MONTHS_FULL[Number(m) - 1] ?? key;
@@ -787,7 +998,7 @@ function dailyStats(
 	}
 	for (const row of days) {
 		const [y, m, d] = row.day.split("-").map(Number);
-		const key = bucketKey(new Date(y ?? 0, (m ?? 1) - 1, d ?? 1), agg);
+		const key = bucketKey(new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)), agg);
 		const current = dataMap.get(key);
 		if (current) {
 			dataMap.set(key, {
@@ -911,6 +1122,11 @@ function formatMemberSince(createdAt: string | null): string | null {
 
 function toRows(data: unknown): Row[] {
 	return Array.isArray(data) ? (data as Row[]) : [];
+}
+
+/** Escape PostgREST `ilike` wildcards in user search input. */
+function escapeLike(value: string): string {
+	return value.replace(/[%_\\]/g, (c) => `\\${c}`);
 }
 
 function num(value: unknown): number | null {

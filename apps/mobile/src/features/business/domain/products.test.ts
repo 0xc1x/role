@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import type { OfferDetail } from "@/features/offers/domain/offer";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
 import {
 	filterAndSortProducts,
 	productStats,
+	productsSortToOrder,
 	type ProductListFilters,
-} from "@/features/business/domain/products";
+} from "@/src/features/business/domain/products";
 
 function makeOffer(
 	overrides: Partial<OfferDetail["offer"]> &
@@ -132,6 +133,35 @@ describe("filterAndSortProducts", () => {
 		];
 		const result = filterAndSortProducts(offers, { ...baseFilters, sort: "stockLow" });
 		expect(result.map((o) => o.offer.id)).toEqual(["b", "a"]);
+	});
+});
+
+describe("productsSortToOrder", () => {
+	it("mapea cada sort a order() server-side sobre columnas base", () => {
+		expect(productsSortToOrder("newest")).toEqual({
+			orderBy: "created_at",
+			ascending: false,
+		});
+		expect(productsSortToOrder("nameAZ")).toEqual({
+			orderBy: "title",
+			ascending: true,
+		});
+		expect(productsSortToOrder("nameZA")).toEqual({
+			orderBy: "title",
+			ascending: false,
+		});
+		expect(productsSortToOrder("priceLow")).toEqual({
+			orderBy: "discounted_price",
+			ascending: true,
+		});
+		expect(productsSortToOrder("priceHigh")).toEqual({
+			orderBy: "discounted_price",
+			ascending: false,
+		});
+		expect(productsSortToOrder("stockLow")).toEqual({
+			orderBy: "stock",
+			ascending: true,
+		});
 	});
 });
 

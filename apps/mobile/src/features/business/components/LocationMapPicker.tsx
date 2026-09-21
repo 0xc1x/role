@@ -1,20 +1,21 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Expand, LocateFixed, Map, Navigation } from "lucide-react-native";
 import * as Location from "expo-location";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { env } from "@/core/config/env";
-import { reverseGeocode } from "@/core/utils/geocode";
-import type { MapCanvasHandle } from "@/core/ui/MapCanvas.types";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { env } from "@/src/core/config/env";
+import { reverseGeocode } from "@/src/core/utils/geocode";
+import type { MapCanvasHandle } from "@/src/core/ui/MapCanvas.types";
+import { Button } from "@/components/ui/button";
 
 const RMap = lazy(() =>
 	(Platform.OS === "web"
-		? import("@/core/ui/MapCanvas.web")
-		: import("@/core/ui/MapCanvas.native")
+		? import("@/src/core/ui/MapCanvas.web")
+		: import("@/src/core/ui/MapCanvas.native")
 	).then((m) => ({ default: m.MapCanvas })),
 );
 
@@ -130,7 +131,7 @@ export function LocationMapPicker({
 					},
 				]}
 			>
-				<Ionicons name="map-outline" size={28} color={colors.mutedForeground} />
+				<Map size={28} color={colors.mutedForeground} />
 				<AppText
 					variant="bodySmall"
 					style={{ color: colors.mutedForeground, textAlign: "center" }}
@@ -173,9 +174,9 @@ export function LocationMapPicker({
 					accessibilityLabel={strings.business.useMyLocation}
 				>
 					{locating ? (
-						<Ionicons name="locate" size={18} color={colors.primary} />
+						<LocateFixed size={18} color={colors.primary} />
 					) : (
-						<Ionicons name="navigate" size={18} color={colors.primary} />
+						<Navigation size={18} color={colors.primary} />
 					)}
 				</Pressable>
 				<Pressable
@@ -188,7 +189,7 @@ export function LocationMapPicker({
 					accessibilityRole="button"
 					accessibilityLabel={strings.business.expandMap}
 				>
-					<Ionicons name="expand" size={18} color={colors.primary} />
+					<Expand size={18} color={colors.primary} />
 				</Pressable>
 			</View>
 
@@ -239,14 +240,16 @@ function FullscreenMap({
 			</Suspense>
 			<View style={[styles.fullscreenBar, { borderTopColor: colors.borderSolid }]}>
 				<Button
-					label={strings.business.cancel}
 					variant="outline"
 					onPress={onClose}
-				/>
+				>
+					{strings.business.cancel}
+				</Button>
 				<Button
-					label={strings.business.confirmMapPin}
 					onPress={() => onConfirm(coords)}
-				/>
+				>
+					{strings.business.confirmMapPin}
+				</Button>
 			</View>
 		</View>
 	);

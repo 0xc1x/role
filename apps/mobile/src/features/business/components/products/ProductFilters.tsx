@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Funnel } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal, Button } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useCategories } from "@/features/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, BottomSheetModal } from "@/src/core/ui";
+import { Button } from "@/components/ui/button";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useCategories } from "@/src/features/hooks";
 
 /**
  * "Filtrar" pill + category bottom sheet. A single active category is
@@ -33,31 +34,20 @@ export function ProductFilters({
 
 	return (
 		<>
-			<Pressable
+			<Button
+				variant={active ? "default" : "outline"}
+				size="sm"
 				onPress={openSheet}
 				accessibilityRole="button"
-				style={({ pressed }) => [
-					styles.pill,
-					{
-						backgroundColor: active ? colors.secondary : colors.inputBackground,
-						borderColor: active ? colors.secondary : colors.borderSolid,
-						opacity: pressed ? 0.8 : 1,
-					},
-				]}
+				icon={
+					<Funnel
+						size={14}
+						color={active ? colors.secondaryForeground : colors.foreground}
+					/>
+				}
 			>
-				<Ionicons
-					name="filter"
-					size={14}
-					color={active ? colors.secondaryForeground : colors.foreground}
-				/>
-				<AppText
-					variant="bodySmall"
-					weight="semiBold"
-					style={{ color: active ? colors.secondaryForeground : colors.foreground }}
-				>
-					{strings.business.filter}
-				</AppText>
-			</Pressable>
+				{strings.business.filter}
+			</Button>
 
 			{open ? (
 				<BottomSheetModal
@@ -65,18 +55,19 @@ export function ProductFilters({
 					onClose={() => setOpen(false)}
 					footer={
 						<Button
-							label={
-								draft != null
-									? strings.business.applyFilters
-									: strings.common.close
-							}
 							onPress={() => {
 								onApply(draft);
 								setOpen(false);
 							}}
 							fullWidth
 							size="lg"
-						/>
+						>
+							{
+								draft != null
+									? strings.business.applyFilters
+									: strings.common.close
+							}
+						</Button>
 					}
 				>
 					<View style={styles.optionsWrap}>
@@ -87,6 +78,7 @@ export function ProductFilters({
 								: category.name;
 							return (
 								<Pressable
+									cssInterop={false}
 									key={category.id}
 									onPress={() =>
 										setDraft((current) =>

@@ -5,7 +5,7 @@ const DAY_MS = 86_400_000;
 
 function startOfDay(date: Date): Date {
 	const d = new Date(date);
-	d.setHours(0, 0, 0, 0);
+	d.setUTCHours(0, 0, 0, 0);
 	return d;
 }
 
@@ -23,23 +23,23 @@ export function statsRangeFor(
 	const start = startOfDay(now);
 
 	if (period === "week") {
-		start.setDate(start.getDate() + offset * 7);
-		const weekday = start.getDay() === 0 ? 7 : start.getDay();
-		start.setDate(start.getDate() - weekday + 1);
+		start.setUTCDate(start.getUTCDate() + offset * 7);
+		const weekday = start.getUTCDay() === 0 ? 7 : start.getUTCDay();
+		start.setUTCDate(start.getUTCDate() - weekday + 1);
 	} else if (period === "month") {
-		start.setMonth(start.getMonth() + offset, 1);
+		start.setUTCMonth(start.getUTCMonth() + offset, 1);
 	} else {
-		start.setMonth(0, 1);
-		start.setFullYear(start.getFullYear() + offset);
+		start.setUTCMonth(0, 1);
+		start.setUTCFullYear(start.getUTCFullYear() + offset);
 	}
 
 	if (offset >= 0) return { start, end: new Date(now) };
 
 	const end = new Date(start);
-	if (period === "week") end.setDate(end.getDate() + 6);
-	if (period === "month") end.setMonth(end.getMonth() + 1, 0);
-	if (period === "year") end.setMonth(11, 31);
-	end.setHours(23, 59, 59, 999);
+	if (period === "week") end.setUTCDate(end.getUTCDate() + 6);
+	if (period === "month") end.setUTCMonth(end.getUTCMonth() + 1, 0);
+	if (period === "year") end.setUTCMonth(11, 31);
+	end.setUTCHours(23, 59, 59, 999);
 	return { start, end };
 }
 
@@ -69,28 +69,26 @@ export function statsRangeLabel(
 		return labels.thisYear;
 	}
 	const { start, end } = statsRangeFor(period, offset, now);
-	if (period === "year") return String(end.getFullYear());
+	if (period === "year") return String(end.getUTCFullYear());
 	if (period === "month")
-		return `${MONTH_ABBR[start.getMonth()]} ${start.getFullYear()}`;
-	const sameYear = start.getFullYear() === end.getFullYear();
+		return `${MONTH_ABBR[start.getUTCMonth()]} ${start.getUTCFullYear()}`;
+	const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
 	const day = (d: Date) =>
-		`${d.getDate()} ${MONTH_ABBR[d.getMonth()]}${sameYear ? "" : ` ${d.getFullYear()}`}`;
-	return `${day(start)} – ${day(end)} ${end.getFullYear()}`;
+		`${d.getUTCDate()} ${MONTH_ABBR[d.getUTCMonth()]}${sameYear ? "" : ` ${d.getUTCFullYear()}`}`;
+	return `${day(start)} – ${day(end)} ${end.getUTCFullYear()}`;
 }
 
-/** KPIs derivados del agregado (puros, testeables). */
+/** KPIs derivados del agregado (puros, testeables; números sin formato). */
 export function statsViewModel(stats: {
 	revenue: number;
 	ordersCount: number;
 	avgRating: number | null;
-}): { dailyAvg: (days: number) => string; avgTicket: string; rating: string } {
+}): { dailyAvg: (days: number) => number; avgTicket: number; rating: number } {
 	return {
 		dailyAvg: (days: number) =>
-			stats.revenue > 0 && days > 0 ? (stats.revenue / days).toFixed(2) : "0.00",
+			stats.revenue > 0 && days > 0 ? stats.revenue / days : 0,
 		avgTicket:
-			stats.ordersCount > 0
-				? (stats.revenue / stats.ordersCount).toFixed(2)
-				: "0.00",
-		rating: (stats.avgRating ?? 0).toFixed(1),
+			stats.ordersCount > 0 ? stats.revenue / stats.ordersCount : 0,
+		rating: stats.avgRating ?? 0,
 	};
 }

@@ -5,7 +5,7 @@ import {
 	PAYOUT_STATUS_LABELS,
 	filterBusinessReviews,
 	type BusinessReviewView,
-} from "@/features/business/domain/business";
+} from "@/src/features/business/domain/business";
 
 function review(partial: Partial<BusinessReviewView>): BusinessReviewView {
 	return {

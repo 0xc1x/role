@@ -1,7 +1,7 @@
 import type { BusinessNotificationPreferences } from "@0xc1x/role-commons";
 
-import { supabase } from "@/core/supabase/client";
-import { toAppError } from "@/core/error/mapper";
+import { supabase } from "@/src/core/supabase/client";
+import { toAppError } from "@/src/core/error/mapper";
 
 import { DEFAULT_BUSINESS_NOTIFICATION_PREFS } from "../domain/business";
 

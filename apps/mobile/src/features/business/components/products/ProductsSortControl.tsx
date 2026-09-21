@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { Pressable, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ArrowUpDown, Check } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, BottomSheetModal } from "@/src/core/ui";
+import { Button } from "@/components/ui/button";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
 import {
 	PRODUCT_SORTS,
 	type ProductsSort,
-} from "@/features/business/domain/products";
+} from "@/src/features/business/domain/products";
 
 const SORT_LABELS: Record<ProductsSort, string> = {
 	newest: strings.business.sortNewest,
@@ -33,24 +34,15 @@ export function ProductsSortControl({
 
 	return (
 		<>
-			<Pressable
+			<Button
+				variant="outline"
+				size="sm"
 				onPress={() => setOpen(true)}
 				accessibilityRole="button"
-				style={({ pressed }) => [
-					styles.pill,
-					{
-						backgroundColor: colors.inputBackground,
-						borderColor: colors.borderSolid,
-						opacity: pressed ? 0.8 : 1,
-					},
-				]}
+				icon={<ArrowUpDown size={14} color={colors.mutedForeground} />}
 			>
-				<Ionicons name="swap-vertical" size={14} color={colors.mutedForeground} />
-				<AppText variant="bodySmall" weight="semiBold">
-					{SORT_LABELS[value]}
-				</AppText>
-				<Ionicons name="chevron-down" size={14} color={colors.mutedForeground} />
-			</Pressable>
+				{SORT_LABELS[value]}
+			</Button>
 
 			{open ? (
 				<BottomSheetModal title={strings.business.sort} onClose={() => setOpen(false)}>
@@ -58,6 +50,7 @@ export function ProductsSortControl({
 						const selected = sort === value;
 						return (
 							<Pressable
+								cssInterop={false}
 								key={sort}
 								onPress={() => {
 									onChange(sort);
@@ -84,8 +77,7 @@ export function ProductsSortControl({
 									{SORT_LABELS[sort]}
 								</AppText>
 								{selected ? (
-									<Ionicons
-										name="checkmark"
+									<Check
 										size={18}
 										color={colors.secondaryForeground}
 									/>

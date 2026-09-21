@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Check, Store } from "lucide-react-native";
 import type { BusinessLocation } from "@0xc1x/role-commons";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, BottomSheetModal } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
 
 /**
  * Sucursal selector pill + bottom sheet. `null` = todas las sucursales
@@ -30,6 +30,7 @@ export function BranchSelector({
 	return (
 		<>
 			<Pressable
+				cssInterop={false}
 				onPress={() => setOpen(true)}
 				accessibilityRole="button"
 				style={({ pressed }) => [
@@ -37,20 +38,19 @@ export function BranchSelector({
 					{
 						backgroundColor: colors.inputBackground,
 						borderColor: colors.borderSolid,
-						opacity: pressed ? 0.8 : 1,
+						opacity: pressed ? 0.85 : 1,
 					},
 				]}
 			>
-				<Ionicons name="storefront-outline" size={15} color={colors.foreground} />
+				<Store size={15} color={colors.foreground} />
 				<AppText
 					variant="bodySmall"
-					weight="semiBold"
+					weight="medium"
 					numberOfLines={1}
-					style={{ maxWidth: 140 }}
+					style={{ color: colors.foreground }}
 				>
 					{label}
 				</AppText>
-				<Ionicons name="chevron-down" size={14} color={colors.mutedForeground} />
 			</Pressable>
 
 			{open ? (
@@ -98,6 +98,7 @@ function OptionRow({
 	const { colors } = useTheme();
 	return (
 		<Pressable
+			cssInterop={false}
 			onPress={onPress}
 			style={({ pressed }) => [
 				styles.option,
@@ -130,8 +131,7 @@ function OptionRow({
 				) : null}
 			</View>
 			{selected ? (
-				<Ionicons
-					name="checkmark"
+				<Check
 					size={18}
 					color={colors.secondaryForeground}
 				/>

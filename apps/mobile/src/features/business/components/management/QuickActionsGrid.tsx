@@ -1,18 +1,18 @@
 import { type Href, router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Bell, CircleHelp, Star, Tag, TrendingUp } from "lucide-react-native";
 import { Pressable, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
 
 export function QuickActionsGrid({ businessId }: { businessId: string }) {
 	const { colors } = useTheme();
 	const base = `/business/${businessId}`;
 
 	const large = {
-		icon: <Ionicons name="trending-up" size={18} color={colors.success} />,
+		icon: <TrendingUp size={18} color={colors.success} />,
 		title: strings.business.quickStats,
 		subtitle: strings.business.quickStatsSub,
 		route: `${base}/stats`,
@@ -21,31 +21,31 @@ export function QuickActionsGrid({ businessId }: { businessId: string }) {
 	const grid = [
 		// Oculto hasta habilitar la pasarela de pagos
 		// {
-		// 	icon: <Ionicons name="card-outline" size={18} color={colors.foreground} />,
+		// 	icon: <CreditCard size={18} color={colors.foreground} />,
 		// 	title: strings.business.quickPayments,
 		// 	subtitle: strings.business.quickPaymentsSub,
 		// 	route: `${base}/payouts`,
 		// },
 		{
-			icon: <Ionicons name="pricetag-outline" size={18} color={colors.foreground} />,
+			icon: <Tag size={18} color={colors.foreground} />,
 			title: strings.business.quickCoupons,
 			subtitle: strings.business.quickCouponsSub,
 			route: `${base}/coupons`,
 		},
 		{
-			icon: <Ionicons name="star-outline" size={18} color={colors.foreground} />,
+			icon: <Star size={18} color={colors.foreground} />,
 			title: strings.business.quickReviews,
 			subtitle: strings.business.quickReviewsSub,
 			route: `${base}/reviews`,
 		},
 		{
-			icon: <Ionicons name="notifications-outline" size={18} color={colors.foreground} />,
+			icon: <Bell size={18} color={colors.foreground} />,
 			title: strings.business.quickAlerts,
 			subtitle: strings.business.quickAlertsSub,
 			route: `${base}/notifications`,
 		},
 		{
-			icon: <Ionicons name="help-circle-outline" size={18} color={colors.foreground} />,
+			icon: <CircleHelp size={18} color={colors.foreground} />,
 			title: strings.business.quickSupport,
 			subtitle: strings.business.quickSupportSub,
 			route: `${base}/help`,
@@ -56,11 +56,7 @@ export function QuickActionsGrid({ businessId }: { businessId: string }) {
 		<View style={styles.quickGrid}>
 			<Pressable
 				onPress={() => router.push(`${base}/stats` as Href)}
-				style={({ pressed }) => [
-					styles.quickTileLarge,
-					{ backgroundColor: colors.card, borderColor: colors.borderSolid },
-					pressed && styles.pressed,
-				]}
+				style={ [styles.quickTileLarge,{backgroundColor: colors.card, borderColor: colors.borderSolid }]}
 			>
 				<View style={styles.quickInfo}>
 					<AppText variant="bodyMedium" weight="bold">
@@ -79,11 +75,7 @@ export function QuickActionsGrid({ businessId }: { businessId: string }) {
 					<Pressable
 						key={item.title}
 						onPress={() => router.push(item.route as Href)}
-						style={({ pressed }) => [
-							styles.quickTile,
-							{ backgroundColor: colors.card, borderColor: colors.borderSolid },
-							pressed && styles.pressed,
-						]}
+						style={ [styles.quickTile ,{backgroundColor: colors.card, borderColor: colors.borderSolid }]}
 					>
 						<View style={styles.quickInfo}>
 							<AppText variant="bodySmall" weight="bold">
@@ -126,7 +118,6 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		flexBasis: "48%",
 		flexGrow: 1,
 		gap: spacing.xs,
 		padding: spacing.md,

@@ -9,7 +9,20 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { toast } from "sonner-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+	Calendar,
+	CheckCheck,
+	CircleCheck,
+	CircleX,
+	Clock,
+	MapPin,
+	Phone,
+	QrCode,
+	Timer,
+	User,
+	UtensilsCrossed,
+	type LucideIcon,
+} from "lucide-react-native";
 
 import {
 	AlertDialog,
@@ -22,42 +35,40 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	goBackOr,
 	Screen,
 	ScreenHeader,
 	StatusBadge,
 	TextField,
 	useWebPullToRefresh,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 import {
 	formatMoneyPrecise,
 	formatShortDate,
 	formatTime,
-} from "@/core/utils/formatters";
-import { orderStatusLabels } from "@/features/orders/domain/order";
-import { orderStatusTone } from "@/features/orders/domain/order";
+} from "@/src/core/utils/formatters";
+import { orderStatusLabels } from "@/src/features/orders/domain/order";
+import { orderStatusTone } from "@/src/features/orders/domain/order";
 import {
 	isTerminalStatus,
 	lastEventTimeFor,
 	type OrderDetail,
-} from "@/features/orders/domain/order";
+} from "@/src/features/orders/domain/order";
 import type { OrderStatus } from "@0xc1x/role-commons";
 import {
 	useCancelBusinessOrder,
 	useUpdateOrderStatus,
 	useValidatePickupCode,
-} from "@/features/business/hooks";
+} from "@/src/features/business/hooks";
 import { PickupScannerSheet } from "./PickupScannerSheet";
-
-type IoniconName = keyof typeof Ionicons.glyphMap;
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 /**
  * Business order detail (ported from Rolé v1 `BusinessOrderDetailScreen`):
@@ -161,38 +172,39 @@ export function OrderDetail({
 				>
 					{order.status === "pending" || order.status === "confirmed" ? (
 						<Button
-							label={strings.business.ordersMarkAsReady}
-							variant="primary"
 							size="lg"
 							icon={
-								<Ionicons name="checkmark-circle-outline" size={20} color={colors.primaryForeground} />
+								<CircleCheck size={20} color={colors.primaryForeground} />
 							}
 							onPress={markReady}
 							loading={updateStatus.isPending}
 							fullWidth
-						/>
+						>
+							{strings.business.ordersMarkAsReady}
+						</Button>
 					) : null}
 
 					{order.status === "ready_for_pickup" ? (
 						<Button
-							label={strings.business.ordersValidateDelivery}
-							variant="primary"
 							size="lg"
-							icon={<Ionicons name="qr-code-outline" size={20} color={colors.primaryForeground} />}
+							icon={<QrCode size={20} color={colors.primaryForeground} />}
 							onPress={() => setValidateOpen(true)}
 							fullWidth
-						/>
+						>
+							{strings.business.ordersValidateDelivery}
+						</Button>
 					) : null}
 
 					{order.status !== "picked_up" ? (
 						<Button
-							label={strings.business.ordersCancelOrder}
 							variant="outline"
 							size="lg"
 							onPress={confirmCancel}
 							loading={cancelOrder.isPending}
 							fullWidth
-						/>
+						>
+							{strings.business.ordersCancelOrder}
+						</Button>
 					) : null}
 				</View>
 			) : null}
@@ -279,7 +291,7 @@ export function OrderDetail({
 function ProductCard({ item }: { item: OrderDetail }) {
 	const { colors } = useTheme();
 	return (
-		<Card style={styles.card}>
+		<Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 			<AppText variant="h4" weight="bold">
 				{strings.business.ordersProductTitle}
 			</AppText>
@@ -288,8 +300,7 @@ function ProductCard({ item }: { item: OrderDetail }) {
 					<Image source={{ uri: item.offerImageUrl }} style={styles.productImage} />
 				) : (
 					<View style={[styles.productImage, styles.productPlaceholder, { backgroundColor: colors.borderSolid }]}>
-						<Ionicons
-							name="fast-food-outline"
+						<UtensilsCrossed
 							size={28}
 							color={colors.mutedForeground}
 						/>
@@ -311,6 +322,7 @@ function ProductCard({ item }: { item: OrderDetail }) {
 // ─── Información del cliente ─────────────────────────────────────────
 
 function CustomerInfoCard({ item }: { item: OrderDetail }) {
+	const { colors } = useTheme();
 	const handleCall = () => {
 		if (item.customerPhone) {
 			Linking.openURL(`tel:${item.customerPhone}`);
@@ -318,12 +330,12 @@ function CustomerInfoCard({ item }: { item: OrderDetail }) {
 	};
 
 	return (
-		<Card style={styles.card}>
+		<Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 			<AppText variant="h4" weight="bold">
 				{strings.business.ordersCustomerInfo}
 			</AppText>
 			<InfoRow
-				icon="person-outline"
+				icon={User}
 				label={strings.business.ordersName}
 				text={item.customerName ?? strings.business.ordersNoName}
 			/>
@@ -333,7 +345,7 @@ function CustomerInfoCard({ item }: { item: OrderDetail }) {
 			style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
 		>
 			<InfoRow
-				icon="call-outline"
+				icon={Phone}
 				label={strings.business.phone}
 				text={item.customerPhone ?? strings.business.ordersNoPhone}
 			/>
@@ -345,23 +357,24 @@ function CustomerInfoCard({ item }: { item: OrderDetail }) {
 // ─── Información de recogida ─────────────────────────────────────────
 
 function PickupInfoCard({ item }: { item: OrderDetail }) {
+	const { colors } = useTheme();
 	const { order } = item;
 	const pickupTime =
 		order.pickup_time != null
 			? `${formatShortDate(order.pickup_time)} · ${formatTime(order.pickup_time)}`
 			: strings.business.ordersPickupPending;
 	return (
-		<Card style={styles.card}>
+		<Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 			<AppText variant="h4" weight="bold">
 				{strings.business.ordersPickupInfo}
 			</AppText>
 			<InfoRow
-				icon="time-outline"
+				icon={Clock}
 				label={strings.business.ordersPickupSchedule}
 				text={pickupTime}
 			/>
 			<InfoRow
-				icon="location-outline"
+				icon={MapPin}
 				label={strings.business.ordersPickupPlace}
 				text={item.businessAddress ?? strings.business.ordersNoAddress}
 			/>
@@ -372,7 +385,7 @@ function PickupInfoCard({ item }: { item: OrderDetail }) {
 // ─── Historial de cambios ────────────────────────────────────────────
 
 interface TimelineEntry {
-	icon: IoniconName;
+	icon: LucideIcon;
 	title: string;
 	note: string;
 	timestamp: string;
@@ -401,7 +414,7 @@ function buildTimeline(item: OrderDetail, colors: ReturnType<typeof useTheme>["c
 	const steps: TimelineStep[] = [
 		{
 			statuses: ["pending", "confirmed", "ready_for_pickup", "picked_up", "completed"],
-			icon: "time-outline",
+			icon: Clock,
 			title: strings.business.ordersTimelinePending,
 			note: strings.business.ordersTimelinePendingNote,
 			eventKeys: ["pending"],
@@ -411,7 +424,7 @@ function buildTimeline(item: OrderDetail, colors: ReturnType<typeof useTheme>["c
 		},
 		{
 			statuses: ["confirmed", "ready_for_pickup", "picked_up", "completed"],
-			icon: "checkmark-circle-outline",
+			icon: CircleCheck,
 			title: strings.business.ordersTimelineConfirmed,
 			note: strings.business.ordersTimelineConfirmedNote,
 			eventKeys: ["confirmed"],
@@ -421,7 +434,7 @@ function buildTimeline(item: OrderDetail, colors: ReturnType<typeof useTheme>["c
 		},
 		{
 			statuses: ["ready_for_pickup", "picked_up", "completed"],
-			icon: "checkmark-circle",
+			icon: CircleCheck,
 			title: strings.business.ordersTimelineReady,
 			note: strings.business.ordersTimelineReadyNote,
 			eventKeys: ["ready_for_pickup"],
@@ -431,7 +444,7 @@ function buildTimeline(item: OrderDetail, colors: ReturnType<typeof useTheme>["c
 		},
 		{
 			statuses: ["completed"],
-			icon: "checkmark-done-circle",
+			icon: CheckCheck,
 			title: strings.business.ordersTimelineCompleted,
 			note: strings.business.ordersTimelineCompletedNote,
 			eventKeys: ["picked_up", "completed"],
@@ -441,7 +454,7 @@ function buildTimeline(item: OrderDetail, colors: ReturnType<typeof useTheme>["c
 		},
 		{
 			statuses: ["cancelled"],
-			icon: "close-circle-outline",
+			icon: CircleX,
 			title: strings.business.ordersTimelineCancelled,
 			note: strings.business.ordersTimelineCancelledNote,
 			eventKeys: ["cancelled"],
@@ -451,7 +464,7 @@ function buildTimeline(item: OrderDetail, colors: ReturnType<typeof useTheme>["c
 		},
 		{
 			statuses: ["expired"],
-			icon: "timer-outline",
+			icon: Timer,
 			title: strings.business.ordersTimelineExpired,
 			note: strings.business.ordersTimelineExpiredNote,
 			eventKeys: ["expired"],
@@ -477,9 +490,9 @@ function TimelineCard({ item }: { item: OrderDetail }) {
 	const { colors } = useTheme();
 	const entries = buildTimeline(item, colors);
 	return (
-		<Card style={styles.card}>
+		<Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 			<View style={styles.timelineHeader}>
-				<Ionicons name="calendar-outline" size={20} color={colors.primary} />
+				<Calendar size={20} color={colors.primary} />
 				<AppText variant="h4" weight="bold">
 					{strings.business.ordersTimelineTitle}
 				</AppText>
@@ -496,7 +509,7 @@ function TimelineCard({ item }: { item: OrderDetail }) {
 }
 
 function TimelineEntryRow({
-	entry,
+	entry: { icon: Icon, ...entry },
 	isLast,
 }: {
 	entry: TimelineEntry;
@@ -507,7 +520,7 @@ function TimelineEntryRow({
 		<View style={styles.timelineRow}>
 			<View style={styles.timelineRail}>
 				<View style={[styles.timelineDot, { backgroundColor: entry.background }]}>
-					<Ionicons name={entry.icon} size={18} color={entry.color} />
+					<Icon size={18} color={entry.color} />
 				</View>
 				{isLast ? null : (
 					<View style={[styles.timelineLine, { backgroundColor: colors.borderSolid }]} />
@@ -570,11 +583,11 @@ function OrderInfoCard({ item }: { item: OrderDetail }) {
 // ─── Fila informativa ────────────────────────────────────────────────
 
 function InfoRow({
-	icon,
+	icon: Icon,
 	label,
 	text,
 }: {
-	icon: IoniconName;
+	icon: LucideIcon;
 	label: string;
 	text: string;
 }) {
@@ -582,7 +595,7 @@ function InfoRow({
 	return (
 		<View style={styles.infoRow}>
 			<View style={[styles.infoIcon, { backgroundColor: colors.inputBackground }]}>
-				<Ionicons name={icon} size={16} color={colors.mutedForeground} />
+				<Icon size={16} color={colors.mutedForeground} />
 			</View>
 			<View style={styles.infoBody}>
 				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
@@ -639,15 +652,15 @@ function ValidateCodeDialog({
 					</AppText>
 
 					<Button
-						label={strings.business.ordersScanQr}
 						variant="outline"
 						size="lg"
-						icon={<Ionicons name="qr-code-outline" size={18} color={colors.foreground} />}
+						icon={<QrCode size={18} color={colors.foreground} />}
 						onPress={onScan}
 						fullWidth
 						style={styles.scanBtn}
-					/>
-
+					>
+						{strings.business.ordersScanQr}
+					</Button>
 					<View style={styles.orRow}>
 						<View style={[styles.orLine, { backgroundColor: colors.borderSolid }]} />
 						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
@@ -666,18 +679,19 @@ function ValidateCodeDialog({
 					/>
 					<View style={styles.dialogActions}>
 						<Button
-							label={strings.common.cancel}
 							variant="outline"
 							style={{ flex: 1 }}
 							onPress={onClose}
-						/>
+						>
+							{strings.common.cancel}
+						</Button>
 						<Button
-							label={strings.common.confirm}
-							variant="primary"
 							style={{ flex: 1 }}
 							onPress={() => onSubmit(code)}
 							loading={loading}
-						/>
+						>
+							{strings.common.confirm}
+						</Button>
 					</View>
 				</View>
 			</View>
@@ -698,6 +712,9 @@ const styles = StyleSheet.create({
 		gap: spacing.sm,
 	},
 	card: {
+		borderRadius: radii.lg,
+		borderWidth: 1,
+		overflow: "hidden",
 		padding: spacing.lg,
 		gap: spacing.md,
 	},

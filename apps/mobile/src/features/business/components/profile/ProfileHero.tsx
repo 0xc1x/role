@@ -1,12 +1,12 @@
 import { Animated, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronLeft } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { CircleIconButton, goBackOr } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { CircleIconButton, goBackOr } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 
 export function ProfileHero({
 	coverImage,
@@ -47,7 +47,7 @@ export function ProfileHero({
 
 			<View style={[styles.topBar, { top: topOffset }]}>
 				<CircleIconButton
-					icon={<Ionicons name="chevron-back" size={22} color={colors.foreground} />}
+					icon={<ChevronLeft size={22} color={colors.foreground} />}
 					onPress={() => goBackOr("/(consumer)")}
 				/>
 			</View>

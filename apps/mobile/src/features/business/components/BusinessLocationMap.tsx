@@ -1,13 +1,13 @@
 import { Pressable, StyleSheet, View } from "react-native";
 
-import { env } from "@/core/config/env";
-import { strings } from "@/core/i18n/strings";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
-import { AppText } from "@/core/ui";
+import { env } from "@/src/core/config/env";
+import { strings } from "@/src/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { AppText } from "@/src/core/ui";
 // Static import: this file is web-only (Metro resolves
 // BusinessLocationMap.native.tsx on iOS/Android).
-import { MapCanvas } from "@/core/ui/MapCanvas.web";
+import { MapCanvas } from "@/src/core/ui/MapCanvas.web";
 
 /**
  * Business location preview (web): same interactive Google map as the

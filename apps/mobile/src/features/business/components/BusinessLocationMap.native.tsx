@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 
-import { radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { getMapStyle } from "@/core/theme/map-style";
+import { radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { getMapStyle } from "@/src/core/theme/map-style";
 
 export function BusinessLocationMap({
 	latitude,

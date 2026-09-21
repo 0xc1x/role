@@ -1,14 +1,14 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Star } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import type { BusinessProfileDetail } from "@/features/business/domain/business";
-import { BusinessLocationMap } from "@/features/business/components/BusinessLocationMap";
-import { ReviewItem } from "@/features/business/components/ReviewItem";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import type { BusinessProfileDetail } from "@/src/features/business/domain/business";
+import { BusinessLocationMap } from "@/src/features/business/components/BusinessLocationMap";
+import { ReviewItem } from "@/src/features/business/components/ReviewItem";
 import { openMaps } from "./maps";
 
 export function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
@@ -21,7 +21,7 @@ export function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
 					{strings.businessProfile.reviewsTitle}
 				</AppText>
 				<View style={[styles.ratingBadge, { backgroundColor: colors.surfaceWarning }]}>
-					<Ionicons name="star" size={14} color={colors.yellowDark} />
+					<Star size={14} color={colors.yellowDark} />
 					<View style={{ width: 4 }} />
 					<AppText weight="bold" style={{ color: colors.yellowDark }}>
 						{(business.rating ?? 0).toFixed(1)}

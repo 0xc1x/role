@@ -1,18 +1,19 @@
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { MapPin, Star, Store } from "lucide-react-native";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { AppText, Card } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { formatDistanceKm } from "@/core/utils/formatters";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import type { BusinessSummary } from "@/features/offers/domain/offer";
-import { haversineKm } from "@/features/offers/domain/offer";
-import { useSelectedAddress } from "@/features/hooks";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { formatDistanceKm } from "@/src/core/utils/formatters";
+import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
+import type { BusinessSummary } from "@/src/features/offers/domain/offer";
+import { haversineKm } from "@/src/features/offers/domain/offer";
+import { useSelectedAddress } from "@/src/features/hooks";
+import { CardPressable } from "@/components/ui/card-presable";
 
 interface BusinessGridCardProps {
 	business: BusinessSummary;
@@ -46,7 +47,8 @@ export function BusinessGridCard({
 	const typeLabel = BUSINESS_TYPE_LABELS[business.type] ?? business.type;
 
 	return (
-		<Card
+		<CardPressable
+			className="p-0 gap-0 border-0 shadow-none"
 			style={[styles.card, style]}
 			onPress={onPress ?? (() => router.push(`/business-profile/${business.id}`))}
 		>
@@ -59,7 +61,7 @@ export function BusinessGridCard({
 					/>
 				) : (
 					<View style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.muted }]}>
-						<Ionicons name="storefront-outline" size={28} color={colors.mutedForeground} />
+						<Store size={28} color={colors.mutedForeground} />
 					</View>
 				)}
 				{business.rating > 0 ? (
@@ -69,7 +71,7 @@ export function BusinessGridCard({
 							{ backgroundColor: withAlpha(colors.card, 0.922), boxShadow: `0px 1px 4px ${colors.shadow}` },
 						]}
 					>
-						<Ionicons name="star" size={14} color={colors.green} />
+						<Star size={14} color={colors.green} />
 						<AppText style={{ fontSize: 12, fontWeight: "700", color: colors.foreground }}>
 							{business.rating.toFixed(1)}
 						</AppText>
@@ -82,8 +84,7 @@ export function BusinessGridCard({
 							{ backgroundColor: withAlpha(colors.card, 0.922), boxShadow: `0px 1px 4px ${colors.shadow}` },
 						]}
 					>
-						<Ionicons
-							name="location-outline"
+						<MapPin
 							size={12}
 							color={colors.mutedForeground}
 						/>
@@ -112,6 +113,7 @@ export function BusinessGridCard({
 					style={{
 						color: colors.mutedForeground,
 						fontSize: 12,
+						lineHeight: 16,
 						fontWeight: "500",
 						letterSpacing: 0.5,
 						marginTop: 4,
@@ -122,7 +124,7 @@ export function BusinessGridCard({
 					{typeLabel}
 				</AppText>
 			</View>
-		</Card>
+		</CardPressable>
 	);
 }
 
@@ -164,7 +166,6 @@ const styles = StyleSheet.create({
 		overflow: "hidden",
 		borderRadius: radii.sm,
 		borderWidth: 0,
-		flex: 1,
 	},
 	skeleton: {
 		borderRadius: radii.sm,
@@ -207,8 +208,10 @@ const styles = StyleSheet.create({
 		borderRadius: radii.sm,
 	},
 	info: {
-		padding: 10,
-		height: 90,
+		paddingHorizontal: 10,
+		paddingTop: 10,
+		paddingBottom: 12,
+		// sacá el height:90 fijo
 		justifyContent: "flex-start",
 	},
 });

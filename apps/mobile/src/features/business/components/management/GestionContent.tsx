@@ -1,31 +1,30 @@
 import { type Href, router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Pencil, Pin, Plus, Store } from "lucide-react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
 	AppText,
-	Button,
-	Card,
 	EmptyState,
 	ErrorState,
 	Screen,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import { LocationCard, LocationCardSkeleton } from "@/features/business/components/LocationCard";
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
+import { LocationCard, LocationCardSkeleton } from "@/src/features/business/components/LocationCard";
 import {
 	useBusinessLocations,
 	useBusinessProfile,
-} from "@/features/business/hooks";
+} from "@/src/features/business/hooks";
 import { QuickActionsGrid } from "./QuickActionsGrid";
 import { SettingsSection } from "./SettingsSection";
-import { SignOutSection } from "@/features/auth/presentation/SignOutSection";
+import { SignOutSection } from "@/src/features/auth/presentation/SignOutSection";
+import { Button } from "@/components/ui/button";
 
 export function GestionContent({ businessId }: { businessId: string }) {
 	const { colors } = useTheme();
@@ -56,7 +55,17 @@ export function GestionContent({ businessId }: { businessId: string }) {
 				</AppText>
 
 				{/* ── Info del negocio ─────────────────────────────── */}
-				<Card style={styles.heroCard}>
+				<View
+					style={[
+						styles.heroCard,
+						{
+							backgroundColor: colors.card,
+							borderColor: colors.borderSolid,
+							borderWidth: 1,
+							borderRadius: radii.lg,
+						},
+					]}
+				>
 					<View style={styles.coverWrap}>
 						{business.cover_image ?? business.image ? (
 							<Image
@@ -88,7 +97,7 @@ export function GestionContent({ businessId }: { businessId: string }) {
 								/>
 							) : (
 								<View style={[styles.logo, styles.logoPlaceholder, { backgroundColor: colors.primary }]}>
-									<Ionicons name="storefront-outline" size={28} color={colors.primaryForeground} />
+									<Store size={28} color={colors.primaryForeground} />
 								</View>
 							)}
 							<View style={{ flex: 1, gap: 4 }}>
@@ -131,14 +140,14 @@ export function GestionContent({ businessId }: { businessId: string }) {
 							{profile.address ?? strings.business.ordersNoAddress}
 						</AppText>
 						<Button
-							label={strings.business.editProfile}
-							variant="primary"
-							icon={<Ionicons name="create-outline" size={20} color={colors.primaryForeground} />}
+							icon={<Pencil size={20} color={colors.primaryForeground} />}
 							style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
 							onPress={() => router.push("/business/profile/edit" as Href)}
-						/>
+						>
+							{strings.business.editProfile}
+						</Button>
 					</View>
-				</Card>
+				</View>
 
 				{/* ── Mis Locales ─────────────────────────────────── */}
 				<View style={styles.sectionHeader}>
@@ -146,13 +155,15 @@ export function GestionContent({ businessId }: { businessId: string }) {
 						{strings.business.myLocations}
 					</AppText>
 					<Button
-						label={strings.business.addLocation}
 						size="sm"
-						icon={<Ionicons name="add" size={16} color={colors.primaryForeground} />}
+						icon={<Plus size={16} color={colors.primaryForeground} />}
 						onPress={() =>
 							router.push(`/business/${businessId}/locations/create` as Href)
 						}
-					/>
+						style={{borderRadius: radii.pill}}
+					>
+						{strings.business.addLocation}
+					</Button>
 				</View>
 
 				{locationsLoading ? (
@@ -162,23 +173,34 @@ export function GestionContent({ businessId }: { businessId: string }) {
 						))}
 					</View>
 				) : !locations || locations.length === 0 ? (
-					<Card style={styles.emptyLocations}>
+					<View
+						style={[
+							styles.emptyLocations,
+							{
+								backgroundColor: colors.card,
+								borderColor: colors.borderSolid,
+								borderWidth: 1,
+								borderRadius: radii.lg,
+							},
+						]}
+					>
 						<EmptyState
-							icon={<Ionicons name="pin-outline" size={28} />}
+							icon={<Pin size={28} />}
 							title={strings.business.noLocationsTitle}
 							message={strings.business.noLocationsBody}
 							action={
 								<Button
-									label={strings.business.createLocation}
 									onPress={() =>
 										router.push(
 											`/business/${businessId}/locations/create` as Href,
 										)
 									}
-								/>
+								>
+									{strings.business.createLocation}
+								</Button>
 							}
 						/>
-					</Card>
+					</View>
 				) : (
 					<View style={styles.locations}>
 						{(locations ?? []).map((location) => (
@@ -272,14 +294,19 @@ export function GestionContentSkeleton() {
 				</View>
 				<View style={styles.skeletonQuickGrid}>
 					<Skeleton style={styles.skeletonQuickLarge} />
-					<View style={styles.skeletonQuickRow}>
-						{[0, 1].map((i) => (
-							<Skeleton
-								key={`gestion-quick-skeleton-${i}`}
-								style={styles.skeletonQuickTile}
-							/>
-						))}
-					</View>
+					{[0, 1].map((row) => (
+						<View
+							key={`gestion-quick-skeleton-row-${row}`}
+							style={styles.skeletonQuickRow}
+						>
+							{[0, 1].map((i) => (
+								<Skeleton
+									key={`gestion-quick-skeleton-${row}-${i}`}
+									style={styles.skeletonQuickTile}
+								/>
+							))}
+						</View>
+					))}
 				</View>
 			</View>
 		</Screen>

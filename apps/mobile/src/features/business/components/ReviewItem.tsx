@@ -1,11 +1,11 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Store, User, UtensilsCrossed } from "lucide-react-native";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { radii, spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import type { BusinessReviewView } from "@/features/business/domain/business";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import type { BusinessReviewView } from "@/src/features/business/domain/business";
 
 export function ReviewItem({ review }: { review: BusinessReviewView }) {
 	const { colors } = useTheme();
@@ -16,7 +16,7 @@ export function ReviewItem({ review }: { review: BusinessReviewView }) {
 	return (
 		<View style={[styles.reviewItem, { borderBottomColor: colors.border }]}>
 			<View style={[styles.avatar, { backgroundColor: colors.muted }]}>
-				<Ionicons name="person-outline" size={16} color={colors.mutedForeground} />
+				<User size={16} color={colors.mutedForeground} />
 			</View>
 			<View style={{ width: spacing.sm }} />
 			<View style={{ flex: 1 }}>
@@ -29,12 +29,12 @@ export function ReviewItem({ review }: { review: BusinessReviewView }) {
 					</AppText>
 				</View>
 				<View style={styles.reviewRatingRow}>
-					<Ionicons name="fast-food-outline" size={12} color={colors.yellow} />
+					<UtensilsCrossed size={12} color={colors.yellow} />
 					<AppText style={{ fontSize: 12 }}>
 						{strings.businessProfile.packRating.replace("{n}", String(review.productRating))}
 					</AppText>
 					<View style={{ width: spacing.md }} />
-					<Ionicons name="storefront-outline" size={12} color={colors.yellow} />
+					<Store size={12} color={colors.yellow} />
 					<AppText style={{ fontSize: 12 }}>
 						{strings.businessProfile.attentionRating.replace("{n}", String(review.businessRating))}
 					</AppText>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Store } from "lucide-react-native";
 import { View, StyleSheet } from "react-native";
 
 import {
@@ -14,11 +14,12 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
-import { strings } from "@/core/i18n/strings";
-import { Button, EmptyState, Screen } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { useAuthStore } from "@/features/auth/store";
-import { performSignOut } from "@/features/auth/sign-out";
+import { strings } from "@/src/core/i18n/strings";
+import { EmptyState, Screen } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { useAuthStore } from "@/src/features/auth/store";
+import { performSignOut } from "@/src/features/auth/sign-out";
+import { Button } from "@/components/ui/button";
 
 /**
  * Estado "aún no tienes negocio" compartido por products/orders/management
@@ -38,22 +39,24 @@ export function NoBusinessPrompt() {
 		<Screen>
 			<View style={styles.container}>
 				<EmptyState
-					icon={<Ionicons name="storefront-outline" size={28} color={colors.primary} />}
+					icon={<Store size={28} color={colors.primary} />}
 					title={strings.business.noBusiness}
 					message={strings.business.newBusinessSubtitle}
 					action={
 						<View style={styles.actions}>
 							<Button
-								label={strings.business.createBusiness}
 								onPress={() =>
 									router.push("/my-business/business-new")
 								}
-							/>
+							>
+								{strings.business.createBusiness}
+							</Button>
 							<Button
-								label={strings.auth.signOut}
 								variant="ghost"
 								onPress={() => setSignOutOpen(true)}
-							/>
+							>
+								{strings.auth.signOut}
+							</Button>
 						</View>
 					}
 				/>

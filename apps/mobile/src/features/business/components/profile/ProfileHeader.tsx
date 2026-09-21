@@ -1,14 +1,14 @@
 import { StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
+import { Leaf, Star, Store } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import type { BusinessProfileDetail } from "@/features/business/domain/business";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
+import type { BusinessProfileDetail } from "@/src/features/business/domain/business";
 
 export function BusinessHeader({ profile }: { profile: BusinessProfileDetail }) {
 	const { colors } = useTheme();
@@ -21,7 +21,7 @@ export function BusinessHeader({ profile }: { profile: BusinessProfileDetail }) 
 						<Image source={{ uri: business.image }} style={styles.logo} contentFit="cover" />
 					) : (
 						<View style={[styles.logo, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]}>
-							<Ionicons name="storefront-outline" size={28} color={colors.mutedForeground} />
+							<Store size={28} color={colors.mutedForeground} />
 						</View>
 					)}
 				</View>
@@ -50,7 +50,7 @@ export function BusinessHeader({ profile }: { profile: BusinessProfileDetail }) 
 			</View>
 
 			<View style={[styles.ratingRow, { marginTop: spacing.md }]}>
-				<Ionicons name="star" size={20} color={colors.yellow} />
+				<Star size={20} color={colors.yellow} />
 				<AppText variant="bodyMedium" weight="bold">
 					{(business.rating ?? 0).toFixed(1)}
 				</AppText>
@@ -78,7 +78,7 @@ export function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
 			]}
 		>
 			<View style={styles.statsRow}>
-				<Ionicons name="leaf-outline" size={24} color={colors.successDark} />
+				<Leaf size={24} color={colors.successDark} />
 				<AppText
 					// Display one-off: cifra de impacto del hero (fuera de escala).
 					style={{

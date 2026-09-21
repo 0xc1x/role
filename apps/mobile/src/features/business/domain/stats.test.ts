@@ -102,16 +102,16 @@ describe("statsRangeLabel", () => {
 });
 
 describe("statsViewModel", () => {
-	it("calcula promedios y rating", () => {
+	it("calcula promedios y rating como números", () => {
 		const vm = statsViewModel({ revenue: 100, ordersCount: 4, avgRating: 4.5 });
-		expect(vm.dailyAvg(10)).toBe("10.00");
-		expect(vm.avgTicket).toBe("25.00");
-		expect(vm.rating).toBe("4.5");
+		expect(vm.dailyAvg(10)).toBe(10);
+		expect(vm.avgTicket).toBe(25);
+		expect(vm.rating).toBe(4.5);
 	});
 	it("ceros sin dividir", () => {
 		const vm = statsViewModel({ revenue: 0, ordersCount: 0, avgRating: null });
-		expect(vm.dailyAvg(0)).toBe("0.00");
-		expect(vm.avgTicket).toBe("0.00");
-		expect(vm.rating).toBe("0.0");
+		expect(vm.dailyAvg(0)).toBe(0);
+		expect(vm.avgTicket).toBe(0);
+		expect(vm.rating).toBe(0);
 	});
 });

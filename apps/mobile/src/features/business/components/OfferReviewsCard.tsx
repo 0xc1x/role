@@ -1,13 +1,18 @@
 import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Star } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, Card } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { useBusinessReviews } from "@/features/business/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import {
+	useBusinessReviewCount,
+	useBusinessReviews,
+} from "@/src/features/business/hooks";
 import { ReviewItem } from "./ReviewItem";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 /**
  * Reseñas de un producto (read-only): top 3 + ver todas filtradas.
@@ -21,26 +26,27 @@ export function OfferReviewsCard({
 	offerId: string;
 }) {
 	const { colors } = useTheme();
-	const { data: reviews } = useBusinessReviews(businessId);
-	const offerReviews = (reviews ?? []).filter((r) => r.offerId === offerId);
+	// Top-3 preview + total via server params (no full review fetch).
+	const { data: infiniteData } = useBusinessReviews(businessId, {
+		offerId,
+		limit: 3,
+	});
+	const { data: totalCount } = useBusinessReviewCount(businessId, { offerId });
+	const offerReviews = infiniteData?.pages[0] ?? [];
 	if (offerReviews.length === 0) return null;
 	const offerTitle = offerReviews[0]?.offerTitle ?? null;
 	return (
 		<Card style={styles.card}>
 			<View style={styles.header}>
-				<Ionicons name="star-outline" size={20} color={colors.primary} />
+				<Star size={20} color={colors.primary} />
 				<AppText variant="h4" weight="bold">
 					{offerTitle ?? strings.business.reviews}
 				</AppText>
 			</View>
-			{offerReviews.slice(0, 3).map((review) => (
+			{offerReviews.map((review) => (
 				<ReviewItem key={review.id} review={review} />
 			))}
 			<Button
-				label={strings.businessProfile.seeAllReviews.replace(
-					"{n}",
-					String(offerReviews.length),
-				)}
 				variant="outline"
 				fullWidth
 				style={{ marginTop: spacing.sm }}
@@ -50,7 +56,12 @@ export function OfferReviewsCard({
 						params: { id: businessId, offerId },
 					})
 				}
-			/>
+			>
+				{strings.businessProfile.seeAllReviews.replace(
+					"{n}",
+					String(totalCount ?? offerReviews.length),
+				)}
+			</Button>
 		</Card>
 	);
 }

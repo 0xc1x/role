@@ -1,12 +1,13 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, View } from "react-native";
+import { ChevronRight, MapPin, Phone, Store } from "lucide-react-native";
+import { StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card, StatusBadge } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, StatusBadge } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { CardPressable } from "@/components/ui/card-presable";
 
 export function LocationCard({
 	name,
@@ -26,17 +27,22 @@ export function LocationCard({
 }) {
 	const { colors } = useTheme();
 	return (
-		<Card style={styles.card}>
-			<Pressable
-				onPress={onPress}
-				accessibilityRole="button"
-			>
-				<View style={styles.body}>
+		<CardPressable
+			onPress={onPress}
+			style={[
+				styles.card,
+				{
+					backgroundColor: colors.card,
+					borderColor: colors.borderSolid,
+				},
+			]}
+		>
+			<View style={styles.body}>
 				<View style={[styles.icon, { backgroundColor: colors.muted }]}>
 					{imageUrl ? (
 						<Image source={{ uri: imageUrl }} style={styles.iconImage} />
 					) : (
-						<Ionicons name="storefront" size={22} color={colors.mutedForeground} />
+						<Store size={22} color={colors.mutedForeground} />
 					)}
 				</View>
 				<View style={styles.info}>
@@ -55,8 +61,7 @@ export function LocationCard({
 						/>
 					</View>
 					<View style={[styles.rowStart, { marginTop: 4 }]}>
-						<Ionicons
-							name="location-outline"
+						<MapPin
 							size={14}
 							color={colors.mutedForeground}
 						/>
@@ -70,8 +75,7 @@ export function LocationCard({
 					</View>
 					{phone ? (
 						<View style={[styles.rowStart, { marginTop: 4 }]}>
-							<Ionicons
-								name="call-outline"
+							<Phone
 								size={14}
 								color={colors.mutedForeground}
 							/>
@@ -85,15 +89,8 @@ export function LocationCard({
 					) : null}
 				</View>
 			</View>
-			</Pressable>
-			<Pressable
-				onPress={onPress}
-				accessibilityRole="button"
-				style={({ pressed }) => [
-					styles.footer,
-					{ borderTopColor: colors.borderSolid },
-					pressed && { opacity: 0.85 },
-				]}
+			<View
+				style={[styles.footer, { borderTopColor: colors.borderSolid }]}
 			>
 			<AppText
 				variant="bodySmall"
@@ -102,9 +99,9 @@ export function LocationCard({
 			>
 				{strings.business.viewDetailsAndConfig}
 			</AppText>
-			<Ionicons name="chevron-forward" size={16} color={colors.foreground} />
-			</Pressable>
-		</Card>
+			<ChevronRight size={16} color={colors.foreground} />
+			</View>
+		</CardPressable>
 	);
 }
 
@@ -143,7 +140,7 @@ export function LocationCardSkeleton() {
 }
 
 const styles = StyleSheet.create({
-	card: { padding: 0, overflow: "hidden" },
+	card: { padding: 0, overflow: "hidden", borderRadius: radii.xl },
 	body: {
 		flexDirection: "row",
 		padding: spacing.md,

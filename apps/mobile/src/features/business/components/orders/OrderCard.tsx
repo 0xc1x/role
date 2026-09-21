@@ -1,28 +1,23 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { UtensilsCrossed } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-	AppText,
-	Card,
-	StatusBadge,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { formatDateTime, formatMoney } from "@/core/utils/formatters";
-import { orderStatusLabels } from "@/features/orders/domain/order";
-import { orderStatusTone } from "@/features/orders/domain/order";
-import { isActiveStatus } from "@/features/orders/domain/order";
-import type { OrderDetail } from "@/features/orders/domain/order";
+import { CardPressable } from "@/components/ui/card-presable";
+import { AppText, StatusBadge } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { typography } from "@/src/core/theme/typography";
+import { formatDateTime, formatMoney } from "@/src/core/utils/formatters";
+import { orderStatusLabels, orderStatusTone } from "@/src/features/orders/domain/order";
+import type { OrderDetail } from "@/src/features/orders/domain/order";
 import { OrderActionButtons } from "./OrderActionButtons";
 
-/**
- * Order list card (ported from Rolé v1 `OrderCard`): thumb, title, order
- * line, customer, created date, status, price and per-status actions.
- */
+/** Business order card: inset thumb, title + price row, order line, customer,
+ * date + status row, divider and per-status actions. Same structure in both
+ * themes; only color tokens change. */
 export function OrderCard({
 	businessId,
 	item,
@@ -32,92 +27,98 @@ export function OrderCard({
 }) {
 	const { colors } = useTheme();
 	const { order } = item;
-	const isActive = isActiveStatus(order.status);
+	const hasActions = ["pending", "confirmed", "ready_for_pickup"].includes(order.status);
 
 	return (
-		<Card>
-			<Pressable
+		<View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+			<CardPressable
+				className="p-0 gap-0 border-0 shadow-none"
+				style={{
+					backgroundColor: colors.card,
+					borderColor: colors.borderSolid,
+				}}
 				onPress={() => router.push(`/business/${businessId}/order/${order.id}`)}
-				accessibilityRole="button"
 			>
 				<View style={styles.body}>
-				{item.offerImageUrl ? (
-					<Image source={{ uri: item.offerImageUrl }} style={styles.thumb} />
-				) : (
-					<View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.borderSolid }]}>
-						<Ionicons
-							name="fast-food-outline"
-							size={26}
-							color={colors.mutedForeground}
+					{item.offerImageUrl ? (
+						<Image
+							source={{ uri: item.offerImageUrl }}
+							style={styles.thumb}
+							contentFit="cover"
 						/>
-					</View>
-				)}
+					) : (
+						<View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.borderSolid }]}>
+							<UtensilsCrossed
+								size={26}
+								color={colors.mutedForeground}
+							/>
+						</View>
+					)}
 
-				<View style={styles.content}>
-					<View style={styles.titleRow}>
-						<AppText
-							variant="h4"
-							weight="bold"
-							numberOfLines={2}
-							style={{ flex: 1 }}
-						>
-							{item.offerTitle}
-						</AppText>
-						<AppText variant="price" style={{ color: colors.primary }}>
-							{formatMoney(order.price)}
-						</AppText>
-					</View>
-
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-						{strings.business.ordersOrderLine.replace("{n}", order.order_number)}
-					</AppText>
-
-					{item.customerName ? (
-						<View style={styles.customerRow}>
+					<View style={styles.content}>
+						<View style={styles.titleRow}>
 							<AppText
-								variant="labelSmall"
-								numberOfLines={1}
-								style={styles.customerName}
+								variant="h4"
+								weight="bold"
+								numberOfLines={2}
+								style={{ flex: 1 }}
 							>
-								{item.customerName}
+								{item.offerTitle}
+							</AppText>
+							<AppText variant="price" style={{ color: colors.primary }}>
+								{formatMoney(order.price)}
 							</AppText>
 						</View>
-					) : null}
 
-					<View style={styles.bottomRow}>
 						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-							{formatDateTime(order.created_at)}
+							{strings.business.ordersOrderLine.replace("{n}", order.order_number)}
 						</AppText>
-						<StatusBadge
-							label={orderStatusLabels[order.status]}
-							tone={orderStatusTone(order.status)}
-						/>
+
+						{item.customerName ? (
+							<View style={styles.customerRow}>
+								<AppText
+									variant="labelSmall"
+									numberOfLines={1}
+									style={styles.customerName}
+								>
+									{item.customerName}
+								</AppText>
+							</View>
+						) : null}
+
+						<View style={styles.bottomRow}>
+							<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+								{formatDateTime(order.created_at)}
+							</AppText>
+							<StatusBadge
+								label={orderStatusLabels[order.status]}
+								tone={orderStatusTone(order.status)}
+							/>
+						</View>
 					</View>
 				</View>
-				</View>
-			</Pressable>
+			</CardPressable>
 
-			{isActive ? (
+			{hasActions ? (
 				<>
 					<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
 					<OrderActionButtons businessId={businessId} item={item} />
 				</>
 			) : null}
-		</Card>
+		</View>
 	);
 }
 
-/**
- * Skeleton con las dimensiones aproximadas de la card real
- * (thumb 76 + columna info + fila inferior).
- * Mismo patrón que ProductCardSkeleton / LocationCardSkeleton.
- */
-export function OrderCardSkeleton() {
+export function OrderCardSkeleton({ active = true }: { active?: boolean }) {
 	const { colors } = useTheme();
 	return (
 		<View
+			accessible
+			accessibilityLabel={strings.common.loading}
+			accessibilityState={{ busy: true }}
+			testID="business-order-skeleton"
 			style={[
-				styles.skeletonCard,
+				styles.card,
 				{
 					backgroundColor: colors.card,
 					borderColor: colors.borderSolid,
@@ -125,21 +126,42 @@ export function OrderCardSkeleton() {
 			]}
 		>
 			<View style={styles.body}>
-				<Skeleton style={styles.skeletonThumb} />
-				<View style={styles.skeletonContent}>
-					<Skeleton style={styles.skeletonTitle} />
-					<Skeleton style={styles.skeletonLine} />
+				<Skeleton style={styles.thumb} />
+				<View style={styles.content}>
+					<View style={styles.titleRow}>
+						<View style={{ flex: 1 }}>
+							<Skeleton style={{ height: typography.h4.lineHeight }} />
+							<Skeleton style={{ height: typography.h4.lineHeight, width: "70%" }} />
+						</View>
+						<Skeleton style={{ width: "30%", height: typography.price.fontSize * 1.4 }} />
+					</View>
+					<Skeleton style={{ height: typography.bodySmall.lineHeight, width: "65%" }} />
+					<View style={styles.customerRow}>
+						<Skeleton style={{ height: typography.labelSmall.fontSize * 1.4, width: "80%" }} />
+					</View>
 					<View style={styles.bottomRow}>
-						<Skeleton style={styles.skeletonDate} />
+						<Skeleton style={{ height: typography.bodySmall.lineHeight, flex: 1 }} />
 						<Skeleton style={styles.skeletonBadge} />
 					</View>
 				</View>
 			</View>
+			{active ? (
+				<View testID="order-actions-skeleton">
+					<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
+					<Skeleton style={styles.skeletonAction} />
+				</View>
+			) : null}
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
+	card: {
+		borderRadius: radii.xl,
+		borderWidth: 1,
+		padding: spacing.lg,
+		overflow: "hidden",
+	},
 	body: {
 		flexDirection: "row",
 		gap: spacing.md,
@@ -180,35 +202,11 @@ const styles = StyleSheet.create({
 		height: StyleSheet.hairlineWidth,
 		marginVertical: spacing.md,
 	},
-	skeletonCard: {
-		borderRadius: radii.xl,
-		borderWidth: 1,
-		padding: spacing.lg,
-	},
-	skeletonThumb: {
-		width: 76,
-		height: 76,
-		borderRadius: radii.lg,
-	},
-	skeletonContent: {
-		flex: 1,
-		gap: spacing.sm,
-		justifyContent: "center",
-	},
-	skeletonTitle: {
-		height: 16,
-		width: "70%",
-		borderRadius: radii.sm,
-	},
-	skeletonLine: {
-		height: 12,
-		width: "45%",
-		borderRadius: radii.sm,
-	},
-	skeletonDate: {
-		height: 12,
-		width: "35%",
-		borderRadius: radii.sm,
+	// Match the action button's minimum touch target without mounting a mutation.
+	skeletonAction: {
+		minHeight: 44,
+		paddingVertical: spacing.sm,
+		borderRadius: radii.pill,
 	},
 	skeletonBadge: {
 		height: 22,

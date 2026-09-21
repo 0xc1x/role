@@ -2,7 +2,18 @@ import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import {
+	Clock,
+	Ellipsis,
+	Eye,
+	EyeOff,
+	Package,
+	Pencil,
+	Store,
+	Trash2,
+	TrendingUp,
+	type LucideIcon,
+} from "lucide-react-native";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -15,20 +26,22 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { CardPressable } from "@/components/ui/card-presable";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal, StatusBadge } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { formatMoney, formatRelativeDay, formatTime } from "@/core/utils/formatters";
-import type { OfferDetail } from "@/features/offers/domain/offer";
-import { useDeleteOffer, useToggleOfferActive } from "@/features/business/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, BottomSheetModal, StatusBadge } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { formatMoney, formatRelativeDay } from "@/src/core/utils/formatters";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
+import { useDeleteOffer, useToggleOfferActive } from "@/src/features/business/hooks";
 
 /**
- * Business product card (ported from Rolé v1 `ProductCard`): status,
- * sold chip, pickup window + stock chips, prices and the actions
- * Ver detalles / Editar / Más acciones.
+ * Business product card (Rolé v1 port): badges and title on top, pickup
+ * window and stock chips below, prices, and the actions
+ * Ver detalles / Editar / Más acciones in a bordered footer.
  */
 export function ProductCard({
 	businessId,
@@ -48,48 +61,43 @@ export function ProductCard({
 		0,
 		(product.offer.initial_stock ?? product.offer.stock) - product.offer.stock,
 	);
-	const discount =
-		product.offer.original_price > 0
-			? Math.round(
-					((product.offer.original_price - product.offer.discounted_price) /
-						product.offer.original_price) *
-						100,
-				)
-			: 0;
 
 	const openDetail = () =>
 		router.push(`/business/${businessId}/offer/${product.offer.id}`);
 
 	return (
 		<>
-			<Pressable
-				onPress={openDetail}
-				style={({ pressed }) => [
-					styles.card,
-					{
-						backgroundColor: colors.card,
-						borderColor: colors.borderSolid,
-						boxShadow: `0px 6px 16px ${colors.cardShadow}`,
-						opacity: pressed ? 0.92 : 1,
-					},
-				]}
-			>
+			<View style={[styles.card, { backgroundColor: colors.card }]}>
+				<CardPressable
+					className="p-0 gap-0 border-0 shadow-none"
+					style={[
+						styles.cardBody,
+						{
+							backgroundColor: colors.card,
+							borderColor: colors.borderSolid,
+						},
+					]}
+					onPress={openDetail}
+				>
 				<View style={styles.mainRow}>
+					{/* Full-bleed image; badges remain in the information column. */}
 					<View style={styles.imageWrap}>
 						{product.offer.image ? (
-							<Image source={{ uri: product.offer.image }} style={styles.image} />
+							<Image
+								source={{ uri: product.offer.image }}
+								style={styles.image}
+								contentFit="cover"
+							/>
 						) : (
-							<View style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.borderSolid }]}>
-								<Ionicons
-									name="cube-outline"
-									size={28}
-									color={colors.mutedForeground}
-								/>
+							<View
+								style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.borderSolid }]}
+							>
+								<Package size={28} color={colors.mutedForeground} />
 							</View>
 						)}
 						{!isActive ? (
 							<View style={[styles.imageOverlay, { backgroundColor: withAlpha(colors.scrim, 0.56) }]}>
-								<Ionicons name="eye-off" size={20} color={colors.onMedia} />
+								<EyeOff size={20} color={colors.onMedia} />
 							</View>
 						) : null}
 					</View>
@@ -102,12 +110,11 @@ export function ProductCard({
 							/>
 							{sold > 0 ? (
 								<View style={[styles.soldChip, { backgroundColor: colors.surfaceSuccess }]}>
-									<Ionicons name="trending-up" size={12} color={colors.success} />
+									<TrendingUp size={12} color={colors.success} />
 									<AppText
-										variant="labelSmall"
+										variant="bodySmall"
 										weight="semiBold"
-										numberOfLines={1}
-										style={{ color: colors.success }}
+										style={[styles.chipText, { color: colors.success }]}
 									>
 										{strings.business.soldCount.replace("{n}", String(sold))}
 									</AppText>
@@ -117,26 +124,26 @@ export function ProductCard({
 						<AppText variant="h4" weight="bold" numberOfLines={2}>
 							{product.offer.title}
 						</AppText>
-						<View style={styles.infoChips}>
-							{product.location?.name ? (
-								<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
-									<Ionicons
-										name="storefront-outline"
-										size={12}
-										color={colors.mutedForeground}
-									/>
-									<AppText
-										variant="bodySmall"
-										numberOfLines={1}
-										style={{ color: colors.mutedForeground }}
-									>
-										{product.location.name}
-									</AppText>
-								</View>
-							) : null}
+
+						{product.location?.name ? (
 							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
-								<Ionicons name="time-outline" size={12} color={colors.mutedForeground} />
-								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+								<Store
+									size={12}
+									color={colors.mutedForeground}
+								/>
+								<AppText
+									variant="bodySmall"
+									numberOfLines={1}
+									style={[styles.chipText, { color: colors.mutedForeground }]}
+								>
+									{product.location.name}
+								</AppText>
+							</View>
+						) : null}
+						<View style={styles.infoChips}>
+							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
+								<Clock size={12} color={colors.mutedForeground} />
+								<AppText variant="bodySmall" style={[styles.chipText, { color: colors.mutedForeground }]}>
 									{strings.business.untilTime.replace(
 										"{time}",
 										formatRelativeDay(product.offer.pickup_end),
@@ -144,16 +151,16 @@ export function ProductCard({
 								</AppText>
 							</View>
 							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
-								<Ionicons
-									name="cube-outline"
+								<Package
 									size={12}
 									color={colors.mutedForeground}
 								/>
-								<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+								<AppText variant="bodySmall" style={[styles.chipText, { color: colors.mutedForeground }]}>
 									{product.offer.stock}
 								</AppText>
 							</View>
 						</View>
+
 						<View style={styles.priceRow}>
 							<AppText variant="priceLarge" style={{ color: colors.primary }}>
 								{formatMoney(product.offer.discounted_price)}
@@ -167,24 +174,25 @@ export function ProductCard({
 						</View>
 					</View>
 				</View>
+				</CardPressable>
 
 				<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
 				<View style={styles.actions}>
-					<ActionButton icon="eye-outline" label={strings.business.viewDetails} onPress={openDetail} />
+					<ActionButton icon={Eye} label={strings.business.viewDetails} onPress={openDetail} />
 					<ActionButton
-						icon="create-outline"
+						icon={Pencil}
 						label={strings.common.edit}
 						onPress={() =>
 							router.push(`/business/${businessId}/offer/${product.offer.id}/edit`)
 						}
 					/>
 					<ActionButton
-						icon="ellipsis-horizontal"
+						icon={Ellipsis}
 						label={strings.business.moreActions}
 						onPress={() => setMenuOpen(true)}
 					/>
 				</View>
-			</Pressable>
+			</View>
 
 			{menuOpen ? (
 				<BottomSheetModal
@@ -193,7 +201,7 @@ export function ProductCard({
 				>
 					<View style={styles.menuList}>
 						<MenuRow
-							icon={isActive ? "eye-off-outline" : "eye-outline"}
+							icon={isActive ? EyeOff : Eye}
 							label={isActive ? strings.business.deactivate : strings.business.activate}
 							onPress={() => {
 								toggleActive.mutate({ offerId: product.offer.id, isActive: !isActive });
@@ -201,7 +209,7 @@ export function ProductCard({
 							}}
 						/>
 						<MenuRow
-							icon="create-outline"
+							icon={Pencil}
 							label={strings.common.edit}
 							onPress={() => {
 								setMenuOpen(false);
@@ -209,7 +217,7 @@ export function ProductCard({
 							}}
 						/>
 						<MenuRow
-							icon="trash-outline"
+							icon={Trash2}
 							label={strings.common.delete}
 							destructive
 							onPress={() => {
@@ -245,15 +253,15 @@ export function ProductCard({
 	);
 }
 
-/**
- * Skeleton con las dimensiones aproximadas de la card real
- * (imagen 120 + columna info + fila de acciones).
- * Mismo patrón que BusinessGridCardSkeleton / OfferSkeleton.
- */
+/** Skeleton mirrors the proportional image, information and action rows. */
 export function ProductCardSkeleton() {
 	const { colors } = useTheme();
 	return (
 		<View
+			accessible
+			accessibilityLabel={strings.common.loading}
+			accessibilityState={{ busy: true }}
+			testID="product-card-skeleton"
 			style={[
 				styles.card,
 				{
@@ -263,11 +271,25 @@ export function ProductCardSkeleton() {
 			]}
 		>
 			<View style={styles.mainRow}>
-				<Skeleton style={styles.skeletonImage} />
-				<View style={styles.skeletonInfo}>
-					<Skeleton style={styles.skeletonTitle} />
-					<Skeleton style={styles.skeletonLine} />
-					<Skeleton style={styles.skeletonPrice} />
+				<Skeleton style={[styles.imageWrap, styles.skeletonImage]} />
+				<View style={styles.info}>
+					<View style={styles.statusRow}>
+						<Skeleton style={styles.skeletonBadge} />
+						<Skeleton style={styles.skeletonSoldBadge} />
+					</View>
+					<View>
+						<Skeleton style={styles.skeletonTitle} />
+						<Skeleton style={[styles.skeletonTitle, { width: "70%" }]} />
+					</View>
+					<Skeleton style={styles.skeletonBranch} />
+					<View style={styles.infoChips}>
+						<Skeleton style={styles.skeletonDate} />
+						<Skeleton style={styles.skeletonStock} />
+					</View>
+					<View style={styles.priceRow}>
+						<Skeleton style={styles.skeletonPrice} />
+						<Skeleton style={styles.skeletonOriginalPrice} />
+					</View>
 				</View>
 			</View>
 			<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
@@ -281,37 +303,37 @@ export function ProductCardSkeleton() {
 }
 
 function ActionButton({
-	icon,
+	icon: Icon,
 	label,
 	onPress,
 }: {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	label: string;
 	onPress?: () => void;
 }) {
 	const { colors } = useTheme();
 	return (
-		<Pressable
+		<Button
+			variant="ghost"
+			size="sm"
+			style={styles.action}
 			onPress={onPress}
-			style={({ pressed }) => [styles.action, { opacity: pressed ? 0.7 : 1 }]}
+			icon={<Icon size={14} color={colors.foreground} />}
 		>
-			<View style={[styles.actionIcon, { backgroundColor: colors.muted }]}>
-				<Ionicons name={icon} size={14} color={colors.foreground} />
-			</View>
-			<AppText variant="bodySmall" weight="semiBold" numberOfLines={1}>
+			<AppText variant="bodySmall" weight="semiBold" style={[styles.chipText, { color: colors.foreground }]}>
 				{label}
 			</AppText>
-		</Pressable>
+		</Button>
 	);
 }
 
 function MenuRow({
-	icon,
+	icon: Icon,
 	label,
 	destructive,
 	onPress,
 }: {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	label: string;
 	destructive?: boolean;
 	onPress?: () => void;
@@ -319,6 +341,7 @@ function MenuRow({
 	const { colors } = useTheme();
 	return (
 		<Pressable
+			cssInterop={false}
 			onPress={onPress}
 			style={({ pressed }) => [
 				styles.menuRow,
@@ -329,8 +352,7 @@ function MenuRow({
 				},
 			]}
 		>
-			<Ionicons
-				name={icon}
+			<Icon
 				size={18}
 				color={destructive ? colors.destructive : colors.foreground}
 			/>
@@ -347,23 +369,25 @@ function MenuRow({
 
 const styles = StyleSheet.create({
 	card: {
-		borderRadius: radii.lg,
-		borderWidth: StyleSheet.hairlineWidth,
+		borderRadius: radii.xl,
 		overflow: "hidden",
+	},
+	cardBody: {
+		borderBottomLeftRadius: 0,
+		borderBottomRightRadius: 0,
 	},
 	mainRow: {
 		flexDirection: "row",
-		gap: spacing.md,
+		minHeight: 165,
 	},
-	// Sangrado completo hacia el borde izquierdo/superior/inferior de la card;
-	// el radio del contenedor recorta las esquinas.
+	// Stretch with the content; the card clips the full-bleed image corners.
 	imageWrap: {
-		width: 120,
+		width: "35%",
+		position: "relative",
 		overflow: "hidden",
 	},
 	image: {
-		width: "100%",
-		height: "100%",
+		...StyleSheet.absoluteFill,
 	},
 	imagePlaceholder: {
 		alignItems: "center",
@@ -381,16 +405,17 @@ const styles = StyleSheet.create({
 	info: {
 		flex: 1,
 		minWidth: 0,
-		gap: 4,
-		paddingVertical: spacing.md,
-		paddingRight: spacing.md,
+		gap: spacing.xs,
+		padding: spacing.md,
 	},
 	statusRow: {
 		flexDirection: "row",
+		flexWrap: "wrap",
 		alignItems: "center",
-		gap: spacing.sm,
+		gap: spacing.xs,
 	},
 	soldChip: {
+		maxWidth: "100%",
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 3,
@@ -404,6 +429,8 @@ const styles = StyleSheet.create({
 		gap: spacing.sm,
 	},
 	infoChip: {
+		alignSelf: "flex-start",
+		maxWidth: "100%",
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 4,
@@ -411,11 +438,15 @@ const styles = StyleSheet.create({
 		paddingVertical: 2,
 		borderRadius: radii.sm,
 	},
+	chipText: {
+		flexShrink: 1,
+	},
 	priceRow: {
 		flexDirection: "row",
+		flexWrap: "wrap",
 		alignItems: "baseline",
 		gap: spacing.sm,
-		marginTop: 2,
+		marginTop: "auto",
 	},
 	original: {
 		textDecorationLine: "line-through",
@@ -426,23 +457,20 @@ const styles = StyleSheet.create({
 	},
 	actions: {
 		flexDirection: "row",
+		flexWrap: "wrap",
 		alignItems: "center",
 		justifyContent: "space-between",
-		paddingHorizontal: spacing.md,
-		paddingVertical: spacing.sm,
+		gap: spacing.xs,
+		paddingHorizontal: spacing.sm,
+		paddingVertical: spacing.xs,
 	},
 	action: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 6,
+		height: "auto",
+		minHeight: 44,
+		maxWidth: "100%",
+		paddingHorizontal: spacing.xs,
 		paddingVertical: spacing.sm,
-	},
-	actionIcon: {
-		width: 24,
-		height: 24,
-		borderRadius: radii.md,
-		alignItems: "center",
-		justifyContent: "center",
+		gap: spacing.xs,
 	},
 	menuList: {
 		gap: 8,
@@ -457,34 +485,51 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 	},
 	skeletonImage: {
-		width: 120,
-		minHeight: 148,
+		borderRadius: 0,
 	},
-	skeletonInfo: {
-		flex: 1,
-		minWidth: 0,
-		gap: spacing.sm,
-		paddingVertical: spacing.md,
-		paddingRight: spacing.md,
-		justifyContent: "center",
+	skeletonBadge: {
+		height: 22,
+		width: "40%",
+		borderRadius: radii.pill,
+	},
+	skeletonSoldBadge: {
+		height: 20,
+		width: "55%",
+		borderRadius: radii.pill,
 	},
 	skeletonTitle: {
-		height: 16,
-		width: "80%",
+		height: 17,
+		marginVertical: 2,
+		width: "90%",
 		borderRadius: radii.sm,
 	},
-	skeletonLine: {
-		height: 12,
-		width: "60%",
+	skeletonBranch: {
+		height: 20,
+		width: "75%",
+		borderRadius: radii.sm,
+	},
+	skeletonDate: {
+		height: 20,
+		width: "65%",
+		borderRadius: radii.sm,
+	},
+	skeletonStock: {
+		height: 20,
+		width: "25%",
 		borderRadius: radii.sm,
 	},
 	skeletonPrice: {
-		height: 16,
+		height: 29,
 		width: "40%",
 		borderRadius: radii.sm,
 	},
+	skeletonOriginalPrice: {
+		height: 16,
+		width: "30%",
+		borderRadius: radii.sm,
+	},
 	skeletonAction: {
-		height: 28,
+		minHeight: 44,
 		flex: 1,
 		borderRadius: radii.sm,
 	},

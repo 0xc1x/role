@@ -1,14 +1,14 @@
 import { Fragment } from "react";
 import { StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
+import type { LucideIcon } from "lucide-react-native";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
 
 export interface MetricItem {
 	label: string;
 	value: number | string;
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	color: string;
 	bg: string;
 }
@@ -27,7 +27,9 @@ export function StatsMetricsCard({ items }: { items: MetricItem[] }) {
 				},
 			]}
 		>
-			{items.map((item, index) => (
+			{items.map((item, index) => {
+				const Icon = item.icon;
+				return (
 				<Fragment key={item.label}>
 					{index > 0 ? (
 						<View
@@ -39,7 +41,7 @@ export function StatsMetricsCard({ items }: { items: MetricItem[] }) {
 					) : null}
 					<View style={styles.item}>
 						<View style={[styles.iconChip, { backgroundColor: item.bg }]}>
-							<Ionicons name={item.icon} size={16} color={item.color} />
+							<Icon size={16} color={item.color} />
 						</View>
 						<AppText variant="h3" weight="extraBold" style={{ color: item.color }}>
 							{item.value}
@@ -53,7 +55,8 @@ export function StatsMetricsCard({ items }: { items: MetricItem[] }) {
 						</AppText>
 					</View>
 				</Fragment>
-			))}
+				);
+			})}
 		</View>
 	);
 }

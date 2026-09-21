@@ -83,7 +83,11 @@ export function reviewAverageRating(
 	return (review.productRating + review.businessRating) / 2;
 }
 
-/** Más recientes primero; en "recommended" solo reseñas con promedio ≥ 4, mejor puntuadas primero. */
+/**
+ * Más recientes primero; en "recommended" solo reseñas con promedio ≥ 4,
+ * mejor puntuadas primero. Presentational over loaded pages: no server
+ * ordering exists for the computed average, so screens label the tabs.
+ */
 export function filterBusinessReviews(
 	reviews: BusinessReviewView[],
 	filter: ReviewFilter,

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
-	Pressable,
 	StyleSheet,
 	View,
 } from "react-native";
@@ -10,15 +9,16 @@ import {
 	useCameraPermissions,
 	type BarcodeScanningResult,
 } from "expo-camera";
-import { Ionicons } from "@expo/vector-icons";
+import { Camera, CircleCheck, CircleX } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal, Button } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { useValidatePickupCode } from "@/features/business/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, BottomSheetModal } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { useValidatePickupCode } from "@/src/features/business/hooks";
 import { parsePickupQr } from "./qr";
+import { Button } from "@/components/ui/button";
 
 type ScanStatus = "idle" | "validating" | "success" | "error";
 
@@ -60,13 +60,14 @@ export function PickupScannerSheet({
 			/>
 
 			<Button
-				label={strings.common.cancel}
 				variant="outline"
 				fullWidth
 				size="lg"
 				onPress={onClose}
 				style={styles.cancel}
-				/>
+				>
+					{strings.common.cancel}
+				</Button>
 			</View>
 		</BottomSheetModal>
 	);
@@ -151,7 +152,7 @@ function NativeScanner({
 					{ borderColor: colors.borderSolid, backgroundColor: colors.inputBackground },
 				]}
 			>
-				<Ionicons name="camera-outline" size={36} color={colors.mutedForeground} />
+				<Camera size={36} color={colors.mutedForeground} />
 				<AppText
 					variant="bodyMedium"
 					style={{ color: colors.mutedForeground, textAlign: "center" }}
@@ -162,11 +163,11 @@ function NativeScanner({
 				</AppText>
 				{permission?.canAskAgain !== false ? (
 					<Button
-						label={strings.business.cameraPermissionGrant}
-						variant="primary"
 						onPress={() => void requestPermission()}
 						style={styles.permissionBtn}
-					/>
+					>
+						{strings.business.cameraPermissionGrant}
+					</Button>
 				) : null}
 			</View>
 		);
@@ -195,8 +196,7 @@ function NativeScanner({
 							</View>
 						) : status === "success" ? (
 							<View style={styles.center}>
-								<Ionicons
-									name="checkmark-circle"
+								<CircleCheck
 									size={64}
 									color={colors.success}
 								/>
@@ -210,8 +210,7 @@ function NativeScanner({
 							</View>
 						) : (
 							<View style={styles.center}>
-								<Ionicons
-									name="close-circle"
+								<CircleX
 									size={64}
 									color={colors.destructiveVibrant}
 								/>
@@ -231,21 +230,12 @@ function NativeScanner({
 										{scanned}
 									</AppText>
 								) : null}
-								<Pressable
+								<Button
 									onPress={reset}
 									accessibilityRole="button"
-									style={({ pressed }) => [
-										styles.scanAgain,
-										{
-											backgroundColor: colors.primary,
-											opacity: pressed ? 0.85 : 1,
-										},
-									]}
 								>
-									<AppText variant="bodyMedium" weight="semiBold" color={colors.onMedia}>
-										{strings.business.ordersScanAgain}
-									</AppText>
-								</Pressable>
+									{strings.business.ordersScanAgain}
+								</Button>
 							</View>
 						)}
 					</View>
