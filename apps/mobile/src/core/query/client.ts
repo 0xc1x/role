@@ -1,7 +1,7 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 
-import { analytics } from '@/core/analytics';
-import { isAppError } from '@/core/error/app-error';
+import { analytics } from '@/src/core/analytics';
+import { isAppError } from '@/src/core/error/app-error';
 
 /**
  * Global React Query client.

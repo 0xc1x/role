@@ -7,7 +7,7 @@ import {
 	findNodeHandle,
 } from "react-native";
 
-import { useTheme } from "@/core/theme";
+import { useTheme } from "@/src/core/theme";
 import { radii } from "../theme/spacing";
 
 // Umbrales en px (distancia de dedo, antes del factor 0.5 del indicador).
@@ -136,7 +136,10 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 		};
 	}, [node, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
-	const visible = refreshing || pull > 0;
+	// En nativo el indicador custom nunca se muestra: el RefreshControl del
+	// sistema es el único spinner (ver docstring). Sin este gate, durante
+	// `refreshing` el pill custom y el del sistema se pintan a la vez.
+	const visible = Platform.OS === "web" && (refreshing || pull > 0);
 	const indicator = visible ? (
 		<View
 			pointerEvents="none"

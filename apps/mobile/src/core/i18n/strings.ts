@@ -33,6 +33,8 @@ export const strings = {
 		off: "Desactivado",
 		on: "Activado",
 		clear: "Limpiar",
+		clearSearch: "Limpiar búsqueda",
+		removeFilter: "Quitar filtro: {label}",
 	},
 	auth: {
 		login: "Iniciar sesión",
@@ -291,6 +293,7 @@ export const strings = {
 		seeAllReviews: "Ver todas las reseñas ({n})",
 		filterRecent: "Más recientes",
 		filterRecommended: "Recomendaciones",
+		reviewsScopeNote: "Los filtros se aplican sobre las reseñas cargadas.",
 		noFilteredReviews: "No hay reseñas que coincidan con este filtro.",
 		packRating: "Pack: {n}",
 		attentionRating: "Atención: {n}",
@@ -307,6 +310,7 @@ export const strings = {
 		couponLabel: "¿Tienes un cupón?",
 		applyCoupon: "Aplicar",
 		couponApplied: "Cupón aplicado",
+		removeCoupon: "Quitar cupón",
 		invalidCoupon: "Cupón inválido o vencido",
 		couponUnavailable: "Cupón no disponible",
 		couponMinNotMet: "Monto mínimo para este cupón: {amount}",
@@ -342,6 +346,8 @@ export const strings = {
 		tabPast: "Pasados ({n})",
 		historyToday: "Hoy",
 		historyWeek: "Semana",
+		historyPreviousWeek: "Semana anterior",
+		historyNextWeek: "Semana siguiente",
 		historyAll: "Todo",
 		historyThisWeek: "Esta semana",
 		emptyActive: "No tienes pedidos activos",
@@ -435,7 +441,7 @@ export const strings = {
 			"Guarda tus ofertas preferidas aquí para poder rescatarlas en cualquier momento.",
 		explore: "Explorar ofertas cerca",
 		savingsBanner:
-			"Has identificado {saved} de ahorro potencial en tus favoritos.",
+			"Has identificado {saved} de ahorro potencial en tus favoritos cargados.",
 	},
 	profile: {
 		title: "Perfil",
@@ -718,6 +724,8 @@ export const strings = {
 		activeProducts: "Activos",
 		soldToday: "Vendidos",
 		availableStock: "Disponibles",
+		productsStatsScopeNote:
+			"Activos: total del catálogo. Vendidos y disponibles: suma de lo cargado.",
 		noProductsTitle: "No tienes productos publicados",
 		noProductsBody: "Publica tu primer excedente de comida.",
 		createFirstProduct: "Crear mi primer producto",
@@ -1330,6 +1338,7 @@ export const strings = {
 		couponNew: "Nuevo",
 		couponsActiveStat: "Activos",
 		couponsUsesStat: "Usos totales",
+		couponsUsesLoadedStat: "Usos (cargados)",
 		couponsCreatedStat: "Creados",
 		noCoupons: "Sin cupones todavía",
 		noCouponsBody:

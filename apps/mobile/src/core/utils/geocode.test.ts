@@ -1,5 +1,5 @@
 import { describe, expect, jest, test } from "bun:test";
-import { composeShortAddress, reverseGeocode } from "@/core/utils/geocode";
+import { composeShortAddress, reverseGeocode } from "@/src/core/utils/geocode";
 
 describe("reverseGeocode", () => {
 	test("parsea zona y compone dirección corta", async () => {

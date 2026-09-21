@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { env } from '@/core/config/env';
+import { env } from '@/src/core/config/env';
 
 /**
  * Single Supabase client for the whole app.

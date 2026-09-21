@@ -1,11 +1,10 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MapPin } from "lucide-react-native";
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
-import { getMapStyle } from "@/core/theme/map-style";
+import { useTheme } from "@/src/core/theme";
+import { getMapStyle } from "@/src/core/theme/map-style";
 import type { MapCanvasHandle, MapCanvasProps } from "./MapCanvas.types";
 
 const DEFAULT_REGION = {
@@ -62,12 +61,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(
 				{centerPin ? (
 					<Marker coordinate={coords} anchor={{ x: 0.5, y: 0.5 }}>
 						<View style={styles.pinShadow}>
-							<Ionicons
-								name="location"
-								size={40}
-								color={colors.primary}
-								style={[styles.pin, { textShadowColor: withAlpha(colors.scrim, 0.2) }]}
-							/>
+						<MapPin
+							size={40}
+							color={colors.primary}
+							fill="none"
+							style={styles.pin}
+						/>
 						</View>
 					</Marker>
 				) : null}
@@ -80,5 +79,5 @@ const styles = StyleSheet.create({
 	map: { flex: 1 },
 	fullscreenMap: { flex: 1 },
 	pinShadow: { alignItems: "center", justifyContent: "center" },
-	pin: { marginTop: -30, textShadowRadius: 3 },
+	pin: { marginTop: -30 },
 });

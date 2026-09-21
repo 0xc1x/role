@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/react-native";
 
-import { env, isProd } from "@/core/config/env";
+import { env, isProd } from "@/src/core/config/env";
 
 export interface TrackEvent {
 	category: string;
@@ -10,7 +10,10 @@ export interface TrackEvent {
 }
 
 const dsn = env.EXPO_PUBLIC_SENTRY_DSN;
-const enabled = dsn.length > 0;
+const enabled =
+	dsn.length > 0 &&
+	env.EXPO_PUBLIC_ENVIRONMENT !== "development" &&
+	env.EXPO_PUBLIC_ENVIRONMENT !== "dev";
 let didInit = false;
 
 function doInit(): void {
@@ -35,7 +38,7 @@ doInit();
 
 /**
  * Analytics service — Sentry breadcrumbs + error reporting.
- * Nativo + web con el mismo DSN. Si EXPO_PUBLIC_SENTRY_DSN está vacío, no-op.
+ * Native + web share a DSN. No-op in development/dev or when the DSN is empty.
  */
 export const analytics = {
 	initialized: enabled,

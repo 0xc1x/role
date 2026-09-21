@@ -8,7 +8,7 @@ import {
 	formatRelativeTime,
 	formatShortDate,
 	formatTime,
-} from "@/core/utils/formatters";
+} from "@/src/core/utils/formatters";
 
 describe("formatters", () => {
 	test("formatMoney sin decimales", () => {

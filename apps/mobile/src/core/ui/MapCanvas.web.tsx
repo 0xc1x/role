@@ -1,11 +1,10 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MapPin } from "lucide-react-native";
 import { APIProvider, Map, useMap } from "@vis.gl/react-google-maps";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { env } from "@/core/config/env";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
+import { env } from "@/src/core/config/env";
+import { useTheme } from "@/src/core/theme";
 import type { MapCanvasHandle, MapCanvasProps } from "./MapCanvas.types";
 
 // Single Google cloud-styled Map ID carrying BOTH designs: light style on
@@ -18,9 +17,9 @@ function zoomForDelta(delta: number): number {
 	return Math.min(Math.max(zoom, 1), 20);
 }
 
-const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
+	const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 	function MapCanvasInner(
-		{ coords, fullscreen = false, onRegionChange, children, centerPin = true },
+		{ coords, fullscreen = false, onRegionChange, children, centerPin = true, fitCoords },
 		ref,
 	) {
 		const { colors, scheme } = useTheme();
@@ -58,6 +57,27 @@ const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 			}
 		}, [map]);
 
+		// Encuadra los puntos (p. ej. pines filtrados de Explorar): una vez
+		// por cada conjunto distinto de coords.
+		const fitKey = (fitCoords ?? [])
+			.map((c) => `${c.latitude.toFixed(4)},${c.longitude.toFixed(4)}`)
+			.join("|");
+		const fittedRef = useRef<string | null>(null);
+		useEffect(() => {
+			if (!map || !fitCoords || fitCoords.length === 0) return;
+			if (fittedRef.current === fitKey) return;
+			fittedRef.current = fitKey;
+			const lats = fitCoords.map((c) => c.latitude);
+			const lngs = fitCoords.map((c) => c.longitude);
+			const pad = 0.01;
+			map.fitBounds({
+				south: Math.min(...lats) - pad,
+				west: Math.min(...lngs) - pad,
+				north: Math.max(...lats) + pad,
+				east: Math.max(...lngs) + pad,
+			});
+		}, [map, fitCoords, fitKey]);
+
 		return (
 			<View style={fullscreen ? styles.fullscreenMap : styles.map}>
 				<Map
@@ -83,18 +103,12 @@ const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 				</Map>
 				{centerPin ? (
 					<View style={[styles.pinWrap, { pointerEvents: "none" }]}>
-						<Ionicons
-							name="location"
-							size={40}
-							color={colors.primary}
-							style={[
-								styles.pin,
-								{
-									// @ts-ignore — RN types aún no exponen textShadow unificado
-									textShadow: `0px 0px 3px ${withAlpha(colors.scrim, 0.2)}`,
-								},
-							]}
-						/>
+					<MapPin
+						size={40}
+						color={colors.primary}
+						fill="none"
+						style={styles.pin}
+					/>
 					</View>
 				) : null}
 			</View>

@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { Pressable, ScrollView, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ScrollView, View } from "react-native";
+import { X } from "lucide-react-native";
 
 import { AppText } from "./AppText";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
 import {
 	Drawer,
 	DrawerClose,
@@ -12,7 +12,7 @@ import {
 	DrawerFooter,
 	DrawerHeader,
 	DrawerTitle,
-} from "@/components/ui/drawer";
+} from "@/src/components/ui/drawer";
 
 /**
  * Compat wrapper — mantiene la API existente (`title`/`footer`/`onClose`)
@@ -58,7 +58,7 @@ export function BottomSheetModal({
 									backgroundColor: colors.inputBackground,
 								}}
 							>
-								<Ionicons name="close" size={16} color={colors.foreground} />
+								<X size={16} color={colors.foreground} />
 							</DrawerClose>
 						</View>
 					</DrawerHeader>
@@ -67,7 +67,13 @@ export function BottomSheetModal({
 				dirección) hace scroll sin tapar el footer. El sheet sigue
 				cerrándose por arrastre desde la barrita del Drawer. */}
 				<ScrollView
-					style={{ flex: 1 }}
+					// Content-driven sizing: the sheet (DrawerContent) has automatic
+					// height capped by maxHeight 92% (no fixed height). flex: 1 here
+					// collapses to height 0 on native Yoga (unbounded parent height),
+					// so the body never shows. flexGrow 0 sizes by content and
+					// flexShrink 1 lets long content shrink into the capped sheet
+					// and scroll without covering the footer.
+					style={{ flexGrow: 0, flexShrink: 1 }}
 					contentContainerStyle={{
 						gap: spacing.sm,
 						paddingHorizontal: spacing.xl,

@@ -15,4 +15,9 @@ export interface MapCanvasProps {
 	children?: ReactNode;
 	/** Center pin used by pickers; off when the map shows its own markers. */
 	centerPin?: boolean;
+	/**
+	 * Puntos a encuadrar (web: `fitBounds`; nativo lo ignora — el fit vive
+	 * en cada pantalla con `fitToCoordinates`). Cambiar el array re-encuadra.
+	 */
+	fitCoords?: ReadonlyArray<{ latitude: number; longitude: number }>;
 }
