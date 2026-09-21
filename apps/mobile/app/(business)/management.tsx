@@ -1,7 +1,7 @@
-import { useAuthStore } from "@/features/auth/store";
-import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
-import { GestionContent, GestionContentSkeleton } from "@/features/business/components/management/GestionContent";
-import { useBusinesses } from "@/features/business/hooks";
+import { useAuthStore } from "@/src/features/auth/store";
+import { NoBusinessPrompt } from "@/src/features/business/components/NoBusinessPrompt";
+import { GestionContent, GestionContentSkeleton } from "@/src/features/business/components/management/GestionContent";
+import { useBusinesses } from "@/src/features/business/hooks";
 
 export default function GestionScreen() {
 	const profile = useAuthStore((s) => s.profile);

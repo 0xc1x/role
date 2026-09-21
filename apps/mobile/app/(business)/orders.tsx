@@ -1,44 +1,75 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { Search, ShoppingBag } from "lucide-react-native";
+import {
+	ActivityIndicator,
+	FlatList,
+	RefreshControl,
+	StyleSheet,
+	View,
+} from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
 	AppText,
-	Button,
 	EmptyState,
 	ErrorState,
 	FilterChip,
 	Screen,
 	SearchBar,
 	useWebPullToRefresh,
-} from "@/core/ui";
-import { useAuthStore } from "@/features/auth/store";
+} from "@/src/core/ui";
+import { useAuthStore } from "@/src/features/auth/store";
 import {
 	useBusinesses,
 	useBusinessLocations,
 	useBusinessOrders,
-} from "@/features/business/hooks";
+	useBusinessOrderStats,
+} from "@/src/features/business/hooks";
 import {
-	filterAndSortOrders,
-	orderStats,
 	type OrdersSort,
 	type OrdersTab,
-} from "@/features/business/domain/orders";
-import { orderStatusLabels, filterByHistoryPeriod, type HistoryPeriod } from "@/features/orders/domain/order";
-import { HistoryDateFilter } from "@/features/orders/components/HistoryDateFilter";
-import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
-import { BranchSelector } from "@/features/business/components/products/BranchSelector";
-import { OrderStatsRow, OrderStatsRowSkeleton } from "@/features/business/components/orders/OrderStatsRow";
-import { OrdersTabs } from "@/features/business/components/orders/OrdersTabs";
-import { OrdersSortControl } from "@/features/business/components/orders/OrdersSortControl";
-import { OrdersFiltersControl } from "@/features/business/components/orders/OrdersFiltersControl";
-import { OrderCard, OrderCardSkeleton } from "@/features/business/components/orders/OrderCard";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+} from "@/src/features/business/domain/orders";
+import {
+	ACTIVE_ORDER_STATUSES,
+	TERMINAL_ORDER_STATUSES,
+	getWeekRange,
+	orderStatusLabels,
+	type HistoryPeriod,
+} from "@/src/features/orders/domain/order";
+import { HistoryDateFilter } from "@/src/features/orders/components/HistoryDateFilter";
+import { NoBusinessPrompt } from "@/src/features/business/components/NoBusinessPrompt";
+import { BranchSelector } from "@/src/features/business/components/products/BranchSelector";
+import { OrderStatsRow, OrderStatsRowSkeleton } from "@/src/features/business/components/orders/OrderStatsRow";
+import { OrdersTabs } from "@/src/features/business/components/orders/OrdersTabs";
+import { OrdersSortControl } from "@/src/features/business/components/orders/OrdersSortControl";
+import { OrdersFiltersControl } from "@/src/features/business/components/orders/OrdersFiltersControl";
+import { OrderCard, OrderCardSkeleton } from "@/src/features/business/components/orders/OrderCard";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
 import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
+import type { OrderDetail } from "@/src/features/orders/domain/order";
+
+const SEARCH_DEBOUNCE_MS = 400;
+
+/** Server-side date range for the history period (undefined = no range). */
+function historyRange(
+	period: HistoryPeriod,
+	weekOffset: number,
+	now: Date,
+): { from?: string; to?: string } {
+	if (period === "all") return {};
+	if (period === "today") {
+		const start = new Date(now);
+		start.setHours(0, 0, 0, 0);
+		const end = new Date(now);
+		end.setHours(23, 59, 59, 999);
+		return { from: start.toISOString(), to: end.toISOString() };
+	}
+	const { monday, sunday } = getWeekRange(now, weekOffset);
+	return { from: monday.toISOString(), to: sunday.toISOString() };
+}
 
 export default function BusinessOrdersScreen() {
 	const { colors } = useTheme();
@@ -50,22 +81,52 @@ export default function BusinessOrdersScreen() {
 	const businessId = business?.id ?? "";
 
 	const { data: locations, isLoading: locationsLoading } = useBusinessLocations(businessId);
+
+	const [tab, setTab] = useState<OrdersTab>("active");
+	const [branchId, setBranchId] = useState<string | null>(null);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [debouncedSearch, setDebouncedSearch] = useState("");
+	const [status, setStatus] = useState<OrderStatusType | null>(null);
+	const [sort, setSort] = useState<OrdersSort>("newest");
+	const [historyPeriod, setHistoryPeriod] = useState<HistoryPeriod>("week");
+	const [weekOffset, setWeekOffset] = useState(0);
+
+	// Debounce the search input (same precedent as all-offers).
+	useEffect(() => {
+		const t = setTimeout(
+			() => setDebouncedSearch(searchQuery),
+			SEARCH_DEBOUNCE_MS,
+		);
+		return () => clearTimeout(t);
+	}, [searchQuery]);
+
+	const historyDates = useMemo(
+		() => historyRange(historyPeriod, weekOffset, new Date()),
+		[historyPeriod, weekOffset],
+	);
+	const search =
+		debouncedSearch.trim().length > 0 ? debouncedSearch.trim() : undefined;
+	const isHistory = tab === "history";
 	const {
-		data: orders,
+		data: infiniteData,
 		isLoading,
 		isError,
 		error,
 		refetch,
 		isFetching,
-	} = useBusinessOrders(businessId);
-
-	const [tab, setTab] = useState<OrdersTab>("active");
-	const [branchId, setBranchId] = useState<string | null>(null);
-	const [searchQuery, setSearchQuery] = useState("");
-	const [status, setStatus] = useState<OrderStatusType | null>(null);
-	const [sort, setSort] = useState<OrdersSort>("newest");
-	const [historyPeriod, setHistoryPeriod] = useState<HistoryPeriod>("week");
-	const [weekOffset, setWeekOffset] = useState(0);
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useBusinessOrders(businessId, {
+		statuses: isHistory ? TERMINAL_ORDER_STATUSES : ACTIVE_ORDER_STATUSES,
+		status: status ?? undefined,
+		branchId,
+		search,
+		ascending: sort === "oldest",
+		...(isHistory ? historyDates : {}),
+	});
+	const { data: stats, isLoading: statsLoading } =
+		useBusinessOrderStats(businessId);
 	const pull = useWebPullToRefresh({
 		onRefresh: () => void refetch(),
 		refreshing: isFetching,
@@ -75,52 +136,51 @@ export default function BusinessOrdersScreen() {
 		setTab("active");
 		setBranchId(null);
 		setSearchQuery("");
+		setDebouncedSearch("");
 		setStatus(null);
 		setSort("newest");
 	}, [businessId]);
 
-	const filtered = useMemo(() => {
-		const baseFiltered = filterAndSortOrders(orders ?? [], {
-			tab,
-			branchId,
-			status,
-			searchQuery,
-			sort,
-		});
-		if (tab !== "history" || historyPeriod === "all") return baseFiltered;
-		return filterByHistoryPeriod(baseFiltered, historyPeriod, weekOffset);
-	}, [orders, tab, branchId, status, searchQuery, sort, historyPeriod, weekOffset]);
+	const orders = useMemo(
+		() => infiniteData?.pages.flat() ?? [],
+		[infiniteData],
+	);
+
+	// Empty page means "no orders at all" only without filters; with filters
+	// it means "no match" (server already filtered, nothing left client-side).
+	const hasActiveFilters =
+		search != null ||
+		status !== null ||
+		branchId !== null ||
+		(isHistory && historyPeriod !== "all");
 
 	const renderItem = useCallback(
-		({ item }: { item: (typeof filtered)[number] }) => (
+		({ item }: { item: OrderDetail }) => (
 			<OrderCard businessId={businessId} item={item} />
 		),
 		[businessId],
 	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
 	const renderSeparator = useCallback(
 		() => <View style={styles.separator} />,
 		[],
 	);
 
-	if (businessesLoading || !business) {
-		if (!businessesLoading && !business) {
-			return <NoBusinessPrompt />;
-		}
-		return <BusinessOrdersSkeleton />;
-	}
+	if (!businessesLoading && !business) return <NoBusinessPrompt />;
 
-	const stats = orderStats(orders ?? []);
-
-	const isHistory = tab === "history";
+	const loading = businessesLoading || isLoading;
 
 	return (
-		<Screen>
+		<Screen edges={["top", "left", "right"]}>
 			<View style={styles.header}>
 				<AppText variant="h2" weight="bold">
 					{strings.business.ordersTitle}
 				</AppText>
-				{locationsLoading ? (
+				{businessesLoading || locationsLoading ? (
 					<Skeleton style={styles.branchSkeleton} />
 				) : locations && locations.length > 0 ? (
 					<BranchSelector
@@ -134,12 +194,15 @@ export default function BusinessOrdersScreen() {
 			{pull.indicator}
 			<FlatList
 				ref={pull.ref}
-				data={filtered}
+				data={orders}
 				keyExtractor={(item) => item.order.id}
 				renderItem={renderItem}
 				ItemSeparatorComponent={renderSeparator}
 				showsVerticalScrollIndicator={false}
+				style={styles.list}
 				contentContainerStyle={styles.content}
+				onEndReached={handleEndReached}
+				onEndReachedThreshold={0.5}
 				refreshControl={
 					<RefreshControl
 						refreshing={isFetching}
@@ -148,9 +211,14 @@ export default function BusinessOrdersScreen() {
 						colors={[colors.primary]}
 					/>
 				}
+				ListFooterComponent={
+					isFetchingNextPage ? (
+						<ActivityIndicator color={colors.primary} />
+					) : null
+				}
 				ListHeaderComponent={
 					<View style={styles.headerContainer}>
-						{isLoading ? (
+						{loading || statsLoading || !stats ? (
 							<OrderStatsRowSkeleton />
 						) : (
 							<OrderStatsRow stats={stats} />
@@ -192,10 +260,10 @@ export default function BusinessOrdersScreen() {
 							</View>
 						) : null}
 
-						{isLoading ? (
+						{loading ? (
 							<View style={styles.loadingList}>
 								{[0, 1, 2].map((i) => (
-									<OrderCardSkeleton key={`order-skeleton-${i}`} />
+									<OrderCardSkeleton key={`order-skeleton-${i}`} active={!isHistory} />
 								))}
 							</View>
 						) : null}
@@ -203,11 +271,10 @@ export default function BusinessOrdersScreen() {
 							<ErrorState error={error} onRetry={() => void refetch()} />
 						) : null}
 
-						{!isLoading && !isError && orders && orders.length === 0 ? (
+						{!loading && !isError && orders.length === 0 && !hasActiveFilters ? (
 							<EmptyState
 								icon={
-									<Ionicons
-										name="bag-handle-outline"
+									<ShoppingBag
 										size={28}
 										color={colors.mutedForeground}
 									/>
@@ -225,15 +292,10 @@ export default function BusinessOrdersScreen() {
 							/>
 						) : null}
 
-						{!isLoading &&
-						!isError &&
-						orders &&
-						orders.length > 0 &&
-						filtered.length === 0 ? (
+						{!loading && !isError && orders.length === 0 && hasActiveFilters ? (
 							<EmptyState
 								icon={
-									<Ionicons
-										name="search-outline"
+									<Search
 										size={28}
 										color={colors.mutedForeground}
 									/>
@@ -245,32 +307,6 @@ export default function BusinessOrdersScreen() {
 					</View>
 				}
 			/>
-		</Screen>
-	);
-}
-
-/**
- * Skeleton con las dimensiones aproximadas de la pantalla de pedidos
- * (header + stats + tabs + búsqueda + lista de OrderCards).
- * Mismo patrón que GestionContentSkeleton / ExploreCategoryGrid.
- */
-function BusinessOrdersSkeleton() {
-	return (
-		<Screen>
-			<View style={styles.header}>
-				<Skeleton style={styles.skeletonTitle} />
-				<Skeleton style={styles.branchSkeleton} />
-			</View>
-			<View style={styles.content}>
-				<OrderStatsRowSkeleton />
-				<Skeleton style={styles.skeletonTabs} />
-				<Skeleton style={styles.skeletonSearch} />
-				<View style={styles.loadingList}>
-					{[0, 1, 2].map((i) => (
-						<OrderCardSkeleton key={`business-orders-skeleton-${i}`} />
-					))}
-				</View>
-			</View>
 		</Screen>
 	);
 }
@@ -291,9 +327,10 @@ const styles = StyleSheet.create({
 	separator: {
 		height: spacing.md,
 	},
+	list: { flex: 1 },
 	content: {
 		paddingHorizontal: spacing.xl,
-		paddingBottom: spacing.xxl,
+		paddingBottom: spacing.lg,
 	},
 	searchRow: {
 		width: "100%",
@@ -319,20 +356,5 @@ const styles = StyleSheet.create({
 	},
 	loadingList: {
 		gap: spacing.md,
-	},
-	skeletonTitle: {
-		height: 28,
-		width: "40%",
-		borderRadius: radii.sm,
-	},
-	skeletonTabs: {
-		height: 40,
-		width: "100%",
-		borderRadius: radii.pill,
-	},
-	skeletonSearch: {
-		height: 48,
-		width: "100%",
-		borderRadius: radii.lg,
 	},
 });

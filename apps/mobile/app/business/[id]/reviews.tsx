@@ -1,28 +1,39 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+	ActivityIndicator,
+	FlatList,
+	Pressable,
+	RefreshControl,
+	StyleSheet,
+	View,
+} from "react-native";
+import { Star } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
 	EmptyState,
 	Screen,
 	ScreenHeader,
-} from "@/core/ui";
+	useWebPullToRefresh,
+} from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
 import {
 	useBusinessProfile,
+	useBusinessReviewCount,
 	useBusinessReviews,
-} from "@/features/business/hooks";
+} from "@/src/features/business/hooks";
 import {
 	filterBusinessReviews,
+	type BusinessReviewView,
 	type ReviewFilter,
-} from "@/features/business/domain/business";
-import { ReviewItem } from "@/features/business/components/ReviewItem";
+} from "@/src/features/business/domain/business";
+import { ReviewItem } from "@/src/features/business/components/ReviewItem";
+import { Button } from "@/components/ui/button";
 
 const FILTERS: Array<{ id: ReviewFilter; label: string }> = [
 	{ id: "recent", label: strings.businessProfile.filterRecent },
@@ -36,31 +47,58 @@ export default function BusinessReviewsScreen() {
 	const [filter, setFilter] = useState<ReviewFilter>("recent");
 
 	const { data: profile } = useBusinessProfile(businessId);
+	const offerIdParam =
+		offerId != null && offerId.length > 0 ? offerId : undefined;
 	const {
-		data: reviews,
+		data: infiniteData,
 		isLoading,
 		isError,
 		refetch,
-	} = useBusinessReviews(businessId);
+		isFetching,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useBusinessReviews(businessId, { offerId: offerIdParam });
+	const { data: totalCount } = useBusinessReviewCount(businessId, {
+		offerId: offerIdParam,
+	});
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
 
-	const visibleReviews = useMemo(() => {
-		const byOffer =
-			offerId != null && offerId.length > 0
-				? (reviews ?? []).filter((r) => r.offerId === offerId)
-				: (reviews ?? []);
-		return filterBusinessReviews(byOffer, filter);
-	}, [reviews, filter, offerId]);
+	// Server filters by offer; recent/recommended is a presentational sort
+	// over the loaded pages (server already orders by date desc, and no
+	// server ordering exists for the recommended average — labeled below).
+	const allReviews = useMemo(
+		() => infiniteData?.pages.flat() ?? [],
+		[infiniteData],
+	);
+	const visibleReviews = useMemo(
+		() => filterBusinessReviews(allReviews, filter),
+		[allReviews, filter],
+	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+	const renderReviewItem = useCallback(
+		({ item }: { item: BusinessReviewView }) => (
+			<ReviewItem review={item} />
+		),
+		[],
+	);
 
 	const rating = profile?.business.rating ?? 0;
-	const reviewCount = profile?.business.review_count ?? 0;
+	const reviewCount = totalCount ?? profile?.business.review_count ?? 0;
 	const offerTitle =
-		offerId != null && offerId.length > 0
-			? (reviews ?? []).find((r) => r.offerId === offerId)?.offerTitle ??
-				null
+		offerIdParam != null
+			? (allReviews.find((r) => r.offerId === offerIdParam)?.offerTitle ??
+				null)
 			: null;
 
-	return (
-		<Screen scroll contentContainerStyle={styles.content}>
+	const header = (
+		<View style={styles.headerBlock}>
 			<ScreenHeader
 				title={
 					offerTitle ?? strings.businessProfile.reviewsTitle
@@ -71,7 +109,7 @@ export default function BusinessReviewsScreen() {
 			{offerTitle == null ? (
 				<View style={styles.summaryRow}>
 					<View style={[styles.ratingBadge, { backgroundColor: colors.surfaceWarning }]}>
-						<Ionicons name="star" size={16} color={colors.yellowDark} />
+						<Star size={16} color={colors.yellowDark} />
 						<View style={{ width: 4 }} />
 						<AppText weight="bold" style={{ color: colors.yellowDark }}>
 							{rating.toFixed(1)}
@@ -113,55 +151,96 @@ export default function BusinessReviewsScreen() {
 					);
 				})}
 			</View>
+			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+				{strings.businessProfile.reviewsScopeNote}
+			</AppText>
+		</View>
+	);
 
-		{isLoading ? (
-			<View style={styles.skeletonList}>
-				{[0, 1, 2].map((i) => (
-					<Skeleton key={`review-skeleton-${i}`} style={styles.skeletonCard} />
-				))}
-			</View>
-		) : isError ? (
-				<View style={styles.centerBox}>
-					<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
-						{strings.common.error}
-					</AppText>
-					<Pressable
-						onPress={() => void refetch()}
-						style={[styles.retry, { backgroundColor: colors.primary }]}
-					>
-						<AppText weight="bold" style={{ color: colors.primaryForeground }}>
-							{strings.common.retry}
+	if (isLoading) {
+		return (
+			<Screen>
+				<View style={styles.content}>
+					{header}
+					<View style={styles.skeletonList}>
+						{[0, 1, 2].map((i) => (
+							<Skeleton key={`review-skeleton-${i}`} style={styles.skeletonCard} />
+						))}
+					</View>
+				</View>
+			</Screen>
+		);
+	}
+
+	if (isError) {
+		return (
+			<Screen>
+				<View style={styles.content}>
+					{header}
+					<View style={styles.centerBox}>
+						<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+							{strings.common.error}
 						</AppText>
-					</Pressable>
+						<Button onPress={() => void refetch()}>
+							{strings.common.retry}
+						</Button>
+					</View>
 				</View>
-			) : visibleReviews.length === 0 ? (
-				<EmptyState
-					icon={<Ionicons name="star-outline" size={28} color={colors.mutedForeground} />}
-					title={
-						(reviews ?? []).length === 0
-							? strings.businessProfile.noReviews
-							: strings.businessProfile.noFilteredReviews
-					}
-				/>
-			) : (
-				<View>
-					{visibleReviews.map((review) => (
-						<ReviewItem key={review.id} review={review} />
-					))}
-				</View>
-			)}
+			</Screen>
+		);
+	}
 
-			{offerId != null && offerId.length > 0 ? (
-				<Button
-					label={strings.businessProfile.seeAllReviews.replace(
-						"{n}",
-						String(reviewCount),
-					)}
-					variant="outline"
-					fullWidth
-					onPress={() => router.replace(`/business/${businessId}/reviews`)}
-				/>
-			) : null}
+	return (
+		<Screen>
+			{pull.indicator}
+			<FlatList
+				ref={pull.ref}
+				data={visibleReviews}
+				keyExtractor={(review) => review.id}
+				contentContainerStyle={styles.content}
+				keyboardShouldPersistTaps="handled"
+				onEndReached={handleEndReached}
+				onEndReachedThreshold={0.5}
+				refreshControl={
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
+					/>
+				}
+				ListHeaderComponent={header}
+				ListFooterComponent={
+					<>
+						{isFetchingNextPage ? (
+							<ActivityIndicator color={colors.primary} />
+						) : null}
+						{offerIdParam != null ? (
+							<Button
+								variant="outline"
+								fullWidth
+								onPress={() => router.replace(`/business/${businessId}/reviews`)}
+							>
+								{strings.businessProfile.seeAllReviews.replace(
+									"{n}",
+									String(reviewCount),
+								)}
+							</Button>
+						) : null}
+					</>
+				}
+				ListEmptyComponent={
+					<EmptyState
+						icon={<Star size={28} color={colors.mutedForeground} />}
+						title={
+							allReviews.length === 0
+								? strings.businessProfile.noReviews
+								: strings.businessProfile.noFilteredReviews
+						}
+					/>
+				}
+				renderItem={renderReviewItem}
+			/>
 		</Screen>
 	);
 }
@@ -171,6 +250,9 @@ const styles = StyleSheet.create({
 		padding: spacing.xl,
 		gap: spacing.lg,
 		paddingBottom: spacing.xxl,
+	},
+	headerBlock: {
+		gap: spacing.lg,
 	},
 	summaryRow: {
 		flexDirection: "row",

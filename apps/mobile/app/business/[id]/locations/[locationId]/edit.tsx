@@ -2,20 +2,20 @@ import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	ErrorState,
 	goBackOr,
 	LoadingView,
 	Screen,
 	ScreenHeader,
-} from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useBusinessLocation, useUpsertLocation } from "@/features/business/hooks";
+} from "@/src/core/ui";
+import { spacing } from "@/src/core/theme/spacing";
+import { useBusinessLocation, useUpsertLocation } from "@/src/features/business/hooks";
 import {
 	LocationForm,
 	type LocationFormValues,
-} from "@/features/business/components/LocationForm";
+} from "@/src/features/business/components/LocationForm";
 
 export default function BusinessLocationEditScreen() {
 	const { id, locationId } = useLocalSearchParams<{

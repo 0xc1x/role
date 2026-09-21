@@ -1,26 +1,34 @@
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronRight, Info, Receipt } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import {
+	ActivityIndicator,
+	FlatList,
+	Pressable,
+	RefreshControl,
+	StyleSheet,
+	View,
+} from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Card,
 	EmptyState,
 	ErrorState,
 	LoadingView,
 	Screen,
 	ScreenHeader,
 	StatusBadge,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useBusinessPayouts } from "@/features/business/hooks";
-import { PAYOUT_STATUS_LABELS } from "@/features/business/domain/business";
-import { formatMoney } from "@/core/utils/formatters";
+	useWebPullToRefresh,
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useBusinessPayouts, useBusinessPayoutTotals } from "@/src/features/business/hooks";
+import { PAYOUT_STATUS_LABELS } from "@/src/features/business/domain/business";
+import { formatMoney } from "@/src/core/utils/formatters";
 import type { Payout, PayoutStatus } from "@0xc1x/role-commons";
-import type { BadgeTone } from "@/core/ui";
+import type { BadgeTone } from "@/src/core/ui";
+import { CardPressable } from "@/components/ui/card-presable";
 
 const TONE: Record<PayoutStatus, BadgeTone> = {
 	paid: "success",
@@ -41,140 +49,182 @@ export default function BusinessPayoutsScreen() {
 	const { colors } = useTheme();
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const businessId = id ?? "";
-	const { data, isLoading, isError, error, refetch } =
-		useBusinessPayouts(businessId);
 	const [filter, setFilter] = useState<PayoutFilter>("all");
+	const {
+		data: infiniteData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		isFetching,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useBusinessPayouts(businessId, {
+		status: filter === "all" ? undefined : filter,
+	});
+	// Balance cards come from an unfiltered aggregate (exact under any
+	// filter); the list below stays status-filtered and paginated.
+	const { data: totals, refetch: refetchTotals } =
+		useBusinessPayoutTotals(businessId);
+	const pull = useWebPullToRefresh({
+		onRefresh: () => {
+			void refetch();
+			void refetchTotals();
+		},
+		refreshing: isFetching,
+	});
+
+	const payouts = useMemo(
+		() => infiniteData?.pages.flat() ?? [],
+		[infiniteData],
+	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+	const renderPayoutItem = useCallback(
+		({ item }: { item: Payout }) => (
+			<PayoutListItem payout={item} businessId={businessId} />
+		),
+		[businessId],
+	);
 
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!data) return null;
 
-	let paid = 0;
-	let paidCount = 0;
-	let pending = 0;
-	for (const payout of data) {
-		if (payout.status === "paid") {
-			paid += payout.net_amount;
-			paidCount += 1;
-		} else if (
-			payout.status === "pending" ||
-			payout.status === "processing"
-		) {
-			pending += payout.net_amount;
-		}
-	}
-
-	const filtered =
-		filter === "all"
-			? data
-			: data.filter((p) => p.status === filter);
+	// Balance cards are exact (unfiltered aggregate); the list itself is
+	// server-filtered by status.
+	const paid = totals?.paid ?? 0;
+	const paidCount = totals?.paidCount ?? 0;
+	const pending = totals?.pending ?? 0;
 
 	return (
-		<Screen scroll>
-			<View style={styles.container}>
-				<ScreenHeader
-					title={strings.business.paymentsTitle}
-					fallback="/(business)/management"
-				/>
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.mutedForeground, marginTop: spacing.lg }}
-				>
-					{strings.business.paymentsSubtitle}
-				</AppText>
-
-				{/* ── Balance cards ─────────────────────────────────── */}
-				<View style={styles.balances}>
-					<View
-						style={[
-							styles.balanceCard,
-							{
-								backgroundColor: colors.surfaceSuccess,
-								borderColor: colors.surfaceSuccessBorder,
-							},
-						]}
-					>
+		<Screen>
+			{pull.indicator}
+			<FlatList
+				ref={pull.ref}
+				data={payouts}
+				keyExtractor={(payout) => payout.id}
+				contentContainerStyle={styles.container}
+				keyboardShouldPersistTaps="handled"
+				onEndReached={handleEndReached}
+				onEndReachedThreshold={0.5}
+				refreshControl={
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => {
+							void refetch();
+							void refetchTotals();
+						}}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
+					/>
+				}
+				ListHeaderComponent={
+					<>
+						<ScreenHeader
+							title={strings.business.paymentsTitle}
+							fallback="/(business)/management"
+						/>
 						<AppText
-							variant="labelSmall"
-							weight="bold"
-							style={{ color: colors.successDark }}
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground, marginTop: spacing.lg }}
 						>
-							{strings.business.totalCollected}
+							{strings.business.paymentsSubtitle}
 						</AppText>
-						<AppText variant="h2" weight="bold" style={{ color: colors.successDark }}>
-							{formatMoney(paid)}
-						</AppText>
-						<AppText variant="bodySmall" style={{ color: colors.successDark }}>
-							{paidCount === 1
-								? strings.business.onePayout
-								: `${paidCount} ${strings.business.payoutsCount}`}
-						</AppText>
-					</View>
-					<View
-						style={[
-							styles.balanceCard,
-							{
-								backgroundColor: colors.infoSurface,
-								borderColor: colors.infoSurfaceBorder,
-							},
-						]}
-					>
-						<AppText
-							variant="labelSmall"
-							weight="bold"
-							style={{ color: colors.infoForeground }}
-						>
-							{strings.business.pendingProcessing}
-						</AppText>
-						<AppText variant="h2" weight="bold" style={{ color: colors.infoForeground }}>
-							{formatMoney(pending)}
-						</AppText>
-						<AppText variant="bodySmall" style={{ color: colors.infoForeground }}>
-							{strings.business.autoCutoff}
-						</AppText>
-					</View>
-				</View>
 
-				{/* ── Filter chips ────────────────────────────────── */}
-				<View style={styles.filters}>
-					{FILTERS.map((option) => {
-						const selected = option.key === filter;
-						return (
-							<Pressable
-								key={option.key}
-								onPress={() => setFilter(option.key)}
+						{/* ── Balance cards ─────────────────────────────────── */}
+						<View style={styles.balances}>
+							<View
 								style={[
-									styles.filterChip,
-									selected && {
-										backgroundColor: colors.foreground,
-										borderColor: colors.foreground,
+									styles.balanceCard,
+									{
+										backgroundColor: colors.surfaceSuccess,
+										borderColor: colors.surfaceSuccessBorder,
 									},
-									!selected && { borderColor: colors.borderSolid },
 								]}
 							>
 								<AppText
-									variant="bodySmall"
-									weight={selected ? "bold" : "medium"}
-									style={{
-										color: selected
-											? colors.background
-											: colors.mutedForeground,
-									}}
+									variant="labelSmall"
+									weight="bold"
+									style={{ color: colors.successDark }}
 								>
-									{option.label}
+									{strings.business.totalCollected}
 								</AppText>
-							</Pressable>
-						);
-					})}
-				</View>
+								<AppText variant="h2" weight="bold" style={{ color: colors.successDark }}>
+									{formatMoney(paid)}
+								</AppText>
+								<AppText variant="bodySmall" style={{ color: colors.successDark }}>
+									{paidCount === 1
+										? strings.business.onePayout
+										: `${paidCount} ${strings.business.payoutsCount}`}
+								</AppText>
+							</View>
+							<View
+								style={[
+									styles.balanceCard,
+									{
+										backgroundColor: colors.infoSurface,
+										borderColor: colors.infoSurfaceBorder,
+									},
+								]}
+							>
+								<AppText
+									variant="labelSmall"
+									weight="bold"
+									style={{ color: colors.infoForeground }}
+								>
+									{strings.business.pendingProcessing}
+								</AppText>
+								<AppText variant="h2" weight="bold" style={{ color: colors.infoForeground }}>
+									{formatMoney(pending)}
+								</AppText>
+								<AppText variant="bodySmall" style={{ color: colors.infoForeground }}>
+									{strings.business.autoCutoff}
+								</AppText>
+							</View>
+						</View>
 
-				{/* ── Payout list ─────────────────────────────────── */}
-				{filtered.length === 0 ? (
+						{/* ── Filter chips ────────────────────────────────── */}
+						<View style={styles.filters}>
+							{FILTERS.map((option) => {
+								const selected = option.key === filter;
+								return (
+									<Pressable
+										key={option.key}
+										onPress={() => setFilter(option.key)}
+										style={[
+											styles.filterChip,
+											selected && {
+												backgroundColor: colors.foreground,
+												borderColor: colors.foreground,
+											},
+											!selected && { borderColor: colors.borderSolid },
+										]}
+									>
+										<AppText
+											variant="bodySmall"
+											weight={selected ? "bold" : "medium"}
+											style={{
+												color: selected
+													? colors.background
+													: colors.mutedForeground,
+											}}
+										>
+											{option.label}
+										</AppText>
+									</Pressable>
+								);
+							})}
+						</View>
+					</>
+				}
+				ListEmptyComponent={
 					<EmptyState
 						icon={
-							<Ionicons
-								name="receipt-outline"
+							<Receipt
 								size={28}
 								color={colors.mutedForeground}
 							/>
@@ -182,45 +232,52 @@ export default function BusinessPayoutsScreen() {
 						title={strings.business.noPayouts}
 						message={strings.business.noPayoutsBody}
 					/>
-				) : (
-					<View style={styles.list}>
-						{filtered.map((payout) => (
-							<PayoutCard
-								key={payout.id}
-								payout={payout}
-								onPress={() =>
-									router.push(
-										`/business/${businessId}/payouts/${payout.id}`,
-									)
-								}
+				}
+				ListFooterComponent={
+					<>
+						{isFetchingNextPage ? (
+							<ActivityIndicator color={colors.primary} />
+						) : null}
+						{/* ── Cycle info card ─────────────────────────────── */}
+						<View
+							style={[
+								styles.cycleInfo,
+								{ backgroundColor: colors.surfaceMuted },
+							]}
+						>
+							<Info
+								size={16}
+								color={colors.mutedForeground}
 							/>
-						))}
-					</View>
-				)}
-
-				{/* ── Cycle info card ─────────────────────────────── */}
-				<View
-					style={[
-						styles.cycleInfo,
-						{ backgroundColor: colors.surfaceMuted },
-					]}
-				>
-					<Ionicons
-						name="information-circle-outline"
-						size={16}
-						color={colors.mutedForeground}
-					/>
-					<AppText
-						variant="bodySmall"
-						style={{ color: colors.mutedForeground, flex: 1 }}
-					>
-						{strings.business.payoutCycleInfo}
-					</AppText>
-				</View>
-			</View>
+							<AppText
+								variant="bodySmall"
+								style={{ color: colors.mutedForeground, flex: 1 }}
+							>
+								{strings.business.payoutCycleInfo}
+							</AppText>
+						</View>
+					</>
+				}
+				renderItem={renderPayoutItem}
+				ItemSeparatorComponent={() => <View style={styles.separator} />}
+			/>
 		</Screen>
 	);
 }
+
+const PayoutListItem = memo(function PayoutListItem({
+	payout,
+	businessId,
+}: {
+	payout: Payout;
+	businessId: string;
+}) {
+	const handlePress = useCallback(
+		() => router.push(`/business/${businessId}/payouts/${payout.id}`),
+		[businessId, payout.id],
+	);
+	return <PayoutCard payout={payout} onPress={handlePress} />;
+});
 
 function PayoutCard({
 	payout,
@@ -231,7 +288,7 @@ function PayoutCard({
 }) {
 	const { colors } = useTheme();
 	return (
-		<Card onPress={onPress} style={styles.payoutCard}>
+		<CardPressable onPress={onPress} style={styles.payoutCard}>
 			<View style={styles.payoutRow}>
 				<View style={styles.payoutInfo}>
 					<View style={styles.payoutHeader}>
@@ -250,13 +307,12 @@ function PayoutCard({
 						{periodLabel(payout)}
 					</AppText>
 				</View>
-				<Ionicons
-					name="chevron-forward"
+				<ChevronRight
 					size={16}
 					color={colors.mutedForeground}
 				/>
 			</View>
-		</Card>
+		</CardPressable>
 	);
 }
 
@@ -274,7 +330,7 @@ function periodLabel(payout: Payout): string {
 }
 
 const styles = StyleSheet.create({
-	container: { padding: spacing.xl, flex: 1 },
+	container: { padding: spacing.xl, flexGrow: 1 },
 	balances: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
 	balanceCard: {
 		flex: 1,
@@ -291,6 +347,7 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 	},
 	list: { marginTop: spacing.md, gap: spacing.xs },
+	separator: { height: spacing.xs },
 	payoutCard: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
 	payoutRow: {
 		flexDirection: "row",

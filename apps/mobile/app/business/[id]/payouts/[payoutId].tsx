@@ -1,26 +1,26 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Download } from "lucide-react-native";
 import { useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	ErrorState,
 	LoadingView,
 	Screen,
 	ScreenHeader,
 	StatusBadge,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { useBusinessPayouts } from "@/features/business/hooks";
-import { PAYOUT_STATUS_LABELS } from "@/features/business/domain/business";
-import { formatMoney, formatMoneyPrecise } from "@/core/utils/formatters";
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { useBusinessPayout } from "@/src/features/business/hooks";
+import { PAYOUT_STATUS_LABELS } from "@/src/features/business/domain/business";
+import { formatMoney, formatMoneyPrecise } from "@/src/core/utils/formatters";
 import type { Payout } from "@0xc1x/role-commons";
-import type { BadgeTone } from "@/core/ui";
+import type { BadgeTone } from "@/src/core/ui";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 const TONE: Record<Payout["status"], BadgeTone> = {
 	paid: "success",
@@ -31,13 +31,12 @@ const TONE: Record<Payout["status"], BadgeTone> = {
 
 export default function BusinessPayoutDetailScreen() {
 	const { colors } = useTheme();
-	const { id, payoutId } = useLocalSearchParams<{
+	const { payoutId } = useLocalSearchParams<{
 		id: string;
 		payoutId: string;
 	}>();
-	const { data, isLoading, isError, error, refetch } =
-		useBusinessPayouts(id ?? "");
-	const payout = data?.find((p) => p.id === payoutId);
+	const { data: payout, isLoading, isError, error, refetch } =
+		useBusinessPayout(payoutId ?? "");
 
 	if (isLoading) return <LoadingView />;
 	if (isError)
@@ -130,12 +129,13 @@ export default function BusinessPayoutDetailScreen() {
 			{/* Comprobante no disponible aún — se habilita con el gateway de pagos. */}
 			<Button
 			    style={{ marginTop: spacing.lg }}
-				label={strings.business.downloadReceipt}
 				variant="outline"
 				fullWidth
 				disabled
-				icon={<Ionicons name="download-outline" size={18} />}
-			/>
+				icon={<Download size={18} />}
+			>
+				{strings.business.downloadReceipt}
+			</Button>
 		</Screen>
 	);
 }

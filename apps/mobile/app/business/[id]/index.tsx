@@ -2,13 +2,15 @@ import { type Href, router, useLocalSearchParams } from "expo-router";
 import { memo, useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card, ErrorState, Screen } from "@/core/ui";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, ErrorState, Screen } from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBusinessProfile } from "@/features/business/hooks";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { useBusinessProfile } from "@/src/features/business/hooks";
+import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Card } from "@/components/ui/card";
+import { CardPressable } from "@/components/ui/card-presable";
 
 export default function BusinessHubScreen() {
 	const { colors } = useTheme();
@@ -144,15 +146,20 @@ const MenuRow = memo(function MenuRow({
 	route: string;
 	onPress: (route: string) => void;
 }) {
+	const { colors } = useTheme();
 	return (
-		<Card onPress={() => onPress(route)}>
+		<CardPressable onPress={() => onPress(route)}>
 			<View style={styles.rowBetween}>
-				<AppText variant="bodyMedium">{label}</AppText>
-				<AppText variant="bodyMedium" style={{ color: "gray" }}>
-					›
+				<AppText variant="bodyMedium" numberOfLines={1} style={styles.menuLabel}>
+					{label}
 				</AppText>
+				<View style={styles.menuChevron}>
+					<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+						›
+					</AppText>
+				</View>
 			</View>
-		</Card>
+		</CardPressable>
 	);
 });
 
@@ -162,7 +169,10 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
+		gap: spacing.sm,
 	},
+	menuLabel: { flex: 1, minWidth: 0 },
+	menuChevron: { flexShrink: 0 },
 	skeletonTitle: { height: 28, width: "60%", borderRadius: radii.md },
 	skeletonSubtitle: { height: 16, width: "80%", borderRadius: radii.md },
 	skeletonCard: { height: 120, borderRadius: radii.lg, marginTop: spacing.md },

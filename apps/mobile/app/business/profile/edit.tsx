@@ -1,37 +1,67 @@
 import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	ErrorState,
 	goBackOr,
 	Screen,
 	ScreenHeader,
-} from "@/core/ui";
+} from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthStore } from "@/features/auth/store";
+import { useTheme } from "@/src/core/theme";
+import { useAuthStore } from "@/src/features/auth/store";
 import {
 	useBusinesses,
 	useBusinessHours,
 	useBusinessProfile,
 	useUpdateBusiness,
-} from "@/features/business/hooks";
-import { BusinessForm } from "@/features/business/components/BusinessForm";
-import { spacing, radii } from "@/core/theme/spacing";
+} from "@/src/features/business/hooks";
+import { BusinessForm } from "@/src/features/business/components/BusinessForm";
+import { NoBusinessPrompt } from "@/src/features/business/components/NoBusinessPrompt";
+import { spacing, radii } from "@/src/core/theme/spacing";
 
 /** Edición del negocio con paridad total: mismos campos que la creación. */export default function BusinessEditScreen() {
+	const initialized = useAuthStore((s) => s.initialized);
 	const profile = useAuthStore((s) => s.profile);
-	const { data: businesses } = useBusinesses(profile?.id ?? "");
-	const businessId = businesses?.[0]?.id ?? "";
-	const { data, isLoading, isError, error, refetch } = useBusinessProfile(
-		businessId,
+	const { data: businesses, isLoading: businessesLoading } = useBusinesses(
+		profile?.id ?? "",
 	);
+	const business = businesses?.[0];
+	const businessId = business?.id ?? "";
+	const { data, isLoading, isError, error, refetch, fetchStatus } =
+		useBusinessProfile(businessId);
 	const { data: hours } = useBusinessHours(businessId);
 	const update = useUpdateBusiness(businessId);
 
+	// Temporary diagnostic log for Expo logs; remove after debugging.
+	console.log("[edit-business]", {
+		initialized,
+		profileId: profile?.id,
+		businessesLen: businesses?.length,
+		businessId,
+		isLoading,
+		isError,
+		errorMessage: String(error),
+		hasData: Boolean(data),
+		fetchStatus,
+	});
+
+	if (!initialized || businessesLoading) return <BusinessFormSkeleton />;
+	if (!business) return <NoBusinessPrompt />;
 	if (isLoading) return <BusinessFormSkeleton />;
 	if (isError)
-		return <ErrorState error={error} onRetry={() => void refetch()} />;
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+					<ScreenHeader
+						title={strings.business.editBusinessTitle}
+						fallback="/(business)/management"
+					/>
+					<ErrorState error={error} onRetry={() => void refetch()} />
+				</View>
+			</Screen>
+		);
 	if (!data) return <BusinessFormSkeleton />;
 
 	return (
@@ -83,6 +113,8 @@ import { spacing, radii } from "@/core/theme/spacing";
 }
 
 function BusinessFormSkeleton() {
+	const { colors } = useTheme();
+	const skeletonStyle = { backgroundColor: colors.borderSolid };
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
@@ -91,9 +123,12 @@ function BusinessFormSkeleton() {
 					fallback="/(business)/management"
 				/>
 				{[0, 1, 2, 3, 4].map((i) => (
-					<Skeleton key={`business-form-skeleton-${i}`} style={styles.skeletonField} />
+					<Skeleton
+						key={`business-form-skeleton-${i}`}
+						style={[styles.skeletonField, skeletonStyle]}
+					/>
 				))}
-				<Skeleton style={styles.skeletonCta} />
+				<Skeleton style={[styles.skeletonCta, skeletonStyle]} />
 			</View>
 		</Screen>
 	);

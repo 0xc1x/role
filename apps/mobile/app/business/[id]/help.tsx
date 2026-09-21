@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { BookOpen, ChevronRight, CircleHelp, Mail, MessagesSquare, Package, Phone, ShieldCheck, type LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,17 +12,17 @@ import {
 } from "react-native";
 import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
-import { useConfigValue } from "@/features/config";
-import { AppText, Card, Screen, ScreenHeader, SearchBar } from "@/core/ui";
-import { radii, spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
-
-type IoniconName = keyof typeof Ionicons.glyphMap;
+import { strings } from "@/src/core/i18n/strings";
+import { useConfigValue } from "@/src/features/config";
+import { AppText, Screen, ScreenHeader, SearchBar } from "@/src/core/ui";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 interface Category {
-	icon: IoniconName;
+	icon: LucideIcon;
 	label: string;
 	subtitle: string;
 	bgColor: string;
@@ -36,11 +36,11 @@ interface Faq {
 }
 
 function ContactChip({
-	icon,
+	icon: Icon,
 	label,
 	onPress,
 }: {
-	icon: IoniconName;
+	icon: LucideIcon;
 	label: string;
 	onPress: () => void;
 }) {
@@ -56,7 +56,7 @@ function ContactChip({
 				},
 			]}
 		>
-			<Ionicons name={icon} size={24} color={colors.primary} />
+			<Icon size={24} color={colors.primary} />
 			<AppText variant="bodyMedium" weight="medium">
 				{label}
 			</AppText>
@@ -77,21 +77,21 @@ function QuickContact({
 		<View style={styles.quickContact}>
 			<View style={styles.quickContactItem}>
 				<ContactChip
-					icon="chatbubble-ellipses-outline"
+					icon={MessagesSquare}
 					label={strings.helpCenter.chat}
 					onPress={onChatPress}
 				/>
 			</View>
 			<View style={styles.quickContactItem}>
 				<ContactChip
-					icon="mail-outline"
+					icon={Mail}
 					label={strings.helpCenter.email}
 					onPress={onEmailPress}
 				/>
 			</View>
 			<View style={styles.quickContactItem}>
 				<ContactChip
-					icon="call-outline"
+					icon={Phone}
 					label={strings.helpCenter.call}
 					onPress={onCallPress}
 				/>
@@ -102,13 +102,14 @@ function QuickContact({
 
 function CategoryRow({ category }: { category: Category }) {
 	const { colors } = useTheme();
+	const Icon = category.icon;
 	return (
 		<Pressable
 			onPress={category.onPress}
 			style={[styles.row, { borderTopColor: colors.borderSolid }]}
 		>
 			<View style={[styles.categoryIcon, { backgroundColor: category.bgColor }]}>
-				<Ionicons name={category.icon} size={20} color={category.iconColor} />
+				<Icon size={20} color={category.iconColor} />
 			</View>
 			<View style={styles.rowBody}>
 				<AppText variant="bodyMedium" weight="medium">
@@ -118,7 +119,7 @@ function CategoryRow({ category }: { category: Category }) {
 					{category.subtitle}
 				</AppText>
 			</View>
-			<Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
+			<ChevronRight size={20} color={colors.mutedForeground} />
 		</Pressable>
 	);
 }
@@ -170,8 +171,7 @@ function FaqChevron({ expanded }: { expanded: boolean }) {
 				],
 			}}
 		>
-			<Ionicons
-				name="chevron-forward"
+			<ChevronRight
 				size={20}
 				color={colors.mutedForeground}
 			/>
@@ -200,7 +200,7 @@ function FaqRow({
 				{ borderTopColor: colors.borderSolid },
 			]}
 		>
-			<Ionicons name="help-circle-outline" size={20} color={colors.primary} />
+			<CircleHelp size={20} color={colors.primary} />
 			<View style={styles.rowBody}>
 				<AppText variant="bodyMedium" weight="medium">
 					{question}
@@ -289,21 +289,9 @@ function ContactSupportCard({ onPress }: { onPress: () => void }) {
 			>
 				{strings.helpCenter.contactSubtitle}
 			</AppText>
-			<Pressable
-				onPress={onPress}
-				style={[
-					styles.supportButton,
-					{ backgroundColor: colors.primaryForeground },
-				]}
-			>
-				<AppText
-					variant="bodyMedium"
-					weight="semiBold"
-					style={{ color: colors.primary }}
-				>
-					{strings.helpCenter.contactCta}
-				</AppText>
-			</Pressable>
+			<Button variant="default" onPress={onPress} fullWidth>
+				{strings.helpCenter.contactCta}
+			</Button>
 		</LinearGradient>
 	);
 }
@@ -363,7 +351,7 @@ export default function BusinessHelpScreen() {
 
 	const categories: Category[] = [
 		{
-			icon: "cube-outline",
+			icon: Package,
 			label: strings.business.businessHelpProducts,
 			subtitle: strings.business.businessHelpProductsSub,
 			bgColor: colors.surfaceSuccess,
@@ -380,7 +368,7 @@ export default function BusinessHelpScreen() {
 		// 	onPress: () => router.push(`/business/${id}/help/payments`),
 		// },
 		{
-			icon: "book-outline",
+			icon: BookOpen,
 			label: strings.business.businessHelpGuides,
 			subtitle: strings.business.businessHelpGuidesSub,
 			bgColor: colors.surfaceWarning,
@@ -388,7 +376,7 @@ export default function BusinessHelpScreen() {
 			onPress: () => router.push(`/business/${id}/help/guides`),
 		},
 		{
-			icon: "shield-checkmark-outline",
+			icon: ShieldCheck,
 			label: strings.business.businessHelpSecurity,
 			subtitle: strings.business.businessHelpSecuritySub,
 			bgColor: colors.infoSurface,
@@ -461,7 +449,7 @@ const styles = StyleSheet.create({
 		borderRadius: radii.xl,
 	},
 	card: { padding: 0, overflow: "hidden" },
-	cardTitle: { padding: spacing.lg },
+	cardTitle: { padding: spacing.xs },
 	row: {
 		flexDirection: "row",
 		alignItems: "center",

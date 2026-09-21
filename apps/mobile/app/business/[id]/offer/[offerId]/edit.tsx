@@ -1,13 +1,13 @@
 import { useLocalSearchParams } from "expo-router";
 
-import { strings } from "@/core/i18n/strings";
-import { ErrorState, Screen, ScreenHeader } from "@/core/ui";
+import { strings } from "@/src/core/i18n/strings";
+import { ErrorState, Screen, ScreenHeader } from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { radii, spacing } from "@/core/theme/spacing";
+import { radii, spacing } from "@/src/core/theme/spacing";
 import { StyleSheet, View } from "react-native";
 
-import { ProductForm } from "@/features/business/components/products/ProductForm";
-import { useOffer } from "@/features/hooks";
+import { ProductForm } from "@/src/features/business/components/products/ProductForm";
+import { useOffer } from "@/src/features/hooks";
 
 export default function EditProductScreen() {
 	const { id, offerId } = useLocalSearchParams<{ id: string; offerId: string }>();

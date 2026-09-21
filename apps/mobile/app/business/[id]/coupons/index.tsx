@@ -1,23 +1,34 @@
-import { Ionicons } from "@expo/vector-icons";
+import { CircleCheck, Plus, Tag } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { useCallback, useMemo } from "react";
+import {
+	ActivityIndicator,
+	FlatList,
+	RefreshControl,
+	StyleSheet,
+	View,
+} from "react-native";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	EmptyState,
 	ErrorState,
 	Screen,
 	ScreenHeader,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useBusinessCoupons } from "@/features/business/hooks";
-import { CouponCard } from "@/features/business/components/CouponCard";
-import { couponIsValid } from "@/features/orders/domain/order";
+	useWebPullToRefresh,
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import {
+	useBusinessCouponCount,
+	useBusinessCoupons,
+} from "@/src/features/business/hooks";
+import type { Coupon } from "@0xc1x/role-commons";
+import { CouponCard } from "@/src/features/business/components/CouponCard";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 function StatCard({
 	label,
@@ -53,130 +64,207 @@ export default function BusinessCouponsScreen() {
 	const { colors } = useTheme();
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const businessId = id ?? "";
-	const { data, isLoading, isError, error, refetch } =
-		useBusinessCoupons(businessId);
+	const {
+		data: infiniteData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		isFetching,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useBusinessCoupons(businessId);
+	// Active/total counts are server head-counts; the uses sum below reflects
+	// loaded pages (no sum aggregate exists server-side) — labeled as such.
+	const { data: activeCount } = useBusinessCouponCount(businessId, {
+		isActive: true,
+	});
+	const { data: totalCount } = useBusinessCouponCount(businessId);
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
+
+	const coupons = useMemo(
+		() => infiniteData?.pages.flat() ?? [],
+		[infiniteData],
+	);
+	const usesTotal = useMemo(
+		() => coupons.reduce((sum, c) => sum + c.used_count, 0),
+		[coupons],
+	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+	const renderCouponItem = useCallback(
+		({ item }: { item: Coupon }) => (
+			<CouponCard coupon={item} businessId={businessId} />
+		),
+		[businessId],
+	);
+
+	if (isLoading) {
+		return (
+			<Screen>
+				<View style={styles.container}>
+					<ScreenHeader
+						title={strings.business.coupons}
+						fallback="/(business)/management"
+					/>
+					<CouponsSkeleton />
+				</View>
+			</Screen>
+		);
+	}
+	if (isError)
+		return (
+			<Screen>
+				<View style={styles.container}>
+					<ScreenHeader
+						title={strings.business.coupons}
+						fallback="/(business)/management"
+					/>
+					<ErrorState error={error} onRetry={() => void refetch()} />
+				</View>
+			</Screen>
+		);
 
 	return (
-		<Screen scroll>
-			<View style={styles.container}>
-				<ScreenHeader
-					title={strings.business.coupons}
-					fallback="/(business)/management"
-				/>
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.mutedForeground, marginTop: spacing.lg }}
-				>
-					{strings.business.couponsSubtitle}
-				</AppText>
-
-				<Button
-					label={strings.business.couponNew}
-					size="sm"
-					icon={<Ionicons name="add" size={18} color={colors.primaryForeground} />}
-					style={styles.newButton}
-					onPress={() =>
-						router.push(`/business/${businessId}/coupons/new`)
-					}
-				/>
-
-			{isLoading ? (
-				<CouponsSkeleton />
-			) : isError ? (
-				<ErrorState error={error} onRetry={() => void refetch()} />
-			) : !data || data.length === 0 ? (
-				<Card style={styles.emptyCard}>
-					<EmptyState
-						icon={
-							<Ionicons
-								name="pricetag-outline"
-								size={40}
-								color={colors.mutedForeground}
-							/>
-						}
-						title={strings.business.noCoupons}
-						message={strings.business.noCouponsBody}
-						action={
-							<Button
-								label={strings.business.couponCreateFirst}
-								onPress={() =>
-									router.push(`/business/${businessId}/coupons/new`)
-								}
-								style={{ marginTop: spacing.md }}
-							/>
-						}
+		<Screen>
+			{pull.indicator}
+			<FlatList
+				ref={pull.ref}
+				data={coupons}
+				keyExtractor={(coupon) => coupon.id}
+				contentContainerStyle={styles.container}
+				keyboardShouldPersistTaps="handled"
+				onEndReached={handleEndReached}
+				onEndReachedThreshold={0.5}
+				refreshControl={
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
 					/>
-				</Card>
-			) : (
+				}
+				ListHeaderComponent={
 					<>
-						<View style={styles.stats}>
-							<StatCard
-								label={strings.business.couponsActiveStat}
-								value={String(
-									data.filter((c) => couponIsValid(c)).length,
-								)}
-								color={colors.successDark}
-							/>
-							<StatCard
-								label={strings.business.couponsUsesStat}
-								value={String(
-									data.reduce((sum, c) => sum + c.used_count, 0),
-								)}
-								color={colors.primary}
-							/>
-							<StatCard
-								label={strings.business.couponsCreatedStat}
-								value={String(data.length)}
-								color={colors.foreground}
-							/>
-						</View>
-
+						<ScreenHeader
+							title={strings.business.coupons}
+							fallback="/(business)/management"
+						/>
 						<AppText
-							variant="labelSmall"
-							weight="bold"
-							style={{ marginTop: spacing.lg, marginBottom: spacing.md }}
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground, marginTop: spacing.lg }}
 						>
-							{strings.business.couponsHistory}
+							{strings.business.couponsSubtitle}
 						</AppText>
-						{data.map((coupon) => (
-							<CouponCard
-								key={coupon.id}
-								coupon={coupon}
-								businessId={businessId}
-							/>
-						))}
-					</>
-				)}
 
-				<View
-					style={[
-						styles.tips,
-						{
-							marginTop: spacing.lg,
-							backgroundColor: colors.surfaceMuted,
-						},
-					]}
-				>
-					<AppText variant="labelSmall" weight="bold" style={{ marginBottom: spacing.sm }}>
-						{strings.business.couponTipsTitle}
-					</AppText>
-					{strings.business.couponTips.map((tip) => (
-						<View key={tip} style={styles.tip}>
-							<Ionicons
-								name="checkmark-circle-outline"
-								size={14}
-								color={colors.success}
-							/>
-							<AppText
-								variant="bodySmall"
-								style={{ color: colors.mutedForeground, flex: 1 }}
-							>
-								{tip}
+						<Button
+							size="sm"
+							icon={<Plus size={18} color={colors.primaryForeground} />}
+							style={styles.newButton}
+							onPress={() =>
+								router.push(`/business/${businessId}/coupons/new`)
+							}
+						>
+							{strings.business.couponNew}
+						</Button>
+
+						{(totalCount ?? 0) > 0 ? (
+							<>
+								<View style={styles.stats}>
+									<StatCard
+										label={strings.business.couponsActiveStat}
+										value={String(activeCount ?? 0)}
+										color={colors.successDark}
+									/>
+									<StatCard
+										label={strings.business.couponsUsesLoadedStat}
+										value={String(usesTotal)}
+										color={colors.primary}
+									/>
+									<StatCard
+										label={strings.business.couponsCreatedStat}
+										value={String(totalCount ?? 0)}
+										color={colors.foreground}
+									/>
+								</View>
+
+								<AppText
+									variant="labelSmall"
+									weight="bold"
+									style={{ marginTop: spacing.lg, marginBottom: spacing.md }}
+								>
+									{strings.business.couponsHistory}
+								</AppText>
+							</>
+						) : null}
+					</>
+				}
+				ListEmptyComponent={
+					<Card style={styles.emptyCard}>
+						<EmptyState
+							icon={
+								<Tag
+									size={40}
+									color={colors.mutedForeground}
+								/>
+							}
+							title={strings.business.noCoupons}
+							message={strings.business.noCouponsBody}
+							action={
+								<Button
+									onPress={() =>
+										router.push(`/business/${businessId}/coupons/new`)
+									}
+									style={{ marginTop: spacing.md }}
+								>
+									{strings.business.couponCreateFirst}
+								</Button>
+							}
+						/>
+					</Card>
+				}
+				ListFooterComponent={
+					<>
+						{isFetchingNextPage ? (
+							<ActivityIndicator color={colors.primary} />
+						) : null}
+						<View
+							style={[
+								styles.tips,
+								{
+									marginTop: spacing.lg,
+									backgroundColor: colors.surfaceMuted,
+								},
+							]}
+						>
+							<AppText variant="labelSmall" weight="bold" style={{ marginBottom: spacing.sm }}>
+								{strings.business.couponTipsTitle}
 							</AppText>
+							{strings.business.couponTips.map((tip) => (
+								<View key={tip} style={styles.tip}>
+									<CircleCheck
+										size={14}
+										color={colors.success}
+									/>
+									<AppText
+										variant="bodySmall"
+										style={{ color: colors.mutedForeground, flex: 1 }}
+									>
+										{tip}
+									</AppText>
+								</View>
+							))}
 						</View>
-					))}
-				</View>
-			</View>
+					</>
+				}
+				renderItem={renderCouponItem}
+			/>
 		</Screen>
 	);
 }
@@ -202,7 +290,7 @@ function CouponsSkeleton() {
 	);
 }
 
-const styles = StyleSheet.create({	container: { padding: spacing.xl, flex: 1 },
+const styles = StyleSheet.create({	container: { padding: spacing.xl, flexGrow: 1 },
 	newButton: { alignSelf: "flex-end", marginTop: spacing.md },
 	stats: {
 		flexDirection: "row",

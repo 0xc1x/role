@@ -1,40 +1,51 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
+import { Package, Plus } from "lucide-react-native";
+import {
+	ActivityIndicator,
+	FlatList,
+	RefreshControl,
+	ScrollView,
+	StyleSheet,
+	View,
+} from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
 	EmptyState,
 	ErrorState,
 	FilterChip,
 	Screen,
 	SearchBar,
 	useWebPullToRefresh,
-} from "@/core/ui";
+} from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthStore } from "@/features/auth/store";
+import { useAuthStore } from "@/src/features/auth/store";
 import {
 	useBusinesses,
 	useBusinessLocations,
+	useBusinessOfferCount,
 	useBusinessOffers,
-} from "@/features/business/hooks";
+} from "@/src/features/business/hooks";
 import {
 	filterAndSortProducts,
 	productStats,
+	productsSortToOrder,
 	type ProductsSort,
-} from "@/features/business/domain/products";
-import { NoBusinessPrompt } from "@/features/business/components/NoBusinessPrompt";
-import { BranchSelector } from "@/features/business/components/products/BranchSelector";
-import { BusinessStatsRow } from "@/features/business/components/products/BusinessStatsRow";
-import { ProductsSortControl } from "@/features/business/components/products/ProductsSortControl";
-import { ProductFilters } from "@/features/business/components/products/ProductFilters";
-import { ProductCard, ProductCardSkeleton } from "@/features/business/components/products/ProductCard";
-import { useCategories } from "@/features/hooks";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+} from "@/src/features/business/domain/products";
+import { NoBusinessPrompt } from "@/src/features/business/components/NoBusinessPrompt";
+import { BranchSelector } from "@/src/features/business/components/products/BranchSelector";
+import { BusinessStatsRow, BusinessStatsRowSkeleton } from "@/src/features/business/components/products/BusinessStatsRow";
+import { ProductsSortControl } from "@/src/features/business/components/products/ProductsSortControl";
+import { ProductFilters } from "@/src/features/business/components/products/ProductFilters";
+import { ProductCard, ProductCardSkeleton } from "@/src/features/business/components/products/ProductCard";
+import { useCategories } from "@/src/features/hooks";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { typography } from "@/src/core/theme/typography";
+import { useTheme } from "@/src/core/theme";
+import { Button } from "@/components/ui/button";
+import { Text } from "@/components/ui/text";
 
 export default function BusinessProductsScreen() {
 	const { colors } = useTheme();
@@ -46,20 +57,51 @@ export default function BusinessProductsScreen() {
 	const businessId = business?.id ?? "";
 
 	const { data: locations } = useBusinessLocations(businessId);
+	// Branch + search + category + sort all filter server-side
+	// (`offer_categories!inner` + `order()`); the client filter below only
+	// re-applies over already-filtered pages (idempotent, no-op).
+	const [branchId, setBranchId] = useState<string | null>(null);
+	const [searchInput, setSearchInput] = useState("");
+	const [debouncedSearch, setDebouncedSearch] = useState("");
+	const [categoryId, setCategoryId] = useState<string | null>(null);
+	const [sort, setSort] = useState<ProductsSort>("newest");
+
+	useEffect(() => {
+		const timer = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
+		return () => clearTimeout(timer);
+	}, [searchInput]);
+
+	const search =
+		debouncedSearch.length > 0 ? debouncedSearch : undefined;
+	const { orderBy, ascending } = productsSortToOrder(sort);
+
 	const {
-		data: offers,
+		data: infiniteData,
 		isLoading,
 		isError,
 		error,
 		refetch,
 		isFetching,
-	} = useBusinessOffers(businessId);
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useBusinessOffers(businessId, {
+		locationId: branchId,
+		search,
+		categoryId,
+		orderBy,
+		ascending,
+	});
+	const { data: totalCount } = useBusinessOfferCount(businessId);
+	// activeCount scoped to the same filters as the list (exact); sold and
+	// available have no server aggregate, so they sum loaded pages (labeled).
+	const { data: activeCount } = useBusinessOfferCount(businessId, {
+		isActive: true,
+		locationId: branchId,
+		search,
+		categoryId,
+	});
 	const { data: categories } = useCategories();
-
-	const [branchId, setBranchId] = useState<string | null>(null);
-	const [searchQuery, setSearchQuery] = useState("");
-	const [categoryId, setCategoryId] = useState<string | null>(null);
-	const [sort, setSort] = useState<ProductsSort>("newest");
 	const pull = useWebPullToRefresh({
 		onRefresh: () => void refetch(),
 		refreshing: isFetching,
@@ -67,17 +109,39 @@ export default function BusinessProductsScreen() {
 
 	useEffect(() => {
 		setBranchId(null);
-		setSearchQuery("");
+		setSearchInput("");
+		setDebouncedSearch("");
 		setCategoryId(null);
 		setSort("newest");
 	}, [businessId]);
 
-	const filtered = filterAndSortProducts(offers ?? [], {
-		branchId,
-		searchQuery,
-		categoryId,
-		sort,
-	});
+	const items = useMemo(
+		() => infiniteData?.pages.flat() ?? [],
+		[infiniteData],
+	);
+	const filtered = useMemo(
+		() =>
+			filterAndSortProducts(items, {
+				branchId: null,
+				searchQuery: "",
+				categoryId,
+				sort,
+			}),
+		[items, categoryId, sort],
+	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+	const stats = useMemo(() => {
+		// activeCount is a server head-count scoped to the list filters;
+		// sold/available are sums with no server aggregate, so they reflect
+		// loaded pages only (labeled under the row).
+		// Tolerates undefined inputs so the skeleton branch can render above.
+		const pageStats = productStats(items);
+		return { ...pageStats, activeCount: activeCount ?? pageStats.activeCount };
+	}, [items, activeCount]);
 
 	const renderItem = useCallback(
 		({ item: product }: { item: (typeof filtered)[number] }) => (
@@ -96,25 +160,40 @@ export default function BusinessProductsScreen() {
 			return <NoBusinessPrompt />;
 		}
 		return (
-			<Screen>
+			<Screen edges={["top", "left", "right"]}>
 				<View style={styles.header}>
 					<Skeleton style={styles.skeletonTitle} />
 					<Skeleton style={styles.skeletonPill} />
 				</View>
-				<View style={styles.content}>
-					<Skeleton style={styles.statsSkeleton} />
-					<Skeleton style={styles.ctaSkeleton} />
-					<View style={styles.listSkeleton}>
-						{[0, 1, 2].map((i) => (
-							<ProductCardSkeleton key={`products-skeleton-${i}`} />
-						))}
+				<ScrollView
+					style={styles.list}
+					contentContainerStyle={styles.content}
+					showsVerticalScrollIndicator={false}
+				>
+					<View style={styles.headerContainer}>
+						<BusinessStatsRowSkeleton />
+						<Skeleton style={styles.ctaSkeleton} />
+						<View style={styles.sectionHeader}>
+							<Skeleton style={styles.sectionTitleSkeleton} />
+							<Skeleton style={styles.sortSkeleton} />
+						</View>
+						<View style={styles.searchRow}>
+							<Skeleton style={styles.searchSkeleton} />
+						</View>
+						<View style={styles.filterRow}>
+							<Skeleton style={styles.filterSkeleton} />
+						</View>
+						<View style={styles.listSkeleton}>
+							{[0, 1, 2].map((i) => (
+								<ProductCardSkeleton key={`products-skeleton-${i}`} />
+							))}
+						</View>
 					</View>
-				</View>
+				</ScrollView>
 			</Screen>
 		);
 	}
 
-	const stats = productStats(offers ?? []);
 	const activeCategoryName = categories?.find(
 		(c) => c.id === categoryId,
 	)?.name;
@@ -122,7 +201,7 @@ export default function BusinessProductsScreen() {
 	const createRoute = () => router.push(`/business/${businessId}/offer/new`);
 
 	return (
-		<Screen>
+		<Screen edges={["top", "left", "right"]}>
 			<View style={styles.header}>
 				<AppText variant="h2" weight="bold">
 					{strings.business.productsTitle}
@@ -144,7 +223,10 @@ export default function BusinessProductsScreen() {
 				renderItem={renderItem}
 				ItemSeparatorComponent={renderSeparator}
 				showsVerticalScrollIndicator={false}
+				style={styles.list}
 				contentContainerStyle={styles.content}
+				onEndReached={handleEndReached}
+				onEndReachedThreshold={0.5}
 				refreshControl={
 					<RefreshControl
 						refreshing={isFetching}
@@ -153,22 +235,36 @@ export default function BusinessProductsScreen() {
 						colors={[colors.primary]}
 					/>
 				}
+				ListFooterComponent={
+					isFetchingNextPage ? (
+						<ActivityIndicator color={colors.primary} />
+					) : null
+				}
 				ListHeaderComponent={
 					<View style={styles.headerContainer}>
 						{isLoading ? (
-							<Skeleton style={styles.statsSkeleton} />
+							<BusinessStatsRowSkeleton />
 						) : (
-							<BusinessStatsRow stats={stats} />
+							<>
+								<BusinessStatsRow stats={stats} />
+								<AppText
+									variant="bodySmall"
+									style={{ color: colors.mutedForeground }}
+								>
+									{strings.business.productsStatsScopeNote}
+								</AppText>
+							</>
 						)}
 
 						<Button
-							label={strings.business.newProduct}
-							icon={<Ionicons name="add" size={20} color={colors.primaryForeground} />}
+							icon={<Plus size={20} color={colors.primaryForeground} />}
 							onPress={createRoute}
 							fullWidth
 							size="lg"
 							style={styles.cta}
-						/>
+						>
+							{strings.business.newProduct}
+						</Button>
 
 						<View style={styles.sectionHeader}>
 							<AppText variant="h4" weight="bold">
@@ -179,8 +275,8 @@ export default function BusinessProductsScreen() {
 
 						<View style={styles.searchRow}>
 							<SearchBar
-								value={searchQuery}
-								onChangeText={setSearchQuery}
+								value={searchInput}
+								onChangeText={setSearchInput}
 								placeholder={strings.business.searchProducts}
 								containerStyle={styles.searchBarFull}
 							/>
@@ -209,30 +305,33 @@ export default function BusinessProductsScreen() {
 							<ErrorState error={error} onRetry={() => void refetch()} />
 						) : null}
 
-						{!isLoading && !isError && offers && offers.length === 0 ? (
+						{!isLoading && !isError && totalCount === 0 ? (
 							<EmptyState
 								icon={
-									<Ionicons
-										name="cube-outline"
-										size={28}
-										color={colors.mutedForeground}
-									/>
+<Package
+									size={28}
+									color={colors.mutedForeground}
+								/>
 								}
 								title={strings.business.noProductsTitle}
 								message={strings.business.noProductsBody}
 								action={
 									<Button
-										label={strings.business.createFirstProduct}
+										icon={<Plus size={20} color={colors.primaryForeground} />}
 										onPress={createRoute}
-									/>
+										fullWidth
+										size="lg"
+										style={styles.cta}
+										>
+										{strings.business.createFirstProduct}
+									</Button>
 								}
 							/>
 						) : null}
 
 						{!isLoading &&
 						!isError &&
-						offers &&
-						offers.length > 0 &&
+						(totalCount ?? 0) > 0 &&
 						filtered.length === 0 ? (
 							<EmptyState
 								title={strings.allOffers.noResultsTitle}
@@ -262,9 +361,10 @@ const styles = StyleSheet.create({
 	separator: {
 		height: spacing.md,
 	},
+	list: { flex: 1 },
 	content: {
 		paddingHorizontal: spacing.xl,
-		paddingBottom: spacing.xxl,
+		paddingBottom: spacing.lg,
 	},
 	cta: {
 		marginTop: spacing.xs,
@@ -301,14 +401,31 @@ const styles = StyleSheet.create({
 		height: 36,
 		borderRadius: radii.pill,
 	},
-	statsSkeleton: {
-		height: 104,
-		borderRadius: radii.xl,
-	},
 	ctaSkeleton: {
-		height: 48,
-		borderRadius: radii.lg,
+		height: 44,
+		borderRadius: radii.sm,
 		marginTop: spacing.xs,
+	},
+	sectionTitleSkeleton: {
+		height: 21,
+		width: "45%",
+		borderRadius: radii.sm,
+	},
+	sortSkeleton: {
+		height: 36,
+		width: "40%",
+		borderRadius: radii.sm,
+	},
+	searchSkeleton: {
+		// Match the 14px input's body line box, vertical padding and 1px borders.
+		height: typography.bodyMedium.lineHeight + 2 * (spacing.sm + 2) + 2,
+		width: "100%",
+		borderRadius: radii.md,
+	},
+	filterSkeleton: {
+		height: 36,
+		width: 88,
+		borderRadius: radii.sm,
 	},
 	listSkeleton: {
 		gap: spacing.md,
