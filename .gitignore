@@ -16,3 +16,5 @@ coverage/
 apps/api/drizzle/
 # Local AI runtime state
 .atl/
+# TanStack Start build cache
+apps/admin/.tanstack/
