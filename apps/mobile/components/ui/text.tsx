@@ -1,8 +1,10 @@
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/src/core/theme';
+import type { ColorTokens } from '@/src/core/theme/colors';
 import { Slot } from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as React from 'react';
-import { Platform, Text as RNText, type Role } from 'react-native';
+import { Platform, StyleSheet, Text as RNText, type Role } from 'react-native';
 
 const textVariants = cva(
   cn(
@@ -64,10 +66,31 @@ const ARIA_LEVEL: Partial<Record<TextVariant, string>> = {
 
 const TextClassContext = React.createContext<string | undefined>(undefined);
 
+/**
+ * Native bridge: text color classes resolve through CSS vars that stay
+ * locked to light values on native (.dark only toggles on web). Map the
+ * base (state-less) text token to the theme so dark mode works; the
+ * className stays as web enhancement and incoming style always wins.
+ */
+function resolveTextColor(classNames: string, colors: ColorTokens): string {
+  const base = classNames.split(/\s+/).filter((t) => t && !t.includes(':'));
+  const has = (token: string) => base.includes(token);
+  if (has('text-primary-foreground')) return colors.primaryForeground;
+  if (has('text-secondary-foreground')) return colors.secondaryForeground;
+  if (has('text-accent-foreground')) return colors.accentForeground;
+  if (has('text-muted-foreground')) return colors.mutedForeground;
+  if (has('text-card-foreground')) return colors.cardForeground;
+  if (has('text-destructive')) return colors.destructive;
+  if (has('text-primary')) return colors.primary;
+  if (has('text-white')) return '#fff';
+  return colors.foreground;
+}
+
 function Text({
   className,
   asChild = false,
   variant = 'default',
+  style,
   ...props
 }: React.ComponentProps<typeof RNText> &
   React.RefAttributes<typeof RNText> &
@@ -75,10 +98,13 @@ function Text({
     asChild?: boolean;
   }) {
   const textClass = React.useContext(TextClassContext);
+  const { colors } = useTheme();
   const Component = asChild ? Slot : RNText;
+  const mergedClass = cn(textVariants({ variant }), textClass, className);
   return (
     <Component
-      className={cn(textVariants({ variant }), textClass, className)}
+      className={mergedClass}
+      style={StyleSheet.flatten([{ color: resolveTextColor(mergedClass, colors) }, style])}
       role={variant ? ROLE[variant] : undefined}
       aria-level={variant ? ARIA_LEVEL[variant] : undefined}
       {...props}

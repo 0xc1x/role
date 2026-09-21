@@ -2,9 +2,10 @@ import { buttonTextVariants, buttonVariants } from '@/components/ui/button';
 import { NativeOnlyAnimatedView } from '@/components/ui/native-only-animated-view';
 import { TextClassContext } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/src/core/theme';
 import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
 import * as React from 'react';
-import { Platform, View, type ViewProps } from 'react-native';
+import { Platform, StyleSheet, View, type ViewProps } from 'react-native';
 import { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
 
@@ -49,10 +50,12 @@ function AlertDialogOverlay({
 function AlertDialogContent({
   className,
   portalHost,
+  style,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
     portalHost?: string;
   }) {
+  const { colors } = useTheme();
   return (
     <AlertDialogPortal hostName={portalHost}>
       <AlertDialogOverlay>
@@ -64,6 +67,8 @@ function AlertDialogContent({
             }),
             className
           )}
+          // Native tokens: bg-background/border-border vars stay light on native.
+          style={StyleSheet.flatten([{ backgroundColor: colors.background, borderColor: colors.borderSolid }, style])}
           {...props}
         />
       </AlertDialogOverlay>
@@ -114,23 +119,37 @@ function AlertDialogDescription({
 
 function AlertDialogAction({
   className,
+  style,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Action>) {
+  const { colors } = useTheme();
   return (
     <TextClassContext.Provider value={buttonTextVariants({ className })}>
-      <AlertDialogPrimitive.Action className={cn(buttonVariants(), className)} {...props} />
+      <AlertDialogPrimitive.Action
+        className={cn(buttonVariants(), className)}
+        // Native token: default variant fill (text via Text mapper above).
+        style={StyleSheet.flatten([{ backgroundColor: colors.primary }, style])}
+        {...props}
+      />
     </TextClassContext.Provider>
   );
 }
 
 function AlertDialogCancel({
   className,
+  style,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Cancel>) {
+  const { colors } = useTheme();
   return (
     <TextClassContext.Provider value={buttonTextVariants({ className, variant: 'outline' })}>
       <AlertDialogPrimitive.Cancel
         className={cn(buttonVariants({ variant: 'outline' }), className)}
+        // Native tokens: outline variant fill + border.
+        style={StyleSheet.flatten([
+          { backgroundColor: colors.inputBackground, borderColor: colors.borderSolid },
+          style,
+        ])}
         {...props}
       />
     </TextClassContext.Provider>

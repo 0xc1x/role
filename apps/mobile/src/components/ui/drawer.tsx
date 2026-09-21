@@ -12,10 +12,10 @@ import {
 import { Portal } from "@rn-primitives/portal";
 
 import { cn } from "@/lib/utils";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { BAR_HEIGHT } from "@/core/ui/RoleTabBar";
-import { useTabBarStore } from "@/core/ui/tabbar-store";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { BAR_HEIGHT } from "@/src/core/ui/Navbar";
+import { useTabBarStore } from "@/src/core/ui/tabbar-store";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type DrawerContextProps = {
@@ -240,7 +240,14 @@ export function DrawerContent({
 			</Portal>
 		);
 	}
-	return sheet;
+
+	return (
+		<Portal name="DRAWER_ROOT">
+			<DrawerContext.Provider value={portalValue}>
+				{sheet}
+			</DrawerContext.Provider>
+		</Portal>
+	);
 }
 
 // ─── Header / Footer / Title / Description ───────────────────────────
