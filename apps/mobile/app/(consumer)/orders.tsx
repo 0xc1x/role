@@ -7,17 +7,18 @@ import {
 	type ComponentProps,
 } from "react";
 import {
+	ActivityIndicator,
 	Animated,
 	Easing,
 	FlatList,
 	Platform,
-	Pressable,
 	RefreshControl,
+	ScrollView,
 	StyleSheet,
 	View,
 } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
 	EmptyState,
@@ -25,68 +26,112 @@ import {
 	Screen,
 	SearchBar,
 	useWebPullToRefresh,
-} from "@/core/ui";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useOrders } from "@/features/hooks";
-import { OrderCard } from "@/features/orders/components/OrderCard";
-import { HistoryDateFilter } from "@/features/orders/components/HistoryDateFilter";
+} from "@/src/core/ui";
+import { useOrderCounts, useOrders } from "@/src/features/hooks";
+import { OrderCard, OrderCardSkeleton } from "@/src/features/orders/components/OrderCard";
+import { HistoryDateFilter } from "@/src/features/orders/components/HistoryDateFilter";
 import {
-	filterByHistoryPeriod,
-	isActiveStatus,
-	isTerminalStatus,
+	ACTIVE_ORDER_STATUSES,
+	TERMINAL_ORDER_STATUSES,
+	getWeekRange,
 	type HistoryPeriod,
-} from "@/features/orders/domain/order";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
+} from "@/src/features/orders/domain/order";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { SegmentedTabs } from "@/src/core/ui/SegmentedTabs";
 
 type OrdersTab = "active" | "past";
 
 /** Entrada de la lista al cambiar de tab (eco del fadeUp del mock). */
 const LIST_ENTER_DURATION = 280;
 
+const SEARCH_DEBOUNCE_MS = 400;
+
+/** Server-side date range for the history period (undefined = no range). */
+function historyRange(
+	period: HistoryPeriod,
+	weekOffset: number,
+	now: Date,
+): { from?: string; to?: string } {
+	if (period === "all") return {};
+	if (period === "today") {
+		const start = new Date(now);
+		start.setHours(0, 0, 0, 0);
+		const end = new Date(now);
+		end.setHours(23, 59, 59, 999);
+		return { from: start.toISOString(), to: end.toISOString() };
+	}
+	const { monday, sunday } = getWeekRange(now, weekOffset);
+	return { from: monday.toISOString(), to: sunday.toISOString() };
+}
+
 export default function OrdersScreen() {
 	const { colors } = useTheme();
-	const { data, isLoading, isError, error, refetch, isFetching } = useOrders();
 	const [query, setQuery] = useState("");
+	const [debouncedQuery, setDebouncedQuery] = useState("");
 	const [tab, setTab] = useState<OrdersTab>("active");
 	const [historyPeriod, setHistoryPeriod] = useState<HistoryPeriod>("week");
 	const [weekOffset, setWeekOffset] = useState(0);
-	const [showAllPast, setShowAllPast] = useState(false);
+
+	// Debounce the search input (same precedent as all-offers).
+	useEffect(() => {
+		const t = setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
+		return () => clearTimeout(t);
+	}, [query]);
+
+	const pastRange = useMemo(
+		() => historyRange(historyPeriod, weekOffset, new Date()),
+		[historyPeriod, weekOffset],
+	);
+	const search = debouncedQuery.trim().length > 0 ? debouncedQuery.trim() : undefined;
+	const listFilters =
+		tab === "active"
+			? { statuses: ACTIVE_ORDER_STATUSES, search }
+			: { statuses: TERMINAL_ORDER_STATUSES, search, ...pastRange };
+	const {
+		data: infiniteData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		isFetching,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useOrders(listFilters);
+	const {
+		data: counts,
+		isLoading: countsLoading,
+		isError: countsError,
+	} = useOrderCounts({
+		search,
+		pastFrom: pastRange.from,
+		pastTo: pastRange.to,
+	});
 	const pull = useWebPullToRefresh({
 		onRefresh: () => void refetch(),
 		refreshing: isFetching,
 	});
 
-	const normalized = query.trim().toLowerCase();
-	const filtered = useMemo(() => {
-		if (!data) return [];
-		if (!normalized) return data;
-		return data.filter((item) => {
-			const haystack =
-				`${item.businessName} ${item.offerTitle} ${item.order.order_number}`.toLowerCase();
-			return haystack.includes(normalized);
-		});
-	}, [data, normalized]);
+	const items = useMemo(() => infiniteData?.pages.flat() ?? [], [infiniteData]);
 
-	const active = filtered.filter((item) => isActiveStatus(item.order.status));
-	const past = filtered.filter((item) => isTerminalStatus(item.order.status));
-
-	// Lo más accionable primero: listos para retirar antes que el resto.
-	const activeSorted = useMemo(
+	// Lo más accionable primero: listos para retirar antes que el resto
+	// (presentational order over the loaded page; server sorts by date).
+	const list = useMemo(
 		() =>
-			[...active].sort(
-				(a, b) =>
-					Number(b.order.status === "ready_for_pickup") -
-					Number(a.order.status === "ready_for_pickup"),
-			),
-		[active],
+			tab === "active"
+				? [...items].sort(
+						(a, b) =>
+							Number(b.order.status === "ready_for_pickup") -
+							Number(a.order.status === "ready_for_pickup"),
+					)
+				: items,
+		[items, tab],
 	);
 
-	const pastVisible = useMemo(() => {
-		if (!showAllPast) return past.slice(0, 5);
-		return filterByHistoryPeriod(past, historyPeriod, weekOffset);
-	}, [past, showAllPast, historyPeriod, weekOffset]);
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
 	const [enterAnim] = useState(() => new Animated.Value(0));
 	useEffect(() => {
@@ -106,33 +151,9 @@ export default function OrdersScreen() {
 		[],
 	);
 
-	if (isLoading) {
-		return (
-			<Screen>
-				<View style={styles.header}>
-					<AppText variant="h2" weight="bold">
-						{strings.orders.tabTitle}
-					</AppText>
-				</View>
-				<View style={styles.list}>
-					<Skeleton style={{ height: 48, borderRadius: radii.lg }} />
-					{[0, 1, 2].map((i) => (
-						<Skeleton
-							key={`order-skeleton-${i}`}
-							style={{ height: 148, borderRadius: radii.lg }}
-						/>
-					))}
-				</View>
-			</Screen>
-		);
-	}
-	if (isError) return <ErrorState error={error} onRetry={refetch} />;
+	if (!isLoading && isError) return <ErrorState error={error} onRetry={refetch} />;
 
-	const list = tab === "active" ? activeSorted : pastVisible;
-
-	return (
-		<Screen>
-			{pull.indicator}
+	const header = (
 			<View
 				style={[
 					styles.stickyHeader,
@@ -159,16 +180,19 @@ export default function OrdersScreen() {
 				<View style={styles.tabsWrap}>
 					<OrdersTabs
 						active={tab}
-						activeCount={active.length}
-						pastCount={past.length}
-						onChange={(t) => {
-							setTab(t);
-							if (t !== "past") setShowAllPast(false);
-						}}
+						// Counts stay hidden while loading or on error (a failed
+						// head-count must not render stale/undefined badges).
+						activeCount={
+							countsLoading || countsError ? undefined : counts?.activeCount
+						}
+						pastCount={
+							countsLoading || countsError ? undefined : counts?.pastCount
+						}
+						onChange={setTab}
 					/>
 				</View>
 
-				{tab === "past" && showAllPast ? (
+				{tab === "past" ? (
 					<HistoryDateFilter
 						period={historyPeriod}
 						weekOffset={weekOffset}
@@ -180,7 +204,27 @@ export default function OrdersScreen() {
 					/>
 				) : null}
 			</View>
+	);
 
+	if (isLoading) {
+		return (
+			<Screen>
+				<ScrollView>
+					{header}
+					<View style={styles.list}>
+						{[0, 1, 2].map((index) => (
+							<OrderCardSkeleton key={index} active={tab === "active"} />
+						))}
+					</View>
+				</ScrollView>
+			</Screen>
+		);
+	}
+
+	return (
+		<Screen>
+			{pull.indicator}
+			{header}
 			<Animated.View
 				key={tab}
 				style={{
@@ -202,6 +246,8 @@ export default function OrdersScreen() {
 					keyExtractor={(item) => item.order.id}
 					contentContainerStyle={styles.list}
 					keyboardShouldPersistTaps="handled"
+					onEndReached={handleEndReached}
+					onEndReachedThreshold={0.5}
 					refreshControl={
 						<RefreshControl
 							refreshing={isFetching}
@@ -209,6 +255,11 @@ export default function OrdersScreen() {
 							tintColor={colors.primary}
 							colors={[colors.primary]}
 						/>
+					}
+					ListFooterComponent={
+						isFetchingNextPage ? (
+							<ActivityIndicator color={colors.primary} />
+						) : null
 					}
 					ListEmptyComponent={
 						<EmptyState
@@ -219,39 +270,6 @@ export default function OrdersScreen() {
 							}
 							message={strings.orders.emptySearchHint}
 						/>
-					}
-					ListHeaderComponent={
-						tab === "past" && past.length > 5 ? (
-							<View style={styles.pastHeader}>
-								<AppText
-									variant="h3"
-									weight="bold"
-									numberOfLines={1}
-									style={styles.pastHeaderTitle}
-								>
-									{strings.profile.pastOrders}
-								</AppText>
-								<Pressable
-									onPress={() => setShowAllPast((v) => !v)}
-									accessibilityRole="button"
-									hitSlop={8}
-									style={styles.pastHeaderAction}
-								>
-									<AppText
-										variant="bodyMedium"
-										weight="semiBold"
-										style={{ color: colors.primary }}
-									>
-										{showAllPast
-											? strings.home.seeLess
-											: strings.profile.viewAllCount.replace(
-													"{n}",
-													String(past.length),
-												)}
-									</AppText>
-								</Pressable>
-							</View>
-						) : null
 					}
 					renderItem={renderItem}
 				/>
@@ -277,53 +295,26 @@ function OrdersTabs({
 	onChange,
 }: {
 	active: OrdersTab;
-	activeCount: number;
-	pastCount: number;
+	activeCount?: number;
+	pastCount?: number;
 	onChange: (tab: OrdersTab) => void;
 }) {
-	const { colors } = useTheme();
 	const tabs: Array<{ key: OrdersTab; label: string }> = [
 		{
 			key: "active",
-			label: strings.orders.tabActive.replace("{n}", String(activeCount)),
+			label: activeCount === undefined
+				? strings.orders.tabActive.replace(" ({n})", "")
+				: strings.orders.tabActive.replace("{n}", String(activeCount)),
 		},
 		{
 			key: "past",
-			label: strings.orders.tabPast.replace("{n}", String(pastCount)),
+			label: pastCount === undefined
+				? strings.orders.tabPast.replace(" ({n})", "")
+				: strings.orders.tabPast.replace("{n}", String(pastCount)),
 		},
 	];
 
-	return (
-		<View style={[styles.tabSeg, { backgroundColor: colors.muted }]}>
-			{tabs.map((tab) => {
-				const selected = active === tab.key;
-				return (
-					<Pressable
-						key={tab.key}
-						onPress={() => onChange(tab.key)}
-						accessibilityRole="tab"
-						accessibilityState={{ selected }}
-						style={[
-							styles.tabSegBtn,
-							selected && {
-								backgroundColor: withAlpha(colors.primary, 0.14),
-							},
-						]}
-					>
-						<AppText
-							variant="bodySmall"
-							weight={selected ? "bold" : "semiBold"}
-							style={{
-								color: selected ? colors.primary : colors.mutedForeground,
-							}}
-						>
-							{tab.label}
-						</AppText>
-					</Pressable>
-				);
-			})}
-		</View>
-	);
+	return <SegmentedTabs value={active} items={tabs} onValueChange={onChange} />;
 }
 
 const styles = StyleSheet.create({
@@ -331,26 +322,5 @@ const styles = StyleSheet.create({
 	header: { padding: spacing.xl, paddingBottom: spacing.sm, gap: spacing.md },
 	searchWrap: { paddingHorizontal: spacing.xl, paddingVertical: spacing.sm },
 	tabsWrap: { paddingHorizontal: spacing.xl, paddingVertical: spacing.sm },
-	tabSeg: {
-		flexDirection: "row",
-		borderRadius: radii.md,
-		padding: spacing.xs,
-		gap: spacing.xs,
-	},
-	tabSegBtn: {
-		flex: 1,
-		alignItems: "center",
-		paddingVertical: 9,
-		borderRadius: radii.sm,
-	},
 	list: { padding: spacing.xl, gap: spacing.md },
-	pastHeader: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		gap: spacing.sm,
-		paddingBottom: spacing.sm,
-	},
-	pastHeaderTitle: { flex: 1 },
-	pastHeaderAction: { flexShrink: 0, paddingVertical: spacing.xs },
 });

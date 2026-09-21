@@ -1,10 +1,12 @@
 import { Link } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, Card, Screen } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen } from "@/src/core/ui";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 const BENEFITS = [
 	{
@@ -43,10 +45,11 @@ export default function LandingForBusinessScreen() {
 				</Card>
 				<Link href="/business-signup" asChild>
 					<Button
-						label={strings.business.createBusiness}
 						fullWidth
 						style={{ marginTop: spacing.lg }}
-					/>
+					>
+						{strings.business.createBusiness}
+					</Button>
 				</Link>
 			</View>
 		</Screen>

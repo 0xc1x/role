@@ -8,25 +8,25 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ErrorState } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
+import { ErrorState } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBusinessProfile } from "@/features/business/hooks";
-import { ProfileHero } from "@/features/business/components/profile/ProfileHero";
+import { useBusinessProfile } from "@/src/features/business/hooks";
+import { ProfileHero } from "@/src/features/business/components/profile/ProfileHero";
 import {
 	AboutCard,
 	BusinessHeader,
 	StatsCard,
-} from "@/features/business/components/profile/ProfileHeader";
+} from "@/src/features/business/components/profile/ProfileHeader";
 import {
 	ContactInfoCard,
 	HoursCard,
-} from "@/features/business/components/profile/ProfileContact";
+} from "@/src/features/business/components/profile/ProfileContact";
 import {
 	LocationCard,
 	ReviewsCard,
-} from "@/features/business/components/profile/ProfileSocial";
+} from "@/src/features/business/components/profile/ProfileSocial";
 
 const HERO_HEIGHT = 240;
 

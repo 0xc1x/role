@@ -14,35 +14,37 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	ErrorState,
 	Screen,
 	useWebPullToRefresh,
-} from "@/core/ui";
+} from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useCancelOrder, useOrder } from "@/features/hooks";
-import { isActiveStatus } from "@/features/orders/domain/order";
-import { useTheme } from "@/core/theme";
-import { DetailHeader } from "@/features/orders/components/order-detail/DetailHeader";
-import { OrderProgressHeader } from "@/features/orders/components/order-detail/OrderProgressHeader";
-import { PickupCodeCard } from "@/features/orders/components/order-detail/PickupCodeCard";
-import { BusinessInfoCard } from "@/features/orders/components/order-detail/BusinessInfoCard";
-import { ProductItemsCard } from "@/features/orders/components/order-detail/ProductItemsCard";
-import { PriceDetailsCard } from "@/features/orders/components/order-detail/PriceDetailsCard";
-import { InstructionsCard } from "@/features/orders/components/order-detail/InstructionsCard";
-import { TimelineCard } from "@/features/orders/components/order-detail/TimelineCard";
-import { ReviewBanner } from "@/features/orders/components/order-detail/ReviewBanner";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useCancelOrder, useOrder, useReviewByOrder } from "@/src/features/hooks";
+import { canTransitionTo, isActiveStatus } from "@/src/features/orders/domain/order";
+import { useTheme } from "@/src/core/theme";
+import { DetailHeader } from "@/src/features/orders/components/order-detail/DetailHeader";
+import { OrderProgressHeader } from "@/src/features/orders/components/order-detail/OrderProgressHeader";
+import { PickupCodeCard } from "@/src/features/orders/components/order-detail/PickupCodeCard";
+import { BusinessInfoCard } from "@/src/features/orders/components/order-detail/BusinessInfoCard";
+import { ProductItemsCard } from "@/src/features/orders/components/order-detail/ProductItemsCard";
+import { PriceDetailsCard } from "@/src/features/orders/components/order-detail/PriceDetailsCard";
+import { InstructionsCard } from "@/src/features/orders/components/order-detail/InstructionsCard";
+import { TimelineCard } from "@/src/features/orders/components/order-detail/TimelineCard";
+import { ReviewBanner } from "@/src/features/orders/components/order-detail/ReviewBanner";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default function OrderDetailScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 	const { data, isLoading, isError, error, refetch, isFetching } = useOrder(id ?? "");
 	const cancel = useCancelOrder();
+	// Si ya existe reseña, el CTA abre el editor en modo edición.
+	const { data: existingReview } = useReviewByOrder(id ?? "");
 	const { colors } = useTheme();
 	const pull = useWebPullToRefresh({
 		onRefresh: () => void refetch(),
@@ -83,7 +85,7 @@ export default function OrderDetailScreen() {
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 
 	const { order } = data;
-	const canCancel = ["pending", "confirmed"].includes(order.status);
+	const canCancel = canTransitionTo(order.status, "cancelled");
 
 	const handleCancel = () => setConfirmCancelOpen(true);
 
@@ -124,9 +126,7 @@ export default function OrderDetailScreen() {
 
 					<BusinessInfoCard item={data} />
 
-					<Card style={styles.cardBlock}>
-						<ProductItemsCard item={data} />
-					</Card>
+					<ProductItemsCard item={data} />
 
 					<PriceDetailsCard order={order} />
 
@@ -138,18 +138,22 @@ export default function OrderDetailScreen() {
 						<>
 							<ReviewBanner />
 							<Button
-								label={strings.orders.orderAgain}
-								variant="primary"
+								variant="default"
 								onPress={() => router.push(`/offer/${order.offer_id}`)}
 								fullWidth
-							/>
+							>
+								{strings.orders.orderAgain}
+							</Button>
 							<Button
-								label={strings.orders.writeReview}
 								variant="outline"
 								onPress={() => router.push(`/review-order/${order.id}`)}
 								fullWidth
 								style={styles.reviewBtn}
-							/>
+							>
+								{existingReview
+									? strings.orders.editReview
+									: strings.orders.writeReview}
+							</Button>
 						</>
 					) : null}
 				</View>
@@ -166,12 +170,13 @@ export default function OrderDetailScreen() {
 					]}
 				>
 					<Button
-						label={strings.orders.cancel}
-						variant="danger"
+						variant="destructive"
 						onPress={() => void handleCancel()}
 						loading={cancel.isPending}
 						fullWidth
-					/>
+					>
+						{strings.orders.cancel}
+					</Button>
 					<AppText
 						variant="caption"
 						style={[styles.cancelHint, { color: colors.mutedForeground }]}
@@ -196,7 +201,12 @@ export default function OrderDetailScreen() {
 						</AlertDialogCancel>
 						<AlertDialogAction
 							onPress={() =>
-								cancel.mutate(order.id, { onSuccess: () => void refetch() })
+								cancel.mutate(order.id, {
+									onSuccess: () => {
+										setConfirmCancelOpen(false);
+										void refetch();
+									},
+								})
 							}
 						>
 							<Text>{strings.orders.cancel}</Text>
@@ -215,9 +225,9 @@ const styles = StyleSheet.create({
 		borderBottomWidth: 1,
 	},
 	scroll: { flex: 1 },
-	scrollContent: { paddingBottom: spacing.xl },
+	scrollContent: { paddingBottom: 0 },
 	container: { padding: spacing.xl, gap: spacing.lg },
-	cardBlock: { gap: spacing.sm },
+	cardBlock: {  },
 	bottomBar: {
 		paddingHorizontal: spacing.xl,
 		paddingTop: spacing.md,

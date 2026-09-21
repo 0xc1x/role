@@ -1,25 +1,25 @@
 import { useCallback, useState } from "react";
 import { View, StyleSheet, RefreshControl, ScrollView, Platform } from "react-native";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Clock, Flame, TrendingUp } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { strings } from "@/core/i18n/strings";
-import { useTheme } from "@/core/theme";
-import { useWebPullToRefresh } from "@/core/ui";
-import { Logo } from "@/core/ui/Logo";
-import { spacing } from "@/core/theme/spacing";
-import { queryClient } from "@/core/query/client";
-import { LocationSelector } from "@/features/home/components/LocationSelector";
-import { WelcomeBanner } from "@/features/home/components/WelcomeBanner";
-import { CategoryChips } from "@/features/home/components/CategoryChips";
-import { PromoSlider } from "@/features/home/components/PromoSlider";
-import { EcoBanner } from "@/features/home/components/EcoBanner";
+import { strings } from "@/src/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { useWebPullToRefresh } from "@/src/core/ui";
+import { Logo } from "@/src/core/ui/Logo";
+import { spacing } from "@/src/core/theme/spacing";
+import { queryClient } from "@/src/core/query/client";
+import { LocationSelector } from "@/src/features/home/components/LocationSelector";
+import { WelcomeBanner } from "@/src/features/home/components/WelcomeBanner";
+import { CategoryChips } from "@/src/features/home/components/CategoryChips";
+import { PromoSlider } from "@/src/features/home/components/PromoSlider";
+import { EcoBanner } from "@/src/features/home/components/EcoBanner";
 import {
 	OfferRowSection,
 	OfferColumnSection,
-} from "@/features/home/components/OfferRowSection";
-import { BusinessRowSection } from "@/features/home/components/BusinessRowSection";
+} from "@/src/features/home/components/OfferRowSection";
+import { BusinessRowSection } from "@/src/features/home/components/BusinessRowSection";
 
 const isWeb = Platform.OS === "web";
 
@@ -39,6 +39,8 @@ export default function ConsumerHomeScreen() {
 			await queryClient.invalidateQueries({ queryKey: ["offers"] });
 			await queryClient.invalidateQueries({ queryKey: ["businesses"] });
 			await queryClient.invalidateQueries({ queryKey: ["categories"] });
+			await queryClient.invalidateQueries({ queryKey: ["userStats"] });
+			await queryClient.invalidateQueries({ queryKey: ["favorites"] });
 		} finally {
 			setRefreshing(false);
 		}
@@ -86,21 +88,21 @@ export default function ConsumerHomeScreen() {
 				<OfferRowSection
 					type="expiring"
 					title={strings.home.ultimasHoras}
-					icon={<Ionicons name="time-outline" size={18} color={colors.primary} />}
+					icon={<Clock size={18} color={colors.primary} />}
 					limit={10}
 					onSeeAll={openAllOffers}
 				/>
 				<OfferRowSection
 					type="recent"
 					title={strings.home.recienAgregados}
-					icon={<Ionicons name="trending-up" size={18} color={colors.primary} />}
+					icon={<TrendingUp size={18} color={colors.primary} />}
 					limit={10}
 					onSeeAll={openAllOffers}
 				/>
 				<OfferRowSection
 					type="popular"
 					title={strings.home.ofertasPopulares}
-					icon={<Ionicons name="flame-outline" size={18} color={colors.primary} />}
+					icon={<Flame size={18} color={colors.primary} />}
 					limit={10}
 					category={selectedCategory}
 					onSeeAll={openAllOffers}

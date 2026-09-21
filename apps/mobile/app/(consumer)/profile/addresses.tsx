@@ -1,8 +1,8 @@
 import { memo, useCallback, useState } from "react";
 import { useEffect } from "react";
-import { FlatList, Pressable, StyleSheet, View } from "react-native";
+import { FlatList, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Map, Plus } from "lucide-react-native";
 
 import {
 	AlertDialog,
@@ -15,24 +15,25 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	EmptyState,
 	ErrorState,
 	Screen,
 	ScreenHeader,
 	StatusBadge,
-} from "@/core/ui";
+} from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthStore } from "@/features/auth/store";
-import { useSavedAddresses, useDeleteAddress } from "@/features/profile/hooks";
-import { AddAddressSheet } from "@/features/profile/components/AddAddressSheet";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useSavedAddresses, useDeleteAddress } from "@/src/features/profile/hooks";
+import { AddAddressSheet } from "@/src/features/profile/components/AddAddressSheet";
 import type { SavedAddress } from "@0xc1x/role-commons";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 
 export default function AddressesScreen() {
 	const { colors } = useTheme();
@@ -89,27 +90,25 @@ export default function AddressesScreen() {
 			<View style={styles.container}>
 				<ScreenHeader title={strings.addresses.title} fallback="/(consumer)/profile" />
 
-				<Pressable
+				<Button
 					onPress={() => setShowAddSheet(true)}
-					style={[styles.addButton, { backgroundColor: colors.foreground }]}
+					fullWidth
+					size="lg"
+					icon={<Plus size={20} color={colors.primaryForeground} />}
 				>
-					<Ionicons name="add" size={20} color={colors.background} />
-					<AppText
-						weight="bold"
-						style={{ color: colors.background }}
-					>
-						{strings.addresses.addNew}
-					</AppText>
-				</Pressable>
+					{strings.addresses.addNew}
+				</Button>
 
-				<View style={[styles.infoBanner, { backgroundColor: colors.muted }]}>
-					<AppText
-						variant="bodySmall"
-						style={{ color: colors.mutedForeground }}
-					>
-						{strings.addresses.infoBanner}
-					</AppText>
-				</View>
+				<Alert variant="info">
+					<AlertDescription>
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground }}
+						>
+							{strings.addresses.infoBanner}
+						</AppText>
+					</AlertDescription>
+				</Alert>
 
 				{isLoading ? (
 					<View style={{ gap: spacing.md }}>
@@ -124,15 +123,16 @@ export default function AddressesScreen() {
 					<ErrorState error={error} onRetry={() => void refetch()} />
 				) : !data || data.length === 0 ? (
 					<EmptyState
-						icon={<Ionicons name="map-outline" size={26} color={colors.primary} />}
+						icon={<Map size={26} color={colors.primary} />}
 						title={strings.addresses.emptyTitle}
 						message={strings.addresses.emptyDescription}
 						action={
 							<Button
-								label={strings.addresses.configureFirst}
 								variant="ghost"
 								onPress={() => setShowAddSheet(true)}
-							/>
+							>
+								{strings.addresses.configureFirst}
+							</Button>
 						}
 					/>
 				) : (
@@ -205,50 +205,44 @@ const AddressCard = memo(function AddressCard({
 	const { colors } = useTheme();
 	return (
 		<Card>
-			<View style={styles.cardHeader}>
+			<CardHeader style={styles.cardHeader}>
 				<AppText variant="bodyMedium" weight="semiBold">
 					{item.label}
 				</AppText>
 				{item.is_default ? (
 					<StatusBadge label={strings.addresses.default} tone="brand" />
 				) : null}
-			</View>
-			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-				{item.address}
-			</AppText>
-			{item.references ? (
+			</CardHeader>
+			<CardContent>
 				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-					{item.references}
+					{item.address}
 				</AppText>
-			) : null}
+				{item.references ? (
+					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+						{item.references}
+					</AppText>
+				) : null}
+			</CardContent>
 
-			<View style={[styles.footerDivider, { backgroundColor: colors.muted }]} />
-
-			<View style={styles.footerActions}>
-				<Pressable
+			<CardFooter style={styles.footerActions}>
+				<Button
+					variant="outline"
+					size="sm"
 					onPress={() => onEdit(item)}
-					style={[styles.footerButton, { borderColor: colors.border }]}
+					style={{ flex: 1 }}
 				>
-					<AppText variant="bodySmall" weight="medium">
-						{strings.addresses.edit}
-					</AppText>
-				</Pressable>
+					{strings.addresses.edit}
+				</Button>
 
-				<Pressable
+				<Button
+					variant="destructive"
+					size="sm"
 					onPress={() => onDelete(String(item.id), item.label)}
-					style={[
-						styles.footerButton,
-						{
-							backgroundColor: colors.destructive ?? "#e5484d",
-							borderColor: colors.destructive ?? "#e5484d",
-						},
-					]}
+					style={{ flex: 1 }}
 				>
-					<AppText variant="bodySmall" weight="medium">
-						{strings.common.delete}
-					</AppText>
-				</Pressable>
-			</View>
+					{strings.common.delete}
+				</Button>
+			</CardFooter>
 		</Card>
 	);
 });
@@ -256,18 +250,6 @@ const AddressCard = memo(function AddressCard({
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, flex: 1, gap: spacing.lg },
 	header: { marginBottom: -spacing.md },
-	addButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: spacing.sm,
-		height: 54,
-		borderRadius: radii.md,
-	},
-	infoBanner: {
-		padding: spacing.md,
-		borderRadius: radii.md,
-	},
 	cardHeader: {
 		flexDirection: "row",
 		alignItems: "center",

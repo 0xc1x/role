@@ -1,19 +1,20 @@
 import { StyleSheet, View } from "react-native";
+import { Moon, Smartphone, Sun, type LucideIcon } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	Screen,
 	ScreenHeader,
 	SectionTitle,
 	ThemeOptionCard
-} from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { ThemeMode, useTheme } from "@/core/theme";
+} from "@/src/core/ui";
+import { spacing } from "@/src/core/theme/spacing";
+import { ThemeMode, useTheme } from "@/src/core/theme";
 
-const THEME_MODES: Array<{ key: ThemeMode; label: string; icon: string }> = [
-	{ key: "light", label: strings.settings.light, icon: "sunny-outline" },
-	{ key: "dark", label: strings.settings.dark, icon: "moon-outline" },
-	{ key: "system", label: strings.settings.system, icon: "phone-portrait-outline" },
+const THEME_MODES: Array<{ key: ThemeMode; label: string; icon: LucideIcon }> = [
+	{ key: "light", label: strings.settings.light, icon: Sun },
+	{ key: "dark", label: strings.settings.dark, icon: Moon },
+	{ key: "system", label: strings.settings.system, icon: Smartphone },
 ];
 
 export default function BusinessProfileScreen() {

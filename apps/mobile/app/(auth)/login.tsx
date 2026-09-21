@@ -1,21 +1,23 @@
-import { Ionicons } from "@expo/vector-icons";
+import { LockKeyhole, Mail, X } from "lucide-react-native";
 import { type Href, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Modal, StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
-import { toAppError } from "@/core/error/mapper";
-import { strings } from "@/core/i18n/strings";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { AppText, Button, TextField } from "@/core/ui";
-import { Logo } from "@/core/ui/Logo";
-import { AuthScreenShell } from "@/features/auth/presentation/AuthScreenShell";
-import { SocialAuthButtons } from "@/features/auth/presentation/SocialAuthButtons";
-import { authRepository } from "@/features/auth/data/repository";
-import { validateLoginForm } from "@/features/auth/domain/validation";
-import { useAuthStore } from "@/features/auth/store";
+import { toAppError } from "@/src/core/error/mapper";
+import { strings } from "@/src/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { AppText, TextField } from "@/src/core/ui";
+import { Logo } from "@/src/core/ui/Logo";
+import { AuthScreenShell } from "@/src/features/auth/presentation/AuthScreenShell";
+import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
+import { authRepository } from "@/src/features/auth/data/repository";
+import { validateLoginForm } from "@/src/features/auth/domain/validation";
+import { useAuthStore } from "@/src/features/auth/store";
+import { Button } from "@/components/ui/button";
+import { Text } from "@/components/ui/text";
 
 export default function LoginScreen() {
 	const { colors } = useTheme();
@@ -25,6 +27,7 @@ export default function LoginScreen() {
 	const [emailError, setEmailError] = useState<string | null>(null);
 	const [passwordError, setPasswordError] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const loginPending = useRef(false);
 	const [loading, setLoading] = useState(false);
 	const [showReset, setShowReset] = useState(false);
 
@@ -36,9 +39,10 @@ export default function LoginScreen() {
 	};
 
 	const handleLogin = async () => {
-		if (loading) return;
+		if (loginPending.current) return;
 		setError(null);
 		if (!validate()) return;
+		loginPending.current = true;
 		setLoading(true);
 		try {
 			const profile = await authRepository.signInWithEmail(
@@ -58,6 +62,7 @@ export default function LoginScreen() {
 		} catch (e) {
 			setError(toAppError(e, strings.auth.loginFailed).message);
 		} finally {
+			loginPending.current = false;
 			setLoading(false);
 		}
 	};
@@ -81,7 +86,7 @@ export default function LoginScreen() {
 
 			<TextField
 				label={strings.auth.email}
-				iconName="mail-outline"
+				icon={Mail}
 				value={email}
 				onChangeText={setEmail}
 				error={emailError}
@@ -94,7 +99,7 @@ export default function LoginScreen() {
 			/>
 			<TextField
 				label={strings.auth.password}
-				iconName="lock-closed-outline"
+				icon={LockKeyhole}
 				value={password}
 				onChangeText={setPassword}
 				error={passwordError}
@@ -104,20 +109,16 @@ export default function LoginScreen() {
 				returnKeyType="done"
 				onSubmitEditing={handleLogin}
 			/>
-			<Pressable
-				onPress={() => setShowReset(true)}
-				hitSlop={8}
-				accessibilityRole="button"
-				style={styles.forgotRow}
-			>
-				<AppText
-					variant="bodySmall"
-					weight="semiBold"
-					style={{ color: colors.primary, fontSize: 13 }}
+			<View style={styles.forgotRow}>
+				<Button
+					variant="link"
+					onPress={() => setShowReset(true)}
+					hitSlop={8}
+					accessibilityRole="button"
 				>
 					{strings.auth.forgotPassword}
-				</AppText>
-			</Pressable>
+				</Button>
+			</View>
 
 			{error ? (
 				<View
@@ -135,24 +136,27 @@ export default function LoginScreen() {
 					>
 						{error}
 					</AppText>
-					<Pressable
+					<Button
+						variant="ghost"
+						size="icon"
 						onPress={() => setError(null)}
 						hitSlop={8}
 						accessibilityRole="button"
-						accessibilityLabel={strings.common.close}
-					>
-						<Ionicons name="close" size={16} color={colors.destructiveVibrant} />
-					</Pressable>
+						aria-label={strings.common.close}
+						style={{ width: 32, height: 32 }}
+						icon={<X size={16} color={colors.destructiveVibrant} />}
+					/>
 				</View>
 			) : null}
 
 			<Button
-				label={strings.auth.login}
 				onPress={handleLogin}
+				size="default"
 				loading={loading}
-				size="lg"
-				style={styles.primaryButton}
-			/>
+			>
+				{strings.auth.login}
+			</Button>
+
 
 			<SocialAuthButtons label={strings.auth.orContinueWith} />
 
@@ -227,9 +231,9 @@ function ForgotPasswordDialog({
 					>
 						{strings.auth.resetDescription}
 					</AppText>
-					<TextField
-						label={strings.auth.email}
-						iconName="mail-outline"
+				<TextField
+					label={strings.auth.email}
+					icon={Mail}
 						value={email}
 						onChangeText={(t) => {
 							setEmail(t);
@@ -245,18 +249,20 @@ function ForgotPasswordDialog({
 					/>
 					<View style={styles.dialogActions}>
 						<Button
-							label={strings.common.cancel}
 							variant="ghost"
 							onPress={onClose}
-							disabled={loading}
-							style={styles.dialogButton}
-						/>
-						<Button
-							label={strings.auth.sendLink}
-							onPress={send}
 							loading={loading}
 							style={styles.dialogButton}
-						/>
+						>
+							{strings.common.cancel}
+						</Button>
+
+						<Button
+							onPress={send}
+							style={styles.dialogButton}
+						>
+							{strings.auth.sendLink}
+						</Button>
 					</View>
 				</View>
 			</View>
@@ -280,7 +286,7 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.md,
 	},
 	errorText: { flex: 1 },
-	primaryButton: { borderRadius: radii.md, marginTop: spacing.sm },
+	primaryButton: { marginTop: spacing.sm },
 	switchLine: { textAlign: "center", marginTop: spacing.xl },
 	overlay: {
 		flex: 1,
@@ -301,5 +307,5 @@ const styles = StyleSheet.create({
 		gap: spacing.md,
 		marginTop: spacing.xs,
 	},
-	dialogButton: { flex: 1, borderRadius: radii.md },
+	dialogButton: { flex: 1 },
 });

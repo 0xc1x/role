@@ -1,10 +1,12 @@
 import { Link } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, Card, Screen } from "@/core/ui";
-import { radii, spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen } from "@/src/core/ui";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 export default function LandingScreen() {
 	const { colors } = useTheme();
@@ -34,14 +36,17 @@ export default function LandingScreen() {
 						{strings.landing.heroBody}
 					</AppText>
 					<Link href="/login" asChild>
-						<Button label={strings.landing.login} fullWidth />
+						<Button fullWidth >
+							{strings.landing.login}
+						</Button>
 					</Link>
 					<Link href="/signup" asChild>
 						<Button
-							label={strings.landing.createAccount}
 							variant="secondary"
 							fullWidth
-						/>
+						>
+							{strings.landing.createAccount}
+						</Button>
 					</Link>
 				</View>
 
@@ -174,7 +179,9 @@ export default function LandingScreen() {
 						{strings.landing.ctaBody}
 					</AppText>
 					<Link href="/signup" asChild>
-						<Button label={strings.landing.openApp} fullWidth />
+						<Button  fullWidth >
+							{strings.landing.openApp}
+						</Button>
 					</Link>
 				</View>
 

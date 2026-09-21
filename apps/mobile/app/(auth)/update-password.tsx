@@ -3,33 +3,36 @@ import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, Screen, TextField } from "@/core/ui";
-import { authRepository } from "@/features/auth/data/repository";
-import { useAuthStore } from "@/features/auth/store";
-import { performSignOut } from "@/features/auth/sign-out";
-import { toAppError } from "@/core/error/mapper";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen, TextField } from "@/src/core/ui";
+import { authRepository } from "@/src/features/auth/data/repository";
+import { useAuthStore } from "@/src/features/auth/store";
+import { performSignOut } from "@/src/features/auth/sign-out";
+import { toAppError } from "@/src/core/error/mapper";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Button } from "@/components/ui/button";
+import { Text } from "@/components/ui/text";
 
 const MIN_PASSWORD_LENGTH = 6;
 
 export default function UpdatePasswordScreen() {
 	const { colors } = useTheme();
-	const status = useAuthStore((s) => s.status);
 	const initialized = useAuthStore((s) => s.initialized);
+	const pendingPasswordRecovery = useAuthStore((s) => s.pendingPasswordRecovery);
 	const [password, setPassword] = useState("");
 	const [confirm, setConfirm] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	// Sin sesión recovery el token del email expiró o ya se consumió.
+	// Solo una sesión recovery válida puede fijar contraseña: sin el flag el
+	// token del email expiró, ya se consumió o se abrió la ruta directo.
 	useEffect(() => {
-		if (initialized && status === "guest") {
+		if (initialized && !pendingPasswordRecovery) {
 			toast.error(strings.auth.resetLinkInvalid);
 			router.replace("/(auth)/login");
 		}
-	}, [initialized, status]);
+	}, [initialized, pendingPasswordRecovery]);
 
 	const handleUpdate = async () => {
 		if (loading) return;
@@ -83,12 +86,13 @@ export default function UpdatePasswordScreen() {
 							autoComplete="new-password"
 						/>
 						<Button
-							label={strings.auth.updatePassword}
 							onPress={handleUpdate}
 							loading={loading}
 							fullWidth
-						style={{ marginTop: spacing.md }}
-					/>
+							style={{ marginTop: spacing.md }}
+						>
+							{strings.auth.updatePassword}
+						</Button>
 				</>
 			</View>
 		</Screen>

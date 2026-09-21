@@ -2,12 +2,12 @@ import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
 import { useEffect } from "react";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Screen } from "@/core/ui";
-import { useAuthStore } from "@/features/auth/store";
-import { spacing } from "@/core/theme/spacing";
-import { ProfileHeader } from "@/features/profile/components/ProfileHeader";
-import { SettingsTab } from "@/features/profile/components/ProfileSettingsTab";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen } from "@/src/core/ui";
+import { useAuthStore } from "@/src/features/auth/store";
+import { spacing } from "@/src/core/theme/spacing";
+import { ProfileHeader } from "@/src/features/profile/components/ProfileHeader";
+import { SettingsTab } from "@/src/features/profile/components/ProfileSettingsTab";
 
 export default function ProfileScreen() {
 	const { status, initialized, profile } = useAuthStore();

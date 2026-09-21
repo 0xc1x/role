@@ -1,23 +1,25 @@
 import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChevronLeft, Store } from "lucide-react-native";
+import { Button } from "@/components/ui/button";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { strings } from "@/core/i18n/strings";
-import { AppText, CircleIconButton, goBackOr, SearchBar, useWebPullToRefresh } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
-import { useAllBusinessesInfinite, useSelectedAddress } from "@/features/hooks";
-import { BusinessGridCard } from "@/features/business/components/BusinessGridCard";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import { ChipsBar } from "@/features/home/components/CategoryChips";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, CircleIconButton, goBackOr, SearchBar, useWebPullToRefresh } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useAllBusinessesInfinite, useSelectedAddress } from "@/src/features/hooks";
+import { BusinessGridCard } from "@/src/features/business/components/BusinessGridCard";
+import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
+import { ChipsBar } from "@/src/features/home/components/CategoryChips";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
 const BUSINESS_TYPES = Object.keys(BUSINESS_TYPE_LABELS);
 
-const SKELETON_DATA = [0, 1, 2];
+const SKELETON_DATA = [0, 1, 2, 3, 4, 5];
 
 type BusinessGridItem = ComponentProps<typeof BusinessGridCard>["business"];
 
@@ -76,6 +78,7 @@ function ListFooter({
 
 export default function AllBusinessesScreen() {
 	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	const params = useLocalSearchParams<{ type?: string }>();
 
 	const [search, setSearch] = useState("");
@@ -142,11 +145,11 @@ export default function AllBusinessesScreen() {
 	return (
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
 			{pull.indicator}
-			<View style={styles.header}>
+			<View style={[styles.header, { paddingTop: spacing.xl + insets.top }]}>
 				<View style={styles.headerRow}>
 					<CircleIconButton
 						icon={
-							<Ionicons name="chevron-back" size={22} color={colors.foreground} />
+							<ChevronLeft size={22} color={colors.foreground} />
 						}
 						onPress={() => goBackOr("/(consumer)")}
 						accessibilityLabel={strings.common.back}
@@ -178,7 +181,7 @@ export default function AllBusinessesScreen() {
 					<FlatList
 						data={SKELETON_DATA}
 						keyExtractor={(i) => String(i)}
-						numColumns={3}
+						numColumns={2}
 						columnWrapperStyle={styles.businessRow}
 						contentContainerStyle={styles.businessContent}
 						scrollEnabled={false}
@@ -190,18 +193,13 @@ export default function AllBusinessesScreen() {
 					<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
 						{error instanceof Error ? error.message : strings.common.error}
 					</AppText>
-					<Pressable
-						onPress={() => void refetch()}
-						style={[styles.retry, { backgroundColor: colors.primary }]}
-					>
-						<AppText weight="bold" style={{ color: colors.primaryForeground }}>
-							{strings.common.retry}
-						</AppText>
-					</Pressable>
+					<Button onPress={() => void refetch()}>
+						{strings.common.retry}
+					</Button>
 				</View>
 			) : data && data.length === 0 ? (
 				<View style={styles.centerBox}>
-					<Ionicons name="storefront-outline" size={44} color={colors.mutedForeground} />
+					<Store size={44} color={colors.mutedForeground} />
 					<AppText variant="h4" weight="bold" style={{ marginTop: spacing.md }}>
 						{strings.allBusinesses.noResultsTitle}
 					</AppText>

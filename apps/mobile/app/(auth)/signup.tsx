@@ -1,19 +1,20 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Check, CircleCheck, LockKeyhole, Mail, User } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { toast } from "sonner-native";
 
-import { toAppError } from "@/core/error/mapper";
-import { strings } from "@/core/i18n/strings";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
-import { AppText, Button, TextField } from "@/core/ui";
-import { Logo } from "@/core/ui/Logo";
-import { AuthScreenShell } from "@/features/auth/presentation/AuthScreenShell";
-import { SocialAuthButtons } from "@/features/auth/presentation/SocialAuthButtons";
-import { authRepository } from "@/features/auth/data/repository";
-import { validateSignupForm } from "@/features/auth/domain/validation";
+import { toAppError } from "@/src/core/error/mapper";
+import { strings } from "@/src/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { AppText, TextField } from "@/src/core/ui";
+import { Logo } from "@/src/core/ui/Logo";
+import { AuthScreenShell } from "@/src/features/auth/presentation/AuthScreenShell";
+import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
+import { authRepository } from "@/src/features/auth/data/repository";
+import { validateSignupForm } from "@/src/features/auth/domain/validation";
+import { Button } from "@/components/ui/button";
 
 const BENEFITS = [
 	strings.auth.benefitSave,
@@ -93,7 +94,7 @@ export default function SignupScreen() {
 
 			<TextField
 				label={strings.auth.fullName}
-				iconName="person-outline"
+				icon={User}
 				value={fullName}
 				onChangeText={setFullName}
 				error={nameError}
@@ -103,7 +104,7 @@ export default function SignupScreen() {
 			/>
 			<TextField
 				label={strings.auth.email}
-				iconName="mail-outline"
+				icon={Mail}
 				value={email}
 				onChangeText={setEmail}
 				error={emailError}
@@ -115,7 +116,7 @@ export default function SignupScreen() {
 			/>
 			<TextField
 				label={strings.auth.password}
-				iconName="lock-closed-outline"
+				icon={LockKeyhole}
 				value={password}
 				onChangeText={setPassword}
 				error={passwordError}
@@ -143,7 +144,7 @@ export default function SignupScreen() {
 					]}
 				>
 					{acceptedTerms ? (
-						<Ionicons name="checkmark" size={16} color={colors.primaryForeground} />
+						<Check size={16} color={colors.primaryForeground} />
 					) : null}
 				</Pressable>
 				<AppText
@@ -152,14 +153,14 @@ export default function SignupScreen() {
 				>
 					{strings.auth.termsConsentPrefix}
 					<Text
-						onPress={() => router.push("/profile/terms")}
+						onPress={() => router.push("/(consumer)/profile/terms")}
 						style={linkStyle}
 					>
 						{strings.auth.termsConsentLink}
 					</Text>
 					{strings.auth.termsConsentConjunction}
 					<Text
-						onPress={() => router.push("/profile/privacy")}
+						onPress={() => router.push("/(consumer)/profile/privacy")}
 						style={linkStyle}
 					>
 						{strings.auth.termsConsentPrivacy}
@@ -169,13 +170,13 @@ export default function SignupScreen() {
 			</View>
 
 			<Button
-				label={strings.auth.createAccount}
 				onPress={handleSignup}
 				loading={loading}
 				disabled={!acceptedTerms}
 				size="lg"
-				style={styles.primaryButton}
-			/>
+			>
+				{strings.auth.createAccount}
+			</Button>
 
 			<SocialAuthButtons label={strings.auth.orSignupWith} />
 
@@ -207,7 +208,7 @@ export default function SignupScreen() {
 				<View style={styles.benefitsList}>
 					{BENEFITS.map((benefit) => (
 						<View key={benefit} style={styles.benefitItem}>
-							<Ionicons name="checkmark-circle" size={18} color={accent} />
+							<CircleCheck size={18} color={accent} />
 							<AppText
 								variant="bodySmall"
 								style={{ color: accent, flex: 1, lineHeight: 17 }}
@@ -242,7 +243,6 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		marginTop: 1,
 	},
-	primaryButton: { borderRadius: radii.md },
 	switchLine: { textAlign: "center", marginTop: spacing.xl },
 	benefits: {
 		borderRadius: radii.lg,

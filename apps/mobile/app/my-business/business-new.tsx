@@ -3,12 +3,12 @@ import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
-import { Screen, ScreenHeader } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useAuthStore } from "@/features/auth/store";
-import { useBusinesses, useCreateBusiness } from "@/features/business/hooks";
-import { BusinessForm } from "@/features/business/components/BusinessForm";
+import { strings } from "@/src/core/i18n/strings";
+import { Screen, ScreenHeader } from "@/src/core/ui";
+import { spacing } from "@/src/core/theme/spacing";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useBusinesses, useCreateBusiness } from "@/src/features/business/hooks";
+import { BusinessForm } from "@/src/features/business/components/BusinessForm";
 
 /**
  * Creación de negocio para un usuario ya autenticado con rol business

@@ -3,21 +3,21 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	ErrorState,
 	goBackOr,
 	LoadingView,
 	Screen,
 	ScreenHeader,
 	TextField,
-} from "@/core/ui";
-import { useOrder, useReviewByOrder, useSubmitReview } from "@/features/hooks";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+} from "@/src/core/ui";
+import { useOrder, useReviewByOrder, useSubmitReview } from "@/src/features/hooks";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 function Stars({
 	value,
@@ -139,16 +139,17 @@ export default function ReviewOrderScreen() {
 				</View>
 
 				<Button
-					label={
-						isEditing
-							? strings.orders.saveReviewChanges
-							: strings.orders.submitReview
-					}
 					onPress={handleSubmit}
 					loading={submit.isPending}
 					fullWidth
 					style={{ marginTop: spacing.lg }}
-				/>
+				>
+					{
+						isEditing
+							? strings.orders.saveReviewChanges
+							: strings.orders.submitReview
+					}
+				</Button>
 			</View>
 		</Screen>
 	);

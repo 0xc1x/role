@@ -9,24 +9,28 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ErrorState, useWebPullToRefresh } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
+import { ErrorState, goBackOr, CircleIconButton, useWebPullToRefresh } from "@/src/core/ui";
+import { ChevronLeft } from "lucide-react-native";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	useOffer,
 	useIsFavorite,
 	useToggleFavorite,
-} from "@/features/hooks";
+} from "@/src/features/hooks";
 import {
 	isOfferAvailable,
 	isOfferOutOfStock,
-} from "@/features/offers/domain/offer";
-import { OfferHero } from "@/features/offers/components/detail/OfferHero";
-import { OfferContent } from "@/features/offers/components/detail/OfferContent";
-import { OfferBottomBar } from "@/features/offers/components/detail/OfferBottomBar";
+} from "@/src/features/offers/domain/offer";
+import { OfferHero } from "@/src/features/offers/components/detail/OfferHero";
+import { OfferContent } from "@/src/features/offers/components/detail/OfferContent";
+import { OfferBottomBar } from "@/src/features/offers/components/detail/OfferBottomBar";
 
 const HERO_HEIGHT = 320;
+const BOTTOM_BAR_HEIGHT = 92;
 
 export default function OfferDetailScreen() {
 	const { colors } = useTheme();
@@ -61,17 +65,82 @@ export default function OfferDetailScreen() {
 	if (isLoading) {
 		return (
 			<View style={[styles.flex, { backgroundColor: colors.background }]}>
-				<Skeleton style={[styles.heroSkeleton, { height: HERO_HEIGHT }]} />
-				<View style={styles.skeletonContent}>
-					<Skeleton style={styles.skeletonTitle} />
-					<Skeleton style={styles.skeletonSubtitle} />
-					<View style={styles.skeletonPriceRow}>
-						<Skeleton style={styles.skeletonPrice} />
-						<Skeleton style={styles.skeletonPrice} />
+				<ScrollView
+					contentContainerStyle={{ paddingBottom: 140 }}
+					showsVerticalScrollIndicator={false}
+				>
+					<Skeleton style={[styles.heroSkeleton, { height: HERO_HEIGHT }]} />
+					<View style={styles.skeletonContent}>
+						<Skeleton style={styles.skeletonTitle} />
+						<Skeleton style={styles.skeletonSubtitle} />
+						<Skeleton style={styles.skeletonSavingsBadge} />
+						<View style={styles.skeletonPriceRow}>
+							<Skeleton style={styles.skeletonPrice} />
+							<Skeleton style={styles.skeletonOriginalPrice} />
+							<Skeleton style={styles.skeletonSavePill} />
+						</View>
+						{/* Keep the always-present pickup and establishment structure. */}
+						<Card style={styles.skeletonCard}>
+							<CardHeader>
+								<Skeleton style={styles.skeletonSectionTitle} />
+							</CardHeader>
+							<CardContent>
+								{[0, 1, 2].map((row) => (
+									<View key={row} style={styles.skeletonPickupRow}>
+										<Skeleton style={styles.skeletonPickupIcon} />
+										<View style={styles.skeletonDetails}>
+											<Skeleton style={styles.skeletonLabel} />
+											<Skeleton style={styles.skeletonValue} />
+										</View>
+									</View>
+								))}
+								<View style={styles.skeletonNote}>
+									<Skeleton style={styles.skeletonNoteIcon} />
+									<View style={styles.skeletonDetails}>
+										<Skeleton style={styles.skeletonValue} />
+										<Skeleton style={styles.skeletonLabel} />
+									</View>
+								</View>
+							</CardContent>
+						</Card>
+						<Card style={styles.skeletonCard}>
+							<CardHeader>
+								<Skeleton style={styles.skeletonSectionTitle} />
+							</CardHeader>
+							<CardContent>
+								<View style={styles.skeletonBusinessHead}>
+									<Skeleton style={styles.skeletonLogo} />
+									<View style={styles.skeletonDetails}>
+										<Skeleton style={styles.skeletonValue} />
+										<Skeleton style={styles.skeletonLabel} />
+									</View>
+								</View>
+								<View style={styles.skeletonAddress}>
+									<Skeleton style={styles.skeletonNoteIcon} />
+									<Skeleton style={styles.skeletonValue} />
+								</View>
+							</CardContent>
+						</Card>
 					</View>
-					<Skeleton style={styles.skeletonCard} />
-					<Skeleton style={styles.skeletonCard} />
+				</ScrollView>
+				{/* Back remains available; data-dependent actions do not. */}
+				<View style={[styles.skeletonTopBar, { top: insets.top + spacing.xl }]}>
+					<CircleIconButton
+						icon={
+							<ChevronLeft
+								size={20}
+								color={colors.foreground}
+							/>
+						}
+						onPress={() => goBackOr("/(consumer)")}
+						accessibilityLabel={strings.common.back}
+					/>
 				</View>
+				{/* Reserve the checkout footprint without exposing a purchase action. */}
+				<Skeleton
+					pointerEvents="none"
+					style={[styles.skeletonBottomSpacer, { bottom: insets.bottom + 16 }]}
+				/>
 			</View>
 		);
 	}
@@ -140,10 +209,35 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.xl,
 	},
 	heroSkeleton: { width: "100%", borderRadius: 0 },
-	skeletonContent: { padding: spacing.xl, gap: spacing.md },
-	skeletonTitle: { height: 28, width: "80%", borderRadius: radii.md },
+	skeletonContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, gap: spacing.md },
+	skeletonTitle: { height: 26, width: "80%", borderRadius: radii.md },
 	skeletonSubtitle: { height: 16, width: "50%", borderRadius: radii.md },
-	skeletonPriceRow: { flexDirection: "row", gap: spacing.md },
-	skeletonPrice: { height: 28, width: 110, borderRadius: radii.md },
-	skeletonCard: { height: 120, borderRadius: radii.lg },
+	skeletonSavingsBadge: { height: 28, width: 100, marginTop: spacing.xl, borderRadius: radii.pill },
+	skeletonPriceRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.md },
+	skeletonPrice: { height: 31, width: 110, borderRadius: radii.md },
+	skeletonOriginalPrice: { height: 20, width: 64, borderRadius: radii.md },
+	skeletonSavePill: { height: 24, width: 90, borderRadius: radii.pill },
+	skeletonCard: { marginVertical: spacing.md },
+	skeletonSectionTitle: { height: 21, width: "60%" },
+	skeletonPickupRow: { flexDirection: "row", alignItems: "flex-start", paddingVertical: spacing.sm, gap: spacing.md },
+	skeletonPickupIcon: { width: 31, height: 31, borderRadius: radii.md },
+	skeletonDetails: { flex: 1, gap: spacing.xxs },
+	skeletonLabel: { height: 16, width: "50%" },
+	skeletonValue: { height: 20, width: "80%" },
+	skeletonNote: { flexDirection: "row", gap: spacing.sm, padding: spacing.sm, marginTop: spacing.sm },
+	skeletonNoteIcon: { width: 18, height: 18, borderRadius: radii.pill },
+	skeletonBusinessHead: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+	skeletonLogo: { width: 48, height: 48, borderRadius: radii.md },
+	skeletonAddress: { flexDirection: "row", gap: spacing.sm },
+	skeletonTopBar: {
+		position: "absolute",
+		left: spacing.xl,
+	},
+	skeletonBottomSpacer: {
+		position: "absolute",
+		left: spacing.xl,
+		right: spacing.xl,
+		height: BOTTOM_BAR_HEIGHT,
+		borderRadius: radii.lg,
+	},
 });

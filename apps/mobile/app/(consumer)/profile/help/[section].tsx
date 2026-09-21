@@ -1,11 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronRight } from "lucide-react-native";
 import { Link, useLocalSearchParams, type Href } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card, Screen, ScreenHeader } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen, ScreenHeader } from "@/src/core/ui";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Card } from "@/components/ui/card";
 
 type SectionKey = "orders" | "payments" | "policies";
 
@@ -84,8 +85,7 @@ export default function HelpCategoryScreen() {
 													{item.description}
 												</AppText>
 											</View>
-											<Ionicons
-												name="chevron-forward"
+											<ChevronRight
 												size={18}
 												color={colors.mutedForeground}
 											/>

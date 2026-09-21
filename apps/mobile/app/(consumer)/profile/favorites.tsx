@@ -1,41 +1,75 @@
-import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { memo, useCallback } from "react";
-import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
+import { memo, useCallback, useEffect, useMemo } from "react";
+import {
+	ActivityIndicator,
+	FlatList,
+	RefreshControl,
+	StyleSheet,
+	View,
+} from "react-native";
+import { Heart } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
 	EmptyState,
 	ErrorState,
 	Screen,
 	ScreenHeader,
 	useWebPullToRefresh,
-} from "@/core/ui";
+} from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useFavorites } from "@/features/hooks";
-import type { OfferDetail } from "@/features/offers/domain/offer";
-import { OfferCard } from "@/features/offers/components/OfferCard";
-import type { FavoriteOffer } from "@/features/favorites/data/repository";
-import { formatMoney } from "@/core/utils/formatters";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useFavorites } from "@/src/features/hooks";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
+import { OfferCard } from "@/src/features/offers/components/OfferCard";
+import type { FavoriteOffer } from "@/src/features/favorites/data/repository";
+import { formatMoney } from "@/src/core/utils/formatters";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function FavoritesScreen() {
 	const { colors } = useTheme();
-	const { data, isLoading, isError, error, refetch, isFetching } = useFavorites();
+	const { status, initialized } = useAuthStore();
+	const {
+		data: infiniteData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		isFetching,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useFavorites();
 	const pull = useWebPullToRefresh({
 		onRefresh: () => void refetch(),
 		refreshing: isFetching,
 	});
+	// Redirect guests to login
+	useEffect(() => {
+		if (initialized && status === "guest") {
+			router.replace("/login");
+		}
+	}, [status, initialized]);
+
+	const favorites = useMemo(
+		() => infiniteData?.pages.flat() ?? [],
+		[infiniteData],
+	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
 	const renderItem = useCallback(
 		({ item }: { item: FavoriteOffer }) => <FavoriteRow item={item} />,
 		[],
 	);
 
+	if (!initialized || status === "guest") return null;
 	if (isLoading) {
 		return (
 			<Screen>
@@ -57,7 +91,7 @@ export default function FavoritesScreen() {
 	}
 	if (isError) return <ErrorState error={error} onRetry={refetch} />;
 
-	const favorites = data ?? [];
+	// Savings banner reflects loaded pages (grows as the user scrolls).
 	const totalSaved = favorites.reduce(
 		(sum, f) => sum + Math.max(0, f.originalPrice - f.discountedPrice),
 		0,
@@ -72,6 +106,8 @@ export default function FavoritesScreen() {
 				keyExtractor={(item) => item.favoriteId}
 				contentContainerStyle={styles.list}
 				keyboardShouldPersistTaps="handled"
+				onEndReached={handleEndReached}
+				onEndReachedThreshold={0.5}
 				refreshControl={
 					<RefreshControl
 						refreshing={isFetching}
@@ -79,6 +115,11 @@ export default function FavoritesScreen() {
 						tintColor={colors.primary}
 						colors={[colors.primary]}
 					/>
+				}
+				ListFooterComponent={
+					isFetchingNextPage ? (
+						<ActivityIndicator color={colors.primary} />
+					) : null
 				}
 				ListHeaderComponent={
 					<>
@@ -88,31 +129,23 @@ export default function FavoritesScreen() {
 							style={{ marginBottom: spacing.lg }}
 						/>
 						{favorites.length > 0 ? (
-							<View
-								style={[
-									styles.banner,
-									{
-										backgroundColor: withAlpha(colors.secondary, 0.149),
-										borderColor: withAlpha(colors.secondary, 0.302),
-									},
-								]}
-							>
-								<Ionicons name="heart" size={18} color={colors.primary} />
-								<AppText style={[styles.bannerText, { color: colors.primary }]}>
-									{strings.favorites.savingsBanner.replace(
-										"{saved}",
-										formatMoney(totalSaved),
-									)}
-								</AppText>
-							</View>
+							<Alert variant="success" icon={Heart}>
+								<AlertDescription>
+									<AppText style={[styles.bannerText, { color: colors.success }]}>
+										{strings.favorites.savingsBanner.replace(
+											"{saved}",
+											formatMoney(totalSaved),
+										)}
+									</AppText>
+								</AlertDescription>
+							</Alert>
 						) : null}
 					</>
 				}
 				ListEmptyComponent={
 					<EmptyState
 						icon={
-							<Ionicons
-								name="heart-outline"
+							<Heart
 								size={28}
 								color={colors.mutedForeground}
 							/>
@@ -121,11 +154,12 @@ export default function FavoritesScreen() {
 						message={strings.favorites.emptyHint}
 						action={
 							<Button
-								label={strings.favorites.explore}
 								onPress={() => router.replace("/")}
 								fullWidth
 								style={styles.exploreBtn}
-							/>
+							>
+								{strings.favorites.explore}
+							</Button>
 						}
 					/>
 				}
@@ -146,7 +180,7 @@ function toOfferDetail(item: FavoriteOffer): OfferDetail {
 	return {
 		offer: {
 			id: item.offerId,
-			business_id: "",
+			business_id: item.businessId,
 			business_location_id: "",
 			title: item.title,
 			description: null,
@@ -155,13 +189,13 @@ function toOfferDetail(item: FavoriteOffer): OfferDetail {
 			original_price: item.originalPrice,
 			discounted_price: item.discountedPrice,
 			discount_percentage: null,
-			// Sin datos de stock/pickup en la proyección de favoritos: neutros
-			// para que la card no muestre esos badges.
-			stock: 999,
-			initial_stock: 999,
-			pickup_start: "",
-			pickup_end: "",
-			is_active: true,
+			// Disponibilidad real de la proyección; si la oferta embebida
+			// no llegó, `availabilityUnknown` oculta estos campos en la UI.
+			stock: item.stock,
+			initial_stock: item.stock,
+			pickup_start: item.pickupStart,
+			pickup_end: item.pickupEnd,
+			is_active: item.isActive,
 			includes: null,
 			allergens: null,
 			rating: item.rating,
@@ -179,20 +213,12 @@ function toOfferDetail(item: FavoriteOffer): OfferDetail {
 		},
 		location: null,
 		categories: item.categories,
+		availabilityUnknown: item.availabilityUnknown,
 	};
 }
 
 const styles = StyleSheet.create({
 	list: { padding: spacing.xl, gap: spacing.md },
-	banner: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.sm,
-		borderWidth: 1,
-		borderRadius: radii.md,
-		padding: spacing.md,
-		marginBottom: spacing.md,
-	},
 	bannerText: { flex: 1, fontSize: 13, fontWeight: "600" },
 	exploreBtn: { marginTop: spacing.lg },
 });

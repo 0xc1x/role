@@ -1,31 +1,33 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChevronLeft, Search, SlidersHorizontal } from "lucide-react-native";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	goBackOr,
 	AppText,
-	Button,
 	CircleIconButton,
 	EmptyState,
 	FilterChip,
 	SearchBar,
 	useWebPullToRefresh,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
-import { useCategories, useFilteredOffersInfinite, useSelectedAddress } from "@/features/hooks";
-import { useAuthStore } from "@/features/auth/store";
-import { usePreferences } from "@/features/profile/hooks";
-import { OfferGridCard } from "@/features/offers/components/OfferGridCard";
-import { OfferFiltersSheet } from "@/features/offers/components/OfferFiltersSheet";
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useCategories, useFilteredOffersInfinite, useSelectedAddress } from "@/src/features/hooks";
+import { useAuthStore } from "@/src/features/auth/store";
+import { usePreferences } from "@/src/features/profile/hooks";
+import { OfferGridCard } from "@/src/features/offers/components/OfferGridCard";
+import { OfferFiltersSheet } from "@/src/features/offers/components/OfferFiltersSheet";
 import {
 	emptyOfferFilters,
 	type OfferFilterState,
-} from "@/features/offers/domain/offer";
+} from "@/src/features/offers/domain/offer";
+import { Button } from "@/components/ui/button";
+import { Text } from "@/components/ui/text";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -80,6 +82,7 @@ function ListFooter({
 
 export default function AllOffersScreen() {
 	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	const params = useLocalSearchParams<{ category?: string }>();
 
 	const [search, setSearch] = useState("");
@@ -172,11 +175,11 @@ export default function AllOffersScreen() {
 		<View style={[styles.flex, { backgroundColor: colors.background }]}>
 			{pull.indicator}
 			{/* Header */}
-			<View style={styles.header}>
+			<View style={[styles.header, { paddingTop: spacing.xl + insets.top }]}>
 				<View style={styles.headerRow}>
 					<CircleIconButton
 						icon={
-							<Ionicons name="chevron-back" size={22} color={colors.foreground} />
+							<ChevronLeft size={22} color={colors.foreground} />
 						}
 						onPress={() => goBackOr("/(consumer)")}
 						accessibilityLabel={strings.common.back}
@@ -190,24 +193,14 @@ export default function AllOffersScreen() {
 					onChangeText={setSearch}
 					placeholder={strings.allOffers.searchHint}
 				/>
-				<Pressable
+				<Button
+					variant="outline"
+					size="sm"
 					onPress={() => setSheetVisible(true)}
-					style={[
-						styles.filtersPill,
-						{
-							borderColor: colors.borderSolid,
-							backgroundColor: colors.card,
-						},
-					]}
+					icon={<SlidersHorizontal size={16} color={colors.foreground} />}
 				>
-					<Ionicons name="options-outline" size={16} color={colors.foreground} />
-					<AppText variant="bodySmall" weight="semiBold">
-						{strings.allOffers.filters}
-					</AppText>
-					{hasActiveFilters ? (
-						<View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
-					) : null}
-				</Pressable>
+					{hasActiveFilters ? `${strings.allOffers.filters} •` : strings.allOffers.filters}
+				</Button>
 			</View>
 
 			{/* Active filters chips */}
@@ -239,15 +232,9 @@ export default function AllOffersScreen() {
 							/>
 						) : null}
 					</View>
-					<Pressable onPress={clearAll} hitSlop={8}>
-						<AppText
-							variant="bodySmall"
-							weight="semiBold"
-							style={{ color: colors.primary }}
-						>
-							{strings.allOffers.clear}
-						</AppText>
-					</Pressable>
+					<Button variant="link" onPress={clearAll} hitSlop={8}>
+						{strings.allOffers.clear}
+					</Button>
 				</View>
 			) : null}
 
@@ -255,7 +242,9 @@ export default function AllOffersScreen() {
 			{isGuest ? (
 				<View style={styles.centerBox}>
 					<EmptyState title={strings.explore.loginRequiredTitle} message={strings.explore.loginRequiredBody} />
-					<Button label={strings.explore.loginCTA} onPress={() => router.push("/login")} style={{ marginTop: spacing.lg }} />
+					<Button  onPress={() => router.push("/login")} style={{ marginTop: spacing.lg }} >
+						{strings.explore.loginCTA}
+					</Button>	
 				</View>
 			) : isLoading ? (
 				<View style={styles.gridContainer}>
@@ -274,18 +263,13 @@ export default function AllOffersScreen() {
 					<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
 						{error instanceof Error ? error.message : strings.common.error}
 					</AppText>
-					<Pressable
-						onPress={() => void refetch()}
-						style={[styles.retry, { backgroundColor: colors.primary }]}
-					>
-						<AppText weight="bold" style={{ color: colors.primaryForeground }}>
-							{strings.common.retry}
-						</AppText>
-					</Pressable>
+					<Button onPress={() => void refetch()}>
+						{strings.common.retry}
+					</Button>
 				</View>
 			) : data && data.length === 0 ? (
 				<View style={styles.centerBox}>
-					<Ionicons name="search" size={44} color={colors.mutedForeground} />
+					<Search size={44} color={colors.mutedForeground} />
 					<AppText variant="h4" weight="bold" style={{ marginTop: spacing.md }}>
 						{strings.allOffers.noResultsTitle}
 					</AppText>

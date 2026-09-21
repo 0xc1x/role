@@ -1,21 +1,24 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Bell, ChartColumn, Clock, Mail, MessageCircle, MessageSquare, Smartphone, Star, Zap, type LucideIcon } from "lucide-react-native";
 
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card, Screen, ScreenHeader } from "@/core/ui";
-import { useAuthStore } from "@/features/auth/store";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen, ScreenHeader } from "@/src/core/ui";
+import { useAuthStore } from "@/src/features/auth/store";
+import { removeDeviceToken } from "@/src/features/notifications";
 import {
 	useNotificationPreferences,
 	useUpdateNotificationPreferences,
-} from "@/features/profile/hooks";
-import { usePushToggle } from "@/features/notifications/use-push-toggle";import type { ConsumerNotificationPreferences } from "@0xc1x/role-commons";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
+} from "@/src/features/profile/hooks";
+import { usePushToggle } from "@/src/features/notifications/use-push-toggle";
+import type { ConsumerNotificationPreferences } from "@0xc1x/role-commons";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Card } from "@/components/ui/card";
 
 type ToggleKey = Exclude<
 	keyof ConsumerNotificationPreferences,
@@ -26,7 +29,7 @@ interface ToggleConfig {
 	key: ToggleKey;
 	label: string;
 	subtitle: string;
-	icon: string;
+	icon: LucideIcon;
 	upcoming?: boolean;
 }
 
@@ -35,26 +38,26 @@ const CHANNELS: ToggleConfig[] = [
 		key: "push_enabled",
 		label: strings.notificationsSettings.push,
 		subtitle: strings.notificationsSettings.pushSubtitle,
-		icon: "phone-portrait-outline",
+		icon: Smartphone,
 	},
 	{
 		key: "email_enabled",
 		label: strings.notificationsSettings.email,
 		subtitle: strings.notificationsSettings.emailSubtitle,
-		icon: "mail-outline",
+		icon: Mail,
 	},
 	{
 		key: "sms_enabled",
 		label: strings.notificationsSettings.sms,
 		subtitle: strings.notificationsSettings.smsSubtitle,
-		icon: "text-outline",
+		icon: MessageSquare,
 		upcoming: true,
 	},
 	{
 		key: "whatsapp_enabled",
 		label: strings.notificationsSettings.whatsapp,
 		subtitle: strings.notificationsSettings.whatsappSubtitle,
-		icon: "logo-whatsapp",
+		icon: MessageCircle,
 		upcoming: true,
 	},
 ];
@@ -64,25 +67,25 @@ const SMART_ALERTS: ToggleConfig[] = [
 		key: "favorite_alerts_enabled",
 		label: strings.notificationsSettings.favoriteAlerts,
 		subtitle: strings.notificationsSettings.favoriteAlertsSubtitle,
-		icon: "star-outline",
+		icon: Star,
 	},
 	{
 		key: "pickup_reminders_enabled",
 		label: strings.notificationsSettings.pickupReminders,
 		subtitle: strings.notificationsSettings.pickupRemindersSubtitle,
-		icon: "time-outline",
+		icon: Clock,
 	},
 	{
 		key: "last_minute_deals_enabled",
 		label: strings.notificationsSettings.lastMinuteDeals,
 		subtitle: strings.notificationsSettings.lastMinuteDealsSubtitle,
-		icon: "flash-outline",
+		icon: Zap,
 	},
 	{
 		key: "weekly_summary_enabled",
 		label: strings.notificationsSettings.weeklySummary,
 		subtitle: strings.notificationsSettings.weeklySummarySubtitle,
-		icon: "stats-chart-outline",
+		icon: ChartColumn,
 	},
 ];
 
@@ -113,14 +116,14 @@ function NotificationRow({
 	const { colors } = useTheme();
 	const disabled =
 		config.upcoming || (config.key === "push_enabled" && Boolean(registering));
+	const Icon = config.icon;
 
 	return (
 		<View style={[styles.toggleRow, disabled && styles.toggleRowDisabled]}>
 			<View
 				style={[styles.iconCircle, { backgroundColor: colors.inputBackground }]}
 			>
-				<Ionicons
-					name={config.icon as never}
+				<Icon
 					size={18}
 					color={disabled ? colors.mutedForeground : colors.foreground}
 				/>
@@ -232,6 +235,11 @@ export default function NotificationsSettingsScreen() {
 			await enablePush();
 			return;
 		}
+		if (config.key === "push_enabled" && !value) {
+			// Push off: drop this device's token so it stops receiving pushes,
+			// then persist the preference.
+			await removeDeviceToken(userId).catch(() => {});
+		}
 		update.mutate({
 			[config.key]: value,
 		} as Partial<ConsumerNotificationPreferences>);
@@ -242,28 +250,17 @@ export default function NotificationsSettingsScreen() {
 			<View style={styles.container}>
 				<ScreenHeader title={strings.notificationsSettings.title} fallback="/(consumer)/profile" />
 
-				<View
-					style={[
-						styles.banner,
-						{
-							backgroundColor: withAlpha(colors.primary, 0.059),
-							borderColor: withAlpha(colors.primary, 0.149),
-						},
-					]}
-				>
-					<Ionicons
-						name="notifications-outline"
-						size={22}
-						color={colors.primary}
-					/>
-					<AppText
-						variant="bodySmall"
-						weight="medium"
-						style={[styles.bannerText, { color: colors.primary }]}
-					>
-						{strings.notificationsSettings.banner}
-					</AppText>
-				</View>
+				<Alert variant="info" icon={Bell}>
+					<AlertDescription>
+						<AppText
+							variant="bodySmall"
+							weight="medium"
+							style={[styles.bannerText, { color: colors.infoForeground }]}
+						>
+							{strings.notificationsSettings.banner}
+						</AppText>
+					</AlertDescription>
+				</Alert>
 
 				<SectionTitle>{strings.notificationsSettings.channelsSection}</SectionTitle>
 				{prefsLoading ? (
@@ -290,14 +287,6 @@ export default function NotificationsSettingsScreen() {
 
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, gap: spacing.lg },
-	banner: {
-		flexDirection: "row",
-		alignItems: "flex-start",
-		gap: spacing.md,
-		padding: spacing.lg,
-		borderRadius: radii.lg,
-		borderWidth: 1,
-	},
 	bannerText: { flex: 1, lineHeight: 18 },
 	card: { padding: 0, overflow: "hidden" },
 	divider: { height: 1, marginLeft: spacing.xl },
@@ -308,7 +297,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.md,
 		gap: spacing.md,
 	},
-	toggleRowDisabled: { opacity: 1 },
+	toggleRowDisabled: { opacity: 0.55 },
 	iconCircle: {
 		width: 36,
 		height: 36,

@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useEffect } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { CreditCard, Trash2 } from "lucide-react-native";
 
 import {
 	AlertDialog,
@@ -17,28 +17,32 @@ import {
 import { Text } from "@/components/ui/text";
 import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, Card, EmptyState, Screen, ScreenHeader } from "@/core/ui";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, EmptyState, Screen, ScreenHeader } from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthStore } from "@/features/auth/store";
+import { useAuthStore } from "@/src/features/auth/store";
 import {
 	useDeletePaymentMethod,
 	usePaymentMethods,
 	useSetDefaultPaymentMethod,
-} from "@/features/profile/hooks";
-import type { PaymentMethodModel } from "@/features/profile/domain/profile";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
+} from "@/src/features/profile/hooks";
+import type { PaymentMethodModel } from "@/src/features/profile/domain/profile";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 function PaymentMethodRow({
 	method,
 	onSetDefault,
 	onDelete,
+	settingDefault = false,
 }: {
 	method: PaymentMethodModel;
 	onSetDefault: (id: string) => void;
 	onDelete: (id: string) => void;
+	settingDefault?: boolean;
 }) {
 	const { colors } = useTheme();
 	return (
@@ -46,14 +50,14 @@ function PaymentMethodRow({
 			<View style={styles.row}>
 				<Pressable
 					onPress={method.isDefault ? undefined : () => onSetDefault(method.id)}
-					disabled={method.isDefault}
+					disabled={method.isDefault || settingDefault}
 					accessibilityRole="button"
 					style={styles.rowMain}
 				>
 					<View
 						style={[styles.iconCircle, { backgroundColor: colors.inputBackground }]}
 					>
-						<Ionicons name="card-outline" size={20} color={colors.primary} />
+						<CreditCard size={20} color={colors.primary} />
 					</View>
 					<View style={styles.cardText}>
 						<View style={styles.cardTitleRow}>
@@ -92,19 +96,20 @@ function PaymentMethodRow({
 						) : null}
 					</View>
 				</Pressable>
-				<Pressable
+				<Button
+					variant="ghost"
+					size="icon"
 					hitSlop={8}
 					onPress={() => onDelete(method.id)}
 					accessibilityRole="button"
-					accessibilityLabel={strings.paymentMethods.delete}
-					style={styles.deleteButton}
-				>
-					<Ionicons
-						name="trash-outline"
-						size={20}
-						color={colors.destructiveVibrant}
-					/>
-				</Pressable>
+					aria-label={strings.paymentMethods.delete}
+					icon={
+						<Trash2
+							size={20}
+							color={colors.destructiveVibrant}
+						/>
+					}
+				/>
 			</View>
 		</Card>
 	);
@@ -128,13 +133,18 @@ export default function PaymentMethodsScreen() {
 
 	const setDefault = useCallback(
 		(id: string) => {
-			setDefaultMutation.mutate(id);
+			setDefaultMutation.mutate(id, {
+				onError: () => toast.error(strings.common.error),
+			});
 		},
 		[setDefaultMutation],
 	);
 
 	const deleteMethod = (id: string) => {
-		deleteMutation.mutate(id);
+		deleteMutation.mutate(id, {
+			onSuccess: () => setDeleteId(null),
+			onError: () => toast.error(strings.common.error),
+		});
 	};
 
 	const renderItem = useCallback(
@@ -143,9 +153,10 @@ export default function PaymentMethodsScreen() {
 				method={item}
 				onSetDefault={setDefault}
 				onDelete={setDeleteId}
+				settingDefault={setDefaultMutation.isPending}
 			/>
 		),
-		[setDefault],
+		[setDefault, setDefaultMutation.isPending],
 	);
 
 	if (!initialized || status === "guest") return null;
@@ -186,19 +197,21 @@ export default function PaymentMethodsScreen() {
 							{strings.paymentMethods.comingSoon}
 						</AppText>
 						{/* La alta de tarjetas se habilitará con el SDK del gateway (tokenización PCI — nunca almacenamos el número de tarjeta). */}
-						<Button label={strings.common.cancel} variant="outline" onPress={() => setShowForm(false)} fullWidth />
+						<Button variant="outline" onPress={() => setShowForm(false)} >
+							{strings.common.cancel}
+						</Button>
 					</Card>
 				) : (
 					<Button
-						label={strings.paymentMethods.add}
 						variant="outline"
 						onPress={() => {
 							toast.info(strings.paymentMethods.comingSoonToast);
 							setShowForm(true);
 						}}
-						fullWidth
 						style={{ marginTop: spacing.lg }}
-					/>
+					>
+						{strings.paymentMethods.add}
+					</Button>
 				)}
 			</View>
 

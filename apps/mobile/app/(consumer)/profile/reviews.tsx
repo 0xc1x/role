@@ -1,7 +1,13 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Star } from "lucide-react-native";
 import { router } from "expo-router";
-import { memo, useCallback, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import {
+	ActivityIndicator,
+	FlatList,
+	RefreshControl,
+	StyleSheet,
+	View,
+} from "react-native";
 import { toast } from "sonner-native";
 
 import {
@@ -16,31 +22,49 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	EmptyState,
 	ErrorState,
 	Screen,
 	ScreenHeader,
 	useWebPullToRefresh,
-} from "@/core/ui";
+} from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDeleteReview, useMyReviews } from "@/features/hooks";
-import type { MyReviewView } from "@/features/orders/domain/order";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { useDeleteReview, useMyReviews } from "@/src/features/hooks";
+import type { MyReviewView } from "@/src/features/orders/domain/order";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 
 export default function MyReviewsScreen() {
 	const { colors } = useTheme();
-	const { data, isLoading, isError, error, refetch, isFetching } =
-		useMyReviews();
+	const {
+		data: infiniteData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		isFetching,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useMyReviews();
 	const pull = useWebPullToRefresh({
 		onRefresh: () => void refetch(),
 		refreshing: isFetching,
 	});
+
+	const items = useMemo(
+		() => infiniteData?.pages.flat() ?? [],
+		[infiniteData],
+	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
 	const renderItem = useCallback(
 		({ item }: { item: MyReviewView }) => <ReviewRow item={item} />,
@@ -73,10 +97,12 @@ export default function MyReviewsScreen() {
 			{pull.indicator}
 			<FlatList
 				ref={pull.ref}
-				data={data ?? []}
+				data={items}
 				keyExtractor={(item) => item.id}
 				contentContainerStyle={styles.list}
 				keyboardShouldPersistTaps="handled"
+				onEndReached={handleEndReached}
+				onEndReachedThreshold={0.5}
 				refreshControl={
 					<RefreshControl
 						refreshing={isFetching}
@@ -84,6 +110,11 @@ export default function MyReviewsScreen() {
 						tintColor={colors.primary}
 						colors={[colors.primary]}
 					/>
+				}
+				ListFooterComponent={
+					isFetchingNextPage ? (
+						<ActivityIndicator color={colors.primary} />
+					) : null
 				}
 				ListHeaderComponent={
 					<ScreenHeader
@@ -95,8 +126,7 @@ export default function MyReviewsScreen() {
 				ListEmptyComponent={
 					<EmptyState
 						icon={
-							<Ionicons
-								name="star-outline"
+							<Star
 								size={28}
 								color={colors.mutedForeground}
 							/>
@@ -121,10 +151,10 @@ const ReviewRow = memo(function ReviewRow({ item }: { item: MyReviewView }) {
 		: `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
 
 	return (
-		<Card style={styles.card}>
-			<View style={styles.headerRow}>
+		<Card >
+			<CardHeader style={styles.headerRow}>
 				<View style={{ flex: 1 }}>
-					<AppText variant="bodyMedium" weight="bold">
+					<AppText variant="h2" weight="bold">
 						{item.offerTitle}
 					</AppText>
 					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
@@ -132,39 +162,43 @@ const ReviewRow = memo(function ReviewRow({ item }: { item: MyReviewView }) {
 					</AppText>
 				</View>
 				<View style={styles.starsRow}>
-					<Ionicons name="star" size={14} color={colors.warning} />
-					<AppText variant="bodySmall" weight="semiBold">
+					<Star size={20} color={colors.warning} />
+					<AppText variant="bodyMedium" weight="semiBold">
 						{((item.productRating + item.businessRating) / 2).toFixed(1)}
 					</AppText>
 				</View>
-			</View>
+			</CardHeader>
+			
+			<CardContent>
+				{item.comment ? (
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground, marginTop: spacing.sm }}
+					>
+						{item.comment}
+					</AppText>
+				) : null}
+			</CardContent>
 
-			{item.comment ? (
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.mutedForeground, marginTop: spacing.sm }}
-				>
-					{item.comment}
-				</AppText>
-			) : null}
-
-			<View style={styles.actionsRow}>
+			<CardFooter style={styles.actionsRow}>
 				<Button
-					label={strings.orders.editReview}
 					variant="outline"
 					size="sm"
 					style={{ flex: 1 }}
 					onPress={() => router.push(`/review-order/${item.orderId}`)}
-				/>
+				>
+					{strings.orders.editReview}
+				</Button>
 				<Button
-					label={strings.orders.deleteReview}
-					variant="danger"
+					variant="destructive"
 					size="sm"
 					style={{ flex: 1 }}
 					loading={remove.isPending}
 					onPress={() => setConfirmOpen(true)}
-				/>
-			</View>
+				>
+					{strings.orders.deleteReview}
+				</Button>
+			</CardFooter>
 
 			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
 				<AlertDialogContent>
@@ -199,20 +233,18 @@ const ReviewRow = memo(function ReviewRow({ item }: { item: MyReviewView }) {
 
 const styles = StyleSheet.create({
 	list: { padding: spacing.xl, gap: spacing.md },
-	card: { padding: spacing.lg, gap: spacing.sm },
 	headerRow: {
 		flexDirection: "row",
 		alignItems: "flex-start",
-		gap: spacing.md,
+		paddingTop: spacing.md
 	},
 	starsRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 4,
+		gap: 5,
 	},
 	actionsRow: {
 		flexDirection: "row",
-		gap: spacing.sm,
 		marginTop: spacing.md,
 	},
 });
