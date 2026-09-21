@@ -3,34 +3,39 @@ import {
 	Animated,
 	Easing,
 	Platform,
-	Pressable,
 	StyleSheet,
 	View,
 } from "react-native";
 import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
+import {
+	CircleCheck,
+	Clock,
+	ShoppingBag,
+	Store,
+	type LucideIcon,
+} from "lucide-react-native";
 import { router } from "expo-router";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, type BadgeTone } from "@/core/ui";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, type BadgeTone } from "@/src/core/ui";
 import {
 	isActiveStatus,
 	orderStatusLabels,
 	orderStatusTone,
 	type OrderDetail,
-} from "@/features/orders/domain/order";
-import { formatMoney } from "@/core/utils/formatters";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import type { ColorTokens } from "@/core/theme/colors";
-import { withAlpha } from "@/core/theme/alpha";
+} from "@/src/features/orders/domain/order";
+import { formatMoney } from "@/src/core/utils/formatters";
+import { CardPressable } from "@/components/ui/card-presable";
+import { Skeleton } from "@/components/ui/skeleton";
+import { typography } from "@/src/core/theme/typography";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import type { ColorTokens } from "@/src/core/theme/colors";
+import { withAlpha } from "@/src/core/theme/alpha";
 
 /** Iconos del footer: check / bag / clock (mismos labels que OrderProgressHeader). */
-type IoniconName = keyof typeof Ionicons.glyphMap;
-
 interface CardStep {
-	icon: IoniconName;
-	doneIcon: IoniconName;
+	icon: LucideIcon;
 	label: string;
 	done: boolean;
 }
@@ -101,20 +106,17 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 
 	const steps: CardStep[] = [
 		{
-			icon: "checkmark-circle-outline",
-			doneIcon: "checkmark-circle",
+			icon: CircleCheck,
 			label: strings.orders.timelineConfirmed,
 			done: confirmedDone,
 		},
 		{
-			icon: "bag-handle-outline",
-			doneIcon: "bag-handle",
+			icon: ShoppingBag,
 			label: strings.orders.timelineReady,
 			done: readyDone,
 		},
 		{
-			icon: "time-outline",
-			doneIcon: "time",
+			icon: Clock,
 			label: strings.orders.timelineCompleted,
 			done: completedDone,
 		},
@@ -156,8 +158,9 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 		firstPending >= 0 ? steps[firstPending]?.label : steps[0]?.label;
 
 	return (
-		<Pressable
+		<CardPressable
 			onPress={() => router.push(`/order/${order.id}`)}
+			className="p-0 gap-0 border-0 shadow-none"
 			style={[
 				styles.card,
 				{
@@ -181,8 +184,7 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 							{ backgroundColor: colors.muted },
 						]}
 					>
-						<Ionicons
-							name="storefront-outline"
+						<Store
 							size={32}
 							color={colors.mutedForeground}
 						/>
@@ -199,8 +201,7 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 						{item.offerTitle}
 					</AppText>
 					<View style={styles.topRow}>
-						<Ionicons
-							name="storefront-outline"
+						<Store
 							size={15}
 							color={colors.mutedForeground}
 						/>
@@ -297,10 +298,10 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 											{ backgroundColor: circleBackground },
 										]}
 									>
-										<Ionicons
-											name={step.done ? step.doneIcon : step.icon}
+										<step.icon
 											size={20}
 											color={iconColor}
+											fill={step.done ? iconColor : "none"}
 										/>
 									</View>
 								</Animated.View>
@@ -309,7 +310,53 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 					})}
 				</View>
 			) : null}
-		</Pressable>
+		</CardPressable>
+	);
+}
+
+export function OrderCardSkeleton({ active = true }: { active?: boolean }) {
+	const { colors } = useTheme();
+	return (
+		<View
+			accessible
+			accessibilityLabel={strings.common.loading}
+			accessibilityState={{ busy: true }}
+			testID="consumer-order-skeleton"
+			style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}
+		>
+			<View style={styles.row}>
+				<Skeleton style={[styles.thumb, { borderRadius: 0 }]} />
+				<View style={styles.content}>
+					<View>
+						<Skeleton style={{ height: typography.h2.lineHeight }} />
+						<Skeleton style={{ height: typography.h2.lineHeight, width: "70%" }} />
+					</View>
+					<View style={styles.topRow}>
+						<Skeleton style={{ width: 15, height: 15 }} />
+						<Skeleton style={[styles.businessName, { height: typography.bodyMedium.lineHeight }]} />
+					</View>
+					<Skeleton style={{ height: typography.caption.lineHeight, width: "65%" }} />
+					<View style={styles.statusRow}>
+						<Skeleton style={[styles.pill, { flex: 1 }]}>
+							<View style={{ height: typography.bodySmall.lineHeight }} />
+						</Skeleton>
+						<Skeleton style={{ width: "35%", height: typography.priceLarge.fontSize * 1.4 }} />
+					</View>
+				</View>
+			</View>
+			{active ? (
+				<View testID="order-timeline-skeleton" style={[styles.footer, { borderTopColor: colors.border }]}>
+					{[0, 1, 2].map((index) => (
+						<Fragment key={index}>
+							{index > 0 ? <Skeleton style={styles.connector} /> : null}
+							<View style={styles.station}>
+								<Skeleton style={styles.stationCircle} />
+							</View>
+						</Fragment>
+					))}
+				</View>
+			) : null}
+		</View>
 	);
 }
 

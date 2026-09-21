@@ -1,20 +1,20 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { MapPin } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, HeartButton } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { formatDistanceKm, formatMoney } from "@/core/utils/formatters";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, HeartButton } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { formatDistanceKm, formatMoney } from "@/src/core/utils/formatters";
 import {
 	discountPercentage,
 	haversineKm,
 	type OfferDetail,
-} from "@/features/offers/domain/offer";
-import { useSelectedAddress, useIsFavorite, useToggleFavorite } from "@/features/hooks";
+} from "@/src/features/offers/domain/offer";
+import { useSelectedAddress, useIsFavorite, useToggleFavorite } from "@/src/features/hooks";
 
 export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 	const { colors } = useTheme();
@@ -123,7 +123,7 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 				</View>
 				{distance ? (
 					<View style={styles.distanceRow}>
-						<Ionicons name="location-outline" size={10} color={colors.mutedForeground} />
+						<MapPin size={10} color={colors.mutedForeground} />
 						<AppText variant="tiny" style={{ color: colors.mutedForeground }}>
 							{distance}
 						</AppText>

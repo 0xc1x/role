@@ -5,7 +5,7 @@ import {
 	type OrderStatus as OrderStatusType,
 	type ReserveOfferErrorCode,
 } from "@0xc1x/role-commons";
-import type { BadgeTone } from "@/core/ui";
+import type { BadgeTone } from "@/src/core/ui";
 
 export type { OrderStatusType };
 
@@ -38,6 +38,20 @@ export function isTerminalStatus(status: OrderStatusType): boolean {
 export function isActiveStatus(status: OrderStatusType): boolean {
 	return !TERMINAL.has(status);
 }
+
+/** Server-side tab filters (mirror of TERMINAL above). */
+export const ACTIVE_ORDER_STATUSES: readonly OrderStatusType[] = [
+	"pending",
+	"confirmed",
+	"ready_for_pickup",
+	"picked_up",
+];
+
+export const TERMINAL_ORDER_STATUSES: readonly OrderStatusType[] = [
+	"completed",
+	"cancelled",
+	"expired",
+];
 
 /** Presentational mapping of order status → badge tone (pure, shared consumer/business). */
 export function orderStatusTone(status: OrderStatusType): BadgeTone {
@@ -125,6 +139,25 @@ export interface MyReviewView {
 
 /**
  * Timestamp real (ISO de `order_events`) del último cambio de estado entre
+ * los estados dados, o null si no hay eventos (RLS u órdenes previas al
+ * logging). La presentación decide: "—" u omitir la sección; nunca
+ * fabricar tiempos con created_at/pickup_time.
+ */
+export function findLastEventTime(
+	events: readonly OrderStatusEvent[],
+	statuses: readonly OrderStatusType[],
+): string | null {
+	const wanted = new Set(statuses);
+	let last: string | null = null;
+	for (const event of events) {
+		if (!wanted.has(event.status)) continue;
+		if (last == null || event.created_at > last) last = event.created_at;
+	}
+	return last;
+}
+
+/**
+ * Timestamp real (ISO de `order_events`) del último cambio de estado entre
  * los estados dados; si no hay eventos, cae al fallback (heurística previa).
  * El formateo para pantalla queda en la capa de presentación.
  */
@@ -133,13 +166,7 @@ export function lastEventTimeFor(
 	statuses: readonly OrderStatusType[],
 	fallback: string,
 ): string {
-	const wanted = new Set(statuses);
-	let last: string | null = null;
-	for (const event of events) {
-		if (!wanted.has(event.status)) continue;
-		if (last == null || event.created_at > last) last = event.created_at;
-	}
-	return last ?? fallback;
+	return findLastEventTime(events, statuses) ?? fallback;
 }
 
 export function orderDiscount(
@@ -179,10 +206,50 @@ export function couponIsValid(coupon: Coupon, now: Date = new Date()): boolean {
 }
 
 export function couponDiscount(coupon: Coupon, price: number): number {
-	if (coupon.type === "percentage") {
-		return Math.min((price * coupon.value) / 100, price);
-	}
-	return Math.min(coupon.value, price);
+	const raw =
+		coupon.type === "percentage"
+			? Math.min((price * coupon.value) / 100, price)
+			: Math.min(coupon.value, price);
+	// Redondeo a centavos: evita 0.1+0.2 en el checkout.
+	return Math.round(raw * 100) / 100;
+}
+
+const toCents = (value: number): number => Math.round(value * 100);
+
+/** Totales del checkout calculados una sola vez en centavos enteros. */
+export interface CheckoutTotals {
+	/** Descuento de la oferta (original − discounted), en moneda. */
+	offerDiscount: number;
+	/** Descuento del cupón aplicado, en moneda (0 sin cupón). */
+	coupon: number;
+	/** Total a pagar, en moneda (nunca negativo). */
+	total: number;
+}
+
+export function checkoutTotals(
+	offer: Pick<Order, "original_price" | "price"> | { original_price: number; discounted_price: number },
+	coupon: Coupon | null,
+): CheckoutTotals {
+	const price =
+		"discounted_price" in offer ? offer.discounted_price : offer.price;
+	const priceCents = toCents(price);
+	const couponCents = coupon
+		? toCents(couponDiscount(coupon, price))
+		: 0;
+	return {
+		offerDiscount: (toCents(offer.original_price) - priceCents) / 100,
+		coupon: couponCents / 100,
+		total: Math.max(priceCents - couponCents, 0) / 100,
+	};
+}
+
+/** Mínimo del cupón comparado en centavos (mismas unidades, sin float). */
+export function meetsCouponMinimum(
+	price: number,
+	minOrderAmount: number | null,
+): boolean {
+	if (minOrderAmount == null) return true;
+	return toCents(price) >= toCents(minOrderAmount);
 }
 
 // ─── Reservation / cancellation results (from reserve_offer RPC) ──────
@@ -217,22 +284,22 @@ export interface CancelOrderResult {
 
 export type HistoryPeriod = "today" | "week" | "all";
 
-/** Lunes 00:00 → domingo 23:59 de la semana con offset (0 = actual). */
+/** Lunes 00:00 → domingo 23:59 UTC de la semana con offset (0 = actual). */
 export function getWeekRange(now: Date, weekOffset: number): { monday: Date; sunday: Date } {
 	const base = new Date(now);
-	base.setDate(base.getDate() + weekOffset * 7);
-	const day = base.getDay() === 0 ? 7 : base.getDay();
+	base.setUTCDate(base.getUTCDate() + weekOffset * 7);
+	const day = base.getUTCDay() === 0 ? 7 : base.getUTCDay();
 	const monday = new Date(base);
-	monday.setDate(base.getDate() - day + 1);
-	monday.setHours(0, 0, 0, 0);
+	monday.setUTCDate(base.getUTCDate() - day + 1);
+	monday.setUTCHours(0, 0, 0, 0);
 	const sunday = new Date(monday);
-	sunday.setDate(monday.getDate() + 6);
-	sunday.setHours(23, 59, 59, 999);
+	sunday.setUTCDate(monday.getUTCDate() + 6);
+	sunday.setUTCHours(23, 59, 59, 999);
 	return { monday, sunday };
 }
 
 export function formatDayMonth(d: Date): string {
-	return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+	return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 /** Filtra items con `order.created_at` según período del historial. */
@@ -245,9 +312,9 @@ export function filterByHistoryPeriod<T extends { order: Pick<Order, "created_at
 	if (period === "all") return [...items];
 	if (period === "today") {
 		const start = new Date(now);
-		start.setHours(0, 0, 0, 0);
+		start.setUTCHours(0, 0, 0, 0);
 		const end = new Date(now);
-		end.setHours(23, 59, 59, 999);
+		end.setUTCHours(23, 59, 59, 999);
 		return items.filter((i) => {
 			const d = new Date(i.order.created_at);
 			return d >= start && d <= end;

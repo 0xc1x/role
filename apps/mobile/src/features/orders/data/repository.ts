@@ -4,9 +4,9 @@ import type {
 	OrderStatus as OrderStatusType,
 } from "@0xc1x/role-commons";
 
-import { supabase } from "@/core/supabase/client";
-import { toAppError } from "@/core/error/mapper";
-import { Errors } from "@/core/error/app-error";
+import { supabase } from "@/src/core/supabase/client";
+import { toAppError } from "@/src/core/error/mapper";
+import { Errors } from "@/src/core/error/app-error";
 
 import type {
 	CancelOrderResult,
@@ -32,6 +32,96 @@ const ORDER_SELECT = `
 `;
 
 type Row = Record<string, unknown>;
+
+// Head-count select: mirrors the list embeds so join-dependent filters
+// (`offers.*`, `businesses.*`, `profiles.*` in `or()` / `eq()`) resolve
+// server-side instead of 400ing against a bare `"id"` select. `!inner`
+// matches the list semantics; `profiles` stays a left join like the list.
+const ORDER_COUNT_SELECT = `
+  id,
+  offers!inner (title, business_location_id),
+  businesses!inner (name),
+  profiles!orders_user_id_fkey (full_name)
+`;
+
+/**
+ * Server-side list params for the orders catalogs. Every field maps to a
+ * PostgREST filter so listing scales without fetching all rows; `limit` /
+ * `offset` map to `.range()`.
+ */
+export interface OrderListParams {
+	status?: OrderStatusType;
+	statuses?: readonly OrderStatusType[];
+	from?: string;
+	to?: string;
+	search?: string;
+	/** Business orders only: `offers.business_location_id` (via `!inner`). */
+	branchId?: string | null;
+	limit?: number;
+	offset?: number;
+	/** Newest first by default (matches previous client behavior). */
+	ascending?: boolean;
+}
+
+/** Minimal chainable shape of the PostgREST query builder (untyped client). */
+interface OrderQuery {
+	eq(column: string, value: unknown): OrderQuery;
+	in(column: string, values: readonly unknown[]): OrderQuery;
+	gte(column: string, value: unknown): OrderQuery;
+	lte(column: string, value: unknown): OrderQuery;
+	or(filters: string): OrderQuery;
+	order(column: string, options?: { ascending?: boolean }): OrderQuery;
+	range(from: number, to: number): OrderQuery;
+}
+
+// biome-ignore lint: dynamic builder passthrough — generics over the untyped
+// Supabase client blow up tsc (TS2589); the interface above documents the shape.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyOrderListFilters(query: any, params: OrderListParams): any {
+	let q: OrderQuery = query;
+	if (params.status != null) q = q.eq("status", params.status);
+	if (params.statuses != null && params.statuses.length > 0)
+		q = q.in("status", [...params.statuses]);
+	if (params.from != null) q = q.gte("created_at", params.from);
+	if (params.to != null) q = q.lte("created_at", params.to);
+	if (params.branchId != null)
+		q = q.eq("offers.business_location_id", params.branchId);
+	const search = params.search?.trim();
+	if (search) q = q.or(orderSearchOr(search));
+	return q;
+}
+
+/**
+ * Multi-field search as a single server-side `or` over the order number and
+ * the `!inner` embeds (offer title, business name, customer name). PostgREST
+ * resolves the dotted refs through the embedded joins.
+ */
+function orderSearchOr(search: string): string {
+	const pattern = quoteOrValue(`%${search.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
+	return [
+		`order_number.ilike.${pattern}`,
+		`offers.title.ilike.${pattern}`,
+		`businesses.name.ilike.${pattern}`,
+		`profiles.full_name.ilike.${pattern}`,
+	].join(",");
+}
+
+/** Quote an `or` value when it contains PostgREST reserved chars. */
+function quoteOrValue(value: string): string {
+	return /[,()"\\]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyOrderPaging(query: any, params: OrderListParams): any {
+	let q: OrderQuery = query.order("created_at", {
+		ascending: params.ascending ?? false,
+	});
+	if (params.limit != null) {
+		const offset = params.offset ?? 0;
+		q = q.range(offset, offset + params.limit - 1);
+	}
+	return q;
+}
 
 export const orderRepository = {
 	/**
@@ -87,14 +177,37 @@ export const orderRepository = {
 		}
 	},
 
-	async getUserOrders(userId: string): Promise<OrderDetail[]> {
-		const { data, error } = await supabase
+	async getUserOrders(
+		userId: string,
+		params: OrderListParams = {},
+	): Promise<OrderDetail[]> {
+		let query = supabase
 			.from("orders")
 			.select(ORDER_SELECT)
-			.eq("user_id", userId)
-			.order("created_at", { ascending: false });
+			.eq("user_id", userId);
+		query = applyOrderListFilters(query, params);
+		query = applyOrderPaging(query, params);
+		const { data, error } = await query;
 		if (error) throw toAppError(error, "Error al cargar pedidos");
 		return toRows(data).map(mapOrderDetail);
+	},
+
+	/** Server-side head count with the same filters (no rows fetched). */
+	async countUserOrders(
+		userId: string,
+		params: OrderListParams = {},
+	): Promise<number> {
+		let query = supabase
+			.from("orders")
+			.select(ORDER_COUNT_SELECT, { count: "exact", head: true })
+			.eq("user_id", userId);
+		query = applyOrderListFilters(query, params);
+		const { count, error } = (await query) as unknown as {
+			count: number | null;
+			error: unknown;
+		};
+		if (error) throw toAppError(error, "Error al contar pedidos");
+		return count ?? 0;
 	},
 
 	async getOrderById(id: string): Promise<OrderDetail> {
@@ -108,14 +221,37 @@ export const orderRepository = {
 		return mapOrderDetail(data as unknown as Row);
 	},
 
-	async getBusinessOrders(businessId: string): Promise<OrderDetail[]> {
-		const { data, error } = await supabase
+	async getBusinessOrders(
+		businessId: string,
+		params: OrderListParams = {},
+	): Promise<OrderDetail[]> {
+		let query = supabase
 			.from("orders")
 			.select(ORDER_SELECT)
-			.eq("business_id", businessId)
-			.order("created_at", { ascending: false });
+			.eq("business_id", businessId);
+		query = applyOrderListFilters(query, params);
+		query = applyOrderPaging(query, params);
+		const { data, error } = await query;
 		if (error) throw toAppError(error, "Error al cargar los pedidos");
 		return toRows(data).map(mapOrderDetail);
+	},
+
+	/** Server-side head count with the same filters (no rows fetched). */
+	async countBusinessOrders(
+		businessId: string,
+		params: OrderListParams = {},
+	): Promise<number> {
+		let query = supabase
+			.from("orders")
+			.select(ORDER_COUNT_SELECT, { count: "exact", head: true })
+			.eq("business_id", businessId);
+		query = applyOrderListFilters(query, params);
+		const { count, error } = (await query) as unknown as {
+			count: number | null;
+			error: unknown;
+		};
+		if (error) throw toAppError(error, "Error al contar los pedidos");
+		return count ?? 0;
 	},
 
 	async updateOrderStatus(
@@ -301,11 +437,13 @@ export const orderRepository = {
 	},
 
 	/** Reseñas del usuario actual con contexto de negocio/oferta (Mis reseñas). */
-	async getMyReviews(): Promise<MyReviewView[]> {
+	async getMyReviews(
+		params: { limit?: number; offset?: number } = {},
+	): Promise<MyReviewView[]> {
 		const userId = await currentUserId();
 		if (!userId)
 			throw Errors.unauthorized("Debes iniciar sesión para ver tus reseñas");
-		const { data, error } = await supabase
+		let paged = supabase
 			.from("reviews")
 			.select(
 				`id, order_id, business_id, product_rating, business_rating, comment, created_at,
@@ -314,6 +452,11 @@ export const orderRepository = {
 			)
 			.eq("user_id", userId)
 			.order("created_at", { ascending: false });
+		if (params.limit != null) {
+			const offset = params.offset ?? 0;
+			paged = paged.range(offset, offset + params.limit - 1);
+		}
+		const { data, error } = await paged;
 		if (error) throw toAppError(error, "Error al cargar tus reseñas");
 		return toRows(data).map(mapMyReview);
 	},

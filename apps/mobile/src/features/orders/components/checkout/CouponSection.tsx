@@ -1,11 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
+import { CircleCheck, X } from "lucide-react-native";
 import type { Coupon } from "@0xc1x/role-commons";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, TextField } from "@/core/ui";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, TextField } from "@/src/core/ui";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Button } from "@/components/ui/button";
 
 interface CouponSectionProps {
 	input: string;
@@ -40,7 +41,7 @@ export function CouponSection({
 					},
 				]}
 			>
-				<Ionicons name="checkmark-circle" size={18} color={colors.successDark} />
+				<CircleCheck size={18} color={colors.successDark} fill={colors.successDark} />
 				<AppText
 					variant="bodyMedium"
 					weight="semiBold"
@@ -48,14 +49,16 @@ export function CouponSection({
 				>
 					{strings.checkout.couponApplied} · {applied.code}
 				</AppText>
-				<Pressable
+				<Button
+					variant="ghost"
+					size="icon"
 					onPress={onClear}
 					hitSlop={8}
 					accessibilityRole="button"
-					accessibilityLabel={strings.common.cancel}
-				>
-					<Ionicons name="close" size={18} color={colors.successDark} />
-				</Pressable>
+					aria-label={strings.checkout.removeCoupon}
+					style={{ width: 32, height: 32 }}
+					icon={<X size={18} color={colors.successDark} />}
+				/>
 			</View>
 		);
 	}
@@ -71,13 +74,14 @@ export function CouponSection({
 				error={error}
 			/>
 			<Button
-				label={strings.checkout.applyCoupon}
 				variant="outline"
 				onPress={onApply}
 				loading={applying}
 				disabled={input.trim().length === 0}
 				fullWidth
-			/>
+			>
+				{strings.checkout.applyCoupon}
+			</Button>
 		</View>
 	);
 }

@@ -39,6 +39,12 @@ export interface OfferDetail {
 	business: EmbeddedBusiness;
 	location: EmbeddedLocation | null;
 	categories: EmbeddedCategory[];
+	/**
+	 * True cuando la proyección no trae stock/pickup reales (p. ej. oferta
+	 * eliminada tras guardar el favorito). La UI oculta badges de stock y
+	 * deshabilita la compra con copia honesta en vez de inventar datos.
+	 */
+	availabilityUnknown?: boolean;
 }
 
 /** Aggregated business summary (deduped from active offers). */

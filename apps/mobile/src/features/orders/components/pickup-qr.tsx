@@ -1,9 +1,9 @@
 import { StyleSheet, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { pickupQrValue } from "@/features/orders/domain/order";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { pickupQrValue } from "@/src/features/orders/domain/order";
 
 /**
  * QR del pickup code compartido por el detalle del pedido y el ticket

@@ -3,16 +3,18 @@ import * as Clipboard from "expo-clipboard";
 import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
 import {
 	PickupQr,
-} from "@/features/orders/components/pickup-qr";
+} from "@/src/features/orders/components/pickup-qr";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function PickupCodeCard({ order }: { order: Order }) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	if (!order.pickup_code) return null;
 
 	const handleCopy = () => {
@@ -22,46 +24,42 @@ export function PickupCodeCard({ order }: { order: Order }) {
 	};
 
 	return (
-		<View
+		<Card
 			style={[
-				styles.pickupCard,
-				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
-			]}
-		>
-			<AppText
-				variant="caption"
-				weight="bold"
-				style={[styles.sectionLabel, { color: colors.mutedForeground }]}
-			>
-				{strings.orders.yourCode.toUpperCase()}
-			</AppText>
-			<PickupQr orderId={order.id} pickupCode={order.pickup_code} />
-			<View style={styles.codeRow}>
-				<AppText style={[styles.pickupCode, { color: colors.primary }]}>
+				{
+					backgroundColor: scheme === "dark" ? colors.card : colors.background,
+					borderColor: colors.borderSolid,
+				},
+			]}>
+			<CardHeader >
+				<AppText variant="h4" weight="bold" style={{ color: colors.mutedForeground }}>
+					{strings.orders.yourCode}
+				</AppText>
+			</CardHeader>
+			<View style={styles.body}>
+				<PickupQr orderId={order.id} pickupCode={order.pickup_code} />
+				<View style={{display:"flex", flexDirection:"row", gap:spacing.md}}>
+					<AppText
+					style={[styles.pickupCode, { color: colors.primary }]}
+					numberOfLines={1}
+				>
 					{order.pickup_code}
 				</AppText>
-				<Button
-					label={strings.orders.copyCode}
-					variant="outline"
-					size="sm"
-					onPress={handleCopy}
-				/>
+				<Button variant="secondary" size="sm" onPress={handleCopy}>
+					{strings.orders.copyCode}
+				</Button>
+				</View>
+				
+				<AppText variant="bodySmall" style={[styles.hint, { color: colors.mutedForeground }]}>
+					{strings.orders.pickupCodeHint}
+				</AppText>
 			</View>
-			<AppText
-				variant="bodySmall"
-				style={[styles.sectionNote, { color: colors.mutedForeground }]}
-			>
-				{strings.orders.pickupCodeHint}
-			</AppText>
-		</View>
+		</Card>
 	);
 }
 
 const styles = StyleSheet.create({
-	pickupCard: {
-		borderRadius: radii.lg,
-		borderWidth: 1,
-		padding: spacing.lg,
+	body: {
 		alignItems: "center",
 		gap: spacing.md,
 	},
@@ -75,14 +73,12 @@ const styles = StyleSheet.create({
 	// Display one-off: código de recogida (no es escala tipográfica).
 	pickupCode: {
 		fontSize: 34,
-		fontWeight: "800",
-		letterSpacing: 8,
+		fontWeight: "700",           // peso que exista realmente en la fuente
+		lineHeight: 42,              // ≥ fontSize con aire para descendentes
+		includeFontPadding: false,
 	},
-	sectionLabel: {
-		letterSpacing: 1.2,
-		marginBottom: spacing.xs,
-	},
-	sectionNote: {
+	hint: {
 		textAlign: "center",
 	},
+	
 });

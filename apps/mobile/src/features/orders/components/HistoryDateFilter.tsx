@@ -1,15 +1,16 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { Button } from "@/components/ui/button";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
 import {
 	formatDayMonth,
 	getWeekRange,
 	type HistoryPeriod,
-} from "@/features/orders/domain/order";
+} from "@/src/features/orders/domain/order";
 
 export function HistoryDateFilter({
 	period,
@@ -68,13 +69,15 @@ export function HistoryDateFilter({
 			</View>
 			{period === "week" ? (
 				<View style={styles.weekRow}>
-					<Pressable
+					<Button
+						variant="ghost"
+						size="icon"
 						onPress={() => onWeekChange(weekOffset - 1)}
 						hitSlop={8}
+						aria-label={strings.orders.historyPreviousWeek}
 						style={styles.weekBtn}
-					>
-						<Ionicons name="chevron-back" size={22} color={colors.foreground} />
-					</Pressable>
+						icon={<ChevronLeft size={22} color={colors.foreground} />}
+					/>
 					<AppText
 						variant="bodySmall"
 						weight="semiBold"
@@ -82,18 +85,21 @@ export function HistoryDateFilter({
 					>
 						{weekLabel}
 					</AppText>
-					<Pressable
+					<Button
+						variant="ghost"
+						size="icon"
 						onPress={() => !isFutureWeek && onWeekChange(weekOffset + 1)}
 						hitSlop={8}
 						style={[styles.weekBtn, isFutureWeek && { opacity: 0.3 }]}
 						disabled={isFutureWeek}
-					>
-						<Ionicons
-							name="chevron-forward"
-							size={18}
-							color={colors.foreground}
-						/>
-					</Pressable>
+						aria-label={strings.orders.historyNextWeek}
+						icon={
+							<ChevronRight
+								size={18}
+								color={colors.foreground}
+							/>
+						}
+					/>
 				</View>
 			) : null}
 		</View>

@@ -1,16 +1,16 @@
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronLeft } from "lucide-react-native";
 import type { Order } from "@0xc1x/role-commons";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, CircleIconButton, goBackOr, StatusBadge } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, CircleIconButton, goBackOr, StatusBadge } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
 import {
 	isActiveStatus,
 	orderStatusLabels,
 	orderStatusTone,
-} from "@/features/orders/domain/order";
+} from "@/src/features/orders/domain/order";
 
 export function DetailHeader({ order }: { order: Order }) {
 	const { colors } = useTheme();
@@ -19,7 +19,7 @@ export function DetailHeader({ order }: { order: Order }) {
 			<View style={styles.headerLeft}>
 				<CircleIconButton
 						icon={
-							<Ionicons name="chevron-back" size={22} color={colors.foreground} />
+							<ChevronLeft size={22} color={colors.foreground} />
 						}
 						onPress={() => goBackOr("/(consumer)")}
 						accessibilityLabel={strings.common.back}

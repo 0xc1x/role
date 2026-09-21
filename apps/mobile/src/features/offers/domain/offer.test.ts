@@ -8,8 +8,8 @@ import {
 	isOfferOutOfStock,
 	haversineKm,
 	splitList,
-} from "@/features/offers/domain/offer";
-import type { OfferDetail } from "@/features/offers/domain/offer";
+} from "@/src/features/offers/domain/offer";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
 
 const now = new Date("2025-01-15T12:00:00Z");
 

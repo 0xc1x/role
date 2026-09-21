@@ -1,26 +1,30 @@
-import { Ionicons } from "@expo/vector-icons";
+import { UtensilsCrossed } from "lucide-react-native";
 import { Image } from "expo-image";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { formatMoney } from "@/core/utils/formatters";
-import type { OrderDetail } from "@/features/orders/domain/order";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { formatMoney } from "@/src/core/utils/formatters";
+import type { OrderDetail } from "@/src/features/orders/domain/order";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function ProductItemsCard({ item }: { item: OrderDetail }) {
-	const { colors } = useTheme();
-	return (
-		<View>
-			<AppText
-				variant="caption"
-				weight="bold"
-				style={[styles.sectionLabel, { color: colors.mutedForeground }]}
-			>
-				{strings.orders.productTitle.toUpperCase()}
-			</AppText>
-			<View
+	const { colors, scheme } = useTheme(); return (
+		<Card
+			style={[
+				{
+					backgroundColor: scheme === "dark" ? colors.card : colors.background,
+					borderColor: colors.borderSolid,
+				},
+			]}>
+			<CardHeader>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+					{strings.orders.productTitle}
+				</AppText>
+			</CardHeader>
+			<CardContent
 				style={[
 					styles.itemRow,
 					{
@@ -52,8 +56,7 @@ export function ProductItemsCard({ item }: { item: OrderDetail }) {
 							{ backgroundColor: colors.muted },
 						]}
 					>
-						<Ionicons
-							name="fast-food-outline"
+						<UtensilsCrossed
 							size={22}
 							color={colors.mutedForeground}
 						/>
@@ -70,16 +73,12 @@ export function ProductItemsCard({ item }: { item: OrderDetail }) {
 				<AppText variant="bodyMedium" weight="bold" style={styles.itemPrice}>
 					{formatMoney(item.order.price)}
 				</AppText>
-			</View>
-		</View>
+			</CardContent>
+		</Card>
 	);
 }
 
 const styles = StyleSheet.create({
-	sectionLabel: {
-		letterSpacing: 1.2,
-		marginBottom: spacing.xs,
-	},
 	itemRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -90,8 +89,8 @@ const styles = StyleSheet.create({
 	},
 	itemQty: {
 		borderRadius: radii.sm,
-		paddingHorizontal: 10,
-		paddingVertical: 6,
+		paddingHorizontal: spacing.sm,
+		paddingVertical: spacing.xs,
 	},
 	itemThumb: {
 		width: 52,

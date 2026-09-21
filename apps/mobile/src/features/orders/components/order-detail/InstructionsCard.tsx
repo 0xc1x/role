@@ -1,46 +1,26 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { CircleQuestionMark } from "lucide-react-native";
+import { StyleSheet, View } from "react-native";
+
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
+import { formatShortDate, formatTime } from "@/src/core/utils/formatters";
+import type { OrderDetail } from "@/src/features/orders/domain/order";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
-	LayoutAnimation,
-	Platform,
-	Pressable,
-	StyleSheet,
-	UIManager,
-	View,
-} from "react-native";
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import {
-	formatShortDate,
-	formatTime,
-} from "@/core/utils/formatters";
-import type { OrderDetail } from "@/features/orders/domain/order";
-
-if (
-	Platform.OS === "android" &&
-	UIManager.setLayoutAnimationEnabledExperimental
-) {
-	UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-/**
- * Callout informativo + acordeón "Pasos para retirar".
- * Los pasos usan SOLO datos reales del OrderDetail (dirección, código,
- * horario); si un dato no existe, su paso se omite — nada se inventa.
- */
 export function InstructionsCard({ item }: { item: OrderDetail }) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const { order } = item;
 	const completed = order.status === "completed";
-	const [open, setOpen] = useState(false);
-
-	const toggle = () => {
-		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-		setOpen((v) => !v);
-	};
 
 	const steps: string[] = [];
 	if (!completed) {
@@ -55,18 +35,12 @@ export function InstructionsCard({ item }: { item: OrderDetail }) {
 		}
 		if (item.businessAddress) {
 			steps.push(
-				strings.orders.pickupStepGoTo.replace(
-					"{address}",
-					item.businessAddress,
-				),
+				strings.orders.pickupStepGoTo.replace("{address}", item.businessAddress),
 			);
 		}
 		if (order.pickup_code) {
 			steps.push(
-				strings.orders.pickupStepShowCode.replace(
-					"{code}",
-					order.pickup_code,
-				),
+				strings.orders.pickupStepShowCode.replace("{code}", order.pickup_code),
 			);
 		}
 		steps.push(strings.orders.pickupStepDone);
@@ -74,83 +48,77 @@ export function InstructionsCard({ item }: { item: OrderDetail }) {
 
 	return (
 		<View style={styles.stack}>
-			<Card style={styles.cardBlock}>
-				<View style={styles.calloutRow}>
-					<Ionicons
-						name={
-							completed
-								? "checkmark-circle-outline"
-								: "information-circle-outline"
-						}
-						size={22}
-						color={completed ? colors.success : colors.info}
-					/>
-					<View style={styles.calloutBody}>
-						{completed ? (
-							<AppText variant="bodyMedium" weight="bold">
-								{strings.orders.instructionsCompletedTitle}
-							</AppText>
-						) : null}
-						<AppText
-							variant="bodySmall"
-							style={{ color: colors.mutedForeground }}
-						>
-							{completed
-								? strings.orders.instructionsCompletedBody
-								: strings.orders.instructionsBody}
+			<Alert variant={completed ? "success" : "info"}>
+				{completed ? (
+					<AlertTitle>
+						<AppText variant="bodyMedium" weight="bold">
+							{strings.orders.instructionsCompletedTitle}
 						</AppText>
-					</View>
-				</View>
-			</Card>
+					</AlertTitle>
+				) : null}
+				<AlertDescription>
+					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+						{completed
+							? strings.orders.instructionsCompletedBody
+							: strings.orders.instructionsBody}
+					</AppText>
+				</AlertDescription>
+			</Alert>
 
 			{completed ? null : (
-				<Card style={styles.cardBlock}>
-					<Pressable
-						onPress={toggle}
-						accessibilityRole="button"
-						accessibilityState={{ expanded: open }}
-						style={styles.accordionHeader}
-					>
-						<Ionicons
-							name="help-circle-outline"
-							size={20}
-							color={colors.mutedForeground}
-						/>
-						<AppText
-							variant="bodyMedium"
-							weight="bold"
-							style={styles.accordionTitle}
-						>
-							{strings.orders.instructionsTitle}
-						</AppText>
-						<Ionicons
-							name={open ? "chevron-down" : "chevron-forward"}
-							size={20}
-							color={colors.mutedForeground}
-						/>
-					</Pressable>
-					{open
-						? steps.map((step, index) => (
-								<View key={step} style={styles.stepRow}>
-									<AppText
-										variant="bodySmall"
-										weight="bold"
-										style={{ color: colors.primary }}
-									>
-										{`${index + 1}.`}
-									</AppText>
-									<AppText
-										variant="bodySmall"
-										style={[
-											styles.stepText,
-											{ color: colors.mutedForeground },
-										]}
-									>
-										{step}
-									</AppText>
-								</View>
-							))
-						: null}
+				<Card
+					style={[
+						{
+							backgroundColor: scheme === "dark" ? colors.card : colors.background,
+							borderColor: colors.borderSolid,
+						},
+					]}
+				>
+					<Accordion type="single" collapsible>
+						<AccordionItem value="pickup-steps" className="border-b-0">
+							<CardHeader>
+								<AccordionTrigger
+									className="py-0"
+									accessibilityLabel={strings.orders.instructionsTitle}
+								>
+									<View style={styles.accordionHeaderInner}>
+										<CircleQuestionMark
+											size={20}
+											color={colors.mutedForeground}
+										/>
+										<AppText
+											variant="bodyMedium"
+											weight="bold"
+											style={styles.accordionTitle}
+										>
+											{strings.orders.instructionsTitle}
+										</AppText>
+									</View>
+								</AccordionTrigger>
+							</CardHeader>
+							<AccordionContent className="p-0">
+								<CardContent style={styles.steps}>
+									{steps.map((step, index) => (
+										<View key={step} style={styles.stepRow}>
+											<AppText
+												variant="bodySmall"
+												weight="bold"
+												style={{ color: colors.primary }}
+											>
+												{`${index + 1}.`}
+											</AppText>
+											<AppText
+												variant="bodySmall"
+												style={[styles.stepText, { color: colors.mutedForeground }]}
+											>
+												{step}
+											</AppText>
+										</View>
+									))}
+								</CardContent>
+							</AccordionContent>
+						</AccordionItem>
+					</Accordion>
 				</Card>
 			)}
 		</View>
@@ -158,25 +126,10 @@ export function InstructionsCard({ item }: { item: OrderDetail }) {
 }
 
 const styles = StyleSheet.create({
-	stack: { gap: spacing.xl },
-	cardBlock: { gap: spacing.sm },
-	calloutRow: {
-		flexDirection: "row",
-		alignItems: "flex-start",
-		gap: spacing.sm,
-	},
-	calloutBody: { flex: 1, gap: spacing.md },
-	accordionHeader: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.sm,
-	},
+	stack: { gap: spacing.lg },
+	accordionHeaderInner: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm },
 	accordionTitle: { flex: 1 },
-	stepRow: {
-		flexDirection: "row",
-		alignItems: "flex-start",
-		gap: spacing.sm,
-		paddingTop: spacing.xs,
-	},
+	steps: { gap: spacing.xs },
+	stepRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, paddingTop: spacing.xs },
 	stepText: { flex: 1, lineHeight: 18 },
 });

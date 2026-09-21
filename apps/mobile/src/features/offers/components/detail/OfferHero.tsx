@@ -1,12 +1,12 @@
 import { Animated, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronLeft } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { CircleIconButton, goBackOr, HeartButton } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { CircleIconButton, goBackOr, HeartButton } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 
 export function OfferHero({
 	image,
@@ -57,8 +57,7 @@ export function OfferHero({
 			<View style={[styles.topBar, { top: topOffset }]}>
 				<CircleIconButton
 					icon={
-						<Ionicons
-							name="chevron-back"
+						<ChevronLeft
 							size={20}
 							color={colors.foreground}
 						/>

@@ -1,8 +1,8 @@
 import type { BusinessType } from "@0xc1x/role-commons";
 
-import { supabase } from "@/core/supabase/client";
-import { toAppError } from "@/core/error/mapper";
-import { Errors } from "@/core/error/app-error";
+import { supabase } from "@/src/core/supabase/client";
+import { toAppError } from "@/src/core/error/mapper";
+import { Errors } from "@/src/core/error/app-error";
 
 import type {
 	AreaStat,
@@ -101,13 +101,14 @@ export const offersRepository = {
 			maxDistanceKm != null && params.lat != null && params.lng != null
 				? { lat: params.lat, lng: params.lng, radiusKm: maxDistanceKm }
 				: undefined;
+		const pageSize = limit ?? 100;
 		return fetchOffersNear({
 			radiusParams,
 			category,
 			maxPrice,
 			search: searchQuery != null && searchQuery.length > 0 ? searchQuery : null,
-			limit: limit ?? 100,
-			offset: page * (limit ?? 0),
+			limit: pageSize,
+			offset: page * pageSize,
 			errorLabel: "Error al filtrar ofertas",
 		});
 	},

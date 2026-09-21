@@ -1,66 +1,62 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, View } from "react-native";
-import { useState } from "react";
+import { Banknote } from "lucide-react-native";
+import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card } from "@/core/ui";
-import { radii, spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 /**
- * Payment method selector: cash (pay at pickup) only.
- * Saved cards stay hidden until the payment gateway is enabled.
+ * Payment method: cash (pay at pickup) only — sin toggle (no hay más
+ * opciones que elegir). Saved cards stay hidden until the gateway is enabled.
  */
 export function PaymentMethodSection() {
-	const { colors } = useTheme();
-	const [selected, setSelected] = useState<string>("cash");
+	const { colors, scheme } = useTheme();
 
 	return (
-		<Card>
-			<AppText style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-				{strings.checkout.paymentMethodTitle.toUpperCase()}
-			</AppText>
+		<Card
+			style={{
+				backgroundColor: scheme === "dark" ? colors.card : colors.background,
+				borderColor: colors.borderSolid,
+			}}>
+			<CardHeader>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+					{strings.checkout.paymentMethodTitle}
+				</AppText>
+			</CardHeader>
+			<CardContent style={styles.body}>
 
-			<Pressable
-				onPress={() => setSelected("cash")}
+			<View
 				style={[
 					styles.methodRow,
 					{
-						backgroundColor: selected === "cash" ? withAlpha(colors.primary, 0.078) : colors.inputBackground,
-						borderColor: selected === "cash" ? colors.primary : colors.borderSolid,
+						backgroundColor: withAlpha(colors.primary, 0.078),
+						borderColor: colors.primary,
 					},
 				]}
 			>
 				<View style={[styles.iconBox, { backgroundColor: withAlpha(colors.secondary, 0.302) }]}>
-					<Ionicons name="cash-outline" size={18} color={colors.primary} />
+					<Banknote size={18} color={colors.primary} />
 				</View>
 				<AppText variant="bodyMedium" weight="semiBold" style={styles.methodLabel}>
 					{strings.checkout.payAtPickup}
 				</AppText>
-				<Ionicons
-					name={selected === "cash" ? "radio-button-on" : "radio-button-off"}
-					size={20}
-					color={colors.primary}
-				/>
-			</Pressable>
+			</View>
 
 			{/* Tarjetas guardadas: se muestran cuando la pasarela de pagos esté activa. */}
 
 			<AppText style={[styles.hint, { color: colors.mutedForeground }]}>
 				{strings.paymentMethods.payAtPickupHint}
 			</AppText>
+			</CardContent>
 		</Card>
 	);
 }
 
 const styles = StyleSheet.create({
-	sectionLabel: {
-		fontSize: 12,
-		fontWeight: "700",
-		letterSpacing: 1.2,
-		marginBottom: spacing.sm,
-	},
+	body: { gap: spacing.sm },
 	methodRow: {
 		flexDirection: "row",
 		alignItems: "center",

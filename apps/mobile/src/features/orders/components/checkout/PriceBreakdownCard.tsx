@@ -1,13 +1,15 @@
-import { Ionicons } from "@expo/vector-icons";
+import { PiggyBank } from "lucide-react-native";
 import type { Coupon, Offer } from "@0xc1x/role-commons";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card } from "@/core/ui";
-import { formatMoney, formatMoneyPrecise } from "@/core/utils/formatters";
-import { radii, spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { couponDiscount } from "@/features/orders/domain/order";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { formatMoney, formatMoneyPrecise } from "@/src/core/utils/formatters";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { checkoutTotals } from "@/src/features/orders/domain/order";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 interface PriceBreakdownCardProps {
 	offer: Offer;
@@ -16,18 +18,24 @@ interface PriceBreakdownCardProps {
 
 /** Price breakdown in checkout (ported from Rolé v1 `PriceBreakdownCard`). */
 export function PriceBreakdownCard({ offer, appliedCoupon }: PriceBreakdownCardProps) {
-	const { colors } = useTheme();
-	const offerDiscount = offer.original_price - offer.discounted_price;
-	const coupon = appliedCoupon ? couponDiscount(appliedCoupon, offer.discounted_price) : 0;
-	const total = Math.max(offer.discounted_price - coupon, 0);
+	const { colors, scheme } = useTheme();
+	const totals = checkoutTotals(offer, appliedCoupon);
+	const offerDiscount = totals.offerDiscount;
+	const coupon = totals.coupon;
+	const total = totals.total;
 
 	return (
-		<Card>
-			<AppText
-				style={[styles.sectionLabel, { color: colors.mutedForeground }]}
-			>
-				{strings.checkout.orderSummary.toUpperCase()}
-			</AppText>
+		<Card
+			style={{
+				backgroundColor: scheme === "dark" ? colors.card : colors.background,
+				borderColor: colors.borderSolid,
+			}}>
+			<CardHeader>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+					{strings.checkout.orderSummary}
+				</AppText>
+			</CardHeader>
+			<CardContent style={styles.body}>
 			<View style={styles.priceRow}>
 				<AppText style={[styles.label, { color: colors.mutedForeground }]}>
 					{strings.checkout.subtotal}
@@ -61,34 +69,23 @@ export function PriceBreakdownCard({ offer, appliedCoupon }: PriceBreakdownCardP
 					{formatMoney(total)}
 				</AppText>
 			</View>
-			<View
-				style={[
-					styles.ecoBox,
-					{
-						backgroundColor: colors.surfaceSuccess,
-						borderColor: colors.surfaceSuccessBorder,
-					},
-				]}
-			>
-				<Ionicons name="cash-outline" size={18} color={colors.success} />
-				<AppText style={[styles.ecoText, { color: colors.success }]}>
-					{strings.orders.moneySaved.replace(
-						"{saved}",
-						formatMoneyPrecise(offerDiscount + coupon),
-					)}
-				</AppText>
-			</View>
+			<Alert variant="success" icon={PiggyBank}>
+				<AlertDescription>
+					<AppText style={[styles.ecoText, { color: colors.success }]}>
+						{strings.orders.moneySaved.replace(
+							"{saved}",
+							formatMoneyPrecise(offerDiscount + coupon),
+						)}
+					</AppText>
+				</AlertDescription>
+			</Alert>
+			</CardContent>
 		</Card>
 	);
 }
 
 const styles = StyleSheet.create({
-	sectionLabel: {
-		fontSize: 12,
-		fontWeight: "700",
-		letterSpacing: 1.2,
-		marginBottom: spacing.sm,
-	},
+	body: { gap: spacing.sm },
 	priceRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -100,14 +97,5 @@ const styles = StyleSheet.create({
 	value: { fontSize: 13, fontWeight: "600" },
 	totalLabel: { flex: 1 },
 	divider: { height: 1, marginVertical: spacing.sm },
-	ecoBox: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.sm,
-		borderWidth: 1,
-		borderRadius: radii.lg,
-		padding: spacing.md,
-		marginTop: spacing.sm,
-	},
 	ecoText: { flex: 1, fontSize: 13, fontWeight: "600" },
 });

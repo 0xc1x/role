@@ -11,18 +11,18 @@ g.window ??= {
 	},
 };
 
-mock.module("@/core/supabase/client", () => ({
+mock.module("@/src/core/supabase/client", () => ({
 	supabase: {
 		from: jest.fn(),
 		rpc: jest.fn(),
 	},
 }));
 
-import { supabase } from "@/core/supabase/client";
+import { supabase } from "@/src/core/supabase/client";
 import {
 	expiringSoonWindowHours,
 	offersRepository,
-} from "@/features/offers/data/repository";
+} from "@/src/features/offers/data/repository";
 
 const rpcMock = supabase.rpc as unknown as Mock<
 	(...args: never[]) => Promise<{ data: unknown; error: unknown }>
@@ -220,6 +220,15 @@ describe("offersRepository (RPC activo)", () => {
 				p_radius_km: null,
 				p_search: "tacos",
 			}),
+		);
+	});
+
+	test("getFilteredOffers pagina con el límite default cuando no se pasa limit", async () => {
+		rpcOk([]);
+		await offersRepository.getFilteredOffers({ searchQuery: "pan", page: 2 });
+		expect(rpcMock).toHaveBeenCalledWith(
+			"active_offers_near",
+			expect.objectContaining({ p_limit: 100, p_offset: 200 }),
 		);
 	});
 

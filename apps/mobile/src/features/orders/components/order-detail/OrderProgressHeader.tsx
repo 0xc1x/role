@@ -1,25 +1,28 @@
-import { Ionicons } from "@expo/vector-icons";
+import {
+	CircleCheck,
+	Package,
+	Star,
+	type LucideIcon,
+} from "lucide-react-native";
 import type { Order } from "@0xc1x/role-commons";
 import { Fragment, useEffect, useState } from "react";
 import { Animated, Easing, Platform, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
 import {
 	isActiveStatus,
 	orderStatusLabels,
 	type OrderStatusType,
-} from "@/features/orders/domain/order";
-
-type IoniconName = keyof typeof Ionicons.glyphMap;
+} from "@/src/features/orders/domain/order";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 interface ProgressStep {
 	status: OrderStatusType;
 	label: string;
-	icon: IoniconName;
-	doneIcon: IoniconName;
+	icon: LucideIcon;
 	done: boolean;
 }
 
@@ -28,7 +31,7 @@ const STEP_DURATION = 250;
 
 /** Progreso Confirmado → Listo para recoger → Completado derivado del status. */
 export function OrderProgressHeader({ order }: { order: Order }) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const active = isActiveStatus(order.status);
 
 	const confirmedDone = order.status !== "pending";
@@ -74,22 +77,19 @@ export function OrderProgressHeader({ order }: { order: Order }) {
 		{
 			status: "confirmed",
 			label: strings.orders.timelineConfirmed,
-			icon: "checkmark-circle-outline",
-			doneIcon: "checkmark-circle",
+			icon: CircleCheck,
 			done: confirmedDone,
 		},
 		{
 			status: "ready_for_pickup",
 			label: strings.orders.timelineReady,
-			icon: "cube-outline",
-			doneIcon: "cube",
+			icon: Package,
 			done: readyDone,
 		},
 		{
 			status: "completed",
 			label: strings.orders.timelineCompleted,
-			icon: "star-outline",
-			doneIcon: "star",
+			icon: Star,
 			done: completedDone,
 		},
 	];
@@ -97,19 +97,21 @@ export function OrderProgressHeader({ order }: { order: Order }) {
 	const firstPending = steps.findIndex((s) => !s.done);
 
 	return (
-		<Card style={styles.card}>
-			<View style={styles.titleRow}>
-				<AppText
-					variant="caption"
-					weight="bold"
-					style={[styles.sectionLabel, { color: colors.mutedForeground }]}
-				>
-					{strings.orders.statusTitle.toUpperCase()}
+		<Card
+			style={[
+				{
+					backgroundColor: scheme === "dark" ? colors.card : colors.background,
+					borderColor: colors.borderSolid,
+				},
+			]}>
+			<CardHeader>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+					{strings.orders.statusTitle}
 				</AppText>
 				{/* Sin campo ETA en OrderDetail: el chip se omite hasta que el
 				    contrato exponga el dato (no se inventa). */}
-			</View>
-			<View style={styles.row}>
+			</CardHeader>
+			<CardContent style={styles.row}>
 				{steps.map((step, index) => {
 					const isCurrent = active && index === firstPending;
 					const circleBackground = step.done
@@ -159,10 +161,10 @@ export function OrderProgressHeader({ order }: { order: Order }) {
 								<View
 									style={[styles.circle, { backgroundColor: circleBackground }]}
 								>
-									<Ionicons
-										name={step.done ? step.doneIcon : step.icon}
+									<step.icon
 										size={18}
 										color={iconColor}
+										fill={step.done ? iconColor : "none"}
 									/>
 								</View>
 								<AppText
@@ -185,23 +187,14 @@ export function OrderProgressHeader({ order }: { order: Order }) {
 						</Fragment>
 					);
 				})}
-			</View>
+			</CardContent>
 		</Card>
 	);
 }
 
 const styles = StyleSheet.create({
-	card: { gap: spacing.sm },
-	titleRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		gap: spacing.sm,
-		marginBottom: spacing.xs,
-	},
-	sectionLabel: { letterSpacing: 1.2 },
 	row: { flexDirection: "row", alignItems: "flex-start" },
-	step: { alignItems: "center", width: 92, gap: 4 },
+	step: { alignItems: "center", width: 92, gap: spacing.xs },
 	circle: {
 		width: 36,
 		height: 36,

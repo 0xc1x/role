@@ -1,17 +1,18 @@
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal, Button } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useCategories } from "@/features/hooks";
-import type { EmbeddedCategory } from "@/features/offers/domain/offer";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, BottomSheetModal } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useCategories } from "@/src/features/hooks";
+import type { EmbeddedCategory } from "@/src/features/offers/domain/offer";
 import {
 	emptyOfferFilters,
 	type OfferFilterState,
-} from "@/features/offers/domain/offer";
-import { Ionicons } from "@expo/vector-icons";
+} from "@/src/features/offers/domain/offer";
+import { X } from "lucide-react-native";
+import { Button } from "@/components/ui/button";
 
 export type { OfferFilterState };
 
@@ -81,11 +82,6 @@ export function OfferFiltersSheet({
 			onClose={onClose}
 			footer={
 				<Button
-					label={
-						hasActiveFilters
-							? strings.allOffers.applyFilters
-							: strings.common.close
-					}
 					onPress={() => {
 						if (hasActiveFilters) {
 							onApply(state);
@@ -94,7 +90,13 @@ export function OfferFiltersSheet({
 					}}
 					fullWidth
 					size="lg"
-				/>
+				>
+					{
+						hasActiveFilters
+							? strings.allOffers.applyFilters
+							: strings.common.close
+					}
+				</Button>
 			}
 		>
 			<View style={styles.header}>
@@ -102,21 +104,19 @@ export function OfferFiltersSheet({
 					{strings.allOffers.filters}
 				</AppText>
 				{hasActiveFilters ? (
-					<Pressable onPress={() => setState(emptyOfferFilters)} hitSlop={8}>
-						<AppText
-							variant="bodySmall"
-							weight="semiBold"
-							style={{ color: colors.primary }}
-						>
-							{strings.allOffers.clearAll}
-						</AppText>
-					</Pressable>
+					<Button variant="link" onPress={() => setState(emptyOfferFilters)} hitSlop={8}>
+						{strings.allOffers.clearAll}
+					</Button>
 				) : (
-					<Pressable onPress={onClose} hitSlop={8}>
-						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-							<Ionicons name="close" size={16} color={colors.foreground} />
-						</AppText>
-					</Pressable>
+					<Button
+						variant="ghost"
+						size="icon"
+						onPress={onClose}
+						hitSlop={8}
+						accessibilityRole="button"
+						aria-label={strings.common.close}
+						icon={<X size={16} color={colors.foreground} />}
+					/>
 				)}
 			</View>
 			<ScrollView

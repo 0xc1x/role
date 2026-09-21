@@ -1,26 +1,31 @@
-import { Ionicons } from "@expo/vector-icons";
 import type { Order } from "@0xc1x/role-commons";
+import { PiggyBank } from "lucide-react-native";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { formatMoney } from "@/core/utils/formatters";
-import { orderDiscount } from "@/features/orders/domain/order";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
+import { formatMoney } from "@/src/core/utils/formatters";
+import { orderDiscount } from "@/src/features/orders/domain/order";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function PriceDetailsCard({ order }: { order: Order }) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const discount = orderDiscount(order);
 	return (
-		<Card style={styles.cardBlock}>
-			<AppText
-				variant="caption"
-				weight="bold"
-				style={[styles.sectionLabel, { color: colors.mutedForeground }]}
-			>
-				{strings.orders.summaryTitle.toUpperCase()}
-			</AppText>
+		<Card
+			style={{
+				backgroundColor: scheme === "dark" ? colors.card : colors.background,
+				borderColor: colors.borderSolid,
+			}}>
+			<CardHeader>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+					{strings.orders.summaryTitle}
+				</AppText>
+			</CardHeader>
+			<CardContent style={styles.body}>
 			<View style={styles.priceRow}>
 				<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
 					{strings.orders.originalPriceLabel}
@@ -50,36 +55,26 @@ export function PriceDetailsCard({ order }: { order: Order }) {
 					{formatMoney(order.price)}
 				</AppText>
 			</View>
-			<View
-				style={[
-					styles.ecoBox,
-					{
-						backgroundColor: colors.surfaceSuccess,
-						borderColor: colors.surfaceSuccessBorder,
-					},
-				]}
-			>
-				<Ionicons name="cash-outline" size={18} color={colors.success} />
-				<AppText
-					variant="bodySmall"
-					weight="semiBold"
-					style={{ color: colors.success, flex: 1 }}
-				>
-					{strings.orders.moneySaved.replace("{saved}", formatMoney(discount))}
-				</AppText>
-			</View>
+			<Alert variant="success" icon={PiggyBank}>
+				<AlertDescription>
+					<AppText
+						variant="bodySmall"
+						weight="semiBold"
+						style={{ color: colors.success, flex: 1 }}
+					>
+						{strings.orders.moneySaved.replace("{saved}", formatMoney(discount))}
+					</AppText>
+				</AlertDescription>
+			</Alert>
 			{/* Oculta hasta habilitar la pasarela de pagos: fila del método de
 			    pago (p. ej. Visa ••••). Se conserva comentada, no se borra. */}
+			</CardContent>
 		</Card>
 	);
 }
 
 const styles = StyleSheet.create({
-	cardBlock: { gap: spacing.sm },
-	sectionLabel: {
-		letterSpacing: 1.2,
-		marginBottom: spacing.xs,
-	},
+	body: { gap: spacing.sm },
 	priceRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -89,13 +84,4 @@ const styles = StyleSheet.create({
 	totalLabel: { flex: 1 },
 	tabular: { fontVariant: ["tabular-nums"] },
 	divider: { height: 1, marginVertical: spacing.sm },
-	ecoBox: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.sm,
-		borderWidth: 1,
-		borderRadius: radii.lg,
-		padding: spacing.md,
-		marginTop: spacing.sm,
-	},
 });
