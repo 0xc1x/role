@@ -4,9 +4,8 @@
 
 @layer base {
   :root {
-    /* Modo de dark mode de css-interop: 'class' evita el error
-       "Cannot manually set color scheme" en web. */
     --css-interop-darkMode: class;
+
     /* css-vars:generated:start (fuente: src/core/theme/colors.ts — regenerar con: bun scripts/generate-css-vars.mjs) */
     --background: #faf9f7;
     --foreground: #1a1a18;
@@ -29,8 +28,14 @@
     --input: #ffffff;
     --ring: #0000001a;
 /* css-vars:generated:end */
+    --radius: 0.75rem;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --info: 175 84% 32%;
+    --info-foreground: 0 0% 100%;
   }
 
+  .dark:root,
   .dark {
     /* css-vars:generated:start (fuente: src/core/theme/colors.ts — regenerar con: bun scripts/generate-css-vars.mjs) */
     --background: #121212;
@@ -54,6 +59,11 @@
     --input: #2c2c2c;
     --ring: #ffffff33;
 /* css-vars:generated:end */
+    --radius: 0.75rem;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --info: 172 66% 50%;
+    --info-foreground: 0 0% 100%;
   }
 
   input,
