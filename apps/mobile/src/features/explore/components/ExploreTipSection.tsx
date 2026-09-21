@@ -1,14 +1,15 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronDown, ChevronUp, Lightbulb } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card } from "@/core/ui";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { useRandomTip } from "@/features/tips/hooks";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { useRandomTip } from "@/src/features/tips/hooks";
 import { useState } from "react";
+import { Card } from "@/components/ui/card";
 
 /**
  * Banner de "Consejo del día" entre el grid de categorías y la lista de
@@ -64,8 +65,7 @@ export function ExploreTipSection() {
 							},
 						]}
 						>
-							<Ionicons
-								name="bulb"
+							<Lightbulb
 								size={20}
 								color={
 								isExpanded
@@ -78,11 +78,17 @@ export function ExploreTipSection() {
 							{strings.explore.tipTitle}
 						</AppText>
 					</View>
-					<Ionicons
-						name={isExpanded ? "chevron-up" : "chevron-down"}
-						size={20}
-						color={isDark ? colors.yellow : colors.yellowDark}
-					/>
+					{isExpanded ? (
+						<ChevronUp
+							size={20}
+							color={isDark ? colors.yellow : colors.yellowDark}
+						/>
+					) : (
+						<ChevronDown
+							size={20}
+							color={isDark ? colors.yellow : colors.yellowDark}
+						/>
+					)}
 				</Pressable>
 				{isExpanded && (
 					<AppText

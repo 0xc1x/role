@@ -1,7 +1,7 @@
 import type { AppConfigMap } from "@0xc1x/role-commons";
 
-import { supabase } from "@/core/supabase/client";
-import { toAppError } from "@/core/error/mapper";
+import { supabase } from "@/src/core/supabase/client";
+import { toAppError } from "@/src/core/error/mapper";
 
 /**
  * Lee la configuración pública directamente de Supabase (RLS permite

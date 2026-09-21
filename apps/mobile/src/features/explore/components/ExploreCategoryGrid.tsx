@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
 	Platform,
 	Animated,
@@ -12,20 +12,20 @@ import {
 	type ViewStyle,
 } from "react-native";
 import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronDown, ChevronUp, MapPin } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 import {
 	useCategoryStats,
 	usePopularAreas,
-} from "@/features/hooks";
-import type { CategoryStat } from "@/features/offers/domain/offer";
+} from "@/src/features/hooks";
+import type { CategoryStat } from "@/src/features/offers/domain/offer";
 
 const INITIAL_COUNT = 4;
 const ENTRY_ANIM_DURATION = 300;
@@ -157,8 +157,7 @@ export function ExploreCategoryGrid({
 									},
 								]}
 							>
-								<Ionicons
-									name="location-outline"
+								<MapPin
 									size={14}
 									color={isDark ? mutedText : colors.greenMidDark}
 								/>
@@ -204,7 +203,7 @@ export function ExploreCategoryGrid({
 						animate={newIds.has(cat.id)}
 						style={styles.gridItem}
 					>
-						<ExploreCategoryCard
+						<CategoryGridItem
 							category={cat}
 							isSelected={selectedCategory === cat.id}
 							background={cellBackground}
@@ -216,7 +215,7 @@ export function ExploreCategoryGrid({
 									: colors.borderSolid
 							}
 							mutedText={mutedText}
-							onPress={() => onCategoryTap(cat.id)}
+							onSelect={onCategoryTap}
 						/>
 					</CategoryFadeSlideIn>
 				))}
@@ -238,11 +237,17 @@ export function ExploreCategoryGrid({
 							]}
 						>
 							<View style={[styles.expandIcon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}>
-								<Ionicons
-									name={showAll ? "chevron-up" : "chevron-down"}
-									size={22}
-									color={colors.primary}
-								/>
+								{showAll ? (
+									<ChevronUp
+										size={22}
+										color={colors.primary}
+									/>
+								) : (
+									<ChevronDown
+										size={22}
+										color={colors.primary}
+									/>
+								)}
 							</View>
 							<View style={styles.expandText}>
 								<AppText variant="bodySmall" weight="bold">
@@ -312,6 +317,40 @@ function CategoryFadeSlideIn({
 		</Animated.View>
 	);
 }
+
+const CategoryGridItem = memo(function CategoryGridItem({
+	category,
+	isSelected,
+	background,
+	selectedBackground,
+	selectedShadow,
+	borderColor,
+	mutedText,
+	onSelect,
+}: {
+	category: CategoryStat;
+	isSelected: boolean;
+	background: string;
+	selectedBackground: string;
+	selectedShadow: string;
+	borderColor: string;
+	mutedText: string;
+	onSelect: (categoryId: string) => void;
+}) {
+	const handlePress = useCallback(() => onSelect(category.id), [onSelect, category.id]);
+	return (
+		<ExploreCategoryCard
+			category={category}
+			isSelected={isSelected}
+			background={background}
+			selectedBackground={selectedBackground}
+			selectedShadow={selectedShadow}
+			borderColor={borderColor}
+			mutedText={mutedText}
+			onPress={handlePress}
+		/>
+	);
+});
 
 function ExploreCategoryCard({
 	category,

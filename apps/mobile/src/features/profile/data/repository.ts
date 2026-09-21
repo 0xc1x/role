@@ -6,13 +6,12 @@ import type {
 } from "@0xc1x/role-commons";
 import * as SecureStore from "expo-secure-store";
 
-import { supabase } from "@/core/supabase/client";
-import { toAppError } from "@/core/error/mapper";
-import { Errors } from "@/core/error/app-error";
+import { supabase } from "@/src/core/supabase/client";
+import { toAppError } from "@/src/core/error/mapper";
+import { Errors } from "@/src/core/error/app-error";
 
 import type {
 	PaymentMethodModel,
-	UserOrderSummary,
 	UserStats,
 } from "../domain/profile";
 import {
@@ -229,38 +228,6 @@ export const profileRepository = {
 			total_orders: count,
 			co2_saved_kg: count * CO2_KG_PER_ORDER,
 		};
-	},
-
-	async getUserOrders(userId: string): Promise<UserOrderSummary[]> {
-		const { data, error } = await supabase
-			.from("orders")
-			.select(
-				`
-        id, order_number, status, price, original_price,
-        pickup_time, created_at,
-        businesses:business_id (name),
-        offers:offer_id (image)
-        `,
-			)
-			.eq("user_id", userId)
-			.order("created_at", { ascending: false });
-		if (error) throw toAppError(error, "Error al cargar pedidos");
-		return (data ?? []).map((r) => {
-			const row = r as unknown as Record<string, unknown>;
-			const business = (row.businesses ?? {}) as Record<string, unknown>;
-			const offer = (row.offers ?? {}) as Record<string, unknown>;
-			return {
-				id: String(row.id),
-				orderNumber: String(row.order_number ?? ""),
-				businessName: String(business.name ?? ""),
-				status: String(row.status ?? "pending"),
-				price: num(row.price) ?? 0,
-				originalPrice: num(row.original_price) ?? 0,
-				pickupTime: (row.pickup_time as string | null) ?? null,
-				createdAt: String(row.created_at ?? ""),
-				offerImageUrl: (offer.image as string | null) ?? null,
-			};
-		});
 	},
 
 	// ─── Payment methods (Supabase tokenized — PCI: never PAN) ───────

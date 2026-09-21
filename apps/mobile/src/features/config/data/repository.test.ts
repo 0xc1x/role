@@ -11,15 +11,15 @@ g.window ??= {
 	},
 };
 
-mock.module("@/core/supabase/client", () => ({
+mock.module("@/src/core/supabase/client", () => ({
 	supabase: {
 		from: jest.fn(),
 	},
 }));
 
-import { supabase } from "@/core/supabase/client";
-import { fetchAppConfig } from "@/features/config/data/repository";
-import { AppError } from "@/core/error/app-error";
+import { supabase } from "@/src/core/supabase/client";
+import { fetchAppConfig } from "@/src/features/config/data/repository";
+import { AppError } from "@/src/core/error/app-error";
 
 describe("fetchAppConfig", () => {
 	test("mapea filas a mapa", async () => {

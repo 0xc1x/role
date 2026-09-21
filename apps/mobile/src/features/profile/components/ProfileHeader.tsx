@@ -1,15 +1,15 @@
 import { StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { formatCount, formatMoney } from "@/core/utils/formatters";
-import type { UserProfile } from "@/features/auth/domain/user";
-import { useProfileStats } from "@/features/profile/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { typography } from "@/src/core/theme/typography";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { formatCount, formatMoney } from "@/src/core/utils/formatters";
+import type { UserProfile } from "@/src/features/auth/domain/user";
+import { useProfileStats } from "@/src/features/profile/hooks";
 
 function initialsOf(profile: UserProfile): string {
 	const name = profile.fullName?.trim();
@@ -75,31 +75,34 @@ export function ProfileHeader({ profile }: { profile: UserProfile }) {
 				</View>
 			</View>
 
-			{statsLoading ? (
-				<View style={styles.statsRow}>
-					{[0, 1, 2].map((i) => (
-						<Skeleton
-							key={`profile-stat-skeleton-${i}`}
-							style={styles.statSkeleton}
-						/>
-					))}
-				</View>
-			) : (
-				<View style={styles.statsRow}>
-					<StatCard
-						value={formatMoney(Math.round((stats?.total_saved_cents ?? 0) / 100))}
-						label={strings.profile.totalSaved}
-					/>
-					<StatCard
-						value={formatCount(stats?.total_orders ?? 0)}
-						label={strings.profile.totalOrders}
-					/>
-					<StatCard
-						value={`${(stats?.co2_saved_kg ?? 0).toFixed(1)} kg`}
-						label={strings.profile.co2Saved}
-					/>
-				</View>
-			)}
+		{statsLoading ? (
+			<View style={styles.statsRow}>
+				{[0, 1, 2].map((i) => (
+					<View
+						key={`profile-stat-skeleton-${i}`}
+						style={[styles.statCard, { backgroundColor: colors.card }]}
+					>
+						<Skeleton style={styles.statValueSkeleton} />
+						<Skeleton style={styles.statLabelSkeleton} />
+					</View>
+				))}
+			</View>
+		) : (
+			<View style={styles.statsRow}>
+				<StatCard
+					value={formatMoney(Math.round((stats?.total_saved_cents ?? 0) / 100))}
+					label={strings.profile.totalSaved}
+				/>
+				<StatCard
+					value={formatCount(stats?.total_orders ?? 0)}
+					label={strings.profile.totalOrders}
+				/>
+				<StatCard
+					value={`${(stats?.co2_saved_kg ?? 0).toFixed(1)} kg`}
+					label={strings.profile.co2Saved}
+				/>
+			</View>
+		)}
 		</View>
 	);
 }
@@ -114,9 +117,14 @@ const styles = StyleSheet.create({
 		borderRadius: radii.lg,
 		alignItems: "center",
 	},
-	statSkeleton: {
-		flex: 1,
-		height: 76,
-		borderRadius: radii.lg,
+	statValueSkeleton: {
+		height: typography.h4.lineHeight,
+		width: "45%",
+		borderRadius: radii.sm,
+	},
+	statLabelSkeleton: {
+		height: typography.bodySmall.lineHeight,
+		width: "70%",
+		borderRadius: radii.sm,
 	},
 });

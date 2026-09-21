@@ -1,4 +1,4 @@
-import { supabase } from "@/core/supabase/client";
+import { supabase } from "@/src/core/supabase/client";
 
 export type DeviceTokenPlatform = "ios" | "android" | "web";
 

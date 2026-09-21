@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { toTip } from "@/features/tips/domain/tip";
+import { toTip } from "@/src/features/tips/domain/tip";
 
 describe("toTip", () => {
 	test("mapea fila a tip diario", () => {

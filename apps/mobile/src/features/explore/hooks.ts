@@ -3,9 +3,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
 	emptyExploreFilters,
 	type ExploreFilterState,
-} from "@/features/explore/exploreTypes";
-import type { ActiveFilterKey } from "@/features/explore/components/ExploreActiveFiltersBar";
-import type { OfferFilterState } from "@/features/offers/domain/offer";
+} from "@/src/features/explore/exploreTypes";
+import type { ActiveFilterKey } from "@/src/features/explore/components/ExploreActiveFiltersBar";
+import type { OfferFilterState } from "@/src/features/offers/domain/offer";
 
 const SEARCH_DEBOUNCE_MS = 400;
 

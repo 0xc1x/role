@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Map, SlidersHorizontal, type LucideIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, SearchBar } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, SearchBar } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 
 /**
  * Header principal de la pantalla de Explorar (portado de fudi):
@@ -71,14 +71,14 @@ export function ExploreHeader({
 			</View>
 			<View style={styles.pillsRow}>
 				<ExploreHeaderPillButton
-					iconName="map-outline"
+					icon={Map}
 					label={strings.explore.viewMap}
 					onPress={onToggleMap}
 					onBrand={onBrand}
 					brandForeground={brandForeground}
 				/>
 				<ExploreHeaderPillButton
-					iconName="options-outline"
+					icon={SlidersHorizontal}
 					label={strings.explore.filters}
 					onPress={onFilterTap}
 					hasIndicator={hasActiveFilters}
@@ -91,14 +91,14 @@ export function ExploreHeader({
 }
 
 function ExploreHeaderPillButton({
-	iconName,
+	icon: Icon,
 	label,
 	onPress,
 	hasIndicator = false,
 	onBrand,
 	brandForeground,
 }: {
-	iconName: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	label: string;
 	onPress: () => void;
 	hasIndicator?: boolean;
@@ -126,7 +126,7 @@ function ExploreHeaderPillButton({
 				},
 			]}
 		>
-			<Ionicons name={iconName} size={16} color={brandForeground} />
+			<Icon size={16} color={brandForeground} />
 			<AppText variant="bodySmall" weight="semiBold" style={{ color: brandForeground }}>
 				{label}
 			</AppText>

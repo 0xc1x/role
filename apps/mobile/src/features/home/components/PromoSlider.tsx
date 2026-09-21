@@ -1,244 +1,77 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import {
 	View,
 	StyleSheet,
-	ScrollView,
-	Dimensions,
 	Pressable,
 	Platform,
 	Linking,
-	Animated,
+	useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { type Href, router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { toast } from "sonner-native";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { AppText, Button } from "@/core/ui";
+import { Carousel, type CarouselRef } from "react-native-reanimated-carousel";
+import Animated, {
+	useSharedValue,
+	useAnimatedStyle,
+	interpolateColor,
+} from "react-native-reanimated";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { AppText } from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
-import { strings } from "@/core/i18n/strings";
-import { usePromoSlides, type PromoSlide } from "@/features/slides";
+import { strings } from "@/src/core/i18n/strings";
+import { usePromoSlides, type PromoSlide } from "@/src/features/slides";
+import { Button } from "@/components/ui/button";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CARD_WIDTH = SCREEN_WIDTH - spacing.lg * 2;
-const CARD_HEIGHT = Math.min((CARD_WIDTH * 9) / 16, 220);
-const DOT_ANIM_DURATION = 250;
-const SCROLL_SETTLE_DELAY = 120;
+const AUTOPLAY_MS = 5000;
 
 export function PromoSlider() {
 	const { colors } = useTheme();
+	const { width: screenWidth } = useWindowDimensions();
 	const { data: slides = [], isLoading } = usePromoSlides();
-	const [currentIndex, setCurrentIndex] = useState(0);
-	const [isPaused, setIsPaused] = useState(false);
 
-	const scrollRef = useRef<ScrollView>(null);
-	const step = CARD_WIDTH + spacing.sm;
+	const CARD_WIDTH = screenWidth - spacing.lg * 2;
+	const CARD_HEIGHT = Math.min((CARD_WIDTH * 9) / 16, 220);
+	const slideStyle = useMemo(
+		() => ({ width: screenWidth, paddingHorizontal: spacing.lg }),
+		[screenWidth],
+	);
+	const cardStyle = useMemo(
+		() => [
+			styles.card,
+			{
+				width: CARD_WIDTH,
+				height: CARD_HEIGHT,
+				...Platform.select({
+					ios: {
+						shadowColor: colors.shadow,
+						shadowOffset: { width: 0, height: 8 },
+						shadowOpacity: 0.15,
+						shadowRadius: 12,
+					},
+					android: { elevation: 6 },
+					web: { boxShadow: `0px 8px 20px ${colors.shadow}` },
+				}),
+			},
+		],
+		[CARD_WIDTH, CARD_HEIGHT, colors.shadow],
+	);
 
-	// ── Loop infinito ────────────────────────────────────────────────
+	const carouselRef = useRef<CarouselRef>(null);
+	const progress = useSharedValue(0);
+
 	const total = slides.length;
 	const hasLoop = total > 1;
 
-	const loopSlides = hasLoop
-		? [slides[total - 1], ...slides, slides[0]]
-		: slides;
-
-	// offset real dentro del ScrollView (1 = primera slide real)
-	const toScrollX = useCallback(
-		(logicalIndex: number) => (hasLoop ? logicalIndex + 1 : logicalIndex) * step,
-		[hasLoop, step],
-	);
-
-	const prevIndexRef = useRef(0);
-	const isWrapRef = useRef(false);
-
 	const goTo = useCallback(
-		(logicalIndex: number, animated = true) => {
-			if (total === 0) {
-				setCurrentIndex(0);
-				return;
-			}
-			const next = ((logicalIndex % total) + total) % total;
-			isWrapRef.current =
-				(prevIndexRef.current === total - 1 && next === 0) ||
-				(prevIndexRef.current === 0 && next === total - 1);
-			prevIndexRef.current = next;
-			setCurrentIndex(next);
-			scrollRef.current?.scrollTo({
-				x: toScrollX(next),
-				animated,
-			});
-		},
-		[total, toScrollX],
-	);
-
-	// Posicionar en la primera slide real al montar / cuando llegan datos
-	const didInit = useRef(false);
-	useEffect(() => {
-		if (total === 0 || didInit.current) return;
-		didInit.current = true;
-		const initialX = hasLoop ? step : 0;
-		// Sin animación para no “parpadear”
-		requestAnimationFrame(() => {
-			scrollRef.current?.scrollTo({ x: initialX, animated: false });
-		});
-	}, [total, hasLoop, step]);
-
-	const currentIndexRef = useRef(currentIndex);
-	useEffect(() => {
-		currentIndexRef.current = currentIndex;
-	}, [currentIndex]);
-	const goToRef = useRef(goTo);
-	useEffect(() => {
-		goToRef.current = goTo;
-	}, [goTo]);
-
-	// Autoplay
-	useEffect(() => {
-		if (!hasLoop) return;
-		const interval = setInterval(() => {
-			if (!isPaused) {
-				goToRef.current(currentIndexRef.current + 1);
-			}
-		}, 5000);
-		return () => clearInterval(interval);
-	}, [isPaused, hasLoop]);
-
-	const scrollX = useRef(hasLoop ? step : 0); // empezamos en la primera real
-	const dragStartX = useRef<number | null>(null);
-	const dragStartScrollX = useRef(0);
-	const dragAreaRef = useRef<View>(null);
-
-	const setIndexFromSnap = useCallback(
-		(logicalIndex: number) => {
-			const isWrap =
-				(prevIndexRef.current === total - 1 && logicalIndex === 0) ||
-				(prevIndexRef.current === 0 && logicalIndex === total - 1);
-			isWrapRef.current = isWrap;
-			prevIndexRef.current = logicalIndex;
-			setCurrentIndex(logicalIndex);
+		(index: number) => {
+			if (total === 0) return;
+			carouselRef.current?.scrollTo({ index, animated: true });
 		},
 		[total],
-	);
-
-	/** Convierte offset de scroll → índice lógico [0..total-1] y corrige clones. */
-	const normalizeAndSnap = useCallback(() => {
-		if (total === 0) return;
-
-		let rawIndex = Math.round(scrollX.current / step);
-
-		if (!hasLoop) {
-			const clamped = Math.max(0, Math.min(rawIndex, total - 1));
-			setIndexFromSnap(clamped);
-			scrollRef.current?.scrollTo({ x: clamped * step, animated: true });
-			return;
-		}
-
-		if (rawIndex <= 0) {
-			// Estamos en el clon de la izquierda → saltar a la última real
-			const logical = total - 1;
-			setIndexFromSnap(logical);
-			scrollRef.current?.scrollTo({ x: toScrollX(logical), animated: false });
-			scrollX.current = toScrollX(logical);
-			return;
-		}
-
-		if (rawIndex >= total + 1) {
-			setIndexFromSnap(0);
-			scrollRef.current?.scrollTo({ x: toScrollX(0), animated: false });
-			scrollX.current = toScrollX(0);
-			return;
-		}
-
-		// Slide real
-		const logical = rawIndex - 1;
-		setIndexFromSnap(logical);
-		scrollRef.current?.scrollTo({ x: toScrollX(logical), animated: true });
-	}, [total, hasLoop, step, toScrollX, setIndexFromSnap]);
-
-	// ── Coordinación de snap ─────────────────────────────────────────
-	const isUserInteractingRef = useRef(false);
-	const settleTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	const clearSettleTimeout = useCallback(() => {
-		if (settleTimeout.current) {
-			clearTimeout(settleTimeout.current);
-			settleTimeout.current = null;
-		}
-	}, []);
-
-	useEffect(() => () => clearSettleTimeout(), [clearSettleTimeout]);
-
-	const handleTouchStart = useCallback(() => {
-		isUserInteractingRef.current = true;
-		clearSettleTimeout();
-		setIsPaused(true);
-	}, [clearSettleTimeout]);
-
-	const normalizeAndSnapRef = useRef(normalizeAndSnap);
-	useEffect(() => {
-		normalizeAndSnapRef.current = normalizeAndSnap;
-	}, [normalizeAndSnap]);
-
-	// Drag con mouse (web)
-	useEffect(() => {
-		if (Platform.OS !== "web") return;
-		const area = dragAreaRef.current as unknown as HTMLElement | null;
-		if (!area) return;
-
-		const maxScroll = step * (hasLoop ? total + 1 : total - 1);
-
-		const handleDown = (e: MouseEvent) => {
-			dragStartX.current = e.pageX;
-			dragStartScrollX.current = scrollX.current;
-			isUserInteractingRef.current = true;
-			clearSettleTimeout();
-			setIsPaused(true);
-		};
-
-		const handleMove = (e: MouseEvent) => {
-			if (dragStartX.current == null) return;
-			const dx = e.pageX - dragStartX.current;
-			const newX = Math.max(0, Math.min(dragStartScrollX.current - dx, maxScroll));
-			scrollX.current = newX;
-			scrollRef.current?.scrollTo({ x: newX, animated: false });
-		};
-
-		const handleUp = () => {
-			if (dragStartX.current == null) return;
-			dragStartX.current = null;
-			clearSettleTimeout();
-			isUserInteractingRef.current = false;
-			setIsPaused(false);
-			normalizeAndSnapRef.current();
-		};
-
-		area.addEventListener("mousedown", handleDown);
-		window.addEventListener("mousemove", handleMove);
-		window.addEventListener("mouseup", handleUp);
-		return () => {
-			area.removeEventListener("mousedown", handleDown);
-			window.removeEventListener("mousemove", handleMove);
-			window.removeEventListener("mouseup", handleUp);
-		};
-	}, [step, total, hasLoop, clearSettleTimeout]);
-
-	// Solo escribe refs por frame; el setState vive en el timeout con
-	// debounce (no hay setState por evento de scroll).
-	const handleScroll = useCallback(
-		(event: { nativeEvent: { contentOffset: { x: number } } }) => {
-			scrollX.current = event.nativeEvent.contentOffset.x;
-			if (!isUserInteractingRef.current) return;
-
-			clearSettleTimeout();
-			settleTimeout.current = setTimeout(() => {
-				isUserInteractingRef.current = false;
-				setIsPaused(false);
-				normalizeAndSnap();
-			}, SCROLL_SETTLE_DELAY);
-		},
-		[clearSettleTimeout, normalizeAndSnap],
 	);
 
 	if (isLoading) {
@@ -261,55 +94,28 @@ export function PromoSlider() {
 
 	return (
 		<View style={styles.container}>
-			<View style={styles.sliderWrap}>
-				<View ref={dragAreaRef}>
-					<ScrollView
-						ref={scrollRef}
-						horizontal
-						showsHorizontalScrollIndicator={false}
-						snapToInterval={step}
-						snapToAlignment="center"
-						decelerationRate="fast"
-						disableIntervalMomentum
-						pagingEnabled={false}
-						onScroll={handleScroll}
-						scrollEventThrottle={16}
-						onTouchStart={handleTouchStart}
-						contentContainerStyle={{
-							paddingHorizontal: spacing.lg,
-							gap: spacing.sm,
-						}}
-						style={{ height: CARD_HEIGHT }}
-					>
-						{loopSlides.map((item, i) => (
-							<View
-								key={
-									hasLoop
-										? i === 0
-											? `clone-last-${item.id}`
-											: i === loopSlides.length - 1
-												? `clone-first-${item.id}`
-												: item.id
-										: item.id
-								}
-								style={[
-									styles.card,
-									{ boxShadow: `0px 8px 20px ${colors.shadow}` },
-								]}
-							>
-								<PromoCard item={item} />
-							</View>
-						))}
-					</ScrollView>
-				</View>
-			</View>
+			<Carousel
+				ref={carouselRef}
+				data={slides}
+				loop={hasLoop}
+				autoPlay={hasLoop}
+				autoPlayInterval={AUTOPLAY_MS}
+				style={{ width: screenWidth, height: CARD_HEIGHT }}
+				progress={progress}
+				renderItem={({ item }) => (
+					<View style={slideStyle}>
+						<View style={cardStyle}>
+							<PromoCard item={item} />
+						</View>
+					</View>
+				)}
+			/>
 
-			{slides.length > 1 && (
+			{total > 1 && (
 				<DotsIndicator
-					count={slides.length}
-					activeIndex={currentIndex}
-					isWrap={isWrapRef.current}
-					onPressDot={(index) => goTo(index)}
+					count={total}
+					progress={progress}
+					onPressDot={goTo}
 					activeColor={colors.primary}
 					inactiveColor={withAlpha(colors.foreground, 0.2)}
 				/>
@@ -318,64 +124,73 @@ export function PromoSlider() {
 	);
 }
 
-// ─── DotsIndicator (sin cambios) ────────────────────────────────────
 function DotsIndicator({
 	count,
-	activeIndex,
-	isWrap,
+	progress,
 	onPressDot,
 	activeColor,
 	inactiveColor,
 }: {
 	count: number;
-	activeIndex: number;
-	isWrap: boolean;
+	progress: Animated.SharedValue<number>;
 	onPressDot: (index: number) => void;
 	activeColor: string;
 	inactiveColor: string;
 }) {
-	const dotItems = useMemo(
-		() =>
-			Array.from({ length: count }, (_, i) => ({
-				id: `promo-dot-${i}`,
-				anim: new Animated.Value(0),
-			})),
-		[count],
-	);
-
-	useEffect(() => {
-		const animations = dotItems.map((item, i) =>
-			Animated.timing(item.anim, {
-				toValue: i === activeIndex ? 1 : 0,
-				duration: isWrap ? 0 : DOT_ANIM_DURATION,
-				useNativeDriver: false,
-			}),
-		);
-		Animated.parallel(animations).start();
-	}, [activeIndex, isWrap, dotItems]);
-
 	return (
 		<View style={styles.dotsContainer}>
-			{dotItems.map((item, index) => {
-				const width = item.anim.interpolate({
-					inputRange: [0, 1],
-					outputRange: [8, 22],
-				});
-				const backgroundColor = item.anim.interpolate({
-					inputRange: [0, 1],
-					outputRange: [inactiveColor, activeColor],
-				});
-				return (
-					<Pressable key={item.id} onPress={() => onPressDot(index)} hitSlop={6}>
-						<Animated.View style={[styles.dot, { width, backgroundColor }]} />
-					</Pressable>
-				);
-			})}
+			{Array.from({ length: count }).map((_, index) => (
+				<Dot
+					key={`promo-dot-${index}`}
+					index={index}
+					count={count}
+					progress={progress}
+					onPress={() => onPressDot(index)}
+					activeColor={activeColor}
+					inactiveColor={inactiveColor}
+				/>
+			))}
 		</View>
 	);
 }
 
-// ─── PromoCard (sin cambios) ────────────────────────────────────────
+function Dot({
+	index,
+	count,
+	progress,
+	onPress,
+	activeColor,
+	inactiveColor,
+}: {
+	index: number;
+	count: number;
+	progress: Animated.SharedValue<number>;
+	onPress: () => void;
+	activeColor: string;
+	inactiveColor: string;
+}) {
+	const animatedStyle = useAnimatedStyle(() => {
+		// progress.value no está acotado en modo loop (puede crecer o decrecer
+		// indefinidamente tras varias vueltas), así que primero lo normalizamos
+		// al rango [0, count) antes de medir la distancia más corta al índice.
+		let diff = (progress.value - index) % count;
+		if (diff < 0) diff += count;
+		const loopedDiff = Math.min(diff, count - diff);
+		const t = Math.max(0, 1 - Math.min(loopedDiff, 1)); // 1 = activo, 0 = inactivo
+
+		return {
+			width: 8 + t * 14,
+			backgroundColor: interpolateColor(t, [0, 1], [inactiveColor, activeColor]),
+		};
+	});
+
+	return (
+		<Pressable onPress={onPress} hitSlop={6}>
+			<Animated.View style={[styles.dot, animatedStyle]} />
+		</Pressable>
+	);
+}
+
 function PromoCard({ item }: { item: PromoSlide }) {
 	const { colors } = useTheme();
 	const badgeLabel =
@@ -413,10 +228,13 @@ function PromoCard({ item }: { item: PromoSlide }) {
 				{ backgroundColor: colors.greenDark, flexDirection: "row" },
 			]}
 		>
-			{/* Columna izquierda */}
 			<View style={styles.cardLeft}>
-				{/* Badge + textos (crecen y se reparten el espacio) */}
-				<View style={[styles.cardLeftContent, { justifyContent: hasCta ? "flex-start" : "center" }]}>
+				<View
+					style={[
+						styles.cardLeftContent,
+						{ justifyContent: hasCta ? "flex-start" : "center" },
+					]}
+				>
 					<View
 						style={[
 							styles.badge,
@@ -466,21 +284,20 @@ function PromoCard({ item }: { item: PromoSlide }) {
 					</AppText>
 				</View>
 
-				{/* Botón siempre abajo */}
 				{hasCta ? (
 					<Button
-						label={item.ctaLabel ?? ""}
 						onPress={handleCtaPress}
 						size="sm"
 						style={{
 							backgroundColor: item.buttonColor ?? colors.primary,
 							marginTop: 8,
 						}}
-					/>
+					>
+						{item.ctaLabel ?? ""}
+					</Button>
 				) : null}
 			</View>
 
-			{/* Columna derecha (imagen) */}
 			<View style={styles.cardRight}>
 				{item.imageUrl ? (
 					<Image
@@ -489,16 +306,7 @@ function PromoCard({ item }: { item: PromoSlide }) {
 						contentFit="cover"
 					/>
 				) : (
-					<View
-						style={[
-							styles.cardRightImage,
-							{
-								backgroundColor: colors.muted,
-								alignItems: "center",
-								justifyContent: "center",
-							},
-						]}
-					/>
+					<View style={[styles.cardRightImage, { backgroundColor: colors.muted }]} />
 				)}
 			</View>
 		</View>
@@ -509,12 +317,7 @@ const styles = StyleSheet.create({
 	container: {
 		marginBottom: spacing.md,
 	},
-	sliderWrap: {
-		position: "relative",
-	},
 	card: {
-		width: CARD_WIDTH,
-		height: CARD_HEIGHT,
 		borderRadius: radii.xl,
 		overflow: "hidden",
 	},

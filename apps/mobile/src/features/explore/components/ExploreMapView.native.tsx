@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	Pressable,
@@ -7,27 +7,28 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import MapView, { Marker, type Region } from "react-native-maps";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronLeft, Clock, LocateFixed, Minus, Plus, SlidersHorizontal, Star, Store, X } from "lucide-react-native";
 import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { formatMoney, formatTime } from "@/core/utils/formatters";
-import { getMapStyle } from "@/core/theme/map-style";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { formatMoney, formatTime } from "@/src/core/utils/formatters";
+import { getMapStyle } from "@/src/core/theme/map-style";
 import {
 	discountPercentage,
 	type OfferDetail,
-} from "@/features/offers/domain/offer";
+} from "@/src/features/offers/domain/offer";
 import {
 	exploreFilterSummary,
 	type ExploreFilterState,
-} from "@/features/explore/exploreTypes";
-import { useCategories } from "@/features/hooks";
+} from "@/src/features/explore/exploreTypes";
+import { useCategories } from "@/src/features/hooks";
 
 const ECUADOR_CENTER = {
 	latitude: -1.8312,
@@ -50,6 +51,7 @@ export function ExploreMapView({
 	onFilterTap: () => void;
 }) {
 	const { colors, scheme } = useTheme();
+	const insets = useSafeAreaInsets();
 	const mapRef = useRef<MapView>(null);
 	const { data: categories } = useCategories();
 
@@ -61,6 +63,7 @@ export function ExploreMapView({
 	}));
 	const [mapReady, setMapReady] = useState(false);
 	// Solo se lee/escribe en el efecto de fit: ref, no estado.
+	// El padre remonta con key por filtros: selección y fit reinician solos.
 	const hasFittedRef = useRef(false);
 	const [selectedOffer, setSelectedOffer] = useState<OfferDetail | null>(null);
 
@@ -85,14 +88,16 @@ export function ExploreMapView({
 				: [],
 		);
 		mapRef.current?.fitToCoordinates(coords, {
-			edgePadding: { top: 120, right: 48, bottom: 120, left: 48 },
+			edgePadding: { top: insets.top + 120, right: 48, bottom: 120, left: 48 },
 			animated: true,
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [mapReady, offers]);
+	}, [mapReady, offers, insets.top]);
 
 	// Deseleccionar al tocar el mapa.
-	const handleMapPress = () => setSelectedOffer(null);
+	const handleMapPress = useCallback(() => setSelectedOffer(null), []);
+	const handleSelectOffer = useCallback((offer: OfferDetail) => setSelectedOffer(offer), []);
+	const handleCloseCard = useCallback(() => setSelectedOffer(null), []);
 
 	const zoomIn = () => {
 		setRegion((r) => ({
@@ -139,6 +144,7 @@ export function ExploreMapView({
 		<View style={styles.flex}>
 			<MapView
 				ref={mapRef}
+				//style={{ width: '100%', height: '100%' }}
 				style={StyleSheet.absoluteFill}
 				region={region}
 				onRegionChangeComplete={setRegion}
@@ -151,46 +157,18 @@ export function ExploreMapView({
 				onPress={handleMapPress}
 				customMapStyle={getMapStyle(scheme)}
 			>
-				{locatedOffers.map((offer) => {
-					const selected = selectedOffer?.offer.id === offer.offer.id;
-					const loc = offer.location;
-					if (loc == null) return null;
-					return (
-						<Marker
-							key={`${offer.offer.id}-${selected ? "sel" : "def"}`}
-							coordinate={{
-								latitude: loc.latitude,
-								longitude: loc.longitude,
-							}}
-							onPress={() => setSelectedOffer(offer)}
-							tracksViewChanges={false}
-							anchor={{ x: 0.5, y: 1 }}
-						>
-							<View
-								style={[
-									styles.pricePill,
-									selected
-										? { backgroundColor: colors.primary, borderColor: colors.primary }
-										: { backgroundColor: colors.card, borderColor: colors.primary },
-								]}
-							>
-								<AppText
-									weight="extraBold"
-									style={{
-										color: selected ? colors.primaryForeground : colors.primary,
-										fontSize: 12,
-									}}
-								>
-									{formatMoney(offer.offer.discounted_price)}
-								</AppText>
-							</View>
-						</Marker>
-					);
-				})}
+				{locatedOffers.map((offer) => (
+					<OfferPriceMarker
+						key={offer.offer.id}
+						offer={offer}
+						selected={selectedOffer?.offer.id === offer.offer.id}
+						onSelect={handleSelectOffer}
+					/>
+				))}
 			</MapView>
 
 			{/* ── Header ─────────────────────────────────────────────── */}
-			<View style={[styles.header, { top: spacing.md }]}>
+			<View style={[styles.header, { top: insets.top + spacing.md }]}>
 				<View
 					style={[styles.headerCard, { backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}
 				>
@@ -200,7 +178,7 @@ export function ExploreMapView({
 						accessibilityLabel={strings.common.back}
 						style={[styles.headerButton, { backgroundColor: colors.surfaceMuted }]}
 					>
-						<Ionicons name="chevron-back" size={22} color={colors.foreground} />
+						<ChevronLeft size={22} color={colors.foreground} />
 					</Pressable>
 					<View style={styles.headerTitle}>
 						<AppText variant="labelSmall" weight="semiBold">
@@ -231,8 +209,7 @@ export function ExploreMapView({
 							},
 						]}
 					>
-						<Ionicons
-							name="options-outline"
+						<SlidersHorizontal
 							size={20}
 							color={
 								filters.category != null || filters.maxDistanceKm != null || filters.maxPrice != null
@@ -245,18 +222,18 @@ export function ExploreMapView({
 			</View>
 
 			{/* ── Controles de zoom + mi ubicación ─────────────────────── */}
-			<View style={[styles.zoomControls, { top: 96, backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}>
+			<View style={[styles.zoomControls, { top: insets.top + 96, backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}>
 				<Pressable onPress={zoomIn} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel={strings.explore.zoomIn}>
-					<Ionicons name="add" size={20} color={colors.foreground} />
+					<Plus size={20} color={colors.foreground} />
 				</Pressable>
 				<View style={[styles.zoomDivider, { backgroundColor: colors.border }]} />
 				<Pressable onPress={zoomOut} style={styles.zoomButton} accessibilityRole="button" accessibilityLabel={strings.explore.zoomOut}>
-					<Ionicons name="remove" size={20} color={colors.foreground} />
+					<Minus size={20} color={colors.foreground} />
 				</Pressable>
 			</View>
 			<View style={[styles.myLocation, { bottom: selectedOffer ? 360 : 80, backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}>
 				<Pressable onPress={() => void goToMyLocation()} accessibilityRole="button" accessibilityLabel={strings.explore.myLocation}>
-					<Ionicons name="locate" size={22} color={colors.primary} />
+					<LocateFixed size={22} color={colors.primary} />
 				</Pressable>
 			</View>
 
@@ -267,7 +244,7 @@ export function ExploreMapView({
 				</View>
 			) : null}
 			{mapReady && !hasOffers ? (
-				<View style={[styles.noOffers, { top: 116 }]}>
+				<View style={[styles.noOffers, { top: insets.top + 116 }]}>
 					<View style={[styles.noOffersCard, { backgroundColor: colors.card }]}>
 						<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
 							{strings.explore.noOffersInZone}
@@ -280,13 +257,13 @@ export function ExploreMapView({
 			{selectedOffer ? (
 				<MapOfferCard
 					offer={selectedOffer}
-					onClose={() => setSelectedOffer(null)}
+					onClose={handleCloseCard}
 				/>
 			) : null}
 
 			{/* ── Leyenda ─────────────────────────────────────────────── */}
 			{!selectedOffer ? (
-				<View style={[styles.legend, { bottom: 24, backgroundColor: colors.card }]}>
+				<View style={[styles.legend, { bottom: spacing.xxl, backgroundColor: colors.card }]}>
 					<View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
 					<AppText variant="bodySmall">
 						{strings.explore.offersAvailable}
@@ -296,6 +273,49 @@ export function ExploreMapView({
 		</View>
 	);
 }
+
+const OfferPriceMarker = memo(function OfferPriceMarker({
+	offer,
+	selected,
+	onSelect,
+}: {
+	offer: OfferDetail;
+	selected: boolean;
+	onSelect: (offer: OfferDetail) => void;
+}) {
+	const { colors } = useTheme();
+	const loc = offer.location;
+	const handlePress = useCallback(() => onSelect(offer), [onSelect, offer]);
+	if (loc == null) return null;
+	return (
+		<Marker
+			key={offer.offer.id}
+			coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
+			onPress={handlePress}
+			tracksViewChanges={false}
+			anchor={{ x: 0.5, y: 1 }}
+		>
+			<View
+				style={[
+					styles.pricePill,
+					selected
+						? { backgroundColor: colors.primary, borderColor: colors.primary }
+						: { backgroundColor: colors.card, borderColor: colors.primary },
+				]}
+			>
+				<AppText
+					weight="extraBold"
+					style={{
+						color: selected ? colors.primaryForeground : colors.primary,
+						fontSize: 12,
+					}}
+				>
+					{formatMoney(offer.offer.discounted_price)}
+				</AppText>
+			</View>
+		</Marker>
+	);
+});
 
 function MapOfferCard({
 	offer,
@@ -331,7 +351,7 @@ function MapOfferCard({
 					</View>
 				) : null}
 				<Pressable onPress={onClose} style={[styles.selectedClose, { backgroundColor: colors.card }]}>
-					<Ionicons name="close" size={16} color={colors.foreground} />
+					<X size={16} color={colors.foreground} />
 				</Pressable>
 				<LinearGradient
 					colors={["transparent", withAlpha(colors.scrim, 0.4)]}
@@ -343,7 +363,7 @@ function MapOfferCard({
 					{offer.offer.title}
 				</AppText>
 				<View style={styles.selectedMeta}>
-					<Ionicons name="storefront-outline" size={14} color={colors.mutedForeground} />
+					<Store size={14} color={colors.mutedForeground} />
 					<AppText
 						variant="bodySmall"
 						numberOfLines={1}
@@ -353,7 +373,7 @@ function MapOfferCard({
 					</AppText>
 					{hasRating ? (
 						<>
-							<Ionicons name="star" size={14} color={colors.starGold} />
+							<Star size={14} color={colors.starGold} />
 							<AppText
 								variant="bodySmall"
 								weight="semiBold"
@@ -365,7 +385,7 @@ function MapOfferCard({
 					) : null}
 				</View>
 				<View style={styles.selectedMeta}>
-					<Ionicons name="time-outline" size={14} color={colors.info} />
+					<Clock size={14} color={colors.info} />
 					<AppText variant="bodySmall" weight="semiBold" style={{ color: colors.info }}>
 						{strings.explore.pickupWindow
 							.replace("{start}", formatTime(offer.offer.pickup_start))

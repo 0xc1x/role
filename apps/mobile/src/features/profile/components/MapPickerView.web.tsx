@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ChevronLeft, LocateFixed } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { env } from "@/core/config/env";
-import { reverseGeocode } from "@/core/utils/geocode";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { env } from "@/src/core/config/env";
+import { reverseGeocode } from "@/src/core/utils/geocode";
 // Static import: this file is web-only, so the Google Maps canvas loads with it.
-import { MapCanvas } from "@/core/ui/MapCanvas.web";
-import type { MapCanvasHandle } from "@/core/ui/MapCanvas.types";
+import { MapCanvas } from "@/src/core/ui/MapCanvas.web";
+import type { MapCanvasHandle } from "@/src/core/ui/MapCanvas.types";
 import type { MapPickerResult } from "./MapPickerView";
+import { Button } from "@/components/ui/button";
 
 export function MapPickerView({
 	initialLocation,
@@ -94,13 +95,15 @@ export function MapPickerView({
 		return (
 			<View style={[styles.full, { backgroundColor: colors.background }]}>
 				<View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-					<Pressable
+					<Button
+						variant="outline"
+						size="icon"
 						onPress={onCancel}
 						hitSlop={8}
-						style={[styles.roundButton, { backgroundColor: colors.card }]}
-					>
-						<Ionicons name="chevron-back" size={22} color={colors.foreground} />
-					</Pressable>
+						accessibilityRole="button"
+						aria-label={strings.common.back}
+						icon={<ChevronLeft size={22} color={colors.foreground} />}
+					/>
 					<AppText variant="h4" weight="bold" numberOfLines={1} style={styles.headerTitle}>
 						{strings.addresses.pickLocationTitle}
 					</AppText>
@@ -123,16 +126,16 @@ export function MapPickerView({
 			<MapCanvas ref={mapRef} coords={coords} fullscreen onRegionChange={handleRegionChange} />
 
 			<View style={styles.header}>
-				<Pressable
+				<Button
+					variant="outline"
+					size="icon"
 					onPress={onCancel}
 					hitSlop={8}
-					style={[
-						styles.roundButton,
-						{ backgroundColor: colors.card, marginTop: insets.top },
-					]}
-				>
-					<Ionicons name="chevron-back" size={22} color={colors.foreground} />
-				</Pressable>
+					accessibilityRole="button"
+					aria-label={strings.common.back}
+					style={{ marginTop: insets.top }}
+					icon={<ChevronLeft size={22} color={colors.foreground} />}
+				/>
 				<AppText
 					variant="h4"
 					weight="bold"
@@ -144,16 +147,16 @@ export function MapPickerView({
 				<View style={[styles.headerSpacer, { marginTop: insets.top }]} />
 			</View>
 
-			<Pressable
+			<Button
+				variant="ghost"
+				size="icon"
 				onPress={() => void useMyLocation()}
+				loading={locating}
+				accessibilityRole="button"
+				aria-label={strings.addresses.useMyLocation}
 				style={[styles.fab, { backgroundColor: colors.card, top: spacing.md + insets.top }]}
-			>
-				{locating ? (
-					<ActivityIndicator size="small" color={colors.primary} />
-				) : (
-					<Ionicons name="locate" size={22} color={colors.primary} />
-				)}
-			</Pressable>
+				icon={<LocateFixed size={22} color={colors.primary} />}
+			/>
 
 			<View
 				style={[
@@ -176,7 +179,6 @@ export function MapPickerView({
 					</AppText>
 				)}
 				<Button
-					label={strings.addresses.confirmLocation}
 					onPress={() =>
 						onConfirm({
 							latitude: coords.latitude,
@@ -186,7 +188,9 @@ export function MapPickerView({
 					}
 					fullWidth
 					size="lg"
-				/>
+				>
+					{strings.addresses.confirmLocation}
+				</Button>
 			</View>
 		</View>
 	);

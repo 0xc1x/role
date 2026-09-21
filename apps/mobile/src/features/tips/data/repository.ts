@@ -1,5 +1,5 @@
-import { supabase } from "@/core/supabase/client";
-import { toAppError } from "@/core/error/mapper";
+import { supabase } from "@/src/core/supabase/client";
+import { toAppError } from "@/src/core/error/mapper";
 
 import { toTip, type DailyTip, type TipRow } from "../domain/tip";
 

@@ -6,13 +6,13 @@ import Animated, {
 	withSpring,
 } from "react-native-reanimated";
 
-import { useTheme } from "@/core/theme";
-import { AppText } from "@/core/ui";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { strings } from "@/core/i18n/strings";
-import { useCategoryStats } from "@/features/hooks";
-import type { CategoryStat } from "@/features/offers/domain/offer";
+import { useTheme } from "@/src/core/theme";
+import { AppText } from "@/src/core/ui";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
+import { useCategoryStats } from "@/src/features/hooks";
+import type { CategoryStat } from "@/src/features/offers/domain/offer";
 
 interface CategoryChipsProps {
 	selectedCategory: string | null;

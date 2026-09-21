@@ -1,22 +1,23 @@
 import { useCallback } from "react";
 import { View, StyleSheet, FlatList } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { MapPin } from "lucide-react-native";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { useTheme } from "@/core/theme";
-import { AppText, Card, SectionHeader } from "@/core/ui";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { strings } from "@/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { AppText, SectionHeader } from "@/src/core/ui";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	usePopularOffers,
 	useExpiringSoonOffers,
 	useRecentOffers,
 	useNearbyOffersHook,
 	useSelectedAddress,
-} from "@/features/hooks";
-import { OfferCard } from "@/features/offers/components/OfferCard";
-import type { OfferDetail } from "@/features/offers/domain/offer";
+} from "@/src/features/hooks";
+import { OfferCard } from "@/src/features/offers/components/OfferCard";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
+import { Card } from "@/components/ui/card";
 
 type SectionType = "popular" | "expiring" | "recent" | "nearby";
 
@@ -250,8 +251,7 @@ export function OfferColumnSection({
 								{ backgroundColor: withAlpha(colors.primary, 0.078) },
 							]}
 						>
-							<Ionicons
-								name="location-outline"
+							<MapPin
 								size={20}
 								color={colors.primary}
 							/>

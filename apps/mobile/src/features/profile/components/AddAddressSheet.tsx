@@ -6,17 +6,18 @@ import {
 	StyleSheet,
 	View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Briefcase, Building, Building2, ChevronRight, Ellipsis, House, List, Map, MapPin, Pencil, Square, SquareCheck, type LucideIcon } from "lucide-react-native";
 import { toast } from "sonner-native";
 import type { AddressType, SavedAddress } from "@0xc1x/role-commons";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal, Button, TextField } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { useSaveAddress, useUpdateAddress } from "@/features/profile/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, BottomSheetModal, TextField } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { useSaveAddress, useUpdateAddress } from "@/src/features/profile/hooks";
 import { MapPickerView, type MapPickerResult } from "./MapPickerView";
+import { Button } from "@/components/ui/button";
 
 const TYPE_OPTIONS: { type: AddressType; label: string }[] = [
 	{ type: "home", label: strings.addresses.labelHome },
@@ -24,12 +25,12 @@ const TYPE_OPTIONS: { type: AddressType; label: string }[] = [
 	{ type: "other", label: strings.addresses.labelOther },
 ];
 
-const HOUSING_OPTIONS: { value: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-	{ value: "apartment", label: strings.addresses.housingApartment, icon: "business" },
-	{ value: "house", label: strings.addresses.housingHouse, icon: "home" },
-	{ value: "office", label: strings.addresses.housingOffice, icon: "briefcase-outline" },
-	{ value: "building", label: strings.addresses.housingBuilding, icon: "business-outline" },
-	{ value: "other", label: strings.addresses.housingOther, icon: "ellipsis-horizontal" },
+const HOUSING_OPTIONS: { value: string; label: string; icon: LucideIcon }[] = [
+	{ value: "apartment", label: strings.addresses.housingApartment, icon: Building2 },
+	{ value: "house", label: strings.addresses.housingHouse, icon: House },
+	{ value: "office", label: strings.addresses.housingOffice, icon: Briefcase },
+	{ value: "building", label: strings.addresses.housingBuilding, icon: Building },
+	{ value: "other", label: strings.addresses.housingOther, icon: Ellipsis },
 ];
 
 const TYPE_DEFAULT_LABELS: Record<string, string> = {
@@ -142,12 +143,7 @@ export function AddAddressSheet({
 			onClose={onClose}
 			title={address ? strings.addresses.editTitle : strings.addresses.whereDeliver}
 		>
-			<ScrollView
-				style={styles.scroll}
-				contentContainerStyle={styles.scrollContent}
-				keyboardShouldPersistTaps="handled"
-				showsVerticalScrollIndicator={false}
-			>
+			<View style={styles.scrollContent}>
 				<View
 					style={[styles.segmented, { backgroundColor: colors.inputBackground }]}
 				>
@@ -182,9 +178,9 @@ export function AddAddressSheet({
 					})}
 				</View>
 
-				<FieldLabel>{strings.addresses.nameAddress}</FieldLabel>
-				<IconInput
-					icon="create-outline"
+			<FieldLabel>{strings.addresses.nameAddress}</FieldLabel>
+			<IconInput
+				icon={Pencil}
 					value={label}
 					onChangeText={setLabel}
 					placeholder={strings.addresses.nameHint}
@@ -213,13 +209,11 @@ export function AddAddressSheet({
 							},
 						]}
 					>
-						<Ionicons
-							name={picked ? "location" : "map-outline"}
-							size={20}
-							color={
-								picked ? colors.primaryForeground : colors.foreground
-							}
-						/>
+						{picked ? (
+							<MapPin size={20} color={colors.primaryForeground} />
+						) : (
+							<Map size={20} color={colors.foreground} />
+						)}
 					</View>
 					<View style={styles.mapCardText}>
 						<AppText weight="bold">
@@ -236,16 +230,12 @@ export function AddAddressSheet({
 								: strings.addresses.locateOnMapSub}
 						</AppText>
 					</View>
-					<Ionicons
-						name="chevron-forward"
-						size={18}
-						color={colors.mutedForeground}
-					/>
+					<ChevronRight size={18} color={colors.mutedForeground} />
 				</Pressable>
 
-				<FieldLabel>{strings.addresses.exactAddress}</FieldLabel>
-				<IconInput
-					icon="location-outline"
+			<FieldLabel>{strings.addresses.exactAddress}</FieldLabel>
+			<IconInput
+				icon={MapPin}
 					value={addressText}
 					onChangeText={setAddressText}
 					placeholder={strings.addresses.addressHint}
@@ -253,9 +243,10 @@ export function AddAddressSheet({
 
 				<FieldLabel>{strings.addresses.housingType}</FieldLabel>
 				<View style={styles.chipsRow}>
-					{HOUSING_OPTIONS.map((option) => {
-						const isSelected = housingType === option.value;
-						return (
+				{HOUSING_OPTIONS.map((option) => {
+					const isSelected = housingType === option.value;
+					const OptionIcon = option.icon;
+					return (
 							<Pressable
 								key={option.value}
 								onPress={() =>
@@ -271,13 +262,12 @@ export function AddAddressSheet({
 									},
 								]}
 							>
-								<Ionicons
-									name={option.icon}
-									size={14}
-									color={
-										isSelected ? colors.background : colors.mutedForeground
-									}
-								/>
+						<OptionIcon
+								size={14}
+								color={
+									isSelected ? colors.background : colors.mutedForeground
+								}
+							/>
 								<AppText
 									variant="bodySmall"
 									weight="semiBold"
@@ -292,9 +282,9 @@ export function AddAddressSheet({
 					})}
 				</View>
 
-				<FieldLabel>{strings.addresses.references}</FieldLabel>
-				<IconInput
-					icon="list-outline"
+			<FieldLabel>{strings.addresses.references}</FieldLabel>
+			<IconInput
+				icon={List}
 					value={references}
 					onChangeText={setReferences}
 					placeholder={strings.addresses.referencesHint}
@@ -306,11 +296,11 @@ export function AddAddressSheet({
 						onPress={() => setIsDefault((v) => !v)}
 						style={styles.defaultRow}
 					>
-						<Ionicons
-							name={isDefault ? "checkbox" : "square-outline"}
-							size={22}
-							color={isDefault ? colors.primary : colors.mutedForeground}
-						/>
+						{isDefault ? (
+							<SquareCheck size={22} color={colors.primary} />
+						) : (
+							<Square size={22} color={colors.mutedForeground} />
+						)}
 						<AppText variant="bodyMedium" style={{ color: colors.foreground }}>
 							{strings.addresses.setAsDefaultHint}
 						</AppText>
@@ -318,14 +308,15 @@ export function AddAddressSheet({
 				) : null}
 
 				<Button
-					label={strings.addresses.confirmAddress}
 					onPress={handleSave}
 					loading={saving}
 					fullWidth
 					size="lg"
 					style={styles.confirmButton}
-				/>
-			</ScrollView>
+				>
+					{strings.addresses.confirmAddress}
+				</Button>
+			</View>
 		</BottomSheetModal>
 	);
 }
@@ -344,13 +335,13 @@ function FieldLabel({ children }: { children: string }) {
 }
 
 function IconInput({
-	icon,
+	icon: Icon,
 	value,
 	onChangeText,
 	placeholder,
 	multiline,
 }: {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	value: string;
 	onChangeText: (text: string) => void;
 	placeholder: string;
@@ -361,7 +352,7 @@ function IconInput({
 			value={value}
 			onChangeText={onChangeText}
 			placeholder={placeholder}
-			iconName={icon}
+			icon={Icon}
 			autoCapitalize="sentences"
 			multiline={multiline}
 		/>
@@ -370,7 +361,6 @@ function IconInput({
 
 const styles = StyleSheet.create({
 	full: { flex: 1 },
-	scroll: { flexShrink: 1 },
 	scrollContent: {
 		gap: spacing.md,
 	},
