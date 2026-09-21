@@ -73,7 +73,7 @@ export function Footer() {
 							className="inline-flex items-center gap-2 rounded-2xl bg-paper p-2"
 							aria-label="Rolé — Inicio"
 						>
-							<LogoMark className="h-5 w-auto text-ink" />
+							<LogoMark className="h-5 w-auto text-role-accent" />
 							<Wordmark className="h-5 w-auto text-ink" />
 						</Link>
 						<p className="mt-5 max-w-sm text-sm leading-relaxed text-cream/70">
