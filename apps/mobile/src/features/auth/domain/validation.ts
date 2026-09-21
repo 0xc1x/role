@@ -1,4 +1,4 @@
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 
 /** Pure form validators (no React, no repos) for auth screens. */
 

@@ -1,6 +1,6 @@
-import { supabase } from '@/core/supabase/client';
-import { env } from '@/core/config/env';
-import { Errors } from '@/core/error/app-error';
+import { supabase } from '@/src/core/supabase/client';
+import { env } from '@/src/core/config/env';
+import { Errors } from '@/src/core/error/app-error';
 
 import type { UserProfile } from '../domain/user';
 import { parseRole } from '../domain/user';

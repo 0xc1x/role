@@ -5,7 +5,7 @@ import {
 	validateLoginForm,
 	validatePasswordField,
 	validateSignupForm,
-} from "@/features/auth/domain/validation";
+} from "@/src/features/auth/domain/validation";
 
 describe("auth validation", () => {
 	test("email vacío e inválido", () => {

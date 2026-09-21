@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseRole } from "@/features/auth/domain/user";
+import { parseRole } from "@/src/features/auth/domain/user";
 
 describe("parseRole", () => {
 	test("roles conocidos", () => {

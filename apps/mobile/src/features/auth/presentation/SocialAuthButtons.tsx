@@ -1,11 +1,13 @@
+import { Apple, Globe } from "lucide-react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { type ReactNode } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Button } from "@/components/ui/button";
 
-import { useTheme } from "@/core/theme";
-import { radii, spacing } from "@/core/theme/spacing";
-import { AppText } from "@/core/ui";
-import { strings } from "@/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { AppText } from "@/src/core/ui";
+import { strings } from "@/src/core/i18n/strings";
 
 /**
  * Divisor "o … con" + botones sociales (Google/Apple), portados de Fudi.
@@ -37,25 +39,17 @@ export function SocialAuthButtons({ label }: { label: string }) {
 }
 
 function SocialProvider({ icon, label }: { icon: ReactNode; label: string }) {
-	const { colors } = useTheme();
 	return (
-		<Pressable
+		<Button
+			variant="outline"
+			disabled
 			accessibilityRole="button"
 			accessibilityLabel={label}
-			disabled
-			style={[
-				styles.provider,
-				{
-					backgroundColor: colors.inputBackground,
-					borderColor: colors.borderSolid,
-				},
-			]}
+			style={{ flex: 1 }}
+			icon={icon}
 		>
-			{icon}
-			<AppText variant="bodyMedium" weight="semiBold">
-				{label}
-			</AppText>
-		</Pressable>
+			{label}
+		</Button>
 	);
 }
 
@@ -77,7 +71,8 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		gap: spacing.sm,
-		borderRadius: radii.md,
+		// Pill como el resto de CTAs (marca web): el rect era resto del port de Fudi.
+		borderRadius: radii.pill,
 		borderWidth: 1,
 		paddingVertical: 14,
 	},
