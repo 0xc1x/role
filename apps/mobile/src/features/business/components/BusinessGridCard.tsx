@@ -71,7 +71,7 @@ export function BusinessGridCard({
 							{ backgroundColor: withAlpha(colors.card, 0.922), boxShadow: `0px 1px 4px ${colors.shadow}` },
 						]}
 					>
-						<Star size={14} color={colors.green} />
+						<Star size={14} color={colors.starGold} />
 						<AppText style={{ fontSize: 12, fontWeight: "700", color: colors.foreground }}>
 							{business.rating.toFixed(1)}
 						</AppText>

@@ -61,7 +61,7 @@ export default function ConsumerHomeScreen() {
 		<View style={{ flex: 1, backgroundColor: colors.background }}>
 			<View style={[styles.topBar, { borderBottomColor: colors.background, paddingTop: insets.top }]}>
 				<LocationSelector />
-				<Logo width={100} height={60} color={colors.primary} />
+				<Logo width={100} height={50} />
 			</View>
 			{pull.indicator}
 			<ScrollView

@@ -24,9 +24,9 @@ import type { ThemeScheme } from "./colors";
  * The dark variant re-tints the same entries from the dark palette so
  * roads and water stay readable in both themes.
  *
- * Palette refs (light): surfaceMuted #F1F5F9, infoSurface #F0FDFA,
+ * Palette refs (light): surfaceMuted #F2EFF7, infoSurface #F0FDFA,
  * chart3 #B1CDB6.
- * Palette refs (dark): surfaceMuted #333333, accent #435D38,
+ * Palette refs (dark): surfaceMuted #2E2A38, accent #311743,
  * chart4 #2D4142.
  */
 export const MAP_STYLE_NO_POI: MapStyleElement[] = [
@@ -39,11 +39,11 @@ export const MAP_STYLE_NO_POI: MapStyleElement[] = [
 	{ featureType: "transit.station", stylers: [{ visibility: "off" }] },
 	// Road shields/icons — off; road names stay for orientation.
 	{ featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-	// Built blocks in soft slate instead of default gray.
+	// Built blocks in soft lavender-gray instead of default gray.
 	{
 		featureType: "landscape.man_made",
 		elementType: "geometry",
-		stylers: [{ color: "#F1F5F9" }],
+		stylers: [{ color: "#F2EFF7" }],
 	},
 	// Parks and natural land in muted sage instead of default green.
 	{
@@ -79,22 +79,22 @@ export const MAP_STYLE_NO_POI_DARK: MapStyleElement[] = [
 	{ featureType: "transit.station", stylers: [{ visibility: "off" }] },
 	// Road shields/icons — off; road names stay for orientation.
 	{ featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-	// Built blocks in dark slate instead of default gray.
+	// Built blocks in dark lavender-gray instead of default gray.
 	{
 		featureType: "landscape.man_made",
 		elementType: "geometry",
-		stylers: [{ color: "#333333" }],
+		stylers: [{ color: "#2E2A38" }],
 	},
-	// Parks and natural land in muted dark green instead of default green.
+	// Parks and natural land in muted dark purple instead of default green.
 	{
 		featureType: "landscape.natural",
 		elementType: "geometry",
-		stylers: [{ color: "#435D38" }],
+		stylers: [{ color: "#311743" }],
 	},
 	{
 		featureType: "poi.park",
 		elementType: "geometry",
-		stylers: [{ color: "#435D38" }],
+		stylers: [{ color: "#311743" }],
 	},
 	// Water in dark slate-teal — readable against dark blocks.
 	{

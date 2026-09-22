@@ -87,9 +87,17 @@ export function Navbar() {
 							className="flex items-center"
 							aria-label="Rolé — Inicio"
 						>
-							<Wordmark
-								className={`h-9 w-auto transition-colors duration-500 md:h-10 ${headerSolid ? "text-ink" : "text-white"}`}
-							/>
+							{/* Crossfade: wordmark mono en blanco sobre el hero oscuro,
+							    color de marca al pasar a navbar sólida. */}
+							<span className="relative block h-9 md:h-10">
+								<Wordmark
+									className={`h-full w-auto transition-opacity duration-500 ${headerSolid ? "opacity-100" : "opacity-0"}`}
+								/>
+								<Wordmark
+									mono
+									className={`absolute left-0 top-0 h-full w-auto text-white transition-opacity duration-500 ${headerSolid ? "opacity-0" : "opacity-100"}`}
+								/>
+							</span>
 						</Link>
 
 						<nav

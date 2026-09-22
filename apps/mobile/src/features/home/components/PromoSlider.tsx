@@ -16,6 +16,7 @@ import Animated, {
 	useSharedValue,
 	useAnimatedStyle,
 	interpolateColor,
+	type SharedValue,
 } from "react-native-reanimated";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
@@ -98,8 +99,8 @@ export function PromoSlider() {
 				ref={carouselRef}
 				data={slides}
 				loop={hasLoop}
-				autoPlay={hasLoop}
-				autoPlayInterval={AUTOPLAY_MS}
+				autoplay={hasLoop}
+				autoplayInterval={AUTOPLAY_MS}
 				style={{ width: screenWidth, height: CARD_HEIGHT }}
 				progress={progress}
 				renderItem={({ item }) => (
@@ -132,7 +133,7 @@ function DotsIndicator({
 	inactiveColor,
 }: {
 	count: number;
-	progress: Animated.SharedValue<number>;
+	progress: SharedValue<number>;
 	onPressDot: (index: number) => void;
 	activeColor: string;
 	inactiveColor: string;
@@ -164,7 +165,7 @@ function Dot({
 }: {
 	index: number;
 	count: number;
-	progress: Animated.SharedValue<number>;
+	progress: SharedValue<number>;
 	onPress: () => void;
 	activeColor: string;
 	inactiveColor: string;

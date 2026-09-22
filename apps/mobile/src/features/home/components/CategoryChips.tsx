@@ -215,15 +215,15 @@ function AnimatedChip({
 				style={[
 					styles.chip,
 					{
-						backgroundColor: selected ? colors.greenDark : withAlpha(colors.green, 0.18),
-						borderColor: selected ? colors.greenDark : withAlpha(colors.green, 0.25),
+						backgroundColor: selected ? colors.primary : withAlpha(colors.primary, 0.12),
+						borderColor: selected ? colors.primary : withAlpha(colors.primary, 0.25),
 					},
 				]}
 			>
 				<AppText
 					weight={selected ? "semiBold" : "medium"}
 					style={{
-						color: selected ? colors.green : withAlpha(colors.green, 0.95),
+						color: selected ? colors.primaryForeground : colors.primary,
 					}}
 				>
 					{label}

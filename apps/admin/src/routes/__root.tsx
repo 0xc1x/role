@@ -45,11 +45,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			{
 				rel: "icon",
 				type: "image/svg+xml",
-				href: "/icon.svg?v=2",
+				href: "/icon.svg?v=5",
 			},
 			{
 				rel: "icon",
-				href: "/favicon.ico?v=2",
+				href: "/favicon.ico?v=5",
 				sizes: "any",
 			},
 		],

@@ -153,18 +153,18 @@ export function ExploreCategoryGrid({
 									{
 										backgroundColor: isDark
 											? colors.surfaceMuted
-											: withAlpha(colors.green, 0.302),
+											: withAlpha(colors.primary, 0.15),
 									},
 								]}
 							>
 								<MapPin
 									size={14}
-									color={isDark ? mutedText : colors.greenMidDark}
+									color={isDark ? mutedText : colors.primary}
 								/>
 								<AppText
 									variant="bodySmall"
 									weight="semiBold"
-									style={{ color: isDark ? baseText : withAlpha(colors.greenDark, 0.702) }}
+									style={{ color: isDark ? baseText : colors.primary }}
 								>
 									{area.name}
 								</AppText>
@@ -174,14 +174,14 @@ export function ExploreCategoryGrid({
 										{
 											backgroundColor: isDark
 												? withAlpha(colors.primaryForeground, 0.102)
-												: withAlpha(colors.greenMidDark, 0.102),
+												: withAlpha(colors.primary, 0.102),
 										},
 									]}
 								>
 									<AppText
 										variant="bodySmall"
 										weight="semiBold"
-										style={{ color: isDark ? baseText : colors.greenMidDark }}
+										style={{ color: isDark ? baseText : colors.primary }}
 									>
 										{area.deals}
 									</AppText>

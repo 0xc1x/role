@@ -78,7 +78,7 @@ export default function SignupScreen() {
 	return (
 		<AuthScreenShell title={strings.auth.createAccount}>
 			<View style={styles.logoWrap}>
-				<Logo width={104} height={74} color={colors.primary} />
+				<Logo width={104} height={52} />
 			</View>
 			<View style={styles.heading}>
 				<AppText variant="h1" weight="bold" style={styles.center}>
