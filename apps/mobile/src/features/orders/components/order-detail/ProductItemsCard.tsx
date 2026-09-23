@@ -12,15 +12,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function ProductItemsCard({ item }: { item: OrderDetail }) {
 	const { colors, scheme } = useTheme(); return (
-		<Card
-			style={[
-				{
-					backgroundColor: scheme === "dark" ? colors.card : colors.background,
-					borderColor: colors.borderSolid,
-				},
-			]}>
+		<Card>
 			<CardHeader>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText variant="h4" weight="bold" style={{ flex: 1 }}>
 					{strings.orders.productTitle}
 				</AppText>
 			</CardHeader>

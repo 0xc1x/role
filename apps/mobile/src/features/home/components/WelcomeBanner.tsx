@@ -66,7 +66,7 @@ export function WelcomeBanner() {
 
 	if (!profile) return null;
 
-	const secondaryAlpha = withAlpha(colors.secondary, 0.102);
+	const secondaryAlpha = withAlpha(colors.secondary, 0.150);
 
 	const firstName = getDisplayName(profile);
 
@@ -130,7 +130,7 @@ export function WelcomeBanner() {
 						<AppText
 							variant="h2"
 							weight="extraBold"
-							style={{ color: colors.accent, fontSize: 22, lineHeight: 26 }}
+							style={{ color: colors.primary, fontSize: 22, lineHeight: 26 }}
 						>
 							{stat.value}
 						</AppText>

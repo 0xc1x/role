@@ -8,7 +8,11 @@ Centraliza el logo, el wordmark y los colores de Rolé.
    Puede venir con fondo o ya transparente: el sync deriva la variante
    **transparente** (quita el rect de fondo crema si existe) para UI,
    favicons y PNGs de mobile; el `apple-touch-icon.png` se aplana sobre
-   crema en el render (iOS exige opaco).
+   crema en el render (iOS exige opaco). El favicon de **admin** usa la marca
+   completa (R + destellos) con la R en papel, como la referencia, con
+   dimensiones explícitas para un rasterizado determinista en el `.ico`.
+   El `apple-touch-icon.png` de landing es transparente como el SVG (iOS
+   compone la transparencia sobre negro: sin marco claro por diseño).
    **Wordmark:** reemplaza `assets/wordmark.svg` (mantén el `viewBox`).
    Limpia el `<metadata>` C2PA que exportan los editores antes de commitear
    (`brand:sync` falla si lo detecta).
@@ -40,6 +44,7 @@ splash nativo solo cambian con un nuevo build EAS/instalación.
 ## Pendiente (requiere trabajo de diseño, no de este flujo)
 
 - `android-icon-monochrome.png` monocromático (necesita un glifo a un color).
-- `favicon.ico` legacy y tarjetas `og.png` (los navegadores modernos ya usan
-  `icon.svg`; el `.ico` queda como fallback).
-- `admin` `logo192/512.png` (iconos CRA obsoletos, sin uso real).
+- `og.png` raster (la fuente `og.svg` ya usa acentos de marca; el PNG necesita
+  exportarse con Outfit/DM Sans instaladas o desde el editor de diseño).
+- `admin` `logo192/512.png` + `manifest.json` + `role_wordmark.svg` (×2) +
+  `splash/logo-white.png`: eliminados por no referenciarse (2026-09-22).

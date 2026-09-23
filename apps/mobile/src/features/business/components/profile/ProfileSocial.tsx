@@ -10,13 +10,14 @@ import type { BusinessProfileDetail } from "@/src/features/business/domain/busin
 import { BusinessLocationMap } from "@/src/features/business/components/BusinessLocationMap";
 import { ReviewItem } from "@/src/features/business/components/ReviewItem";
 import { openMaps } from "./maps";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
 export function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
 	const { colors } = useTheme();
 	const business = profile.business;
 	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<View style={styles.reviewsHeaderRow}>
+		<Card style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
+			<CardHeader style={styles.reviewsHeaderRow}>
 				<AppText variant="labelMedium" weight="bold">
 					{strings.businessProfile.reviewsTitle}
 				</AppText>
@@ -27,39 +28,39 @@ export function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
 						{(business.rating ?? 0).toFixed(1)}
 					</AppText>
 				</View>
-			</View>
-			<View style={{ height: spacing.lg }} />
+			</CardHeader>
+			<CardContent>
+				{profile.reviews.length === 0 ? (
+					<View >
+						<AppText style={{ color: colors.mutedForeground, textAlign: "center" }}>
+							{strings.businessProfile.noReviews}
+						</AppText>
+					</View>
+				) : (
+					profile.reviews.map((review) => <ReviewItem key={review.id} review={review} />)
+				)}
 
-			{profile.reviews.length === 0 ? (
-				<View style={{ paddingVertical: spacing.lg }}>
-					<AppText style={{ color: colors.mutedForeground, textAlign: "center" }}>
-						{strings.businessProfile.noReviews}
-					</AppText>
-				</View>
-			) : (
-				profile.reviews.map((review) => <ReviewItem key={review.id} review={review} />)
-			)}
-
-			{(business.review_count ?? 0) > 0 ? (
-				<Pressable
-					onPress={() =>
-						router.push(`/business-profile/${business.id}/reviews`)
-					}
-					hitSlop={8}
-					accessibilityRole="link"
-				>
-					<AppText
-						weight="bold"
-						style={{ color: colors.primary, textAlign: "center", marginTop: spacing.sm }}
+				{(business.review_count ?? 0) > 0 ? (
+					<Pressable
+						onPress={() =>
+							router.push(`/business-profile/${business.id}/reviews`)
+						}
+						hitSlop={8}
+						accessibilityRole="link"
 					>
-						{strings.businessProfile.seeAllReviews.replace(
-							"{n}",
-							String(business.review_count ?? 0),
-						)}
-					</AppText>
-				</Pressable>
-			) : null}
-		</View>
+						<AppText
+							weight="bold"
+							style={{ color: colors.primary, textAlign: "center", marginTop: spacing.sm }}
+						>
+							{strings.businessProfile.seeAllReviews.replace(
+								"{n}",
+								String(business.review_count ?? 0),
+							)}
+						</AppText>
+					</Pressable>
+				) : null}
+			</CardContent>
+		</Card>
 	);
 }
 
@@ -68,45 +69,52 @@ export function LocationCard({ profile }: { profile: BusinessProfileDetail }) {
 	const hasCoords = profile.latitude != null && profile.longitude != null;
 
 	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<AppText variant="labelMedium" weight="bold">
-				{strings.businessProfile.geolocation}
-			</AppText>
-			<AppText style={{ color: colors.mutedForeground, marginTop: spacing.xs }}>
-				{profile.address ?? ""}
-			</AppText>
+		<Card style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
+			<CardHeader>
+				<AppText variant="labelMedium" weight="bold">
+					{strings.businessProfile.geolocation}
+				</AppText>
+			</CardHeader>
+			
+			<CardDescription>
+				<AppText style={{ color: colors.mutedForeground, marginTop: spacing.xs }}>
+					{profile.address ?? ""}
+				</AppText>
+			</CardDescription>
+			
+			<CardContent>
+				{hasCoords && profile.latitude != null && profile.longitude != null ? (
+					<>
+						<View style={{ height: spacing.lg }} />
+						<BusinessLocationMap
+							latitude={profile.latitude}
+							longitude={profile.longitude}
+							onPress={() => {
+								const lat = profile.latitude;
+								const lng = profile.longitude;
+								if (lat != null && lng != null) void openMaps(lat, lng);
+							}}
+						/>
+						<View style={{ height: spacing.md }} />
+					</>
+				) : null}
 
-			{hasCoords && profile.latitude != null && profile.longitude != null ? (
-				<>
-					<View style={{ height: spacing.lg }} />
-					<BusinessLocationMap
-						latitude={profile.latitude}
-						longitude={profile.longitude}
+				{hasCoords && profile.latitude != null && profile.longitude != null ? (
+					<Pressable
 						onPress={() => {
 							const lat = profile.latitude;
 							const lng = profile.longitude;
 							if (lat != null && lng != null) void openMaps(lat, lng);
 						}}
-					/>
-					<View style={{ height: spacing.md }} />
-				</>
-			) : null}
-
-			{hasCoords && profile.latitude != null && profile.longitude != null ? (
-				<Pressable
-					onPress={() => {
-						const lat = profile.latitude;
-						const lng = profile.longitude;
-						if (lat != null && lng != null) void openMaps(lat, lng);
-					}}
-					style={[styles.routeButton, { backgroundColor: colors.primary }]}
-				>
-					<AppText weight="bold" style={{ color: colors.primaryForeground }}>
-						{strings.businessProfile.routeInMaps}
-					</AppText>
-				</Pressable>
-			) : null}
-		</View>
+						style={[styles.routeButton, { backgroundColor: colors.primary }]}
+					>
+						<AppText weight="bold" style={{ color: colors.primaryForeground }}>
+							{strings.businessProfile.routeInMaps}
+						</AppText>
+					</Pressable>
+				) : null}
+			</CardContent>
+		</Card>
 	);
 }
 

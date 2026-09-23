@@ -25,13 +25,9 @@ export function PriceBreakdownCard({ offer, appliedCoupon }: PriceBreakdownCardP
 	const total = totals.total;
 
 	return (
-		<Card
-			style={{
-				backgroundColor: scheme === "dark" ? colors.card : colors.background,
-				borderColor: colors.borderSolid,
-			}}>
+		<Card>
 			<CardHeader>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, }}>
 					{strings.checkout.orderSummary}
 				</AppText>
 			</CardHeader>

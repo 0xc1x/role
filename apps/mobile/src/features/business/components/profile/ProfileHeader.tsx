@@ -9,6 +9,7 @@ import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
 import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
 import type { BusinessProfileDetail } from "@/src/features/business/domain/business";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function BusinessHeader({ profile }: { profile: BusinessProfileDetail }) {
 	const { colors } = useTheme();
@@ -119,16 +120,21 @@ export function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
 export function AboutCard({ description }: { description: string }) {
 	const { colors } = useTheme();
 	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<AppText variant="labelMedium" weight="bold">
-				{strings.businessProfile.aboutBusiness}
+		<Card style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
+			<CardHeader>
+				<AppText variant="labelMedium" weight="bold">
+					{strings.businessProfile.aboutBusiness}
+				</AppText>
+			</CardHeader>
+			<CardContent>
+				<AppText
+					style={{ color: colors.mutedForeground, lineHeight: 21, marginTop: spacing.sm }}
+				>
+					{description}
 			</AppText>
-			<AppText
-				style={{ color: colors.mutedForeground, lineHeight: 21, marginTop: spacing.sm }}
-			>
-				{description}
-			</AppText>
-		</View>
+			</CardContent>
+		
+		</Card>
 	);
 }
 

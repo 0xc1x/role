@@ -76,7 +76,8 @@
           "locationWhenInUsePermission": "Rolé usa tu ubicación para mostrarte ofertas cercanas."
         }
       ],
-      "@sentry/react-native"
+      "@sentry/react-native",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

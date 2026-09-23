@@ -23,7 +23,14 @@ function Card({ className, style, ...props }: React.ComponentProps<typeof View> 
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
-  return <View className={cn('flex gap-1 px-6', className)} {...props} />;
+  // Text color must ride the class context: a View's `color` style does not
+  // inherit to child Text on native, and an incoming `style` prop would clobber
+  // it anyway. Every Text under the header resolves to muted via resolveTextColor.
+  return (
+    <TextClassContext.Provider value="text-muted-foreground">
+      <View className={cn('flex gap-1 px-4', className)} {...props} />
+    </TextClassContext.Provider>
+  );
 }
 
 function CardTitle({
@@ -37,7 +44,7 @@ function CardTitle({
       ref={ref}
       role="heading"
       aria-level={3}
-      className={cn('font-semibold leading-none', className)}
+      className={cn('font-semibold leading-none gap-1 px-4', className)}
       {...props}
     />
   );
@@ -47,11 +54,11 @@ function CardDescription({
   className,
   ...props
 }: React.ComponentProps<typeof Text> & React.RefAttributes<typeof Text>) {
-  return <Text className={cn('text-muted-foreground text-sm', className)} {...props} />;
+  return <Text className={cn('px-4 text-muted-foreground text-sm', className)} {...props} />;
 }
 
 function CardContent({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
-  return <View className={cn('px-6', className)} {...props} />;
+  return <View className={cn('px-4', className)} {...props} />;
 }
 
 function CardFooter({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {

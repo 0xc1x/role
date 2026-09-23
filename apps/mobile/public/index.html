@@ -23,7 +23,7 @@
     <meta name="format-detection" content="telephone=no" />
 
     <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" href="/favicon.ico?v=5" />
+    <link rel="icon" href="/favicon.ico?v=10" />
     <link rel="apple-touch-icon" href="/icons/Icon-180.png" />
     <!-- iOS PWA splash: una imagen por tamaño exacto de pantalla (Safari
          ignora cualquier imagen que no coincida con el viewport) -->
@@ -61,11 +61,23 @@
     <style id="expo-reset">
       html, body {
         height: 100%;
-        /* Safari iOS: la toolbar colapsa al hacer scroll y el viewport crece.
-           height:100% se congela con la medida inicial y deja una franja
-           blanca bajo la tab bar; 100dvh sigue al viewport dinámico.
+        /* Safari iOS tiene DOS alturas de viewport y cada una falla en un
+           contexto distinto:
+           - 100% = alto del layout viewport (ICB). En la PWA standalone con
+             status-bar black-translucent el ICB cubre la pantalla completa
+             mientras que el visual viewport (dvh) descuenta la barra de
+             estado: 100dvh queda ~47px corto y deja la franja blanca bajo
+             la tab bar.
+           - 100dvh sigue el viewport dinámico. En Safari con toolbar
+             colapsada crece y evita que 100% se quede congelado con la
+             medida inicial (la franja clásica al hacer scroll).
+           max() toma el MAYOR de los dos: en la PWA gana el ICB (llena la
+           pantalla), en Safari gana dvh (sigue la toolbar). Nunca puede
+           quedarse más corto que el viewport visible, así que no abre
+           franja nueva. Si el navegador no entiende dvh/max(), la
+           declaración se descarta y queda 100% como fallback.
            -webkit-fill-available cubre iOS < 15.4 (ignora dvh). */
-        height: 100dvh;
+        height: max(100%, 100dvh);
         min-height: -webkit-fill-available;
         margin: 0;
         padding: 0;
@@ -82,7 +94,9 @@
       #root {
         display: flex;
         height: 100%;
-        height: 100dvh;
+        /* Mismo criterio que html/body: mayor entre ICB y viewport dinámico,
+           para que el shell nunca termine por encima del fondo real. */
+        height: max(100%, 100dvh);
         min-height: -webkit-fill-available;
         flex: 1;
       }

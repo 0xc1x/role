@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
 	stack: { gap: spacing.lg },
 	accordionHeaderInner: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm },
 	accordionTitle: { flex: 1 },
-	steps: { gap: spacing.xs },
+	steps: { gap: spacing.xs, paddingTop: spacing.lg },
 	stepRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, paddingTop: spacing.xs },
 	stepText: { flex: 1, lineHeight: 18 },
 });

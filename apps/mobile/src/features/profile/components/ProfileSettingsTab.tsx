@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
 		borderColor: "transparent"
 	},
 	card: { 
-		padding: spacing.md, 
+		paddingTop: spacing.md, 
 		overflow: "hidden", 
 		borderRadius: radii.xl, 
 		gap: 0,  

@@ -34,6 +34,7 @@ import {
 	formatDateTime,
 } from "@/src/core/utils/formatters";
 import { CategoryBadge, InfoCard, InfoRow } from "./InfoPrimitives";
+import { Card, CardDescription, CardHeader } from "@/components/ui/card";
 
 function distanceSubtitle(
 	offer: OfferDetail,
@@ -116,7 +117,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 				{data.offer.title}
 			</AppText>
 			<Button
-				variant="link"
+				variant="outline"
 				onPress={() =>
 					router.push(`/business-profile/${data.offer.business_id}`)
 				}
@@ -358,26 +359,31 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 			</InfoCard>
 
 			{/* ── Card ecológica ───────────────────────────────────── */}
-			<View style={[styles.ecoCard, { backgroundColor: cardBg, boxShadow: `0px 4px 10px ${colors.shadow}` }]}>
-				<Leaf size={28} color={colors.success} />
-				<AppText
-					variant="labelMedium"
-					weight="bold"
-					style={{ marginTop: spacing.sm }}
-				>
-					{strings.offerDetail.wasteHero}
-				</AppText>
-				<AppText
-					style={{
-						color: muted,
-						textAlign: "center",
-						lineHeight: 19,
-						marginTop: 4,
-					}}
-				>
-					{strings.offerDetail.wasteHeroText}
-				</AppText>
-			</View>
+			<Card >
+				<CardHeader style={[styles.ecoCard]}>
+					<Leaf size={28} color={colors.success} />
+					<AppText
+						variant="labelMedium"
+						weight="bold"
+						style={{ marginTop: spacing.sm }}
+					>
+						{strings.offerDetail.wasteHero}
+					</AppText>
+				</CardHeader>
+				<CardDescription>
+					<AppText
+						style={{
+							color: muted,
+							textAlign: "center",
+							lineHeight: 19,
+							marginTop: 4,
+						}}
+					>
+						{strings.offerDetail.wasteHeroText}
+					</AppText>
+				</CardDescription>
+				
+			</Card>
 		</View>
 	);
 }
@@ -494,12 +500,10 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "flex-start",
 		gap: spacing.sm,
+		paddingTop: spacing.md
 	},
 	ecoCard: {
-		width: "100%",
 		alignItems: "center",
-		padding: spacing.xl,
 		borderRadius: radii.lg,
-		marginTop: spacing.xl,
 	},
 });

@@ -7,82 +7,86 @@ import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import type { BusinessProfileDetail } from "@/src/features/business/domain/business";
 import { openMaps, openUrl } from "./maps";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function ContactInfoCard({ profile }: { profile: BusinessProfileDetail }) {
 	const { colors } = useTheme();
 	const business = profile.business;
 	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<AppText variant="labelMedium" weight="bold">
-				{strings.businessProfile.contactInfo}
-			</AppText>
-			<View style={{ height: spacing.lg }} />
+		<Card style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
+			<CardHeader>
+				<AppText variant="labelMedium" weight="bold">
+					{strings.businessProfile.contactInfo}
+				</AppText>
+			</CardHeader>
+			
+			<CardContent>
+				<InfoRow
+					icon={MapPin}
+					label={strings.businessProfile.address}
+					text={profile.address ?? strings.businessProfile.notAvailable}
+					trailing={
+						profile.latitude != null && profile.longitude != null ? (
+							<Pressable
+								onPress={() => {
+									const lat = profile.latitude;
+									const lng = profile.longitude;
+									if (lat != null && lng != null) void openMaps(lat, lng);
+								}}
+							>
+								<AppText weight="bold" style={{ color: colors.primary }}>
+									{strings.businessProfile.directions}
+								</AppText>
+							</Pressable>
+						) : null
+					}
+				/>
 
-			<InfoRow
-				icon={MapPin}
-				label={strings.businessProfile.address}
-				text={profile.address ?? strings.businessProfile.notAvailable}
-				trailing={
-					profile.latitude != null && profile.longitude != null ? (
-						<Pressable
+				{business.phone?.length ? (
+					<>
+						<View style={{ height: spacing.md }} />
+						<InfoRow
+							icon={Phone}
+							label={strings.businessProfile.phone}
+							text={business.phone}
+							onPress={() => void openUrl(`tel:${business.phone}`)}
+							isLink
+						/>
+					</>
+				) : null}
+
+				{business.email?.length ? (
+					<>
+						<View style={{ height: spacing.md }} />
+						<InfoRow
+							icon={Mail}
+							label={strings.businessProfile.email}
+							text={business.email}
+							onPress={() => void openUrl(`mailto:${business.email}`)}
+							isLink
+						/>
+					</>
+				) : null}
+
+				{business.website?.length ? (
+					<>
+						<View style={{ height: spacing.md }} />
+						<InfoRow
+							icon={Globe}
+							label={strings.businessProfile.website}
+							text={business.website}
 							onPress={() => {
-								const lat = profile.latitude;
-								const lng = profile.longitude;
-								if (lat != null && lng != null) void openMaps(lat, lng);
+								const site = business.website;
+								if (!site) return;
+								const url = site.startsWith("http") ? site : `https://${site}`;
+								void openUrl(url);
 							}}
-						>
-							<AppText weight="bold" style={{ color: colors.primary }}>
-								{strings.businessProfile.directions}
-							</AppText>
-						</Pressable>
-					) : null
-				}
-			/>
-
-			{business.phone?.length ? (
-				<>
-					<View style={{ height: spacing.md }} />
-					<InfoRow
-						icon={Phone}
-						label={strings.businessProfile.phone}
-						text={business.phone}
-						onPress={() => void openUrl(`tel:${business.phone}`)}
-						isLink
-					/>
-				</>
-			) : null}
-
-			{business.email?.length ? (
-				<>
-					<View style={{ height: spacing.md }} />
-					<InfoRow
-						icon={Mail}
-						label={strings.businessProfile.email}
-						text={business.email}
-						onPress={() => void openUrl(`mailto:${business.email}`)}
-						isLink
-					/>
-				</>
-			) : null}
-
-			{business.website?.length ? (
-				<>
-					<View style={{ height: spacing.md }} />
-					<InfoRow
-						icon={Globe}
-						label={strings.businessProfile.website}
-						text={business.website}
-						onPress={() => {
-							const site = business.website;
-							if (!site) return;
-							const url = site.startsWith("http") ? site : `https://${site}`;
-							void openUrl(url);
-						}}
-						isLink
-					/>
-				</>
-			) : null}
-		</View>
+							isLink
+						/>
+					</>
+				) : null}
+			</CardContent>
+		</Card>
 	);
 }
 
@@ -127,27 +131,29 @@ export function InfoRow({
 export function HoursCard({ hours }: { hours: BusinessProfileDetail["hours"] }) {
 	const { colors } = useTheme();
 	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<View style={styles.hoursTitleRow}>
+		<Card style={[{ boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
+			<CardHeader style={styles.hoursTitleRow}>
 				<Clock size={20} color={colors.primary} />
 				<View style={{ width: spacing.sm }} />
 				<AppText weight="semiBold">{strings.businessProfile.businessHours}</AppText>
-			</View>
+			</CardHeader>
 			<View style={{ height: spacing.md }} />
-			{hours.map((h) => {
-				const closed = h.hoursDisplay === strings.businessProfile.closed;
-				return (
-					<View key={h.dayRange} style={[styles.hoursRow, { borderBottomColor: colors.border }]}>
-						<AppText weight="medium">{h.dayRange}</AppText>
-						<AppText
-							style={{ color: closed ? colors.destructive : colors.mutedForeground }}
-						>
-							{h.hoursDisplay}
-						</AppText>
-					</View>
-				);
-			})}
-		</View>
+			<CardContent>
+				{hours.map((h) => {
+					const closed = h.hoursDisplay === strings.businessProfile.closed;
+					return (
+						<View key={h.dayRange} style={[styles.hoursRow, { borderBottomColor: colors.border }]}>
+							<AppText weight="medium">{h.dayRange}</AppText>
+							<AppText
+								style={{ color: closed ? colors.destructive : colors.mutedForeground }}
+							>
+								{h.hoursDisplay}
+							</AppText>
+						</View>
+					);
+				})}
+			</CardContent>
+		</Card>
 	);
 }
 

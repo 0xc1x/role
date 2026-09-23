@@ -15,13 +15,9 @@ export function PriceDetailsCard({ order }: { order: Order }) {
 	const { colors, scheme } = useTheme();
 	const discount = orderDiscount(order);
 	return (
-		<Card
-			style={{
-				backgroundColor: scheme === "dark" ? colors.card : colors.background,
-				borderColor: colors.borderSolid,
-			}}>
+		<Card>
 			<CardHeader>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText variant="h4" weight="bold" style={{ flex: 1 }}>
 					{strings.orders.summaryTitle}
 				</AppText>
 			</CardHeader>

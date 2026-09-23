@@ -54,14 +54,10 @@ export function InfoCard({
 		<Card
 			style={[
 				styles.infoCard,
-				{
-					backgroundColor: scheme === "dark" ? colors.card : colors.background,
-					borderColor: colors.borderSolid,
-				},
 			]}
 		>
 			<CardHeader style={styles.infoCardHead}>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, }}>
 					{title}
 				</AppText>
 				{trailing}

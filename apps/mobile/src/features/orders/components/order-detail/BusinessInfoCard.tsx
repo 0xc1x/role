@@ -32,15 +32,9 @@ export function BusinessInfoCard({ item }: { item: OrderDetail }) {
 	};
 
 	return (
-		<Card
-			style={[
-				{
-					backgroundColor: scheme === "dark" ? colors.card : colors.background,
-					borderColor: colors.borderSolid,
-				},
-			]}>
+		<Card>
 			<CardHeader>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText variant="h4" weight="bold" style={{ flex: 1 }}>
 					{strings.orders.businessTitle}
 				</AppText>
 			</CardHeader>

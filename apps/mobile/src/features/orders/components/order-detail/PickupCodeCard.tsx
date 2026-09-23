@@ -24,15 +24,9 @@ export function PickupCodeCard({ order }: { order: Order }) {
 	};
 
 	return (
-		<Card
-			style={[
-				{
-					backgroundColor: scheme === "dark" ? colors.card : colors.background,
-					borderColor: colors.borderSolid,
-				},
-			]}>
+		<Card>
 			<CardHeader >
-				<AppText variant="h4" weight="bold" style={{ color: colors.mutedForeground }}>
+				<AppText variant="h4" weight="bold" >
 					{strings.orders.yourCode}
 				</AppText>
 			</CardHeader>

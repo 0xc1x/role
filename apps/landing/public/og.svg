@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <rect width="1200" height="630" fill="#1b1210"/>
-  <circle cx="1050" cy="60" r="300" fill="#bf1c19" opacity="0.35"/>
-  <circle cx="120" cy="600" r="320" fill="#96bf85" opacity="0.18"/>
+  <circle cx="1050" cy="60" r="300" fill="#B582E4" opacity="0.35"/>
+  <circle cx="120" cy="600" r="320" fill="#6D28D9" opacity="0.18"/>
   <g transform="translate(110 95) scale(0.09)">
 <g transform="matrix(4.166667,0,0,4.166667,938.541242,845.614545)">
         <g transform="matrix(0.284331,0,0,0.256607,-347.168964,-228.027598)">
