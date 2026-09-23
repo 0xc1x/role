@@ -201,7 +201,7 @@ function PromoCard({ item }: { item: PromoSlide }) {
 			: item.type === "coupon"
 				? strings.home.promoCoupon
 				: strings.home.promoTips);
-	const textColor = item.textColor ?? colors.greenDarkForeground;
+	const textColor = item.textColor ?? colors.accentForeground;
 	const hasCta = Boolean(
 		item.ctaLabel && (item.type === "coupon" ? item.couponCode : item.redirectUrl),
 	);
@@ -226,7 +226,7 @@ function PromoCard({ item }: { item: PromoSlide }) {
 		<View
 			style={[
 				styles.cardInner,
-				{ backgroundColor: colors.greenDark, flexDirection: "row" },
+				{ backgroundColor: colors.accent, flexDirection: "row" },
 			]}
 		>
 			<View style={styles.cardLeft}>
@@ -248,7 +248,7 @@ function PromoCard({ item }: { item: PromoSlide }) {
 						<AppText
 							weight="semiBold"
 							style={{
-								color: withAlpha(colors.greenDarkForeground, 0.7),
+								color: withAlpha(colors.accentForeground, 0.7),
 								fontSize: 11,
 								letterSpacing: 0.4,
 							}}
@@ -289,10 +289,13 @@ function PromoCard({ item }: { item: PromoSlide }) {
 					<Button
 						onPress={handleCtaPress}
 						size="sm"
-						style={{
-							backgroundColor: item.buttonColor ?? colors.primary,
-							marginTop: 8,
-						}}
+						// secondary (#DCCBF5 / texto #371949): default (primary #371949)
+						// se fundiría con el fondo accent #311743 en light.
+						variant="secondary"
+						style={[
+							item.buttonColor ? { backgroundColor: item.buttonColor } : null,
+							{ marginTop: 8 },
+						]}
 					>
 						{item.ctaLabel ?? ""}
 					</Button>
