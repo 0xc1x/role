@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useRouter } from "expo-router";
-import { useAuthStore } from "@/features/auth/store";
+import { useAuthStore } from "@/src/features/auth/store";
 
 export default function IndexRedirect() {
 	const router = useRouter();

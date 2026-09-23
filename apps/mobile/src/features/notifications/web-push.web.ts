@@ -1,5 +1,5 @@
-import { env } from "@/core/config/env";
-import { Errors } from "@/core/error/app-error";
+import { env } from "@/src/core/config/env";
+import { Errors } from "@/src/core/error/app-error";
 import { upsertDeviceToken } from "./data/repository";
 
 /**

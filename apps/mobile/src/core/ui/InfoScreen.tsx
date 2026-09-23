@@ -1,7 +1,7 @@
 import { StyleSheet, View } from "react-native";
 
-import { AppText, Screen, ScreenHeader } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
+import { AppText, Screen, ScreenHeader } from "@/src/core/ui";
+import { spacing } from "@/src/core/theme/spacing";
 
 /** Simple scrollable screen for static informational content (about/terms/help…). */
 export default function InfoScreen({

@@ -14,3 +14,7 @@ coverage/
 .pi
 # drizzle generated — no commitear el schema dump en repo público
 apps/api/drizzle/
+# Local AI runtime state
+.atl/
+# TanStack Start build cache
+apps/admin/.tanstack/

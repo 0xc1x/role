@@ -1,10 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { toast } from "sonner-native";
-import * as Notifications from "expo-notifications";
 
-import { strings } from "@/core/i18n/strings";
-import { syncDeviceToken } from "./";
+import { strings } from "@/src/core/i18n/strings";
+import { loadNotifications, syncDeviceToken } from "./";
 
 /**
  * Estado real del permiso, pidiéndolo solo si está en "default".
@@ -20,6 +19,9 @@ async function ensurePushPermission(): Promise<"granted" | "denied"> {
 		}
 		return Notification.permission === "granted" ? "granted" : "denied";
 	}
+	const Notifications = await loadNotifications();
+	// Expo Go / web: sin módulo nativo no hay permiso que pedir.
+	if (!Notifications) return "denied";
 	const current = await Notifications.getPermissionsAsync();
 	if (current.status === "granted") return "granted";
 	const requested = await Notifications.requestPermissionsAsync();

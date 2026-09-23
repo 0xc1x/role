@@ -1,13 +1,14 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Clock, MapPin, type LucideIcon } from "lucide-react-native";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card } from "@/core/ui";
-import { formatRelativeDay, formatTime } from "@/core/utils/formatters";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import type { EmbeddedLocation } from "@/features/offers/domain/offer";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { formatRelativeDay, formatTime } from "@/src/core/utils/formatters";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import type { EmbeddedLocation } from "@/src/features/offers/domain/offer";
 import type { Offer } from "@0xc1x/role-commons";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 interface PickupDetailsCardProps {
 	offer: Offer;
@@ -16,7 +17,7 @@ interface PickupDetailsCardProps {
 
 /** Pickup details (address + window) in checkout (ported from Rolé v1 `PickupDetailsCard`). */
 export function PickupDetailsCard({ offer, location }: PickupDetailsCardProps) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const day = formatRelativeDay(offer.pickup_start);
 	const window = strings.checkout.pickupWindow
 		.replace("{day}", day)
@@ -24,14 +25,21 @@ export function PickupDetailsCard({ offer, location }: PickupDetailsCardProps) {
 		.replace("{end}", formatTime(offer.pickup_end));
 
 	return (
-		<Card>
-			<AppText
-				style={[styles.sectionLabel, { color: colors.mutedForeground }]}
-			>
-				{strings.checkout.pickupDetailsTitle.toUpperCase()}
-			</AppText>
+		<Card
+			style={[
+				{
+					backgroundColor: scheme === "dark" ? colors.card : colors.background,
+					borderColor: colors.borderSolid,
+				},
+			]}>
+			<CardHeader>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+					{strings.checkout.pickupDetailsTitle}
+				</AppText>
+			</CardHeader>
+			<CardContent style={styles.body}>
 			<InfoRow
-				icon="location-outline"
+				icon={MapPin}
 				label={strings.checkout.pickupAddressLabel}
 				value={location?.address ?? strings.businessProfile.notAvailable}
 			/>
@@ -44,28 +52,29 @@ export function PickupDetailsCard({ offer, location }: PickupDetailsCardProps) {
 					},
 				]}
 			>
-				<Ionicons name="time-outline" size={18} color={colors.successDark} />
+				<Clock size={18} color={colors.successDark} />
 				<AppText style={[styles.windowText, { color: colors.successDark }]}>
 					{window}
 				</AppText>
 			</View>
+			</CardContent>
 		</Card>
 	);
 }
 
 function InfoRow({
-	icon,
+	icon: Icon,
 	label,
 	value,
 }: {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	label: string;
 	value: string;
 }) {
 	const { colors } = useTheme();
 	return (
 		<View style={styles.infoRow}>
-			<Ionicons name={icon} size={16} color={colors.mutedForeground} />
+			<Icon size={16} color={colors.mutedForeground} />
 			<View style={styles.infoBody}>
 				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 					{label}
@@ -79,12 +88,7 @@ function InfoRow({
 }
 
 const styles = StyleSheet.create({
-	sectionLabel: {
-		fontSize: 12,
-		fontWeight: "700",
-		letterSpacing: 1.2,
-		marginBottom: spacing.sm,
-	},
+	body: { gap: spacing.sm },
 	infoRow: {
 		flexDirection: "row",
 		alignItems: "flex-start",
@@ -97,7 +101,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		borderWidth: 1,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		padding: spacing.md,
 		marginTop: spacing.sm,
 	},

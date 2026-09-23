@@ -18,6 +18,9 @@ const SOCIAL_FALLBACKS = {
 	"social.instagram_url": "#",
 	"social.twitter_url": "#",
 	"social.linkedin_url": "#",
+	"social.tiktok_url": "#",
+	"social.facebook_url": "#",
+	"social.youtube_url": "#",
 } as const;
 
 export function Footer() {
@@ -33,6 +36,18 @@ export function Footer() {
 		"social.linkedin_url",
 		SOCIAL_FALLBACKS["social.linkedin_url"],
 	);
+	const tiktok = useConfig(
+		"social.tiktok_url",
+		SOCIAL_FALLBACKS["social.tiktok_url"],
+	);
+	const facebook = useConfig(
+		"social.facebook_url",
+		SOCIAL_FALLBACKS["social.facebook_url"],
+	);
+	const youtube = useConfig(
+		"social.youtube_url",
+		SOCIAL_FALLBACKS["social.youtube_url"],
+	);
 	const holaEmail = useConfig("contact.hola_email", "hola@role.app");
 	const negociosEmail = useConfig(
 		"contact.negocios_email",
@@ -43,6 +58,9 @@ export function Footer() {
 		{ label: "Instagram", href: instagram },
 		{ label: "X", href: twitter },
 		{ label: "LinkedIn", href: linkedin },
+		{ label: "TikTok", href: tiktok },
+		{ label: "Facebook", href: facebook },
+		{ label: "YouTube", href: youtube },
 	].filter((s) => s.href && s.href !== "#");
 
 	return (
@@ -55,7 +73,7 @@ export function Footer() {
 							className="inline-flex items-center gap-2 rounded-2xl bg-paper p-2"
 							aria-label="Rolé — Inicio"
 						>
-							<LogoMark className="h-5 w-auto text-ink" />
+							<LogoMark className="h-5 w-auto text-role-accent" />
 							<Wordmark className="h-5 w-auto text-ink" />
 						</Link>
 						<p className="mt-5 max-w-sm text-sm leading-relaxed text-cream/70">
@@ -63,7 +81,7 @@ export function Footer() {
 							increíbles. Menos desperdicio, más comunidad.
 						</p>
 						<a
-							href="#contacto"
+							href="/#contacto"
 							className="mt-6 inline-block text-sm font-medium text-cream underline-offset-4 hover:underline"
 						>
 							Hablar con el equipo
@@ -125,12 +143,12 @@ export function Footer() {
 					<p>
 						© {new Date().getFullYear()} Rolé. Todos los derechos reservados.
 					</p>
-					<div className="flex gap-6">
+					<div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:flex sm:gap-6">
 						{SOCIAL.map((s) => (
 							<a
 								key={s.label}
 								href={s.href}
-								className="text-xs font-semibold uppercase tracking-widest transition-colors duration-150 hover:text-cream"
+								className="block text-xs font-semibold uppercase tracking-widest transition-colors duration-150 hover:text-cream sm:inline"
 							>
 								{s.label}
 							</a>

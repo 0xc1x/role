@@ -1,11 +1,11 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Clock, Globe, Mail, MapPin, Phone, type LucideIcon } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import type { BusinessProfileDetail } from "@/features/business/domain/business";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import type { BusinessProfileDetail } from "@/src/features/business/domain/business";
 import { openMaps, openUrl } from "./maps";
 
 export function ContactInfoCard({ profile }: { profile: BusinessProfileDetail }) {
@@ -19,7 +19,7 @@ export function ContactInfoCard({ profile }: { profile: BusinessProfileDetail })
 			<View style={{ height: spacing.lg }} />
 
 			<InfoRow
-				icon="location-outline"
+				icon={MapPin}
 				label={strings.businessProfile.address}
 				text={profile.address ?? strings.businessProfile.notAvailable}
 				trailing={
@@ -43,7 +43,7 @@ export function ContactInfoCard({ profile }: { profile: BusinessProfileDetail })
 				<>
 					<View style={{ height: spacing.md }} />
 					<InfoRow
-						icon="call-outline"
+						icon={Phone}
 						label={strings.businessProfile.phone}
 						text={business.phone}
 						onPress={() => void openUrl(`tel:${business.phone}`)}
@@ -56,7 +56,7 @@ export function ContactInfoCard({ profile }: { profile: BusinessProfileDetail })
 				<>
 					<View style={{ height: spacing.md }} />
 					<InfoRow
-						icon="mail-outline"
+						icon={Mail}
 						label={strings.businessProfile.email}
 						text={business.email}
 						onPress={() => void openUrl(`mailto:${business.email}`)}
@@ -69,7 +69,7 @@ export function ContactInfoCard({ profile }: { profile: BusinessProfileDetail })
 				<>
 					<View style={{ height: spacing.md }} />
 					<InfoRow
-						icon="globe-outline"
+						icon={Globe}
 						label={strings.businessProfile.website}
 						text={business.website}
 						onPress={() => {
@@ -87,14 +87,14 @@ export function ContactInfoCard({ profile }: { profile: BusinessProfileDetail })
 }
 
 export function InfoRow({
-	icon,
+	icon: Icon,
 	label,
 	text,
 	onPress,
 	isLink,
 	trailing,
 }: {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	label: string;
 	text: string;
 	onPress?: () => void;
@@ -104,7 +104,7 @@ export function InfoRow({
 	const { colors } = useTheme();
 	return (
 		<View style={styles.infoRow}>
-			<Ionicons name={icon} size={18} color={colors.primary} style={{ marginTop: 2 }} />
+			<Icon size={18} color={colors.primary} style={{ marginTop: 2 }} />
 			<View style={{ width: spacing.sm }} />
 			<View style={{ flex: 1 }}>
 				<AppText style={{ color: colors.mutedForeground, fontSize: 12 }}>
@@ -129,7 +129,7 @@ export function HoursCard({ hours }: { hours: BusinessProfileDetail["hours"] }) 
 	return (
 		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
 			<View style={styles.hoursTitleRow}>
-				<Ionicons name="time-outline" size={20} color={colors.primary} />
+				<Clock size={20} color={colors.primary} />
 				<View style={{ width: spacing.sm }} />
 				<AppText weight="semiBold">{strings.businessProfile.businessHours}</AppText>
 			</View>

@@ -1,13 +1,15 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronDown, ChevronUp, Lightbulb } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { useRandomTip } from "@/features/tips/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { useRandomTip } from "@/src/features/tips/hooks";
 import { useState } from "react";
+import { Card } from "@/components/ui/card";
 
 /**
  * Banner de "Consejo del día" entre el grid de categorías y la lista de
@@ -19,10 +21,27 @@ export function ExploreTipSection() {
 	const { data: tip, isLoading } = useRandomTip();
 	const [isExpanded, setIsExpanded] = useState(false);
 
-	if (isLoading || !tip) return null;
+	if (isLoading) {
+		return (
+			<View style={styles.wrap}>
+				<Skeleton style={styles.tipSkeleton} />
+			</View>
+		);
+	}
+
+	if (!tip) return null;
 
 	const cardBackground = isDark ? colors.surfaceWarning : colors.yellowLight;
 	const cardBorder = withAlpha(colors.yellowDark, isDark ? 0.3 : 0.2);
+	// Estados del bulb: en dark "encender" es sumar brillo sobre fondo oscuro;
+	// en light hace falta el contraste inverso — gris apagado vs ámbar encendido —
+	// porque oscurecer el mismo tono no se lee como "prender" sobre fondo amarillo.
+	const bulbOn = isDark ? colors.yellow : colors.warning;
+	const bulbOff = isDark
+		? withAlpha(colors.yellow, 0.55)
+		: withAlpha(colors.mutedForeground, 0.55);
+	// warning = #F59E0B en ambos temas (en dark, yellowDark lo era también): glow idéntico.
+	const bulbGlowOn = withAlpha(colors.warning, 0.55);
 
 	return (
 		<View style={styles.wrap}>
@@ -43,37 +62,35 @@ export function ExploreTipSection() {
 				>
 					<View style={styles.titleLeft}>
 						<View
-						style={[
-							styles.bulbCircle,
-							{
-							backgroundColor: isExpanded
-								? withAlpha(colors.yellow, isDark ? 0.25 : 0.35)
-								: withAlpha(colors.card, isDark ? 0 : 0.5),
-							boxShadow: isExpanded
-								? `0px 0px 16px ${withAlpha(colors.yellowDark, isDark ? 0.55 : 0.45)}`
-								: `0px 0px 8px ${withAlpha(colors.yellowDark, isDark ? 0.15 : 0.2)}`,
-							},
-						]}
+							style={[
+								styles.bulbCircle,
+								{
+									backgroundColor: isExpanded
+										? withAlpha(colors.yellow, isDark ? 0.25 : 0.35)
+										: withAlpha(colors.card, isDark ? 0 : 0.5),
+									boxShadow: isExpanded
+										? `0px 0px 16px ${bulbGlowOn}`
+										: `0px 0px 8px ${withAlpha(colors.yellowDark, isDark ? 0.15 : 0.2)}`,
+								},
+							]}
 						>
-							<Ionicons
-								name="bulb"
-								size={20}
-								color={
-								isExpanded
-									? (isDark ? colors.yellow : colors.yellowDark)
-									: withAlpha(isDark ? colors.yellow : colors.yellowDark, 0.55)
-								}
-						/>
+							<Lightbulb size={20} color={isExpanded ? bulbOn : bulbOff} />
 						</View>
 						<AppText variant="h4" weight="bold">
 							{strings.explore.tipTitle}
 						</AppText>
 					</View>
-					<Ionicons
-						name={isExpanded ? "chevron-up" : "chevron-down"}
-						size={20}
-						color={isDark ? colors.yellow : colors.yellowDark}
-					/>
+					{isExpanded ? (
+						<ChevronUp
+							size={20}
+							color={isDark ? colors.yellow : colors.yellowDark}
+						/>
+					) : (
+						<ChevronDown
+							size={20}
+							color={isDark ? colors.yellow : colors.yellowDark}
+						/>
+					)}
 				</Pressable>
 				{isExpanded && (
 					<AppText
@@ -112,12 +129,17 @@ const styles = StyleSheet.create({
 	bulbCircle: {
 		width: 32,
 		height: 32,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	tipBody: {
 		marginTop: spacing.md,
 		lineHeight: 20,
+	},
+	tipSkeleton: {
+		// Altura colapsada: padding lg*2 + fila título (bulb 32).
+		height: 64,
+		borderRadius: radii.xl,
 	},
 });

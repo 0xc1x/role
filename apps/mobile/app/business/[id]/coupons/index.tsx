@@ -1,23 +1,34 @@
-import { Ionicons } from "@expo/vector-icons";
+import { CircleCheck, Plus, Tag } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { useCallback, useMemo } from "react";
+import {
+	ActivityIndicator,
+	FlatList,
+	RefreshControl,
+	StyleSheet,
+	View,
+} from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { Skeleton } from "@/components/ui/skeleton";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	EmptyState,
 	ErrorState,
-	LoadingView,
 	Screen,
 	ScreenHeader,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useBusinessCoupons } from "@/features/business/hooks";
-import { CouponCard } from "@/features/business/components/CouponCard";
-import { couponIsValid } from "@/features/orders/domain/order";
+	useWebPullToRefresh,
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import {
+	useBusinessCouponCount,
+	useBusinessCoupons,
+} from "@/src/features/business/hooks";
+import type { Coupon } from "@0xc1x/role-commons";
+import { CouponCard } from "@/src/features/business/components/CouponCard";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 function StatCard({
 	label,
@@ -53,90 +64,136 @@ export default function BusinessCouponsScreen() {
 	const { colors } = useTheme();
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const businessId = id ?? "";
-	const { data, isLoading, isError, error, refetch } =
-		useBusinessCoupons(businessId);
+	const {
+		data: infiniteData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		isFetching,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useBusinessCoupons(businessId);
+	// Active/total counts are server head-counts; the uses sum below reflects
+	// loaded pages (no sum aggregate exists server-side) — labeled as such.
+	const { data: activeCount } = useBusinessCouponCount(businessId, {
+		isActive: true,
+	});
+	const { data: totalCount } = useBusinessCouponCount(businessId);
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void refetch(),
+		refreshing: isFetching,
+	});
+
+	const coupons = useMemo(
+		() => infiniteData?.pages.flat() ?? [],
+		[infiniteData],
+	);
+	const usesTotal = useMemo(
+		() => coupons.reduce((sum, c) => sum + c.used_count, 0),
+		[coupons],
+	);
+
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+	const renderCouponItem = useCallback(
+		({ item }: { item: Coupon }) => (
+			<CouponCard coupon={item} businessId={businessId} />
+		),
+		[businessId],
+	);
+
+	if (isLoading) {
+		return (
+			<Screen>
+				<View style={styles.container}>
+					<ScreenHeader
+						title={strings.business.coupons}
+						fallback="/(business)/management"
+					/>
+					<CouponsSkeleton />
+				</View>
+			</Screen>
+		);
+	}
+	if (isError)
+		return (
+			<Screen>
+				<View style={styles.container}>
+					<ScreenHeader
+						title={strings.business.coupons}
+						fallback="/(business)/management"
+					/>
+					<ErrorState error={error} onRetry={() => void refetch()} />
+				</View>
+			</Screen>
+		);
 
 	return (
-		<Screen scroll>
-			<View style={styles.container}>
-				<ScreenHeader
-					title={strings.business.coupons}
-					fallback="/(business)/management"
-				/>
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.mutedForeground, marginTop: spacing.lg }}
-				>
-					{strings.business.couponsSubtitle}
-				</AppText>
-
-				<Button
-					label={strings.business.couponNew}
-					size="sm"
-					icon={<Ionicons name="add" size={18} color={colors.primaryForeground} />}
-					style={styles.newButton}
-					onPress={() =>
-						router.push(`/business/${businessId}/coupons/new`)
-					}
-				/>
-
-				{isLoading ? (
-					<LoadingView />
-				) : isError ? (
-					<ErrorState error={error} onRetry={() => void refetch()} />
-				) : !data ? (
-					<LoadingView />
-				) : (
+		<Screen>
+			{pull.indicator}
+			<FlatList
+				ref={pull.ref}
+				data={coupons}
+				keyExtractor={(coupon) => coupon.id}
+				contentContainerStyle={styles.container}
+				keyboardShouldPersistTaps="handled"
+				onEndReached={handleEndReached}
+				onEndReachedThreshold={0.5}
+				refreshControl={
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
+					/>
+				}
+				ListHeaderComponent={
 					<>
-						<View style={styles.stats}>
-							<StatCard
-								label={strings.business.couponsActiveStat}
-								value={String(
-									data.filter((c) => couponIsValid(c)).length,
-								)}
-								color={colors.successDark}
-							/>
-							<StatCard
-								label={strings.business.couponsUsesStat}
-								value={String(
-									data.reduce((sum, c) => sum + c.used_count, 0),
-								)}
-								color={colors.primary}
-							/>
-							<StatCard
-								label={strings.business.couponsCreatedStat}
-								value={String(data.length)}
-								color={colors.foreground}
-							/>
-						</View>
+						<ScreenHeader
+							title={strings.business.coupons}
+							fallback="/(business)/management"
+						/>
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground, marginTop: spacing.lg }}
+						>
+							{strings.business.couponsSubtitle}
+						</AppText>
 
-						{data.length === 0 ? (
-							<Card style={styles.emptyCard}>
-								<EmptyState
-									icon={
-										<Ionicons
-											name="pricetag-outline"
-											size={40}
-											color={colors.mutedForeground}
-										/>
-									}
-									title={strings.business.noCoupons}
-									message={strings.business.noCouponsBody}
-									action={
-										<Button
-											label={strings.business.couponCreateFirst}
-											onPress={() =>
-												router.push(
-													`/business/${businessId}/coupons/new`,
-												)
-											}
-											style={{ marginTop: spacing.md }}
-										/>
-									}
-								/>
-							</Card>
-						) : (
+						<Button
+							size="sm"
+							icon={<Plus size={18} color={colors.primaryForeground} />}
+							style={styles.newButton}
+							onPress={() =>
+								router.push(`/business/${businessId}/coupons/new`)
+							}
+						>
+							{strings.business.couponNew}
+						</Button>
+
+						{(totalCount ?? 0) > 0 ? (
 							<>
+								<View style={styles.stats}>
+									<StatCard
+										label={strings.business.couponsActiveStat}
+										value={String(activeCount ?? 0)}
+										color={colors.successDark}
+									/>
+									<StatCard
+										label={strings.business.couponsUsesLoadedStat}
+										value={String(usesTotal)}
+										color={colors.primary}
+									/>
+									<StatCard
+										label={strings.business.couponsCreatedStat}
+										value={String(totalCount ?? 0)}
+										color={colors.foreground}
+									/>
+								</View>
+
 								<AppText
 									variant="labelSmall"
 									weight="bold"
@@ -144,16 +201,39 @@ export default function BusinessCouponsScreen() {
 								>
 									{strings.business.couponsHistory}
 								</AppText>
-								{data.map((coupon) => (
-									<CouponCard
-										key={coupon.id}
-										coupon={coupon}
-										businessId={businessId}
-									/>
-								))}
 							</>
-						)}
-
+						) : null}
+					</>
+				}
+				ListEmptyComponent={
+					<Card style={styles.emptyCard}>
+						<EmptyState
+							icon={
+								<Tag
+									size={40}
+									color={colors.mutedForeground}
+								/>
+							}
+							title={strings.business.noCoupons}
+							message={strings.business.noCouponsBody}
+							action={
+								<Button
+									onPress={() =>
+										router.push(`/business/${businessId}/coupons/new`)
+									}
+									style={{ marginTop: spacing.md }}
+								>
+									{strings.business.couponCreateFirst}
+								</Button>
+							}
+						/>
+					</Card>
+				}
+				ListFooterComponent={
+					<>
+						{isFetchingNextPage ? (
+							<ActivityIndicator color={colors.primary} />
+						) : null}
 						<View
 							style={[
 								styles.tips,
@@ -168,8 +248,7 @@ export default function BusinessCouponsScreen() {
 							</AppText>
 							{strings.business.couponTips.map((tip) => (
 								<View key={tip} style={styles.tip}>
-									<Ionicons
-										name="checkmark-circle-outline"
+									<CircleCheck
 										size={14}
 										color={colors.success}
 									/>
@@ -183,14 +262,35 @@ export default function BusinessCouponsScreen() {
 							))}
 						</View>
 					</>
-				)}
-			</View>
+				}
+				renderItem={renderCouponItem}
+			/>
 		</Screen>
 	);
 }
 
-const styles = StyleSheet.create({
-	container: { padding: spacing.xl, flex: 1 },
+function CouponsSkeleton() {
+	return (
+		<View style={styles.skeletonWrap}>
+			<View style={styles.stats}>
+				{[0, 1, 2].map((i) => (
+					<Skeleton
+						key={`coupon-stat-skeleton-${i}`}
+						style={styles.skeletonStat}
+					/>
+				))}
+			</View>
+			{[0, 1].map((i) => (
+				<Skeleton
+					key={`coupon-skeleton-${i}`}
+					style={styles.skeletonCard}
+				/>
+			))}
+		</View>
+	);
+}
+
+const styles = StyleSheet.create({	container: { padding: spacing.xl, flexGrow: 1 },
 	newButton: { alignSelf: "flex-end", marginTop: spacing.md },
 	stats: {
 		flexDirection: "row",
@@ -215,4 +315,7 @@ const styles = StyleSheet.create({
 		alignItems: "flex-start",
 		gap: spacing.xs,
 	},
+	skeletonWrap: { gap: spacing.md },
+	skeletonStat: { flex: 1, height: 64, borderRadius: radii.md },
+	skeletonCard: { height: 148, borderRadius: radii.lg, marginTop: spacing.md },
 });

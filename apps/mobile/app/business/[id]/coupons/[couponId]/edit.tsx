@@ -2,20 +2,20 @@ import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	ErrorState,
 	goBackOr,
 	LoadingView,
 	Screen,
 	ScreenHeader,
-} from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useBusinessCoupon, useUpsertCoupon } from "@/features/business/hooks";
+} from "@/src/core/ui";
+import { spacing } from "@/src/core/theme/spacing";
+import { useBusinessCoupon, useUpsertCoupon } from "@/src/features/business/hooks";
 import {
 	CouponForm,
 	type CouponFormValues,
-} from "@/features/business/components/CouponForm";
+} from "@/src/features/business/components/CouponForm";
 
 export default function BusinessCouponEditScreen() {
 	const { id, couponId } = useLocalSearchParams<{

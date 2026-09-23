@@ -1,17 +1,20 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner-native";
-import { strings } from "@/core/i18n/strings";
-import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
+import { strings } from "@/src/core/i18n/strings";
+import type {
+	OrderStatus as OrderStatusType,
+	PayoutStatus as PayoutStatusType,
+} from "@0xc1x/role-commons";
 
 import {
 	businessRepository,
 	deleteOffer,
 	saveOffer,
-} from "@/features/business/data/repository";
-import { notificationRepository } from "@/features/business/data/notifications";
+} from "@/src/features/business/data/repository";
+import { notificationRepository } from "@/src/features/business/data/notifications";
 // Los writes de pedidos (RPCs) viven en el repo de orders; estos hooks solo
 // orquestan vistas del rol negocio sobre esa API.
-import { orderRepository } from "@/features/orders/data/repository";
+import { orderRepository } from "@/src/features/orders/data/repository";
 
 export function useBusinesses(ownerId: string) {
 	return useQuery({
@@ -29,19 +32,110 @@ export function useBusinessProfile(businessId: string) {
 	});
 }
 
-/** Lista completa de reseñas del negocio (pantalla dedicada). */
-export function useBusinessReviews(businessId: string) {
-	return useQuery({
-		queryKey: ["businesses", businessId, "reviews"],
-		queryFn: () => businessRepository.getBusinessReviews(businessId),
+/** Lista paginada de reseñas del negocio (pantalla dedicada + preview por oferta). */
+export function useBusinessReviews(
+	businessId: string,
+	filters: { offerId?: string | null; limit?: number } = {},
+) {
+	const pageSize = filters.limit ?? REVIEWS_PAGE_SIZE;
+	const offerId = filters.offerId ?? null;
+	return useInfiniteQuery({
+		// pageSize in key: the top-3 preview (OfferReviewsCard) and the full
+		// screen (20/page) must not share cached pages.
+		queryKey: ["businesses", businessId, "reviews", { offerId, pageSize }],
+		initialPageParam: 0,
+		queryFn: ({ pageParam }) =>
+			businessRepository.getBusinessReviews(businessId, {
+				offerId,
+				limit: pageSize,
+				offset: (pageParam as number) * pageSize,
+			}),
+		getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+			lastPage.length < pageSize ? undefined : (lastPageParam as number) + 1,
 		enabled: businessId.length > 0,
 	});
 }
 
-export function useBusinessOffers(businessId: string) {
+/** Total de reseñas via server head-count (no rows fetched). */
+export function useBusinessReviewCount(
+	businessId: string,
+	filters: { offerId?: string | null } = {},
+) {
+	const offerId = filters.offerId ?? null;
 	return useQuery({
-		queryKey: ["businesses", businessId, "offers"],
-		queryFn: () => businessRepository.getBusinessOffers(businessId),
+		queryKey: ["businesses", businessId, "reviews", "count", { offerId }],
+		queryFn: () =>
+			businessRepository.countBusinessReviews(businessId, { offerId }),
+		enabled: businessId.length > 0,
+	});
+}
+
+export interface BusinessOfferListFilters {
+	locationId?: string | null;
+	search?: string;
+	isActive?: boolean;
+	categoryId?: string | null;
+	orderBy?: "created_at" | "title" | "discounted_price" | "stock";
+	ascending?: boolean;
+	limit?: number;
+}
+
+export function useBusinessOffers(
+	businessId: string,
+	filters: BusinessOfferListFilters = {},
+) {
+	const pageSize = filters.limit ?? OFFERS_PAGE_SIZE;
+	const {
+		locationId = null,
+		search = "",
+		isActive,
+		categoryId = null,
+		orderBy = null,
+		ascending = null,
+	} = filters;
+	return useInfiniteQuery({
+		// limit/categoryId/order in key: different page sizes and orderings
+		// must not share cached pages.
+		queryKey: [
+			"businesses",
+			businessId,
+			"offers",
+			{
+				locationId,
+				search,
+				isActive: isActive ?? null,
+				categoryId,
+				orderBy,
+				ascending,
+				limit: pageSize,
+			},
+		],
+		initialPageParam: 0,
+		queryFn: ({ pageParam }) =>
+			businessRepository.getBusinessOffers(businessId, {
+				locationId,
+				search: search.length > 0 ? search : undefined,
+				isActive,
+				categoryId: categoryId ?? undefined,
+				orderBy: orderBy ?? undefined,
+				ascending: ascending ?? undefined,
+				limit: pageSize,
+				offset: (pageParam as number) * pageSize,
+			}),
+		getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+			lastPage.length < pageSize ? undefined : (lastPageParam as number) + 1,
+		enabled: businessId.length > 0,
+	});
+}
+
+/** Catalog totals via server head-counts (no rows fetched). */
+export function useBusinessOfferCount(
+	businessId: string,
+	filters: Omit<BusinessOfferListFilters, "limit"> = {},
+) {
+	return useQuery({
+		queryKey: ["businesses", businessId, "offers", "count", filters],
+		queryFn: () => businessRepository.countBusinessOffers(businessId, filters),
 		enabled: businessId.length > 0,
 	});
 }
@@ -132,10 +226,41 @@ export function useToggleLocationStatus(businessId: string) {
 	});
 }
 
-export function useBusinessCoupons(businessId: string) {
+export function useBusinessCoupons(
+	businessId: string,
+	filters: { isActive?: boolean } = {},
+) {
+	const { isActive } = filters;
+	return useInfiniteQuery({
+		queryKey: [
+			"businesses",
+			businessId,
+			"coupons",
+			{ isActive: isActive ?? null },
+		],
+		initialPageParam: 0,
+		queryFn: ({ pageParam }) =>
+			businessRepository.getCoupons(businessId, {
+				isActive,
+				limit: COUPONS_PAGE_SIZE,
+				offset: (pageParam as number) * COUPONS_PAGE_SIZE,
+			}),
+		getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+			lastPage.length < COUPONS_PAGE_SIZE
+				? undefined
+				: (lastPageParam as number) + 1,
+		enabled: businessId.length > 0,
+	});
+}
+
+/** Coupon totals via server head-counts (no rows fetched). */
+export function useBusinessCouponCount(
+	businessId: string,
+	filters: { isActive?: boolean } = {},
+) {
 	return useQuery({
-		queryKey: ["businesses", businessId, "coupons"],
-		queryFn: () => businessRepository.getCoupons(businessId),
+		queryKey: ["businesses", businessId, "coupons", "count", filters],
+		queryFn: () => businessRepository.countCoupons(businessId, filters),
 		enabled: businessId.length > 0,
 	});
 }
@@ -223,11 +348,46 @@ export function useUpdateBusiness(businessId: string) {
 	});
 }
 
-export function useBusinessPayouts(businessId: string) {
-	return useQuery({
-		queryKey: ["businesses", businessId, "payouts"],
-		queryFn: () => businessRepository.getPayouts(businessId),
+export function useBusinessPayouts(
+	businessId: string,
+	filters: { status?: PayoutStatusType } = {},
+) {
+	const { status = null } = filters;
+	return useInfiniteQuery({
+		queryKey: ["businesses", businessId, "payouts", { status }],
+		initialPageParam: 0,
+		queryFn: ({ pageParam }) =>
+			businessRepository.getPayouts(businessId, {
+				status: status ?? undefined,
+				limit: PAYOUTS_PAGE_SIZE,
+				offset: (pageParam as number) * PAYOUTS_PAGE_SIZE,
+			}),
+		getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+			lastPage.length < PAYOUTS_PAGE_SIZE
+				? undefined
+				: (lastPageParam as number) + 1,
 		enabled: businessId.length > 0,
+	});
+}
+
+/**
+ * Exact balance cards over ALL payouts (unfiltered aggregate — independent
+ * from the status-filtered list, so the cards never read 0 under a filter).
+ */
+export function useBusinessPayoutTotals(businessId: string) {
+	return useQuery({
+		queryKey: ["businesses", businessId, "payouts", "totals"],
+		queryFn: () => businessRepository.getPayoutTotals(businessId),
+		enabled: businessId.length > 0,
+	});
+}
+
+/** Single payout by id (detail screen — no list fetch). */
+export function useBusinessPayout(payoutId: string) {
+	return useQuery({
+		queryKey: ["businesses", "payout", payoutId],
+		queryFn: () => businessRepository.getPayout(payoutId),
+		enabled: payoutId.length > 0,
 	});
 }
 
@@ -268,10 +428,55 @@ export function useUpdateBusinessNotifications(businessId: string) {
 }
 
 /** Business orders (shared order repository, filtered by business id). */
-export function useBusinessOrders(businessId: string) {
+export interface BusinessOrderListFilters {
+	statuses?: readonly OrderStatusType[];
+	status?: OrderStatusType;
+	branchId?: string | null;
+	search?: string;
+	from?: string;
+	to?: string;
+	ascending?: boolean;
+}
+
+const ORDERS_PAGE_SIZE = 20;
+const REVIEWS_PAGE_SIZE = 20;
+const OFFERS_PAGE_SIZE = 20;
+const COUPONS_PAGE_SIZE = 20;
+const PAYOUTS_PAGE_SIZE = 20;
+
+export function useBusinessOrders(businessId: string, filters: BusinessOrderListFilters = {}) {
+	return useInfiniteQuery({
+		queryKey: ["businesses", businessId, "orders", filters],
+		initialPageParam: 0,
+		queryFn: ({ pageParam }) =>
+			orderRepository.getBusinessOrders(businessId, {
+				...filters,
+				limit: ORDERS_PAGE_SIZE,
+				offset: (pageParam as number) * ORDERS_PAGE_SIZE,
+			}),
+		getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+			lastPage.length < ORDERS_PAGE_SIZE ? undefined : (lastPageParam as number) + 1,
+		enabled: businessId.length > 0,
+	});
+}
+
+/** Headline metrics via server head-counts (no rows fetched). */
+export function useBusinessOrderStats(businessId: string) {
 	return useQuery({
-		queryKey: ["businesses", businessId, "orders"],
-		queryFn: () => orderRepository.getBusinessOrders(businessId),
+		queryKey: ["businesses", businessId, "orders", "stats"],
+		queryFn: async () => {
+			const start = new Date();
+			start.setUTCHours(0, 0, 0, 0);
+			const [pendingCount, readyCount, todayCompletedCount] = await Promise.all([
+				orderRepository.countBusinessOrders(businessId, { status: "pending" }),
+				orderRepository.countBusinessOrders(businessId, { status: "ready_for_pickup" }),
+				orderRepository.countBusinessOrders(businessId, {
+					status: "completed",
+					from: start.toISOString(),
+				}),
+			]);
+			return { pendingCount, readyCount, todayCompletedCount };
+		},
 		enabled: businessId.length > 0,
 	});
 }
@@ -298,6 +503,13 @@ export function useUpdateOrderStatus(businessId: string) {
 				queryKey: businessOrdersKey(businessId),
 			});
 			void queryClient.invalidateQueries({ queryKey: ["orders"] });
+			// El cambio de estado mueve contadores y ventas agregadas.
+			void queryClient.invalidateQueries({
+				queryKey: ["businesses", businessId, "orders", "stats"],
+			});
+			void queryClient.invalidateQueries({
+				queryKey: ["businesses", businessId, "stats"],
+			});
 		},
 		onError: () => toast.error(strings.business.ordersStatusError),
 	});
@@ -320,6 +532,12 @@ export function useCancelBusinessOrder(businessId: string) {
 				});
 				void queryClient.invalidateQueries({ queryKey: ["orders"] });
 				void queryClient.invalidateQueries({ queryKey: ["offers"] });
+				void queryClient.invalidateQueries({
+					queryKey: ["businesses", businessId, "orders", "stats"],
+				});
+				void queryClient.invalidateQueries({
+					queryKey: ["businesses", businessId, "stats"],
+				});
 			}
 		},
 	});
@@ -342,6 +560,10 @@ export function useValidatePickupCode(businessId: string) {
 					queryKey: businessOrdersKey(businessId),
 				});
 				void queryClient.invalidateQueries({ queryKey: ["orders"] });
+				// Pickup completes a sale: the sales-stats RPC goes stale.
+				void queryClient.invalidateQueries({
+					queryKey: ["businesses", businessId, "stats"],
+				});
 			}
 		},
 		onError: () => toast.error(strings.business.ordersValidateError),

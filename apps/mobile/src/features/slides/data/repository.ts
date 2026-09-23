@@ -1,5 +1,5 @@
-import { supabase } from "@/core/supabase/client";
-import { toAppError } from "@/core/error/mapper";
+import { supabase } from "@/src/core/supabase/client";
+import { toAppError } from "@/src/core/error/mapper";
 
 import { isInValidityWindow, toPromoSlide, type PromoSlide, type SlideRow } from "../domain/slide";
 

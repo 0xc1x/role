@@ -1,11 +1,11 @@
 import { View, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Leaf } from "lucide-react-native";
 
-import { useTheme } from "@/core/theme";
-import { AppText } from "@/core/ui";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { strings } from "@/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { AppText } from "@/src/core/ui";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
 
 export function EcoBanner() {
 	const { colors } = useTheme();
@@ -21,7 +21,7 @@ export function EcoBanner() {
 				<View
 					style={[styles.iconContainer, { backgroundColor: colors.greenMidDark }]}
 				>
-					<Ionicons name="leaf" size={28} color={colors.green} />
+					<Leaf size={28} color={colors.green} />
 				</View>
 				<View style={styles.textContainer}>
 					<AppText
@@ -49,8 +49,7 @@ export function EcoBanner() {
 				<View
 					style={[styles.leafDecoration, { backgroundColor: colors.ecoGreen }]}
 				>
-					<Ionicons
-						name="leaf"
+					<Leaf
 						size={40}
 						color={colors.greenDarkForeground}
 					/>
@@ -83,7 +82,7 @@ const styles = StyleSheet.create({
 	iconContainer: {
 		width: 52,
 		height: 52,
-		borderRadius: 26,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -101,7 +100,7 @@ const styles = StyleSheet.create({
 	leafDecoration: {
 		width: 75,
 		height: 75,
-		borderRadius: 37.5,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},

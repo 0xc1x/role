@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
 import {
 	ActivityIndicator,
 	Pressable,
@@ -8,31 +8,36 @@ import {
 	TextInput,
 	type TextInputProps,
 	View,
+	Platform,
 	type RefreshControlProps,
 	type StyleProp,
 	type TextStyle,
 	type ViewStyle,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { router, useNavigation, type Href } from "expo-router";
+import { ChevronLeft, Eye, EyeOff, Heart, Search, X, type LucideIcon } from "lucide-react-native";
+import { router, useNavigation, useSegments, type Href } from "expo-router";
 import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
+	withRepeat,
 	withSequence,
 	withSpring,
 	withTiming,
 	Easing,
 } from "react-native-reanimated";
 
-import { useTheme } from "@/core/theme";
-import type { ColorTokens } from "@/core/theme/colors";
-import { strings } from "@/core/i18n/strings";
-import { spacing, radii } from "@/core/theme/spacing";
-import { fonts, typography, type TypeStyle } from "@/core/theme/typography";
-import { withAlpha } from "@/core/theme/alpha";
-import { toAppError } from "@/core/error/mapper";
+import { useTheme } from "@/src/core/theme";
+import type { ColorTokens } from "@/src/core/theme/colors";
+import { strings } from "@/src/core/i18n/strings";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { fonts, typography, type TypeStyle } from "@/src/core/theme/typography";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { toAppError } from "@/src/core/error/mapper";
 import { AppText } from "./AppText";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export { BottomSheetModal } from "./BottomSheetModal";
 export { AppText, type FontVariant, type FontWeight } from "./AppText";
@@ -40,126 +45,11 @@ export { useWebPullToRefresh } from "./WebPullToRefresh";
 // InfoScreen y LegalScreen importan del barrel: exportarlas aquí crearía
 // un ciclo; se siguen importando por ruta directa.
 export { Logo } from "./Logo";
-export { default as RoleTabBar, BAR_HEIGHT } from "./RoleTabBar";
+export { default as Navbar, BAR_HEIGHT } from "./Navbar";
 
 export type { ColorTokens, TypeStyle };
 export { spacing, fonts, typography };
 
-// ─── Button ─────────────────────────────────────────────────────────
-export type ButtonVariant =
-	| "primary"
-	| "secondary"
-	| "outline"
-	| "ghost"
-	| "danger";
-
-interface ButtonProps {
-	onPress?: () => void;
-	label: string;
-	variant?: ButtonVariant;
-	disabled?: boolean;
-	loading?: boolean;
-	fullWidth?: boolean;
-	size?: "sm" | "md" | "lg";
-	style?: StyleProp<ViewStyle>;
-	icon?: ReactNode;
-	accessibilityLabel?: string;
-}
-
-export function Button({
-	onPress,
-	label,
-	variant = "primary",
-	disabled,
-	loading,
-	fullWidth,
-	size = "md",
-	style,
-	icon,
-	accessibilityLabel,
-}: ButtonProps) {
-	const { colors } = useTheme();
-	const isDisabled = disabled || loading;
-	const height = size === "sm" ? 38 : size === "lg" ? 54 : 46;
-	const { base, labelStyle, labelColor } = buttonVariant(colors, variant);
-	return (
-		<Pressable
-			onPress={onPress}
-			disabled={isDisabled}
-			accessibilityRole="button"
-			accessibilityLabel={accessibilityLabel ?? label}
-			style={({ pressed }) => [
-				base,
-				{ height, opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1 },
-				fullWidth && styles.fullWidth,
-				style,
-			]}
-		>
-			{loading ? (
-				<ActivityIndicator color={labelColor} />
-			) : (
-				<View style={styles.row}>
-					{icon}
-					<Text style={[labelStyle, { color: labelColor }]}>{label}</Text>
-				</View>
-			)}
-		</Pressable>
-	);
-}
-
-function buttonVariant(
-	colors: ColorTokens,
-	variant: ButtonVariant,
-): {
-	base: ViewStyle;
-	labelStyle: TextStyle;
-	labelColor: string;
-} {
-	const base: ViewStyle = {
-		borderRadius: radii.pill,
-		justifyContent: "center",
-		alignItems: "center",
-		paddingHorizontal: spacing.lg,
-	};
-	const labelStyle: TextStyle = { ...typography.button };
-	switch (variant) {
-		case "primary":
-			return {
-				base: { ...base, backgroundColor: colors.primary },
-				labelStyle,
-				labelColor: colors.primaryForeground,
-			};
-		case "secondary":
-			return {
-				base: { ...base, backgroundColor: colors.secondary },
-				labelStyle,
-				labelColor: colors.secondaryForeground,
-			};
-		case "outline":
-			return {
-				base: {
-					...base,
-					borderWidth: 1.5,
-					borderColor: colors.foreground,
-					backgroundColor: "transparent",
-				},
-				labelStyle,
-				labelColor: colors.foreground,
-			};
-		case "ghost":
-			return {
-				base: { ...base, backgroundColor: "transparent" },
-				labelStyle: { ...labelStyle, fontWeight: "600" },
-				labelColor: colors.foreground,
-			};
-		case "danger":
-			return {
-				base: { ...base, backgroundColor: colors.destructive },
-				labelStyle,
-				labelColor: colors.destructiveForeground,
-			};
-	}
-}
 
 // ─── Circular Icon Button (floating) ─────────────────────────────
 export function CircleIconButton({
@@ -252,8 +142,8 @@ export function HeartButton({
 					},
 				]}
 			>
-				<Ionicons
-					name={isFavorite ? "heart" : "heart-outline"}
+				<Heart
+					fill={isFavorite ? colors.redAccent : "none"}
 					size={iconSize}
 					color={isFavorite ? colors.redAccent : colors.foreground}
 				/>
@@ -292,7 +182,7 @@ export function SearchBar({
 				containerStyle,
 			]}
 		>
-			<Ionicons name="search" size={18} color={colors.mutedForeground} />
+			<Search size={18} color={colors.mutedForeground} />
 			<TextInput
 				value={value}
 				onChangeText={onChangeText}
@@ -304,21 +194,19 @@ export function SearchBar({
 				style={[styles.searchInput, { color: colors.foreground }]}
 			/>
 			{value.length > 0 ? (
-				<Pressable
+				<Button
+					variant="ghost"
+					size="icon"
 					onPress={() => {
 						onChangeText("");
 						onSubmit?.("");
 					}}
 					hitSlop={8}
 					accessibilityRole="button"
-					accessibilityLabel={strings.common.clear}
-					style={[
-						styles.searchClear,
-						{ backgroundColor: colors.inputBackground },
-					]}
-				>
-					<Ionicons name="close" size={16} color={colors.mutedForeground} />
-				</Pressable>
+					aria-label={strings.common.clearSearch}
+					style={{ width: 24, height: 24 }}
+					icon={<X size={16} color={colors.mutedForeground} />}
+				/>
 			) : null}
 		</View>
 	);
@@ -350,9 +238,16 @@ export function FilterChip({
 			>
 				{label}
 			</AppText>
-			<Pressable onPress={onClear} hitSlop={8} accessibilityRole="button">
-				<Ionicons name="close" size={14} color={colors.mutedForeground} />
-			</Pressable>
+			<Button
+				variant="ghost"
+				size="icon"
+				onPress={onClear}
+				aria-label={strings.common.removeFilter.replace("{label}", label)}
+				hitSlop={8}
+				accessibilityRole="button"
+				style={{ width: 24, height: 24 }}
+				icon={<X size={14} color={colors.mutedForeground} />}
+			/>
 		</View>
 	);
 }
@@ -389,18 +284,15 @@ export function ScreenHeader({ title, onBack, fallback, style }: ScreenHeaderPro
 
 	return (
 		<View style={[styles.screenHeader, style]}>
-			<Pressable
+			<Button
+				variant="ghost"
+				size="icon"
 				onPress={onBack ?? handleBack}
 				hitSlop={8}
 				accessibilityRole="button"
-				accessibilityLabel={strings.common.back}
-				style={[
-					styles.screenHeaderBack,
-					{ backgroundColor: colors.card, borderColor: colors.borderSolid },
-				]}
-			>
-				<Ionicons name="chevron-back" size={20} color={colors.foreground} />
-			</Pressable>
+				aria-label={strings.common.back}
+				icon={<ChevronLeft size={22} color={colors.foreground} />}
+			/>
 			{title ? (
 				<AppText
 					variant="h2"
@@ -413,38 +305,6 @@ export function ScreenHeader({ title, onBack, fallback, style }: ScreenHeaderPro
 			) : null}
 		</View>
 	);
-}
-
-// ─── Card ───────────────────────────────────────────────────────────
-interface CardProps {
-	children: ReactNode;
-	style?: StyleProp<ViewStyle>;
-	onPress?: () => void;
-}
-
-export function Card({ children, style, onPress }: CardProps) {
-	const { colors } = useTheme();
-	const inner = [
-		styles.card,
-		{
-			backgroundColor: colors.card,
-			borderColor: colors.borderSolid,
-			boxShadow: `0px 4px 16px ${colors.cardShadow}`,
-		},
-		style,
-	];
-	if (onPress) {
-		return (
-			<Pressable
-				onPress={onPress}
-				accessibilityRole="button"
-				style={({ pressed }) => [inner, pressed && { opacity: 0.9 }]}
-			>
-				{children}
-			</Pressable>
-		);
-	}
-	return <View style={inner}>{children}</View>;
 }
 
 // ─── Screen ─────────────────────────────────────────────────────────
@@ -471,15 +331,34 @@ export function Screen({
 }: ScreenProps) {
 	const { colors } = useTheme();
 	const bg = { backgroundColor: colors.background };
+	// Dueño único del inset inferior en los grupos con tabs: OuterBar/
+	// Navbar va en flujo debajo de TODA pantalla de (consumer)/(business)
+	// (incluidos los stacks anidados como profile/*) y guarda la zona de
+	// gesto con su propio bottomInset pintado con el fondo temático. El
+	// bottom de SafeAreaView aquí duplicaba ese inset y, apilado sobre el
+	// padding de diseño del contenido, se leía como franja en todas las
+	// tabs — por eso se filtra en la zona compartida en vez de tocar
+	// pantallas una por una. Fuera de esos grupos (stacks raíz, modales,
+	// auth, checkout) edges se respeta intacto: ahí no hay barra que
+	// guarde el gesto. Los edges explícitos sin bottom (p. ej. business
+	// products/orders) no cambian: el filtro es no-op para ellos.
+	const segments = useSegments();
+	const resolvedEdges = useMemo(() => {
+		const group = segments[0];
+		if (group === "(consumer)" || group === "(business)") {
+			return edges.filter((edge) => edge !== "bottom");
+		}
+		return edges;
+	}, [segments, edges]);
 	if (!scroll) {
 		return (
-			<SafeAreaView edges={edges} style={[styles.flex, bg, style]}>
+			<SafeAreaView edges={resolvedEdges} style={[styles.flex, bg, style]}>
 				{children}
 			</SafeAreaView>
 		);
 	}
 	return (
-		<SafeAreaView edges={edges} style={[styles.flex, bg]}>
+		<SafeAreaView edges={resolvedEdges} style={[styles.flex, bg]}>
 			<ScrollView
 				ref={scrollRef}
 				style={style}
@@ -500,8 +379,8 @@ interface TextFieldProps extends TextInputProps {
 	hint?: string;
 	error?: string | null;
 	containerStyle?: StyleProp<ViewStyle>;
-	/** Icono de prefijo (Ionicons), usado por los formularios de auth. */
-	iconName?: keyof typeof Ionicons.glyphMap;
+	/** Prefix icon (Lucide), used by the auth forms. */
+	icon?: LucideIcon;
 	/** Toggle de visibilidad para contraseñas (junto a secureTextEntry). */
 	secureToggle?: boolean;
 }
@@ -512,7 +391,7 @@ export function TextField({
 	error,
 	containerStyle,
 	multiline,
-	iconName,
+	icon: Icon,
 	secureToggle,
 	...inputProps
 }: TextFieldProps) {
@@ -546,7 +425,7 @@ export function TextField({
 		</AppText>
 	) : null;
 
-	if (iconName || secureToggle) {
+	if (Icon || secureToggle) {
 		const editable = inputProps.editable !== false;
 		return (
 			<View style={[styles.field, containerStyle]}>
@@ -565,9 +444,9 @@ export function TextField({
 						},
 					]}
 				>
-					{iconName ? (
-						<Ionicons name={iconName} size={20} color={colors.mutedForeground} />
-					) : null}
+				{Icon ? (
+					<Icon size={20} color={colors.mutedForeground} />
+				) : null}
 					<TextInput
 						placeholderTextColor={colors.mutedForeground}
 						onFocus={(e) => {
@@ -583,21 +462,24 @@ export function TextField({
 						secureTextEntry={secureToggle ? obscured : inputProps.secureTextEntry}
 					/>
 					{secureToggle ? (
-						<Pressable
+						<Button
+							variant="ghost"
+							size="icon"
 							onPress={() => setObscured((s) => !s)}
 							hitSlop={8}
 							accessibilityRole="button"
-							accessibilityLabel={
+							aria-label={
 								obscured ? strings.auth.showPassword : strings.auth.hidePassword
 							}
-							style={styles.eyeButton}
-						>
-							<Ionicons
-								name={obscured ? "eye" : "eye-off"}
-								size={20}
-								color={colors.mutedForeground}
-							/>
-						</Pressable>
+							style={{ width: 32, height: 32 }}
+							icon={
+								obscured ? (
+									<Eye size={20} color={colors.mutedForeground} />
+								) : (
+									<EyeOff size={20} color={colors.mutedForeground} />
+								)
+							}
+						/>
 					) : null}
 				</View>
 				{hintNode}
@@ -650,9 +532,12 @@ export type BadgeTone =
 export function StatusBadge({
 	label,
 	tone = "neutral",
+	dot = false,
 }: {
 	label: string;
 	tone?: BadgeTone;
+	/** Punto pulsante del estado (header del detalle del pedido). */
+	dot?: boolean;
 }) {
 	const { colors } = useTheme();
 	const toneMap: Record<BadgeTone, { bg: string; fg: string }> = {
@@ -664,12 +549,33 @@ export function StatusBadge({
 		info: { bg: colors.infoSurface, fg: colors.info },
 	};
 	const t = toneMap[tone];
-	return (
-		<View style={[styles.badge, { backgroundColor: t.bg }]}>
-			<AppText variant="bodySmall" weight="semiBold" style={{ color: t.fg }}>
-				{label}
-			</AppText>
-		</View>
+	const opacity = useSharedValue(1);
+	useEffect(() => {
+		if (dot) {
+			opacity.value = withRepeat(
+				withTiming(0.35, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+				-1,
+				true,
+			);
+		}
+	}, [dot, opacity]);
+	const dotStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+	  return (
+		<Badge
+		variant="outline"
+		style={{ backgroundColor: t.bg, borderColor: withAlpha(t.fg, 0.35) }}
+		>
+		{dot ? (
+			<Animated.View style={dotStyle}>
+				<View
+					style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.fg }}
+				/>
+			</Animated.View>
+		) : null}
+		<AppText variant="bodySmall" weight="semiBold" style={{ color: t.fg }}>
+			{label}
+		</AppText>
+		</Badge>
 	);
 }
 
@@ -733,11 +639,12 @@ export function ErrorState({
 			</AppText>
 			{onRetry ? (
 				<Button
-					label={strings.common.retry}
 					variant="outline"
 					onPress={onRetry}
 					style={{ alignSelf: "center", marginTop: margin(2) }}
-				/>
+				>
+				{strings.common.retry}
+				</Button>
 			) : null}
 		</View>
 	);
@@ -757,7 +664,6 @@ export function SectionHeader({
 	action?: ReactNode;
 	style?: StyleProp<ViewStyle>;
 }) {
-	const { colors } = useTheme();
 	return (
 		<View style={[styles.sectionHeader, style]}>
 			<View style={styles.sectionHeaderTitle}>
@@ -767,19 +673,9 @@ export function SectionHeader({
 				</AppText>
 			</View>
 			{onSeeAll ? (
-				<Pressable
-					onPress={onSeeAll}
-					hitSlop={8}
-					style={styles.sectionHeaderAction}
-				>
-					<AppText
-						variant="bodySmall"
-						weight="semiBold"
-						style={{ color: colors.primary }}
-					>
-						{strings.home.viewAll}
-					</AppText>
-				</Pressable>
+				<Button variant="link" onPress={onSeeAll} hitSlop={8}>
+					{strings.home.viewAll}
+				</Button>
 			) : (
 				action
 			)}
@@ -829,12 +725,12 @@ export function SectionTitle({ children }: { children: string }) {
 
 export function ThemeOptionCard({
 	label,
-	icon,
+	icon: Icon,
 	isSelected,
 	onPress,
 }: {
 	label: string;
-	icon: string;
+	icon: LucideIcon;
 	isSelected: boolean;
 	onPress: () => void;
 }) {
@@ -853,13 +749,12 @@ export function ThemeOptionCard({
 				},
 			]}
 		>
-			<Ionicons
-				name={icon as never}
-				size={20}
-				color={isSelected ? colors.primary : colors.mutedForeground}
-			/>
-			<AppText
-				variant="bodySmall"
+		<Icon
+			size={20}
+			color={isSelected ? colors.primary : colors.mutedForeground}
+		/>
+		<AppText
+			variant="bodySmall"
 				weight={isSelected ? "bold" : "regular"}
 				style={{
 					color: isSelected ? colors.primary : colors.foreground,
@@ -875,14 +770,14 @@ export function ThemeOptionCard({
 // ─── Styles ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
 	flex: { flex: 1 },
-	scrollContent: { paddingBottom: 32 },
+	scrollContent: { paddingBottom: spacing.xxl },
 	card: {
-		borderRadius: 24,
+		borderRadius: radii.md,
 		borderWidth: 1,
 		padding: 16,
 	},
 	circleButton: {
-		borderRadius: 99,
+		borderRadius: radii.pill,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -893,7 +788,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		borderWidth: 1,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		paddingHorizontal: 16,
 		paddingVertical: 12,
 	},
@@ -904,7 +799,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	input: {
-		borderRadius: 18,
+		borderRadius: radii.md,
 		borderWidth: 1,
 		paddingHorizontal: 16,
 		paddingVertical: 12,
@@ -912,10 +807,19 @@ const styles = StyleSheet.create({
 	},
 	inputMultiline: { minHeight: 96, textAlignVertical: "top" },
 	badge: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
 		paddingHorizontal: 10,
 		paddingVertical: 4,
-		borderRadius: 999,
+		borderRadius: radii.pill,
+		borderWidth: 1,
 		alignSelf: "flex-start",
+	},
+	badgeDot: {
+		width: 6,
+		height: 6,
+		borderRadius: radii.sm,
 	},
 	stateBox: {
 		alignItems: "center",
@@ -926,7 +830,7 @@ const styles = StyleSheet.create({
 	stateIcon: {
 		width: 56,
 		height: 56,
-		borderRadius: 28,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 		marginBottom: spacing.sm,
@@ -964,7 +868,7 @@ const styles = StyleSheet.create({
 	screenHeaderBack: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.xxl,
 		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",
@@ -978,7 +882,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.sm,
 		paddingHorizontal: spacing.md,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		borderWidth: 1,
 	},
 	// minWidth: 0 permite que el input encoja dentro de filas flex en web
@@ -987,7 +891,7 @@ const styles = StyleSheet.create({
 	searchClear: {
 		width: 24,
 		height: 24,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},

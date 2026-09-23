@@ -22,23 +22,24 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { strings } from "@/core/i18n/strings";
+import { Skeleton } from "@/components/ui/skeleton";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
 	goBackOr,
 	Screen,
 	ScreenHeader,
 	TextField,
-} from "@/core/ui";
-import { useAuthStore } from "@/features/auth/store";
-import { useAppConfig } from "@/features/config";
-import { useSaveProfileWithEmail } from "@/features/profile/hooks";
-import { authRepository } from "@/features/auth/data/repository";
-import { toAppError } from "@/core/error/mapper";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import type { UserProfile } from "@/features/auth/domain/user";
+} from "@/src/core/ui";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useAppConfig } from "@/src/features/config";
+import { useSaveProfileWithEmail } from "@/src/features/profile/hooks";
+import { authRepository } from "@/src/features/auth/data/repository";
+import { toAppError } from "@/src/core/error/mapper";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import type { UserProfile } from "@/src/features/auth/domain/user";
+import { Button } from "@/components/ui/button";
 
 function initialsOf(profile: UserProfile): string {
 	const name = profile.fullName?.trim();
@@ -90,7 +91,21 @@ export default function EditProfileScreen() {
 	// la mutación solo se dispara por acción del usuario ya autenticado).
 	const saveProfile = useSaveProfileWithEmail(profile?.id ?? "", profile?.email ?? "");
 
-	if (!initialized || status === "guest" || !profile) return null;
+	if (!initialized || !profile) {
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+					<ScreenHeader title={strings.profileEdit.title} fallback="/(consumer)/profile" />
+					<Skeleton style={styles.skeletonAvatar} />
+					{[0, 1, 2, 3].map((i) => (
+						<Skeleton key={`profile-form-skeleton-${i}`} style={styles.skeletonField} />
+					))}
+					<Skeleton style={styles.skeletonCta} />
+				</View>
+			</Screen>
+		);
+	}
+	if (status === "guest") return null;
 
 	const save = {
 		get isPending() {
@@ -165,11 +180,12 @@ export default function EditProfileScreen() {
 						</AvatarFallback>
 					</Avatar>
 					<Button
-						label={strings.profileEdit.changeAvatar}
 						variant="ghost"
 						size="sm"
 						onPress={() => {}}
-					/>
+					>
+						{strings.profileEdit.changeAvatar}
+					</Button>
 				</View>
 
 				{error ? (
@@ -230,12 +246,13 @@ export default function EditProfileScreen() {
 					/>
 				) : null}
 				<Button
-					label={strings.common.save}
-					onPress={() => void handleSave()}
+				    onPress={() => void handleSave()}
 					loading={save.isPending}
 					fullWidth
 					style={{ marginTop: spacing.md }}
-				/>
+				>
+					{strings.common.save}
+				</Button>
 			</View>
 		</Screen>
 	);
@@ -246,4 +263,12 @@ const styles = StyleSheet.create({
 	avatarWrap: { alignItems: "center", gap: spacing.xs },
 	field: { marginBottom: 0 },
 	fieldLabel: { marginBottom: 6 },
+	skeletonAvatar: {
+		width: 96,
+		height: 96,
+		borderRadius: radii.md,
+		alignSelf: "center",
+	},
+	skeletonField: { height: 56, borderRadius: radii.md },
+	skeletonCta: { height: 48, borderRadius: radii.md, marginTop: spacing.sm },
 });

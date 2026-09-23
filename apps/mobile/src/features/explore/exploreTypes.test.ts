@@ -4,7 +4,7 @@ import {
 	emptyExploreFilters,
 	exploreFilterSummary,
 	hasActiveExploreFilters,
-} from "@/features/explore/exploreTypes";
+} from "@/src/features/explore/exploreTypes";
 
 describe("hasActiveExploreFilters", () => {
 	it("es false cuando no hay filtros", () => {

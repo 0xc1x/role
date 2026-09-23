@@ -15,7 +15,7 @@ export function ThemeToggle() {
 		<DropdownMenu>
 			<DropdownMenuTrigger
 				render={
-					<SidebarMenuButton className="w-full data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground" />
+					<SidebarMenuButton className="relative w-full data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center" />
 				}
 			>
 				<Sun className="size-4 rotate-0 scale-100 opacity-100 transition-[transform,opacity] dark:-rotate-90 dark:scale-50 dark:opacity-0" />

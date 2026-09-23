@@ -14,7 +14,7 @@ import { Eyebrow } from "@/components/section";
 import { StepsGrid } from "@/components/steps-grid";
 import { platformStatsQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
-import { usePlatformStats } from "@/lib/use-config";
+import { useConfig, usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/for-business")({
 	component: ForBusinessPage,
@@ -75,6 +75,7 @@ const PROCESS = [
 
 function ForBusinessPage() {
 	const statsData = usePlatformStats();
+	const salesEmail = useConfig("contact.negocios_email", "negocios@role.app");
 	const stats = [
 		{ value: "12%", label: "ingresos extra en promedio" },
 		{
@@ -122,7 +123,7 @@ function ForBusinessPage() {
 									Registrar mi negocio
 								</Link>
 								<a
-									href="mailto:negocios@role.app"
+									href={`mailto:${salesEmail}`}
 									className="rounded-full border border-white/25 px-7 py-3 font-semibold text-white transition-[background-color,box-shadow,transform] duration-200 hover:bg-white/10 active:scale-[0.98]"
 								>
 									Hablar con ventas
@@ -137,10 +138,13 @@ function ForBusinessPage() {
 						<dl className="mt-16 grid grid-cols-3 gap-4 border-t border-white/10 pt-10 reveal reveal-delay-5">
 							{(stats ?? []).map((s) => (
 								<div key={s.label}>
-									<dd className="font-heading text-3xl font-bold tabular-nums text-role-primary md:text-4xl">
-										{s.value}
+									<dt className="sr-only">{s.label}</dt>
+									<dd>
+										<p className="font-heading text-3xl font-bold tabular-nums text-role-primary md:text-4xl">
+											{s.value}
+										</p>
+										<p className="mt-1 text-sm text-white/70">{s.label}</p>
 									</dd>
-									<dt className="mt-1 text-sm text-white/70">{s.label}</dt>
 								</div>
 							))}
 						</dl>
@@ -245,7 +249,7 @@ function ForBusinessPage() {
 					primaryHref="/business-signup"
 					primaryIcon={<StoreIcon className="h-5 w-5" />}
 					secondaryLabel="Contactar a ventas"
-					secondaryHref="mailto:negocios@role.app"
+					secondaryHref={`mailto:${salesEmail}`}
 					foot="Sin costo de registro. Sin comisiones sobre el cobro."
 				/>
 			</main>

@@ -4,25 +4,26 @@ import {
 	Platform,
 	Pressable,
 	StyleSheet,
-	Switch,
 	View,
 } from "react-native";
 import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronRight, CircleCheck, Image as ImageIcon, Images, MapPin } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, TextField } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, TextField } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
 import type { BusinessType } from "@0xc1x/role-commons";
 import {
 	MapPickerView,
 	type MapPickerResult,
-} from "@/features/profile/components/MapPickerView";
+} from "@/src/features/profile/components/MapPickerView";
 import { DateTimeField } from "./products/DateTimeFields";
 import { pickWebImage } from "../utils/pick-image";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 
 const DAYS = [
 	"Lunes",
@@ -104,7 +105,7 @@ function dateToTime(d: Date): string {
 
 /**
  * Formulario compartido de negocio: creación (business-new) y edición
- * (my-business/edit). Los campos son los que soportan
+ * (business/profile/edit). Los campos son los que soportan
  * createBusiness/updateBusiness del repository.
  */
 export function BusinessForm({
@@ -201,12 +202,10 @@ export function BusinessForm({
 			<View style={styles.imagesRow}>
 				<Pressable
 					onPress={() => void pickImage(setLogoUri)}
-					style={({ pressed }) => [
-						styles.logoArea,
+					style={[styles.logoArea,
 						{
 							backgroundColor: colors.inputBackground,
 							borderColor: colors.borderSolid,
-							opacity: pressed ? 0.85 : 1,
 						},
 					]}
 				>
@@ -214,8 +213,7 @@ export function BusinessForm({
 						<Image source={{ uri: logoUri }} style={styles.areaImage} />
 					) : (
 						<View style={styles.imagePlaceholder}>
-							<Ionicons
-								name="image-outline"
+							<ImageIcon
 								size={22}
 								color={colors.mutedForeground}
 							/>
@@ -230,21 +228,26 @@ export function BusinessForm({
 				</Pressable>
 				<Pressable
 					onPress={() => void pickImage(setCoverUri)}
-					style={({ pressed }) => [
-						styles.coverArea,
+					style={[styles.coverArea,
 						{
 							backgroundColor: colors.inputBackground,
 							borderColor: colors.borderSolid,
-							opacity: pressed ? 0.85 : 1,
 						},
 					]}
+					// style={({ pressed }) => [
+					// 	styles.coverArea,
+					// 	{
+					// 		backgroundColor: colors.inputBackground,
+					// 		borderColor: colors.borderSolid,
+					// 		opacity: pressed ? 0.85 : 1,
+					// 	},
+					// ]}
 				>
 					{coverUri ? (
 						<Image source={{ uri: coverUri }} style={styles.areaImage} />
 					) : (
 						<View style={styles.imagePlaceholder}>
-							<Ionicons
-								name="images-outline"
+							<Images
 								size={22}
 								color={colors.mutedForeground}
 							/>
@@ -279,10 +282,11 @@ export function BusinessForm({
 					{(Object.keys(BUSINESS_TYPE_LABELS) as BusinessType[]).map((key) => {
 						const selected = type === key;
 						return (
-							<Pressable
+							<Button
+								variant={"outline"}
 								key={key}
 								onPress={() => setType(key)}
-								style={({ pressed }) => [
+								style={ [
 									styles.chip,
 									{
 										backgroundColor: selected
@@ -291,7 +295,6 @@ export function BusinessForm({
 										borderColor: selected
 											? colors.secondary
 											: colors.borderSolid,
-										opacity: pressed ? 0.85 : 1,
 									},
 								]}
 							>
@@ -306,7 +309,7 @@ export function BusinessForm({
 								>
 									{BUSINESS_TYPE_LABELS[key]}
 								</AppText>
-							</Pressable>
+							</Button>
 						);
 					})}
 				</View>
@@ -355,17 +358,15 @@ export function BusinessForm({
 				</AppText>
 				<Pressable
 					onPress={() => setShowMap(true)}
-					style={({ pressed }) => [
+					style={[
 						styles.selectRow,
 						{
 							backgroundColor: colors.inputBackground,
 							borderColor: colors.borderSolid,
-							opacity: pressed ? 0.85 : 1,
 						},
 					]}
 				>
-					<Ionicons
-						name="location-outline"
+					<MapPin
 						size={16}
 						color={picked ? colors.success : colors.mutedForeground}
 					/>
@@ -377,14 +378,12 @@ export function BusinessForm({
 						{picked?.address ?? strings.business.pickLocation}
 					</AppText>
 					{picked ? (
-						<Ionicons
-							name="checkmark-circle"
+						<CircleCheck
 							size={18}
 							color={colors.success}
 						/>
 					) : (
-						<Ionicons
-							name="chevron-forward"
+						<ChevronRight
 							size={16}
 							color={colors.mutedForeground}
 						/>
@@ -408,7 +407,7 @@ export function BusinessForm({
 				</AppText>
 				{hours.map((h) => (
 					<View key={h.day} style={styles.hoursRow}>
-						<AppText variant="bodySmall" style={{ width: 90 }}>
+						<AppText variant="h4" style={{ width: 90 }}>
 							{h.day}
 						</AppText>
 						{h.closed ? (
@@ -419,38 +418,39 @@ export function BusinessForm({
 								{strings.businessProfile.closed}
 							</AppText>
 						) : (
-							<View style={styles.timeRow}>
+							<View style={styles.timeRow}
+							>
 								<DateTimeField
 									mode="time"
-									label=""
+									label="Apertura"
 									value={h.open}
 									onChange={(d) => setDay(h.day, { open: d })}
 								/>
 								<DateTimeField
 									mode="time"
-									label=""
+									label="Cierre"
 									value={h.close}
 									onChange={(d) => setDay(h.day, { close: d })}
 								/>
 							</View>
 						)}
 						<Switch
-							value={!h.closed}
-							onValueChange={(open) => setDay(h.day, { closed: !open })}
-							trackColor={{ false: colors.muted, true: colors.secondary }}
+							checked={!h.closed}
+							onCheckedChange={(open) => setDay(h.day, { closed: !open })}
 						/>
 					</View>
 				))}
 			</View>
 
 			<Button
-				label={submitLabel}
 				onPress={handleSubmit}
 				loading={pending}
 				fullWidth
 				size="lg"
 				style={{ marginTop: spacing.md }}
-			/>
+			>
+				{submitLabel}
+			</Button>
 
 			{showMap ? (
 				<Modal visible transparent statusBarTranslucent animationType="fade">
@@ -475,6 +475,8 @@ const styles = StyleSheet.create({
 	imagesRow: {
 		flexDirection: "row",
 		gap: spacing.md,
+		width: 110,
+		height: 110,
 	},
 	logoArea: {
 		width: 110,
@@ -485,8 +487,8 @@ const styles = StyleSheet.create({
 		overflow: "hidden",
 	},
 	coverArea: {
-		flex: 1,
 		height: 110,
+		width: 210,
 		borderRadius: radii.lg,
 		borderWidth: 1,
 		borderStyle: "dashed",
@@ -516,7 +518,7 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.sm,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		borderWidth: 1,
 		paddingHorizontal: 16,
 		paddingVertical: 12,

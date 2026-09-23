@@ -1,20 +1,25 @@
-import { View, StyleSheet, Pressable } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { MapPin } from "lucide-react-native";
 
-import { useTheme } from "@/core/theme";
-import { AppText, Card, HeartButton } from "@/core/ui";
-import { spacing, radii } from "@/core/theme/spacing";
-import { strings } from "@/core/i18n/strings";
-import { useIsFavorite, useSelectedAddress, useToggleFavorite } from "@/features/hooks";
-import { useAuthStore } from "@/features/auth/store";
-import { formatDistanceKm, formatTime } from "@/core/utils/formatters";
+import { useTheme } from "@/src/core/theme";
+import { AppText, HeartButton } from "@/src/core/ui";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import {
+	useIsFavorite,
+	useSelectedAddress,
+	useToggleFavorite,
+} from "@/src/features/hooks";
+import { useAuthStore } from "@/src/features/auth/store";
+import { formatDistanceKm, formatTime } from "@/src/core/utils/formatters";
 import {
 	discountPercentage,
 	haversineKm,
 	type OfferDetail,
-} from "@/features/offers/domain/offer";
+} from "@/src/features/offers/domain/offer";
+import { CardPressable } from "@/components/ui/card-presable";
 
 function dealPrice(value: number): string {
 	return `$${value.toFixed(2)}`;
@@ -42,13 +47,15 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 					),
 				)
 			: "";
-	const pickupTime = offer.offer.pickup_end
-		? formatTime(offer.offer.pickup_end)
-		: "";
+	const pickupTime =
+		!offer.availabilityUnknown && offer.offer.pickup_end
+			? formatTime(offer.offer.pickup_end)
+			: "";
 
-return (
-		<View style={styles.wrapper}>
-			<Card
+	return (
+		<View >
+			<CardPressable
+				className="p-0 gap-0 border-0 shadow-none" 
 				style={styles.offerCard}
 				onPress={() => router.push(`/offer/${offer.offer.id}`)}
 			>
@@ -82,7 +89,7 @@ return (
 						</View>
 					)}
 
-					{offer.offer.stock <= 3 && (
+					{!offer.availabilityUnknown && offer.offer.stock <= 3 && (
 						<View
 							style={[
 								styles.lowStockBadge,
@@ -105,11 +112,10 @@ return (
 					)}
 				</View>
 
-				{/* Body con altura fija de contenido */}
+				{/* Body */}
 				<View style={styles.offerBody}>
 					<View style={styles.offerBodyRow}>
 						<View style={styles.offerInfo}>
-							{/* Título siempre 2 líneas → altura constante */}
 							<AppText
 								variant="h4"
 								weight="bold"
@@ -121,8 +127,7 @@ return (
 
 							<View style={styles.metaBlock}>
 								<View style={styles.metaRow}>
-									<Ionicons
-										name="location-outline"
+									<MapPin
 										size={12}
 										color={colors.mutedForeground}
 									/>
@@ -137,14 +142,13 @@ return (
 									</AppText>
 								</View>
 
-								{/* Reserva espacio aunque no haya pickupTime */}
 								<AppText
 									variant="caption"
+									numberOfLines={1}
 									style={{
 										color: colors.mutedForeground,
 										opacity: pickupTime ? 1 : 0,
 									}}
-									numberOfLines={1}
 								>
 									{pickupTime
 										? strings.offers.pickupBefore.replace("{time}", pickupTime)
@@ -166,7 +170,6 @@ return (
 									{dealPrice(offer.offer.original_price)}
 								</AppText>
 							) : (
-								// Reserva espacio del precio tachado
 								<AppText style={{ fontSize: 12, lineHeight: 14, opacity: 0 }}>
 									{" "}
 								</AppText>
@@ -175,7 +178,7 @@ return (
 								variant="priceLarge"
 								style={{
 									color: colors.primary,
-									fontSize: 25,
+									fontSize: 20,
 									lineHeight: 24,
 									fontWeight: "800",
 								}}
@@ -185,9 +188,8 @@ return (
 						</View>
 					</View>
 				</View>
-			</Card>
+			</CardPressable>
 
-			{/* Hermano absoluto: evita <button> anidado en web */}
 			{profile && (
 				<View style={styles.heartButton}>
 					<HeartButton
@@ -203,15 +205,8 @@ return (
 }
 
 const styles = StyleSheet.create({
-	wrapper: {
-		flex: 1,
-	},
 	offerCard: {
-		padding: 0,
 		overflow: "hidden",
-		borderRadius: radii.xl,
-		borderWidth: 0,
-		flex: 1,
 	},
 	offerImageWrap: {
 		width: "100%",

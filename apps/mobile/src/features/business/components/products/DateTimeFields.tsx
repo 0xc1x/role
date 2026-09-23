@@ -1,11 +1,12 @@
 import { createElement, useRef, useState, type ChangeEvent } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { Ionicons } from "@expo/vector-icons";
+import { Calendar, Clock } from "lucide-react-native";
 
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { Button } from "@/components/ui/button";
 
 type Mode = "date" | "time";
 
@@ -21,7 +22,7 @@ export function DateTimeField({
 	onChange,
 }: {
 	mode: Mode;
-	label: string;
+	label?: string;
 	value: Date;
 	onChange: (date: Date) => void;
 }) {
@@ -36,9 +37,11 @@ export function DateTimeField({
 			: `${pad(value.getHours())}:${pad(value.getMinutes())}`;
 		return (
 			<View style={[styles.field, { gap: 6 }]}>
-				<AppText variant="labelSmall" weight="semiBold" style={{ color: colors.mutedForeground }}>
-					{label}
-				</AppText>
+				{ label && 
+					<AppText variant="labelSmall" weight="semiBold" style={{ color: colors.mutedForeground }}>
+						{label}
+					</AppText>
+				}
 				<Pressable
 					onPress={() => {
 						const input = webInputRef.current;
@@ -48,20 +51,19 @@ export function DateTimeField({
 						else input.click();
 					}}
 					accessibilityRole="button"
-					style={({ pressed }) => [
+					style={[
 						styles.inputRow,
 						{
 							backgroundColor: colors.inputBackground,
 							borderColor: colors.border,
-							opacity: pressed ? 0.8 : 1,
 						},
 					]}
 				>
-					<Ionicons
-						name={isDate ? "calendar-outline" : "time-outline"}
-						size={16}
-						color={colors.mutedForeground}
-					/>
+					{isDate ? (
+						<Calendar size={16} color={colors.mutedForeground} />
+					) : (
+						<Clock size={16} color={colors.mutedForeground} />
+					)}
 					<AppText variant="bodyMedium">{current}</AppText>
 				</Pressable>
 				{createElement("input", {
@@ -70,7 +72,9 @@ export function DateTimeField({
 					value: current,
 					onChange: (e: ChangeEvent<HTMLInputElement>) => {
 						const raw = e.target.value;
-						const next = isDate ? parseDateInput(raw) : parseTimeInput(raw);
+						// Preserve the complementary half: date edits keep the
+						// current time, time edits keep the current date.
+						const next = isDate ? parseDateInput(raw, value) : parseTimeInput(raw, value);
 						if (next) onChange(next);
 					},
 					style: {
@@ -91,28 +95,31 @@ export function DateTimeField({
 
 	return (
 		<View style={styles.field}>
-			<AppText variant="labelSmall" weight="semiBold" style={{ color: colors.mutedForeground }}>
-				{label}
-			</AppText>
-			<Pressable
+			{label && 
+				<AppText variant="labelSmall" weight="semiBold" style={{ color: colors.mutedForeground }}>
+					{label}
+				</AppText>
+			}
+			<Button
+				variant={"outline"}
+				size={"sm"}
 				onPress={() => setShow(true)}
 				accessibilityRole="button"
-				style={({ pressed }) => [
+				style={  [
 					styles.inputRow,
 					{
 						backgroundColor: colors.inputBackground,
 						borderColor: colors.border,
-						opacity: pressed ? 0.8 : 1,
 					},
 				]}
 			>
-				<Ionicons
-					name={mode === "date" ? "calendar-outline" : "time-outline"}
-					size={16}
-					color={colors.mutedForeground}
-				/>
+				{mode === "date" ? (
+					<Calendar size={16} color={colors.mutedForeground} />
+				) : (
+					<Clock size={16} color={colors.mutedForeground} />
+				)}
 				<AppText variant="bodyMedium">{displayLabel}</AppText>
-			</Pressable>
+			</Button>
 			{show || Platform.OS === "ios" ? (
 				<DateTimePicker
 					value={value}
@@ -155,34 +162,47 @@ function toDateInput(date: Date): string {
 	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function parseDateInput(text: string): Date | null {
+function parseDateInput(text: string, current: Date): Date | null {
 	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text.trim());
 	if (!match) return null;
-	const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+	const date = new Date(
+		Number(match[1]),
+		Number(match[2]) - 1,
+		Number(match[3]),
+		current.getHours(),
+		current.getMinutes(),
+		0,
+		0,
+	);
 	return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function parseTimeInput(text: string): Date | null {
+function parseTimeInput(text: string, current: Date): Date | null {
 	const match = /^(\d{1,2}):(\d{2})$/.exec(text.trim());
 	if (!match) return null;
-	const date = new Date();
-	date.setHours(Number(match[1]), Number(match[2]), 0, 0);
+	const date = new Date(
+		current.getFullYear(),
+		current.getMonth(),
+		current.getDate(),
+		Number(match[1]),
+		Number(match[2]),
+		0,
+		0,
+	);
 	return date;
 }
 
 const styles = StyleSheet.create({
 	field: {
 		flex: 1,
-		gap: 6,
 	},
 	inputRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: spacing.sm,
-		borderRadius: 18,
+		gap: spacing.md,
+		borderRadius: radii.md,
+		paddingVertical: spacing.sm,
+		paddingHorizontal: spacing.md,
 		borderWidth: 1,
-		paddingHorizontal: 16,
-		paddingVertical: 12,
-		minHeight: 46,
 	},
 });

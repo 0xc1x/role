@@ -1,9 +1,9 @@
 import type { Favorite } from "@0xc1x/role-commons";
 
-import { supabase } from "@/core/supabase/client";
-import { toAppError } from "@/core/error/mapper";
+import { supabase } from "@/src/core/supabase/client";
+import { toAppError } from "@/src/core/error/mapper";
 
-import type { EmbeddedCategory } from "@/features/offers/domain/offer";
+import type { EmbeddedCategory } from "@/src/features/offers/domain/offer";
 
 /** A user's favorite offer with its embedded offer projection. */
 export interface FavoriteOffer {
@@ -18,13 +18,27 @@ export interface FavoriteOffer {
 	discountedPrice: number;
 	originalPrice: number;
 	imageUrl: string | null;
+	/** Proyección real de disponibilidad (nunca inventada en la card). */
+	stock: number;
+	pickupStart: string;
+	pickupEnd: string;
+	businessId: string;
+	isActive: boolean;
+	/**
+	 * True si la oferta embebida no llegó (eliminada) y los campos de
+	 * disponibilidad son relleno neutro: la UI debe ocultarlos.
+	 */
+	availabilityUnknown: boolean;
 }
 
 type Row = Record<string, unknown>;
 
 export const favoritesRepository = {
-	async getFavorites(userId: string): Promise<FavoriteOffer[]> {
-		const { data, error } = await supabase
+	async getFavorites(
+		userId: string,
+		params: { limit?: number; offset?: number } = {},
+	): Promise<FavoriteOffer[]> {
+		let paged = supabase
 			.from("favorites")
 			.select(
 				`
@@ -32,6 +46,7 @@ export const favoritesRepository = {
         offer_id,
         offers:offer_id (
           id, title, image, original_price, discounted_price, rating,
+          stock, pickup_start, pickup_end, is_active, business_id,
           businesses:business_id (name),
           business_locations:business_location_id (address, zone),
           offer_categories (
@@ -44,11 +59,18 @@ export const favoritesRepository = {
 			)
 			.eq("user_id", userId)
 			.order("created_at", { ascending: false });
+		if (params.limit != null) {
+			const offset = params.offset ?? 0;
+			paged = paged.range(offset, offset + params.limit - 1);
+		}
+		const { data, error } = await paged;
 		if (error) throw toAppError(error, "Error al cargar favoritos");
 		return toRows(data).map(mapFavorite);
 	},
 
 	async getFavoriteOfferIds(userId: string): Promise<Set<string>> {
+		// Unbounded by design: one tiny row (offer_id) per save, naturally
+		// bounded by how many offers a user favorites.
 		const { data, error } = await supabase
 			.from("favorites")
 			.select("offer_id")
@@ -93,6 +115,8 @@ function mapFavorite(row: Row): FavoriteOffer {
 	const offer = (row.offers ?? {}) as Row;
 	const business = (offer.businesses ?? {}) as Row;
 	const location = (offer.business_locations ?? null) as Row | null;
+	// Sin fila embebida (oferta eliminada) no hay disponibilidad real.
+	const unknown = row.offers == null;
 
 	return {
 		favoriteId: String(row.id),
@@ -106,6 +130,12 @@ function mapFavorite(row: Row): FavoriteOffer {
 		discountedPrice: num(offer.discounted_price) ?? 0,
 		originalPrice: num(offer.original_price) ?? 0,
 		imageUrl: (offer.image as string | null) ?? null,
+		stock: num(offer.stock) ?? 0,
+		pickupStart: (offer.pickup_start as string | null) ?? "",
+		pickupEnd: (offer.pickup_end as string | null) ?? "",
+		businessId: String(offer.business_id ?? ""),
+		isActive: (offer.is_active as boolean | null) ?? false,
+		availabilityUnknown: unknown,
 	};
 }
 

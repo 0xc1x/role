@@ -1,13 +1,14 @@
-import { Ionicons } from "@expo/vector-icons";
+import { CircleCheck, Store } from "lucide-react-native";
 import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button } from "@/core/ui";
-import { PickupQr } from "@/features/orders/components/pickup-qr";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import type { EmbeddedBusiness, EmbeddedLocation } from "@/features/offers/domain/offer";
-import { type ReservationSuccess, pickupQrValue } from "@/features/orders/domain/order";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { PickupQr } from "@/src/features/orders/components/pickup-qr";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import type { EmbeddedBusiness, EmbeddedLocation } from "@/src/features/offers/domain/offer";
+import { type ReservationSuccess, pickupQrValue } from "@/src/features/orders/domain/order";
+import { Button } from "@/components/ui/button";
 
 interface ConfirmationViewProps {
 	result: ReservationSuccess;
@@ -29,7 +30,7 @@ export function ConfirmationView({
 	return (
 		<View style={styles.wrap}>
 			<View style={styles.successHeader}>
-				<Ionicons name="checkmark-circle" size={54} color={colors.ecoGreen} />
+				<CircleCheck size={54} color={colors.ecoGreen} fill={colors.ecoGreen} />
 				<AppText variant="h3" weight="bold" style={styles.successTitle}>
 					{strings.checkout.reservationSuccessTitle}
 				</AppText>
@@ -65,7 +66,7 @@ export function ConfirmationView({
 					{ backgroundColor: colors.muted, borderColor: colors.borderSolid },
 				]}
 			>
-				<Ionicons name="storefront" size={20} color={colors.primary} />
+				<Store size={20} color={colors.primary} fill={colors.primary} />
 				<View style={styles.businessBody}>
 					<AppText variant="labelSmall" weight="bold" numberOfLines={1}>
 						{business.name}
@@ -84,17 +85,18 @@ export function ConfirmationView({
 
 			<View style={styles.actions}>
 				<Button
-					label={strings.checkout.viewOrder}
-					variant="primary"
 					fullWidth
 					onPress={() => router.replace(`/order/${result.orderId}`)}
-				/>
+				>
+					{strings.checkout.viewOrder}
+				</Button>
 				<Button
-					label={strings.checkout.moreOffers}
 					variant="outline"
 					fullWidth
 					onPress={() => router.replace("/")}
-				/>
+				>
+					{strings.checkout.moreOffers}
+				</Button>
 			</View>
 		</View>
 	);
@@ -107,7 +109,7 @@ const styles = StyleSheet.create({
 	successMessage: { textAlign: "center" },
 
 	ticket: {
-		borderRadius: 20,
+		borderRadius: radii.xl,
 		borderWidth: 1.5,
 		padding: spacing.lg,
 		alignItems: "center",

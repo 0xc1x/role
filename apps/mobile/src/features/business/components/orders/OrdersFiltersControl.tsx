@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Check, Funnel } from "lucide-react-native";
 import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, BottomSheetModal, Button } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { orderStatusLabels } from "@/features/orders/domain/order";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, BottomSheetModal } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { orderStatusLabels } from "@/src/features/orders/domain/order";
+import { Button } from "@/components/ui/button";
 
 const ALL_STATUSES: OrderStatusType[] = [
 	"pending",
@@ -38,31 +39,20 @@ export function OrdersFiltersControl({
 
 	return (
 		<>
-			<Pressable
+			<Button
+				variant={status ? "default" : "outline"}
+				size="sm"
 				onPress={openSheet}
 				accessibilityRole="button"
-				style={({ pressed }) => [
-					styles.pill,
-					{
-						backgroundColor: status ? colors.primary : colors.inputBackground,
-						borderColor: status ? colors.primary : colors.borderSolid,
-						opacity: pressed ? 0.8 : 1,
-					},
-				]}
+				icon={
+					<Funnel
+						size={14}
+						color={status ? colors.primaryForeground : colors.mutedForeground}
+					/>
+				}
 			>
-				<Ionicons
-					name="funnel-outline"
-					size={14}
-					color={status ? colors.primaryForeground : colors.mutedForeground}
-				/>
-				<AppText
-					variant="bodySmall"
-					weight="semiBold"
-					style={{ color: status ? colors.primaryForeground : colors.foreground }}
-				>
-					{strings.business.ordersFilter}
-				</AppText>
-			</Pressable>
+				{strings.business.ordersFilter}
+			</Button>
 
 			{open ? (
 				<BottomSheetModal
@@ -70,14 +60,15 @@ export function OrdersFiltersControl({
 					onClose={() => setOpen(false)}
 					footer={
 						<Button
-							label={strings.business.ordersApplyFilter}
 							fullWidth
 							size="lg"
 							onPress={() => {
 								onApply(draft);
 								setOpen(false);
 							}}
-						/>
+						>
+							{strings.business.ordersApplyFilter}
+						</Button>
 					}
 				>
 					<ScrollView
@@ -87,6 +78,7 @@ export function OrdersFiltersControl({
 						keyboardShouldPersistTaps="handled"
 					>
 						<Pressable
+							cssInterop={false}
 							onPress={() => setDraft(null)}
 							style={({ pressed }) => [
 								styles.option,
@@ -108,7 +100,7 @@ export function OrdersFiltersControl({
 								{strings.business.ordersClear}
 							</AppText>
 							{draft === null ? (
-								<Ionicons name="checkmark" size={18} color={colors.secondaryForeground} />
+								<Check size={18} color={colors.secondaryForeground} />
 							) : null}
 						</Pressable>
 
@@ -116,6 +108,7 @@ export function OrdersFiltersControl({
 						const selected = draft === item;
 						return (
 							<Pressable
+								cssInterop={false}
 								key={item}
 								onPress={() => setDraft(item)}
 								style={({ pressed }) => [
@@ -149,8 +142,7 @@ export function OrdersFiltersControl({
 									</AppText>
 								</View>
 								{selected ? (
-									<Ionicons
-										name="checkmark"
+									<Check
 										size={18}
 										color={colors.secondaryForeground}
 									/>
@@ -214,6 +206,6 @@ const styles = StyleSheet.create({
 	statusDot: {
 		width: 10,
 		height: 10,
-		borderRadius: 5,
+		borderRadius: radii.xs,
 	},
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isInValidityWindow, toPromoSlide } from "@/features/slides/domain/slide";
+import { isInValidityWindow, toPromoSlide } from "@/src/features/slides/domain/slide";
 
 describe("toPromoSlide", () => {
 	test("mapea y marca sponsor", () => {

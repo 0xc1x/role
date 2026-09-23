@@ -1,22 +1,23 @@
 import { useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	ErrorState,
 	goBackOr,
 	LoadingView,
 	Screen,
 	ScreenHeader,
 	TextField,
-} from "@/core/ui";
-import { useOrder, useSubmitReview } from "@/features/hooks";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+} from "@/src/core/ui";
+import { useOrder, useReviewByOrder, useSubmitReview } from "@/src/features/hooks";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 function Stars({
 	value,
@@ -51,14 +52,28 @@ export default function ReviewOrderScreen() {
 	const { colors } = useTheme();
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const { data, isLoading, isError, error, refetch } = useOrder(id ?? "");
+	const { data: existing } = useReviewByOrder(data?.order.id ?? "");
 	const submit = useSubmitReview();
 	const [productRating, setProductRating] = useState(5);
 	const [businessRating, setBusinessRating] = useState(5);
 	const [comment, setComment] = useState("");
+	const prefilledRef = useRef(false);
+
+	// Modo edición: precarga la reseña existente una sola vez.
+	useEffect(() => {
+		if (existing && !prefilledRef.current) {
+			setProductRating(existing.productRating || 5);
+			setBusinessRating(existing.businessRating || 5);
+			setComment(existing.comment ?? "");
+			prefilledRef.current = true;
+		}
+	}, [existing]);
 
 	if (isLoading) return <LoadingView />;
 	if (isError || !data)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
+
+	const isEditing = existing != null;
 
 	const handleSubmit = () => {
 		submit.mutate(
@@ -70,7 +85,14 @@ export default function ReviewOrderScreen() {
 				comment: comment.trim() || undefined,
 			},
 			{
-				onSuccess: () => goBackOr(`/order/${data.order.id}`),
+				onSuccess: () => {
+					toast.success(
+						isEditing
+							? strings.orders.reviewUpdated
+							: strings.orders.reviewSubmitted,
+					);
+					goBackOr(`/order/${data.order.id}`);
+				},
 			},
 		);
 	};
@@ -78,7 +100,9 @@ export default function ReviewOrderScreen() {
 	return (
 		<Screen scroll keyboardShouldPersistTaps="handled">
 			<View style={styles.container}>
-				<ScreenHeader title={strings.orders.writeReview} />
+				<ScreenHeader
+					title={isEditing ? strings.orders.editReview : strings.orders.writeReview}
+				/>
 				<AppText variant="bodyMedium" style={{ color: colors.mutedForeground, paddingTop: spacing.xl }}>
 					{data.offerTitle} · {data.businessName}
 				</AppText>
@@ -115,12 +139,17 @@ export default function ReviewOrderScreen() {
 				</View>
 
 				<Button
-					label={strings.orders.submitReview}
 					onPress={handleSubmit}
 					loading={submit.isPending}
 					fullWidth
 					style={{ marginTop: spacing.lg }}
-				/>
+				>
+					{
+						isEditing
+							? strings.orders.saveReviewChanges
+							: strings.orders.submitReview
+					}
+				</Button>
 			</View>
 		</Screen>
 	);

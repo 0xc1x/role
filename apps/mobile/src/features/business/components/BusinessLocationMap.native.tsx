@@ -1,7 +1,9 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 
-import { radii } from "@/core/theme/spacing";
+import { radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { getMapStyle } from "@/src/core/theme/map-style";
 
 export function BusinessLocationMap({
 	latitude,
@@ -12,6 +14,7 @@ export function BusinessLocationMap({
 	longitude: number;
 	onPress?: () => void;
 }) {
+	const { scheme } = useTheme();
 	return (
 		<View style={styles.mapWrap}>
 			<MapView
@@ -25,6 +28,7 @@ export function BusinessLocationMap({
 				zoomEnabled
 				scrollEnabled
 				onPress={onPress}
+				customMapStyle={getMapStyle(scheme)}
 			>
 				<Marker coordinate={{ latitude, longitude }} />
 			</MapView>

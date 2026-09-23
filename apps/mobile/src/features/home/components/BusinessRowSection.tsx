@@ -1,17 +1,17 @@
 import { useCallback } from "react";
 import { View, StyleSheet, FlatList } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Store } from "lucide-react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { useTheme } from "@/core/theme";
-import { AppText, SectionHeader } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useNearbyBusinesses } from "@/features/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { AppText, SectionHeader } from "@/src/core/ui";
+import { spacing } from "@/src/core/theme/spacing";
+import { useNearbyBusinesses } from "@/src/features/hooks";
 import {
 	BusinessGridCard,
 	BusinessGridCardSkeleton,
-} from "@/features/business/components/BusinessGridCard";
-import type { BusinessSummary } from "@/features/offers/domain/offer";
+} from "@/src/features/business/components/BusinessGridCard";
+import type { BusinessSummary } from "@/src/features/offers/domain/offer";
 
 const SKELETON_ROWS = [0, 1, 2];
 
@@ -54,7 +54,7 @@ export function BusinessRowSection({
 		<View style={styles.container}>
 			<SectionHeader
 				title={strings.home.negociosCerca}
-				icon={<Ionicons name="storefront-outline" size={18} color={colors.primary} />}
+				icon={<Store size={18} color={colors.primary} />}
 				onSeeAll={onSeeAll}
 			/>
 			{isLoading ? (

@@ -1,25 +1,26 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Clock, MapPin, Phone, Store, type LucideIcon } from "lucide-react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Linking, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, Card } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 import {
 	formatShortDate,
 	formatTime,
-} from "@/core/utils/formatters";
+} from "@/src/core/utils/formatters";
 import {
 	isActiveStatus,
 	type OrderDetail,
-} from "@/features/orders/domain/order";
-
-type IoniconName = keyof typeof Ionicons.glyphMap;
+} from "@/src/features/orders/domain/order";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function BusinessInfoCard({ item }: { item: OrderDetail }) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const { order } = item;
 	const isActive = isActiveStatus(order.status);
 
@@ -31,16 +32,36 @@ export function BusinessInfoCard({ item }: { item: OrderDetail }) {
 	};
 
 	return (
-		<Card style={styles.cardBlock}>
+		<Card
+			style={[
+				{
+					backgroundColor: scheme === "dark" ? colors.card : colors.background,
+					borderColor: colors.borderSolid,
+				},
+			]}>
+			<CardHeader>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+					{strings.orders.businessTitle}
+				</AppText>
+			</CardHeader>
+			<CardContent style={styles.body}>
 			<View style={styles.businessTitleRow}>
-				<View
-					style={[
-						styles.businessIcon,
-						{ backgroundColor: withAlpha(colors.secondary, 0.302) },
-					]}
-				>
-					<Ionicons name="storefront-outline" size={18} color={colors.primary} />
-				</View>
+				{item.businessImageUrl ? (
+					<Image
+						source={{ uri: item.businessImageUrl }}
+						style={styles.businessLogo}
+						contentFit="cover"
+					/>
+				) : (
+					<View
+						style={[
+							styles.businessIcon,
+							{ backgroundColor: withAlpha(colors.secondary, 0.302) },
+						]}
+					>
+						<Store size={18} color={colors.primary} />
+					</View>
+				)}
 				<AppText
 					variant="h4"
 					weight="bold"
@@ -53,61 +74,63 @@ export function BusinessInfoCard({ item }: { item: OrderDetail }) {
 
 			{item.businessAddress ? (
 				<InfoRow
-					icon="location-outline"
+					icon={MapPin}
 					label={strings.orders.businessAddressLabel}
 					text={item.businessAddress}
 				/>
 			) : null}
 			{item.businessPhone ? (
 				<InfoRow
-					icon="call-outline"
+					icon={Phone}
 					label={strings.orders.businessPhoneLabel}
 					text={item.businessPhone}
 				/>
 			) : null}
 			{order.pickup_time ? (
 				<InfoRow
-					icon="time-outline"
+					icon={Clock}
 					label={strings.orders.pickupTimeLabel}
 					text={`${formatShortDate(order.pickup_time)} · ${formatTime(order.pickup_time)} hs`}
 				/>
 			) : null}
 
 			<View style={styles.businessActions}>
+				{isActive ? (
+					<Button
+						size="sm"
+						style={styles.businessActionBtn}
+						onPress={openDirections}
+					>
+						{strings.orders.getDirections}
+					</Button>
+				) : null}
 				<Button
-					label={strings.orders.viewBusiness}
 					variant="secondary"
 					size="sm"
 					style={styles.businessActionBtn}
 					onPress={() => router.push(`/business-profile/${order.business_id}`)}
-				/>
-				{isActive ? (
-					<Button
-						label={strings.orders.getDirections}
-						variant="outline"
-						size="sm"
-						style={styles.businessActionBtn}
-						onPress={openDirections}
-					/>
-				) : null}
+				>
+					{strings.orders.viewBusiness}
+				</Button>
 			</View>
+			</CardContent>
 		</Card>
 	);
 }
 
 export function InfoRow({
-	icon,
+	icon: Icon,
 	label,
 	text,
 }: {
-	icon: IoniconName;
+	icon: LucideIcon;
 	label: string;
 	text: string;
 }) {
 	const { colors } = useTheme();
 	return (
 		<View style={styles.infoRow}>
-			<Ionicons name={icon} size={16} color={colors.mutedForeground} />
+			<Icon size={16} color={colors.mutedForeground} />
 			<View style={styles.infoBody}>
 				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 					{label}
@@ -121,7 +144,7 @@ export function InfoRow({
 }
 
 const styles = StyleSheet.create({
-	cardBlock: { gap: spacing.sm },
+	body: { gap: spacing.sm },
 	businessTitleRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -131,9 +154,14 @@ const styles = StyleSheet.create({
 	businessIcon: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
+	},
+	businessLogo: {
+		width: 40,
+		height: 40,
+		borderRadius: radii.lg,
 	},
 	businessName: { flex: 1 },
 	businessActions: {

@@ -1,23 +1,28 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MapPin } from "lucide-react-native";
 import { APIProvider, Map, useMap } from "@vis.gl/react-google-maps";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { env } from "@/core/config/env";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
+import { env } from "@/src/core/config/env";
+import { useTheme } from "@/src/core/theme";
 import type { MapCanvasHandle, MapCanvasProps } from "./MapCanvas.types";
+
+// Single Google cloud-styled Map ID carrying BOTH designs: light style on
+// Modo claro, dark style on Modo oscuro. Google Maps JS picks the design from
+// the map's colorScheme. To change designs, edit them in the Cloud Console —
+// no code change needed.
+const ROLE_MAP_ID = "23f43f21c46dc36c9fe83380";
 function zoomForDelta(delta: number): number {
 	const zoom = Math.round(Math.log2(360 / Math.max(delta, 0.0001)));
 	return Math.min(Math.max(zoom, 1), 20);
 }
 
-const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
+	const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 	function MapCanvasInner(
-		{ coords, fullscreen = false, onRegionChange, children, centerPin = true },
+		{ coords, fullscreen = false, onRegionChange, children, centerPin = true, fitCoords },
 		ref,
 	) {
-		const { colors } = useTheme();
+		const { colors, scheme } = useTheme();
 		const map = useMap();
 		// Camera target requested before the Google map instance is ready.
 		const pending = useRef<{
@@ -52,14 +57,43 @@ const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 			}
 		}, [map]);
 
+		// Encuadra los puntos (p. ej. pines filtrados de Explorar): una vez
+		// por cada conjunto distinto de coords.
+		const fitKey = (fitCoords ?? [])
+			.map((c) => `${c.latitude.toFixed(4)},${c.longitude.toFixed(4)}`)
+			.join("|");
+		const fittedRef = useRef<string | null>(null);
+		useEffect(() => {
+			if (!map || !fitCoords || fitCoords.length === 0) return;
+			if (fittedRef.current === fitKey) return;
+			fittedRef.current = fitKey;
+			const lats = fitCoords.map((c) => c.latitude);
+			const lngs = fitCoords.map((c) => c.longitude);
+			const pad = 0.01;
+			map.fitBounds({
+				south: Math.min(...lats) - pad,
+				west: Math.min(...lngs) - pad,
+				north: Math.max(...lats) + pad,
+				east: Math.max(...lngs) + pad,
+			});
+		}, [map, fitCoords, fitKey]);
+
 		return (
 			<View style={fullscreen ? styles.fullscreenMap : styles.map}>
 				<Map
-					mapId="role-map"
+					mapId={ROLE_MAP_ID}
+					colorScheme={scheme === "dark" ? "DARK" : "LIGHT"}
 					defaultCenter={{ lat: coords.latitude, lng: coords.longitude }}
 					defaultZoom={15}
 					gestureHandling="greedy"
 					disableDefaultUI
+					// POIs stay non-interactive so taps never open Google's
+					// place cards over our markers. Full POI hiding is not
+					// possible client-side here: the `styles` option is
+					// ignored on maps with a `mapId`, and `AdvancedMarker`
+					// requires one — hide POIs via a cloud map style for
+					// this map ID in the Google Cloud Console instead.
+					clickableIcons={false}
 					onCameraChanged={(ev) => {
 						const { center } = ev.detail;
 						onRegionChange({ latitude: center.lat, longitude: center.lng });
@@ -69,18 +103,12 @@ const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 				</Map>
 				{centerPin ? (
 					<View style={[styles.pinWrap, { pointerEvents: "none" }]}>
-						<Ionicons
-							name="location"
-							size={40}
-							color={colors.primary}
-							style={[
-								styles.pin,
-								{
-									// @ts-ignore — RN types aún no exponen textShadow unificado
-									textShadow: `0px 0px 3px ${withAlpha(colors.scrim, 0.2)}`,
-								},
-							]}
-						/>
+					<MapPin
+						size={40}
+						color={colors.primary}
+						fill="none"
+						style={styles.pin}
+					/>
 					</View>
 				) : null}
 			</View>

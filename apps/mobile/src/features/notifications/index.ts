@@ -1,20 +1,24 @@
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 
-import { toAppError } from "@/core/error/mapper";
-import { env } from "@/core/config/env";
+import { toAppError } from "@/src/core/error/mapper";
+import { env } from "@/src/core/config/env";
 import {
 	upsertDeviceToken,
 	deleteDeviceTokens,
 	type DeviceTokenPlatform,
 } from "./data/repository";
 
-type NotificationsModule = typeof import("expo-notifications");
+export type NotificationsModule = typeof import("expo-notifications");
 
 // ponytail: import perezoso — expo-notifications emite warnings en web al
 // importarse y ahí no se usa (la PWA hace push vía FCM service worker).
 // Si algún día hay push web vía expo, volver a import estático.
-async function loadNotifications(): Promise<NotificationsModule | null> {
+export async function loadNotifications(): Promise<NotificationsModule | null> {
 	if (Platform.OS === "web") return null;
+	// Push remoto eliminado de Expo Go (SDK 53+): evaluar el módulo ahí
+	// lanza en Android (warnOfExpoGoPushUsage). Solo dev builds reales.
+	if (Constants.appOwnership === "expo") return null;
 	return import("expo-notifications");
 }
 

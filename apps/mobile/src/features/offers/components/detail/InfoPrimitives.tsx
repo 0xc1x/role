@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import type { LucideIcon } from "lucide-react-native";
 
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
+import { Text } from "react-native-svg";
 
 export function CategoryBadge({ label }: { label: string }) {
 	const { colors } = useTheme();
@@ -38,14 +40,18 @@ export function InfoCard({
 	title,
 	trailing,
 	children,
+	description,
+	footer,
 }: {
 	title: string;
 	trailing?: ReactNode;
 	children: ReactNode;
+	description?: ReactNode;
+	footer?: ReactNode;
 }) {
 	const { colors, scheme } = useTheme();
 	return (
-		<View
+		<Card
 			style={[
 				styles.infoCard,
 				{
@@ -54,23 +60,35 @@ export function InfoCard({
 				},
 			]}
 		>
-			<View style={styles.infoCardHead}>
-				<AppText variant="h4" weight="bold" style={{ flex: 1 }}>
+			<CardHeader style={styles.infoCardHead}>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
 					{title}
 				</AppText>
 				{trailing}
-			</View>
-			{children}
-		</View>
+			</CardHeader>
+			{ description && (
+				<CardDescription>
+					{description}
+				</CardDescription>
+			) }
+			<CardContent>
+				{children}
+			</CardContent>
+			{footer && (
+				<CardFooter>
+					{footer}
+				</CardFooter>
+			)}
+		</Card>
 	);
 }
 
 export function InfoRow({
-	icon,
+	icon: Icon,
 	label,
 	value,
 }: {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	label: string;
 	value: string;
 }) {
@@ -78,7 +96,7 @@ export function InfoRow({
 	return (
 		<View style={styles.infoRow}>
 			<View style={[styles.infoRowIcon, { backgroundColor: `${withAlpha(colors.primary, 0.078)}` }]}>
-				<Ionicons name={icon} size={15} color={colors.primary} />
+				<Icon size={15} color={colors.primary} />
 			</View>
 			<View style={styles.infoRowBody}>
 				<AppText variant="labelSmall" style={{ color: colors.mutedForeground }}>
@@ -96,24 +114,18 @@ const styles = StyleSheet.create({
 	categoryBadge: {
 		paddingHorizontal: 10,
 		paddingVertical: 4,
-		borderRadius: 6,
+		borderRadius: radii.sm,
 	},
 	infoCard: {
-		width: "100%",
-		borderWidth: 1,
-		borderRadius: 20,
-		padding: spacing.xl,
-		gap: spacing.lg,
-		marginTop: spacing.xl,
+		marginVertical: spacing.md,
 	},
 	infoCardHead: {
 		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.sm,
 	},
 	infoRow: {
 		flexDirection: "row",
 		alignItems: "flex-start",
+		paddingVertical: spacing.sm,
 		gap: spacing.md,
 	},
 	infoRowIcon: {

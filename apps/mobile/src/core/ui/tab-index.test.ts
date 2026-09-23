@@ -4,7 +4,7 @@ import {
 	filterVisibleRoutes,
 	resolveActiveTabIndex,
 	type TabRouteLike,
-} from "@/core/ui/tab-index";
+} from "@/src/core/ui/tab-index";
 
 const routes: TabRouteLike[] = [
 	{ key: "products-key", name: "products" },

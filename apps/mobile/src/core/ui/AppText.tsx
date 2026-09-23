@@ -1,8 +1,8 @@
 import { type ReactNode } from "react";
-import { Text, type StyleProp, type TextStyle } from "react-native";
+import {  Text, type StyleProp, type TextStyle } from "react-native";
 
-import { useTheme } from "@/core/theme";
-import { fonts, typography, type TypeStyle } from "@/core/theme/typography";
+import { useTheme } from "@/src/core/theme";
+import { fonts, typography, type TypeStyle } from "@/src/core/theme/typography";
 
 export type FontVariant = keyof typeof typography;
 export type FontWeight =

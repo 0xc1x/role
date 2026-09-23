@@ -2,7 +2,15 @@ import { useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import {
+	Banknote,
+	CircleCheck,
+	Package,
+	Pencil,
+	ShoppingBag,
+	Trash2,
+	type LucideIcon,
+} from "lucide-react-native";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -15,26 +23,27 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	goBackOr,
 	Screen,
 	ScreenHeader,
 	StatusBadge,
 	useWebPullToRefresh,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 import {
 	formatDateTime,
 	formatMoney,
-} from "@/core/utils/formatters";
-import type { OfferDetail } from "@/features/offers/domain/offer";
-import { useDeleteOffer, useToggleOfferActive } from "@/features/business/hooks";
+} from "@/src/core/utils/formatters";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
+import { useDeleteOffer, useToggleOfferActive } from "@/src/features/business/hooks";
+import { OfferReviewsCard } from "@/src/features/business/components/OfferReviewsCard";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 /**
  * Product detail + performance stats (ported from Rolé v1
  * `BusinessProductDetailScreen`).
@@ -124,7 +133,7 @@ export function ProductDetail({
 						<Image source={{ uri: offer.image }} style={styles.heroImage} />
 					) : (
 						<View style={[styles.heroImage, styles.heroPlaceholder, { backgroundColor: colors.borderSolid }]}>
-							<Ionicons name="cube-outline" size={40} color={colors.mutedForeground} />
+							<Package size={40} color={colors.mutedForeground} />
 						</View>
 					)}
 					{!isActive ? (
@@ -151,21 +160,21 @@ export function ProductDetail({
 					<StatCard
 						label={strings.business.unitsSold}
 						value={String(sold)}
-						icon="bag-handle-outline"
+						icon={ShoppingBag}
 						color={colors.success}
 						bg={colors.surfaceSuccess}
 					/>
 					<StatCard
 						label={strings.business.revenue}
 						value={formatMoney(revenue)}
-						icon="cash-outline"
+						icon={Banknote}
 						color={colors.primary}
 						bg={colors.destructiveSurface}
 					/>
 					<StatCard
 						label={strings.business.created}
 						value={String(offer.initial_stock ?? offer.stock)}
-						icon="cube-outline"
+						icon={Package}
 						color={colors.warning}
 						bg={colors.surfaceWarning}
 					/>
@@ -173,25 +182,26 @@ export function ProductDetail({
 
 				<View style={styles.quickActions}>
 					<Button
-						label={strings.common.edit}
-						icon={<Ionicons name="create-outline" size={18} color={colors.primaryForeground} />}
+						icon={<Pencil size={18} color={colors.primaryForeground} />}
 						style={{ flex: 1 }}
 						onPress={() =>
 							router.push(`/business/${businessId}/offer/${offer.id}/edit`)
 						}
-					/>
+					>1
+					{strings.common.edit}
+					</Button>
 					<Button
-						label={isActive ? strings.business.deactivate : strings.business.activate}
 						variant="outline"
 						style={{ flex: 1 }}
 						onPress={() =>
 							toggleActive.mutate({ offerId: offer.id, isActive: !isActive })
 						}
-					/>
+					>
+						{isActive ? strings.business.deactivate : strings.business.activate}
+					</Button>
 					<Button
-						label=""
 						variant="ghost"
-						icon={<Ionicons name="trash-outline" size={20} color={colors.destructive} />}
+						icon={<Trash2 size={20} color={colors.destructive} />}
 						onPress={() => setDeleteOpen(true)}
 						accessibilityLabel={strings.common.delete}
 					/>
@@ -249,6 +259,8 @@ export function ProductDetail({
 					</View>
 				</Card>
 
+				<OfferReviewsCard businessId={businessId} offerId={offer.id} />
+
 				{offer.includes ? (
 					<Card style={styles.card}>
 						<AppText variant="h4" weight="bold">
@@ -256,7 +268,7 @@ export function ProductDetail({
 						</AppText>
 						{splitList(offer.includes).map((item) => (
 							<View key={item} style={styles.listRow}>
-								<Ionicons name="checkmark-circle" size={18} color={colors.success} />
+								<CircleCheck size={18} color={colors.success} />
 								<AppText variant="bodyMedium" style={{ flex: 1 }}>
 									{item}
 								</AppText>
@@ -326,13 +338,13 @@ function splitList(value: string): string[] {
 function StatCard({
 	label,
 	value,
-	icon,
+	icon: Icon,
 	color,
 	bg,
 }: {
 	label: string;
 	value: string;
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	color: string;
 	bg: string;
 }) {
@@ -340,7 +352,7 @@ function StatCard({
 	return (
 		<View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 			<View style={[styles.statIcon, { backgroundColor: bg }]}>
-				<Ionicons name={icon} size={16} color={color} />
+				<Icon size={16} color={color} />
 			</View>
 			<AppText variant="h3" weight="extraBold" numberOfLines={1} style={{ color }}>
 				{value}
@@ -432,7 +444,7 @@ const styles = StyleSheet.create({
 	statIcon: {
 		width: 30,
 		height: 30,
-		borderRadius: 15,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 		marginBottom: spacing.xs,

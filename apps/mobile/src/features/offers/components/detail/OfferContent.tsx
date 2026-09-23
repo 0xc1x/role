@@ -1,27 +1,38 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import {
+	Calendar,
+	CircleCheck,
+	Clock,
+	Info,
+	Leaf,
+	MapPin,
+	Package,
+	Star,
+	Store,
+} from "lucide-react-native";
+import { Button } from "@/components/ui/button";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
 import {
 	discountPercentage,
 	haversineKm,
 	splitList,
 	type OfferDetail,
-} from "@/features/offers/domain/offer";
-import { useSelectedAddress } from "@/features/hooks";
+} from "@/src/features/offers/domain/offer";
+import { useSelectedAddress } from "@/src/features/hooks";
 import {
 	formatMoney,
 	formatMoneyPrecise,
 	formatDistanceKm,
 	formatDateTime,
-} from "@/core/utils/formatters";
+} from "@/src/core/utils/formatters";
 import { CategoryBadge, InfoCard, InfoRow } from "./InfoPrimitives";
 
 function distanceSubtitle(
@@ -75,18 +86,23 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 						))}
 					</View>
 					{data.offer.rating > 0 ? (
-						<View style={styles.ratingRow}>
-							<Ionicons name="star" size={18} color={colors.yellow} />
-							<AppText variant="bodyMedium" weight="bold">
-								{data.offer.rating.toFixed(1)}
-							</AppText>
-							<AppText
-								variant="bodySmall"
-								style={{ color: muted }}
-							>
-								({data.offer.review_count})
-							</AppText>
-						</View>
+						<Button
+							variant="link"
+							onPress={() =>
+								router.push({
+									pathname: "/business-profile/[id]/reviews",
+									params: {
+										id: data.offer.business_id,
+										offerId: data.offer.id,
+									},
+								})
+							}
+							hitSlop={8}
+							accessibilityRole="link"
+							icon={<Star size={18} color={colors.yellow} fill={colors.yellow} />}
+						>
+							{`${data.offer.rating.toFixed(1)} (${data.offer.review_count})`}
+						</Button>
 					) : null}
 				</View>
 			) : null}
@@ -99,19 +115,16 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 			>
 				{data.offer.title}
 			</AppText>
-			<Pressable
+			<Button
+				variant="link"
 				onPress={() =>
 					router.push(`/business-profile/${data.offer.business_id}`)
 				}
 				hitSlop={8}
+				icon={<Store size={14} color={muted} />}
 			>
-				<View style={styles.businessSubtitle}>
-					<Ionicons name="storefront-outline" size={14} color={muted} />
-					<AppText variant="bodyMedium" style={{ color: muted }}>
-						{data.business.name}
-					</AppText>
-				</View>
-			</Pressable>
+				{data.business.name}
+			</Button>
 
 			{/* ── Badges activos: ahorro + stock bajo ─────────────── */}
 			<View style={styles.badgeWrap}>
@@ -155,7 +168,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 			{/* ── Precio + ahorro ─────────────────────────────────── */}
 			<View style={styles.priceRow}>
 				<AppText
-					variant="h2"
+					variant="h1"
 					weight="extraBold"
 					style={{ color: colors.primary }}
 				>
@@ -206,8 +219,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 							</AppText>
 							{includes.map((item) => (
 								<View key={item} style={styles.listRow}>
-									<Ionicons
-										name="checkmark-circle"
+									<CircleCheck
 										size={18}
 										color={colors.success}
 									/>
@@ -251,17 +263,17 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 				title={strings.offerDetail.pickupSchedule}
 			>
 				<InfoRow
-					icon="calendar-outline"
+					icon={Calendar}
 					label={strings.business.pickupFrom}
 					value={formatDateTime(data.offer.pickup_start)}
 				/>
 				<InfoRow
-					icon="time-outline"
+					icon={Clock}
 					label={strings.business.availableUntil}
 					value={formatDateTime(data.offer.pickup_end)}
 				/>
 				<InfoRow
-					icon="cube-outline"
+					icon={Package}
 					label={strings.offerDetail.availablePacks}
 					value={strings.offerDetail.packsLeftText
 						.replace("{stock}", String(data.offer.stock))
@@ -270,11 +282,10 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 							String(data.offer.initial_stock || data.offer.stock),
 						)}
 				/>
-				<View style={[styles.noteRow, { backgroundColor: `${withAlpha(colors.primary, 0.051)}` }]}>
-					<Ionicons
-						name="information-circle-outline"
+				<View style={[styles.noteRow, { backgroundColor: `${withAlpha(colors.infoForeground, 0.051)}` }]}>
+					<Info
 						size={18}
-						color={colors.primary}
+						color={colors.info}
 					/>
 					<AppText
 						variant="bodySmall"
@@ -289,25 +300,15 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 			<InfoCard
 				title={strings.offerDetail.establishment}
 				trailing={
-					<Pressable
+					<Button
+						variant="secondary"
+						size="sm"
 						onPress={() =>
 							router.push(`/business-profile/${data.offer.business_id}`)
 						}
 					>
-						<View
-							style={[
-								styles.seeLocalPill,
-								{ backgroundColor: `${withAlpha(colors.primary, 0.102)}` },
-							]}
-						>
-							<AppText
-								weight="bold"
-								style={{ color: colors.primary, fontSize: 12 }}
-							>
-								{strings.offerDetail.seeLocal}
-							</AppText>
-						</View>
-					</Pressable>
+						{strings.offerDetail.seeLocal}
+					</Button>
 				}
 			>
 				<View style={styles.businessHead}>
@@ -318,7 +319,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 						/>
 					) : (
 						<View style={[styles.businessLogo, styles.businessLogoPlaceholder, { backgroundColor: colors.borderSolid }]}>
-							<Ionicons name="storefront-outline" size={20} color={muted} />
+							<Store size={20} color={muted} />
 						</View>
 					)}
 					<View style={styles.businessMeta}>
@@ -332,18 +333,20 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 					</View>
 				</View>
 				{(data.business.rating ?? 0) > 0 ? (
-					<View style={styles.businessRatingRow}>
-						<Ionicons name="star" size={16} color={colors.yellow} />
-						<AppText variant="bodyMedium" weight="bold">
-							{(data.business.rating ?? 0).toFixed(1)}
-						</AppText>
-						<AppText variant="bodySmall" style={{ color: muted }}>
-							({data.business.review_count})
-						</AppText>
-					</View>
+					<Button
+						variant="link"
+						onPress={() =>
+							router.push(`/business-profile/${data.offer.business_id}/reviews`)
+						}
+						hitSlop={8}
+						accessibilityRole="link"
+						icon={<Star size={16} color={colors.yellow} fill={colors.yellow} />}
+					>
+						{`${(data.business.rating ?? 0).toFixed(1)} (${data.business.review_count})`}
+					</Button>
 				) : null}
 				<View style={styles.addressRow}>
-					<Ionicons name="location-outline" size={16} color={muted} />
+					<MapPin size={16} color={muted} />
 					<AppText
 						variant="bodyMedium"
 						style={{ flex: 1, color: muted, lineHeight: 19 }}
@@ -356,7 +359,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 
 			{/* ── Card ecológica ───────────────────────────────────── */}
 			<View style={[styles.ecoCard, { backgroundColor: cardBg, boxShadow: `0px 4px 10px ${colors.shadow}` }]}>
-				<Ionicons name="leaf-outline" size={28} color={colors.success} />
+				<Leaf size={28} color={colors.success} />
 				<AppText
 					variant="labelMedium"
 					weight="bold"
@@ -414,7 +417,7 @@ const styles = StyleSheet.create({
 	pill: {
 		paddingHorizontal: 12,
 		paddingVertical: 6,
-		borderRadius: 99,
+		borderRadius: radii.pill,
 	},
 	onlyLeftPill: {
 		borderWidth: 1,
@@ -442,7 +445,6 @@ const styles = StyleSheet.create({
 	allergenRow: {
 		flexDirection: "row",
 		flexWrap: "wrap",
-		gap: spacing.sm,
 		padding: spacing.md,
 		borderRadius: radii.md,
 	},
@@ -455,13 +457,14 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "flex-start",
 		gap: spacing.sm,
-		padding: spacing.md,
+		padding: spacing.sm,
+		marginTop: spacing.sm,
 		borderRadius: radii.md,
 	},
 	seeLocalPill: {
 		paddingHorizontal: 12,
 		paddingVertical: 6,
-		borderRadius: 8,
+		borderRadius: radii.sm,
 	},
 	businessHead: {
 		flexDirection: "row",
@@ -485,6 +488,7 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 4,
+		marginVertical: spacing.md,
 	},
 	addressRow: {
 		flexDirection: "row",
@@ -495,7 +499,7 @@ const styles = StyleSheet.create({
 		width: "100%",
 		alignItems: "center",
 		padding: spacing.xl,
-		borderRadius: 20,
+		borderRadius: radii.lg,
 		marginTop: spacing.xl,
 	},
 });

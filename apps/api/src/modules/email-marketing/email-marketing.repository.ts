@@ -9,6 +9,7 @@ import {
   inArray,
   isNull,
   lte,
+  ne,
   sql,
   type SQL,
 } from 'drizzle-orm';
@@ -194,7 +195,10 @@ export class EmailMarketingRepository {
     return row != null;
   }
 
-  /** Soft delete de campaña: desaparece del grid sin romper email_sends. */
+  /**
+   * Soft delete de campaña (cualquier estado salvo `sending` en curso):
+   * desaparece del grid sin romper email_sends.
+   */
   async deleteCampaign(id: string) {
     const [row] = await this.db
       .update(campaigns)
@@ -203,7 +207,13 @@ export class EmailMarketingRepository {
         status: 'cancelled',
         updated_at: new Date(),
       })
-      .where(and(eq(campaigns.id, id), eq(campaigns.status, 'draft')))
+      .where(
+        and(
+          eq(campaigns.id, id),
+          isNull(campaigns.deleted_at),
+          ne(campaigns.status, 'sending'),
+        ),
+      )
       .returning({ id: campaigns.id });
     return row != null;
   }
@@ -370,6 +380,7 @@ export class EmailMarketingRepository {
         and(
           eq(campaigns.status, 'scheduled'),
           lte(campaigns.scheduled_at, now),
+          isNull(campaigns.deleted_at),
         ),
       );
   }

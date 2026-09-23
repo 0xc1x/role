@@ -76,6 +76,7 @@ function CampaignsPage() {
 									),
 							})
 						}
+						onResend={() => mutations.resend.mutate(c)}
 						onCancel={() =>
 							mutations.cancel.mutate(c.id, {
 								onError: (err) =>
@@ -101,9 +102,11 @@ function CampaignsPage() {
 						}
 						busy={
 							mutations.send.isPending ||
+							mutations.resend.isPending ||
 							mutations.cancel.isPending ||
 							mutations.test.isPending ||
-							mutations.update.isPending
+							mutations.update.isPending ||
+							mutations.remove.isPending
 						}
 					/>
 				))}

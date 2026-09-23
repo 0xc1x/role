@@ -7,10 +7,13 @@ import {
 	couponIsExpired,
 	couponIsExhausted,
 	lastEventTimeFor,
+	findLastEventTime,
+	checkoutTotals,
+	meetsCouponMinimum,
 	filterByHistoryPeriod,
 	orderStatusTone,
 	type OrderStatusEvent,
-} from "@/features/orders/domain/order";
+} from "@/src/features/orders/domain/order";
 
 describe("order status transitions", () => {
 	it("allows pending → confirmed", () => {
@@ -84,6 +87,30 @@ describe("lastEventTimeFor", () => {
 	});
 });
 
+describe("findLastEventTime", () => {
+	it("devuelve null cuando no hay eventos del estado (nunca fabrica)", () => {
+		expect(findLastEventTime([], ["confirmed"])).toBeNull();
+		expect(
+			findLastEventTime(
+				[{ status: "pending", created_at: "2026-08-01T10:00:00Z" }],
+				["ready_for_pickup"],
+			),
+		).toBeNull();
+	});
+
+	it("devuelve el ISO del último evento coincidente", () => {
+		expect(
+			findLastEventTime(
+				[
+					{ status: "confirmed", created_at: "2026-08-01T10:05:00Z" },
+					{ status: "confirmed", created_at: "2026-08-02T09:00:00Z" },
+				],
+				["confirmed"],
+			),
+		).toBe("2026-08-02T09:00:00Z");
+	});
+});
+
 describe("coupon helpers", () => {
 	it("detects expiry", () => {
 		const now = new Date("2025-01-15T12:00:00Z");
@@ -96,6 +123,40 @@ describe("coupon helpers", () => {
 	it("detects exhaustion", () => {
 		expect(couponIsExhausted({ max_uses: 10, used_count: 10 })).toBe(true);
 		expect(couponIsExhausted({ max_uses: 10, used_count: 5 })).toBe(false);
+	});
+});
+
+describe("checkoutTotals", () => {
+	const offer = { original_price: 100, discounted_price: 80 };
+	const pct = {
+		type: "percentage",
+		value: 10,
+	} as Parameters<typeof checkoutTotals>[1];
+
+	it("calcula descuento y total en centavos (sin float)", () => {
+		const t = checkoutTotals(offer, pct);
+		expect(t.offerDiscount).toBe(20);
+		expect(t.coupon).toBe(8);
+		expect(t.total).toBe(72);
+	});
+
+	it("sin cupón el total es el precio con descuento", () => {
+		const t = checkoutTotals(offer, null);
+		expect(t.coupon).toBe(0);
+		expect(t.total).toBe(80);
+	});
+
+	it("el cupón nunca deja el total en negativo", () => {
+		const fixed = { type: "fixed", value: 200 } as Parameters<
+			typeof checkoutTotals
+		>[1];
+		expect(checkoutTotals(offer, fixed).total).toBe(0);
+	});
+
+	it("meetsCouponMinimum compara en las mismas unidades", () => {
+		expect(meetsCouponMinimum(80, null)).toBe(true);
+		expect(meetsCouponMinimum(80, 80)).toBe(true);
+		expect(meetsCouponMinimum(79.99, 80)).toBe(false);
 	});
 });
 

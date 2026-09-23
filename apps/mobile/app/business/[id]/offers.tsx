@@ -1,35 +1,52 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { memo, useCallback } from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { memo, useCallback, useMemo } from "react";
+import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	EmptyState,
 	ErrorState,
 	LoadingView,
 	Screen,
 	StatusBadge,
-} from "@/core/ui";
-import { useBusinessOffers } from "@/features/business/hooks";
-import { discountPercentage } from "@/features/offers/domain/offer";
-import { formatMoney } from "@/core/utils/formatters";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+} from "@/src/core/ui";
+import { useBusinessOffers } from "@/src/features/business/hooks";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
+import { discountPercentage } from "@/src/features/offers/domain/offer";
+import { formatMoney } from "@/src/core/utils/formatters";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Button } from "@/components/ui/button";
+import { CardPressable } from "@/components/ui/card-presable";
 
 /** Business offer list (from hub menu). */
 export default function BusinessOffersScreen() {
 	const { colors } = useTheme();
 	const { id } = useLocalSearchParams<{ id: string }>();
-	const { data, isLoading, isError, error, refetch } = useBusinessOffers(
-		id ?? "",
+	const {
+		data: infiniteData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+	} = useBusinessOffers(id ?? "");
+
+	const items = useMemo(
+		() => infiniteData?.pages.flat() ?? [],
+		[infiniteData],
 	);
 
+	const handleEndReached = useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
 	const renderItem = useCallback(
-		({ item }: { item: NonNullable<typeof data>[number] }) => (
+		({ item }: { item: OfferDetail }) => (
 			<BusinessOfferRow item={item} businessId={id ?? ""} />
 		),
 		[id],
@@ -46,24 +63,32 @@ export default function BusinessOffersScreen() {
 					{strings.business.products}
 				</AppText>
 				<Button
-					label={strings.business.newProduct}
 					size="sm"
 					onPress={() => router.push(`/business/${id}/offer/new`)}
-				/>
+				>
+					{strings.business.newProduct}
+				</Button>
 			</View>
-			{!data || data.length === 0 ? (
-				<EmptyState
-					title="Sin productos aún"
-					message="Publica tu primer excedente de comida."
-				/>
-			) : (
-				<FlatList
-					data={data}
-					keyExtractor={(item) => item.offer.id}
-					contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}
-					renderItem={renderItem}
-				/>
-			)}
+		{items.length === 0 ? (
+			<EmptyState
+				title="Sin productos aún"
+				message="Publica tu primer excedente de comida."
+			/>
+		) : (
+			<FlatList
+				data={items}
+				keyExtractor={(item) => item.offer.id}
+				contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}
+				renderItem={renderItem}
+				onEndReached={handleEndReached}
+				onEndReachedThreshold={0.5}
+				ListFooterComponent={
+					isFetchingNextPage ? (
+						<ActivityIndicator color={colors.primary} />
+					) : null
+				}
+			/>
+		)}
 		</Screen>
 	);
 }
@@ -72,13 +97,13 @@ const BusinessOfferRow = memo(function BusinessOfferRow({
 	item,
 	businessId,
 }: {
-	item: NonNullable<ReturnType<typeof useBusinessOffers>["data"]>[number];
+	item: OfferDetail;
 	businessId: string;
 }) {
 	const { colors } = useTheme();
 	const discount = discountPercentage(item.offer);
 	return (
-		<Card
+		<CardPressable
 			onPress={() => router.push(`/business/${businessId}/offer/${item.offer.id}`)}
 		>
 			<View style={styles.row}>
@@ -98,7 +123,7 @@ const BusinessOfferRow = memo(function BusinessOfferRow({
 					/>
 				</View>
 			</View>
-		</Card>
+		</CardPressable>
 	);
 });
 
@@ -113,5 +138,5 @@ const styles = StyleSheet.create({
 	},
 	row: { flexDirection: "row", gap: spacing.md },
 	offerBody: { flex: 1, gap: 2 },
-	image: { width: 64, height: 64, borderRadius: 10 },
+	image: { width: 64, height: 64, borderRadius: radii.sm },
 });

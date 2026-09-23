@@ -1,5 +1,5 @@
-import LegalScreen from "@/core/ui/LegalScreen";
-import { strings } from "@/core/i18n/strings";
+import LegalScreen from "@/src/core/ui/LegalScreen";
+import { strings } from "@/src/core/i18n/strings";
 
 export default function TermsScreen() {
 	return (

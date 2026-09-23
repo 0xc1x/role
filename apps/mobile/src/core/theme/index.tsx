@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SystemUI from "expo-system-ui";
 
 import { colorTokens, type ColorTokens, type ThemeScheme } from "./colors";
 export { colorTokens, light, dark } from "./colors";
@@ -76,6 +77,11 @@ export function ThemeProvider({
 	}, []);
 
 	const scheme: ThemeScheme = mode === "system" ? systemScheme : mode;
+
+	useEffect(() => {
+		if (!hydrated) return;
+		void SystemUI.setBackgroundColorAsync(colorTokens[scheme].background);
+	}, [scheme, hydrated]);
 
 	const value = useMemo<ThemeContextValue>(
 		() => ({

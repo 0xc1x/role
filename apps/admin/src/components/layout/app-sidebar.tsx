@@ -28,10 +28,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							size="lg"
-							className="data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground [&_svg]:size-[unset]"
+							className="data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center [&_svg]:size-[unset]"
 						>
-							<Logo variant="icon" size={40} />
-							<div className="grid flex-1 text-left text-sm leading-tight">
+							<Logo
+								variant="icon"
+								size={40}
+								className="text-sidebar-foreground transition-[width,height] duration-200 group-data-[collapsible=icon]:size-6!"
+							/>
+							<div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
 								<Logo
 									variant="wordmark"
 									className="h-5 w-auto text-sidebar-foreground"
@@ -51,7 +55,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 			<SidebarFooter>
 				<SidebarMenu>
 					<SidebarMenuItem>
-						<div className="flex items-center justify-center p-2">
+						<div className="flex items-center justify-center p-2 group-data-[collapsible=icon]:p-0!">
 							<ThemeToggle />
 						</div>
 					</SidebarMenuItem>

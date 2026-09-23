@@ -1,9 +1,9 @@
 import { router } from "expo-router";
 
-import { queryClient } from "@/core/query/client";
+import { queryClient } from "@/src/core/query/client";
 import { authRepository } from "./data/repository";
 import { useAuthStore } from "./store";
-import { removeDeviceToken } from "@/features/notifications";
+import { removeDeviceToken } from "@/src/features/notifications";
 
 /**
  * Cierre de sesión completo: desvincula el token push de este dispositivo,

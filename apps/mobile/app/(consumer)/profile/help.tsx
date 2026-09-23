@@ -7,24 +7,22 @@ import {
 	StyleSheet,
 	View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronRight, CircleHelp, Leaf, Mail, MessagesSquare, Phone, ShieldCheck, ShoppingBag, type LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card, Screen, ScreenHeader, SearchBar } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import type { ColorTokens } from "@/core/theme/colors";
-import { withAlpha } from "@/core/theme/alpha";
-import { useAuthStore } from "@/features/auth/store";
-import { useConfigValue } from "@/features/config";
-
-type IoniconName = keyof typeof Ionicons.glyphMap;
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen, ScreenHeader, SearchBar } from "@/src/core/ui";
+import { Button } from "@/components/ui/button";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useConfigValue } from "@/src/features/config";
 
 interface Category {
-	icon: IoniconName;
+	icon: LucideIcon;
 	label: string;
 	subtitle: string;
 	bgColor: string;
@@ -33,31 +31,24 @@ interface Category {
 }
 
 function ContactChip({
-	icon,
+	icon: Icon,
 	label,
 	onPress,
 }: {
-	icon: IoniconName;
+	icon: LucideIcon;
 	label: string;
 	onPress: () => void;
 }) {
 	const { colors } = useTheme();
 	return (
-		<Pressable
+		<Button
+			variant="outline"
+			fullWidth
 			onPress={onPress}
-			style={[
-				styles.contactChip,
-				{
-					backgroundColor: colors.background,
-					borderColor: colors.borderSolid,
-				},
-			]}
+			icon={<Icon size={24} color={colors.primary} />}
 		>
-			<Ionicons name={icon} size={24} color={colors.primary} />
-			<AppText variant="bodyMedium" weight="medium">
-				{label}
-			</AppText>
-		</Pressable>
+			{label}
+		</Button>
 	);
 }
 
@@ -74,21 +65,21 @@ function QuickContact({
 		<View style={styles.quickContact}>
 			<View style={{ flex: 1 }}>
 				<ContactChip
-					icon="chatbubble-ellipses-outline"
+					icon={MessagesSquare}
 					label={strings.helpCenter.chat}
 					onPress={onChatPress}
 				/>
 			</View>
 			<View style={{ flex: 1 }}>
 				<ContactChip
-					icon="mail-outline"
+					icon={Mail}
 					label={strings.helpCenter.email}
 					onPress={onEmailPress}
 				/>
 			</View>
 			<View style={{ flex: 1 }}>
 				<ContactChip
-					icon="call-outline"
+					icon={Phone}
 					label={strings.helpCenter.call}
 					onPress={onCallPress}
 				/>
@@ -99,10 +90,11 @@ function QuickContact({
 
 function CategoryRow({ category }: { category: Category }) {
 	const { colors } = useTheme();
+	const Icon = category.icon;
 	return (
 		<Pressable onPress={category.onPress} style={[styles.row, { borderTopColor: colors.borderSolid }]}>
 			<View style={[styles.categoryIcon, { backgroundColor: category.bgColor }]}>
-				<Ionicons name={category.icon} size={20} color={category.iconColor} />
+				<Icon size={20} color={category.iconColor} />
 			</View>
 			<View style={styles.rowBody}>
 				<AppText variant="bodyMedium" weight="medium">
@@ -112,7 +104,7 @@ function CategoryRow({ category }: { category: Category }) {
 					{category.subtitle}
 				</AppText>
 			</View>
-			<Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
+			<ChevronRight size={20} color={colors.mutedForeground} />
 		</Pressable>
 	);
 }
@@ -120,7 +112,7 @@ function CategoryRow({ category }: { category: Category }) {
 function CategoriesCard({ categories }: { categories: Category[] }) {
 	const { colors } = useTheme();
 	return (
-		<Card style={styles.card}>
+		<View style={[styles.card, { backgroundColor: colors.card }]}>
 			<AppText
 				variant="labelSmall"
 				weight="semiBold"
@@ -131,7 +123,7 @@ function CategoriesCard({ categories }: { categories: Category[] }) {
 			{categories.map((category) => (
 				<CategoryRow key={category.label} category={category} />
 			))}
-		</Card>
+		</View>
 	);
 }
 
@@ -164,7 +156,7 @@ function FaqChevron({ expanded }: { expanded: boolean }) {
 				],
 			}}
 		>
-			<Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
+			<ChevronRight size={20} color={colors.mutedForeground} />
 		</Animated.View>
 	);
 }
@@ -182,8 +174,15 @@ function FaqRow({
 }) {
 	const { colors } = useTheme();
 	return (
-		<Pressable onPress={onToggle} style={[styles.row, styles.faqRow, { borderTopColor: colors.borderSolid }]}>
-			<Ionicons name="help-circle-outline" size={20} color={colors.primary} />
+		<Pressable
+			onPress={onToggle}
+			style={[
+				styles.row,
+				styles.faqRow,
+				{ borderTopColor: colors.borderSolid },
+			]}
+		>
+			<CircleHelp size={20} color={colors.primary} />
 			<View style={styles.rowBody}>
 				<AppText variant="bodyMedium" weight="medium">
 					{question}
@@ -191,7 +190,11 @@ function FaqRow({
 				{expanded ? (
 					<AppText
 						variant="bodySmall"
-						style={{ color: colors.mutedForeground, lineHeight: 21, marginTop: spacing.xs }}
+						style={{
+							color: colors.mutedForeground,
+							lineHeight: 21,
+							marginTop: spacing.xs,
+						}}
 					>
 						{answer}
 					</AppText>
@@ -213,7 +216,7 @@ function FaqCard({
 }) {
 	const { colors } = useTheme();
 	return (
-		<Card style={styles.card}>
+		<View style={[styles.card, { backgroundColor: colors.card }]}>
 			<AppText
 				variant="labelSmall"
 				weight="semiBold"
@@ -242,7 +245,7 @@ function FaqCard({
 					);
 				})
 			)}
-		</Card>
+		</View>
 	);
 }
 
@@ -268,18 +271,9 @@ function ContactSupportCard({ onPress }: { onPress: () => void }) {
 			>
 				{strings.helpCenter.contactSubtitle}
 			</AppText>
-			<Pressable
-				onPress={onPress}
-				style={[styles.supportButton, { backgroundColor: colors.primaryForeground }]}
-			>
-				<AppText
-					variant="bodyMedium"
-					weight="semiBold"
-					style={{ color: colors.primary }}
-				>
-					{strings.helpCenter.contactCta}
-				</AppText>
-			</Pressable>
+			<Button variant="default" onPress={onPress} fullWidth>
+				{strings.helpCenter.contactCta}
+			</Button>
 		</LinearGradient>
 	);
 }
@@ -339,7 +333,7 @@ export default function HelpScreen() {
 
 	const categories: Category[] = [
 		{
-			icon: "leaf-outline",
+			icon: Leaf,
 			label: strings.helpCenter.categoryAbout,
 			subtitle: strings.helpCenter.categoryAboutSubtitle,
 			bgColor: colors.surfaceSuccess,
@@ -347,7 +341,7 @@ export default function HelpScreen() {
 			onPress: () => router.push("/profile/about"),
 		},
 		{
-			icon: "bag-handle-outline",
+			icon: ShoppingBag,
 			label: strings.helpCenter.categoryOrders,
 			subtitle: strings.helpCenter.categoryOrdersSubtitle,
 			bgColor: colors.surfaceSuccess,
@@ -364,7 +358,7 @@ export default function HelpScreen() {
 		// 	onPress: () => router.push("/profile/help/payments"),
 		// },
 		{
-			icon: "shield-checkmark-outline",
+			icon: ShieldCheck,
 			label: strings.helpCenter.categoryPolicies,
 			subtitle: strings.helpCenter.categoryPoliciesSubtitle,
 			bgColor: colors.infoSurface,
@@ -436,10 +430,20 @@ const styles = StyleSheet.create({
 		gap: spacing.sm,
 		paddingVertical: spacing.md,
 		borderWidth: 1,
-		borderRadius: 24,
+		borderRadius: radii.xl,
 	},
-	card: { padding: 0, overflow: "hidden" },
-	cardTitle: { padding: spacing.lg },
+	card: { 
+		padding: 0, 
+		overflow: "hidden", 
+		borderRadius: radii.xl, 
+		gap: 0,  
+	},
+	cardTitle: {
+		paddingHorizontal: spacing.lg,
+		paddingTop: spacing.md,
+		paddingBottom: spacing.sm,
+	},
+	faqRow: { alignItems: "flex-start" },
 	row: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -452,18 +456,17 @@ const styles = StyleSheet.create({
 	categoryIcon: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},
-	faqRow: { alignItems: "flex-start" },
 	supportCard: {
-		borderRadius: 24,
+		borderRadius: radii.xl,
 		padding: spacing.lg,
 		gap: spacing.xs,
 	},
 	supportButton: {
-		borderRadius: 12,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 		paddingVertical: spacing.sm,

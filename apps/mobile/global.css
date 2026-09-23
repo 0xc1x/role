@@ -4,56 +4,66 @@
 
 @layer base {
   :root {
-    /* Modo de dark mode de css-interop: 'class' evita el error
-       "Cannot manually set color scheme" en web. */
     --css-interop-darkMode: class;
+
     /* css-vars:generated:start (fuente: src/core/theme/colors.ts — regenerar con: bun scripts/generate-css-vars.mjs) */
-    --background: #faf9f7;
-    --foreground: #1a1a18;
-    --card: #fff5f5;
-    --card-foreground: #1a1a18;
-    --popover: #ffffff;
-    --popover-foreground: #1a1a18;
-    --primary: #bf1c19;
-    --primary-foreground: #ffffff;
-    --secondary: #96bf85;
-    --secondary-foreground: #1a1a18;
-    --muted: #fff5f5;
-    --muted-foreground: #737373;
-    --accent: #435d38;
-    --accent-foreground: #ffffff;
-    --destructive: #901b35;
-    --destructive-foreground: #ffffff;
-    --border: #00000014;
-    --border-solid: #e5e5e5;
-    --input: #ffffff;
-    --ring: #0000001a;
+    --background: 260 42.86% 98.63%;
+    --foreground: 60 4% 9.8%;
+    --card: 270 50% 96.86%;
+    --card-foreground: 60 4% 9.8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 60 4% 9.8%;
+    --primary: 277.5 48.98% 19.22%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 264.29 67.74% 87.84%;
+    --secondary-foreground: 277.5 48.98% 19.22%;
+    --muted: 270 50% 96.86%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 275.45 48.89% 17.65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 346.67 68.42% 33.53%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 0% / 0.08;
+    --border-solid: 263.08 25.49% 90%;
+    --input: 0 0% 100%;
+    --ring: 0 0% 0% / 0.1;
 /* css-vars:generated:end */
+    --radius: 0.75rem;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --info: 175 84% 32%;
+    --info-foreground: 0 0% 100%;
   }
 
+  .dark:root,
   .dark {
     /* css-vars:generated:start (fuente: src/core/theme/colors.ts — regenerar con: bun scripts/generate-css-vars.mjs) */
-    --background: #121212;
-    --foreground: #faf9f7;
-    --card: #2c2c2c;
-    --card-foreground: #faf9f7;
-    --popover: #2c2c2c;
-    --popover-foreground: #faf9f7;
-    --primary: #bf1c19;
-    --primary-foreground: #ffffff;
-    --secondary: #96bf85;
-    --secondary-foreground: #1a1a18;
-    --muted: #2c2c2c;
-    --muted-foreground: #9e9e9e;
-    --accent: #435d38;
-    --accent-foreground: #ffffff;
-    --destructive: #901b35;
-    --destructive-foreground: #ffffff;
-    --border: #ffffff33;
-    --border-solid: #3d3d3d;
-    --input: #2c2c2c;
-    --ring: #ffffff33;
+    --background: 0 0% 7.06%;
+    --foreground: 40 23.08% 97.45%;
+    --card: 0 0% 17.25%;
+    --card-foreground: 40 23.08% 97.45%;
+    --popover: 257.14 14.29% 19.22%;
+    --popover-foreground: 40 23.08% 97.45%;
+    --primary: 271.22 64.47% 70.2%;
+    --primary-foreground: 60 4% 9.8%;
+    --secondary: 264.29 67.74% 87.84%;
+    --secondary-foreground: 277.5 48.98% 19.22%;
+    --muted: 257.14 14.29% 19.22%;
+    --muted-foreground: 0 0% 61.96%;
+    --accent: 275.45 48.89% 17.65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 346.67 68.42% 33.53%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100% / 0.2;
+    --border-solid: 258.26 15.65% 28.82%;
+    --input: 257.14 14.29% 19.22%;
+    --ring: 0 0% 100% / 0.2;
 /* css-vars:generated:end */
+    --radius: 0.75rem;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --info: 172 66% 50%;
+    --info-foreground: 0 0% 100%;
   }
 
   input,

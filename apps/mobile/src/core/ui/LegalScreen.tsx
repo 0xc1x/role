@@ -1,8 +1,9 @@
 import { StyleSheet, View } from "react-native";
 
-import { AppText, Card, Screen, ScreenHeader } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { AppText, Screen, ScreenHeader } from "@/src/core/ui";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Card } from "@/components/ui/card";
 
 interface LegalSection {
 	title: string;
@@ -53,6 +54,6 @@ export default function LegalScreen({
 
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, gap: spacing.lg },
-	card: { padding: spacing.xl, borderRadius: 20 },
+	card: { padding: spacing.xl, borderRadius: radii.lg },
 	section: { marginTop: spacing.xl },
 });

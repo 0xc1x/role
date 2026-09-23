@@ -1,32 +1,33 @@
 import { useMemo, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { Calendar, ChartColumn, ChevronLeft, ChevronRight, Clock, Package, ShoppingBag, Star, TrendingDown, TrendingUp, Wallet, type LucideIcon } from "lucide-react-native";
+import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	EmptyState,
 	ErrorState,
-	LoadingView,
 	Screen,
 	ScreenHeader,
-} from "@/core/ui";
-import { useAuthStore } from "@/features/auth/store";
-import { useBusinesses, useBusinessStats } from "@/features/business/hooks";
+} from "@/src/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useBusinesses, useBusinessStats } from "@/src/features/business/hooks";
 import {
 	statsDaysInRange,
 	statsRangeFor,
 	statsRangeLabel,
 	statsViewModel,
 	type StatsPeriod,
-} from "@/features/business/domain/stats";
-import { formatMoney, formatPercent } from "@/core/utils/formatters";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
-import type { BusinessStats } from "@/features/business/domain/business";
+} from "@/src/features/business/domain/stats";
+import { formatMoney, formatPercent } from "@/src/core/utils/formatters";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { withAlpha } from "@/src/core/theme/alpha";
+import type { BusinessStats } from "@/src/features/business/domain/business";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
 export default function BusinessStatsScreen() {
 	const { colors } = useTheme();
@@ -50,10 +51,55 @@ export default function BusinessStatsScreen() {
 		refetch,
 	} = useBusinessStats(business?.id ?? "", range.start, range.end);
 
-	if (isLoading) return <LoadingView />;
+	if (isLoading) {
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+				<ScreenHeader
+					title={strings.business.statistics}
+					fallback="/(business)/management"
+				/>
+				<Skeleton style={styles.skeletonSubtitle} />
+				<View style={styles.skeletonPeriodRow}>
+					{[0, 1, 2].map((i) => (
+						<Skeleton key={`stats-period-skeleton-${i}`} style={styles.skeletonPeriodChip} />
+					))}
+				</View>
+				<View style={styles.kpiGrid}>
+						{[0, 1, 2, 3].map((i) => (
+							<Skeleton key={`stats-kpi-skeleton-${i}`} style={styles.skeletonKpi} />
+						))}
+					</View>
+					<Skeleton style={styles.skeletonChart} />
+					<Skeleton style={styles.skeletonChart} />
+				</View>
+			</Screen>
+		);
+	}
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!stats || !business)
+	if (!business)
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+					<ScreenHeader
+						title={strings.business.statistics}
+						fallback="/(business)/management"
+					/>
+					<EmptyState
+						title={strings.business.noBusiness}
+						action={
+							<Button
+								onPress={() => router.push("/my-business/business-new")}
+							>
+								{strings.business.createBusiness}
+							</Button>
+						}
+					/>
+				</View>
+			</Screen>
+		);
+	if (!stats)
 		return (
 			<Screen scroll>
 				<View style={styles.container}>
@@ -66,10 +112,11 @@ export default function BusinessStatsScreen() {
 						message={strings.business.noSalesProducts}
 						action={
 							<Button
-								label={strings.common.retry}
 								variant="outline"
 								onPress={() => void refetch()}
-							/>
+							>
+								{strings.common.retry}
+							</Button>
 						}
 					/>
 				</View>
@@ -105,34 +152,41 @@ export default function BusinessStatsScreen() {
 				/>
 
 				<View style={styles.kpiGrid}>
-					<KpiCard
-						label={strings.business.revenue}
-						value={formatMoney(stats.revenue)}
-						change={stats.revenueChange}
-						icon="wallet-outline"
-						colorKey="success"
-					/>
-					<KpiCard
-						label={strings.business.ordersCount}
-						value={String(stats.ordersCount)}
-						change={stats.ordersChange}
-						icon="bag-handle-outline"
-						colorKey="primary"
-					/>
-					<KpiCard
-						label={strings.business.kpiRescued}
-						value={String(stats.rescuedCount)}
-						change={stats.rescuedChange}
-						icon="cube-outline"
-						colorKey="warning"
-					/>
-					<KpiCard
-						label={strings.business.avgRating}
-						value={stats.avgRating.toFixed(1)}
-						change={null}
-						icon="star-outline"
-						colorKey="info"
-					/>
+					<View style={styles.kpiRow}>
+						<KpiCard
+							label={strings.business.revenue}
+							value={formatMoney(stats.revenue)}
+							change={stats.revenueChange}
+							icon={Wallet}
+							colorKey="success"
+						/>
+						<KpiCard
+							label={strings.business.ordersCount}
+							value={String(stats.ordersCount)}
+							change={stats.ordersChange}
+							icon={ShoppingBag}
+							colorKey="primary"
+						/>
+					</View>
+					<View style={styles.kpiRow}>
+						<KpiCard
+							label={strings.business.kpiRescued}
+							value={String(stats.rescuedCount)}
+							change={stats.rescuedChange}
+							icon={Package}
+							colorKey="warning"
+						/>
+						<KpiCard
+							label={strings.business.avgRating}
+							value={stats.avgRating.toFixed(1)}
+							change={null}
+							icon={Star}
+							colorKey="info"
+							onPress={() =>
+								router.push(`/business/${business?.id}/reviews`)
+							}
+						/>
+					</View>
 				</View>
 
 				<DailyRevenueChart dailyStats={stats.dailyStats} />
@@ -200,18 +254,18 @@ function PeriodSelector({
 				})}
 			</View>
 			<View style={[styles.rangeRow, { marginTop: spacing.sm }]}>
-				<Pressable
+				<Button
+					variant="ghost"
+					size="icon"
 					onPress={() => onOffsetChange(offset - 1)}
 					hitSlop={8}
 					accessibilityRole="button"
-					accessibilityLabel={strings.business.statsPreviousPeriod}
+					aria-label={strings.business.statsPreviousPeriod}
 					style={styles.navBtn}
-				>
-					<Ionicons name="chevron-back" size={18} color={colors.foreground} />
-				</Pressable>
+					icon={<ChevronLeft size={22} color={colors.foreground} />}
+				/>
 				<View style={styles.rangeLabel}>
-					<Ionicons
-						name="time-outline"
+					<Clock
 						size={14}
 						color={colors.mutedForeground}
 					/>
@@ -228,16 +282,17 @@ function PeriodSelector({
 						})}
 					</AppText>
 				</View>
-				<Pressable
+				<Button
+					variant="ghost"
+					size="icon"
 					onPress={() => onOffsetChange(offset + 1)}
 					disabled={isCurrent}
 					hitSlop={8}
 					accessibilityRole="button"
-					accessibilityLabel={strings.business.statsNextPeriod}
+					aria-label={strings.business.statsNextPeriod}
 					style={[styles.navBtn, isCurrent && { opacity: 0.3 }]}
-				>
-					<Ionicons name="chevron-forward" size={18} color={colors.foreground} />
-				</Pressable>
+					icon={<ChevronRight size={18} color={colors.foreground} />}
+				/>
 			</View>
 		</View>
 	);
@@ -262,14 +317,16 @@ function KpiCard({
 	label,
 	value,
 	change,
-	icon,
+	icon: Icon,
 	colorKey,
+	onPress,
 }: {
 	label: string;
 	value: string;
 	change: number | null;
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	colorKey: "success" | "primary" | "warning" | "info";
+	onPress?: () => void;
 }) {
 	const { colors } = useTheme();
 	const color = kpiColor(colors, colorKey);
@@ -277,26 +334,29 @@ function KpiCard({
 	const trendColor =
 		change == null ? colors.mutedForeground : positive ? colors.success : colors.destructive;
 
-	return (
-		<Card style={styles.kpi}>
-			<View style={styles.kpiHeader}>
+	const body = (pressed = false) => (
+		<Card style={[styles.kpiFill, pressed && { opacity: 0.9 }]}>
+			<CardHeader style={styles.kpiHeader}>
 				<View style={[styles.kpiIcon, { backgroundColor: withAlpha(color, 0.15) }]}>
-					<Ionicons name={icon} size={16} color={color} />
+					<Icon size={16} color={color} />
 				</View>
 				<AppText variant="bodySmall" numberOfLines={1} style={styles.flex1}>
 					{label}
 				</AppText>
-			</View>
-			<AppText variant="h3" weight="bold" style={{ color }} numberOfLines={1}>
-				{value}
-			</AppText>
+			</CardHeader>
+			<CardContent>
+				<AppText variant="h3" weight="bold" style={{ color }} numberOfLines={1}>
+					{value}
+				</AppText>
+			</CardContent>
+			
 			{change != null ? (
-				<View style={styles.trendRow}>
-					<Ionicons
-						name={positive ? "trending-up" : "trending-down"}
-						size={13}
-						color={trendColor}
-					/>
+				<CardContent style={styles.trendRow}>
+					{positive ? (
+						<TrendingUp size={13} color={trendColor} />
+					) : (
+						<TrendingDown size={13} color={trendColor} />
+					)}
 					<AppText
 						variant="bodySmall"
 						weight="bold"
@@ -312,9 +372,23 @@ function KpiCard({
 					>
 						{strings.business.vsPrevious}
 					</AppText>
-				</View>
+				</CardContent>
 			) : null}
 		</Card>
+	);
+
+	return (
+		<View style={styles.kpiColumn}>
+			{onPress ? (
+				<Pressable
+					onPress={onPress}
+					accessibilityRole="button"
+					style={styles.kpiFill}
+				>
+					{({ pressed }) => body(pressed)}
+				</Pressable>
+			) : body()}
+		</View>
 	);
 }
 
@@ -326,16 +400,15 @@ function DailyRevenueChart({ dailyStats }: { dailyStats: BusinessStats["dailySta
 
 	return (
 		<Card style={styles.cardGap}>
-			<View style={styles.cardHeader}>
-				<Ionicons name="calendar-outline" size={18} color={colors.primary} />
+			<CardHeader style={styles.cardHeader}>
+				<Calendar size={18} color={colors.primary} />
 				<AppText variant="h4" weight="bold">
 					{strings.business.dailyChart}
 				</AppText>
-			</View>
+			</CardHeader>
 			{dailyStats.length === 0 || maxRevenue === 0 ? (
 				<View style={styles.emptyState}>
-					<Ionicons
-						name="bar-chart-outline"
+					<ChartColumn
 						size={36}
 						color={colors.mutedForeground}
 					/>
@@ -351,7 +424,7 @@ function DailyRevenueChart({ dailyStats }: { dailyStats: BusinessStats["dailySta
 				</View>
 			) : (
 				dailyStats.map((stat) => (
-					<View key={stat.day} style={styles.chartRow}>
+					<CardContent key={stat.day} style={styles.chartRow}>
 						<View style={styles.rowBetween}>
 							<AppText variant="bodyMedium" weight="bold">
 								{stat.day}
@@ -385,7 +458,7 @@ function DailyRevenueChart({ dailyStats }: { dailyStats: BusinessStats["dailySta
 								]}
 							/>
 						</View>
-					</View>
+					</CardContent>
 				))
 			)}
 		</Card>
@@ -399,13 +472,15 @@ function TopProducts({ products }: { products: BusinessStats["topProducts"] }) {
 
 	return (
 		<Card style={styles.cardGap}>
-			<AppText variant="h4" weight="bold">
-				{strings.business.topProducts}
-			</AppText>
+			<CardHeader>
+				<AppText variant="h4" weight="bold">
+					{strings.business.topProducts}
+				</AppText>
+			</CardHeader>
+			
 			{products.length === 0 ? (
 				<View style={styles.emptyState}>
-					<Ionicons
-						name="cube-outline"
+					<Package
 						size={32}
 						color={colors.mutedForeground}
 					/>
@@ -421,7 +496,7 @@ function TopProducts({ products }: { products: BusinessStats["topProducts"] }) {
 				</View>
 			) : (
 				products.map((product, index) => (
-					<View key={product.name} style={styles.productRow}>
+					<CardContent key={product.name} style={styles.productRow}>
 						<View
 							style={[styles.rankCircle, { backgroundColor: withAlpha(colors.primary, 0.102) }]}
 						>
@@ -451,7 +526,7 @@ function TopProducts({ products }: { products: BusinessStats["topProducts"] }) {
 						>
 							{formatMoney(product.revenue)}
 						</AppText>
-					</View>
+					</CardContent>
 				))
 			)}
 		</Card>
@@ -499,7 +574,7 @@ function PeriodSummary({
 						{strings.business.dailyAvg}
 					</AppText>
 					<AppText variant="h2" weight="bold" style={{ color: colors.primaryForeground }}>
-						${dailyAvg}
+						{formatMoney(dailyAvg)}
 					</AppText>
 				</View>
 				<View style={styles.flex1}>
@@ -510,7 +585,7 @@ function PeriodSummary({
 						{strings.business.avgTicket}
 					</AppText>
 					<AppText variant="h2" weight="bold" style={{ color: colors.primaryForeground }}>
-						${ticketAvg}
+						{formatMoney(ticketAvg)}
 					</AppText>
 				</View>
 			</View>
@@ -543,7 +618,7 @@ const styles = StyleSheet.create({
 	navBtn: {
 		width: 32,
 		height: 32,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -553,7 +628,9 @@ const styles = StyleSheet.create({
 		gap: spacing.md,
 		marginTop: spacing.lg,
 	},
-	kpi: { flexBasis: "47%", flex: 1, gap: 6 },
+	kpiRow: { width: "100%", flexDirection: "row", gap: spacing.md },
+	kpiColumn: { flex: 1, minWidth: 0 },
+	kpiFill: { flexGrow: 1, width: "100%" },
 	kpiHeader: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -562,7 +639,7 @@ const styles = StyleSheet.create({
 	kpiIcon: {
 		width: 30,
 		height: 30,
-		borderRadius: 8,
+		borderRadius: radii.sm,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -592,11 +669,11 @@ const styles = StyleSheet.create({
 	chartValues: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
 	chartTrack: {
 		height: 8,
-		borderRadius: 4,
+		borderRadius: radii.sm,
 		marginTop: spacing.xs,
 		overflow: "hidden",
 	},
-	chartBar: { height: "100%", borderRadius: 4 },
+	chartBar: { height: "100%", borderRadius: radii.sm },
 	productRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -606,7 +683,7 @@ const styles = StyleSheet.create({
 	rankCircle: {
 		width: 28,
 		height: 28,
-		borderRadius: 14,
+		borderRadius: radii.pill,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -621,4 +698,28 @@ const styles = StyleSheet.create({
 		marginTop: spacing.md,
 	},
 	flex1: { flex: 1 },
+	skeletonKpi: {
+		flexBasis: "47%",
+		flexGrow: 1,
+		flexShrink: 1,
+		height: 110,
+		borderRadius: radii.lg,
+	},
+	skeletonSubtitle: {
+		height: 16,
+		width: "70%",
+		borderRadius: radii.sm,
+		marginTop: spacing.lg,
+	},
+	skeletonPeriodRow: {
+		flexDirection: "row",
+		gap: spacing.sm,
+		marginTop: spacing.sm,
+	},
+	skeletonPeriodChip: {
+		flex: 1,
+		height: 38,
+		borderRadius: radii.pill,
+	},
+	skeletonChart: { height: 180, borderRadius: radii.lg, marginTop: spacing.lg },
 });

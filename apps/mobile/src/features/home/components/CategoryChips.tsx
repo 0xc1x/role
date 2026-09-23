@@ -6,13 +6,13 @@ import Animated, {
 	withSpring,
 } from "react-native-reanimated";
 
-import { useTheme } from "@/core/theme";
-import { AppText } from "@/core/ui";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { strings } from "@/core/i18n/strings";
-import { useCategoryStats } from "@/features/hooks";
-import type { CategoryStat } from "@/features/offers/domain/offer";
+import { useTheme } from "@/src/core/theme";
+import { AppText } from "@/src/core/ui";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
+import { useCategoryStats } from "@/src/features/hooks";
+import type { CategoryStat } from "@/src/features/offers/domain/offer";
 
 interface CategoryChipsProps {
 	selectedCategory: string | null;
@@ -215,15 +215,15 @@ function AnimatedChip({
 				style={[
 					styles.chip,
 					{
-						backgroundColor: selected ? colors.greenDark : withAlpha(colors.green, 0.18),
-						borderColor: selected ? colors.greenDark : withAlpha(colors.green, 0.25),
+						backgroundColor: selected ? colors.primary : withAlpha(colors.primary, 0.12),
+						borderColor: selected ? colors.primary : withAlpha(colors.primary, 0.25),
 					},
 				]}
 			>
 				<AppText
 					weight={selected ? "semiBold" : "medium"}
 					style={{
-						color: selected ? colors.green : withAlpha(colors.green, 0.95),
+						color: selected ? colors.primaryForeground : colors.primary,
 					}}
 				>
 					{label}

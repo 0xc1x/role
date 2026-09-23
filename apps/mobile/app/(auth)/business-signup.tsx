@@ -2,14 +2,16 @@ import { Link, router } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, Screen, TextField } from "@/core/ui";
-import { authRepository } from "@/features/auth/data/repository";
-import { businessRepository } from "@/features/business/data/repository";
-import { toAppError } from "@/core/error/mapper";
-import { Errors } from "@/core/error/app-error";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen, TextField } from "@/src/core/ui";
+import { authRepository } from "@/src/features/auth/data/repository";
+import { businessRepository } from "@/src/features/business/data/repository";
+import { toAppError } from "@/src/core/error/mapper";
+import { Errors } from "@/src/core/error/app-error";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { Text } from "@/components/ui/text";
+import { Button } from "@/components/ui/button";
 
 export default function BusinessSignupScreen() {
 	const { colors } = useTheme();
@@ -105,7 +107,9 @@ export default function BusinessSignupScreen() {
 				<TextField label={strings.business.businessName} value={businessName} onChangeText={setBusinessName} autoComplete="name" />
 				<TextField label={strings.business.signupPhoneLabel} value={businessPhone} onChangeText={setBusinessPhone} keyboardType="phone-pad" />
 
-				<Button label={strings.business.createBusiness} onPress={handleSignup} loading={loading} fullWidth style={{ marginTop: spacing.md }} />
+				<Button onPress={handleSignup} loading={loading} fullWidth style={{ marginTop: spacing.md }} >
+					{strings.business.createBusiness}
+				</Button>
 				<Link href="/login" style={[styles.link, { color: colors.primary }]}>
 					<AppText variant="bodyMedium">{strings.auth.login}</AppText>
 				</Link>

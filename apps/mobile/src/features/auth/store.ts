@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { supabase } from "@/core/supabase/client";
+import { supabase } from "@/src/core/supabase/client";
 
 import { parseRole, type UserProfile } from "./domain/user";
 import { authRepository, enrichProfile } from "./data/repository";
@@ -50,14 +50,18 @@ export const useAuthStore = create<AuthState>((set) => ({
 	initialized: false,
 
 	initialize: async () => {
-		const { data } = await supabase.auth.getSession();
-		const session = data.session;
-		if (!session?.user) {
+		try {
+			const { data } = await supabase.auth.getSession();
+			const session = data.session;
+			if (!session?.user) {
+				set({ status: "guest", profile: null, initialized: true });
+				return;
+			}
+			const profile = await enrichProfile(profileFromUser(session.user));
+			set({ status: "authenticated", profile, initialized: true });
+		} catch {
 			set({ status: "guest", profile: null, initialized: true });
-			return;
 		}
-		const profile = await enrichProfile(profileFromUser(session.user));
-		set({ status: "authenticated", profile, initialized: true });
 	},
 
 	setProfile: (profile) =>

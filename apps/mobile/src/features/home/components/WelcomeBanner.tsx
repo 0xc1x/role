@@ -1,19 +1,19 @@
 import { useMemo } from "react";
 import { View, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Leaf, Package, Trophy, type LucideIcon } from "lucide-react-native";
 
-import { useAuthStore } from "@/features/auth/store";
-import { useProfileStats } from "@/features/profile/hooks";
-import { strings } from "@/core/i18n/strings";
-import { useTheme } from "@/core/theme";
-import { AppText } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-
-type IconName = React.ComponentProps<typeof Ionicons>["name"];
+import { useAuthStore } from "@/src/features/auth/store";
+import { useProfileStats } from "@/src/features/profile/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { AppText } from "@/src/core/ui";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { formatMoney } from "@/src/core/utils/formatters";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface StatInfo {
-	icon: IconName;
+	icon: LucideIcon;
 	value: string;
 	label: string;
 }
@@ -57,7 +57,9 @@ function getDisplayName(profile: {
 export function WelcomeBanner() {
 	const { colors } = useTheme();
 	const profile = useAuthStore((s) => s.profile);
-	const { data: stats } = useProfileStats(profile?.id ?? "");
+	const { data: stats, isLoading: statsLoading } = useProfileStats(
+		profile?.id ?? "",
+	);
 
 	// Random stat index picked once per mount (Flutter Random().nextInt(3)).
 	const statIndex = useMemo(() => Math.floor(Math.random() * 3), []);
@@ -68,30 +70,32 @@ export function WelcomeBanner() {
 
 	const firstName = getDisplayName(profile);
 
-	const stat: StatInfo = (() => {
-		switch (statIndex) {
-			case 0: {
-				const totalSaved = (stats?.total_saved_cents ?? 0) / 100;
-				const value =
-					totalSaved >= 1000
-						? `$${totalSaved.toFixed(1).replace(".0", "")}k`
-						: `$${totalSaved.toFixed(0)}`;
-				return { icon: "trophy-outline", value, label: strings.home.statSaved };
-			}
-			case 1:
-				return {
-					icon: "cube-outline",
-					value: String(stats?.total_orders ?? 0),
-					label: strings.home.statOrders,
-				};
-			default:
-				return {
-					icon: "leaf-outline",
-					value: `${(stats?.co2_saved_kg ?? 0).toFixed(1)} kg`,
-					label: strings.home.statCo2,
-				};
-		}
-	})();
+	const stat: StatInfo | null = statsLoading
+		? null
+		: (() => {
+				switch (statIndex) {
+					case 0: {
+						const totalSaved = (stats?.total_saved_cents ?? 0) / 100;
+						return {
+							icon: Trophy,
+							value: formatMoney(totalSaved),
+							label: strings.home.statSaved,
+						};
+					}
+					case 1:
+						return {
+							icon: Package,
+							value: String(stats?.total_orders ?? 0),
+							label: strings.home.statOrders,
+						};
+					default:
+						return {
+							icon: Leaf,
+							value: `${(stats?.co2_saved_kg ?? 0).toFixed(1)} kg`,
+							label: strings.home.statCo2,
+						};
+				}
+			})();
 
 	return (
 		<View style={styles.container}>
@@ -114,19 +118,27 @@ export function WelcomeBanner() {
 			</AppText>
 			</View>
 			<View style={[styles.statCircle, { backgroundColor: secondaryAlpha }]}>
-				<View style={[styles.statIcon, { backgroundColor: secondaryAlpha }]}>
-					<Ionicons name={stat.icon} size={16} color={colors.secondary} />
-				</View>
-				<AppText
-					variant="h2"
-					weight="extraBold"
-					style={{ color: colors.accent, fontSize: 22, lineHeight: 26 }}
-				>
-					{stat.value}
-				</AppText>
-				<AppText variant="bodySmall" style={{ color: colors.secondary }}>
-					{stat.label}
-				</AppText>
+				{stat == null ? (
+					<Skeleton
+						style={{ width: 72, height: 72, borderRadius: radii.xxxl }}
+					/>
+				) : (
+					<>
+						<View style={[styles.statIcon, { backgroundColor: secondaryAlpha }]}>
+							<stat.icon size={16} color={colors.secondary} />
+						</View>
+						<AppText
+							variant="h2"
+							weight="extraBold"
+							style={{ color: colors.accent, fontSize: 22, lineHeight: 26 }}
+						>
+							{stat.value}
+						</AppText>
+						<AppText variant="bodySmall" style={{ color: colors.secondary }}>
+							{stat.label}
+						</AppText>
+					</>
+				)}
 			</View>
 		</View>
 	);
@@ -149,14 +161,14 @@ const styles = StyleSheet.create({
 	statCircle: {
 		width: 100,
 		height: 100,
-		borderRadius: 50,
+		borderRadius: radii.xxxl,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	statIcon: {
 		width: 28,
 		height: 28,
-		borderRadius: 14,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 		marginBottom: 2,

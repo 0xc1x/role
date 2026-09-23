@@ -1,14 +1,15 @@
 import { StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { formatCount, formatMoney } from "@/core/utils/formatters";
-import type { UserProfile } from "@/features/auth/domain/user";
-import { useProfileStats } from "@/features/profile/hooks";
+import { Skeleton } from "@/components/ui/skeleton";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { typography } from "@/src/core/theme/typography";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { formatCount, formatMoney } from "@/src/core/utils/formatters";
+import type { UserProfile } from "@/src/features/auth/domain/user";
+import { useProfileStats } from "@/src/features/profile/hooks";
 
 function initialsOf(profile: UserProfile): string {
 	const name = profile.fullName?.trim();
@@ -58,7 +59,7 @@ function StatCard({ value, label }: { value: string; label: string }) {
 
 export function ProfileHeader({ profile }: { profile: UserProfile }) {
 	const { colors } = useTheme();
-	const { data: stats } = useProfileStats(profile.id);
+	const { data: stats, isLoading: statsLoading } = useProfileStats(profile.id);
 
 	return (
 		<View style={{ gap: spacing.lg }}>
@@ -74,6 +75,19 @@ export function ProfileHeader({ profile }: { profile: UserProfile }) {
 				</View>
 			</View>
 
+		{statsLoading ? (
+			<View style={styles.statsRow}>
+				{[0, 1, 2].map((i) => (
+					<View
+						key={`profile-stat-skeleton-${i}`}
+						style={[styles.statCard, { backgroundColor: colors.card }]}
+					>
+						<Skeleton style={styles.statValueSkeleton} />
+						<Skeleton style={styles.statLabelSkeleton} />
+					</View>
+				))}
+			</View>
+		) : (
 			<View style={styles.statsRow}>
 				<StatCard
 					value={formatMoney(Math.round((stats?.total_saved_cents ?? 0) / 100))}
@@ -88,6 +102,7 @@ export function ProfileHeader({ profile }: { profile: UserProfile }) {
 					label={strings.profile.co2Saved}
 				/>
 			</View>
+		)}
 		</View>
 	);
 }
@@ -99,7 +114,17 @@ const styles = StyleSheet.create({
 		flex: 1,
 		gap: 2,
 		padding: spacing.md,
-		borderRadius: 16,
+		borderRadius: radii.lg,
 		alignItems: "center",
+	},
+	statValueSkeleton: {
+		height: typography.h4.lineHeight,
+		width: "45%",
+		borderRadius: radii.sm,
+	},
+	statLabelSkeleton: {
+		height: typography.bodySmall.lineHeight,
+		width: "70%",
+		borderRadius: radii.sm,
 	},
 });

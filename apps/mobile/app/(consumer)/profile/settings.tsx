@@ -1,21 +1,23 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Moon, Smartphone, Sun, type LucideIcon } from "lucide-react-native";
 import Slider from "@react-native-community/slider";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card, Screen, ScreenHeader, SectionTitle, ThemeOptionCard} from "@/core/ui";
-import { useAuthStore } from "@/features/auth/store";
-import { useTheme, type ThemeMode } from "@/core/theme";
-import { usePreferences, useUpdatePreferences } from "@/features/profile/hooks";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen, ScreenHeader, SectionTitle, ThemeOptionCard} from "@/src/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useTheme, type ThemeMode } from "@/src/core/theme";
+import { usePreferences, useUpdatePreferences } from "@/src/features/profile/hooks";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 
-const MODES: Array<{ key: ThemeMode; label: string; icon: string }> = [
-	{ key: "light", label: strings.settings.light, icon: "sunny-outline" },
-	{ key: "dark", label: strings.settings.dark, icon: "moon-outline" },
-	{ key: "system", label: strings.settings.system, icon: "phone-portrait-outline" },
+const MODES: Array<{ key: ThemeMode; label: string; icon: LucideIcon }> = [
+	{ key: "light", label: strings.settings.light, icon: Sun },
+	{ key: "dark", label: strings.settings.dark, icon: Moon },
+	{ key: "system", label: strings.settings.system, icon: Smartphone },
 ];
 
 
@@ -38,7 +40,7 @@ export default function SettingsScreen() {
 	const { mode, setMode, colors } = useTheme();
 	const { profile, status, initialized } = useAuthStore();
 	const userId = profile?.id ?? "";
-	const { data: prefs } = usePreferences(userId);
+	const { data: prefs, isLoading: prefsLoading } = usePreferences(userId);
 	const updatePrefs = useUpdatePreferences(userId);
 	const [radius, setRadius] = useState(5);
 
@@ -79,8 +81,11 @@ export default function SettingsScreen() {
 				</View>
 
 				<SectionTitle>{strings.settings.searchRadius}</SectionTitle>
-				<Card style={styles.radiusCard}>
-					<View style={styles.radiusHeader}>
+				{prefsLoading ? (
+					<Skeleton style={{ height: 148, borderRadius: radii.lg }} />
+				) : (
+				<Card >
+					<CardHeader style={styles.radiusHeader}>
 						<SectionLabel>{strings.settings.maxDistance}</SectionLabel>
 						<View
 							style={[styles.radiusPill, { backgroundColor: withAlpha(colors.primary, 0.078) }]}
@@ -93,25 +98,31 @@ export default function SettingsScreen() {
 								{radius} {strings.settings.km}
 							</AppText>
 						</View>
-					</View>
-					<Slider
-						value={radius}
-						minimumValue={1}
-						maximumValue={50}
-						step={1}
-						minimumTrackTintColor={colors.primary}
-						maximumTrackTintColor={colors.muted}
-						thumbTintColor={colors.primary}
-						onValueChange={setRadius}
-						onSlidingComplete={persistRadius}
-					/>
-					<AppText
-						variant="bodySmall"
-						style={{ color: colors.mutedForeground, lineHeight: 18 }}
-					>
-						{strings.settings.searchRadiusHint}
-					</AppText>
+					</CardHeader>
+					<CardContent>
+						<Slider
+							value={radius}
+							minimumValue={1}
+							maximumValue={50}
+							step={1}
+							minimumTrackTintColor={colors.primary}
+							maximumTrackTintColor={colors.muted}
+							thumbTintColor={colors.primary}
+							onValueChange={setRadius}
+							onSlidingComplete={persistRadius}
+						/>
+					</CardContent>
+					<CardFooter>
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground, lineHeight: 18 }}
+						>
+							{strings.settings.searchRadiusHint}
+						</AppText>
+					</CardFooter>
+					
 				</Card>
+				)}
 
 
 			</View>
@@ -122,8 +133,6 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, gap: spacing.lg },
 	themeRow: { flexDirection: "row", gap: spacing.sm },
-	
-	radiusCard: { gap: spacing.sm },
 	radiusHeader: {
 		flexDirection: "row",
 		alignItems: "center",

@@ -1,28 +1,30 @@
 import { type Href, router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Pencil, Pin, Plus, Store } from "lucide-react-native";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
 	AppText,
-	Button,
-	Card,
 	EmptyState,
 	ErrorState,
-	LoadingView,
 	Screen,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import { LocationCard } from "@/features/business/components/LocationCard";
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
+import { LocationCard, LocationCardSkeleton } from "@/src/features/business/components/LocationCard";
 import {
 	useBusinessLocations,
 	useBusinessProfile,
-} from "@/features/business/hooks";
+} from "@/src/features/business/hooks";
 import { QuickActionsGrid } from "./QuickActionsGrid";
 import { SettingsSection } from "./SettingsSection";
-import { SignOutSection } from "@/features/auth/presentation/SignOutSection";
+import { SignOutSection } from "@/src/features/auth/presentation/SignOutSection";
+import { Button } from "@/components/ui/button";
 
 export function GestionContent({ businessId }: { businessId: string }) {
 	const { colors } = useTheme();
@@ -38,7 +40,7 @@ export function GestionContent({ businessId }: { businessId: string }) {
 		isLoading: locationsLoading,
 	} = useBusinessLocations(businessId);
 
-	if (isLoading) return <LoadingView />;
+	if (isLoading) return <GestionContentSkeleton />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 	if (!profile) return null;
@@ -53,27 +55,99 @@ export function GestionContent({ businessId }: { businessId: string }) {
 				</AppText>
 
 				{/* ── Info del negocio ─────────────────────────────── */}
-				<Card style={styles.businessCard}>
-					<AppText variant="h2" weight="bold">
-						{business.name}
-					</AppText>
-					<AppText
-						variant="bodySmall"
-						style={{ color: colors.mutedForeground, marginTop: 2 }}
-					>
-						{BUSINESS_TYPE_LABELS[business.type] ?? business.type}
-					</AppText>
-					<AppText variant="bodyMedium" style={{ marginTop: spacing.md }}>
-						{business.description ?? strings.business.noDescription}
-					</AppText>
-					<Button
-						label={strings.business.editProfile}
-						variant="primary"
-						icon={<Ionicons name="create-outline" size={20} color={colors.primaryForeground} />}
-						style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
-						onPress={() => router.push("/my-business/edit")}
-					/>
-				</Card>
+				<View
+					style={[
+						styles.heroCard,
+						{
+							backgroundColor: colors.card,
+							borderColor: colors.borderSolid,
+							borderWidth: 1,
+							borderRadius: radii.lg,
+						},
+					]}
+				>
+					<View style={styles.coverWrap}>
+						{business.cover_image ?? business.image ? (
+							<Image
+								source={{ uri: (business.cover_image ?? business.image) as string }}
+								style={StyleSheet.absoluteFill}
+								contentFit="cover"
+							/>
+						) : (
+							<View
+								style={[
+									StyleSheet.absoluteFill,
+									{ backgroundColor: colors.primary },
+								]}
+							/>
+						)}
+						<LinearGradient
+							colors={["transparent", withAlpha(colors.scrim, 0.55), colors.card]}
+							locations={[0.35, 0.75, 1]}
+							style={StyleSheet.absoluteFill}
+						/>
+					</View>
+					<View style={styles.heroBody}>
+						<View style={styles.heroIdentity}>
+							{business.image ? (
+								<Image
+									source={{ uri: business.image }}
+									style={styles.logo}
+									contentFit="cover"
+								/>
+							) : (
+								<View style={[styles.logo, styles.logoPlaceholder, { backgroundColor: colors.primary }]}>
+									<Store size={28} color={colors.primaryForeground} />
+								</View>
+							)}
+							<View style={{ flex: 1, gap: 4 }}>
+								<View style={[styles.typeBadge, { backgroundColor: withAlpha(colors.destructive, 0.16) }]}>
+									<AppText
+										variant="labelSmall"
+										weight="bold"
+										style={{ color: colors.destructive }}
+									>
+										{(BUSINESS_TYPE_LABELS[business.type] ?? business.type).toUpperCase()}
+									</AppText>
+								</View>
+								<AppText variant="h2" weight="bold">
+									{business.name}
+								</AppText>
+							</View>
+						</View>
+						<AppText variant="bodyMedium" style={{ marginTop: spacing.md }}>
+							{business.description ?? strings.business.noDescription}
+						</AppText>
+						{profile.hours.length > 0 ? (
+							<View style={{ marginTop: spacing.md, gap: spacing.xs }}>
+								{profile.hours.map((h) => (
+									<View key={h.dayRange} style={styles.hoursRow}>
+										<AppText variant="bodySmall">{h.dayRange}</AppText>
+										<AppText
+											variant="bodySmall"
+											style={{ color: colors.mutedForeground }}
+										>
+											{h.hoursDisplay}
+										</AppText>
+									</View>
+								))}
+							</View>
+						) : null}
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground, marginTop: spacing.xs }}
+						>
+							{profile.address ?? strings.business.ordersNoAddress}
+						</AppText>
+						<Button
+							icon={<Pencil size={20} color={colors.primaryForeground} />}
+							style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
+							onPress={() => router.push("/business/profile/edit" as Href)}
+						>
+							{strings.business.editProfile}
+						</Button>
+					</View>
+				</View>
 
 				{/* ── Mis Locales ─────────────────────────────────── */}
 				<View style={styles.sectionHeader}>
@@ -81,33 +155,52 @@ export function GestionContent({ businessId }: { businessId: string }) {
 						{strings.business.myLocations}
 					</AppText>
 					<Button
-						label={strings.business.addLocation}
 						size="sm"
-						icon={<Ionicons name="add" size={16} color={colors.primaryForeground} />}
+						icon={<Plus size={16} color={colors.primaryForeground} />}
 						onPress={() =>
 							router.push(`/business/${businessId}/locations/create` as Href)
 						}
-					/>
+						style={{borderRadius: radii.pill}}
+					>
+						{strings.business.addLocation}
+					</Button>
 				</View>
 
-				{!locationsLoading && locations && locations.length === 0 ? (
-					<Card style={styles.emptyLocations}>
+				{locationsLoading ? (
+					<View style={styles.locations}>
+						{[0, 1].map((i) => (
+							<LocationCardSkeleton key={`location-skeleton-${i}`} />
+						))}
+					</View>
+				) : !locations || locations.length === 0 ? (
+					<View
+						style={[
+							styles.emptyLocations,
+							{
+								backgroundColor: colors.card,
+								borderColor: colors.borderSolid,
+								borderWidth: 1,
+								borderRadius: radii.lg,
+							},
+						]}
+					>
 						<EmptyState
-							icon={<Ionicons name="pin-outline" size={28} />}
+							icon={<Pin size={28} />}
 							title={strings.business.noLocationsTitle}
 							message={strings.business.noLocationsBody}
 							action={
 								<Button
-									label={strings.business.createLocation}
 									onPress={() =>
 										router.push(
 											`/business/${businessId}/locations/create` as Href,
 										)
 									}
-								/>
+								>
+									{strings.business.createLocation}
+								</Button>
 							}
 						/>
-					</Card>
+					</View>
 				) : (
 					<View style={styles.locations}>
 						{(locations ?? []).map((location) => (
@@ -151,9 +244,116 @@ export function GestionContent({ businessId }: { businessId: string }) {
 	);
 }
 
+/**
+ * Skeleton con las dimensiones aproximadas de la pantalla de gestión
+ * (hero con cover 170 + logo 64, locales, accesos rápidos).
+ * Mismo patrón que ExploreCategoryGrid / ProductCardSkeleton.
+ */
+export function GestionContentSkeleton() {
+	const { colors } = useTheme();
+	return (
+		<Screen scroll>
+			<View style={styles.container}>
+				<Skeleton style={styles.skeletonTitle} />
+				<View
+					style={[
+						styles.heroCard,
+						{
+							backgroundColor: colors.card,
+							borderColor: colors.borderSolid,
+							borderWidth: 1,
+							borderRadius: radii.lg,
+						},
+					]}
+				>
+					<Skeleton style={styles.skeletonCover} />
+					<View style={styles.heroBody}>
+						<View style={styles.heroIdentity}>
+							<Skeleton style={styles.skeletonLogo} />
+							<View style={styles.skeletonHeroText}>
+								<Skeleton style={styles.skeletonBadge} />
+								<Skeleton style={styles.skeletonName} />
+							</View>
+						</View>
+						<Skeleton style={styles.skeletonDescription} />
+						<Skeleton style={styles.skeletonDescriptionShort} />
+						<Skeleton style={styles.skeletonButton} />
+					</View>
+				</View>
+				<View style={styles.sectionHeader}>
+					<Skeleton style={styles.skeletonSectionTitle} />
+					<Skeleton style={styles.skeletonAddButton} />
+				</View>
+				<View style={styles.locations}>
+					{[0, 1].map((i) => (
+						<LocationCardSkeleton key={`gestion-location-skeleton-${i}`} />
+					))}
+				</View>
+				<View style={styles.sectionTitle}>
+					<Skeleton style={styles.skeletonSectionTitle} />
+				</View>
+				<View style={styles.skeletonQuickGrid}>
+					<Skeleton style={styles.skeletonQuickLarge} />
+					{[0, 1].map((row) => (
+						<View
+							key={`gestion-quick-skeleton-row-${row}`}
+							style={styles.skeletonQuickRow}
+						>
+							{[0, 1].map((i) => (
+								<Skeleton
+									key={`gestion-quick-skeleton-${row}-${i}`}
+									style={styles.skeletonQuickTile}
+								/>
+							))}
+						</View>
+					))}
+				</View>
+			</View>
+		</Screen>
+	);
+}
+
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, flex: 1 },
-	businessCard: { marginTop: spacing.lg, gap: spacing.xs },
+	heroCard: {
+		marginTop: spacing.lg,
+		padding: 0,
+		overflow: "hidden",
+	},
+	coverWrap: {
+		width: "100%",
+		height: 170,
+	},
+	heroBody: {
+		padding: spacing.lg,
+		marginTop: -44,
+		gap: spacing.xs,
+	},
+	heroIdentity: {
+		flexDirection: "row",
+		alignItems: "flex-end",
+		gap: spacing.md,
+	},
+	logo: {
+		width: 64,
+		height: 64,
+		borderRadius: radii.lg,
+	},
+	logoPlaceholder: {
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	typeBadge: {
+		alignSelf: "flex-start",
+		paddingHorizontal: spacing.sm,
+		paddingVertical: 2,
+		borderRadius: radii.sm,
+	},
+	hoursRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+	},
 	sectionHeader: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -164,4 +364,77 @@ const styles = StyleSheet.create({
 	sectionTitle: { marginTop: spacing.xl, marginBottom: spacing.md },
 	locations: { gap: spacing.md },
 	emptyLocations: { paddingVertical: spacing.xl + 8 },
+	skeletonTitle: {
+		height: 28,
+		width: "40%",
+		borderRadius: radii.sm,
+	},
+	skeletonCover: {
+		width: "100%",
+		height: 170,
+		borderRadius: 0,
+	},
+	skeletonLogo: {
+		width: 64,
+		height: 64,
+		borderRadius: radii.lg,
+	},
+	skeletonHeroText: {
+		flex: 1,
+		gap: spacing.xs,
+	},
+	skeletonBadge: {
+		height: 14,
+		width: 80,
+		borderRadius: radii.sm,
+	},
+	skeletonName: {
+		height: 22,
+		width: "70%",
+		borderRadius: radii.sm,
+	},
+	skeletonDescription: {
+		height: 12,
+		width: "90%",
+		borderRadius: radii.sm,
+		marginTop: spacing.md,
+	},
+	skeletonDescriptionShort: {
+		height: 12,
+		width: "60%",
+		borderRadius: radii.sm,
+	},
+	skeletonButton: {
+		height: 40,
+		width: 140,
+		borderRadius: radii.md,
+		marginTop: spacing.md,
+	},
+	skeletonSectionTitle: {
+		height: 20,
+		width: "35%",
+		borderRadius: radii.sm,
+	},
+	skeletonAddButton: {
+		height: 32,
+		width: 110,
+		borderRadius: radii.pill,
+	},
+	skeletonQuickGrid: {
+		gap: spacing.sm,
+	},
+	skeletonQuickRow: {
+		flexDirection: "row",
+		gap: spacing.sm,
+	},
+	skeletonQuickLarge: {
+		height: 66,
+		width: "100%",
+		borderRadius: radii.lg,
+	},
+	skeletonQuickTile: {
+		height: 66,
+		flex: 1,
+		borderRadius: radii.lg,
+	},
 });

@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AddressType } from "@0xc1x/role-commons";
 
-import { profileRepository } from "@/features/profile/data/repository";
-import { authRepository } from "@/features/auth/data/repository";
+import { profileRepository } from "@/src/features/profile/data/repository";
+import { authRepository } from "@/src/features/auth/data/repository";
+import { useAuthStore } from "@/src/features/auth/store";
 
 // ─── Saved addresses ────────────────────────────────────────────────
 export function useSavedAddresses(userId: string) {
@@ -139,9 +140,12 @@ export function useUpdateProfile(userId: string) {
 			phone?: string | null;
 			city?: string | null;
 		}) => profileRepository.updateProfile(userId, patch),
-		onSuccess: () => {
+		onSuccess: async () => {
 			void queryClient.invalidateQueries({ queryKey: ["userStats", userId] });
-			return authRepository.fetchProfile(userId);
+			const profile = await authRepository
+				.fetchProfile(userId)
+				.catch(() => null);
+			if (profile) useAuthStore.getState().setProfile(profile);
 		},
 	});
 }
@@ -205,8 +209,12 @@ export function useSaveProfileWithEmail(userId: string, currentEmail: string) {
 			}
 			return { emailChanged };
 		},
-		onSuccess: () => {
+		onSuccess: async () => {
 			void queryClient.invalidateQueries({ queryKey: ["userStats", userId] });
+			const profile = await authRepository
+				.fetchProfile(userId)
+				.catch(() => null);
+			if (profile) useAuthStore.getState().setProfile(profile);
 		},
 	});
 }

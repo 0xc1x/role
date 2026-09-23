@@ -4,36 +4,31 @@ import {
 	View,
 	StyleSheet,
 	Animated,
+	Easing,
 	Pressable,
 	useWindowDimensions,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronDown, MapPin } from "lucide-react-native";
 import { Portal } from "@rn-primitives/portal";
-import Reanimated, {
-	useSharedValue,
-	useAnimatedStyle,
-	withTiming,
-	withDelay,
-	Easing,
-} from "react-native-reanimated";
 
-import { useAuthStore } from "@/features/auth/store";
-import { useSavedAddresses, useSetDefaultAddress } from "@/features/profile/hooks";
-import { AddAddressSheet } from "@/features/profile/components/AddAddressSheet";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useSavedAddresses, useSetDefaultAddress } from "@/src/features/profile/hooks";
+import { AddAddressSheet } from "@/src/features/profile/components/AddAddressSheet";
 import { router } from "expo-router";
 import type { SavedAddressDto } from "@0xc1x/role-commons";
-import { strings } from "@/core/i18n/strings";
-import { useTheme } from "@/core/theme";
-import { AppText } from "@/core/ui";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { AppText } from "@/src/core/ui";
+import { Button } from "@/components/ui/button";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 
 export function LocationSelector() {
 	const { colors } = useTheme();
 	const profile = useAuthStore((s) => s.profile);
 	const status = useAuthStore((s) => s.status);
 	const userId = profile?.id ?? "";
-	const { data: addresses, isLoading, isError } = useSavedAddresses(userId);
+	const { data: addresses, isLoading, isError, refetch } = useSavedAddresses(userId);
 	const setDefault = useSetDefaultAddress(userId);
 
 	const [isOpen, setIsOpen] = useState(false);
@@ -44,29 +39,47 @@ export function LocationSelector() {
 	const [chevronRotation] = useState(() => new Animated.Value(0));
 	const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 	const triggerRef = useRef<View>(null);
+	const openIntentRef = useRef(false);
 
 	const toggleDropdown = () => {
 		const next = !isOpen;
+		openIntentRef.current = next;
 		Animated.timing(chevronRotation, {
 			toValue: next ? 1 : 0,
 			duration: 250,
 			useNativeDriver: Platform.OS !== "web",
 		}).start();
 		if (next) {
-			triggerRef.current?.measureInWindow((x, y, width, height) => {
-				const panelWidth = 300;
-				const panelHeight = 380;
-				const panelX = Math.max(
-					8,
-					Math.min(x, windowWidth - panelWidth - 8),
-				);
-				const panelY = Math.max(
-					8,
-					Math.min(y + height + 6, windowHeight - panelHeight - 8),
-				);
-				setMenuOrigin({ x: panelX, y: panelY });
+			// Web: measureInWindow puede no resolverse (ref compuesta) o
+			// devolver ceros; el timer abre el menú en una posición segura.
+			const fallback = setTimeout(() => {
+				if (!openIntentRef.current) return;
+				setMenuOrigin((o) => o ?? { x: 8, y: 64 });
 				setIsOpen(true);
-			});
+			}, 350);
+			try {
+				triggerRef.current?.measureInWindow((x, y, width, height) => {
+					clearTimeout(fallback);
+					if (!openIntentRef.current) return;
+					const measured = width > 0 && height > 0;
+					const anchorX = measured ? x : 8;
+					const anchorY = measured ? y + height + 6 : 64;
+					const panelWidth = 300;
+					const panelHeight = 380;
+					const panelX = Math.max(
+						8,
+						Math.min(anchorX, windowWidth - panelWidth - 8),
+					);
+					const panelY = Math.max(
+						8,
+						Math.min(anchorY, windowHeight - panelHeight - 8),
+					);
+					setMenuOrigin({ x: panelX, y: panelY });
+					setIsOpen(true);
+				});
+			} catch {
+				// El timer de fallback abre el menú.
+			}
 		} else {
 			setMenuOrigin(null);
 			setIsOpen(false);
@@ -74,6 +87,7 @@ export function LocationSelector() {
 	};
 
 	const closeDropdown = () => {
+		openIntentRef.current = false;
 		setMenuOrigin(null);
 		setIsOpen(false);
 		Animated.timing(chevronRotation, {
@@ -104,7 +118,7 @@ export function LocationSelector() {
 	return (
 		<View style={styles.wrapper}>
 			<Pressable ref={triggerRef} onPress={toggleDropdown} style={styles.trigger}>
-				<Ionicons name="location-outline" size={16} color={colors.primary} />
+				<MapPin size={16} color={colors.primary} />
 				<AppText
 					weight="bold"
 					numberOfLines={1}
@@ -125,7 +139,7 @@ export function LocationSelector() {
 						],
 					}}
 				>
-					<Ionicons name="chevron-down" size={16} color={colors.foreground} />
+					<ChevronDown size={16} color={colors.foreground} />
 				</Animated.View>
 			</Pressable>
 
@@ -140,6 +154,7 @@ export function LocationSelector() {
 						addresses={addresses}
 						isLoading={isLoading}
 						isError={isError}
+						onRetry={() => void refetch()}
 						selectedAddress={selectedAddress}
 						onAddressSelect={handleAddressSelect}
 						onAddAddress={handleAddAddress}
@@ -163,6 +178,7 @@ function DropdownPanel({
 	addresses,
 	isLoading,
 	isError,
+	onRetry,
 	selectedAddress,
 	onAddressSelect,
 	onAddAddress,
@@ -172,41 +188,53 @@ function DropdownPanel({
 	addresses?: SavedAddressDto[];
 	isLoading: boolean;
 	isError: boolean;
+	onRetry: () => void;
 	selectedAddress?: SavedAddressDto;
 	onAddressSelect: (id: string) => void;
 	onAddAddress: () => void;
 	colors: ReturnType<typeof useTheme>["colors"];
 }) {
-	const opacity = useSharedValue(0);
-	const translateY = useSharedValue(-6);
-	const scale = useSharedValue(0.96);
+	// Entrada con Animated clásico (JS-driven, sin native driver): la
+	// visibilidad del panel no depende del UI-runtime de Reanimated/
+	// worklets, que solo corre en nativo (en web hay fallback JS y por eso
+	// ahí sí abría). Misma curva/duración que antes, mismo mecanismo que
+	// el Drawer de `components/ui/drawer.tsx`.
+	const [opacity] = useState(() => new Animated.Value(0));
+	const [translateY] = useState(() => new Animated.Value(-6));
+	const [scale] = useState(() => new Animated.Value(0.96));
 
 	useEffect(() => {
-		opacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.quad) });
-		translateY.value = withTiming(0, {
-			duration: 220,
-			easing: Easing.out(Easing.cubic),
-		});
-		scale.value = withTiming(1, {
-			duration: 220,
-			easing: Easing.out(Easing.cubic),
-		});
+		const anim = Animated.parallel([
+			Animated.timing(opacity, {
+				toValue: 1,
+				duration: 220,
+				easing: Easing.out(Easing.quad),
+				useNativeDriver: false,
+			}),
+			Animated.timing(translateY, {
+				toValue: 0,
+				duration: 220,
+				easing: Easing.out(Easing.cubic),
+				useNativeDriver: false,
+			}),
+			Animated.timing(scale, {
+				toValue: 1,
+				duration: 220,
+				easing: Easing.out(Easing.cubic),
+				useNativeDriver: false,
+			}),
+		]);
+		anim.start();
+		return () => anim.stop();
 	}, [opacity, translateY, scale]);
 
-	const panelStyle = useAnimatedStyle(() => ({
-		opacity: opacity.value,
-		transform: [
-			{ translateY: translateY.value },
-			{ scale: scale.value },
-		],
-	}));
-
 	return (
-		<Reanimated.View
+		<Animated.View
 			style={[
 				styles.dropdown,
-				panelStyle,
 				{
+					opacity,
+					transform: [{ translateY }, { scale }],
 					left: origin.x,
 					top: origin.y,
 					boxShadow: `0px 4px 20px ${colors.shadow}`,
@@ -232,6 +260,9 @@ function DropdownPanel({
 					>
 						{strings.common.error}
 					</AppText>
+					<Button variant="link" onPress={onRetry}>
+						{strings.common.retry}
+					</Button>
 				</View>
 			) : (addresses?.length ?? 0) === 0 ? (
 				<View style={styles.loadingBox}>
@@ -263,12 +294,10 @@ function DropdownPanel({
 					{ backgroundColor: colors.borderSolid },
 				]}
 			/>
-			<Pressable onPress={onAddAddress} style={styles.addAddressButton}>
-				<AppText weight="semiBold" style={{ color: colors.primary }}>
-					+ {strings.addresses.add}
-				</AppText>
-			</Pressable>
-		</Reanimated.View>
+			<Button variant="link" onPress={onAddAddress} style={styles.addAddressButton}>
+				{`+ ${strings.addresses.add}`}
+			</Button>
+		</Animated.View>
 	);
 }
 
@@ -285,30 +314,32 @@ function AddressItem({
 	onPress: () => void;
 	colors: ReturnType<typeof useTheme>["colors"];
 }) {
-	const opacity = useSharedValue(0);
-	const translateX = useSharedValue(-8);
+	const [opacity] = useState(() => new Animated.Value(0));
+	const [translateX] = useState(() => new Animated.Value(-8));
 
 	useEffect(() => {
-		opacity.value = withDelay(
-			40 * index,
-			withTiming(1, { duration: 240, easing: Easing.out(Easing.quad) }),
-		);
-		translateX.value = withDelay(
-			40 * index,
-			withTiming(0, {
+		const anim = Animated.parallel([
+			Animated.timing(opacity, {
+				toValue: 1,
+				duration: 240,
+				easing: Easing.out(Easing.quad),
+				useNativeDriver: false,
+				delay: 40 * index,
+			}),
+			Animated.timing(translateX, {
+				toValue: 0,
 				duration: 240,
 				easing: Easing.out(Easing.cubic),
+				useNativeDriver: false,
+				delay: 40 * index,
 			}),
-		);
+		]);
+		anim.start();
+		return () => anim.stop();
 	}, [index, opacity, translateX]);
 
-	const itemStyle = useAnimatedStyle(() => ({
-		opacity: opacity.value,
-		transform: [{ translateX: translateX.value }],
-	}));
-
 	return (
-		<Reanimated.View style={itemStyle}>
+		<Animated.View style={{ opacity, transform: [{ translateX }] }}>
 			<Pressable
 				onPress={onPress}
 				style={[
@@ -324,8 +355,7 @@ function AddressItem({
 						{ backgroundColor: withAlpha(colors.secondary, 0.102) },
 					]}
 				>
-					<Ionicons
-						name="location-outline"
+					<MapPin
 						size={16}
 						color={colors.primary}
 					/>
@@ -358,7 +388,7 @@ function AddressItem({
 					/>
 				)}
 			</Pressable>
-		</Reanimated.View>
+		</Animated.View>
 	);
 }
 
@@ -397,7 +427,7 @@ const styles = StyleSheet.create({
 	addressIcon: {
 		width: 28,
 		height: 28,
-		borderRadius: 14,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -407,7 +437,7 @@ const styles = StyleSheet.create({
 	selectedDot: {
 		width: 8,
 		height: 8,
-		borderRadius: 4,
+		borderRadius: radii.sm,
 		marginTop: 4,
 	},
 	divider: {

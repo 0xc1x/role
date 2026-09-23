@@ -1,12 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronLeft } from "lucide-react-native";
 import { type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { strings } from "@/core/i18n/strings";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { AppText, CircleIconButton, goBackOr } from "@/core/ui";
+import { strings } from "@/src/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
+import { AppText, CircleIconButton, goBackOr } from "@/src/core/ui";
 
 /**
  * Estructura común de las pantallas de autenticación (portada de Fudi):
@@ -29,7 +29,7 @@ export function AuthScreenShell({
 		>
 			<View style={styles.header}>
 				<CircleIconButton
-					icon={<Ionicons name="chevron-back" size={20} color={colors.foreground} />}
+					icon={<ChevronLeft size={22} color={colors.foreground} />}
 					onPress={() => goBackOr("/")}
 					accessibilityLabel={strings.common.back}
 				/>

@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
-	Pressable,
 	StyleSheet,
 	View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronLeft, LocateFixed, MapPin } from "lucide-react-native";
+import { Button } from "@/components/ui/button";
 import MapView, { type Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
+import { strings } from "@/src/core/i18n/strings";
+import { composeShortAddress } from "@/src/core/utils/geocode";
+import { getMapStyle } from "@/src/core/theme/map-style";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
 
 export interface MapPickerResult {
 	latitude: number;
@@ -37,7 +39,7 @@ export function MapPickerView({
 	onCancel: () => void;
 	onConfirm: (result: MapPickerResult) => void;
 }) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const insets = useSafeAreaInsets();
 	// Uncontrolled map (initialRegion only): a controlled `region` prop fights
 	// the user's pan gestures and snaps the camera back mid-drag.
@@ -96,16 +98,14 @@ export function MapPickerView({
 				longitude,
 			});
 			const place = results[0];
-			const parts = [
-				place?.street,
-				place?.streetNumber,
-				place?.district,
-				place?.city,
-				place?.region,
-			]
-				.map((part) => part?.trim())
-				.filter((part): part is string => typeof part === "string" && part.length > 0);
-			setResolvedAddress(parts.join(", ") || null);
+			setResolvedAddress(
+				composeShortAddress({
+					street: place?.street,
+					streetNumber: place?.streetNumber,
+					city: place?.city,
+					postcode: place?.postalCode,
+				}) || null,
+			);
 		} catch {
 			setResolvedAddress(null);
 		} finally {
@@ -131,23 +131,24 @@ export function MapPickerView({
 				showsUserLocation
 				showsMyLocationButton={false}
 				loadingEnabled
+				customMapStyle={getMapStyle(scheme)}
 			/>
 
 			<View style={[styles.centerMarker, { pointerEvents: "none" }]}>
-				<Ionicons name="location" size={48} color={colors.primary} />
+				<MapPin size={48} color={colors.primary} />
 			</View>
 
 			<View style={styles.header}>
-				<Pressable
+				<Button
+					variant="outline"
+					size="icon"
 					onPress={onCancel}
 					hitSlop={8}
-					style={[
-						styles.roundButton,
-						{ backgroundColor: colors.card, marginTop: insets.top },
-					]}
-				>
-					<Ionicons name="chevron-back" size={20} color={colors.foreground} />
-				</Pressable>
+					accessibilityRole="button"
+					aria-label={strings.common.back}
+					style={{ marginTop: insets.top }}
+					icon={<ChevronLeft size={22} color={colors.foreground} />}
+				/>
 				<AppText
 					variant="h4"
 					weight="bold"
@@ -183,7 +184,7 @@ export function MapPickerView({
 						{strings.addresses.moveMapToSelect}
 					</AppText>
 				)}
-			<Pressable
+			<Button
 				onPress={() =>
 					onConfirm({
 						latitude: coords.latitude,
@@ -191,23 +192,22 @@ export function MapPickerView({
 						address: resolvedAddress,
 					})
 				}
-					style={[styles.confirmButton, { backgroundColor: colors.primary }]}
-				>
-					<AppText
-						weight="bold"
-						style={{ color: colors.primaryForeground }}
-					>
-						{strings.addresses.confirmLocation}
-					</AppText>
-				</Pressable>
+				fullWidth
+				size="lg"
+			>
+				{strings.addresses.confirmLocation}
+			</Button>
 			</View>
 
-			<Pressable
+			<Button
+				variant="ghost"
+				size="icon"
 				onPress={() => void determinePosition()}
+				accessibilityRole="button"
+				aria-label={strings.addresses.useMyLocation}
 				style={[styles.fab, { backgroundColor: colors.card, top: spacing.md + insets.top }]}
-			>
-				<Ionicons name="locate" size={22} color={colors.primary} />
-			</Pressable>
+				icon={<LocateFixed size={22} color={colors.primary} />}
+			/>
 
 			{loading ? (
 				<View style={[StyleSheet.absoluteFill, styles.loadingOverlay]}>
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
 	roundButton: {
 		width: 36,
 		height: 36,
-		borderRadius: 18,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 		borderWidth: 1,
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
 		right: spacing.md,
 		width: 44,
 		height: 44,
-		borderRadius: 22,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 		borderWidth: 1,

@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { goBackOr, Screen, ScreenHeader } from "@/core/ui";
-import { useAuthStore } from "@/features/auth/store";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { useBusinesses, useUpsertCoupon } from "@/features/business/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { goBackOr, Screen, ScreenHeader } from "@/src/core/ui";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
+import { useBusinesses, useUpsertCoupon } from "@/src/features/business/hooks";
 import {
 	CouponForm,
 	type CouponFormValues,
-} from "@/features/business/components/CouponForm";
+} from "@/src/features/business/components/CouponForm";
 
 export default function BusinessCouponNewScreen() {
 	const { colors } = useTheme();

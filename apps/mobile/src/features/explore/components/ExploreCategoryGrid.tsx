@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
 	Platform,
 	Animated,
@@ -12,19 +12,20 @@ import {
 	type ViewStyle,
 } from "react-native";
 import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
+import { ChevronDown, ChevronUp, MapPin } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 import {
 	useCategoryStats,
 	usePopularAreas,
-} from "@/features/hooks";
-import type { CategoryStat } from "@/features/offers/domain/offer";
+} from "@/src/features/hooks";
+import type { CategoryStat } from "@/src/features/offers/domain/offer";
 
 const INITIAL_COUNT = 4;
 const ENTRY_ANIM_DURATION = 300;
@@ -44,8 +45,8 @@ export function ExploreCategoryGrid({
 	onCollapse?: () => void;
 }) {
 	const { colors, scheme } = useTheme();
-	const { data: areas } = usePopularAreas();
-	const { data: stats } = useCategoryStats();
+	const { data: areas, isLoading: isLoadingAreas } = usePopularAreas();
+	const { data: stats, isLoading: isLoadingStats } = useCategoryStats();
 	const [showAll, setShowAll] = useState(false);
 
 	// IDs visibles en el frame anterior: los que NO estaban son "nuevos"
@@ -97,6 +98,39 @@ export function ExploreCategoryGrid({
 		if (willCollapse) onCollapse?.();
 	};
 
+	if (isLoadingAreas || isLoadingStats) {
+		return (
+			<View style={styles.container}>
+				<AppText variant="h3" weight="bold">
+					{strings.explore.popularAreas}
+				</AppText>
+				<View
+					style={[
+						styles.chipsRow,
+						{ flexDirection: "row", marginTop: spacing.md },
+					]}
+				>
+					{[0, 1, 2].map((i) => (
+						<Skeleton
+							key={`area-skeleton-${i}`}
+							style={{ width: 120, height: 36, borderRadius: radii.md }}
+						/>
+					))}
+				</View>
+				<AppText variant="h3" weight="bold" style={{ marginTop: spacing.lg }}>
+					{strings.explore.categories}
+				</AppText>
+				<View style={styles.grid}>
+					{[0, 1, 2, 3].map((i) => (
+						<View key={`category-skeleton-${i}`} style={styles.gridItem}>
+							<Skeleton style={{ height: 85, borderRadius: radii.lg }} />
+						</View>
+					))}
+				</View>
+			</View>
+		);
+	}
+
 	return (
 		<View style={styles.container}>
 			{/* ── Áreas Populares ────────────────────────────────────── */}
@@ -119,19 +153,18 @@ export function ExploreCategoryGrid({
 									{
 										backgroundColor: isDark
 											? colors.surfaceMuted
-											: withAlpha(colors.green, 0.302),
+											: withAlpha(colors.primary, 0.15),
 									},
 								]}
 							>
-								<Ionicons
-									name="location-outline"
+								<MapPin
 									size={14}
-									color={isDark ? mutedText : colors.greenMidDark}
+									color={isDark ? mutedText : colors.primary}
 								/>
 								<AppText
 									variant="bodySmall"
 									weight="semiBold"
-									style={{ color: isDark ? baseText : withAlpha(colors.greenDark, 0.702) }}
+									style={{ color: isDark ? baseText : colors.primary }}
 								>
 									{area.name}
 								</AppText>
@@ -141,14 +174,14 @@ export function ExploreCategoryGrid({
 										{
 											backgroundColor: isDark
 												? withAlpha(colors.primaryForeground, 0.102)
-												: withAlpha(colors.greenMidDark, 0.102),
+												: withAlpha(colors.primary, 0.102),
 										},
 									]}
 								>
 									<AppText
 										variant="bodySmall"
 										weight="semiBold"
-										style={{ color: isDark ? baseText : colors.greenMidDark }}
+										style={{ color: isDark ? baseText : colors.primary }}
 									>
 										{area.deals}
 									</AppText>
@@ -170,7 +203,7 @@ export function ExploreCategoryGrid({
 						animate={newIds.has(cat.id)}
 						style={styles.gridItem}
 					>
-						<ExploreCategoryCard
+						<CategoryGridItem
 							category={cat}
 							isSelected={selectedCategory === cat.id}
 							background={cellBackground}
@@ -182,7 +215,7 @@ export function ExploreCategoryGrid({
 									: colors.borderSolid
 							}
 							mutedText={mutedText}
-							onPress={() => onCategoryTap(cat.id)}
+							onSelect={onCategoryTap}
 						/>
 					</CategoryFadeSlideIn>
 				))}
@@ -204,11 +237,17 @@ export function ExploreCategoryGrid({
 							]}
 						>
 							<View style={[styles.expandIcon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}>
-								<Ionicons
-									name={showAll ? "chevron-up" : "chevron-down"}
-									size={22}
-									color={colors.primary}
-								/>
+								{showAll ? (
+									<ChevronUp
+										size={22}
+										color={colors.primary}
+									/>
+								) : (
+									<ChevronDown
+										size={22}
+										color={colors.primary}
+									/>
+								)}
 							</View>
 							<View style={styles.expandText}>
 								<AppText variant="bodySmall" weight="bold">
@@ -278,6 +317,40 @@ function CategoryFadeSlideIn({
 		</Animated.View>
 	);
 }
+
+const CategoryGridItem = memo(function CategoryGridItem({
+	category,
+	isSelected,
+	background,
+	selectedBackground,
+	selectedShadow,
+	borderColor,
+	mutedText,
+	onSelect,
+}: {
+	category: CategoryStat;
+	isSelected: boolean;
+	background: string;
+	selectedBackground: string;
+	selectedShadow: string;
+	borderColor: string;
+	mutedText: string;
+	onSelect: (categoryId: string) => void;
+}) {
+	const handlePress = useCallback(() => onSelect(category.id), [onSelect, category.id]);
+	return (
+		<ExploreCategoryCard
+			category={category}
+			isSelected={isSelected}
+			background={background}
+			selectedBackground={selectedBackground}
+			selectedShadow={selectedShadow}
+			borderColor={borderColor}
+			mutedText={mutedText}
+			onPress={handlePress}
+		/>
+	);
+});
 
 function ExploreCategoryCard({
 	category,
@@ -362,7 +435,7 @@ const styles = StyleSheet.create({
 	countBadge: {
 		minWidth: 20,
 		height: 20,
-		borderRadius: 10,
+		borderRadius: radii.sm,
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: 5,
@@ -380,7 +453,7 @@ const styles = StyleSheet.create({
 	},
 	categoryCard: {
 		height: 85,
-		borderRadius: 20,
+		borderRadius: radii.xl,
 		borderWidth: 1,
 		overflow: "hidden",
 		justifyContent: "center",
@@ -411,13 +484,13 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 16,
-		gap: 10,
+		paddingHorizontal: spacing.lg,
+		gap: spacing.md,
 	},
 	expandIcon: {
 		width: 44,
 		height: 44,
-		borderRadius: 22,
+		borderRadius: radii.xl,
 		alignItems: "center",
 		justifyContent: "center",
 	},

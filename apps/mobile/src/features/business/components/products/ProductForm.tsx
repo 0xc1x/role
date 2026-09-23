@@ -1,24 +1,24 @@
 import { useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
+import { Check, ChevronDown, Image as ImageIcon, Store } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
 	BottomSheetModal,
-	Button,
 	goBackOr,
 	TextField,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useCategories } from "@/features/hooks";
-import { useBusinessLocations, useSaveOffer } from "@/features/business/hooks";
-import type { OfferDetail } from "@/features/offers/domain/offer";
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useCategories } from "@/src/features/hooks";
+import { useBusinessLocations, useSaveOffer } from "@/src/features/business/hooks";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
 import { DateTimeField } from "./DateTimeFields";
 import { pickWebImage } from "../../utils/pick-image";
+import { Button } from "@/components/ui/button";
 
 /**
  * Shared create/edit product form (ported from Rolé v1
@@ -78,11 +78,15 @@ export function ProductForm({
 
 	const setStart = (next: Date) => {
 		setPickupStart(next);
-		if (pickupEnd.getTime() <= next.getTime()) setPickupEnd(next);
+		// Keep a valid window: clamping end equal to start would always
+		// fail the end > start validation and block the save.
+		if (pickupEnd.getTime() <= next.getTime())
+			setPickupEnd(new Date(next.getTime() + 60 * 60 * 1000));
 	};
 	const setEnd = (next: Date) => {
-		if (next.getTime() < pickupStart.getTime()) setPickupStart(next);
 		setPickupEnd(next);
+		if (next.getTime() <= pickupStart.getTime())
+			setPickupStart(new Date(next.getTime() - 60 * 60 * 1000));
 	};
 
 	const pickImage = async () => {
@@ -162,6 +166,7 @@ export function ProductForm({
 			) : null}
 
 			<Pressable
+				cssInterop={false}
 				onPress={() => void pickImage()}
 				accessibilityRole="button"
 				style={({ pressed }) => [
@@ -177,7 +182,7 @@ export function ProductForm({
 					<Image source={{ uri: imageUri }} style={styles.imagePreview} />
 				) : (
 					<View style={styles.imagePlaceholder}>
-						<Ionicons name="image-outline" size={28} color={colors.mutedForeground} />
+						<ImageIcon size={28} color={colors.mutedForeground} />
 						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 							{strings.business.uploadPhoto}
 						</AppText>
@@ -210,6 +215,7 @@ export function ProductForm({
 							const selected = selectedCategoryIds.has(category.id);
 							return (
 								<Pressable
+									cssInterop={false}
 									key={category.id}
 									onPress={() => toggleCategory(category.id)}
 									style={({ pressed }) => [
@@ -248,6 +254,7 @@ export function ProductForm({
 						{strings.business.locations}
 					</AppText>
 					<Pressable
+						cssInterop={false}
 						onPress={() => setLocationPickerOpen(true)}
 						accessibilityRole="button"
 						style={({ pressed }) => [
@@ -259,11 +266,11 @@ export function ProductForm({
 							},
 						]}
 					>
-						<Ionicons name="storefront-outline" size={16} color={colors.foreground} />
+						<Store size={16} color={colors.foreground} />
 						<AppText variant="bodyMedium" style={{ flex: 1 }}>
 							{selectedLocationName ?? strings.business.noLocationOption}
 						</AppText>
-						<Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
+						<ChevronDown size={16} color={colors.mutedForeground} />
 					</Pressable>
 				</View>
 
@@ -370,13 +377,14 @@ export function ProductForm({
 			</FormSection>
 
 			<Button
-				label={editing ? strings.business.saveChanges : strings.business.publishProduct}
 				onPress={handleSubmit}
 				loading={save.isPending}
 				fullWidth
 				size="lg"
 				style={{ marginTop: spacing.lg }}
-			/>
+			>
+				{editing ? strings.business.saveChanges : strings.business.publishProduct}
+			</Button>
 
 			{locationPickerOpen ? (
 				<BottomSheetModal
@@ -384,6 +392,7 @@ export function ProductForm({
 					onClose={() => setLocationPickerOpen(false)}
 				>
 					<Pressable
+						cssInterop={false}
 						onPress={() => {
 							setLocationId("");
 							setLocationPickerOpen(false);
@@ -409,11 +418,12 @@ export function ProductForm({
 							{strings.business.noLocationOption}
 						</AppText>
 						{locationId === "" ? (
-							<Ionicons name="checkmark" size={18} color={colors.secondaryForeground} />
+							<Check size={18} color={colors.secondaryForeground} />
 						) : null}
 					</Pressable>
 					{(locations ?? []).map((location) => (
 						<Pressable
+							cssInterop={false}
 							key={location.id}
 							onPress={() => {
 								setLocationId(location.id);
@@ -456,7 +466,7 @@ export function ProductForm({
 								) : null}
 							</View>
 							{locationId === location.id ? (
-								<Ionicons name="checkmark" size={18} color={colors.secondaryForeground} />
+								<Check size={18} color={colors.secondaryForeground} />
 							) : null}
 						</Pressable>
 					))}
@@ -542,10 +552,10 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.sm,
-		borderRadius: 18,
+		borderRadius: radii.md,
 		borderWidth: 1,
-		paddingHorizontal: 16,
-		paddingVertical: 12,
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.md,
 		minHeight: 46,
 	},
 	priceRow: {

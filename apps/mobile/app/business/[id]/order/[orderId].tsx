@@ -1,8 +1,8 @@
 import { useLocalSearchParams } from "expo-router";
 
-import { ErrorState, LoadingView } from "@/core/ui";
-import { useBusinessOrders } from "@/features/business/hooks";
-import { OrderDetail } from "@/features/business/components/orders/OrderDetail";
+import { ErrorState, LoadingView } from "@/src/core/ui";
+import { useOrder } from "@/src/features/hooks";
+import { OrderDetail } from "@/src/features/business/components/orders/OrderDetail";
 
 export default function BusinessOrderDetailScreen() {
 	const { id, orderId } = useLocalSearchParams<{
@@ -11,16 +11,16 @@ export default function BusinessOrderDetailScreen() {
 	}>();
 	const businessId = id ?? "";
 
+	// Single-row fetch: the orders list is paginated + server-filtered now,
+	// so the item may not be in any loaded page.
 	const {
-		data: orders,
+		data: item,
 		isLoading,
 		isError,
 		error,
 		refetch,
 		isFetching,
-	} = useBusinessOrders(businessId);
-
-	const item = orders?.find((o) => o.order.id === orderId);
+	} = useOrder(orderId ?? "");
 
 	if (isLoading) return <LoadingView />;
 	if (isError || !item)

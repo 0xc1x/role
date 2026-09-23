@@ -3,16 +3,16 @@ import { useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Button, ErrorState, LoadingView, Screen, ScreenHeader } from "@/core/ui";
-import { formatMoney } from "@/core/utils/formatters";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { useApplyCoupon, useOffer, useReserveOffer } from "@/features/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, ErrorState, LoadingView, Screen, ScreenHeader } from "@/src/core/ui";
+import { formatMoney } from "@/src/core/utils/formatters";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { useApplyCoupon, useOffer, useReserveOffer } from "@/src/features/hooks";
 import {
 	type ReservationSuccess,
-} from "@/features/orders/domain/order";
-import { isOfferAvailable } from "@/features/offers/domain/offer";
+} from "@/src/features/orders/domain/order";
+import { isOfferAvailable } from "@/src/features/offers/domain/offer";
 import {
 	CouponSection,
 	PaymentMethodSection,
@@ -20,18 +20,24 @@ import {
 	PriceBreakdownCard,
 	ProductSummaryCard,
 	ConfirmationView,
-} from "@/features/orders/components/checkout";
+} from "@/src/features/orders/components/checkout";
+import { Button } from "@/components/ui/button";
 
 export default function CheckoutScreen() {
-	const { colors } = useTheme();
 	const { id } = useLocalSearchParams<{ id: string }>();
+	// Remonta por oferta: cupón y confirmación reinician solos, sin efectos.
+	return <CheckoutBody key={id ?? "empty"} offerId={id ?? ""} />;
+}
+
+function CheckoutBody({ offerId }: { offerId: string }) {
+	const { colors } = useTheme();
 	const {
 		data: offerDetail,
 		isLoading,
 		isError,
 		error,
 		refetch,
-	} = useOffer(id ?? "");
+	} = useOffer(offerId);
 	const reserve = useReserveOffer();
 	const {
 		couponInput,
@@ -124,13 +130,14 @@ export default function CheckoutScreen() {
 					</AppText>
 				</View>
 				<Button
-					label={strings.checkout.confirm}
 					onPress={confirmReservation}
 					loading={reserve.isPending}
 					disabled={!isAvailable}
 					fullWidth
 					size="lg"
-				/>
+				>
+					{strings.checkout.confirm}
+				</Button>
 				<AppText variant="caption" style={[styles.termsNote, { color: colors.mutedForeground }]}>
 					{strings.checkout.termsNote}
 				</AppText>

@@ -1,7 +1,9 @@
-import { strings } from "@/core/i18n/strings";
-import { useTheme } from "@/core/theme";
-import type { OrderStats } from "@/features/business/domain/orders";
+import { strings } from "@/src/core/i18n/strings";
+import { useTheme } from "@/src/core/theme";
+export { BusinessStatsRowSkeleton as OrderStatsRowSkeleton } from "../products/BusinessStatsRow";
+import type { OrderStats } from "@/src/features/business/domain/orders";
 import { StatsMetricsCard } from "../StatsMetricsCard";
+import { CircleCheck, Clock, PackageCheck } from "lucide-react-native";
 
 /**
  * Headline order metrics (ported from Rolé v1 `OrderStatsRow`):
@@ -14,21 +16,21 @@ export function OrderStatsRow({ stats }: { stats: OrderStats }) {
 		{
 			label: strings.business.ordersPendingStat,
 			value: stats.pendingCount,
-			icon: "time-outline" as const,
+			icon: Clock,
 			color: colors.warning,
 			bg: colors.surfaceWarning,
 		},
 		{
 			label: strings.business.ordersReadyStat,
 			value: stats.readyCount,
-			icon: "bag-check-outline" as const,
+			icon: PackageCheck,
 			color: colors.info,
 			bg: colors.infoSurface,
 		},
 		{
 			label: strings.business.ordersTodayStat,
 			value: stats.todayCompletedCount,
-			icon: "checkmark-circle-outline" as const,
+			icon: CircleCheck,
 			color: colors.success,
 			bg: colors.surfaceSuccess,
 		},

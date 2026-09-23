@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Eyebrow, Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
+import { useStoreLink } from "@/lib/store-links";
 
 type CtaProps = {
 	variant?: "primary" | "muted";
@@ -48,7 +49,7 @@ export function Cta({
 	title = "Únete a Rolé hoy mismo",
 	body = "Descarga la app, encuentra ofertas cerca de ti y empieza a salvar comida hoy mismo.",
 	primaryLabel = "Abrir Rolé",
-	primaryHref = "role://",
+	primaryHref,
 	primaryIcon,
 	secondaryLabel = "Soy negocio",
 	secondaryHref = "/for-business",
@@ -57,6 +58,8 @@ export function Cta({
 }: CtaProps) {
 	const isPrimary = variant === "primary";
 	const styles = VARIANT_STYLES[variant];
+	const storeLink = useStoreLink();
+	const resolvedPrimaryHref = primaryHref ?? storeLink;
 	const secondaryInternal = secondaryHref?.startsWith("/") ?? false;
 
 	return (
@@ -100,7 +103,7 @@ export function Cta({
 					<div className="mt-9 flex flex-wrap justify-center gap-4">
 						<Button
 							variant={isPrimary ? "default" : "brand"}
-							render={<a href={primaryHref} aria-label={primaryLabel} />}
+							render={<a href={resolvedPrimaryHref} aria-label={primaryLabel} />}
 							className={`inline-flex items-center gap-2 rounded-full px-8 py-3 font-semibold active:scale-[0.98] ${styles.primaryButton}`}
 						>
 							{primaryIcon}

@@ -2,22 +2,22 @@ import { router } from "expo-router";
 import { memo, useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
-	Card,
 	EmptyState,
 	ErrorState,
 	LoadingView,
 	Screen,
 	StatusBadge,
-} from "@/core/ui";
-import { useAuthStore } from "@/features/auth/store";
-import { useBusinesses } from "@/features/business/hooks";
-import { BUSINESS_TYPE_LABELS } from "@/features/business/domain/business";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+} from "@/src/core/ui";
+import { useAuthStore } from "@/src/features/auth/store";
+import { useBusinesses } from "@/src/features/business/hooks";
+import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
+import { spacing } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { CardPressable } from "@/components/ui/card-presable";
+import { Button } from "@/components/ui/button";
 
 export default function BusinessDashboardScreen() {
 	const profile = useAuthStore((s) => s.profile);
@@ -51,10 +51,11 @@ export default function BusinessDashboardScreen() {
 					{strings.business.title ?? "Panel de negocio"}
 				</AppText>
 				<Button
-					label="Nuevo negocio"
 					size="sm"
 					onPress={() => router.push("/business-signup")}
-				/>
+				>
+					"Nuevo negocio"
+				</Button>
 			</View>
 
 			{!businesses || businesses.length === 0 ? (
@@ -83,7 +84,7 @@ const BusinessCardRow = memo(function BusinessCardRow({
 }) {
 	const { colors } = useTheme();
 	return (
-		<Card onPress={() => onPress(item.id)}>
+		<CardPressable onPress={() => onPress(item.id)}>
 			<AppText variant="h4" weight="bold">
 				{item.name}
 			</AppText>
@@ -96,7 +97,7 @@ const BusinessCardRow = memo(function BusinessCardRow({
 					tone={item.is_active ? "success" : "neutral"}
 				/>
 			</View>
-		</Card>
+		</CardPressable>
 	);
 });
 

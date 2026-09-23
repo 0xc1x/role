@@ -5,7 +5,7 @@ import {
 	PAYOUT_STATUS_LABELS,
 	filterBusinessReviews,
 	type BusinessReviewView,
-} from "@/features/business/domain/business";
+} from "@/src/features/business/domain/business";
 
 function review(partial: Partial<BusinessReviewView>): BusinessReviewView {
 	return {
@@ -15,6 +15,9 @@ function review(partial: Partial<BusinessReviewView>): BusinessReviewView {
 		businessRating: partial.businessRating ?? 0,
 		date: partial.date ?? "2026-01-01T00:00:00Z",
 		comment: partial.comment ?? null,
+		orderId: partial.orderId ?? null,
+		offerId: partial.offerId ?? null,
+		offerTitle: partial.offerTitle ?? null,
 	};
 }
 

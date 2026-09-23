@@ -125,8 +125,15 @@ describe('EmailMarketingRepository campaigns+sends (DB real)', () => {
 
     await repo.updateCampaign(camp.id, { status: 'cancelled' });
     expect(await repo.getCampaignById(camp.id)).toMatchObject({ status: 'cancelled' });
-    // Solo draft se puede borrar.
+    // Soft delete en cualquier estado salvo sending en curso.
+    expect(await repo.deleteCampaign(camp.id)).toBe(true);
+    expect(await repo.getCampaignById(camp.id)).toBeNull();
     expect(await repo.deleteCampaign(camp.id)).toBe(false);
+
+    const [live] = await repo.insertCampaign({ name: 'En curso', template_id: t.id });
+    if (!live) throw new Error('sin campaña');
+    await repo.updateCampaign(live.id, { status: 'sending' });
+    expect(await repo.deleteCampaign(live.id)).toBe(false);
   });
 });
 

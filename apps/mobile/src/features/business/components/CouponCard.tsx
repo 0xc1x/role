@@ -1,22 +1,36 @@
-import { Ionicons } from "@expo/vector-icons";
+import {
+	Calendar,
+	ChartColumn,
+	Copy,
+	EllipsisVertical,
+	Hourglass,
+	Pause,
+	Pencil,
+	Play,
+	ShoppingBag,
+	Tags,
+	Trash2,
+	type LucideIcon,
+} from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 import type { Coupon } from "@0xc1x/role-commons";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card, StatusBadge } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, StatusBadge } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
 import {
 	couponIsExpired,
 	couponIsExhausted,
 	couponIsValid,
-} from "@/features/orders/domain/order";
-import { formatMoney } from "@/core/utils/formatters";
-import { useDeleteCoupon, useToggleCouponStatus } from "@/features/business/hooks";
+} from "@/src/features/orders/domain/order";
+import { formatMoney } from "@/src/core/utils/formatters";
+import { useDeleteCoupon, useToggleCouponStatus } from "@/src/features/business/hooks";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 type BadgeState = "paused" | "active" | "expired" | "exhausted" | "inactive";
 
@@ -90,7 +104,7 @@ export function CouponCard({
 
 	return (
 		<Card style={styles.card}>
-			<View style={styles.header}>
+			<CardHeader style={styles.header}>
 				<View style={styles.headerLeft}>
 					<View
 						style={[
@@ -117,19 +131,18 @@ export function CouponCard({
 					accessibilityRole="button"
 					accessibilityLabel={strings.business.couponMenu}
 				>
-					<Ionicons
-						name="ellipsis-vertical"
+					<EllipsisVertical
 						size={18}
 						color={colors.mutedForeground}
 					/>
 				</Pressable>
-			</View>
+			</CardHeader>
 
 			<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
 
-			<View style={styles.details}>
+			<CardContent style={styles.details}>
 				<DetailItem
-					icon="pricetags-outline"
+					icon={Tags}
 					title={strings.business.couponBenefit}
 					value={
 						coupon.type === "percentage"
@@ -138,7 +151,7 @@ export function CouponCard({
 					}
 				/>
 				<DetailItem
-					icon="calendar-outline"
+					icon={Calendar}
 					title={strings.business.couponExpires}
 					value={
 						coupon.expires_at
@@ -147,7 +160,7 @@ export function CouponCard({
 					}
 				/>
 				<DetailItem
-					icon="analytics-outline"
+					icon={ChartColumn}
 					title={strings.business.couponRedemptions}
 					value={
 						coupon.max_uses != null
@@ -157,12 +170,12 @@ export function CouponCard({
 				/>
 				{coupon.min_order_amount != null && coupon.min_order_amount > 0 ? (
 					<DetailItem
-						icon="bag-outline"
+						icon={ShoppingBag}
 						title={strings.business.couponMinOrder}
 						value={formatMoney(coupon.min_order_amount)}
 					/>
 				) : null}
-			</View>
+			</CardContent>
 
 			{/* ── Kebab menu ─────────────────────────────────────── */}
 			<Modal
@@ -178,9 +191,9 @@ export function CouponCard({
 						accessibilityRole="button"
 						accessibilityLabel={strings.common.close}
 					/>
-					<View style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+					<CardContent style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 						<MenuItem
-							icon="create-outline"
+							icon={Pencil}
 							label={strings.business.couponEdit}
 							color={colors.foreground}
 							onPress={() => {
@@ -189,13 +202,13 @@ export function CouponCard({
 							}}
 						/>
 						<MenuItem
-							icon="copy-outline"
+							icon={Copy}
 							label={strings.business.couponCopy}
 							color={colors.foreground}
 							onPress={() => void copy()}
 						/>
 						<MenuItem
-							icon={coupon.is_active ? "pause" : "play"}
+							icon={coupon.is_active ? Pause : Play}
 							label={
 								coupon.is_active
 									? strings.business.couponPause
@@ -207,7 +220,7 @@ export function CouponCard({
 						/>
 						<View style={[styles.menuDivider, { backgroundColor: colors.borderSolid }]} />
 						<MenuItem
-							icon="trash-outline"
+							icon={Trash2}
 							label={strings.business.couponDelete}
 							color={colors.destructive}
 							bold
@@ -216,7 +229,7 @@ export function CouponCard({
 								setConfirmDelete(true);
 							}}
 						/>
-					</View>
+					</CardContent>
 				</View>
 			</Modal>
 
@@ -269,27 +282,28 @@ export function CouponCard({
 }
 
 function MenuItem({
-	icon,
+	icon: Icon,
 	label,
 	color,
 	bold = false,
 	loading = false,
 	onPress,
 }: {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	label: string;
 	color: string;
 	bold?: boolean;
 	loading?: boolean;
 	onPress: () => void;
 }) {
+	const LoadingIcon = loading ? Hourglass : Icon;
 	return (
 		<Pressable
 			onPress={onPress}
-			style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.7 }]}
+			style={[styles.menuItem, ]}
 			accessibilityRole="button"
 		>
-			<Ionicons name={loading ? "hourglass-outline" : icon} size={18} color={color} />
+			<LoadingIcon size={18} color={color} />
 			<AppText
 				variant="bodyMedium"
 				weight={bold ? "bold" : "regular"}
@@ -302,18 +316,18 @@ function MenuItem({
 }
 
 function DetailItem({
-	icon,
+	icon: Icon,
 	title,
 	value,
 }: {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: LucideIcon;
 	title: string;
 	value: string;
 }) {
 	const { colors } = useTheme();
 	return (
 		<View style={styles.detailItem}>
-			<Ionicons name={icon} size={16} color={colors.mutedForeground} />
+			<Icon size={16} color={colors.mutedForeground} />
 			<View>
 				<AppText variant="bodySmall" style={{ fontSize: 10, color: colors.mutedForeground }}>
 					{title}

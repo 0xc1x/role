@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { Wordmark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
+import { useStoreLink } from "@/lib/store-links";
 import {
 	Drawer,
 	DrawerContent,
@@ -32,6 +33,7 @@ export function Navbar() {
 	const [pastHero, setPastHero] = useState(false);
 	const [heroBottom, setHeroBottom] = useState(0);
 	const matchRoute = useMatchRoute();
+	const storeLink = useStoreLink();
 	const pathname = useRouterState({ select: (s) => s.location.pathname });
 
 	// Mide dónde termina el hero de la ruta actual: la navbar cambia
@@ -85,9 +87,17 @@ export function Navbar() {
 							className="flex items-center"
 							aria-label="Rolé — Inicio"
 						>
-							<Wordmark
-								className={`h-9 w-auto transition-colors duration-500 md:h-10 ${headerSolid ? "text-ink" : "text-white"}`}
-							/>
+							{/* Crossfade: wordmark mono en blanco sobre el hero oscuro,
+							    color de marca al pasar a navbar sólida. */}
+							<span className="relative block h-9 md:h-10">
+								<Wordmark
+									className={`h-full w-auto transition-opacity duration-500 ${headerSolid ? "opacity-100" : "opacity-0"}`}
+								/>
+								<Wordmark
+									mono
+									className={`absolute left-0 top-0 h-full w-auto text-white transition-opacity duration-500 ${headerSolid ? "opacity-0" : "opacity-100"}`}
+								/>
+							</span>
 						</Link>
 
 						<nav
@@ -121,8 +131,8 @@ export function Navbar() {
 						<div className="flex items-center gap-2">
 							<Button
 								variant="brand"
-								render={<a href="role://" aria-label="Consigue la app" />}
-								className={`hidden rounded-full px-5 py-2 text-sm font-semibold active:scale-[0.98] md:inline-flex ${
+							render={<a href={storeLink} aria-label="Consigue la app" />}
+							className={`hidden rounded-full px-5 py-2 text-sm font-semibold active:scale-[0.98] md:inline-flex ${
 									solid
 										? ""
 										: "bg-white text-role-primary shadow-dark-glow hover:bg-white/90 hover:text-role-primary"
@@ -209,7 +219,7 @@ export function Navbar() {
 						</ul>
 						<Button
 							variant="brand"
-							render={<a href="role://" aria-label="Consigue la app" />}
+							render={<a href={storeLink} aria-label="Consigue la app" />}
 							className="animate-item-in mt-4 w-full rounded-full px-5 py-3 text-sm font-semibold"
 							style={
 								{

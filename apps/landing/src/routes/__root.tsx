@@ -29,7 +29,8 @@ const ORGANIZATION_JSON_LD = {
 
 export const Route = createRootRouteWithContext<RouterContext>()({
 	head: () => {
-		const ogImage = absoluteUrl("/og.png") ?? "/og.png";
+		const ogImage = absoluteUrl("/og.png");
+		const ogImageAlt = "Rolé — rescata comida deliciosa a precio increíble";
 		return {
 			meta: [
 				{ charSet: "utf-8" },
@@ -54,6 +55,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 						"Rescata comida deliciosa a precio increíble. Conectamos comercios con excedente y personas que quieren comer bien por menos.",
 				},
 				{ property: "og:image", content: ogImage },
+				{ property: "og:image:width", content: "1200" },
+				{ property: "og:image:height", content: "630" },
+				{ property: "og:image:alt", content: ogImageAlt },
 				{ name: "twitter:card", content: "summary_large_image" },
 				{
 					name: "twitter:title",
@@ -64,6 +68,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 					content: "Rescata comida deliciosa a precio increíble.",
 				},
 				{ name: "twitter:image", content: ogImage },
+				{ name: "twitter:image:alt", content: ogImageAlt },
 			],
 			links: [
 				{ rel: "stylesheet", href: appCss },
@@ -80,7 +85,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 					rel: "stylesheet",
 					href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap",
 				},
-				{ rel: "icon", type: "image/svg+xml", href: "/icon.svg" },
+			{ rel: "icon", type: "image/svg+xml", href: "/icon.svg?v=5" },
+			{ rel: "icon", href: "/favicon.ico?v=5", sizes: "any" },
+				{ rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+				{ rel: "manifest", href: "/site.webmanifest" },
 			],
 			scripts: [
 				{

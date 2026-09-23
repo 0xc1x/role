@@ -107,12 +107,6 @@ const slideFormSchema = CreateSlideFormSchema.omit({
 					message: "Las slides de tipo cupón requieren un código",
 				});
 			}
-		} else if (!value.redirect_url) {
-			ctx.addIssue({
-				code: "custom",
-				path: ["redirect_url"],
-				message: "El destino es obligatorio (URL externa o ruta interna /)",
-			});
 		}
 	});
 
@@ -393,7 +387,7 @@ function RedirectUrlField({
 }: CtaFieldProps) {
 	return (
 		<Field data-invalid={isInvalid}>
-			<FieldLabel htmlFor={fieldName}>Destino</FieldLabel>
+			<FieldLabel htmlFor={fieldName}>Destino (opcional)</FieldLabel>
 			<Input
 				id={fieldName}
 				name={fieldName}
@@ -405,7 +399,8 @@ function RedirectUrlField({
 				aria-invalid={isInvalid}
 			/>
 			<p className="text-xs text-muted-foreground">
-				URL externa (https://...) o ruta interna de la app (ej. /explore).
+				URL externa (https://...) o ruta interna de la app (ej. /explore). Si
+				se omite no se mostrará botón en mobile.
 			</p>
 			{isInvalid && <FieldError errors={errors} />}
 		</Field>

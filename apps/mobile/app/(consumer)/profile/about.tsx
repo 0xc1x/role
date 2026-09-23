@@ -1,18 +1,17 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Leaf, Sparkles, Tag, Users, type LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Screen, ScreenHeader } from "@/core/ui";
-import { spacing } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
-import { useAuthStore } from "@/features/auth/store";
-import { usePlatformStats } from "@/features/profile/hooks";
-
-type IoniconName = keyof typeof Ionicons.glyphMap;
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, Screen, ScreenHeader } from "@/src/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { useAuthStore } from "@/src/features/auth/store";
+import { usePlatformStats } from "@/src/features/profile/hooks";
 
 function Hero() {
 	const { colors } = useTheme();
@@ -52,11 +51,11 @@ function TextSection({ title, body }: { title: string; body: string }) {
 }
 
 function ValueCard({
-	icon,
+	icon: Icon,
 	title,
 	description,
 }: {
-	icon: IoniconName;
+	icon: LucideIcon;
 	title: string;
 	description: string;
 }) {
@@ -64,7 +63,7 @@ function ValueCard({
 	return (
 		<View style={[styles.valueCard, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
 			<View style={[styles.valueIcon, { backgroundColor: `${withAlpha(colors.secondary, 0.302)}` }]}>
-				<Ionicons name={icon} size={24} color={colors.primary} />
+				<Icon size={24} color={colors.primary} />
 			</View>
 			<View style={styles.valueBody}>
 				<AppText variant="bodyMedium" weight="bold">
@@ -90,22 +89,22 @@ function Principles() {
 			</AppText>
 			<View style={styles.valueList}>
 				<ValueCard
-					icon="leaf-outline"
+					icon={Leaf}
 					title={strings.aboutScreen.principle1Title}
 					description={strings.aboutScreen.principle1Body}
 				/>
 				<ValueCard
-					icon="people-outline"
+					icon={Users}
 					title={strings.aboutScreen.principle2Title}
 					description={strings.aboutScreen.principle2Body}
 				/>
 				<ValueCard
-					icon="pricetag-outline"
+					icon={Tag}
 					title={strings.aboutScreen.principle3Title}
 					description={strings.aboutScreen.principle3Body}
 				/>
 				<ValueCard
-					icon="sparkles-outline"
+					icon={Sparkles}
 					title={strings.aboutScreen.principle4Title}
 					description={strings.aboutScreen.principle4Body}
 				/>
@@ -116,11 +115,28 @@ function Principles() {
 
 function Stats() {
 	const { colors } = useTheme();
-	const { data } = usePlatformStats();
+	const { data, isLoading } = usePlatformStats();
 	// Fallback a valores de strings si RPC falla / aún carga (no bloquea UI)
 	const users = data?.users ?? 15;
 	const businesses = data?.businesses ?? 13;
 	const meals = data?.meals ?? 7;
+	if (isLoading && !data) {
+		return (
+			<View style={styles.section}>
+				<AppText variant="h2" weight="bold" style={[styles.centered, styles.sectionTitle]}>
+					{strings.aboutScreen.statsTitle}
+				</AppText>
+				<View style={styles.statsGrid}>
+					{[0, 1, 2].map((i) => (
+						<Skeleton
+							key={`about-stat-skeleton-${i}`}
+							style={{ flex: 1, minWidth: 90, height: 76, borderRadius: radii.lg }}
+						/>
+					))}
+				</View>
+			</View>
+		);
+	}
 	const items = [
 		{ value: `${users}+`, label: strings.aboutScreen.statUsers },
 		{ value: `${businesses}+`, label: strings.aboutScreen.statBusinesses },
@@ -209,12 +225,12 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.md,
 		padding: 20,
-		borderRadius: 24,
+		borderRadius: radii.lg,
 		borderWidth: 1,
 	},
 	valueIcon: {
 		padding: spacing.md,
-		borderRadius: 999,
+		borderRadius: radii.lg,
 	},
 	valueBody: { flex: 1, gap: 4 },
 	statsGrid: {

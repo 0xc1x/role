@@ -1,6 +1,10 @@
 import * as Sentry from "@sentry/react-native";
 import { Stack, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import {
+	DefaultTheme,
+	ThemeProvider as NavigationThemeProvider,
+} from "expo-router/react-navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFonts } from "expo-font";
 import {
 	Outfit_600SemiBold,
@@ -33,13 +37,13 @@ if (Platform.OS === "web") {
 		},
 	};
 }
-
-import { ThemeProvider, light } from "@/core/theme";
-import { queryClient } from "@/core/query/client";
-import { analytics } from "@/core/analytics";
-import { appConfigQueryOptions } from "@/features/config";
-import { useAuthStore, watchAuthState } from "@/features/auth/store";
-import { initNotificationHandler, syncDeviceToken } from "@/features/notifications";
+import "../global.css";
+import { ThemeProvider, useTheme } from "@/src/core/theme";
+import { queryClient } from "@/src/core/query/client";
+import { analytics } from "@/src/core/analytics";
+import { appConfigQueryOptions } from "@/src/features/config";
+import { useAuthStore, watchAuthState } from "@/src/features/auth/store";
+import { initNotificationHandler, syncDeviceToken } from "@/src/features/notifications";
 import { Toaster } from "sonner-native";
 SplashScreen.preventAutoHideAsync();
 
@@ -163,23 +167,64 @@ function RootLayout() {
 			<GestureHandlerRootView style={{ flex: 1 }}>
 				<ThemeProvider onHydrated={() => setThemeReady(true)}>
 					<QueryClientProvider client={queryClient}>
-						<Stack
-							screenOptions={{
-								headerShown: false,
-								contentStyle: { backgroundColor: light.background },
-							}}
-						>
-							<Stack.Screen name="(auth)" />
-							<Stack.Screen name="(consumer)" />
-							<Stack.Screen name="(business)" />
-							<Stack.Screen name="landing" />
-						</Stack>
+						<ThemedRootStack />
 						<Toaster />
-						<PortalHost />
 					</QueryClientProvider>
+					<PortalHost />
 				</ThemeProvider>
 			</GestureHandlerRootView>
 		</Sentry.ErrorBoundary>
+	);
+}
+
+// Stack raíz con contentStyle temático: va en componente hijo porque
+// useTheme() solo existe bajo ThemeProvider (que además no pinta hijos
+// hasta hidratar, así que el fondo ya es el del tema resuelto). Sin esto
+// la tarjeta del native-stack usa el blanco por defecto y flashea al
+// volver atrás en nativo; el `light.background` estático previo flasheaba
+// en dark mode por el mismo motivo.
+//
+// Además se monta el ThemeProvider de react-navigation (expo-router monta
+// su NavigationContainer con DefaultTheme: fondo rgb(242,242,242) y card
+// blanca). El contentStyle por layout solo cubre las tarjetas, no el
+// `nativeContainerStyle` del ScreenStack: al hacer pop en stacks anidados
+// (p. ej. profile en modo consumer) el contenedor queda expuesto en la
+// transición y se veía la franja clara del DefaultTheme. El tema aquí
+// tiñe contenedor, contentStyle por defecto y la tab bar nativa oculta
+// detrás de OuterBar en un solo lugar.
+function ThemedRootStack() {
+	const { colors, scheme } = useTheme();
+	const navigationTheme = useMemo(
+		() => ({
+			...DefaultTheme,
+			dark: scheme === "dark",
+			colors: {
+				...DefaultTheme.colors,
+				background: colors.background,
+				card: colors.background,
+			},
+		}),
+		[colors, scheme],
+	);
+	return (
+		<NavigationThemeProvider value={navigationTheme}>
+		<Stack
+			screenOptions={{
+				headerShown: false,
+				contentStyle: { backgroundColor: colors.background },
+			}}
+		>
+			{/* `index` first: on native the Stack starts at the first
+			    declared screen (root has no initialRouteName anchor), so the
+			    redirect in app/index.tsx must own that slot. Web is
+			    URL-driven and unaffected. */}
+			<Stack.Screen name="index" />
+			<Stack.Screen name="(auth)" />
+			<Stack.Screen name="(consumer)" />
+			<Stack.Screen name="(business)" />
+			<Stack.Screen name="landing" />
+		</Stack>
+		</NavigationThemeProvider>
 	);
 }
 

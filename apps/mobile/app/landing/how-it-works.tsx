@@ -1,5 +1,5 @@
-import InfoScreen from "@/core/ui/InfoScreen";
-import { strings } from "@/core/i18n/strings";
+import InfoScreen from "@/src/core/ui/InfoScreen";
+import { strings } from "@/src/core/i18n/strings";
 
 export default function LandingHowItWorksScreen() {
 	return (

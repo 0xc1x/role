@@ -3,6 +3,7 @@ import type {
 	SegmentDto,
 	UpdateCampaignDto,
 } from "@0xc1x/role-commons";
+import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -16,10 +17,20 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "@/components/ui/drawer";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { CampaignFields } from "@/features/email/components/campaign-fields";
+import { ConfirmDeleteDialog } from "@/features/email/components/confirm-delete-dialog";
 import { EmailPreview } from "@/features/email/components/email-preview";
 import {
 	type CampaignFormValues,
@@ -36,6 +47,7 @@ export function CampaignRowCard(props: {
 	templates: { id: string; name: string }[];
 	segments: SegmentDto[];
 	onSend: () => void;
+	onResend: () => void;
 	onCancel: () => void;
 	onRemove: () => Promise<unknown>;
 	onUpdate: (payload: UpdateCampaignDto) => Promise<unknown>;
@@ -44,6 +56,7 @@ export function CampaignRowCard(props: {
 }) {
 	const c = props.campaign;
 	const [drawer, setDrawer] = useState<"edit" | "test" | null>(null);
+	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [values, setValues] = useState<CampaignFormValues>(() =>
 		campaignDefaults(c),
 	);
@@ -74,16 +87,6 @@ export function CampaignRowCard(props: {
 					>
 						Probar
 					</Button>
-					<Button
-						size="sm"
-						onClick={() => {
-							setValues(campaignDefaults(c));
-							setDrawer("edit");
-						}}
-						disabled={props.busy}
-					>
-						Editar
-					</Button>
 					{c.status === "draft" ||
 					c.status === "scheduled" ||
 					c.status === "failed" ? (
@@ -96,6 +99,16 @@ export function CampaignRowCard(props: {
 							Enviar
 						</Button>
 					) : null}
+					{c.status === "sent" || c.status === "cancelled" ? (
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={props.onResend}
+							disabled={props.busy}
+						>
+							Reenviar
+						</Button>
+					) : null}
 					{c.status === "sending" || c.status === "scheduled" ? (
 						<Button
 							size="sm"
@@ -106,8 +119,48 @@ export function CampaignRowCard(props: {
 							Cancelar envío
 						</Button>
 					) : null}
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							render={<Button variant="ghost" size="icon-sm" />}
+						>
+							<span className="sr-only">Abrir menú</span>
+							<MoreHorizontal className="size-4" />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuGroup>
+								<DropdownMenuLabel>Acciones</DropdownMenuLabel>
+								<DropdownMenuItem
+									onClick={() => {
+										setValues(campaignDefaults(c));
+										setDrawer("edit");
+									}}
+								>
+									<Pencil className="size-4" /> Editar
+								</DropdownMenuItem>
+								{c.status !== "sending" ? (
+									<>
+										<DropdownMenuSeparator />
+										<DropdownMenuItem
+											variant="destructive"
+											onClick={() => setConfirmDelete(true)}
+										>
+											<Trash2 className="size-4" /> Eliminar
+										</DropdownMenuItem>
+									</>
+								) : null}
+							</DropdownMenuGroup>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</div>
 			</div>
+
+			<ConfirmDeleteDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title={`Eliminar la campaña "${c.name}"?`}
+				onRemove={props.onRemove}
+				busy={props.busy}
+			/>
 
 			{/* Drawer editar: formulario completo */}
 			<Drawer
@@ -127,29 +180,7 @@ export function CampaignRowCard(props: {
 						/>
 					</DrawerBody>
 					<DrawerFooter>
-						<div className="flex w-full items-center justify-between">
-							{c.status === "draft" ? (
-								<Button
-									type="button"
-									variant="destructive"
-									size="sm"
-									disabled={props.busy}
-									onClick={async () => {
-										try {
-											await props.onRemove();
-											setDrawer(null);
-										} catch (err) {
-											toast.error(
-												err instanceof Error ? err.message : "Error inesperado",
-											);
-										}
-									}}
-								>
-									Eliminar
-								</Button>
-							) : (
-								<span />
-							)}
+						<div className="flex w-full items-center justify-end">
 							<div className="flex gap-2">
 								<Button
 									type="button"

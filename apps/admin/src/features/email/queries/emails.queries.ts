@@ -1,4 +1,8 @@
-import type { CreateCampaignDto, UpdateCampaignDto } from "@0xc1x/role-commons";
+import type {
+	CampaignDto,
+	CreateCampaignDto,
+	UpdateCampaignDto,
+} from "@0xc1x/role-commons";
 import {
 	queryOptions,
 	useMutation,
@@ -186,6 +190,20 @@ export function useCampaignMutations() {
 			},
 			onError: notifyMutationError,
 		}),
+		resend: useMutation({
+			mutationKey: emailKeys.all,
+			mutationFn: async (c: CampaignDto) => {
+				const copy = await emailApi.createCampaign(toResendPayload(c));
+				return emailApi.sendCampaign(copy.id);
+			},
+			onSuccess: (res) => {
+				toast.success(
+					`Reenvío iniciado a ${res.total_recipients} destinatarios — el progreso se ve en la lista`,
+				);
+				invalidate();
+			},
+			onError: notifyMutationError,
+		}),
 		remove: useMutation({
 			mutationKey: emailKeys.all,
 			mutationFn: (id: string) => emailApi.removeCampaign(id),
@@ -195,6 +213,23 @@ export function useCampaignMutations() {
 			},
 			onError: notifyMutationError,
 		}),
+	};
+}
+
+/**
+ * Payload para reenviar: copia la audiencia y plantilla de la original en una
+ * campaña nueva (la API no reabre campañas `sent`; así se preserva su historial).
+ */
+export function toResendPayload(c: CampaignDto): CreateCampaignDto {
+	return {
+		name: `${c.name} (reenvío)`,
+		channel: c.channel,
+		template_id: c.template_id,
+		category: c.category,
+		segment_ids: c.segment_ids,
+		include_user_ids: c.include_user_ids,
+		exclude_user_ids: c.exclude_user_ids,
+		scheduled_at: null,
 	};
 }
 

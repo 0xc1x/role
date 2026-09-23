@@ -1,4 +1,4 @@
-import type { OfferDetail } from "@/features/offers/domain/offer";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
 
 /**
  * Business catalog view model (pure logic — ported from Rolé v1
@@ -16,6 +16,30 @@ export const PRODUCT_SORTS = [
 ] as const;
 
 export type ProductsSort = (typeof PRODUCT_SORTS)[number];
+
+/** Server-side ordering equivalent of a ProductsSort (base columns only). */
+export interface ProductServerOrder {
+	orderBy: "created_at" | "title" | "discounted_price" | "stock";
+	ascending: boolean;
+}
+
+/** Maps a catalog sort to PostgREST `order()` params (no client re-sort over pages). */
+export function productsSortToOrder(sort: ProductsSort): ProductServerOrder {
+	switch (sort) {
+		case "newest":
+			return { orderBy: "created_at", ascending: false };
+		case "nameAZ":
+			return { orderBy: "title", ascending: true };
+		case "nameZA":
+			return { orderBy: "title", ascending: false };
+		case "priceLow":
+			return { orderBy: "discounted_price", ascending: true };
+		case "priceHigh":
+			return { orderBy: "discounted_price", ascending: false };
+		case "stockLow":
+			return { orderBy: "stock", ascending: true };
+	}
+}
 
 export interface ProductListFilters {
 	branchId: string | null;

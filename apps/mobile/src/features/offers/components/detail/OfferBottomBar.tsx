@@ -1,12 +1,14 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View, Platform } from "react-native";
 import { router } from "expo-router";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { withAlpha } from "@/core/theme/alpha";
-import { formatMoneyPrecise } from "@/core/utils/formatters";
-import type { OfferDetail } from "@/features/offers/domain/offer";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { formatMoneyPrecise } from "@/src/core/utils/formatters";
+import type { OfferDetail } from "@/src/features/offers/domain/offer";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { Button } from "@/components/ui/button";
 
 const BOTTOM_BAR_HEIGHT = 92;
 
@@ -15,53 +17,61 @@ export function OfferBottomBar({
 	available,
 	outOfStock,
 	bottomOffset,
+	availabilityUnknown = false,
 }: {
 	detail: OfferDetail;
 	available: boolean;
 	outOfStock: boolean;
 	bottomOffset: number;
+	availabilityUnknown?: boolean;
 }) {
 	const { colors } = useTheme();
 	const muted = colors.mutedForeground;
+	const purchasable = available && !availabilityUnknown;
 	return (
 		<View style={[styles.bottomBarWrap, { bottom: bottomOffset }]}>
-			<View style={[styles.bottomBar, { backgroundColor: colors.card, boxShadow: `0px 8px 24px ${colors.shadow}` }]}>
-				<View>
+			<View
+				style={[
+					styles.bottomBar,
+					{
+						backgroundColor: colors.card,
+						borderColor: colors.borderSolid,
+						boxShadow: Platform.select({
+							ios: `0px 8px 24px ${withAlpha(colors.shadow, 0.18)}`,
+							default: `0px 8px 24px ${colors.shadow}`,
+						}),
+					},
+				]}
+			>
+				<View style={styles.priceRow}>
+					<AppText variant="h3" weight="extraBold">
+						{formatMoneyPrecise(detail.offer.discounted_price)}
+					</AppText>
 					<AppText
 						style={{
 							textDecorationLine: "line-through",
 							color: muted,
-							fontSize: 12,
+							fontSize: 13,
 						}}
 					>
 						{formatMoneyPrecise(detail.offer.original_price)}
 					</AppText>
-					<AppText variant="h3" weight="extraBold">
-						{formatMoneyPrecise(detail.offer.discounted_price)}
-					</AppText>
 				</View>
-				<Pressable
-					disabled={!available}
+				<Button
+					disabled={!purchasable}
 					onPress={() => router.push(`/checkout/${detail.offer.id}`)}
-					style={({ pressed }) => [
-						styles.saveButton,
-						{
-							backgroundColor: available
-								? colors.primary
-								: `${withAlpha(colors.foreground, 0.149)}`,
-							transform: [{ scale: pressed ? 0.97 : 1 }],
-						},
-					]}
 				>
 					<AppText
 						weight="bold"
 						style={{ color: colors.primaryForeground }}
 					>
-						{outOfStock
-							? strings.offers.soldOut
-							: strings.offerDetail.savePack}
+						{availabilityUnknown
+							? strings.offers.unavailable
+							: outOfStock
+								? strings.offers.soldOut
+								: strings.offerDetail.savePack}
 					</AppText>
-				</Pressable>
+				</Button>
 			</View>
 		</View>
 	);
@@ -77,13 +87,20 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		padding: 16,
-		borderRadius: 24,
-		minHeight: BOTTOM_BAR_HEIGHT,
+		paddingHorizontal: spacing.xl,
+		borderWidth: 1,
+		borderRadius: radii.md,
+		minHeight: BOTTOM_BAR_HEIGHT - 20,
+
+	},
+	priceRow: {
+		flexDirection: "row",
+		alignItems: "baseline",
+		gap: spacing.md,
 	},
 	saveButton: {
 		height: 52,
-		borderRadius: 16,
+		borderRadius: radii.lg,
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: 24,

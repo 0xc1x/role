@@ -1,17 +1,18 @@
 import { StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, Card } from "@/core/ui";
-import { formatMoney } from "@/core/utils/formatters";
-import { spacing, radii } from "@/core/theme/spacing";
-import { useTheme } from "@/core/theme";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText } from "@/src/core/ui";
+import { formatMoney } from "@/src/core/utils/formatters";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { useTheme } from "@/src/core/theme";
 import {
 	discountPercentage,
 	type EmbeddedBusiness,
 	type EmbeddedLocation,
-} from "@/features/offers/domain/offer";
+} from "@/src/features/offers/domain/offer";
 import type { Offer } from "@0xc1x/role-commons";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 interface ProductSummaryCardProps {
 	offer: Offer;
@@ -24,11 +25,23 @@ export function ProductSummaryCard({
 	offer,
 	business,
 }: ProductSummaryCardProps) {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const percent = discountPercentage(offer);
 
 	return (
-		<Card>
+		<Card
+			style={[
+				{
+					backgroundColor: scheme === "dark" ? colors.card : colors.background,
+					borderColor: colors.borderSolid,
+				},
+			]}>
+			<CardHeader>
+				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+					{strings.orders.productTitle}
+				</AppText>
+			</CardHeader>
+			<CardContent>
 			<View style={styles.row}>
 				{offer.image ? (
 					<Image source={{ uri: offer.image }} style={styles.image} />
@@ -83,6 +96,7 @@ export function ProductSummaryCard({
 					</View>
 				</View>
 			</View>
+			</CardContent>
 		</Card>
 	);
 }

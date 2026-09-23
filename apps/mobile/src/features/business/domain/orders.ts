@@ -1,7 +1,7 @@
 import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
 
-import { isActiveStatus } from "@/features/orders/domain/order";
-import type { OrderDetail } from "@/features/orders/domain/order";
+import { isActiveStatus } from "@/src/features/orders/domain/order";
+import type { OrderDetail } from "@/src/features/orders/domain/order";
 
 /** Tab of the orders list: active vs history (terminal states). */
 export type OrdersTab = "active" | "history";

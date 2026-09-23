@@ -13,12 +13,13 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { strings } from "@/core/i18n/strings";
-import { APP_VERSION } from "@/core/version";
-import { AppText, Button } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { performSignOut } from "@/features/auth/sign-out";
+import { strings } from "@/src/core/i18n/strings";
+import { APP_VERSION } from "@/src/core/version";
+import { AppText } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
+import { performSignOut } from "@/src/features/auth/sign-out";
+import { Button } from "@/components/ui/button";
 
 /** Diálogo de cierre de sesión + versión (compartido consumer/business). */
 export function SignOutSection({ style }: { style?: object }) {
@@ -33,10 +34,11 @@ export function SignOutSection({ style }: { style?: object }) {
 			<AlertDialog open={open} onOpenChange={setOpen}>
 				<AlertDialogTrigger asChild>
 					<Button
-						label={strings.profile.signOutItem}
-						variant="danger"
+						variant="destructive"
 						onPress={() => setOpen(true)}
-					/>
+					>
+						{strings.profile.signOutItem}
+					</Button>
 				</AlertDialogTrigger>
 				<AlertDialogContent>
 					<AlertDialogHeader>

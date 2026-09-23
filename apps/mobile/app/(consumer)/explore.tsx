@@ -3,28 +3,29 @@ import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { strings } from "@/core/i18n/strings";
-import { Button, EmptyState, ErrorState, LoadingView, useWebPullToRefresh } from "@/core/ui";
-import { SectionHeader } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { useFilteredOffers, useSelectedAddress } from "@/features/hooks";
-import { useAuthStore } from "@/features/auth/store";
-import { usePreferences } from "@/features/profile/hooks";
+import { strings } from "@/src/core/i18n/strings";
+import { EmptyState, ErrorState, LoadingView, useWebPullToRefresh } from "@/src/core/ui";
+import { SectionHeader } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { radii, spacing } from "@/src/core/theme/spacing";
+import { useFilteredOffers, useSelectedAddress } from "@/src/features/hooks";
+import { useAuthStore } from "@/src/features/auth/store";
+import { usePreferences } from "@/src/features/profile/hooks";
 import {
 	OfferFiltersSheet,
 	type OfferFilterState,
-} from "@/features/offers/components/OfferFiltersSheet";
-import { ExploreHeader } from "@/features/explore/components/ExploreHeader";
-import { ExploreActiveFiltersBar } from "@/features/explore/components/ExploreActiveFiltersBar";
-import { ExploreCategoryGrid } from "@/features/explore/components/ExploreCategoryGrid";
-import { ExploreTipSection } from "@/features/explore/components/ExploreTipSection";
-import { OfferCard } from "@/features/offers/components/OfferCard";
-import { ExploreMapView } from "@/features/explore/components/ExploreMapView";
+} from "@/src/features/offers/components/OfferFiltersSheet";
+import { ExploreHeader } from "@/src/features/explore/components/ExploreHeader";
+import { ExploreActiveFiltersBar } from "@/src/features/explore/components/ExploreActiveFiltersBar";
+import { ExploreCategoryGrid } from "@/src/features/explore/components/ExploreCategoryGrid";
+import { ExploreTipSection } from "@/src/features/explore/components/ExploreTipSection";
+import { OfferCard } from "@/src/features/offers/components/OfferCard";
+import { ExploreMapView } from "@/src/features/explore/components/ExploreMapView";
 import {
 	hasActiveExploreFilters,
-} from "@/features/explore/exploreTypes";
-import { useExploreFilters } from "@/features/explore/hooks";
+} from "@/src/features/explore/exploreTypes";
+import { useExploreFilters } from "@/src/features/explore/hooks";
+import { Button } from "@/components/ui/button";
 
 export default function ExploreScreen() {
 	const { colors } = useTheme();
@@ -61,6 +62,7 @@ export default function ExploreScreen() {
 	);
 
 	const effectiveMaxDistanceKm = filters.maxDistanceKm ?? (isGuest ? null : prefRadius);
+	// Preview section shows 8 cards — cap server-side instead of slicing 100 rows client-side.
 	const { data, isLoading, isError, error, refetch, isFetching } = useFilteredOffers({
 		category: filters.category,
 		maxPrice: filters.maxPrice,
@@ -68,6 +70,7 @@ export default function ExploreScreen() {
 		lat: selectedAddress?.latitude ?? undefined,
 		lng: selectedAddress?.longitude ?? undefined,
 		searchQuery: debouncedSearch.length > 0 ? debouncedSearch : null,
+		limit: 8,
 	});
 
 	const pull = useWebPullToRefresh({
@@ -83,6 +86,18 @@ export default function ExploreScreen() {
 	const openFilterSheet = useCallback(() => setSheetVisible(true), []);
 	const closeFilterSheet = useCallback(() => setSheetVisible(false), []);
 	const toggleViewMode = useCallback(() => setViewModeMap((m) => !m), []);
+	const handleSubmitSearch = useCallback(
+		(q: string) => {
+			setDebouncedSearch(q);
+			setFilters((f) => ({ ...f, searchQuery: q }));
+		},
+		[setDebouncedSearch, setFilters],
+	);
+	const handleRetry = useCallback(() => void refetch(), [refetch]);
+	const handleSeeAllOffers = useCallback(() => router.push("/all-offers"), []);
+	const handleLoginPress = useCallback(() => router.push("/login"), []);
+	// Remonta el mapa al cambiar filtros: reinicia selección y encuadre sin efectos.
+	const mapResetKey = JSON.stringify({ ...filters, searchQuery: debouncedSearch });
 
 	const handleCategoryTapWithMap = useCallback(
 		(categoryId: string) => {
@@ -106,7 +121,9 @@ export default function ExploreScreen() {
 			return (
 				<View style={[styles.flex, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center", padding: spacing.xl }]}>
 					<EmptyState title={strings.explore.loginRequiredTitle} message={strings.explore.loginRequiredBody} />
-					<Button label={strings.explore.loginCTA} onPress={() => router.push("/login")} style={{ marginTop: spacing.lg }} />
+					<Button onPress={handleLoginPress} style={{ marginTop: spacing.lg }} >
+						{strings.explore.loginCTA}
+					</Button>	
 				</View>
 			);
 		}
@@ -116,6 +133,7 @@ export default function ExploreScreen() {
 					<LoadingView />
 				) : (
 					<ExploreMapView
+						key={mapResetKey}
 						offers={data ?? []}
 						filters={{ ...filters, searchQuery: debouncedSearch }}
 						userLocation={
@@ -160,10 +178,7 @@ export default function ExploreScreen() {
 				<ExploreHeader
 					search={search}
 					onSearchChange={setSearch}
-					onSubmitSearch={(q) => {
-						setDebouncedSearch(q);
-						setFilters((f) => ({ ...f, searchQuery: q }));
-					}}
+					onSubmitSearch={handleSubmitSearch}
 					onToggleMap={toggleViewMode}
 					onFilterTap={openFilterSheet}
 					hasActiveFilters={hasActiveFilters}
@@ -187,7 +202,7 @@ export default function ExploreScreen() {
 
 				<SectionHeader
 					title={strings.explore.availableOffers}
-					onSeeAll={() => router.push("/all-offers")}
+					onSeeAll={handleSeeAllOffers}
 					style={styles.offersHeader}
 				/>
 
@@ -195,7 +210,9 @@ export default function ExploreScreen() {
 				{isGuest ? (
 					<View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.lg, gap: spacing.md, alignItems: "center" }}>
 						<EmptyState title={strings.explore.loginRequiredTitle} message={strings.explore.loginRequiredBody} />
-						<Button label={strings.explore.loginCTA} onPress={() => router.push("/login")} />
+						<Button onPress={handleLoginPress} >
+							{strings.explore.loginCTA}
+						</Button>
 					</View>
 				) : isLoading ? (
 					<View style={styles.offersList}>
@@ -206,7 +223,7 @@ export default function ExploreScreen() {
 				) : isError ? (
 					<ErrorState
 						error={error}
-						onRetry={() => void refetch()}
+						onRetry={handleRetry}
 					/>
 				) : data && data.length === 0 ? (
 					<EmptyState
@@ -215,7 +232,7 @@ export default function ExploreScreen() {
 					/>
 				) : (
 					<View style={styles.offersList}>
-						{(data ?? []).slice(0, 8).map((offer) => (
+						{(data ?? []).map((offer) => (
 							<OfferCard key={offer.offer.id} offer={offer} />
 						))}
 					</View>
@@ -249,6 +266,6 @@ const styles = StyleSheet.create({
 	},
 	skeleton: {
 		height: 260,
-		borderRadius: 16,
+		borderRadius: radii.md,
 	},
 });

@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { router } from "expo-router";
-import InfoScreen from "@/core/ui/InfoScreen";
-import { strings } from "@/core/i18n/strings";
-import { useAuthStore } from "@/features/auth/store";
+import InfoScreen from "@/src/core/ui/InfoScreen";
+import { strings } from "@/src/core/i18n/strings";
+import { useAuthStore } from "@/src/features/auth/store";
 
 export default function HowItWorksScreen() {
 	const { status, initialized } = useAuthStore();

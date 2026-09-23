@@ -1,21 +1,21 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Map, Plus } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Button,
 	EmptyState,
 	ErrorState,
 	LoadingView,
 	Screen,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { useBusinessLocations } from "@/features/business/hooks";
-import { LocationCard } from "@/features/business/components/LocationCard";
+} from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
+import { useBusinessLocations } from "@/src/features/business/hooks";
+import { LocationCard } from "@/src/features/business/components/LocationCard";
+import { Button } from "@/components/ui/button";
 
 export default function BusinessLocationsScreen() {
 	const { colors } = useTheme();
@@ -56,15 +56,16 @@ export default function BusinessLocationsScreen() {
 						{strings.business.locations}
 					</AppText>
 					<Button
-						label={strings.business.addLocation}
 						size="sm"
 						icon={
-							<Ionicons name="add" size={18} color={colors.primaryForeground} />
+							<Plus size={18} color={colors.primaryForeground} />
 						}
 						onPress={() =>
 							router.push(`/business/${businessId}/locations/create`)
 						}
-					/>
+					>
+						{strings.business.addLocation}
+					</Button>
 				</View>
 
 				{isLoading ? (
@@ -74,18 +75,19 @@ export default function BusinessLocationsScreen() {
 				) : !data || data.length === 0 ? (
 					<EmptyState
 						icon={
-							<Ionicons name="map-outline" size={28} color={colors.primary} />
+							<Map size={28} color={colors.primary} />
 						}
 						title={strings.business.noLocations}
 						message={strings.business.noLocationsHint}
 						action={
 							<Button
-								label={strings.business.createLocation}
 								onPress={() =>
 									router.push(`/business/${businessId}/locations/create`)
 								}
 								style={{ marginTop: spacing.md }}
-							/>
+							>
+								{strings.business.createLocation}
+							</Button>
 						}
 					/>
 				) : (

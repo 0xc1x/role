@@ -1,23 +1,24 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Calendar, ChevronRight, Map, MapPin, Pencil, Phone, Pin, Star, Store, type LucideIcon } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
+import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
-	Card,
 	ErrorState,
-	LoadingView,
 	Screen,
 	ScreenHeader,
 	StatusBadge,
-} from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing, radii } from "@/core/theme/spacing";
-import { withAlpha } from "@/core/theme/alpha";
-import { formatShortDate } from "@/core/utils/formatters";
-import { useBusinessLocation } from "@/features/business/hooks";
-import { BusinessLocationMap } from "@/features/business/components/BusinessLocationMap";
+} from "@/src/core/ui";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { formatShortDate } from "@/src/core/utils/formatters";
+import { useBusinessLocation } from "@/src/features/business/hooks";
+import { BusinessLocationMap } from "@/src/features/business/components/BusinessLocationMap";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { CardPressable } from "@/components/ui/card-presable";
 
 export default function BusinessLocationDetailScreen() {
 	const { colors } = useTheme();
@@ -28,7 +29,19 @@ export default function BusinessLocationDetailScreen() {
 	const { data: location, isLoading, isError, error, refetch } =
 		useBusinessLocation(locationId ?? "");
 
-	if (isLoading) return <LoadingView />;
+	if (isLoading) {
+		return (
+			<Screen scroll>
+				<View style={styles.container}>
+					<ScreenHeader title={strings.business.locationDetail} />
+					<Skeleton style={styles.skeletonHero} />
+					<Skeleton style={styles.skeletonMap} />
+					<Skeleton style={styles.skeletonCard} />
+					<Skeleton style={styles.skeletonCard} />
+				</View>
+			</Screen>
+		);
+	}
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 	if (!location) return null;
@@ -39,9 +52,12 @@ export default function BusinessLocationDetailScreen() {
 
 			{/* ── Hero ─────────────────────────────────────────────────── */}
 			<Card style={styles.hero}>
-				<View style={[styles.icon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}>
-					<Ionicons name="storefront" size={26} color={colors.primary} />
-				</View>
+				<CardHeader>
+					<View style={[styles.icon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}>
+						<Store size={26} color={colors.primary} />
+					</View>
+				</CardHeader>
+				
 				<View style={styles.heroText}>
 					<AppText variant="h3" weight="bold">
 						{location.name}
@@ -62,7 +78,7 @@ export default function BusinessLocationDetailScreen() {
 									{ backgroundColor: withAlpha(colors.warning, 0.149) },
 								]}
 							>
-								<Ionicons name="star" size={11} color={colors.warning} />
+								<Star size={11} color={colors.warning} />
 								<AppText
 									variant="bodySmall"
 									weight="semiBold"
@@ -91,51 +107,52 @@ export default function BusinessLocationDetailScreen() {
 
 			{/* ── Información ──────────────────────────────────────────── */}
 			<Card style={styles.card}>
-				<InfoRow
-					icon="location-outline"
-					label={strings.business.address}
-					value={location.address}
-				/>
-				{location.phone ? (
+				<CardContent>
 					<InfoRow
-						icon="call-outline"
-						label={strings.business.phone}
-						value={location.phone}
+						icon={MapPin}
+						label={strings.business.address}
+						value={location.address}
 					/>
-				) : null}
-				{location.zone ? (
+					{location.phone ? (
+						<InfoRow
+							icon={Phone}
+							label={strings.business.phone}
+							value={location.phone}
+						/>
+					) : null}
+					{location.zone ? (
+						<InfoRow
+							icon={Map}
+							label={strings.business.zone}
+							value={location.zone}
+						/>
+					) : null}
 					<InfoRow
-						icon="map-outline"
-						label={strings.business.zone}
-						value={location.zone}
+						icon={Pin}
+						label={strings.business.coordinates}
+						value={`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`}
 					/>
-				) : null}
-				<InfoRow
-					icon="pin-outline"
-					label={strings.business.coordinates}
-					value={`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`}
-				/>
-				{location.created_at ? (
-					<InfoRow
-						icon="calendar-outline"
-						label={strings.business.locationCreated}
-						value={formatShortDate(location.created_at)}
-						last
-					/>
-				) : null}
+					{location.created_at ? (
+						<InfoRow
+							icon={Calendar}
+							label={strings.business.locationCreated}
+							value={formatShortDate(location.created_at)}
+							last
+						/>
+					) : null}
+				</CardContent>
 			</Card>
 
 			{/* ── Acciones ─────────────────────────────────────────────── */}
-			<Card
+			<CardPressable
 				style={styles.card}
 				onPress={() => router.push(`/business/${id}/locations/${location.id}/edit`)}
 			>
-				<View style={styles.actionRow}>
+				<CardContent style={styles.actionRow}>
 					<View
 						style={[styles.actionIcon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}
 					>
-						<Ionicons
-							name="create-outline"
+						<Pencil
 							size={18}
 							color={colors.primary}
 						/>
@@ -143,29 +160,23 @@ export default function BusinessLocationDetailScreen() {
 					<AppText variant="bodyMedium" weight="medium" style={styles.flex1}>
 						{strings.business.editInformation}
 					</AppText>
-					<Ionicons
-						name="chevron-forward"
+					<ChevronRight
 						size={18}
 						color={colors.mutedForeground}
 					/>
-				</View>
-			</Card>
+				</CardContent>
+			</CardPressable>
 		</Screen>
 	);
 }
 
 function InfoRow({
-	icon,
+	icon: Icon,
 	label,
 	value,
 	last = false,
 }: {
-	icon:
-		| "location-outline"
-		| "call-outline"
-		| "map-outline"
-		| "pin-outline"
-		| "calendar-outline";
+	icon: LucideIcon;
 	label: string;
 	value: string;
 	last?: boolean;
@@ -174,7 +185,7 @@ function InfoRow({
 	return (
 		<View style={[styles.infoRow, last && { marginBottom: 0 }]}>
 			<View style={[styles.infoIcon, { backgroundColor: withAlpha(colors.primary, 0.051) }]}>
-				<Ionicons name={icon} size={14} color={colors.mutedForeground} />
+				<Icon size={14} color={colors.mutedForeground} />
 			</View>
 			<View style={styles.infoRowText}>
 				<AppText
@@ -202,7 +213,7 @@ const styles = StyleSheet.create({
 	icon: {
 		width: 52,
 		height: 52,
-		borderRadius: 16,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -231,7 +242,7 @@ const styles = StyleSheet.create({
 	infoIcon: {
 		width: 30,
 		height: 30,
-		borderRadius: 10,
+		borderRadius: radii.sm,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -244,9 +255,24 @@ const styles = StyleSheet.create({
 	actionIcon: {
 		width: 38,
 		height: 38,
-		borderRadius: 12,
+		borderRadius: radii.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	flex1: { flex: 1 },
+	skeletonHero: {
+		height: 110,
+		borderRadius: radii.lg,
+		marginTop: spacing.lg,
+	},
+	skeletonMap: {
+		height: 180,
+		borderRadius: radii.lg,
+		marginTop: spacing.lg,
+	},
+	skeletonCard: {
+		height: 90,
+		borderRadius: radii.lg,
+		marginTop: spacing.lg,
+	},
 });

@@ -1,11 +1,12 @@
+import { memo, useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
-import { strings } from "@/core/i18n/strings";
-import { AppText, FilterChip } from "@/core/ui";
-import { useTheme } from "@/core/theme";
-import { spacing } from "@/core/theme/spacing";
-import { useCategories } from "@/features/hooks";
-import type { ExploreFilterState } from "@/features/explore/exploreTypes";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, FilterChip } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing } from "@/src/core/theme/spacing";
+import { useCategories } from "@/src/features/hooks";
+import type { ExploreFilterState } from "@/src/features/explore/exploreTypes";
 
 const FILTER_KEYS = ["category", "maxDistanceKm", "maxPrice", "searchQuery"] as const;
 export type ActiveFilterKey = (typeof FILTER_KEYS)[number];
@@ -47,13 +48,15 @@ export function ExploreActiveFiltersBar({
 			<ScrollView
 				horizontal
 				showsHorizontalScrollIndicator={false}
+				style={styles.scroll}
 				contentContainerStyle={styles.chips}
 			>
 				{chips.map((chip) => (
-					<FilterChip
+					<ActiveFilterChip
 						key={chip.key}
+						filterKey={chip.key}
 						label={chip.label}
-						onClear={() => onClear(chip.key)}
+						onClear={onClear}
 					/>
 				))}
 			</ScrollView>
@@ -70,6 +73,19 @@ export function ExploreActiveFiltersBar({
 	);
 }
 
+const ActiveFilterChip = memo(function ActiveFilterChip({
+	filterKey,
+	label,
+	onClear,
+}: {
+	filterKey: ActiveFilterKey;
+	label: string;
+	onClear: (key: ActiveFilterKey) => void;
+}) {
+	const handleClear = useCallback(() => onClear(filterKey), [onClear, filterKey]);
+	return <FilterChip label={label} onClear={handleClear} />;
+});
+
 const styles = StyleSheet.create({
 	container: {
 		flexDirection: "row",
@@ -78,8 +94,10 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.sm,
 		gap: spacing.sm,
 	},
+	scroll: {
+		flex: 1,
+	},
 	chips: {
 		gap: spacing.sm,
-		flexGrow: 1,
 	},
 });
