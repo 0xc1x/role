@@ -1,6 +1,6 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@/test-utils/dom";
+import { cleanup, fireEvent, render, screen } from "@/test-utils/dom";
 
 mock.module("@/components/navbar", () => ({ Navbar: () => null }));
 mock.module("@/components/footer", () => ({ Footer: () => null }));
@@ -71,6 +71,8 @@ async function fillValid(container: HTMLElement) {
 }
 
 describe("BusinessSignupPage", () => {
+	afterEach(cleanup);
+
 	test("valida campos requeridos y contraseñas", async () => {
 		const { captured } = setup();
 		fireEvent.click(screen.getByRole("button", { name: "Registrar negocio" }));
