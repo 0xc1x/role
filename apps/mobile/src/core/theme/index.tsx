@@ -69,6 +69,11 @@ export function ThemeProvider({
 		document.documentElement.classList.toggle("dark", resolved === "dark");
 		// actualiza color-scheme para scrollbars/form controls nativos
 		document.documentElement.style.colorScheme = resolved;
+		// Mantiene alineado el canvas web con la superficie de la app.
+		document.documentElement.style.setProperty(
+			"--page-background",
+			colorTokens[resolved].background,
+		);
 	}, [mode, systemScheme]);
 
 	const setMode = useCallback((next: ThemeMode) => {
