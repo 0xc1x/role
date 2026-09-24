@@ -1804,6 +1804,39 @@ export const strings = {
 			meals: "100K+",
 		},
 	},
+	// ── Onboarding de primera visita (gate + pager de 3 pasos) ─────
+	// Audiencia consumer: parte del copy se reutiliza de app.tagline y
+	// landing.feature*/howItWorks*; el resto (ciclo/entrada) es propio.
+	// Audiencia business: copy espejo de vendedor + pestañas del panel.
+	onboarding: {
+		skip: "Saltar",
+		start: "Empezar",
+		stepOf: "Paso {n} de {total}",
+		// Ciclo consumer: la pieza que un primera-timer no infiere de la UI.
+		cycleReserve: "Reserva",
+		cyclePay: "Paga",
+		cyclePickup: "Recoge con QR",
+		// Cuerpo del ciclo consumer: el código de recogida único y su ventana.
+		cycleBody:
+			"Cada reserva genera un código de recogida único: muéstralo en el comercio dentro del horario indicado y recoge tu pedido. Así de simple.",
+		// Entrada consumer: entrar a la app, sin prometer permiso de ubicación
+		// (lo gestiona LocationSelector desde el inicio).
+		entryTitle: "Ofertas cerca de ti",
+		entryBody:
+			"Ya dentro de la app verás las ofertas disponibles por zona y podrás reservar en segundos. Puedes cambiar tu ubicación cuando quieras desde el inicio.",
+		business: {
+			valueTitle: "Convierte tu excedente en ingresos",
+			valueBody:
+				"Lo que hoy acabaría en la basura puede venderse: publica tu excedente en Rolé y recupera parte de su valor. Menos merma, más ingresos.",
+			valueLabel: "Menos desperdicio, más ingresos",
+			cyclePublish: "Publica",
+			cycleReceive: "Recibe pedidos",
+			cyclePickup: "Entrega con QR",
+			cycleBody:
+				"Publica tu excedente en minutos, recibe los pedidos en la app y entrégalos validando el código QR del cliente dentro de su ventana de recogida.",
+			panelTitle: "Tu negocio en tres pestañas",
+		},
+	},
 } as const;
 
 export type StringKey = keyof typeof strings;

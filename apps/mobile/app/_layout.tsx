@@ -223,6 +223,7 @@ function ThemedRootStack() {
 			<Stack.Screen name="(consumer)" />
 			<Stack.Screen name="(business)" />
 			<Stack.Screen name="landing" />
+			<Stack.Screen name="onboarding" />
 		</Stack>
 		</NavigationThemeProvider>
 	);
