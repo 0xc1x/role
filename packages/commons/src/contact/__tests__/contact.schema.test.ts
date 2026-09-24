@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { CONTACT_CITIES_FALLBACK } from '../enums/contact.enum';
 import { CreateContactSchema } from '../schemas/contact.schema';
 
 describe('CreateContactSchema', () => {
@@ -7,6 +8,10 @@ describe('CreateContactSchema', () => {
     role: 'persona' as const,
     city: 'Quito',
   };
+
+  it('excludes Otra from the shared city fallback', () => {
+    expect(CONTACT_CITIES_FALLBACK).toEqual(['Quito', 'Guayaquil', 'Cuenca', 'Manta']);
+  });
 
   it('accepts valid contact and normalizes email', () => {
     const parsed = CreateContactSchema.parse(base);

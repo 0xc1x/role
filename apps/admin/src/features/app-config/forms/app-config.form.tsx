@@ -115,7 +115,7 @@ function parseJsonValue(value: FormValue): ParseResult {
 		return { parsed: JSON.parse(trimmed) as ParsedValue };
 	} catch {
 		return {
-			error: 'JSON inválido. Ej: ["Quito","Guayaquil","Cuenca","Manta","Otra"]',
+			error: 'JSON inválido. Ej: ["Quito","Guayaquil","Cuenca","Manta"]',
 		};
 	}
 }
@@ -443,7 +443,7 @@ function JsonValueInput({
 			<Textarea
 				id={fieldName}
 				name={fieldName}
-				placeholder='["Quito","Guayaquil","Cuenca","Manta","Otra"]'
+				placeholder='["Quito","Guayaquil","Cuenca","Manta"]'
 				rows={4}
 				value={String(value ?? "")}
 				onBlur={onBlur}

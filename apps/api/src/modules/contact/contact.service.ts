@@ -8,7 +8,8 @@ import { EmailMarketingRepository } from '../email-marketing/email-marketing.rep
 import { RendererService } from '../email-marketing/renderer.service';
 import { AppStoreRepository } from '../store/app-store.repository';
 
-const FALLBACK_CITIES = ['Quito', 'Guayaquil', 'Cuenca', 'Manta', 'Otra'];
+const OTHER_CITY = 'Otra';
+const FALLBACK_CITIES = ['Quito', 'Guayaquil', 'Cuenca', 'Manta'];
 
 @Injectable()
 export class ContactService {
@@ -29,10 +30,11 @@ export class ContactService {
   async handle(dto: CreateContactDto, ip?: string) {
     // 1. validar ciudad contra app_config.contact.cities
     const cities = await this.resolveCities();
-    if (!cities.includes(dto.city)) {
+    const isOtherCity = dto.city === OTHER_CITY;
+    if (!isOtherCity && !cities.includes(dto.city)) {
       throw new BadRequestException(`Ciudad no habilitada. Opciones: ${cities.join(', ')}`);
     }
-    const effectiveCity = dto.city === 'Otra' ? dto.city_other!.trim() : dto.city;
+    const effectiveCity = isOtherCity ? dto.city_other!.trim() : dto.city;
 
     // 2. resolver destinos y remitente desde app_config
     const to = await this.resolveTo(dto.role);
@@ -47,7 +49,7 @@ export class ContactService {
         role: dto.role,
         city: effectiveCity,
         city_raw: dto.city,
-        city_other: dto.city_other ?? null,
+        city_other: dto.city_other?.trim() ?? null,
         message: dto.message ?? null,
         at: new Date().toISOString(),
         ip: ip ?? null,
@@ -109,7 +111,7 @@ export class ContactService {
   private async resolveCities(): Promise<string[]> {
     const row = await this.appConfigRepo.findByKey('contact.cities');
     if (row?.value && Array.isArray(row.value) && row.value.every((v) => typeof v === 'string')) {
-      return row.value as string[];
+      return (row.value as string[]).filter((city) => city !== OTHER_CITY);
     }
     return FALLBACK_CITIES;
   }

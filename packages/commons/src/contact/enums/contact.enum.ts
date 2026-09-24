@@ -6,5 +6,4 @@ export const CONTACT_CITIES_FALLBACK = [
   'Guayaquil',
   'Cuenca',
   'Manta',
-  'Otra',
 ] as const;
