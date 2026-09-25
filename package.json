@@ -9,7 +9,7 @@
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "turbo run test && bun test supabase",
     "test:e2e": "turbo run test:e2e",
     "lint": "turbo run lint",
     "dev:api": "bun run --cwd apps/api start:dev",
@@ -19,9 +19,11 @@
     "deploy:mobile": "bun run --cwd packages/commons build && bun run --cwd apps/mobile deploy",
     "doctor:api": "npx -y nestjs-doctor@latest apps/api",
     "doctor:react": "npx -y react-doctor@latest --yes --scope changed --base origin/main",
-    "doctor": "bun run doctor:api && bun run doctor:react"
+    "doctor:expo": "bun scripts/doctor-expo.mjs",
+    "doctor": "bun run doctor:api && bun run doctor:react && bun run doctor:expo"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
     "nitro": "npm:nitro-nightly@3.0.1-20260817-141030-4bfb35a7",
     "turbo": "^2.10.12"
   }

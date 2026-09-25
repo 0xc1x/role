@@ -525,7 +525,10 @@ describe('offers write grants match what the client actually writes', () => {
   /** Keys of the shared mutable column object in the mobile repository. */
   function clientMutableColumns(): string[] {
     const source = readFileSync(REPOSITORY_PATH, 'utf8');
-    const block = source.match(/const mutableColumns: Row = \{([\s\S]*?)\n {2}\};/);
+    // Indentation is whitespace-agnostic on purpose: the file is formatted by
+    // biome, and a guard that hardcodes "two spaces" silently breaks the day
+    // the tab convention is enforced.
+    const block = source.match(/const mutableColumns: Row = \{([\s\S]*?)\n[\t ]+\};/);
     if (!block?.[1]) {
       throw new Error(
         'saveOffer no longer declares a `mutableColumns: Row` object literal; update this guard to match the new shape.',
@@ -545,7 +548,7 @@ describe('offers write grants match what the client actually writes', () => {
     // Anchor on the spread so an unrelated .insert({...}) elsewhere in the
     // file cannot be mistaken for the offer insert.
     const spread = source.match(
-      /\.insert\(\{\s*\.\.\.mutableColumns,([\s\S]*?)\n {6}\}\)/,
+      /\.insert\(\{\s*\.\.\.mutableColumns,([\s\S]*?)\n[\t ]+\}\)/,
     );
     if (!spread?.[1]) {
       throw new Error(
