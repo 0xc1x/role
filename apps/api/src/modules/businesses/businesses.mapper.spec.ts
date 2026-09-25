@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { BusinessMapper } from './businesses.mapper';
 import type {
+  BusinessAggregateRow,
   BusinessLocationRow,
-  BusinessRow,
 } from './businesses.repository';
 
-const makeRow = (overrides: Partial<BusinessRow> = {}): BusinessRow =>
+const makeRow = (
+  overrides: Partial<BusinessAggregateRow> = {},
+): BusinessAggregateRow =>
   ({
     id: 'biz-1',
     owner_id: 'user-1',
@@ -30,7 +32,7 @@ const makeRow = (overrides: Partial<BusinessRow> = {}): BusinessRow =>
     created_at: new Date('2025-01-01T00:00:00Z'),
     updated_at: new Date('2025-01-02T00:00:00Z'),
     ...overrides,
-  }) as BusinessRow;
+  }) as BusinessAggregateRow;
 
 describe('BusinessMapper.toDto', () => {
   test('mapea numéricos y fechas', () => {
@@ -43,6 +45,8 @@ describe('BusinessMapper.toDto', () => {
   });
 
   test('nulos se preservan', () => {
+    // commission_rate/balance son NOT NULL en los companions; el cast documenta
+    // que el mapper los sigue tolerando en null (el DTO los admite).
     const dto = BusinessMapper.toDto(
       makeRow({
         commission_rate: null,
@@ -51,7 +55,7 @@ describe('BusinessMapper.toDto', () => {
         review_count: null,
         verified_at: null,
         verified_by: null,
-      }),
+      } as Partial<BusinessAggregateRow>),
     );
     expect(dto.commission_rate).toBeNull();
     expect(dto.balance).toBeNull();

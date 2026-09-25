@@ -1,6 +1,7 @@
 export * from './enums';
 export * from './profiles';
 export * from './businesses';
+export * from './business-companions';
 export * from './business-locations';
 export * from './offers';
 export * from './offer-categories';
@@ -56,6 +57,12 @@ import {
   pushTemplates,
 } from './push-notifications';
 import { payouts } from './payouts';
+import {
+  businessFinance,
+  businessModeration,
+  businessOwnership,
+} from './business-companions';
+import { defineRelations } from 'drizzle-orm';
 
 /** Schema map passed to drizzle() for typed queries. */
 export const schema = {
@@ -90,6 +97,42 @@ export const schema = {
   pushTemplates,
   pushNotifications,
   pushSends,
+  businessOwnership,
+  businessFinance,
+  businessModeration,
 };
 
 export type DatabaseSchema = typeof schema;
+
+/**
+ * Relations for the relational query builder. Only the business aggregate is
+ * declared: it is the one relation set that is not inferable from a join in
+ * the query (a business is read together with its three companions). The
+ * repositories still join explicitly, so this is the RQB view of the same
+ * shape.
+ */
+export const relations = defineRelations(schema, (helpers) => ({
+  businesses: {
+    ownership: helpers.one.businessOwnership(),
+    finance: helpers.one.businessFinance(),
+    moderation: helpers.one.businessModeration(),
+  },
+  businessOwnership: {
+    business: helpers.one.businesses({
+      from: helpers.businessOwnership.business_id,
+      to: helpers.businesses.id,
+    }),
+  },
+  businessFinance: {
+    business: helpers.one.businesses({
+      from: helpers.businessFinance.business_id,
+      to: helpers.businesses.id,
+    }),
+  },
+  businessModeration: {
+    business: helpers.one.businesses({
+      from: helpers.businessModeration.business_id,
+      to: helpers.businesses.id,
+    }),
+  },
+}));

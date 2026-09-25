@@ -17,7 +17,8 @@ let handlers: NotificationHandlers;
 let send: ReturnType<typeof mockSend>;
 
 const mockSend = () => {
-  const calls: Array<{ userIds: string[]; payload: unknown; opts?: unknown }> = [];
+  const calls: Array<{ userIds: string[]; payload: unknown; opts?: unknown }> =
+    [];
   return {
     calls,
     service: {
@@ -32,6 +33,7 @@ let userId: string;
 let businessId: string;
 let offerId: string;
 let orderId: string;
+let businessOwnerId: string;
 
 beforeAll(async () => {
   ctx = await createTestDb();
@@ -43,6 +45,7 @@ beforeAll(async () => {
   );
   userId = await seedProfile(ctx.db);
   const owner = await seedProfile(ctx.db);
+  businessOwnerId = owner;
   const biz = await seedBusiness(ctx.db, owner);
   businessId = biz.id;
   const loc = await seedLocation(ctx.db, businessId);
@@ -64,6 +67,10 @@ describe('NotificationHandlers.onOrderStatusChanged (DB real)', () => {
     await handlers.onOrderStatusChanged(orderId);
     expect(send.calls.length).toBeGreaterThanOrEqual(1);
     expect(send.calls[0]?.userIds).toEqual([userId]);
+    // El owner llega desde business_ownership, no desde businesses.
+    expect(
+      send.calls.some((call) => call.userIds.includes(businessOwnerId)),
+    ).toBe(true);
   });
 });
 
@@ -72,7 +79,9 @@ describe('NotificationHandlers.onOfferCreated (DB real)', () => {
     send.calls.length = 0;
     await handlers.onOfferCreated(offerId);
     expect(send.calls).toHaveLength(0);
-    await ctx.db.insert(favorites).values({ user_id: userId, offer_id: offerId });
+    await ctx.db
+      .insert(favorites)
+      .values({ user_id: userId, offer_id: offerId });
     await handlers.onOfferCreated(offerId);
     expect(send.calls).toHaveLength(1);
     expect(send.calls[0]?.userIds).toEqual([userId]);

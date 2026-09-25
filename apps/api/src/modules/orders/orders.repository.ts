@@ -13,7 +13,13 @@ import {
 import type { OrderStatus } from '@0xc1x/role-commons';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
-import { businesses, coupons, orders } from '../../database/schema';
+import {
+  businessFinance,
+  businessOwnership,
+  businesses,
+  coupons,
+  orders,
+} from '../../database/schema';
 import { ACTIVE_ORDER_STATUSES } from './order-status.machine';
 
 export type DbExecutor = Database;
@@ -57,10 +63,14 @@ export class OrdersRepository {
     const [row] = await this.db
       .select({
         order: orders,
-        business_owner_id: businesses.owner_id,
+        business_owner_id: businessOwnership.owner_id,
       })
       .from(orders)
       .innerJoin(businesses, eq(orders.business_id, businesses.id))
+      .innerJoin(
+        businessOwnership,
+        eq(orders.business_id, businessOwnership.business_id),
+      )
       .where(eq(orders.id, id))
       .limit(1);
     return row ?? null;
@@ -77,10 +87,14 @@ export class OrdersRepository {
     const [row] = await tx
       .select({
         order: orders,
-        business_owner_id: businesses.owner_id,
+        business_owner_id: businessOwnership.owner_id,
       })
       .from(orders)
       .innerJoin(businesses, eq(orders.business_id, businesses.id))
+      .innerJoin(
+        businessOwnership,
+        eq(orders.business_id, businessOwnership.business_id),
+      )
       .where(eq(orders.id, id))
       .for('update', { of: orders })
       .limit(1);
@@ -161,10 +175,13 @@ export class OrdersRepository {
 
   async isBusinessOwner(businessId: string, userId: string): Promise<boolean> {
     const [row] = await this.db
-      .select({ id: businesses.id })
-      .from(businesses)
+      .select({ id: businessOwnership.business_id })
+      .from(businessOwnership)
       .where(
-        and(eq(businesses.id, businessId), eq(businesses.owner_id, userId)),
+        and(
+          eq(businessOwnership.business_id, businessId),
+          eq(businessOwnership.owner_id, userId),
+        ),
       )
       .limit(1);
     return Boolean(row);
@@ -211,9 +228,9 @@ export class OrdersRepository {
     businessId: string,
   ): Promise<string | null> {
     const [row] = await tx
-      .select({ commission_rate: businesses.commission_rate })
-      .from(businesses)
-      .where(eq(businesses.id, businessId))
+      .select({ commission_rate: businessFinance.commission_rate })
+      .from(businessFinance)
+      .where(eq(businessFinance.business_id, businessId))
       .limit(1);
     return row?.commission_rate ?? null;
   }
@@ -265,8 +282,8 @@ export class OrdersRepository {
     netAmount: string,
   ): Promise<void> {
     await tx
-      .update(businesses)
-      .set({ balance: sql`${businesses.balance} + ${netAmount}` })
-      .where(eq(businesses.id, businessId));
+      .update(businessFinance)
+      .set({ balance: sql`${businessFinance.balance} + ${netAmount}` })
+      .where(eq(businessFinance.business_id, businessId));
   }
 }

@@ -1,11 +1,23 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import { escapeLike } from '../../common/utils/like';
 import {
+  businessFinance,
   businessLocations,
+  businessModeration,
   businessNotificationPreferences,
+  businessOwnership,
   businesses,
 } from '../../database/schema';
 import { payouts } from '../../database/schema/payouts';
@@ -15,7 +27,40 @@ import type {
 } from '@0xc1x/role-commons';
 
 export type BusinessRow = typeof businesses.$inferSelect;
-export type BusinessInsert = typeof businesses.$inferInsert;
+
+/**
+ * Companion fields of the business aggregate, flattened under their historical
+ * column names. `businesses` no longer stores them — they moved to
+ * business_ownership / business_finance / business_moderation so anon can hold
+ * table-level SELECT on `businesses` for PostgREST — but the DTO keeps the same
+ * shape, so the mapper reads them from here under the same names.
+ */
+export type BusinessCompanionFields = {
+  owner_id: string;
+  balance: string;
+  commission_rate: string;
+  verification_status: string;
+  verified_at: Date | null;
+  verified_by: string | null;
+  rejection_reason: string | null;
+};
+
+/** A business row joined with its three companions: the aggregate the DTO maps. */
+export type BusinessAggregateRow = BusinessRow & BusinessCompanionFields;
+
+/** Companion columns a business write may carry, wherever they are stored. */
+export type BusinessCompanionInsert = {
+  owner_id: string;
+  balance?: string;
+  commission_rate?: string;
+  verification_status?: string;
+  verified_at?: Date | null;
+  verified_by?: string | null;
+  rejection_reason?: string | null;
+};
+
+export type BusinessInsert = typeof businesses.$inferInsert &
+  BusinessCompanionInsert;
 export type BusinessUpdate = Partial<
   Pick<
     BusinessInsert,
@@ -28,14 +73,10 @@ export type BusinessUpdate = Partial<
     | 'phone'
     | 'email'
     | 'website'
-    | 'commission_rate'
     | 'is_active'
-    | 'verification_status'
-    | 'verified_at'
-    | 'verified_by'
-    | 'rejection_reason'
   >
->;
+> &
+  Partial<Omit<BusinessCompanionInsert, 'owner_id'>>;
 
 export type BusinessLocationRow = typeof businessLocations.$inferSelect;
 export type BusinessLocationInsert = typeof businessLocations.$inferInsert;
@@ -54,6 +95,17 @@ export type BusinessLocationUpdate = Partial<
 >;
 
 export type DbExecutor = Database;
+
+/** Drops the keys whose value is `undefined` so the column keeps its default. */
+function defined<T extends object>(values: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined) {
+      out[key as keyof T] = value as T[keyof T];
+    }
+  }
+  return out;
+}
 
 @Injectable()
 export class BusinessesRepository {
@@ -78,42 +130,185 @@ export class BusinessesRepository {
     return this.db.transaction(fn);
   }
 
+  /**
+   * Inserts the business and its three companions in the caller's transaction.
+   *
+   * Every companion row is always written: the old NOT NULL columns carried
+   * their defaults with the business row, and the one-row-per-business
+   * invariant has to hold for the aggregate joins. `on conflict do nothing`
+   * mirrors the notification-preferences trigger being idempotent.
+   */
   async insert(
     executor: DbExecutor,
     values: BusinessInsert,
-  ): Promise<BusinessRow> {
-    const [row] = await executor.insert(businesses).values(values).returning();
+  ): Promise<BusinessAggregateRow> {
+    const {
+      owner_id,
+      balance,
+      commission_rate,
+      verification_status,
+      verified_at,
+      verified_by,
+      rejection_reason,
+      ...businessValues
+    } = values;
+
+    const [row] = await executor
+      .insert(businesses)
+      .values(businessValues)
+      .returning();
     if (!row) {
       throw new Error('Failed to insert business');
     }
+
+    await executor
+      .insert(businessOwnership)
+      .values({ business_id: row.id, owner_id })
+      .onConflictDoNothing();
+    await executor
+      .insert(businessFinance)
+      .values({
+        business_id: row.id,
+        ...defined({ balance, commission_rate }),
+      })
+      .onConflictDoNothing();
+    await executor
+      .insert(businessModeration)
+      .values({
+        business_id: row.id,
+        ...defined({
+          verification_status,
+          verified_at,
+          verified_by,
+          rejection_reason,
+        }),
+      })
+      .onConflictDoNothing();
     // Espejo del trigger create_business_notification_preferences (on conflict = idempotente con el trigger activo).
     await executor
       .insert(businessNotificationPreferences)
       .values({ business_id: row.id })
       .onConflictDoNothing();
-    return row;
+
+    const created = await this.findById(row.id, executor);
+    if (!created) {
+      throw new Error('Failed to read back business');
+    }
+    return created;
   }
 
+  /**
+   * Applies a business patch across the tables that hold its columns.
+   *
+   * `businesses.updated_at` moves for any non-empty patch, including
+   * companion-only patches: it is part of the public business DTO and used to
+   * move on every write.
+   */
   async update(
     executor: DbExecutor,
     id: string,
     values: BusinessUpdate,
-  ): Promise<BusinessRow | null> {
-    const [row] = await executor
+  ): Promise<BusinessAggregateRow | null> {
+    const businessPatch = defined({
+      name: values.name,
+      type: values.type,
+      slug: values.slug,
+      image: values.image,
+      cover_image: values.cover_image,
+      description: values.description,
+      phone: values.phone,
+      email: values.email,
+      website: values.website,
+      is_active: values.is_active,
+    });
+    const financePatch = defined({
+      balance: values.balance,
+      commission_rate: values.commission_rate,
+    });
+    const moderationPatch = defined({
+      verification_status: values.verification_status,
+      verified_at: values.verified_at,
+      verified_by: values.verified_by,
+      rejection_reason: values.rejection_reason,
+    });
+
+    await executor
       .update(businesses)
-      .set({ ...values, updated_at: sql`now()` })
-      .where(eq(businesses.id, id))
-      .returning();
-    return row ?? null;
+      .set({ ...businessPatch, updated_at: sql`now()` })
+      .where(eq(businesses.id, id));
+
+    if (Object.keys(financePatch).length > 0) {
+      await executor
+        .update(businessFinance)
+        .set({ ...financePatch, updated_at: sql`now()` })
+        .where(eq(businessFinance.business_id, id));
+    }
+    if (Object.keys(moderationPatch).length > 0) {
+      await executor
+        .update(businessModeration)
+        .set({ ...moderationPatch, updated_at: sql`now()` })
+        .where(eq(businessModeration.business_id, id));
+    }
+
+    return this.findById(id, executor);
+  }
+
+  /**
+   * Base projection + joins for the business aggregate.
+   *
+   * The companions are joined (1:1 by primary key) rather than left-joined so
+   * `owner_id` stays non-null and the DTO contract holds. Listings rely on the
+   * one-row-per-business invariant for `total` to match the page: the count
+   * query reads `businesses` alone, and it is the write paths above plus the
+   * Supabase backfill that keep the companions complete.
+   */
+  private aggregateSelect(executor: DbExecutor = this.db) {
+    return executor
+      .select({
+        ...getTableColumns(businesses),
+        owner_id: businessOwnership.owner_id,
+        balance: businessFinance.balance,
+        commission_rate: businessFinance.commission_rate,
+        verification_status: businessModeration.verification_status,
+        verified_at: businessModeration.verified_at,
+        verified_by: businessModeration.verified_by,
+        rejection_reason: businessModeration.rejection_reason,
+      })
+      .from(businesses)
+      .innerJoin(
+        businessOwnership,
+        eq(businessOwnership.business_id, businesses.id),
+      )
+      .innerJoin(
+        businessFinance,
+        eq(businessFinance.business_id, businesses.id),
+      )
+      .innerJoin(
+        businessModeration,
+        eq(businessModeration.business_id, businesses.id),
+      );
+  }
+
+  /**
+   * `verification_status = <status>` over the moderation companion. A business
+   * with no moderation row matches nothing, which is what the old NOT NULL
+   * column defaulting to 'pending' did. Written as `exists` so the count query
+   * keeps reading `businesses` alone.
+   */
+  private moderatedAs(status: string): SQL {
+    return sql`exists (select 1 from ${businessModeration} m where m.business_id = ${businesses.id} and m.verification_status = ${status})`;
+  }
+
+  /** The business is owned by the user (business_ownership is the source). */
+  private ownedBy(userId: string): SQL {
+    return sql`exists (select 1 from ${businessOwnership} o where o.business_id = ${businesses.id} and o.owner_id = ${userId})`;
   }
 
   async findById(
     id: string,
     executor: DbExecutor = this.db,
-  ): Promise<BusinessRow | null> {
-    const [row] = await executor
-      .select()
-      .from(businesses)
+  ): Promise<BusinessAggregateRow | null> {
+    const [row] = await this.aggregateSelect(executor)
       .where(eq(businesses.id, id))
       .limit(1);
     return row ?? null;
@@ -122,10 +317,8 @@ export class BusinessesRepository {
   async findBySlug(
     slug: string,
     executor: DbExecutor = this.db,
-  ): Promise<BusinessRow | null> {
-    const [row] = await executor
-      .select()
-      .from(businesses)
+  ): Promise<BusinessAggregateRow | null> {
+    const [row] = await this.aggregateSelect(executor)
       .where(eq(businesses.slug, slug))
       .limit(1);
     return row ?? null;
@@ -134,25 +327,21 @@ export class BusinessesRepository {
   async listForUser(
     userId: string,
     query: ListBusinessesQuery,
-  ): Promise<{ items: BusinessRow[]; total: number }> {
-    const filters: SQL[] = [eq(businesses.owner_id, userId)];
+  ): Promise<{ items: BusinessAggregateRow[]; total: number }> {
+    const filters: SQL[] = [this.ownedBy(userId)];
 
     if (query.is_active !== undefined) {
       filters.push(eq(businesses.is_active, query.is_active));
     }
     if (query.verification_status) {
-      filters.push(
-        eq(businesses.verification_status, query.verification_status),
-      );
+      filters.push(this.moderatedAs(query.verification_status));
     }
 
     const where = and(...filters);
     const offset = (query.page - 1) * query.limit;
 
     const [items, totalRow] = await Promise.all([
-      this.db
-        .select()
-        .from(businesses)
+      this.aggregateSelect()
         .where(where)
         .orderBy(desc(businesses.created_at))
         .limit(query.limit)
@@ -169,10 +358,13 @@ export class BusinessesRepository {
 
   async isOwner(businessId: string, userId: string): Promise<boolean> {
     const [row] = await this.db
-      .select({ id: businesses.id })
-      .from(businesses)
+      .select({ id: businessOwnership.business_id })
+      .from(businessOwnership)
       .where(
-        and(eq(businesses.id, businessId), eq(businesses.owner_id, userId)),
+        and(
+          eq(businessOwnership.business_id, businessId),
+          eq(businessOwnership.owner_id, userId),
+        ),
       )
       .limit(1);
     return Boolean(row);
@@ -180,24 +372,22 @@ export class BusinessesRepository {
 
   async findIdsOwnedBy(userId: string): Promise<string[]> {
     const rows = await this.db
-      .select({ id: businesses.id })
-      .from(businesses)
-      .where(eq(businesses.owner_id, userId));
+      .select({ id: businessOwnership.business_id })
+      .from(businessOwnership)
+      .where(eq(businessOwnership.owner_id, userId));
     return rows.map((r) => r.id);
   }
 
   async listAll(
     query: ListBusinessesQuery,
-  ): Promise<{ items: BusinessRow[]; total: number }> {
+  ): Promise<{ items: BusinessAggregateRow[]; total: number }> {
     const filters: SQL[] = [];
 
     if (query.is_active !== undefined) {
       filters.push(eq(businesses.is_active, query.is_active));
     }
     if (query.verification_status) {
-      filters.push(
-        eq(businesses.verification_status, query.verification_status),
-      );
+      filters.push(this.moderatedAs(query.verification_status));
     }
 
     if (query.search) {
@@ -210,9 +400,7 @@ export class BusinessesRepository {
     const offset = (query.page - 1) * query.limit;
 
     const [items, totalRow] = await Promise.all([
-      this.db
-        .select()
-        .from(businesses)
+      this.aggregateSelect()
         .where(where)
         .orderBy(desc(businesses.created_at))
         .limit(query.limit)

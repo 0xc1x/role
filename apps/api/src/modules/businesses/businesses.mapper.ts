@@ -1,12 +1,18 @@
 import type { BusinessDto, BusinessLocationDto } from '@0xc1x/role-commons';
 import { toNumber, toNumberOrNull } from '../../common/utils/numeric';
-import type { BusinessLocationRow, BusinessRow } from './businesses.repository';
+import type {
+  BusinessAggregateRow,
+  BusinessLocationRow,
+} from './businesses.repository';
 
 /**
  * Maps business / location rows → API DTOs (numerics + ISO dates).
+ *
+ * The aggregate row is the business plus its three companions, so the DTO keeps
+ * the flat shape it always had.
  */
 export class BusinessMapper {
-  static toDto(row: BusinessRow): BusinessDto {
+  static toDto(row: BusinessAggregateRow): BusinessDto {
     return {
       id: row.id,
       owner_id: row.owner_id,

@@ -9,12 +9,14 @@ import type { AuthUser } from '../../auth/auth.types';
 import { DRIZZLE } from '../../database/database.tokens';
 import { BusinessesService } from './businesses.service';
 import { BusinessesRepository } from './businesses.repository';
-import type { BusinessRow } from './businesses.repository';
+import type { BusinessAggregateRow } from './businesses.repository';
 
 const businessId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const ownerId = 'a1b2c3d4-e5f6-4789-a012-3456789abcde';
 
-const makeBusinessRow = (overrides: Partial<BusinessRow> = {}): BusinessRow =>
+const makeBusinessRow = (
+  overrides: Partial<BusinessAggregateRow> = {},
+): BusinessAggregateRow =>
   ({
     id: businessId,
     owner_id: ownerId,
@@ -32,10 +34,14 @@ const makeBusinessRow = (overrides: Partial<BusinessRow> = {}): BusinessRow =>
     rating: null,
     review_count: null,
     is_active: true,
+    verification_status: 'pending',
+    verified_at: null,
+    verified_by: null,
+    rejection_reason: null,
     created_at: new Date('2026-01-01T00:00:00.000Z'),
     updated_at: new Date('2026-01-02T00:00:00.000Z'),
     ...overrides,
-  }) as BusinessRow;
+  }) as BusinessAggregateRow;
 
 describe('BusinessesService', () => {
   let service: BusinessesService;

@@ -14,6 +14,7 @@ import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import { escapeLike } from '../../common/utils/like';
 import { businesses } from '../../database/schema/businesses';
+import { businessFinance } from '../../database/schema/business-companions';
 import { payouts } from '../../database/schema/payouts';
 
 /** Projection of a business row for commission management. */
@@ -45,7 +46,7 @@ const commissionColumns = (pendingPayoutsSql: SQL<boolean>) => ({
   id: businesses.id,
   name: businesses.name,
   slug: businesses.slug,
-  commission_rate: businesses.commission_rate,
+  commission_rate: businessFinance.commission_rate,
   is_active: businesses.is_active,
   updated_at: businesses.updated_at,
   has_pending_payouts: pendingPayoutsSql,
@@ -75,6 +76,17 @@ export class CommissionsRepository {
     ) as SQL<boolean>;
   }
 
+  /** The commission projection: business columns joined with its finance row. */
+  private commissionSelect() {
+    return this.db
+      .select(commissionColumns(this.pendingPayoutsSql(businesses.id)))
+      .from(businesses)
+      .innerJoin(
+        businessFinance,
+        eq(businessFinance.business_id, businesses.id),
+      );
+  }
+
   async list(filter: ListCommissionsFilter): Promise<ListCommissionsResult> {
     const offset = (filter.page - 1) * filter.limit;
     const filters: SQL[] = [];
@@ -88,9 +100,7 @@ export class CommissionsRepository {
       .from(businesses)
       .where(where);
 
-    const rows = await this.db
-      .select(commissionColumns(this.pendingPayoutsSql(businesses.id)))
-      .from(businesses)
+    const rows = await this.commissionSelect()
       .where(where)
       .orderBy(desc(businesses.created_at))
       .limit(filter.limit)
@@ -100,9 +110,7 @@ export class CommissionsRepository {
   }
 
   async findById(id: string): Promise<CommissionRow | null> {
-    const [row] = await this.db
-      .select(commissionColumns(this.pendingPayoutsSql(businesses.id)))
-      .from(businesses)
+    const [row] = await this.commissionSelect()
       .where(eq(businesses.id, id))
       .limit(1);
     return row ?? null;
@@ -125,16 +133,38 @@ export class CommissionsRepository {
     return rows.length > 0;
   }
 
+  /**
+   * The rate lives in business_finance, so the update targets that table; the
+   * projection is re-read because the business columns and the pending-payout
+   * subquery cannot be part of a `returning` on the companion.
+   *
+   * `businesses.updated_at` moves with it: it is the `updated_at` the commission
+   * DTO exposes, and it used to move on every rate change.
+   */
   async updateCommissionRate(
     executor: DbExecutor,
     id: string,
     rate: number,
   ): Promise<CommissionRow | null> {
-    const [row] = await executor
-      .update(businesses)
+    const [updated] = await executor
+      .update(businessFinance)
       .set({ commission_rate: rate.toString(), updated_at: new Date() })
+      .where(eq(businessFinance.business_id, id))
+      .returning({ business_id: businessFinance.business_id });
+    if (!updated) return null;
+    await executor
+      .update(businesses)
+      .set({ updated_at: new Date() })
+      .where(eq(businesses.id, id));
+    const [row] = await executor
+      .select(commissionColumns(this.pendingPayoutsSql(businesses.id)))
+      .from(businesses)
+      .innerJoin(
+        businessFinance,
+        eq(businessFinance.business_id, businesses.id),
+      )
       .where(eq(businesses.id, id))
-      .returning(commissionColumns(this.pendingPayoutsSql(businesses.id)));
+      .limit(1);
     return row ?? null;
   }
 }

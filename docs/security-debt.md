@@ -38,6 +38,47 @@ named"). Cuando las columnas se muevan, ese test se reemplaza por uno que
 pruebe que ya no están en la tabla. No lo borres sin hacer el follow-up: el test
 existe para que la deuda sea visible y no se olvide en silencio.
 
+## 1b. Fase 3 del split de `businesses`: bloqueada, no aplicada
+
+**Estado:** fases 1 y 2 hechas. Fase 3 NO aplicada, deliberadamente.
+
+- **Fase 1 — hecha.** Las tres tablas acompañantes existen y están backfilled
+  (16/16, 0 discrepancias). Aditiva: no cambió nada que la app use.
+- **Fase 2 — hecha, sin desplegar.** API y mobile leen y escriben las tablas
+  acompañantes. El DTO público no cambia. El cliente móvil ya no envía
+  `owner_id`: la propiedad se deriva de `auth.uid()`, así que ya no puede
+  escribirse.
+- **Fase 3 — NO hecha.** El drop exige reescribir **13 funciones SQL** que leen
+  esas columnas, no 2:
+
+  ```
+  reserve_offer              generate_payouts          set_order_status
+  cancel_order               validate_pickup_code      active_offers_near
+  get_platform_stats         get_platform_public_stats
+  notify_business_pending    notify_business_verification
+  enforce_offer_business_availability                 sync_business_verification
+  ```
+
+  `reserve_offer` y `generate_payouts` mueven **plata y órdenes**. Y el e2e usa
+  copias offline instaladas por `apps/api/test/db.ts`, **no** las funciones
+  reales, así que esas 13 reescrituras quedarían sin probar contra flujos
+  reales. El diseño de la fase 3 (RLS por subconsulta sobre
+  `business_ownership`, trigger `BEFORE INSERT` que deriva el owner, trigger de
+  verificación movido a `business_moderation`, y el drop) está escrito pero
+  **fuera del repo a propósito**: una migración de drop sin verificar en el
+  árbol es una mina para quien corra `supabase db push`.
+
+  **Cómo desbloquear:** aplicar la fase 3 en una rama desechable de Supabase
+  (`create_branch` replica el ledger completo), ejecutar un flujo real de
+  reserva → confirmación → recogida → payout contra ella, y solo entonces
+  promover el drop. Requiere además desplegar la API de la fase 2 antes del
+  drop: el servicio desplegado hoy corre el código viejo que lee esas columnas.
+
+**Drift adicional detectado:** `apps/api/src/database/schema/businesses.ts`
+declaraba `owner_id` con `onDelete: 'no action'`, pero la FK real en la base es
+`ON DELETE CASCADE`. El schema Drizzle está desalineado de la base;
+`business_ownership` sigue la base, que es lo correcto.
+
 ## 2. Ocho migraciones nunca se han ejecutado
 
 **Estado:** abierto. Reproducibilidad, noorrectitud.

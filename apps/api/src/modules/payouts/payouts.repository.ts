@@ -3,6 +3,7 @@ import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import { businesses } from '../../database/schema/businesses';
+import { businessFinance } from '../../database/schema/business-companions';
 import { orders } from '../../database/schema/orders';
 import { payouts } from '../../database/schema/payouts';
 
@@ -123,11 +124,11 @@ export class PayoutsRepository {
           );
 
         await tx
-          .update(businesses)
+          .update(businessFinance)
           .set({
-            balance: sql`coalesce((select sum(o.net_amount) from ${orders} o where o.business_id = ${businesses.id} and o.status = 'completed' and o.payout_id is null), 0)`,
+            balance: sql`coalesce((select sum(o.net_amount) from ${orders} o where o.business_id = ${g.businessId} and o.status = 'completed' and o.payout_id is null), 0)`,
           })
-          .where(eq(businesses.id, g.businessId));
+          .where(eq(businessFinance.business_id, g.businessId));
 
         created += 1;
       }

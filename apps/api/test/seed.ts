@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import {
+  businessFinance,
   businessLocations,
+  businessModeration,
+  businessOwnership,
   businesses,
   categories,
   offers,
@@ -16,6 +19,11 @@ export async function seedProfile(db: TestDatabase, email?: string) {
   return id;
 }
 
+/**
+ * Inserta el negocio y sus tres companions. El espejo no tiene los triggers de
+ * Supabase que crean estas filas, así que el seed las escribe explícitamente
+ * (mismo inventario que el backfill de la migración).
+ */
 export async function seedBusiness(
   db: TestDatabase,
   ownerId: string,
@@ -30,14 +38,20 @@ export async function seedBusiness(
   const [row] = await db
     .insert(businesses)
     .values({
-      owner_id: ownerId,
       name: overrides.name ?? `Negocio ${suffix}`,
       slug: overrides.slug ?? `negocio-${suffix}`,
       is_active: overrides.is_active ?? true,
-      verification_status: overrides.verification_status ?? 'approved',
     })
     .returning();
   if (!row) throw new Error('seedBusiness falló');
+  await db
+    .insert(businessOwnership)
+    .values({ business_id: row.id, owner_id: ownerId });
+  await db.insert(businessFinance).values({ business_id: row.id });
+  await db.insert(businessModeration).values({
+    business_id: row.id,
+    verification_status: overrides.verification_status ?? 'approved',
+  });
   return row;
 }
 

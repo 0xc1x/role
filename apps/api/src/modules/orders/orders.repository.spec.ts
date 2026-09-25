@@ -8,7 +8,7 @@ import {
   seedOrder,
   seedProfile,
 } from '../../../test/seed';
-import { coupons, orderEvents } from '../../database/schema';
+import { businessFinance, coupons, orderEvents } from '../../database/schema';
 import { OrdersRepository } from './orders.repository';
 
 let ctx: TestDbContext;
@@ -181,10 +181,12 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
     await repo.transaction((tx) =>
       repo.accrueBusinessBalance(tx, businessId, '500'),
     );
-    const biz = await ctx.db.execute(
-      `select balance from businesses where id = '${businessId}'`,
-    );
-    expect(biz).toBeDefined();
+    // El saldo vive en business_finance (se movió fuera de businesses).
+    const [finance] = await ctx.db
+      .select({ balance: businessFinance.balance })
+      .from(businessFinance)
+      .where(eq(businessFinance.business_id, businessId));
+    expect(finance?.balance).toBe('500.00');
   });
 
   test('findByIdForUpdate bloquea la orden', async () => {

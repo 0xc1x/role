@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { eq } from 'drizzle-orm';
+import { businessFinance } from '../../database/schema';
 import { createTestDb, type TestDbContext } from '../../../test/db';
 import {
   seedBusiness,
@@ -43,6 +45,17 @@ describe('PayoutsRepository (DB real)', () => {
     expect(await repo.generate()).toBe(0);
   });
 
+  test('generate recalcula el saldo en business_finance', async () => {
+    // El saldo vive en business_finance. Tras la corrida no quedan órdenes
+    // completed sin payout (la única se acaba de pagar), así que el saldo
+    // recalculado es 0 — igual que el recalculo sobre businesses.
+    const [finance] = await ctx.db
+      .select({ balance: businessFinance.balance })
+      .from(businessFinance)
+      .where(eq(businessFinance.business_id, businessId));
+    expect(finance?.balance).toBe('0.00');
+  });
+
   test('list + findById + markPaid', async () => {
     const list = await repo.list({ page: 1, limit: 10 });
     expect(list.total).toBeGreaterThanOrEqual(1);
@@ -61,7 +74,11 @@ describe('PayoutsRepository (DB real)', () => {
   test('list filtra por negocio y estado', async () => {
     const paid = await repo.list({ page: 1, limit: 10, status: 'paid' });
     expect(paid.rows.every((r) => r.status === 'paid')).toBe(true);
-    const biz = await repo.list({ page: 1, limit: 10, business_id: businessId });
+    const biz = await repo.list({
+      page: 1,
+      limit: 10,
+      business_id: businessId,
+    });
     expect(biz.total).toBeGreaterThanOrEqual(1);
   });
 });

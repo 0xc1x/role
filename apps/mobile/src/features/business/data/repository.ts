@@ -42,9 +42,6 @@ export { isOfferOutOfStock };
 const BUSINESS_PUBLIC_COLUMNS =
 	"id, name, type, slug, image, cover_image, rating, review_count, description, phone, email, website, is_active, created_at, updated_at, currency";
 
-/** Owner-scoped read: adds owner_id, still without platform/financial columns. */
-const BUSINESS_OWNER_COLUMNS = `owner_id, ${BUSINESS_PUBLIC_COLUMNS}`;
-
 /**
  * Row shape actually returned for a public/owner client read. The withheld
  * platform columns are normalized to `null` so `Business` never holds
@@ -376,10 +373,24 @@ export const businessRepository = {
 	},
 
 	async getBusinessesByOwnerId(ownerId: string): Promise<Business[]> {
+		// owner_id lives in business_ownership, not on businesses. The RLS on that
+		// table is `owner_id = auth.uid()`, so a caller passing someone else's id
+		// gets an empty result instead of another tenant's businesses.
+		const { data: owned, error: ownedError } = await supabase
+			.from("business_ownership")
+			.select("business_id")
+			.eq("owner_id", ownerId);
+		if (ownedError) throw toAppError(ownedError, "Error al cargar negocios");
+
+		const ids = (owned ?? [])
+			.map((row) => (row as { business_id?: string }).business_id)
+			.filter((id): id is string => Boolean(id));
+		if (ids.length === 0) return [];
+
 		const { data, error } = await supabase
 			.from("businesses")
-			.select(BUSINESS_OWNER_COLUMNS)
-			.eq("owner_id", ownerId)
+			.select(BUSINESS_PUBLIC_COLUMNS)
+			.in("id", ids)
 			.order("name");
 		if (error) throw toAppError(error, "Error al cargar negocios");
 		return (data ?? []).map((row) =>
@@ -429,7 +440,9 @@ export const businessRepository = {
 		const businessResult = await supabase
 			.from("businesses")
 			.insert({
-				owner_id: input.ownerId,
+				// owner_id is NOT sent by the client. It lives in
+				// business_ownership and the database derives it from auth.uid()
+				// on insert, so ownership can no longer be written by a caller.
 				name: input.name,
 				slug,
 				type: input.type,

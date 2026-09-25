@@ -16,6 +16,8 @@ import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import {
   businessLocations,
+  businessModeration,
+  businessOwnership,
   businesses,
   categories,
   offerCategories,
@@ -235,6 +237,17 @@ export class OffersRepository {
     ];
   }
 
+  /**
+   * The business of the offer is moderation-approved. `verification_status`
+   * lives in business_moderation; a business with no moderation row is not
+   * approved, which is what the old NOT NULL column defaulting to 'pending'
+   * meant. Written as `exists` so it composes with the joins already in the
+   * query without adding a groupBy column.
+   */
+  private approvedBusiness(): SQL {
+    return sql`exists (select 1 from ${businessModeration} m where m.business_id = ${businesses.id} and m.verification_status = 'approved')`;
+  }
+
   /** Oferta activa aleatoria con stock y pickup vigente (hero landing). */
   async findRandomActive(): Promise<OfferListRow | null> {
     const [row] = await this.baseSelect()
@@ -242,7 +255,7 @@ export class OffersRepository {
         and(
           eq(offers.is_active, true),
           eq(businesses.is_active, true),
-          eq(businesses.verification_status, 'approved'),
+          this.approvedBusiness(),
           gt(offers.stock, 0),
           gt(offers.pickup_end, sql`now()`),
         ),
@@ -259,7 +272,7 @@ export class OffersRepository {
     if (query.available_only) {
       filters.push(eq(offers.is_active, true));
       filters.push(eq(businesses.is_active, true));
-      filters.push(eq(businesses.verification_status, 'approved'));
+      filters.push(this.approvedBusiness());
       filters.push(gt(offers.stock, 0));
       filters.push(gt(offers.pickup_end, sql`now()`));
     }
@@ -339,7 +352,7 @@ export class OffersRepository {
         and(
           eq(businesses.id, businessId),
           eq(businesses.is_active, true),
-          eq(businesses.verification_status, 'approved'),
+          sql`exists (select 1 from ${businessModeration} m where m.business_id = ${businesses.id} and m.verification_status = 'approved')`,
         ),
       )
       .limit(1);
@@ -425,10 +438,13 @@ export class OffersRepository {
 
   async isBusinessOwner(businessId: string, userId: string): Promise<boolean> {
     const [row] = await this.db
-      .select({ id: businesses.id })
-      .from(businesses)
+      .select({ id: businessOwnership.business_id })
+      .from(businessOwnership)
       .where(
-        and(eq(businesses.id, businessId), eq(businesses.owner_id, userId)),
+        and(
+          eq(businessOwnership.business_id, businessId),
+          eq(businessOwnership.owner_id, userId),
+        ),
       )
       .limit(1);
     return Boolean(row);
@@ -436,9 +452,9 @@ export class OffersRepository {
 
   async findBusinessIdsOwnedBy(userId: string): Promise<string[]> {
     const rows = await this.db
-      .select({ id: businesses.id })
-      .from(businesses)
-      .where(eq(businesses.owner_id, userId));
+      .select({ id: businessOwnership.business_id })
+      .from(businessOwnership)
+      .where(eq(businessOwnership.owner_id, userId));
     return rows.map((r) => r.id);
   }
 

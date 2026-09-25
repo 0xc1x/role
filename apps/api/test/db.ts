@@ -138,12 +138,19 @@ export async function createTestDb(): Promise<TestDbContext> {
     set search_path = ''
     as $function$
     begin
+      -- verification_status vive en business_moderation: se consulta aparte
+      -- para no exigir la fila del companion (misma semántica que la columna
+      -- NOT NULL con default 'pending': sin fila, no está aprobado).
       if not exists (
         select 1
         from public.businesses b
         where b.id = new.business_id
           and b.is_active = true
-          and b.verification_status = 'approved'
+      ) or not exists (
+        select 1
+        from public.business_moderation m
+        where m.business_id = new.business_id
+          and m.verification_status = 'approved'
       ) then
         new.is_active := false;
       end if;
