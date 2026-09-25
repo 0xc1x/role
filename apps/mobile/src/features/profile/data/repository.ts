@@ -291,8 +291,11 @@ export const profileRepository = {
 	},
 
 	// ─── Platform stats (public, real counts) ───────────────────────
+	// Counts only. get_platform_stats() is now service_role-only because it is a
+	// SECURITY DEFINER function; public surfaces use the count-only variant that
+	// exposes no rows and no platform fields.
 	async getPlatformStats(): Promise<{ users: number; businesses: number; meals: number }> {
-		const { data, error } = await supabase.rpc('get_platform_stats');
+		const { data, error } = await supabase.rpc('get_platform_public_stats');
 		if (error) throw toAppError(error, 'Error al cargar estadísticas');
 		const row = data as unknown as { users: number; businesses: number; meals: number };
 		return {

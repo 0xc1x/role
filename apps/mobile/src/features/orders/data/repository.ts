@@ -123,6 +123,14 @@ function applyOrderPaging(query: any, params: OrderListParams): any {
 	return q;
 }
 
+export function createReservationIdempotencyKey(): string {
+	const webCrypto = globalThis.crypto as { randomUUID?: () => string };
+	if (webCrypto.randomUUID) return webCrypto.randomUUID();
+	return `reservation-${Date.now().toString(36)}-${Math.random()
+		.toString(36)
+		.slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 export const orderRepository = {
 	/**
 	 * Reserves an offer through the `reserve_offer` RPC — the transaction
@@ -131,7 +139,8 @@ export const orderRepository = {
 	 */
 	async reserveOffer(
 		offerId: string,
-		couponId?: string,
+		couponId: string | undefined,
+		idempotencyKey: string,
 	): Promise<ReservationResult> {
 		const userId = await currentUserId();
 		if (!userId) {
@@ -146,6 +155,7 @@ export const orderRepository = {
 				p_user_id: userId,
 				p_offer_id: offerId,
 				p_coupon_id: couponId ?? null,
+				p_idempotency_key: idempotencyKey,
 			});
 			if (error) throw toAppError(error, "Error al procesar la reserva");
 			const result = (data ?? {}) as { success?: boolean } & Record<

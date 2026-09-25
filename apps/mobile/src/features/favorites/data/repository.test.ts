@@ -18,8 +18,10 @@ mock.module("@/src/core/supabase/client", () => ({
 	},
 }));
 
-import { supabase } from "@/src/core/supabase/client";
-import { favoritesRepository } from "@/src/features/favorites/data/repository";
+// El mock debe registrarse antes de cargar el repositorio para evitar importar el runtime nativo.
+const { supabase } = await import("@/src/core/supabase/client");
+const { favoritesRepository } =
+		await import("@/src/features/favorites/data/repository");
 
 const fromMock = supabase.from as unknown as Mock<
 	(...args: never[]) => unknown
@@ -60,10 +62,7 @@ describe("favoritesRepository paginated listing", () => {
 
 		expect(rows).toEqual([]);
 		expect(calls["eq"]).toContainEqual(["user_id", "u1"]);
-		expect(calls["order"]).toContainEqual([
-			"created_at",
-			{ ascending: false },
-		]);
+    expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
 		expect(calls["range"]).toContainEqual([20, 39]);
 	});
 

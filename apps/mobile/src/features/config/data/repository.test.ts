@@ -17,8 +17,10 @@ mock.module("@/src/core/supabase/client", () => ({
 	},
 }));
 
-import { supabase } from "@/src/core/supabase/client";
-import { fetchAppConfig } from "@/src/features/config/data/repository";
+// El mock debe registrarse antes de cargar el repositorio para evitar importar el runtime nativo.
+const { supabase } = await import("@/src/core/supabase/client");
+const { fetchAppConfig } =
+	await import("@/src/features/config/data/repository");
 import { AppError } from "@/src/core/error/app-error";
 
 describe("fetchAppConfig", () => {
@@ -28,16 +30,23 @@ describe("fetchAppConfig", () => {
 			error: null,
 		}));
 		const eq1 = jest.fn(() => ({ eq: eq2 }));
-		(supabase.from as unknown as Mock<(...args: never[]) => unknown>).mockReturnValue({
+    (
+      supabase.from as unknown as Mock<(...args: never[]) => unknown>
+    ).mockReturnValue({
 			select: jest.fn(() => ({ eq: eq1 })),
 		});
 		await expect(fetchAppConfig()).resolves.toEqual({ a: 1 });
 	});
 
 	test("propaga error de supabase como AppError", async () => {
-		const eq2 = jest.fn(async () => ({ data: null, error: { message: "boom" } }));
+    const eq2 = jest.fn(async () => ({
+      data: null,
+      error: { message: "boom" },
+    }));
 		const eq1 = jest.fn(() => ({ eq: eq2 }));
-		(supabase.from as unknown as Mock<(...args: never[]) => unknown>).mockReturnValue({
+    (
+      supabase.from as unknown as Mock<(...args: never[]) => unknown>
+    ).mockReturnValue({
 			select: jest.fn(() => ({ eq: eq1 })),
 		});
 		const err = await fetchAppConfig().then(

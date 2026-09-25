@@ -43,7 +43,12 @@ import { queryClient } from "@/src/core/query/client";
 import { analytics } from "@/src/core/analytics";
 import { appConfigQueryOptions } from "@/src/features/config";
 import { useAuthStore, watchAuthState } from "@/src/features/auth/store";
-import { initNotificationHandler, syncDeviceToken } from "@/src/features/notifications";
+import { syncAnalyticsConsent } from "@/src/features/auth/data/repository";
+import { pendingBusinessOnboardingRepository } from "@/src/features/business/data/onboarding";
+import {
+	initNotificationHandler,
+	syncDeviceToken,
+} from "@/src/features/notifications";
 import { Toaster } from "sonner-native";
 SplashScreen.preventAutoHideAsync();
 
@@ -83,7 +88,15 @@ function RootLayout() {
 
 	// Sincroniza usuario con Sentry (nativo + web) para agrupar errores por usuario
 	const authProfileId = useAuthStore((s) => s.profile?.id);
+	const authProfileRole = useAuthStore((s) => s.profile?.role);
+	const analyticsConsentGranted = useAuthStore(
+		(s) => s.profile?.analyticsConsentGranted === true,
+	);
 	const authStatus = useAuthStore((s) => s.status);
+	useEffect(() => {
+		analytics.setConsent(analyticsConsentGranted);
+	}, [analyticsConsentGranted]);
+
 	useEffect(() => {
 		if (authStatus === "authenticated" && authProfileId) {
 			analytics.setUser(authProfileId);
@@ -91,6 +104,37 @@ function RootLayout() {
 			analytics.setUser(null);
 		}
 	}, [authStatus, authProfileId]);
+
+	useEffect(() => {
+		if (
+			authStatus !== "authenticated" ||
+			!authProfileId ||
+			!analyticsConsentGranted
+		) {
+			return;
+		}
+		void syncAnalyticsConsent(authProfileId).catch(() => {
+			// Consent synchronization is retried on the next authenticated app start.
+		});
+	}, [analyticsConsentGranted, authProfileId, authStatus]);
+
+	// A business signup without a session is persisted locally. Once email is
+	// confirmed, both the deep-link session and the normal login path publish a
+	// business profile here, so the pending business can be created safely.
+	useEffect(() => {
+		if (
+			authStatus !== "authenticated" ||
+			authProfileRole !== "business" ||
+			!authProfileId
+		) {
+			return;
+		}
+		void pendingBusinessOnboardingRepository
+			.complete(authProfileId)
+			.catch(() => {
+				// Keep the pending payload for the next authenticated app start.
+			});
+	}, [authProfileId, authProfileRole, authStatus]);
 
 	// Primera consulta de la app: config dinámica desde Supabase mientras
 	// la splash screen sigue visible. Con guard de timeout para no bloquear
@@ -100,11 +144,9 @@ function RootLayout() {
 		const timeout = setTimeout(() => {
 			if (!cancelled) setConfigReady(true);
 		}, 2500);
-		queryClient
-			.prefetchQuery(appConfigQueryOptions)
-			.finally(() => {
-				if (!cancelled) setConfigReady(true);
-			});
+		queryClient.prefetchQuery(appConfigQueryOptions).finally(() => {
+			if (!cancelled) setConfigReady(true);
+		});
 		return () => {
 			cancelled = true;
 			clearTimeout(timeout);
@@ -208,23 +250,23 @@ function ThemedRootStack() {
 	);
 	return (
 		<NavigationThemeProvider value={navigationTheme}>
-		<Stack
-			screenOptions={{
-				headerShown: false,
-				contentStyle: { backgroundColor: colors.background },
-			}}
-		>
-			{/* `index` first: on native the Stack starts at the first
+			<Stack
+				screenOptions={{
+					headerShown: false,
+					contentStyle: { backgroundColor: colors.background },
+				}}
+			>
+				{/* `index` first: on native the Stack starts at the first
 			    declared screen (root has no initialRouteName anchor), so the
 			    redirect in app/index.tsx must own that slot. Web is
 			    URL-driven and unaffected. */}
-			<Stack.Screen name="index" />
-			<Stack.Screen name="(auth)" />
-			<Stack.Screen name="(consumer)" />
-			<Stack.Screen name="(business)" />
-			<Stack.Screen name="landing" />
-			<Stack.Screen name="onboarding" />
-		</Stack>
+				<Stack.Screen name="index" />
+				<Stack.Screen name="(auth)" />
+				<Stack.Screen name="(consumer)" />
+				<Stack.Screen name="(business)" />
+				<Stack.Screen name="landing" />
+				<Stack.Screen name="onboarding" />
+			</Stack>
 		</NavigationThemeProvider>
 	);
 }

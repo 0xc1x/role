@@ -8,7 +8,10 @@ import { formatMoney } from "@/src/core/utils/formatters";
 import { useAuthStore } from "@/src/features/auth/store";
 import { offersRepository } from "@/src/features/offers/data/repository";
 import { favoritesRepository } from "@/src/features/favorites/data/repository";
-import { orderRepository } from "@/src/features/orders/data/repository";
+import {
+	createReservationIdempotencyKey,
+	orderRepository,
+} from "@/src/features/orders/data/repository";
 import { couponIsValid, checkoutTotals, meetsCouponMinimum } from "@/src/features/orders/domain/order";
 import {
 	ACTIVE_ORDER_STATUSES,
@@ -19,6 +22,8 @@ import {
 	useSavedAddresses,
 	usePreferences,
 } from "@/src/features/profile/hooks";
+
+export { createReservationIdempotencyKey };
 
 // ─── Offers ─────────────────────────────────────────────────────────
 export function useOffer(id: string) {
@@ -362,8 +367,16 @@ export function useOrder(id: string) {
 export function useReserveOffer() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (input: { offerId: string; couponId?: string }) =>
-			orderRepository.reserveOffer(input.offerId, input.couponId),
+		mutationFn: (input: {
+			offerId: string;
+			couponId?: string;
+			idempotencyKey: string;
+		}) =>
+			orderRepository.reserveOffer(
+				input.offerId,
+				input.couponId,
+				input.idempotencyKey,
+			),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["orders"] });
 			queryClient.invalidateQueries({ queryKey: ["offers"] });

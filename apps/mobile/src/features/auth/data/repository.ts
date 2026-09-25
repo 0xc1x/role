@@ -1,9 +1,9 @@
-import { supabase } from '@/src/core/supabase/client';
-import { env } from '@/src/core/config/env';
-import { Errors } from '@/src/core/error/app-error';
+import { supabase } from "@/src/core/supabase/client";
+import { env } from "@/src/core/config/env";
+import { Errors } from "@/src/core/error/app-error";
 
-import type { UserProfile } from '../domain/user';
-import { parseRole } from '../domain/user';
+import type { UserProfile } from "../domain/user";
+import { parseRole } from "../domain/user";
 
 export interface SignUpResult {
   requiresEmailConfirmation: boolean;
@@ -17,7 +17,9 @@ export interface SignUpResult {
  * Merges the session-metadata profile with the `profiles` table row so
  * DB-backed fields (phone, city, current role) survive signup/login.
  */
-export async function enrichProfile(profile: UserProfile): Promise<UserProfile> {
+export async function enrichProfile(
+  profile: UserProfile,
+): Promise<UserProfile> {
   try {
     const row = await authRepository.fetchProfile(profile.id);
     if (!row) return profile;
@@ -37,10 +39,16 @@ export async function enrichProfile(profile: UserProfile): Promise<UserProfile> 
 
 export const authRepository = {
   async signInWithEmail(email: string, password: string): Promise<UserProfile> {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw mapAuthError(error);
     const user = data.user;
-    if (!user) throw Errors.unauthorized('No se pudo iniciar sesión con esas credenciales');
+    if (!user)
+      throw Errors.unauthorized(
+        "No se pudo iniciar sesión con esas credenciales",
+      );
     // Role must come from the DB row, not signup metadata (it can change).
     return enrichProfile(profileFromUser(user));
   },
@@ -49,7 +57,7 @@ export const authRepository = {
     fullName: string;
     email: string;
     password: string;
-    role: 'user' | 'business';
+    role: "user" | "business";
     analyticsConsentGranted: boolean;
   }): Promise<SignUpResult & { userId: string }> {
     const { data, error } = await supabase.auth.signUp({
@@ -65,14 +73,23 @@ export const authRepository = {
     });
     if (error) throw mapAuthError(error);
     const user = data.user;
-    if (!user) throw Errors.validation('No se pudo crear la cuenta');
+    if (!user) throw Errors.validation("No se pudo crear la cuenta");
 
     const hasActiveSession = data.session != null;
     if (hasActiveSession && input.analyticsConsentGranted) {
       await syncAnalyticsConsent(user.id);
     }
-    if (!hasActiveSession) return { requiresEmailConfirmation: true, profile: null, userId: user.id };
-    return { requiresEmailConfirmation: false, profile: profileFromUser(user), userId: user.id };
+    if (!hasActiveSession)
+      return {
+        requiresEmailConfirmation: true,
+        profile: null,
+        userId: user.id,
+      };
+    return {
+      requiresEmailConfirmation: false,
+      profile: profileFromUser(user),
+      userId: user.id,
+    };
   },
 
   async signOut(): Promise<void> {
@@ -81,8 +98,7 @@ export const authRepository = {
 
   async sendPasswordResetEmail(email: string): Promise<void> {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo:
-        env.EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL || undefined,
+      redirectTo: env.EXPO_PUBLIC_AUTH_RESET_REDIRECT_URL || undefined,
     });
     if (error) throw mapAuthError(error);
   },
@@ -97,16 +113,38 @@ export const authRepository = {
     if (error) throw mapAuthError(error);
   },
 
+  async fetchAnalyticsConsent(userId: string): Promise<boolean> {
+    const { data } = await supabase
+      .from("user_consents")
+      .select("granted")
+      .eq("user_id", userId)
+      .eq("consent_type", "analytics")
+      .maybeSingle();
+    return data?.granted === true;
+  },
+
+  async setAnalyticsConsent(userId: string, granted: boolean): Promise<void> {
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("user_consents").upsert({
+      user_id: userId,
+      consent_type: "analytics",
+      granted,
+      granted_at: granted ? now : null,
+      revoked_at: granted ? null : now,
+    });
+    if (error) throw error;
+  },
+
   async fetchProfile(userId: string): Promise<UserProfile | null> {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, avatar_url, phone, city, role')
-      .eq('id', userId)
+      .from("profiles")
+      .select("id, email, full_name, avatar_url, phone, city, role")
+      .eq("id", userId)
       .maybeSingle();
     if (error || !data) return null;
     return {
       id: data.id,
-      email: data.email ?? '',
+      email: data.email ?? "",
       fullName: data.full_name,
       avatarUrl: data.avatar_url,
       phone: data.phone,
@@ -124,7 +162,7 @@ function profileFromUser(user: {
 }): UserProfile {
   return {
     id: user.id,
-    email: user.email ?? '',
+    email: user.email ?? "",
     fullName: (user.user_metadata?.full_name as string | null) ?? null,
     avatarUrl: (user.user_metadata?.avatar_url as string | null) ?? null,
     phone: null,
@@ -135,35 +173,29 @@ function profileFromUser(user: {
   };
 }
 
-async function syncAnalyticsConsent(userId: string): Promise<void> {
-  const { data } = await supabase
-    .from('user_consents')
-    .select('granted')
-    .eq('user_id', userId)
-    .eq('consent_type', 'analytics')
-    .maybeSingle();
-  if (data?.granted) return;
-  await supabase.from('user_consents').upsert({
-    user_id: userId,
-    consent_type: 'analytics',
-    granted: true,
-    granted_at: new Date().toISOString(),
-  });
+export async function syncAnalyticsConsent(userId: string): Promise<void> {
+  await authRepository.setAnalyticsConsent(userId, true);
 }
 
 function mapAuthError(error: { message: string }): Error {
   const message = error.message.toLowerCase();
   if (/invalid login credentials|invalid credentials/.test(message)) {
-    return Errors.unauthorized('Correo o contraseña inválidos');
+    return Errors.unauthorized("Correo o contraseña inválidos");
   }
   if (/email not confirmed/.test(message)) {
-    return Errors.unauthorized('Debes confirmar tu correo antes de iniciar sesión');
+    return Errors.unauthorized(
+      "Debes confirmar tu correo antes de iniciar sesión",
+    );
   }
-  if (/already registered|already been registered|user already registered/.test(message)) {
-    return Errors.conflict('Ese correo ya está registrado');
+  if (
+    /already registered|already been registered|user already registered/.test(
+      message,
+    )
+  ) {
+    return Errors.conflict("Ese correo ya está registrado");
   }
   if (/session.*expired/.test(message)) {
-    return Errors.unauthorized('Tu sesión expiró. Inicia sesión de nuevo.');
+    return Errors.unauthorized("Tu sesión expiró. Inicia sesión de nuevo.");
   }
   return Errors.unknown(error.message);
 }

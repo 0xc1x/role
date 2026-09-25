@@ -5,21 +5,36 @@ import { Moon, Smartphone, Sun, type LucideIcon } from "lucide-react-native";
 import Slider from "@react-native-community/slider";
 
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, Screen, ScreenHeader, SectionTitle, ThemeOptionCard} from "@/src/core/ui";
+import {
+	AppText,
+	Screen,
+	ScreenHeader,
+	SectionTitle,
+	ThemeOptionCard,
+} from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/src/features/auth/store";
+import { authRepository } from "@/src/features/auth/data/repository";
 import { useTheme, type ThemeMode } from "@/src/core/theme";
-import { usePreferences, useUpdatePreferences } from "@/src/features/profile/hooks";
+import {
+	usePreferences,
+	useUpdatePreferences,
+} from "@/src/features/profile/hooks";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+} from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 
 const MODES: Array<{ key: ThemeMode; label: string; icon: LucideIcon }> = [
 	{ key: "light", label: strings.settings.light, icon: Sun },
 	{ key: "dark", label: strings.settings.dark, icon: Moon },
 	{ key: "system", label: strings.settings.system, icon: Smartphone },
 ];
-
 
 function SectionLabel({ children }: { children: string }) {
 	const { colors } = useTheme();
@@ -43,11 +58,41 @@ export default function SettingsScreen() {
 	const { data: prefs, isLoading: prefsLoading } = usePreferences(userId);
 	const updatePrefs = useUpdatePreferences(userId);
 	const [radius, setRadius] = useState(5);
+	const [analyticsConsent, setAnalyticsConsentState] = useState(false);
+	const [analyticsSaving, setAnalyticsSaving] = useState(false);
 
 	// Sync radius from persisted preferences.
 	useEffect(() => {
 		setRadius(prefs?.notification_radius_km ?? 5);
 	}, [prefs?.notification_radius_km]);
+
+	useEffect(() => {
+		if (!userId) return;
+		void authRepository
+			.fetchAnalyticsConsent(userId)
+			.then(setAnalyticsConsentState)
+			.catch(() => {
+				setAnalyticsConsentState(profile?.analyticsConsentGranted === true);
+			});
+	}, [profile?.analyticsConsentGranted, userId]);
+
+	const toggleAnalyticsConsent = async (granted: boolean) => {
+		const previous = analyticsConsent;
+		setAnalyticsConsentState(granted);
+		setAnalyticsSaving(true);
+		try {
+			await authRepository.setAnalyticsConsent(userId, granted);
+			useAuthStore.setState((state) =>
+				state.profile
+					? { profile: { ...state.profile, analyticsConsentGranted: granted } }
+					: state,
+			);
+		} catch {
+			setAnalyticsConsentState(previous);
+		} finally {
+			setAnalyticsSaving(false);
+		}
+	};
 
 	// Redirect guests to login
 	useEffect(() => {
@@ -65,7 +110,10 @@ export default function SettingsScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
-				<ScreenHeader title={strings.settings.title} fallback="/(consumer)/profile" />
+				<ScreenHeader
+					title={strings.settings.title}
+					fallback="/(consumer)/profile"
+				/>
 
 				<SectionTitle>{strings.settings.appearance}</SectionTitle>
 				<View style={styles.themeRow}>
@@ -84,47 +132,62 @@ export default function SettingsScreen() {
 				{prefsLoading ? (
 					<Skeleton style={{ height: 148, borderRadius: radii.lg }} />
 				) : (
-				<Card >
-					<CardHeader style={styles.radiusHeader}>
-						<SectionLabel>{strings.settings.maxDistance}</SectionLabel>
-						<View
-							style={[styles.radiusPill, { backgroundColor: withAlpha(colors.primary, 0.078) }]}
-						>
-							<AppText
-								variant="labelSmall"
-								weight="bold"
-								style={{ color: colors.primary }}
+					<Card>
+						<CardHeader style={styles.radiusHeader}>
+							<SectionLabel>{strings.settings.maxDistance}</SectionLabel>
+							<View
+								style={[
+									styles.radiusPill,
+									{ backgroundColor: withAlpha(colors.primary, 0.078) },
+								]}
 							>
-								{radius} {strings.settings.km}
+								<AppText
+									variant="labelSmall"
+									weight="bold"
+									style={{ color: colors.primary }}
+								>
+									{radius} {strings.settings.km}
+								</AppText>
+							</View>
+						</CardHeader>
+						<CardContent>
+							<Slider
+								value={radius}
+								minimumValue={1}
+								maximumValue={50}
+								step={1}
+								minimumTrackTintColor={colors.primary}
+								maximumTrackTintColor={colors.muted}
+								thumbTintColor={colors.primary}
+								onValueChange={setRadius}
+								onSlidingComplete={persistRadius}
+							/>
+						</CardContent>
+						<CardFooter>
+							<AppText
+								variant="bodySmall"
+								style={{ color: colors.mutedForeground, lineHeight: 18 }}
+							>
+								{strings.settings.searchRadiusHint}
 							</AppText>
-						</View>
-					</CardHeader>
-					<CardContent>
-						<Slider
-							value={radius}
-							minimumValue={1}
-							maximumValue={50}
-							step={1}
-							minimumTrackTintColor={colors.primary}
-							maximumTrackTintColor={colors.muted}
-							thumbTintColor={colors.primary}
-							onValueChange={setRadius}
-							onSlidingComplete={persistRadius}
-						/>
-					</CardContent>
-					<CardFooter>
-						<AppText
-							variant="bodySmall"
-							style={{ color: colors.mutedForeground, lineHeight: 18 }}
-						>
-							{strings.settings.searchRadiusHint}
-						</AppText>
-					</CardFooter>
-					
-				</Card>
+						</CardFooter>
+					</Card>
 				)}
 
-
+				<SectionTitle>{strings.settings.analytics}</SectionTitle>
+				<Card>
+					<CardContent style={styles.analyticsRow}>
+						<AppText variant="bodyMedium" style={{ flex: 1 }}>
+							{strings.auth.consentAnalytics}
+						</AppText>
+						<Switch
+							checked={analyticsConsent}
+							disabled={analyticsSaving}
+							onCheckedChange={(value) => void toggleAnalyticsConsent(value)}
+							accessibilityLabel={strings.auth.consentAnalytics}
+						/>
+					</CardContent>
+				</Card>
 			</View>
 		</Screen>
 	);
@@ -132,6 +195,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, gap: spacing.lg },
+	analyticsRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
 	themeRow: { flexDirection: "row", gap: spacing.sm },
 	radiusHeader: {
 		flexDirection: "row",

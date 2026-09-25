@@ -23,9 +23,8 @@ mock.module("@/src/core/supabase/client", () => ({
 // Dynamic imports: static imports evaluate before bare-specifier mocks
 // (react-native) apply, which trips the Flow-parser on the real package.
 const { supabase } = await import("@/src/core/supabase/client");
-const { businessRepository } = await import(
-	"@/src/features/business/data/repository"
-);
+const { businessRepository, detectImageContentType } =
+	await import("@/src/features/business/data/repository");
 
 const fromMock = supabase.from as unknown as Mock<
 	(...args: never[]) => unknown
@@ -63,6 +62,68 @@ function mockChain(result: {
 	return { calls, selectArgs };
 }
 
+describe("image upload validation", () => {
+	test("detects supported image signatures and rejects arbitrary bytes", () => {
+		const bytes = (...values: number[]) => new Uint8Array(values).buffer;
+		expect(detectImageContentType(bytes(0xff, 0xd8, 0xff, 0x00))).toBe(
+			"image/jpeg",
+		);
+		expect(
+			detectImageContentType(
+				bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a),
+			),
+		).toBe("image/png");
+		expect(
+			detectImageContentType(
+				bytes(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50),
+			),
+		).toBe("image/webp");
+		expect(detectImageContentType(bytes(0, 1, 2, 3))).toBeNull();
+	});
+});
+
+describe("businessRepository.createBusiness", () => {
+	test("writes only owner-editable fields and uses the idempotent slug", async () => {
+		const insert = jest.fn((_payload: Record<string, unknown>) => ({
+			select: jest.fn(() => ({
+				single: jest.fn(async () => ({ data: { id: "biz-1" }, error: null })),
+			})),
+		}));
+		fromMock.mockReset();
+		fromMock.mockReturnValue({ insert });
+
+		await businessRepository.createBusiness({
+			ownerId: "owner-1",
+			name: "Owner Business",
+			type: "restaurant",
+			phone: null,
+			email: "owner@example.com",
+			description: null,
+			website: null,
+			logoUri: null,
+			coverUri: null,
+			hours: [],
+			slug: "onboarding-owner-1",
+		});
+
+		const payload = insert.mock.calls[0]?.[0] as Record<string, unknown>;
+		expect(payload.slug).toBe("onboarding-owner-1");
+		for (const protectedField of [
+			"rating",
+			"review_count",
+			"commission_rate",
+			"balance",
+			"is_active",
+			"verification_status",
+			"verified_at",
+			"verified_by",
+			"rejection_reason",
+		]) {
+			expect(payload).not.toHaveProperty(protectedField);
+		}
+	});
+});
+
 describe("businessRepository paginated listing", () => {
 	test("getBusinessReviews pagina con range y sin filtro de oferta", async () => {
 		const { calls } = mockChain({ data: [], error: null });
@@ -74,10 +135,7 @@ describe("businessRepository paginated listing", () => {
 
 		expect(rows).toEqual([]);
 		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
-		expect(calls["order"]).toContainEqual([
-			"created_at",
-			{ ascending: false },
-		]);
+		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
 		expect(calls["range"]).toContainEqual([20, 39]);
 	});
 
@@ -197,10 +255,7 @@ describe("businessRepository paginated listing", () => {
 		});
 
 		expect(calls["eq"]).toContainEqual(["status", "paid"]);
-		expect(calls["order"]).toContainEqual([
-			"period_end",
-			{ ascending: false },
-		]);
+		expect(calls["order"]).toContainEqual(["period_end", { ascending: false }]);
 		expect(calls["range"]).toContainEqual([0, 19]);
 	});
 
