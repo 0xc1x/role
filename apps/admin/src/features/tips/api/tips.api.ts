@@ -13,4 +13,4 @@ export const tipsApi = createResourceApi<
 	UpdateTipDto,
 	ListTipsQuery,
 	TipPaginatedData
->("/tips");
+>("/tips", "/tips/admin");

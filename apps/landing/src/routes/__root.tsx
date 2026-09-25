@@ -72,21 +72,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			],
 			links: [
 				{ rel: "stylesheet", href: appCss },
-				{
-					rel: "preconnect",
-					href: "https://fonts.googleapis.com",
-				},
-				{
-					rel: "preconnect",
-					href: "https://fonts.gstatic.com",
-					crossOrigin: "anonymous",
-				},
-				{
-					rel: "stylesheet",
-					href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap",
-				},
-			{ rel: "icon", type: "image/svg+xml", href: "/icon.svg?v=10" },
-			{ rel: "icon", href: "/favicon.ico?v=10", sizes: "any" },
+
+				{ rel: "icon", type: "image/svg+xml", href: "/icon.svg?v=10" },
+				{ rel: "icon", href: "/favicon.ico?v=10", sizes: "any" },
 				{ rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
 				{ rel: "manifest", href: "/site.webmanifest" },
 			],

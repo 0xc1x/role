@@ -1,7 +1,14 @@
-import { describe, expect, jest, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@/test-utils/dom";
+import { cleanup, render, screen } from "@/test-utils/dom";
 import { IdPicker } from "../id-picker";
+
+const previousFetch = globalThis.fetch;
+
+afterEach(() => {
+	cleanup();
+	globalThis.fetch = previousFetch;
+});
 
 function setup(ui: React.ReactElement) {
 	const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

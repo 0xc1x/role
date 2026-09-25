@@ -14,7 +14,7 @@ const base = createResourceApi<
 	UpdateCategoryDto,
 	ListCategoriesQuery,
 	CategoryPaginatedData
->("/categories");
+>("/categories", "/categories/admin");
 
 export const categoriesApi = {
 	...base,

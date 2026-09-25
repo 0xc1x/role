@@ -87,10 +87,8 @@ export function FormDrawer<TValues, TPayload, Row>(props: {
 						{props.isPending ? <Spinner /> : null}{" "}
 						{props.submitLabel ?? "Guardar"}
 					</Button>
-					<DrawerClose>
-						<Button variant="outline" className="w-full">
-							Cancelar
-						</Button>
+					<DrawerClose render={<Button variant="outline" className="w-full" />}>
+						Cancelar
 					</DrawerClose>
 				</DrawerFooter>
 			</DrawerContent>

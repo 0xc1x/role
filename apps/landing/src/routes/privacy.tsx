@@ -18,10 +18,10 @@ export const Route = createFileRoute("/privacy")({
 	component: PrivacyPage,
 });
 
-const SECTIONS = [
+export const SECTIONS = [
 	{
 		title: "Responsable del tratamiento",
-		body: "Rolé (operado por 0xC1X S.A.S., RUC 1799999999001, domicilio Quito, Ecuador) es responsable del tratamiento de tus datos personales a través de la app móvil y la web. Contacto de privacidad: {contactEmail}.",
+		body: "{controllerIdentity} es responsable del tratamiento de tus datos personales a través de la app móvil y la web. Contacto de privacidad: {contactEmail}.",
 	},
 	{
 		title: "Normativa aplicable",
@@ -53,11 +53,11 @@ const SECTIONS = [
 	},
 	{
 		title: "Seguridad",
-		body: "Cifrado SSL/HTTPS, control de accesos, registro de actividad, backups y actualizaciones. Ante una brecha notificamos a la SPDP en máximo 5 días y a ti en 2 días si hay riesgo significativo.",
+		body: "Usamos HTTPS, controles de acceso y políticas de datos para proteger la cuenta y las reservas. También podemos mejorar medidas técnicas y de seguridad conforme cambia el servicio.",
 	},
 	{
 		title: "Cookies",
-		body: "Usamos cookies técnicas (necesarias), de análisis y de terceros (Google Maps, Sentry). Verás un banner para aceptar, rechazar o configurar por categoría. Las no esenciales no se cargan hasta tu consentimiento (Art. 8 LOPDP). Puedes gestionarlas en tu navegador.",
+		body: "El sitio usa almacenamiento local para recordar tu elección del aviso de privacidad. Puedes aceptar o rechazar; las fuentes de Google se cargan solo después de aceptar. No hay un panel de configuración por categorías en esta versión.",
 	},
 	{
 		title: "Cambios y contacto",
@@ -68,11 +68,17 @@ const SECTIONS = [
 function PrivacyPage() {
 	const contactEmail = useConfig(
 		"privacy.contact_email",
-		"privacidad@role.app",
+		"correo de privacidad pendiente de configuración",
+	);
+	const controllerIdentity = useConfig(
+		"legal.controller_identity",
+		"el operador de Rolé (identidad legal pendiente de publicación)",
 	);
 	const sections = SECTIONS.map((s) => ({
 		...s,
-		body: s.body.replace("{contactEmail}", contactEmail),
+		body: s.body
+			.replace("{contactEmail}", contactEmail)
+			.replace("{controllerIdentity}", controllerIdentity),
 	}));
 	const updatedRaw = useConfig("legal.privacy_updated_at", "");
 	const updatedDate = useMemo(() => formatLegalDate(updatedRaw), [updatedRaw]);
@@ -121,9 +127,12 @@ function PrivacyPage() {
 
 					<div className="mt-12 grid gap-4 border-t border-role-border pt-10 sm:grid-cols-3">
 						{[
-							{ t: "Cifrado total", d: "Tránsito y reposo protegidos" },
-							{ t: "Sin venta", d: "Nunca vendemos tus datos" },
-							{ t: "Control tuyo", d: "Elimina o exporta cuando quieras" },
+							{ t: "Tránsito protegido", d: "Conexiones cifradas con HTTPS" },
+							{ t: "Uso limitado", d: "Solo para las finalidades indicadas" },
+							{
+								t: "Derechos claros",
+								d: "Solicita acceso, corrección o supresión",
+							},
 						].map((f) => (
 							<div key={f.t} className="border-l-2 border-role-primary/20 pl-4">
 								<p className="text-sm font-semibold text-role-foreground">

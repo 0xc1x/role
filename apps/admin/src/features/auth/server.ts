@@ -106,16 +106,19 @@ export const refreshFn = createServerFn({ method: "POST" }).handler(
 	},
 );
 
-/** Revoca el refresh token en la API y borra la cookie. */
+/** Revoca la sesión actual en la API y siempre borra la cookie local. */
 export const logoutFn = createServerFn({ method: "POST" }).handler(
 	async (): Promise<void> => {
 		const refreshToken = getCookie(REFRESH_COOKIE);
-		if (refreshToken) {
-			// Un refresh ya revocado/expirado no es un error de logout.
-			await apiPost("/auth/logout", { refresh_token: refreshToken }).catch(
-				() => null,
-			);
+		try {
+			if (refreshToken) {
+				const res = await apiPost("/auth/logout", {
+					refresh_token: refreshToken,
+				});
+				if (!res.ok) throw new Error(res.message);
+			}
+		} finally {
+			deleteCookie(REFRESH_COOKIE, { path: COOKIE_OPTIONS.path });
 		}
-		deleteCookie(REFRESH_COOKIE, { path: COOKIE_OPTIONS.path });
 	},
 );

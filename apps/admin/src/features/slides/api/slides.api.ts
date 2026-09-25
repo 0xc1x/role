@@ -14,7 +14,7 @@ const base = createResourceApi<
 	UpdateSlideDto,
 	ListSlideQuery,
 	SlidePaginatedData
->("/slides");
+>("/slides", "/slides/admin");
 
 export const slidesApi = {
 	...base,

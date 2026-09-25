@@ -19,10 +19,10 @@ export const Route = createFileRoute("/terms")({
 	component: TermsPage,
 });
 
-const SECTIONS = [
+export const SECTIONS = [
 	{
 		title: "Aceptación y objeto",
-		body: "Estos Términos regulan el uso de Rolé (app y web) operado por 0xC1X S.A.S., RUC 1799999999001, Quito, Ecuador. Al crear cuenta o usar el servicio aceptas estos términos. Si no estás de acuerdo, no uses la plataforma.",
+		body: "Estos Términos regulan el uso de Rolé (app y web) por {controllerIdentity}. Al crear cuenta o usar el servicio aceptas estos términos. Si no estás de acuerdo, no uses la plataforma.",
 	},
 	{
 		title: "El servicio e intermediación",
@@ -59,10 +59,19 @@ const SECTIONS = [
 ];
 
 function TermsPage() {
-	const contactEmail = useConfig("legal.contact_email", "legal@role.app");
+	const contactEmail = useConfig(
+		"legal.contact_email",
+		"correo legal pendiente de configuración",
+	);
+	const controllerIdentity = useConfig(
+		"legal.controller_identity",
+		"el operador de Rolé (identidad legal pendiente de publicación)",
+	);
 	const sections = SECTIONS.map((s) => ({
 		...s,
-		body: s.body.replace("{contactEmail}", contactEmail),
+		body: s.body
+			.replace("{contactEmail}", contactEmail)
+			.replace("{controllerIdentity}", controllerIdentity),
 	}));
 	const updatedRaw = useConfig("legal.terms_updated_at", "");
 	const updatedDate = useMemo(() => formatLegalDate(updatedRaw), [updatedRaw]);
