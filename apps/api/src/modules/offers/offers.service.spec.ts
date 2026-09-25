@@ -78,7 +78,10 @@ describe('OffersService', () => {
     const module = await Test.createTestingModule({
       providers: [
         OffersService,
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(false) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue(false) },
+        },
         {
           provide: OffersRepository,
           useValue: {
@@ -92,6 +95,7 @@ describe('OffersService', () => {
             setCategories: jest.fn(),
             findCategoryIds: jest.fn(),
             isBusinessOwner: jest.fn(),
+            isBusinessAvailableForOffers: jest.fn(),
             locationBelongsToBusiness: jest.fn(),
             findActiveCategoryIds: jest.fn(),
           },
@@ -219,6 +223,7 @@ describe('OffersService', () => {
         category_ids: ['c1'],
       };
       repository.isBusinessOwner.mockResolvedValue(true);
+      repository.isBusinessAvailableForOffers.mockResolvedValue(true);
       repository.locationBelongsToBusiness.mockResolvedValue(true);
       repository.findActiveCategoryIds.mockResolvedValue(['c1']);
       repository.transaction.mockImplementation(async (fn) =>
@@ -244,6 +249,40 @@ describe('OffersService', () => {
       expect(result.id).toBe('o1');
       expect(result.category_ids).toEqual(['c1']);
     });
+
+    it('creates unapproved-business offers inactive', async () => {
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'business' as const,
+      };
+      const body = {
+        business_id: 'b1',
+        business_location_id: 'bl1',
+        title: 'Pending Offer',
+        original_price: 29.99,
+        discounted_price: 14.99,
+        pickup_start: '2025-02-01T10:00:00Z',
+        pickup_end: '2025-02-01T12:00:00Z',
+        category_ids: ['c1'],
+        is_active: true,
+      };
+      repository.isBusinessOwner.mockResolvedValue(true);
+      repository.isBusinessAvailableForOffers.mockResolvedValue(false);
+      repository.locationBelongsToBusiness.mockResolvedValue(true);
+      repository.findActiveCategoryIds.mockResolvedValue(['c1']);
+      repository.insert.mockResolvedValue(
+        makeOfferRow({ title: 'Pending Offer', is_active: false }),
+      );
+      repository.findCategoryIds.mockResolvedValue(['c1']);
+
+      await service.create(mockUser, body);
+
+      expect(repository.insert).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ is_active: false }),
+      );
+    });
   });
 
   describe('update', () => {
@@ -256,6 +295,7 @@ describe('OffersService', () => {
       const existing = makeOfferRow();
       repository.findDtoById.mockResolvedValue(existing);
       repository.isBusinessOwner.mockResolvedValue(true);
+      repository.isBusinessAvailableForOffers.mockResolvedValue(true);
       repository.locationBelongsToBusiness.mockResolvedValue(true);
       repository.findActiveCategoryIds.mockResolvedValue([]);
       repository.transaction.mockImplementation(async (fn) =>
@@ -301,6 +341,7 @@ describe('OffersService', () => {
       const existing = makeOfferRow();
       repository.findDtoById.mockResolvedValue(existing);
       repository.isBusinessOwner.mockResolvedValue(true);
+      repository.isBusinessAvailableForOffers.mockResolvedValue(true);
       repository.locationBelongsToBusiness.mockResolvedValue(true);
       repository.findActiveCategoryIds.mockResolvedValue(['c1', 'c2']);
       repository.transaction.mockImplementation(async (fn) =>
@@ -365,7 +406,10 @@ describe('OffersService.create (notificación post-creación)', () => {
     const module = await Test.createTestingModule({
       providers: [
         OffersService,
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(flag) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue(flag) },
+        },
         {
           provide: OffersRepository,
           useValue: {
@@ -379,6 +423,7 @@ describe('OffersService.create (notificación post-creación)', () => {
             setCategories: jest.fn(),
             findCategoryIds: jest.fn(async () => []),
             isBusinessOwner: jest.fn(async () => true),
+            isBusinessAvailableForOffers: jest.fn(async () => true),
             locationBelongsToBusiness: jest.fn(async () => true),
             findActiveCategoryIds: jest.fn(async () => []),
           },

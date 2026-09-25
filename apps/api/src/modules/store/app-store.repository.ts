@@ -13,7 +13,7 @@ export class AppStoreRepository {
   async insert(values: typeof appStore.$inferInsert): Promise<StoreEntry> {
     const [row] = await this.db.insert(appStore).values(values).returning();
     if (!row) throw new Error('Failed to insert app_store');
-    return row as StoreEntry;
+    return row;
   }
 
   async findById(id: string): Promise<StoreEntry | null> {
@@ -62,11 +62,16 @@ export class AppStoreRepository {
     limit: number;
   }): Promise<{ rows: StoreEntry[]; total: number }> {
     const filters: SQL[] = [isNull(appStore.deleted_at)];
-    if (filter.namespace) filters.push(eq(appStore.namespace, filter.namespace));
-    if (filter.status) filters.push(eq(appStore.status, filter.status as never));
+    if (filter.namespace)
+      filters.push(eq(appStore.namespace, filter.namespace));
+    if (filter.status)
+      filters.push(eq(appStore.status, filter.status as never));
     const where = filters.length ? and(...filters) : undefined;
 
-    const [totalRow] = await this.db.select({ c: count() }).from(appStore).where(where);
+    const [totalRow] = await this.db
+      .select({ c: count() })
+      .from(appStore)
+      .where(where);
     const rows = await this.db
       .select()
       .from(appStore)
@@ -74,6 +79,6 @@ export class AppStoreRepository {
       .orderBy(desc(appStore.created_at))
       .limit(filter.limit)
       .offset((filter.page - 1) * filter.limit);
-    return { rows: rows as StoreEntry[], total: Number(totalRow?.c ?? 0) };
+    return { rows: rows, total: Number(totalRow?.c ?? 0) };
   }
 }

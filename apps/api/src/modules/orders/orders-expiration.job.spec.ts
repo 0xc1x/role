@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { OrdersExpirationJob } from './orders-expiration.job';
@@ -49,10 +50,24 @@ describe('OrdersExpirationJob', () => {
     await expect(job.handleExpireStaleOrders()).resolves.toBeUndefined();
   });
 
-  it('no lanza el error del servicio (lo loggea) y libera el flag', async () => {
-    ordersService.expireStaleOrders.mockRejectedValue(new Error('db down'));
+  it('no lanza el error del servicio y loggea solo campos seguros', async () => {
+    const logError = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    ordersService.expireStaleOrders.mockRejectedValue(
+      Object.assign(new Error('password=secret'), {
+        name: 'DatabaseError',
+        code: '08006',
+      }),
+    );
 
     await expect(job.handleExpireStaleOrders()).resolves.toBeUndefined();
+
+    expect(logError).toHaveBeenCalledWith({
+      event: 'orders_expiration_failed',
+      errorType: 'DatabaseError',
+      errorCode: '08006',
+    });
+    expect(JSON.stringify(logError.mock.calls)).not.toContain('secret');
+    logError.mockRestore();
 
     // El flag anti-reentrada quedó libre: el siguiente tick sí ejecuta.
     ordersService.expireStaleOrders.mockResolvedValue({ expired: 1 });

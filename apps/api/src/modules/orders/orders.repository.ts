@@ -1,14 +1,19 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import type { OrderStatus } from '@0xc1x/role-commons';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
-import {
-  businesses,
-  coupons,
-  orderEvents,
-  orders,
-} from '../../database/schema';
+import { businesses, coupons, orders } from '../../database/schema';
 import { ACTIVE_ORDER_STATUSES } from './order-status.machine';
 
 export type DbExecutor = Database;
@@ -24,6 +29,12 @@ export class OrdersRepository {
     return this.db.transaction(fn);
   }
 
+  async setEventActor(tx: DbExecutor, userId: string | null): Promise<void> {
+    await tx.execute(
+      sql`SELECT set_config('role.order_event_actor', ${userId ?? ''}, true)`,
+    );
+  }
+
   async insertOrder(
     tx: DbExecutor,
     values: typeof orders.$inferInsert,
@@ -31,13 +42,6 @@ export class OrdersRepository {
     const [row] = await tx.insert(orders).values(values).returning();
     if (!row) throw new Error('Failed to insert order');
     return row;
-  }
-
-  async insertEvent(
-    tx: DbExecutor,
-    values: typeof orderEvents.$inferInsert,
-  ): Promise<void> {
-    await tx.insert(orderEvents).values(values);
   }
 
   async findById(id: string) {
@@ -189,27 +193,13 @@ export class OrdersRepository {
     return row ?? null;
   }
 
-  /**
-   * Folio diario `FD-YYYY-MMDD-NNN` (espejo de `generate_order_number`).
-   * El MAX+1 del SQL requiere lock para evitar colisiones concurrentes
-   * (ADR-0008): advisory xact-lock por día en lugar de tabla de secuencias.
-   */
+  /** Folio diario `FD-YYYY-MMDD-NNN` desde la secuencia SQL compartida. */
   async nextOrderNumber(tx: DbExecutor): Promise<string> {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext('FD-' || to_char(now(), 'YYYY-MMDD')))`,
-    );
-    // ponytail: driver puede devolver filas o {rows}; normalizar como en payouts
-    // El secuencial arranca tras el prefijo `FD-YYYY-MMDD-` (13 chars), igual
-    // que generate_order_number en Supabase (equivalencia ADR-0008).
-    const result = (await tx.execute(sql`
-      SELECT 'FD-' || to_char(now(), 'YYYY-MMDD') || '-' || lpad((
-        COALESCE(MAX(CAST(SUBSTRING(order_number FROM LENGTH('FD-' || to_char(now(), 'YYYY-MMDD') || '-') + 1) AS INTEGER)), 0) + 1
-      )::text, 3, '0') AS order_number
-      FROM ${orders}
-      WHERE order_number LIKE 'FD-' || to_char(now(), 'YYYY-MMDD') || '-%'
-    `)) as unknown as { rows?: Array<{ order_number?: string }> } | Array<{
-      order_number: string;
-    }>;
+    const result = (await tx.execute(
+      sql`SELECT public.generate_order_number() AS order_number`,
+    )) as unknown as
+      | { rows?: Array<{ order_number?: string }> }
+      | Array<{ order_number: string }>;
     const row = Array.isArray(result) ? result[0] : result.rows?.[0];
     if (!row?.order_number) throw new Error('Failed to generate order number');
     return row.order_number;
@@ -261,7 +251,10 @@ export class OrdersRepository {
   async incrementCouponUsedCount(tx: DbExecutor, couponId: string) {
     await tx
       .update(coupons)
-      .set({ used_count: sql`${coupons.used_count} + 1`, updated_at: sql`now()` })
+      .set({
+        used_count: sql`${coupons.used_count} + 1`,
+        updated_at: sql`now()`,
+      })
       .where(eq(coupons.id, couponId));
   }
 

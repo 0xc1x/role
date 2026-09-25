@@ -72,10 +72,7 @@ export class CouponsRepository {
     return this.db.transaction(fn);
   }
 
-  async insert(
-    executor: DbExecutor,
-    values: CouponInsert,
-  ): Promise<CouponRow> {
+  async insert(executor: DbExecutor, values: CouponInsert): Promise<CouponRow> {
     const [row] = await executor.insert(coupons).values(values).returning();
     if (!row) {
       throw new Error('Failed to insert coupon');
@@ -105,7 +102,10 @@ export class CouponsRepository {
     opts: { excludeId?: string } = {},
     executor: DbExecutor = this.db,
   ): Promise<CouponRow | null> {
-    const filters: SQL[] = [eq(coupons.code, code), isNull(coupons.business_id)];
+    const filters: SQL[] = [
+      eq(coupons.code, code),
+      isNull(coupons.business_id),
+    ];
     if (opts.excludeId) {
       filters.push(ne(coupons.id, opts.excludeId));
     }

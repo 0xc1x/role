@@ -112,6 +112,7 @@ describe('OrdersService', () => {
           provide: OrdersRepository,
           useValue: {
             transaction: jest.fn(),
+            setEventActor: jest.fn(),
             findActiveByUserAndOffer: jest.fn(),
             findByIdWithBusinessOwner: jest.fn(),
             findByIdForUpdate: jest.fn(),
@@ -119,7 +120,6 @@ describe('OrdersService', () => {
             listForBusiness: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
-            insertEvent: jest.fn(),
             isBusinessOwner: jest.fn(),
             findBusinessIdsOwnedBy: jest.fn(),
             nextOrderNumber: jest.fn(),
@@ -133,6 +133,7 @@ describe('OrdersService', () => {
           provide: OffersRepository,
           useValue: {
             findByIdForUpdate: jest.fn(),
+            isBusinessAvailableForOffers: jest.fn(),
             decrementStock: jest.fn(),
             incrementStock: jest.fn(),
             findBusinessIdsOwnedBy: jest.fn(),
@@ -164,12 +165,12 @@ describe('OrdersService', () => {
 
     const mockHappyPath = (offer = makeOfferRow()) => {
       offersRepository.findByIdForUpdate.mockResolvedValue(offer);
+      offersRepository.isBusinessAvailableForOffers.mockResolvedValue(true);
       ordersRepository.findActiveByUserAndOffer.mockResolvedValue(null);
       ordersRepository.findCommissionRate.mockResolvedValue('0.1000');
       offersRepository.decrementStock.mockResolvedValue(true);
       ordersRepository.nextOrderNumber.mockResolvedValue('FD-2026-0825-001');
       ordersRepository.insertOrder.mockResolvedValue(createdOrder);
-      ordersRepository.insertEvent.mockResolvedValue(undefined);
     };
 
     it('feliz: crea orden con snapshot de comisión y contrato del RPC', async () => {
@@ -192,10 +193,6 @@ describe('OrdersService', () => {
           coupon_id: null,
         }),
       );
-      expect(ordersRepository.insertEvent).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ status: 'pending', previous_status: null }),
-      );
     });
 
     it.each([
@@ -216,8 +213,19 @@ describe('OrdersService', () => {
       await expect(service.create(mockAuthUser, body)).rejects.toThrow(code);
     });
 
+    it('negocio no aprobado o inactivo no puede reservarse', async () => {
+      mockHappyPath();
+      offersRepository.isBusinessAvailableForOffers.mockResolvedValue(false);
+
+      await expect(service.create(mockAuthUser, body)).rejects.toThrow(
+        'OFFER_NOT_FOUND',
+      );
+      expect(offersRepository.decrementStock).not.toHaveBeenCalled();
+    });
+
     it('duplicado activo → DUPLICATE_RESERVATION', async () => {
       offersRepository.findByIdForUpdate.mockResolvedValue(makeOfferRow());
+      offersRepository.isBusinessAvailableForOffers.mockResolvedValue(true);
       ordersRepository.findActiveByUserAndOffer.mockResolvedValue(
         makeOrderRow({ id: 'existing' }),
       );
@@ -325,7 +333,7 @@ describe('OrdersService', () => {
       );
     });
 
-    it('folio FD-YYYY-MMDD-NNN generado con lock diario', async () => {
+    it('folio FD-YYYY-MMDD-NNN generado por la secuencia SQL compartida', async () => {
       mockHappyPath();
 
       await service.create(mockAuthUser, body);
@@ -342,12 +350,14 @@ describe('OrdersService', () => {
 
       const result = await service.create(mockAuthUser, body);
 
-      expect(result.pickup_code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
+      expect(result.pickup_code).toMatch(
+        /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/,
+      );
     });
   });
 
   describe('cancelOrder (espejo de cancel_order)', () => {
-    it('feliz: cancela, restaura stock y registra evento', async () => {
+    it('feliz: cancela y restaura stock; el trigger registra el evento', async () => {
       ordersRepository.findByIdForUpdate.mockResolvedValue(
         makeOrderWithBusinessOwner({
           order: makeOrderRow({ user_id: 'user-1', status: 'pending' }),
@@ -356,7 +366,6 @@ describe('OrdersService', () => {
       ordersRepository.updateStatus.mockResolvedValue(
         makeOrderRow({ status: 'cancelled' }),
       );
-      ordersRepository.insertEvent.mockResolvedValue(undefined);
 
       const result = await service.cancelOrder(mockAuthUser, 'order-1');
 
@@ -365,13 +374,6 @@ describe('OrdersService', () => {
         expect.anything(),
         'offer-1',
         1,
-      );
-      expect(ordersRepository.insertEvent).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          status: 'cancelled',
-          reason: 'Cancelado por el usuario',
-        }),
       );
     });
 
@@ -390,9 +392,9 @@ describe('OrdersService', () => {
         }),
       );
 
-      await expect(service.cancelOrder(mockAuthUser, 'order-1')).rejects.toThrow(
-        'NOT_ORDER_OWNER',
-      );
+      await expect(
+        service.cancelOrder(mockAuthUser, 'order-1'),
+      ).rejects.toThrow('NOT_ORDER_OWNER');
     });
 
     it.each(['completed', 'cancelled', 'expired', 'picked_up'] as const)(
@@ -427,10 +429,9 @@ describe('OrdersService', () => {
         ...locked.order,
         status: 'completed',
       });
-      ordersRepository.insertEvent.mockResolvedValue(undefined);
     };
 
-    it('feliz: completa la orden con metadata method=pickup_code', async () => {
+    it('feliz: completa la orden; el trigger registra el evento', async () => {
       happyMocks();
 
       const result = await service.validatePickupCode(
@@ -440,14 +441,6 @@ describe('OrdersService', () => {
       );
 
       expect(result.status).toBe('completed');
-      expect(ordersRepository.insertEvent).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          status: 'completed',
-          previous_status: 'ready_for_pickup',
-          metadata: expect.objectContaining({ method: 'pickup_code' }),
-        }),
-      );
     });
 
     it('UNAUTHORIZED si el caller no es el dueño del negocio (o no existe)', async () => {
@@ -485,7 +478,10 @@ describe('OrdersService', () => {
 
   describe('listMine', () => {
     it('should return paginated orders for user', async () => {
-      const items = [makeOrderRow({ id: 'order-1' }), makeOrderRow({ id: 'order-2' })];
+      const items = [
+        makeOrderRow({ id: 'order-1' }),
+        makeOrderRow({ id: 'order-2' }),
+      ];
       ordersRepository.listForUser.mockResolvedValue({ items, total: 2 });
 
       const result = await service.listMine(mockAuthUser, {
@@ -593,11 +589,13 @@ describe('OrdersService', () => {
     });
 
     it('should throw NotFoundException when order not found', async () => {
-      (ordersRepository.findByIdWithBusinessOwner as jest.Mock).mockResolvedValue(null);
+      (
+        ordersRepository.findByIdWithBusinessOwner as jest.Mock
+      ).mockResolvedValue(null);
 
-      await expect(service.getById(mockAuthUser, 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.getById(mockAuthUser, 'nonexistent'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw ForbiddenException when user is stranger', async () => {
@@ -622,13 +620,10 @@ describe('OrdersService', () => {
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
       ordersRepository.isBusinessOwner.mockResolvedValue(true);
-      ordersRepository.insertEvent.mockResolvedValue(undefined);
 
-      const result = await service.updateStatus(
-        mockBusinessUser,
-        'order-1',
-        { status: 'confirmed' },
-      );
+      const result = await service.updateStatus(mockBusinessUser, 'order-1', {
+        status: 'confirmed',
+      });
 
       expect(result.status).toBe('confirmed');
       expect(ordersRepository.updateStatus).toHaveBeenCalledWith(
@@ -648,7 +643,6 @@ describe('OrdersService', () => {
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
       ordersRepository.isBusinessOwner.mockResolvedValue(true);
-      ordersRepository.insertEvent.mockResolvedValue(undefined);
 
       await service.updateStatus(mockBusinessUser, 'order-1', {
         status: 'cancelled',
@@ -670,7 +664,6 @@ describe('OrdersService', () => {
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
       ordersRepository.isBusinessOwner.mockResolvedValue(true);
-      ordersRepository.insertEvent.mockResolvedValue(undefined);
 
       await service.updateStatus(mockBusinessUser, 'order-1', {
         status: 'completed',
@@ -683,7 +676,9 @@ describe('OrdersService', () => {
       ordersRepository.findByIdForUpdate.mockResolvedValue(null);
 
       await expect(
-        service.updateStatus(mockAuthUser, 'nonexistent', { status: 'confirmed' }),
+        service.updateStatus(mockAuthUser, 'nonexistent', {
+          status: 'confirmed',
+        }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -717,7 +712,9 @@ describe('OrdersService', () => {
       ordersRepository.updateStatus.mockResolvedValue(null);
 
       await expect(
-        service.updateStatus(mockBusinessUser, 'order-1', { status: 'confirmed' }),
+        service.updateStatus(mockBusinessUser, 'order-1', {
+          status: 'confirmed',
+        }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -730,7 +727,6 @@ describe('OrdersService', () => {
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
       ordersRepository.isBusinessOwner.mockResolvedValue(true);
-      ordersRepository.insertEvent.mockResolvedValue(undefined);
 
       const result = await service.updateStatus(mockAuthUser, 'order-1', {
         status: 'cancelled',
@@ -748,7 +744,6 @@ describe('OrdersService', () => {
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
       ordersRepository.isBusinessOwner.mockResolvedValue(true);
-      ordersRepository.insertEvent.mockResolvedValue(undefined);
 
       const result = await service.updateStatus(mockAdminUser, 'order-1', {
         status: 'completed',
@@ -785,7 +780,9 @@ describe('OrdersService', () => {
       );
       ordersRepository.isBusinessOwner.mockResolvedValue(true);
 
-      getFlag.mockImplementation((key: string) => key === 'ENABLE_API_MIRROR_ORDERS');
+      getFlag.mockImplementation(
+        (key: string) => key === 'ENABLE_API_MIRROR_ORDERS',
+      );
       await service.updateStatus(mockBusinessUser, 'order-1', {
         status: 'completed',
       });
@@ -805,12 +802,13 @@ describe('OrdersService', () => {
         order: makeOrderRow({ status: 'pending', offer_id: 'offer-1' }),
       });
 
-      offersRepository.findOrderCandidatesToExpire.mockResolvedValue([candidate]);
+      offersRepository.findOrderCandidatesToExpire.mockResolvedValue([
+        candidate,
+      ]);
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(
         makeOrderRow({ status: 'expired', offer_id: 'offer-1' }),
       );
-      ordersRepository.insertEvent.mockResolvedValue(undefined);
 
       const result = await service.expireStaleOrders();
 
@@ -828,7 +826,9 @@ describe('OrdersService', () => {
         order: makeOrderRow({ status: 'confirmed', offer_id: 'offer-1' }),
       });
 
-      offersRepository.findOrderCandidatesToExpire.mockResolvedValue([candidate]);
+      offersRepository.findOrderCandidatesToExpire.mockResolvedValue([
+        candidate,
+      ]);
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
 
       const result = await service.expireStaleOrders();
@@ -843,7 +843,9 @@ describe('OrdersService', () => {
         order: makeOrderRow({ status: 'pending', offer_id: 'offer-1' }),
       });
 
-      offersRepository.findOrderCandidatesToExpire.mockResolvedValue([candidate]);
+      offersRepository.findOrderCandidatesToExpire.mockResolvedValue([
+        candidate,
+      ]);
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(null);
 
@@ -863,6 +865,7 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
           provide: OrdersRepository,
           useValue: {
             transaction: jest.fn(),
+            setEventActor: jest.fn(),
             findActiveByUserAndOffer: jest.fn(),
             findByIdWithBusinessOwner: jest.fn(),
             findByIdForUpdate: jest.fn(),
@@ -870,7 +873,6 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
             listForBusiness: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
-            insertEvent: jest.fn(),
             isBusinessOwner: jest.fn(),
             findBusinessIdsOwnedBy: jest.fn(),
             nextOrderNumber: jest.fn(),
@@ -884,25 +886,33 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
           provide: OffersRepository,
           useValue: {
             findByIdForUpdate: jest.fn(),
+            isBusinessAvailableForOffers: jest.fn(),
             decrementStock: jest.fn(),
             incrementStock: jest.fn(),
             findBusinessIdsOwnedBy: jest.fn(),
             findOrderCandidatesToExpire: jest.fn(),
           },
         },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(true) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue(true) },
+        },
         { provide: NotificationHandlers, useValue: { onOrderStatusChanged } },
       ],
     }).compile();
     const svc = module.get(OrdersService);
 
     onOrderStatusChanged.mockResolvedValue(undefined);
-    (svc as unknown as { emitOrderChange: (id: string) => void }).emitOrderChange('o1');
+    (
+      svc as unknown as { emitOrderChange: (id: string) => void }
+    ).emitOrderChange('o1');
     await new Promise((r) => setImmediate(r));
     expect(onOrderStatusChanged).toHaveBeenCalledWith('o1');
 
     onOrderStatusChanged.mockRejectedValue(new Error('expo down'));
-    (svc as unknown as { emitOrderChange: (id: string) => void }).emitOrderChange('o2');
+    (
+      svc as unknown as { emitOrderChange: (id: string) => void }
+    ).emitOrderChange('o2');
     await new Promise((r) => setImmediate(r));
     expect(onOrderStatusChanged).toHaveBeenCalledWith('o2');
   });

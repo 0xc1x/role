@@ -242,6 +242,7 @@ export class OffersRepository {
         and(
           eq(offers.is_active, true),
           eq(businesses.is_active, true),
+          eq(businesses.verification_status, 'approved'),
           gt(offers.stock, 0),
           gt(offers.pickup_end, sql`now()`),
         ),
@@ -258,6 +259,7 @@ export class OffersRepository {
     if (query.available_only) {
       filters.push(eq(offers.is_active, true));
       filters.push(eq(businesses.is_active, true));
+      filters.push(eq(businesses.verification_status, 'approved'));
       filters.push(gt(offers.stock, 0));
       filters.push(gt(offers.pickup_end, sql`now()`));
     }
@@ -324,6 +326,24 @@ export class OffersRepository {
     ]);
 
     return { items: items, total: Number(totalRow) };
+  }
+
+  async isBusinessAvailableForOffers(
+    executor: DbExecutor,
+    businessId: string,
+  ): Promise<boolean> {
+    const [row] = await executor
+      .select({ id: businesses.id })
+      .from(businesses)
+      .where(
+        and(
+          eq(businesses.id, businessId),
+          eq(businesses.is_active, true),
+          eq(businesses.verification_status, 'approved'),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
   }
 
   async findById(id: string): Promise<OfferListRow | null> {
@@ -496,9 +516,7 @@ export class OffersRepository {
     const rows = await this.db
       .update(offers)
       .set({ is_active: false, updated_at: sql`now()` })
-      .where(
-        and(eq(offers.is_active, true), lte(offers.pickup_end, now)),
-      )
+      .where(and(eq(offers.is_active, true), lte(offers.pickup_end, now)))
       .returning({ id: offers.id });
     return rows.length;
   }
