@@ -22,47 +22,53 @@ export function PriceDetailsCard({ order }: { order: Order }) {
 				</AppText>
 			</CardHeader>
 			<CardContent style={styles.body}>
-			<View style={styles.priceRow}>
-				<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
-					{strings.orders.originalPriceLabel}
-				</AppText>
-				<AppText variant="bodyMedium" style={styles.tabular}>
-					{formatMoney(order.original_price)}
-				</AppText>
-			</View>
-			<View style={styles.priceRow}>
-				<AppText variant="bodyMedium" style={{ color: colors.success }}>
-					{strings.orders.discountLabel}
-				</AppText>
-				<AppText
-					variant="bodyMedium"
-					weight="semiBold"
-					style={[{ color: colors.success }, styles.tabular]}
-				>
-					-{formatMoney(discount)}
-				</AppText>
-			</View>
-			<View style={[styles.divider, { backgroundColor: colors.border }]} />
-			<View style={styles.priceRow}>
-				<AppText variant="h4" weight="bold" style={styles.totalLabel}>
-					{strings.orders.totalLabel}
-				</AppText>
-				<AppText variant="priceLarge" style={{ color: colors.primary }}>
-					{formatMoney(order.price)}
-				</AppText>
-			</View>
-			<Alert variant="success" icon={PiggyBank}>
-				<AlertDescription>
+				<View style={styles.priceRow}>
 					<AppText
-						variant="bodySmall"
-						weight="semiBold"
-						style={{ color: colors.success, flex: 1 }}
+						variant="bodyMedium"
+						style={{ color: colors.mutedForeground }}
 					>
-						{strings.orders.moneySaved.replace("{saved}", formatMoney(discount))}
+						{strings.orders.originalPriceLabel}
 					</AppText>
-				</AlertDescription>
-			</Alert>
-			{/* Oculta hasta habilitar la pasarela de pagos: fila del método de
+					<AppText variant="bodyMedium" style={styles.tabular}>
+						{formatMoney(order.original_price)}
+					</AppText>
+				</View>
+				<View style={styles.priceRow}>
+					<AppText variant="bodyMedium" style={{ color: colors.success }}>
+						{strings.orders.discountLabel}
+					</AppText>
+					<AppText
+						variant="bodyMedium"
+						weight="semiBold"
+						style={[{ color: colors.success }, styles.tabular]}
+					>
+						-{formatMoney(discount)}
+					</AppText>
+				</View>
+				<View style={[styles.divider, { backgroundColor: colors.border }]} />
+				<View style={styles.priceRow}>
+					<AppText variant="h4" weight="bold" style={styles.totalLabel}>
+						{strings.orders.totalLabel}
+					</AppText>
+					<AppText variant="priceLarge" style={{ color: colors.primary }}>
+						{formatMoney(order.price)}
+					</AppText>
+				</View>
+				<Alert variant="success" icon={PiggyBank}>
+					<AlertDescription>
+						<AppText
+							variant="bodySmall"
+							weight="semiBold"
+							style={{ color: colors.success, flex: 1 }}
+						>
+							{strings.orders.moneySaved.replace(
+								"{saved}",
+								formatMoney(discount),
+							)}
+						</AppText>
+					</AlertDescription>
+				</Alert>
+				{/* Oculta hasta habilitar la pasarela de pagos: fila del método de
 			    pago (p. ej. Visa ••••). Se conserva comentada, no se borra. */}
 			</CardContent>
 		</Card>

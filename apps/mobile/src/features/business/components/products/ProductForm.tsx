@@ -1,20 +1,23 @@
 import { useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import { Check, ChevronDown, Image as ImageIcon, Store } from "lucide-react-native";
+import {
+	Check,
+	ChevronDown,
+	Image as ImageIcon,
+	Store,
+} from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 
 import { strings } from "@/src/core/i18n/strings";
-import {
-	AppText,
-	BottomSheetModal,
-	goBackOr,
-	TextField,
-} from "@/src/core/ui";
+import { AppText, BottomSheetModal, goBackOr, TextField } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { useCategories } from "@/src/features/hooks";
-import { useBusinessLocations, useSaveOffer } from "@/src/features/business/hooks";
+import {
+	useBusinessLocations,
+	useSaveOffer,
+} from "@/src/features/business/hooks";
 import type { OfferDetail } from "@/src/features/offers/domain/offer";
 import { DateTimeField } from "./DateTimeFields";
 import { pickWebImage } from "../../utils/pick-image";
@@ -48,10 +51,13 @@ export function ProductForm({
 	);
 	const [includes, setIncludes] = useState(product?.offer.includes ?? "");
 	const [allergens, setAllergens] = useState(product?.offer.allergens ?? "");
-	const [categoryIds, setCategoryIds] = useState<string[]>(() =>
-		product?.categories.map((c) => c.id) ?? [],
+	const [categoryIds, setCategoryIds] = useState<string[]>(
+		() => product?.categories.map((c) => c.id) ?? [],
 	);
-	const selectedCategoryIds = useMemo(() => new Set(categoryIds), [categoryIds]);
+	const selectedCategoryIds = useMemo(
+		() => new Set(categoryIds),
+		[categoryIds],
+	);
 	const [locationId, setLocationId] = useState(
 		product?.offer.business_location_id ?? "",
 	);
@@ -61,7 +67,9 @@ export function ProductForm({
 	const [discountedPrice, setDiscountedPrice] = useState(
 		product ? String(product.offer.discounted_price) : "",
 	);
-	const [stock, setStock] = useState(product ? String(product.offer.stock) : "");
+	const [stock, setStock] = useState(
+		product ? String(product.offer.stock) : "",
+	);
 	const [pickupStart, setPickupStart] = useState<Date>(() =>
 		product ? new Date(product.offer.pickup_start) : defaultPickup(true),
 	);
@@ -108,16 +116,21 @@ export function ProductForm({
 			? Math.round(((original - discounted) / original) * 100)
 			: null;
 
-	const selectedLocationName = locations?.find((l) => l.id === locationId)?.name;
+	const selectedLocationName = locations?.find(
+		(l) => l.id === locationId,
+	)?.name;
 
 	const handleSubmit = () => {
 		const nextErrors: Record<string, string> = {};
 		if (!title.trim()) nextErrors.title = strings.business.requiredField;
 		if (categoryIds.length === 0)
 			nextErrors.categories = strings.business.selectAtLeastOneCategory;
-		if (!description.trim()) nextErrors.description = strings.business.requiredField;
-		if (!(original > 0)) nextErrors.originalPrice = strings.business.invalidPrice;
-		if (!(discounted > 0)) nextErrors.discountedPrice = strings.business.invalidPrice;
+		if (!description.trim())
+			nextErrors.description = strings.business.requiredField;
+		if (!(original > 0))
+			nextErrors.originalPrice = strings.business.invalidPrice;
+		if (!(discounted > 0))
+			nextErrors.discountedPrice = strings.business.invalidPrice;
 		else if (original > 0 && discounted >= original)
 			nextErrors.discountedPrice = strings.business.priceMustBeLower;
 		const stockNumber = Number(stock);
@@ -183,7 +196,10 @@ export function ProductForm({
 				) : (
 					<View style={styles.imagePlaceholder}>
 						<ImageIcon size={28} color={colors.mutedForeground} />
-						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground }}
+						>
 							{strings.business.uploadPhoto}
 						</AppText>
 					</View>
@@ -207,7 +223,11 @@ export function ProductForm({
 				/>
 
 				<View style={styles.fieldBlock}>
-					<AppText variant="labelSmall" weight="semiBold" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="labelSmall"
+						weight="semiBold"
+						style={{ color: colors.mutedForeground }}
+					>
 						{strings.business.productCategories}
 					</AppText>
 					<View style={styles.optionsWrap}>
@@ -233,24 +253,35 @@ export function ProductForm({
 										variant="bodySmall"
 										weight={selected ? "semiBold" : "medium"}
 										style={{
-											color: selected ? colors.secondaryForeground : colors.foreground,
+											color: selected
+												? colors.secondaryForeground
+												: colors.foreground,
 										}}
 									>
-										{category.emoji ? `${category.emoji} ${category.name}` : category.name}
+										{category.emoji
+											? `${category.emoji} ${category.name}`
+											: category.name}
 									</AppText>
 								</Pressable>
 							);
 						})}
 					</View>
 					{errors.categories ? (
-						<AppText variant="bodySmall" style={{ color: colors.destructive, marginTop: 4 }}>
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.destructive, marginTop: 4 }}
+						>
 							{errors.categories}
 						</AppText>
 					) : null}
 				</View>
 
 				<View style={styles.fieldBlock}>
-					<AppText variant="labelSmall" weight="semiBold" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="labelSmall"
+						weight="semiBold"
+						style={{ color: colors.mutedForeground }}
+					>
 						{strings.business.locations}
 					</AppText>
 					<Pressable
@@ -304,7 +335,9 @@ export function ProductForm({
 						label={strings.business.productPrice}
 						value={originalPrice}
 						onChangeText={(t) =>
-							setOriginalPrice(t.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"))
+							setOriginalPrice(
+								t.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"),
+							)
 						}
 						keyboardType="decimal-pad"
 						containerStyle={{ flex: 1 }}
@@ -314,7 +347,9 @@ export function ProductForm({
 						label={strings.business.productDiscountedPrice}
 						value={discountedPrice}
 						onChangeText={(t) =>
-							setDiscountedPrice(t.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"))
+							setDiscountedPrice(
+								t.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"),
+							)
 						}
 						keyboardType="decimal-pad"
 						containerStyle={{ flex: 1 }}
@@ -322,8 +357,17 @@ export function ProductForm({
 					/>
 				</View>
 				{discountPercent != null ? (
-					<View style={[styles.discountBadge, { backgroundColor: colors.surfaceSuccess }]}>
-						<AppText variant="bodySmall" weight="bold" style={{ color: colors.success }}>
+					<View
+						style={[
+							styles.discountBadge,
+							{ backgroundColor: colors.surfaceSuccess },
+						]}
+					>
+						<AppText
+							variant="bodySmall"
+							weight="bold"
+							style={{ color: colors.success }}
+						>
 							{strings.business.discountPercent.replace(
 								"{percent}",
 								String(discountPercent),
@@ -383,7 +427,9 @@ export function ProductForm({
 				size="lg"
 				style={{ marginTop: spacing.lg }}
 			>
-				{editing ? strings.business.saveChanges : strings.business.publishProduct}
+				{editing
+					? strings.business.saveChanges
+					: strings.business.publishProduct}
 			</Button>
 
 			{locationPickerOpen ? (
@@ -412,7 +458,9 @@ export function ProductForm({
 							weight={locationId === "" ? "semiBold" : "regular"}
 							style={{
 								color:
-									locationId === "" ? colors.secondaryForeground : colors.foreground,
+									locationId === ""
+										? colors.secondaryForeground
+										: colors.foreground,
 							}}
 						>
 							{strings.business.noLocationOption}
@@ -495,7 +543,12 @@ function FormSection({
 			<AppText variant="h4" weight="bold">
 				{title}
 			</AppText>
-			<View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+			<View
+				style={[
+					styles.sectionCard,
+					{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+				]}
+			>
 				{children}
 			</View>
 		</View>

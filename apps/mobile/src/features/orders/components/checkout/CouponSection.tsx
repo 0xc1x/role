@@ -41,7 +41,11 @@ export function CouponSection({
 					},
 				]}
 			>
-				<CircleCheck size={18} color={colors.successDark} fill={colors.successDark} />
+				<CircleCheck
+					size={18}
+					color={colors.successDark}
+					fill={colors.successDark}
+				/>
 				<AppText
 					variant="bodyMedium"
 					weight="semiBold"

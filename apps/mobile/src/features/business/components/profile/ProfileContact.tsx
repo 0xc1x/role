@@ -1,5 +1,12 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Clock, Globe, Mail, MapPin, Phone, type LucideIcon } from "lucide-react-native";
+import {
+	Clock,
+	Globe,
+	Mail,
+	MapPin,
+	Phone,
+	type LucideIcon,
+} from "lucide-react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import { AppText } from "@/src/core/ui";
@@ -9,7 +16,11 @@ import type { BusinessProfileDetail } from "@/src/features/business/domain/busin
 import { openMaps, openUrl } from "./maps";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-export function ContactInfoCard({ profile }: { profile: BusinessProfileDetail }) {
+export function ContactInfoCard({
+	profile,
+}: {
+	profile: BusinessProfileDetail;
+}) {
 	const { colors } = useTheme();
 	const business = profile.business;
 	return (
@@ -19,7 +30,7 @@ export function ContactInfoCard({ profile }: { profile: BusinessProfileDetail })
 					{strings.businessProfile.contactInfo}
 				</AppText>
 			</CardHeader>
-			
+
 			<CardContent>
 				<InfoRow
 					icon={MapPin}
@@ -117,7 +128,10 @@ export function InfoRow({
 				<Pressable onPress={onPress} disabled={!isLink}>
 					<AppText
 						weight={isLink ? "bold" : undefined}
-						style={{ color: isLink ? colors.primary : colors.foreground, marginTop: 2 }}
+						style={{
+							color: isLink ? colors.primary : colors.foreground,
+							marginTop: 2,
+						}}
 					>
 						{text}
 					</AppText>
@@ -128,24 +142,35 @@ export function InfoRow({
 	);
 }
 
-export function HoursCard({ hours }: { hours: BusinessProfileDetail["hours"] }) {
+export function HoursCard({
+	hours,
+}: {
+	hours: BusinessProfileDetail["hours"];
+}) {
 	const { colors } = useTheme();
 	return (
 		<Card style={[{ boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
 			<CardHeader style={styles.hoursTitleRow}>
 				<Clock size={20} color={colors.primary} />
 				<View style={{ width: spacing.sm }} />
-				<AppText weight="semiBold">{strings.businessProfile.businessHours}</AppText>
+				<AppText weight="semiBold">
+					{strings.businessProfile.businessHours}
+				</AppText>
 			</CardHeader>
 			<View style={{ height: spacing.md }} />
 			<CardContent>
 				{hours.map((h) => {
 					const closed = h.hoursDisplay === strings.businessProfile.closed;
 					return (
-						<View key={h.dayRange} style={[styles.hoursRow, { borderBottomColor: colors.border }]}>
+						<View
+							key={h.dayRange}
+							style={[styles.hoursRow, { borderBottomColor: colors.border }]}
+						>
 							<AppText weight="medium">{h.dayRange}</AppText>
 							<AppText
-								style={{ color: closed ? colors.destructive : colors.mutedForeground }}
+								style={{
+									color: closed ? colors.destructive : colors.mutedForeground,
+								}}
 							>
 								{h.hoursDisplay}
 							</AppText>

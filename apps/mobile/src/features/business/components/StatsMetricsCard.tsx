@@ -30,31 +30,35 @@ export function StatsMetricsCard({ items }: { items: MetricItem[] }) {
 			{items.map((item, index) => {
 				const Icon = item.icon;
 				return (
-				<Fragment key={item.label}>
-					{index > 0 ? (
-						<View
-							style={{
-								width: StyleSheet.hairlineWidth,
-								backgroundColor: colors.borderSolid,
-							}}
-						/>
-					) : null}
-					<View style={styles.item}>
-						<View style={[styles.iconChip, { backgroundColor: item.bg }]}>
-							<Icon size={16} color={item.color} />
+					<Fragment key={item.label}>
+						{index > 0 ? (
+							<View
+								style={{
+									width: StyleSheet.hairlineWidth,
+									backgroundColor: colors.borderSolid,
+								}}
+							/>
+						) : null}
+						<View style={styles.item}>
+							<View style={[styles.iconChip, { backgroundColor: item.bg }]}>
+								<Icon size={16} color={item.color} />
+							</View>
+							<AppText
+								variant="h3"
+								weight="extraBold"
+								style={{ color: item.color }}
+							>
+								{item.value}
+							</AppText>
+							<AppText
+								variant="bodySmall"
+								numberOfLines={1}
+								style={{ color: colors.mutedForeground, textAlign: "center" }}
+							>
+								{item.label}
+							</AppText>
 						</View>
-						<AppText variant="h3" weight="extraBold" style={{ color: item.color }}>
-							{item.value}
-						</AppText>
-						<AppText
-							variant="bodySmall"
-							numberOfLines={1}
-							style={{ color: colors.mutedForeground, textAlign: "center" }}
-						>
-							{item.label}
-						</AppText>
-					</View>
-				</Fragment>
+					</Fragment>
 				);
 			})}
 		</View>

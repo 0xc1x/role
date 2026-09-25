@@ -23,8 +23,9 @@ mock.module("@/src/core/supabase/client", () => ({
 // Dynamic imports: static imports evaluate before bare-specifier mocks
 // (react-native) apply, which trips the Flow-parser on the real package.
 const { supabase } = await import("@/src/core/supabase/client");
-const { businessRepository, detectImageContentType } =
-	await import("@/src/features/business/data/repository");
+const { businessRepository, detectImageContentType } = await import(
+	"@/src/features/business/data/repository"
+);
 
 const fromMock = supabase.from as unknown as Mock<
 	(...args: never[]) => unknown

@@ -1,13 +1,13 @@
 import { useState } from "react";
-import {
-	Modal,
-	Platform,
-	Pressable,
-	StyleSheet,
-	View,
-} from "react-native";
+import { Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import { ChevronRight, CircleCheck, Image as ImageIcon, Images, MapPin } from "lucide-react-native";
+import {
+	ChevronRight,
+	CircleCheck,
+	Image as ImageIcon,
+	Images,
+	MapPin,
+} from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 
 import { strings } from "@/src/core/i18n/strings";
@@ -123,7 +123,9 @@ export function BusinessForm({
 }) {
 	const { colors } = useTheme();
 
-	const [logoUri, setLogoUri] = useState<string | null>(initial?.logoUri ?? null);
+	const [logoUri, setLogoUri] = useState<string | null>(
+		initial?.logoUri ?? null,
+	);
 	const [coverUri, setCoverUri] = useState<string | null>(
 		initial?.coverUri ?? null,
 	);
@@ -181,7 +183,12 @@ export function BusinessForm({
 			hours: hours.flatMap((h) =>
 				h.closed
 					? []
-					: [{ day: h.day, hours: `${dateToTime(h.open)} - ${dateToTime(h.close)}` }],
+					: [
+							{
+								day: h.day,
+								hours: `${dateToTime(h.open)} - ${dateToTime(h.close)}`,
+							},
+						],
 			),
 			address: picked?.address ?? null,
 			latitude: picked?.latitude ?? null,
@@ -202,7 +209,8 @@ export function BusinessForm({
 			<View style={styles.imagesRow}>
 				<Pressable
 					onPress={() => void pickImage(setLogoUri)}
-					style={[styles.logoArea,
+					style={[
+						styles.logoArea,
 						{
 							backgroundColor: colors.inputBackground,
 							borderColor: colors.borderSolid,
@@ -213,10 +221,7 @@ export function BusinessForm({
 						<Image source={{ uri: logoUri }} style={styles.areaImage} />
 					) : (
 						<View style={styles.imagePlaceholder}>
-							<ImageIcon
-								size={22}
-								color={colors.mutedForeground}
-							/>
+							<ImageIcon size={22} color={colors.mutedForeground} />
 							<AppText
 								variant="labelSmall"
 								style={{ color: colors.mutedForeground }}
@@ -228,7 +233,8 @@ export function BusinessForm({
 				</Pressable>
 				<Pressable
 					onPress={() => void pickImage(setCoverUri)}
-					style={[styles.coverArea,
+					style={[
+						styles.coverArea,
 						{
 							backgroundColor: colors.inputBackground,
 							borderColor: colors.borderSolid,
@@ -247,10 +253,7 @@ export function BusinessForm({
 						<Image source={{ uri: coverUri }} style={styles.areaImage} />
 					) : (
 						<View style={styles.imagePlaceholder}>
-							<Images
-								size={22}
-								color={colors.mutedForeground}
-							/>
+							<Images size={22} color={colors.mutedForeground} />
 							<AppText
 								variant="labelSmall"
 								style={{ color: colors.mutedForeground }}
@@ -286,7 +289,7 @@ export function BusinessForm({
 								variant={"outline"}
 								key={key}
 								onPress={() => setType(key)}
-								style={ [
+								style={[
 									styles.chip,
 									{
 										backgroundColor: selected
@@ -378,15 +381,9 @@ export function BusinessForm({
 						{picked?.address ?? strings.business.pickLocation}
 					</AppText>
 					{picked ? (
-						<CircleCheck
-							size={18}
-							color={colors.success}
-						/>
+						<CircleCheck size={18} color={colors.success} />
 					) : (
-						<ChevronRight
-							size={16}
-							color={colors.mutedForeground}
-						/>
+						<ChevronRight size={16} color={colors.mutedForeground} />
 					)}
 				</Pressable>
 				<TextField
@@ -418,8 +415,7 @@ export function BusinessForm({
 								{strings.businessProfile.closed}
 							</AppText>
 						) : (
-							<View style={styles.timeRow}
-							>
+							<View style={styles.timeRow}>
 								<DateTimeField
 									mode="time"
 									label="Apertura"

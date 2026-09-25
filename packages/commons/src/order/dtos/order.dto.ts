@@ -1,10 +1,10 @@
-import type { z } from 'zod';
+import type { z } from "zod";
 import type {
-  CreateOrderSchema,
-  OrderSchema,
-  UpdateOrderSchema,
-} from '../schemas/order.schema';
-import type { ReserveOfferResultSchema } from '../schemas/reserve-offer.schema';
+	CreateOrderSchema,
+	OrderSchema,
+	UpdateOrderSchema,
+} from "../schemas/order.schema";
+import type { ReserveOfferResultSchema } from "../schemas/reserve-offer.schema";
 
 export type OrderDto = z.infer<typeof OrderSchema>;
 export type CreateOrderDto = z.infer<typeof CreateOrderSchema>;

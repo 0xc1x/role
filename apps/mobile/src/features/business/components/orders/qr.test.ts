@@ -13,10 +13,12 @@ describe("parsePickupQr", () => {
 	});
 
 	it("parses the legacy fudi://pickup scheme", () => {
-		expect(parsePickupQr(`fudi://pickup/${ORDER_ID}/123456`, ORDER_ID)).toEqual({
-			orderId: ORDER_ID,
-			pickupCode: "123456",
-		});
+		expect(parsePickupQr(`fudi://pickup/${ORDER_ID}/123456`, ORDER_ID)).toEqual(
+			{
+				orderId: ORDER_ID,
+				pickupCode: "123456",
+			},
+		);
 	});
 
 	it("is case-insensitive on scheme and host", () => {
@@ -27,12 +29,18 @@ describe("parsePickupQr", () => {
 	});
 
 	it("rejects a QR that belongs to another order", () => {
-		expect(parsePickupQr(`role://order/other-order/284731`, ORDER_ID)).toBeNull();
+		expect(
+			parsePickupQr(`role://order/other-order/284731`, ORDER_ID),
+		).toBeNull();
 	});
 
 	it("rejects a QR with a wrong host or scheme", () => {
-		expect(parsePickupQr(`role://fake/${ORDER_ID}/284731`, ORDER_ID)).toBeNull();
-		expect(parsePickupQr(`https://order/${ORDER_ID}/284731`, ORDER_ID)).toBeNull();
+		expect(
+			parsePickupQr(`role://fake/${ORDER_ID}/284731`, ORDER_ID),
+		).toBeNull();
+		expect(
+			parsePickupQr(`https://order/${ORDER_ID}/284731`, ORDER_ID),
+		).toBeNull();
 	});
 
 	it("rejects malformed payloads", () => {

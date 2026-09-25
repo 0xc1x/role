@@ -8,7 +8,12 @@ import { spacing } from "@/src/core/theme/spacing";
 import { useCategories } from "@/src/features/hooks";
 import type { ExploreFilterState } from "@/src/features/explore/exploreTypes";
 
-const FILTER_KEYS = ["category", "maxDistanceKm", "maxPrice", "searchQuery"] as const;
+const FILTER_KEYS = [
+	"category",
+	"maxDistanceKm",
+	"maxPrice",
+	"searchQuery",
+] as const;
 export type ActiveFilterKey = (typeof FILTER_KEYS)[number];
 
 /**
@@ -29,8 +34,8 @@ export function ExploreActiveFiltersBar({
 
 	const categoryName =
 		filters.category != null
-			? categories?.find((c) => c.id === filters.category)?.name ??
-				filters.category
+			? (categories?.find((c) => c.id === filters.category)?.name ??
+				filters.category)
 			: null;
 
 	const chips: Array<{ key: ActiveFilterKey; label: string }> = [];
@@ -82,7 +87,10 @@ const ActiveFilterChip = memo(function ActiveFilterChip({
 	label: string;
 	onClear: (key: ActiveFilterKey) => void;
 }) {
-	const handleClear = useCallback(() => onClear(filterKey), [onClear, filterKey]);
+	const handleClear = useCallback(
+		() => onClear(filterKey),
+		[onClear, filterKey],
+	);
 	return <FilterChip label={label} onClear={handleClear} />;
 });
 

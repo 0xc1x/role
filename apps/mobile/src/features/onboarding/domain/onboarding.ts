@@ -52,7 +52,9 @@ export const ONBOARDING_SEEN_KEY_PREFIX = "onboarding.v1.seen";
  * Clave por viewer: invitado y cada cuenta marcan por separado, así una
  * sesión nueva (o el paso de invitado a cuenta) no hereda la marca vista.
  */
-export function onboardingSeenKey(profileId: string | null | undefined): string {
+export function onboardingSeenKey(
+	profileId: string | null | undefined,
+): string {
 	return `${ONBOARDING_SEEN_KEY_PREFIX}:${profileId ?? "guest"}`;
 }
 

@@ -1,14 +1,14 @@
-import type { z } from 'zod';
-import type { PaginatedData } from '../../_common/dtos/api.dto'
+import type { z } from "zod";
+import type { PaginatedData } from "../../_common/dtos/api.dto";
 import type {
-    CreateSlideSchema,
-    ListSlidesQuerySchema,
-    PatchSlideSchema,
-    SlideListResponseSchema,
-    SlideSchema,
-    UpdateSlideSchema,
-    ViewSlideSchema
-} from '../schemas/slide.schema'
+	CreateSlideSchema,
+	ListSlidesQuerySchema,
+	PatchSlideSchema,
+	SlideListResponseSchema,
+	SlideSchema,
+	UpdateSlideSchema,
+	ViewSlideSchema,
+} from "../schemas/slide.schema";
 
 export type SlideDto = z.infer<typeof SlideSchema>;
 

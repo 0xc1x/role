@@ -11,7 +11,8 @@ import type { OrderDetail } from "@/src/features/orders/domain/order";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function ProductItemsCard({ item }: { item: OrderDetail }) {
-	const { colors, scheme } = useTheme(); return (
+	const { colors, scheme } = useTheme();
+	return (
 		<Card>
 			<CardHeader>
 				<AppText variant="h4" weight="bold" style={{ flex: 1 }}>
@@ -50,10 +51,7 @@ export function ProductItemsCard({ item }: { item: OrderDetail }) {
 							{ backgroundColor: colors.muted },
 						]}
 					>
-						<UtensilsCrossed
-							size={22}
-							color={colors.mutedForeground}
-						/>
+						<UtensilsCrossed size={22} color={colors.mutedForeground} />
 					</View>
 				)}
 				<AppText

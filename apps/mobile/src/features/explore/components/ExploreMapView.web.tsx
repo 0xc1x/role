@@ -49,7 +49,10 @@ export function ExploreMapView({
 	const insets = useSafeAreaInsets();
 	const { data: categories } = useCategories();
 	const [selectedOffer, setSelectedOffer] = useState<OfferDetail | null>(null);
-	const handleSelectOffer = useCallback((offer: OfferDetail) => setSelectedOffer(offer), []);
+	const handleSelectOffer = useCallback(
+		(offer: OfferDetail) => setSelectedOffer(offer),
+		[],
+	);
 	const handleCloseCard = useCallback(() => setSelectedOffer(null), []);
 
 	const locatedOffers = offers.filter((o) => o.location != null);
@@ -68,8 +71,8 @@ export function ExploreMapView({
 	const filterParts = exploreFilterSummary(
 		filters,
 		filters.category != null
-			? categories?.find((c) => c.id === filters.category)?.name ??
-				filters.category
+			? (categories?.find((c) => c.id === filters.category)?.name ??
+					filters.category)
 			: undefined,
 	);
 
@@ -83,7 +86,12 @@ export function ExploreMapView({
 					onRegionChange={() => {}}
 					fitCoords={locatedOffers.slice(0, 20).flatMap((o) =>
 						o.location != null
-							? [{ latitude: o.location.latitude, longitude: o.location.longitude }]
+							? [
+									{
+										latitude: o.location.latitude,
+										longitude: o.location.longitude,
+									},
+								]
 							: [],
 					)}
 				>
@@ -103,13 +111,22 @@ export function ExploreMapView({
 			{/* ── Header ─────────────────────────────────────────────── */}
 			<View style={[styles.header, { top: insets.top + spacing.sm }]}>
 				<View
-					style={[styles.headerCard, { backgroundColor: colors.card, boxShadow: `0px 2px 8px ${colors.shadow}` }]}
+					style={[
+						styles.headerCard,
+						{
+							backgroundColor: colors.card,
+							boxShadow: `0px 2px 8px ${colors.shadow}`,
+						},
+					]}
 				>
 					<Pressable
 						onPress={onBack}
 						accessibilityRole="button"
 						accessibilityLabel={strings.common.back}
-						style={[styles.headerButton, { backgroundColor: colors.surfaceMuted }]}
+						style={[
+							styles.headerButton,
+							{ backgroundColor: colors.surfaceMuted },
+						]}
 					>
 						<ChevronLeft size={22} color={colors.foreground} />
 					</Pressable>
@@ -118,7 +135,11 @@ export function ExploreMapView({
 							{strings.explore.mapOfOffers}
 						</AppText>
 						{filterParts.length > 0 ? (
-							<AppText variant="bodySmall" numberOfLines={1} style={{ color: colors.mutedForeground }}>
+							<AppText
+								variant="bodySmall"
+								numberOfLines={1}
+								style={{ color: colors.mutedForeground }}
+							>
 								{filterParts.join(" · ")}
 							</AppText>
 						) : null}
@@ -130,10 +151,18 @@ export function ExploreMapView({
 						style={[
 							styles.headerButton,
 							{
-								backgroundColor: filters.category != null || filters.maxDistanceKm != null || filters.maxPrice != null
-									? withAlpha(colors.primary, 0.102)
-									: colors.surfaceMuted,
-								borderWidth: filters.category != null || filters.maxDistanceKm != null || filters.maxPrice != null ? 1.5 : 0,
+								backgroundColor:
+									filters.category != null ||
+									filters.maxDistanceKm != null ||
+									filters.maxPrice != null
+										? withAlpha(colors.primary, 0.102)
+										: colors.surfaceMuted,
+								borderWidth:
+									filters.category != null ||
+									filters.maxDistanceKm != null ||
+									filters.maxPrice != null
+										? 1.5
+										: 0,
 								borderColor: colors.primary,
 							},
 						]}
@@ -141,7 +170,9 @@ export function ExploreMapView({
 						<SlidersHorizontal
 							size={20}
 							color={
-								filters.category != null || filters.maxDistanceKm != null || filters.maxPrice != null
+								filters.category != null ||
+								filters.maxDistanceKm != null ||
+								filters.maxPrice != null
 									? colors.primary
 									: colors.mutedForeground
 							}
@@ -154,7 +185,10 @@ export function ExploreMapView({
 			{!hasOffers ? (
 				<View style={[styles.noOffers, { top: 116 }]}>
 					<View style={[styles.noOffersCard, { backgroundColor: colors.card }]}>
-						<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+						<AppText
+							variant="bodyMedium"
+							style={{ color: colors.mutedForeground }}
+						>
 							{strings.explore.noOffersInZone}
 						</AppText>
 					</View>
@@ -163,14 +197,17 @@ export function ExploreMapView({
 
 			{/* ── Card de oferta seleccionada / leyenda ──────────────── */}
 			{selectedOffer ? (
-				<MapOfferCard
-					offer={selectedOffer}
-					onClose={handleCloseCard}
-				/>
+				<MapOfferCard offer={selectedOffer} onClose={handleCloseCard} />
 			) : (
-				<View style={[styles.legend, { bottom: 24, backgroundColor: colors.card }]}>
-					<View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-					<AppText variant="bodySmall">{strings.explore.offersAvailable}</AppText>
+				<View
+					style={[styles.legend, { bottom: 24, backgroundColor: colors.card }]}
+				>
+					<View
+						style={[styles.legendDot, { backgroundColor: colors.primary }]}
+					/>
+					<AppText variant="bodySmall">
+						{strings.explore.offersAvailable}
+					</AppText>
 				</View>
 			)}
 		</View>
@@ -229,7 +266,15 @@ function MapOfferCard({
 	const discount = Math.round(discountPercentage(offer.offer));
 
 	return (
-		<View style={[styles.selectedCard, { backgroundColor: colors.card, boxShadow: `0px 4px 16px ${colors.shadow}` }]}>
+		<View
+			style={[
+				styles.selectedCard,
+				{
+					backgroundColor: colors.card,
+					boxShadow: `0px 4px 16px ${colors.shadow}`,
+				},
+			]}
+		>
 			<View style={styles.selectedImageWrap}>
 				{offer.offer.image ? (
 					<Image
@@ -238,16 +283,32 @@ function MapOfferCard({
 						resizeMode="cover"
 					/>
 				) : (
-					<View style={[styles.selectedImage, { backgroundColor: colors.surfaceMuted }]} />
+					<View
+						style={[
+							styles.selectedImage,
+							{ backgroundColor: colors.surfaceMuted },
+						]}
+					/>
 				)}
 				{discount > 0 ? (
-					<View style={[styles.selectedDiscount, { backgroundColor: colors.primary }]}>
-						<AppText weight="extraBold" style={{ color: colors.primaryForeground, fontSize: 12 }}>
+					<View
+						style={[
+							styles.selectedDiscount,
+							{ backgroundColor: colors.primary },
+						]}
+					>
+						<AppText
+							weight="extraBold"
+							style={{ color: colors.primaryForeground, fontSize: 12 }}
+						>
 							-{discount}%
 						</AppText>
 					</View>
 				) : null}
-				<Pressable onPress={onClose} style={[styles.selectedClose, { backgroundColor: colors.card }]}>
+				<Pressable
+					onPress={onClose}
+					style={[styles.selectedClose, { backgroundColor: colors.card }]}
+				>
 					<X size={16} color={colors.foreground} />
 				</Pressable>
 				<LinearGradient
@@ -272,20 +333,31 @@ function MapOfferCard({
 						variant="bodySmall"
 						style={{
 							color:
-								offer.offer.stock <= 3 ? colors.destructive : colors.mutedForeground,
+								offer.offer.stock <= 3
+									? colors.destructive
+									: colors.mutedForeground,
 						}}
 					>
-						{strings.explore.availableCount.replace("{n}", String(offer.offer.stock))}
+						{strings.explore.availableCount.replace(
+							"{n}",
+							String(offer.offer.stock),
+						)}
 					</AppText>
 				</View>
 				<View style={styles.selectedPriceRow}>
-					<AppText weight="extraBold" style={{ color: colors.primary, fontSize: 20 }}>
+					<AppText
+						weight="extraBold"
+						style={{ color: colors.primary, fontSize: 20 }}
+					>
 						{formatMoney(offer.offer.discounted_price)}
 					</AppText>
 					{offer.offer.original_price > offer.offer.discounted_price ? (
 						<AppText
 							variant="bodySmall"
-							style={{ textDecorationLine: "line-through", color: colors.mutedForeground }}
+							style={{
+								textDecorationLine: "line-through",
+								color: colors.mutedForeground,
+							}}
 						>
 							{formatMoney(offer.offer.original_price)}
 						</AppText>

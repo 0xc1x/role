@@ -44,17 +44,10 @@ export function NoBusinessPrompt() {
 					message={strings.business.newBusinessSubtitle}
 					action={
 						<View style={styles.actions}>
-							<Button
-								onPress={() =>
-									router.push("/my-business/business-new")
-								}
-							>
+							<Button onPress={() => router.push("/my-business/business-new")}>
 								{strings.business.createBusiness}
 							</Button>
-							<Button
-								variant="ghost"
-								onPress={() => setSignOutOpen(true)}
-							>
+							<Button variant="ghost" onPress={() => setSignOutOpen(true)}>
 								{strings.auth.signOut}
 							</Button>
 						</View>

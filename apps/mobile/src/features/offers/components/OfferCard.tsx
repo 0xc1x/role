@@ -53,9 +53,9 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 			: "";
 
 	return (
-		<View >
+		<View>
 			<CardPressable
-				className="p-0 gap-0 border-0 shadow-none" 
+				className="p-0 gap-0 border-0 shadow-none"
 				style={styles.offerCard}
 				onPress={() => router.push(`/offer/${offer.offer.id}`)}
 			>
@@ -69,13 +69,19 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 						/>
 					) : (
 						<View
-							style={[styles.offerImage, { backgroundColor: colors.borderSolid }]}
+							style={[
+								styles.offerImage,
+								{ backgroundColor: colors.borderSolid },
+							]}
 						/>
 					)}
 
 					{discount > 0 && (
 						<View
-							style={[styles.discountBadge, { backgroundColor: colors.primary }]}
+							style={[
+								styles.discountBadge,
+								{ backgroundColor: colors.primary },
+							]}
 						>
 							<AppText
 								style={{
@@ -127,10 +133,7 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 
 							<View style={styles.metaBlock}>
 								<View style={styles.metaRow}>
-									<MapPin
-										size={12}
-										color={colors.mutedForeground}
-									/>
+									<MapPin size={12} color={colors.mutedForeground} />
 									<AppText
 										numberOfLines={1}
 										variant="caption"

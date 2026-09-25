@@ -1,5 +1,5 @@
-import type { z } from 'zod';
-import type { CategorySchema } from '../schemas/category.schema';
+import type { z } from "zod";
+import type { CategorySchema } from "../schemas/category.schema";
 
 /**
  * Row shape for `public.categories` — derivado del schema Zod (SSOT).

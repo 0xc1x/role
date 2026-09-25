@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-	ActivityIndicator,
-	StyleSheet,
-	View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import {
 	CameraView,
 	useCameraPermissions,
@@ -42,7 +38,10 @@ export function PickupScannerSheet({
 	const { colors } = useTheme();
 
 	return (
-		<BottomSheetModal onClose={onClose} title={strings.business.ordersScanTitle}>
+		<BottomSheetModal
+			onClose={onClose}
+			title={strings.business.ordersScanTitle}
+		>
 			<View style={styles.content}>
 				<AppText
 					variant="bodySmall"
@@ -51,20 +50,20 @@ export function PickupScannerSheet({
 					{strings.business.ordersScanHint}
 				</AppText>
 
-			<NativeScanner
-				businessId={businessId}
-				orderId={orderId}
-				onValidated={onValidated}
-				onClose={onClose}
-				colors={colors}
-			/>
+				<NativeScanner
+					businessId={businessId}
+					orderId={orderId}
+					onValidated={onValidated}
+					onClose={onClose}
+					colors={colors}
+				/>
 
-			<Button
-				variant="outline"
-				fullWidth
-				size="lg"
-				onPress={onClose}
-				style={styles.cancel}
+				<Button
+					variant="outline"
+					fullWidth
+					size="lg"
+					onPress={onClose}
+					style={styles.cancel}
 				>
 					{strings.common.cancel}
 				</Button>
@@ -122,7 +121,8 @@ function NativeScanner({
 			validate.mutate(
 				{ orderId: parsed.orderId, pickupCode: parsed.pickupCode },
 				{
-					onSuccess: (result) => setStatus(result.success ? "success" : "error"),
+					onSuccess: (result) =>
+						setStatus(result.success ? "success" : "error"),
 					onError: () => setStatus("error"),
 				},
 			);
@@ -137,7 +137,13 @@ function NativeScanner({
 
 	if (permission === null) {
 		return (
-			<View style={[styles.previewWrap, styles.center, { borderColor: colors.borderSolid }]}>
+			<View
+				style={[
+					styles.previewWrap,
+					styles.center,
+					{ borderColor: colors.borderSolid },
+				]}
+			>
 				<ActivityIndicator color={colors.primary} />
 			</View>
 		);
@@ -149,7 +155,10 @@ function NativeScanner({
 				style={[
 					styles.previewWrap,
 					styles.center,
-					{ borderColor: colors.borderSolid, backgroundColor: colors.inputBackground },
+					{
+						borderColor: colors.borderSolid,
+						backgroundColor: colors.inputBackground,
+					},
 				]}
 			>
 				<Camera size={36} color={colors.mutedForeground} />
@@ -182,7 +191,12 @@ function NativeScanner({
 				onBarcodeScanned={handleBarcode}
 			>
 				{status !== "idle" ? (
-					<View style={[styles.scanOverlay, { backgroundColor: withAlpha(colors.scrim, 0.54) }]}>
+					<View
+						style={[
+							styles.scanOverlay,
+							{ backgroundColor: withAlpha(colors.scrim, 0.54) },
+						]}
+					>
 						{status === "validating" ? (
 							<View style={styles.center}>
 								<ActivityIndicator color={colors.onMedia} size="large" />
@@ -196,10 +210,7 @@ function NativeScanner({
 							</View>
 						) : status === "success" ? (
 							<View style={styles.center}>
-								<CircleCheck
-									size={64}
-									color={colors.success}
-								/>
+								<CircleCheck size={64} color={colors.success} />
 								<AppText
 									variant="bodyMedium"
 									weight="bold"
@@ -210,10 +221,7 @@ function NativeScanner({
 							</View>
 						) : (
 							<View style={styles.center}>
-								<CircleX
-									size={64}
-									color={colors.destructiveVibrant}
-								/>
+								<CircleX size={64} color={colors.destructiveVibrant} />
 								<AppText
 									variant="bodyMedium"
 									weight="bold"
@@ -225,15 +233,15 @@ function NativeScanner({
 									<AppText
 										variant="bodySmall"
 										numberOfLines={1}
-										style={{ color: withAlpha(colors.onMedia, 0.8), marginTop: 4 }}
+										style={{
+											color: withAlpha(colors.onMedia, 0.8),
+											marginTop: 4,
+										}}
 									>
 										{scanned}
 									</AppText>
 								) : null}
-								<Button
-									onPress={reset}
-									accessibilityRole="button"
-								>
+								<Button onPress={reset} accessibilityRole="button">
 									{strings.business.ordersScanAgain}
 								</Button>
 							</View>

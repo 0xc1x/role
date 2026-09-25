@@ -1,11 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import {
-	Animated,
-	Easing,
-	Platform,
-	StyleSheet,
-	View,
-} from "react-native";
+import { Animated, Easing, Platform, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import {
 	CircleCheck,
@@ -128,7 +122,10 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 		new Animated.Value(0),
 		new Animated.Value(0),
 	]);
-	const [lineAnims] = useState(() => [new Animated.Value(0), new Animated.Value(0)]);
+	const [lineAnims] = useState(() => [
+		new Animated.Value(0),
+		new Animated.Value(0),
+	]);
 
 	// Llenado secuencial estación por estación al montar y al cambiar de fase.
 	useEffect(() => {
@@ -184,10 +181,7 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 							{ backgroundColor: colors.muted },
 						]}
 					>
-						<Store
-							size={32}
-							color={colors.mutedForeground}
-						/>
+						<Store size={32} color={colors.mutedForeground} />
 					</View>
 				)}
 
@@ -201,24 +195,18 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 						{item.offerTitle}
 					</AppText>
 					<View style={styles.topRow}>
-						<Store
-							size={15}
-							color={colors.mutedForeground}
-						/>
+						<Store size={15} color={colors.mutedForeground} />
 						<AppText
 							variant="bodyMedium"
 							weight="semiBold"
 							numberOfLines={1}
 							style={styles.businessName}
 						>
-						{item.businessName}
-					</AppText>
-				</View>
+							{item.businessName}
+						</AppText>
+					</View>
 
-					<AppText
-						variant="caption"
-						style={{ color: colors.mutedForeground }}
-					>
+					<AppText variant="caption" style={{ color: colors.mutedForeground }}>
 						{strings.orders.orderNumber.replace("{n}", order.order_number)}
 					</AppText>
 
@@ -227,7 +215,10 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 							label={orderStatusLabels[order.status]}
 							tone={orderStatusTone(order.status)}
 						/>
-						<AppText variant="priceLarge" style={{ color: colors.primary, paddingRight: spacing.sm }}>
+						<AppText
+							variant="priceLarge"
+							style={{ color: colors.primary, paddingRight: spacing.sm }}
+						>
 							{formatMoney(order.price)}
 						</AppText>
 					</View>
@@ -322,30 +313,50 @@ export function OrderCardSkeleton({ active = true }: { active?: boolean }) {
 			accessibilityLabel={strings.common.loading}
 			accessibilityState={{ busy: true }}
 			testID="consumer-order-skeleton"
-			style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}
+			style={[
+				styles.card,
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+			]}
 		>
 			<View style={styles.row}>
 				<Skeleton style={[styles.thumb, { borderRadius: 0 }]} />
 				<View style={styles.content}>
 					<View>
 						<Skeleton style={{ height: typography.h2.lineHeight }} />
-						<Skeleton style={{ height: typography.h2.lineHeight, width: "70%" }} />
+						<Skeleton
+							style={{ height: typography.h2.lineHeight, width: "70%" }}
+						/>
 					</View>
 					<View style={styles.topRow}>
 						<Skeleton style={{ width: 15, height: 15 }} />
-						<Skeleton style={[styles.businessName, { height: typography.bodyMedium.lineHeight }]} />
+						<Skeleton
+							style={[
+								styles.businessName,
+								{ height: typography.bodyMedium.lineHeight },
+							]}
+						/>
 					</View>
-					<Skeleton style={{ height: typography.caption.lineHeight, width: "65%" }} />
+					<Skeleton
+						style={{ height: typography.caption.lineHeight, width: "65%" }}
+					/>
 					<View style={styles.statusRow}>
 						<Skeleton style={[styles.pill, { flex: 1 }]}>
 							<View style={{ height: typography.bodySmall.lineHeight }} />
 						</Skeleton>
-						<Skeleton style={{ width: "35%", height: typography.priceLarge.fontSize * 1.4 }} />
+						<Skeleton
+							style={{
+								width: "35%",
+								height: typography.priceLarge.fontSize * 1.4,
+							}}
+						/>
 					</View>
 				</View>
 			</View>
 			{active ? (
-				<View testID="order-timeline-skeleton" style={[styles.footer, { borderTopColor: colors.border }]}>
+				<View
+					testID="order-timeline-skeleton"
+					style={[styles.footer, { borderTopColor: colors.border }]}
+				>
 					{[0, 1, 2].map((index) => (
 						<Fragment key={index}>
 							{index > 0 ? <Skeleton style={styles.connector} /> : null}

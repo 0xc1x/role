@@ -1,7 +1,12 @@
 import { supabase } from "@/src/core/supabase/client";
 import { toAppError } from "@/src/core/error/mapper";
 
-import { isInValidityWindow, toPromoSlide, type PromoSlide, type SlideRow } from "../domain/slide";
+import {
+	isInValidityWindow,
+	toPromoSlide,
+	type PromoSlide,
+	type SlideRow,
+} from "../domain/slide";
 
 /** Tipos de slide que alimentan el carrusel promocional del home. */
 const PROMO_SLIDE_TYPES = ["ad", "info", "sponsor", "coupon"] as const;
@@ -11,21 +16,21 @@ const PROMO_SLIDE_TYPES = ["ad", "info", "sponsor", "coupon"] as const;
  * El admin las gestiona; el móvil solo consume.
  */
 export async function fetchPromoSlides(): Promise<PromoSlide[]> {
-  const { data, error } = await supabase
-    .from("slides")
-    .select(
-      "id, title, caption, badge_text, cta_label, redirect_url, coupon_code, image_url, text_color, button_color, type, priority, active, start_at, end_at",
-    )
-    .eq("active", true)
-    .is("deleted_at", null)
-    .in("type", [...PROMO_SLIDE_TYPES])
-    .order("priority", { ascending: true });
+	const { data, error } = await supabase
+		.from("slides")
+		.select(
+			"id, title, caption, badge_text, cta_label, redirect_url, coupon_code, image_url, text_color, button_color, type, priority, active, start_at, end_at",
+		)
+		.eq("active", true)
+		.is("deleted_at", null)
+		.in("type", [...PROMO_SLIDE_TYPES])
+		.order("priority", { ascending: true });
 
-  if (error) throw toAppError(error);
+	if (error) throw toAppError(error);
 
-  const slides: PromoSlide[] = [];
-  for (const row of ((data ?? []) as SlideRow[])) {
-    if (isInValidityWindow(row)) slides.push(toPromoSlide(row));
-  }
-  return slides;
+	const slides: PromoSlide[] = [];
+	for (const row of (data ?? []) as SlideRow[]) {
+		if (isInValidityWindow(row)) slides.push(toPromoSlide(row));
+	}
+	return slides;
 }

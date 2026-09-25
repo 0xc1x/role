@@ -83,7 +83,8 @@ export function OrdersFiltersControl({
 							style={({ pressed }) => [
 								styles.option,
 								{
-									backgroundColor: draft === null ? colors.secondary : colors.inputBackground,
+									backgroundColor:
+										draft === null ? colors.secondary : colors.inputBackground,
 									borderColor:
 										draft === null ? colors.secondary : colors.borderSolid,
 									opacity: pressed ? 0.85 : 1,
@@ -94,7 +95,10 @@ export function OrdersFiltersControl({
 								variant="bodyMedium"
 								weight={draft === null ? "semiBold" : "regular"}
 								style={{
-									color: draft === null ? colors.secondaryForeground : colors.foreground,
+									color:
+										draft === null
+											? colors.secondaryForeground
+											: colors.foreground,
 								}}
 							>
 								{strings.business.ordersClear}
@@ -105,50 +109,49 @@ export function OrdersFiltersControl({
 						</Pressable>
 
 						{ALL_STATUSES.map((item) => {
-						const selected = draft === item;
-						return (
-							<Pressable
-								cssInterop={false}
-								key={item}
-								onPress={() => setDraft(item)}
-								style={({ pressed }) => [
-									styles.option,
-									{
-										backgroundColor: selected
-											? colors.secondary
-											: colors.inputBackground,
-										borderColor: selected ? colors.secondary : colors.borderSolid,
-										opacity: pressed ? 0.85 : 1,
-									},
-								]}
-							>
-								<View style={styles.optionLabel}>
-									<View
-										style={[
-											styles.statusDot,
-											{ backgroundColor: statusDotColor(item, colors) },
-										]}
-									/>
-									<AppText
-										variant="bodyMedium"
-										weight={selected ? "semiBold" : "regular"}
-										style={{
-											color: selected
-												? colors.secondaryForeground
-												: colors.foreground,
-										}}
-									>
-										{orderStatusLabels[item]}
-									</AppText>
-								</View>
-								{selected ? (
-									<Check
-										size={18}
-										color={colors.secondaryForeground}
-									/>
-								) : null}
-							</Pressable>
-						);
+							const selected = draft === item;
+							return (
+								<Pressable
+									cssInterop={false}
+									key={item}
+									onPress={() => setDraft(item)}
+									style={({ pressed }) => [
+										styles.option,
+										{
+											backgroundColor: selected
+												? colors.secondary
+												: colors.inputBackground,
+											borderColor: selected
+												? colors.secondary
+												: colors.borderSolid,
+											opacity: pressed ? 0.85 : 1,
+										},
+									]}
+								>
+									<View style={styles.optionLabel}>
+										<View
+											style={[
+												styles.statusDot,
+												{ backgroundColor: statusDotColor(item, colors) },
+											]}
+										/>
+										<AppText
+											variant="bodyMedium"
+											weight={selected ? "semiBold" : "regular"}
+											style={{
+												color: selected
+													? colors.secondaryForeground
+													: colors.foreground,
+											}}
+										>
+											{orderStatusLabels[item]}
+										</AppText>
+									</View>
+									{selected ? (
+										<Check size={18} color={colors.secondaryForeground} />
+									) : null}
+								</Pressable>
+							);
 						})}
 					</ScrollView>
 				</BottomSheetModal>

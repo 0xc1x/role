@@ -35,7 +35,10 @@ export function InstructionsCard({ item }: { item: OrderDetail }) {
 		}
 		if (item.businessAddress) {
 			steps.push(
-				strings.orders.pickupStepGoTo.replace("{address}", item.businessAddress),
+				strings.orders.pickupStepGoTo.replace(
+					"{address}",
+					item.businessAddress,
+				),
 			);
 		}
 		if (order.pickup_code) {
@@ -57,7 +60,10 @@ export function InstructionsCard({ item }: { item: OrderDetail }) {
 					</AlertTitle>
 				) : null}
 				<AlertDescription>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{completed
 							? strings.orders.instructionsCompletedBody
 							: strings.orders.instructionsBody}
@@ -69,7 +75,8 @@ export function InstructionsCard({ item }: { item: OrderDetail }) {
 				<Card
 					style={[
 						{
-							backgroundColor: scheme === "dark" ? colors.card : colors.background,
+							backgroundColor:
+								scheme === "dark" ? colors.card : colors.background,
 							borderColor: colors.borderSolid,
 						},
 					]}
@@ -109,7 +116,10 @@ export function InstructionsCard({ item }: { item: OrderDetail }) {
 											</AppText>
 											<AppText
 												variant="bodySmall"
-												style={[styles.stepText, { color: colors.mutedForeground }]}
+												style={[
+													styles.stepText,
+													{ color: colors.mutedForeground },
+												]}
 											>
 												{step}
 											</AppText>
@@ -127,9 +137,19 @@ export function InstructionsCard({ item }: { item: OrderDetail }) {
 
 const styles = StyleSheet.create({
 	stack: { gap: spacing.lg },
-	accordionHeaderInner: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm },
+	accordionHeaderInner: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+	},
 	accordionTitle: { flex: 1 },
 	steps: { gap: spacing.xs, paddingTop: spacing.lg },
-	stepRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, paddingTop: spacing.xs },
+	stepRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		gap: spacing.sm,
+		paddingTop: spacing.xs,
+	},
 	stepText: { flex: 1, lineHeight: 18 },
 });

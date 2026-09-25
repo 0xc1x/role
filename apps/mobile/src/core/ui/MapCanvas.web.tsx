@@ -17,9 +17,16 @@ function zoomForDelta(delta: number): number {
 	return Math.min(Math.max(zoom, 1), 20);
 }
 
-	const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
+const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 	function MapCanvasInner(
-		{ coords, fullscreen = false, onRegionChange, children, centerPin = true, fitCoords },
+		{
+			coords,
+			fullscreen = false,
+			onRegionChange,
+			children,
+			centerPin = true,
+			fitCoords,
+		},
 		ref,
 	) {
 		const { colors, scheme } = useTheme();
@@ -103,12 +110,12 @@ function zoomForDelta(delta: number): number {
 				</Map>
 				{centerPin ? (
 					<View style={[styles.pinWrap, { pointerEvents: "none" }]}>
-					<MapPin
-						size={40}
-						color={colors.primary}
-						fill="none"
-						style={styles.pin}
-					/>
+						<MapPin
+							size={40}
+							color={colors.primary}
+							fill="none"
+							style={styles.pin}
+						/>
 					</View>
 				) : null}
 			</View>

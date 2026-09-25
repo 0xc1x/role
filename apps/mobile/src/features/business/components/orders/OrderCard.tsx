@@ -11,7 +11,10 @@ import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { typography } from "@/src/core/theme/typography";
 import { formatDateTime, formatMoney } from "@/src/core/utils/formatters";
-import { orderStatusLabels, orderStatusTone } from "@/src/features/orders/domain/order";
+import {
+	orderStatusLabels,
+	orderStatusTone,
+} from "@/src/features/orders/domain/order";
 import type { OrderDetail } from "@/src/features/orders/domain/order";
 import { OrderActionButtons } from "./OrderActionButtons";
 
@@ -27,10 +30,17 @@ export function OrderCard({
 }) {
 	const { colors } = useTheme();
 	const { order } = item;
-	const hasActions = ["pending", "confirmed", "ready_for_pickup"].includes(order.status);
+	const hasActions = ["pending", "confirmed", "ready_for_pickup"].includes(
+		order.status,
+	);
 
 	return (
-		<View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+		<View
+			style={[
+				styles.card,
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+			]}
+		>
 			<CardPressable
 				className="p-0 gap-0 border-0 shadow-none"
 				style={{
@@ -47,11 +57,14 @@ export function OrderCard({
 							contentFit="cover"
 						/>
 					) : (
-						<View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.borderSolid }]}>
-							<UtensilsCrossed
-								size={26}
-								color={colors.mutedForeground}
-							/>
+						<View
+							style={[
+								styles.thumb,
+								styles.thumbPlaceholder,
+								{ backgroundColor: colors.borderSolid },
+							]}
+						>
+							<UtensilsCrossed size={26} color={colors.mutedForeground} />
 						</View>
 					)}
 
@@ -70,8 +83,14 @@ export function OrderCard({
 							</AppText>
 						</View>
 
-						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-							{strings.business.ordersOrderLine.replace("{n}", order.order_number)}
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground }}
+						>
+							{strings.business.ordersOrderLine.replace(
+								"{n}",
+								order.order_number,
+							)}
 						</AppText>
 
 						{item.customerName ? (
@@ -87,7 +106,10 @@ export function OrderCard({
 						) : null}
 
 						<View style={styles.bottomRow}>
-							<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+							<AppText
+								variant="bodySmall"
+								style={{ color: colors.mutedForeground }}
+							>
 								{formatDateTime(order.created_at)}
 							</AppText>
 							<StatusBadge
@@ -101,7 +123,9 @@ export function OrderCard({
 
 			{hasActions ? (
 				<>
-					<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
+					<View
+						style={[styles.divider, { backgroundColor: colors.borderSolid }]}
+					/>
 					<OrderActionButtons businessId={businessId} item={item} />
 				</>
 			) : null}
@@ -131,23 +155,38 @@ export function OrderCardSkeleton({ active = true }: { active?: boolean }) {
 					<View style={styles.titleRow}>
 						<View style={{ flex: 1 }}>
 							<Skeleton style={{ height: typography.h4.lineHeight }} />
-							<Skeleton style={{ height: typography.h4.lineHeight, width: "70%" }} />
+							<Skeleton
+								style={{ height: typography.h4.lineHeight, width: "70%" }}
+							/>
 						</View>
-						<Skeleton style={{ width: "30%", height: typography.price.fontSize * 1.4 }} />
+						<Skeleton
+							style={{ width: "30%", height: typography.price.fontSize * 1.4 }}
+						/>
 					</View>
-					<Skeleton style={{ height: typography.bodySmall.lineHeight, width: "65%" }} />
+					<Skeleton
+						style={{ height: typography.bodySmall.lineHeight, width: "65%" }}
+					/>
 					<View style={styles.customerRow}>
-						<Skeleton style={{ height: typography.labelSmall.fontSize * 1.4, width: "80%" }} />
+						<Skeleton
+							style={{
+								height: typography.labelSmall.fontSize * 1.4,
+								width: "80%",
+							}}
+						/>
 					</View>
 					<View style={styles.bottomRow}>
-						<Skeleton style={{ height: typography.bodySmall.lineHeight, flex: 1 }} />
+						<Skeleton
+							style={{ height: typography.bodySmall.lineHeight, flex: 1 }}
+						/>
 						<Skeleton style={styles.skeletonBadge} />
 					</View>
 				</View>
 			</View>
 			{active ? (
 				<View testID="order-actions-skeleton">
-					<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
+					<View
+						style={[styles.divider, { backgroundColor: colors.borderSolid }]}
+					/>
 					<Skeleton style={styles.skeletonAction} />
 				</View>
 			) : null}

@@ -1,12 +1,20 @@
 import { useState } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import {
-	Modal,
-	Pressable,
-	ScrollView,
-	StyleSheet,
-	View,
-} from "react-native";
-import { Briefcase, Building, Building2, ChevronRight, Ellipsis, House, List, Map, MapPin, Pencil, Square, SquareCheck, type LucideIcon } from "lucide-react-native";
+	Briefcase,
+	Building,
+	Building2,
+	ChevronRight,
+	Ellipsis,
+	House,
+	List,
+	Map,
+	MapPin,
+	Pencil,
+	Square,
+	SquareCheck,
+	type LucideIcon,
+} from "lucide-react-native";
 import { toast } from "sonner-native";
 import type { AddressType, SavedAddress } from "@0xc1x/role-commons";
 
@@ -26,10 +34,18 @@ const TYPE_OPTIONS: { type: AddressType; label: string }[] = [
 ];
 
 const HOUSING_OPTIONS: { value: string; label: string; icon: LucideIcon }[] = [
-	{ value: "apartment", label: strings.addresses.housingApartment, icon: Building2 },
+	{
+		value: "apartment",
+		label: strings.addresses.housingApartment,
+		icon: Building2,
+	},
 	{ value: "house", label: strings.addresses.housingHouse, icon: House },
 	{ value: "office", label: strings.addresses.housingOffice, icon: Briefcase },
-	{ value: "building", label: strings.addresses.housingBuilding, icon: Building },
+	{
+		value: "building",
+		label: strings.addresses.housingBuilding,
+		icon: Building,
+	},
 	{ value: "other", label: strings.addresses.housingOther, icon: Ellipsis },
 ];
 
@@ -63,7 +79,11 @@ export function AddAddressSheet({
 	const [isDefault, setIsDefault] = useState(address?.is_default ?? false);
 	const [picked, setPicked] = useState<MapPickerResult | null>(
 		address
-			? { latitude: address.latitude, longitude: address.longitude, address: address.address }
+			? {
+					latitude: address.latitude,
+					longitude: address.longitude,
+					address: address.address,
+				}
 			: null,
 	);
 	const [saving, setSaving] = useState(false);
@@ -132,7 +152,10 @@ export function AddAddressSheet({
 			onSettled: () => setSaving(false),
 		};
 		if (address) {
-			update.mutate({ id: address.id, userId, ...payload, isDefault }, callbacks);
+			update.mutate(
+				{ id: address.id, userId, ...payload, isDefault },
+				callbacks,
+			);
 		} else {
 			save.mutate(payload, callbacks);
 		}
@@ -141,11 +164,16 @@ export function AddAddressSheet({
 	return (
 		<BottomSheetModal
 			onClose={onClose}
-			title={address ? strings.addresses.editTitle : strings.addresses.whereDeliver}
+			title={
+				address ? strings.addresses.editTitle : strings.addresses.whereDeliver
+			}
 		>
 			<View style={styles.scrollContent}>
 				<View
-					style={[styles.segmented, { backgroundColor: colors.inputBackground }]}
+					style={[
+						styles.segmented,
+						{ backgroundColor: colors.inputBackground },
+					]}
 				>
 					{TYPE_OPTIONS.map((option) => {
 						const isSelected = selectedType === option.type;
@@ -158,8 +186,9 @@ export function AddAddressSheet({
 									{ borderColor: colors.borderSolid },
 									isSelected && {
 										backgroundColor: colors.card,
-										boxShadow: `0px 2px 4px ${colors.shadow}`,		
-										borderColor: colors.border },
+										boxShadow: `0px 2px 4px ${colors.shadow}`,
+										borderColor: colors.border,
+									},
 								]}
 							>
 								<AppText
@@ -178,9 +207,9 @@ export function AddAddressSheet({
 					})}
 				</View>
 
-			<FieldLabel>{strings.addresses.nameAddress}</FieldLabel>
-			<IconInput
-				icon={Pencil}
+				<FieldLabel>{strings.addresses.nameAddress}</FieldLabel>
+				<IconInput
+					icon={Pencil}
 					value={label}
 					onChangeText={setLabel}
 					placeholder={strings.addresses.nameHint}
@@ -233,9 +262,9 @@ export function AddAddressSheet({
 					<ChevronRight size={18} color={colors.mutedForeground} />
 				</Pressable>
 
-			<FieldLabel>{strings.addresses.exactAddress}</FieldLabel>
-			<IconInput
-				icon={MapPin}
+				<FieldLabel>{strings.addresses.exactAddress}</FieldLabel>
+				<IconInput
+					icon={MapPin}
 					value={addressText}
 					onChangeText={setAddressText}
 					placeholder={strings.addresses.addressHint}
@@ -243,31 +272,29 @@ export function AddAddressSheet({
 
 				<FieldLabel>{strings.addresses.housingType}</FieldLabel>
 				<View style={styles.chipsRow}>
-				{HOUSING_OPTIONS.map((option) => {
-					const isSelected = housingType === option.value;
-					const OptionIcon = option.icon;
-					return (
+					{HOUSING_OPTIONS.map((option) => {
+						const isSelected = housingType === option.value;
+						const OptionIcon = option.icon;
+						return (
 							<Pressable
 								key={option.value}
-								onPress={() =>
-									setHousingType(isSelected ? null : option.value)
-								}
+								onPress={() => setHousingType(isSelected ? null : option.value)}
 								style={[
 									styles.chip,
 									{
-										borderColor: colors.borderSolid ,
+										borderColor: colors.borderSolid,
 										backgroundColor: isSelected
 											? colors.foreground
 											: withAlpha(colors.inputBackground, 0.502),
 									},
 								]}
 							>
-						<OptionIcon
-								size={14}
-								color={
-									isSelected ? colors.background : colors.mutedForeground
-								}
-							/>
+								<OptionIcon
+									size={14}
+									color={
+										isSelected ? colors.background : colors.mutedForeground
+									}
+								/>
 								<AppText
 									variant="bodySmall"
 									weight="semiBold"
@@ -282,9 +309,9 @@ export function AddAddressSheet({
 					})}
 				</View>
 
-			<FieldLabel>{strings.addresses.references}</FieldLabel>
-			<IconInput
-				icon={List}
+				<FieldLabel>{strings.addresses.references}</FieldLabel>
+				<IconInput
+					icon={List}
 					value={references}
 					onChangeText={setReferences}
 					placeholder={strings.addresses.referencesHint}
@@ -376,7 +403,7 @@ const styles = StyleSheet.create({
 		paddingVertical: 10,
 		borderRadius: radii.lg,
 		alignItems: "center",
-		borderWidth: 1, 
+		borderWidth: 1,
 		marginHorizontal: 2,
 	},
 	mapCard: {
@@ -407,7 +434,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.sm,
 		borderRadius: radii.pill,
-		borderWidth: 1, 
+		borderWidth: 1,
 	},
 	defaultRow: {
 		flexDirection: "row",

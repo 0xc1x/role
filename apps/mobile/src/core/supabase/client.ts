@@ -10,15 +10,15 @@ import { supabaseSessionStorage } from "./storage";
  * data boundary) — there is no API intermediary for consumer flows.
  */
 export const supabase: SupabaseClient = createClient(
-  env.EXPO_PUBLIC_SUPABASE_URL,
-  env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      // Native sessions use SecureStore; web keeps localStorage.
-      storage: supabaseSessionStorage,
-    },
-  },
+	env.EXPO_PUBLIC_SUPABASE_URL,
+	env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+	{
+		auth: {
+			persistSession: true,
+			autoRefreshToken: true,
+			detectSessionInUrl: true,
+			// Native sessions use SecureStore; web keeps localStorage.
+			storage: supabaseSessionStorage,
+		},
+	},
 );

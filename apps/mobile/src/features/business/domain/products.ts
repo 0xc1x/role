@@ -95,13 +95,18 @@ export function productStats(offers: OfferDetail[]): ProductStats {
 	for (const o of offers) {
 		const offer = o.offer;
 		if (offer.is_active) activeCount += 1;
-		soldToday += Math.max(0, (offer.initial_stock ?? offer.stock) - offer.stock);
+		soldToday += Math.max(
+			0,
+			(offer.initial_stock ?? offer.stock) - offer.stock,
+		);
 		availableCount += offer.stock;
 	}
 	return { activeCount, soldToday, availableCount };
 }
 
-function bySort(sort: ProductsSort): (a: OfferDetail, b: OfferDetail) => number {
+function bySort(
+	sort: ProductsSort,
+): (a: OfferDetail, b: OfferDetail) => number {
 	switch (sort) {
 		case "newest":
 			return (a, b) => ts(b.offer.created_at) - ts(a.offer.created_at);

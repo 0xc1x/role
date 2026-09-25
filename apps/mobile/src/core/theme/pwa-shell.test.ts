@@ -5,16 +5,18 @@ mock.module("react-native", () => ({
 	Platform: { OS: "web" },
 }));
 
-const {
-	IOS_PWA_NAVBAR_OVERLAP,
-	getIosPwaNavbarOverlap,
-} = await import("../ios-pwa-navbar");
+const { IOS_PWA_NAVBAR_OVERLAP, getIosPwaNavbarOverlap } = await import(
+	"../ios-pwa-navbar"
+);
 
 const shell = readFileSync(
 	new URL("../../../public/index.html", import.meta.url),
 	"utf8",
 );
-const themeSource = readFileSync(new URL("./index.tsx", import.meta.url), "utf8");
+const themeSource = readFileSync(
+	new URL("./index.tsx", import.meta.url),
+	"utf8",
+);
 const consumerLayoutSource = readFileSync(
 	new URL("../../../app/(consumer)/_layout.tsx", import.meta.url),
 	"utf8",
@@ -51,9 +53,13 @@ describe("PWA web shell", () => {
 
 	test("hides the HTML splash only for iOS standalone", () => {
 		expect(shell).toContain("/iPad|iPhone|iPod/.test(navigator.userAgent)");
-		expect(shell).toContain('window.matchMedia?.("(display-mode: standalone)")');
+		expect(shell).toContain(
+			'window.matchMedia?.("(display-mode: standalone)")',
+		);
 		expect(shell).toContain("navigator.standalone === true");
-		expect(shell).toContain('document.documentElement.dataset.iosStandalone = "true"');
+		expect(shell).toContain(
+			'document.documentElement.dataset.iosStandalone = "true"',
+		);
 		expect(shell).toMatch(
 			/html\[data-ios-standalone="true"\]\s+#boot-splash\s*\{[^}]*display:\s*none !important;/,
 		);
@@ -62,7 +68,9 @@ describe("PWA web shell", () => {
 
 	test("keeps ThemeProvider persisted mode and web canvas in sync", () => {
 		expect(themeSource).toContain('const THEME_MODE_KEY = "role.themeMode";');
-		expect(themeSource).toContain('document.documentElement.classList.toggle("dark"');
+		expect(themeSource).toContain(
+			'document.documentElement.classList.toggle("dark"',
+		);
 		expect(themeSource).toMatch(
 			/style\.setProperty\(\s*"--page-background",\s*colorTokens\[resolved\]\.background,?\s*\);/,
 		);
@@ -70,9 +78,9 @@ describe("PWA web shell", () => {
 
 	test("uses the validated overlap only for the iOS standalone web marker", () => {
 		expect(IOS_PWA_NAVBAR_OVERLAP).toBe(30);
-		expect(
-			getIosPwaNavbarOverlap("web", htmlDocument("true")),
-		).toBe(IOS_PWA_NAVBAR_OVERLAP);
+		expect(getIosPwaNavbarOverlap("web", htmlDocument("true"))).toBe(
+			IOS_PWA_NAVBAR_OVERLAP,
+		);
 		expect(getIosPwaNavbarOverlap("ios", htmlDocument("true"))).toBe(0);
 
 		for (const surface of ["desktop web", "Android web"]) {
@@ -81,16 +89,11 @@ describe("PWA web shell", () => {
 	});
 
 	test("applies the shared overlap to both tab shell wrappers", () => {
-		for (const layoutSource of [
-			consumerLayoutSource,
-			businessLayoutSource,
-		]) {
+		for (const layoutSource of [consumerLayoutSource, businessLayoutSource]) {
 			expect(layoutSource).toContain(
 				'import { getIosPwaNavbarOverlap } from "@/src/core/ios-pwa-navbar";',
 			);
-			expect(layoutSource).toContain(
-				"bottom: -getIosPwaNavbarOverlap()",
-			);
+			expect(layoutSource).toContain("bottom: -getIosPwaNavbarOverlap()");
 		}
 
 		expect(consumerLayoutSource).toContain("<OuterBar />");

@@ -6,17 +6,15 @@ import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-	AppText,
-	EmptyState,
-	ErrorState,
-	Screen,
-} from "@/src/core/ui";
+import { AppText, EmptyState, ErrorState, Screen } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
 import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
-import { LocationCard, LocationCardSkeleton } from "@/src/features/business/components/LocationCard";
+import {
+	LocationCard,
+	LocationCardSkeleton,
+} from "@/src/features/business/components/LocationCard";
 import {
 	useBusinessLocations,
 	useBusinessProfile,
@@ -35,10 +33,8 @@ export function GestionContent({ businessId }: { businessId: string }) {
 		error,
 		refetch,
 	} = useBusinessProfile(businessId);
-	const {
-		data: locations,
-		isLoading: locationsLoading,
-	} = useBusinessLocations(businessId);
+	const { data: locations, isLoading: locationsLoading } =
+		useBusinessLocations(businessId);
 
 	if (isLoading) return <GestionContentSkeleton />;
 	if (isError)
@@ -67,9 +63,11 @@ export function GestionContent({ businessId }: { businessId: string }) {
 					]}
 				>
 					<View style={styles.coverWrap}>
-						{business.cover_image ?? business.image ? (
+						{(business.cover_image ?? business.image) ? (
 							<Image
-								source={{ uri: (business.cover_image ?? business.image) as string }}
+								source={{
+									uri: (business.cover_image ?? business.image) as string,
+								}}
 								style={StyleSheet.absoluteFill}
 								contentFit="cover"
 							/>
@@ -82,7 +80,11 @@ export function GestionContent({ businessId }: { businessId: string }) {
 							/>
 						)}
 						<LinearGradient
-							colors={["transparent", withAlpha(colors.scrim, 0.55), colors.card]}
+							colors={[
+								"transparent",
+								withAlpha(colors.scrim, 0.55),
+								colors.card,
+							]}
 							locations={[0.35, 0.75, 1]}
 							style={StyleSheet.absoluteFill}
 						/>
@@ -96,18 +98,31 @@ export function GestionContent({ businessId }: { businessId: string }) {
 									contentFit="cover"
 								/>
 							) : (
-								<View style={[styles.logo, styles.logoPlaceholder, { backgroundColor: colors.primary }]}>
+								<View
+									style={[
+										styles.logo,
+										styles.logoPlaceholder,
+										{ backgroundColor: colors.primary },
+									]}
+								>
 									<Store size={28} color={colors.primaryForeground} />
 								</View>
 							)}
 							<View style={{ flex: 1, gap: 4 }}>
-								<View style={[styles.typeBadge, { backgroundColor: withAlpha(colors.destructive, 0.16) }]}>
+								<View
+									style={[
+										styles.typeBadge,
+										{ backgroundColor: withAlpha(colors.destructive, 0.16) },
+									]}
+								>
 									<AppText
 										variant="labelSmall"
 										weight="bold"
 										style={{ color: colors.destructive }}
 									>
-										{(BUSINESS_TYPE_LABELS[business.type] ?? business.type).toUpperCase()}
+										{(
+											BUSINESS_TYPE_LABELS[business.type] ?? business.type
+										).toUpperCase()}
 									</AppText>
 								</View>
 								<AppText variant="h2" weight="bold">
@@ -160,7 +175,7 @@ export function GestionContent({ businessId }: { businessId: string }) {
 						onPress={() =>
 							router.push(`/business/${businessId}/locations/create` as Href)
 						}
-						style={{borderRadius: radii.pill}}
+						style={{ borderRadius: radii.pill }}
 					>
 						{strings.business.addLocation}
 					</Button>

@@ -131,7 +131,10 @@ function OfferRowView({
 			) : isError ? (
 				<AppText
 					variant="bodyMedium"
-					style={{ color: colors.mutedForeground, paddingHorizontal: spacing.xl }}
+					style={{
+						color: colors.mutedForeground,
+						paddingHorizontal: spacing.xl,
+					}}
 				>
 					{strings.home.noOffers}
 				</AppText>
@@ -166,7 +169,13 @@ export function OfferRowSection(props: OfferRowSectionProps) {
 
 type RowProps = Omit<OfferRowSectionProps, "type">;
 
-function PopularRow({ title, icon, limit = 10, category = null, onSeeAll }: RowProps) {
+function PopularRow({
+	title,
+	icon,
+	limit = 10,
+	category = null,
+	onSeeAll,
+}: RowProps) {
 	const q = usePopularOffers(limit, category);
 	return (
 		<OfferRowView
@@ -208,7 +217,13 @@ function RecentRow({ title, icon, limit = 10, onSeeAll }: RowProps) {
 	);
 }
 
-function NearbyRow({ title, icon, limit = 10, category = null, onSeeAll }: RowProps) {
+function NearbyRow({
+	title,
+	icon,
+	limit = 10,
+	category = null,
+	onSeeAll,
+}: RowProps) {
 	const q = useNearbyOffersHook(limit, category);
 	return (
 		<OfferRowView
@@ -235,7 +250,11 @@ export function OfferColumnSection({
 }) {
 	const { colors } = useTheme();
 	const selectedAddress = useSelectedAddress();
-	const { data: offers, isLoading, isError } = useNearbyOffersHook(limit, category);
+	const {
+		data: offers,
+		isLoading,
+		isError,
+	} = useNearbyOffersHook(limit, category);
 
 	const hasLocation =
 		selectedAddress?.latitude != null && selectedAddress?.longitude != null;
@@ -251,10 +270,7 @@ export function OfferColumnSection({
 								{ backgroundColor: withAlpha(colors.primary, 0.078) },
 							]}
 						>
-							<MapPin
-								size={20}
-								color={colors.primary}
-							/>
+							<MapPin size={20} color={colors.primary} />
 						</View>
 						<View style={styles.locationPromptText}>
 							<AppText variant="bodyMedium" weight="semiBold">
@@ -289,7 +305,10 @@ export function OfferColumnSection({
 			) : isError ? (
 				<AppText
 					variant="bodyMedium"
-					style={{ color: colors.mutedForeground, paddingHorizontal: spacing.xl }}
+					style={{
+						color: colors.mutedForeground,
+						paddingHorizontal: spacing.xl,
+					}}
 				>
 					{strings.home.noOffers}
 				</AppText>

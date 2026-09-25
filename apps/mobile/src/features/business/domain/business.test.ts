@@ -31,10 +31,30 @@ describe("business domain constants", () => {
 
 describe("filterBusinessReviews", () => {
 	const reviews = [
-		review({ id: "a", productRating: 3, businessRating: 4, date: "2026-03-01T00:00:00Z" }),
-		review({ id: "b", productRating: 5, businessRating: 5, date: "2026-01-01T00:00:00Z" }),
-		review({ id: "c", productRating: 2, businessRating: 1, date: "2026-02-01T00:00:00Z" }),
-		review({ id: "d", productRating: 5, businessRating: 3, date: "2025-12-01T00:00:00Z" }),
+		review({
+			id: "a",
+			productRating: 3,
+			businessRating: 4,
+			date: "2026-03-01T00:00:00Z",
+		}),
+		review({
+			id: "b",
+			productRating: 5,
+			businessRating: 5,
+			date: "2026-01-01T00:00:00Z",
+		}),
+		review({
+			id: "c",
+			productRating: 2,
+			businessRating: 1,
+			date: "2026-02-01T00:00:00Z",
+		}),
+		review({
+			id: "d",
+			productRating: 5,
+			businessRating: 3,
+			date: "2025-12-01T00:00:00Z",
+		}),
 	];
 
 	test("recent ordena por fecha descendente sin filtrar", () => {
@@ -48,20 +68,28 @@ describe("filterBusinessReviews", () => {
 
 	test("recommended conserva solo promedio >= 4, mejor puntuadas primero", () => {
 		// b: 5.0, d: 4.0; a: 3.5 y c: 1.5 quedan fuera.
-		expect(filterBusinessReviews(reviews, "recommended").map((r) => r.id)).toEqual([
-			"b",
-			"d",
-		]);
+		expect(
+			filterBusinessReviews(reviews, "recommended").map((r) => r.id),
+		).toEqual(["b", "d"]);
 	});
 
 	test("empate en promedio se resuelve por fecha más reciente", () => {
 		const tied = [
-			review({ id: "old", productRating: 5, businessRating: 3, date: "2025-01-01T00:00:00Z" }),
-			review({ id: "new", productRating: 4, businessRating: 4, date: "2026-06-01T00:00:00Z" }),
+			review({
+				id: "old",
+				productRating: 5,
+				businessRating: 3,
+				date: "2025-01-01T00:00:00Z",
+			}),
+			review({
+				id: "new",
+				productRating: 4,
+				businessRating: 4,
+				date: "2026-06-01T00:00:00Z",
+			}),
 		];
-		expect(filterBusinessReviews(tied, "recommended").map((r) => r.id)).toEqual([
-			"new",
-			"old",
-		]);
+		expect(filterBusinessReviews(tied, "recommended").map((r) => r.id)).toEqual(
+			["new", "old"],
+		);
 	});
 });

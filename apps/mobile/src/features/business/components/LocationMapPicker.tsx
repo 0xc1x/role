@@ -48,8 +48,7 @@ export function LocationMapPicker({
 	onRegionChange: (region: MapRegion) => void;
 }) {
 	const { colors } = useTheme();
-	const hasInitial =
-		latitude !== 0 || longitude !== 0;
+	const hasInitial = latitude !== 0 || longitude !== 0;
 	const [coords, setCoords] = useState(
 		hasInitial
 			? { latitude, longitude }
@@ -115,7 +114,10 @@ export function LocationMapPicker({
 		}
 	};
 
-	const confirmFullscreen = (region: { latitude: number; longitude: number }) => {
+	const confirmFullscreen = (region: {
+		latitude: number;
+		longitude: number;
+	}) => {
 		emitRegion(region);
 		setFullscreen(false);
 	};
@@ -143,12 +145,7 @@ export function LocationMapPicker({
 	}
 
 	return (
-		<View
-			style={[
-				styles.wrapper,
-				{ borderColor: colors.borderSolid },
-			]}
-		>
+		<View style={[styles.wrapper, { borderColor: colors.borderSolid }]}>
 			<Suspense
 				fallback={
 					<View
@@ -167,7 +164,10 @@ export function LocationMapPicker({
 					onPress={() => void useMyLocation()}
 					style={({ pressed }) => [
 						styles.actionButton,
-						{ backgroundColor: colors.card, boxShadow: `0px 2px 4px ${colors.shadow}` },
+						{
+							backgroundColor: colors.card,
+							boxShadow: `0px 2px 4px ${colors.shadow}`,
+						},
 						pressed && { opacity: 0.85 },
 					]}
 					accessibilityRole="button"
@@ -183,7 +183,10 @@ export function LocationMapPicker({
 					onPress={() => setFullscreen(true)}
 					style={({ pressed }) => [
 						styles.actionButton,
-						{ backgroundColor: colors.card, boxShadow: `0px 2px 4px ${colors.shadow}` },
+						{
+							backgroundColor: colors.card,
+							boxShadow: `0px 2px 4px ${colors.shadow}`,
+						},
 						pressed && { opacity: 0.85 },
 					]}
 					accessibilityRole="button"
@@ -238,16 +241,13 @@ function FullscreenMap({
 					onRegionChange={(region) => setCoords(region)}
 				/>
 			</Suspense>
-			<View style={[styles.fullscreenBar, { borderTopColor: colors.borderSolid }]}>
-				<Button
-					variant="outline"
-					onPress={onClose}
-				>
+			<View
+				style={[styles.fullscreenBar, { borderTopColor: colors.borderSolid }]}
+			>
+				<Button variant="outline" onPress={onClose}>
 					{strings.business.cancel}
 				</Button>
-				<Button
-					onPress={() => onConfirm(coords)}
-				>
+				<Button onPress={() => onConfirm(coords)}>
 					{strings.business.confirmMapPin}
 				</Button>
 			</View>

@@ -1,14 +1,14 @@
-import { z } from 'zod';
-import { ADDRESS_TYPES } from '../enums/address-type';
-import { APP_ROLES } from '../enums/app-role';
-import { DAYS_OF_WEEK } from '../enums/day-of-week';
-import { PLATFORMS } from '../enums/platform';
-import { BUSINESS_TYPES } from '../../business/enums/business-type';
-import { COUPON_TYPES } from '../../catalog/enums/coupon-type';
-import { ORDER_STATUSES } from '../../order/enums/order-status';
-import { PAYMENT_GATEWAYS } from '../../payment/enums/payment-gateway';
-import { PAYMENT_INTENT_STATUSES } from '../../payment/enums/payment-intent-status';
-import { PAYOUT_STATUSES } from '../../payment/enums/payout-status';
+import { z } from "zod";
+import { ADDRESS_TYPES } from "../enums/address-type";
+import { APP_ROLES } from "../enums/app-role";
+import { DAYS_OF_WEEK } from "../enums/day-of-week";
+import { PLATFORMS } from "../enums/platform";
+import { BUSINESS_TYPES } from "../../business/enums/business-type";
+import { COUPON_TYPES } from "../../catalog/enums/coupon-type";
+import { ORDER_STATUSES } from "../../order/enums/order-status";
+import { PAYMENT_GATEWAYS } from "../../payment/enums/payment-gateway";
+import { PAYMENT_INTENT_STATUSES } from "../../payment/enums/payment-intent-status";
+import { PAYOUT_STATUSES } from "../../payment/enums/payout-status";
 
 /** UUID string (matches Postgres `uuid`) */
 export const UuidSchema = z.uuid();
@@ -20,9 +20,7 @@ export const TimestamptzSchema = z.string().min(1);
 export const DateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 /** Time of day `HH:MM` or `HH:MM:SS` */
-export const TimeSchema = z
-  .string()
-  .regex(/^\d{2}:\d{2}(:\d{2})?$/);
+export const TimeSchema = z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/);
 
 export const JsonObjectSchema = z.record(z.string(), z.unknown());
 

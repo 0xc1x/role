@@ -50,18 +50,32 @@ export function OrderActionButtons({
 			<>
 				<View style={styles.row}>
 					<Button
-						style={[styles.action, styles.markReady, { backgroundColor: colors.info }]}
+						style={[
+							styles.action,
+							styles.markReady,
+							{ backgroundColor: colors.info },
+						]}
 						onPress={markReady}
 						loading={updateStatus.isPending}
 					>
-						<AppText variant="bodyMedium" weight="semiBold" style={[styles.label, { color: colors.primaryForeground }]}>
+						<AppText
+							variant="bodyMedium"
+							weight="semiBold"
+							style={[styles.label, { color: colors.primaryForeground }]}
+						>
 							{strings.business.ordersMarkReady}
 						</AppText>
 					</Button>
 					<Button
 						variant="outline"
 						size="icon"
-						style={[styles.cancelBtn, { backgroundColor: colors.inputBackground, borderColor: colors.borderSolid }]}
+						style={[
+							styles.cancelBtn,
+							{
+								backgroundColor: colors.inputBackground,
+								borderColor: colors.borderSolid,
+							},
+						]}
 						disabled={updateStatus.isPending}
 						onPress={handleCancel}
 						accessibilityRole="button"
@@ -69,11 +83,18 @@ export function OrderActionButtons({
 						icon={<CircleX size={20} color={colors.destructive} />}
 					/>
 				</View>
-				<AlertDialog open={confirmCancelOpen} onOpenChange={setConfirmCancelOpen}>
+				<AlertDialog
+					open={confirmCancelOpen}
+					onOpenChange={setConfirmCancelOpen}
+				>
 					<AlertDialogContent>
 						<AlertDialogHeader>
-							<AlertDialogTitle>{strings.business.ordersCancelOrder}</AlertDialogTitle>
-							<AlertDialogDescription>{strings.business.ordersCancelConfirm}</AlertDialogDescription>
+							<AlertDialogTitle>
+								{strings.business.ordersCancelOrder}
+							</AlertDialogTitle>
+							<AlertDialogDescription>
+								{strings.business.ordersCancelConfirm}
+							</AlertDialogDescription>
 						</AlertDialogHeader>
 						<AlertDialogFooter>
 							<AlertDialogCancel>
@@ -96,7 +117,11 @@ export function OrderActionButtons({
 				onPress={markReady}
 				loading={updateStatus.isPending}
 			>
-				<AppText variant="bodyMedium" weight="semiBold" style={[styles.label, { color: colors.primaryForeground }]}>
+				<AppText
+					variant="bodyMedium"
+					weight="semiBold"
+					style={[styles.label, { color: colors.primaryForeground }]}
+				>
 					{strings.business.ordersMarkReady}
 				</AppText>
 			</Button>
@@ -107,10 +132,18 @@ export function OrderActionButtons({
 		return (
 			<Button
 				icon={<QrCode size={18} color={colors.primaryForeground} />}
-				style={[styles.action, styles.full, { backgroundColor: colors.success }]}
+				style={[
+					styles.action,
+					styles.full,
+					{ backgroundColor: colors.success },
+				]}
 				onPress={() => router.push(`/business/${businessId}/order/${order.id}`)}
 			>
-				<AppText variant="bodyMedium" weight="semiBold" style={[styles.label, { color: colors.primaryForeground }]}>
+				<AppText
+					variant="bodyMedium"
+					weight="semiBold"
+					style={[styles.label, { color: colors.primaryForeground }]}
+				>
 					{strings.business.ordersValidateAndDeliver}
 				</AppText>
 			</Button>

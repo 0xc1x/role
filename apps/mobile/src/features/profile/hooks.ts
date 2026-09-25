@@ -34,8 +34,9 @@ export function useSaveAddress(userId: string) {
 export function useUpdateAddress(userId: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (input: Parameters<typeof profileRepository.updateAddress>[0]) =>
-			profileRepository.updateAddress(input),
+		mutationFn: (
+			input: Parameters<typeof profileRepository.updateAddress>[0],
+		) => profileRepository.updateAddress(input),
 		onSuccess: () =>
 			void queryClient.invalidateQueries({ queryKey: ["addresses", userId] }),
 	});
@@ -94,7 +95,9 @@ export function useUpdateMarketingPreferences(userId: string) {
 		mutationFn: (isSubscribed: boolean) =>
 			profileRepository.setMarketingSubscribed(userId, isSubscribed),
 		onSuccess: () =>
-			void queryClient.invalidateQueries({ queryKey: ["marketingPrefs", userId] }),
+			void queryClient.invalidateQueries({
+				queryKey: ["marketingPrefs", userId],
+			}),
 	});
 }
 
@@ -174,16 +177,21 @@ export function useSetDefaultPaymentMethod(userId: string) {
 		mutationFn: (id: string) =>
 			profileRepository.setDefaultPaymentMethod(userId, id),
 		onSuccess: () =>
-			void queryClient.invalidateQueries({ queryKey: ["paymentMethods", userId] }),
+			void queryClient.invalidateQueries({
+				queryKey: ["paymentMethods", userId],
+			}),
 	});
 }
 
 export function useDeletePaymentMethod(userId: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (id: string) => profileRepository.deletePaymentMethod(userId, id),
+		mutationFn: (id: string) =>
+			profileRepository.deletePaymentMethod(userId, id),
 		onSuccess: () =>
-			void queryClient.invalidateQueries({ queryKey: ["paymentMethods", userId] }),
+			void queryClient.invalidateQueries({
+				queryKey: ["paymentMethods", userId],
+			}),
 	});
 }
 

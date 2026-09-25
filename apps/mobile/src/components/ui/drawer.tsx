@@ -27,7 +27,8 @@ const DrawerContext = React.createContext<DrawerContextProps | null>(null);
 
 function useDrawer() {
 	const ctx = React.useContext(DrawerContext);
-	if (!ctx) throw new Error("Drawer compound components must be inside <Drawer>");
+	if (!ctx)
+		throw new Error("Drawer compound components must be inside <Drawer>");
 	return ctx;
 }
 
@@ -53,8 +54,13 @@ export function Drawer({
 		},
 		[isControlled, onOpenChange],
 	);
-	const value = React.useMemo(() => ({ open, onOpenChange: setOpen }), [open, setOpen]);
-	return <DrawerContext.Provider value={value}>{children}</DrawerContext.Provider>;
+	const value = React.useMemo(
+		() => ({ open, onOpenChange: setOpen }),
+		[open, setOpen],
+	);
+	return (
+		<DrawerContext.Provider value={value}>{children}</DrawerContext.Provider>
+	);
 }
 
 // ─── Trigger / Close ─────────────────────────────────────────────────
@@ -92,7 +98,10 @@ export function DrawerClose({
 }
 
 // ─── Overlay ─────────────────────────────────────────────────────────
-export function DrawerOverlay({ className, ...props }: React.ComponentProps<typeof View> & { className?: string }) {
+export function DrawerOverlay({
+	className,
+	...props
+}: React.ComponentProps<typeof View> & { className?: string }) {
 	const { onOpenChange } = useDrawer();
 	return (
 		<Pressable
@@ -152,7 +161,8 @@ export function DrawerContent({
 			// Solo capturamos el gesto si es principalmente vertical y hacia
 			// abajo, para no robarle el swipe horizontal a nada dentro del header.
 			onMoveShouldSetPanResponder: (_, gestureState) =>
-				gestureState.dy > 4 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+				gestureState.dy > 4 &&
+				Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
 			onPanResponderMove: (_, gestureState) => {
 				if (gestureState.dy > 0) {
 					dragY.setValue(gestureState.dy);
@@ -160,7 +170,8 @@ export function DrawerContent({
 			},
 			onPanResponderRelease: (_, gestureState) => {
 				const shouldDismiss =
-					gestureState.dy > DISMISS_DISTANCE || gestureState.vy > DISMISS_VELOCITY;
+					gestureState.dy > DISMISS_DISTANCE ||
+					gestureState.vy > DISMISS_VELOCITY;
 				if (shouldDismiss) {
 					Animated.timing(dragY, {
 						toValue: screenHeight,
@@ -176,7 +187,11 @@ export function DrawerContent({
 				}
 			},
 			onPanResponderTerminate: () => {
-				Animated.spring(dragY, { toValue: 0, useNativeDriver: false, bounciness: 4 }).start();
+				Animated.spring(dragY, {
+					toValue: 0,
+					useNativeDriver: false,
+					bounciness: 4,
+				}).start();
 			},
 		}),
 	);
@@ -195,10 +210,17 @@ export function DrawerContent({
 		<View
 			style={[
 				StyleSheet.absoluteFill,
-				{ justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000 },
+				{
+					justifyContent: "flex-end",
+					backgroundColor: "rgba(0,0,0,0.5)",
+					zIndex: 1000,
+				},
 			]}
 		>
-			<Pressable style={StyleSheet.absoluteFill} onPress={() => onOpenChange(false)} />
+			<Pressable
+				style={StyleSheet.absoluteFill}
+				onPress={() => onOpenChange(false)}
+			/>
 			<Animated.View
 				style={[
 					{
@@ -220,9 +242,20 @@ export function DrawerContent({
 					{...panResponder.panHandlers}
 					// hitSlop-like: agrandamos el área táctil de la barrita hacia abajo
 					// para que sea más fácil de agarrar sin tocar el contenido.
-					style={{ paddingTop: spacing.md, paddingBottom: spacing.sm, alignItems: "center" }}
+					style={{
+						paddingTop: spacing.md,
+						paddingBottom: spacing.sm,
+						alignItems: "center",
+					}}
 				>
-					<View style={{ width: 48, height: 5, borderRadius: 2.5, backgroundColor: colors.borderSolid }} />
+					<View
+						style={{
+							width: 48,
+							height: 5,
+							borderRadius: 2.5,
+							backgroundColor: colors.borderSolid,
+						}}
+					/>
 				</View>
 				{children}
 			</Animated.View>
@@ -251,15 +284,35 @@ export function DrawerContent({
 }
 
 // ─── Header / Footer / Title / Description ───────────────────────────
-export function DrawerHeader({ className, ...props }: React.ComponentProps<typeof View> & { className?: string }) {
-	return <View className={cn("flex flex-col gap-1.5 p-4", className)} {...props} />;
+export function DrawerHeader({
+	className,
+	...props
+}: React.ComponentProps<typeof View> & { className?: string }) {
+	return (
+		<View className={cn("flex flex-col gap-1.5 p-4", className)} {...props} />
+	);
 }
 
-export function DrawerFooter({ className, ...props }: React.ComponentProps<typeof View> & { className?: string }) {
-	return <View className={cn("mt-auto flex flex-col gap-2 p-4", className)} {...props} />;
+export function DrawerFooter({
+	className,
+	...props
+}: React.ComponentProps<typeof View> & { className?: string }) {
+	return (
+		<View
+			className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+			{...props}
+		/>
+	);
 }
 
-export function DrawerTitle({ className, children, ...props }: React.ComponentProps<typeof View> & { className?: string; children: React.ReactNode }) {
+export function DrawerTitle({
+	className,
+	children,
+	...props
+}: React.ComponentProps<typeof View> & {
+	className?: string;
+	children: React.ReactNode;
+}) {
 	return (
 		<View className={cn("px-4", className)} {...props}>
 			{children}
@@ -267,10 +320,29 @@ export function DrawerTitle({ className, children, ...props }: React.ComponentPr
 	);
 }
 
-export function DrawerDescription({ className, ...props }: React.ComponentProps<typeof View> & { className?: string }) {
-	return <View className={cn("px-4 text-sm text-muted-foreground", className)} {...props} />;
+export function DrawerDescription({
+	className,
+	...props
+}: React.ComponentProps<typeof View> & { className?: string }) {
+	return (
+		<View
+			className={cn("px-4 text-sm text-muted-foreground", className)}
+			{...props}
+		/>
+	);
 }
 
-export function DrawerSwipeHandle({ className, ...props }: React.ComponentProps<typeof View> & { className?: string }) {
-	return <View className={cn("mx-auto mt-2 h-1.5 w-[100px] rounded-full bg-muted", className)} {...props} />;
+export function DrawerSwipeHandle({
+	className,
+	...props
+}: React.ComponentProps<typeof View> & { className?: string }) {
+	return (
+		<View
+			className={cn(
+				"mx-auto mt-2 h-1.5 w-[100px] rounded-full bg-muted",
+				className,
+			)}
+			{...props}
+		/>
+	);
 }

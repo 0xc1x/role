@@ -17,8 +17,9 @@ type IosStandaloneDocument = {
  */
 export function getIosPwaNavbarOverlap(
 	platformOS: typeof Platform.OS = Platform.OS,
-	documentRef: IosStandaloneDocument | null =
-		typeof document === "undefined" ? null : document,
+	documentRef: IosStandaloneDocument | null = typeof document === "undefined"
+		? null
+		: document,
 ): number {
 	if (platformOS !== "web") return 0;
 

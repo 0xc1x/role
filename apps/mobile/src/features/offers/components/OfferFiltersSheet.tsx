@@ -58,19 +58,22 @@ export function OfferFiltersSheet({
 			<AppText
 				variant="bodySmall"
 				weight="semiBold"
-				style={{ color: selected ? colors.secondaryForeground : colors.foreground }}
+				style={{
+					color: selected ? colors.secondaryForeground : colors.foreground,
+				}}
 			>
 				{label}
 			</AppText>
 		</Pressable>
 	);
 
-	const renderSection = (
-		title: string,
-		children: React.ReactNode,
-	) => (
+	const renderSection = (title: string, children: React.ReactNode) => (
 		<View style={styles.section}>
-			<AppText variant="labelSmall" weight="bold" style={{ color: colors.mutedForeground }}>
+			<AppText
+				variant="labelSmall"
+				weight="bold"
+				style={{ color: colors.mutedForeground }}
+			>
 				{title}
 			</AppText>
 			<View style={styles.optionsWrap}>{children}</View>
@@ -91,11 +94,9 @@ export function OfferFiltersSheet({
 					fullWidth
 					size="lg"
 				>
-					{
-						hasActiveFilters
-							? strings.allOffers.applyFilters
-							: strings.common.close
-					}
+					{hasActiveFilters
+						? strings.allOffers.applyFilters
+						: strings.common.close}
 				</Button>
 			}
 		>
@@ -104,7 +105,11 @@ export function OfferFiltersSheet({
 					{strings.allOffers.filters}
 				</AppText>
 				{hasActiveFilters ? (
-					<Button variant="link" onPress={() => setState(emptyOfferFilters)} hitSlop={8}>
+					<Button
+						variant="link"
+						onPress={() => setState(emptyOfferFilters)}
+						hitSlop={8}
+					>
 						{strings.allOffers.clearAll}
 					</Button>
 				) : (
@@ -127,15 +132,11 @@ export function OfferFiltersSheet({
 				{renderSection(
 					strings.allOffers.category,
 					(categories ?? []).map((cat: EmbeddedCategory) =>
-						renderOption(
-							cat.id,
-							cat.name,
-							state.category === cat.id,
-							() =>
-								setState((s) => ({
-									...s,
-									category: s.category === cat.id ? null : cat.id,
-								})),
+						renderOption(cat.id, cat.name, state.category === cat.id, () =>
+							setState((s) => ({
+								...s,
+								category: s.category === cat.id ? null : cat.id,
+							})),
 						),
 					),
 				)}
@@ -159,10 +160,7 @@ export function OfferFiltersSheet({
 					PRICE_OPTIONS.map((price) =>
 						renderOption(
 							`price-${price}`,
-							strings.allOffers.price.replace(
-								"{n}",
-								`${price}`,
-							),
+							strings.allOffers.price.replace("{n}", `${price}`),
 							state.maxPrice === price,
 							() =>
 								setState((s) => ({

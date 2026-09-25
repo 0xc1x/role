@@ -1,13 +1,13 @@
-import type { z } from 'zod';
+import type { z } from "zod";
 import type {
-  AuthResponseSchema,
-  AuthUserSchema,
-  InviteBusinessRequestSchema,
-  LoginRequestSchema,
-  LogoutRequestSchema,
-  RefreshRequestSchema,
-  RegisterRequestSchema,
-} from '../schemas/auth.schema';
+	AuthResponseSchema,
+	AuthUserSchema,
+	InviteBusinessRequestSchema,
+	LoginRequestSchema,
+	LogoutRequestSchema,
+	RefreshRequestSchema,
+	RegisterRequestSchema,
+} from "../schemas/auth.schema";
 
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;

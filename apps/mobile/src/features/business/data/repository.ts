@@ -52,7 +52,12 @@ const BUSINESS_OWNER_COLUMNS = `owner_id, ${BUSINESS_PUBLIC_COLUMNS}`;
  */
 type BusinessClientRow = Omit<
 	Business,
-	"commission_rate" | "balance" | "verification_status" | "verified_at" | "verified_by" | "rejection_reason"
+	| "commission_rate"
+	| "balance"
+	| "verification_status"
+	| "verified_at"
+	| "verified_by"
+	| "rejection_reason"
 >;
 
 function toBusiness(row: Record<string, unknown>): Business {
@@ -283,7 +288,8 @@ export const businessRepository = {
 			businessResult.data as unknown as Record<string, unknown>,
 		);
 		const headquarter = locationResult.data as unknown as
-			(Row & { address?: string }) | null;
+			| (Row & { address?: string })
+			| null;
 
 		const hourEntries = toRows(hoursResult.data).map((r) => ({
 			day: String(r.day),
@@ -377,7 +383,7 @@ export const businessRepository = {
 			.order("name");
 		if (error) throw toAppError(error, "Error al cargar negocios");
 		return (data ?? []).map((row) =>
-			toBusiness(row as unknown as Record<string, unknown>)
+			toBusiness(row as unknown as Record<string, unknown>),
 		);
 	},
 
@@ -702,11 +708,11 @@ export const businessRepository = {
 	},
 
 	/**
-   * Exact balance totals over ALL payouts (single bounded fetch — payouts
-   * settle quincenales, so rows stay tiny; no sum aggregate exists
-   * server-side). Used by the balance cards so they stay exact under any
-   * list filter.
-   */
+	 * Exact balance totals over ALL payouts (single bounded fetch — payouts
+	 * settle quincenales, so rows stay tiny; no sum aggregate exists
+	 * server-side). Used by the balance cards so they stay exact under any
+	 * list filter.
+	 */
 	async getPayoutTotals(businessId: string): Promise<{
 		paid: number;
 		paidCount: number;

@@ -6,14 +6,23 @@ import { AppText } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardFooter,
+	CardHeader,
+} from "@/components/ui/card";
 import { Text } from "react-native-svg";
 
 export function CategoryBadge({ label }: { label: string }) {
 	const { colors } = useTheme();
 	return (
 		<View
-			style={[styles.categoryBadge, { backgroundColor: `${withAlpha(colors.primary, 0.102)}` }]}
+			style={[
+				styles.categoryBadge,
+				{ backgroundColor: `${withAlpha(colors.primary, 0.102)}` },
+			]}
 		>
 			<AppText
 				style={{
@@ -51,30 +60,16 @@ export function InfoCard({
 }) {
 	const { colors, scheme } = useTheme();
 	return (
-		<Card
-			style={[
-				styles.infoCard,
-			]}
-		>
+		<Card style={[styles.infoCard]}>
 			<CardHeader style={styles.infoCardHead}>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, }}>
+				<AppText variant="h4" weight="bold" style={{ flex: 1 }}>
 					{title}
 				</AppText>
 				{trailing}
 			</CardHeader>
-			{ description && (
-				<CardDescription>
-					{description}
-				</CardDescription>
-			) }
-			<CardContent>
-				{children}
-			</CardContent>
-			{footer && (
-				<CardFooter>
-					{footer}
-				</CardFooter>
-			)}
+			{description && <CardDescription>{description}</CardDescription>}
+			<CardContent>{children}</CardContent>
+			{footer && <CardFooter>{footer}</CardFooter>}
 		</Card>
 	);
 }
@@ -91,7 +86,12 @@ export function InfoRow({
 	const { colors } = useTheme();
 	return (
 		<View style={styles.infoRow}>
-			<View style={[styles.infoRowIcon, { backgroundColor: `${withAlpha(colors.primary, 0.078)}` }]}>
+			<View
+				style={[
+					styles.infoRowIcon,
+					{ backgroundColor: `${withAlpha(colors.primary, 0.078)}` },
+				]}
+			>
 				<Icon size={15} color={colors.primary} />
 			</View>
 			<View style={styles.infoRowBody}>

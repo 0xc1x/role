@@ -1,20 +1,20 @@
-import type { z } from 'zod';
-import type { PaginatedData } from '../../_common/dtos/api.dto';
+import type { z } from "zod";
+import type { PaginatedData } from "../../_common/dtos/api.dto";
 import {
-  CreatePushSendSchema,
-  CreatePushTemplateSchema,
-  ListPushNotificationsQuerySchema,
-  ListPushTemplatesQuerySchema,
-  ListPushTokensQuerySchema,
-  PushAudienceSchema,
-  PushNotificationDtoSchema,
-  PushPayloadSchema,
-  PushTemplateDtoSchema,
-  PushTestSchema,
-  PushTokenDtoSchema,
-  UpdatePushTemplateSchema,
-  UpdatePushTokenSchema,
-} from '../schemas/push.schema';
+	CreatePushSendSchema,
+	CreatePushTemplateSchema,
+	ListPushNotificationsQuerySchema,
+	ListPushTemplatesQuerySchema,
+	ListPushTokensQuerySchema,
+	PushAudienceSchema,
+	PushNotificationDtoSchema,
+	PushPayloadSchema,
+	PushTemplateDtoSchema,
+	PushTestSchema,
+	PushTokenDtoSchema,
+	UpdatePushTemplateSchema,
+	UpdatePushTokenSchema,
+} from "../schemas/push.schema";
 
 export type PushTemplateDto = z.infer<typeof PushTemplateDtoSchema>;
 export type PushNotificationDto = z.infer<typeof PushNotificationDtoSchema>;
@@ -28,8 +28,12 @@ export type CreatePushSendDto = z.infer<typeof CreatePushSendSchema>;
 export type PushTestDto = z.infer<typeof PushTestSchema>;
 export type UpdatePushTokenDto = z.infer<typeof UpdatePushTokenSchema>;
 
-export type ListPushNotificationsQuery = z.infer<typeof ListPushNotificationsQuerySchema>;
-export type ListPushTemplatesQuery = z.infer<typeof ListPushTemplatesQuerySchema>;
+export type ListPushNotificationsQuery = z.infer<
+	typeof ListPushNotificationsQuerySchema
+>;
+export type ListPushTemplatesQuery = z.infer<
+	typeof ListPushTemplatesQuerySchema
+>;
 export type ListPushTokensQuery = z.infer<typeof ListPushTokensQuerySchema>;
 
 export type PushTemplatePaginatedData = PaginatedData<PushTemplateDto>;

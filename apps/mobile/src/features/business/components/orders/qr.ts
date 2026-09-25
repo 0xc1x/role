@@ -23,7 +23,11 @@ export function parsePickupQr(
 		const pickupCode = uri[4];
 		const isRole = scheme === "role" && host === "order";
 		const isFudi = scheme === "fudi" && host === "pickup";
-		if ((isRole || isFudi) && orderId === expectedOrderId && pickupCode.length > 0) {
+		if (
+			(isRole || isFudi) &&
+			orderId === expectedOrderId &&
+			pickupCode.length > 0
+		) {
 			return { orderId, pickupCode };
 		}
 		return null;

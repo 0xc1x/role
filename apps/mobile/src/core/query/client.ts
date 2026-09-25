@@ -1,7 +1,7 @@
-import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 
-import { analytics } from '@/src/core/analytics';
-import { isAppError } from '@/src/core/error/app-error';
+import { analytics } from "@/src/core/analytics";
+import { isAppError } from "@/src/core/error/app-error";
 
 /**
  * Global React Query client.
@@ -14,42 +14,42 @@ import { isAppError } from '@/src/core/error/app-error';
  * Errores de negocio/validación no se envían para no hacer ruido.
  */
 function shouldReportToSentry(error: unknown): boolean {
-  if (isAppError(error)) {
-    return error.kind === 'unknown' || error.kind === 'network';
-  }
-  // Error no clasificado -> reportar
-  return true;
+	if (isAppError(error)) {
+		return error.kind === "unknown" || error.kind === "network";
+	}
+	// Error no clasificado -> reportar
+	return true;
 }
 
 export const queryClient = new QueryClient({
-  queryCache: new QueryCache({
-    onError: (error, query) => {
-      if (shouldReportToSentry(error)) {
-        analytics.trackError(error, {
-          queryKey: query.queryKey,
-          queryHash: query.queryHash,
-        });
-      }
-    },
-  }),
-  mutationCache: new MutationCache({
-    onError: (error, _variables, _context, mutation) => {
-      if (shouldReportToSentry(error)) {
-        analytics.trackError(error, {
-          mutationKey: mutation.options.mutationKey,
-        });
-      }
-    },
-  }),
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      gcTime: 5 * 60_000,
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-    mutations: {
-      retry: 0,
-    },
-  },
+	queryCache: new QueryCache({
+		onError: (error, query) => {
+			if (shouldReportToSentry(error)) {
+				analytics.trackError(error, {
+					queryKey: query.queryKey,
+					queryHash: query.queryHash,
+				});
+			}
+		},
+	}),
+	mutationCache: new MutationCache({
+		onError: (error, _variables, _context, mutation) => {
+			if (shouldReportToSentry(error)) {
+				analytics.trackError(error, {
+					mutationKey: mutation.options.mutationKey,
+				});
+			}
+		},
+	}),
+	defaultOptions: {
+		queries: {
+			staleTime: 30_000,
+			gcTime: 5 * 60_000,
+			retry: 1,
+			refetchOnWindowFocus: false,
+		},
+		mutations: {
+			retry: 0,
+		},
+	},
 });

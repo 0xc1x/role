@@ -62,11 +62,9 @@ export function ProductFilters({
 							fullWidth
 							size="lg"
 						>
-							{
-								draft != null
-									? strings.business.applyFilters
-									: strings.common.close
-							}
+							{draft != null
+								? strings.business.applyFilters
+								: strings.common.close}
 						</Button>
 					}
 				>

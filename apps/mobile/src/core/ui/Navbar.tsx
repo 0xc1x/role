@@ -27,10 +27,7 @@ type NavbarProps = BottomTabBarProps & {
 	fallbackTabName?: string;
 };
 
-export default function Navbar({
-	fallbackTabName,
-	...props
-}: NavbarProps) {
+export default function Navbar({ fallbackTabName, ...props }: NavbarProps) {
 	const { colors } = useTheme();
 	const safeInsets = useSafeAreaInsets();
 	const bottomInset = Math.max(safeInsets.bottom, props.insets.bottom ?? 0);
@@ -112,7 +109,16 @@ export default function Navbar({
 				easing: Easing.in(Easing.ease),
 			}),
 		);
-	}, [currentIndex, barWidth, itemWidth, pillWidth, routes.length, initialized, left, stretch]);
+	}, [
+		currentIndex,
+		barWidth,
+		itemWidth,
+		pillWidth,
+		routes.length,
+		initialized,
+		left,
+		stretch,
+	]);
 
 	const pillStyle = useAnimatedStyle(() => {
 		const stretchExtra = STRETCH_FACTOR * pillWidth * stretch.value;
@@ -156,19 +162,19 @@ export default function Navbar({
 
 					return (
 						<Pressable
-						key={route.key}
-						onPress={() => onTab(index)}
-						accessibilityRole="button"
-						accessibilityLabel={labelFor(options, route.name)}
-						style={styles.item}
+							key={route.key}
+							onPress={() => onTab(index)}
+							accessibilityRole="button"
+							accessibilityLabel={labelFor(options, route.name)}
+							style={styles.item}
 						>
-						{icon
-							? icon({
-								color: colors.mutedForeground,
-								size: 28,
-								focused: false,
-							})
-							: null}
+							{icon
+								? icon({
+										color: colors.mutedForeground,
+										size: 28,
+										focused: false,
+									})
+								: null}
 						</Pressable>
 					);
 				})}
@@ -183,11 +189,7 @@ export default function Navbar({
 					]}
 				>
 					<Animated.View
-						style={[
-							styles.pillContent,
-							{ width: barWidth || 1 },
-							contentStyle,
-						]}
+						style={[styles.pillContent, { width: barWidth || 1 }, contentStyle]}
 					>
 						{routes.map((route) => {
 							const options = props.descriptors[route.key]?.options;
@@ -200,7 +202,7 @@ export default function Navbar({
 												color: colors.background,
 												size: 24,
 												focused: true,
-										  })
+											})
 										: null}
 									{compact ? null : (
 										<AppText

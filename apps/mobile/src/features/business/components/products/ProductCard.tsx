@@ -36,7 +36,10 @@ import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
 import { formatMoney, formatRelativeDay } from "@/src/core/utils/formatters";
 import type { OfferDetail } from "@/src/features/offers/domain/offer";
-import { useDeleteOffer, useToggleOfferActive } from "@/src/features/business/hooks";
+import {
+	useDeleteOffer,
+	useToggleOfferActive,
+} from "@/src/features/business/hooks";
 
 /**
  * Business product card (Rolé v1 port): badges and title on top, pickup
@@ -79,111 +82,152 @@ export function ProductCard({
 					]}
 					onPress={openDetail}
 				>
-				<View style={styles.mainRow}>
-					{/* Full-bleed image; badges remain in the information column. */}
-					<View style={styles.imageWrap}>
-						{product.offer.image ? (
-							<Image
-								source={{ uri: product.offer.image }}
-								style={styles.image}
-								contentFit="cover"
-							/>
-						) : (
-							<View
-								style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.borderSolid }]}
-							>
-								<Package size={28} color={colors.mutedForeground} />
-							</View>
-						)}
-						{!isActive ? (
-							<View style={[styles.imageOverlay, { backgroundColor: withAlpha(colors.scrim, 0.56) }]}>
-								<EyeOff size={20} color={colors.onMedia} />
-							</View>
-						) : null}
-					</View>
-
-					<View style={styles.info}>
-						<View style={styles.statusRow}>
-							<StatusBadge
-								label={isActive ? strings.business.active : strings.business.inactive}
-								tone={isActive ? "success" : "neutral"}
-							/>
-							{sold > 0 ? (
-								<View style={[styles.soldChip, { backgroundColor: colors.surfaceSuccess }]}>
-									<TrendingUp size={12} color={colors.success} />
-									<AppText
-										variant="bodySmall"
-										weight="semiBold"
-										style={[styles.chipText, { color: colors.success }]}
-									>
-										{strings.business.soldCount.replace("{n}", String(sold))}
-									</AppText>
+					<View style={styles.mainRow}>
+						{/* Full-bleed image; badges remain in the information column. */}
+						<View style={styles.imageWrap}>
+							{product.offer.image ? (
+								<Image
+									source={{ uri: product.offer.image }}
+									style={styles.image}
+									contentFit="cover"
+								/>
+							) : (
+								<View
+									style={[
+										styles.image,
+										styles.imagePlaceholder,
+										{ backgroundColor: colors.borderSolid },
+									]}
+								>
+									<Package size={28} color={colors.mutedForeground} />
+								</View>
+							)}
+							{!isActive ? (
+								<View
+									style={[
+										styles.imageOverlay,
+										{ backgroundColor: withAlpha(colors.scrim, 0.56) },
+									]}
+								>
+									<EyeOff size={20} color={colors.onMedia} />
 								</View>
 							) : null}
 						</View>
-						<AppText variant="h4" weight="bold" numberOfLines={2}>
-							{product.offer.title}
-						</AppText>
 
-						{product.location?.name ? (
-							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
-								<Store
-									size={12}
-									color={colors.mutedForeground}
+						<View style={styles.info}>
+							<View style={styles.statusRow}>
+								<StatusBadge
+									label={
+										isActive
+											? strings.business.active
+											: strings.business.inactive
+									}
+									tone={isActive ? "success" : "neutral"}
 								/>
-								<AppText
-									variant="bodySmall"
-									numberOfLines={1}
-									style={[styles.chipText, { color: colors.mutedForeground }]}
+								{sold > 0 ? (
+									<View
+										style={[
+											styles.soldChip,
+											{ backgroundColor: colors.surfaceSuccess },
+										]}
+									>
+										<TrendingUp size={12} color={colors.success} />
+										<AppText
+											variant="bodySmall"
+											weight="semiBold"
+											style={[styles.chipText, { color: colors.success }]}
+										>
+											{strings.business.soldCount.replace("{n}", String(sold))}
+										</AppText>
+									</View>
+								) : null}
+							</View>
+							<AppText variant="h4" weight="bold" numberOfLines={2}>
+								{product.offer.title}
+							</AppText>
+
+							{product.location?.name ? (
+								<View
+									style={[
+										styles.infoChip,
+										{ backgroundColor: withAlpha(colors.scrim, 0.04) },
+									]}
 								>
-									{product.location.name}
-								</AppText>
+									<Store size={12} color={colors.mutedForeground} />
+									<AppText
+										variant="bodySmall"
+										numberOfLines={1}
+										style={[styles.chipText, { color: colors.mutedForeground }]}
+									>
+										{product.location.name}
+									</AppText>
+								</View>
+							) : null}
+							<View style={styles.infoChips}>
+								<View
+									style={[
+										styles.infoChip,
+										{ backgroundColor: withAlpha(colors.scrim, 0.04) },
+									]}
+								>
+									<Clock size={12} color={colors.mutedForeground} />
+									<AppText
+										variant="bodySmall"
+										style={[styles.chipText, { color: colors.mutedForeground }]}
+									>
+										{strings.business.untilTime.replace(
+											"{time}",
+											formatRelativeDay(product.offer.pickup_end),
+										)}
+									</AppText>
+								</View>
+								<View
+									style={[
+										styles.infoChip,
+										{ backgroundColor: withAlpha(colors.scrim, 0.04) },
+									]}
+								>
+									<Package size={12} color={colors.mutedForeground} />
+									<AppText
+										variant="bodySmall"
+										style={[styles.chipText, { color: colors.mutedForeground }]}
+									>
+										{product.offer.stock}
+									</AppText>
+								</View>
 							</View>
-						) : null}
-						<View style={styles.infoChips}>
-							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
-								<Clock size={12} color={colors.mutedForeground} />
-								<AppText variant="bodySmall" style={[styles.chipText, { color: colors.mutedForeground }]}>
-									{strings.business.untilTime.replace(
-										"{time}",
-										formatRelativeDay(product.offer.pickup_end),
-									)}
-								</AppText>
-							</View>
-							<View style={[styles.infoChip, { backgroundColor: withAlpha(colors.scrim, 0.04) }]}>
-								<Package
-									size={12}
-									color={colors.mutedForeground}
-								/>
-								<AppText variant="bodySmall" style={[styles.chipText, { color: colors.mutedForeground }]}>
-									{product.offer.stock}
-								</AppText>
-							</View>
-						</View>
 
-						<View style={styles.priceRow}>
-							<AppText variant="priceLarge" style={{ color: colors.primary }}>
-								{formatMoney(product.offer.discounted_price)}
-							</AppText>
-							<AppText
-								variant="priceOriginal"
-								style={[styles.original, { color: colors.mutedForeground }]}
-							>
-								{formatMoney(product.offer.original_price)}
-							</AppText>
+							<View style={styles.priceRow}>
+								<AppText variant="priceLarge" style={{ color: colors.primary }}>
+									{formatMoney(product.offer.discounted_price)}
+								</AppText>
+								<AppText
+									variant="priceOriginal"
+									style={[styles.original, { color: colors.mutedForeground }]}
+								>
+									{formatMoney(product.offer.original_price)}
+								</AppText>
+							</View>
 						</View>
 					</View>
-				</View>
 				</CardPressable>
 
-				<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
+				<View
+					style={[styles.divider, { backgroundColor: colors.borderSolid }]}
+				/>
 				<View style={styles.actions}>
-					<ActionButton icon={Eye} label={strings.business.viewDetails} onPress={openDetail} />
+					<ActionButton
+						icon={Eye}
+						label={strings.business.viewDetails}
+						onPress={openDetail}
+					/>
 					<ActionButton
 						icon={Pencil}
 						label={strings.common.edit}
 						onPress={() =>
-							router.push(`/business/${businessId}/offer/${product.offer.id}/edit`)
+							router.push(
+								`/business/${businessId}/offer/${product.offer.id}/edit`,
+							)
 						}
 					/>
 					<ActionButton
@@ -202,9 +246,16 @@ export function ProductCard({
 					<View style={styles.menuList}>
 						<MenuRow
 							icon={isActive ? EyeOff : Eye}
-							label={isActive ? strings.business.deactivate : strings.business.activate}
+							label={
+								isActive
+									? strings.business.deactivate
+									: strings.business.activate
+							}
 							onPress={() => {
-								toggleActive.mutate({ offerId: product.offer.id, isActive: !isActive });
+								toggleActive.mutate({
+									offerId: product.offer.id,
+									isActive: !isActive,
+								});
 								setMenuOpen(false);
 							}}
 						/>
@@ -213,7 +264,9 @@ export function ProductCard({
 							label={strings.common.edit}
 							onPress={() => {
 								setMenuOpen(false);
-								router.push(`/business/${businessId}/offer/${product.offer.id}/edit`);
+								router.push(
+									`/business/${businessId}/offer/${product.offer.id}/edit`,
+								);
 							}}
 						/>
 						<MenuRow
@@ -232,7 +285,9 @@ export function ProductCard({
 			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>{strings.business.deleteProductTitle}</AlertDialogTitle>
+						<AlertDialogTitle>
+							{strings.business.deleteProductTitle}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
 							{strings.business.deleteProductBody}
 						</AlertDialogDescription>
@@ -295,7 +350,10 @@ export function ProductCardSkeleton() {
 			<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
 			<View style={styles.actions}>
 				{[0, 1, 2].map((i) => (
-					<Skeleton key={`product-action-skeleton-${i}`} style={styles.skeletonAction} />
+					<Skeleton
+						key={`product-action-skeleton-${i}`}
+						style={styles.skeletonAction}
+					/>
 				))}
 			</View>
 		</View>
@@ -320,7 +378,11 @@ function ActionButton({
 			onPress={onPress}
 			icon={<Icon size={14} color={colors.foreground} />}
 		>
-			<AppText variant="bodySmall" weight="semiBold" style={[styles.chipText, { color: colors.foreground }]}>
+			<AppText
+				variant="bodySmall"
+				weight="semiBold"
+				style={[styles.chipText, { color: colors.foreground }]}
+			>
 				{label}
 			</AppText>
 		</Button>

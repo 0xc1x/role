@@ -12,6 +12,8 @@
     "test": "turbo run test && bun test supabase",
     "test:e2e": "turbo run test:e2e",
     "lint": "turbo run lint",
+    "format:check": "turbo run format:check",
+    "format": "turbo run format",
     "dev:api": "bun run --cwd apps/api start:dev",
     "dev:admin": "bun run --cwd apps/admin dev",
     "dev:commons": "bun run --cwd packages/commons typecheck",

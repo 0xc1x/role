@@ -46,9 +46,16 @@ function makeOffer(
 			review_count: 3,
 		},
 		location: null,
-		categories:
-			overrides.categories ??
-			[{ id: "c1", name: "Pan", slug: "pan", emoji: "🍞", image_url: null, active: true }],
+		categories: overrides.categories ?? [
+			{
+				id: "c1",
+				name: "Pan",
+				slug: "pan",
+				emoji: "🍞",
+				image_url: null,
+				active: true,
+			},
+		],
 	};
 }
 
@@ -70,7 +77,10 @@ describe("filterAndSortProducts", () => {
 			makeOffer({ id: "a", business_location_id: "l1" }),
 			makeOffer({ id: "b", business_location_id: "l2" }),
 		];
-		const result = filterAndSortProducts(offers, { ...baseFilters, branchId: "l2" });
+		const result = filterAndSortProducts(offers, {
+			...baseFilters,
+			branchId: "l2",
+		});
 		expect(result.map((o) => o.offer.id)).toEqual(["b"]);
 	});
 
@@ -89,9 +99,24 @@ describe("filterAndSortProducts", () => {
 	it("filters by category membership", () => {
 		const offers = [
 			makeOffer({ id: "a" }),
-			makeOffer({ id: "b", categories: [{ id: "c2", name: "Bebidas", slug: "bebidas", emoji: null, image_url: null, active: true }] }),
+			makeOffer({
+				id: "b",
+				categories: [
+					{
+						id: "c2",
+						name: "Bebidas",
+						slug: "bebidas",
+						emoji: null,
+						image_url: null,
+						active: true,
+					},
+				],
+			}),
 		];
-		const result = filterAndSortProducts(offers, { ...baseFilters, categoryId: "c2" });
+		const result = filterAndSortProducts(offers, {
+			...baseFilters,
+			categoryId: "c2",
+		});
 		expect(result.map((o) => o.offer.id)).toEqual(["b"]);
 	});
 
@@ -100,7 +125,10 @@ describe("filterAndSortProducts", () => {
 			makeOffer({ id: "old", created_at: "2025-01-10T00:00:00Z" }),
 			makeOffer({ id: "new", created_at: "2025-01-20T00:00:00Z" }),
 		];
-		const result = filterAndSortProducts(offers, { ...baseFilters, sort: "newest" });
+		const result = filterAndSortProducts(offers, {
+			...baseFilters,
+			sort: "newest",
+		});
 		expect(result[0]!.offer.id).toBe("new");
 	});
 
@@ -109,9 +137,15 @@ describe("filterAndSortProducts", () => {
 			makeOffer({ id: "a", discounted_price: 50 }),
 			makeOffer({ id: "b", discounted_price: 20 }),
 		];
-		const low = filterAndSortProducts(offers, { ...baseFilters, sort: "priceLow" });
+		const low = filterAndSortProducts(offers, {
+			...baseFilters,
+			sort: "priceLow",
+		});
 		expect(low.map((o) => o.offer.id)).toEqual(["b", "a"]);
-		const high = filterAndSortProducts(offers, { ...baseFilters, sort: "priceHigh" });
+		const high = filterAndSortProducts(offers, {
+			...baseFilters,
+			sort: "priceHigh",
+		});
 		expect(high.map((o) => o.offer.id)).toEqual(["a", "b"]);
 	});
 
@@ -120,9 +154,15 @@ describe("filterAndSortProducts", () => {
 			makeOffer({ id: "a", title: "Zurra" }),
 			makeOffer({ id: "b", title: "Pan" }),
 		];
-		const az = filterAndSortProducts(offers, { ...baseFilters, sort: "nameAZ" });
+		const az = filterAndSortProducts(offers, {
+			...baseFilters,
+			sort: "nameAZ",
+		});
 		expect(az.map((o) => o.offer.id)).toEqual(["b", "a"]);
-		const za = filterAndSortProducts(offers, { ...baseFilters, sort: "nameZA" });
+		const za = filterAndSortProducts(offers, {
+			...baseFilters,
+			sort: "nameZA",
+		});
 		expect(za.map((o) => o.offer.id)).toEqual(["a", "b"]);
 	});
 
@@ -131,7 +171,10 @@ describe("filterAndSortProducts", () => {
 			makeOffer({ id: "a", stock: 8 }),
 			makeOffer({ id: "b", stock: 2 }),
 		];
-		const result = filterAndSortProducts(offers, { ...baseFilters, sort: "stockLow" });
+		const result = filterAndSortProducts(offers, {
+			...baseFilters,
+			sort: "stockLow",
+		});
 		expect(result.map((o) => o.offer.id)).toEqual(["b", "a"]);
 	});
 });

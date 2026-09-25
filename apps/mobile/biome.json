@@ -7,16 +7,13 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": [
-			"**/src/**/*",
-			"!**/routeTree.gen.ts"
-		]
+		"includes": ["**/src/**/*", "!**/routeTree.gen.ts"]
 	},
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab",
 		"indentWidth": 2,
-		"lineWidth": 90,
+		"lineWidth": 80,
 		"lineEnding": "lf"
 	},
 	"javascript": {

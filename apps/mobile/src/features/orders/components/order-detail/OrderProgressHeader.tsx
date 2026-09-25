@@ -47,7 +47,10 @@ export function OrderProgressHeader({ order }: { order: Order }) {
 		new Animated.Value(0),
 		new Animated.Value(0),
 	]);
-	const [lineAnims] = useState(() => [new Animated.Value(0), new Animated.Value(0)]);
+	const [lineAnims] = useState(() => [
+		new Animated.Value(0),
+		new Animated.Value(0),
+	]);
 
 	// Llenado secuencial estación por estación al montar y al cambiar de fase.
 	useEffect(() => {
@@ -61,14 +64,13 @@ export function OrderProgressHeader({ order }: { order: Order }) {
 		for (const anim of ordered) anim.setValue(0);
 		Animated.stagger(
 			STEP_DELAY,
-			ordered.map(
-				(anim) =>
-					Animated.timing(anim, {
-						toValue: 1,
-						duration: STEP_DURATION,
-						easing: Easing.out(Easing.cubic),
-						useNativeDriver: Platform.OS !== "web",
-					}),
+			ordered.map((anim) =>
+				Animated.timing(anim, {
+					toValue: 1,
+					duration: STEP_DURATION,
+					easing: Easing.out(Easing.cubic),
+					useNativeDriver: Platform.OS !== "web",
+				}),
 			),
 		).start();
 	}, [order.status, stepAnims, lineAnims]);
@@ -113,9 +115,10 @@ export function OrderProgressHeader({ order }: { order: Order }) {
 						: isCurrent
 							? colors.primary
 							: colors.muted;
-					const iconColor = step.done || isCurrent
-						? colors.primaryForeground
-						: colors.mutedForeground;
+					const iconColor =
+						step.done || isCurrent
+							? colors.primaryForeground
+							: colors.mutedForeground;
 					const anim = stepAnims[index];
 					const lineAnim = index > 0 ? lineAnims[index - 1] : null;
 					return (

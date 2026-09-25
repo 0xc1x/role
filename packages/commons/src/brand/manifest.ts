@@ -13,7 +13,10 @@ export interface BrandTarget {
 export const BRAND_TARGETS: BrandTarget[] = [
 	{ file: "apps/admin/public/icon.svg", treatment: "transparent-icon" },
 	{ file: "apps/landing/public/icon.svg", treatment: "transparent-icon" },
-	{ file: "apps/mobile/assets/svgs/role_wordmark.svg", treatment: "wordmark-file" },
+	{
+		file: "apps/mobile/assets/svgs/role_wordmark.svg",
+		treatment: "wordmark-file",
+	},
 	{ file: "apps/landing/public/wordmark.svg", treatment: "wordmark-file" },
 	{ file: "apps/admin/public/wordmark.svg", treatment: "wordmark-file" },
 ];

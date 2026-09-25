@@ -31,16 +31,28 @@ export function ReviewItem({ review }: { review: BusinessReviewView }) {
 				<View style={styles.reviewRatingRow}>
 					<UtensilsCrossed size={12} color={colors.yellow} />
 					<AppText style={{ fontSize: 12 }}>
-						{strings.businessProfile.packRating.replace("{n}", String(review.productRating))}
+						{strings.businessProfile.packRating.replace(
+							"{n}",
+							String(review.productRating),
+						)}
 					</AppText>
 					<View style={{ width: spacing.md }} />
 					<Store size={12} color={colors.yellow} />
 					<AppText style={{ fontSize: 12 }}>
-						{strings.businessProfile.attentionRating.replace("{n}", String(review.businessRating))}
+						{strings.businessProfile.attentionRating.replace(
+							"{n}",
+							String(review.businessRating),
+						)}
 					</AppText>
 				</View>
 				{review.comment ? (
-					<AppText style={{ color: colors.mutedForeground, lineHeight: 19, marginTop: 6 }}>
+					<AppText
+						style={{
+							color: colors.mutedForeground,
+							lineHeight: 19,
+							marginTop: 6,
+						}}
+					>
 						{review.comment}
 					</AppText>
 				) : null}

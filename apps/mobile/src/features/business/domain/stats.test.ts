@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { statsDaysInRange, statsRangeFor, statsRangeLabel, statsViewModel } from "./stats";
+import {
+	statsDaysInRange,
+	statsRangeFor,
+	statsRangeLabel,
+	statsViewModel,
+} from "./stats";
 
 describe("statsRangeFor", () => {
 	it("current week runs from Monday to now", () => {

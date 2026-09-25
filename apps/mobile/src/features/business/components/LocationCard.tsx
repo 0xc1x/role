@@ -56,15 +56,14 @@ export function LocationCard({
 							{name}
 						</AppText>
 						<StatusBadge
-							label={isActive ? strings.business.active : strings.business.inactive}
+							label={
+								isActive ? strings.business.active : strings.business.inactive
+							}
 							tone={isActive ? "success" : "neutral"}
 						/>
 					</View>
 					<View style={[styles.rowStart, { marginTop: 4 }]}>
-						<MapPin
-							size={14}
-							color={colors.mutedForeground}
-						/>
+						<MapPin size={14} color={colors.mutedForeground} />
 						<AppText
 							variant="bodySmall"
 							numberOfLines={1}
@@ -75,10 +74,7 @@ export function LocationCard({
 					</View>
 					{phone ? (
 						<View style={[styles.rowStart, { marginTop: 4 }]}>
-							<Phone
-								size={14}
-								color={colors.mutedForeground}
-							/>
+							<Phone size={14} color={colors.mutedForeground} />
 							<AppText
 								variant="bodySmall"
 								style={{ color: colors.mutedForeground }}
@@ -89,17 +85,15 @@ export function LocationCard({
 					) : null}
 				</View>
 			</View>
-			<View
-				style={[styles.footer, { borderTopColor: colors.borderSolid }]}
-			>
-			<AppText
-				variant="bodySmall"
-				weight="semiBold"
-				style={{ color: colors.foreground }}
-			>
-				{strings.business.viewDetailsAndConfig}
-			</AppText>
-			<ChevronRight size={16} color={colors.foreground} />
+			<View style={[styles.footer, { borderTopColor: colors.borderSolid }]}>
+				<AppText
+					variant="bodySmall"
+					weight="semiBold"
+					style={{ color: colors.foreground }}
+				>
+					{strings.business.viewDetailsAndConfig}
+				</AppText>
+				<ChevronRight size={16} color={colors.foreground} />
 			</View>
 		</CardPressable>
 	);

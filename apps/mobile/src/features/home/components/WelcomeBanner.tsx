@@ -31,7 +31,9 @@ function getContextualMessage(): string {
 	const weekday = now.getDay();
 	const isWeekend = weekday === 0 || weekday === 6;
 	if (hour >= 6 && hour < 12) {
-		return isWeekend ? strings.home.welcomeMorningWeekend : strings.home.welcomeMorning;
+		return isWeekend
+			? strings.home.welcomeMorningWeekend
+			: strings.home.welcomeMorning;
 	}
 	if (hour >= 12 && hour < 19) {
 		if (weekday === 5) return strings.home.welcomeAfternoonFriday;
@@ -66,7 +68,7 @@ export function WelcomeBanner() {
 
 	if (!profile) return null;
 
-	const secondaryAlpha = withAlpha(colors.secondary, 0.150);
+	const secondaryAlpha = withAlpha(colors.secondary, 0.15);
 
 	const firstName = getDisplayName(profile);
 
@@ -110,12 +112,9 @@ export function WelcomeBanner() {
 				>
 					{firstName || strings.home.welcome}
 				</AppText>
-			<AppText
-				variant="bodySmall"
-				style={{ color: colors.mutedForeground }}
-			>
-				{getContextualMessage()}
-			</AppText>
+				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					{getContextualMessage()}
+				</AppText>
 			</View>
 			<View style={[styles.statCircle, { backgroundColor: secondaryAlpha }]}>
 				{stat == null ? (
@@ -124,7 +123,9 @@ export function WelcomeBanner() {
 					/>
 				) : (
 					<>
-						<View style={[styles.statIcon, { backgroundColor: secondaryAlpha }]}>
+						<View
+							style={[styles.statIcon, { backgroundColor: secondaryAlpha }]}
+						>
 							<stat.icon size={16} color={colors.secondary} />
 						</View>
 						<AppText

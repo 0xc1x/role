@@ -5,10 +5,7 @@ import { strings } from "@/src/core/i18n/strings";
 import { AppText, TextField } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing } from "@/src/core/theme/spacing";
-import {
-	LocationMapPicker,
-	type MapRegion,
-} from "./LocationMapPicker";
+import { LocationMapPicker, type MapRegion } from "./LocationMapPicker";
 import { Button } from "@/components/ui/button";
 
 export interface LocationFormValues {

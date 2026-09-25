@@ -1,13 +1,13 @@
-import type { z } from 'zod';
-import type { PaginatedData } from '../../_common/dtos/api.dto';
+import type { z } from "zod";
+import type { PaginatedData } from "../../_common/dtos/api.dto";
 import type {
-  AppConfigListResponseSchema,
-  AppConfigSchema,
-  CreateAppConfigSchema,
-  ListAppConfigQuerySchema,
-  PublicAppConfigSchema,
-  UpdateAppConfigSchema,
-} from '../schemas/config.schema';
+	AppConfigListResponseSchema,
+	AppConfigSchema,
+	CreateAppConfigSchema,
+	ListAppConfigQuerySchema,
+	PublicAppConfigSchema,
+	UpdateAppConfigSchema,
+} from "../schemas/config.schema";
 
 export type AppConfigDto = z.infer<typeof AppConfigSchema>;
 export type PublicAppConfigDto = z.infer<typeof PublicAppConfigSchema>;

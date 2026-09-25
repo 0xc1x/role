@@ -181,7 +181,11 @@ function Dot({
 
 		return {
 			width: 8 + t * 14,
-			backgroundColor: interpolateColor(t, [0, 1], [inactiveColor, activeColor]),
+			backgroundColor: interpolateColor(
+				t,
+				[0, 1],
+				[inactiveColor, activeColor],
+			),
 		};
 	});
 
@@ -203,7 +207,8 @@ function PromoCard({ item }: { item: PromoSlide }) {
 				: strings.home.promoTips);
 	const textColor = item.textColor ?? colors.accentForeground;
 	const hasCta = Boolean(
-		item.ctaLabel && (item.type === "coupon" ? item.couponCode : item.redirectUrl),
+		item.ctaLabel &&
+			(item.type === "coupon" ? item.couponCode : item.redirectUrl),
 	);
 
 	const handleCtaPress = () => {
@@ -310,7 +315,9 @@ function PromoCard({ item }: { item: PromoSlide }) {
 						contentFit="cover"
 					/>
 				) : (
-					<View style={[styles.cardRightImage, { backgroundColor: colors.muted }]} />
+					<View
+						style={[styles.cardRightImage, { backgroundColor: colors.muted }]}
+					/>
 				)}
 			</View>
 		</View>

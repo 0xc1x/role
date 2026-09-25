@@ -1,5 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactElement } from "react";
-import { View, StyleSheet, FlatList, Pressable, type StyleProp, type ViewStyle } from "react-native";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ComponentType,
+	type ReactElement,
+} from "react";
+import {
+	View,
+	StyleSheet,
+	FlatList,
+	Pressable,
+	type StyleProp,
+	type ViewStyle,
+} from "react-native";
 import Animated, {
 	useSharedValue,
 	useAnimatedStyle,
@@ -86,10 +101,7 @@ export function CategoryChips({
 				showMore || showLess ? (
 					<Pressable
 						onPress={toggleShowAll}
-						style={[
-							styles.moreChip,
-							{ borderColor: colors.borderSolid },
-						]}
+						style={[styles.moreChip, { borderColor: colors.borderSolid }]}
 					>
 						<AppText
 							weight="semiBold"
@@ -215,8 +227,12 @@ function AnimatedChip({
 				style={[
 					styles.chip,
 					{
-						backgroundColor: selected ? colors.primary : withAlpha(colors.primary, 0.12),
-						borderColor: selected ? colors.primary : withAlpha(colors.primary, 0.25),
+						backgroundColor: selected
+							? colors.primary
+							: withAlpha(colors.primary, 0.12),
+						borderColor: selected
+							? colors.primary
+							: withAlpha(colors.primary, 0.25),
 					},
 				]}
 			>

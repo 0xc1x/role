@@ -27,8 +27,7 @@ export function exploreFilterSummary(
 	categoryName?: string,
 ): string[] {
 	const parts: string[] = [];
-	if (f.category != null)
-		parts.push(categoryName ?? f.category ?? "");
+	if (f.category != null) parts.push(categoryName ?? f.category ?? "");
 	if (f.maxDistanceKm != null) parts.push(`${f.maxDistanceKm} km`);
 	if (f.maxPrice != null) parts.push(`Max \$${f.maxPrice}`);
 	return parts.filter((p) => p.length > 0);

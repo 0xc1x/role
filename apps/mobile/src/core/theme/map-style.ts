@@ -31,14 +31,26 @@ import type { ThemeScheme } from "./colors";
  */
 export const MAP_STYLE_NO_POI: MapStyleElement[] = [
 	// Google POI labels (businesses, attractions, parks) — off everywhere.
-	{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+	{
+		featureType: "poi",
+		elementType: "labels",
+		stylers: [{ visibility: "off" }],
+	},
 	// Business POI footprints — off so only our markers compete visually.
 	{ featureType: "poi.business", stylers: [{ visibility: "off" }] },
 	// Transit labels and station pins — off; transit lines stay for context.
-	{ featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] },
+	{
+		featureType: "transit",
+		elementType: "labels",
+		stylers: [{ visibility: "off" }],
+	},
 	{ featureType: "transit.station", stylers: [{ visibility: "off" }] },
 	// Road shields/icons — off; road names stay for orientation.
-	{ featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+	{
+		featureType: "road",
+		elementType: "labels.icon",
+		stylers: [{ visibility: "off" }],
+	},
 	// Built blocks in soft lavender-gray instead of default gray.
 	{
 		featureType: "landscape.man_made",
@@ -71,14 +83,26 @@ export const MAP_STYLE_NO_POI: MapStyleElement[] = [
  */
 export const MAP_STYLE_NO_POI_DARK: MapStyleElement[] = [
 	// Google POI labels (businesses, attractions, parks) — off everywhere.
-	{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+	{
+		featureType: "poi",
+		elementType: "labels",
+		stylers: [{ visibility: "off" }],
+	},
 	// Business POI footprints — off so only our markers compete visually.
 	{ featureType: "poi.business", stylers: [{ visibility: "off" }] },
 	// Transit labels and station pins — off; transit lines stay for context.
-	{ featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] },
+	{
+		featureType: "transit",
+		elementType: "labels",
+		stylers: [{ visibility: "off" }],
+	},
 	{ featureType: "transit.station", stylers: [{ visibility: "off" }] },
 	// Road shields/icons — off; road names stay for orientation.
-	{ featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+	{
+		featureType: "road",
+		elementType: "labels.icon",
+		stylers: [{ visibility: "off" }],
+	},
 	// Built blocks in dark lavender-gray instead of default gray.
 	{
 		featureType: "landscape.man_made",

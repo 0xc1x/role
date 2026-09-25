@@ -1,7 +1,15 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	useInfiniteQuery,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner-native";
-import type { Coupon, OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
+import type {
+	Coupon,
+	OrderStatus as OrderStatusType,
+} from "@0xc1x/role-commons";
 import { strings } from "@/src/core/i18n/strings";
 import { formatMoney } from "@/src/core/utils/formatters";
 
@@ -12,7 +20,11 @@ import {
 	createReservationIdempotencyKey,
 	orderRepository,
 } from "@/src/features/orders/data/repository";
-import { couponIsValid, checkoutTotals, meetsCouponMinimum } from "@/src/features/orders/domain/order";
+import {
+	couponIsValid,
+	checkoutTotals,
+	meetsCouponMinimum,
+} from "@/src/features/orders/domain/order";
 import {
 	ACTIVE_ORDER_STATUSES,
 	TERMINAL_ORDER_STATUSES,
@@ -78,7 +90,11 @@ export function useAllBusinesses(
 ) {
 	const status = useAuthStore((s) => s.status);
 	return useQuery({
-		queryKey: ["businesses", "all", { lat, lng, searchQuery, type, radiusKm, limit }],
+		queryKey: [
+			"businesses",
+			"all",
+			{ lat, lng, searchQuery, type, radiusKm, limit },
+		],
 		queryFn: () =>
 			offersRepository.getAllBusinesses({
 				lat,
@@ -128,7 +144,11 @@ export function useFilteredOffersInfinite(filters: {
 		queryKey: ["offers", "filtered", "infinite", filters],
 		initialPageParam: 0,
 		queryFn: ({ pageParam }) =>
-			offersRepository.getFilteredOffers({ ...filters, page: pageParam as number, limit: PAGE_SIZE }),
+			offersRepository.getFilteredOffers({
+				...filters,
+				page: pageParam as number,
+				limit: PAGE_SIZE,
+			}),
 		getNextPageParam: (lastPage, _allPages, lastPageParam) =>
 			lastPage.length < PAGE_SIZE ? undefined : (lastPageParam as number) + 1,
 		enabled: status !== "guest",
@@ -143,7 +163,12 @@ export function useAllBusinessesInfinite(
 ) {
 	const status = useAuthStore((s) => s.status);
 	return useInfiniteQuery({
-		queryKey: ["businesses", "all", "infinite", { lat, lng, searchQuery, type }],
+		queryKey: [
+			"businesses",
+			"all",
+			"infinite",
+			{ lat, lng, searchQuery, type },
+		],
 		initialPageParam: 0,
 		queryFn: ({ pageParam }) =>
 			offersRepository.getAllBusinesses({
@@ -222,7 +247,15 @@ function useRadiusParams() {
 export function useNearbyOffersHook(limit = 10, category?: string | null) {
 	const { lat, lng, radiusKm, params } = useRadiusParams();
 	return useQuery({
-		queryKey: ["offers", "nearby", lat, lng, radiusKm, limit, category ?? "all"],
+		queryKey: [
+			"offers",
+			"nearby",
+			lat,
+			lng,
+			radiusKm,
+			limit,
+			category ?? "all",
+		],
 		queryFn: () => {
 			if (lat == null || lng == null) throw new Error("Ubicación requerida");
 			return offersRepository.getNearbyOffers({
@@ -330,7 +363,11 @@ export function useOrders(filters: OrderListFilters = {}) {
 }
 
 /** Exact tab counts (head-count queries, no rows fetched). */
-export function useOrderCounts(filters: { search?: string; pastFrom?: string; pastTo?: string }) {
+export function useOrderCounts(filters: {
+	search?: string;
+	pastFrom?: string;
+	pastTo?: string;
+}) {
 	const profile = useAuthStore((s) => s.profile);
 	const profileId = profile?.id;
 	return useQuery({
@@ -413,7 +450,10 @@ export function useApplyCoupon(offerDetail: OfferDetail | undefined) {
 	const mutation = useMutation({
 		mutationFn: async (code: string) => {
 			if (!offerDetail) throw new Error("Oferta no disponible");
-			return orderRepository.getCouponByCode(code, offerDetail.offer.business_id);
+			return orderRepository.getCouponByCode(
+				code,
+				offerDetail.offer.business_id,
+			);
 		},
 		onSuccess: (coupon) => {
 			if (!offerDetail) return;

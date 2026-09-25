@@ -97,7 +97,9 @@ function applyOrderListFilters(query: any, params: OrderListParams): any {
  * resolves the dotted refs through the embedded joins.
  */
 function orderSearchOr(search: string): string {
-	const pattern = quoteOrValue(`%${search.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
+	const pattern = quoteOrValue(
+		`%${search.replace(/[%_\\]/g, (c) => `\\${c}`)}%`,
+	);
 	return [
 		`order_number.ilike.${pattern}`,
 		`offers.title.ilike.${pattern}`,
@@ -411,8 +413,7 @@ export const orderRepository = {
 			.is("business_id", null)
 			.eq("is_active", true)
 			.maybeSingle();
-		if (globalError)
-			throw toAppError(globalError, "Error al validar el cupón");
+		if (globalError) throw toAppError(globalError, "Error al validar el cupón");
 		return (globalCoupon as unknown as Coupon | null) ?? null;
 	},
 

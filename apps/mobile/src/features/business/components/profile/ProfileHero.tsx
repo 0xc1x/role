@@ -23,7 +23,14 @@ export function ProfileHero({
 	return (
 		<>
 			<Animated.View
-				style={[styles.header, { height: headerHeight, opacity: headerOpacity, pointerEvents: "none" }]}
+				style={[
+					styles.header,
+					{
+						height: headerHeight,
+						opacity: headerOpacity,
+						pointerEvents: "none",
+					},
+				]}
 			>
 				{coverImage ? (
 					<Image
@@ -32,7 +39,9 @@ export function ProfileHero({
 						contentFit="cover"
 					/>
 				) : (
-					<View style={[styles.headerImage, { backgroundColor: colors.primary }]} />
+					<View
+						style={[styles.headerImage, { backgroundColor: colors.primary }]}
+					/>
 				)}
 				<LinearGradient
 					colors={[

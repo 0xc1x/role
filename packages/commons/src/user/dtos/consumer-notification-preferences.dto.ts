@@ -1,16 +1,16 @@
-import type { z } from 'zod';
+import type { z } from "zod";
 import type {
-  ConsumerNotificationPreferencesSchema,
-  CreateConsumerNotificationPreferencesSchema,
-  UpdateConsumerNotificationPreferencesSchema,
-} from '../schemas/consumer-notification-preferences.schema';
+	ConsumerNotificationPreferencesSchema,
+	CreateConsumerNotificationPreferencesSchema,
+	UpdateConsumerNotificationPreferencesSchema,
+} from "../schemas/consumer-notification-preferences.schema";
 
 export type ConsumerNotificationPreferencesDto = z.infer<
-  typeof ConsumerNotificationPreferencesSchema
+	typeof ConsumerNotificationPreferencesSchema
 >;
 export type CreateConsumerNotificationPreferencesDto = z.infer<
-  typeof CreateConsumerNotificationPreferencesSchema
+	typeof CreateConsumerNotificationPreferencesSchema
 >;
 export type UpdateConsumerNotificationPreferencesDto = z.infer<
-  typeof UpdateConsumerNotificationPreferencesSchema
+	typeof UpdateConsumerNotificationPreferencesSchema
 >;

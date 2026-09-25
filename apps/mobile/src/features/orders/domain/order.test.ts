@@ -61,9 +61,9 @@ describe("lastEventTimeFor", () => {
 	});
 
 	it("devuelve el más reciente entre varios estados candidatos", () => {
-		expect(lastEventTimeFor(events, ["picked_up", "completed"], "fallback")).toBe(
-			"2026-08-01T13:00:00Z",
-		);
+		expect(
+			lastEventTimeFor(events, ["picked_up", "completed"], "fallback"),
+		).toBe("2026-08-01T13:00:00Z");
 	});
 
 	it("usa el último registro si el estado se repite", () => {
@@ -168,7 +168,12 @@ describe("history filter", () => {
 
 	it("all devuelve todo", () => {
 		expect(
-			filterByHistoryPeriod([...items], "all", 0, new Date("2026-09-08T12:00:00Z")),
+			filterByHistoryPeriod(
+				[...items],
+				"all",
+				0,
+				new Date("2026-09-08T12:00:00Z"),
+			),
 		).toHaveLength(2);
 	});
 

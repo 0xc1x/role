@@ -31,9 +31,11 @@ export function ExploreHeader({
 	const insets = useSafeAreaInsets();
 	const onBrand = scheme === "light";
 	const brandBackground = onBrand ? colors.primary : colors.background;
-	const brandForeground = onBrand ? colors.primaryForeground : colors.foreground;
+	const brandForeground = onBrand
+		? colors.primaryForeground
+		: colors.foreground;
 
-		return (
+	return (
 		<View
 			style={[
 				styles.container,
@@ -62,9 +64,7 @@ export function ExploreHeader({
 							backgroundColor: onBrand
 								? colors.background
 								: colors.inputBackground,
-							borderColor: onBrand
-								? colors.background
-								: colors.borderSolid,
+							borderColor: onBrand ? colors.background : colors.borderSolid,
 						},
 					]}
 				/>
@@ -127,11 +127,17 @@ function ExploreHeaderPillButton({
 			]}
 		>
 			<Icon size={16} color={brandForeground} />
-			<AppText variant="bodySmall" weight="semiBold" style={{ color: brandForeground }}>
+			<AppText
+				variant="bodySmall"
+				weight="semiBold"
+				style={{ color: brandForeground }}
+			>
 				{label}
 			</AppText>
 			{hasIndicator ? (
-				<View style={[styles.indicator, { backgroundColor: brandForeground }]} />
+				<View
+					style={[styles.indicator, { backgroundColor: brandForeground }]}
+				/>
 			) : null}
 		</Pressable>
 	);

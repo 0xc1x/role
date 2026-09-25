@@ -33,7 +33,12 @@ export function AuthScreenShell({
 					onPress={() => goBackOr("/")}
 					accessibilityLabel={strings.common.back}
 				/>
-				<AppText variant="h2" weight="bold" numberOfLines={1} style={styles.headerTitle}>
+				<AppText
+					variant="h2"
+					weight="bold"
+					numberOfLines={1}
+					style={styles.headerTitle}
+				>
 					{title}
 				</AppText>
 			</View>
@@ -59,7 +64,7 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.md,
 	},
 	headerTitle: { flex: 1 },
-	divider: { height: StyleSheet.hairlineWidth , },
+	divider: { height: StyleSheet.hairlineWidth },
 	scrollContent: {
 		flexGrow: 1,
 		alignItems: "center",

@@ -1,4 +1,10 @@
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+	Pressable,
+	StyleSheet,
+	View,
+	type StyleProp,
+	type ViewStyle,
+} from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { MapPin, Star, Store } from "lucide-react-native";
@@ -41,7 +47,9 @@ export function BusinessGridCard({
 		lng != null &&
 		business.latitude != null &&
 		business.longitude != null
-			? formatDistanceKm(haversineKm(lat, lng, business.latitude, business.longitude))
+			? formatDistanceKm(
+					haversineKm(lat, lng, business.latitude, business.longitude),
+				)
 			: "";
 
 	const typeLabel = BUSINESS_TYPE_LABELS[business.type] ?? business.type;
@@ -50,7 +58,9 @@ export function BusinessGridCard({
 		<CardPressable
 			className="p-0 gap-0 border-0 shadow-none"
 			style={[styles.card, style]}
-			onPress={onPress ?? (() => router.push(`/business-profile/${business.id}`))}
+			onPress={
+				onPress ?? (() => router.push(`/business-profile/${business.id}`))
+			}
 		>
 			<View style={styles.imageWrap}>
 				{business.imageUrl ? (
@@ -60,7 +70,13 @@ export function BusinessGridCard({
 						contentFit="cover"
 					/>
 				) : (
-					<View style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.muted }]}>
+					<View
+						style={[
+							styles.image,
+							styles.imagePlaceholder,
+							{ backgroundColor: colors.muted },
+						]}
+					>
 						<Store size={28} color={colors.mutedForeground} />
 					</View>
 				)}
@@ -68,11 +84,20 @@ export function BusinessGridCard({
 					<View
 						style={[
 							styles.ratingBadge,
-							{ backgroundColor: withAlpha(colors.card, 0.922), boxShadow: `0px 1px 4px ${colors.shadow}` },
+							{
+								backgroundColor: withAlpha(colors.card, 0.922),
+								boxShadow: `0px 1px 4px ${colors.shadow}`,
+							},
 						]}
 					>
 						<Star size={14} color={colors.starGold} />
-						<AppText style={{ fontSize: 12, fontWeight: "700", color: colors.foreground }}>
+						<AppText
+							style={{
+								fontSize: 12,
+								fontWeight: "700",
+								color: colors.foreground,
+							}}
+						>
 							{business.rating.toFixed(1)}
 						</AppText>
 					</View>
@@ -81,13 +106,13 @@ export function BusinessGridCard({
 					<View
 						style={[
 							styles.distanceBadge,
-							{ backgroundColor: withAlpha(colors.card, 0.922), boxShadow: `0px 1px 4px ${colors.shadow}` },
+							{
+								backgroundColor: withAlpha(colors.card, 0.922),
+								boxShadow: `0px 1px 4px ${colors.shadow}`,
+							},
 						]}
 					>
-						<MapPin
-							size={12}
-							color={colors.mutedForeground}
-						/>
+						<MapPin size={12} color={colors.mutedForeground} />
 						<AppText
 							style={{
 								fontSize: 12,
@@ -128,7 +153,11 @@ export function BusinessGridCard({
 	);
 }
 
-export function BusinessGridCardSkeleton({ style }: { style?: StyleProp<ViewStyle> }) {
+export function BusinessGridCardSkeleton({
+	style,
+}: {
+	style?: StyleProp<ViewStyle>;
+}) {
 	const { colors } = useTheme();
 	return (
 		<View

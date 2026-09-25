@@ -13,7 +13,8 @@ const SEARCH_DEBOUNCE_MS = 400;
 export function useExploreFilters() {
 	const [search, setSearch] = useState("");
 	const [debouncedSearch, setDebouncedSearch] = useState("");
-	const [filters, setFilters] = useState<ExploreFilterState>(emptyExploreFilters);
+	const [filters, setFilters] =
+		useState<ExploreFilterState>(emptyExploreFilters);
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
 	// Debounce la búsqueda (400ms).

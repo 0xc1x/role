@@ -61,12 +61,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(
 				{centerPin ? (
 					<Marker coordinate={coords} anchor={{ x: 0.5, y: 0.5 }}>
 						<View style={styles.pinShadow}>
-						<MapPin
-							size={40}
-							color={colors.primary}
-							fill="none"
-							style={styles.pin}
-						/>
+							<MapPin
+								size={40}
+								color={colors.primary}
+								fill="none"
+								style={styles.pin}
+							/>
 						</View>
 					</Marker>
 				) : null}

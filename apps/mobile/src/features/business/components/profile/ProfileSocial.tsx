@@ -10,7 +10,12 @@ import type { BusinessProfileDetail } from "@/src/features/business/domain/busin
 import { BusinessLocationMap } from "@/src/features/business/components/BusinessLocationMap";
 import { ReviewItem } from "@/src/features/business/components/ReviewItem";
 import { openMaps } from "./maps";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+} from "@/components/ui/card";
 
 export function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
 	const { colors } = useTheme();
@@ -21,7 +26,12 @@ export function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
 				<AppText variant="labelMedium" weight="bold">
 					{strings.businessProfile.reviewsTitle}
 				</AppText>
-				<View style={[styles.ratingBadge, { backgroundColor: colors.surfaceWarning }]}>
+				<View
+					style={[
+						styles.ratingBadge,
+						{ backgroundColor: colors.surfaceWarning },
+					]}
+				>
 					<Star size={14} color={colors.yellowDark} />
 					<View style={{ width: 4 }} />
 					<AppText weight="bold" style={{ color: colors.yellowDark }}>
@@ -31,13 +41,17 @@ export function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
 			</CardHeader>
 			<CardContent>
 				{profile.reviews.length === 0 ? (
-					<View >
-						<AppText style={{ color: colors.mutedForeground, textAlign: "center" }}>
+					<View>
+						<AppText
+							style={{ color: colors.mutedForeground, textAlign: "center" }}
+						>
 							{strings.businessProfile.noReviews}
 						</AppText>
 					</View>
 				) : (
-					profile.reviews.map((review) => <ReviewItem key={review.id} review={review} />)
+					profile.reviews.map((review) => (
+						<ReviewItem key={review.id} review={review} />
+					))
 				)}
 
 				{(business.review_count ?? 0) > 0 ? (
@@ -50,7 +64,11 @@ export function ReviewsCard({ profile }: { profile: BusinessProfileDetail }) {
 					>
 						<AppText
 							weight="bold"
-							style={{ color: colors.primary, textAlign: "center", marginTop: spacing.sm }}
+							style={{
+								color: colors.primary,
+								textAlign: "center",
+								marginTop: spacing.sm,
+							}}
 						>
 							{strings.businessProfile.seeAllReviews.replace(
 								"{n}",
@@ -75,13 +93,15 @@ export function LocationCard({ profile }: { profile: BusinessProfileDetail }) {
 					{strings.businessProfile.geolocation}
 				</AppText>
 			</CardHeader>
-			
+
 			<CardDescription>
-				<AppText style={{ color: colors.mutedForeground, marginTop: spacing.xs }}>
+				<AppText
+					style={{ color: colors.mutedForeground, marginTop: spacing.xs }}
+				>
 					{profile.address ?? ""}
 				</AppText>
 			</CardDescription>
-			
+
 			<CardContent>
 				{hasCoords && profile.latitude != null && profile.longitude != null ? (
 					<>

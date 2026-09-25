@@ -85,9 +85,8 @@ export function BottomSheetModal({
 					{children}
 				</ScrollView>
 				<DrawerFooter style={{ paddingHorizontal: spacing.md, paddingTop: 6 }}>
-					{footer ? (footer) : null}
+					{footer ? footer : null}
 				</DrawerFooter>
-				
 			</DrawerContent>
 		</Drawer>
 	);

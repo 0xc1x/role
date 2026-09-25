@@ -1,13 +1,13 @@
-import type { z } from 'zod';
-import type { PaginatedData } from '../../_common/dtos/api.dto';
+import type { z } from "zod";
+import type { PaginatedData } from "../../_common/dtos/api.dto";
 import type {
-  CouponSchema,
-  CouponListItemSchema,
-  CouponListResponseSchema,
-  CreateCouponSchema,
-  UpdateCouponSchema,
-  ListCouponsQuerySchema,
-} from '../schemas/coupon.schema';
+	CouponSchema,
+	CouponListItemSchema,
+	CouponListResponseSchema,
+	CreateCouponSchema,
+	UpdateCouponSchema,
+	ListCouponsQuerySchema,
+} from "../schemas/coupon.schema";
 
 /** Wire DTO for a coupon resource (matches {@link CouponSchema}). */
 export type CouponDto = z.infer<typeof CouponSchema>;

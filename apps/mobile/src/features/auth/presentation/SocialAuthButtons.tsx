@@ -18,19 +18,27 @@ export function SocialAuthButtons({ label }: { label: string }) {
 	return (
 		<>
 			<View style={styles.dividerRow}>
-				<View style={[styles.dividerLine, { backgroundColor: colors.borderSolid }]} />
+				<View
+					style={[styles.dividerLine, { backgroundColor: colors.borderSolid }]}
+				/>
 				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 					{label}
 				</AppText>
-				<View style={[styles.dividerLine, { backgroundColor: colors.borderSolid }]} />
+				<View
+					style={[styles.dividerLine, { backgroundColor: colors.borderSolid }]}
+				/>
 			</View>
 			<View style={styles.providers}>
 				<SocialProvider
-					icon={<Ionicons name="logo-google" size={20} color={colors.foreground} />}
+					icon={
+						<Ionicons name="logo-google" size={20} color={colors.foreground} />
+					}
 					label={strings.auth.google}
 				/>
 				<SocialProvider
-					icon={<Ionicons name="logo-apple" size={20} color={colors.foreground} />}
+					icon={
+						<Ionicons name="logo-apple" size={20} color={colors.foreground} />
+					}
 					label={strings.auth.apple}
 				/>
 			</View>

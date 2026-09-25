@@ -47,9 +47,9 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 		>
 			{items.map((item, index) => (
 				<View key={item.label}>
-				<Button
-					variant="ghost"
-					onPress={() => router.push(item.route)}
+					<Button
+						variant="ghost"
+						onPress={() => router.push(item.route)}
 						style={({ pressed }) => [
 							styles.settingsItem,
 							pressed && styles.pressed,
@@ -66,7 +66,9 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 						</View>
 					</Button>
 					{index < items.length - 1 ? (
-						<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
+						<View
+							style={[styles.divider, { backgroundColor: colors.borderSolid }]}
+						/>
 					) : null}
 				</View>
 			))}
