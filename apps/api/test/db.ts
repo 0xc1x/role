@@ -17,17 +17,35 @@ const BASE_URL =
   process.env.TEST_DATABASE_URL ??
   'postgres://postgres:postgres@localhost:6432/role_test';
 
+/**
+ * Drizzle genera migraciones incrementales, so the mirror is the CONCATENATION
+ * of every folder, in name order. Reading only the first non-meta folder looked
+ * equivalent while the working copy happened to have a stale one, and silently
+ * tested against an old schema: locally the first folder lacked a constraint
+ * that a later folder added, so the manual ALTER below succeeded. On CI only
+ * the latest folder exists, the constraint is already there, and the ALTER
+ * failed with 42P07, taking 48 database specs down with it.
+ */
 async function loadInitSql(): Promise<string> {
   const dir = join(__dirname, '..', 'drizzle');
-  const entries = await readdir(dir);
-  const folder = entries.find((e) => e !== 'meta' && !e.startsWith('.'));
-  if (!folder) throw new Error('Sin migraciones en drizzle/');
-  const raw = await readFile(join(dir, folder, 'migration.sql'), 'utf8');
-  // drizzle-kit pull envuelve el SQL en /* ... */ ("uncomment to run"); lo desenvolvemos.
-  const open = raw.indexOf('/*');
-  const close = raw.lastIndexOf('*/');
-  if (open === -1 || close === -1 || close < open) return raw;
-  return raw.slice(0, open) + raw.slice(open + 2, close) + raw.slice(close + 2);
+  const entries = (await readdir(dir))
+    .filter((e) => e !== 'meta' && !e.startsWith('.'))
+    .sort();
+  if (entries.length === 0) throw new Error('Sin migraciones en drizzle/');
+
+  const chunks: string[] = [];
+  for (const folder of entries) {
+    const raw = await readFile(join(dir, folder, 'migration.sql'), 'utf8');
+    // drizzle-kit pull envuelve el SQL en /* ... */ ("uncomment to run"); lo desenvolvemos.
+    const open = raw.indexOf('/*');
+    const close = raw.lastIndexOf('*/');
+    chunks.push(
+      open === -1 || close === -1 || close < open
+        ? raw
+        : raw.slice(0, open) + raw.slice(open + 2, close) + raw.slice(close + 2),
+    );
+  }
+  return chunks.join('\n--> statement-breakpoint\n');
 }
 
 const INIT_SQL = loadInitSql();
@@ -79,19 +97,16 @@ export async function createTestDb(): Promise<TestDbContext> {
   // The checked-in Drizzle mirror intentionally omits Supabase functions,
   // triggers, RLS and PostGIS. Install only the reservation/order primitives
   // exercised by DB specs so those tests do not pass on trigger-less tables.
+  //
+  // Not repeated here, because the mirror already carries them and re-adding
+  // raises 42P07: the composite unique on business_locations(id, business_id),
+  // the offers_location_business_fkey composite foreign key, and the orders
+  // idempotency_key column. What remains is the check constraint, the partial
+  // unique index, the sequence, and the functions and triggers that Drizzle
+  // cannot model.
   await client.unsafe(`
-    alter table public.business_locations
-      add constraint business_locations_id_business_id_key
-      unique (id, business_id);
-    alter table public.offers
-      add constraint offers_location_business_fkey
-      foreign key (business_location_id, business_id)
-      references public.business_locations(id, business_id)
-      on delete restrict;
     alter table public.offers
       alter column is_active set default false;
-    alter table public.orders
-      add column idempotency_key text;
     alter table public.orders
       add constraint orders_idempotency_key_length
       check (
