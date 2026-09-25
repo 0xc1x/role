@@ -15,18 +15,11 @@ export class TipsService {
   constructor(private readonly tipsRepository: TipsRepository) {}
 
   async list(query: ListTipsQuery): Promise<TipPaginatedData> {
-    const { rows, total } = await this.tipsRepository.list({
-      page: query.page,
-      limit: query.limit,
-      search: query.search,
-      active: query.active,
-    });
+    return this.listWithActive(query, true);
+  }
 
-    return paginatedDataFromQuery(
-      rows.map((row) => TipMapper.toDto(row)),
-      { page: query.page, limit: query.limit },
-      total,
-    );
+  async listAdmin(query: ListTipsQuery): Promise<TipPaginatedData> {
+    return this.listWithActive(query, query.active);
   }
 
   async getRandom(): Promise<TipDto> {
@@ -39,7 +32,7 @@ export class TipsService {
 
   async getById(id: string): Promise<TipDto> {
     const row = await this.tipsRepository.findById(id);
-    if (!row) {
+    if (!row?.active) {
       throw new NotFoundException(`Tip ${id} not found`);
     }
     return TipMapper.toDto(row);
@@ -77,5 +70,23 @@ export class TipsService {
     });
 
     return TipMapper.toDto(deleted);
+  }
+
+  private async listWithActive(
+    query: ListTipsQuery,
+    active: boolean | undefined,
+  ): Promise<TipPaginatedData> {
+    const { rows, total } = await this.tipsRepository.list({
+      page: query.page,
+      limit: query.limit,
+      search: query.search,
+      active,
+    });
+
+    return paginatedDataFromQuery(
+      rows.map((row) => TipMapper.toDto(row)),
+      { page: query.page, limit: query.limit },
+      total,
+    );
   }
 }

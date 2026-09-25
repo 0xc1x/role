@@ -51,6 +51,18 @@ export class CategoriesController {
     return this.categoriesService.list(query);
   }
 
+  @Roles('admin')
+  @Get('admin')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'List categories (admin)' })
+  @ApiOkResponse({ description: 'Paginated category list' })
+  listAdmin(
+    @Query(new ZodValidationPipe(ListCategoriesQuerySchema))
+    query: ListCategoriesQuery,
+  ): Promise<CategoryPaginatedData> {
+    return this.categoriesService.listAdmin(query);
+  }
+
   @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get category by id' })

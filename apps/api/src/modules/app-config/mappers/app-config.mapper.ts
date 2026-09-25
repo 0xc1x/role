@@ -33,7 +33,9 @@ export function toPublicAppConfigDto(row: AppConfigRow): PublicAppConfigDto {
   };
 }
 
-export function toPublicAppConfigList(rows: AppConfigRow[]): PublicAppConfigDto[] {
+export function toPublicAppConfigList(
+  rows: AppConfigRow[],
+): PublicAppConfigDto[] {
   return rows.map((row) => toPublicAppConfigDto(row));
 }
 
@@ -61,7 +63,8 @@ export function toAppConfigUpdate(dto: UpdateAppConfigDto): AppConfigUpdate {
     'active',
   ] as const;
   const out: AppConfigUpdate = {};
-  for (const k of keys) if (dto[k] !== undefined) (out as Record<string, unknown>)[k] = dto[k];
+  for (const k of keys)
+    if (dto[k] !== undefined) (out as Record<string, unknown>)[k] = dto[k];
   return out;
 }
 

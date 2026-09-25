@@ -5,14 +5,18 @@ jest.mock('@0xc1x/role-commons', () => ({
   SlideSchema: {},
 }));
 
+import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import type { SlideDto, SlidePaginatedData } from '@0xc1x/role-commons';
+import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
+import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { SlidesController } from './slides.controller';
 import { SlidesService } from './slides.service';
 
 describe('SlidesController', () => {
   let controller: SlidesController;
   let service: jest.Mocked<SlidesService>;
+  let reflector: Reflector;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -22,6 +26,7 @@ describe('SlidesController', () => {
           provide: SlidesService,
           useValue: {
             list: jest.fn(),
+            listAdmin: jest.fn(),
             getById: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
@@ -33,6 +38,7 @@ describe('SlidesController', () => {
 
     controller = module.get(SlidesController);
     service = module.get(SlidesService);
+    reflector = module.get(Reflector);
   });
 
   const mockDto: SlideDto = {
@@ -68,6 +74,29 @@ describe('SlidesController', () => {
 
       expect(result).toEqual(paginated);
       expect(service.list).toHaveBeenCalledWith({ page: 1, limit: 10, active: undefined });
+    });
+  });
+
+  describe('authorization', () => {
+    it('keeps public reads public and the admin list protected', () => {
+      expect(reflector.get(IS_PUBLIC_KEY, controller.list)).toBe(true);
+      expect(reflector.get(IS_PUBLIC_KEY, controller.getById)).toBe(true);
+      expect(reflector.get(ROLES_KEY, controller.listAdmin)).toEqual(['admin']);
+      expect(reflector.get(IS_PUBLIC_KEY, controller.listAdmin)).toBeUndefined();
+    });
+  });
+
+  describe('listAdmin', () => {
+    it('preserves the admin active filter', async () => {
+      const query = { page: 1, limit: 10, active: false } as const;
+      const paginated: SlidePaginatedData = {
+        data: [],
+        meta: { page: 1, limit: 10, total: 0, total_pages: 0 },
+      };
+      service.listAdmin.mockResolvedValue(paginated);
+
+      await expect(controller.listAdmin(query)).resolves.toEqual(paginated);
+      expect(service.listAdmin).toHaveBeenCalledWith(query);
     });
   });
 

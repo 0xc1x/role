@@ -20,11 +20,30 @@ export class CategoriesService {
   constructor(private readonly categoriesRepository: CategoriesRepository) {}
 
   async list(query: ListCategoriesQuery): Promise<CategoryPaginatedData> {
+    return this.listWithActive(query, true);
+  }
+
+  async listAdmin(query: ListCategoriesQuery): Promise<CategoryPaginatedData> {
+    return this.listWithActive(query, query.active);
+  }
+
+  async getById(id: string): Promise<CategoryDto> {
+    const row = await this.categoriesRepository.findById(id);
+    if (!row?.active) {
+      throw new NotFoundException(`Category ${id} not found`);
+    }
+    return CategoryMapper.toDto(row);
+  }
+
+  private async listWithActive(
+    query: ListCategoriesQuery,
+    active: boolean | undefined,
+  ): Promise<CategoryPaginatedData> {
     const { rows, total } = await this.categoriesRepository.list({
       page: query.page,
       limit: query.limit,
       search: query.search,
-      active: query.active,
+      active,
     });
 
     return paginatedDataFromQuery(
@@ -32,14 +51,6 @@ export class CategoriesService {
       { page: query.page, limit: query.limit },
       total,
     );
-  }
-
-  async getById(id: string): Promise<CategoryDto> {
-    const row = await this.categoriesRepository.findById(id);
-    if (!row) {
-      throw new NotFoundException(`Category ${id} not found`);
-    }
-    return CategoryMapper.toDto(row);
   }
 
   async create(body: CreateCategoryDto): Promise<CategoryDto> {
