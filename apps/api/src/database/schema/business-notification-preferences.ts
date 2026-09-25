@@ -1,10 +1,4 @@
-import {
-  boolean,
-  pgTable,
-  time,
-  timestamp,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { boolean, pgTable, time, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { businesses } from './businesses';
 
 export const businessNotificationPreferences = pgTable(

@@ -35,7 +35,9 @@ export const businesses = pgTable('businesses', {
   is_active: boolean('is_active').notNull().default(true),
   verification_status: text('verification_status').notNull().default('pending'),
   verified_at: timestamp('verified_at', { withTimezone: true }),
-  verified_by: uuid('verified_by').references(() => profiles.id, { onDelete: 'no action' }),
+  verified_by: uuid('verified_by').references(() => profiles.id, {
+    onDelete: 'no action',
+  }),
   rejection_reason: text('rejection_reason'),
   created_at: timestamp('created_at', { withTimezone: true })
     .notNull()

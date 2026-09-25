@@ -241,7 +241,9 @@ export const emailSends = pgTable(
     index('idx_email_sends_user').on(t.user_id),
     index('idx_email_sends_resend_id').on(t.resend_id),
     index('idx_email_sends_status').on(t.status),
-    index('idx_email_sends_scheduled').on(t.scheduled_at).where(sql`status in ('pending','queued')`),
+    index('idx_email_sends_scheduled')
+      .on(t.scheduled_at)
+      .where(sql`status in ('pending','queued')`),
     index('idx_email_sends_queued_at').on(t.queued_at),
   ],
 );
