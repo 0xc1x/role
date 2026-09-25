@@ -54,6 +54,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Lint
+        run: bun run lint
+
       - name: Generate offline DDL mirror for API tests
         working-directory: apps/api
         run: bunx drizzle-kit generate
