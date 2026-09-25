@@ -1,0 +1,1 @@
+alter table public.profiles drop column if exists notification_radius_km;
