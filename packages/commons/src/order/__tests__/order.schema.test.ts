@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { CreateOrderSchema } from '../schemas/order.schema';
 import {
   CreateOrderRequestSchema,
   ListOrdersQuerySchema,
@@ -18,6 +19,32 @@ describe('CreateOrderRequestSchema', () => {
 
   it('rejects invalid uuid', () => {
     expect(CreateOrderRequestSchema.safeParse({ offer_id: 'bad' }).success).toBe(false);
+  });
+});
+
+describe('CreateOrderSchema', () => {
+  const order = {
+    user_id: uuid,
+    offer_id: uuid,
+    business_id: uuid,
+    order_number: 'FD-2026-0925-001',
+    price: 5,
+    original_price: 10,
+    pickup_code: 'ABC123',
+    commission_rate: 0.1,
+    platform_fee: 0.5,
+    net_amount: 4.5,
+  };
+
+  it('accepts a bounded idempotency key', () => {
+    expect(
+      CreateOrderSchema.safeParse({ ...order, idempotency_key: 'reservation-1' })
+        .success,
+    ).toBe(true);
+    expect(
+      CreateOrderSchema.safeParse({ ...order, idempotency_key: 'x'.repeat(129) })
+        .success,
+    ).toBe(false);
   });
 });
 
@@ -57,6 +84,7 @@ describe('ReserveOfferResponseSchema', () => {
         platform_fee: 0.5,
         net_amount: 4.5,
         status: 'pending',
+        replayed: true,
       }).success,
     ).toBe(true);
   });
@@ -67,6 +95,16 @@ describe('ReserveOfferResponseSchema', () => {
         success: false,
         error: 'OFFER_OUT_OF_STOCK',
         message: 'Sin stock',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('accepts idempotency-key errors from the RPC', () => {
+    expect(
+      ReserveOfferErrorSchema.safeParse({
+        success: false,
+        error: 'IDEMPOTENCY_KEY_REUSED',
+        message: 'La clave ya fue usada para otra reserva',
       }).success,
     ).toBe(true);
   });

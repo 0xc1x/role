@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ORDER_STATUSES } from '../enums/order-status';
 
 /**
  * Contrato de respuesta del espejo de la RPC `reserve_offer` de Supabase.
@@ -11,6 +12,9 @@ export const RESERVE_OFFER_ERROR_CODES = [
   'DUPLICATE_RESERVATION',
   'COUPON_EXHAUSTED',
   'COUPON_MIN_NOT_MET',
+  'UNAUTHORIZED',
+  'INVALID_IDEMPOTENCY_KEY',
+  'IDEMPOTENCY_KEY_REUSED',
 ] as const;
 
 export type ReserveOfferErrorCode = (typeof RESERVE_OFFER_ERROR_CODES)[number];
@@ -27,7 +31,8 @@ export const ReserveOfferResultSchema = z.object({
   discount: z.number(),
   platform_fee: z.number(),
   net_amount: z.number(),
-  status: z.literal('pending'),
+  status: z.enum(ORDER_STATUSES),
+  replayed: z.boolean().optional(),
 });
 
 export const ReserveOfferErrorSchema = z.object({
