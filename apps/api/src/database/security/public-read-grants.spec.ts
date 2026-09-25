@@ -110,29 +110,39 @@ describe('client read/write boundary migration', () => {
     );
   });
 
-  test('businesses: public select is column-scoped away from platform fields', () => {
-    expect(
-      findStatement((s) =>
-        /revoke all on table public\.businesses from anon, authenticated/i.test(s),
+  test('businesses: table-level SELECT is restored, and the exposure it buys is named', () => {
+    // This is the debt, pinned on purpose.
+    //
+    // 20260925163235 replaced table-wide SELECT with per-column grants so anon
+    // could not read the platform columns. That is incompatible with PostgREST:
+    // offers, business_locations and orders hold foreign keys to businesses, and
+    // PostgREST needs table-level SELECT on a referenced table to resolve
+    // relationships, so every /rest/v1/offers read failed with 42501 - including
+    // select=id with no embed. The offers catalog is the product.
+    //
+    // The two are mutually exclusive: either the table is exposed, or the
+    // sensitive columns move off it. The follow-up is to move them to
+    // business_finance and business_moderation. Until then these columns ARE
+    // readable by anon, and this test exists so that fact is asserted rather
+    // than forgotten. When the columns move, replace this test with one that
+    // proves they are absent from the table again.
+    const restore = [
+      ...ALL_MIGRATIONS.matchAll(
+        /grant select on table public\.businesses to anon, authenticated;/gi,
       ),
-    ).toMatch(/businesses/);
+    ];
+    expect(
+      restore.length,
+      'no migration restores table-level SELECT on businesses',
+    ).toBeGreaterThan(0);
 
-    const anonGrant = grantBlock('businesses').toLowerCase();
-    for (const column of [
-      'owner_id',
-      'commission_rate',
-      'balance',
-      'verification_status',
-      'verified_at',
-      'verified_by',
-      'rejection_reason',
-    ]) {
-      expect(anonGrant).not.toContain(column);
-    }
-    // The public catalog fields stay readable, otherwise mobile breaks.
-    for (const column of ['id', 'name', 'slug', 'rating', 'is_active']) {
-      expect(anonGrant).toContain(column);
-    }
+    expect(ALL_MIGRATIONS).toMatch(
+      /EXPOSED TO ANON[\s\S]*commission_rate[\s\S]*balance[\s\S]*verification_status/i,
+    );
+
+    // Row access is still bounded: anon only reaches active businesses, which
+    // is what RLS still guarantees while the columns are exposed.
+    expect(ALL_MIGRATIONS).toMatch(/Row access is still bounded by RLS/i);
   });
 
   test('offers: computed rating columns are excluded from client write grants', () => {
