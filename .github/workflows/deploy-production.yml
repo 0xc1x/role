@@ -4,63 +4,116 @@ on:
   workflow_dispatch:
     inputs:
       skip_api:
-        description: 'Saltar Render API'
+        description: Skip Render API
         type: boolean
         default: false
       skip_frontends:
-        description: 'Saltar Vercel admin + landing'
+        description: Skip Vercel admin, landing, and PWA
         type: boolean
         default: false
+
+permissions:
+  contents: read
 
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
-  deploy-api:
-    name: render · api production
+  resolve_source:
+    name: Resolve immutable production source
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - name: Checkout the dispatched commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify the checked-out commit
+        id: source
+        run: |
+          checked_out="$(git rev-parse HEAD)"
+          test "$checked_out" = "$GITHUB_SHA"
+          git cat-file -e "${GITHUB_SHA}^{commit}"
+          echo "sha=$checked_out" >> "$GITHUB_OUTPUT"
+
+  deploy_api:
+    name: Render API production
+    needs: resolve_source
     if: ${{ inputs.skip_api == false }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 15
+    env:
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      API_HEALTH_URL: ${{ vars.API_HEALTH_URL || secrets.API_HEALTH_URL }}
     steps:
-      - name: Trigger Render deploy hook (prod)
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      - name: Deploy the immutable API commit
         run: |
-          : "${RENDER_DEPLOY_HOOK_URL:?secret RENDER_DEPLOY_HOOK_URL vacío — configúralo en el environment production}"
-          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
+          : "${RENDER_DEPLOY_HOOK_URL:?RENDER_DEPLOY_HOOK_URL is required}"
+          case "$RENDER_DEPLOY_HOOK_URL" in
+            *\?*) deploy_url="${RENDER_DEPLOY_HOOK_URL}&ref=${GITHUB_SHA}" ;;
+            *) deploy_url="${RENDER_DEPLOY_HOOK_URL}?ref=${GITHUB_SHA}" ;;
+          esac
+          curl -fsSL -X POST "$deploy_url" >/dev/null
 
-      - name: Wait for healthy API
-        env:
-          API_HEALTH_URL: ${{ secrets.API_HEALTH_URL }}
+      - name: Wait for the expected API version
         run: |
-          : "${API_HEALTH_URL:?secret API_HEALTH_URL vacío — configúralo en el environment production}"
-          for i in $(seq 1 30); do
-            if curl -fsSL "$API_HEALTH_URL" >/dev/null; then
-              echo "API healthy"
+          : "${API_HEALTH_URL:?API_HEALTH_URL is required}"
+          for attempt in $(seq 1 30); do
+            health="$(curl -fsSL --connect-timeout 5 --max-time 15 "$API_HEALTH_URL" 2>/dev/null || true)"
+            if EXPECTED_SHA="$GITHUB_SHA" node -e '
+              const health = JSON.parse(process.argv[1]);
+              if (health.status !== "ok" || health.version !== process.env.EXPECTED_SHA) process.exit(1);
+            ' "$health"; then
+              echo "API healthy at expected commit"
               exit 0
             fi
+            echo "API not ready at expected commit (attempt ${attempt}/30)"
             sleep 20
           done
-          echo "API did not become healthy in time" >&2
+          echo "API did not become healthy at the dispatched commit" >&2
           exit 1
 
-  deploy-admin:
-    name: vercel · admin production
+  build_frontend:
+    name: Build ${{ matrix.name }} candidate
+    needs: resolve_source
     if: ${{ inputs.skip_frontends == false }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: admin
+            app_dir: apps/admin
+            project_id_secret: VERCEL_PROJECT_ID_ADMIN
+            build_command: NITRO_PRESET=vercel bun run --cwd apps/admin build:vercel
+          - name: landing
+            app_dir: apps/landing
+            project_id_secret: VERCEL_PROJECT_ID_LANDING
+            build_command: NITRO_PRESET=vercel bun run --cwd apps/landing build:vercel
+          - name: pwa
+            app_dir: apps/mobile
+            project_id_secret: VERCEL_PROJECT_ID_MOBILE
+            build_command: bun run --cwd apps/mobile build:vercel
     env:
-      NITRO_PRESET: vercel
-    defaults:
-      run:
-        working-directory: apps/admin
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout the immutable commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve_source.outputs.sha }}
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
 
@@ -72,82 +125,108 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
 
-      - name: Install (workspace root)
+      - name: Install workspace
         working-directory: .
         run: bun install --frozen-lockfile
 
-      - name: Pull Vercel env (production)
+      - name: Pull Vercel production environment
+        working-directory: ${{ matrix.app_dir }}
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
+          VERCEL_PROJECT_ID: ${{ secrets[matrix.project_id_secret] }}
         run: |
-          : "${VERCEL_TOKEN:?secret VERCEL_TOKEN vacío}" "${VERCEL_ORG_ID:?secret VERCEL_ORG_ID vacío}" "${VERCEL_PROJECT_ID:?secret VERCEL_PROJECT_ID_* vacío}"
+          : "${VERCEL_TOKEN:?VERCEL_TOKEN is required}"
+          : "${VERCEL_ORG_ID:?VERCEL_ORG_ID is required}"
+          : "${VERCEL_PROJECT_ID:?Vercel project id is required}"
           bunx --package=vercel@59 vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
-      # Build en el runner (workspace + commons disponibles).
-      - name: Build (production output)
+      - name: Build production output
         working-directory: .
         run: |
           bun run build --filter=@0xc1x/role-commons
-          NITRO_PRESET=vercel bun run --cwd apps/admin build:vercel
+          ${{ matrix.build_command }}
 
-      - name: Deploy (prod, prebuilt)
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
-        run: bunx --package=vercel@59 vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+      - name: Create unpromoted production candidate
+        id: candidate
+        working-directory: ${{ matrix.app_dir }}
+        run: |
+          deployment_file="$RUNNER_TEMP/${{ matrix.name }}-deployment-url.txt"
+          bunx --package=vercel@59 vercel deploy \
+            --prebuilt \
+            --prod \
+            --skip-domain \
+            --yes \
+            --meta "githubSha=$GITHUB_SHA" \
+            --meta "deployedBy=deploy-production" \
+            --token="$VERCEL_TOKEN" > "$deployment_file"
+          deployment_url="$(tr -d '\r\n' < "$deployment_file")"
+          case "$deployment_url" in
+            https://*) ;;
+            *) echo "Unexpected Vercel deployment output" >&2; cat "$deployment_file" >&2; exit 1 ;;
+          esac
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
 
-  deploy-landing:
-    name: vercel · landing production
-    if: ${{ inputs.skip_frontends == false }}
+      - name: Upload candidate URL
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-deployment-url
+          path: ${{ runner.temp }}/${{ matrix.name }}-deployment-url.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  promote_frontends:
+    name: Promote verified frontend candidates
+    needs: [resolve_source, deploy_api, build_frontend]
+    if: ${{ always() && needs.resolve_source.result == 'success' && inputs.skip_frontends == false && (needs.deploy_api.result == 'success' || inputs.skip_api == true) && needs.build_frontend.result == 'success' }}
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 20
+    timeout-minutes: 10
     env:
-      NITRO_PRESET: vercel
-    defaults:
-      run:
-        working-directory: apps/landing
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
+      - name: Download candidate URLs
+        uses: actions/download-artifact@v4
         with:
-          bun-version-file: package.json
-
-      - name: Cache Bun store
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install (workspace root)
-        working-directory: .
-        run: bun install --frozen-lockfile
-
-      - name: Pull Vercel env (production)
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_LANDING }}
+          pattern: '*-deployment-url'
+          path: ${{ runner.temp }}/frontend-deployments
+      - name: Promote admin, landing, and PWA
         run: |
-          : "${VERCEL_TOKEN:?secret VERCEL_TOKEN vacío}" "${VERCEL_ORG_ID:?secret VERCEL_ORG_ID vacío}" "${VERCEL_PROJECT_ID:?secret VERCEL_PROJECT_ID_* vacío}"
-          bunx --package=vercel@59 vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          : "${VERCEL_TOKEN:?VERCEL_TOKEN is required}"
+          for name in admin landing pwa; do
+            deployment_file="${{ runner.temp }}/frontend-deployments/${name}-deployment-url/${name}-deployment-url.txt"
+            test -s "$deployment_file"
+            deployment_url="$(tr -d '\r\n' < "$deployment_file")"
+            bunx --package=vercel@59 vercel promote "$deployment_url" --yes --token="$VERCEL_TOKEN"
+          done
 
-      # Build en el runner (workspace + commons disponibles).
-      - name: Build (production output)
-        working-directory: .
+  smoke:
+    name: Production smoke checks
+    needs: [resolve_source, deploy_api, build_frontend, promote_frontends]
+    if: ${{ always() && needs.resolve_source.result == 'success' && (needs.deploy_api.result == 'success' || inputs.skip_api == true) && (needs.promote_frontends.result == 'success' || inputs.skip_frontends == true) }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      API_HEALTH_URL: ${{ vars.API_HEALTH_URL || secrets.API_HEALTH_URL }}
+      ADMIN_PUBLIC_URL: ${{ vars.ADMIN_PUBLIC_URL }}
+      LANDING_PUBLIC_URL: ${{ vars.LANDING_PUBLIC_URL }}
+      PWA_PUBLIC_URL: ${{ vars.PWA_PUBLIC_URL }}
+    steps:
+      - name: Verify API version
+        if: ${{ inputs.skip_api == false }}
         run: |
-          bun run build --filter=@0xc1x/role-commons
-          NITRO_PRESET=vercel bun run --cwd apps/landing build:vercel
+          : "${API_HEALTH_URL:?API_HEALTH_URL is required}"
+          health="$(curl -fsSL --retry 5 --retry-all-errors --connect-timeout 5 --max-time 20 "$API_HEALTH_URL")"
+          EXPECTED_SHA="$GITHUB_SHA" node -e '
+            const health = JSON.parse(process.argv[1]);
+            if (health.status !== "ok" || health.version !== process.env.EXPECTED_SHA) process.exit(1);
+          ' "$health"
 
-      - name: Deploy (prod, prebuilt)
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_LANDING }}
-        run: bunx --package=vercel@59 vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+      - name: Verify public frontends
+        if: ${{ inputs.skip_frontends == false }}
+        run: |
+          : "${ADMIN_PUBLIC_URL:?ADMIN_PUBLIC_URL is required}"
+          : "${LANDING_PUBLIC_URL:?LANDING_PUBLIC_URL is required}"
+          : "${PWA_PUBLIC_URL:?PWA_PUBLIC_URL is required}"
+          for url in "$ADMIN_PUBLIC_URL" "$LANDING_PUBLIC_URL" "$PWA_PUBLIC_URL"; do
+            curl -fsSL --retry 5 --retry-all-errors --connect-timeout 5 --max-time 30 "$url" >/dev/null
+          done
