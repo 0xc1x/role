@@ -9,8 +9,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
-import { profiles } from '../../database/schema';
 import {
   paginatedDataFromQuery,
   type BusinessDto,
@@ -33,6 +33,13 @@ import {
   type BusinessLocationUpdate,
 } from './businesses.repository';
 import { BusinessMapper } from './businesses.mapper';
+
+const PLATFORM_CONTROLLED_BUSINESS_FIELDS = [
+  'commission_rate',
+  'is_active',
+  'verification_status',
+  'rejection_reason',
+] as const;
 
 @Injectable()
 export class BusinessesService {
@@ -81,10 +88,9 @@ export class BusinessesService {
   }
 
   /**
-   * Public business onboarding (landing): creates the auth user
-   * (role=business, email confirmation pending) + profile + business row
-   * (verification pending, inactive). Compensates the auth user if the
-   * DB writes fail so no orphan accounts remain.
+   * Public business onboarding (landing): creates the auth user (whose trigger
+   * creates the profile) and one pending business row. Compensates the auth
+   * user only when the business write fails.
    */
   async onboard(
     body: OnboardingBusinessRequest,
@@ -108,12 +114,6 @@ export class BusinessesService {
     try {
       const slug = await this.generateUniqueSlug(body.business_name);
       await this.businessesRepository.transaction(async (tx) => {
-        await tx.insert(profiles).values({
-          id: user.id,
-          email: body.email,
-          full_name: body.full_name,
-          role: 'business',
-        });
         await this.businessesRepository.insert(tx, {
           owner_id: user.id,
           name: body.business_name,
@@ -129,9 +129,10 @@ export class BusinessesService {
       const { error: deleteError } =
         await this.supabaseAdmin.auth.admin.deleteUser(user.id);
       if (deleteError) {
-        this.logger.warn(
-          `Onboarding compensation failed for user ${user.id}: ${deleteError.message}`,
-        );
+        this.logger.error({
+          event: 'business_onboarding_compensation_failed',
+          ...safeErrorFields(deleteError),
+        });
       }
       throw err;
     }
@@ -158,7 +159,8 @@ export class BusinessesService {
     throw new InternalServerErrorException('Could not generate business slug');
   }
 
-  async getById(user: AuthUser, id: string): Promise<BusinessDto> {    const row = await this.businessesRepository.findById(id);
+  async getById(user: AuthUser, id: string): Promise<BusinessDto> {
+    const row = await this.businessesRepository.findById(id);
     if (!row) {
       throw new NotFoundException(`Business ${id} not found`);
     }
@@ -168,10 +170,8 @@ export class BusinessesService {
 
   async create(user: AuthUser, body: CreateBusinessDto): Promise<BusinessDto> {
     if (user.role !== 'admin') {
+      this.assertNoPlatformFieldMutation(user, body);
       body.owner_id = user.id;
-      // Business role always creates pending, is_active false (trigger syncs)
-      body.verification_status = 'pending';
-      body.is_active = false;
     }
 
     const existing = await this.businessesRepository.findBySlug(body.slug);
@@ -191,10 +191,17 @@ export class BusinessesService {
         phone: body.phone ?? null,
         email: body.email ?? null,
         website: body.website ?? null,
-        commission_rate: (body.commission_rate ?? 0.1).toString(),
-        is_active: body.is_active ?? false,
-        verification_status: body.verification_status ?? 'pending',
-        rejection_reason: body.rejection_reason ?? null,
+        commission_rate:
+          user.role === 'admin'
+            ? (body.commission_rate ?? 0.1).toString()
+            : '0.1',
+        is_active: user.role === 'admin' ? (body.is_active ?? false) : false,
+        verification_status:
+          user.role === 'admin'
+            ? (body.verification_status ?? 'pending')
+            : 'pending',
+        rejection_reason:
+          user.role === 'admin' ? (body.rejection_reason ?? null) : null,
       });
     });
 
@@ -214,6 +221,7 @@ export class BusinessesService {
       throw new NotFoundException(`Business ${id} not found`);
     }
     await this.assertCanMutate(user, existing);
+    this.assertNoPlatformFieldMutation(user, body);
 
     if (body.slug && body.slug !== existing.slug) {
       const slugExists = await this.businessesRepository.findBySlug(body.slug);
@@ -273,6 +281,9 @@ export class BusinessesService {
   }
 
   async remove(user: AuthUser, id: string): Promise<void> {
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('Only admin can deactivate businesses');
+    }
     const existing = await this.businessesRepository.findById(id);
     if (!existing) {
       throw new NotFoundException(`Business ${id} not found`);
@@ -428,6 +439,24 @@ export class BusinessesService {
     );
     if (!isOwner) {
       throw new ForbiddenException('You can only access businesses you own');
+    }
+  }
+
+  private assertNoPlatformFieldMutation(
+    user: AuthUser,
+    body: Partial<
+      Record<(typeof PLATFORM_CONTROLLED_BUSINESS_FIELDS)[number], unknown>
+    >,
+  ): void {
+    if (user.role === 'admin') return;
+    if (
+      PLATFORM_CONTROLLED_BUSINESS_FIELDS.some(
+        (field) => body[field] !== undefined,
+      )
+    ) {
+      throw new ForbiddenException(
+        'Only admin can change platform-controlled business fields',
+      );
     }
   }
 

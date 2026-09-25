@@ -24,6 +24,7 @@ describe('BusinessesController', () => {
         {
           provide: BusinessesService,
           useValue: {
+            onboard: jest.fn(),
             list: jest.fn(),
             create: jest.fn(),
             getById: jest.fn(),
@@ -41,6 +42,16 @@ describe('BusinessesController', () => {
 
     controller = module.get(BusinessesController);
     service = module.get(BusinessesService);
+  });
+
+  it('public onboarding delegates the validated request', async () => {
+    const body = { email: 'owner@example.com' } as never;
+    service.onboard.mockResolvedValue({ message: 'received' } as never);
+
+    await expect(controller.onboard(body)).resolves.toEqual({
+      message: 'received',
+    });
+    expect(service.onboard).toHaveBeenCalledWith(body);
   });
 
   it('list/create/getById/update/remove delegan con usuario', () => {
@@ -62,7 +73,12 @@ describe('BusinessesController', () => {
 
   it('locations: CRUD delega con businessId y locationId correctos', () => {
     const query = { page: 1, limit: 10 } as never;
-    const body = { name: 'Sucursal', address: 'Calle 1', latitude: 0, longitude: 0 } as never;
+    const body = {
+      name: 'Sucursal',
+      address: 'Calle 1',
+      latitude: 0,
+      longitude: 0,
+    } as never;
 
     controller.listLocations(user, 'biz-1', query);
     controller.getLocation(user, 'biz-1', 'loc-1');
@@ -73,7 +89,12 @@ describe('BusinessesController', () => {
     expect(service.listLocations).toHaveBeenCalledWith(user, 'biz-1', query);
     expect(service.getLocation).toHaveBeenCalledWith(user, 'biz-1', 'loc-1');
     expect(service.createLocation).toHaveBeenCalledWith(user, 'biz-1', body);
-    expect(service.updateLocation).toHaveBeenCalledWith(user, 'biz-1', 'loc-1', body);
+    expect(service.updateLocation).toHaveBeenCalledWith(
+      user,
+      'biz-1',
+      'loc-1',
+      body,
+    );
     expect(service.removeLocation).toHaveBeenCalledWith(user, 'biz-1', 'loc-1');
   });
 });

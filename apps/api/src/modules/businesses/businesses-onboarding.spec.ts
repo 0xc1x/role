@@ -57,14 +57,16 @@ describe('BusinessesService.onboard', () => {
     jest.clearAllMocks();
   });
 
-  it('creates user, profile (business) and pending business', async () => {
+  it('creates one Auth user, trigger-owned profile and one pending business', async () => {
     mockSupabaseAdmin.auth.admin.createUser.mockResolvedValue({
       data: { user: { id: 'user-1' } },
       error: null,
     });
     repository.findBySlug.mockResolvedValue(null);
     const tx = makeTx();
-    repository.transaction.mockImplementation(async (fn: (t: unknown) => Promise<unknown>) => fn(tx));
+    repository.transaction.mockImplementation(
+      async (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
     repository.insert.mockResolvedValue({ id: 'biz-1' });
 
     const res = await service.onboard(body);
@@ -77,18 +79,9 @@ describe('BusinessesService.onboard', () => {
         user_metadata: { full_name: body.full_name, role: 'business' },
       }),
     );
-    // profile insert (role=business)
-    expect(tx.insert).toHaveBeenCalledTimes(1);
-    const valuesFn = tx.insert.mock.results[0].value.values as jest.Mock;
-    expect(valuesFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'user-1',
-        email: body.email,
-        full_name: body.full_name,
-        role: 'business',
-      }),
-    );
-    // business insert via repository
+    // The Auth trigger owns the profile row; onboarding must not insert it.
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(repository.insert).toHaveBeenCalledTimes(1);
     expect(repository.insert).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
@@ -107,7 +100,9 @@ describe('BusinessesService.onboard', () => {
       error: { message: 'User already registered' },
     });
 
-    await expect(service.onboard(body)).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.onboard(body)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
     expect(repository.transaction).not.toHaveBeenCalled();
   });
 
@@ -121,6 +116,8 @@ describe('BusinessesService.onboard', () => {
     mockSupabaseAdmin.auth.admin.deleteUser.mockResolvedValue({ error: null });
 
     await expect(service.onboard(body)).rejects.toThrow('db down');
-    expect(mockSupabaseAdmin.auth.admin.deleteUser).toHaveBeenCalledWith('user-2');
+    expect(mockSupabaseAdmin.auth.admin.deleteUser).toHaveBeenCalledWith(
+      'user-2',
+    );
   });
 });

@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { AuthUser } from '../../auth/auth.types';
@@ -44,12 +48,26 @@ describe('BusinessesService', () => {
     hasPendingPayout: jest.fn(),
     insert: jest.fn(),
     update: jest.fn(),
-    transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),
+    transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({}),
+    ),
   };
 
-  const admin: AuthUser = { id: 'admin-1', role: 'admin', email: 'admin@role.ec' };
-  const owner: AuthUser = { id: ownerId, role: 'business', email: 'owner@role.ec' };
-  const stranger: AuthUser = { id: 'other-user', role: 'business', email: 'x@y.com' };
+  const admin: AuthUser = {
+    id: 'admin-1',
+    role: 'admin',
+    email: 'admin@role.ec',
+  };
+  const owner: AuthUser = {
+    id: ownerId,
+    role: 'business',
+    email: 'owner@role.ec',
+  };
+  const stranger: AuthUser = {
+    id: 'other-user',
+    role: 'business',
+    email: 'x@y.com',
+  };
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -113,24 +131,62 @@ describe('BusinessesService', () => {
 
       expect(repository.insert).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ owner_id: ownerId }),
+        expect.objectContaining({
+          owner_id: ownerId,
+          commission_rate: '0.1',
+          is_active: false,
+          verification_status: 'pending',
+          rejection_reason: null,
+        }),
       );
+    });
+
+    it('rejects platform fields from business owners before writing', async () => {
+      const attempts = [
+        { commission_rate: 0 },
+        { is_active: true },
+        { verification_status: 'approved' },
+        { rejection_reason: 'approved externally' },
+      ] as const;
+
+      for (const platformField of attempts) {
+        await expect(
+          service.create(owner, {
+            name: 'Nuevo',
+            slug: 'nuevo',
+            ...platformField,
+          }),
+        ).rejects.toThrow(ForbiddenException);
+      }
+
+      expect(repository.findBySlug).not.toHaveBeenCalled();
+      expect(repository.insert).not.toHaveBeenCalled();
     });
   });
 
   describe('remove', () => {
-    it('soft-deletes by setting is_active false', async () => {
+    it('allows admin to soft-delete by setting is_active false', async () => {
       repository.findById.mockResolvedValue(makeBusinessRow());
-      repository.isOwner.mockResolvedValue(true);
-      repository.update.mockResolvedValue(makeBusinessRow({ is_active: false }));
+      repository.update.mockResolvedValue(
+        makeBusinessRow({ is_active: false }),
+      );
 
-      await service.remove(owner, businessId);
+      await service.remove(admin, businessId);
 
       expect(repository.update).toHaveBeenCalledWith(
         expect.anything(),
         businessId,
         { is_active: false },
       );
+    });
+
+    it('does not let an owner deactivate a business', async () => {
+      await expect(service.remove(owner, businessId)).rejects.toThrow(
+        ForbiddenException,
+      );
+
+      expect(repository.findById).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
     });
   });
 
@@ -141,7 +197,9 @@ describe('BusinessesService', () => {
     });
 
     it('admin aprueba: activa el negocio y limpia el motivo de rechazo', async () => {
-      await service.update(admin, businessId, { verification_status: 'approved' });
+      await service.update(admin, businessId, {
+        verification_status: 'approved',
+      });
 
       expect(repository.update).toHaveBeenCalledWith(
         expect.anything(),
@@ -176,7 +234,9 @@ describe('BusinessesService', () => {
     });
 
     it('admin rechaza sin motivo: rejection_reason queda null', async () => {
-      await service.update(admin, businessId, { verification_status: 'rejected' });
+      await service.update(admin, businessId, {
+        verification_status: 'rejected',
+      });
 
       expect(repository.update).toHaveBeenCalledWith(
         expect.anything(),
@@ -186,12 +246,17 @@ describe('BusinessesService', () => {
     });
 
     it('admin vuelve a pending: el negocio queda desactivado', async () => {
-      await service.update(admin, businessId, { verification_status: 'pending' });
+      await service.update(admin, businessId, {
+        verification_status: 'pending',
+      });
 
       expect(repository.update).toHaveBeenCalledWith(
         expect.anything(),
         businessId,
-        expect.objectContaining({ verification_status: 'pending', is_active: false }),
+        expect.objectContaining({
+          verification_status: 'pending',
+          is_active: false,
+        }),
       );
     });
 
@@ -216,6 +281,35 @@ describe('BusinessesService', () => {
       );
     });
 
+    it('owner no puede mutar campos controlados por la plataforma', async () => {
+      repository.isOwner.mockResolvedValue(true);
+      const attempts = [
+        { commission_rate: 0.2 },
+        { is_active: false },
+        { verification_status: 'approved' },
+        { rejection_reason: 'approved externally' },
+      ] as const;
+
+      for (const platformField of attempts) {
+        await expect(
+          service.update(owner, businessId, platformField),
+        ).rejects.toThrow(ForbiddenException);
+      }
+
+      expect(repository.hasPendingPayout).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('business user no puede actualizar el negocio de otro owner', async () => {
+      repository.isOwner.mockResolvedValue(false);
+
+      await expect(
+        service.update(stranger, businessId, { description: 'Intrusión' }),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
     it('no permite cambiar comisión con pagos pendientes', async () => {
       repository.hasPendingPayout.mockResolvedValue(true);
 
@@ -238,7 +332,9 @@ describe('BusinessesService', () => {
     });
 
     it('rechaza slug duplicado en update', async () => {
-      repository.findBySlug.mockResolvedValue(makeBusinessRow({ id: 'otro-id' }));
+      repository.findBySlug.mockResolvedValue(
+        makeBusinessRow({ id: 'otro-id' }),
+      );
 
       await expect(
         service.update(admin, businessId, { slug: 'cafe-central-nueva' }),

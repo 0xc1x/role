@@ -112,7 +112,7 @@ export class BusinessesController {
   }
 
   @Delete(':id')
-  @Roles('business', 'admin')
+  @Roles('admin')
   @ApiOperation({ summary: 'Deactivate business' })
   @ApiOkResponse({ description: 'Business deactivated' })
   remove(

@@ -76,10 +76,12 @@ export class AuthController {
     return { user };
   }
 
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Log out (revoke refresh token globally)' })
-  @ApiOkResponse({ description: 'Logged out successfully' })
+  @ApiOperation({ summary: 'Log out (revoke the current session)' })
+  @ApiOkResponse({ description: 'Current session logged out successfully' })
   logout(
     @Body(new ZodValidationPipe(LogoutRequestSchema))
     body: LogoutRequest,

@@ -141,7 +141,9 @@ export class BusinessesRepository {
       filters.push(eq(businesses.is_active, query.is_active));
     }
     if (query.verification_status) {
-      filters.push(eq(businesses.verification_status, query.verification_status));
+      filters.push(
+        eq(businesses.verification_status, query.verification_status),
+      );
     }
 
     const where = and(...filters);
@@ -193,11 +195,15 @@ export class BusinessesRepository {
       filters.push(eq(businesses.is_active, query.is_active));
     }
     if (query.verification_status) {
-      filters.push(eq(businesses.verification_status, query.verification_status));
+      filters.push(
+        eq(businesses.verification_status, query.verification_status),
+      );
     }
 
     if (query.search) {
-      filters.push(sql`${businesses.name} ILIKE ${`%${escapeLike(query.search)}%`}`);
+      filters.push(
+        sql`${businesses.name} ILIKE ${`%${escapeLike(query.search)}%`}`,
+      );
     }
 
     const where = filters.length ? and(...filters) : undefined;
