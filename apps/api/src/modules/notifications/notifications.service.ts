@@ -1,6 +1,12 @@
 import { createPrivateKey } from 'node:crypto';
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import { parseRedisUrl } from '../../common/utils/redis';
 import type { Env } from '../../config/env.schema';
 import { NotificationsRepository } from './notifications.repository';
@@ -43,13 +49,17 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     const redisUrl = this.config.get('REDIS_URL', { infer: true });
     if (!redisUrl) {
-      this.logger.log('REDIS_URL not set — notifications run in direct mode (no queue)');
+      this.logger.log(
+        'REDIS_URL not set — notifications run in direct mode (no queue)',
+      );
       return;
     }
     try {
       const { Queue, Worker } = await import('bullmq');
       const connection = this.parseRedisUrl(redisUrl);
-      this.queue = new Queue('notifications', { connection: connection as never });
+      this.queue = new Queue('notifications', {
+        connection: connection as never,
+      });
       this.worker = new Worker(
         'notifications',
         async (job: import('bullmq').Job<EnqueuePushJob>) => {
@@ -58,11 +68,19 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         { connection: connection as never, concurrency: 5 },
       );
       this.worker.on('failed', (job, err) =>
-        this.logger.warn(`Queue job ${job?.name} failed: ${err.message}`),
+        this.logger.warn({
+          event: 'notification_queue_job_failed',
+          jobName: job?.name ?? 'unknown',
+          ...safeErrorFields(err),
+        }),
       );
       this.logger.log('BullMQ notifications queue ready');
     } catch (err) {
-      this.logger.warn(`BullMQ init failed, falling back to direct: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn({
+        event: 'notification_queue_init_failed',
+        fallback: 'direct',
+        ...safeErrorFields(err),
+      });
     }
   }
 
@@ -92,7 +110,10 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async processSend(job: EnqueuePushJob): Promise<void> {
-    const userIds = await this.resolveAllowedRecipients(job.userIds, job.prefFlag);
+    const userIds = await this.resolveAllowedRecipients(
+      job.userIds,
+      job.prefFlag,
+    );
     if (userIds.length === 0) return;
 
     const targets = await this.repo.findActiveTokens(userIds);
@@ -106,7 +127,11 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           const ok = await this.sendToToken(t, payload);
           if (!ok) await this.repo.deactivateToken(t.token);
         } catch (err) {
-          this.logger.warn(`Push failed ${t.platform} ${t.token.slice(0, 10)}: ${err instanceof Error ? err.message : String(err)}`);
+          this.logger.warn({
+            event: 'push_delivery_failed',
+            platform: t.platform,
+            ...safeErrorFields(err),
+          });
         }
       }),
     );
@@ -153,7 +178,11 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           }
         } catch (err) {
           failed += 1;
-          this.logger.warn(`Push failed ${t.platform} ${t.token.slice(0, 10)}: ${err instanceof Error ? err.message : String(err)}`);
+          this.logger.warn({
+            event: 'push_delivery_failed',
+            platform: t.platform,
+            ...safeErrorFields(err),
+          });
         }
       }),
     );
@@ -167,10 +196,16 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   ): Promise<string[]> {
     let allowed = userIds;
     if (prefFlag) {
-      allowed = await this.repo.filterByConsumerPrefs(allowed, prefFlag as never);
+      allowed = await this.repo.filterByConsumerPrefs(
+        allowed,
+        prefFlag as never,
+      );
       if (allowed.length === 0) return [];
     }
-    const pushAllowed = await this.repo.filterByConsumerPrefs(allowed, 'push_enabled' as never);
+    const pushAllowed = await this.repo.filterByConsumerPrefs(
+      allowed,
+      'push_enabled',
+    );
     if (pushAllowed.length === 0) return [];
     return this.repo.filterNotInQuietHours(pushAllowed);
   }
@@ -190,7 +225,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     if (userIds.length === 0) return result;
     const allowed = await this.repo.filterByConsumerPrefs(
       userIds,
-      'push_enabled' as never,
+      'push_enabled',
     );
     if (allowed.length === 0) return result;
     const targets = await this.repo.findActiveTokens(allowed);
@@ -208,9 +243,11 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           }
         } catch (err) {
           r.failed += 1;
-          this.logger.warn(
-            `Push failed ${t.platform} ${t.token.slice(0, 10)}: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          this.logger.warn({
+            event: 'push_delivery_failed',
+            platform: t.platform,
+            ...safeErrorFields(err),
+          });
         }
         result.set(t.user_id, r);
       }),
@@ -225,7 +262,8 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     // `*` es wildcard de CORS, no una base de URL: deja las rutas relativas
     // intactas (el SW de push las resuelve contra su origen).
     const base = !first || first === '*' ? '' : first;
-    const abs = (v?: string) => (v ? (v.startsWith('http') ? v : `${base}${v}`) : '');
+    const abs = (v?: string) =>
+      v ? (v.startsWith('http') ? v : `${base}${v}`) : '';
     const link = abs(payload.data?.link);
     const icon = abs(payload.data?.icon) || `${base}/icons/Icon-192.png`;
     const badge = abs(payload.data?.badge) || `${base}/icons/Icon-72.png`;
@@ -234,7 +272,14 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
 
     return {
       ...payload,
-      data: { ...payload.data, link, icon, badge, tag, ...(image ? { image } : {}) },
+      data: {
+        ...payload.data,
+        link,
+        icon,
+        badge,
+        tag,
+        ...(image ? { image } : {}),
+      },
     };
   }
 
@@ -248,7 +293,9 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
 
   private async sendFcm(token: string, payload: PushPayload): Promise<boolean> {
     const saJson = this.config.get('FCM_SERVICE_ACCOUNT', { infer: true });
-    const projectId = this.config.get('FCM_PROJECT_ID', { infer: true }) || this.extractProjectId(saJson);
+    const projectId =
+      this.config.get('FCM_PROJECT_ID', { infer: true }) ||
+      this.extractProjectId(saJson);
     if (!saJson || !projectId) {
       this.logger.debug('FCM_SERVICE_ACCOUNT not set — mock send (no-op)');
       return true;
@@ -261,47 +308,87 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       const webpushNotif: Record<string, unknown> = {
         title: payload.title,
         body: payload.body,
-        icon: d.icon ?? `${this.config.get('CORS_ORIGINS', { infer: true }).split(',')[0]?.trim()}/icons/Icon-192.png`,
-        badge: d.badge ?? `${this.config.get('CORS_ORIGINS', { infer: true }).split(',')[0]?.trim()}/icons/Icon-72.png`,
+        icon:
+          d.icon ??
+          `${this.config.get('CORS_ORIGINS', { infer: true }).split(',')[0]?.trim()}/icons/Icon-192.png`,
+        badge:
+          d.badge ??
+          `${this.config.get('CORS_ORIGINS', { infer: true }).split(',')[0]?.trim()}/icons/Icon-72.png`,
         tag: d.tag ?? d.type ?? 'role',
         renotify: false,
       };
       if (d.image) webpushNotif.image = d.image;
-      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: {
-            token,
-            notification: { title: payload.title, body: payload.body },
-            data: payload.data,
-            webpush: { notification: webpushNotif, fcm_options: { link: d.link } },
+      const res = await fetch(
+        `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
           },
-        }),
-      });
+          body: JSON.stringify({
+            message: {
+              token,
+              notification: { title: payload.title, body: payload.body },
+              data: payload.data,
+              webpush: {
+                notification: webpushNotif,
+                fcm_options: { link: d.link },
+              },
+            },
+          }),
+        },
+      );
       if (res.ok) return true;
       const body = await res.text();
-      if (body.includes('UNREGISTERED') || body.includes('NOT_FOUND') || res.status === 404) {
+      if (
+        body.includes('UNREGISTERED') ||
+        body.includes('NOT_FOUND') ||
+        res.status === 404
+      ) {
         // Token muerto del lado FCM (suscripción web vencida, app desinstalada):
         // se desactiva para no reintentarlo; el cliente debe renovarlo.
-        this.logger.debug(`Token muerto (UNREGISTERED), desactivando: ${token.slice(0, 12)}…`);
+        this.logger.debug({
+          event: 'push_token_deactivated',
+          platform: 'web',
+          reasonCode: 'UNREGISTERED',
+        });
         return false;
       }
-      this.logger.warn(`FCM send failed ${res.status}: ${body}`);
+      this.logger.warn({
+        event: 'fcm_send_failed',
+        statusCode: res.status,
+        platform: 'web',
+      });
       return true;
     } catch (err) {
-      this.logger.warn(`FCM error: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn({
+        event: 'fcm_request_failed',
+        platform: 'web',
+        ...safeErrorFields(err),
+      });
       return true;
     }
   }
 
-  private async sendExpo(token: string, payload: PushPayload): Promise<boolean> {
+  private async sendExpo(
+    token: string,
+    payload: PushPayload,
+  ): Promise<boolean> {
     const accessToken = this.config.get('EXPO_ACCESS_TOKEN', { infer: true });
     try {
       const res = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
-        body: JSON.stringify({ to: token, title: payload.title, body: payload.body, data: payload.data }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          to: token,
+          title: payload.title,
+          body: payload.body,
+          data: payload.data,
+        }),
       });
       const json = (await res.json().catch(() => ({}))) as {
         errors?: Array<{ code: string }>;
@@ -310,21 +397,34 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       const errCode = json.errors?.[0]?.code ?? json.data?.details?.error ?? '';
       if (errCode === 'DeviceNotRegistered') return false;
       return true;
-    } catch {
+    } catch (err) {
+      this.logger.warn({
+        event: 'push_provider_request_failed',
+        platform: 'native',
+        ...safeErrorFields(err),
+      });
       return true;
     }
   }
 
   private extractProjectId(saJson: string): string {
-    try { return (JSON.parse(saJson) as { project_id?: string }).project_id ?? ''; } catch { return ''; }
+    try {
+      return (JSON.parse(saJson) as { project_id?: string }).project_id ?? '';
+    } catch {
+      return '';
+    }
   }
 
   private async getFcmAccessToken(saJson: string): Promise<string> {
-    if (this.fcmAccessToken && Date.now() < this.fcmTokenExpiry) return this.fcmAccessToken;
+    if (this.fcmAccessToken && Date.now() < this.fcmTokenExpiry)
+      return this.fcmAccessToken;
     const { JWT } = await import('google-auth-library');
     let creds: { client_email: string; private_key: string };
     try {
-      creds = JSON.parse(saJson) as { client_email: string; private_key: string };
+      creds = JSON.parse(saJson) as {
+        client_email: string;
+        private_key: string;
+      };
       // La firma del JWT falla con el críptico "DECODER routines::unsupported"
       // cuando la private_key llegó truncada al pegarla en .env; validar el PEM
       // aquí produce un mensaje accionable.
@@ -334,7 +434,11 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         'FCM_SERVICE_ACCOUNT malformado: el JSON o su private_key no se copiaron completos — regenera el JSON en Firebase Console y pégalo en una sola línea',
       );
     }
-    const client = new JWT({ email: creds.client_email, key: creds.private_key, scopes: ['https://www.googleapis.com/auth/firebase.messaging'] });
+    const client = new JWT({
+      email: creds.client_email,
+      key: creds.private_key,
+      scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+    });
     const tokens = await client.authorize();
     this.fcmAccessToken = tokens.access_token ?? null;
     this.fcmTokenExpiry = Date.now() + 50 * 60 * 1000;

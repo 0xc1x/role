@@ -8,7 +8,7 @@ jest.mock('resend', () => ({
   })),
 }));
 
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { CreateContactDto } from '@0xc1x/role-commons';
@@ -83,7 +83,10 @@ describe('ContactService', () => {
     setContactCities(null);
     emailRepo.listTemplates.mockResolvedValue({ rows: [] });
     storeRepo.insert.mockResolvedValue({ id: 'entry-1' });
-    storeRepo.updateStatus.mockResolvedValue({ id: 'entry-1', status: 'PROCESADO' });
+    storeRepo.updateStatus.mockResolvedValue({
+      id: 'entry-1',
+      status: 'PROCESADO',
+    });
   });
 
   it('rejects city not in allowed list', async () => {
@@ -137,7 +140,8 @@ describe('ContactService', () => {
     expect(storeRepo.updateStatus).toHaveBeenCalledWith('entry-1', 'PROCESADO');
   });
 
-  it('queda PENDIENTE y devuelve ok cuando el envío falla (no lanza)', async () => {
+  it('queda PENDIENTE y devuelve ok sin loggear el error bruto', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
     const deliver = jest
       .spyOn(service as unknown as { deliver: () => Promise<void> }, 'deliver')
       .mockRejectedValue(new Error('SMTP down'));
@@ -150,10 +154,12 @@ describe('ContactService', () => {
     expect(storeRepo.updateStatus).toHaveBeenCalledWith(
       'entry-1',
       'PENDIENTE',
-      expect.objectContaining({ error: 'SMTP down' }),
+      expect.objectContaining({ error: 'Error' }),
     );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('SMTP down');
 
     deliver.mockRestore();
+    warn.mockRestore();
   });
 
   it('escapes HTML in inline fallback template', async () => {
@@ -181,9 +187,15 @@ describe('ContactService', () => {
   describe('ContactService.findContactTemplate', () => {
     test('usa plantilla contacto-notificacion cuando existe', async () => {
       emailRepo.listTemplates.mockResolvedValue({
-        rows: [{ id: 't1', name: 'contacto-notificacion' }, { id: 't2', name: 'otra' }],
+        rows: [
+          { id: 't1', name: 'contacto-notificacion' },
+          { id: 't2', name: 'otra' },
+        ],
       });
-      emailRepo.findTemplateById.mockResolvedValue({ id: 't1', subject: 'Hola' });
+      emailRepo.findTemplateById.mockResolvedValue({
+        id: 't1',
+        subject: 'Hola',
+      });
 
       await service.handle(baseDto);
 

@@ -12,16 +12,19 @@ import type { TestDatabase } from './db';
 /** Seeds mínimos para specs de repositories (DB real, aislada por archivo). */
 export async function seedProfile(db: TestDatabase, email?: string) {
   const id = randomUUID();
-  await db
-    .insert(profiles)
-    .values({ id, email: email ?? `${id}@test.cl` });
+  await db.insert(profiles).values({ id, email: email ?? `${id}@test.cl` });
   return id;
 }
 
 export async function seedBusiness(
   db: TestDatabase,
   ownerId: string,
-  overrides: { name?: string; slug?: string } = {},
+  overrides: {
+    name?: string;
+    slug?: string;
+    is_active?: boolean;
+    verification_status?: 'pending' | 'approved' | 'rejected';
+  } = {},
 ) {
   const suffix = randomUUID().slice(0, 8);
   const [row] = await db
@@ -30,6 +33,8 @@ export async function seedBusiness(
       owner_id: ownerId,
       name: overrides.name ?? `Negocio ${suffix}`,
       slug: overrides.slug ?? `negocio-${suffix}`,
+      is_active: overrides.is_active ?? true,
+      verification_status: overrides.verification_status ?? 'approved',
     })
     .returning();
   if (!row) throw new Error('seedBusiness falló');
@@ -91,7 +96,11 @@ export async function seedOrder(
   userId: string,
   offerId: string,
   businessId: string,
-  overrides: { status?: string; order_number?: string } = {},
+  overrides: {
+    status?: string;
+    order_number?: string;
+    idempotency_key?: string;
+  } = {},
 ) {
   const [row] = await db
     .insert(orders)
@@ -101,6 +110,7 @@ export async function seedOrder(
       business_id: businessId,
       order_number: overrides.order_number ?? `R-${randomUUID().slice(0, 8)}`,
       status: (overrides.status ?? 'pending') as never,
+      idempotency_key: overrides.idempotency_key,
       price: '3990',
       original_price: '10000',
       pickup_code: 'ABC123',

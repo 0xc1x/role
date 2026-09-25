@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import { NotificationHandlers } from './notification.handlers';
 
@@ -28,7 +29,11 @@ export class NotificationJobs {
     try {
       await fn();
     } catch (err) {
-      this.logger.error(`${key} failed`, err instanceof Error ? err.stack : String(err));
+      this.logger.error({
+        event: 'notification_job_failed',
+        job: key,
+        ...safeErrorFields(err),
+      });
     } finally {
       this.running.delete(key);
     }

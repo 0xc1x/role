@@ -32,7 +32,7 @@ export class NotificationsRepository {
           eq(deviceTokens.is_active, true),
         ),
       );
-    return rows as PushTarget[];
+    return rows;
   }
 
   async deactivateToken(token: string): Promise<void> {
@@ -68,7 +68,9 @@ export class NotificationsRepository {
       .from(consumerNotificationPreferences)
       .where(inArray(consumerNotificationPreferences.user_id, userIds));
 
-    const prefMap = new Map(prefs.map((p) => [p.user_id, p as Record<string, unknown>]));
+    const prefMap = new Map(
+      prefs.map((p) => [p.user_id, p as Record<string, unknown>]),
+    );
     return userIds.filter((id) => {
       const pref = prefMap.get(id);
       if (!pref) return true; // sin fila = permitido

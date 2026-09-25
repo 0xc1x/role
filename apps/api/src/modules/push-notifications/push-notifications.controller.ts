@@ -118,7 +118,9 @@ export class PushNotificationsController {
 
   @Post('audience')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Count reachable users (push enabled + active token)' })
+  @ApiOperation({
+    summary: 'Count reachable users (push enabled + active token)',
+  })
   audience(
     @Body(new ZodValidationPipe(PushAudienceSchema)) body: PushAudienceDto,
   ): Promise<{ total: number }> {
@@ -152,7 +154,8 @@ export class PushNotificationsController {
 
   @Get('tokens')
   listTokens(
-    @Query(new ZodValidationPipe(ListPushTokensQuerySchema)) q: ListPushTokensQuery,
+    @Query(new ZodValidationPipe(ListPushTokensQuerySchema))
+    q: ListPushTokensQuery,
   ): Promise<PushTokenPaginatedData> {
     return this.pushAdminService.listTokens(q).then(({ rows, total }) =>
       paginatedDataFromQuery(
@@ -166,7 +169,8 @@ export class PushNotificationsController {
   @Patch('tokens/:id')
   async updateToken(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(UpdatePushTokenSchema)) body: UpdatePushTokenDto,
+    @Body(new ZodValidationPipe(UpdatePushTokenSchema))
+    body: UpdatePushTokenDto,
   ) {
     const row = await this.pushAdminService.updateToken(id, body);
     return row ? PushNotificationsMapper.toTokenDto(row) : null;

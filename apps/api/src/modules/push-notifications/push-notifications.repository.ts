@@ -36,7 +36,9 @@ export interface PushListFilter {
   active?: boolean;
 }
 
-export type ListTokensFilter = PushListFilter & { platform?: 'ios' | 'android' | 'web' };
+export type ListTokensFilter = PushListFilter & {
+  platform?: 'ios' | 'android' | 'web';
+};
 
 /** Usuario con su nombre para renderizar variables por destinatario. */
 export interface ProfileName {
@@ -56,7 +58,8 @@ export class PushNotificationsRepository {
     const filters: SQL[] = [isNull(pushTemplates.deleted_at)];
     if (f.active !== undefined)
       filters.push(eq(pushTemplates.is_active, f.active));
-    if (f.search) filters.push(ilike(pushTemplates.name, `%${escapeLike(f.search)}%`));
+    if (f.search)
+      filters.push(ilike(pushTemplates.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     const [totalRow] = await this.db
       .select({ c: count() })
@@ -112,12 +115,11 @@ export class PushNotificationsRepository {
 
   // ─── Historial de envíos ───────────────────────────────────────────
 
-  async listNotifications(
-    f: PushListFilter & { type?: string },
-  ) {
+  async listNotifications(f: PushListFilter & { type?: string }) {
     const filters: SQL[] = [];
     if (f.type) filters.push(eq(pushNotifications.type, f.type));
-    if (f.search) filters.push(ilike(pushNotifications.title, `%${escapeLike(f.search)}%`));
+    if (f.search)
+      filters.push(ilike(pushNotifications.title, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     const [totalRow] = await this.db
       .select({ c: count() })
@@ -285,7 +287,9 @@ export class PushNotificationsRepository {
   }
 
   async deletePushSendsByCampaign(campaignId: string): Promise<void> {
-    await this.db.delete(pushSends).where(eq(pushSends.campaign_id, campaignId));
+    await this.db
+      .delete(pushSends)
+      .where(eq(pushSends.campaign_id, campaignId));
   }
 
   findQueuedPushBatch(

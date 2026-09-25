@@ -16,6 +16,7 @@ import {
   type RenderedEmail,
   type TestCampaignDto,
 } from '@0xc1x/role-commons';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import type { CampaignChannelDispatcher } from '../../common/campaigns/campaign-dispatcher.port';
 import { MAX_AUDIENCE_SIZE, RecipientsService } from './recipients.service';
@@ -47,14 +48,19 @@ export class CampaignsService {
   private readonly logger = new Logger(CampaignsService.name);
   private readonly resend: Resend | null;
   /** Dispatchers por canal (push se auto-registra; email va inline). */
-  private readonly channelDispatchers = new Map<string, CampaignChannelDispatcher>();
+  private readonly channelDispatchers = new Map<
+    string,
+    CampaignChannelDispatcher
+  >();
 
   constructor(
     private readonly repository: EmailMarketingRepository,
     private readonly renderer: RendererService,
     private readonly recipients: RecipientsService,
     private readonly config: ConfigService<Env, true>,
-    @Optional() @InjectQueue('email-expedition') private readonly queue?: Queue<{ campaignId: string }>,
+    @Optional()
+    @InjectQueue('email-expedition')
+    private readonly queue?: Queue<{ campaignId: string }>,
   ) {
     const apiKey = this.config.get('RESEND_API_KEY', { infer: true });
     this.resend = apiKey ? new Resend(apiKey) : null;
@@ -165,7 +171,11 @@ export class CampaignsService {
         await this.deliver(email, rendered);
         sent++;
       } catch (err) {
-        this.logger.warn(`Test a ${email} falló: ${String(err)}`);
+        this.logger.warn({
+          event: 'campaign_test_delivery_failed',
+          channel: 'email',
+          ...safeErrorFields(err),
+        });
       }
     }
     return { sent };
@@ -184,7 +194,11 @@ export class CampaignsService {
         await this.deliver(email, rendered);
         sent++;
       } catch (err) {
-        this.logger.warn(`Test de plantilla a ${email} falló: ${String(err)}`);
+        this.logger.warn({
+          event: 'campaign_template_test_delivery_failed',
+          channel: 'email',
+          ...safeErrorFields(err),
+        });
       }
     }
     return { sent };
@@ -357,10 +371,7 @@ export class CampaignsService {
     return this.repository.insertCampaign(values);
   }
 
-  updateCampaign(
-    id: string,
-    values: Partial<typeof campaigns.$inferInsert>,
-  ) {
+  updateCampaign(id: string, values: Partial<typeof campaigns.$inferInsert>) {
     return this.repository.updateCampaign(id, values);
   }
 
@@ -409,13 +420,17 @@ export class CampaignsService {
       try {
         await this.send(due.id);
       } catch (err) {
-        this.logger.error(`Campaña programada ${due.id} falló`, err);
+        this.logger.error({
+          event: 'scheduled_campaign_failed',
+          ...safeErrorFields(err),
+        });
         try {
           await this.repository.updateCampaign(due.id, { status: 'failed' });
         } catch (updateErr) {
-          this.logger.error(
-            `No se pudo marcar failed ${due.id}: ${updateErr instanceof Error ? updateErr.message : String(updateErr)}`,
-          );
+          this.logger.error({
+            event: 'scheduled_campaign_status_update_failed',
+            ...safeErrorFields(updateErr),
+          });
         }
       }
     }
@@ -470,10 +485,17 @@ export class CampaignsService {
           vars,
         });
         const subject = this.renderer.renderVariables(template.subject, vars);
-        const resendId = await this.deliver(send.email, { subject, html, variables_used: [] });
+        const resendId = await this.deliver(send.email, {
+          subject,
+          html,
+          variables_used: [],
+        });
         await this.repository.markSent(send.id, resendId);
       } catch (err) {
-        await this.repository.markFailed(send.id, err instanceof Error ? err.message : String(err));
+        await this.repository.markFailed(
+          send.id,
+          err instanceof Error ? err.message : String(err),
+        );
       }
     }
     return transactional.length;
@@ -544,7 +566,10 @@ export class CampaignsService {
       );
     } else {
       void this.processBatch(updated).catch((err: unknown) =>
-        this.logger.error(`Primera tanda de ${campaign.id} falló`, err),
+        this.logger.error({
+          event: 'campaign_first_batch_failed',
+          ...safeErrorFields(err),
+        }),
       );
     }
     return EmailMarketingMapper.toCampaignDto(updated);

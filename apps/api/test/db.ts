@@ -56,7 +56,8 @@ export async function createTestDb(): Promise<TestDbContext> {
   // Supabase. Policies, grants y FKs enteras a auth.users se descartan; las
   // FKs inline dentro de CREATE TABLE pierden solo el REFERENCES (la columna
   // queda). geog ya se excluyó del baseline a mano (memoria workflow DDL).
-  const parts = (await INIT_SQL).split('--> statement-breakpoint')
+  const parts = (await INIT_SQL)
+    .split('--> statement-breakpoint')
     .map((s) => s.trim())
     .filter(Boolean)
     .filter(
@@ -74,6 +75,118 @@ export async function createTestDb(): Promise<TestDbContext> {
   for (let i = 0; i < parts.length; i += 25) {
     await client.unsafe(parts.slice(i, i + 25).join(';\n'));
   }
+
+  // The checked-in Drizzle mirror intentionally omits Supabase functions,
+  // triggers, RLS and PostGIS. Install only the reservation/order primitives
+  // exercised by DB specs so those tests do not pass on trigger-less tables.
+  await client.unsafe(`
+    alter table public.business_locations
+      add constraint business_locations_id_business_id_key
+      unique (id, business_id);
+    alter table public.offers
+      add constraint offers_location_business_fkey
+      foreign key (business_location_id, business_id)
+      references public.business_locations(id, business_id)
+      on delete restrict;
+    alter table public.offers
+      alter column is_active set default false;
+    alter table public.orders
+      add column idempotency_key text;
+    alter table public.orders
+      add constraint orders_idempotency_key_length
+      check (
+        idempotency_key is null
+        or (length(idempotency_key) between 1 and 128)
+      );
+    create unique index orders_user_idempotency_key_unique
+      on public.orders(user_id, idempotency_key)
+      where idempotency_key is not null;
+
+    create sequence if not exists public.order_number_seq as bigint;
+    select setval('public.order_number_seq', 1, false);
+    create or replace function public.generate_order_number()
+    returns text
+    language plpgsql
+    set search_path = ''
+    as $function$
+    declare
+      next_seq bigint := nextval('public.order_number_seq');
+    begin
+      return 'FD-' || to_char(now(), 'YYYY-MMDD') || '-' ||
+        lpad(next_seq::text, 3, '0');
+    end;
+    $function$;
+
+    create or replace function public.enforce_offer_business_availability()
+    returns trigger
+    language plpgsql
+    set search_path = ''
+    as $function$
+    begin
+      if not exists (
+        select 1
+        from public.businesses b
+        where b.id = new.business_id
+          and b.is_active = true
+          and b.verification_status = 'approved'
+      ) then
+        new.is_active := false;
+      end if;
+      return new;
+    end;
+    $function$;
+
+    create trigger enforce_offer_business_availability
+      before insert or update of business_id, business_location_id, is_active
+      on public.offers
+      for each row
+      execute function public.enforce_offer_business_availability();
+
+    create or replace function public.record_order_event()
+    returns trigger
+    language plpgsql
+    set search_path = ''
+    as $function$
+    begin
+      if tg_op = 'INSERT' then
+        insert into public.order_events (
+          order_id, status, previous_status, changed_by, reason, metadata
+        ) values (
+          new.id, new.status, null, null, 'Reserva creada',
+          '{"source":"database"}'::jsonb
+        );
+      elsif old.status is distinct from new.status then
+        insert into public.order_events (
+          order_id, status, previous_status, changed_by, reason, metadata
+        ) values (
+          new.id, new.status, old.status,
+          nullif(current_setting('role.order_event_actor', true), '')::uuid,
+          null,
+          '{"source":"database"}'::jsonb
+        );
+      end if;
+      return new;
+    end;
+    $function$;
+
+    create trigger record_order_event
+      after insert or update on public.orders
+      for each row
+      execute function public.record_order_event();
+
+    create or replace function public.business_completed_orders_count(p_business_id uuid)
+    returns bigint
+    language sql
+    stable
+    security definer
+    set search_path = ''
+    as $function$
+      select count(*)::bigint
+      from public.orders
+      where business_id = p_business_id
+        and status = 'completed'::public.order_status
+    $function$;
+  `);
 
   const db: TestDatabase = drizzle({ client });
   let stopped = false;
