@@ -20,36 +20,49 @@ export function PaymentMethodSection() {
 			style={{
 				backgroundColor: scheme === "dark" ? colors.card : colors.background,
 				borderColor: colors.borderSolid,
-			}}>
+			}}
+		>
 			<CardHeader>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText
+					variant="h4"
+					weight="bold"
+					style={{ flex: 1, color: colors.mutedForeground }}
+				>
 					{strings.checkout.paymentMethodTitle}
 				</AppText>
 			</CardHeader>
 			<CardContent style={styles.body}>
-
-			<View
-				style={[
-					styles.methodRow,
-					{
-						backgroundColor: withAlpha(colors.primary, 0.078),
-						borderColor: colors.primary,
-					},
-				]}
-			>
-				<View style={[styles.iconBox, { backgroundColor: withAlpha(colors.secondary, 0.302) }]}>
-					<Banknote size={18} color={colors.primary} />
+				<View
+					style={[
+						styles.methodRow,
+						{
+							backgroundColor: withAlpha(colors.primary, 0.078),
+							borderColor: colors.primary,
+						},
+					]}
+				>
+					<View
+						style={[
+							styles.iconBox,
+							{ backgroundColor: withAlpha(colors.secondary, 0.302) },
+						]}
+					>
+						<Banknote size={18} color={colors.primary} />
+					</View>
+					<AppText
+						variant="bodyMedium"
+						weight="semiBold"
+						style={styles.methodLabel}
+					>
+						{strings.checkout.payAtPickup}
+					</AppText>
 				</View>
-				<AppText variant="bodyMedium" weight="semiBold" style={styles.methodLabel}>
-					{strings.checkout.payAtPickup}
+
+				{/* Tarjetas guardadas: se muestran cuando la pasarela de pagos esté activa. */}
+
+				<AppText style={[styles.hint, { color: colors.mutedForeground }]}>
+					{strings.paymentMethods.payAtPickupHint}
 				</AppText>
-			</View>
-
-			{/* Tarjetas guardadas: se muestran cuando la pasarela de pagos esté activa. */}
-
-			<AppText style={[styles.hint, { color: colors.mutedForeground }]}>
-				{strings.paymentMethods.payAtPickupHint}
-			</AppText>
 			</CardContent>
 		</Card>
 	);

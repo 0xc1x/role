@@ -7,7 +7,6 @@ import {
 import {
   paginatedDataFromQuery,
   type CouponDto,
-  type CouponListItemDto,
   type CouponPaginatedData,
   type CreateCouponDto,
   type ListCouponsQuery,
@@ -30,7 +29,7 @@ export class CouponsService {
     });
 
     return paginatedDataFromQuery(
-      rows.map((row) => CouponMapper.toListItem(row)) as CouponListItemDto[],
+      rows.map((row) => CouponMapper.toListItem(row)),
       { page: query.page, limit: query.limit },
       total,
     );

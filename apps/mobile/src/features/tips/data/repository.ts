@@ -8,9 +8,9 @@ import { toTip, type DailyTip, type TipRow } from "../domain/tip";
  * El admin los gestiona; el móvil solo consume.
  */
 export async function fetchRandomTip(): Promise<DailyTip | null> {
-  const { data, error } = await supabase.rpc("get_random_tip");
+	const { data, error } = await supabase.rpc("get_random_tip");
 
-  if (error) throw toAppError(error);
+	if (error) throw toAppError(error);
 
-  return data ? toTip(data as TipRow) : null;
+	return data ? toTip(data as TipRow) : null;
 }

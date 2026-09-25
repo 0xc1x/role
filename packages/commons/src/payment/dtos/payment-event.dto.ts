@@ -1,9 +1,9 @@
-import type { z } from 'zod';
+import type { z } from "zod";
 import type {
-  CreatePaymentEventSchema,
-  PaymentEventSchema,
-  UpdatePaymentEventSchema,
-} from '../schemas/payment-event.schema';
+	CreatePaymentEventSchema,
+	PaymentEventSchema,
+	UpdatePaymentEventSchema,
+} from "../schemas/payment-event.schema";
 
 export type PaymentEventDto = z.infer<typeof PaymentEventSchema>;
 export type CreatePaymentEventDto = z.infer<typeof CreatePaymentEventSchema>;

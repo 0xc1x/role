@@ -17,7 +17,10 @@ interface PriceBreakdownCardProps {
 }
 
 /** Price breakdown in checkout (ported from Rolé v1 `PriceBreakdownCard`). */
-export function PriceBreakdownCard({ offer, appliedCoupon }: PriceBreakdownCardProps) {
+export function PriceBreakdownCard({
+	offer,
+	appliedCoupon,
+}: PriceBreakdownCardProps) {
 	const { colors, scheme } = useTheme();
 	const totals = checkoutTotals(offer, appliedCoupon);
 	const offerDiscount = totals.offerDiscount;
@@ -25,60 +28,58 @@ export function PriceBreakdownCard({ offer, appliedCoupon }: PriceBreakdownCardP
 	const total = totals.total;
 
 	return (
-		<Card
-			style={{
-				backgroundColor: scheme === "dark" ? colors.card : colors.background,
-				borderColor: colors.borderSolid,
-			}}>
+		<Card>
 			<CardHeader>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText variant="h4" weight="bold" style={{ flex: 1 }}>
 					{strings.checkout.orderSummary}
 				</AppText>
 			</CardHeader>
 			<CardContent style={styles.body}>
-			<View style={styles.priceRow}>
-				<AppText style={[styles.label, { color: colors.mutedForeground }]}>
-					{strings.checkout.subtotal}
-				</AppText>
-				<AppText style={styles.value}>{formatMoney(offer.original_price)}</AppText>
-			</View>
-			<View style={styles.priceRow}>
-				<AppText style={[styles.label, { color: colors.success }]}>
-					{strings.checkout.discount}
-				</AppText>
-				<AppText style={[styles.value, { color: colors.success }]}>
-					-{formatMoney(offerDiscount)}
-				</AppText>
-			</View>
-			{appliedCoupon ? (
 				<View style={styles.priceRow}>
-					<AppText style={[styles.label, { color: colors.primary }]}>
-						{strings.checkout.couponApplied} · {appliedCoupon.code}
+					<AppText style={[styles.label, { color: colors.mutedForeground }]}>
+						{strings.checkout.subtotal}
 					</AppText>
-					<AppText style={[styles.value, { color: colors.primary }]}>
-						-{formatMoney(coupon)}
+					<AppText style={styles.value}>
+						{formatMoney(offer.original_price)}
 					</AppText>
 				</View>
-			) : null}
-			<View style={[styles.divider, { backgroundColor: colors.border }]} />
-			<View style={styles.priceRow}>
-				<AppText variant="h4" weight="bold" style={styles.totalLabel}>
-					{strings.checkout.total}
-				</AppText>
-				<AppText variant="priceLarge" style={{ color: colors.primary }}>
-					{formatMoney(total)}
-				</AppText>
-			</View>
-			<Alert variant="success" icon={PiggyBank}>
-				<AlertDescription>
-					<AppText style={[styles.ecoText, { color: colors.success }]}>
-						{strings.orders.moneySaved.replace(
-							"{saved}",
-							formatMoneyPrecise(offerDiscount + coupon),
-						)}
+				<View style={styles.priceRow}>
+					<AppText style={[styles.label, { color: colors.success }]}>
+						{strings.checkout.discount}
 					</AppText>
-				</AlertDescription>
-			</Alert>
+					<AppText style={[styles.value, { color: colors.success }]}>
+						-{formatMoney(offerDiscount)}
+					</AppText>
+				</View>
+				{appliedCoupon ? (
+					<View style={styles.priceRow}>
+						<AppText style={[styles.label, { color: colors.primary }]}>
+							{strings.checkout.couponApplied} · {appliedCoupon.code}
+						</AppText>
+						<AppText style={[styles.value, { color: colors.primary }]}>
+							-{formatMoney(coupon)}
+						</AppText>
+					</View>
+				) : null}
+				<View style={[styles.divider, { backgroundColor: colors.border }]} />
+				<View style={styles.priceRow}>
+					<AppText variant="h4" weight="bold" style={styles.totalLabel}>
+						{strings.checkout.total}
+					</AppText>
+					<AppText variant="priceLarge" style={{ color: colors.primary }}>
+						{formatMoney(total)}
+					</AppText>
+				</View>
+				<Alert variant="success" icon={PiggyBank}>
+					<AlertDescription>
+						<AppText style={[styles.ecoText, { color: colors.success }]}>
+							{strings.orders.moneySaved.replace(
+								"{saved}",
+								formatMoneyPrecise(offerDiscount + coupon),
+							)}
+						</AppText>
+					</AlertDescription>
+				</Alert>
 			</CardContent>
 		</Card>
 	);

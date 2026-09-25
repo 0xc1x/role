@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDbContext } from '../../../test/db';
 import {
   seedBusiness,
@@ -7,7 +8,7 @@ import {
   seedOrder,
   seedProfile,
 } from '../../../test/seed';
-import { coupons } from '../../database/schema';
+import { coupons, orderEvents } from '../../database/schema';
 import { OrdersRepository } from './orders.repository';
 
 let ctx: TestDbContext;
@@ -48,8 +49,31 @@ describe('OrdersRepository (DB real)', () => {
   test('updateStatus y isBusinessOwner', async () => {
     const order = await seedOrder(ctx.db, userId, offerId, businessId);
     await repo.updateStatus(ctx.db, order.id, 'confirmed');
-    expect(await repo.findById(order.id)).toMatchObject({ status: 'confirmed' });
+    expect(await repo.findById(order.id)).toMatchObject({
+      status: 'confirmed',
+    });
     expect(await repo.isBusinessOwner(businessId, userId)).toBe(false);
+  });
+
+  test('el trigger de estado es la única autoridad y registra una vez', async () => {
+    const order = await seedOrder(ctx.db, userId, offerId, businessId);
+    await ctx.db.delete(orderEvents).where(eq(orderEvents.order_id, order.id));
+
+    await repo.transaction(async (tx) => {
+      await repo.setEventActor(tx, userId);
+      await repo.updateStatus(tx, order.id, 'confirmed');
+    });
+
+    const events = await ctx.db
+      .select()
+      .from(orderEvents)
+      .where(eq(orderEvents.order_id, order.id));
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      status: 'confirmed',
+      previous_status: 'pending',
+      changed_by: userId,
+    });
   });
 
   test('listForUser y listForBusiness', async () => {
@@ -70,37 +94,43 @@ describe('OrdersRepository (DB real)', () => {
     expect(other).toBeNull();
   });
 
-  test('nextOrderNumber genera folios únicos y crecientes (12 el mismo día)', async () => {
-    // Regresión del off-by-two del SUBSTRING: con el corte en el último dígito,
-    // el folio 010 aportaba 0 al MAX y la 11ª orden colisionaba (unique).
-    const folios: string[] = [];
-    for (let i = 0; i < 12; i++) {
-      const n = await repo.transaction((tx) => repo.nextOrderNumber(tx));
-      expect(n).toMatch(/^FD-\d{4}-\d{4}-\d{3}$/);
-      expect(folios).not.toContain(n);
-      const prev = folios.at(-1);
-      if (prev) {
-        expect(Number(n.slice(-3))).toBeGreaterThan(Number(prev.slice(-3)));
-      }
-      folios.push(n);
-      await seedOrder(ctx.db, userId, offerId, businessId, { order_number: n });
+  test('nextOrderNumber es único bajo reservas concurrentes', async () => {
+    const folios = await Promise.all(
+      Array.from({ length: 24 }, () =>
+        repo.transaction((tx) => repo.nextOrderNumber(tx)),
+      ),
+    );
+
+    expect(folios).toHaveLength(24);
+    expect(new Set(folios).size).toBe(24);
+    for (const orderNumber of folios) {
+      expect(orderNumber).toMatch(/^FD-\d{4}-\d{4}-\d{3,}$/);
+      await seedOrder(ctx.db, userId, offerId, businessId, {
+        order_number: orderNumber,
+      });
     }
-    expect(folios).toHaveLength(12);
   });
 
-  test('insertEvent registra evento', async () => {
-    const order = await seedOrder(ctx.db, userId, offerId, businessId);
-    await repo.insertEvent(ctx.db, {
-      order_id: order.id,
-      status: 'confirmed',
+  test('idempotency key is unique per user', async () => {
+    await seedOrder(ctx.db, userId, offerId, businessId, {
+      idempotency_key: 'reservation-key-1',
     });
+
+    await expect(
+      seedOrder(ctx.db, userId, offerId, businessId, {
+        idempotency_key: 'reservation-key-1',
+      }),
+    ).rejects.toThrow();
   });
 
   test('findCommissionRate lee tarifa del negocio', async () => {
     const rate = await repo.findCommissionRate(ctx.db, businessId);
     expect(rate).not.toBeNull();
     expect(
-      await repo.findCommissionRate(ctx.db, '00000000-0000-0000-0000-000000000000'),
+      await repo.findCommissionRate(
+        ctx.db,
+        '00000000-0000-0000-0000-000000000000',
+      ),
     ).toBeNull();
   });
 });
@@ -145,8 +175,12 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
       .insert(coupons)
       .values({ code: 'U1', name: 'U', type: 'fixed', value: '1' })
       .returning({ id: coupons.id });
-    await repo.transaction((tx) => repo.incrementCouponUsedCount(tx, cpn?.id as string));
-    await repo.transaction((tx) => repo.accrueBusinessBalance(tx, businessId, '500'));
+    await repo.transaction((tx) =>
+      repo.incrementCouponUsedCount(tx, cpn?.id as string),
+    );
+    await repo.transaction((tx) =>
+      repo.accrueBusinessBalance(tx, businessId, '500'),
+    );
     const biz = await ctx.db.execute(
       `select balance from businesses where id = '${businessId}'`,
     );
@@ -155,7 +189,9 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
 
   test('findByIdForUpdate bloquea la orden', async () => {
     const order = await seedOrder(ctx.db, userId, offerId, businessId);
-    const locked = await repo.transaction((tx) => repo.findByIdForUpdate(tx, order.id));
+    const locked = await repo.transaction((tx) =>
+      repo.findByIdForUpdate(tx, order.id),
+    );
     expect(locked?.order.id).toBe(order.id);
   });
 });

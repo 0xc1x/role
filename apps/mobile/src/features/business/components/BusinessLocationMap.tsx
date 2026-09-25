@@ -49,16 +49,8 @@ export function BusinessLocationMap({
 	}
 
 	return (
-		<View
-			style={[
-				styles.mapWrap,
-				{ borderColor: colors.borderSolid },
-			]}
-		>
-			<MapCanvas
-				coords={{ latitude, longitude }}
-				onRegionChange={() => {}}
-			/>
+		<View style={[styles.mapWrap, { borderColor: colors.borderSolid }]}>
+			<MapCanvas coords={{ latitude, longitude }} onRegionChange={() => {}} />
 			{onPress ? (
 				<Pressable style={StyleSheet.absoluteFill} onPress={onPress} />
 			) : null}

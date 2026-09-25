@@ -1,9 +1,9 @@
-import type { z } from 'zod';
+import type { z } from "zod";
 import type {
-  CreateDeviceTokenSchema,
-  DeviceTokenSchema,
-  UpdateDeviceTokenSchema,
-} from '../schemas/device-token.schema';
+	CreateDeviceTokenSchema,
+	DeviceTokenSchema,
+	UpdateDeviceTokenSchema,
+} from "../schemas/device-token.schema";
 
 export type DeviceTokenDto = z.infer<typeof DeviceTokenSchema>;
 export type CreateDeviceTokenDto = z.infer<typeof CreateDeviceTokenSchema>;

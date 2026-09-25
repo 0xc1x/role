@@ -15,9 +15,7 @@ export const userPreferences = pgTable('user_preferences', {
     .notNull()
     .references(() => profiles.id, { onDelete: 'no action' }),
   notification_radius_km: integer('notification_radius_km').default(5),
-  favorite_categories: text('favorite_categories')
-    .array()
-    .default([]),
+  favorite_categories: text('favorite_categories').array().default([]),
   language: text('language').default('es'),
   theme_mode: text('theme_mode').notNull().default('system'),
   created_at: timestamp('created_at', { withTimezone: true })
@@ -61,22 +59,19 @@ export const consumerNotificationPreferences = pgTable(
   },
 );
 
-export const userConsents = pgTable(
-  'user_consents',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    user_id: uuid('user_id')
-      .notNull()
-      .references(() => profiles.id, { onDelete: 'no action' }),
-    consent_type: text('consent_type').notNull(),
-    granted: boolean('granted').notNull().default(false),
-    granted_at: timestamp('granted_at', { withTimezone: true }),
-    revoked_at: timestamp('revoked_at', { withTimezone: true }),
-    created_at: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updated_at: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-);
+export const userConsents = pgTable('user_consents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id')
+    .notNull()
+    .references(() => profiles.id, { onDelete: 'no action' }),
+  consent_type: text('consent_type').notNull(),
+  granted: boolean('granted').notNull().default(false),
+  granted_at: timestamp('granted_at', { withTimezone: true }),
+  revoked_at: timestamp('revoked_at', { withTimezone: true }),
+  created_at: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

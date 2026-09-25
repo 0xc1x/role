@@ -33,8 +33,11 @@ export function useLogout() {
 	const navigate = useNavigate();
 	return async () => {
 		// Revoca el refresh token en la API (cookie httpOnly) y limpia el cliente.
-		await apiLogout();
-		queryClient.clear();
-		navigate({ to: "/login" });
+		try {
+			await apiLogout();
+		} finally {
+			queryClient.clear();
+			navigate({ to: "/login" });
+		}
 	};
 }

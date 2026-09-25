@@ -12,7 +12,10 @@ import { ChevronDown, MapPin } from "lucide-react-native";
 import { Portal } from "@rn-primitives/portal";
 
 import { useAuthStore } from "@/src/features/auth/store";
-import { useSavedAddresses, useSetDefaultAddress } from "@/src/features/profile/hooks";
+import {
+	useSavedAddresses,
+	useSetDefaultAddress,
+} from "@/src/features/profile/hooks";
 import { AddAddressSheet } from "@/src/features/profile/components/AddAddressSheet";
 import { router } from "expo-router";
 import type { SavedAddressDto } from "@0xc1x/role-commons";
@@ -28,7 +31,12 @@ export function LocationSelector() {
 	const profile = useAuthStore((s) => s.profile);
 	const status = useAuthStore((s) => s.status);
 	const userId = profile?.id ?? "";
-	const { data: addresses, isLoading, isError, refetch } = useSavedAddresses(userId);
+	const {
+		data: addresses,
+		isLoading,
+		isError,
+		refetch,
+	} = useSavedAddresses(userId);
 	const setDefault = useSetDefaultAddress(userId);
 
 	const [isOpen, setIsOpen] = useState(false);
@@ -98,8 +106,7 @@ export function LocationSelector() {
 	};
 
 	const selectedAddress = addresses?.find((a) => a.is_default);
-	const displayLabel =
-		selectedAddress?.label ?? strings.home.changeLocation;
+	const displayLabel = selectedAddress?.label ?? strings.home.changeLocation;
 
 	const handleAddressSelect = (id: string) => {
 		closeDropdown();
@@ -117,7 +124,11 @@ export function LocationSelector() {
 
 	return (
 		<View style={styles.wrapper}>
-			<Pressable ref={triggerRef} onPress={toggleDropdown} style={styles.trigger}>
+			<Pressable
+				ref={triggerRef}
+				onPress={toggleDropdown}
+				style={styles.trigger}
+			>
 				<MapPin size={16} color={colors.primary} />
 				<AppText
 					weight="bold"
@@ -145,10 +156,7 @@ export function LocationSelector() {
 
 			{isOpen && menuOrigin ? (
 				<Portal name="location-selector-overlay">
-					<Pressable
-						onPress={closeDropdown}
-						style={StyleSheet.absoluteFill}
-					/>
+					<Pressable onPress={closeDropdown} style={StyleSheet.absoluteFill} />
 					<DropdownPanel
 						origin={menuOrigin}
 						addresses={addresses}
@@ -254,10 +262,7 @@ function DropdownPanel({
 				</View>
 			) : isError ? (
 				<View style={styles.loadingBox}>
-					<AppText
-						variant="bodySmall"
-						style={{ color: colors.destructive }}
-					>
+					<AppText variant="bodySmall" style={{ color: colors.destructive }}>
 						{strings.common.error}
 					</AppText>
 					<Button variant="link" onPress={onRetry}>
@@ -288,13 +293,12 @@ function DropdownPanel({
 					);
 				})
 			)}
-			<View
-				style={[
-					styles.divider,
-					{ backgroundColor: colors.borderSolid },
-				]}
-			/>
-			<Button variant="link" onPress={onAddAddress} style={styles.addAddressButton}>
+			<View style={[styles.divider, { backgroundColor: colors.borderSolid }]} />
+			<Button
+				variant="link"
+				onPress={onAddAddress}
+				style={styles.addAddressButton}
+			>
 				{`+ ${strings.addresses.add}`}
 			</Button>
 		</Animated.View>
@@ -355,18 +359,13 @@ function AddressItem({
 						{ backgroundColor: withAlpha(colors.secondary, 0.102) },
 					]}
 				>
-					<MapPin
-						size={16}
-						color={colors.primary}
-					/>
+					<MapPin size={16} color={colors.primary} />
 				</View>
 				<View style={styles.addressInfo}>
 					<AppText
 						weight={isSelected ? "semiBold" : "regular"}
 						style={{
-							color: isSelected
-								? colors.primary
-								: colors.foreground,
+							color: isSelected ? colors.primary : colors.foreground,
 						}}
 					>
 						{address.label}
@@ -381,10 +380,7 @@ function AddressItem({
 				</View>
 				{isSelected && (
 					<View
-						style={[
-							styles.selectedDot,
-							{ backgroundColor: colors.primary },
-						]}
+						style={[styles.selectedDot, { backgroundColor: colors.primary }]}
 					/>
 				)}
 			</Pressable>
@@ -410,7 +406,7 @@ const styles = StyleSheet.create({
 		maxWidth: 300,
 		borderRadius: radii.xl,
 		borderWidth: 1,
-		},
+	},
 	loadingBox: {
 		paddingHorizontal: spacing.lg,
 		paddingVertical: spacing.lg,

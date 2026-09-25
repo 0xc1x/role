@@ -1,4 +1,10 @@
-import { Banknote, Calendar, Tag, Tags, type LucideIcon } from "lucide-react-native";
+import {
+	Banknote,
+	Calendar,
+	Tag,
+	Tags,
+	type LucideIcon,
+} from "lucide-react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
@@ -11,7 +17,12 @@ import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
 import { DateTimeField } from "./products/DateTimeFields";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -19,15 +30,26 @@ const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function randomCode(length = 8): string {
 	let result = "";
 	for (let i = 0; i < length; i++) {
-		result += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)] ?? "X";
+		result +=
+			CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)] ?? "X";
 	}
 	return result;
 }
 
 function formatLongDate(date: Date): string {
 	const months = [
-		"enero", "febrero", "marzo", "abril", "mayo", "junio",
-		"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+		"enero",
+		"febrero",
+		"marzo",
+		"abril",
+		"mayo",
+		"junio",
+		"julio",
+		"agosto",
+		"septiembre",
+		"octubre",
+		"noviembre",
+		"diciembre",
 	];
 	return `${date.getDate()} de ${months[date.getMonth()]} de ${date.getFullYear()}`;
 }
@@ -59,9 +81,7 @@ export function CouponForm({
 	const { colors } = useTheme();
 	const [code, setCode] = useState(initial?.code ?? "");
 	const [type, setType] = useState<CouponType>(initial?.type ?? "percentage");
-	const [value, setValue] = useState(
-		initial ? String(initial.value) : "",
-	);
+	const [value, setValue] = useState(initial ? String(initial.value) : "");
 	const [minOrder, setMinOrder] = useState(
 		initial?.min_order_amount != null && initial.min_order_amount > 0
 			? String(initial.min_order_amount)
@@ -79,9 +99,11 @@ export function CouponForm({
 
 	const numericValue = Number(value);
 	const codeValid = code.trim().length >= 3;
-	const valueValid = value.trim() !== "" && numericValue > 0 && (type !== "percentage" || numericValue <= 100);
-	const canSubmit =
-		codeValid && valueValid && expiry != null && !submitting;
+	const valueValid =
+		value.trim() !== "" &&
+		numericValue > 0 &&
+		(type !== "percentage" || numericValue <= 100);
+	const canSubmit = codeValid && valueValid && expiry != null && !submitting;
 
 	const submit = () => {
 		if (expiry == null) {
@@ -94,7 +116,9 @@ export function CouponForm({
 			type,
 			value: numericValue,
 			min_order_amount:
-				minOrder.trim() !== "" && Number(minOrder) > 0 ? Number(minOrder) : null,
+				minOrder.trim() !== "" && Number(minOrder) > 0
+					? Number(minOrder)
+					: null,
 			max_uses:
 				maxUses.trim() !== "" && Number(maxUses) > 0
 					? Math.floor(Number(maxUses))
@@ -118,7 +142,9 @@ export function CouponForm({
 						<TextField
 							containerStyle={styles.codeField}
 							value={code}
-							onChangeText={(text) => setCode(text.replace(/\s/g, "").toUpperCase())}
+							onChangeText={(text) =>
+								setCode(text.replace(/\s/g, "").toUpperCase())
+							}
 							placeholder={strings.business.couponCodeHint}
 							autoCapitalize="characters"
 							maxLength={20}
@@ -149,7 +175,10 @@ export function CouponForm({
 					</View>
 				</CardContent>
 				<CardFooter>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{strings.business.couponCodeHint}
 					</AppText>
 				</CardFooter>
@@ -157,7 +186,11 @@ export function CouponForm({
 
 			<Card>
 				<CardHeader>
-					<AppText variant="labelSmall" weight="bold" style={{ marginBottom: spacing.md }}>
+					<AppText
+						variant="labelSmall"
+						weight="bold"
+						style={{ marginBottom: spacing.md }}
+					>
 						{strings.business.couponTypeLabel}
 					</AppText>
 				</CardHeader>
@@ -197,12 +230,16 @@ export function CouponForm({
 
 			<Card>
 				<CardHeader>
-					<AppText variant="labelSmall" weight="bold" style={{ marginBottom: spacing.md }}>
+					<AppText
+						variant="labelSmall"
+						weight="bold"
+						style={{ marginBottom: spacing.md }}
+					>
 						{strings.business.couponConditions}
 					</AppText>
 				</CardHeader>
 				<CardContent>
-						<TextField
+					<TextField
 						label={strings.business.couponMinPurchase}
 						value={minOrder}
 						onChangeText={(text) => setMinOrder(text.replace(/[^0-9.]/g, ""))}
@@ -211,7 +248,10 @@ export function CouponForm({
 					/>
 				</CardContent>
 				<CardFooter>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground, marginTop: -8 }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground, marginTop: -8 }}
+					>
 						{strings.business.couponMinPurchaseHint}
 					</AppText>
 				</CardFooter>
@@ -219,12 +259,20 @@ export function CouponForm({
 
 			<Card>
 				<CardHeader>
-					<AppText variant="labelSmall" weight="bold" style={{ marginBottom: spacing.md }}>
+					<AppText
+						variant="labelSmall"
+						weight="bold"
+						style={{ marginBottom: spacing.md }}
+					>
 						{strings.business.couponValidity}
 					</AppText>
 				</CardHeader>
 				<CardContent>
-					<AppText variant="bodyMedium" weight="medium" style={{ marginBottom: spacing.sm }}>
+					<AppText
+						variant="bodyMedium"
+						weight="medium"
+						style={{ marginBottom: spacing.sm }}
+					>
 						{strings.business.couponExpiry}
 					</AppText>
 					<Pressable
@@ -233,24 +281,38 @@ export function CouponForm({
 							styles.dateField,
 							{
 								backgroundColor: colors.inputBackground,
-								borderColor: showExpiryError && !expiry ? colors.destructive : colors.border,
+								borderColor:
+									showExpiryError && !expiry
+										? colors.destructive
+										: colors.border,
 							},
 						]}
 					>
 						<Calendar
 							size={16}
-							color={showExpiryError && !expiry ? colors.destructive : colors.mutedForeground}
+							color={
+								showExpiryError && !expiry
+									? colors.destructive
+									: colors.mutedForeground
+							}
 						/>
 						<AppText
 							variant="bodyMedium"
 							weight={expiry ? "semiBold" : "regular"}
-							style={{ color: expiry ? colors.foreground : colors.mutedForeground }}
+							style={{
+								color: expiry ? colors.foreground : colors.mutedForeground,
+							}}
 						>
-							{expiry ? formatLongDate(expiry) : strings.business.couponPickDate}
+							{expiry
+								? formatLongDate(expiry)
+								: strings.business.couponPickDate}
 						</AppText>
 					</Pressable>
 					{showExpiryError && !expiry ? (
-						<AppText variant="bodySmall" style={{ color: colors.destructive, marginTop: 4 }}>
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.destructive, marginTop: 4 }}
+						>
 							{strings.business.couponExpiryRequired}
 						</AppText>
 					) : null}
@@ -277,7 +339,6 @@ export function CouponForm({
 						/>
 					</View>
 				</CardContent>
-				
 			</Card>
 
 			<Card style={styles.statusCard}>
@@ -289,7 +350,10 @@ export function CouponForm({
 				<CardContent>
 					<View style={styles.statusRow}>
 						<View style={styles.statusText}>
-							<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+							<AppText
+								variant="bodySmall"
+								style={{ color: colors.mutedForeground }}
+							>
 								{strings.business.couponAvailabilityHint}
 							</AppText>
 						</View>
@@ -299,7 +363,6 @@ export function CouponForm({
 						/>
 					</View>
 				</CardContent>
-				
 			</Card>
 
 			{error ? (
@@ -340,7 +403,9 @@ function TypeOption({
 				{
 					borderColor: selected ? colors.primary : colors.borderSolid,
 					borderWidth: selected ? 1.5 : 1,
-					backgroundColor: selected ? withAlpha(colors.primary, 0.051) : colors.card,
+					backgroundColor: selected
+						? withAlpha(colors.primary, 0.051)
+						: colors.card,
 				},
 			]}
 		>

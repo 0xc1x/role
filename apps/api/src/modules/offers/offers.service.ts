@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import { NotificationHandlers } from '../notifications/notification.handlers';
 import {
@@ -100,6 +101,11 @@ export class OffersService {
     );
 
     const created = await this.offersRepository.transaction(async (tx) => {
+      const businessAvailable =
+        await this.offersRepository.isBusinessAvailableForOffers(
+          tx,
+          body.business_id,
+        );
       const offer = await this.offersRepository.insert(tx, {
         business_id: body.business_id,
         business_location_id: body.business_location_id,
@@ -112,7 +118,7 @@ export class OffersService {
         initial_stock: body.initial_stock ?? 1,
         pickup_start: new Date(body.pickup_start),
         pickup_end: new Date(body.pickup_end),
-        is_active: body.is_active ?? true,
+        is_active: businessAvailable ? (body.is_active ?? true) : false,
         includes: body.includes ?? null,
         allergens: body.allergens ?? null,
       });
@@ -131,9 +137,10 @@ export class OffersService {
     );
     if (this.config.get('ENABLE_API_MIRROR_NOTIFICATIONS', { infer: true })) {
       this.notificationHandlers?.onOfferCreated(created.id).catch((err) => {
-        this.logger.warn(
-          `Notificación de oferta creada falló para ${created.id}: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        this.logger.warn({
+          event: 'offer_created_notification_failed',
+          ...safeErrorFields(err),
+        });
       });
     }
     return OfferMapper.toDto(created, category_ids);

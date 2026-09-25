@@ -9,13 +9,19 @@ export function validateEmailField(email: string): string | null {
 	return null;
 }
 
-export function validatePasswordField(password: string, minLength = 1): string | null {
+export function validatePasswordField(
+	password: string,
+	minLength = 1,
+): string | null {
 	if (!password) return strings.auth.requiredPassword;
 	if (password.length < minLength) return strings.auth.passwordMinError;
 	return null;
 }
 
-export function validateLoginForm(email: string, password: string): {
+export function validateLoginForm(
+	email: string,
+	password: string,
+): {
 	emailError: string | null;
 	passwordError: string | null;
 	ok: boolean;
@@ -38,5 +44,10 @@ export function validateSignupForm(
 	const nameError = fullName.trim() ? null : strings.auth.requiredName;
 	const emailError = validateEmailField(email);
 	const passwordError = validatePasswordField(password, 8);
-	return { nameError, emailError, passwordError, ok: !nameError && !emailError && !passwordError };
+	return {
+		nameError,
+		emailError,
+		passwordError,
+		ok: !nameError && !emailError && !passwordError,
+	};
 }

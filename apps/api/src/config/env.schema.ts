@@ -10,11 +10,52 @@ const mirrorFlag = (def: 'true' | 'false' = 'false') =>
     .default(def)
     .transform((v) => v === 'true');
 
+const insecureJwtSecretValues = new Set([
+  'admin',
+  'changeme',
+  'change-me',
+  'default',
+  'example',
+  'example-secret',
+  'jwt-secret',
+  'password',
+  'replaceme',
+  'replace-me',
+  'secret',
+  'secret-key',
+  'supersecret',
+  'test',
+  'test-secret',
+  'test-secret-key',
+  'your-jwt-secret',
+  'your-secret',
+  'your-secret-here',
+  'your-supabase-jwt-secret',
+]);
+
+const normalizeSecret = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+
+const hasStrongJwtSecretVariation = (value: string) =>
+  [
+    /[a-z]/.test(value),
+    /[A-Z]/.test(value),
+    /\d/.test(value),
+    /[^A-Za-z0-9]/.test(value),
+  ].filter(Boolean).length >= 3;
+
 export const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
+  /** Deployment version exposed by the health endpoint. */
+  APP_VERSION: z.string().default(''),
+  /** Render injects the immutable deployed commit SHA. */
+  RENDER_GIT_COMMIT: z.string().default(''),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   SUPABASE_URL: z.string().url('SUPABASE_URL must be a valid URL'),
   SUPABASE_JWT_SECRET: z.string().min(1, 'SUPABASE_JWT_SECRET is required'),
@@ -63,6 +104,9 @@ export const envSchema = z.object({
   ENABLE_JOBS_ORDERS_EXPIRATION: mirrorFlag(),
   /** BullMQ: URL de Redis para colas de notificaciones (vacío = ejecución directa sin cola) */
   REDIS_URL: z.string().default(''),
+  /** Optional Cloudflare Turnstile settings reserved for a future verifier. */
+  TURNSTILE_SITE_KEY: z.string().default(''),
+  TURNSTILE_SECRET_KEY: z.string().default(''),
   /** FCM HTTP v1: JSON del service account de Firebase (vacío deshabilita envío web) */
   FCM_SERVICE_ACCOUNT: z.string().default(''),
   /** FCM: project_id (opcional si ya está en el JSON) */
@@ -83,6 +127,23 @@ export function validateEnv(config: Record<string, unknown>): Env {
   }
   const env = parsed.data;
 
+  if (env.NODE_ENV === 'production') {
+    const normalizedSecret = normalizeSecret(env.SUPABASE_JWT_SECRET);
+    if (insecureJwtSecretValues.has(normalizedSecret)) {
+      throw new Error(
+        'SUPABASE_JWT_SECRET must not use a placeholder, test, or change-me value in production',
+      );
+    }
+    if (
+      env.SUPABASE_JWT_SECRET.length < 32 ||
+      !hasStrongJwtSecretVariation(env.SUPABASE_JWT_SECRET)
+    ) {
+      throw new Error(
+        'SUPABASE_JWT_SECRET must be at least 32 characters and use at least 3 character types in production',
+      );
+    }
+  }
+
   if (env.NODE_ENV === 'production' && env.CORS_ORIGINS === '*') {
     throw new Error(
       'CORS_ORIGINS must be explicitly set in production (cannot be "*")',
@@ -92,6 +153,18 @@ export function validateEnv(config: Record<string, unknown>): Env {
   if (env.NODE_ENV === 'production' && (!env.DOCS_USER || !env.DOCS_PASSWORD)) {
     throw new Error(
       'DOCS_USER and DOCS_PASSWORD must be set in production to protect /docs',
+    );
+  }
+
+  if (env.NODE_ENV === 'production' && !env.REDIS_URL) {
+    throw new Error(
+      'REDIS_URL must be set in production for durable throttling and queues',
+    );
+  }
+
+  if (env.NODE_ENV === 'production' && !env.ENABLE_JOBS_ORDERS_EXPIRATION) {
+    throw new Error(
+      'ENABLE_JOBS_ORDERS_EXPIRATION must be enabled in production',
     );
   }
 

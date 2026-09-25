@@ -61,10 +61,13 @@ export function toSlideUpdate(dto: UpdateSlideDto): SlideUpdate {
   for (const k of directKeys) {
     if (dto[k] !== undefined) (update as Record<string, unknown>)[k] = dto[k];
   }
-  if (dto.redirect_url !== undefined) update.redirect_url = dto.redirect_url || null;
+  if (dto.redirect_url !== undefined)
+    update.redirect_url = dto.redirect_url || null;
   if (dto.image_url !== undefined) update.image_url = dto.image_url || null;
-  if (dto.start_at !== undefined) update.start_at = dto.start_at ? new Date(dto.start_at) : null;
-  if (dto.end_at !== undefined) update.end_at = dto.end_at ? new Date(dto.end_at) : null;
+  if (dto.start_at !== undefined)
+    update.start_at = dto.start_at ? new Date(dto.start_at) : null;
+  if (dto.end_at !== undefined)
+    update.end_at = dto.end_at ? new Date(dto.end_at) : null;
   return update;
 }
 

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import { CampaignsService } from './campaigns.service';
 
 /**
@@ -21,15 +22,9 @@ export class CampaignsCron {
         this.logger.log(`processTick procesó ${processed} envíos`);
       }
     } catch (err) {
-      const cause = err instanceof Error ? err.cause : undefined;
-      this.logger.error(`processTick falló`, {
-        message: err instanceof Error ? err.message : String(err),
-        cause:
-          cause instanceof Error
-            ? { name: cause.name, message: cause.message }
-            : cause,
-        code: (cause as { code?: unknown } | undefined)?.code,
-        detail: (cause as { detail?: unknown } | undefined)?.detail,
+      this.logger.error({
+        event: 'campaign_cron_tick_failed',
+        ...safeErrorFields(err),
       });
     }
   }

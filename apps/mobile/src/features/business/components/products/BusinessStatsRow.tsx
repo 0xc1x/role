@@ -50,7 +50,10 @@ export function BusinessStatsRowSkeleton() {
 			accessibilityLabel={strings.common.loading}
 			accessibilityState={{ busy: true }}
 			testID="business-stats-skeleton"
-			style={[styles.row, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}
+			style={[
+				styles.row,
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+			]}
 		>
 			{[0, 1, 2].map((index) => (
 				<View key={index} style={styles.item}>

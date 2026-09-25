@@ -5,7 +5,7 @@ import {
 	RefreshControl,
 	StyleSheet,
 	View,
-	Linking
+	Linking,
 } from "react-native";
 import { Image } from "expo-image";
 import { toast } from "sonner-native";
@@ -123,7 +123,7 @@ export function OrderDetail({
 
 	const confirmCancel = () => setConfirmCancelOpen(true);
 
-		return (
+	return (
 		<View style={styles.root}>
 			<Screen
 				scroll
@@ -173,9 +173,7 @@ export function OrderDetail({
 					{order.status === "pending" || order.status === "confirmed" ? (
 						<Button
 							size="lg"
-							icon={
-								<CircleCheck size={20} color={colors.primaryForeground} />
-							}
+							icon={<CircleCheck size={20} color={colors.primaryForeground} />}
 							onPress={markReady}
 							loading={updateStatus.isPending}
 							fullWidth
@@ -241,10 +239,7 @@ export function OrderDetail({
 				/>
 			) : null}
 
-			<AlertDialog
-				open={confirmCancelOpen}
-				onOpenChange={setConfirmCancelOpen}
-			>
+			<AlertDialog open={confirmCancelOpen} onOpenChange={setConfirmCancelOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
@@ -291,19 +286,30 @@ export function OrderDetail({
 function ProductCard({ item }: { item: OrderDetail }) {
 	const { colors } = useTheme();
 	return (
-		<Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+		<Card
+			style={[
+				styles.card,
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+			]}
+		>
 			<AppText variant="h4" weight="bold">
 				{strings.business.ordersProductTitle}
 			</AppText>
 			<View style={styles.productRow}>
 				{item.offerImageUrl ? (
-					<Image source={{ uri: item.offerImageUrl }} style={styles.productImage} />
+					<Image
+						source={{ uri: item.offerImageUrl }}
+						style={styles.productImage}
+					/>
 				) : (
-					<View style={[styles.productImage, styles.productPlaceholder, { backgroundColor: colors.borderSolid }]}>
-						<UtensilsCrossed
-							size={28}
-							color={colors.mutedForeground}
-						/>
+					<View
+						style={[
+							styles.productImage,
+							styles.productPlaceholder,
+							{ backgroundColor: colors.borderSolid },
+						]}
+					>
+						<UtensilsCrossed size={28} color={colors.mutedForeground} />
 					</View>
 				)}
 				<View style={styles.productBody}>
@@ -330,7 +336,12 @@ function CustomerInfoCard({ item }: { item: OrderDetail }) {
 	};
 
 	return (
-		<Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+		<Card
+			style={[
+				styles.card,
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+			]}
+		>
 			<AppText variant="h4" weight="bold">
 				{strings.business.ordersCustomerInfo}
 			</AppText>
@@ -339,17 +350,17 @@ function CustomerInfoCard({ item }: { item: OrderDetail }) {
 				label={strings.business.ordersName}
 				text={item.customerName ?? strings.business.ordersNoName}
 			/>
-		<Pressable
-			onPress={handleCall}
-			disabled={!item.customerPhone}
-			style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-		>
-			<InfoRow
-				icon={Phone}
-				label={strings.business.phone}
-				text={item.customerPhone ?? strings.business.ordersNoPhone}
-			/>
-		</Pressable>
+			<Pressable
+				onPress={handleCall}
+				disabled={!item.customerPhone}
+				style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+			>
+				<InfoRow
+					icon={Phone}
+					label={strings.business.phone}
+					text={item.customerPhone ?? strings.business.ordersNoPhone}
+				/>
+			</Pressable>
 		</Card>
 	);
 }
@@ -364,7 +375,12 @@ function PickupInfoCard({ item }: { item: OrderDetail }) {
 			? `${formatShortDate(order.pickup_time)} · ${formatTime(order.pickup_time)}`
 			: strings.business.ordersPickupPending;
 	return (
-		<Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+		<Card
+			style={[
+				styles.card,
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+			]}
+		>
 			<AppText variant="h4" weight="bold">
 				{strings.business.ordersPickupInfo}
 			</AppText>
@@ -406,14 +422,23 @@ type TimelineStep = {
 	background: string;
 };
 
-function buildTimeline(item: OrderDetail, colors: ReturnType<typeof useTheme>["colors"]): TimelineEntry[] {
+function buildTimeline(
+	item: OrderDetail,
+	colors: ReturnType<typeof useTheme>["colors"],
+): TimelineEntry[] {
 	const { order, events } = item;
 	const created = order.created_at;
 	const readyFallback = order.pickup_time ?? created;
 
 	const steps: TimelineStep[] = [
 		{
-			statuses: ["pending", "confirmed", "ready_for_pickup", "picked_up", "completed"],
+			statuses: [
+				"pending",
+				"confirmed",
+				"ready_for_pickup",
+				"picked_up",
+				"completed",
+			],
 			icon: Clock,
 			title: strings.business.ordersTimelinePending,
 			note: strings.business.ordersTimelinePendingNote,
@@ -490,7 +515,12 @@ function TimelineCard({ item }: { item: OrderDetail }) {
 	const { colors } = useTheme();
 	const entries = buildTimeline(item, colors);
 	return (
-		<Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+		<Card
+			style={[
+				styles.card,
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+			]}
+		>
 			<View style={styles.timelineHeader}>
 				<Calendar size={20} color={colors.primary} />
 				<AppText variant="h4" weight="bold">
@@ -519,11 +549,18 @@ function TimelineEntryRow({
 	return (
 		<View style={styles.timelineRow}>
 			<View style={styles.timelineRail}>
-				<View style={[styles.timelineDot, { backgroundColor: entry.background }]}>
+				<View
+					style={[styles.timelineDot, { backgroundColor: entry.background }]}
+				>
 					<Icon size={18} color={entry.color} />
 				</View>
 				{isLast ? null : (
-					<View style={[styles.timelineLine, { backgroundColor: colors.borderSolid }]} />
+					<View
+						style={[
+							styles.timelineLine,
+							{ backgroundColor: colors.borderSolid },
+						]}
+					/>
 				)}
 			</View>
 			<View style={styles.timelineBody}>
@@ -531,14 +568,20 @@ function TimelineEntryRow({
 					<AppText variant="bodyMedium" weight="semiBold">
 						{entry.title}
 					</AppText>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{formatTime(entry.timestamp)}
 					</AppText>
 				</View>
 				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 					{entry.note}
 				</AppText>
-				<AppText variant="bodySmall" style={{ color: colors.mutedForeground, fontSize: 11 }}>
+				<AppText
+					variant="bodySmall"
+					style={{ color: colors.mutedForeground, fontSize: 11 }}
+				>
 					{formatShortDate(entry.timestamp)}
 				</AppText>
 			</View>
@@ -594,7 +637,9 @@ function InfoRow({
 	const { colors } = useTheme();
 	return (
 		<View style={styles.infoRow}>
-			<View style={[styles.infoIcon, { backgroundColor: colors.inputBackground }]}>
+			<View
+				style={[styles.infoIcon, { backgroundColor: colors.inputBackground }]}
+			>
 				<Icon size={16} color={colors.mutedForeground} />
 			</View>
 			<View style={styles.infoBody}>
@@ -633,7 +678,12 @@ function ValidateCodeDialog({
 			animationType="fade"
 			onRequestClose={onClose}
 		>
-			<View style={[styles.backdrop, { backgroundColor: withAlpha(colors.scrim, 0.5) }]}>
+			<View
+				style={[
+					styles.backdrop,
+					{ backgroundColor: withAlpha(colors.scrim, 0.5) },
+				]}
+			>
 				<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 				<View
 					style={[
@@ -662,11 +712,18 @@ function ValidateCodeDialog({
 						{strings.business.ordersScanQr}
 					</Button>
 					<View style={styles.orRow}>
-						<View style={[styles.orLine, { backgroundColor: colors.borderSolid }]} />
-						<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+						<View
+							style={[styles.orLine, { backgroundColor: colors.borderSolid }]}
+						/>
+						<AppText
+							variant="bodySmall"
+							style={{ color: colors.mutedForeground }}
+						>
 							{strings.business.ordersCodeManual}
 						</AppText>
-						<View style={[styles.orLine, { backgroundColor: colors.borderSolid }]} />
+						<View
+							style={[styles.orLine, { backgroundColor: colors.borderSolid }]}
+						/>
 					</View>
 
 					<TextField
@@ -678,11 +735,7 @@ function ValidateCodeDialog({
 						containerStyle={styles.codeInputContainer}
 					/>
 					<View style={styles.dialogActions}>
-						<Button
-							variant="outline"
-							style={{ flex: 1 }}
-							onPress={onClose}
-						>
+						<Button variant="outline" style={{ flex: 1 }} onPress={onClose}>
 							{strings.common.cancel}
 						</Button>
 						<Button

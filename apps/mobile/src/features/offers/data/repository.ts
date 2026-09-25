@@ -12,7 +12,7 @@ import type {
 	EmbeddedCategory,
 	EmbeddedLocation,
 	OfferDetail,
-	} from "../domain/offer";
+} from "../domain/offer";
 import { OFFER_SELECT } from "./offer-select";
 
 export const expiringSoonWindowHours = 3;
@@ -23,7 +23,10 @@ type Row = Record<string, unknown>;
 type RadiusParams = { lat: number; lng: number; radiusKm?: number };
 
 export const offersRepository = {
-	async getPopularOffers(radiusParams?: RadiusParams, limit = 10): Promise<OfferDetail[]> {
+	async getPopularOffers(
+		radiusParams?: RadiusParams,
+		limit = 10,
+	): Promise<OfferDetail[]> {
 		return fetchOffersNear({
 			radiusParams,
 			limit,
@@ -44,7 +47,10 @@ export const offersRepository = {
 		});
 	},
 
-	async getExpiringSoonOffers(radiusParams?: RadiusParams, limit = 5): Promise<OfferDetail[]> {
+	async getExpiringSoonOffers(
+		radiusParams?: RadiusParams,
+		limit = 5,
+	): Promise<OfferDetail[]> {
 		return fetchOffersNear({
 			radiusParams,
 			sort: "pickup_end",
@@ -54,7 +60,10 @@ export const offersRepository = {
 		});
 	},
 
-	async getRecentOffers(radiusParams?: RadiusParams, limit = 5): Promise<OfferDetail[]> {
+	async getRecentOffers(
+		radiusParams?: RadiusParams,
+		limit = 5,
+	): Promise<OfferDetail[]> {
 		return fetchOffersNear({
 			radiusParams,
 			limit,
@@ -106,7 +115,8 @@ export const offersRepository = {
 			radiusParams,
 			category,
 			maxPrice,
-			search: searchQuery != null && searchQuery.length > 0 ? searchQuery : null,
+			search:
+				searchQuery != null && searchQuery.length > 0 ? searchQuery : null,
 			limit: pageSize,
 			offset: page * pageSize,
 			errorLabel: "Error al filtrar ofertas",
@@ -155,9 +165,11 @@ export const offersRepository = {
 		return stats;
 	},
 
-	async getPopularAreas(
-		near?: { lat: number; lng: number; radiusKm?: number },
-	): Promise<AreaStat[]> {
+	async getPopularAreas(near?: {
+		lat: number;
+		lng: number;
+		radiusKm?: number;
+	}): Promise<AreaStat[]> {
 		try {
 			const { data, error } = await supabase.rpc("popular_zones", {
 				p_lat: near?.lat ?? null,
@@ -175,7 +187,10 @@ export const offersRepository = {
 		}
 	},
 
-	async getNearbyBusinesses(radiusParams?: RadiusParams, limit = 5): Promise<BusinessSummary[]> {
+	async getNearbyBusinesses(
+		radiusParams?: RadiusParams,
+		limit = 5,
+	): Promise<BusinessSummary[]> {
 		return fetchBusinessesNear({
 			radiusParams,
 			sort: "distance",
@@ -203,16 +218,18 @@ export const offersRepository = {
 			page = 0,
 		} = params as typeof params & { page?: number };
 		return fetchBusinessesNear({
-			radiusParams: lat != null && lng != null ? { lat, lng, radiusKm } : undefined,
-			search: searchQuery != null && searchQuery.length > 0 ? searchQuery : null,
+			radiusParams:
+				lat != null && lng != null ? { lat, lng, radiusKm } : undefined,
+			search:
+				searchQuery != null && searchQuery.length > 0 ? searchQuery : null,
 			type,
 			sort: "deals",
 			limit,
 			offset: page * limit,
 			errorLabel: "Error al cargar negocios",
 		});
-		},
-	};
+	},
+};
 
 /**
  * active_offers_near: filtra (geo, categoría, precio, búsqueda, ventana de

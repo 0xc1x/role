@@ -5,6 +5,7 @@ import { Footer } from "@/components/footer";
 import { LegalHero } from "@/components/legal-hero";
 import { Navbar } from "@/components/navbar";
 import { formatLegalDate } from "@/lib/dates";
+import { PRIVACY_SECTIONS } from "@/lib/legal/privacy-content";
 import { pageHead } from "@/lib/seo";
 import { useConfig } from "@/lib/use-config";
 
@@ -18,61 +19,20 @@ export const Route = createFileRoute("/privacy")({
 	component: PrivacyPage,
 });
 
-const SECTIONS = [
-	{
-		title: "Responsable del tratamiento",
-		body: "Rolé (operado por 0xC1X S.A.S., RUC 1799999999001, domicilio Quito, Ecuador) es responsable del tratamiento de tus datos personales a través de la app móvil y la web. Contacto de privacidad: {contactEmail}.",
-	},
-	{
-		title: "Normativa aplicable",
-		body: "Tratamos tus datos conforme a la Ley Orgánica de Protección de Datos Personales (LOPDP, RO Suplemento 459 de 26 de mayo de 2021), su Reglamento y la Constitución del Ecuador (Art. 66.19). Esta política se interpreta bajo ley ecuatoriana.",
-	},
-	{
-		title: "Datos que recopilamos",
-		body: "Automáticos: IP anonimizada, tipo de navegador/SO, páginas vistas, duración, fecha/hora y referer. Voluntarios: nombre, correo, teléfono, ubicación aproximada, preferencias, datos de reserva (oferta, comercio, horario de recogida) y mensajes de contacto. No solicitamos datos sensibles salvo que tú los aportes.",
-	},
-	{
-		title: "Finalidades",
-		body: "Proveer y mantener el servicio; procesar reservas y coordinar recogidas; mostrarte ofertas cercanas; enviarte notificaciones transaccionales; mejorar la experiencia y obtener estadísticas agregadas; cumplir obligaciones legales y prevenir fraude.",
-	},
-	{
-		title: "Base legal",
-		body: "Ejecución del contrato (reserva), consentimiento (marketing/cookies no esenciales), interés legítimo (mejora y seguridad) y cumplimiento legal. Puedes retirar el consentimiento en cualquier momento sin afectar tratamientos previos.",
-	},
-	{
-		title: "Conservación",
-		body: "Navegación y logs: hasta 12 meses. Datos de cuenta y reservas: mientras mantengas la cuenta y 24 meses tras la baja, salvo obligación legal mayor. Contacto: hasta revocar consentimiento.",
-	},
-	{
-		title: "Destinatarios y transferencias",
-		body: "Compartimos lo mínimo necesario con: comercios (para tu reserva), y encargados técnicos: Supabase (base de datos), Vercel (hosting), Sentry (observabilidad), Firebase/Google (push y mapas). Algunos servidores están en EE. UU./UE; aplicamos cláusulas tipo u otras garantías adecuadas y DPAs vigentes.",
-	},
-	{
-		title: "Tus derechos",
-		body: "Acceso, rectificación, supresión, oposición, portabilidad, limitación y a no ser objeto de decisiones automatizadas. Ejerce escribiendo a {contactEmail} con cédula, derecho solicitado y medio de respuesta. Respondemos en máximo 15 días (Art. 26 Reglamento LOPDP); puedes reclamar ante la SPDP si no estás conforme.",
-	},
-	{
-		title: "Seguridad",
-		body: "Cifrado SSL/HTTPS, control de accesos, registro de actividad, backups y actualizaciones. Ante una brecha notificamos a la SPDP en máximo 5 días y a ti en 2 días si hay riesgo significativo.",
-	},
-	{
-		title: "Cookies",
-		body: "Usamos cookies técnicas (necesarias), de análisis y de terceros (Google Maps, Sentry). Verás un banner para aceptar, rechazar o configurar por categoría. Las no esenciales no se cargan hasta tu consentimiento (Art. 8 LOPDP). Puedes gestionarlas en tu navegador.",
-	},
-	{
-		title: "Cambios y contacto",
-		body: "Podemos actualizar esta política; publicaremos la nueva versión aquí con fecha de vigencia. Contacto: {contactEmail}. Jurisdicción: tribunales de Quito, Ecuador.",
-	},
-];
-
 function PrivacyPage() {
 	const contactEmail = useConfig(
 		"privacy.contact_email",
-		"privacidad@role.app",
+		"correo de privacidad pendiente de configuración",
 	);
-	const sections = SECTIONS.map((s) => ({
+	const controllerIdentity = useConfig(
+		"legal.controller_identity",
+		"el operador de Rolé (identidad legal pendiente de publicación)",
+	);
+	const sections = PRIVACY_SECTIONS.map((s) => ({
 		...s,
-		body: s.body.replace("{contactEmail}", contactEmail),
+		body: s.body
+			.replace("{contactEmail}", contactEmail)
+			.replace("{controllerIdentity}", controllerIdentity),
 	}));
 	const updatedRaw = useConfig("legal.privacy_updated_at", "");
 	const updatedDate = useMemo(() => formatLegalDate(updatedRaw), [updatedRaw]);
@@ -121,9 +81,12 @@ function PrivacyPage() {
 
 					<div className="mt-12 grid gap-4 border-t border-role-border pt-10 sm:grid-cols-3">
 						{[
-							{ t: "Cifrado total", d: "Tránsito y reposo protegidos" },
-							{ t: "Sin venta", d: "Nunca vendemos tus datos" },
-							{ t: "Control tuyo", d: "Elimina o exporta cuando quieras" },
+							{ t: "Tránsito protegido", d: "Conexiones cifradas con HTTPS" },
+							{ t: "Uso limitado", d: "Solo para las finalidades indicadas" },
+							{
+								t: "Derechos claros",
+								d: "Solicita acceso, corrección o supresión",
+							},
 						].map((f) => (
 							<div key={f.t} className="border-l-2 border-role-primary/20 pl-4">
 								<p className="text-sm font-semibold text-role-foreground">

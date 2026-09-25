@@ -114,7 +114,9 @@ function OptionRow({
 					variant="bodyMedium"
 					weight={selected ? "semiBold" : "regular"}
 					numberOfLines={1}
-					style={{ color: selected ? colors.secondaryForeground : colors.foreground }}
+					style={{
+						color: selected ? colors.secondaryForeground : colors.foreground,
+					}}
 				>
 					{label}
 				</AppText>
@@ -123,19 +125,16 @@ function OptionRow({
 						variant="bodySmall"
 						numberOfLines={1}
 						style={{
-							color: selected ? colors.secondaryForeground : colors.mutedForeground,
+							color: selected
+								? colors.secondaryForeground
+								: colors.mutedForeground,
 						}}
 					>
 						{subtitle}
 					</AppText>
 				) : null}
 			</View>
-			{selected ? (
-				<Check
-					size={18}
-					color={colors.secondaryForeground}
-				/>
-			) : null}
+			{selected ? <Check size={18} color={colors.secondaryForeground} /> : null}
 		</Pressable>
 	);
 }

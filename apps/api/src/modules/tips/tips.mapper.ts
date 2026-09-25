@@ -21,7 +21,7 @@ export function toTipInsert(dto: CreateTipDto): TipInsert {
 }
 
 export function toTipUpdate(dto: UpdateTipDto): TipUpdate {
-  return pickDefined(dto, ['content', 'active']) as TipUpdate;
+  return pickDefined(dto, ['content', 'active']);
 }
 
 export const TipMapper = {

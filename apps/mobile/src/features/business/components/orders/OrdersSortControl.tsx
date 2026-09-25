@@ -41,7 +41,10 @@ export function OrdersSortControl({
 			</Button>
 
 			{open ? (
-				<BottomSheetModal title={strings.business.sort} onClose={() => setOpen(false)}>
+				<BottomSheetModal
+					title={strings.business.sort}
+					onClose={() => setOpen(false)}
+				>
 					{ORDERS_SORTS.map((sort) => {
 						const selected = sort === value;
 						return (
@@ -58,7 +61,9 @@ export function OrdersSortControl({
 										backgroundColor: selected
 											? colors.secondary
 											: colors.inputBackground,
-										borderColor: selected ? colors.secondary : colors.borderSolid,
+										borderColor: selected
+											? colors.secondary
+											: colors.borderSolid,
 										opacity: pressed ? 0.85 : 1,
 									},
 								]}
@@ -67,16 +72,15 @@ export function OrdersSortControl({
 									variant="bodyMedium"
 									weight={selected ? "semiBold" : "regular"}
 									style={{
-										color: selected ? colors.secondaryForeground : colors.foreground,
+										color: selected
+											? colors.secondaryForeground
+											: colors.foreground,
 									}}
 								>
 									{SORT_LABELS[sort]}
 								</AppText>
 								{selected ? (
-									<Check
-										size={18}
-										color={colors.secondaryForeground}
-									/>
+									<Check size={18} color={colors.secondaryForeground} />
 								) : null}
 							</Pressable>
 						);

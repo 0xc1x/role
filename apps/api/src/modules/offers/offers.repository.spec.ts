@@ -42,10 +42,49 @@ describe('OffersRepository (DB real)', () => {
     const found = await repo.findById(row.id);
     expect(found?.title).toBe('Pack');
     expect(found?.business_name).toBeDefined();
-    expect(await repo.findById('00000000-0000-0000-0000-000000000000')).toBeNull();
-    expect(await repo.update(ctx.db, row.id, { title: 'Pack2' })).toMatchObject({
-      title: 'Pack2',
+    expect(
+      await repo.findById('00000000-0000-0000-0000-000000000000'),
+    ).toBeNull();
+    expect(await repo.update(ctx.db, row.id, { title: 'Pack2' })).toMatchObject(
+      {
+        title: 'Pack2',
+      },
+    );
+  });
+
+  test('unapproved business forces new offers inactive', async () => {
+    const owner = await seedProfile(ctx.db);
+    const pending = await seedBusiness(ctx.db, owner, {
+      verification_status: 'pending',
     });
+    const pendingLocation = await seedLocation(ctx.db, pending.id);
+
+    const offer = await seedOffer(ctx.db, pending.id, pendingLocation.id, {
+      is_active: true,
+    });
+
+    expect(offer.is_active).toBe(false);
+    expect(await repo.isBusinessAvailableForOffers(ctx.db, pending.id)).toBe(
+      false,
+    );
+  });
+
+  test('composite FK rejects a location from another business', async () => {
+    const otherOwner = await seedProfile(ctx.db);
+    const otherBusiness = await seedBusiness(ctx.db, otherOwner);
+    const otherLocation = await seedLocation(ctx.db, otherBusiness.id);
+
+    await expect(
+      repo.insert(ctx.db, {
+        business_id: businessId,
+        business_location_id: otherLocation.id,
+        title: 'Invalid relationship',
+        original_price: '1000',
+        discounted_price: '500',
+        pickup_start: new Date(Date.now() - 1000),
+        pickup_end: new Date(Date.now() + 3600_000),
+      }),
+    ).rejects.toThrow();
   });
 
   test('setCategories + findCategoryIds', async () => {
@@ -78,8 +117,12 @@ describe('OffersRepository (DB real)', () => {
     const biz = await seedBusiness(ctx.db, owner);
     expect(await repo.isBusinessOwner(biz.id, owner)).toBe(true);
     expect(await repo.isBusinessOwner(biz.id, businessId)).toBe(false);
-    expect(await repo.locationBelongsToBusiness(locationId, businessId)).toBe(true);
-    expect(await repo.locationBelongsToBusiness(locationId, biz.id)).toBe(false);
+    expect(await repo.locationBelongsToBusiness(locationId, businessId)).toBe(
+      true,
+    );
+    expect(await repo.locationBelongsToBusiness(locationId, biz.id)).toBe(
+      false,
+    );
   });
 });
 
@@ -87,11 +130,19 @@ describe('OffersRepository consultas (DB real)', () => {
   test('findMany con available_only y búsqueda', async () => {
     const all = await repo.findMany({ page: 1, limit: 10 });
     expect(all.total).toBeGreaterThanOrEqual(1);
-    const avail = await repo.findMany({ page: 1, limit: 10, available_only: true });
+    const avail = await repo.findMany({
+      page: 1,
+      limit: 10,
+      available_only: true,
+    });
     expect(avail.items.every((o) => o.is_active && o.stock > 0)).toBe(true);
     const search = await repo.findMany({ page: 1, limit: 10, search: 'pack' });
     expect(search.total).toBeGreaterThanOrEqual(1);
-    const byBiz = await repo.findMany({ page: 1, limit: 10, business_id: businessId });
+    const byBiz = await repo.findMany({
+      page: 1,
+      limit: 10,
+      business_id: businessId,
+    });
     expect(byBiz.items.every((o) => o.business_id === businessId)).toBe(true);
   });
 
@@ -100,15 +151,20 @@ describe('OffersRepository consultas (DB real)', () => {
     const biz = await seedBusiness(ctx.db, owner);
     expect(await repo.findBusinessIdsOwnedBy(owner)).toContain(biz.id);
     const cat = await seedCategory(ctx.db);
-    expect(await repo.findActiveCategoryIds([cat.id, '00000000-0000-0000-0000-000000000000'])).toEqual([
-      cat.id,
-    ]);
+    expect(
+      await repo.findActiveCategoryIds([
+        cat.id,
+        '00000000-0000-0000-0000-000000000000',
+      ]),
+    ).toEqual([cat.id]);
     expect(await repo.findActiveCategoryIds([])).toEqual([]);
   });
 
   test('findByIdForUpdate dentro de transacción', async () => {
     const offer = await seedOffer(ctx.db, businessId, locationId);
-    const found = await repo.transaction((tx) => repo.findByIdForUpdate(tx, offer.id));
+    const found = await repo.transaction((tx) =>
+      repo.findByIdForUpdate(tx, offer.id),
+    );
     expect(found?.id).toBe(offer.id);
   });
 
@@ -121,6 +177,7 @@ describe('OffersRepository consultas (DB real)', () => {
       discounted_price: '500',
       pickup_start: new Date(Date.now() - 7200_000),
       pickup_end: new Date(Date.now() - 3600_000),
+      is_active: true,
     });
     expect(await repo.expireStale(new Date())).toBeGreaterThanOrEqual(1);
     expect(await repo.findById(stale.id)).toMatchObject({ is_active: false });

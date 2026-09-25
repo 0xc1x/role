@@ -1,1 +1,1 @@
-export * from './schemas/stats.schema';
+export * from "./schemas/stats.schema";

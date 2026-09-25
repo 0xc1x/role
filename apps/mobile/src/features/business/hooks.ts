@@ -1,4 +1,9 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	useInfiniteQuery,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner-native";
 import { strings } from "@/src/core/i18n/strings";
 import type {
@@ -170,8 +175,13 @@ export function useDeleteOffer(businessId: string) {
 export function useToggleOfferActive(businessId: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: ({ offerId, isActive }: { offerId: string; isActive: boolean }) =>
-			businessRepository.toggleOfferStatus(offerId, isActive),
+		mutationFn: ({
+			offerId,
+			isActive,
+		}: {
+			offerId: string;
+			isActive: boolean;
+		}) => businessRepository.toggleOfferStatus(offerId, isActive),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({
 				queryKey: ["businesses", businessId, "offers"],
@@ -318,8 +328,9 @@ export function useToggleCouponStatus(businessId: string) {
 export function useCreateBusiness() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (input: Parameters<typeof businessRepository.createBusiness>[0]) =>
-			businessRepository.createBusiness(input),
+		mutationFn: (
+			input: Parameters<typeof businessRepository.createBusiness>[0],
+		) => businessRepository.createBusiness(input),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: ["businesses"] });
 		},
@@ -337,8 +348,9 @@ export function useBusinessHours(businessId: string) {
 export function useUpdateBusiness(businessId: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (patch: Parameters<typeof businessRepository.updateBusiness>[1]) =>
-			businessRepository.updateBusiness(businessId, patch),
+		mutationFn: (
+			patch: Parameters<typeof businessRepository.updateBusiness>[1],
+		) => businessRepository.updateBusiness(businessId, patch),
 		onSuccess: () => {
 			// Prefijo ancho: cubre perfil propio, owned y directorio consumidor.
 			void queryClient.invalidateQueries({ queryKey: ["businesses"] });
@@ -444,7 +456,10 @@ const OFFERS_PAGE_SIZE = 20;
 const COUPONS_PAGE_SIZE = 20;
 const PAYOUTS_PAGE_SIZE = 20;
 
-export function useBusinessOrders(businessId: string, filters: BusinessOrderListFilters = {}) {
+export function useBusinessOrders(
+	businessId: string,
+	filters: BusinessOrderListFilters = {},
+) {
 	return useInfiniteQuery({
 		queryKey: ["businesses", businessId, "orders", filters],
 		initialPageParam: 0,
@@ -455,7 +470,9 @@ export function useBusinessOrders(businessId: string, filters: BusinessOrderList
 				offset: (pageParam as number) * ORDERS_PAGE_SIZE,
 			}),
 		getNextPageParam: (lastPage, _allPages, lastPageParam) =>
-			lastPage.length < ORDERS_PAGE_SIZE ? undefined : (lastPageParam as number) + 1,
+			lastPage.length < ORDERS_PAGE_SIZE
+				? undefined
+				: (lastPageParam as number) + 1,
 		enabled: businessId.length > 0,
 	});
 }
@@ -467,14 +484,20 @@ export function useBusinessOrderStats(businessId: string) {
 		queryFn: async () => {
 			const start = new Date();
 			start.setUTCHours(0, 0, 0, 0);
-			const [pendingCount, readyCount, todayCompletedCount] = await Promise.all([
-				orderRepository.countBusinessOrders(businessId, { status: "pending" }),
-				orderRepository.countBusinessOrders(businessId, { status: "ready_for_pickup" }),
-				orderRepository.countBusinessOrders(businessId, {
-					status: "completed",
-					from: start.toISOString(),
-				}),
-			]);
+			const [pendingCount, readyCount, todayCompletedCount] = await Promise.all(
+				[
+					orderRepository.countBusinessOrders(businessId, {
+						status: "pending",
+					}),
+					orderRepository.countBusinessOrders(businessId, {
+						status: "ready_for_pickup",
+					}),
+					orderRepository.countBusinessOrders(businessId, {
+						status: "completed",
+						from: start.toISOString(),
+					}),
+				],
+			);
 			return { pendingCount, readyCount, todayCompletedCount };
 		},
 		enabled: businessId.length > 0,

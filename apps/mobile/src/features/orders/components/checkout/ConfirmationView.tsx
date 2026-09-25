@@ -6,8 +6,14 @@ import { AppText } from "@/src/core/ui";
 import { PickupQr } from "@/src/features/orders/components/pickup-qr";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
-import type { EmbeddedBusiness, EmbeddedLocation } from "@/src/features/offers/domain/offer";
-import { type ReservationSuccess, pickupQrValue } from "@/src/features/orders/domain/order";
+import type {
+	EmbeddedBusiness,
+	EmbeddedLocation,
+} from "@/src/features/offers/domain/offer";
+import {
+	type ReservationSuccess,
+	pickupQrValue,
+} from "@/src/features/orders/domain/order";
 import { Button } from "@/components/ui/button";
 
 interface ConfirmationViewProps {
@@ -34,7 +40,9 @@ export function ConfirmationView({
 				<AppText variant="h3" weight="bold" style={styles.successTitle}>
 					{strings.checkout.reservationSuccessTitle}
 				</AppText>
-				<AppText style={[styles.successMessage, { color: colors.mutedForeground }]}>
+				<AppText
+					style={[styles.successMessage, { color: colors.mutedForeground }]}
+				>
 					{strings.checkout.reservationSuccessMessage}
 				</AppText>
 			</View>
@@ -45,14 +53,18 @@ export function ConfirmationView({
 					{ backgroundColor: colors.card, borderColor: colors.borderSolid },
 				]}
 			>
-				<AppText style={[styles.ticketLabel, { color: colors.mutedForeground }]}>
+				<AppText
+					style={[styles.ticketLabel, { color: colors.mutedForeground }]}
+				>
 					{strings.checkout.ticketTitle.toUpperCase()}
 				</AppText>
 				<PickupQr orderId={result.orderId} pickupCode={result.pickupCode} />
 				<AppText style={[styles.pickupCode, { color: colors.primary }]}>
 					{result.pickupCode}
 				</AppText>
-				<AppText style={[styles.orderNumber, { color: colors.mutedForeground }]}>
+				<AppText
+					style={[styles.orderNumber, { color: colors.mutedForeground }]}
+				>
 					{strings.checkout.ticketOrder.replace("{n}", result.orderNumber)}
 				</AppText>
 				<AppText style={[styles.pickupInfo, { color: colors.mutedForeground }]}>
@@ -90,11 +102,7 @@ export function ConfirmationView({
 				>
 					{strings.checkout.viewOrder}
 				</Button>
-				<Button
-					variant="outline"
-					fullWidth
-					onPress={() => router.replace("/")}
-				>
+				<Button variant="outline" fullWidth onPress={() => router.replace("/")}>
 					{strings.checkout.moreOffers}
 				</Button>
 			</View>
@@ -104,7 +112,11 @@ export function ConfirmationView({
 
 const styles = StyleSheet.create({
 	wrap: { gap: spacing.lg },
-	successHeader: { alignItems: "center", gap: spacing.sm, marginTop: spacing.sm },
+	successHeader: {
+		alignItems: "center",
+		gap: spacing.sm,
+		marginTop: spacing.sm,
+	},
 	successTitle: { textAlign: "center" },
 	successMessage: { textAlign: "center" },
 

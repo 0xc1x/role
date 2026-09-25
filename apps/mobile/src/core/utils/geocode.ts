@@ -17,10 +17,14 @@ export interface ShortAddressParts {
 export function composeShortAddress(parts: ShortAddressParts): string {
 	const street = [parts.street, parts.streetNumber]
 		.map((part) => part?.trim())
-		.filter((part): part is string => typeof part === "string" && part.length > 0)
+		.filter(
+			(part): part is string => typeof part === "string" && part.length > 0,
+		)
 		.join(" ");
 	return [street, parts.city?.trim(), parts.postcode?.trim()]
-		.filter((part): part is string => typeof part === "string" && part.length > 0)
+		.filter(
+			(part): part is string => typeof part === "string" && part.length > 0,
+		)
 		.join(", ");
 }
 
@@ -89,7 +93,8 @@ export async function reverseGeocode({
 					streetNumber: address.house_number,
 					city: address.city ?? address.town ?? address.village,
 					postcode: address.postcode,
-				}) || (data.display_name ?? "");
+				}) ||
+				(data.display_name ?? "");
 			const result = { displayName, zone };
 			if (result.displayName) cache.set(key, result);
 			return result;

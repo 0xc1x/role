@@ -8,17 +8,17 @@ import { toAppError } from "@/src/core/error/mapper";
  * `active AND is_public` a anon). Mobile no pasa por la API BFF.
  */
 export async function fetchAppConfig(): Promise<AppConfigMap> {
-  const { data, error } = await supabase
-    .from("app_config")
-    .select("key, value")
-    .eq("active", true)
-    .eq("is_public", true);
+	const { data, error } = await supabase
+		.from("app_config")
+		.select("key, value")
+		.eq("active", true)
+		.eq("is_public", true);
 
-  if (error) throw toAppError(error);
+	if (error) throw toAppError(error);
 
-  const map: AppConfigMap = {};
-  for (const row of data ?? []) {
-    map[row.key] = row.value;
-  }
-  return map;
+	const map: AppConfigMap = {};
+	for (const row of data ?? []) {
+		map[row.key] = row.value;
+	}
+	return map;
 }

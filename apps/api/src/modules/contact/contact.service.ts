@@ -2,13 +2,18 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import type { CreateContactDto } from '@0xc1x/role-commons';
+import {
+  safeErrorFields,
+  safeErrorSummary,
+} from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import { AppConfigRepository } from '../app-config/app-config.repository';
 import { EmailMarketingRepository } from '../email-marketing/email-marketing.repository';
 import { RendererService } from '../email-marketing/renderer.service';
 import { AppStoreRepository } from '../store/app-store.repository';
 
-const FALLBACK_CITIES = ['Quito', 'Guayaquil', 'Cuenca', 'Manta', 'Otra'];
+const OTHER_CITY = 'Otra';
+const FALLBACK_CITIES = ['Quito', 'Guayaquil', 'Cuenca', 'Manta'];
 
 @Injectable()
 export class ContactService {
@@ -29,10 +34,13 @@ export class ContactService {
   async handle(dto: CreateContactDto, ip?: string) {
     // 1. validar ciudad contra app_config.contact.cities
     const cities = await this.resolveCities();
-    if (!cities.includes(dto.city)) {
-      throw new BadRequestException(`Ciudad no habilitada. Opciones: ${cities.join(', ')}`);
+    const isOtherCity = dto.city === OTHER_CITY;
+    if (!isOtherCity && !cities.includes(dto.city)) {
+      throw new BadRequestException(
+        `Ciudad no habilitada. Opciones: ${cities.join(', ')}`,
+      );
     }
-    const effectiveCity = dto.city === 'Otra' ? dto.city_other!.trim() : dto.city;
+    const effectiveCity = isOtherCity ? dto.city_other!.trim() : dto.city;
 
     // 2. resolver destinos y remitente desde app_config
     const to = await this.resolveTo(dto.role);
@@ -47,7 +55,7 @@ export class ContactService {
         role: dto.role,
         city: effectiveCity,
         city_raw: dto.city,
-        city_other: dto.city_other ?? null,
+        city_other: dto.city_other?.trim() ?? null,
         message: dto.message ?? null,
         at: new Date().toISOString(),
         ip: ip ?? null,
@@ -70,8 +78,12 @@ export class ContactService {
       await this.deliver(to, rendered.subject, rendered.html, dto.email, from);
       await this.storeRepo.updateStatus(entry.id, 'PROCESADO');
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Contacto ${entry.id} encolado (email falló, no bloquea): ${message}`);
+      const errorSummary = safeErrorSummary(err);
+      this.logger.warn({
+        event: 'contact_delivery_failed',
+        queued: true,
+        ...safeErrorFields(err),
+      });
       // Encolar en email_sends robusto (type/source + template_id) para reintento — BD fuente de verdad
       try {
         const tmpl = await this.findContactTemplate();
@@ -89,17 +101,25 @@ export class ContactService {
               queued_at: now,
               attempts: 0,
               max_attempts: 5,
-              error_message: message.slice(0, 500),
-              variables_used: { nombre: dto.name, email: dto.email, rol: dto.role, ciudad: effectiveCity } as unknown as never,
+              error_message: errorSummary,
+              variables_used: {
+                nombre: dto.name,
+                email: dto.email,
+                rol: dto.role,
+                ciudad: effectiveCity,
+              },
             },
           ]);
         }
       } catch (enqueueErr) {
-        this.logger.warn(
-          `Contacto ${entry.id}: falló el encolado del reintento: ${enqueueErr instanceof Error ? enqueueErr.message : String(enqueueErr)}`,
-        );
+        this.logger.warn({
+          event: 'contact_retry_enqueue_failed',
+          ...safeErrorFields(enqueueErr),
+        });
       }
-      await this.storeRepo.updateStatus(entry.id, 'PENDIENTE', { error: message.slice(0, 500) });
+      await this.storeRepo.updateStatus(entry.id, 'PENDIENTE', {
+        error: errorSummary,
+      });
       // No throw — el lead no se pierde aunque el correo falle
     }
 
@@ -108,17 +128,26 @@ export class ContactService {
 
   private async resolveCities(): Promise<string[]> {
     const row = await this.appConfigRepo.findByKey('contact.cities');
-    if (row?.value && Array.isArray(row.value) && row.value.every((v) => typeof v === 'string')) {
-      return row.value as string[];
+    if (
+      row?.value &&
+      Array.isArray(row.value) &&
+      row.value.every((v) => typeof v === 'string')
+    ) {
+      return row.value.filter((city) => city !== OTHER_CITY);
     }
     return FALLBACK_CITIES;
   }
 
   private async resolveTo(role: string): Promise<string> {
-    const key = role === 'negocio' ? 'contact.negocios_email' : 'contact.hola_email';
+    const key =
+      role === 'negocio' ? 'contact.negocios_email' : 'contact.hola_email';
     const row = await this.appConfigRepo.findByKey(key);
-    if (row?.value && typeof row.value === 'string' && row.value.includes('@')) {
-      return row.value as string;
+    if (
+      row?.value &&
+      typeof row.value === 'string' &&
+      row.value.includes('@')
+    ) {
+      return row.value;
     }
     // fallback por rol
     return role === 'negocio' ? 'negocios@role.ec' : 'hola@role.ec';
@@ -126,8 +155,12 @@ export class ContactService {
 
   private async resolveFrom(): Promise<string> {
     const row = await this.appConfigRepo.findByKey('email.from');
-    if (row?.value && typeof row.value === 'string' && (row.value as string).includes('@')) {
-      const v = row.value as string;
+    if (
+      row?.value &&
+      typeof row.value === 'string' &&
+      row.value.includes('@')
+    ) {
+      const v = row.value;
       return v.includes('<') ? v : `Rolé <${v}>`;
     }
     const envFrom = this.config.get('EMAIL_FROM', { infer: true });
@@ -135,7 +168,9 @@ export class ContactService {
     return 'Rolé <notificaciones@role.ec>';
   }
 
-  private async renderContactEmail(vars: Record<string, string | undefined>): Promise<{ subject: string; html: string }> {
+  private async renderContactEmail(
+    vars: Record<string, string | undefined>,
+  ): Promise<{ subject: string; html: string }> {
     const safeVars = {
       nombre: vars.nombre ?? '',
       email: vars.email ?? '',
@@ -152,8 +187,12 @@ export class ContactService {
     }
 
     const [header, footer] = await Promise.all([
-      template.header_id ? this.emailRepo.findComponentById(template.header_id) : Promise.resolve(null),
-      template.footer_id ? this.emailRepo.findComponentById(template.footer_id) : Promise.resolve(null),
+      template.header_id
+        ? this.emailRepo.findComponentById(template.header_id)
+        : Promise.resolve(null),
+      template.footer_id
+        ? this.emailRepo.findComponentById(template.footer_id)
+        : Promise.resolve(null),
     ]);
 
     const subject = this.renderer.renderVariables(template.subject, safeVars);
@@ -168,8 +207,14 @@ export class ContactService {
 
   private async findContactTemplate() {
     // buscar por nombre (seed: contacto-notificacion)
-    const { rows } = await this.emailRepo.listTemplates({ page: 1, limit: 10, search: 'contacto-notificacion' });
-    const found = (rows as unknown as { name: string }[]).find((r) => r.name === 'contacto-notificacion');
+    const { rows } = await this.emailRepo.listTemplates({
+      page: 1,
+      limit: 10,
+      search: 'contacto-notificacion',
+    });
+    const found = (rows as unknown as { name: string }[]).find(
+      (r) => r.name === 'contacto-notificacion',
+    );
     if (found) {
       const id = (found as unknown as { id: string }).id;
       return this.emailRepo.findTemplateById(id);
@@ -177,9 +222,15 @@ export class ContactService {
     return null;
   }
 
-  private async deliver(to: string, subject: string, html: string, replyTo: string, from: string): Promise<string | null> {
+  private async deliver(
+    to: string,
+    subject: string,
+    html: string,
+    replyTo: string,
+    from: string,
+  ): Promise<string | null> {
     if (!this.resend) {
-      this.logger.log(`[contact mock] to=${to} from=${from} subject=${subject}`);
+      this.logger.debug({ event: 'contact_delivery_mocked' });
       return `dev_${Date.now()}`;
     }
     const { data, error } = await this.resend.emails.send({
@@ -194,6 +245,10 @@ export class ContactService {
   }
 
   private escape(v: string): string {
-    return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return v
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 }

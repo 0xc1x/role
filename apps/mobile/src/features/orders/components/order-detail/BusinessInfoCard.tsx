@@ -1,4 +1,10 @@
-import { Clock, MapPin, Phone, Store, type LucideIcon } from "lucide-react-native";
+import {
+	Clock,
+	MapPin,
+	Phone,
+	Store,
+	type LucideIcon,
+} from "lucide-react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Linking, StyleSheet, View } from "react-native";
@@ -8,10 +14,7 @@ import { AppText } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { radii, spacing } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
-import {
-	formatShortDate,
-	formatTime,
-} from "@/src/core/utils/formatters";
+import { formatShortDate, formatTime } from "@/src/core/utils/formatters";
 import {
 	isActiveStatus,
 	type OrderDetail,
@@ -32,87 +35,83 @@ export function BusinessInfoCard({ item }: { item: OrderDetail }) {
 	};
 
 	return (
-		<Card
-			style={[
-				{
-					backgroundColor: scheme === "dark" ? colors.card : colors.background,
-					borderColor: colors.borderSolid,
-				},
-			]}>
+		<Card>
 			<CardHeader>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText variant="h4" weight="bold" style={{ flex: 1 }}>
 					{strings.orders.businessTitle}
 				</AppText>
 			</CardHeader>
 			<CardContent style={styles.body}>
-			<View style={styles.businessTitleRow}>
-				{item.businessImageUrl ? (
-					<Image
-						source={{ uri: item.businessImageUrl }}
-						style={styles.businessLogo}
-						contentFit="cover"
-					/>
-				) : (
-					<View
-						style={[
-							styles.businessIcon,
-							{ backgroundColor: withAlpha(colors.secondary, 0.302) },
-						]}
+				<View style={styles.businessTitleRow}>
+					{item.businessImageUrl ? (
+						<Image
+							source={{ uri: item.businessImageUrl }}
+							style={styles.businessLogo}
+							contentFit="cover"
+						/>
+					) : (
+						<View
+							style={[
+								styles.businessIcon,
+								{ backgroundColor: withAlpha(colors.secondary, 0.302) },
+							]}
+						>
+							<Store size={18} color={colors.primary} />
+						</View>
+					)}
+					<AppText
+						variant="h4"
+						weight="bold"
+						numberOfLines={2}
+						style={styles.businessName}
 					>
-						<Store size={18} color={colors.primary} />
-					</View>
-				)}
-				<AppText
-					variant="h4"
-					weight="bold"
-					numberOfLines={2}
-					style={styles.businessName}
-				>
-					{item.businessName}
-				</AppText>
-			</View>
+						{item.businessName}
+					</AppText>
+				</View>
 
-			{item.businessAddress ? (
-				<InfoRow
-					icon={MapPin}
-					label={strings.orders.businessAddressLabel}
-					text={item.businessAddress}
-				/>
-			) : null}
-			{item.businessPhone ? (
-				<InfoRow
-					icon={Phone}
-					label={strings.orders.businessPhoneLabel}
-					text={item.businessPhone}
-				/>
-			) : null}
-			{order.pickup_time ? (
-				<InfoRow
-					icon={Clock}
-					label={strings.orders.pickupTimeLabel}
-					text={`${formatShortDate(order.pickup_time)} · ${formatTime(order.pickup_time)} hs`}
-				/>
-			) : null}
+				{item.businessAddress ? (
+					<InfoRow
+						icon={MapPin}
+						label={strings.orders.businessAddressLabel}
+						text={item.businessAddress}
+					/>
+				) : null}
+				{item.businessPhone ? (
+					<InfoRow
+						icon={Phone}
+						label={strings.orders.businessPhoneLabel}
+						text={item.businessPhone}
+					/>
+				) : null}
+				{order.pickup_time ? (
+					<InfoRow
+						icon={Clock}
+						label={strings.orders.pickupTimeLabel}
+						text={`${formatShortDate(order.pickup_time)} · ${formatTime(order.pickup_time)} hs`}
+					/>
+				) : null}
 
-			<View style={styles.businessActions}>
-				{isActive ? (
+				<View style={styles.businessActions}>
+					{isActive ? (
+						<Button
+							size="sm"
+							style={styles.businessActionBtn}
+							onPress={openDirections}
+						>
+							{strings.orders.getDirections}
+						</Button>
+					) : null}
 					<Button
+						variant="secondary"
 						size="sm"
 						style={styles.businessActionBtn}
-						onPress={openDirections}
+						onPress={() =>
+							router.push(`/business-profile/${order.business_id}`)
+						}
 					>
-						{strings.orders.getDirections}
+						{strings.orders.viewBusiness}
 					</Button>
-				) : null}
-				<Button
-					variant="secondary"
-					size="sm"
-					style={styles.businessActionBtn}
-					onPress={() => router.push(`/business-profile/${order.business_id}`)}
-				>
-					{strings.orders.viewBusiness}
-				</Button>
-			</View>
+				</View>
 			</CardContent>
 		</Card>
 	);

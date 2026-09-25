@@ -20,17 +20,32 @@ mock.module("react-native", () => ({
 		views.push(nativeWeb.StyleSheet.flatten(style) ?? {});
 		return createElement(nativeWeb.View, { style }, children);
 	},
-	Pressable: (props: any) => { buttons.push(props); return createElement(nativeWeb.View, {}, props.children); },
+	Pressable: (props: any) => {
+		buttons.push(props);
+		return createElement(nativeWeb.View, {}, props.children);
+	},
 }));
-mock.module("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top, bottom: 34, left: 0, right: 0 }) }));
-mock.module("react-native-maps", () => ({ default: (props: any) => { map = props; return null; }, Marker: empty }));
+mock.module("react-native-safe-area-context", () => ({
+	useSafeAreaInsets: () => ({ top, bottom: 34, left: 0, right: 0 }),
+}));
+mock.module("react-native-maps", () => ({
+	default: (props: any) => {
+		map = props;
+		return null;
+	},
+	Marker: empty,
+}));
 mock.module("expo-router", () => ({ router: {} }));
 mock.module("expo-image", () => ({ Image: empty }));
 mock.module("expo-location", () => ({}));
 mock.module("expo-linear-gradient", () => ({ LinearGradient: empty }));
-mock.module("@/src/core/theme", () => ({ useTheme: () => ({ colors: light, scheme: "light" }) }));
+mock.module("@/src/core/theme", () => ({
+	useTheme: () => ({ colors: light, scheme: "light" }),
+}));
 mock.module("@/src/core/ui", () => ({ AppText: nativeWeb.Text }));
-mock.module("@/src/features/hooks", () => ({ useCategories: () => ({ data: [] }) }));
+mock.module("@/src/features/hooks", () => ({
+	useCategories: () => ({ data: [] }),
+}));
 const { ExploreMapView } = await import("./ExploreMapView.native");
 
 for (const inset of [0, 44]) {
@@ -40,22 +55,41 @@ for (const inset of [0, 44]) {
 		buttons.length = 0;
 		const onBack = mock(() => {});
 		const onFilterTap = mock(() => {});
-		renderToStaticMarkup(createElement(ExploreMapView, {
-			offers: [], filters: emptyExploreFilters, userLocation: null, onBack, onFilterTap,
-		}));
-		const header = views.find((style) => style.position === "absolute" && style.left === spacing.lg && style.top !== undefined);
+		renderToStaticMarkup(
+			createElement(ExploreMapView, {
+				offers: [],
+				filters: emptyExploreFilters,
+				userLocation: null,
+				onBack,
+				onFilterTap,
+			}),
+		);
+		const header = views.find(
+			(style) =>
+				style.position === "absolute" &&
+				style.left === spacing.lg &&
+				style.top !== undefined,
+		);
 		expect(header?.top).toBe(spacing.md + inset);
-		const zoom = views.find((style) => style.position === "absolute" && style.overflow === "hidden");
+		const zoom = views.find(
+			(style) => style.position === "absolute" && style.overflow === "hidden",
+		);
 		expect(zoom?.top).toBe(96 + inset);
 		expect(views[0]).toEqual({ flex: 1 });
-		expect(nativeWeb.StyleSheet.flatten(map.style)).toEqual(nativeWeb.StyleSheet.absoluteFillObject);
+		expect(nativeWeb.StyleSheet.flatten(map.style)).toEqual(
+			nativeWeb.StyleSheet.absoluteFillObject,
+		);
 		expect(views.some((style) => style.bottom === 80)).toBe(true);
 		expect(views.some((style) => style.bottom === spacing.xxl)).toBe(true);
 		expect(map.onRegionChangeComplete).toBeFunction();
 		expect(map.onPress).toBeFunction();
 		expect(map.scrollEnabled).not.toBe(false);
-		buttons.find((button) => button.accessibilityLabel === strings.common.back).onPress();
-		buttons.find((button) => button.accessibilityLabel === strings.explore.filters).onPress();
+		buttons
+			.find((button) => button.accessibilityLabel === strings.common.back)
+			.onPress();
+		buttons
+			.find((button) => button.accessibilityLabel === strings.explore.filters)
+			.onPress();
 		expect(onBack).toHaveBeenCalledTimes(1);
 		expect(onFilterTap).toHaveBeenCalledTimes(1);
 	});

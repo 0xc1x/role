@@ -51,6 +51,18 @@ export class TipsController {
     return this.tipsService.list(query);
   }
 
+  @Roles('admin')
+  @Get('admin')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'List tips (admin)' })
+  @ApiOkResponse({ description: 'Paginated tip list' })
+  listAdmin(
+    @Query(new ZodValidationPipe(ListTipsQuerySchema))
+    query: ListTipsQuery,
+  ): Promise<TipPaginatedData> {
+    return this.tipsService.listAdmin(query);
+  }
+
   @Public()
   @Get('random')
   @ApiOperation({ summary: 'Get a random active tip' })

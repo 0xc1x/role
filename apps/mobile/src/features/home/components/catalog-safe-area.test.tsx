@@ -25,31 +25,61 @@ mock.module("react-native", () => ({
 		views.push(nativeWeb.StyleSheet.flatten(style) ?? {});
 		return createElement(nativeWeb.View, { style }, children);
 	},
-	FlatList: (props: any) => { lists.push(props); return null; },
+	FlatList: (props: any) => {
+		lists.push(props);
+		return null;
+	},
 	RefreshControl: empty,
 }));
-mock.module("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top, bottom: 0, left: 0, right: 0 }) }));
-mock.module("expo-router", () => ({ router: {}, useLocalSearchParams: () => ({}) }));
-mock.module("@/src/core/theme", () => ({ useTheme: () => ({ colors: light }) }));
+mock.module("react-native-safe-area-context", () => ({
+	useSafeAreaInsets: () => ({ top, bottom: 0, left: 0, right: 0 }),
+}));
+mock.module("expo-router", () => ({
+	router: {},
+	useLocalSearchParams: () => ({}),
+}));
+mock.module("@/src/core/theme", () => ({
+	useTheme: () => ({ colors: light }),
+}));
 mock.module("@/src/core/ui", () => ({
-	AppText: nativeWeb.Text, CircleIconButton: empty, EmptyState: empty,
-	FilterChip: empty, SearchBar: empty, goBackOr: empty,
+	AppText: nativeWeb.Text,
+	CircleIconButton: empty,
+	EmptyState: empty,
+	FilterChip: empty,
+	SearchBar: empty,
+	goBackOr: empty,
 	useWebPullToRefresh: () => ({ ref: undefined, indicator: null }),
 }));
 mock.module("@/components/ui/button", () => ({ Button: empty }));
 mock.module("@/components/ui/text", () => ({ Text: nativeWeb.Text }));
 mock.module("@/components/ui/skeleton", () => ({ Skeleton: empty }));
 mock.module("@/src/features/hooks", () => ({
-	useSelectedAddress: empty, useCategories: () => ({ data: [] }),
-	useAllBusinessesInfinite: query, useFilteredOffersInfinite: query,
+	useSelectedAddress: empty,
+	useCategories: () => ({ data: [] }),
+	useAllBusinessesInfinite: query,
+	useFilteredOffersInfinite: query,
 }));
-mock.module("@/src/features/auth/store", () => ({ useAuthStore: () => ({ id: "consumer" }) }));
-mock.module("@/src/features/profile/hooks", () => ({ usePreferences: () => ({}) }));
-mock.module("@/src/features/business/components/BusinessGridCard", () => ({ BusinessGridCard: empty }));
-mock.module("@/src/features/home/components/CategoryChips", () => ({ ChipsBar: empty }));
-mock.module("@/src/features/offers/components/OfferGridCard", () => ({ OfferGridCard: empty }));
-mock.module("@/src/features/offers/components/OfferFiltersSheet", () => ({ OfferFiltersSheet: empty }));
-const { default: AllBusinessesScreen } = await import("../../../../app/all-businesses");
+mock.module("@/src/features/auth/store", () => ({
+	useAuthStore: () => ({ id: "consumer" }),
+}));
+mock.module("@/src/features/profile/hooks", () => ({
+	usePreferences: () => ({}),
+}));
+mock.module("@/src/features/business/components/BusinessGridCard", () => ({
+	BusinessGridCard: empty,
+}));
+mock.module("@/src/features/home/components/CategoryChips", () => ({
+	ChipsBar: empty,
+}));
+mock.module("@/src/features/offers/components/OfferGridCard", () => ({
+	OfferGridCard: empty,
+}));
+mock.module("@/src/features/offers/components/OfferFiltersSheet", () => ({
+	OfferFiltersSheet: empty,
+}));
+const { default: AllBusinessesScreen } = await import(
+	"../../../../app/all-businesses"
+);
 const { default: AllOffersScreen } = await import("../../../../app/all-offers");
 
 for (const Screen of [AllBusinessesScreen, AllOffersScreen]) {
@@ -61,7 +91,10 @@ for (const Screen of [AllBusinessesScreen, AllOffersScreen]) {
 				views.length = 0;
 				lists.length = 0;
 				renderToStaticMarkup(createElement(Screen));
-				const headers = views.filter((style) => style.paddingHorizontal === spacing.xl && style.gap === spacing.md);
+				const headers = views.filter(
+					(style) =>
+						style.paddingHorizontal === spacing.xl && style.gap === spacing.md,
+				);
 				expect(headers).toHaveLength(1);
 				expect(headers[0].paddingTop).toBe(spacing.xl + inset);
 				expect(views[0].paddingTop ?? 0).toBe(0);

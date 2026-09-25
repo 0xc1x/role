@@ -254,13 +254,80 @@ export const ${upper}_MONO_SVG = \`<svg xmlns="http://www.w3.org/2000/svg" viewB
 `;
 }
 
+/** Admin favicon file: white R on the dark rounded tile (no sparkles, no
+ *  cream) — reads on light and dark browser tabs, like the navbar mark. */
+function adminFaviconFile(iconT, mark, tokens) {
+	const tile = [...iconT.inner.matchAll(/<path\b[^>]*\/>/g)]
+		.map((m) => m[0])
+		.find(
+			(t) =>
+				t.includes(`fill="${tokens.BRAND_PRIMARY_DARK}"`) &&
+				(t.match(/d="([^"]+)"/) || [])[1]?.length > 1000,
+		);
+	if (!tile) throw new Error("admin favicon: dark tile path not found");
+	return (
+		`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="${iconT.viewBox}">\n` +
+		`${tile}\n<path d="${mark.d}" fill="${tokens.BRAND_PAPER}"/>\n</svg>\n`
+	);
+}
+
+/** Admin favicon artwork: full mark (R + sparkles) with the R in paper,
+ *  like the reference. Explicit dimensions so rasterizers size it
+ *  deterministically. Pass a square `size` for ICO entries (meet-fit);
+ *  omit it for the .svg file. */
+function markFaviconFile(markFull, tokens, size = null) {
+	const [x, y, w, h] = markFull.viewBox.split(" ").map(Number);
+	const dims =
+		size == null ? `width="${w}" height="${h}"` : `width="${size}" height="${size}"`;
+	const inner = markFull.inner
+		.split('fill="currentColor"')
+		.join(`fill="${tokens.BRAND_PAPER}"`);
+	return (
+		`<svg xmlns="http://www.w3.org/2000/svg" ${dims} viewBox="${markFull.viewBox}">\n` +
+		`${inner}</svg>\n`
+	);
+}
+
 function writeOrCheck(abs, content) {
-	const prev = existsSync(abs) ? readFileSync(abs, "utf8") : null;
-	if (prev === content) return "ok";
+	const prev = existsSync(abs) ? readFileSync(abs, isBuffer(content) ? null : "utf8") : null;
+	const same = isBuffer(content)
+		? prev !== null && Buffer.compare(prev, content) === 0
+		: prev === content;
+	if (same) return "ok";
 	if (CHECK) throw new Error(`Outdated: ${abs} (run bun run brand:sync)`);
 	mkdirSync(dirname(abs), { recursive: true });
 	writeFileSync(abs, content);
 	return prev === null ? "created" : "updated";
+}
+
+function isBuffer(v) {
+	return typeof Buffer !== "undefined" && Buffer.isBuffer(v);
+}
+
+/**
+ * Minimal ICO encoder (PNG-compressed entries, Vista+): all modern browsers
+ * accept it, no dependency needed. sharp cannot write ICO.
+ */
+function encodeIco(entries) {
+	const header = Buffer.alloc(6);
+	header.writeUInt16LE(0, 0);
+	header.writeUInt16LE(1, 2);
+	header.writeUInt16LE(entries.length, 4);
+	let offset = 6 + 16 * entries.length;
+	const dirs = entries.map(({ size, png }) => {
+		const dir = Buffer.alloc(16);
+		dir.writeUInt8(size >= 256 ? 0 : size, 0);
+		dir.writeUInt8(size >= 256 ? 0 : size, 1);
+		dir.writeUInt8(0, 2);
+		dir.writeUInt8(0, 3);
+		dir.writeUInt16LE(1, 4);
+		dir.writeUInt16LE(32, 6);
+		dir.writeUInt32LE(png.length, 8);
+		dir.writeUInt32LE(offset, 12);
+		offset += png.length;
+		return dir;
+	});
+	return Buffer.concat([header, ...dirs, ...entries.map((e) => e.png)]);
 }
 
 function bumpVersion(rel, version) {
@@ -313,8 +380,9 @@ results.push([
 ]);
 
 results.push([
+	// Admin favicon: full mark (R + sparkles) with the R in paper.
 	"apps/admin/public/icon.svg",
-	writeOrCheck(join(root, "apps/admin/public/icon.svg"), iconT.file),
+	writeOrCheck(join(root, "apps/admin/public/icon.svg"), markFaviconFile(markFull, tokens)),
 ]);
 results.push([
 	"apps/landing/public/icon.svg",
@@ -398,8 +466,9 @@ if (WANT_PNG && !CHECK) {
 			["apps/mobile/assets/favicon.png", 64, iconT.file, null],
 			["apps/mobile/assets/splash-icon.png", 1024, iconT.file, null],
 			["apps/mobile/assets/android-icon-foreground.png", 1024, iconT.file, null],
-			// iOS ignores transparency (renders it black): flatten on cream.
-			["apps/landing/public/apple-touch-icon.png", 180, iconT.file, tokens.BRAND_CREAM],
+			// Apple touch: transparent like the SVG (iOS composites transparency
+			// over black — no light margin by design).
+			["apps/landing/public/apple-touch-icon.png", 180, iconT.file, null],
 		];
 		// PWA icons: transparent regulars; maskables + apple-touch flatten on
 		// dark (masking and iOS need predictable backgrounds).
@@ -426,6 +495,36 @@ if (WANT_PNG && !CHECK) {
 			.png()
 			.toFile(join(root, "apps/mobile/assets/android-icon-background.png"));
 		results.push(["apps/mobile/assets/android-icon-background.png", "updated"]);
+		// Legacy favicon.ico (referenced as fallback + PWA manifest): pack
+		// 16/32/48 PNG renders, no dependency. Admin uses the lone paper R
+		// (like the navbar mark); landing and mobile use the full tile.
+		{
+			async function icoFrom(getSvg) {
+				const entries = [];
+				for (const size of [16, 32, 48]) {
+					const png = await sharp(Buffer.from(getSvg(size)))
+						.resize(size, size)
+						.png()
+						.toBuffer();
+					entries.push({ size, png });
+				}
+				return encodeIco(entries);
+			}
+			results.push([
+				"apps/admin/public/favicon.ico",
+				writeOrCheck(
+					join(root, "apps/admin/public/favicon.ico"),
+					await icoFrom((size) => markFaviconFile(markFull, tokens, size)),
+				),
+			]);
+			const tileIco = await icoFrom(() => iconT.file);
+			for (const rel of [
+				"apps/landing/public/favicon.ico",
+				"apps/mobile/public/favicon.ico",
+			]) {
+				results.push([rel, writeOrCheck(join(root, rel), tileIco)]);
+			}
+		}
 		// iOS PWA startup images: dark full-screen canvas + centered white
 		// wordmark at 60% width (sizes mirror the link tags in index.html).
 		{

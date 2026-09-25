@@ -23,6 +23,7 @@ export const orders = pgTable('orders', {
     .notNull()
     .references(() => businesses.id, { onDelete: 'no action' }),
   order_number: text('order_number').notNull().unique(),
+  idempotency_key: text('idempotency_key'),
   status: orderStatusEnum('status').notNull().default('pending'),
   price: numeric('price', { precision: 12, scale: 2 }).notNull(),
   original_price: numeric('original_price', {
@@ -57,7 +58,9 @@ export const orderEvents = pgTable('order_events', {
     .references(() => orders.id, { onDelete: 'no action' }),
   status: orderStatusEnum('status').notNull(),
   previous_status: orderStatusEnum('previous_status'),
-  changed_by: uuid('changed_by').references(() => profiles.id, { onDelete: 'no action' }),
+  changed_by: uuid('changed_by').references(() => profiles.id, {
+    onDelete: 'no action',
+  }),
   reason: text('reason'),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
   created_at: timestamp('created_at', { withTimezone: true })

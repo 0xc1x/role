@@ -285,10 +285,7 @@ export class EmailMarketingController {
         body.template_id !== undefined
           ? body.template_id
           : (current.template_id ?? null);
-      await this.campaignsService.assertTemplateForChannel(
-        channel,
-        templateId,
-      );
+      await this.campaignsService.assertTemplateForChannel(channel, templateId);
     }
     return this.campaignsService
       .updateCampaign(id, {
@@ -367,15 +364,16 @@ export class EmailMarketingController {
     @Query(new ZodValidationPipe(ListSendsQuerySchema)) q: ListSendsQuery,
   ) {
     return this.campaignsService.listAllSends(q).then(({ rows, total }) => ({
-        data: rows.map((r) => EmailMarketingMapper.toSendDto(r)),
-        meta: { page: q.page, limit: q.limit, total },
-      })) as Promise<never>;
+      data: rows.map((r) => EmailMarketingMapper.toSendDto(r)),
+      meta: { page: q.page, limit: q.limit, total },
+    })) as Promise<never>;
   }
 
   @Patch('sends/:id')
   updateSend(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(UpdateEmailSendSchema)) body: UpdateEmailSendDto,
+    @Body(new ZodValidationPipe(UpdateEmailSendSchema))
+    body: UpdateEmailSendDto,
   ) {
     // El drizzle insert espera Date para los *_at; el contrato zod viaja en ISO.
     const values = Object.fromEntries(

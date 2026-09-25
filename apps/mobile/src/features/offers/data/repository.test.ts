@@ -18,11 +18,11 @@ mock.module("@/src/core/supabase/client", () => ({
 	},
 }));
 
-import { supabase } from "@/src/core/supabase/client";
-import {
-	expiringSoonWindowHours,
-	offersRepository,
-} from "@/src/features/offers/data/repository";
+// El mock debe registrarse antes de cargar el repositorio para evitar importar el runtime nativo.
+const { supabase } = await import("@/src/core/supabase/client");
+const { expiringSoonWindowHours, offersRepository } = await import(
+	"@/src/features/offers/data/repository"
+);
 
 const rpcMock = supabase.rpc as unknown as Mock<
 	(...args: never[]) => Promise<{ data: unknown; error: unknown }>
@@ -40,7 +40,9 @@ function rpcError() {
 }
 
 /** Fila con el shape que devuelve active_offers_near (embeds jsonb). */
-function offerRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function offerRow(
+	overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
 	return {
 		id: "offer-1",
 		business_id: "biz-1",
@@ -275,22 +277,43 @@ describe("offersRepository (RPC activo)", () => {
 
 	test("propaga el error del rpc", async () => {
 		rpcError();
-		await expect(
-			offersRepository.getPopularOffers(point, 10),
-		).rejects.toThrow("boom");
+		await expect(offersRepository.getPopularOffers(point, 10)).rejects.toThrow(
+			"boom",
+		);
 	});
 });
 
 describe("agregaciones server-side (RPC)", () => {
 	test("getCategoryStats mapea counts y ordena desc", async () => {
 		rpcOk([
-			{ id: "cat-1", name: "Panadería", slug: "panaderia", emoji: "🥐", image_url: "u1", active: true, active_count: 3 },
-			{ id: "cat-2", name: "Café", slug: "cafe", emoji: "☕", image_url: "u2", active: true, active_count: 7 },
+			{
+				id: "cat-1",
+				name: "Panadería",
+				slug: "panaderia",
+				emoji: "🥐",
+				image_url: "u1",
+				active: true,
+				active_count: 3,
+			},
+			{
+				id: "cat-2",
+				name: "Café",
+				slug: "cafe",
+				emoji: "☕",
+				image_url: "u2",
+				active: true,
+				active_count: 7,
+			},
 		]);
 		const stats = await offersRepository.getCategoryStats();
 		expect(rpcMock).toHaveBeenCalledWith("active_offer_category_counts");
 		expect(stats.map((s) => s.id)).toEqual(["cat-2", "cat-1"]);
-		expect(stats[0]).toMatchObject({ name: "Café", count: 7, emoji: "☕", imageUrl: "u2" });
+		expect(stats[0]).toMatchObject({
+			name: "Café",
+			count: 7,
+			emoji: "☕",
+			imageUrl: "u2",
+		});
 	});
 
 	test("getPopularAreas pasa el punto y radio al rpc", async () => {

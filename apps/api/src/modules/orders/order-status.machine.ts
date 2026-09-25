@@ -1,8 +1,5 @@
 import type { AppRole, OrderStatus } from '@0xc1x/role-commons';
 
-/** Source of a status change event (stored in order_events.metadata). */
-export type OrderEventSource = 'api' | 'cron' | 'admin';
-
 /** Statuses that still hold reserved stock (must restock on cancel/expire). */
 export const STOCK_HOLDING_STATUSES: readonly OrderStatus[] = [
   'pending',

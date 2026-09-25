@@ -30,7 +30,11 @@ export function ProfileAvatar({ profile }: { profile: UserProfile }) {
 			) : null}
 			<AvatarFallback className="bg-primary">
 				<AppText
-					style={{ fontSize: 28, fontWeight: "700", color: colors.primaryForeground }}
+					style={{
+						fontSize: 28,
+						fontWeight: "700",
+						color: colors.primaryForeground,
+					}}
 				>
 					{initialsOf(profile)}
 				</AppText>
@@ -69,40 +73,45 @@ export function ProfileHeader({ profile }: { profile: UserProfile }) {
 					<AppText variant="h3" weight="bold">
 						{profile.fullName ?? profile.email}
 					</AppText>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{profile.email}
 					</AppText>
 				</View>
 			</View>
 
-		{statsLoading ? (
-			<View style={styles.statsRow}>
-				{[0, 1, 2].map((i) => (
-					<View
-						key={`profile-stat-skeleton-${i}`}
-						style={[styles.statCard, { backgroundColor: colors.card }]}
-					>
-						<Skeleton style={styles.statValueSkeleton} />
-						<Skeleton style={styles.statLabelSkeleton} />
-					</View>
-				))}
-			</View>
-		) : (
-			<View style={styles.statsRow}>
-				<StatCard
-					value={formatMoney(Math.round((stats?.total_saved_cents ?? 0) / 100))}
-					label={strings.profile.totalSaved}
-				/>
-				<StatCard
-					value={formatCount(stats?.total_orders ?? 0)}
-					label={strings.profile.totalOrders}
-				/>
-				<StatCard
-					value={`${(stats?.co2_saved_kg ?? 0).toFixed(1)} kg`}
-					label={strings.profile.co2Saved}
-				/>
-			</View>
-		)}
+			{statsLoading ? (
+				<View style={styles.statsRow}>
+					{[0, 1, 2].map((i) => (
+						<View
+							key={`profile-stat-skeleton-${i}`}
+							style={[styles.statCard, { backgroundColor: colors.card }]}
+						>
+							<Skeleton style={styles.statValueSkeleton} />
+							<Skeleton style={styles.statLabelSkeleton} />
+						</View>
+					))}
+				</View>
+			) : (
+				<View style={styles.statsRow}>
+					<StatCard
+						value={formatMoney(
+							Math.round((stats?.total_saved_cents ?? 0) / 100),
+						)}
+						label={strings.profile.totalSaved}
+					/>
+					<StatCard
+						value={formatCount(stats?.total_orders ?? 0)}
+						label={strings.profile.totalOrders}
+					/>
+					<StatCard
+						value={`${(stats?.co2_saved_kg ?? 0).toFixed(1)} kg`}
+						label={strings.profile.co2Saved}
+					/>
+				</View>
+			)}
 		</View>
 	);
 }

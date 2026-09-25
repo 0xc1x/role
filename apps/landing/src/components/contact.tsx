@@ -7,7 +7,7 @@ import {
 } from "@0xc1x/role-commons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import type { ZodError } from "zod";
 import { Eyebrow, Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,8 @@ const ROLES: { id: ContactRole; label: string }[] = [
 	{ id: "negocio", label: "Tengo un local" },
 	{ id: "persona", label: "Quiero Rolé" },
 ];
+
+const OTHER_CITY = "Otra";
 
 const COPY: Record<ContactRole, { title: string; body: string }> = {
 	negocio: {
@@ -72,10 +74,16 @@ export function Contact() {
 	const [done, setDone] = useState<string | null>(null);
 
 	const { data: configMap } = useQuery(appConfigQueryOptions);
-	const cities = getConfigStringArray(
-		configMap,
-		"contact.cities",
-		CONTACT_CITIES_FALLBACK,
+	const cities = useMemo(
+		() => [
+			...getConfigStringArray(
+				configMap,
+				"contact.cities",
+				CONTACT_CITIES_FALLBACK,
+			).filter((c) => c !== OTHER_CITY),
+			OTHER_CITY,
+		],
+		[configMap],
 	);
 
 	// react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation -- fire-and-forget signup, result handled via localStorage + local state, no cached query goes stale
@@ -101,7 +109,7 @@ export function Contact() {
 			email: email.trim().toLowerCase(),
 			role,
 			city,
-			...(city === "Otra" ? { city_other: cityOther.trim() } : {}),
+			...(city === OTHER_CITY ? { city_other: cityOther.trim() } : {}),
 		});
 		if (!parsed.success) {
 			setError(contactErrorMessage(parsed.error));
@@ -267,7 +275,7 @@ export function Contact() {
 								</Select>
 							</div>
 
-							{city === "Otra" ? (
+							{city === OTHER_CITY ? (
 								<div className="flex flex-col gap-1.5">
 									<Label
 										htmlFor="contact-city-other"

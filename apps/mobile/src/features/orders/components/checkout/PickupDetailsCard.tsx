@@ -31,32 +31,37 @@ export function PickupDetailsCard({ offer, location }: PickupDetailsCardProps) {
 					backgroundColor: scheme === "dark" ? colors.card : colors.background,
 					borderColor: colors.borderSolid,
 				},
-			]}>
+			]}
+		>
 			<CardHeader>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText
+					variant="h4"
+					weight="bold"
+					style={{ flex: 1, color: colors.mutedForeground }}
+				>
 					{strings.checkout.pickupDetailsTitle}
 				</AppText>
 			</CardHeader>
 			<CardContent style={styles.body}>
-			<InfoRow
-				icon={MapPin}
-				label={strings.checkout.pickupAddressLabel}
-				value={location?.address ?? strings.businessProfile.notAvailable}
-			/>
-			<View
-				style={[
-					styles.windowBox,
-					{
-						backgroundColor: colors.surfaceSuccess,
-						borderColor: colors.surfaceSuccessBorder,
-					},
-				]}
-			>
-				<Clock size={18} color={colors.successDark} />
-				<AppText style={[styles.windowText, { color: colors.successDark }]}>
-					{window}
-				</AppText>
-			</View>
+				<InfoRow
+					icon={MapPin}
+					label={strings.checkout.pickupAddressLabel}
+					value={location?.address ?? strings.businessProfile.notAvailable}
+				/>
+				<View
+					style={[
+						styles.windowBox,
+						{
+							backgroundColor: colors.surfaceSuccess,
+							borderColor: colors.surfaceSuccessBorder,
+						},
+					]}
+				>
+					<Clock size={18} color={colors.successDark} />
+					<AppText style={[styles.windowText, { color: colors.successDark }]}>
+						{window}
+					</AppText>
+				</View>
 			</CardContent>
 		</Card>
 	);

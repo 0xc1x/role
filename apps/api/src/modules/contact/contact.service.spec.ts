@@ -8,7 +8,7 @@ jest.mock('resend', () => ({
   })),
 }));
 
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { CreateContactDto } from '@0xc1x/role-commons';
@@ -46,6 +46,16 @@ describe('ContactService', () => {
     message: 'Hola',
   };
 
+  function setContactCities(cities: string[] | null) {
+    appConfigRepo.findByKey.mockImplementation(async (key: string) => {
+      if (key === 'contact.cities') return cities ? { value: cities } : null;
+      if (key === 'contact.hola_email') return null;
+      if (key === 'contact.negocios_email') return null;
+      if (key === 'email.from') return null;
+      return null;
+    });
+  }
+
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
@@ -70,25 +80,46 @@ describe('ContactService', () => {
     service = module.get(ContactService);
     jest.clearAllMocks();
 
-    appConfigRepo.findByKey.mockImplementation(async (key: string) => {
-      if (key === 'contact.cities') return null;
-      if (key === 'contact.hola_email') return null;
-      if (key === 'contact.negocios_email') return null;
-      if (key === 'email.from') return null;
-      return null;
-    });
+    setContactCities(null);
     emailRepo.listTemplates.mockResolvedValue({ rows: [] });
     storeRepo.insert.mockResolvedValue({ id: 'entry-1' });
-    storeRepo.updateStatus.mockResolvedValue({ id: 'entry-1', status: 'PROCESADO' });
+    storeRepo.updateStatus.mockResolvedValue({
+      id: 'entry-1',
+      status: 'PROCESADO',
+    });
   });
 
   it('rejects city not in allowed list', async () => {
+    setContactCities(['Quito', 'Manta']);
+
     await expect(
       service.handle({ ...baseDto, city: 'Ambato' }),
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('uses city_other when city is Otra', async () => {
+  it('accepts Otra when the configured list excludes it and trims city_other', async () => {
+    setContactCities(['Quito', 'Manta']);
+
+    await service.handle({
+      ...baseDto,
+      city: 'Otra',
+      city_other: '  Ambato  ',
+    });
+
+    expect(storeRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: expect.objectContaining({
+          city: 'Ambato',
+          city_raw: 'Otra',
+          city_other: 'Ambato',
+        }),
+      }),
+    );
+  });
+
+  it('accepts Otra when the configured list still contains it', async () => {
+    setContactCities(['Quito', 'Manta', 'Otra']);
+
     await service.handle({
       ...baseDto,
       city: 'Otra',
@@ -109,7 +140,8 @@ describe('ContactService', () => {
     expect(storeRepo.updateStatus).toHaveBeenCalledWith('entry-1', 'PROCESADO');
   });
 
-  it('queda PENDIENTE y devuelve ok cuando el envío falla (no lanza)', async () => {
+  it('queda PENDIENTE y devuelve ok sin loggear el error bruto', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
     const deliver = jest
       .spyOn(service as unknown as { deliver: () => Promise<void> }, 'deliver')
       .mockRejectedValue(new Error('SMTP down'));
@@ -122,10 +154,12 @@ describe('ContactService', () => {
     expect(storeRepo.updateStatus).toHaveBeenCalledWith(
       'entry-1',
       'PENDIENTE',
-      expect.objectContaining({ error: 'SMTP down' }),
+      expect.objectContaining({ error: 'Error' }),
     );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('SMTP down');
 
     deliver.mockRestore();
+    warn.mockRestore();
   });
 
   it('escapes HTML in inline fallback template', async () => {
@@ -153,9 +187,15 @@ describe('ContactService', () => {
   describe('ContactService.findContactTemplate', () => {
     test('usa plantilla contacto-notificacion cuando existe', async () => {
       emailRepo.listTemplates.mockResolvedValue({
-        rows: [{ id: 't1', name: 'contacto-notificacion' }, { id: 't2', name: 'otra' }],
+        rows: [
+          { id: 't1', name: 'contacto-notificacion' },
+          { id: 't2', name: 'otra' },
+        ],
       });
-      emailRepo.findTemplateById.mockResolvedValue({ id: 't1', subject: 'Hola' });
+      emailRepo.findTemplateById.mockResolvedValue({
+        id: 't1',
+        subject: 'Hola',
+      });
 
       await service.handle(baseDto);
 

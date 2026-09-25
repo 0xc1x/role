@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import { OrdersService } from './orders.service';
 
@@ -24,25 +25,26 @@ export class OrdersExpirationJob {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleExpireStaleOrders(): Promise<void> {
-    if (
-      !this.config.get('ENABLE_JOBS_ORDERS_EXPIRATION', { infer: true })
-    )
+    if (!this.config.get('ENABLE_JOBS_ORDERS_EXPIRATION', { infer: true })) {
+      this.logger.debug({
+        event: 'orders_expiration_disabled',
+        intervalSeconds: 60,
+      });
       return;
+    }
     if (this.running) {
-      this.logger.debug('Expire job already running; skipping tick');
+      this.logger.warn({ event: 'orders_expiration_overlap_skipped' });
       return;
     }
     this.running = true;
     try {
       const { expired } = await this.ordersService.expireStaleOrders();
-      if (expired > 0) {
-        this.logger.log(`Expired ${expired} order(s)`);
-      }
+      this.logger.log({ event: 'orders_expiration_completed', expired });
     } catch (err) {
-      this.logger.error(
-        'Failed to expire stale orders',
-        err instanceof Error ? err.stack : String(err),
-      );
+      this.logger.error({
+        event: 'orders_expiration_failed',
+        ...safeErrorFields(err),
+      });
     } finally {
       this.running = false;
     }

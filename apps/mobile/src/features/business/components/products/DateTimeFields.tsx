@@ -1,6 +1,8 @@
 import { createElement, useRef, useState, type ChangeEvent } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+	type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { Calendar, Clock } from "lucide-react-native";
 
 import { AppText } from "@/src/core/ui";
@@ -37,11 +39,15 @@ export function DateTimeField({
 			: `${pad(value.getHours())}:${pad(value.getMinutes())}`;
 		return (
 			<View style={[styles.field, { gap: 6 }]}>
-				{ label && 
-					<AppText variant="labelSmall" weight="semiBold" style={{ color: colors.mutedForeground }}>
+				{label && (
+					<AppText
+						variant="labelSmall"
+						weight="semiBold"
+						style={{ color: colors.mutedForeground }}
+					>
 						{label}
 					</AppText>
-				}
+				)}
 				<Pressable
 					onPress={() => {
 						const input = webInputRef.current;
@@ -74,7 +80,9 @@ export function DateTimeField({
 						const raw = e.target.value;
 						// Preserve the complementary half: date edits keep the
 						// current time, time edits keep the current date.
-						const next = isDate ? parseDateInput(raw, value) : parseTimeInput(raw, value);
+						const next = isDate
+							? parseDateInput(raw, value)
+							: parseTimeInput(raw, value);
 						if (next) onChange(next);
 					},
 					style: {
@@ -95,17 +103,21 @@ export function DateTimeField({
 
 	return (
 		<View style={styles.field}>
-			{label && 
-				<AppText variant="labelSmall" weight="semiBold" style={{ color: colors.mutedForeground }}>
+			{label && (
+				<AppText
+					variant="labelSmall"
+					weight="semiBold"
+					style={{ color: colors.mutedForeground }}
+				>
 					{label}
 				</AppText>
-			}
+			)}
 			<Button
 				variant={"outline"}
 				size={"sm"}
 				onPress={() => setShow(true)}
 				accessibilityRole="button"
-				style={  [
+				style={[
 					styles.inputRow,
 					{
 						backgroundColor: colors.inputBackground,

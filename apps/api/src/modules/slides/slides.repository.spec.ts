@@ -44,6 +44,88 @@ describe('SlidesRepository (DB real)', () => {
     expect(search.rows.map((r) => r.title)).toContain('Bienvenido');
   });
 
+  test('availableAt filtra la ventana temporal y el total coincide con las filas', async () => {
+    const now = new Date();
+    const inside = await repo.insert(ctx.db, {
+      title: 'Ventana Abierta',
+      caption: 'x',
+      cta_label: 'Ver',
+      type: 'info',
+      priority: 1,
+      active: true,
+      start_at: new Date(now.getTime() - 60 * 60_000),
+      end_at: new Date(now.getTime() + 60 * 60_000),
+    });
+    const notStarted = await repo.insert(ctx.db, {
+      title: 'Ventana Futura',
+      caption: 'x',
+      cta_label: 'Ver',
+      type: 'info',
+      priority: 1,
+      active: true,
+      start_at: new Date(now.getTime() + 60 * 60_000),
+      end_at: new Date(now.getTime() + 120 * 60_000),
+    });
+    const alreadyEnded = await repo.insert(ctx.db, {
+      title: 'Ventana Pasada',
+      caption: 'x',
+      cta_label: 'Ver',
+      type: 'info',
+      priority: 1,
+      active: true,
+      start_at: new Date(now.getTime() - 120 * 60_000),
+      end_at: new Date(now.getTime() - 60 * 60_000),
+    });
+    const noWindow = await repo.insert(ctx.db, {
+      title: 'Sin Ventana',
+      caption: 'x',
+      cta_label: 'Ver',
+      type: 'info',
+      priority: 1,
+      active: true,
+    });
+
+    const result = await repo.list({
+      page: 1,
+      limit: 50,
+      active: true,
+      availableAt: now,
+    });
+    const ids = result.rows.map((r) => r.id);
+
+    expect(ids).toContain(inside.id);
+    expect(ids).toContain(noWindow.id);
+    expect(ids).not.toContain(notStarted.id);
+    expect(ids).not.toContain(alreadyEnded.id);
+    // Regresión: antes el listado público ignoraba la ventana y además el
+    // total incluía filas que luego no se devolvían.
+    expect(result.total).toBe(result.rows.length);
+  });
+
+  test('sin availableAt la ventana no restringe (comportamiento administrativo)', async () => {
+    const now = new Date();
+    const future = await repo.insert(ctx.db, {
+      title: 'Admin Ve Todas',
+      caption: 'x',
+      cta_label: 'Ver',
+      type: 'info',
+      priority: 1,
+      active: true,
+      start_at: new Date(now.getTime() + 60 * 60_000),
+    });
+
+    const admin = await repo.list({ page: 1, limit: 50, active: true });
+    const publicList = await repo.list({
+      page: 1,
+      limit: 50,
+      active: true,
+      availableAt: now,
+    });
+
+    expect(admin.rows.map((r) => r.id)).toContain(future.id);
+    expect(publicList.rows.map((r) => r.id)).not.toContain(future.id);
+  });
+
   test('update y softDelete', async () => {
     const row = await repo.insert(ctx.db, {
       title: 'Tmp',

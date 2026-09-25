@@ -12,17 +12,15 @@ export async function upsertDeviceToken(
 	token: string,
 	platform: DeviceTokenPlatform,
 ): Promise<void> {
-	const { error } = await supabase
-		.from("device_tokens")
-		.upsert(
-			{
-				user_id: userId,
-				token,
-				platform,
-				is_active: true,
-			},
-			{ onConflict: "token" },
-		);
+	const { error } = await supabase.from("device_tokens").upsert(
+		{
+			user_id: userId,
+			token,
+			platform,
+			is_active: true,
+		},
+		{ onConflict: "token" },
+	);
 	if (error) throw error;
 }
 

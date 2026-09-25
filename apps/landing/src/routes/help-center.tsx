@@ -83,7 +83,7 @@ const CATEGORIES = [
 			},
 			{
 				q: "¿Cómo gestiono mis datos?",
-				a: "Desde tu perfil en la app puedes actualizar tu información, gestionar preferencias de notificaciones y eliminar tu cuenta cuando quieras. Consulta nuestra política de privacidad para más detalle.",
+				a: "Desde tu perfil en la app puedes actualizar tu información y gestionar preferencias de notificaciones. Para solicitar acceso, corrección, portabilidad o supresión de datos, escribe al canal de privacidad indicado en nuestra política.",
 			},
 		],
 	},

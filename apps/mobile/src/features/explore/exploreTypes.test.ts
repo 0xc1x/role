@@ -12,18 +12,24 @@ describe("hasActiveExploreFilters", () => {
 	});
 
 	it("detecta categoría, precio máximo y distancia máxima", () => {
-		expect(hasActiveExploreFilters({ ...emptyExploreFilters, category: "c1" })).toBe(true);
-		expect(hasActiveExploreFilters({ ...emptyExploreFilters, maxPrice: 5 })).toBe(true);
+		expect(
+			hasActiveExploreFilters({ ...emptyExploreFilters, category: "c1" }),
+		).toBe(true);
+		expect(
+			hasActiveExploreFilters({ ...emptyExploreFilters, maxPrice: 5 }),
+		).toBe(true);
 		expect(
 			hasActiveExploreFilters({ ...emptyExploreFilters, maxDistanceKm: 5 }),
 		).toBe(true);
 	});
 
 	it("detecta la búsqueda solo si tiene texto", () => {
-		expect(hasActiveExploreFilters({ ...emptyExploreFilters, searchQuery: "" })).toBe(false);
-		expect(hasActiveExploreFilters({ ...emptyExploreFilters, searchQuery: "pizza" })).toBe(
-			true,
-		);
+		expect(
+			hasActiveExploreFilters({ ...emptyExploreFilters, searchQuery: "" }),
+		).toBe(false);
+		expect(
+			hasActiveExploreFilters({ ...emptyExploreFilters, searchQuery: "pizza" }),
+		).toBe(true);
 	});
 });
 
@@ -33,7 +39,11 @@ describe("exploreFilterSummary", () => {
 	});
 
 	it("resuelve el nombre de categoría si se pasa", () => {
-		const filters = { ...emptyExploreFilters, category: "c1", maxDistanceKm: 5 };
+		const filters = {
+			...emptyExploreFilters,
+			category: "c1",
+			maxDistanceKm: 5,
+		};
 		expect(exploreFilterSummary(filters, "Panadería")).toEqual([
 			"Panadería",
 			"5 km",

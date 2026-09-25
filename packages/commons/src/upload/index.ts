@@ -1,1 +1,1 @@
-export * from './schemas/upload.schema';
+export * from "./schemas/upload.schema";

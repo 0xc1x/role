@@ -1,11 +1,11 @@
-import type { z } from 'zod';
+import type { z } from "zod";
 import type {
-  CreatePaymentMethodSchema,
-  PatchPaymentMethodSchema,
-  PaymentMethodSchema,
-  UpdatePaymentMethodSchema,
-  ViewPaymentMethodSchema,
-} from '../schemas/payment-method.schema';
+	CreatePaymentMethodSchema,
+	PatchPaymentMethodSchema,
+	PaymentMethodSchema,
+	UpdatePaymentMethodSchema,
+	ViewPaymentMethodSchema,
+} from "../schemas/payment-method.schema";
 
 /** Wire DTO for a saved payment method (matches {@link PaymentMethodSchema}). */
 export type PaymentMethodDto = z.infer<typeof PaymentMethodSchema>;

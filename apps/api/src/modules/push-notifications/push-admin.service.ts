@@ -1,5 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import type { CreatePushSendDto, PushSendResult, PushTestDto } from '@0xc1x/role-commons';
+import type {
+  CreatePushSendDto,
+  PushSendResult,
+  PushTestDto,
+} from '@0xc1x/role-commons';
 import { RecipientsService } from '../email-marketing/recipients.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -59,12 +63,19 @@ export class PushAdminService {
       excludeUserIds: input.exclude_user_ids,
     });
     if (resolved.length === 0) {
-      return this.record(input, null, adminUserId, { targeted: 0, sent: 0, failed: 0 });
+      return this.record(input, null, adminUserId, {
+        targeted: 0,
+        sent: 0,
+        failed: 0,
+      });
     }
 
     const enabled = await this.pushRepo.filterPushEnabled(resolved);
     const names = new Map(
-      (await this.pushRepo.findProfileNames(enabled)).map((p) => [p.user_id, p.full_name]),
+      (await this.pushRepo.findProfileNames(enabled)).map((p) => [
+        p.user_id,
+        p.full_name,
+      ]),
     );
 
     const payload = {
@@ -76,7 +87,8 @@ export class PushAdminService {
       enabled,
       payload,
       {
-        render: (userId) => this.renderPayload(payload, names.get(userId) ?? null),
+        render: (userId) =>
+          this.renderPayload(payload, names.get(userId) ?? null),
       },
     );
     return this.record(input, null, adminUserId, report);
@@ -87,11 +99,16 @@ export class PushAdminService {
    * preferencias ni quiet hours, y sin registrar en el historial.
    * Renderiza `{{nombre}}` igual que el envío manual (las plantillas lo usan).
    */
-  async test(input: PushTestDto & { data?: Record<string, unknown> }): Promise<PushSendResult> {
+  async test(
+    input: PushTestDto & { data?: Record<string, unknown> },
+  ): Promise<PushSendResult> {
     const payload = {
       title: `[TEST] ${input.title}`,
       body: input.body,
-      data: toPayloadData(input.type, (input as { data?: Record<string, unknown> }).data),
+      data: toPayloadData(
+        input.type,
+        (input as { data?: Record<string, unknown> }).data,
+      ),
     };
     // Regex local (sin /g): NAME_VARIABLE tiene /gi y .test() avanzaría su lastIndex.
     const hasNameVariable = /\{\{\s*nombre\s*\}\}/i.test(
@@ -105,24 +122,31 @@ export class PushAdminService {
           ])
         : [],
     );
-    const report = await this.notificationsService.sendWithReport(input.user_ids, payload, {
-      skipFilters: true,
-      render: hasNameVariable
-        ? (userId) => this.renderPayload(payload, names.get(userId) ?? null)
-        : undefined,
-    });
+    const report = await this.notificationsService.sendWithReport(
+      input.user_ids,
+      payload,
+      {
+        skipFilters: true,
+        render: hasNameVariable
+          ? (userId) => this.renderPayload(payload, names.get(userId) ?? null)
+          : undefined,
+      },
+    );
     return { id: null, ...report };
   }
 
   /** Envío de prueba del contenido de una plantilla. */
-  async testTemplate(templateId: string, input: PushTestDto): Promise<PushSendResult> {
+  async testTemplate(
+    templateId: string,
+    input: PushTestDto,
+  ): Promise<PushSendResult> {
     const template = await this.pushRepo.findTemplateById(templateId);
     if (!template) throw new BadRequestException('Plantilla no encontrada');
     return this.test({
       ...input,
       title: template.title,
       body: template.body,
-      data: (template.data as Record<string, unknown>) ?? undefined,
+      data: template.data ?? undefined,
     });
   }
 
@@ -186,7 +210,8 @@ export class PushAdminService {
     const status =
       report.sent === 0 && report.failed > 0
         ? 'failed'
-        : report.failed > 0 || (report.targeted > 0 && report.sent < report.targeted)
+        : report.failed > 0 ||
+            (report.targeted > 0 && report.sent < report.targeted)
           ? 'partial'
           : 'sent';
     const [row] = await this.pushRepo.insertNotification({

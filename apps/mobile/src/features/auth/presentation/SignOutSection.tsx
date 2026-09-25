@@ -33,17 +33,16 @@ export function SignOutSection({ style }: { style?: object }) {
 		<View style={[styles.wrap, style]}>
 			<AlertDialog open={open} onOpenChange={setOpen}>
 				<AlertDialogTrigger asChild>
-					<Button
-						variant="destructive"
-						onPress={() => setOpen(true)}
-					>
+					<Button variant="destructive" onPress={() => setOpen(true)}>
 						{strings.profile.signOutItem}
 					</Button>
 				</AlertDialogTrigger>
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>{strings.auth.signOut}</AlertDialogTitle>
-						<AlertDialogDescription>{strings.auth.signOutConfirm}</AlertDialogDescription>
+						<AlertDialogDescription>
+							{strings.auth.signOutConfirm}
+						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>

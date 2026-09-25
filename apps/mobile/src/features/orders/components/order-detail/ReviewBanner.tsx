@@ -25,7 +25,10 @@ export function ReviewBanner() {
 					<AppText variant="bodyMedium" weight="bold">
 						{strings.orders.reviewBannerTitle}
 					</AppText>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{strings.orders.reviewBannerMessage}
 					</AppText>
 				</View>

@@ -100,7 +100,9 @@ export class AppConfigRepository {
     }
     if (filter.search) {
       const term = `%${escapeLike(filter.search)}%`;
-      filters.push(or(ilike(appConfig.key, term), ilike(appConfig.label, term))!);
+      filters.push(
+        or(ilike(appConfig.key, term), ilike(appConfig.label, term))!,
+      );
     }
 
     const where = filters.length > 0 ? and(...filters) : undefined;

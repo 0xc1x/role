@@ -64,7 +64,10 @@ export function MapPickerView({
 		});
 	};
 
-	const handleRegionChange = (next: { latitude: number; longitude: number }) => {
+	const handleRegionChange = (next: {
+		latitude: number;
+		longitude: number;
+	}) => {
 		setCoords(next);
 		if (debounce.current) clearTimeout(debounce.current);
 		debounce.current = setTimeout(() => resolve(next), 800);
@@ -104,7 +107,12 @@ export function MapPickerView({
 						aria-label={strings.common.back}
 						icon={<ChevronLeft size={22} color={colors.foreground} />}
 					/>
-					<AppText variant="h4" weight="bold" numberOfLines={1} style={styles.headerTitle}>
+					<AppText
+						variant="h4"
+						weight="bold"
+						numberOfLines={1}
+						style={styles.headerTitle}
+					>
 						{strings.addresses.pickLocationTitle}
 					</AppText>
 					<View style={styles.headerSpacer} />
@@ -123,7 +131,12 @@ export function MapPickerView({
 
 	return (
 		<View style={styles.full}>
-			<MapCanvas ref={mapRef} coords={coords} fullscreen onRegionChange={handleRegionChange} />
+			<MapCanvas
+				ref={mapRef}
+				coords={coords}
+				fullscreen
+				onRegionChange={handleRegionChange}
+			/>
 
 			<View style={styles.header}>
 				<Button
@@ -154,20 +167,30 @@ export function MapPickerView({
 				loading={locating}
 				accessibilityRole="button"
 				aria-label={strings.addresses.useMyLocation}
-				style={[styles.fab, { backgroundColor: colors.card, top: spacing.md + insets.top }]}
+				style={[
+					styles.fab,
+					{ backgroundColor: colors.card, top: spacing.md + insets.top },
+				]}
 				icon={<LocateFixed size={22} color={colors.primary} />}
 			/>
 
 			<View
 				style={[
 					styles.panel,
-					{ backgroundColor: colors.card, paddingBottom: spacing.lg + insets.bottom },
+					{
+						backgroundColor: colors.card,
+						paddingBottom: spacing.lg + insets.bottom,
+					},
 				]}
 			>
 				{resolving ? (
 					<ActivityIndicator color={colors.primary} />
 				) : resolvedAddress ? (
-					<AppText variant="bodyMedium" numberOfLines={2} style={styles.panelText}>
+					<AppText
+						variant="bodyMedium"
+						numberOfLines={2}
+						style={styles.panelText}
+					>
 						{resolvedAddress}
 					</AppText>
 				) : (

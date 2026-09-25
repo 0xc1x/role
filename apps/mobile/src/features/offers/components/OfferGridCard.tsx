@@ -14,7 +14,11 @@ import {
 	haversineKm,
 	type OfferDetail,
 } from "@/src/features/offers/domain/offer";
-import { useSelectedAddress, useIsFavorite, useToggleFavorite } from "@/src/features/hooks";
+import {
+	useSelectedAddress,
+	useIsFavorite,
+	useToggleFavorite,
+} from "@/src/features/hooks";
 
 export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 	const { colors } = useTheme();
@@ -52,84 +56,97 @@ export function OfferGridCard({ offer }: { offer: OfferDetail }) {
 				onPress={() => router.push(`/offer/${offer.offer.id}`)}
 				style={styles.pressArea}
 			>
-			<View style={styles.imageWrap}>
-				{offer.offer.image ? (
-					<Image
-						source={{ uri: offer.offer.image }}
-						style={styles.image}
-						contentFit="cover"
-					/>
-				) : (
-					<View style={[styles.image, { backgroundColor: colors.borderSolid }]} />
-				)}
-				{discount >= 10 ? (
-					<View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
-						<AppText
-							variant="caption"
-							weight="bold"
-							style={{
-								color: colors.primaryForeground,
-							}}
+				<View style={styles.imageWrap}>
+					{offer.offer.image ? (
+						<Image
+							source={{ uri: offer.offer.image }}
+							style={styles.image}
+							contentFit="cover"
+						/>
+					) : (
+						<View
+							style={[styles.image, { backgroundColor: colors.borderSolid }]}
+						/>
+					)}
+					{discount >= 10 ? (
+						<View
+							style={[
+								styles.discountBadge,
+								{ backgroundColor: colors.primary },
+							]}
 						>
-							-{discount}%
-						</AppText>
-					</View>
-				) : null}
-				{offer.offer.stock <= 3 && offer.offer.stock > 0 ? (
-					<View
-						style={[styles.lowStockBadge, { backgroundColor: colors.destructive }]}
+							<AppText
+								variant="caption"
+								weight="bold"
+								style={{
+									color: colors.primaryForeground,
+								}}
+							>
+								-{discount}%
+							</AppText>
+						</View>
+					) : null}
+					{offer.offer.stock <= 3 && offer.offer.stock > 0 ? (
+						<View
+							style={[
+								styles.lowStockBadge,
+								{ backgroundColor: colors.destructive },
+							]}
+						>
+							<AppText
+								variant="tiny"
+								weight="semiBold"
+								style={{
+									color: colors.destructiveForeground,
+								}}
+							>
+								{strings.offers.onlyLeft.replace(
+									"{n}",
+									String(offer.offer.stock),
+								)}
+							</AppText>
+						</View>
+					) : null}
+				</View>
+				<View style={styles.body}>
+					<AppText
+						variant="labelSmall"
+						weight="semiBold"
+						numberOfLines={1}
+						style={{ color: colors.mutedForeground, fontSize: 12 }}
 					>
-						<AppText
-							variant="tiny"
-							weight="semiBold"
-							style={{
-								color: colors.destructiveForeground,
-							}}
-						>
-							{strings.offers.onlyLeft.replace(
-								"{n}",
-								String(offer.offer.stock),
-							)}
-						</AppText>
-					</View>
-				) : null}
-			</View>
-			<View style={styles.body}>
-				<AppText
-					variant="labelSmall"
-					weight="semiBold"
-					numberOfLines={1}
-					style={{ color: colors.mutedForeground, fontSize: 12 }}
-				>
-					{offer.business.name}
-				</AppText>
-				<AppText
-					variant="caption"
-					numberOfLines={1}
-					style={{ color: colors.mutedForeground }}
-				>
-					{offer.offer.title}
-				</AppText>
-				<View style={styles.priceRow}>
-					<AppText variant="price" style={{ color: colors.primary, fontSize: 16 }}>
-						{formatMoney(offer.offer.discounted_price)}
+						{offer.business.name}
 					</AppText>
 					<AppText
 						variant="caption"
+						numberOfLines={1}
 						style={{ color: colors.mutedForeground }}
 					>
-						{formatMoney(offer.offer.original_price)}
+						{offer.offer.title}
 					</AppText>
-				</View>
-				{distance ? (
-					<View style={styles.distanceRow}>
-						<MapPin size={10} color={colors.mutedForeground} />
-						<AppText variant="tiny" style={{ color: colors.mutedForeground }}>
-							{distance}
+					<View style={styles.priceRow}>
+						<AppText
+							variant="price"
+							style={{ color: colors.primary, fontSize: 16 }}
+						>
+							{formatMoney(offer.offer.discounted_price)}
+						</AppText>
+						<AppText
+							variant="caption"
+							style={{ color: colors.mutedForeground }}
+						>
+							{formatMoney(offer.offer.original_price)}
 						</AppText>
 					</View>
-				) : null}
-			</View>
+					{distance ? (
+						<View style={styles.distanceRow}>
+							<MapPin size={10} color={colors.mutedForeground} />
+							<AppText variant="tiny" style={{ color: colors.mutedForeground }}>
+								{distance}
+							</AppText>
+						</View>
+					) : null}
+				</View>
 			</Pressable>
 			{/* Hermano absoluto: evita <button> anidado en web */}
 			<View style={styles.heart}>

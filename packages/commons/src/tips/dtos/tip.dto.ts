@@ -1,14 +1,14 @@
-import type { z } from 'zod';
-import type { PaginatedData } from '../../_common/dtos/api.dto';
+import type { z } from "zod";
+import type { PaginatedData } from "../../_common/dtos/api.dto";
 import type {
-  TipSchema,
-  CreateTipSchema,
-  UpdateTipSchema,
-  ListTipsQuerySchema,
-  PatchTipSchema,
-  TipListResponseSchema,
-  ViewTipSchema,
-} from '../schemas/tip.schema';
+	TipSchema,
+	CreateTipSchema,
+	UpdateTipSchema,
+	ListTipsQuerySchema,
+	PatchTipSchema,
+	TipListResponseSchema,
+	ViewTipSchema,
+} from "../schemas/tip.schema";
 
 /** Wire DTO for a tip resource (matches {@link TipSchema}). */
 export type TipDto = z.infer<typeof TipSchema>;

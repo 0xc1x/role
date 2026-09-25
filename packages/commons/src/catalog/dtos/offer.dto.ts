@@ -1,15 +1,15 @@
-import type { z } from 'zod';
-import type { PaginatedData } from '../../_common/dtos/api.dto';
-import type { ListOffersQuerySchema } from '../schemas/offer-query.schema';
+import type { z } from "zod";
+import type { PaginatedData } from "../../_common/dtos/api.dto";
+import type { ListOffersQuerySchema } from "../schemas/offer-query.schema";
 import type {
-  CreateOfferSchema,
-  OfferListResponseSchema,
-  OfferSchema,
-  OfferWithBusinessSchema,
-  PatchOfferSchema,
-  UpdateOfferSchema,
-  ViewOfferSchema,
-} from '../schemas/offer.schema';
+	CreateOfferSchema,
+	OfferListResponseSchema,
+	OfferSchema,
+	OfferWithBusinessSchema,
+	PatchOfferSchema,
+	UpdateOfferSchema,
+	ViewOfferSchema,
+} from "../schemas/offer.schema";
 
 export type OfferDto = z.infer<typeof OfferSchema>;
 export type CreateOfferDto = z.infer<typeof CreateOfferSchema>;

@@ -35,12 +35,12 @@ import {
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
-import {
-	formatDateTime,
-	formatMoney,
-} from "@/src/core/utils/formatters";
+import { formatDateTime, formatMoney } from "@/src/core/utils/formatters";
 import type { OfferDetail } from "@/src/features/offers/domain/offer";
-import { useDeleteOffer, useToggleOfferActive } from "@/src/features/business/hooks";
+import {
+	useDeleteOffer,
+	useToggleOfferActive,
+} from "@/src/features/business/hooks";
 import { OfferReviewsCard } from "@/src/features/business/components/OfferReviewsCard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -101,11 +101,18 @@ export function ProductDetail({
 			<View style={styles.content}>
 				<ScreenHeader title={strings.business.productDetailTitle} />
 				<View style={styles.headerRow}>
-					<AppText variant="h2" weight="bold" style={{ flex: 1 }} numberOfLines={1}>
+					<AppText
+						variant="h2"
+						weight="bold"
+						style={{ flex: 1 }}
+						numberOfLines={1}
+					>
 						{offer.title}
 					</AppText>
 					<StatusBadge
-						label={isActive ? strings.business.active : strings.business.inactive}
+						label={
+							isActive ? strings.business.active : strings.business.inactive
+						}
 						tone={isActive ? "success" : "neutral"}
 					/>
 				</View>
@@ -115,11 +122,18 @@ export function ProductDetail({
 						{categories.map((c) => (
 							<View
 								key={c.id}
-								style={[styles.categoryChip, { backgroundColor: `${withAlpha(colors.primary, 0.102)}` }]}
+								style={[
+									styles.categoryChip,
+									{ backgroundColor: `${withAlpha(colors.primary, 0.102)}` },
+								]}
 							>
 								<AppText
 									weight="semiBold"
-									style={{ color: colors.primary, fontSize: 11, letterSpacing: 0.5 }}
+									style={{
+										color: colors.primary,
+										fontSize: 11,
+										letterSpacing: 0.5,
+									}}
 								>
 									{c.emoji ? `${c.emoji} ${c.name}` : c.name}
 								</AppText>
@@ -132,19 +146,39 @@ export function ProductDetail({
 					{offer.image ? (
 						<Image source={{ uri: offer.image }} style={styles.heroImage} />
 					) : (
-						<View style={[styles.heroImage, styles.heroPlaceholder, { backgroundColor: colors.borderSolid }]}>
+						<View
+							style={[
+								styles.heroImage,
+								styles.heroPlaceholder,
+								{ backgroundColor: colors.borderSolid },
+							]}
+						>
 							<Package size={40} color={colors.mutedForeground} />
 						</View>
 					)}
 					{!isActive ? (
-						<View style={[styles.inactiveOverlay, { backgroundColor: withAlpha(colors.scrim, 0.56) }]}>
-							<AppText variant="bodyMedium" weight="bold" color={colors.onMedia}>
+						<View
+							style={[
+								styles.inactiveOverlay,
+								{ backgroundColor: withAlpha(colors.scrim, 0.56) },
+							]}
+						>
+							<AppText
+								variant="bodyMedium"
+								weight="bold"
+								color={colors.onMedia}
+							>
 								{strings.business.inactive}
 							</AppText>
 						</View>
 					) : null}
 					{discount > 0 ? (
-						<View style={[styles.discountBadge, { backgroundColor: colors.primary }]}>
+						<View
+							style={[
+								styles.discountBadge,
+								{ backgroundColor: colors.primary },
+							]}
+						>
 							<AppText
 								weight="bold"
 								color={colors.primaryForeground}
@@ -187,8 +221,8 @@ export function ProductDetail({
 						onPress={() =>
 							router.push(`/business/${businessId}/offer/${offer.id}/edit`)
 						}
-					>1
-					{strings.common.edit}
+					>
+						1{strings.common.edit}
 					</Button>
 					<Button
 						variant="outline"
@@ -217,13 +251,19 @@ export function ProductDetail({
 						</AppText>
 						<AppText
 							variant="priceOriginal"
-							style={{ color: colors.mutedForeground, textDecorationLine: "line-through" }}
+							style={{
+								color: colors.mutedForeground,
+								textDecorationLine: "line-through",
+							}}
 						>
 							{formatMoney(offer.original_price)}
 						</AppText>
 					</View>
 					<View style={styles.grid}>
-						<InfoField label={strings.business.productStock} value={String(offer.stock)} />
+						<InfoField
+							label={strings.business.productStock}
+							value={String(offer.stock)}
+						/>
 						<InfoField
 							label={strings.business.discount}
 							value={discount > 0 ? `-${discount}%` : "—"}
@@ -232,7 +272,10 @@ export function ProductDetail({
 							label={strings.business.pickupFrom}
 							value={formatDateTime(offer.pickup_start)}
 						/>
-						<InfoField label={strings.business.availableUntil} value={formatDateTime(offer.pickup_end)} />
+						<InfoField
+							label={strings.business.availableUntil}
+							value={formatDateTime(offer.pickup_end)}
+						/>
 						<InfoField
 							label={strings.business.pickupLocation}
 							value={
@@ -245,9 +288,14 @@ export function ProductDetail({
 						/>
 						<InfoField
 							label={strings.business.status}
-							value={isActive ? strings.business.active : strings.business.inactive}
+							value={
+								isActive ? strings.business.active : strings.business.inactive
+							}
 						/>
-						<InfoField label={strings.business.soldToday} value={String(sold)} />
+						<InfoField
+							label={strings.business.soldToday}
+							value={String(sold)}
+						/>
 						<InfoField
 							label={strings.business.rating}
 							value={
@@ -282,13 +330,25 @@ export function ProductDetail({
 						<AppText variant="h4" weight="bold">
 							{strings.business.allergensTitle}
 						</AppText>
-						<View style={[styles.allergenRow, { backgroundColor: colors.surfaceWarning }]}>
+						<View
+							style={[
+								styles.allergenRow,
+								{ backgroundColor: colors.surfaceWarning },
+							]}
+						>
 							{splitList(offer.allergens).map((item) => (
 								<View
 									key={item}
-									style={[styles.allergenChip, { backgroundColor: colors.warning }]}
+									style={[
+										styles.allergenChip,
+										{ backgroundColor: colors.warning },
+									]}
 								>
-									<AppText variant="bodySmall" weight="semiBold" color={colors.yellowDarkForeground}>
+									<AppText
+										variant="bodySmall"
+										weight="semiBold"
+										color={colors.yellowDarkForeground}
+									>
 										{item}
 									</AppText>
 								</View>
@@ -301,7 +361,9 @@ export function ProductDetail({
 			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>{strings.business.deleteProductTitle}</AlertDialogTitle>
+						<AlertDialogTitle>
+							{strings.business.deleteProductTitle}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
 							{strings.business.deleteProductBody}
 						</AlertDialogDescription>
@@ -314,8 +376,7 @@ export function ProductDetail({
 							onPress={() => {
 								setDeleteOpen(false);
 								deleteOffer.mutate(offer.id, {
-									onSuccess: () =>
-										goBackOr(`/business/${businessId}/offers`),
+									onSuccess: () => goBackOr(`/business/${businessId}/offers`),
 								});
 							}}
 						>
@@ -350,14 +411,28 @@ function StatCard({
 }) {
 	const { colors } = useTheme();
 	return (
-		<View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+		<View
+			style={[
+				styles.statCard,
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+			]}
+		>
 			<View style={[styles.statIcon, { backgroundColor: bg }]}>
 				<Icon size={16} color={color} />
 			</View>
-			<AppText variant="h3" weight="extraBold" numberOfLines={1} style={{ color }}>
+			<AppText
+				variant="h3"
+				weight="extraBold"
+				numberOfLines={1}
+				style={{ color }}
+			>
 				{value}
 			</AppText>
-			<AppText variant="bodySmall" numberOfLines={1} style={{ color: colors.mutedForeground }}>
+			<AppText
+				variant="bodySmall"
+				numberOfLines={1}
+				style={{ color: colors.mutedForeground }}
+			>
 				{label}
 			</AppText>
 		</View>

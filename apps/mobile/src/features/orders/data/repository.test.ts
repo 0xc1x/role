@@ -21,8 +21,11 @@ mock.module("@/src/core/supabase/client", () => ({
 	},
 }));
 
-import { supabase } from "@/src/core/supabase/client";
-import { orderRepository } from "@/src/features/orders/data/repository";
+// El mock debe registrarse antes de cargar el repositorio para evitar importar el runtime nativo.
+const { supabase } = await import("@/src/core/supabase/client");
+const { createReservationIdempotencyKey, orderRepository } = await import(
+	"@/src/features/orders/data/repository"
+);
 
 const rpcMock = supabase.rpc as unknown as Mock<
 	(...args: never[]) => Promise<{ data: unknown; error: unknown }>
@@ -36,6 +39,46 @@ function rpcOk(data: unknown) {
 }
 
 describe("orderRepository", () => {
+	test("genera claves de idempotencia únicas y acotadas", () => {
+		const first = createReservationIdempotencyKey();
+		const second = createReservationIdempotencyKey();
+
+		expect(first).not.toBe(second);
+		expect(first.length).toBeGreaterThan(0);
+		expect(first.length).toBeLessThanOrEqual(128);
+	});
+
+	test("reserveOffer conserva la frontera RPC reserve_offer", async () => {
+		rpcOk({
+			success: true,
+			order_id: "order-1",
+			order_number: "000001",
+			pickup_code: "123456",
+			price: 4.5,
+			original_price: 6,
+			discount: 1.5,
+		});
+
+		const result = await orderRepository.reserveOffer(
+			"offer-1",
+			"coupon-1",
+			"reservation-replay-key",
+		);
+
+		expect(rpcMock).toHaveBeenCalledWith("reserve_offer", {
+			p_user_id: "u1",
+			p_offer_id: "offer-1",
+			p_coupon_id: "coupon-1",
+			p_idempotency_key: "reservation-replay-key",
+		});
+		expect(result).toMatchObject({
+			ok: true,
+			orderId: "order-1",
+			orderNumber: "000001",
+			pickupCode: "123456",
+		});
+	});
+
 	test("cancelOrderForBusiness llama cancel_order con p_business_id", async () => {
 		rpcOk({ success: true, order_id: "order-1", status: "cancelled" });
 
@@ -180,10 +223,7 @@ describe("orderRepository paginated listing", () => {
 		expect(typeof orArg).toBe("string");
 		expect(orArg as string).toContain("order_number.ilike.");
 		expect(orArg as string).toContain("aurora");
-		expect(calls["order"]).toContainEqual([
-			"created_at",
-			{ ascending: false },
-		]);
+		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
 		expect(calls["range"]).toContainEqual([0, 19]);
 	});
 
@@ -200,10 +240,7 @@ describe("orderRepository paginated listing", () => {
 
 		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
 		expect(calls["eq"]).toContainEqual(["status", "confirmed"]);
-		expect(calls["eq"]).toContainEqual([
-			"offers.business_location_id",
-			"loc1",
-		]);
+		expect(calls["eq"]).toContainEqual(["offers.business_location_id", "loc1"]);
 		expect(calls["order"]).toContainEqual(["created_at", { ascending: true }]);
 		expect(calls["range"]).toContainEqual([20, 39]);
 	});
@@ -273,10 +310,7 @@ describe("orderRepository paginated listing", () => {
 		await orderRepository.countBusinessOrders("b1", { branchId: "loc1" });
 
 		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
-		expect(calls["eq"]).toContainEqual([
-			"offers.business_location_id",
-			"loc1",
-		]);
+		expect(calls["eq"]).toContainEqual(["offers.business_location_id", "loc1"]);
 	});
 
 	test("countBusinessOrders propaga errores via toAppError", async () => {
@@ -299,10 +333,7 @@ describe("orderRepository paginated listing", () => {
 		});
 
 		expect(rows).toEqual([]);
-		expect(calls["order"]).toContainEqual([
-			"created_at",
-			{ ascending: false },
-		]);
+		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
 		expect(calls["range"]).toContainEqual([40, 59]);
 	});
 });

@@ -62,7 +62,8 @@ export class EmailMarketingRepository {
     const filters: SQL[] = [isNull(emailComponents.deleted_at)];
     if (f.active !== undefined)
       filters.push(eq(emailComponents.is_active, f.active));
-    if (f.search) filters.push(ilike(emailComponents.name, `%${escapeLike(f.search)}%`));
+    if (f.search)
+      filters.push(ilike(emailComponents.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailComponents, where, f);
   }
@@ -110,7 +111,8 @@ export class EmailMarketingRepository {
     const filters: SQL[] = [isNull(emailTemplates.deleted_at)];
     if (f.active !== undefined)
       filters.push(eq(emailTemplates.is_active, f.active));
-    if (f.search) filters.push(ilike(emailTemplates.name, `%${escapeLike(f.search)}%`));
+    if (f.search)
+      filters.push(ilike(emailTemplates.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailTemplates, where, f);
   }
@@ -156,7 +158,8 @@ export class EmailMarketingRepository {
     const filters: SQL[] = [isNull(segments.deleted_at)];
     if (f.category) filters.push(eq(segments.category, f.category));
     if (f.active !== undefined) filters.push(eq(segments.is_active, f.active));
-    if (f.search) filters.push(ilike(segments.name, `%${escapeLike(f.search)}%`));
+    if (f.search)
+      filters.push(ilike(segments.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(segments, where, f);
   }
@@ -310,7 +313,8 @@ export class EmailMarketingRepository {
     category: string,
   ): Promise<{ user_id: string; email: string; full_name: string | null }[]> {
     if (ids.length === 0) return Promise.resolve([]);
-    const out: { user_id: string; email: string; full_name: string | null }[] = [];
+    const out: { user_id: string; email: string; full_name: string | null }[] =
+      [];
     for (let i = 0; i < ids.length; i += 1000) {
       const chunk = ids.slice(i, i + 1000);
       const rows = await this.db
@@ -342,7 +346,8 @@ export class EmailMarketingRepository {
     const filters: SQL[] = [isNull(campaigns.deleted_at)];
     if (f.status) filters.push(sql`status = ${f.status}`);
     if (f.channel) filters.push(sql`channel = ${f.channel}`);
-    if (f.search) filters.push(ilike(campaigns.name, `%${escapeLike(f.search)}%`));
+    if (f.search)
+      filters.push(ilike(campaigns.name, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(campaigns, where, f);
   }
@@ -388,7 +393,9 @@ export class EmailMarketingRepository {
   // ─── Envíos (la cola) ──────────────────────────────────────────────
 
   /** Inserta envíos en lotes de 1000 (un solo INSERT gigante revienta el plan). */
-  async insertSends(values: (typeof emailSends.$inferInsert)[]): Promise<SendRow[]> {
+  async insertSends(
+    values: (typeof emailSends.$inferInsert)[],
+  ): Promise<SendRow[]> {
     if (values.length === 0) return Promise.resolve([]);
     const out: SendRow[] = [];
     for (let i = 0; i < values.length; i += 1000) {
@@ -424,7 +431,9 @@ export class EmailMarketingRepository {
     return this.db
       .select()
       .from(emailSends)
-      .where(sql`status in ('pending','queued','failed') and attempts < max_attempts and (scheduled_at is null or scheduled_at <= now())`)
+      .where(
+        sql`status in ('pending','queued','failed') and attempts < max_attempts and (scheduled_at is null or scheduled_at <= now())`,
+      )
       .orderBy(emailSends.scheduled_at)
       .limit(limit);
   }
@@ -432,7 +441,11 @@ export class EmailMarketingRepository {
   async markProcessing(id: string) {
     await this.db
       .update(emailSends)
-      .set({ status: 'processing', processed_at: new Date(), updated_at: new Date() })
+      .set({
+        status: 'processing',
+        processed_at: new Date(),
+        updated_at: new Date(),
+      })
       .where(eq(emailSends.id, id));
   }
 
@@ -465,11 +478,22 @@ export class EmailMarketingRepository {
   }
 
   async markCancelled(id: string) {
-    await this.db.update(emailSends).set({ status: 'cancelled', updated_at: new Date() }).where(eq(emailSends.id, id));
+    await this.db
+      .update(emailSends)
+      .set({ status: 'cancelled', updated_at: new Date() })
+      .where(eq(emailSends.id, id));
   }
 
   async deleteSendsByCampaign(campaignId: string): Promise<void> {
-    await this.db.delete(emailSends).where(and(eq(emailSends.type, 'campaign'), eq(emailSends.source_type, 'campaign'), eq(emailSends.source_id, campaignId)));
+    await this.db
+      .delete(emailSends)
+      .where(
+        and(
+          eq(emailSends.type, 'campaign'),
+          eq(emailSends.source_type, 'campaign'),
+          eq(emailSends.source_id, campaignId),
+        ),
+      );
   }
 
   /** ¿Quedan envíos en cola para esta campaña? */
@@ -511,30 +535,55 @@ export class EmailMarketingRepository {
   }
 
   listSendsByCampaign(campaignId: string, f: ListFilter & { status?: string }) {
-    const filters: SQL[] = [eq(emailSends.type, 'campaign'), eq(emailSends.source_type, 'campaign'), eq(emailSends.source_id, campaignId)];
+    const filters: SQL[] = [
+      eq(emailSends.type, 'campaign'),
+      eq(emailSends.source_type, 'campaign'),
+      eq(emailSends.source_id, campaignId),
+    ];
     if (f.status)
       filters.push(eq(emailSends.status, f.status as SendRow['status']));
     return this.paginate(emailSends, and(...filters), f);
   }
 
-  listSends(f: ListFilter & { status?: string; type?: string; source_type?: string | null; source_id?: string | null; search?: string }) {
+  listSends(
+    f: ListFilter & {
+      status?: string;
+      type?: string;
+      source_type?: string | null;
+      source_id?: string | null;
+      search?: string;
+    },
+  ) {
     const filters: SQL[] = [];
-    if (f.status) filters.push(eq(emailSends.status, f.status as SendRow['status']));
+    if (f.status)
+      filters.push(eq(emailSends.status, f.status as SendRow['status']));
     if (f.type) filters.push(eq(emailSends.type, f.type as SendRow['type']));
     if (f.source_type) filters.push(eq(emailSends.source_type, f.source_type));
     if (f.source_id) filters.push(eq(emailSends.source_id, f.source_id));
-    if (f.search) filters.push(ilike(emailSends.email, `%${escapeLike(f.search)}%`));
+    if (f.search)
+      filters.push(ilike(emailSends.email, `%${escapeLike(f.search)}%`));
     const where = filters.length ? and(...filters) : undefined;
     return this.paginate(emailSends, where, f);
   }
 
   async findSendById(id: string): Promise<SendRow | null> {
-    const [row] = await this.db.select().from(emailSends).where(eq(emailSends.id, id)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(emailSends)
+      .where(eq(emailSends.id, id))
+      .limit(1);
     return (row as SendRow) ?? null;
   }
 
-  async updateSend(id: string, values: Partial<typeof emailSends.$inferInsert>) {
-    const [row] = await this.db.update(emailSends).set({ ...values, updated_at: new Date() }).where(eq(emailSends.id, id)).returning();
+  async updateSend(
+    id: string,
+    values: Partial<typeof emailSends.$inferInsert>,
+  ) {
+    const [row] = await this.db
+      .update(emailSends)
+      .set({ ...values, updated_at: new Date() })
+      .where(eq(emailSends.id, id))
+      .returning();
     return row ?? null;
   }
 

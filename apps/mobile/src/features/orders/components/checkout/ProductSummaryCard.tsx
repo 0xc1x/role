@@ -35,67 +35,75 @@ export function ProductSummaryCard({
 					backgroundColor: scheme === "dark" ? colors.card : colors.background,
 					borderColor: colors.borderSolid,
 				},
-			]}>
+			]}
+		>
 			<CardHeader>
-				<AppText variant="h4" weight="bold" style={{ flex: 1, color: colors.mutedForeground }}>
+				<AppText
+					variant="h4"
+					weight="bold"
+					style={{ flex: 1, color: colors.mutedForeground }}
+				>
 					{strings.orders.productTitle}
 				</AppText>
 			</CardHeader>
 			<CardContent>
-			<View style={styles.row}>
-				{offer.image ? (
-					<Image source={{ uri: offer.image }} style={styles.image} />
-				) : (
-					<View
-						style={[styles.image, { backgroundColor: colors.surfaceMuted }]}
-					/>
-				)}
-				<View style={styles.body}>
-					<AppText
-						variant="labelSmall"
-						style={{ color: colors.mutedForeground }}
-						numberOfLines={1}
-					>
-						{business.name}
-					</AppText>
-					<AppText
-						variant="bodyLarge"
-						weight="semiBold"
-						numberOfLines={2}
-						style={styles.title}
-					>
-						{offer.title}
-					</AppText>
-					<View style={styles.priceRow}>
-						<AppText variant="price" style={{ color: colors.primary }}>
-							{formatMoney(offer.discounted_price)}
+				<View style={styles.row}>
+					{offer.image ? (
+						<Image source={{ uri: offer.image }} style={styles.image} />
+					) : (
+						<View
+							style={[styles.image, { backgroundColor: colors.surfaceMuted }]}
+						/>
+					)}
+					<View style={styles.body}>
+						<AppText
+							variant="labelSmall"
+							style={{ color: colors.mutedForeground }}
+							numberOfLines={1}
+						>
+							{business.name}
 						</AppText>
 						<AppText
-							variant="priceOriginal"
-							style={{
-								color: colors.mutedForeground,
-								textDecorationLine: "line-through",
-							}}
+							variant="bodyLarge"
+							weight="semiBold"
+							numberOfLines={2}
+							style={styles.title}
 						>
-							{formatMoney(offer.original_price)}
+							{offer.title}
 						</AppText>
-						<View
-							style={[
-								styles.badge,
-								{ backgroundColor: colors.surfaceSuccess },
-							]}
-						>
-							<AppText
-								variant="labelSmall"
-								weight="bold"
-								style={{ color: colors.successDark }}
-							>
-								{strings.offerDetail.savingsBadge.replace("{p}", String(percent))}
+						<View style={styles.priceRow}>
+							<AppText variant="price" style={{ color: colors.primary }}>
+								{formatMoney(offer.discounted_price)}
 							</AppText>
+							<AppText
+								variant="priceOriginal"
+								style={{
+									color: colors.mutedForeground,
+									textDecorationLine: "line-through",
+								}}
+							>
+								{formatMoney(offer.original_price)}
+							</AppText>
+							<View
+								style={[
+									styles.badge,
+									{ backgroundColor: colors.surfaceSuccess },
+								]}
+							>
+								<AppText
+									variant="labelSmall"
+									weight="bold"
+									style={{ color: colors.successDark }}
+								>
+									{strings.offerDetail.savingsBadge.replace(
+										"{p}",
+										String(percent),
+									)}
+								</AppText>
+							</View>
 						</View>
 					</View>
 				</View>
-			</View>
 			</CardContent>
 		</Card>
 	);

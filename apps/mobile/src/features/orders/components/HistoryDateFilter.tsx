@@ -58,7 +58,9 @@ export function HistoryDateFilter({
 								variant="bodySmall"
 								weight={sel ? "bold" : "regular"}
 								style={{
-									color: sel ? colors.primaryForeground : colors.mutedForeground,
+									color: sel
+										? colors.primaryForeground
+										: colors.mutedForeground,
 								}}
 							>
 								{c.l}
@@ -93,12 +95,7 @@ export function HistoryDateFilter({
 						style={[styles.weekBtn, isFutureWeek && { opacity: 0.3 }]}
 						disabled={isFutureWeek}
 						aria-label={strings.orders.historyNextWeek}
-						icon={
-							<ChevronRight
-								size={18}
-								color={colors.foreground}
-							/>
-						}
+						icon={<ChevronRight size={18} color={colors.foreground} />}
 					/>
 				</View>
 			) : null}

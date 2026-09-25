@@ -52,8 +52,18 @@ export function statsDaysInRange(range: { start: Date; end: Date }): number {
 }
 
 const MONTH_ABBR = [
-	"ene", "feb", "mar", "abr", "may", "jun",
-	"jul", "ago", "sep", "oct", "nov", "dic",
+	"ene",
+	"feb",
+	"mar",
+	"abr",
+	"may",
+	"jun",
+	"jul",
+	"ago",
+	"sep",
+	"oct",
+	"nov",
+	"dic",
 ] as const;
 
 /** Human label for a stats period+offset (labels injected to keep i18n in UI). */
@@ -87,8 +97,7 @@ export function statsViewModel(stats: {
 	return {
 		dailyAvg: (days: number) =>
 			stats.revenue > 0 && days > 0 ? stats.revenue / days : 0,
-		avgTicket:
-			stats.ordersCount > 0 ? stats.revenue / stats.ordersCount : 0,
+		avgTicket: stats.ordersCount > 0 ? stats.revenue / stats.ordersCount : 0,
 		rating: stats.avgRating ?? 0,
 	};
 }

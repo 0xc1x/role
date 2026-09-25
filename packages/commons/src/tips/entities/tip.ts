@@ -1,5 +1,5 @@
-import type { z } from 'zod';
-import type { TipSchema } from '../schemas/tip.schema';
+import type { z } from "zod";
+import type { TipSchema } from "../schemas/tip.schema";
 
 /**
  * Row shape for `public.tips` — derivado del schema Zod (SSOT).

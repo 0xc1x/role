@@ -7,10 +7,7 @@ import {
 	type LucideIcon,
 } from "lucide-react-native";
 import type { Order } from "@0xc1x/role-commons";
-import {
-	StyleSheet,
-	View,
-} from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import { AppText } from "@/src/core/ui";
@@ -18,10 +15,7 @@ import { useTheme } from "@/src/core/theme";
 import type { ColorTokens } from "@/src/core/theme/colors";
 import { radii, spacing } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
-import {
-	formatShortDate,
-	formatTime,
-} from "@/src/core/utils/formatters";
+import { formatShortDate, formatTime } from "@/src/core/utils/formatters";
 import {
 	findLastEventTime,
 	type OrderStatusEvent,
@@ -140,7 +134,8 @@ export function TimelineCard({
 			style={{
 				backgroundColor: scheme === "dark" ? colors.card : colors.background,
 				borderColor: colors.borderSolid,
-			}}>
+			}}
+		>
 			<Accordion type="single" collapsible>
 				<AccordionItem value="timeline" className="border-b-0">
 					<CardHeader>
@@ -150,7 +145,11 @@ export function TimelineCard({
 						>
 							<View style={styles.timelineHeaderInner}>
 								<Calendar size={20} color={colors.mutedForeground} />
-								<AppText variant="h4" weight="bold" style={styles.timelineTitle}>
+								<AppText
+									variant="h4"
+									weight="bold"
+									style={styles.timelineTitle}
+								>
 									{strings.orders.timelineTitle}
 								</AppText>
 							</View>
@@ -186,25 +185,35 @@ function TimelineSectionRow({
 		<View style={styles.timelineRow}>
 			<View style={styles.timelineRail}>
 				<View
-					style={[
-						styles.timelineDot,
-						{ backgroundColor: section.background },
-					]}
+					style={[styles.timelineDot, { backgroundColor: section.background }]}
 				>
-					<Icon size={18} color={section.color} fill={section.filled ? section.color : "none"} />
+					<Icon
+						size={18}
+						color={section.color}
+						fill={section.filled ? section.color : "none"}
+					/>
 				</View>
 				{isLast ? null : (
-					<View style={[styles.timelineLine, { backgroundColor: colors.border }]} />
+					<View
+						style={[styles.timelineLine, { backgroundColor: colors.border }]}
+					/>
 				)}
 			</View>
 			<View style={styles.timelineBody}>
 				<AppText variant="bodyMedium" weight="bold">
 					{section.title}
 				</AppText>
-				<AppText variant="bodySmall" style={[styles.timelineNote, { color: colors.mutedForeground }]}>
+				<AppText
+					variant="bodySmall"
+					style={[styles.timelineNote, { color: colors.mutedForeground }]}
+				>
 					{section.note}
 				</AppText>
-				<AppText variant="bodySmall" weight="medium" style={[styles.timelineTime, { color: colors.mutedForeground }]}>
+				<AppText
+					variant="bodySmall"
+					weight="medium"
+					style={[styles.timelineTime, { color: colors.mutedForeground }]}
+				>
 					{section.time}
 				</AppText>
 			</View>

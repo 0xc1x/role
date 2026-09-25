@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import { OffersService } from './offers.service';
 
@@ -32,10 +33,10 @@ export class OffersExpirationJob {
         this.logger.log(`Deactivated ${expired} stale offer(s)`);
       }
     } catch (err) {
-      this.logger.error(
-        'Failed to expire stale offers',
-        err instanceof Error ? err.stack : String(err),
-      );
+      this.logger.error({
+        event: 'offer_expiration_failed',
+        ...safeErrorFields(err),
+      });
     } finally {
       this.running = false;
     }

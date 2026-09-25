@@ -5,14 +5,17 @@ jest.mock('@0xc1x/role-commons', () => ({
   LogoutRequestSchema: {},
 }));
 
+import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import type { AuthUser } from '../../auth/auth.types';
+import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let service: jest.Mocked<AuthService>;
+  let reflector: Reflector;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -32,6 +35,7 @@ describe('AuthController', () => {
 
     controller = module.get(AuthController);
     service = module.get(AuthService);
+    reflector = module.get(Reflector);
   });
 
   it('login delega el body', () => {
@@ -61,5 +65,11 @@ describe('AuthController', () => {
     const body = { refresh_token: 'rt-1' } as never;
     controller.logout(body);
     expect(service.logout).toHaveBeenCalledWith(body);
+  });
+
+  it('logout es público y rate-limited', () => {
+    expect(reflector.get(IS_PUBLIC_KEY, controller.logout)).toBe(true);
+    expect(reflector.get('THROTTLER:LIMITdefault', controller.logout)).toBe(10);
+    expect(reflector.get('THROTTLER:TTLdefault', controller.logout)).toBe(60_000);
   });
 });

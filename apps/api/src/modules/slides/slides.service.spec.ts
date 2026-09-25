@@ -137,10 +137,30 @@ describe('SlidesService', () => {
 
       await expect(service.getById('nonexistent')).rejects.toThrow(NotFoundException);
     });
+
+    it('should reject inactive slides', async () => {
+      repository.findById.mockResolvedValue(makeRow({ active: false }));
+
+      await expect(service.getById(makeRow().id)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should reject slides outside their current window', async () => {
+      repository.findById.mockResolvedValue(
+        makeRow({ start_at: new Date(Date.now() + 60_000) }),
+      );
+
+      await expect(service.getById(makeRow().id)).rejects.toThrow(NotFoundException);
+
+      repository.findById.mockResolvedValue(
+        makeRow({ end_at: new Date(Date.now() - 60_000) }),
+      );
+
+      await expect(service.getById(makeRow().id)).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('list', () => {
-    it('should return paginated slides', async () => {
+    it('forces active filtering AND the availability window for public lists', async () => {
       const rows = [makeRow()];
       repository.list.mockResolvedValue({ rows, total: 1 });
       (SlideMapper.toDto as jest.Mock).mockReturnValue(makeDto());
@@ -155,12 +175,32 @@ describe('SlidesService', () => {
         page: 1,
         limit: 10,
         search: undefined,
-        active: undefined,
+        active: true,
+        // Regression: the public list used to ask for no window, so slides
+        // outside [start_at, end_at] were listed even though getById 404s them.
+        availableAt: expect.any(Date),
       });
       expect(result).toEqual({
         data: [makeDto()],
         meta: { page: 1, limit: 10, total: 1 },
       });
+    });
+
+    it('passes the same instant used for the window, not a drifting clock', async () => {
+      repository.list.mockResolvedValue({ rows: [], total: 0 });
+      (paginatedDataFromQuery as jest.Mock).mockReturnValue({
+        data: [],
+        meta: { page: 1, limit: 10, total: 0 },
+      });
+
+      const before = Date.now();
+      await service.list({ page: 1, limit: 10, active: undefined });
+      const after = Date.now();
+
+      const { availableAt } = repository.list.mock.calls[0]![0];
+      expect(availableAt).toBeInstanceOf(Date);
+      expect(availableAt.getTime()).toBeGreaterThanOrEqual(before);
+      expect(availableAt.getTime()).toBeLessThanOrEqual(after);
     });
 
     it('should return empty paginated data on repository error', async () => {
@@ -175,6 +215,43 @@ describe('SlidesService', () => {
       expect(result).toEqual({
         data: [],
         meta: { page: 1, limit: 10, total: 0 },
+      });
+    });
+  });
+
+  describe('listAdmin', () => {
+    it('preserves active=false for admin lists', async () => {
+      repository.list.mockResolvedValue({ rows: [], total: 0 });
+      (paginatedDataFromQuery as jest.Mock).mockReturnValue({
+        data: [],
+        meta: { page: 1, limit: 10, total: 0 },
+      });
+
+      await service.listAdmin({ page: 1, limit: 10, active: false });
+
+      expect(repository.list).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
+        search: undefined,
+        active: false,
+        availableAt: undefined,
+      });
+    });
+
+    it('preserves admin filters without public forcing', async () => {
+      repository.list.mockResolvedValue({ rows: [], total: 0 });
+      (paginatedDataFromQuery as jest.Mock).mockReturnValue({
+        data: [],
+        meta: { page: 1, limit: 10, total: 0 },
+      });
+
+      await service.listAdmin({ page: 1, limit: 10, active: undefined });
+
+      expect(repository.list).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
+        search: undefined,
+        active: undefined,
       });
     });
   });

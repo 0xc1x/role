@@ -1,4 +1,12 @@
-import { index, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  index,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 export const storeEntryStatusEnum = pgEnum('store_entry_status', [
   'PENDIENTE',
@@ -18,8 +26,12 @@ export const appStore = pgTable(
     key: text('key'),
     value: jsonb('value').notNull(),
     status: storeEntryStatusEnum('status').notNull().default('PENDIENTE'),
-    created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     deleted_at: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [

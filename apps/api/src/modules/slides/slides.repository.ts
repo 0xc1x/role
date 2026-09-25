@@ -1,5 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, ilike, isNull, ne, type SQL } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  isNull,
+  lte,
+  ne,
+  or,
+  type SQL,
+} from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import { escapeLike } from '../../common/utils/like';
@@ -38,6 +50,12 @@ export type ListSlidesFilter = {
   limit: number;
   search?: string;
   active?: boolean;
+  /**
+   * When set, restrict to slides whose [start_at, end_at] window contains this
+   * instant. This is the same predicate `SlidesService.getById` enforces, and it
+   * must be applied in SQL so `total` reflects the filtered set.
+   */
+  availableAt?: Date;
 };
 
 export type ListSlidesResult = {
@@ -105,6 +123,11 @@ export class SlidesRepository {
 
     if (filter.active !== undefined) {
       filters.push(eq(slides.active, filter.active));
+    }
+    if (filter.availableAt) {
+      const now = filter.availableAt;
+      filters.push(or(isNull(slides.start_at), lte(slides.start_at, now))!);
+      filters.push(or(isNull(slides.end_at), gte(slides.end_at, now))!);
     }
     if (filter.search) {
       filters.push(ilike(slides.title, `%${escapeLike(filter.search)}%`));

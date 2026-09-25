@@ -1,40 +1,45 @@
-import { z } from 'zod';
-import { BooleanQuerySchema, PaginatedDataSchema, PaginationQuerySchema } from '../../_common/schemas/api.schema';
-import { TimestamptzSchema, UuidSchema } from '../../_common/schemas/common';
+import { z } from "zod";
 import {
-  CAMPAIGN_CHANNELS,
-  CAMPAIGN_STATUSES,
-  EMAIL_COMPONENT_TYPES,
-  EMAIL_SEND_STATUSES,
-  EMAIL_SEND_TYPES,
-  MARKETING_CATEGORIES,
-  SEGMENT_TYPES,
-} from '../enums/email.enum';
+	BooleanQuerySchema,
+	PaginatedDataSchema,
+	PaginationQuerySchema,
+} from "../../_common/schemas/api.schema";
+import { TimestamptzSchema, UuidSchema } from "../../_common/schemas/common";
+import {
+	CAMPAIGN_CHANNELS,
+	CAMPAIGN_STATUSES,
+	EMAIL_COMPONENT_TYPES,
+	EMAIL_SEND_STATUSES,
+	EMAIL_SEND_TYPES,
+	MARKETING_CATEGORIES,
+	SEGMENT_TYPES,
+} from "../enums/email.enum";
 
 // ─── Componentes (header / footer) ─────────────────────────────────────
 
 export const EmailComponentSchema = z.object({
-  name: z.string().min(1).max(120),
-  type: z.enum(EMAIL_COMPONENT_TYPES),
-  html_content: z.string().min(1),
-  is_active: z.boolean(),
+	name: z.string().min(1).max(120),
+	type: z.enum(EMAIL_COMPONENT_TYPES),
+	html_content: z.string().min(1),
+	is_active: z.boolean(),
 });
 
 export const EmailComponentDtoSchema = EmailComponentSchema.extend({
-  id: UuidSchema,
-  created_at: TimestamptzSchema,
-  updated_at: TimestamptzSchema,
-  deleted_at: TimestamptzSchema.nullable(),
+	id: UuidSchema,
+	created_at: TimestamptzSchema,
+	updated_at: TimestamptzSchema,
+	deleted_at: TimestamptzSchema.nullable(),
 });
 
 export const CreateEmailComponentSchema = EmailComponentSchema.partial({
-  is_active: true,
+	is_active: true,
 });
-export const UpdateEmailComponentSchema = EmailComponentSchema
-  .partial()
-  .refine((v) => Object.keys(v).length > 0, {
-    message: 'Se requiere al menos un campo para actualizar',
-  });
+export const UpdateEmailComponentSchema = EmailComponentSchema.partial().refine(
+	(v) => Object.keys(v).length > 0,
+	{
+		message: "Se requiere al menos un campo para actualizar",
+	},
+);
 
 // ─── Plantillas ────────────────────────────────────────────────────────
 
@@ -42,39 +47,40 @@ export const UpdateEmailComponentSchema = EmailComponentSchema
 export const TemplateVariablesSchema = z.array(z.string().min(1).max(60));
 
 export const EmailTemplateSchema = z.object({
-  name: z.string().min(1).max(120),
-  subject: z.string().min(1).max(200),
-  body_html: z.string().min(1),
-  header_id: UuidSchema.nullable(),
-  footer_id: UuidSchema.nullable(),
-  variables: TemplateVariablesSchema,
-  is_active: z.boolean(),
+	name: z.string().min(1).max(120),
+	subject: z.string().min(1).max(200),
+	body_html: z.string().min(1),
+	header_id: UuidSchema.nullable(),
+	footer_id: UuidSchema.nullable(),
+	variables: TemplateVariablesSchema,
+	is_active: z.boolean(),
 });
 
 export const EmailTemplateDtoSchema = EmailTemplateSchema.extend({
-  id: UuidSchema,
-  created_at: TimestamptzSchema,
-  updated_at: TimestamptzSchema,
-  deleted_at: TimestamptzSchema.nullable(),
+	id: UuidSchema,
+	created_at: TimestamptzSchema,
+	updated_at: TimestamptzSchema,
+	deleted_at: TimestamptzSchema.nullable(),
 });
 
 export const CreateEmailTemplateSchema = EmailTemplateSchema.partial({
-  header_id: true,
-  footer_id: true,
-  variables: true,
-  is_active: true,
+	header_id: true,
+	footer_id: true,
+	variables: true,
+	is_active: true,
 });
-export const UpdateEmailTemplateSchema = EmailTemplateSchema
-  .partial()
-  .refine((v) => Object.keys(v).length > 0, {
-    message: 'Se requiere al menos un campo para actualizar',
-  });
+export const UpdateEmailTemplateSchema = EmailTemplateSchema.partial().refine(
+	(v) => Object.keys(v).length > 0,
+	{
+		message: "Se requiere al menos un campo para actualizar",
+	},
+);
 
 /** Preview renderizado (header + body + footer ensamblados). */
 export const RenderedEmailSchema = z.object({
-  subject: z.string(),
-  html: z.string(),
-  variables_used: TemplateVariablesSchema,
+	subject: z.string(),
+	html: z.string(),
+	variables_used: TemplateVariablesSchema,
 });
 export type RenderedEmail = z.infer<typeof RenderedEmailSchema>;
 
@@ -84,207 +90,215 @@ export type RenderedEmail = z.infer<typeof RenderedEmailSchema>;
  * DSL mínimo y validado: nada de queries arbitrarias desde JSONB.
  * `field` solo acepta columnas permitidas; `op` operadores fijos.
  */
-export const SEGMENT_FILTER_FIELDS = [
-  'role',
-  'city',
-  'created_at',
+export const SEGMENT_FILTER_FIELDS = ["role", "city", "created_at"] as const;
+export const SEGMENT_FILTER_OPS = [
+	"eq",
+	"neq",
+	"gte",
+	"lte",
+	"contains",
 ] as const;
-export const SEGMENT_FILTER_OPS = ['eq', 'neq', 'gte', 'lte', 'contains'] as const;
 
 const SegmentFilterSchema = z.object({
-  field: z.enum(SEGMENT_FILTER_FIELDS),
-  op: z.enum(SEGMENT_FILTER_OPS),
-  value: z.union([z.string(), z.number(), z.boolean()]),
+	field: z.enum(SEGMENT_FILTER_FIELDS),
+	op: z.enum(SEGMENT_FILTER_OPS),
+	value: z.union([z.string(), z.number(), z.boolean()]),
 });
 
 export const SegmentFiltersSchema = z.object({
-  and: z.array(SegmentFilterSchema).max(10),
+	and: z.array(SegmentFilterSchema).max(10),
 });
 
 export const SegmentSchema = z.object({
-  name: z.string().min(1).max(120),
-  description: z.string().max(500).nullable(),
-  type: z.enum(SEGMENT_TYPES),
-  filters: SegmentFiltersSchema.nullable(),
-  /** Solo combina con campañas de la misma categoría. */
-  category: z.enum(MARKETING_CATEGORIES),
-  is_active: z.boolean(),
+	name: z.string().min(1).max(120),
+	description: z.string().max(500).nullable(),
+	type: z.enum(SEGMENT_TYPES),
+	filters: SegmentFiltersSchema.nullable(),
+	/** Solo combina con campañas de la misma categoría. */
+	category: z.enum(MARKETING_CATEGORIES),
+	is_active: z.boolean(),
 });
 
 export const SegmentDtoSchema = SegmentSchema.extend({
-  id: UuidSchema,
-  estimated_count: z.number().int().nonnegative().nullable(),
-  created_at: TimestamptzSchema,
-  updated_at: TimestamptzSchema,
-  deleted_at: TimestamptzSchema.nullable(),
+	id: UuidSchema,
+	estimated_count: z.number().int().nonnegative().nullable(),
+	created_at: TimestamptzSchema,
+	updated_at: TimestamptzSchema,
+	deleted_at: TimestamptzSchema.nullable(),
 });
 
 export const CreateSegmentSchema = SegmentSchema.partial({
-  description: true,
-  type: true,
-  filters: true,
+	description: true,
+	type: true,
+	filters: true,
 })
-  .extend({
-    // Categoría por defecto si el form no la envía.
-    category: z.enum(MARKETING_CATEGORIES).default('announcements'),
-    // Miembros iniciales del segmento estático (clave desconocida para el
-    // schema = eliminada por Zod antes de llegar al controller).
-    user_ids: z.array(UuidSchema).max(500).optional(),
-  })
-  .superRefine((v, ctx) => {
-  if (v.type === 'dynamic' && !v.filters) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['filters'],
-      message: 'Los segmentos dinámicos requieren filtros',
-    });
-  }
-});
+	.extend({
+		// Categoría por defecto si el form no la envía.
+		category: z.enum(MARKETING_CATEGORIES).default("announcements"),
+		// Miembros iniciales del segmento estático (clave desconocida para el
+		// schema = eliminada por Zod antes de llegar al controller).
+		user_ids: z.array(UuidSchema).max(500).optional(),
+	})
+	.superRefine((v, ctx) => {
+		if (v.type === "dynamic" && !v.filters) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["filters"],
+				message: "Los segmentos dinámicos requieren filtros",
+			});
+		}
+	});
 
 export const UpdateSegmentSchema = SegmentSchema.partial().refine(
-  (v) => Object.keys(v).length > 0,
-  { message: 'Se requiere al menos un campo para actualizar' },
+	(v) => Object.keys(v).length > 0,
+	{ message: "Se requiere al menos un campo para actualizar" },
 );
 
 export const AddSegmentUsersSchema = z.object({
-  user_ids: z.array(UuidSchema).min(1).max(500),
+	user_ids: z.array(UuidSchema).min(1).max(500),
 });
 
 // ─── Campañas ──────────────────────────────────────────────────────────
 
 export const CampaignSchema = z.object({
-  name: z.string().min(1).max(120),
-  /** Canal de entrega; decide qué plantilla y motor de envío usa la campaña. */
-  channel: z.enum(CAMPAIGN_CHANNELS).default('email'),
-  template_id: UuidSchema.nullable(),
-  category: z.enum(MARKETING_CATEGORIES),
-  segment_ids: z.array(UuidSchema),
-  include_user_ids: z.array(UuidSchema),
-  exclude_user_ids: z.array(UuidSchema),
-  scheduled_at: TimestamptzSchema.nullable(),
+	name: z.string().min(1).max(120),
+	/** Canal de entrega; decide qué plantilla y motor de envío usa la campaña. */
+	channel: z.enum(CAMPAIGN_CHANNELS).default("email"),
+	template_id: UuidSchema.nullable(),
+	category: z.enum(MARKETING_CATEGORIES),
+	segment_ids: z.array(UuidSchema),
+	include_user_ids: z.array(UuidSchema),
+	exclude_user_ids: z.array(UuidSchema),
+	scheduled_at: TimestamptzSchema.nullable(),
 });
 
 export const CampaignDtoSchema = CampaignSchema.extend({
-  id: UuidSchema,
-  status: z.enum(CAMPAIGN_STATUSES),
-  deleted_at: TimestamptzSchema.nullable(),
-  sent_at: TimestamptzSchema.nullable(),
-  total_recipients: z.number().int().nonnegative(),
-  total_sent: z.number().int().nonnegative(),
-  total_failed: z.number().int().nonnegative(),
-  total_delivered: z.number().int().nonnegative(),
-  total_opened: z.number().int().nonnegative(),
-  total_clicked: z.number().int().nonnegative(),
-  total_bounced: z.number().int().nonnegative(),
-  created_at: TimestamptzSchema,
-  updated_at: TimestamptzSchema,
+	id: UuidSchema,
+	status: z.enum(CAMPAIGN_STATUSES),
+	deleted_at: TimestamptzSchema.nullable(),
+	sent_at: TimestamptzSchema.nullable(),
+	total_recipients: z.number().int().nonnegative(),
+	total_sent: z.number().int().nonnegative(),
+	total_failed: z.number().int().nonnegative(),
+	total_delivered: z.number().int().nonnegative(),
+	total_opened: z.number().int().nonnegative(),
+	total_clicked: z.number().int().nonnegative(),
+	total_bounced: z.number().int().nonnegative(),
+	created_at: TimestamptzSchema,
+	updated_at: TimestamptzSchema,
 });
 
 export const CreateCampaignSchema = CampaignSchema.partial({
-  category: true,
-  segment_ids: true,
-  include_user_ids: true,
-  exclude_user_ids: true,
-  scheduled_at: true,
+	category: true,
+	segment_ids: true,
+	include_user_ids: true,
+	exclude_user_ids: true,
+	scheduled_at: true,
 });
 
 export const UpdateCampaignSchema = CampaignSchema.partial().refine(
-  (v) => Object.keys(v).length > 0,
-  { message: 'Se requiere al menos un campo para actualizar' },
+	(v) => Object.keys(v).length > 0,
+	{ message: "Se requiere al menos un campo para actualizar" },
 );
 
 /** Envío de prueba: emails fijos, mismo pipeline de render. */
 export const TestCampaignSchema = z.object({
-  emails: z.array(z.email()).min(1).max(10),
-  overrides: z
-    .object({
-      subject: z.string().max(200).optional(),
-      body_html: z.string().optional(),
-    })
-    .optional(),
+	emails: z.array(z.email()).min(1).max(10),
+	overrides: z
+		.object({
+			subject: z.string().max(200).optional(),
+			body_html: z.string().optional(),
+		})
+		.optional(),
 });
 
 // ─── Envíos individuales ───────────────────────────────────────────────
 
 export const EmailSendDtoSchema = z.object({
-  id: UuidSchema,
-  type: z.enum(EMAIL_SEND_TYPES),
-  source_type: z.string().nullable(),
-  source_id: UuidSchema.nullable(),
-  template_id: UuidSchema,
-  user_id: UuidSchema.nullable(),
-  email: z.email(),
-  variables_used: z.record(z.string(), z.unknown()).nullable().optional(),
-  resend_id: z.string().nullable(),
-  status: z.enum(EMAIL_SEND_STATUSES),
-  attempts: z.number().int().nonnegative(),
-  max_attempts: z.number().int().positive(),
-  error_message: z.string().nullable(),
-  error_code: z.string().nullable(),
-  scheduled_at: TimestamptzSchema.nullable(),
-  queued_at: TimestamptzSchema.nullable(),
-  processed_at: TimestamptzSchema.nullable(),
-  sent_at: TimestamptzSchema.nullable(),
-  delivered_at: TimestamptzSchema.nullable(),
-  opened_at: TimestamptzSchema.nullable(),
-  clicked_at: TimestamptzSchema.nullable(),
-  bounced_at: TimestamptzSchema.nullable(),
-  created_at: TimestamptzSchema,
-  updated_at: TimestamptzSchema.nullable(),
+	id: UuidSchema,
+	type: z.enum(EMAIL_SEND_TYPES),
+	source_type: z.string().nullable(),
+	source_id: UuidSchema.nullable(),
+	template_id: UuidSchema,
+	user_id: UuidSchema.nullable(),
+	email: z.email(),
+	variables_used: z.record(z.string(), z.unknown()).nullable().optional(),
+	resend_id: z.string().nullable(),
+	status: z.enum(EMAIL_SEND_STATUSES),
+	attempts: z.number().int().nonnegative(),
+	max_attempts: z.number().int().positive(),
+	error_message: z.string().nullable(),
+	error_code: z.string().nullable(),
+	scheduled_at: TimestamptzSchema.nullable(),
+	queued_at: TimestamptzSchema.nullable(),
+	processed_at: TimestamptzSchema.nullable(),
+	sent_at: TimestamptzSchema.nullable(),
+	delivered_at: TimestamptzSchema.nullable(),
+	opened_at: TimestamptzSchema.nullable(),
+	clicked_at: TimestamptzSchema.nullable(),
+	bounced_at: TimestamptzSchema.nullable(),
+	created_at: TimestamptzSchema,
+	updated_at: TimestamptzSchema.nullable(),
 });
 
 export const ListSendsQuerySchema = PaginationQuerySchema.extend({
-  status: z.enum(EMAIL_SEND_STATUSES).optional(),
-  type: z.enum(EMAIL_SEND_TYPES).optional(),
-  source_type: z.string().nullable().optional(),
-  source_id: UuidSchema.nullable().optional(),
-  search: z.string().optional(),
+	status: z.enum(EMAIL_SEND_STATUSES).optional(),
+	type: z.enum(EMAIL_SEND_TYPES).optional(),
+	source_type: z.string().nullable().optional(),
+	source_id: UuidSchema.nullable().optional(),
+	search: z.string().optional(),
 });
 
-export const EmailSendListResponseSchema = PaginatedDataSchema(EmailSendDtoSchema);
+export const EmailSendListResponseSchema =
+	PaginatedDataSchema(EmailSendDtoSchema);
 
 /** Override de preview de campaña (POST /email-marketing/campaigns/:id/preview). */
 export const PreviewCampaignRequestSchema = z.object({
-  subject: z.string().min(1).max(200).optional(),
-  body_html: z.string().min(1).optional(),
+	subject: z.string().min(1).max(200).optional(),
+	body_html: z.string().min(1).optional(),
 });
 
 /** Campos mutables de un envío (PATCH /email-marketing/sends/:id). */
 export const UpdateEmailSendSchema = z
-  .object({
-    status: z.enum(EMAIL_SEND_STATUSES),
-    error_message: z.string().nullable(),
-    error_code: z.string().nullable(),
-    scheduled_at: TimestamptzSchema.nullable(),
-    queued_at: TimestamptzSchema.nullable(),
-    processed_at: TimestamptzSchema.nullable(),
-    sent_at: TimestamptzSchema.nullable(),
-    delivered_at: TimestamptzSchema.nullable(),
-    opened_at: TimestamptzSchema.nullable(),
-    clicked_at: TimestamptzSchema.nullable(),
-    bounced_at: TimestamptzSchema.nullable(),
-  })
-  .partial();
+	.object({
+		status: z.enum(EMAIL_SEND_STATUSES),
+		error_message: z.string().nullable(),
+		error_code: z.string().nullable(),
+		scheduled_at: TimestamptzSchema.nullable(),
+		queued_at: TimestamptzSchema.nullable(),
+		processed_at: TimestamptzSchema.nullable(),
+		sent_at: TimestamptzSchema.nullable(),
+		delivered_at: TimestamptzSchema.nullable(),
+		opened_at: TimestamptzSchema.nullable(),
+		clicked_at: TimestamptzSchema.nullable(),
+		bounced_at: TimestamptzSchema.nullable(),
+	})
+	.partial();
 
 // ─── Listas paginadas ──────────────────────────────────────────────────
 
 export const ListComponentsQuerySchema = PaginationQuerySchema.extend({
-  search: z.string().min(1).max(100).optional(),
-  active: BooleanQuerySchema,
+	search: z.string().min(1).max(100).optional(),
+	active: BooleanQuerySchema,
 });
 
 export const ListTemplatesQuerySchema = ListComponentsQuerySchema;
 export const ListSegmentsQuerySchema = ListComponentsQuerySchema.extend({
-  category: z.enum(MARKETING_CATEGORIES).optional(),
+	category: z.enum(MARKETING_CATEGORIES).optional(),
 });
 export const ListCampaignsQuerySchema = PaginationQuerySchema.extend({
-  search: z.string().min(1).max(100).optional(),
-  status: z.enum(CAMPAIGN_STATUSES).optional(),
-  channel: z.enum(CAMPAIGN_CHANNELS).optional(),
+	search: z.string().min(1).max(100).optional(),
+	status: z.enum(CAMPAIGN_STATUSES).optional(),
+	channel: z.enum(CAMPAIGN_CHANNELS).optional(),
 });
 
 /** Respuestas de lista canónicas `{ data, meta }`. */
-export const EmailComponentListResponseSchema = PaginatedDataSchema(EmailComponentDtoSchema);
-export const EmailTemplateListResponseSchema = PaginatedDataSchema(EmailTemplateDtoSchema);
+export const EmailComponentListResponseSchema = PaginatedDataSchema(
+	EmailComponentDtoSchema,
+);
+export const EmailTemplateListResponseSchema = PaginatedDataSchema(
+	EmailTemplateDtoSchema,
+);
 export const SegmentListResponseSchema = PaginatedDataSchema(SegmentDtoSchema);
-export const CampaignListResponseSchema = PaginatedDataSchema(CampaignDtoSchema);
+export const CampaignListResponseSchema =
+	PaginatedDataSchema(CampaignDtoSchema);

@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
@@ -8,7 +8,12 @@ import { AppText, ErrorState, LoadingView, Screen, ScreenHeader } from "@/src/co
 import { formatMoney } from "@/src/core/utils/formatters";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
-import { useApplyCoupon, useOffer, useReserveOffer } from "@/src/features/hooks";
+import {
+	createReservationIdempotencyKey,
+	useApplyCoupon,
+	useOffer,
+	useReserveOffer,
+} from "@/src/features/hooks";
 import {
 	type ReservationSuccess,
 } from "@/src/features/orders/domain/order";
@@ -50,6 +55,10 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 		changeInput,
 	} = useApplyCoupon(offerDetail ?? undefined);
 	const [confirmation, setConfirmation] = useState<ReservationSuccess | null>(null);
+	const reservationAttempt = useRef<{
+		scope: string;
+		idempotencyKey: string;
+	} | null>(null);
 
 	if (isLoading) return <LoadingView />;
 	if (isError || !offerDetail)
@@ -59,8 +68,19 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 	const isAvailable = isOfferAvailable(offerDetail);
 
 	const confirmReservation = () => {
+		const scope = `${offer.id}:${appliedCoupon?.id ?? "none"}`;
+		if (reservationAttempt.current?.scope !== scope) {
+			reservationAttempt.current = {
+				scope,
+				idempotencyKey: createReservationIdempotencyKey(),
+			};
+		}
 		reserve.mutate(
-			{ offerId: offer.id, couponId: appliedCoupon?.id },
+			{
+				offerId: offer.id,
+				couponId: appliedCoupon?.id,
+				idempotencyKey: reservationAttempt.current.idempotencyKey,
+			},
 			{
 				onSuccess: (result) => {
 					if (result.ok) {

@@ -84,11 +84,47 @@ describe('CategoriesService', () => {
         page: 1,
         limit: 10,
         search: undefined,
-        active: undefined,
+        active: true,
       });
       expect(result).toEqual({
         data: [makeDto()],
         meta: { page: 1, limit: 10, total: 1 },
+      });
+    });
+  });
+
+  describe('listAdmin', () => {
+    it('preserves active=false for admin lists', async () => {
+      repository.list.mockResolvedValue({ rows: [], total: 0 });
+      (paginatedDataFromQuery as jest.Mock).mockReturnValue({
+        data: [],
+        meta: { page: 1, limit: 10, total: 0 },
+      });
+
+      await service.listAdmin({ page: 1, limit: 10, active: false });
+
+      expect(repository.list).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
+        search: undefined,
+        active: false,
+      });
+    });
+
+    it('preserves an undefined active filter for admin lists', async () => {
+      repository.list.mockResolvedValue({ rows: [], total: 0 });
+      (paginatedDataFromQuery as jest.Mock).mockReturnValue({
+        data: [],
+        meta: { page: 1, limit: 10, total: 0 },
+      });
+
+      await service.listAdmin({ page: 1, limit: 10, active: undefined });
+
+      expect(repository.list).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
+        search: undefined,
+        active: undefined,
       });
     });
   });
@@ -107,6 +143,12 @@ describe('CategoriesService', () => {
       repository.findById.mockResolvedValue(null);
 
       await expect(service.getById('nonexistent')).rejects.toThrow(NotFoundException);
+    });
+
+    it('should reject an inactive category', async () => {
+      repository.findById.mockResolvedValue(makeRow({ active: false }));
+
+      await expect(service.getById(makeRow().id)).rejects.toThrow(NotFoundException);
     });
   });
 

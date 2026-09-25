@@ -12,7 +12,12 @@ const routes = [
 
 function fakeProps(index: number): BottomTabBarProps {
 	return {
-		state: { index, routes, key: "tab-state", routeNames: routes.map((r) => r.name) },
+		state: {
+			index,
+			routes,
+			key: "tab-state",
+			routeNames: routes.map((r) => r.name),
+		},
 		descriptors: {},
 		navigation: {},
 		insets: { top: 0, right: 0, bottom: 0, left: 0 },

@@ -6,15 +6,33 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import type { Env } from '../../config/env.schema';
+import { safeErrorFields } from '../utils/safe-error';
+
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
+
+function safeRequestId(value: unknown): string {
+  return typeof value === 'string' && REQUEST_ID_PATTERN.test(value)
+    ? value
+    : crypto.randomUUID();
+}
+
+function safeRoute(request: Request): string {
+  // Express types `request.route` as `any`, and `any & T` is still `any`, so an
+  // intersection does not help. Widen through `unknown` first: every read below
+  // is then genuinely unchecked and the guards can actually reject it.
+  const view = request as unknown as Record<string, unknown>;
+  const route = view.route;
+  const path =
+    typeof route === 'object' && route !== null
+      ? (route as Record<string, unknown>).path
+      : undefined;
+  return typeof path === 'string' && path.length <= 128 ? path : 'unmatched';
+}
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
-
-  constructor(private readonly config: ConfigService<Env, true>) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -26,8 +44,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let error = 'Internal Server Error';
     let details: unknown;
 
-    const requestId =
-      (request.headers['x-request-id'] as string) || crypto.randomUUID();
+    const requestId = safeRequestId(request.headers['x-request-id']);
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -41,35 +58,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
         error = (obj.error as string) ?? exception.name;
         details = obj.details;
       }
+      if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+        this.logException('http_exception', exception, requestId, request);
+      }
     } else if (exception instanceof Error) {
-      const cause = exception.cause;
-      this.logger.error({
-        message: exception.message,
-        stack: exception.stack,
-        ...(cause !== undefined
-          ? {
-              cause:
-                cause instanceof Error
-                  ? { name: cause.name, message: cause.message }
-                  : String(cause),
-            }
-          : {}),
-        requestId,
-        path: request.url,
-        method: request.method,
-      });
+      this.logException('unhandled_exception', exception, requestId, request);
     } else {
-      this.logger.error({
-        message: 'Unknown exception',
-        exception: String(exception),
-        requestId,
-        path: request.url,
-        method: request.method,
-      });
+      this.logException('unknown_exception', exception, requestId, request);
     }
 
-    const isProduction = this.config.get('NODE_ENV') === 'production';
-    if (isProduction && !(exception instanceof HttpException)) {
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       message = 'Error interno del servidor';
       error = 'Internal Server Error';
       details = undefined;
@@ -79,10 +77,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
       statusCode: status,
       message,
       error,
-      path: request.url,
+      path: request.path,
       timestamp: new Date().toISOString(),
       requestId,
       ...(details !== undefined ? { details } : {}),
+    });
+  }
+
+  private logException(
+    event: string,
+    exception: unknown,
+    requestId: string,
+    request: Request,
+  ): void {
+    this.logger.error({
+      event,
+      ...safeErrorFields(exception),
+      requestId,
+      route: safeRoute(request),
+      method: request.method,
     });
   }
 }

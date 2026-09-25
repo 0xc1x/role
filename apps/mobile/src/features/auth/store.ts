@@ -68,7 +68,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 		set({ profile, status: profile ? "authenticated" : "guest" }),
 	setPendingPasswordRecovery: (value) =>
 		set({ pendingPasswordRecovery: value }),
-clear: () =>
+	clear: () =>
 		set({
 			status: "guest",
 			profile: null,

@@ -1,4 +1,10 @@
-import { Check, CircleCheck, LockKeyhole, Mail, User } from "lucide-react-native";
+import {
+	Check,
+	CircleCheck,
+	LockKeyhole,
+	Mail,
+	User,
+} from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -30,6 +36,7 @@ export default function SignupScreen() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [acceptedTerms, setAcceptedTerms] = useState(false);
+	const [analyticsConsent, setAnalyticsConsent] = useState(false);
 	const [nameError, setNameError] = useState<string | null>(null);
 	const [emailError, setEmailError] = useState<string | null>(null);
 	const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -57,7 +64,7 @@ export default function SignupScreen() {
 				email: email.trim(),
 				password,
 				role: "user",
-				analyticsConsentGranted: false,
+				analyticsConsentGranted: analyticsConsent,
 			});
 			if (result.requiresEmailConfirmation) {
 				toast.success(strings.auth.accountCreatedConfirmation);
@@ -169,6 +176,37 @@ export default function SignupScreen() {
 				</AppText>
 			</View>
 
+			<View style={styles.analyticsRow}>
+				<Pressable
+					onPress={() => setAnalyticsConsent((value) => !value)}
+					hitSlop={8}
+					accessibilityRole="checkbox"
+					accessibilityState={{ checked: analyticsConsent }}
+					accessibilityLabel={strings.auth.consentAnalytics}
+					style={[
+						styles.checkbox,
+						{
+							borderColor: analyticsConsent
+								? colors.primary
+								: colors.borderSolid,
+							backgroundColor: analyticsConsent
+								? colors.primary
+								: "transparent",
+						},
+					]}
+				>
+					{analyticsConsent ? (
+						<Check size={16} color={colors.primaryForeground} />
+					) : null}
+				</Pressable>
+				<AppText
+					variant="bodySmall"
+					style={{ color: colors.mutedForeground, flex: 1, lineHeight: 17 }}
+				>
+					{strings.auth.consentAnalytics}
+				</AppText>
+			</View>
+
 			<Button
 				onPress={handleSignup}
 				loading={loading}
@@ -185,10 +223,7 @@ export default function SignupScreen() {
 				style={[styles.switchLine, { color: colors.mutedForeground }]}
 			>
 				{strings.auth.haveAccount}{" "}
-				<Text
-					onPress={() => router.push("/login")}
-					style={linkStyle}
-				>
+				<Text onPress={() => router.push("/login")} style={linkStyle}>
 					{strings.auth.loginCTA}
 				</Text>
 			</AppText>
@@ -227,6 +262,13 @@ const styles = StyleSheet.create({
 	logoWrap: { alignItems: "center", marginBottom: spacing.md },
 	heading: { gap: spacing.sm, marginBottom: spacing.xl },
 	center: { textAlign: "center" },
+	analyticsRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		gap: spacing.md,
+		marginTop: spacing.xs,
+		marginBottom: spacing.xl,
+	},
 	termsRow: {
 		flexDirection: "row",
 		alignItems: "flex-start",
@@ -251,5 +293,9 @@ const styles = StyleSheet.create({
 		marginTop: spacing.xl,
 	},
 	benefitsList: { gap: spacing.sm, marginTop: spacing.md },
-	benefitItem: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
+	benefitItem: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		gap: spacing.sm,
+	},
 });

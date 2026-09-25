@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
+import {
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ReactElement,
+	type ReactNode,
+	type Ref,
+} from "react";
 import {
 	ActivityIndicator,
 	Pressable,
@@ -16,7 +24,15 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronLeft, Eye, EyeOff, Heart, Search, X, type LucideIcon } from "lucide-react-native";
+import {
+	ChevronLeft,
+	Eye,
+	EyeOff,
+	Heart,
+	Search,
+	X,
+	type LucideIcon,
+} from "lucide-react-native";
 import { router, useNavigation, useSegments, type Href } from "expo-router";
 import Animated, {
 	useAnimatedStyle,
@@ -49,7 +65,6 @@ export { default as Navbar, BAR_HEIGHT } from "./Navbar";
 
 export type { ColorTokens, TypeStyle };
 export { spacing, fonts, typography };
-
 
 // ─── Circular Icon Button (floating) ─────────────────────────────
 export function CircleIconButton({
@@ -269,7 +284,12 @@ interface ScreenHeaderProps {
 	style?: StyleProp<ViewStyle>;
 }
 
-export function ScreenHeader({ title, onBack, fallback, style }: ScreenHeaderProps) {
+export function ScreenHeader({
+	title,
+	onBack,
+	fallback,
+	style,
+}: ScreenHeaderProps) {
 	const { colors } = useTheme();
 	const navigation = useNavigation();
 
@@ -444,9 +464,7 @@ export function TextField({
 						},
 					]}
 				>
-				{Icon ? (
-					<Icon size={20} color={colors.mutedForeground} />
-				) : null}
+					{Icon ? <Icon size={20} color={colors.mutedForeground} /> : null}
 					<TextInput
 						placeholderTextColor={colors.mutedForeground}
 						onFocus={(e) => {
@@ -459,7 +477,9 @@ export function TextField({
 						}}
 						style={[styles.fieldInput, { color: colors.foreground }]}
 						{...inputProps}
-						secureTextEntry={secureToggle ? obscured : inputProps.secureTextEntry}
+						secureTextEntry={
+							secureToggle ? obscured : inputProps.secureTextEntry
+						}
 					/>
 					{secureToggle ? (
 						<Button
@@ -560,21 +580,26 @@ export function StatusBadge({
 		}
 	}, [dot, opacity]);
 	const dotStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
-	  return (
+	return (
 		<Badge
-		variant="outline"
-		style={{ backgroundColor: t.bg, borderColor: withAlpha(t.fg, 0.35) }}
+			variant="outline"
+			style={{ backgroundColor: t.bg, borderColor: withAlpha(t.fg, 0.35) }}
 		>
-		{dot ? (
-			<Animated.View style={dotStyle}>
-				<View
-					style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.fg }}
-				/>
-			</Animated.View>
-		) : null}
-		<AppText variant="bodySmall" weight="semiBold" style={{ color: t.fg }}>
-			{label}
-		</AppText>
+			{dot ? (
+				<Animated.View style={dotStyle}>
+					<View
+						style={{
+							width: 6,
+							height: 6,
+							borderRadius: 3,
+							backgroundColor: t.fg,
+						}}
+					/>
+				</Animated.View>
+			) : null}
+			<AppText variant="bodySmall" weight="semiBold" style={{ color: t.fg }}>
+				{label}
+			</AppText>
 		</Badge>
 	);
 }
@@ -643,7 +668,7 @@ export function ErrorState({
 					onPress={onRetry}
 					style={{ alignSelf: "center", marginTop: margin(2) }}
 				>
-				{strings.common.retry}
+					{strings.common.retry}
 				</Button>
 			) : null}
 		</View>
@@ -741,7 +766,9 @@ export function ThemeOptionCard({
 			style={[
 				styles.themeCard,
 				{
-					backgroundColor: isSelected ? withAlpha(colors.primary, 0.051) : colors.card,
+					backgroundColor: isSelected
+						? withAlpha(colors.primary, 0.051)
+						: colors.card,
 					borderColor: isSelected ? colors.primary : colors.borderSolid,
 					// Ancho uniforme: 1.5 solo en seleccionada desplazaba
 					// la fila 1px al cambiar de opción.
@@ -749,12 +776,12 @@ export function ThemeOptionCard({
 				},
 			]}
 		>
-		<Icon
-			size={20}
-			color={isSelected ? colors.primary : colors.mutedForeground}
-		/>
-		<AppText
-			variant="bodySmall"
+			<Icon
+				size={20}
+				color={isSelected ? colors.primary : colors.mutedForeground}
+			/>
+			<AppText
+				variant="bodySmall"
 				weight={isSelected ? "bold" : "regular"}
 				style={{
 					color: isSelected ? colors.primary : colors.foreground,
@@ -887,7 +914,12 @@ const styles = StyleSheet.create({
 	},
 	// minWidth: 0 permite que el input encoja dentro de filas flex en web
 	// (sin esto el placeholder desborda la caja).
-	searchInput: { flex: 1, minWidth: 0, paddingVertical: spacing.sm + 2, fontSize: 14 },
+	searchInput: {
+		flex: 1,
+		minWidth: 0,
+		paddingVertical: spacing.sm + 2,
+		fontSize: 14,
+	},
 	searchClear: {
 		width: 24,
 		height: 24,

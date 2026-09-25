@@ -68,7 +68,8 @@ export function toCouponUpdate(dto: UpdateCouponDto): CouponUpdate {
   if (dto.max_uses !== undefined) update.max_uses = dto.max_uses;
   if (dto.is_active !== undefined) update.is_active = dto.is_active;
   if (dto.expires_at !== undefined) {
-    update.expires_at = dto.expires_at === null ? null : new Date(dto.expires_at);
+    update.expires_at =
+      dto.expires_at === null ? null : new Date(dto.expires_at);
   }
   return update;
 }

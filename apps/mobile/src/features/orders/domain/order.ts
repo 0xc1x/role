@@ -227,15 +227,15 @@ export interface CheckoutTotals {
 }
 
 export function checkoutTotals(
-	offer: Pick<Order, "original_price" | "price"> | { original_price: number; discounted_price: number },
+	offer:
+		| Pick<Order, "original_price" | "price">
+		| { original_price: number; discounted_price: number },
 	coupon: Coupon | null,
 ): CheckoutTotals {
 	const price =
 		"discounted_price" in offer ? offer.discounted_price : offer.price;
 	const priceCents = toCents(price);
-	const couponCents = coupon
-		? toCents(couponDiscount(coupon, price))
-		: 0;
+	const couponCents = coupon ? toCents(couponDiscount(coupon, price)) : 0;
 	return {
 		offerDiscount: (toCents(offer.original_price) - priceCents) / 100,
 		coupon: couponCents / 100,
@@ -285,7 +285,10 @@ export interface CancelOrderResult {
 export type HistoryPeriod = "today" | "week" | "all";
 
 /** Lunes 00:00 → domingo 23:59 UTC de la semana con offset (0 = actual). */
-export function getWeekRange(now: Date, weekOffset: number): { monday: Date; sunday: Date } {
+export function getWeekRange(
+	now: Date,
+	weekOffset: number,
+): { monday: Date; sunday: Date } {
 	const base = new Date(now);
 	base.setUTCDate(base.getUTCDate() + weekOffset * 7);
 	const day = base.getUTCDay() === 0 ? 7 : base.getUTCDay();
@@ -303,7 +306,9 @@ export function formatDayMonth(d: Date): string {
 }
 
 /** Filtra items con `order.created_at` según período del historial. */
-export function filterByHistoryPeriod<T extends { order: Pick<Order, "created_at"> }>(
+export function filterByHistoryPeriod<
+	T extends { order: Pick<Order, "created_at"> },
+>(
 	items: readonly T[],
 	period: HistoryPeriod,
 	weekOffset: number,

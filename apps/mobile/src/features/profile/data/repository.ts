@@ -10,10 +10,7 @@ import { supabase } from "@/src/core/supabase/client";
 import { toAppError } from "@/src/core/error/mapper";
 import { Errors } from "@/src/core/error/app-error";
 
-import type {
-	PaymentMethodModel,
-	UserStats,
-} from "../domain/profile";
+import type { PaymentMethodModel, UserStats } from "../domain/profile";
 import {
 	DEFAULT_NOTIFICATION_PREFS,
 	DEFAULT_PREFERENCES,
@@ -154,18 +151,19 @@ export const profileRepository = {
 		return { is_subscribed: data?.is_subscribed ?? true };
 	},
 
-	async setMarketingSubscribed(userId: string, isSubscribed: boolean): Promise<void> {
-		const { error } = await supabase
-			.from("marketing_preferences")
-			.upsert(
-				{
-					user_id: userId,
-					is_subscribed: isSubscribed,
-					unsubscribed_at: isSubscribed ? null : new Date().toISOString(),
-					source: "app",
-				},
-				{ onConflict: "user_id" },
-			);
+	async setMarketingSubscribed(
+		userId: string,
+		isSubscribed: boolean,
+	): Promise<void> {
+		const { error } = await supabase.from("marketing_preferences").upsert(
+			{
+				user_id: userId,
+				is_subscribed: isSubscribed,
+				unsubscribed_at: isSubscribed ? null : new Date().toISOString(),
+				source: "app",
+			},
+			{ onConflict: "user_id" },
+		);
 		if (error) throw toAppError(error, "Error al guardar preferencias");
 	},
 
@@ -233,68 +231,94 @@ export const profileRepository = {
 	// ─── Payment methods (Supabase tokenized — PCI: never PAN) ───────
 	async getPaymentMethods(userId: string): Promise<PaymentMethodModel[]> {
 		const { data, error } = await supabase
-			.from('payment_methods')
-			.select('id, brand, last4, exp_month, exp_year, holder_name, is_default, created_at')
-			.eq('user_id', userId)
-			.is('deleted_at', null)
-			.eq('active', true)
-			.order('is_default', { ascending: false })
-			.order('created_at', { ascending: false });
-		if (error) throw toAppError(error, 'Error al cargar métodos de pago');
+			.from("payment_methods")
+			.select(
+				"id, brand, last4, exp_month, exp_year, holder_name, is_default, created_at",
+			)
+			.eq("user_id", userId)
+			.is("deleted_at", null)
+			.eq("active", true)
+			.order("is_default", { ascending: false })
+			.order("created_at", { ascending: false });
+		if (error) throw toAppError(error, "Error al cargar métodos de pago");
 		return (data ?? []).map((r: Record<string, unknown>) => ({
 			id: String(r.id),
-			brand: String(r.brand ?? 'card'),
-			last4: String(r.last4 ?? '0000'),
-			cardHolder: String(r.holder_name ?? '—'),
-			expiryMonth: String(r.exp_month ?? '').padStart(2, '0'),
-			expiryYear: String(r.exp_year ?? '').slice(-2),
+			brand: String(r.brand ?? "card"),
+			last4: String(r.last4 ?? "0000"),
+			cardHolder: String(r.holder_name ?? "—"),
+			expiryMonth: String(r.exp_month ?? "").padStart(2, "0"),
+			expiryYear: String(r.exp_year ?? "").slice(-2),
 			isDefault: Boolean(r.is_default),
-			createdAt: String(r.created_at ?? ''),
+			createdAt: String(r.created_at ?? ""),
 		}));
 	},
 
-	async savePaymentMethod(userId: string, method: PaymentMethodModel): Promise<void> {
+	async savePaymentMethod(
+		userId: string,
+		method: PaymentMethodModel,
+	): Promise<void> {
 		// ponytail: scaffold only — gateway SDK will supply token + brand/last4/exp.
 		// This path creates a simulated tokenized row (never PAN) for continuity.
 		if (method.isDefault) {
-			await supabase.from('payment_methods').update({ is_default: false }).eq('user_id', userId);
+			await supabase
+				.from("payment_methods")
+				.update({ is_default: false })
+				.eq("user_id", userId);
 		}
-		const randomSuffix = typeof globalThis.crypto?.randomUUID === 'function'
-			? globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 8)
-			: `${Date.now().toString(36)}`;
-		const { error } = await supabase.from('payment_methods').insert({
+		const randomSuffix =
+			typeof globalThis.crypto?.randomUUID === "function"
+				? globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 8)
+				: `${Date.now().toString(36)}`;
+		const { error } = await supabase.from("payment_methods").insert({
 			user_id: userId,
-			gateway: 'place_to_pay',
+			gateway: "place_to_pay",
 			gateway_token: `tok_sim_${Date.now()}_${randomSuffix}`,
-			brand: method.brand || 'visa',
+			brand: method.brand || "visa",
 			last4: method.last4,
 			exp_month: Number(method.expiryMonth) || 12,
 			exp_year: Number(`20${method.expiryYear}`) || 2030,
 			holder_name: method.cardHolder,
 			is_default: method.isDefault,
 		});
-		if (error) throw toAppError(error, 'Error al guardar método de pago');
+		if (error) throw toAppError(error, "Error al guardar método de pago");
 	},
 
 	async deletePaymentMethod(_userId: string, id: string): Promise<void> {
 		const { error } = await supabase
-			.from('payment_methods')
+			.from("payment_methods")
 			.update({ active: false, deleted_at: new Date().toISOString() })
-			.eq('id', id);
-		if (error) throw toAppError(error, 'Error al eliminar método de pago');
+			.eq("id", id);
+		if (error) throw toAppError(error, "Error al eliminar método de pago");
 	},
 
 	async setDefaultPaymentMethod(userId: string, id: string): Promise<void> {
-		await supabase.from('payment_methods').update({ is_default: false }).eq('user_id', userId);
-		const { error } = await supabase.from('payment_methods').update({ is_default: true }).eq('id', id);
-		if (error) throw toAppError(error, 'Error al actualizar método de pago');
+		await supabase
+			.from("payment_methods")
+			.update({ is_default: false })
+			.eq("user_id", userId);
+		const { error } = await supabase
+			.from("payment_methods")
+			.update({ is_default: true })
+			.eq("id", id);
+		if (error) throw toAppError(error, "Error al actualizar método de pago");
 	},
 
 	// ─── Platform stats (public, real counts) ───────────────────────
-	async getPlatformStats(): Promise<{ users: number; businesses: number; meals: number }> {
-		const { data, error } = await supabase.rpc('get_platform_stats');
-		if (error) throw toAppError(error, 'Error al cargar estadísticas');
-		const row = data as unknown as { users: number; businesses: number; meals: number };
+	// Counts only. get_platform_stats() is now service_role-only because it is a
+	// SECURITY DEFINER function; public surfaces use the count-only variant that
+	// exposes no rows and no platform fields.
+	async getPlatformStats(): Promise<{
+		users: number;
+		businesses: number;
+		meals: number;
+	}> {
+		const { data, error } = await supabase.rpc("get_platform_public_stats");
+		if (error) throw toAppError(error, "Error al cargar estadísticas");
+		const row = data as unknown as {
+			users: number;
+			businesses: number;
+			meals: number;
+		};
 		return {
 			users: Number(row.users ?? 0),
 			businesses: Number(row.businesses ?? 0),

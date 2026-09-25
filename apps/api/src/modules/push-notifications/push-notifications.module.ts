@@ -16,6 +16,10 @@ import { PushCampaignDispatcher } from './push-campaign-dispatcher';
     BullModule.registerQueue({ name: 'email-expedition' }),
   ],
   controllers: [PushNotificationsController],
-  providers: [PushNotificationsRepository, PushAdminService, PushCampaignDispatcher],
+  providers: [
+    PushNotificationsRepository,
+    PushAdminService,
+    PushCampaignDispatcher,
+  ],
 })
 export class PushNotificationsModule {}

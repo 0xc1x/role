@@ -51,6 +51,18 @@ export class SlidesController {
     return this.slideService.list(query);
   }
 
+  @Roles('admin')
+  @Get('admin')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'List slides (admin)' })
+  @ApiOkResponse({ description: 'Paginated slide list' })
+  listAdmin(
+    @Query(new ZodValidationPipe(ListSlidesQuerySchema))
+    query: ListSlideQuery,
+  ): Promise<SlidePaginatedData> {
+    return this.slideService.listAdmin(query);
+  }
+
   @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get slide by id' })

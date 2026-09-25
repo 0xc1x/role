@@ -56,17 +56,25 @@ export function QuickActionsGrid({ businessId }: { businessId: string }) {
 		<View style={styles.quickGrid}>
 			<Pressable
 				onPress={() => router.push(`${base}/stats` as Href)}
-				style={ [styles.quickTileLarge,{backgroundColor: colors.card, borderColor: colors.borderSolid }]}
+				style={[
+					styles.quickTileLarge,
+					{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+				]}
 			>
 				<View style={styles.quickInfo}>
 					<AppText variant="bodyMedium" weight="bold">
 						{large.title}
 					</AppText>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{large.subtitle}
 					</AppText>
 				</View>
-				<View style={[styles.quickIconLarge, { backgroundColor: colors.muted }]}>
+				<View
+					style={[styles.quickIconLarge, { backgroundColor: colors.muted }]}
+				>
 					{large.icon}
 				</View>
 			</Pressable>
@@ -75,7 +83,10 @@ export function QuickActionsGrid({ businessId }: { businessId: string }) {
 					<Pressable
 						key={item.title}
 						onPress={() => router.push(item.route as Href)}
-						style={ [styles.quickTile ,{backgroundColor: colors.card, borderColor: colors.borderSolid }]}
+						style={[
+							styles.quickTile,
+							{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+						]}
 					>
 						<View style={styles.quickInfo}>
 							<AppText variant="bodySmall" weight="bold">
@@ -89,7 +100,9 @@ export function QuickActionsGrid({ businessId }: { businessId: string }) {
 								{item.subtitle}
 							</AppText>
 						</View>
-						<View style={[styles.quickIcon, { borderColor: colors.borderSolid }]}>
+						<View
+							style={[styles.quickIcon, { borderColor: colors.borderSolid }]}
+						>
 							{item.icon}
 						</View>
 					</Pressable>

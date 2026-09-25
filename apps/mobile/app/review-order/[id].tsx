@@ -16,7 +16,7 @@ import {
 import { useOrder, useReviewByOrder, useSubmitReview } from "@/src/features/hooks";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 function Stars({
@@ -108,25 +108,31 @@ export default function ReviewOrderScreen() {
 				</AppText>
 
 				<Card style={{ marginTop: spacing.lg }}>
-					<AppText
-						variant="bodyMedium"
-						weight="semiBold"
-						style={{ marginBottom: spacing.sm }}
-					>
-						{strings.orders.rateProduct}
-					</AppText>
-					<Stars value={productRating} onChange={setProductRating} colors={colors} />
+					<CardHeader>
+						<AppText
+							variant="bodyMedium"
+							weight="semiBold"
+						>
+							{strings.orders.rateProduct}
+						</AppText>
+					</CardHeader>
+					<CardContent>
+						<Stars value={productRating} onChange={setProductRating} colors={colors} />
+					</CardContent>
 				</Card>
 
 				<Card style={{ marginTop: spacing.md }}>
-					<AppText
-						variant="bodyMedium"
-						weight="semiBold"
-						style={{ marginBottom: spacing.sm }}
-					>
-						{strings.orders.rateBusiness}
-					</AppText>
-					<Stars value={businessRating} onChange={setBusinessRating} colors={colors} />
+					<CardHeader>
+						<AppText
+							variant="bodyMedium"
+							weight="semiBold"
+						>
+							{strings.orders.rateBusiness}
+						</AppText>
+					</CardHeader>
+					<CardContent>
+						<Stars value={businessRating} onChange={setBusinessRating} colors={colors} />
+					</CardContent>
 				</Card>
 
 				<View style={{ marginTop: spacing.lg }}>

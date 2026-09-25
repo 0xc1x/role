@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-	ActivityIndicator,
-	StyleSheet,
-	View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { ChevronLeft, LocateFixed, MapPin } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import MapView, { type Region } from "react-native-maps";
@@ -68,8 +64,7 @@ export function MapPickerView({
 	async function determinePosition() {
 		setLoading(true);
 		try {
-			const { status } =
-				await Location.requestForegroundPermissionsAsync();
+			const { status } = await Location.requestForegroundPermissionsAsync();
 			if (status !== "granted") {
 				setLoading(false);
 				return;
@@ -163,7 +158,10 @@ export function MapPickerView({
 			<View
 				style={[
 					styles.panel,
-					{ backgroundColor: colors.card, paddingBottom: spacing.lg + insets.bottom },
+					{
+						backgroundColor: colors.card,
+						paddingBottom: spacing.lg + insets.bottom,
+					},
 				]}
 			>
 				{resolving ? (
@@ -184,19 +182,19 @@ export function MapPickerView({
 						{strings.addresses.moveMapToSelect}
 					</AppText>
 				)}
-			<Button
-				onPress={() =>
-					onConfirm({
-						latitude: coords.latitude,
-						longitude: coords.longitude,
-						address: resolvedAddress,
-					})
-				}
-				fullWidth
-				size="lg"
-			>
-				{strings.addresses.confirmLocation}
-			</Button>
+				<Button
+					onPress={() =>
+						onConfirm({
+							latitude: coords.latitude,
+							longitude: coords.longitude,
+							address: resolvedAddress,
+						})
+					}
+					fullWidth
+					size="lg"
+				>
+					{strings.addresses.confirmLocation}
+				</Button>
 			</View>
 
 			<Button
@@ -205,7 +203,10 @@ export function MapPickerView({
 				onPress={() => void determinePosition()}
 				accessibilityRole="button"
 				aria-label={strings.addresses.useMyLocation}
-				style={[styles.fab, { backgroundColor: colors.card, top: spacing.md + insets.top }]}
+				style={[
+					styles.fab,
+					{ backgroundColor: colors.card, top: spacing.md + insets.top },
+				]}
 				icon={<LocateFixed size={22} color={colors.primary} />}
 			/>
 

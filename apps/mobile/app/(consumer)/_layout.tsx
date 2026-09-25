@@ -5,6 +5,7 @@ import { View } from "react-native";
 import { PortalHost } from "@rn-primitives/portal";
 import type { BottomTabBarProps } from "expo-router/build/react-navigation/bottom-tabs";
 
+import { getIosPwaNavbarOverlap } from "@/src/core/ios-pwa-navbar";
 import { useAuthStore } from "@/src/features/auth/store";
 import { strings } from "@/src/core/i18n/strings";
 import { useTheme } from "@/src/core/theme";
@@ -33,7 +34,7 @@ function OuterBar() {
 	const synced = props ? withSyncedTabIndex(props, segments) : null;
 	if (!synced) return null;
 	return (
-		<View style={{ zIndex: 1100 }}>
+		<View style={{ zIndex: 1100, bottom: -getIosPwaNavbarOverlap() }}>
 			{/* Deep links a rutas ocultas caen en el home (paridad con
 			    fallbackTabName="management" del layout business). */}
 			<Navbar {...synced} fallbackTabName="index" />

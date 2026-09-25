@@ -107,7 +107,8 @@ export class EmailMarketingMapper {
       template_id: row.template_id,
       user_id: row.user_id ?? null,
       email: row.email,
-      variables_used: (row.variables_used as Record<string, unknown> | null) ?? null,
+      variables_used:
+        (row.variables_used as Record<string, unknown> | null) ?? null,
       resend_id: row.resend_id ?? null,
       status: row.status,
       attempts: row.attempts ?? 0,
@@ -123,7 +124,7 @@ export class EmailMarketingMapper {
       clicked_at: this.iso(row.clicked_at),
       bounced_at: this.iso(row.bounced_at),
       created_at: row.created_at.toISOString(),
-      updated_at: this.iso(row.updated_at as Date | null),
+      updated_at: this.iso(row.updated_at),
     };
   }
 }

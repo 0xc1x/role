@@ -34,6 +34,7 @@ import {
 	formatDateTime,
 } from "@/src/core/utils/formatters";
 import { CategoryBadge, InfoCard, InfoRow } from "./InfoPrimitives";
+import { Card, CardDescription, CardHeader } from "@/components/ui/card";
 
 function distanceSubtitle(
 	offer: OfferDetail,
@@ -99,7 +100,9 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 							}
 							hitSlop={8}
 							accessibilityRole="link"
-							icon={<Star size={18} color={colors.yellow} fill={colors.yellow} />}
+							icon={
+								<Star size={18} color={colors.yellow} fill={colors.yellow} />
+							}
 						>
 							{`${data.offer.rating.toFixed(1)} (${data.offer.review_count})`}
 						</Button>
@@ -116,7 +119,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 				{data.offer.title}
 			</AppText>
 			<Button
-				variant="link"
+				variant="outline"
 				onPress={() =>
 					router.push(`/business-profile/${data.offer.business_id}`)
 				}
@@ -128,17 +131,12 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 
 			{/* ── Badges activos: ahorro + stock bajo ─────────────── */}
 			<View style={styles.badgeWrap}>
-				<View
-					style={[styles.pill, { backgroundColor: colors.foreground }]}
-				>
+				<View style={[styles.pill, { backgroundColor: colors.foreground }]}>
 					<AppText
 						weight="bold"
 						style={{ color: colors.background, fontSize: 12 }}
 					>
-						{strings.offerDetail.savingsBadge.replace(
-							"{p}",
-							String(savings),
-						)}
+						{strings.offerDetail.savingsBadge.replace("{p}", String(savings))}
 					</AppText>
 				</View>
 				{data.offer.stock <= 3 && data.offer.stock > 0 ? (
@@ -219,10 +217,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 							</AppText>
 							{includes.map((item) => (
 								<View key={item} style={styles.listRow}>
-									<CircleCheck
-										size={18}
-										color={colors.success}
-									/>
+									<CircleCheck size={18} color={colors.success} />
 									<AppText variant="bodyMedium" style={{ flex: 1 }}>
 										{item}
 									</AppText>
@@ -235,9 +230,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 
 			{/* ── Alérgenos ───────────────────────────────────────── */}
 			{allergens.length > 0 ? (
-				<InfoCard
-					title={strings.business.allergensTitle}
-				>
+				<InfoCard title={strings.business.allergensTitle}>
 					<View
 						style={[
 							styles.allergenRow,
@@ -247,9 +240,16 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 						{allergens.map((item) => (
 							<View
 								key={item}
-								style={[styles.allergenChip, { backgroundColor: colors.warning }]}
+								style={[
+									styles.allergenChip,
+									{ backgroundColor: colors.warning },
+								]}
 							>
-								<AppText variant="bodySmall" weight="semiBold" color={colors.yellowDarkForeground}>
+								<AppText
+									variant="bodySmall"
+									weight="semiBold"
+									color={colors.yellowDarkForeground}
+								>
 									{item}
 								</AppText>
 							</View>
@@ -259,9 +259,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 			) : null}
 
 			{/* ── Recogida ────────────────────────────────────────── */}
-			<InfoCard
-				title={strings.offerDetail.pickupSchedule}
-			>
+			<InfoCard title={strings.offerDetail.pickupSchedule}>
 				<InfoRow
 					icon={Calendar}
 					label={strings.business.pickupFrom}
@@ -282,11 +280,13 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 							String(data.offer.initial_stock || data.offer.stock),
 						)}
 				/>
-				<View style={[styles.noteRow, { backgroundColor: `${withAlpha(colors.infoForeground, 0.051)}` }]}>
-					<Info
-						size={18}
-						color={colors.info}
-					/>
+				<View
+					style={[
+						styles.noteRow,
+						{ backgroundColor: `${withAlpha(colors.infoForeground, 0.051)}` },
+					]}
+				>
+					<Info size={18} color={colors.info} />
 					<AppText
 						variant="bodySmall"
 						style={{ flex: 1, color: muted, lineHeight: 18 }}
@@ -318,7 +318,13 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 							style={styles.businessLogo}
 						/>
 					) : (
-						<View style={[styles.businessLogo, styles.businessLogoPlaceholder, { backgroundColor: colors.borderSolid }]}>
+						<View
+							style={[
+								styles.businessLogo,
+								styles.businessLogoPlaceholder,
+								{ backgroundColor: colors.borderSolid },
+							]}
+						>
 							<Store size={20} color={muted} />
 						</View>
 					)}
@@ -327,8 +333,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 							{data.business.name}
 						</AppText>
 						<AppText variant="bodySmall" style={{ color: muted }}>
-							{BUSINESS_TYPE_LABELS[data.business.type] ??
-								data.business.type}
+							{BUSINESS_TYPE_LABELS[data.business.type] ?? data.business.type}
 						</AppText>
 					</View>
 				</View>
@@ -358,26 +363,30 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 			</InfoCard>
 
 			{/* ── Card ecológica ───────────────────────────────────── */}
-			<View style={[styles.ecoCard, { backgroundColor: cardBg, boxShadow: `0px 4px 10px ${colors.shadow}` }]}>
-				<Leaf size={28} color={colors.success} />
-				<AppText
-					variant="labelMedium"
-					weight="bold"
-					style={{ marginTop: spacing.sm }}
-				>
-					{strings.offerDetail.wasteHero}
-				</AppText>
-				<AppText
-					style={{
-						color: muted,
-						textAlign: "center",
-						lineHeight: 19,
-						marginTop: 4,
-					}}
-				>
-					{strings.offerDetail.wasteHeroText}
-				</AppText>
-			</View>
+			<Card>
+				<CardHeader style={[styles.ecoCard]}>
+					<Leaf size={28} color={colors.success} />
+					<AppText
+						variant="labelMedium"
+						weight="bold"
+						style={{ marginTop: spacing.sm }}
+					>
+						{strings.offerDetail.wasteHero}
+					</AppText>
+				</CardHeader>
+				<CardDescription>
+					<AppText
+						style={{
+							color: muted,
+							textAlign: "center",
+							lineHeight: 19,
+							marginTop: 4,
+						}}
+					>
+						{strings.offerDetail.wasteHeroText}
+					</AppText>
+				</CardDescription>
+			</Card>
 		</View>
 	);
 }
@@ -494,12 +503,10 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "flex-start",
 		gap: spacing.sm,
+		paddingTop: spacing.md,
 	},
 	ecoCard: {
-		width: "100%",
 		alignItems: "center",
-		padding: spacing.xl,
 		borderRadius: radii.lg,
-		marginTop: spacing.xl,
 	},
 });

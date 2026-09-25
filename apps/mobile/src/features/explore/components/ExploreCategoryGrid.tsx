@@ -1,4 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+	memo,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ReactNode,
+} from "react";
 import {
 	Platform,
 	Animated,
@@ -21,10 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
-import {
-	useCategoryStats,
-	usePopularAreas,
-} from "@/src/features/hooks";
+import { useCategoryStats, usePopularAreas } from "@/src/features/hooks";
 import type { CategoryStat } from "@/src/features/offers/domain/offer";
 
 const INITIAL_COUNT = 4;
@@ -135,16 +140,16 @@ export function ExploreCategoryGrid({
 		<View style={styles.container}>
 			{/* ── Áreas Populares ────────────────────────────────────── */}
 			{areas && areas.length > 0 ? (
-			<>
-				<AppText variant="h3" weight="bold">
-					{strings.explore.popularAreas}
-				</AppText>
-				<ScrollView
-					horizontal
-					showsHorizontalScrollIndicator={false}
-					style={{ marginTop: spacing.md }}
-					contentContainerStyle={styles.chipsRow}
-				>
+				<>
+					<AppText variant="h3" weight="bold">
+						{strings.explore.popularAreas}
+					</AppText>
+					<ScrollView
+						horizontal
+						showsHorizontalScrollIndicator={false}
+						style={{ marginTop: spacing.md }}
+						contentContainerStyle={styles.chipsRow}
+					>
 						{areas.map((area) => (
 							<View
 								key={area.name}
@@ -157,10 +162,7 @@ export function ExploreCategoryGrid({
 									},
 								]}
 							>
-								<MapPin
-									size={14}
-									color={isDark ? mutedText : colors.primary}
-								/>
+								<MapPin size={14} color={isDark ? mutedText : colors.primary} />
 								<AppText
 									variant="bodySmall"
 									weight="semiBold"
@@ -188,9 +190,9 @@ export function ExploreCategoryGrid({
 								</View>
 							</View>
 						))}
-				</ScrollView>
-			</>
-		) : null}
+					</ScrollView>
+				</>
+			) : null}
 
 			{/* ── Grid de categorías ─────────────────────────────────── */}
 			<AppText variant="h3" weight="bold" style={{ marginTop: spacing.lg }}>
@@ -230,23 +232,22 @@ export function ExploreCategoryGrid({
 							onPress={toggleExpand}
 							style={[
 								styles.expandCard,
-								{ 
+								{
 									backgroundColor: cellBackground,
-									borderColor: colors.border
+									borderColor: colors.border,
 								},
 							]}
 						>
-							<View style={[styles.expandIcon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}>
+							<View
+								style={[
+									styles.expandIcon,
+									{ backgroundColor: withAlpha(colors.primary, 0.102) },
+								]}
+							>
 								{showAll ? (
-									<ChevronUp
-										size={22}
-										color={colors.primary}
-									/>
+									<ChevronUp size={22} color={colors.primary} />
 								) : (
-									<ChevronDown
-										size={22}
-										color={colors.primary}
-									/>
+									<ChevronDown size={22} color={colors.primary} />
 								)}
 							</View>
 							<View style={styles.expandText}>
@@ -337,7 +338,10 @@ const CategoryGridItem = memo(function CategoryGridItem({
 	mutedText: string;
 	onSelect: (categoryId: string) => void;
 }) {
-	const handlePress = useCallback(() => onSelect(category.id), [onSelect, category.id]);
+	const handlePress = useCallback(
+		() => onSelect(category.id),
+		[onSelect, category.id],
+	);
 	return (
 		<ExploreCategoryCard
 			category={category}
@@ -392,7 +396,11 @@ function ExploreCategoryCard({
 						contentFit="cover"
 					/>
 					<LinearGradient
-						colors={["transparent", withAlpha(cardBackground, 0.85), cardBackground]}
+						colors={[
+							"transparent",
+							withAlpha(cardBackground, 0.85),
+							cardBackground,
+						]}
 						locations={[0, 0.55, 1]}
 						start={{ x: 0, y: 0 }}
 						end={{ x: 1, y: 0 }}
@@ -401,15 +409,16 @@ function ExploreCategoryCard({
 				</View>
 			) : null}
 			<View style={styles.categoryText}>
-				<AppText variant="h4" weight="bold" numberOfLines={2}
-					style={{ fontSize: 15, lineHeight: 19 }}>
+				<AppText
+					variant="h4"
+					weight="bold"
+					numberOfLines={2}
+					style={{ fontSize: 15, lineHeight: 19 }}
+				>
 					{category.name}
 				</AppText>
 				<AppText variant="bodySmall" style={{ color: mutedText, marginTop: 6 }}>
-					{strings.explore.categoryCount.replace(
-						"{n}",
-						String(category.count),
-					)}
+					{strings.explore.categoryCount.replace("{n}", String(category.count))}
 				</AppText>
 			</View>
 		</Pressable>

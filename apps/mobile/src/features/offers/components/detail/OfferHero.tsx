@@ -29,7 +29,11 @@ export function OfferHero({
 			<Animated.View
 				style={[
 					styles.header,
-					{ height: headerHeight, opacity: headerOpacity, pointerEvents: "none" },
+					{
+						height: headerHeight,
+						opacity: headerOpacity,
+						pointerEvents: "none",
+					},
 				]}
 			>
 				{image ? (
@@ -56,18 +60,10 @@ export function OfferHero({
 
 			<View style={[styles.topBar, { top: topOffset }]}>
 				<CircleIconButton
-					icon={
-						<ChevronLeft
-							size={20}
-							color={colors.foreground}
-						/>
-					}
+					icon={<ChevronLeft size={20} color={colors.foreground} />}
 					onPress={() => goBackOr("/(consumer)")}
 				/>
-				<HeartButton
-					isFavorite={isFavorite}
-					onPress={onToggleFavorite}
-				/>
+				<HeartButton isFavorite={isFavorite} onPress={onToggleFavorite} />
 			</View>
 		</>
 	);

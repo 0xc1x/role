@@ -61,10 +61,7 @@ export function OfferBottomBar({
 					disabled={!purchasable}
 					onPress={() => router.push(`/checkout/${detail.offer.id}`)}
 				>
-					<AppText
-						weight="bold"
-						style={{ color: colors.primaryForeground }}
-					>
+					<AppText weight="bold" style={{ color: colors.primaryForeground }}>
 						{availabilityUnknown
 							? strings.offers.unavailable
 							: outOfStock
@@ -91,7 +88,6 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		borderRadius: radii.md,
 		minHeight: BOTTOM_BAR_HEIGHT - 20,
-
 	},
 	priceRow: {
 		flexDirection: "row",

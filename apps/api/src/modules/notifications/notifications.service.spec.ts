@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from './notifications.service';
@@ -57,7 +58,13 @@ describe('NotificationsService (espejo send-push-notification)', () => {
     });
 
     expect(repo.findActiveTokens).toHaveBeenCalledWith(['u1']);
-    expect(global.fetch).toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://exp.host/--/api/v2/push/send',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('ExponentPushToken[xxx]'),
+      }),
+    );
   });
 
   it('desactiva token muerto (Expo DeviceNotRegistered)', async () => {
@@ -68,7 +75,9 @@ describe('NotificationsService (espejo send-push-notification)', () => {
     ]);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ data: { status: 'error', details: { error: 'DeviceNotRegistered' } } }),
+      json: async () => ({
+        data: { status: 'error', details: { error: 'DeviceNotRegistered' } },
+      }),
     } as never);
 
     await service.processSend({
@@ -76,7 +85,9 @@ describe('NotificationsService (espejo send-push-notification)', () => {
       payload: { title: 'T', body: 'B' },
     });
 
-    expect(repo.deactivateToken).toHaveBeenCalledWith('ExponentPushToken[dead]');
+    expect(repo.deactivateToken).toHaveBeenCalledWith(
+      'ExponentPushToken[dead]',
+    );
   });
 
   it('sin FCM_SERVICE_ACCOUNT hace mock success (no deactivate)', async () => {
@@ -90,6 +101,40 @@ describe('NotificationsService (espejo send-push-notification)', () => {
       payload: { title: 'T', body: 'B' },
     });
     expect(repo.deactivateToken).not.toHaveBeenCalled();
+  });
+
+  it('never logs device token prefixes or raw provider errors', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    repo.filterByConsumerPrefs.mockResolvedValue(['u1']);
+    repo.filterNotInQuietHours.mockResolvedValue(['u1']);
+    repo.findActiveTokens.mockResolvedValue([
+      {
+        user_id: 'u1',
+        token: 'ExponentPushToken[private-token]',
+        platform: 'android',
+      },
+    ]);
+    global.fetch = jest.fn().mockRejectedValue(
+      Object.assign(new Error('provider token private-token failed'), {
+        name: 'ProviderError',
+        code: 'PROVIDER_DOWN',
+      }),
+    );
+
+    await service.processSend({
+      userIds: ['u1'],
+      payload: { title: 'T', body: 'B' },
+    });
+
+    expect(warn).toHaveBeenCalledWith({
+      event: 'push_provider_request_failed',
+      platform: 'native',
+      errorType: 'ProviderError',
+      errorCode: 'PROVIDER_DOWN',
+    });
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).not.toContain('private-token');
+    warn.mockRestore();
   });
 
   it('FCM con private_key truncada cuenta como fallo y no desactiva el token', async () => {
@@ -107,7 +152,10 @@ describe('NotificationsService (espejo send-push-notification)', () => {
     });
     global.fetch = jest.fn();
 
-    const report = await service.sendWithReport(['u1'], { title: 'T', body: 'B' });
+    const report = await service.sendWithReport(['u1'], {
+      title: 'T',
+      body: 'B',
+    });
 
     expect(report).toEqual({ targeted: 1, sent: 0, failed: 1 });
     expect(repo.deactivateToken).not.toHaveBeenCalled();

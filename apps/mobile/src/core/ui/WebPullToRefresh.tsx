@@ -68,7 +68,8 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 	const handleTouchMove = useCallback((e: TouchEvent) => {
 		const gesture = gestureRef.current;
 		const currentNode = nodeRef.current;
-		if (!gesture || gesture.dead || e.touches.length > 1 || !currentNode) return;
+		if (!gesture || gesture.dead || e.touches.length > 1 || !currentNode)
+			return;
 		const touch = e.touches[0];
 		if (!touch) return;
 		const dy = touch.clientY - gesture.startY;

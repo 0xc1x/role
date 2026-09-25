@@ -5,6 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 const STORAGE_KEY = "role-cookie-consent";
+const GOOGLE_FONTS_ID = "role-google-fonts";
+const GOOGLE_FONTS_HREF =
+	"https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap";
+
+function loadGoogleFonts(): void {
+	if (document.getElementById(GOOGLE_FONTS_ID)) return;
+	const link = document.createElement("link");
+	link.id = GOOGLE_FONTS_ID;
+	link.rel = "stylesheet";
+	link.href = GOOGLE_FONTS_HREF;
+	document.head.appendChild(link);
+}
 
 export function CookieBanner() {
 	const [visible, setVisible] = useState(false);
@@ -17,7 +29,10 @@ export function CookieBanner() {
 			// storage no disponible (SSR/privacidad): mostrar el banner
 			stored = null;
 		}
-		if (stored !== "accepted") {
+		if (stored === "accepted") {
+			loadGoogleFonts();
+		}
+		if (stored !== "accepted" && stored !== "rejected") {
 			setVisible(true);
 		}
 	}, []);
@@ -34,6 +49,16 @@ export function CookieBanner() {
 	function accept() {
 		try {
 			window.localStorage.setItem(STORAGE_KEY, "accepted");
+		} catch {
+			// si falla, simplemente ocultamos
+		}
+		loadGoogleFonts();
+		setVisible(false);
+	}
+
+	function reject() {
+		try {
+			window.localStorage.setItem(STORAGE_KEY, "rejected");
 		} catch {
 			// si falla, simplemente ocultamos
 		}
@@ -76,8 +101,8 @@ export function CookieBanner() {
 							</Button>
 						</div>
 						<p className="mt-1.5 text-xs leading-relaxed text-role-muted-foreground">
-							Usamos cookies mínimas para garantizar tu sesión y recordar tus
-							preferencias. Conoce nuestra{" "}
+							Usamos almacenamiento local para recordar tu elección. Las fuentes
+							de Google se cargan solo si aceptas. Conoce nuestra{" "}
 							<Link
 								to="/privacy"
 								className="font-semibold text-role-primary underline hover:text-role-primary-hover"
@@ -86,12 +111,19 @@ export function CookieBanner() {
 							</Link>
 							.
 						</p>
-						<div className="mt-3.5 flex items-center gap-2">
+						<div className="mt-3.5 flex flex-wrap items-center gap-2">
 							<Button
 								onClick={accept}
 								className="rounded-full bg-role-primary px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-role-primary-hover active:scale-[0.97]"
 							>
 								Aceptar y continuar
+							</Button>
+							<Button
+								onClick={reject}
+								variant="outline"
+								className="rounded-full px-5 py-2 text-xs"
+							>
+								Rechazar
 							</Button>
 						</div>
 					</div>

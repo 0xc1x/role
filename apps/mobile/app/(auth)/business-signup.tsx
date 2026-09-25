@@ -1,13 +1,12 @@
+import { Check } from "lucide-react-native";
 import { Link, router } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import { AppText, Screen, TextField } from "@/src/core/ui";
-import { authRepository } from "@/src/features/auth/data/repository";
-import { businessRepository } from "@/src/features/business/data/repository";
+import { submitBusinessOwnerOnboarding } from "@/src/features/business/data/onboarding";
 import { toAppError } from "@/src/core/error/mapper";
-import { Errors } from "@/src/core/error/app-error";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { Text } from "@/components/ui/text";
@@ -21,12 +20,19 @@ export default function BusinessSignupScreen() {
 	const [confirm, setConfirm] = useState("");
 	const [businessName, setBusinessName] = useState("");
 	const [businessPhone, setBusinessPhone] = useState("");
+	const [analyticsConsent, setAnalyticsConsent] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
 
 	const handleSignup = async () => {
-		if (!fullName.trim() || !email.trim() || !password || password !== confirm || !businessName.trim()) {
+		if (
+			!fullName.trim() ||
+			!email.trim() ||
+			!password ||
+			password !== confirm ||
+			!businessName.trim()
+		) {
 			setError(strings.auth.completeFields);
 			return;
 		}
@@ -34,35 +40,19 @@ export default function BusinessSignupScreen() {
 		setError(null);
 		setSuccess(null);
 		try {
-			const result = await authRepository.signUpWithEmail({
+			const result = await submitBusinessOwnerOnboarding({
 				fullName: fullName.trim(),
 				email: email.trim(),
 				password,
-				role: "business",
-				analyticsConsentGranted: true,
+				businessName: businessName.trim(),
+				businessPhone: businessPhone.trim(),
+				analyticsConsentGranted: analyticsConsent,
 			});
 
-			const ownerId = (result as unknown as { userId: string }).userId || result.profile?.id;
-			if (!ownerId) throw Errors.unknown(strings.auth.signupFailed);
-
-			// Crear negocio en estado pendiente incluso si requiere confirmación (service_role, trigger encola emails)
-			await businessRepository.createBusiness({
-				ownerId,
-				name: businessName.trim(),
-				type: "restaurant",
-				phone: businessPhone.trim() || null,
-				email: email.trim(),
-				description: null,
-				website: null,
-				logoUri: null,
-				coverUri: null,
-				hours: [],
-			});
-
-			if (result.requiresEmailConfirmation) {
-				setSuccess("Cuenta creada. Revisa tu correo para confirmar. Tu negocio quedó en revisión (<24h).");
+			if (result.status === "confirmation_required") {
+				setSuccess(strings.business.signupConfirmationRequired);
 			} else {
-				setSuccess("¡Registro recibido! Tu negocio está en revisión. Te contactaremos en menos de 24 horas para activarlo.");
+				setSuccess(strings.business.signupCompleted);
 				setTimeout(() => router.replace("/"), 1200);
 			}
 		} catch (e) {
@@ -78,7 +68,10 @@ export default function BusinessSignupScreen() {
 				<AppText variant="h1" weight="bold">
 					{strings.business.createBusiness}
 				</AppText>
-				<AppText variant="bodyMedium" style={{ color: colors.mutedForeground, marginBottom: spacing.xl }}>
+				<AppText
+					variant="bodyMedium"
+					style={{ color: colors.mutedForeground, marginBottom: spacing.xl }}
+				>
 					{strings.landing.forBusiness}
 				</AppText>
 
@@ -93,21 +86,99 @@ export default function BusinessSignupScreen() {
 					</AppText>
 				) : null}
 
-				<AppText variant="labelSmall" weight="bold" style={{ marginTop: spacing.sm }}>
+				<AppText
+					variant="labelSmall"
+					weight="bold"
+					style={{ marginTop: spacing.sm }}
+				>
 					Datos del responsable
 				</AppText>
-				<TextField label={strings.auth.fullName} value={fullName} onChangeText={setFullName} autoComplete="name" />
-				<TextField label={strings.auth.email} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
-				<TextField label={strings.auth.password} value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" />
-				<TextField label={strings.auth.confirmPassword} value={confirm} onChangeText={setConfirm} secureTextEntry autoComplete="new-password" />
+				<TextField
+					label={strings.auth.fullName}
+					value={fullName}
+					onChangeText={setFullName}
+					autoComplete="name"
+				/>
+				<TextField
+					label={strings.auth.email}
+					value={email}
+					onChangeText={setEmail}
+					autoCapitalize="none"
+					keyboardType="email-address"
+					autoComplete="email"
+				/>
+				<TextField
+					label={strings.auth.password}
+					value={password}
+					onChangeText={setPassword}
+					secureTextEntry
+					autoComplete="new-password"
+				/>
+				<TextField
+					label={strings.auth.confirmPassword}
+					value={confirm}
+					onChangeText={setConfirm}
+					secureTextEntry
+					autoComplete="new-password"
+				/>
 
-				<AppText variant="labelSmall" weight="bold" style={{ marginTop: spacing.md }}>
+				<AppText
+					variant="labelSmall"
+					weight="bold"
+					style={{ marginTop: spacing.md }}
+				>
 					{strings.business.signupDataTitle}
 				</AppText>
-				<TextField label={strings.business.businessName} value={businessName} onChangeText={setBusinessName} autoComplete="name" />
-				<TextField label={strings.business.signupPhoneLabel} value={businessPhone} onChangeText={setBusinessPhone} keyboardType="phone-pad" />
+				<TextField
+					label={strings.business.businessName}
+					value={businessName}
+					onChangeText={setBusinessName}
+					autoComplete="name"
+				/>
+				<TextField
+					label={strings.business.signupPhoneLabel}
+					value={businessPhone}
+					onChangeText={setBusinessPhone}
+					keyboardType="phone-pad"
+				/>
 
-				<Button onPress={handleSignup} loading={loading} fullWidth style={{ marginTop: spacing.md }} >
+				<View style={styles.analyticsRow}>
+					<Pressable
+						onPress={() => setAnalyticsConsent((value) => !value)}
+						hitSlop={8}
+						accessibilityRole="checkbox"
+						accessibilityState={{ checked: analyticsConsent }}
+						accessibilityLabel={strings.auth.consentAnalytics}
+						style={[
+							styles.checkbox,
+							{
+								borderColor: analyticsConsent
+									? colors.primary
+									: colors.borderSolid,
+								backgroundColor: analyticsConsent
+									? colors.primary
+									: "transparent",
+							},
+						]}
+					>
+						{analyticsConsent ? (
+							<Check size={16} color={colors.primaryForeground} />
+						) : null}
+					</Pressable>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground, flex: 1 }}
+					>
+						{strings.auth.consentAnalytics}
+					</AppText>
+				</View>
+
+				<Button
+					onPress={handleSignup}
+					loading={loading}
+					fullWidth
+					style={{ marginTop: spacing.md }}
+				>
 					{strings.business.createBusiness}
 				</Button>
 				<Link href="/login" style={[styles.link, { color: colors.primary }]}>
@@ -120,5 +191,20 @@ export default function BusinessSignupScreen() {
 
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl, gap: spacing.sm },
+	analyticsRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		gap: spacing.md,
+		marginTop: spacing.sm,
+	},
+	checkbox: {
+		width: 24,
+		height: 24,
+		borderRadius: 4,
+		borderWidth: 2,
+		alignItems: "center",
+		justifyContent: "center",
+		marginTop: 1,
+	},
 	link: { marginTop: spacing.lg, alignSelf: "center" },
 });

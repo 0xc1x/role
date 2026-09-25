@@ -1,7 +1,10 @@
 import { Body, Controller, Post, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { CreateContactSchema, type CreateContactDto } from '@0xc1x/role-commons';
+import {
+  CreateContactSchema,
+  type CreateContactDto,
+} from '@0xc1x/role-commons';
 import { Public } from '../../common/decorators/public.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ContactService } from './contact.service';

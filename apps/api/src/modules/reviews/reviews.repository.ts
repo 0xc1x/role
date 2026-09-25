@@ -2,12 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
-import {
-  businesses,
-  offers,
-  orders,
-  reviews,
-} from '../../database/schema';
+import { businesses, offers, orders, reviews } from '../../database/schema';
 
 export type ReviewRow = typeof reviews.$inferSelect;
 

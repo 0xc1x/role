@@ -1,14 +1,14 @@
-import type { z } from 'zod';
-import type { PaginatedData } from '../../_common/dtos/api.dto';
+import type { z } from "zod";
+import type { PaginatedData } from "../../_common/dtos/api.dto";
 import type {
-  CategoryListResponseSchema,
-  CategorySchema,
-  CreateCategorySchema,
-  UpdateCategorySchema,
-  ListCategoriesQuerySchema,
-  PatchCategorySchema,
-  ViewCategorySchema,
-} from '../schemas/category.schema';
+	CategoryListResponseSchema,
+	CategorySchema,
+	CreateCategorySchema,
+	UpdateCategorySchema,
+	ListCategoriesQuerySchema,
+	PatchCategorySchema,
+	ViewCategorySchema,
+} from "../schemas/category.schema";
 
 /** Wire DTO for a category resource (matches {@link CategorySchema}). */
 export type CategoryDto = z.infer<typeof CategorySchema>;

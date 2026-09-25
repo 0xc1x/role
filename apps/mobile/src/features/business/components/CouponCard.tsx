@@ -29,7 +29,10 @@ import {
 	couponIsValid,
 } from "@/src/features/orders/domain/order";
 import { formatMoney } from "@/src/core/utils/formatters";
-import { useDeleteCoupon, useToggleCouponStatus } from "@/src/features/business/hooks";
+import {
+	useDeleteCoupon,
+	useToggleCouponStatus,
+} from "@/src/features/business/hooks";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 type BadgeState = "paused" | "active" | "expired" | "exhausted" | "inactive";
@@ -131,10 +134,7 @@ export function CouponCard({
 					accessibilityRole="button"
 					accessibilityLabel={strings.business.couponMenu}
 				>
-					<EllipsisVertical
-						size={18}
-						color={colors.mutedForeground}
-					/>
+					<EllipsisVertical size={18} color={colors.mutedForeground} />
 				</Pressable>
 			</CardHeader>
 
@@ -186,19 +186,29 @@ export function CouponCard({
 			>
 				<View style={styles.overlay}>
 					<Pressable
-						style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}
+						style={[
+							StyleSheet.absoluteFill,
+							{ backgroundColor: withAlpha(colors.scrim, 0.4) },
+						]}
 						onPress={() => setMenuOpen(false)}
 						accessibilityRole="button"
 						accessibilityLabel={strings.common.close}
 					/>
-					<CardContent style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+					<CardContent
+						style={[
+							styles.menu,
+							{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+						]}
+					>
 						<MenuItem
 							icon={Pencil}
 							label={strings.business.couponEdit}
 							color={colors.foreground}
 							onPress={() => {
 								setMenuOpen(false);
-								router.push(`/business/${businessId}/coupons/${coupon.id}/edit`);
+								router.push(
+									`/business/${businessId}/coupons/${coupon.id}/edit`,
+								);
 							}}
 						/>
 						<MenuItem
@@ -218,7 +228,12 @@ export function CouponCard({
 							loading={busy}
 							onPress={toggleStatus}
 						/>
-						<View style={[styles.menuDivider, { backgroundColor: colors.borderSolid }]} />
+						<View
+							style={[
+								styles.menuDivider,
+								{ backgroundColor: colors.borderSolid },
+							]}
+						/>
 						<MenuItem
 							icon={Trash2}
 							label={strings.business.couponDelete}
@@ -240,20 +255,41 @@ export function CouponCard({
 				animationType="fade"
 				onRequestClose={() => setConfirmDelete(false)}
 			>
-				<View style={[styles.overlay, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}>
-					<View style={[styles.menu, styles.confirm, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
+				<View
+					style={[
+						styles.overlay,
+						{ backgroundColor: withAlpha(colors.scrim, 0.4) },
+					]}
+				>
+					<View
+						style={[
+							styles.menu,
+							styles.confirm,
+							{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+						]}
+					>
 						<AppText variant="h3" weight="bold">
 							{strings.business.couponDeleteTitle}
 						</AppText>
-						<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+						<AppText
+							variant="bodyMedium"
+							style={{ color: colors.mutedForeground }}
+						>
 							{strings.business.couponDeleteBody.replace("{code}", coupon.code)}
 						</AppText>
 						<View style={styles.confirmActions}>
 							<Pressable
 								onPress={() => setConfirmDelete(false)}
-								style={({ pressed }) => [styles.confirmButton, pressed && { opacity: 0.85 }]}
+								style={({ pressed }) => [
+									styles.confirmButton,
+									pressed && { opacity: 0.85 },
+								]}
 							>
-								<AppText variant="bodyMedium" weight="semiBold" style={{ color: colors.foreground }}>
+								<AppText
+									variant="bodyMedium"
+									weight="semiBold"
+									style={{ color: colors.foreground }}
+								>
 									{strings.business.cancel}
 								</AppText>
 							</Pressable>
@@ -270,7 +306,9 @@ export function CouponCard({
 									weight="bold"
 									style={{ color: colors.destructiveForeground }}
 								>
-									{busy ? strings.business.couponDeleting : strings.business.couponDeleteConfirm}
+									{busy
+										? strings.business.couponDeleting
+										: strings.business.couponDeleteConfirm}
 								</AppText>
 							</Pressable>
 						</View>
@@ -300,7 +338,7 @@ function MenuItem({
 	return (
 		<Pressable
 			onPress={onPress}
-			style={[styles.menuItem, ]}
+			style={[styles.menuItem]}
 			accessibilityRole="button"
 		>
 			<LoadingIcon size={18} color={color} />
@@ -329,10 +367,17 @@ function DetailItem({
 		<View style={styles.detailItem}>
 			<Icon size={16} color={colors.mutedForeground} />
 			<View>
-				<AppText variant="bodySmall" style={{ fontSize: 10, color: colors.mutedForeground }}>
+				<AppText
+					variant="bodySmall"
+					style={{ fontSize: 10, color: colors.mutedForeground }}
+				>
 					{title}
 				</AppText>
-				<AppText variant="bodyMedium" weight="semiBold" style={{ lineHeight: 18 }}>
+				<AppText
+					variant="bodyMedium"
+					weight="semiBold"
+					style={{ lineHeight: 18 }}
+				>
 					{value}
 				</AppText>
 			</View>
@@ -344,8 +389,18 @@ function formatShortDate(iso: string): string {
 	const date = new Date(iso);
 	if (Number.isNaN(date.getTime())) return iso;
 	const months = [
-		"ene", "feb", "mar", "abr", "may", "jun",
-		"jul", "ago", "sep", "oct", "nov", "dic",
+		"ene",
+		"feb",
+		"mar",
+		"abr",
+		"may",
+		"jun",
+		"jul",
+		"ago",
+		"sep",
+		"oct",
+		"nov",
+		"dic",
 	];
 	return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }

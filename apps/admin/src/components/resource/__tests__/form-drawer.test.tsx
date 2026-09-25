@@ -46,14 +46,18 @@ describe("FormDrawer", () => {
 		const view = setup(onSubmit);
 
 		fireEvent.click(view.getByRole("button", { name: /crear plantilla/i }));
-		await Bun.write(
-			"/tmp/dbg.txt",
-			`BTNS:${(document.body.innerHTML.match(/<button/g) ?? []).length} GUARDAR:${document.body.innerHTML.includes("Guardar")} CONTAINERS:${document.body.children.length} OPEN:${(document.body.innerHTML.match(/data-open/g) ?? []).length}\n`,
-		);
 		fireEvent.click(view.getByRole("button", { name: /^guardar$/i }));
 
 		await waitFor(() =>
 			expect(onSubmit).toHaveBeenCalledWith({ name: "sin-nombre" }, undefined),
 		);
+	});
+
+	test("renders Cancel as one interactive close control", () => {
+		const view = setup(jest.fn().mockResolvedValue(undefined));
+		fireEvent.click(view.getByRole("button", { name: /crear plantilla/i }));
+
+		const cancel = view.getByRole("button", { name: /cancelar/i });
+		expect(cancel.querySelector("button")).toBeNull();
 	});
 });

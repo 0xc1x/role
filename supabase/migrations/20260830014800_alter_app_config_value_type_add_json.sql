@@ -1,0 +1,2 @@
+alter table app_config drop constraint app_config_value_type_check;
+alter table app_config add constraint app_config_value_type_check check (value_type = any (array['string','text','number','boolean','email','url','phone','json']));

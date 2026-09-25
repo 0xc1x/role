@@ -13,7 +13,10 @@ import type { CampaignChannelDispatcher } from '../../common/campaigns/campaign-
 import { CampaignsService } from '../email-marketing/campaigns.service';
 import { EmailMarketingRepository } from '../email-marketing/email-marketing.repository';
 import { EmailMarketingMapper } from '../email-marketing/mappers/email-marketing.mapper';
-import { MAX_AUDIENCE_SIZE, RecipientsService } from '../email-marketing/recipients.service';
+import {
+  MAX_AUDIENCE_SIZE,
+  RecipientsService,
+} from '../email-marketing/recipients.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushNotificationsRepository } from './push-notifications.repository';
 import type { CampaignRow } from '../email-marketing/email-marketing.repository';
@@ -41,7 +44,9 @@ export class PushCampaignDispatcher
     private readonly recipients: RecipientsService,
     private readonly pushRepo: PushNotificationsRepository,
     private readonly notifications: NotificationsService,
-    @Optional() @InjectQueue('email-expedition') private readonly queue?: Queue<{ campaignId: string }>,
+    @Optional()
+    @InjectQueue('email-expedition')
+    private readonly queue?: Queue<{ campaignId: string }>,
   ) {}
 
   onModuleInit(): void {
@@ -50,15 +55,13 @@ export class PushCampaignDispatcher
 
   async assertTemplate(templateId: string): Promise<void> {
     const template = await this.pushRepo.findTemplateById(templateId);
-    if (!template) throw new BadRequestException('Plantilla push no encontrada');
+    if (!template)
+      throw new BadRequestException('Plantilla push no encontrada');
   }
 
   /** Resuelve audiencia push, crea el ledger y arranca (o programa) el envío. */
   async enqueueAndStart(campaign: CampaignRow): Promise<CampaignDto> {
-    if (
-      !campaign.segment_ids?.length &&
-      !campaign.include_user_ids?.length
-    ) {
+    if (!campaign.segment_ids?.length && !campaign.include_user_ids?.length) {
       throw new BadRequestException(
         'Selecciona al menos un segmento o usuarios incluidos',
       );
@@ -114,10 +117,7 @@ export class PushCampaignDispatcher
       );
     } else {
       void this.processBatch(updated).catch((err: unknown) =>
-        this.logger.error(
-          `Batch campaña push ${campaign.id} falló`,
-          err,
-        ),
+        this.logger.error(`Batch campaña push ${campaign.id} falló`, err),
       );
     }
     return EmailMarketingMapper.toCampaignDto(updated);

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import { PayoutsService } from './payouts.service';
 
@@ -32,10 +33,10 @@ export class PayoutsGenerationJob {
         this.logger.log(`Generated ${count} payout(s)`);
       }
     } catch (err) {
-      this.logger.error(
-        'Failed to generate payouts',
-        err instanceof Error ? err.stack : String(err),
-      );
+      this.logger.error({
+        event: 'payout_generation_failed',
+        ...safeErrorFields(err),
+      });
     } finally {
       this.running = false;
     }

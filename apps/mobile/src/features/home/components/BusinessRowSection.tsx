@@ -69,7 +69,10 @@ export function BusinessRowSection({
 			) : isError ? (
 				<AppText
 					variant="bodyMedium"
-					style={{ color: colors.mutedForeground, paddingHorizontal: spacing.xl }}
+					style={{
+						color: colors.mutedForeground,
+						paddingHorizontal: spacing.xl,
+					}}
 				>
 					{strings.home.businessLoadError}
 				</AppText>

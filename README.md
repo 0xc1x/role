@@ -64,7 +64,8 @@ CI en `.github/workflows/ci.yml` (typecheck + test + build con turbo).
 
 API en **Render** (auto-deploy en push a main, blueprint en `render.yaml`); landing y
 PWA web de mobile en **Vercel** (CLI: `bun run deploy:landing` / `bun run deploy:mobile`).
-Guía completa en [`docs/deploy.md`](docs/deploy.md).
+Guía completa en [`docs/deploy.md`](docs/deploy.md); operación, incidentes,
+restauración y rotación en [`docs/operations.md`](docs/operations.md).
 
 ## Estado (verificado)
 

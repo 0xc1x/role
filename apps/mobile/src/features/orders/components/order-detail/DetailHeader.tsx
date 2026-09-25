@@ -3,7 +3,12 @@ import type { Order } from "@0xc1x/role-commons";
 import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, CircleIconButton, goBackOr, StatusBadge } from "@/src/core/ui";
+import {
+	AppText,
+	CircleIconButton,
+	goBackOr,
+	StatusBadge,
+} from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { radii, spacing } from "@/src/core/theme/spacing";
 import {
@@ -18,12 +23,10 @@ export function DetailHeader({ order }: { order: Order }) {
 		<View style={styles.header}>
 			<View style={styles.headerLeft}>
 				<CircleIconButton
-						icon={
-							<ChevronLeft size={22} color={colors.foreground} />
-						}
-						onPress={() => goBackOr("/(consumer)")}
-						accessibilityLabel={strings.common.back}
-					/>
+					icon={<ChevronLeft size={22} color={colors.foreground} />}
+					onPress={() => goBackOr("/(consumer)")}
+					accessibilityLabel={strings.common.back}
+				/>
 				<View>
 					<AppText variant="h3" weight="bold">
 						{strings.orders.detailTitle}

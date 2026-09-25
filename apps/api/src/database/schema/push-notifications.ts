@@ -25,10 +25,7 @@ export const pushTemplates = pgTable('push_templates', {
   name: text('name').notNull(),
   title: text('title').notNull(),
   body: text('body').notNull(),
-  data: jsonb('data')
-    .$type<Record<string, unknown>>()
-    .notNull()
-    .default({}),
+  data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
   is_active: boolean('is_active').notNull().default(true),
   created_by: uuid('created_by'),
   created_at: timestamp('created_at', { withTimezone: true })
@@ -46,10 +43,7 @@ export const pushNotifications = pgTable('push_notifications', {
   template_id: uuid('template_id'),
   title: text('title').notNull(),
   body: text('body').notNull(),
-  data: jsonb('data')
-    .$type<Record<string, unknown>>()
-    .notNull()
-    .default({}),
+  data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
   type: text('type').notNull().default('announcement'),
   segment_ids: uuid('segment_ids').array().notNull().default([]),
   include_user_ids: uuid('include_user_ids').array().notNull().default([]),

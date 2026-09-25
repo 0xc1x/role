@@ -27,8 +27,24 @@ describe("withAlpha", () => {
 		// Cada sufijo hex usado en la app debe poder reproducirse con un
 		// alpha decimal exacto (evita drift visual en la migración).
 		const suffixes = [
-			"0A", "0D", "14", "1A", "26", "33", "4D", "73", "80", "90",
-			"99", "B3", "BF", "CC", "E6", "E8", "EB", "F2",
+			"0A",
+			"0D",
+			"14",
+			"1A",
+			"26",
+			"33",
+			"4D",
+			"73",
+			"80",
+			"90",
+			"99",
+			"B3",
+			"BF",
+			"CC",
+			"E6",
+			"E8",
+			"EB",
+			"F2",
 		];
 		for (const s of suffixes) {
 			const alpha = Math.round((parseInt(s, 16) / 255) * 1000) / 1000;

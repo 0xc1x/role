@@ -47,7 +47,7 @@ export function toCategoryUpdate(dto: UpdateCategoryDto): CategoryUpdate {
     'slug',
     'image_url',
     'active',
-  ]) as CategoryUpdate;
+  ]);
 }
 
 // backwards compat for tests

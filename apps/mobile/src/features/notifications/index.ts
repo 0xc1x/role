@@ -1,5 +1,9 @@
 import Constants from "expo-constants";
+import type { NotificationResponse } from "expo-notifications";
+import { router } from "expo-router";
 import { Platform } from "react-native";
+
+import { resolveNotificationRoute } from "./notification-routing";
 
 import { toAppError } from "@/src/core/error/mapper";
 import { env } from "@/src/core/config/env";
@@ -87,6 +91,8 @@ export async function removeDeviceToken(userId: string): Promise<void> {
 }
 
 // ─── In-app notification handler (solo nativo) ──────────────────────
+let responseListenerRegistered = false;
+
 export async function initNotificationHandler(): Promise<void> {
 	const Notifications = await loadNotifications();
 	if (!Notifications) return;
@@ -98,4 +104,18 @@ export async function initNotificationHandler(): Promise<void> {
 			shouldSetBadge: false,
 		}),
 	});
+
+	const redirectFromResponse = (response: NotificationResponse) => {
+		const route = resolveNotificationRoute(
+			response.notification.request.content.data ?? {},
+		);
+		if (route) router.push(route as Parameters<typeof router.push>[0]);
+	};
+
+	const lastResponse = Notifications.getLastNotificationResponse();
+	if (lastResponse) redirectFromResponse(lastResponse);
+	if (!responseListenerRegistered) {
+		Notifications.addNotificationResponseReceivedListener(redirectFromResponse);
+		responseListenerRegistered = true;
+	}
 }

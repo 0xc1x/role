@@ -46,19 +46,46 @@ export class NotificationHandlers {
       cancelled: 'Cancelado',
       expired: 'Expirado',
     };
-    const STATUS_MESSAGES: Record<string, { consumer: string; business: string }> = {
-      pending: { consumer: 'Reserva creada. Espera la confirmación del negocio.', business: 'Nueva reserva recibida. Confirma el pedido.' },
-      confirmed: { consumer: 'Tu pedido ha sido confirmado. Prepara tu código de recogida.', business: 'Nuevo pedido confirmado. Prepara el pedido.' },
-      ready_for_pickup: { consumer: 'Tu pedido está listo para recoger. ¡No esperes demasiado!', business: 'El pedido está marcado como listo para recoger.' },
-      picked_up: { consumer: 'Gracias por recoger tu pedido. ¡Buen provecho!', business: 'El cliente ha recogido su pedido.' },
-      completed: { consumer: 'Pedido completado. Cuéntanos cómo fue tu experiencia.', business: 'Pedido completado exitosamente.' },
-      cancelled: { consumer: 'Tu pedido ha sido cancelado.', business: 'El pedido ha sido cancelado.' },
-      expired: { consumer: 'El tiempo para recoger tu pedido ha expirado.', business: 'El pedido ha expirado por falta de recogida.' },
+    const STATUS_MESSAGES: Record<
+      string,
+      { consumer: string; business: string }
+    > = {
+      pending: {
+        consumer: 'Reserva creada. Espera la confirmación del negocio.',
+        business: 'Nueva reserva recibida. Confirma el pedido.',
+      },
+      confirmed: {
+        consumer:
+          'Tu pedido ha sido confirmado. Prepara tu código de recogida.',
+        business: 'Nuevo pedido confirmado. Prepara el pedido.',
+      },
+      ready_for_pickup: {
+        consumer: 'Tu pedido está listo para recoger. ¡No esperes demasiado!',
+        business: 'El pedido está marcado como listo para recoger.',
+      },
+      picked_up: {
+        consumer: 'Gracias por recoger tu pedido. ¡Buen provecho!',
+        business: 'El cliente ha recogido su pedido.',
+      },
+      completed: {
+        consumer: 'Pedido completado. Cuéntanos cómo fue tu experiencia.',
+        business: 'Pedido completado exitosamente.',
+      },
+      cancelled: {
+        consumer: 'Tu pedido ha sido cancelado.',
+        business: 'El pedido ha sido cancelado.',
+      },
+      expired: {
+        consumer: 'El tiempo para recoger tu pedido ha expirado.',
+        business: 'El pedido ha expirado por falta de recogida.',
+      },
     };
     const label = STATUS_LABELS[row.order.status] ?? row.order.status;
     const msgs = STATUS_MESSAGES[row.order.status];
     const image = row.offer_image ?? row.business_image ?? undefined;
-    const baseData = (extra: Record<string, string>): Record<string, string> => ({
+    const baseData = (
+      extra: Record<string, string>,
+    ): Record<string, string> => ({
       type: 'order',
       order_id: orderId,
       order_number: row.order.order_number,
@@ -77,19 +104,39 @@ export class NotificationHandlers {
     });
 
     // Espejo dormido: pending (nueva reserva) + confirmed/cancelled/expired — respeta new_orders_enabled
-    if (['pending', 'confirmed', 'cancelled', 'expired'].includes(row.order.status)) {
+    if (
+      ['pending', 'confirmed', 'cancelled', 'expired'].includes(
+        row.order.status,
+      )
+    ) {
       const [prefs] = await this.db
         .select()
         .from(businessNotificationPreferences)
-        .where(eq(businessNotificationPreferences.business_id, row.order.business_id))
+        .where(
+          eq(
+            businessNotificationPreferences.business_id,
+            row.order.business_id,
+          ),
+        )
         .limit(1);
-      const pushOk = (prefs as unknown as { push_enabled?: boolean } | undefined)?.push_enabled !== false;
-      const newOrdersOk = (prefs as unknown as { new_orders_enabled?: boolean } | undefined)?.new_orders_enabled !== false || row.order.status !== 'pending';
+      const pushOk =
+        (prefs as unknown as { push_enabled?: boolean } | undefined)
+          ?.push_enabled !== false;
+      const newOrdersOk =
+        (prefs as unknown as { new_orders_enabled?: boolean } | undefined)
+          ?.new_orders_enabled !== false || row.order.status !== 'pending';
       if (pushOk && newOrdersOk) {
         await this.notificationsService.send([row.business_owner_id], {
-          title: row.order.status === 'pending' ? `Nueva reserva #${row.order.order_number} — ${row.business_name}` : `Pedido #${row.order.order_number} — ${label}`,
+          title:
+            row.order.status === 'pending'
+              ? `Nueva reserva #${row.order.order_number} — ${row.business_name}`
+              : `Pedido #${row.order.order_number} — ${label}`,
           body: msgs?.business ?? `Pedido ${row.order.order_number} → ${label}`,
-          data: baseData({ link: `/(business)/orders`, role: 'business', tag: `order-${orderId}-biz-${row.order.status}` }),
+          data: baseData({
+            link: `/(business)/orders`,
+            role: 'business',
+            tag: `order-${orderId}-biz-${row.order.status}`,
+          }),
         });
       }
     }
@@ -103,7 +150,11 @@ export class NotificationHandlers {
       .limit(1);
     if (!offer) return;
 
-    const [business] = await this.db.select({ name: businesses.name, image: businesses.image }).from(businesses).where(eq(businesses.id, offer.business_id)).limit(1);
+    const [business] = await this.db
+      .select({ name: businesses.name, image: businesses.image })
+      .from(businesses)
+      .where(eq(businesses.id, offer.business_id))
+      .limit(1);
 
     const favUsers = await this.db
       .select({ user_id: favorites.user_id })

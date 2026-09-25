@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { isInValidityWindow, toPromoSlide } from "@/src/features/slides/domain/slide";
+import {
+	isInValidityWindow,
+	toPromoSlide,
+} from "@/src/features/slides/domain/slide";
 
 describe("toPromoSlide", () => {
 	test("mapea y marca sponsor", () => {
@@ -22,21 +25,31 @@ describe("toPromoSlide", () => {
 		});
 		expect(slide.isSponsored).toBe(true);
 		expect(slide.ctaLabel).toBe("Ver");
-		expect(toPromoSlide({ ...slide, type: "info" } as never).isSponsored).toBe(false);
+		expect(toPromoSlide({ ...slide, type: "info" } as never).isSponsored).toBe(
+			false,
+		);
 	});
 });
 
 describe("isInValidityWindow", () => {
 	const now = new Date("2025-06-01T12:00:00Z");
 	test("sin ventana → válida", () => {
-		expect(isInValidityWindow({ start_at: null, end_at: null }, now)).toBe(true);
+		expect(isInValidityWindow({ start_at: null, end_at: null }, now)).toBe(
+			true,
+		);
 	});
 	test("futura/pasada → inválida", () => {
 		expect(
-			isInValidityWindow({ start_at: "2025-07-01T00:00:00Z", end_at: null }, now),
+			isInValidityWindow(
+				{ start_at: "2025-07-01T00:00:00Z", end_at: null },
+				now,
+			),
 		).toBe(false);
 		expect(
-			isInValidityWindow({ start_at: null, end_at: "2025-05-01T00:00:00Z" }, now),
+			isInValidityWindow(
+				{ start_at: null, end_at: "2025-05-01T00:00:00Z" },
+				now,
+			),
 		).toBe(false);
 		expect(
 			isInValidityWindow(

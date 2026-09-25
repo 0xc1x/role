@@ -18,19 +18,16 @@ import {
   type UpdateOrderStatusRequest,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import { OffersRepository } from '../offers/offers.repository';
 import {
   canActorTransition,
   isTransitionAllowed,
   shouldRestockOnTransition,
-  type OrderEventSource,
 } from './order-status.machine';
 import { OrderMapper, type OrderResponse } from './orders.mapper';
-import {
-  OrdersRepository,
-  type DbExecutor,
-} from './orders.repository';
+import { OrdersRepository, type DbExecutor } from './orders.repository';
 
 import { NotificationHandlers } from '../notifications/notification.handlers';
 
@@ -56,6 +53,7 @@ export class OrdersService {
     body: CreateOrderRequest,
   ): Promise<OrderResponse> {
     const created = await this.ordersRepository.transaction(async (tx) => {
+      await this.ordersRepository.setEventActor(tx, user.id);
       // Espejo de `reserve_offer`: los códigos de error son los mismos que
       // devuelve el RPC para que los tests de equivalencia sean directos.
       const offer = await this.offersRepository.findByIdForUpdate(
@@ -67,13 +65,21 @@ export class OrdersService {
           'OFFER_NOT_FOUND: Oferta no encontrada o inactiva',
         );
       }
+      const businessAvailable =
+        await this.offersRepository.isBusinessAvailableForOffers(
+          tx,
+          offer.business_id,
+        );
+      if (!businessAvailable) {
+        throw new ConflictException(
+          'OFFER_NOT_FOUND: Oferta no encontrada o inactiva',
+        );
+      }
       if (offer.stock <= 0) {
         throw new ConflictException('OFFER_OUT_OF_STOCK: Oferta agotada');
       }
       if (new Date() > offer.pickup_end) {
-        throw new ConflictException(
-          'OFFER_EXPIRED: Ventana de pickup cerrada',
-        );
+        throw new ConflictException('OFFER_EXPIRED: Ventana de pickup cerrada');
       }
 
       const existing = await this.ordersRepository.findActiveByUserAndOffer(
@@ -158,15 +164,6 @@ export class OrdersService {
         net_amount: String(round2(price - platformFee)),
       });
 
-      await this.ordersRepository.insertEvent(tx, {
-        order_id: order.id,
-        status: 'pending',
-        previous_status: null,
-        changed_by: user.id,
-        reason: 'Reserva creada',
-        metadata: { source: 'api' satisfies OrderEventSource },
-      });
-
       return order;
     });
 
@@ -183,6 +180,7 @@ export class OrdersService {
   /** Espejo de la RPC `cancel_order`. */
   async cancelOrder(user: AuthUser, id: string): Promise<OrderResponse> {
     const cancelled = await this.ordersRepository.transaction(async (tx) => {
+      await this.ordersRepository.setEventActor(tx, user.id);
       const locked = await this.ordersRepository.findByIdForUpdate(tx, id);
       if (!locked) {
         throw new NotFoundException('ORDER_NOT_FOUND: Pedido no encontrado');
@@ -212,15 +210,6 @@ export class OrdersService {
 
       await this.offersRepository.incrementStock(tx, locked.order.offer_id, 1);
 
-      await this.ordersRepository.insertEvent(tx, {
-        order_id: id,
-        status: 'cancelled',
-        previous_status: current,
-        changed_by: user.id,
-        reason: 'Cancelado por el usuario',
-        metadata: { source: 'api' satisfies OrderEventSource },
-      });
-
       return order!;
     });
 
@@ -240,6 +229,7 @@ export class OrdersService {
     pickupCode: string,
   ): Promise<OrderResponse> {
     const completed = await this.ordersRepository.transaction(async (tx) => {
+      await this.ordersRepository.setEventActor(tx, user.id);
       // El SQL valida ownership antes que existencia (join contra businesses).
       const locked = await this.ordersRepository.findByIdForUpdate(tx, id);
       if (!locked || locked.business_owner_id !== user.id) {
@@ -266,18 +256,6 @@ export class OrdersService {
       );
 
       await this.accrueEarningsIfNeeded(tx, locked.order);
-
-      await this.ordersRepository.insertEvent(tx, {
-        order_id: id,
-        status: 'completed',
-        previous_status: 'ready_for_pickup',
-        changed_by: user.id,
-        reason: null,
-        metadata: {
-          method: 'pickup_code',
-          source: 'api' satisfies OrderEventSource,
-        },
-      });
 
       return order!;
     });
@@ -394,6 +372,7 @@ export class OrdersService {
     body: UpdateOrderStatusRequest,
   ): Promise<OrderResponse> {
     const updated = await this.ordersRepository.transaction(async (tx) => {
+      await this.ordersRepository.setEventActor(tx, user.id);
       const locked = await this.ordersRepository.findByIdForUpdate(tx, id);
       if (!locked) {
         throw new NotFoundException(`Order ${id} not found`);
@@ -445,17 +424,6 @@ export class OrdersService {
           1,
         );
       }
-
-      const source: OrderEventSource = user.role === 'admin' ? 'admin' : 'api';
-
-      await this.ordersRepository.insertEvent(tx, {
-        order_id: id,
-        status: next,
-        previous_status: current,
-        changed_by: user.id,
-        reason: body.reason ?? null,
-        metadata: { source },
-      });
 
       if (next === 'completed') {
         await this.accrueEarningsIfNeeded(tx, locked.order, current);
@@ -522,15 +490,6 @@ export class OrdersService {
           );
         }
 
-        await this.ordersRepository.insertEvent(tx, {
-          order_id: candidate.orderId,
-          status: 'expired',
-          previous_status: current,
-          changed_by: null,
-          reason: 'Pickup window ended',
-          metadata: { source: 'cron' satisfies OrderEventSource },
-        });
-
         expired += 1;
       });
     }
@@ -569,12 +528,14 @@ export class OrdersService {
   }
 
   private emitOrderChange(orderId: string): void {
-    if (!this.config.get('ENABLE_API_MIRROR_NOTIFICATIONS', { infer: true })) return;
+    if (!this.config.get('ENABLE_API_MIRROR_NOTIFICATIONS', { infer: true }))
+      return;
     // Fire-and-forget: no bloquea la respuesta HTTP, BullMQ hace reintentos
     this.notificationHandlers?.onOrderStatusChanged(orderId).catch((err) => {
-      this.logger.warn(
-        `Notificación de cambio de estado falló para orden ${orderId}: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      this.logger.warn({
+        event: 'order_status_notification_failed',
+        ...safeErrorFields(err),
+      });
     });
   }
 }

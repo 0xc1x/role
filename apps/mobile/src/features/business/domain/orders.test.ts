@@ -142,9 +142,10 @@ describe("filterAndSortOrders", () => {
 			makeOrder({ id: "b", status: "pending" }),
 		];
 		expect(
-			filterAndSortOrders(orders, { tab: "active", searchQuery: "  0042  " }).map(
-				(o) => o.order.id,
-			),
+			filterAndSortOrders(orders, {
+				tab: "active",
+				searchQuery: "  0042  ",
+			}).map((o) => o.order.id),
 		).toEqual(["a"]);
 	});
 
@@ -199,7 +200,11 @@ describe("orderStats", () => {
 			makeOrder({ id: "r1", status: "ready_for_pickup" }),
 			makeOrder({ id: "r2", status: "ready_for_pickup" }),
 			makeOrder({ id: "c1", status: "completed", createdAt: today }),
-			makeOrder({ id: "c2", status: "completed", createdAt: "2026-01-01T10:00:00.000Z" }),
+			makeOrder({
+				id: "c2",
+				status: "completed",
+				createdAt: "2026-01-01T10:00:00.000Z",
+			}),
 			makeOrder({ id: "x", status: "cancelled" }),
 		];
 		expect(orderStats(orders)).toEqual({

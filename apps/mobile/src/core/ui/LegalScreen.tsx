@@ -26,7 +26,10 @@ export default function LegalScreen({
 			<View style={styles.container}>
 				<ScreenHeader title={title} />
 				<Card style={styles.card}>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{updatedAt}
 					</AppText>
 					{sections.map((section) => (

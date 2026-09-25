@@ -9,24 +9,55 @@ import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
 import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
 import type { BusinessProfileDetail } from "@/src/features/business/domain/business";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-export function BusinessHeader({ profile }: { profile: BusinessProfileDetail }) {
+export function BusinessHeader({
+	profile,
+}: {
+	profile: BusinessProfileDetail;
+}) {
 	const { colors } = useTheme();
 	const business = profile.business;
 	return (
 		<View>
 			<View style={styles.headerRow}>
-				<View style={[styles.logoBox, { backgroundColor: colors.background, boxShadow: `0px 8px 12px ${colors.shadow}` }]}>
+				<View
+					style={[
+						styles.logoBox,
+						{
+							backgroundColor: colors.background,
+							boxShadow: `0px 8px 12px ${colors.shadow}`,
+						},
+					]}
+				>
 					{business.image ? (
-						<Image source={{ uri: business.image }} style={styles.logo} contentFit="cover" />
+						<Image
+							source={{ uri: business.image }}
+							style={styles.logo}
+							contentFit="cover"
+						/>
 					) : (
-						<View style={[styles.logo, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]}>
+						<View
+							style={[
+								styles.logo,
+								{
+									backgroundColor: colors.muted,
+									alignItems: "center",
+									justifyContent: "center",
+								},
+							]}
+						>
 							<Store size={28} color={colors.mutedForeground} />
 						</View>
 					)}
 				</View>
 				<View style={styles.headerText}>
-					<View style={[styles.typeBadge, { backgroundColor: `${withAlpha(colors.primary, 0.102)}` }]}>
+					<View
+						style={[
+							styles.typeBadge,
+							{ backgroundColor: `${withAlpha(colors.primary, 0.102)}` },
+						]}
+					>
 						<AppText
 							style={{
 								color: colors.primary,
@@ -93,7 +124,11 @@ export function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
 			</View>
 			<AppText
 				weight="bold"
-				style={{ color: colors.success, textAlign: "center", marginTop: spacing.xs }}
+				style={{
+					color: colors.success,
+					textAlign: "center",
+					marginTop: spacing.xs,
+				}}
 			>
 				{strings.businessProfile.rescuedFromWaste}
 			</AppText>
@@ -119,16 +154,24 @@ export function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
 export function AboutCard({ description }: { description: string }) {
 	const { colors } = useTheme();
 	return (
-		<View style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<AppText variant="labelMedium" weight="bold">
-				{strings.businessProfile.aboutBusiness}
-			</AppText>
-			<AppText
-				style={{ color: colors.mutedForeground, lineHeight: 21, marginTop: spacing.sm }}
-			>
-				{description}
-			</AppText>
-		</View>
+		<Card style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
+			<CardHeader>
+				<AppText variant="labelMedium" weight="bold">
+					{strings.businessProfile.aboutBusiness}
+				</AppText>
+			</CardHeader>
+			<CardContent>
+				<AppText
+					style={{
+						color: colors.mutedForeground,
+						lineHeight: 21,
+						marginTop: spacing.sm,
+					}}
+				>
+					{description}
+				</AppText>
+			</CardContent>
+		</Card>
 	);
 }
 

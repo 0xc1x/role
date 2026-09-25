@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { ReviewDto } from '@0xc1x/role-commons';
 import type { Database } from '../../database/database.module';
 import type { AuthUser } from '../../auth/auth.types';

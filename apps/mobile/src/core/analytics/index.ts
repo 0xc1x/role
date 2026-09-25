@@ -15,9 +15,10 @@ const enabled =
 	env.EXPO_PUBLIC_ENVIRONMENT !== "development" &&
 	env.EXPO_PUBLIC_ENVIRONMENT !== "dev";
 let didInit = false;
+let consentGranted = false;
 
 function doInit(): void {
-	if (!enabled || didInit) return;
+	if (!enabled || !consentGranted || didInit) return;
 	didInit = true;
 	Sentry.init({
 		dsn,
@@ -47,8 +48,13 @@ export const analytics = {
 		doInit();
 	},
 
+	setConsent(granted: boolean): void {
+		consentGranted = granted;
+		if (granted) doInit();
+	},
+
 	track(event: TrackEvent): void {
-		if (!enabled) return;
+		if (!enabled || !consentGranted) return;
 		Sentry.addBreadcrumb({
 			category: event.category,
 			message: event.action,
@@ -60,12 +66,12 @@ export const analytics = {
 	},
 
 	trackError(error: unknown, context?: Record<string, unknown>): void {
-		if (!enabled) return;
+		if (!enabled || !consentGranted) return;
 		Sentry.captureException(error, { extra: context });
 	},
 
 	setUser(userId: string | null): void {
-		if (!enabled) return;
+		if (!enabled || !consentGranted) return;
 		if (userId) {
 			Sentry.setUser({ id: userId });
 		} else {

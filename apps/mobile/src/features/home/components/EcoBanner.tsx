@@ -11,15 +11,13 @@ export function EcoBanner() {
 	const { colors } = useTheme();
 
 	return (
-		<View
-			style={[
-				styles.container,
-				{ backgroundColor: colors.greenDark },
-			]}
-		>
+		<View style={[styles.container, { backgroundColor: colors.greenDark }]}>
 			<View style={styles.content}>
 				<View
-					style={[styles.iconContainer, { backgroundColor: colors.greenMidDark }]}
+					style={[
+						styles.iconContainer,
+						{ backgroundColor: colors.greenMidDark },
+					]}
 				>
 					<Leaf size={28} color={colors.green} />
 				</View>
@@ -49,10 +47,7 @@ export function EcoBanner() {
 				<View
 					style={[styles.leafDecoration, { backgroundColor: colors.ecoGreen }]}
 				>
-					<Leaf
-						size={40}
-						color={colors.greenDarkForeground}
-					/>
+					<Leaf size={40} color={colors.greenDarkForeground} />
 				</View>
 			</View>
 		</View>
