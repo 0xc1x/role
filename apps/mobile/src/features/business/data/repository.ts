@@ -30,6 +30,43 @@ import { OFFER_SELECT } from "@/src/features/offers/data/offer-select";
 
 export { isOfferOutOfStock };
 
+/**
+ * Explicit column list for direct client reads of `businesses`.
+ *
+ * `select("*")` is no longer valid: the table grant is column-scoped
+ * (migration 20260926000004), so `owner_id`, `commission_rate`, `balance` and
+ * the moderation columns are not readable by anon/authenticated. Always select
+ * by name so a future grant change fails loudly here instead of silently
+ * returning `undefined` through the cast below.
+ */
+const BUSINESS_PUBLIC_COLUMNS =
+	"id, name, type, slug, image, cover_image, rating, review_count, description, phone, email, website, is_active, created_at, updated_at, currency";
+
+/** Owner-scoped read: adds owner_id, still without platform/financial columns. */
+const BUSINESS_OWNER_COLUMNS = `owner_id, ${BUSINESS_PUBLIC_COLUMNS}`;
+
+/**
+ * Row shape actually returned for a public/owner client read. The withheld
+ * platform columns are normalized to `null` so `Business` never holds
+ * `undefined` for a field the UI might believe is present.
+ */
+type BusinessClientRow = Omit<
+	Business,
+	"commission_rate" | "balance" | "verification_status" | "verified_at" | "verified_by" | "rejection_reason"
+>;
+
+function toBusiness(row: Record<string, unknown>): Business {
+	return {
+		...(row as unknown as BusinessClientRow),
+		commission_rate: null,
+		balance: null,
+		verification_status: "pending",
+		verified_at: null,
+		verified_by: null,
+		rejection_reason: null,
+	};
+}
+
 const DAY_LABELS: Record<string, string> = {
 	monday: "Lunes",
 	tuesday: "Martes",
@@ -105,12 +142,12 @@ export interface PayoutListParams {
 }
 
 const REVIEW_SELECT = `id, order_id, product_rating, business_rating, comment, created_at,
-        profiles!reviews_user_id_fkey (full_name),
-        orders!reviews_order_id_fkey (offer_id, offers (title))`;
+				profiles!reviews_user_id_fkey (full_name),
+				orders!reviews_order_id_fkey (offer_id, offers (title))`;
 
 const REVIEW_SELECT_BY_OFFER = `id, order_id, product_rating, business_rating, comment, created_at,
-        profiles!reviews_user_id_fkey (full_name),
-        orders!reviews_order_id_fkey!inner (offer_id, offers (title))`;
+				profiles!reviews_user_id_fkey (full_name),
+				orders!reviews_order_id_fkey!inner (offer_id, offers (title))`;
 
 /** Server-side list params for the business catalog (PostgREST filters + `.range()` paging). */
 export interface BusinessOfferListParams {
@@ -174,10 +211,10 @@ export const businessRepository = {
 		const hasCategory = params.categoryId != null;
 		let query = supabase
 			.from("offers")
-			.select(
-				hasCategory ? "id,offer_categories!inner(category_id)" : "id",
-				{ count: "exact", head: true },
-			)
+			.select(hasCategory ? "id,offer_categories!inner(category_id)" : "id", {
+				count: "exact",
+				head: true,
+			})
 			.eq("business_id", businessId);
 		if (params.locationId != null)
 			query = query.eq("business_location_id", params.locationId);
@@ -208,7 +245,7 @@ export const businessRepository = {
 		] = await Promise.all([
 			supabase
 				.from("businesses")
-				.select("*")
+				.select(BUSINESS_PUBLIC_COLUMNS)
 				.eq("id", businessId)
 				.maybeSingle(),
 			supabase
@@ -220,8 +257,8 @@ export const businessRepository = {
 				.from("reviews")
 				.select(
 					`id, user_id, business_id, order_id, rating, comment, product_rating, business_rating, created_at,
-            profiles!reviews_user_id_fkey (full_name),
-            orders!reviews_order_id_fkey (offer_id, offers (title))`,
+						profiles!reviews_user_id_fkey (full_name),
+						orders!reviews_order_id_fkey (offer_id, offers (title))`,
 				)
 				.eq("business_id", businessId)
 				.order("created_at", { ascending: false })
@@ -242,10 +279,11 @@ export const businessRepository = {
 		if (businessResult.error || !businessResult.data) {
 			throw Errors.notFound("Negocio no encontrado");
 		}
-		const business = businessResult.data as unknown as Business;
+		const business = toBusiness(
+			businessResult.data as unknown as Record<string, unknown>,
+		);
 		const headquarter = locationResult.data as unknown as
-			| (Row & { address?: string })
-			| null;
+			(Row & { address?: string }) | null;
 
 		const hourEntries = toRows(hoursResult.data).map((r) => ({
 			day: String(r.day),
@@ -298,9 +336,7 @@ export const businessRepository = {
 		let query = supabase
 			.from("reviews")
 			.select(
-				offerId
-					? "id,orders!reviews_order_id_fkey!inner(offer_id)"
-					: "id",
+				offerId ? "id,orders!reviews_order_id_fkey!inner(offer_id)" : "id",
 				{ count: "exact", head: true },
 			)
 			.eq("business_id", businessId);
@@ -333,13 +369,16 @@ export const businessRepository = {
 		}));
 	},
 
-	async getBusinessesByOwnerId(ownerId: string): Promise<Business[]> {		const { data, error } = await supabase
+	async getBusinessesByOwnerId(ownerId: string): Promise<Business[]> {
+		const { data, error } = await supabase
 			.from("businesses")
-			.select("*")
+			.select(BUSINESS_OWNER_COLUMNS)
 			.eq("owner_id", ownerId)
 			.order("name");
 		if (error) throw toAppError(error, "Error al cargar negocios");
-		return (data ?? []) as unknown as Business[];
+		return (data ?? []).map((row) =>
+			toBusiness(row as unknown as Record<string, unknown>)
+		);
 	},
 
 	async createBusiness(input: {
@@ -353,6 +392,7 @@ export const businessRepository = {
 		logoUri: string | null;
 		coverUri: string | null;
 		hours: Array<{ day: string; hours: string }>;
+		slug?: string;
 		address?: string | null;
 		latitude?: number | null;
 		longitude?: number | null;
@@ -377,7 +417,8 @@ export const businessRepository = {
 			.replace(/[^a-z0-9]+/g, "-")
 			.replace(/-+/g, "-")
 			.replace(/^-|-$/g, "");
-		const slug = `${slugBase}-${Math.floor(Math.random() * 10000)}`;
+		const slug =
+			input.slug ?? `${slugBase}-${Math.floor(Math.random() * 10000)}`;
 
 		const businessResult = await supabase
 			.from("businesses")
@@ -392,10 +433,6 @@ export const businessRepository = {
 				image: logoUrl,
 				cover_image: coverUrl,
 				website: input.website,
-				rating: 0,
-				review_count: 0,
-				is_active: false,
-				verification_status: "pending",
 			})
 			.select("id")
 			.single();
@@ -665,11 +702,11 @@ export const businessRepository = {
 	},
 
 	/**
-	 * Exact balance totals over ALL payouts (single bounded fetch — payouts
-	 * settle quincenales, so rows stay tiny; no sum aggregate exists
-	 * server-side). Used by the balance cards so they stay exact under any
-	 * list filter.
-	 */
+   * Exact balance totals over ALL payouts (single bounded fetch — payouts
+   * settle quincenales, so rows stay tiny; no sum aggregate exists
+   * server-side). Used by the balance cards so they stay exact under any
+   * list filter.
+   */
 	async getPayoutTotals(businessId: string): Promise<{
 		paid: number;
 		paidCount: number;
@@ -775,9 +812,14 @@ export async function saveOffer(
 		);
 	}
 
-	const payload: Row = {
-		business_id: input.businessId,
-		business_location_id: input.businessLocationId || undefined,
+	// Insert and update send deliberately different column sets. The database
+	// grants INSERT on the ownership / location / opening-stock columns and
+	// UPDATE only on the mutable set (supabase/migrations/*_offer_stock_write_grant.sql
+	// and the client read/write boundary migration). PostgREST does not strip
+	// keys the role may not write: it sends the whole object, and Postgres then
+	// rejects the entire statement with "permission denied for table offers".
+	// Reusing the insert payload on update broke editing every offer.
+	const mutableColumns: Row = {
 		title: input.title,
 		description: input.description,
 		includes: input.includes,
@@ -785,18 +827,17 @@ export async function saveOffer(
 		original_price: input.originalPrice,
 		discounted_price: input.discountedPrice,
 		stock: input.stock,
-		initial_stock: input.initialStock,
 		pickup_start: input.pickupStart,
 		pickup_end: input.pickupEnd,
 		is_active: input.isActive,
 	};
-	if (imageUrl) payload.image = imageUrl;
+	if (imageUrl) mutableColumns.image = imageUrl;
 
 	let inserted: unknown;
 	if (input.id) {
 		const result = await supabase
 			.from("offers")
-			.update(payload)
+			.update(mutableColumns)
 			.eq("id", input.id)
 			.select(OFFER_SELECT)
 			.single();
@@ -809,7 +850,12 @@ export async function saveOffer(
 		}
 		const result = await supabase
 			.from("offers")
-			.insert(payload)
+			.insert({
+				...mutableColumns,
+				business_id: input.businessId,
+				business_location_id: input.businessLocationId || undefined,
+				initial_stock: input.initialStock,
+			})
 			.select(OFFER_SELECT)
 			.single();
 		inserted = result.data;
@@ -850,6 +896,37 @@ async function syncCategories(
 	if (error) throw toAppError(error, "Error al guardar categorías");
 }
 
+export function detectImageContentType(
+	bytes: ArrayBuffer,
+): "image/jpeg" | "image/png" | "image/webp" | null {
+	const data = new Uint8Array(bytes);
+	if (
+		data.length >= 3 &&
+		data[0] === 0xff &&
+		data[1] === 0xd8 &&
+		data[2] === 0xff
+	) {
+		return "image/jpeg";
+	}
+	if (
+		data.length >= 8 &&
+		data[0] === 0x89 &&
+		data[1] === 0x50 &&
+		data[2] === 0x4e &&
+		data[3] === 0x47
+	) {
+		return "image/png";
+	}
+	if (
+		data.length >= 12 &&
+		String.fromCharCode(...data.slice(0, 4)) === "RIFF" &&
+		String.fromCharCode(...data.slice(8, 12)) === "WEBP"
+	) {
+		return "image/webp";
+	}
+	return null;
+}
+
 async function uploadImage(
 	uri: string,
 	remotePath: string,
@@ -864,13 +941,27 @@ async function uploadImage(
 		} else {
 			bytes = await new File(uri).arrayBuffer();
 		}
+		const {
+			data: { user },
+		} = await supabase.auth.getUser();
+		if (!user?.id) throw new Error("Missing authenticated owner for upload");
+		const contentType = detectImageContentType(bytes);
+		if (!contentType) throw new Error("Invalid image content");
+		const extension =
+			contentType === "image/png"
+				? "png"
+				: contentType === "image/webp"
+					? "webp"
+					: "jpg";
+		const normalizedPath = remotePath.replace(/\.[^/.]+$/, `.${extension}`);
+		const scopedPath = `${user.id}/${normalizedPath}`;
 		const { error } = await supabase.storage
 			.from("product_images")
-			.upload(remotePath, bytes, { contentType: "image/jpeg", upsert: true });
+			.upload(scopedPath, bytes, { contentType, upsert: true });
 		if (error) throw error;
 		const { data } = supabase.storage
 			.from("product_images")
-			.getPublicUrl(remotePath);
+			.getPublicUrl(scopedPath);
 		return data.publicUrl;
 	} catch {
 		// Upload fallido: null mantiene la imagen anterior en la oferta
@@ -953,7 +1044,9 @@ function bucketLabel(key: string, agg: Aggregation): string {
 	if (agg === "day") {
 		const [y, m, d] = key.split("-").map(Number);
 		const names = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-		return names[new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).getUTCDay()] ?? key;
+		return (
+			names[new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).getUTCDay()] ?? key
+		);
 	}
 	if (agg === "week") {
 		const [yearPart, weekPart] = key.split("-W");
@@ -998,7 +1091,10 @@ function dailyStats(
 	}
 	for (const row of days) {
 		const [y, m, d] = row.day.split("-").map(Number);
-		const key = bucketKey(new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)), agg);
+		const key = bucketKey(
+			new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)),
+			agg,
+		);
 		const current = dataMap.get(key);
 		if (current) {
 			dataMap.set(key, {
@@ -1107,8 +1203,8 @@ function toDbTime(time: string): string {
 	const parts = time.split(":");
 	if (parts.length === 2) {
 		const hh = parts[0] ?? "00";
-	const mm = parts[1] ?? "00";
-	return `${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:00`;
+		const mm = parts[1] ?? "00";
+		return `${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:00`;
 	}
 	return "00:00:00";
 }
@@ -1153,10 +1249,8 @@ function toReviewViews(data: unknown): BusinessReviewView[] {
 			date: String(row.created_at ?? ""),
 			comment: (row.comment as string | null) ?? null,
 			orderId: (row.order_id as string | null) ?? null,
-			offerId:
-				order?.offer_id != null ? String(order.offer_id) : null,
-			offerTitle:
-				offer?.title != null ? String(offer.title) : null,
+			offerId: order?.offer_id != null ? String(order.offer_id) : null,
+			offerTitle: offer?.title != null ? String(offer.title) : null,
 		};
 	});
 }
