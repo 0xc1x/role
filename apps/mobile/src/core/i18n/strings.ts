@@ -59,7 +59,7 @@ export const strings = {
 		passwordResetSent: "Te enviamos un correo para recuperar tu contraseña",
 		passwordUpdated: "Contraseña actualizada",
 		resetLinkInvalid:
-			"El enlace no es válido o expiró. Solicita uno nuevo desde \"¿Olvidaste tu contraseña?\".",
+			'El enlace no es válido o expiró. Solicita uno nuevo desde "¿Olvidaste tu contraseña?".',
 		passwordMinLength: "La contraseña debe tener al menos 6 caracteres",
 		passwordsMismatch: "Las contraseñas no coinciden",
 		signOut: "Cerrar sesión",
@@ -202,7 +202,8 @@ export const strings = {
 		availableCount: "{n} disponibles",
 		viewDetail: "Ver detalle",
 		loginRequiredTitle: "Inicia sesión para ver ofertas",
-		loginRequiredBody: "Inicia sesión para visualizar las ofertas disponibles cerca de tu ubicación seleccionada.",
+		loginRequiredBody:
+			"Inicia sesión para visualizar las ofertas disponibles cerca de tu ubicación seleccionada.",
 		loginCTA: "Iniciar sesión",
 	},
 	allOffers: {
@@ -263,7 +264,8 @@ export const strings = {
 		distanceFromYou: "A una distancia de {distance} de ti.",
 		pickupSchedule: "Horario de recogida",
 		availablePacks: "Packs disponibles",
-		packsLeftText: "Quedan libres {stock} de los {initial} publicados inicialmente.",
+		packsLeftText:
+			"Quedan libres {stock} de los {initial} publicados inicialmente.",
 		counterInstructionsText:
 			"Presenta tu código de reserva digital al personal antes del cierre de la ventana de tiempo. Ellos te entregarán el pack listo.",
 		whatIncludes: "¿Qué incluye este pack?",
@@ -327,8 +329,7 @@ export const strings = {
 		pickupAddressLabel: "Dirección del local",
 		pickupWindow: "{day} de {start} a {end}",
 		termsNote: "Términos y condiciones aplicados.",
-		reservationError:
-			"No pudimos confirmar tu reserva. Inténtalo de nuevo.",
+		reservationError: "No pudimos confirmar tu reserva. Inténtalo de nuevo.",
 		reservationSuccessTitle: "¡Reserva Confirmada!",
 		reservationSuccessMessage: "Tu comida ha sido salvada con éxito",
 		ticketTitle: "Ticket de Recogida",
@@ -502,6 +503,7 @@ export const strings = {
 		language: "Idioma",
 		languageValue: "Español",
 		notifications: "Notificaciones",
+		analytics: "Analítica de uso",
 		about: "Acerca de",
 		version: "Versión",
 		signOut: "Cerrar sesión",
@@ -642,9 +644,12 @@ export const strings = {
 		statsThisYear: "Este año",
 		statsPreviousPeriod: "Período anterior",
 		statsNextPeriod: "Período siguiente",
-		statsGrowthUp: "Tus ventas han crecido un {pct}% comparado con el período anterior.",
-		statsGrowthDown: "Tus ventas han decaído un {pct}% comparado con el período anterior.",
-		statsRescued: "Has rescatado {count} comidas, evitando el desperdicio de alimentos.",
+		statsGrowthUp:
+			"Tus ventas han crecido un {pct}% comparado con el período anterior.",
+		statsGrowthDown:
+			"Tus ventas han decaído un {pct}% comparado con el período anterior.",
+		statsRescued:
+			"Has rescatado {count} comidas, evitando el desperdicio de alimentos.",
 		kpiRescued: "Rescatadas",
 		vsPrevious: "vs anterior",
 		dailyAvg: "Promedio diario",
@@ -656,7 +661,8 @@ export const strings = {
 		productsDesc: "Crea y administra tus ofertas de comida.",
 		couponsDesc: "Crea cupones y promociones para tus clientes.",
 		ordersDesc: "Revisa los pedidos y valida códigos de recogida.",
-		statisticsDesc: "Métricas de ventas, alimentos rescatados y calificaciones.",
+		statisticsDesc:
+			"Métricas de ventas, alimentos rescatados y calificaciones.",
 		manage: "Gestionar",
 		view: "Ver",
 		help: "Ayuda",
@@ -668,6 +674,10 @@ export const strings = {
 		createBusiness: "Registrar negocio",
 		signupDataTitle: "Datos del negocio",
 		signupPhoneLabel: "Teléfono del negocio",
+		signupConfirmationRequired:
+			"Cuenta creada. Confirma tu correo e inicia sesión; crearemos tu negocio pendiente automáticamente.",
+		signupCompleted:
+			"¡Registro recibido! Tu negocio está en revisión. Te contactaremos en menos de 24 horas para activarlo.",
 		newBusinessTitle: "Crea tu negocio",
 		newBusinessSubtitle:
 			"Completa la información de tu negocio para empezar a vender",
@@ -766,7 +776,8 @@ export const strings = {
 		endTime: "Hora hasta",
 		uploadPhoto: "Subir foto",
 		changePhoto: "Cambiar foto",
-		invalidPickupWindow: "La fecha/hora de fin debe ser posterior a la de inicio.",
+		invalidPickupWindow:
+			"La fecha/hora de fin debe ser posterior a la de inicio.",
 		requiredField: "Campo requerido",
 		minStock: "Debe ser al menos 1",
 		invalidPrice: "Ingresa un precio mayor a 0",
@@ -1003,7 +1014,8 @@ export const strings = {
 		couponValidity: "Vigencia y Límites",
 		couponExpiryLabel: "Fecha de expiración *",
 		couponChooseExpiry: "Elegir fecha de vencimiento",
-		couponExpiryError: "Es obligatorio fijar una fecha de vigencia para el cupón.",
+		couponExpiryError:
+			"Es obligatorio fijar una fecha de vigencia para el cupón.",
 		couponMaxUsesOptional: "Límite total de redenciones (opcional)",
 		couponUnlimited: "Sin límite (Ilimitado)",
 		couponMaxUsesInvalid: "Debe ser una cantidad válida mayor a 0",
@@ -1031,7 +1043,8 @@ export const strings = {
 		notifNewOrders: "Nuevos pedidos",
 		notifNewOrdersDesc: "Notificación cuando recibes un nuevo pedido",
 		notifPickupReady: "Hora de recogida",
-		notifPickupReadyDesc: "Recordatorio 30 minutos antes de la hora de recogida",
+		notifPickupReadyDesc:
+			"Recordatorio 30 minutos antes de la hora de recogida",
 		notifReviews: "Nuevas reseñas",
 		notifReviewsDesc: "Cuando un cliente deja una reseña",
 		notifLowStock: "Stock bajo",
@@ -1380,13 +1393,15 @@ export const strings = {
 		notificationsNewOrders: "Nuevos pedidos",
 		notificationsNewOrdersHint: "Notificación cuando recibes un nuevo pedido",
 		notificationsPickupReady: "Hora de recogida",
-		notificationsPickupReadyHint: "Recordatorio 30 minutos antes de la recogida",
+		notificationsPickupReadyHint:
+			"Recordatorio 30 minutos antes de la recogida",
 		notificationsReviews: "Nuevas reseñas",
 		notificationsReviewsHint: "Cuando un cliente deja una reseña",
 		notificationsLowStock: "Stock bajo",
 		notificationsLowStockHint: "Alerta cuando un producto tiene pocas unidades",
 		notificationsDailySummary: "Resumen diario",
-		notificationsDailySummaryHint: "Estadísticas del día al final de la jornada",
+		notificationsDailySummaryHint:
+			"Estadísticas del día al final de la jornada",
 		notificationsPush: "Notificaciones push",
 		notificationsEmail: "Email",
 		notificationsSms: "SMS",

@@ -1,7 +1,7 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import { env } from '@/src/core/config/env';
+import { env } from "@/src/core/config/env";
+import { supabaseSessionStorage } from "./storage";
 
 /**
  * Single Supabase client for the whole app.
@@ -17,9 +17,8 @@ export const supabase: SupabaseClient = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      // Sin adaptador, supabase-js cae a memoria en nativo y la sesión
-      // se pierde en cada reinicio de la app.
-      storage: AsyncStorage,
+      // Native sessions use SecureStore; web keeps localStorage.
+      storage: supabaseSessionStorage,
     },
   },
 );
