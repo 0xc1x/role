@@ -1,7 +1,12 @@
 import type { RedisOptions } from 'ioredis';
 
 export function parseRedisUrl(url: string): RedisOptions {
-  if (!url) return { host: 'localhost', port: 6379, maxRetriesPerRequest: null } as RedisOptions;
+  if (!url)
+    return {
+      host: 'localhost',
+      port: 6379,
+      maxRetriesPerRequest: null,
+    };
   try {
     const u = new URL(url);
     return {
@@ -10,8 +15,12 @@ export function parseRedisUrl(url: string): RedisOptions {
       username: u.username || undefined,
       password: u.password || undefined,
       maxRetriesPerRequest: null,
-    } as RedisOptions;
+    };
   } catch {
-    return { host: 'localhost', port: 6379, maxRetriesPerRequest: null } as RedisOptions;
+    return {
+      host: 'localhost',
+      port: 6379,
+      maxRetriesPerRequest: null,
+    };
   }
 }

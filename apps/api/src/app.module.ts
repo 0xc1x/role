@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { SecurityModule } from './auth/security.module';
 import { parseRedisUrl } from './common/utils/redis';
+import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { validateEnv, type Env } from './config/env.schema';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './modules/health/health.module';
@@ -51,32 +52,7 @@ import { StoreModule } from './modules/store/store.module';
         return { connection } as never;
       },
     }),
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 100,
-      },
-      {
-        name: 'auth',
-        ttl: 60000,
-        limit: 10,
-      },
-      {
-        name: 'orders',
-        ttl: 60000,
-        limit: 30,
-      },
-      {
-        name: 'upload',
-        ttl: 60000,
-        limit: 20,
-      },
-      {
-        name: 'contact',
-        ttl: 60000,
-        limit: 5,
-      },
-    ]),
+    RateLimitModule,
     DatabaseModule,
     SecurityModule,
     AuthModule,

@@ -31,7 +31,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
   app.enableCors({ origin: corsOrigins, credentials: true });
-  app.useGlobalFilters(new AllExceptionsFilter(config));
+  app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
