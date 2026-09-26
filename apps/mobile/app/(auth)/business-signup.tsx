@@ -104,7 +104,7 @@ export default function BusinessSignupScreen() {
 					</AppText>
 				) : null}
 				{success ? (
-					<AppText variant="bodySmall" style={{ color: colors.success }}>
+					<AppText variant="bodySmall" style={{ color: colors.successText }}>
 						{success}
 					</AppText>
 				) : null}

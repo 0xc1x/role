@@ -59,7 +59,7 @@ function toneColors(
 		case "brand":
 			return { bg: colors.secondary, fg: colors.secondaryForeground };
 		case "success":
-			return { bg: colors.surfaceSuccess, fg: colors.success };
+			return { bg: colors.surfaceSuccess, fg: colors.successText };
 		case "warning":
 			return { bg: colors.surfaceWarning, fg: colors.warning };
 		case "danger":

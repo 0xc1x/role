@@ -30,7 +30,7 @@ const BENEFITS = [
 ];
 
 export default function SignupScreen() {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const router = useRouter();
 	const [fullName, setFullName] = useState("");
 	const [email, setEmail] = useState("");
@@ -79,7 +79,6 @@ export default function SignupScreen() {
 		}
 	};
 
-	const accent = scheme === "dark" ? colors.success : colors.successDark;
 	const linkStyle = { color: colors.primary, fontWeight: "700" as const };
 
 	return (
@@ -237,16 +236,16 @@ export default function SignupScreen() {
 					},
 				]}
 			>
-				<AppText variant="h4" weight="bold" style={{ color: accent }}>
+				<AppText variant="h4" weight="bold" style={{ color: colors.successText }}>
 					{strings.auth.benefitsTitle}
 				</AppText>
 				<View style={styles.benefitsList}>
 					{BENEFITS.map((benefit) => (
 						<View key={benefit} style={styles.benefitItem}>
-							<CircleCheck size={18} color={accent} />
+							<CircleCheck size={18} color={colors.successText} />
 							<AppText
 								variant="bodySmall"
-								style={{ color: accent, flex: 1, lineHeight: 17 }}
+								style={{ color: colors.successText, flex: 1, lineHeight: 17 }}
 							>
 								{benefit}
 							</AppText>

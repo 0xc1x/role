@@ -21,16 +21,14 @@ export function PriceBreakdownCard({
 	offer,
 	appliedCoupon,
 }: PriceBreakdownCardProps) {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const totals = checkoutTotals(offer, appliedCoupon);
 	const offerDiscount = totals.offerDiscount;
 	const coupon = totals.coupon;
 	const total = totals.total;
-	// `success` is a decorative green: 2.08:1 on `card`, far under WCAG AA 4.5:1
-	// for this 13pt text. `successDark` clears AA in light (4.58:1) but is the
-	// wrong token in dark, where `success` is the readable one (6.13:1). Same
-	// scheme split the Alert component already applies to its own icon.
-	const successText = scheme === "dark" ? colors.success : colors.successDark;
+	// `successText` is the text-safe green (4.58:1 on `card`, 4.57:1 on the
+	// Alert's `surfaceSuccess` in light; 6.13:1 on `card` in dark). Plain
+	// `success` stays the decorative hue.
 
 	return (
 		<Card>
@@ -49,10 +47,10 @@ export function PriceBreakdownCard({
 					</AppText>
 				</View>
 				<View style={styles.priceRow}>
-					<AppText style={[styles.label, { color: successText }]}>
+					<AppText style={[styles.label, { color: colors.successText }]}>
 						{strings.checkout.discount}
 					</AppText>
-					<AppText style={[styles.value, { color: successText }]}>
+					<AppText style={[styles.value, { color: colors.successText }]}>
 						-{formatMoney(offerDiscount)}
 					</AppText>
 				</View>
@@ -77,7 +75,7 @@ export function PriceBreakdownCard({
 				</View>
 				<Alert variant="success" icon={PiggyBank}>
 					<AlertDescription>
-						<AppText style={[styles.ecoText, { color: successText }]}>
+						<AppText style={[styles.ecoText, { color: colors.successText }]}>
 							{strings.orders.moneySaved.replace(
 								"{saved}",
 								formatMoneyPrecise(offerDiscount + coupon),

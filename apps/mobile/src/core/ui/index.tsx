@@ -575,7 +575,7 @@ export function StatusBadge({
 	const toneMap: Record<BadgeTone, { bg: string; fg: string }> = {
 		neutral: { bg: colors.muted, fg: colors.mutedForeground },
 		brand: { bg: colors.secondary, fg: colors.secondaryForeground },
-		success: { bg: colors.surfaceSuccess, fg: colors.success },
+		success: { bg: colors.surfaceSuccess, fg: colors.successText },
 		warning: { bg: colors.surfaceWarning, fg: colors.warning },
 		danger: { bg: colors.destructiveSurface, fg: colors.destructive },
 		info: { bg: colors.infoSurface, fg: colors.info },

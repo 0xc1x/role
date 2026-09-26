@@ -149,14 +149,14 @@ export default function BusinessPayoutsScreen() {
 								<AppText
 									variant="labelSmall"
 									weight="bold"
-									style={{ color: colors.successDark }}
+									style={{ color: colors.successText }}
 								>
 									{strings.business.totalCollected}
 								</AppText>
-								<AppText variant="h2" weight="bold" style={{ color: colors.successDark }}>
+								<AppText variant="h2" weight="bold" style={{ color: colors.successText }}>
 									{formatMoney(paid)}
 								</AppText>
-								<AppText variant="bodySmall" style={{ color: colors.successDark }}>
+								<AppText variant="bodySmall" style={{ color: colors.successText }}>
 									{paidCount === 1
 										? strings.business.onePayout
 										: `${paidCount} ${strings.business.payoutsCount}`}

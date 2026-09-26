@@ -416,7 +416,7 @@ export function ProductForm({
 						<AppText
 							variant="bodySmall"
 							weight="bold"
-							style={{ color: colors.success }}
+							style={{ color: colors.successText }}
 						>
 							{strings.business.discountPercent.replace(
 								"{percent}",

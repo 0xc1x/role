@@ -371,7 +371,7 @@ export function BusinessForm({
 				>
 					<MapPin
 						size={16}
-						color={picked ? colors.success : colors.mutedForeground}
+						color={picked ? colors.successText : colors.mutedForeground}
 					/>
 					<AppText
 						variant="bodyMedium"
@@ -381,7 +381,7 @@ export function BusinessForm({
 						{picked?.address ?? strings.business.pickLocation}
 					</AppText>
 					{picked ? (
-						<CircleCheck size={18} color={colors.success} />
+						<CircleCheck size={18} color={colors.successText} />
 					) : (
 						<ChevronRight size={16} color={colors.mutedForeground} />
 					)}

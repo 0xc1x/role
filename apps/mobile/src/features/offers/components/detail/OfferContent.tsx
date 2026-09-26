@@ -188,7 +188,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 						<AppText
 							variant="labelSmall"
 							weight="bold"
-							style={{ color: colors.success }}
+							style={{ color: colors.successText }}
 						>
 							{strings.offerDetail.saveAmount.replace(
 								"{amount}",
@@ -217,7 +217,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 							</AppText>
 							{includes.map((item) => (
 								<View key={item} style={styles.listRow}>
-									<CircleCheck size={18} color={colors.success} />
+									<CircleCheck size={18} color={colors.successText} />
 									<AppText variant="bodyMedium" style={{ flex: 1 }}>
 										{item}
 									</AppText>
@@ -365,7 +365,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 			{/* ── Card ecológica ───────────────────────────────────── */}
 			<Card>
 				<CardHeader style={[styles.ecoCard]}>
-					<Leaf size={28} color={colors.success} />
+					<Leaf size={28} color={colors.successText} />
 					<AppText
 						variant="labelMedium"
 						weight="bold"

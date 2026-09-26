@@ -195,7 +195,7 @@ export function ProductDetail({
 						label={strings.business.unitsSold}
 						value={String(sold)}
 						icon={ShoppingBag}
-						color={colors.success}
+						color={colors.successText}
 						bg={colors.surfaceSuccess}
 					/>
 					<StatCard
@@ -316,7 +316,7 @@ export function ProductDetail({
 						</AppText>
 						{splitList(offer.includes).map((item) => (
 							<View key={item} style={styles.listRow}>
-								<CircleCheck size={18} color={colors.success} />
+								<CircleCheck size={18} color={colors.successText} />
 								<AppText variant="bodyMedium" style={{ flex: 1 }}>
 									{item}
 								</AppText>

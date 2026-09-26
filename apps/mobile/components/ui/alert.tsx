@@ -70,7 +70,7 @@ function getAlertTone(
           backgroundColor: colors.surfaceSuccess,
           borderColor: colors.surfaceSuccessBorder,
         },
-        iconColor: scheme === 'dark' ? colors.success : colors.successDark,
+        iconColor: colors.successText,
         defaultIcon: CircleCheck,
       };
     case 'warning':

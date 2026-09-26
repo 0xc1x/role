@@ -111,7 +111,7 @@ export default function BusinessPayoutDetailScreen() {
 					<AppText
 						variant="bodyMedium"
 						weight="bold"
-						style={{ color: colors.successDark }}
+						style={{ color: colors.successText }}
 					>
 						{formatMoney(payout.net_amount)}
 					</AppText>

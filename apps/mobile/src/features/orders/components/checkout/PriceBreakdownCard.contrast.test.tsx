@@ -8,46 +8,12 @@ import type { Coupon, Offer } from "@0xc1x/role-commons";
 import { dark, light, type ThemeScheme } from "@/src/core/theme/colors";
 import { strings } from "@/src/core/i18n/strings";
 import { mockNativeUi } from "@/src/test-utils/native-mocks";
+import { compositeOver, contrast } from "@/src/test-utils/contrast";
 
 // `success` (#22C55E) is a decorative green: 2.08:1 on `card` (#F7F3FB) and
 // 2.08:1 on `surfaceSuccess` (#DCFCE7) in light, against a WCAG AA floor of
-// 4.5:1 for this 13pt text. In dark the same token pair inverts, so the fix has
-// to follow the scheme, exactly like the Alert primitive already does for its
-// own icon.
-
-/** WCAG 2.1 relative luminance: 0.2126R + 0.7152G + 0.0722B, linearised. */
-function luminance(hex: string): number {
-	const value = hex.replace("#", "");
-	const channels = [0, 2, 4].map((offset) => {
-		const c = parseInt(value.slice(offset, offset + 2), 16) / 255;
-		return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-	});
-	return (
-		0.2126 * (channels[0] as number) +
-		0.7152 * (channels[1] as number) +
-		0.0722 * (channels[2] as number)
-	);
-}
-
-/** WCAG 2.1 contrast ratio between two opaque colours. */
-function contrast(a: string, b: string): number {
-	const [lighter, darker] = [luminance(a), luminance(b)].sort(
-		(x, y) => y - x,
-	) as [number, number];
-	return (lighter + 0.05) / (darker + 0.05);
-}
-
-/** Flattens `#RRGGBBAA` over an opaque backdrop the way the device does. */
-function compositeOver(top: string, bottom: string): string {
-	const read = (hex: string, offset: number) =>
-		parseInt(hex.replace("#", "").slice(offset, offset + 2), 16);
-	const alpha = read(top, 6) / 255;
-	const channel = (offset: number) =>
-		Math.round(read(top, offset) * alpha + read(bottom, offset) * (1 - alpha))
-			.toString(16)
-			.padStart(2, "0");
-	return `#${channel(0)}${channel(2)}${channel(4)}`;
-}
+// 4.5:1 for this 13pt text. The palette exposes `successText` for exactly
+// this: 4.58:1 on `card` in light, 6.13:1 on `card` in dark.
 
 type TextProps = ComponentProps<typeof nativeWeb.Text>;
 let texts: TextProps[] = [];
@@ -126,7 +92,7 @@ function coloredTexts() {
 		.filter((color): color is string => typeof color === "string");
 }
 
-test("discount row and savings line use the scheme's accessible success token", () => {
+test("discount row and savings line use the text-safe success token", () => {
 	for (const palette of ["light", "dark"] as const) {
 		scheme = palette;
 		texts = [];
@@ -135,7 +101,7 @@ test("discount row and savings line use the scheme's accessible success token", 
 		);
 
 		const colors = palette === "dark" ? dark : light;
-		const expected = palette === "dark" ? colors.success : colors.successDark;
+		const expected = colors.successText;
 		const surface = colors.surfaceSuccess;
 		const html = renderToStaticMarkup(
 			createElement(PriceBreakdownCard, { offer, appliedCoupon }),
@@ -143,21 +109,24 @@ test("discount row and savings line use the scheme's accessible success token", 
 
 		// The discount label, the discount amount and the savings line.
 		const greens = coloredTexts().filter(
-			(color) => color === colors.success || color === colors.successDark,
+			(color) =>
+				color === colors.success ||
+				color === colors.successDark ||
+				color === colors.successText,
 		);
 		expect(greens.length).toBeGreaterThanOrEqual(3);
 		expect(greens.every((color) => color === expected)).toBe(true);
-		expect(html).not.toContain(
-			palette === "dark" ? colors.successDark : colors.success,
-		);
+		expect(html).not.toContain(colors.success);
+		expect(html).not.toContain(colors.successDark);
 
-		// The decorative token fails AA; the accessible one clears it.
-		const decorative = palette === "dark" ? colors.successDark : colors.success;
+		// Neither legacy token is text-safe in both schemes: `success` fails in
+		// light, `successDark` fails in dark. `successText` clears AA in both.
+		const rejected = palette === "dark" ? colors.successDark : colors.success;
 		const opaqueSurface =
 			palette === "dark" ? compositeOver(surface, colors.card) : surface;
 
 		// The discount row sits directly on the card surface.
-		expect(contrast(decorative, colors.card)).toBeLessThan(4.5);
+		expect(contrast(rejected, colors.card)).toBeLessThan(4.5);
 		expect(contrast(expected, colors.card)).toBeGreaterThanOrEqual(4.5);
 
 		// The savings line sits on the Alert's tinted surface. Light clears AA
@@ -165,7 +134,6 @@ test("discount row and savings line use the scheme's accessible success token", 
 		// `successDark` pairing can do better there, so the Alert's own icon
 		// shares the same gap. Asserted at 4.0 to keep the shortfall visible
 		// instead of rounding it away.
-		expect(contrast(decorative, opaqueSurface)).toBeLessThan(4.5);
 		expect(contrast(expected, opaqueSurface)).toBeGreaterThanOrEqual(
 			palette === "dark" ? 4.2 : 4.5,
 		);

@@ -31,7 +31,7 @@ export function OrderStatsRow({ stats }: { stats: OrderStats }) {
 			label: strings.business.ordersTodayStat,
 			value: stats.todayCompletedCount,
 			icon: CircleCheck,
-			color: colors.success,
+			color: colors.successText,
 			bg: colors.surfaceSuccess,
 		},
 	];

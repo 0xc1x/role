@@ -303,7 +303,7 @@ function PeriodSelector({
 function kpiColor(colors: ReturnType<typeof useTheme>["colors"], key: string) {
 	switch (key) {
 		case "success":
-			return colors.success;
+			return colors.successText;
 		case "warning":
 			return colors.warning;
 		case "info":
@@ -332,7 +332,11 @@ function KpiCard({
 	const color = kpiColor(colors, colorKey);
 	const positive = change != null && change >= 0;
 	const trendColor =
-		change == null ? colors.mutedForeground : positive ? colors.success : colors.destructive;
+		change == null
+			? colors.mutedForeground
+			: positive
+				? colors.successText
+				: colors.destructive;
 
 	const body = (pressed = false) => (
 		<Card style={[styles.kpiFill, pressed && { opacity: 0.9 }]}>
@@ -433,7 +437,7 @@ function DailyRevenueChart({ dailyStats }: { dailyStats: BusinessStats["dailySta
 								<AppText
 									variant="bodyMedium"
 									weight="bold"
-									style={{ color: colors.success }}
+									style={{ color: colors.successText }}
 								>
 									{formatMoney(stat.revenue)}
 								</AppText>
@@ -522,7 +526,7 @@ function TopProducts({ products }: { products: BusinessStats["topProducts"] }) {
 						<AppText
 							variant="bodyMedium"
 							weight="bold"
-							style={{ color: colors.success }}
+							style={{ color: colors.successText }}
 						>
 							{formatMoney(product.revenue)}
 						</AppText>

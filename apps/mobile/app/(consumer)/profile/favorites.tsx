@@ -131,7 +131,9 @@ export default function FavoritesScreen() {
 						{favorites.length > 0 ? (
 							<Alert variant="success" icon={Heart}>
 								<AlertDescription>
-									<AppText style={[styles.bannerText, { color: colors.success }]}>
+									<AppText
+									style={[styles.bannerText, { color: colors.successText }]}
+								>
 										{strings.favorites.savingsBanner.replace(
 											"{saved}",
 											formatMoney(totalSaved),

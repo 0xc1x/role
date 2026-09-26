@@ -180,7 +180,7 @@ export default function BusinessCouponsScreen() {
 									<StatCard
 										label={strings.business.couponsActiveStat}
 										value={String(activeCount ?? 0)}
-										color={colors.successDark}
+										color={colors.successText}
 									/>
 									<StatCard
 										label={strings.business.couponsUsesLoadedStat}
@@ -250,7 +250,7 @@ export default function BusinessCouponsScreen() {
 								<View key={tip} style={styles.tip}>
 									<CircleCheck
 										size={14}
-										color={colors.success}
+										color={colors.successText}
 									/>
 									<AppText
 										variant="bodySmall"

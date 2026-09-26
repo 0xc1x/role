@@ -464,7 +464,7 @@ function buildTimeline(
 			note: strings.business.ordersTimelineReadyNote,
 			eventKeys: ["ready_for_pickup"],
 			fallback: readyFallback,
-			color: colors.success,
+			color: colors.successText,
 			background: colors.surfaceSuccess, // ajusta al token correcto
 		},
 		{
@@ -474,7 +474,7 @@ function buildTimeline(
 			note: strings.business.ordersTimelineCompletedNote,
 			eventKeys: ["picked_up", "completed"],
 			fallback: readyFallback,
-			color: colors.success,
+			color: colors.successText,
 			background: colors.surfaceSuccess,
 		},
 		{

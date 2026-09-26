@@ -44,6 +44,16 @@ export interface ColorTokens {
 	redAccent: string;
 	success: string;
 	successDark: string;
+	/**
+	 * `success` is the decorative green (washes, fills, chart series); it is not
+	 * text-safe. Measured: 2.08:1 on `card` (#F7F3FB) and 2.08:1 on
+	 * `surfaceSuccess` (#DCFCE7) in light — under WCAG AA 4.5:1. This token is
+	 * the text-safe variant: 4.58:1 on `card`, 4.57:1 on `surfaceSuccess`,
+	 * 4.82:1 on `background` in light; in dark the pair inverts, so dark
+	 * `successText` is `success`: 6.13:1 on `card` (2.78:1 for `successDark`).
+	 * Text and glyph foregrounds must use this one.
+	 */
+	successText: string;
 	surfaceSuccess: string;
 	surfaceSuccessBorder: string;
 	warning: string;
@@ -156,6 +166,7 @@ const light: ColorTokens = {
 	redAccent: "#FF4B4B",
 	success: "#22C55E",
 	successDark: "#15803D",
+	successText: "#15803D",
 	surfaceSuccess: "#DCFCE7",
 	surfaceSuccessBorder: "#BBF7D0",
 	warning: "#F59E0B",
@@ -258,6 +269,7 @@ const dark: ColorTokens = {
 	redAccent: "#FF4B4B",
 	success: "#22C55E",
 	successDark: "#15803D",
+	successText: "#22C55E",
 	surfaceSuccess: "#22C55E33",
 	surfaceSuccessBorder: "#BBF7D033",
 	warning: "#F59E0B",

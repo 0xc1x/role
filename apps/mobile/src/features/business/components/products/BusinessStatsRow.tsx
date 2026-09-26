@@ -27,7 +27,7 @@ export function BusinessStatsRow({ stats }: { stats: ProductStats }) {
 			label: strings.business.soldToday,
 			value: stats.soldToday,
 			icon: TrendingUp,
-			color: colors.success,
+			color: colors.successText,
 			bg: colors.surfaceSuccess,
 		},
 		{

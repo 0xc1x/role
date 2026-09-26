@@ -93,7 +93,7 @@ export function ProductSummaryCard({
 								<AppText
 									variant="labelSmall"
 									weight="bold"
-									style={{ color: colors.successDark }}
+									style={{ color: colors.successText }}
 								>
 									{strings.offerDetail.savingsBadge.replace(
 										"{p}",
