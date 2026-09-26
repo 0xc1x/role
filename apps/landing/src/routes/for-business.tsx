@@ -12,16 +12,18 @@ import {
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
 import { StepsGrid } from "@/components/steps-grid";
-import { platformStatsQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
-import { useConfig, usePlatformStats } from "@/lib/use-config";
+import {
+	ensurePlatformStats,
+	useConfig,
+	usePlatformStats,
+} from "@/lib/use-config";
 
 export const Route = createFileRoute("/for-business")({
 	component: ForBusinessPage,
-	loader: ({ context }) =>
-		context.queryClient
-			.ensureQueryData(platformStatsQueryOptions)
-			.catch(() => undefined),
+	// Misma degradación que el resto de páginas públicas: el render nunca
+	// depende de la API, pero el `source` queda expuesto en el markup.
+	loader: ({ context }) => ensurePlatformStats(context.queryClient),
 	head: () =>
 		pageHead(
 			"/for-business",
@@ -80,9 +82,9 @@ function ForBusinessPage() {
 		{ value: "12%", label: "ingresos extra en promedio" },
 		{
 			value:
-				statsData === undefined
+				statsData.data === undefined
 					? "—"
-					: `${numberFormat.format(statsData.businesses)}+`,
+					: `${numberFormat.format(statsData.data.businesses)}+`,
 			label: "comercios ya con nosotros",
 		},
 		{ value: "<24h", label: "para empezar a vender" },
@@ -134,8 +136,13 @@ function ForBusinessPage() {
 							</p>
 						</div>
 
-						{/* Stats strip */}
-						<dl className="mt-16 grid grid-cols-3 gap-4 border-t border-white/10 pt-10 reveal reveal-delay-5">
+						{/* Stats strip. `data-stats-source="fallback"` = la API de stats no
+						    respondió: el "—" no es un dato, y sin el discriminador sería
+						    indistinguible de un número real. */}
+						<dl
+							data-stats-source={statsData.source}
+							className="mt-16 grid grid-cols-3 gap-4 border-t border-white/10 pt-10 reveal reveal-delay-5"
+						>
 							{(stats ?? []).map((s) => (
 								<div key={s.label}>
 									<dt className="sr-only">{s.label}</dt>

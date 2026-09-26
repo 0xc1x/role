@@ -22,6 +22,7 @@ La API registra eventos estructurados con nombre, tipo y código de error. No re
 - Mobile ya tiene Sentry nativo/web condicionado por consentimiento y DSN.
 - Admin y landing no tienen dependencia Sentry configurada. No se instala una integração especulativa.
 - Si se integra Sentry, agrega la dependencia del workspace, inicialización con release/SHA, muestreo, PII scrubbing y pruebas de consentimiento antes de producción.
+- `data-stats-source="fallback"` en el HTML servido de la landing (hero, `/about`, `/for-business`) significa que falló la petición de `/stats/platform`: distingue "no hay datos" de "API caída" para quien esté de guardia.
 
 ## Expiración de órdenes
 

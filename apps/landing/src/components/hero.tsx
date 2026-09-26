@@ -35,9 +35,9 @@ export function Hero() {
 	const { data: offer } = useQuery(randomOfferQueryOptions);
 
 	const STATS = [
-		{ value: formatStat(stats?.users), label: "usuarios rescatando" },
-		{ value: formatStat(stats?.businesses), label: "comercios aliados" },
-		{ value: formatStat(stats?.meals_saved), label: "comidas salvadas" },
+		{ value: formatStat(stats.data?.users), label: "usuarios rescatando" },
+		{ value: formatStat(stats.data?.businesses), label: "comercios aliados" },
+		{ value: formatStat(stats.data?.meals_saved), label: "comidas salvadas" },
 	];
 
 	const originalPrice = offer?.original_price ?? 120;
@@ -175,8 +175,15 @@ export function Hero() {
 						</Button>
 					</div>
 
-					{/* Stats with tabular nums */}
-					<dl className="flex items-stretch reveal reveal-delay-4">
+					{/* Stats with tabular nums.
+					    `data-stats-source="fallback"` = la API de stats no respondió.
+					    Sin ese discriminador, el "—" de una API caída es indistinguible
+					    de un dato ausente y la página publica un cero que nadie puede
+					    auditar. */}
+					<dl
+						data-stats-source={stats.source}
+						className="flex items-stretch reveal reveal-delay-4"
+					>
 						{STATS.map((s, idx) => (
 							<div key={s.label} className="flex items-stretch">
 								<div

@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@/test-utils/dom";
-import { useConfig, usePlatformStats } from "../use-config";
+import {
+	useConfig,
+	ensurePlatformStats,
+	usePlatformStats,
+} from "../use-config";
 
 function stubFetch(map: Record<string, unknown>) {
 	globalThis.fetch = (async (input: unknown) => {
@@ -40,7 +44,7 @@ describe("useConfig", () => {
 });
 
 describe("usePlatformStats", () => {
-	test("devuelve stats", async () => {
+	test("devuelve stats y su procedencia", async () => {
 		stubFetch({
 			"/stats/platform": { users: 10, businesses: 2, meals_saved: 5 },
 		});
@@ -49,10 +53,51 @@ describe("usePlatformStats", () => {
 		});
 		await waitFor(() =>
 			expect(result.current).toEqual({
-				users: 10,
-				businesses: 2,
-				meals_saved: 5,
+				data: {
+					users: 10,
+					businesses: 2,
+					meals_saved: 5,
+				},
+				source: "api",
 			}),
 		);
+	});
+
+	test("una API caída se reporta como fallback, no como un cero", async () => {
+		globalThis.fetch = (async () => {
+			throw new Error("sin red");
+		}) as unknown as typeof fetch;
+		const { result } = renderHook(() => usePlatformStats(), {
+			wrapper: wrapper(),
+		});
+		await waitFor(() => expect(result.current.source).toBe("fallback"));
+		expect(result.current.data).toBeUndefined();
+	});
+});
+
+describe("ensurePlatformStats", () => {
+	test("el loader distingue la respuesta real de la degradación", async () => {
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		stubFetch({
+			"/stats/platform": { users: 10, businesses: 2, meals_saved: 5 },
+		});
+		expect(await ensurePlatformStats(queryClient)).toEqual({
+			data: { users: 10, businesses: 2, meals_saved: 5 },
+			source: "api",
+		});
+
+		const downClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		globalThis.fetch = (async () => {
+			throw new Error("sin red");
+		}) as unknown as typeof fetch;
+		// La degradación no lanza: el render por SEO no puede depender de la API.
+		expect(await ensurePlatformStats(downClient)).toEqual({
+			data: undefined,
+			source: "fallback",
+		});
 	});
 });

@@ -5,17 +5,15 @@ import { HeroBackground } from "@/components/hero-background";
 import { HeartIcon, LeafIcon, SparkIcon, UsersIcon } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
-import { platformStatsQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
 import { useStoreLink } from "@/lib/store-links";
-import { usePlatformStats } from "@/lib/use-config";
+import { ensurePlatformStats, usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/about")({
 	component: AboutPage,
-	loader: ({ context }) =>
-		context.queryClient
-			.ensureQueryData(platformStatsQueryOptions)
-			.catch(() => undefined),
+	// La degradación a `fallback` no rompe el render (esta página publica
+	// cifras, no las esconde), pero queda explícita en el markup.
+	loader: ({ context }) => ensurePlatformStats(context.queryClient),
 	head: () =>
 		pageHead(
 			"/about",
@@ -58,9 +56,12 @@ function AboutPage() {
 	const stats = usePlatformStats();
 	const storeLink = useStoreLink();
 	const IMPACT = [
-		{ value: formatStat(stats?.users), label: "usuarios activos" },
-		{ value: formatStat(stats?.businesses), label: "comercios aliados" },
-		{ value: formatStat(stats?.meals_saved), label: "comidas salvadas" },
+		{ value: formatStat(stats.data?.users), label: "usuarios activos" },
+		{ value: formatStat(stats.data?.businesses), label: "comercios aliados" },
+		{
+			value: formatStat(stats.data?.meals_saved),
+			label: "comidas salvadas",
+		},
 	];
 
 	return (
@@ -135,8 +136,13 @@ function AboutPage() {
 					</div>
 				</section>
 
-				{/* Impact stats */}
-				<section className="bg-role-surface-muted px-6 py-24 md:py-32">
+				{/* Impact stats. `data-stats-source="fallback"` = la API de stats no
+				    respondió; sin el atributo, este bloque publicaría ceros falsos
+				    indistinguibles de un impacto real de cero. */}
+				<section
+					data-stats-source={stats.source}
+					className="bg-role-surface-muted px-6 py-24 md:py-32"
+				>
 					<div className="mx-auto max-w-4xl">
 						<div className="mb-12 max-w-2xl reveal">
 							<Eyebrow>El impacto hasta hoy</Eyebrow>
