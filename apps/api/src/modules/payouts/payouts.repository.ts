@@ -2,6 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
+import {
+  effectiveNetAmountSql,
+  effectivePlatformFeeSql,
+} from '../../database/order-earnings';
 import { businesses } from '../../database/schema/businesses';
 import { businessFinance } from '../../database/schema/business-companions';
 import { orders } from '../../database/schema/orders';
@@ -78,8 +82,8 @@ export class PayoutsRepository {
         .select({
           businessId: orders.business_id,
           gross: sql<string>`sum(${orders.price})`,
-          // deriva fee si platform_fee es 0 por legacy: round(price * commission_rate)
-          fee: sql<string>`sum(case when ${orders.platform_fee} = 0 and ${orders.commission_rate} > 0 then round(${orders.price} * ${orders.commission_rate}, 2) else ${orders.platform_fee} end)`,
+          // fee legacy derivada por la regla compartida (ver order-earnings.ts)
+          fee: sql<string>`sum(${effectivePlatformFeeSql()})`,
           periodStart: sql<string>`min(${orders.created_at})::date`,
         })
         .from(orders)
@@ -112,8 +116,8 @@ export class PayoutsRepository {
           .set({
             payout_id: payout.id,
             // backfill legacy fee/net para consistencia futura
-            platform_fee: sql`case when ${orders.platform_fee} = 0 and ${orders.commission_rate} > 0 then round(${orders.price} * ${orders.commission_rate}, 2) else ${orders.platform_fee} end`,
-            net_amount: sql`${orders.price} - case when ${orders.platform_fee} = 0 and ${orders.commission_rate} > 0 then round(${orders.price} * ${orders.commission_rate}, 2) else ${orders.platform_fee} end`,
+            platform_fee: effectivePlatformFeeSql(),
+            net_amount: effectiveNetAmountSql(),
           })
           .where(
             and(

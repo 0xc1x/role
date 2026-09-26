@@ -1473,6 +1473,26 @@
         ]
       }
     },
+    "/api/v1/stats/revenue": {
+      "get": {
+        "operationId": "StatsController_getRevenueStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Revenue stats for the resolved period"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Money metrics for a period (admin). Accrued (from orders) and collected (from payouts) are reported separately.",
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
     "/api/v1/email-marketing/components": {
       "get": {
         "operationId": "EmailMarketingController_listComponents",
