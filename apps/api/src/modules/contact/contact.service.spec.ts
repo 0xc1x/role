@@ -184,6 +184,53 @@ describe('ContactService', () => {
     );
   });
 
+  describe('remitente (resolveOutboundFrom)', () => {
+    const sentFrom = () =>
+      (storeRepo.insert.mock.calls[0]![0] as { value: { from: string } }).value
+        .from;
+
+    it('gana app_config["email.from"] sobre EMAIL_FROM', async () => {
+      appConfigRepo.findByKey.mockImplementation(async (key: string) =>
+        key === 'email.from'
+          ? { value: 'notificaciones@role.ec', active: true }
+          : null,
+      );
+
+      await service.handle(baseDto);
+
+      expect(sentFrom()).toBe('Rolé <notificaciones@role.ec>');
+    });
+
+    it('cae a EMAIL_FROM si la fila de app_config está inactiva', async () => {
+      appConfigRepo.findByKey.mockImplementation(async (key: string) =>
+        key === 'email.from'
+          ? { value: 'notificaciones@role.ec', active: false }
+          : null,
+      );
+
+      await service.handle(baseDto);
+
+      expect(sentFrom()).toBe('notificaciones@role.ec');
+    });
+
+    it('usa el destinatario de app_config cuando la fila está activa', async () => {
+      appConfigRepo.findByKey.mockImplementation(async (key: string) =>
+        key === 'contact.negocios_email'
+          ? { value: 'negocios@role.ec', active: true }
+          : null,
+      );
+
+      await service.handle({ ...baseDto, role: 'negocio' });
+
+      expect(sentFrom()).toBe('notificaciones@role.ec');
+      expect(storeRepo.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          value: expect.objectContaining({ to: 'negocios@role.ec' }),
+        }),
+      );
+    });
+  });
+
   describe('ContactService.findContactTemplate', () => {
     test('usa plantilla contacto-notificacion cuando existe', async () => {
       emailRepo.listTemplates.mockResolvedValue({

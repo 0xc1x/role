@@ -87,10 +87,10 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Logged out successfully"
+            "description": "Current session logged out successfully"
           }
         },
-        "summary": "Log out (revoke refresh token globally)",
+        "summary": "Log out (revoke the current session)",
         "tags": [
           "Auth"
         ]
@@ -138,6 +138,26 @@
           }
         ],
         "summary": "Create a category (admin)",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/v1/categories/admin": {
+      "get": {
+        "operationId": "CategoriesController_listAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated category list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List categories (admin)",
         "tags": [
           "Categories"
         ]
@@ -221,6 +241,273 @@
         ]
       }
     },
+    "/api/v1/coupons": {
+      "get": {
+        "operationId": "CouponsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated coupon list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List coupons (admin)",
+        "tags": [
+          "Coupons"
+        ]
+      },
+      "post": {
+        "operationId": "CouponsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Coupon created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a coupon (admin)",
+        "tags": [
+          "Coupons"
+        ]
+      }
+    },
+    "/api/v1/coupons/{id}": {
+      "get": {
+        "operationId": "CouponsController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Coupon detail"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get coupon by id (admin)",
+        "tags": [
+          "Coupons"
+        ]
+      },
+      "patch": {
+        "operationId": "CouponsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Coupon updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a coupon (admin)",
+        "tags": [
+          "Coupons"
+        ]
+      },
+      "delete": {
+        "operationId": "CouponsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Coupon deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a coupon (admin)",
+        "tags": [
+          "Coupons"
+        ]
+      }
+    },
+    "/api/v1/tips": {
+      "get": {
+        "operationId": "TipsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated tip list"
+          }
+        },
+        "summary": "List tips",
+        "tags": [
+          "Tips"
+        ]
+      },
+      "post": {
+        "operationId": "TipsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Tip created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a tip (admin)",
+        "tags": [
+          "Tips"
+        ]
+      }
+    },
+    "/api/v1/tips/admin": {
+      "get": {
+        "operationId": "TipsController_listAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated tip list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List tips (admin)",
+        "tags": [
+          "Tips"
+        ]
+      }
+    },
+    "/api/v1/tips/random": {
+      "get": {
+        "operationId": "TipsController_getRandom",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Random tip"
+          }
+        },
+        "summary": "Get a random active tip",
+        "tags": [
+          "Tips"
+        ]
+      }
+    },
+    "/api/v1/tips/{id}": {
+      "get": {
+        "operationId": "TipsController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tip detail"
+          }
+        },
+        "summary": "Get tip by id",
+        "tags": [
+          "Tips"
+        ]
+      },
+      "patch": {
+        "operationId": "TipsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tip updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a tip (admin)",
+        "tags": [
+          "Tips"
+        ]
+      },
+      "delete": {
+        "operationId": "TipsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tip soft-deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft-delete a tip (admin)",
+        "tags": [
+          "Tips"
+        ]
+      }
+    },
     "/api/v1/offers": {
       "get": {
         "operationId": "OffersController_list",
@@ -249,6 +536,21 @@
           }
         ],
         "summary": "Create an offer (admin or business owner)",
+        "tags": [
+          "Offers"
+        ]
+      }
+    },
+    "/api/v1/offers/random": {
+      "get": {
+        "operationId": "OffersController_getRandom",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Offer with business and location, or null"
+          }
+        },
+        "summary": "Random active offer (landing hero)",
         "tags": [
           "Offers"
         ]
@@ -448,6 +750,64 @@
         ]
       }
     },
+    "/api/v1/orders/{id}/cancel": {
+      "post": {
+        "operationId": "OrdersController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled order"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel my order (espejo de la RPC cancel_order)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/validate-pickup": {
+      "post": {
+        "operationId": "OrdersController_validatePickup",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completed order"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Validate pickup code (espejo de la RPC validate_pickup_code)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
     "/api/v1/upload/image": {
       "post": {
         "operationId": "UploadController_uploadImage",
@@ -538,6 +898,26 @@
         ]
       }
     },
+    "/api/v1/slides/admin": {
+      "get": {
+        "operationId": "SlidesController_listAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated slide list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List slides (admin)",
+        "tags": [
+          "Slides"
+        ]
+      }
+    },
     "/api/v1/slides/{id}": {
       "get": {
         "operationId": "SlidesController_getById",
@@ -613,6 +993,26 @@
         "summary": "Soft-delete a slide (admin)",
         "tags": [
           "Slides"
+        ]
+      }
+    },
+    "/api/v1/businesses/onboarding": {
+      "post": {
+        "operationId": "BusinessesController_onboard",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Onboarding request received"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Public business onboarding (landing)",
+        "tags": [
+          "Businesses"
         ]
       }
     },
@@ -732,6 +1132,35 @@
           }
         ],
         "summary": "Deactivate business",
+        "tags": [
+          "Businesses"
+        ]
+      }
+    },
+    "/api/v1/businesses/{id}/email-sends": {
+      "get": {
+        "operationId": "BusinessesController_listEmailSends",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transactional email deliveries"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List transactional email deliveries for a business",
         "tags": [
           "Businesses"
         ]
@@ -1021,6 +1450,1391 @@
         "summary": "Real platform stats (users, businesses, meals)",
         "tags": [
           "Stats"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/components": {
+      "get": {
+        "operationId": "EmailMarketingController_listComponents",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List email components (header/footer)",
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_createComponent",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/components/{id}": {
+      "patch": {
+        "operationId": "EmailMarketingController_updateComponent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "delete": {
+        "operationId": "EmailMarketingController_removeComponent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/templates": {
+      "get": {
+        "operationId": "EmailMarketingController_listTemplates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_createTemplate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/templates/{id}/render": {
+      "post": {
+        "operationId": "EmailMarketingController_renderPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/templates/{id}/test": {
+      "post": {
+        "operationId": "EmailMarketingController_testTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/templates/{id}": {
+      "patch": {
+        "operationId": "EmailMarketingController_updateTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "delete": {
+        "operationId": "EmailMarketingController_removeTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/segments": {
+      "get": {
+        "operationId": "EmailMarketingController_listSegments",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_createSegment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/segments/{id}": {
+      "patch": {
+        "operationId": "EmailMarketingController_updateSegment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "delete": {
+        "operationId": "EmailMarketingController_removeSegment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/segments/{id}/users": {
+      "get": {
+        "operationId": "EmailMarketingController_getSegmentUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "put": {
+        "operationId": "EmailMarketingController_setSegmentUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_addSegmentUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns": {
+      "get": {
+        "operationId": "EmailMarketingController_listCampaigns",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_createCampaign",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}": {
+      "get": {
+        "operationId": "EmailMarketingController_getCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "patch": {
+        "operationId": "EmailMarketingController_updateCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "delete": {
+        "operationId": "EmailMarketingController_removeCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/preview": {
+      "post": {
+        "operationId": "EmailMarketingController_previewCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/test": {
+      "post": {
+        "operationId": "EmailMarketingController_testCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/audience": {
+      "post": {
+        "operationId": "EmailMarketingController_audience",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/send": {
+      "post": {
+        "operationId": "EmailMarketingController_sendCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/cancel": {
+      "post": {
+        "operationId": "EmailMarketingController_cancelCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/sends": {
+      "get": {
+        "operationId": "EmailMarketingController_listSends",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/sends": {
+      "get": {
+        "operationId": "EmailMarketingController_listAllSends",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/sends/{id}": {
+      "patch": {
+        "operationId": "EmailMarketingController_updateSend",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/sends/{id}/retry": {
+      "post": {
+        "operationId": "EmailMarketingController_retrySend",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/webhooks/resend": {
+      "post": {
+        "operationId": "EmailMarketingPublicController_resendWebhook",
+        "parameters": [
+          {
+            "name": "svix-id",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "svix-timestamp",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "svix-signature",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Email Marketing (public)"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/unsubscribe": {
+      "get": {
+        "operationId": "EmailMarketingPublicController_unsubscribe",
+        "parameters": [
+          {
+            "name": "t",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Email Marketing (public)"
+        ]
+      }
+    },
+    "/api/v1/profiles": {
+      "get": {
+        "operationId": "ProfilesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated profiles"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List profiles (admin)",
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/profiles/{id}": {
+      "get": {
+        "operationId": "ProfilesController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "patch": {
+        "operationId": "ProfilesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/payouts": {
+      "get": {
+        "operationId": "PayoutsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List payouts (admin)",
+        "tags": [
+          "Payouts"
+        ]
+      }
+    },
+    "/api/v1/payouts/{id}": {
+      "get": {
+        "operationId": "PayoutsController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get payout by id (admin)",
+        "tags": [
+          "Payouts"
+        ]
+      }
+    },
+    "/api/v1/payouts/generate": {
+      "post": {
+        "operationId": "PayoutsController_generate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Generate payouts for completed orders (admin)",
+        "tags": [
+          "Payouts"
+        ]
+      }
+    },
+    "/api/v1/payouts/{id}/pay": {
+      "patch": {
+        "operationId": "PayoutsController_markPaid",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark payout as paid (admin)",
+        "tags": [
+          "Payouts"
+        ]
+      }
+    },
+    "/api/v1/commissions": {
+      "get": {
+        "operationId": "CommissionsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated commission list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List business commissions (admin)",
+        "tags": [
+          "Commissions"
+        ]
+      }
+    },
+    "/api/v1/commissions/{id}": {
+      "get": {
+        "operationId": "CommissionsController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Commission detail"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the commission of a business (admin)",
+        "tags": [
+          "Commissions"
+        ]
+      },
+      "patch": {
+        "operationId": "CommissionsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Commission updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update the commission rate of a business (admin). Blocked while it has pending/processing payouts.",
+        "tags": [
+          "Commissions"
+        ]
+      }
+    },
+    "/api/v1/reviews": {
+      "post": {
+        "operationId": "ReviewsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Review created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a review for a completed order",
+        "tags": [
+          "Reviews"
+        ]
+      }
+    },
+    "/api/v1/push-notifications/templates": {
+      "get": {
+        "operationId": "PushNotificationsController_listTemplates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Push Notifications"
+        ]
+      },
+      "post": {
+        "operationId": "PushNotificationsController_createTemplate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/push-notifications/templates/{id}": {
+      "patch": {
+        "operationId": "PushNotificationsController_updateTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Push Notifications"
+        ]
+      },
+      "delete": {
+        "operationId": "PushNotificationsController_removeTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/push-notifications/templates/{id}/test": {
+      "post": {
+        "operationId": "PushNotificationsController_testTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/push-notifications/audience": {
+      "post": {
+        "operationId": "PushNotificationsController_audience",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Count reachable users (push enabled + active token)",
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/push-notifications/send": {
+      "post": {
+        "operationId": "PushNotificationsController_send",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Send a manual push and record it in history",
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/push-notifications/test": {
+      "post": {
+        "operationId": "PushNotificationsController_test",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Send a test push to specific users (no history)",
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/push-notifications/tokens": {
+      "get": {
+        "operationId": "PushNotificationsController_listTokens",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/push-notifications/tokens/{id}": {
+      "patch": {
+        "operationId": "PushNotificationsController_updateToken",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/push-notifications": {
+      "get": {
+        "operationId": "PushNotificationsController_listNotifications",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/push-notifications/{id}": {
+      "get": {
+        "operationId": "PushNotificationsController_getNotification",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Push Notifications"
+        ]
+      }
+    },
+    "/api/v1/contact": {
+      "post": {
+        "operationId": "ContactController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Contact"
         ]
       }
     }

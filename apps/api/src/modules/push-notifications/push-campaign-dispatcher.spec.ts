@@ -4,6 +4,7 @@ import type { Queue } from 'bullmq';
 import { consumerNotificationPreferences, deviceTokens } from '../../database/schema';
 import { createTestDb, type TestDbContext } from '../../../test/db';
 import { seedProfile } from '../../../test/seed';
+import { AppConfigRepository } from '../app-config/app-config.repository';
 import { CampaignsService } from '../email-marketing/campaigns.service';
 import { EmailMarketingRepository } from '../email-marketing/email-marketing.repository';
 import { RecipientsService } from '../email-marketing/recipients.service';
@@ -55,6 +56,7 @@ beforeAll(async () => {
     renderer,
     recipients,
     config,
+    new AppConfigRepository(ctx.db),
   );
   dispatcher = new PushCampaignDispatcher(
     campaignsService,

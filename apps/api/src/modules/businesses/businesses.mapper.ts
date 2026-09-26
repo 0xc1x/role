@@ -1,7 +1,12 @@
-import type { BusinessDto, BusinessLocationDto } from '@0xc1x/role-commons';
+import type {
+  BusinessDto,
+  BusinessEmailSendDto,
+  BusinessLocationDto,
+} from '@0xc1x/role-commons';
 import { toNumber, toNumberOrNull } from '../../common/utils/numeric';
 import type {
   BusinessAggregateRow,
+  BusinessEmailSendRow,
   BusinessLocationRow,
 } from './businesses.repository';
 
@@ -35,6 +40,24 @@ export class BusinessMapper {
       verified_at: row.verified_at ? row.verified_at.toISOString() : null,
       verified_by: row.verified_by ?? null,
       rejection_reason: row.rejection_reason ?? null,
+      created_at: row.created_at.toISOString(),
+      updated_at: row.updated_at.toISOString(),
+    };
+  }
+
+  /**
+   * Envío transaccional de un negocio → DTO. La fila se proyecta a los campos
+   * que el operador necesita; `error_message` es null mientras el envío no ha
+   * fallado (no un string vacío), para que la UI pueda distinguir "sin error"
+   * de "falló sin mensaje".
+   */
+  static toEmailSendDto(row: BusinessEmailSendRow): BusinessEmailSendDto {
+    return {
+      id: row.id,
+      email: row.email,
+      template_name: row.template_name,
+      status: row.status,
+      error_message: row.error_message ?? null,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
     };

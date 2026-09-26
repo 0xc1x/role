@@ -5,6 +5,8 @@ import {
   businessFinance,
   businessModeration,
   businessOwnership,
+  emailSends,
+  emailTemplates,
   profiles,
 } from '../../database/schema';
 import { createTestDb, type TestDbContext } from '../../../test/db';
@@ -193,5 +195,59 @@ describe('BusinessesRepository extras (DB real)', () => {
     const loc = await seedLocation(ctx.db, biz);
     expect(await repo.locationBelongsToBusiness(loc.id, biz)).toBe(true);
     expect(await repo.locationBelongsToBusiness(loc.id, ownerId)).toBe(false);
+  });
+
+  test('listEmailSends devuelve solo los transaccionales del negocio', async () => {
+    const owner = await seedProfile(ctx.db);
+    const biz = (await seedBusiness(ctx.db, owner)).id;
+    const other = (await seedBusiness(ctx.db, owner)).id;
+    const [template] = await ctx.db
+      .insert(emailTemplates)
+      .values({
+        name: 'business-approved',
+        subject: 'Aprobado',
+        body_html: '<p>Ok</p>',
+      })
+      .returning();
+    if (!template) throw new Error('sin plantilla');
+
+    // Mismo origen y tipo que el trigger, más un envío de campaña que debe quedar fuera.
+    const insert = (sourceId: string, values: Record<string, unknown>) =>
+      ctx.db.insert(emailSends).values({
+        type: 'transactional',
+        source_type: 'business',
+        source_id: sourceId,
+        template_id: template.id,
+        email: 'owner@role.ec',
+        ...values,
+      });
+
+    await insert(biz, { status: 'pending', created_at: new Date('2026-02-01') });
+    await insert(biz, {
+      status: 'failed',
+      error_message: 'You can only send testing emails to your own email',
+      created_at: new Date('2026-02-02'),
+    });
+    await insert(other, { status: 'sent', created_at: new Date('2026-02-03') });
+    await ctx.db.insert(emailSends).values({
+      type: 'campaign',
+      source_type: 'campaign',
+      source_id: biz,
+      template_id: template.id,
+      email: 'lead@role.ec',
+      status: 'sent',
+    });
+
+    const rows = await repo.listEmailSends(biz);
+
+    // Más reciente primero, con el nombre de la plantilla resuelto.
+    expect(rows.map((r) => r.status)).toEqual(['failed', 'pending']);
+    expect(rows[0]).toMatchObject({
+      email: 'owner@role.ec',
+      template_name: 'business-approved',
+      error_message: 'You can only send testing emails to your own email',
+    });
+    expect(rows[1]?.error_message).toBeNull();
+    expect(await repo.listEmailSends(randomUUID())).toEqual([]);
   });
 });

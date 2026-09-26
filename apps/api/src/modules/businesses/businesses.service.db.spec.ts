@@ -5,6 +5,7 @@ import { createTestDb, type TestDbContext } from '../../../test/db';
 import { seedBusiness, seedLocation, seedProfile } from '../../../test/seed';
 import { BusinessesService } from './businesses.service';
 import { BusinessesRepository } from './businesses.repository';
+import { AppConfigRepository } from '../app-config/app-config.repository';
 
 let ctx: TestDbContext;
 let service: BusinessesService;
@@ -30,7 +31,11 @@ beforeAll(async () => {
         SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
       })[key],
   } as never;
-  service = new BusinessesService(new BusinessesRepository(ctx.db), config);
+  service = new BusinessesService(
+    new BusinessesRepository(ctx.db),
+    config,
+    new AppConfigRepository(ctx.db),
+  );
   ownerId = await seedProfile(ctx.db);
   businessId = (await seedBusiness(ctx.db, ownerId)).id;
   await seedLocation(ctx.db, businessId);

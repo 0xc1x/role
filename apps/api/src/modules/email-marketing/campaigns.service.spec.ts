@@ -21,6 +21,7 @@ import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getQueueToken } from '@nestjs/bullmq';
 import { paginatedDataFromQuery } from '@0xc1x/role-commons';
+import { AppConfigRepository } from '../app-config/app-config.repository';
 import { CampaignsService } from './campaigns.service';
 import { RecipientsService } from './recipients.service';
 import { RendererService } from './renderer.service';
@@ -128,8 +129,15 @@ describe('CampaignsService', () => {
   let config: { get: jest.Mock };
   let queue: { add: jest.Mock };
   let env: Record<string, string | undefined>;
+  /** Rows the sender resolution reads; `null` = key not configured. */
+  let appConfigRows: Record<string, unknown>;
+
+  const appConfigRepo = {
+    findByKey: jest.fn(async (key: string) => appConfigRows[key] ?? null),
+  };
 
   beforeEach(async () => {
+    appConfigRows = {};
     env = {
       RESEND_API_KEY: 'test-key',
       REDIS_URL: 'redis://localhost:6379',
@@ -186,6 +194,7 @@ describe('CampaignsService', () => {
         },
         { provide: RecipientsService, useValue: { resolve: jest.fn().mockResolvedValue(RECIPIENTS) } },
         { provide: ConfigService, useValue: { get: jest.fn((key: string) => env[key]) } },
+        { provide: AppConfigRepository, useValue: appConfigRepo },
         { provide: getQueueToken('email-expedition'), useValue: queue },
       ],
     }).compile();
@@ -314,6 +323,62 @@ describe('CampaignsService', () => {
       expect(out).toEqual({ sent: 1 });
       expect(resendSend).toHaveBeenCalledWith(
         expect.objectContaining({ subject: '[TEST] Hola Ana Torres' }),
+      );
+    });
+  });
+
+  // The sender is security-relevant (a wrong `from` bounces every send), so it
+  // is resolved from `app_config` first, not from the env var alone.
+  describe('remitente (resolveOutboundFrom)', () => {
+    beforeEach(() => {
+      resendSend.mockResolvedValue({ data: { id: 're_1' }, error: null });
+    });
+
+    it('usa app_config["email.from"] por encima de EMAIL_FROM', async () => {
+      appConfigRows['email.from'] = {
+        value: 'notificaciones@role.ec',
+        active: true,
+      };
+
+      await service.testTemplate(TEMPLATE_ID, ['a@x.com']);
+
+      expect(appConfigRepo.findByKey).toHaveBeenCalledWith('email.from');
+      expect(resendSend).toHaveBeenCalledWith(
+        expect.objectContaining({ from: 'Rolé <notificaciones@role.ec>' }),
+      );
+    });
+
+    it('respeta un valor de app_config que ya trae nombre para mostrar', async () => {
+      appConfigRows['email.from'] = {
+        value: 'Equipo Rolé <notificaciones@role.ec>',
+        active: true,
+      };
+
+      await service.testTemplate(TEMPLATE_ID, ['a@x.com']);
+
+      expect(resendSend).toHaveBeenCalledWith(
+        expect.objectContaining({ from: 'Equipo Rolé <notificaciones@role.ec>' }),
+      );
+    });
+
+    it('cae a EMAIL_FROM si la fila no está activa', async () => {
+      appConfigRows['email.from'] = {
+        value: 'notificaciones@role.ec',
+        active: false,
+      };
+
+      await service.testTemplate(TEMPLATE_ID, ['a@x.com']);
+
+      expect(resendSend).toHaveBeenCalledWith(
+        expect.objectContaining({ from: 'Rolé <hola@role.mx>' }),
+      );
+    });
+
+    it('cae a EMAIL_FROM si no hay fila en app_config', async () => {
+      await service.testTemplate(TEMPLATE_ID, ['a@x.com']);
+
+      expect(resendSend).toHaveBeenCalledWith(
+        expect.objectContaining({ from: 'Rolé <hola@role.mx>' }),
       );
     });
   });

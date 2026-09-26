@@ -69,6 +69,12 @@ export const envSchema = z.object({
   SUPABASE_ALLOWED_BUCKETS: z.string().default('images'),
   /** Comma-separated allowed folders (allowlist). Default: categories */
   SUPABASE_ALLOWED_FOLDERS: z.string().default('categories'),
+  /**
+   * Public site URL Supabase appends to the confirmation link generated for
+   * business onboarding (a site URL, not the API). Must be listed in
+   * Supabase → Authentication → URL Configuration → Redirect URLs.
+   */
+  AUTH_REDIRECT_TO: z.string().default('http://localhost:3001/'),
   /** Comma-separated origins for CORS. Required in production (no '*') */
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   /** Basic auth username for /docs in production */
@@ -77,8 +83,12 @@ export const envSchema = z.object({
   DOCS_PASSWORD: z.string().optional(),
   /** Resend API key — vacío deshabilita el envío real de emails de marketing */
   RESEND_API_KEY: z.string().default(''),
-  /** Remitente por defecto para emails de marketing */
-  EMAIL_FROM: z.string().default('Rolé <no-reply@role.app>'),
+  /**
+   * Remitente por defecto para emails de marketing. Último recurso: la
+   * resolución real es `app_config['email.from']` → `EMAIL_FROM` → este valor
+   * (ver `resolveOutboundFrom`), y debe caer en el dominio real del producto.
+   */
+  EMAIL_FROM: z.string().default('Rolé <notificaciones@role.ec>'),
   /** Secreto de firma del webhook de Resend — vacío deshabilita la verificación */
   RESEND_WEBHOOK_SECRET: z.string().default(''),
   /** Secreto HMAC para tokens de desuscripción */

@@ -8,12 +8,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import {
   paginatedDataFromQuery,
   type BusinessDto,
+  type BusinessEmailSendDto,
   type BusinessLocationDto,
   type CreateBusinessDto,
   type CreateBusinessLocationDto,
@@ -26,6 +28,11 @@ import {
   type UpdateBusinessLocationDto,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
+import { AppConfigRepository } from '../app-config/app-config.repository';
+import {
+  resolveBusinessSupportEmail,
+  resolveOutboundFrom,
+} from '../app-config/outbound-addresses';
 import {
   BusinessesRepository,
   type BusinessRow,
@@ -33,6 +40,7 @@ import {
   type BusinessLocationUpdate,
 } from './businesses.repository';
 import { BusinessMapper } from './businesses.mapper';
+import { renderBusinessConfirmationEmail } from './businesses-confirmation-email';
 
 const PLATFORM_CONTROLLED_BUSINESS_FIELDS = [
   'commission_rate',
@@ -45,16 +53,20 @@ const PLATFORM_CONTROLLED_BUSINESS_FIELDS = [
 export class BusinessesService {
   private readonly logger = new Logger(BusinessesService.name);
   private supabaseAdmin;
+  private readonly resend: Resend | null;
 
   constructor(
     private readonly businessesRepository: BusinessesRepository,
-    config: ConfigService<Env, true>,
+    private readonly config: ConfigService<Env, true>,
+    private readonly appConfigRepo: AppConfigRepository,
   ) {
     this.supabaseAdmin = createClient(
       config.get('SUPABASE_URL', { infer: true }),
       config.get('SUPABASE_SERVICE_ROLE_KEY', { infer: true }),
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
+    const apiKey = this.config.get('RESEND_API_KEY', { infer: true });
+    this.resend = apiKey ? new Resend(apiKey) : null;
   }
 
   async list(
@@ -137,10 +149,91 @@ export class BusinessesService {
       throw err;
     }
 
+    await this.sendConfirmationEmail(body, user.id);
+
     return {
       message:
         'Solicitud recibida. Tu negocio quedó en revisión y te avisaremos por correo.',
     };
+  }
+
+  /**
+   * Sends the account confirmation link for a freshly onboarded business owner.
+   *
+   * `auth.admin.createUser()` never sends mail, so the API generates the link
+   * with `auth.admin.generateLink({ type: 'signup' })` and delivers it through
+   * Resend (same wiring as CampaignsService/ContactService — not the marketing
+   * queue, which has its own rate limits and retry semantics).
+   *
+   * Best-effort by design: the auth user and the business row already exist at
+   * this point, so a failed send must NOT fail the request. Throwing would turn
+   * a transient email outage into a permanently locked-out business — the owner
+   * retries, hits "Email is already registered", and never gets the link.
+   */
+  private async sendConfirmationEmail(
+    body: OnboardingBusinessRequest,
+    userId: string,
+  ): Promise<void> {
+    if (!this.resend) {
+      // Sin API key (dev/tests): se omite el envío y el onboarding continúa.
+      this.logger.debug({ event: 'business_confirmation_email_skipped' });
+      return;
+    }
+
+    try {
+      const { data, error } = await this.supabaseAdmin.auth.admin.generateLink({
+        type: 'signup',
+        email: body.email,
+        password: body.password,
+        options: {
+          redirectTo: this.config.get('AUTH_REDIRECT_TO', { infer: true }),
+        },
+      });
+      const actionLink = data?.properties?.action_link;
+      if (error || !actionLink) {
+        throw new Error(
+          error?.message ?? 'generateLink returned no action_link',
+        );
+      }
+
+      const email = renderBusinessConfirmationEmail({
+        ownerName: body.full_name,
+        businessName: body.business_name,
+        confirmationUrl: actionLink,
+        supportEmail: await resolveBusinessSupportEmail(this.appConfigRepo),
+      });
+      const { error: sendError } = await this.resend.emails.send({
+        from: await resolveOutboundFrom(this.appConfigRepo, this.config),
+        to: body.email,
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+      });
+      if (sendError) throw new Error(sendError.message);
+
+      this.logger.log({
+        event: 'business_confirmation_email_sent',
+        userId,
+        email: body.email,
+        businessName: body.business_name,
+      });
+    } catch (err) {
+      // Deliberately swallowed: the account exists and the business is queued.
+      // `errorMessage` is capped and kept because the actionable cause of a
+      // Resend failure is its text ("domain not verified", "invalid `from`"),
+      // and this line already logs the recipient address.
+      this.logger.error({
+        event: 'business_confirmation_email_failed',
+        userId,
+        email: body.email,
+        businessName: body.business_name,
+        onboarding: 'completed_without_confirmation_email',
+        ...safeErrorFields(err),
+        ...(err instanceof Error
+          ? { errorMessage: err.message.slice(0, 200) }
+          : {}),
+      });
+    }
   }
 
   private async generateUniqueSlug(name: string): Promise<string> {
@@ -205,8 +298,20 @@ export class BusinessesService {
       });
     });
 
-    // TODO: email hook — business_pending_admin + business_pending_owner
-    // Will be implemented via EmailMarketing module after template seeding
+    // No email hook belongs here. Approval and rejection notices are already
+    // emitted by the `notify_business_verification` AFTER trigger on
+    // `public.businesses`, which inserts a `transactional` row into `email_sends`
+    // using the `business-approved` / `business-rejected` templates. The
+    // `email-expedition` BullMQ worker delivers them. Do not add a second path:
+    // a business created already-approved fires the trigger on INSERT, because
+    // OLD.verification_status is NULL and the guard only skips a real no-op.
+    //
+    // Delivery, not enqueue, is the part that breaks: the resolved sender
+    // (`resolveOutboundFrom`) must be an address on a Resend-verified domain.
+    // With Resend's shared test address
+    // (`onboarding@resend.dev`) every send is rejected with "You can only send
+    // testing emails to your own email address", which is why 11/11
+    // transactional sends were `failed` with 5 attempts each and none `sent`.
 
     return BusinessMapper.toDto(created);
   }
@@ -293,6 +398,27 @@ export class BusinessesService {
     await this.businessesRepository.transaction(async (tx) => {
       await this.businessesRepository.update(tx, id, { is_active: false });
     });
+  }
+
+  /**
+   * Entregas de correo transaccional de un negocio (read-only).
+   *
+   * Admin-only a propósito: la fila de `email_sends` es la única evidencia de
+   * si el aviso de aprobación/rechazo salió, y su `error_message` es el motivo
+   * accionable cuando Resend rechaza el envío. Sin comprobación de existencia
+   * del negocio: la lista vacía ya dice que no hubo avisos.
+   */
+  async listEmailSends(
+    user: AuthUser,
+    id: string,
+  ): Promise<BusinessEmailSendDto[]> {
+    if (user.role !== 'admin') {
+      throw new ForbiddenException(
+        'Only admin can read business email deliveries',
+      );
+    }
+    const rows = await this.businessesRepository.listEmailSends(id);
+    return rows.map((row) => BusinessMapper.toEmailSendDto(row));
   }
 
   async listLocations(

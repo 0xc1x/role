@@ -122,6 +122,19 @@ export class BusinessesController {
     return this.businessesService.remove(user, id);
   }
 
+  @Get(':id/email-sends')
+  @Roles('admin')
+  @ApiOperation({
+    summary: 'List transactional email deliveries for a business',
+  })
+  @ApiOkResponse({ description: 'Transactional email deliveries' })
+  listEmailSends(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.businessesService.listEmailSends(user, id);
+  }
+
   // Business Locations
   @Get(':businessId/locations')
   @Roles('business', 'admin')

@@ -19,6 +19,8 @@ import {
   businessNotificationPreferences,
   businessOwnership,
   businesses,
+  emailSends,
+  emailTemplates,
 } from '../../database/schema';
 import { payouts } from '../../database/schema/payouts';
 import type {
@@ -77,6 +79,15 @@ export type BusinessUpdate = Partial<
   >
 > &
   Partial<Omit<BusinessCompanionInsert, 'owner_id'>>;
+
+/**
+ * Envío transaccional encolado para un negocio + el nombre de su plantilla.
+ * `template_id` es NOT NULL con FK, así que el inner join no pierde filas.
+ */
+export type BusinessEmailSendRow = Pick<
+  typeof emailSends.$inferSelect,
+  'id' | 'email' | 'status' | 'error_message' | 'created_at' | 'updated_at'
+> & { template_name: string };
 
 export type BusinessLocationRow = typeof businessLocations.$inferSelect;
 export type BusinessLocationInsert = typeof businessLocations.$inferInsert;
@@ -354,6 +365,38 @@ export class BusinessesRepository {
     ]);
 
     return { items, total: Number(totalRow) };
+  }
+
+  /**
+   * Envíos transaccionales de un negocio (avisos de aprobación/rechazo).
+   *
+   * Los inserta el trigger `notify_business_verification` sobre
+   * `business_moderation` con `source_type = 'business'` y
+   * `source_id = business_id`; el cron los drena contra Resend. La fila es la
+   * única evidencia de si el correo al propietario salió, así que el panel la
+   * lee tal cual (read-only).
+   */
+  async listEmailSends(businessId: string): Promise<BusinessEmailSendRow[]> {
+    return this.db
+      .select({
+        id: emailSends.id,
+        email: emailSends.email,
+        status: emailSends.status,
+        error_message: emailSends.error_message,
+        created_at: emailSends.created_at,
+        updated_at: emailSends.updated_at,
+        template_name: emailTemplates.name,
+      })
+      .from(emailSends)
+      .innerJoin(emailTemplates, eq(emailTemplates.id, emailSends.template_id))
+      .where(
+        and(
+          eq(emailSends.type, 'transactional'),
+          eq(emailSends.source_type, 'business'),
+          eq(emailSends.source_id, businessId),
+        ),
+      )
+      .orderBy(desc(emailSends.created_at));
   }
 
   async isOwner(businessId: string, userId: string): Promise<boolean> {

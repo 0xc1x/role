@@ -33,7 +33,8 @@ const STATUS_VARIANTS: Record<
 	bounced: "warning",
 };
 
-const StatusBadge = ({ status }: { status: string }) => {
+/** Estado del envío reutilizable fuera de la tabla (p. ej. el drawer de negocio). */
+export const StatusBadge = ({ status }: { status: string }) => {
 	return (
 		<Badge variant={STATUS_VARIANTS[status] ?? "secondary"}>{status}</Badge>
 	);

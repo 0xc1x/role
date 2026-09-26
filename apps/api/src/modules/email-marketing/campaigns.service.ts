@@ -18,6 +18,8 @@ import {
 } from '@0xc1x/role-commons';
 import { safeErrorFields } from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
+import { AppConfigRepository } from '../app-config/app-config.repository';
+import { resolveOutboundFrom } from '../app-config/outbound-addresses';
 import type { CampaignChannelDispatcher } from '../../common/campaigns/campaign-dispatcher.port';
 import { MAX_AUDIENCE_SIZE, RecipientsService } from './recipients.service';
 import { RendererService } from './renderer.service';
@@ -58,6 +60,7 @@ export class CampaignsService {
     private readonly renderer: RendererService,
     private readonly recipients: RecipientsService,
     private readonly config: ConfigService<Env, true>,
+    private readonly appConfigRepo: AppConfigRepository,
     @Optional()
     @InjectQueue('email-expedition')
     private readonly queue?: Queue<{ campaignId: string }>,
@@ -698,7 +701,7 @@ export class CampaignsService {
       return `dev_${Date.now()}`;
     }
     const { data, error } = await this.resend.emails.send({
-      from: this.config.get('EMAIL_FROM', { infer: true }),
+      from: await resolveOutboundFrom(this.appConfigRepo, this.config),
       to: email,
       subject: rendered.subject,
       html: rendered.html,

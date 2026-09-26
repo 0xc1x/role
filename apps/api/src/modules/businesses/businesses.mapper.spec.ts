@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { BusinessMapper } from './businesses.mapper';
 import type {
   BusinessAggregateRow,
+  BusinessEmailSendRow,
   BusinessLocationRow,
 } from './businesses.repository';
 
@@ -62,6 +63,86 @@ describe('BusinessMapper.toDto', () => {
     expect(dto.rating).toBeNull();
     expect(dto.review_count).toBeNull();
     expect(dto.verified_at).toBeNull();
+  });
+});
+
+describe('BusinessMapper.toEmailSendDto', () => {
+  const makeSendRow = (
+    overrides: Partial<BusinessEmailSendRow> = {},
+  ): BusinessEmailSendRow =>
+    ({
+      id: 'a1000000-0000-4000-8000-000000000001',
+      email: 'owner@role.ec',
+      status: 'pending',
+      error_message: null,
+      created_at: new Date('2026-02-01T10:00:00Z'),
+      updated_at: new Date('2026-02-01T10:00:00Z'),
+      template_name: 'business-approved',
+      ...overrides,
+    }) as BusinessEmailSendRow;
+
+  test('pending: sin error y con fechas ISO', () => {
+    const dto = BusinessMapper.toEmailSendDto(makeSendRow());
+
+    expect(dto).toEqual({
+      id: 'a1000000-0000-4000-8000-000000000001',
+      email: 'owner@role.ec',
+      template_name: 'business-approved',
+      status: 'pending',
+      error_message: null,
+      created_at: '2026-02-01T10:00:00.000Z',
+      updated_at: '2026-02-01T10:00:00.000Z',
+    });
+  });
+
+  test('sent: estado entregado sin mensaje de error', () => {
+    const dto = BusinessMapper.toEmailSendDto(
+      makeSendRow({ status: 'sent', error_message: null }),
+    );
+
+    expect(dto.status).toBe('sent');
+    expect(dto.error_message).toBeNull();
+  });
+
+  test('failed: expone el motivo de Resend', () => {
+    const dto = BusinessMapper.toEmailSendDto(
+      makeSendRow({
+        status: 'failed',
+        error_message: 'You can only send testing emails to your own email',
+      }),
+    );
+
+    expect(dto.status).toBe('failed');
+    expect(dto.error_message).toBe(
+      'You can only send testing emails to your own email',
+    );
+  });
+
+  test('failed sin error_message: null, no string vacío', () => {
+    const dto = BusinessMapper.toEmailSendDto(
+      makeSendRow({ status: 'failed', error_message: null }),
+    );
+
+    expect(dto.error_message).toBeNull();
+  });
+
+  test('no filtra columnas internas de email_sends', () => {
+    const dto = BusinessMapper.toEmailSendDto(
+      makeSendRow({
+        variables_used: { businessName: 'Café' },
+        resend_id: 'resend-1',
+      } as Partial<BusinessEmailSendRow>),
+    );
+
+    expect(Object.keys(dto).sort()).toEqual([
+      'created_at',
+      'email',
+      'error_message',
+      'id',
+      'status',
+      'template_name',
+      'updated_at',
+    ]);
   });
 });
 
