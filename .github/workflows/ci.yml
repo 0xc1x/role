@@ -81,3 +81,30 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      - name: OpenAPI export is in sync
+        working-directory: apps/api
+        env:
+          # The export only builds the Swagger document; it never opens the
+          # database or the network. Dummy-but-valid values satisfy the zod
+          # env validator. NODE_ENV stays off 'production' on purpose so the
+          # production-only assertions (strong JWT secret, CORS, DOCS_*, REDIS_URL)
+          # do not apply — this step is not a boot test.
+          NODE_ENV: development
+          DATABASE_URL: postgres://postgres:postgres@localhost:6432/role_test
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_JWT_SECRET: openapi-export-placeholder-secret
+          SUPABASE_ANON_KEY: openapi-export-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: openapi-export-service-role-key
+        run: |
+          bun run openapi:export
+          # Scalar does not read this file — /docs is built in memory at boot
+          # (main.ts). This artifact exists for external consumers and was left
+          # to rot by hand: nothing regenerated it and nothing checked it.
+          # The export is deterministic (verified across repeated runs), so any
+          # diff here is real drift, not noise.
+          if ! git diff --quiet -- openapi/openapi.json; then
+            echo "::error::apps/api/openapi/openapi.json is stale. Run 'bun run --cwd apps/api openapi:export' and commit the result."
+            git --no-pager diff --stat -- openapi/openapi.json
+            exit 1
+          fi

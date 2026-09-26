@@ -21,8 +21,10 @@ Cómo se modelan, versionan y validan los contratos compartidos del ecosistema.
 
 ## OpenAPI
 
-- Desde `commons`: `bun run docs:export` → `openapi.json` (espec derivada de los schemas).
-- Desde la API: `bun run openapi:export` (NestJS + swagger → `apps/api/openapi/`).
+- **Desde la API**: `bun run --cwd apps/api openapi:export` (NestJS + swagger → `apps/api/openapi/openapi.json`).
+- **`commons` no genera OpenAPI.** No hay `docs:export` ni spec derivada de los schemas: ese script nunca existió en el paquete. Los schemas Zod son la SSOT y su guard es `bun run typecheck` en la raíz; la especificación HTTP se deriva de los decoradores de Nest, no de los schemas.
+- El único artefacto commiteado es `apps/api/openapi/openapi.json`, y **CI verifica que esté sincronizado** (step *OpenAPI export is in sync*). Si tocás una ruta, un decorador o un DTO de la API, regeneralo en el mismo PR o el gate falla.
+- `/docs` en runtime **no lee ese archivo**: `main.ts` construye el documento en memoria en cada boot y se lo pasa a Scalar. El archivo existe para consumidores externos del proceso.
 
 ## Build del paquete
 

@@ -1,10 +1,48 @@
 # Deuda de seguridad abierta antes de recibir clientes
 
 Fecha: 2026-09-25. Ordenada por lo que bloquea el lanzamiento.
+Revisado contra la base de datos el 2026-09-25 (SQL directo, no inferencia).
+
+> **Cómo se verificó esta revisión.** Cada afirmación de estado de abajo se
+> comprobó con `has_column_privilege` / `information_schema` /
+> `supabase_migrations.schema_migrations` sobre la base real. `has_table_privilege`
+> **no sirve** para concluir que falta un privilegio: este esquema usa grants
+> **por columna** a propósito, así que a nivel de tabla devuelve `false`
+> aunque la escritura exista columna por columna. Y `has_column_privilege`
+> necesita **4** argumentos (`user, tabla, columna, privilegio`); con 3 Postgres
+> interpreta el rol como nombre de tabla y responde `42P01`.
+
+## 0. Una migración aplicada sin pasar por el ledger (corregido)
+
+**Estado:** cerrado el 2026-09-25.
+
+`businesses_client_write_grants` restauraba los grants de escritura que
+`20260925163235` había quitado con `revoke all`. El SQL se ejecutó directo: los
+efectos están en la base (los grants por columna y los triggers
+`trg_set_business_owner_from_jwt` y `trg_default_business_inactive`), pero el
+ledger no tenía la fila, así que el directorio de migraciones no describía la
+base y `supabase db push` la habría reproducido contra un proyecto vivo como si
+nunca hubiera corrido.
+
+Re-aplicada por `apply_migration` (idempotente) y registrada como
+`20260926010336_businesses_client_write_grants`; el `md5sum` del archivo coincide
+con `md5(statements[1])` del ledger. La regla que lo previene está en
+`AGENTS.md` y en `supabase/migrations/README.md`.
+
+**El fallo no fue el SQL, fue escribir a la base por una vía que no deja
+rastro y luego confundir un commit con prueba de aplicación.**
 
 ## 1. Columnas de negocio expuestas a `anon` (P1-2, revertido a propósito)
 
-**Estado:** abierto. Las ofertas vuelven a cargar, el precio es exposición de datos.
+**Estado:** abierto, **verificado hoy**. Las ofertas vuelven a cargar, el precio
+es exposición de datos.
+
+Confirmado por SQL el 2026-09-25: `public.businesses` conserva las 7 columnas
+(`commission_rate`, `balance`, `verification_status`, `verified_at`,
+`verified_by`, `rejection_reason`, `owner_id`),
+`has_table_privilege('anon','public.businesses','SELECT')` es `true`, y la
+política de lectura es `is_active = true`. El filtro de filas no protege las
+columnas: `anon` lee `commission_rate` y `balance` de **todo negocio activo**.
 
 `public.businesses` tiene 7 columnas que no deberían ser públicas:
 `commission_rate`, `balance`, `verification_status`, `verified_at`,
@@ -40,7 +78,13 @@ existe para que la deuda sea visible y no se olvide en silencio.
 
 ## 1b. Fase 3 del split de `businesses`: verificada, pendiente de deploy
 
-**Estado:** fases 1, 2 y 3 escritas. La 3 NO aplicada — depende de un deploy.
+**Estado:** fases 1, 2 y 3 escritas. La 3 **NO aplicada** — confirmado en el
+ledger el 2026-09-25, whose última entrada es `20260926010336`. La base está en
+**fase 1**; el código (API y mobile) está en **fase 2**. Ese desfasaje es
+recuperable, y es la precondición de la 3: la 000011 dropea columnas que una API
+fase-1 lee en runtime, así que el orden obligatorio es **desplegar la API
+fase 2 → verificar en vivo → aplicar la 000011**. Al revés se rompe el negocio
+en producción.
 
 - **Fase 1 — hecha.** Las tres tablas acompañantes existen y están backfilled
   (16/16, 0 discrepancias). Aditiva: no cambió nada que la app use.
@@ -151,21 +195,43 @@ ledger; el procedimiento está en `supabase/migrations/README.md`.
 
 ## 4. Lint sin cubrir en mobile y commons
 
-**Estado:** abierto, cosmético.
+**Estado:** abierto, cosmético. Verificado el 2026-09-25.
 
 `bun run lint` corre en admin, landing y api. `apps/mobile` y `packages/commons`
 no tienen script de `lint`, así que ~30 hallazgos de biome no bloquean nada.
 La mayoría son mecánicos (`noUnusedImports`, `useImportType`, prefijo `node:`);
 `noNonNullAssertion` (7) cambia tipado y conviene revisar aparte.
 
+Lo que sí está cubierto desde `80698b2` es el **formateo** (`format:check` con
+biome, en turbo y en CI). Formateo no es lint: el formateador no reporta
+`noUnusedImports` ni `useImportType`. Los dos scripts son independientes.
+
 ## 5. Verificación que no se puede hacer desde el código
 
-**Estado:** abierto.
+**Estado:** abierto, pero menos vacío que antes.
 
-Toda la evidencia de esta remediación es de capa Postgres: matriz de roles con
-mutaciones reales, y round-trips por PostgREST. La capa de UI no está verificada.
-Antes de recibir clientes hay que abrir la app y, como comercio, **crear una
-oferta y editar una**. Ese camino se recorrió cero veces.
+Toda la evidencia de la remediación de seguridad es de capa Postgres: matriz
+de roles con mutaciones reales y round-trips por PostgREST. Sobre la capa de UI
+hay ahora una **auditoría estática de 63 hallazgos** (31 en mobile, 32 en
+landing + admin) que Camilla no encontró, no recorrió ni midió.
+
+Lo que sigue sin verificarse, y no se puede verificar leyendo código:
+
+- Recorrer en un dispositivo real el camino de **crear una oferta y editar una**.
+  Sigue siendo el camino que nunca se recorrió.
+- Confirmación de correo: `businesses.service.ts:98` crea el usuario con
+  `email_confirm: false` vía `auth.admin.createUser`, que **no envía ningún
+  correo**, y el hook de email es un `// TODO` sin implementar
+  (`businesses.service.ts:208`). La pantalla de éxito promete "Recibirás un
+  email para confirmar tu cuenta" (`apps/landing/src/routes/business-signup.tsx:200`).
+  El resultado no es un comercio sin correo de bienvenida: es una **cuenta que
+  no puede activarse nunca**, porque el admin la aprueba y el login siempre
+  responde `Email not confirmed`. Hay que decidir entre enviar el correo de
+  confirmación o poner `email_confirm: true` **y** darle al admin una vista con
+  el email y el teléfono del solicitante antes de aprobar (hoy no la tiene: solo
+  ve nombre, tipo, estado, activo y fecha).
+- Contraste y dynamic type: los ratios de los hallazgos se calcularon a mano
+  desde los hex de `colors.ts`, no contra píxeles renderizados.
 
 ## 6. Acciones de configuración externas
 
