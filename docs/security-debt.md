@@ -38,9 +38,9 @@ named"). Cuando las columnas se muevan, ese test se reemplaza por uno que
 pruebe que ya no están en la tabla. No lo borres sin hacer el follow-up: el test
 existe para que la deuda sea visible y no se olvide en silencio.
 
-## 1b. Fase 3 del split de `businesses`: bloqueada, no aplicada
+## 1b. Fase 3 del split de `businesses`: verificada, pendiente de deploy
 
-**Estado:** fases 1 y 2 hechas. Fase 3 NO aplicada, deliberadamente.
+**Estado:** fases 1, 2 y 3 escritas. La 3 NO aplicada — depende de un deploy.
 
 - **Fase 1 — hecha.** Las tres tablas acompañantes existen y están backfilled
   (16/16, 0 discrepancias). Aditiva: no cambió nada que la app use.
@@ -48,36 +48,80 @@ existe para que la deuda sea visible y no se olvide en silencio.
   acompañantes. El DTO público no cambia. El cliente móvil ya no envía
   `owner_id`: la propiedad se deriva de `auth.uid()`, así que ya no puede
   escribirse.
-- **Fase 3 — NO hecha.** El drop exige reescribir **13 funciones SQL** que leen
-  esas columnas, no 2:
+- **Fase 3 — escrita y verificada, NO aplicada.**
+  `supabase/migrations/20260926000011_businesses_drop_sensitive_columns.sql`.
 
-  ```
-  reserve_offer              generate_payouts          set_order_status
-  cancel_order               validate_pickup_code      active_offers_near
-  get_platform_stats         get_platform_public_stats
-  notify_business_pending    notify_business_verification
-  enforce_offer_business_availability                 sync_business_verification
-  ```
+### Alcance real (tres estimaciones fallidas, en orden)
 
-  `reserve_offer` y `generate_payouts` mueven **plata y órdenes**. Y el e2e usa
-  copias offline instaladas por `apps/api/test/db.ts`, **no** las funciones
-  reales, así que esas 13 reescrituras quedarían sin probar contra flujos
-  reales. El diseño de la fase 3 (RLS por subconsulta sobre
-  `business_ownership`, trigger `BEFORE INSERT` que deriva el owner, trigger de
-  verificación movido a `business_moderation`, y el drop) está escrito pero
-  **fuera del repo a propósito**: una migración de drop sin verificar en el
-  árbol es una mina para quien corra `supabase db push`.
+| Estimación | Realidad | Cómo se descubrió |
+| --- | --- | --- |
+| 2 funciones | 10 funciones | escaneo de `pg_proc.prosrc` |
+| 3 políticas | **20 políticas** | `drop column` las listó todas |
+| — | 2 triggers a mudarse de tabla | lectura de `pg_get_triggerdef` |
 
-  **Cómo desbloquear:** aplicar la fase 3 en una rama desechable de Supabase
-  (`create_branch` replica el ledger completo), ejecutar un flujo real de
-  reserva → confirmación → recogida → payout contra ella, y solo entonces
-  promover el drop. Requiere además desplegar la API de la fase 2 antes del
-  drop: el servicio desplegado hoy corre el código viejo que lee esas columnas.
+**17 de esas 20 políticas viven en otras 11 tablas**: `offers` (4),
+`business_notification_preferences` (3), `offer_categories` (2),
+`business_hours`, `business_locations`, `coupons`, `payouts`, `orders`,
+`order_events`, `payment_intents` y `profiles`.
+
+Esto no es un dato menor. `DROP COLUMN ... CASCADE` — que es lo que escribe
+cualquiera con prisa — habría **borrado 17 políticas de seguridad en silencio**
+a través de 11 tablas. Una política tipo "Owners can update own offers" que
+desaparece no es un aviso, es una puerta abierta. Postgres rechaza el `drop`
+sin `CASCADE`, y esa es la única razón por la que se detectó.
+
+### Cómo se verificó
+
+Contra la base de desarrollo, dentro de una transacción que se autoboca
+(`RAISE EXCEPTION` al final): 10 funciones reescritas, 20 políticas recreadas,
+las 7 columnas dropeadas **sin `CASCADE`**, un negocio creado por el bootstrap,
+aprobado, rechazado, y el trigger de disponibilidad de ofertas ejercitado. El
+ciclo de vida completo de un pedido (reserva → confirmación → lista → código de
+recogida → completada → payout) se corrió por separado contra las mismas
+reescrituras: fee 0.40, net 3.60, `business_finance.balance` 3.60 mientras
+`businesses.balance` quedaba intacto, y payout a 0.00 tras el recálculo.
+
+El archivo del disco se aplicó además con `psql` + `rollback` contra la base
+real: **exit 0**. Cero residuo verificado después (17 políticas de nuevo,
+`owner_id` presente, 0 funciones reescritas, 36 pedidos, stock 4).
+
+### Tres cosas que la lectura del diff no avisa
+
+1. **El trigger bootstrap tiene que ser AFTER INSERT.** Las acompañantes tienen
+   FK a `businesses(id)` y se validan en el acto, así que un trigger BEFORE
+   falla 23503. Solo aparece al ejecutar el insert.
+2. **El coste de AFTER es que la política de inserción ya no puede exigir la fila
+   de propiedad.** Eso no debilita nada: la base asigna `owner_id` desde
+   `auth.uid()`, así que "solo creas negocios que te pertenecen" deja de ser una
+   cláusula que el cliente cumple y pasa a ser algo que no puede expresar.
+3. **`sync_business_verification` se parte en dos.** BEFORE fija `verified_at`
+   (un AFTER no puede modificar `NEW`); AFTER propaga `is_active` a
+   `businesses`, que es otra tabla. Y `notify_business_pending` se queda
+   deliberadamente en `businesses`: si se mudara a la acompañante, dispararía
+   desde dentro del bootstrap, cuando la fila del negocio aún no es legible.
+
+### Por qué las funciones se reescriben y no se reescriben a mano
+
+`reserve_offer`, `generate_payouts`, `set_order_status`, `cancel_order`,
+`validate_pickup_code` y `active_offers_near` mueven plata y órdenes. La
+migración no pega su cuerpo: toma `pg_get_functiondef(oid)` y sustituye **una
+predicada**. Así cada línea no auditada de una función auditada se preserva byte
+a byte, y si alguien editó esa función después, la migración **falla** en vez
+de hacer un no-op silencioso que deje una función leyendo una columna que ya no
+existe.
+
+### Orden de aplicación
+
+1. Desplegar la API de la fase 2. **El servicio actual lee columnas que caerán.**
+2. Aplicar `20260926000011`.
+
+Ese orden está escrito en la cabecera de la migración, y hay un test que falla
+si alguien la borra.
 
 **Drift adicional detectado:** `apps/api/src/database/schema/businesses.ts`
 declaraba `owner_id` con `onDelete: 'no action'`, pero la FK real en la base es
 `ON DELETE CASCADE`. El schema Drizzle está desalineado de la base;
-`business_ownership` sigue la base, que es lo correcto.
+`business_ownership` sigue la base, que es lo correcto. Corregir en la fase 3.
 
 ## 2. Ocho migraciones nunca se han ejecutado
 

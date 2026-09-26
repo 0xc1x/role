@@ -110,9 +110,7 @@ describe('client read/write boundary migration', () => {
     );
   });
 
-  test('businesses: table-level SELECT is restored, and the exposure it buys is named', () => {
-    // This is the debt, pinned on purpose.
-    //
+  test('businesses: table-level SELECT is required, and phase 3 must close what it exposes', () => {
     // 20260925163235 replaced table-wide SELECT with per-column grants so anon
     // could not read the platform columns. That is incompatible with PostgREST:
     // offers, business_locations and orders hold foreign keys to businesses, and
@@ -121,11 +119,10 @@ describe('client read/write boundary migration', () => {
     // select=id with no embed. The offers catalog is the product.
     //
     // The two are mutually exclusive: either the table is exposed, or the
-    // sensitive columns move off it. The follow-up is to move them to
-    // business_finance and business_moderation. Until then these columns ARE
-    // readable by anon, and this test exists so that fact is asserted rather
-    // than forgotten. When the columns move, replace this test with one that
-    // proves they are absent from the table again.
+    // sensitive columns move off it. Phase 1 created the companion tables,
+    // phase 2 repointed the application at them, and phase 3 drops the columns.
+    // The restore below is not a regression to undo: without table-level SELECT
+    // the catalog does not load at all.
     const restore = [
       ...ALL_MIGRATIONS.matchAll(
         /grant select on table public\.businesses to anon, authenticated;/gi,
@@ -136,12 +133,16 @@ describe('client read/write boundary migration', () => {
       'no migration restores table-level SELECT on businesses',
     ).toBeGreaterThan(0);
 
+    // While the columns are still on the table they ARE readable by anon. This
+    // assertion is the debt marker: it fails the day someone re-hides them with
+    // a column grant and breaks the offers catalog again, and it is removed only
+    // when phase 3 has actually been applied to the database.
     expect(ALL_MIGRATIONS).toMatch(
       /EXPOSED TO ANON[\s\S]*commission_rate[\s\S]*balance[\s\S]*verification_status/i,
     );
 
-    // Row access is still bounded: anon only reaches active businesses, which
-    // is what RLS still guarantees while the columns are exposed.
+    // Row access stays bounded by RLS throughout: anon only reaches active
+    // businesses, so the exposure was never unbounded, only too wide.
     expect(ALL_MIGRATIONS).toMatch(/Row access is still bounded by RLS/i);
   });
 
@@ -622,6 +623,254 @@ describe('offers write grants match what the client actually writes', () => {
         `${col} must not be sent on the update path`,
       ).not.toContain(col);
       expect(clientInsertOnlyColumns()).toContain(col);
+    }
+  });
+});
+
+/**
+ * Phase 3 of the businesses column split.
+ *
+ * This is the closing half of finding P1-2. Phase 1 created the companion
+ * tables, phase 2 repointed the API and the mobile client at them, and phase 3
+ * drops the seven columns from `public.businesses`. Only after that is the
+ * table-level SELECT that PostgREST requires actually safe, because the table
+ * then holds nothing but public data.
+ *
+ * The migration is committed but NOT applied. It must not be applied until the
+ * phase-2 API is deployed, so these tests pin the migration source, not the
+ * live database. The debt assertion in the suite above is what still tracks
+ * the live state.
+ *
+ * Three things went wrong while building this and are worth guarding, because
+ * each one is invisible to a review that only reads the diff:
+ *
+ * 1. The scope was badly under-estimated twice. First "two functions", then
+ *    "thirteen". The truth is ten functions, twenty RLS policies, and two
+ *    triggers that had to move to another table. Seven of those policies live
+ *    on tables nobody was looking at. A guard that counts them keeps the
+ *    estimate honest.
+ *
+ * 2. `DROP COLUMN ... CASCADE` would have deleted seventeen security policies
+ *    without a word. Postgres refuses the drop without CASCADE, which is the
+ *    only reason this was caught at all.
+ *
+ * 3. The bootstrap trigger has to be AFTER INSERT. The companions have foreign
+ *    keys to businesses(id) and those are validated immediately, so a BEFORE
+ *    trigger fails with 23503. Nothing about reading the trigger suggests that;
+ *    only running the insert does.
+ */
+describe('businesses column split phase 3 closes the anon exposure', () => {
+  const MIGRATIONS_DIR = join(
+    import.meta.dir,
+    '..',
+    '..',
+    '..',
+    '..',
+    '..',
+    'supabase',
+    'migrations',
+  );
+  const PHASE3_FILE = '20260926000011_businesses_drop_sensitive_columns.sql';
+  const PHASE3_PATH = join(MIGRATIONS_DIR, PHASE3_FILE);
+  const PHASE3: string = readFileSync(PHASE3_PATH, 'utf8');
+
+  const DRIZZLE_BUSINESSES = join(
+    import.meta.dir,
+    '..',
+    'schema',
+    'businesses.ts',
+  );
+
+  /**
+   * The migration with line comments stripped. Two assertions below would
+   * otherwise match the prose: the header explains at length why the DROP must
+   * not use CASCADE, and the rewrite helper carries the old predicates as the
+   * search strings it replaces.
+   */
+  function sql(): string {
+    return PHASE3.replace(/--[^\n]*/g, '');
+  }
+
+  /** Columns that must not survive on public.businesses. */
+  const MOVED_COLUMNS = [
+    'owner_id',
+    'balance',
+    'commission_rate',
+    'verification_status',
+    'verified_at',
+    'verified_by',
+    'rejection_reason',
+  ] as const;
+
+  test('the phase-3 migration drops every moved column and refuses CASCADE', () => {
+    const drop = sql().match(/alter table public\.businesses([\s\S]*?);/i)?.[1];
+    expect(drop, 'no ALTER TABLE ... DROP COLUMN on businesses').toBeDefined();
+
+    for (const column of MOVED_COLUMNS) {
+      expect(drop).toMatch(
+        new RegExp(`drop column if exists ${column}\\b`, 'i'),
+      );
+    }
+
+    // The single most important assertion in this file. CASCADE here would
+    // silently drop seventeen ownership policies across eleven tables, turning
+    // "Owners can update own offers" into a missing policy rather than an error.
+    expect(drop).not.toMatch(/cascade/i);
+    expect(sql()).not.toMatch(/alter table public\.businesses[\s\S]*?cascade/i);
+  });
+
+  test('the migration carries its own apply-order warning', () => {
+    // Applying this before the phase-2 API ships breaks order reservation, so
+    // the ordering constraint has to live in the file, not in someone's memory.
+    expect(PHASE3).toMatch(/APPLY ORDER WARNING/i);
+    expect(PHASE3).toMatch(/DO NOT RUN until the phase-2 API is deployed/i);
+  });
+
+  test('the ten functions are rewritten from their own definition, not retyped', () => {
+    // Retyping a body that moves money is how a migration changes behaviour
+    // nobody re-reads. The rewrite reads pg_get_functiondef and replaces one
+    // predicate, so every other line of an audited function is preserved byte
+    // for byte.
+    const rewritten = [
+      ...PHASE3.matchAll(/pg_temp\.apply_rewrite\('([a-z_]+)'/g),
+    ].map((m) => m[1] as string);
+    expect(rewritten).toEqual([
+      'set_order_status',
+      'cancel_order',
+      'validate_pickup_code',
+      'reserve_offer',
+      'accrue_order_earnings',
+      'generate_payouts',
+      'enforce_offer_business_availability',
+      'active_offers_near',
+      'get_platform_stats',
+      'get_platform_public_stats',
+    ]);
+    expect(PHASE3).toMatch(/pg_get_functiondef\(p\.oid\)/i);
+  });
+
+  test('a rewrite fails loudly instead of silently no-oping', () => {
+    // If someone edited one of those functions after this migration was
+    // written, a silent no-op would leave it reading a column that is gone.
+    expect(PHASE3).toMatch(
+      /patron no encontrado en public\.%:\s*\[%\]/i,
+    );
+    expect(PHASE3).toMatch(/esperaba exactamente 1 overload de public\.%/i);
+  });
+
+  test('all twenty ownership policies resolve through business_ownership', () => {
+    // Seventeen of them are on tables other than businesses: offers (4),
+    // business_notification_preferences (3), offer_categories (2),
+    // business_hours, business_locations, coupons, payouts, orders,
+    // order_events, payment_intents and profiles. Counting them is the point.
+    const policies = [
+      ...PHASE3.matchAll(/create policy\s+"([^"]+)"\s+on\s+public\.(\w+)/gi),
+    ];
+    expect(policies.length, 'expected twenty recreated policies').toBe(20);
+
+    const viaOwnership = PHASE3.match(
+      /create policy[\s\S]*?business_ownership/g,
+    );
+    expect(viaOwnership).toBeDefined();
+
+    const tables = new Set(policies.map((m) => (m[2] as string).toLowerCase()));
+    for (const table of [
+      'offers',
+      'business_notification_preferences',
+      'offer_categories',
+      'business_hours',
+      'business_locations',
+      'coupons',
+      'payouts',
+      'orders',
+      'order_events',
+      'payment_intents',
+      'profiles',
+    ]) {
+      expect(tables, `${table} lost its ownership policy`).toContain(table);
+    }
+  });
+
+  test('no recreated policy still reaches for a moved column on businesses', () => {
+    // Scoped to the policies on purpose. The rewrite helper legitimately
+    // carries `b.owner_id = auth.uid()` as the search string it replaces, and
+    // `orders.commission_rate` is a real snapshot column that must survive.
+    const policySection = sql().split(/alter table public\.businesses/i)[0];
+    // The insert policy is the one deliberate exception: it cannot check
+    // ownership because the AFTER trigger has not written the row yet, and it
+    // does not need to, because the database assigns the owner.
+    const unowned = 'Authenticated can create businesses';
+    for (const [, name] of [
+      ...policySection.matchAll(/create policy\s+"([^"]+)"/gi),
+    ]) {
+      const body = policySection.match(
+        new RegExp(`create policy\\s+"${name}"[\\s\\S]*?;`, 'i'),
+      )?.[0];
+      expect(body, `policy ${name} not found`).toBeDefined();
+      expect(body).not.toMatch(/businesses\.owner_id/i);
+      if (name === unowned) {
+        expect(body).not.toMatch(/business_ownership/i);
+      } else {
+        expect(
+          body,
+          `${name} must resolve ownership via the companion`,
+        ).toMatch(/business_ownership/i);
+      }
+    }
+  });
+
+  test('the ownership bootstrap is AFTER INSERT, because the companions have FKs', () => {
+    // A BEFORE trigger runs before the parent row exists, so
+    // `insert into business_finance (business_id) values (new.id)` fails 23503.
+    // This was found by running the flow, not by reading the trigger.
+    const trigger = sql().match(
+      /create trigger trg_bootstrap_business_companions[\s\S]*?execute function public\.bootstrap_business_companions\(\);/i,
+    )?.[0];
+    expect(trigger).toBeDefined();
+    expect(trigger).toMatch(/after insert on public\.businesses/i);
+    expect(trigger).not.toMatch(/before insert/i);
+  });
+
+  test('the insert policy no longer demands an ownership row the trigger has not written yet', () => {
+    // A BEFORE trigger could satisfy this. An AFTER trigger cannot, so the
+    // policy gives up the check. That is not a weakening: the database assigns
+    // owner_id from auth.uid(), so ownership stops being something the caller
+    // expresses. The mobile client used to send owner_id in the insert body.
+    expect(sql()).toMatch(
+      /create policy\s+"Authenticated can create businesses"[\s\S]*?for insert[\s\S]*?with check \(true\)/i,
+    );
+    // The update policy keeps the check, because by then the ownership row exists.
+    expect(sql()).toMatch(
+      /create policy\s+"Owners can update own businesses"[\s\S]*?with check \(\s*exists/i,
+    );
+
+    const mobileRepository = readFileSync(
+      join(
+        import.meta.dir,
+        '..',
+        '..',
+        '..',
+        '..',
+        '..',
+        'apps',
+        'mobile',
+        'src',
+        'features',
+        'business',
+        'data',
+        'repository.ts',
+      ),
+      'utf8',
+    );
+    expect(mobileRepository).not.toMatch(/owner_id:\s*input\.ownerId/);
+  });
+
+  test('the drizzle schema declares no moved column on businesses', () => {
+    const schema = readFileSync(DRIZZLE_BUSINESSES, 'utf8');
+    for (const column of MOVED_COLUMNS) {
+      expect(schema, `businesses.ts still declares ${column}`).not.toMatch(
+        new RegExp(`^\\s*${column}\\s*:`, 'im'),
+      );
     }
   });
 });
