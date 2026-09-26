@@ -4,6 +4,7 @@ export * from "./dtos/order-event.dto";
 export * from "./entities/order";
 export * from "./entities/order-event";
 export * from "./enums/order-status";
+export * from "./enums/order-transitions";
 export * from "./schemas/order.schema";
 export * from "./schemas/order-query.schema";
 export * from "./schemas/order-event.schema";

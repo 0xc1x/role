@@ -17,6 +17,7 @@ import {
   type ListBusinessOrdersQuery,
   type ListOrdersQuery,
   type PaginatedData,
+  shouldAccrueEarningsOnTransition,
   type UpdateOrderStatusRequest,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
@@ -455,7 +456,7 @@ export class OrdersService {
         );
       }
 
-      if (next === 'completed') {
+      if (shouldAccrueEarningsOnTransition(next)) {
         await this.accrueEarningsIfNeeded(tx, locked.order, current);
       }
 
