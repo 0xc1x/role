@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { PLATFORM_CURRENCY } from "../../_common/enums/platform-currency";
 import { RevenueStatsSchema } from "../schemas/revenue-stats.schema";
 
 /** Payload mínimo válido: accrued y collected con montos distintos a propósito. */
@@ -73,5 +74,17 @@ describe("RevenueStatsSchema", () => {
 			accrued: { ...payload.accrued, effective_commission_rate: 10 },
 		});
 		expect(result.success).toBe(false);
+	});
+
+	// El agregado es de TODA la plataforma, así que no puede traer una moneda
+	// propia: sumaría filas de negocios con unidades distintas. Su unidad es
+	// `PLATFORM_CURRENCY`, y el rótulo de cada cifra se arma en la capa que la
+	// muestra. La contraparte de este assert es la que falla si alguien agrega
+	// `currency` al reporte para "resolverlo" desde el servidor.
+	it("no trae una moneda propia: su unidad es PLATFORM_CURRENCY", () => {
+		const shape = RevenueStatsSchema.shape as Record<string, unknown>;
+
+		expect(Object.keys(shape)).not.toContain("currency");
+		expect(PLATFORM_CURRENCY).toBe("USD");
 	});
 });
