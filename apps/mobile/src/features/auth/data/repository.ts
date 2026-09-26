@@ -54,8 +54,10 @@ export async function enrichProfile(
  * `auth.users.user_metadata.analytics_consent_granted`), así que un `select`
  * sobre `profiles` no puede devolverlo.
  *
- * `null` = no se pudo leer. Distinguir "no concedido" de "no se pudo leer" es
- * lo que evita que un fallo de red se convierta en una revocación silenciosa.
+ * `null` = no se pudo saber, y hay DOS casos distintos con la misma respuesta:
+ * la lectura falló, o la fila no existe. Distinguir "no concedido" de "no se
+ * pudo leer" es lo que evita que un fallo de red se convierta en una revocación
+ * silenciosa.
  */
 async function readAnalyticsConsent(userId: string): Promise<boolean | null> {
 	const { data, error } = await supabase
@@ -65,7 +67,15 @@ async function readAnalyticsConsent(userId: string): Promise<boolean | null> {
 		.eq("consent_type", "analytics")
 		.maybeSingle();
 	if (error) return null;
-	return data?.granted === true;
+	// POR QUÉ el ternario con `data === null` y no `data?.granted === true`:
+	// `?.` convierte la fila ausente en `undefined`, y `undefined === true` es
+	// `false` — un "no concedido" inventado. Con un fallback conocido `true`
+	// (alta con confirmación de correo, donde `syncAnalyticsConsent` aún no
+	// corrió) eso llegaba al store como `false` y `_layout` llamaba a
+	// `analytics.setConsent(false)`. `??` no rescata el caso: solo atraviesa
+	// nullish, y `false` no es nullish. La fila ausente es un `null` de verdad,
+	// y así el llamador aplica su fallback conocido.
+	return data === null ? null : data.granted === true;
 }
 
 export const authRepository = {

@@ -106,4 +106,28 @@ describe("fetchProfile y el consentimiento de analytics", () => {
 
 		expect(enriched.analyticsConsentGranted).toBe(true);
 	});
+
+	test("sin fila de consentimiento y con un valor conocido, lo conserva", async () => {
+		// El caso que `data?.granted === true` rompía: la fila ausente devolvía
+		// `false` (no nullish, así que `??` tampoco lo rescataba) y el store
+		// acababa con `analytics.setConsent(false)`. Fallaba cerrado, pero
+		// degradaba un consentimiento concedido.
+		results.profiles = { data: PROFILE_ROW, error: null };
+		results.user_consents = { data: null, error: null };
+
+		const profile = await authRepository.fetchProfile("user-1", true);
+
+		expect(profile?.analyticsConsentGranted).toBe(true);
+	});
+
+	test("una fila explícitamente revocada gana aunque el fallback diga true", async () => {
+		// El fallback solo aplica a lo que NO se pudo leer. Con la fila presente
+		// y `granted: false`, la respuesta de la base manda.
+		results.profiles = { data: PROFILE_ROW, error: null };
+		results.user_consents = { data: { granted: false }, error: null };
+
+		const profile = await authRepository.fetchProfile("user-1", true);
+
+		expect(profile?.analyticsConsentGranted).toBe(false);
+	});
 });
