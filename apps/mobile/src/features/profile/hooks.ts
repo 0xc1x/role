@@ -1,8 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	useMutation,
+	useQuery,
+	useQueryClient,
+	type QueryClient,
+} from "@tanstack/react-query";
 import type { AddressType } from "@0xc1x/role-commons";
 
 import { profileRepository } from "@/src/features/profile/data/repository";
 import { authRepository } from "@/src/features/auth/data/repository";
+import type { UserProfile } from "@/src/features/auth/domain/user";
 import { useAuthStore } from "@/src/features/auth/store";
 
 // ─── Saved addresses ────────────────────────────────────────────────
@@ -126,6 +132,65 @@ export function useUpdateNotificationPreferences(userId: string) {
 }
 
 // ─── Profile + stats ────────────────────────────────────────────────
+type ProfileWritePatch = {
+	full_name?: string;
+	email?: string;
+	phone?: string | null;
+	city?: string | null;
+};
+
+/**
+ * Aplica al perfil del store solo los campos presentes en el patch.
+ *
+ * `!== undefined` y no truthiness: `""` y `null` son valores legítimos
+ * (borrar el teléfono, dejar el nombre sin relleno) y no deben caerse al valor
+ * anterior.
+ */
+function applyPatch(
+	profile: UserProfile,
+	patch: ProfileWritePatch,
+): UserProfile {
+	return {
+		...profile,
+		fullName:
+			patch.full_name !== undefined ? patch.full_name : profile.fullName,
+		email: patch.email !== undefined ? patch.email : profile.email,
+		phone: patch.phone !== undefined ? patch.phone : profile.phone,
+		city: patch.city !== undefined ? patch.city : profile.city,
+	};
+}
+
+/**
+ * Reconcilia el perfil del store después de una escritura ya confirmada.
+ *
+ * POR QUÉ NO HAY UNA QUERY QUE INVALIDAR: el perfil vive en el store de sesión
+ * (Zustand), no en la caché de React Query, así que la relectura es el único
+ * mecanismo de sincronización. Antes, si esa relectura fallaba, el `if (profile)`
+ * era falso y la UI seguía mostrando el nombre y el teléfono anteriores con un
+ * toast de "guardado": un dato viejo con un éxito aparente.
+ *
+ * El servidor ya confirmó la escritura, así que el patch no es especulativo: si
+ * la relectura falla se aplica al store en vez de dejar el valor viejo, y la
+ * siguiente relectura (arranque de sesión, próximo guardado) lo reconcilia. La
+ * invalidación de `userStats` sigue siendo la vía para las estadísticas derivadas.
+ */
+async function syncProfileAfterWrite(
+	queryClient: QueryClient,
+	userId: string,
+	patch: ProfileWritePatch,
+): Promise<void> {
+	void queryClient.invalidateQueries({ queryKey: ["userStats", userId] });
+	const profile = await authRepository.fetchProfile(userId).catch(() => null);
+	if (profile) {
+		useAuthStore.getState().setProfile(profile);
+		return;
+	}
+	const current = useAuthStore.getState().profile;
+	// Otra sesión en el store: no se pisa el perfil de quien está autenticado ahora.
+	if (!current || current.id !== userId) return;
+	useAuthStore.getState().setProfile(applyPatch(current, patch));
+}
+
 export function useProfileStats(userId: string) {
 	return useQuery({
 		queryKey: ["userStats", userId],
@@ -143,12 +208,8 @@ export function useUpdateProfile(userId: string) {
 			phone?: string | null;
 			city?: string | null;
 		}) => profileRepository.updateProfile(userId, patch),
-		onSuccess: async () => {
-			void queryClient.invalidateQueries({ queryKey: ["userStats", userId] });
-			const profile = await authRepository
-				.fetchProfile(userId)
-				.catch(() => null);
-			if (profile) useAuthStore.getState().setProfile(profile);
+		onSuccess: async (_updated, patch) => {
+			await syncProfileAfterWrite(queryClient, userId, patch);
 		},
 	});
 }
@@ -217,12 +278,13 @@ export function useSaveProfileWithEmail(userId: string, currentEmail: string) {
 			}
 			return { emailChanged };
 		},
-		onSuccess: async () => {
-			void queryClient.invalidateQueries({ queryKey: ["userStats", userId] });
-			const profile = await authRepository
-				.fetchProfile(userId)
-				.catch(() => null);
-			if (profile) useAuthStore.getState().setProfile(profile);
+		onSuccess: async (_result, input) => {
+			await syncProfileAfterWrite(queryClient, userId, {
+				full_name: input.fullName,
+				email: input.email,
+				phone: input.phone,
+				city: input.city,
+			});
 		},
 	});
 }
