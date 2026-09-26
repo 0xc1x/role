@@ -114,8 +114,9 @@ async function bootstrap() {
 // Sin este catch, un fallo en `validateEnv` — que lanza nombrando la variable
 // culpable — moría como unhandled rejection con un stack inútil. En un deploy
 // eso se traduce en un contenedor que reinicia en bucle sin contexto. El evento
-// lleva solo la huella acotada (`errorType`/`errorCode`) porque el mensaje crudo
-// puede contener el valor de la variable que falta.
+// lleva la huella acotada (`errorType`/`errorCode`) y los NOMBRES de las
+// variables de entorno implicadas, porque un nombre no es un secreto; lo que no
+// viaja es el `message`, que sí puede contener el valor de la que falta.
 bootstrap().catch((err: unknown) => {
   new Logger('Bootstrap').error(buildBootstrapFailureLog(err));
   process.exitCode = 1;

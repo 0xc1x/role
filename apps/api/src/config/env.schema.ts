@@ -1,5 +1,46 @@
 import { z } from 'zod';
 
+import { SAFE_ERROR_FIELD } from '../common/utils/safe-error';
+
+/**
+ * Fallo de validación de entorno que separa lo público de lo sensible.
+ *
+ * POR QUÉ EXISTE: `docs/operations.md` prohíbe registrar mensajes crudos, y el
+ * `message` de este error es exactamente eso — una concatenación de mensajes de
+ * issues de zod. No se depende de que hoy ese texto no cargue un valor: la
+ * dependencia correcta es que el canal prohibido no se toque nunca. El nombre
+ * de la variable, en cambio, no es un secreto y es justo lo que el operador
+ * necesita para arreglar un contenedor reiniciando en bucle. Separar los dos
+ * canales en campos distintos es lo que permite loguear el segundo sin abrir el
+ * primero.
+ *
+ * `variables` se filtra aquí y no al construir el log: una lista filtrada en el
+ * punto de consumo sigue pudiendo recibir cualquier texto de cualquier llamador,
+ * mientras que este constructor no deja entrar un nombre fuera de la gramática.
+ */
+export class EnvironmentConfigError extends Error {
+  /** Nombres de las variables rechazadas. Nunca valores. */
+  readonly variables: readonly string[];
+
+  constructor(variables: readonly string[], message: string) {
+    super(message);
+    this.name = 'EnvironmentConfigError';
+    this.variables = [
+      ...new Set(
+        variables.filter(
+          (name): name is string =>
+            typeof name === 'string' && SAFE_ERROR_FIELD.test(name),
+        ),
+      ),
+    ];
+  }
+}
+
+/** Lanza el rechazo fail-closed nombrando las variables implicadas. */
+function invalidEnv(variables: string[], message: string): never {
+  throw new EnvironmentConfigError(variables, message);
+}
+
 /**
  * Flag booleano de env ("true"/"false") para los espejos del ADR-0008.
  * Default false: el SQL de Supabase sigue siendo el emisor activo hasta el cutover.
@@ -130,17 +171,25 @@ export type Env = z.infer<typeof envSchema>;
 export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
-    const details = parsed.error.issues
+    const issues = parsed.error.issues;
+    const details = issues
       .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
       .join('; ');
-    throw new Error(`Invalid environment variables: ${details}`);
+    // Los `path` de zod son las claves del schema, o sea los nombres de las
+    // variables: es el único dato del fallo que el operador necesita y el
+    // único que este error garantiza poder exponer sin abrir el `message`.
+    throw new EnvironmentConfigError(
+      issues.map((issue) => issue.path.join('.')),
+      `Invalid environment variables: ${details}`,
+    );
   }
   const env = parsed.data;
 
   if (env.NODE_ENV === 'production') {
     const normalizedSecret = normalizeSecret(env.SUPABASE_JWT_SECRET);
     if (insecureJwtSecretValues.has(normalizedSecret)) {
-      throw new Error(
+      invalidEnv(
+        ['SUPABASE_JWT_SECRET'],
         'SUPABASE_JWT_SECRET must not use a placeholder, test, or change-me value in production',
       );
     }
@@ -148,32 +197,37 @@ export function validateEnv(config: Record<string, unknown>): Env {
       env.SUPABASE_JWT_SECRET.length < 32 ||
       !hasStrongJwtSecretVariation(env.SUPABASE_JWT_SECRET)
     ) {
-      throw new Error(
+      invalidEnv(
+        ['SUPABASE_JWT_SECRET'],
         'SUPABASE_JWT_SECRET must be at least 32 characters and use at least 3 character types in production',
       );
     }
   }
 
   if (env.NODE_ENV === 'production' && env.CORS_ORIGINS === '*') {
-    throw new Error(
+    invalidEnv(
+      ['CORS_ORIGINS'],
       'CORS_ORIGINS must be explicitly set in production (cannot be "*")',
     );
   }
 
   if (env.NODE_ENV === 'production' && (!env.DOCS_USER || !env.DOCS_PASSWORD)) {
-    throw new Error(
+    invalidEnv(
+      ['DOCS_USER', 'DOCS_PASSWORD'],
       'DOCS_USER and DOCS_PASSWORD must be set in production to protect /docs',
     );
   }
 
   if (env.NODE_ENV === 'production' && !env.REDIS_URL) {
-    throw new Error(
+    invalidEnv(
+      ['REDIS_URL'],
       'REDIS_URL must be set in production for durable throttling and queues',
     );
   }
 
   if (env.NODE_ENV === 'production' && !env.ENABLE_JOBS_ORDERS_EXPIRATION) {
-    throw new Error(
+    invalidEnv(
+      ['ENABLE_JOBS_ORDERS_EXPIRATION'],
       'ENABLE_JOBS_ORDERS_EXPIRATION must be enabled in production',
     );
   }
@@ -183,13 +237,15 @@ export function validateEnv(config: Record<string, unknown>): Env {
   // (HMAC con key vacía). En producción deben existir, aunque el envío esté
   // deshabilitado (RESEND_API_KEY vacío).
   if (env.NODE_ENV === 'production' && !env.RESEND_WEBHOOK_SECRET) {
-    throw new Error(
+    invalidEnv(
+      ['RESEND_WEBHOOK_SECRET'],
       'RESEND_WEBHOOK_SECRET must be set in production to verify Resend webhooks',
     );
   }
 
   if (env.NODE_ENV === 'production' && !env.UNSUBSCRIBE_SECRET) {
-    throw new Error(
+    invalidEnv(
+      ['UNSUBSCRIBE_SECRET'],
       'UNSUBSCRIBE_SECRET must be set in production to sign unsubscribe tokens',
     );
   }

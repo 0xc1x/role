@@ -1,4 +1,12 @@
-const SAFE_ERROR_FIELD = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
+/**
+ * Gramática de un campo de diagnóstico que sí se puede loguear.
+ *
+ * Exportada porque "esto no es un secreto" tiene que ser una decisión
+ * verificable, no una convención: la usan `safeField`/`readErrorCode` y también
+ * la lista de variables de entorno de `EnvironmentConfigError`, que viaja a un
+ * log estructurado con la misma promesa de no filtrar nada.
+ */
+export const SAFE_ERROR_FIELD = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
 
 export interface SafeErrorFields {
   errorType: string;
