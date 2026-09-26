@@ -27,6 +27,7 @@ import {
 	slidesListOptions,
 	useSlideList,
 } from "@/features/slides/queries/slides.queries";
+import { formatApiError } from "@/lib/api/notify";
 
 export const Route = createFileRoute("/_layout/slides")({
 	validateSearch: (raw) => ListSlidesQuerySchema.parse(raw),
@@ -51,7 +52,7 @@ export const Route = createFileRoute("/_layout/slides")({
 function RouteComponent() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, isLoading, isError, error } = useSlideList(search);
+	const { data, isLoading, isError, error, refetch } = useSlideList(search);
 	const [searchInput, setSearchInput] = useState(search.search ?? "");
 
 	useEffect(() => {
@@ -82,24 +83,12 @@ function RouteComponent() {
 			<div className="px-6 py-4">
 				<div className="flex flex-col items-center gap-4">
 					<p className="text-destructive">
-						{error instanceof Error
-							? error.message
-							: "Error al cargar categorías"}
+						{formatApiError(error, "Error al cargar slides")}
 					</p>
-					<Button
-						variant="outline"
-						onClick={() =>
-							navigate({
-								search: {
-									page: 1,
-									limit: 10,
-									search: search.search,
-									type: search.type,
-									active: undefined,
-								},
-							})
-						}
-					>
+					{/* Reintentar navegaba con un search limpio: eso cambiaba la key de
+					    la query y además borraba los filtros que el operador tenía
+					    puesta. Reintentar es refetchar la misma consulta. */}
+					<Button variant="outline" onClick={() => void refetch()}>
 						Reintentar
 					</Button>
 				</div>

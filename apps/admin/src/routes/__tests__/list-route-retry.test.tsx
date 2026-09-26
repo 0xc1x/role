@@ -5,10 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
  * Defectos del MISMO estado —el inline de error de las rutas de lista— y por eso
  * viven en un solo archivo:
  *
- * 1. Regresión de A6/A20: el botón "Reintentar" navegaba al mismo search que ya
- *    tenía la ruta. TanStack Router lo deduplica y React Query conserva la query
- *    errored bajo la misma key, así que el botón no recuperaba nada y el operador
- *    quedaba atrapado hasta un refresco manual del navegador.
+ * 1. Regresión de A6/A20: el botón "Reintentar" navegaba en vez de refetchar.
+ *    Cuando el search era el mismo, TanStack Router lo deduplica y React Query
+ *    conserva la query errored bajo la misma key: el botón no recuperaba nada y
+ *    el operador quedaba atrapado hasta un refresco manual del navegador. Cuando
+ *    el search venía limpio (página 1, sin filtros), sí cambiaba la key, pero
+ *    borraba los filtros que el operador tenía puesta. Ninguna de las dos
+ *    variantes es "reintentar": eso es refetchar la misma consulta.
  * 2. El mensaje mostraba solo `error.message`, sin el `requestId` que la API ya
  *    había devuelto. El operador veía un fallo sin nada con lo que soporte
  *    pudiera encontrarlo en el log del servidor.
@@ -54,6 +57,9 @@ const { Route: consejosRoute } = await import("../_layout.consejos");
 const { Route: comisionesRoute } = await import("../_layout.comisiones");
 const { Route: pagosRoute } = await import("../_layout.pagos");
 const { Route: cuponesRoute } = await import("../_layout.cupones");
+const { Route: slidesRoute } = await import("../_layout.slides");
+const { Route: categoriasRoute } = await import("../_layout.categorias");
+const { Route: configuracionRoute } = await import("../_layout.configuracion");
 const { EnviosTab } = await import("@/features/email/components/envios-tab");
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import(
@@ -72,17 +78,26 @@ const routes: Array<[string, { component: RouteComponent }]> = [
 	["consejos", consejosRoute as unknown as { component: RouteComponent }],
 	["comisiones", comisionesRoute as unknown as { component: RouteComponent }],
 	["pagos", pagosRoute as unknown as { component: RouteComponent }],
+	["cupones", cuponesRoute as unknown as { component: RouteComponent }],
+	["slides", slidesRoute as unknown as { component: RouteComponent }],
+	["categorias", categoriasRoute as unknown as { component: RouteComponent }],
+	[
+		"configuracion",
+		configuracionRoute as unknown as { component: RouteComponent },
+	],
 ];
 
 /**
- * Superficies cuyo inline de error verifica la correlación aquí. `cupones` NO
- * entra en `routes` porque su "Reintentar" navega en vez de refetchar (limpia
- * los filtros), así que el defecto 1 no aplica a esa vista.
+ * Superficies cuyo inline de error verifica la correlación aquí. `envios` no es
+ * una ruta: es una pestaña dentro de /email, y por eso entra por su componente.
  */
 const correlatedRoutes: Array<[string, RouteComponent]> = [
 	["negocios", componentOf(negociosRoute)],
 	["pagos", componentOf(pagosRoute)],
 	["cupones", componentOf(cuponesRoute)],
+	["slides", componentOf(slidesRoute)],
+	["categorias", componentOf(categoriasRoute)],
+	["configuracion", componentOf(configuracionRoute)],
 	["envios", EnviosTab as RouteComponent],
 ];
 

@@ -67,7 +67,7 @@ function globalToScope(global: boolean | undefined): ScopeFilter {
 function RouteComponent() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, isLoading, isError, error } = useCouponsList(search);
+	const { data, isLoading, isError, error, refetch } = useCouponsList(search);
 
 	const [searchInput, setSearchInput] = useState(search.search ?? "");
 
@@ -110,19 +110,10 @@ function RouteComponent() {
 					<p className="text-destructive">
 						{formatApiError(error, "Error al cargar cupones")}
 					</p>
-					<Button
-						variant="outline"
-						onClick={() =>
-							navigate({
-								search: {
-									page: 1,
-									limit: 10,
-									is_active: undefined,
-									global: undefined,
-								},
-							})
-						}
-					>
+					{/* Reintentar navegaba con un search limpio: eso cambiaba la key de
+					    la query y además borraba los filtros que el operador tenía
+					    puesta. Reintentar es refetchar la misma consulta. */}
+					<Button variant="outline" onClick={() => void refetch()}>
 						Reintentar
 					</Button>
 				</div>
