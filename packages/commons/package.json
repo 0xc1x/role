@@ -20,6 +20,7 @@
   ],
   "scripts": {
     "build": "bun node_modules/typescript/bin/tsc -p tsconfig.json && bun scripts/fix-imports.mjs",
+    "lint": "biome lint .",
     "clean": "rm -rf dist",
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
     "test": "bun test src",

@@ -12,6 +12,7 @@
     "clean": "rm -rf node_modules/.vite dist .output",
     "generate-routes": "tsr generate",
     "build": "vite build",
+    "format:check": "biome format .",
     "build:vercel": "NITRO_PRESET=vercel vite build",
     "preview": "vite preview",
     "test": "bun test src",
