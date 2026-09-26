@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
 import { OrdersService } from './orders.service';
 

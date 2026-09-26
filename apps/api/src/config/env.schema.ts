@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { SAFE_ERROR_FIELD } from '../common/utils/safe-error';
+import { SAFE_ERROR_FIELD } from '@0xc1x/role-commons';
 
 /**
  * Fallo de validación de entorno que separa lo público de lo sensible.

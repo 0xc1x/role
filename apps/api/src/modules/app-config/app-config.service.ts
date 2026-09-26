@@ -14,7 +14,7 @@ import {
   type PublicAppConfigDto,
   type UpdateAppConfigDto,
 } from '@0xc1x/role-commons';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import { AppConfigRepository } from './app-config.repository';
 import { AppConfigMapper } from './mappers/app-config.mapper';
 

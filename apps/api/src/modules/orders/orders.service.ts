@@ -20,7 +20,7 @@ import {
   type UpdateOrderStatusRequest,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
 import { OffersRepository } from '../offers/offers.repository';
 import {

@@ -2,10 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import type { CreateContactDto } from '@0xc1x/role-commons';
-import {
-  safeErrorFields,
-  safeErrorSummary,
-} from '../../common/utils/safe-error';
+import { safeErrorFields, safeErrorSummary } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
 import { AppConfigRepository } from '../app-config/app-config.repository';
 import {

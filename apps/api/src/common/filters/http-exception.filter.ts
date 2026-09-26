@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { safeErrorFields } from '../utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
 

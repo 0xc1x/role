@@ -7,7 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
 import { NotificationHandlers } from '../notifications/notification.handlers';
 import {

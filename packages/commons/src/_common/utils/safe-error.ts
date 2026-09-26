@@ -1,24 +1,33 @@
 /**
- * Redacción de errores para superficies de cliente (admin, mobile).
+ * Redacción de errores para superficies de cliente (admin, mobile) y para los
+ * logs estructurados de la API.
  *
  * POR QUÉ EXISTE: el frontend no tiene capa de redacción. La API redacta lo que
- * loguea (`apps/api/src/common/utils/safe-error.ts`) y las edge functions de
- * Supabase hacen lo mismo en su copia Deno, pero admin y mobile no tienen
- * equivalente: cualquier logging futuro en un cliente se llevaría la cadena
- * cruda del servidor (PII: emails, ids de cuenta, tokens) a un agregador. Este
- * módulo es el prerrequisito: fija la misma disciplina (solo `errorType` y
- * `errorCode` acotados; nunca mensajes, stacks ni `cause`) ANTES de que ese
- * logging exista, para no tener que auditarlo después.
+ * loguea y las edge functions de Supabase hacen lo mismo en su copia Deno, pero
+ * admin y mobile no tienen equivalente: cualquier logging futuro en un cliente
+ * se llevaría la cadena cruda del servidor (PII: emails, ids de cuenta, tokens)
+ * a un agregador. Este módulo es el prerrequisito: fija la misma disciplina (solo
+ * `errorType` y `errorCode` acotados; nunca mensajes, stacks ni `cause`) ANTES de
+ * que ese logging exista, para no tener que auditarlo después.
  *
  * Es ENVIRONMENT-AGNÓSTICO a propósito: sin DOM, sin React, sin `window` ni
  * `process`, porque lo consumen tanto el navegador (admin) como React Native.
  *
- * NO unificar con la copia de la API ni con `supabase/functions/_shared/logging.ts`:
- * las edge functions corren en Deno aislado y no pueden importar de este paquete.
- * La de la API sí es fusionable en el futuro (ya depende de commons); hasta
- * entonces el nombre y el contrato idénticos hacen que unificar sea un borrado.
+ * ÚNICO en el monorepo salvo `supabase/functions/_shared/logging.ts`, que sigue
+ * duplicado a propósito: las edge functions corren en Deno aislado y no pueden
+ * importar de este paquete. Esa copia además NO es equivalente —diverge con un
+ * `throw` de un no-objeto, donde aquí `typeof` es la única fuente válida—, así
+ * que no es candidata a unificación.
  */
-const SAFE_ERROR_FIELD = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
+/**
+ * Gramática de un campo de diagnóstico que sí se puede loguear.
+ *
+ * Exportada porque "esto no es un secreto" tiene que ser una decisión
+ * verificable, no una convención: la usan `safeField`/`readErrorCode` y también
+ * la lista de variables de entorno de `EnvironmentConfigError` de la API, que
+ * viaja a un log estructurado con la misma promesa de no filtrar nada.
+ */
+export const SAFE_ERROR_FIELD = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
 
 export interface SafeErrorFields {
 	errorType: string;

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import { CampaignsService } from './campaigns.service';
 
 /**

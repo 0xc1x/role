@@ -6,7 +6,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import { parseRedisUrl } from '../../common/utils/redis';
 import type { Env } from '../../config/env.schema';
 import { NotificationsRepository } from './notifications.repository';

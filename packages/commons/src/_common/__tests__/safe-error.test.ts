@@ -39,6 +39,32 @@ describe("safeErrorFields", () => {
 
 		expect(safeErrorFields(error)).toEqual({ errorType: "UnknownError" });
 	});
+
+	// El caso que aportó la copia de la API al fusionarse aquí: un error de
+	// driver de Postgres llega con `name` ya acotado y un `code` numérico, y ese
+	// par es lo que hace falta para triage (`23505` = unique violation). Sin el
+	// nombre, el log solo decía `"Error"` para cualquier caída de la base de datos.
+	it("conserva el nombre acotado de un driver con su código", () => {
+		const error = Object.assign(new Error("duplicate key"), {
+			name: "PostgrestError",
+			code: "23505",
+		});
+
+		expect(safeErrorFields(error)).toEqual({
+			errorType: "PostgrestError",
+			errorCode: "23505",
+		});
+		expect(safeErrorSummary(error)).toBe("PostgrestError:23505");
+	});
+
+	it("no filtra el contenido de un objeto que no es Error", () => {
+		// Un `throw { token }` es un caso real: el objeto entero es el error. La
+		// huella debe quedarse en su `typeof`, nunca serializar sus campos.
+		const fields = safeErrorFields({ token: "do-not-log" });
+
+		expect(fields).toEqual({ errorType: "object" });
+		expect(JSON.stringify(fields)).not.toContain("do-not-log");
+	});
 });
 
 describe("safeErrorSummary", () => {

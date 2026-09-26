@@ -12,7 +12,7 @@ import {
   type ListSlideQuery,
   type UpdateSlideDto,
 } from '@0xc1x/role-commons';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import { SlidesRepository, type SlideRow } from './slides.repository';
 import { SlideMapper } from './mappers/slides.mapper';
 

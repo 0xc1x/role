@@ -1,5 +1,5 @@
 import { EnvironmentConfigError } from '../config/env.schema';
-import { safeErrorFields, type SafeErrorFields } from './utils/safe-error';
+import { safeErrorFields, type SafeErrorFields } from '@0xc1x/role-commons';
 
 /**
  * Payload del log de arranque fallido.

@@ -18,7 +18,7 @@ import {
   RecipientsService,
 } from '../email-marketing/recipients.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import { PushNotificationsRepository } from './push-notifications.repository';
 import type { CampaignRow } from '../email-marketing/email-marketing.repository';
 
