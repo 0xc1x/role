@@ -110,4 +110,11 @@ async function bootstrap() {
   logger.log(`Health at http://localhost:${port}/api/v1/health`);
 }
 
-bootstrap();
+// Sin este catch, un fallo en `validateEnv` — que lanza nombrando la variable
+// culpable — moría como unhandled rejection con un stack inútil. En un deploy
+// eso se traduce en un contenedor que reinicia en bucle sin decir qué falta.
+bootstrap().catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  new Logger('Bootstrap').error(`La API no pudo arrancar: ${message}`);
+  process.exitCode = 1;
+});
