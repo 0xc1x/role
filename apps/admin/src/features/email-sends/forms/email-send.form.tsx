@@ -16,17 +16,24 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { ApiClientError } from "@/lib/api/errors";
 import { useUpdateEmailSend } from "../queries/email-sends.queries";
 
 /** Campos mutables según el contrato (UpdateEmailSendSchema → PATCH /email-marketing/sends/:id). */
 const schema = z.object({
 	status: z.enum(EMAIL_SEND_STATUSES),
-	// El form trabaja con ""; el payload envía null si queda vacío.
-	error_message: z.string(),
 });
-/** Contexto de solo lectura: el API ignora estos campos en el PATCH. */
+/**
+ * Contexto de solo lectura: el API ignora estos campos en el PATCH.
+ *
+ * `error_message` se muestra pero NO se edita. Desde a7fac68 la API escribe ahí
+ * la huella acotada del fallo (`safeErrorSummary`) en vez del texto crudo de
+ * Resend, precisamente porque ese texto podía traer la API key o el email del
+ * destinatario. Un textarea libre devolvía esa fuga por la puerta de atrás: el
+ * operador escribía a mano lo que el servidor ya tenía que redimir, y el
+ * PATCH lo persistía. Para limpiarlo está `POST /sends/:id/retry`, que lo
+ *pone a null.
+ */
 function ReadOnlyInfo({ send }: { send: EmailSendDto }) {
 	const rows: Array<[label: string, value: string]> = [
 		["Email", send.email],
@@ -36,6 +43,7 @@ function ReadOnlyInfo({ send }: { send: EmailSendDto }) {
 			send.source_type ? `${send.source_type} · ${send.source_id ?? "—"}` : "—",
 		],
 		["Intentos", `${send.attempts} / ${send.max_attempts}`],
+		["Huella del error", send.error_message ?? "—"],
 	];
 
 	return (
@@ -64,15 +72,11 @@ export function EmailSendForm({
 	const form = useForm({
 		defaultValues: {
 			status: send.status,
-			error_message: send.error_message ?? "",
 		},
 		validators: { onSubmit: schema },
 		onSubmit: async ({ value }) => {
 			// Valida contra el contrato antes de enviar.
-			const body = UpdateEmailSendSchema.parse({
-				status: value.status,
-				error_message: value.error_message === "" ? null : value.error_message,
-			});
+			const body = UpdateEmailSendSchema.parse({ status: value.status });
 			await updateMutation.mutateAsync({
 				id: send.id,
 				body,
@@ -124,17 +128,6 @@ export function EmailSendForm({
 								))}
 							</SelectContent>
 						</Select>
-					</Field>
-				)}
-			</form.Field>
-			<form.Field name="error_message">
-				{(field) => (
-					<Field>
-						<FieldLabel>Error</FieldLabel>
-						<Textarea
-							value={field.state.value}
-							onChange={(e) => field.handleChange(e.target.value)}
-						/>
 					</Field>
 				)}
 			</form.Field>

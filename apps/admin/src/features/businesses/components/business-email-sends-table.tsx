@@ -15,6 +15,13 @@ import { StatusBadge } from "@/features/email-sends/tables/email-sends.columns";
  * Historial de avisos transaccionales de un negocio (read-only), con la query y
  * sus estados de carga/error/vacío. Lo consumen el drawer de notificaciones y la
  * ficha del negocio: aprobar sin ver si el aviso salió es aprobar a ciegas.
+ *
+ * `error_message` NO es un motivo legible: desde a7fac68 la API guarda ahí la
+ * huella acotada del fallo (`TypeError`, `NotFoundException:E42`) en vez del
+ * texto crudo de Resend, que podía traer la API key o el email del
+ * destinatario. La columna se rotula y se tipa como lo que es —un dato de
+ * diagnóstico, no una explicación— para no prometer al operador un motivo que
+ * ya no existe. El texto crudo está en el log del servidor, no aquí.
  */
 export function BusinessEmailSendsTable({
 	businessId,
@@ -63,7 +70,7 @@ export function BusinessEmailSendsTable({
 						<TableHead>Destinatario</TableHead>
 						<TableHead>Plantilla</TableHead>
 						<TableHead>Estado</TableHead>
-						<TableHead>Detalle</TableHead>
+						<TableHead>Huella del error</TableHead>
 						<TableHead>Creado</TableHead>
 					</TableRow>
 				</TableHeader>
@@ -77,7 +84,7 @@ export function BusinessEmailSendsTable({
 							<TableCell>
 								<StatusBadge status={send.status} />
 							</TableCell>
-							<TableCell className="max-w-[16rem] text-sm">
+							<TableCell className="max-w-[16rem] text-muted-foreground font-mono text-sm">
 								{send.error_message ?? "—"}
 							</TableCell>
 							<TableCell className="text-muted-foreground text-sm whitespace-nowrap">

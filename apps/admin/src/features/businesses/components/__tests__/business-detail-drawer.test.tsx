@@ -97,7 +97,10 @@ describe("ficha del negocio", () => {
 						email: "postulante@cafe-central.ec",
 						template_name: "business-approved",
 						status: "failed",
-						error_message: "SMTP 550 mailbox unavailable",
+						// Desde a7fac68 la API guarda la huella acotada del fallo, no
+						// el texto crudo de Resend: la tabla debe rotularla como dato
+						// de diagnóstico, no como motivo legible.
+						error_message: "TypeError",
 						created_at: "2026-09-01T10:05:00.000Z",
 					},
 				]),
@@ -109,6 +112,7 @@ describe("ficha del negocio", () => {
 		await waitFor(() =>
 			expect(screen.getByText("business-approved")).toBeDefined(),
 		);
-		expect(screen.getByText("SMTP 550 mailbox unavailable")).toBeDefined();
+		expect(screen.getByText("Huella del error")).toBeDefined();
+		expect(screen.getByText("TypeError")).toBeDefined();
 	});
 });
