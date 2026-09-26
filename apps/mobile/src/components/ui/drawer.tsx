@@ -87,7 +87,6 @@ export function DrawerClose({
 		<Pressable
 			onPress={(e) => {
 				onOpenChange(false);
-				// @ts-ignore
 				onPress?.(e);
 			}}
 			{...props}

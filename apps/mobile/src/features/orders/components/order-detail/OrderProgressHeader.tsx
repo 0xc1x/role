@@ -53,6 +53,9 @@ export function OrderProgressHeader({ order }: { order: Order }) {
 	]);
 
 	// Llenado secuencial estación por estación al montar y al cambiar de fase.
+	// `order.status` is a deliberate trigger, not a value read inside: the
+	// progress fill replays when the order advances to a new phase.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: status is the trigger
 	useEffect(() => {
 		const ordered = [
 			stepAnims[0],

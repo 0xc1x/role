@@ -27,7 +27,7 @@ import { Platform } from "react-native";
 // `logger.warn/error` find a `logFunction` (plain `{ level }` crashes with
 // "config.logFunction is not a function").
 if (Platform.OS === "web") {
-	// @ts-ignore - needed for Reanimated 3 web
+	// @ts-expect-error - needed for Reanimated 3 web
 	global.__reanimatedLoggerConfig = {
 		level: 1, // warn
 		strict: false,

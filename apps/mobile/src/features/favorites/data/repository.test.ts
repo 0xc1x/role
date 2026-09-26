@@ -41,6 +41,9 @@ function mockChain(result: { data?: unknown; error: unknown }) {
 			return chain;
 		};
 	}
+	// The repository awaits this chain and supabase-js `PostgrestBuilder`
+	// exposes `then()`, so the double must be awaitable to stay faithful.
+	// biome-ignore lint/suspicious/noThenProperty: intentional thenable double
 	chain.then = (onF: unknown, onR: unknown) =>
 		Promise.resolve(result).then(
 			onF as (value: typeof result) => unknown,

@@ -1,7 +1,7 @@
 import {
 	Calendar,
 	ChevronRight,
-	Map,
+	Map as MapIcon,
 	MapPin,
 	Pencil,
 	Phone,
@@ -157,7 +157,7 @@ export default function BusinessLocationDetailScreen() {
 					) : null}
 					{location.zone ? (
 						<InfoRow
-							icon={Map}
+							icon={MapIcon}
 							label={strings.business.zone}
 							value={location.zone}
 						/>

@@ -1,9 +1,9 @@
-import type {
-  AdminOrderListItemDto,
-  OrderStatus,
-} from '@0xc1x/role-commons';
+import type { AdminOrderListItemDto, OrderStatus } from '@0xc1x/role-commons';
 import { toNumber } from '../../common/utils/numeric';
-import { ACTIVE_ORDER_STATUSES, canViewPickupCode } from './order-status.machine';
+import {
+  ACTIVE_ORDER_STATUSES,
+  canViewPickupCode,
+} from './order-status.machine';
 import type { orders as ordersTable } from '../../database/schema';
 import type { AdminOrderListRow } from './orders.repository';
 

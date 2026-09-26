@@ -34,16 +34,18 @@ let signupResult: {
 // `useState(false)` de `loading`, que debe quedarse en false para que la
 // guarda de reentrada no bloquee el envío.
 let checkboxFalseSeen = 0;
-const useState = React.useState;
+// Aliased away from the `use*` prefix: this is the real hook captured so the
+// mocked `useState` below can delegate to it, not a hook call site.
+const realUseState = React.useState;
 mock.module("react", () => ({
 	...React,
 	useState: (initial: unknown) => {
-		if (initial === "") return useState("ada@example.invalid");
+		if (initial === "") return realUseState("ada@example.invalid");
 		if (initial === false && checkboxFalseSeen < 2) {
 			checkboxFalseSeen += 1;
-			return useState(true);
+			return realUseState(true);
 		}
-		return useState(initial);
+		return realUseState(initial);
 	},
 }));
 

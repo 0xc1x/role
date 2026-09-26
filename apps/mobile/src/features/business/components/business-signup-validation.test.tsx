@@ -62,7 +62,9 @@ mock.module("@/src/features/business/data/onboarding", () => ({
 // per-field error record.
 let values: string[] = [];
 let errors: unknown = null;
-const useState = React.useState;
+// Aliased away from the `use*` prefix: this is the real hook captured so the
+// mocked `useState` below can delegate to it, not a hook call site.
+const realUseState = React.useState;
 mock.module("react", () => ({
 	...React,
 	useState: (initial: unknown) => {
@@ -80,7 +82,7 @@ mock.module("react", () => ({
 			};
 			return [errors ?? initial, setFieldErrors];
 		}
-		return useState(initial);
+		return realUseState(initial);
 	},
 }));
 

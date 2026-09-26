@@ -84,21 +84,25 @@ export function ExploreMapView({
 	);
 
 	// Fit a las ofertas una sola vez cuando aparecen.
+	// `locatedOffers` is rebuilt on every render, so depending on it would
+	// re-run this effect each time; it is derived from the `offers` prop inside
+	// the effect instead, which is the dependency that actually matters.
 	useEffect(() => {
-		if (!mapReady || hasFittedRef.current || locatedOffers.length === 0) return;
-		hasFittedRef.current = true;
-		const coords = locatedOffers
+		if (!mapReady || hasFittedRef.current) return;
+		const coords = offers
+			.filter((o) => o.location != null)
 			.slice(0, 20)
 			.flatMap((o) =>
 				o.location != null
 					? [{ latitude: o.location.latitude, longitude: o.location.longitude }]
 					: [],
 			);
+		if (coords.length === 0) return;
+		hasFittedRef.current = true;
 		mapRef.current?.fitToCoordinates(coords, {
 			edgePadding: { top: insets.top + 120, right: 48, bottom: 120, left: 48 },
 			animated: true,
 		});
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [mapReady, offers, insets.top]);
 
 	// Deseleccionar al tocar el mapa.

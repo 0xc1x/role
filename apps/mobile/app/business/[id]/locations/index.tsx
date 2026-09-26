@@ -1,4 +1,4 @@
-import { Map, Plus } from "lucide-react-native";
+import { Map as MapIcon, Plus } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
@@ -68,7 +68,7 @@ export default function BusinessLocationsScreen() {
 					<ErrorState error={error} onRetry={() => void refetch()} />
 				) : !data || data.length === 0 ? (
 					<EmptyState
-						icon={<Map size={28} color={colors.primary} />}
+						icon={<MapIcon size={28} color={colors.primary} />}
 						title={strings.business.noLocations}
 						message={strings.business.noLocationsHint}
 						action={

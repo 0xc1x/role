@@ -138,6 +138,9 @@ export default function OrdersScreen() {
 	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
 	const [enterAnim] = useState(() => new Animated.Value(0));
+	// `tab` is a deliberate trigger, not a value read inside: switching tab
+	// replays the list enter animation.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: tab is the trigger
 	useEffect(() => {
 		enterAnim.setValue(0);
 		Animated.timing(enterAnim, {

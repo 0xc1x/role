@@ -79,6 +79,7 @@ export function CategoryChips({
 			<View style={styles.loadingContainer}>
 				{Array.from({ length: INITIAL_COUNT }).map((_, i) => (
 					<View
+						// biome-ignore lint/suspicious/noArrayIndexKey: fixed-count placeholders
 						key={i}
 						style={[styles.loadingChip, { backgroundColor: colors.muted }]}
 					/>

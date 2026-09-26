@@ -8,7 +8,7 @@ import {
 	Ellipsis,
 	House,
 	List,
-	Map,
+	Map as MapIcon,
 	MapPin,
 	Pencil,
 	Square,
@@ -241,7 +241,7 @@ export function AddAddressSheet({
 						{picked ? (
 							<MapPin size={20} color={colors.primaryForeground} />
 						) : (
-							<Map size={20} color={colors.foreground} />
+							<MapIcon size={20} color={colors.foreground} />
 						)}
 					</View>
 					<View style={styles.mapCardText}>

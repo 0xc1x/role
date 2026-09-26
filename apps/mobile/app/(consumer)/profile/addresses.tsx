@@ -2,7 +2,7 @@ import { memo, useCallback, useState } from "react";
 import { useEffect } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Map, Plus } from "lucide-react-native";
+import { Map as MapIcon, Plus } from "lucide-react-native";
 
 import {
 	AlertDialog,
@@ -134,7 +134,7 @@ export default function AddressesScreen() {
 					<ErrorState error={error} onRetry={() => void refetch()} />
 				) : !data || data.length === 0 ? (
 					<EmptyState
-						icon={<Map size={26} color={colors.primary} />}
+						icon={<MapIcon size={26} color={colors.primary} />}
 						title={strings.addresses.emptyTitle}
 						message={strings.addresses.emptyDescription}
 						action={

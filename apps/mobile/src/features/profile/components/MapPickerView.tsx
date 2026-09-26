@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { ChevronLeft, LocateFixed, MapPin } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
@@ -48,20 +48,41 @@ export function MapPickerView({
 	const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
 	const [resolving, setResolving] = useState(false);
 	const resolveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	// `initialLocation` is a prop object that parents commonly rebuild on every
+	// render. The bootstrap effect below must fire exactly once, so it reads the
+	// mount-time value from a ref instead of depending on the prop identity.
+	const initialLocationRef = useRef(initialLocation);
 
-	useEffect(() => {
-		if (initialLocation) {
-			void resolveAddress(initialLocation.latitude, initialLocation.longitude);
-			return;
-		}
-		void determinePosition();
-		return () => {
-			if (resolveTimer.current) clearTimeout(resolveTimer.current);
-		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	// Stable ([]): reads only setters and the module-level address composer.
+	const resolveAddress = useCallback(
+		async (latitude: number, longitude: number) => {
+			setResolving(true);
+			try {
+				const results = await Location.reverseGeocodeAsync({
+					latitude,
+					longitude,
+				});
+				const place = results[0];
+				setResolvedAddress(
+					composeShortAddress({
+						street: place?.street,
+						streetNumber: place?.streetNumber,
+						city: place?.city,
+						postcode: place?.postalCode,
+					}) || null,
+				);
+			} catch {
+				setResolvedAddress(null);
+			} finally {
+				setResolving(false);
+			}
+		},
+		[],
+	);
 
-	async function determinePosition() {
+	// Stable ([resolveAddress]): reads only setters, mapRef and the module-level
+	// DEFAULT_REGION.
+	const determinePosition = useCallback(async () => {
 		setLoading(true);
 		try {
 			const { status } = await Location.requestForegroundPermissionsAsync();
@@ -83,30 +104,22 @@ export function MapPickerView({
 		} catch {
 			setLoading(false);
 		}
-	}
+	}, [resolveAddress]);
 
-	async function resolveAddress(latitude: number, longitude: number) {
-		setResolving(true);
-		try {
-			const results = await Location.reverseGeocodeAsync({
-				latitude,
-				longitude,
-			});
-			const place = results[0];
-			setResolvedAddress(
-				composeShortAddress({
-					street: place?.street,
-					streetNumber: place?.streetNumber,
-					city: place?.city,
-					postcode: place?.postalCode,
-				}) || null,
-			);
-		} catch {
-			setResolvedAddress(null);
-		} finally {
-			setResolving(false);
+	// Mount-once bootstrap. Both callbacks are `useCallback`-stable and the
+	// initial location comes from a ref, so listing them as dependencies cannot
+	// re-trigger the effect on a re-render.
+	useEffect(() => {
+		const initial = initialLocationRef.current;
+		if (initial) {
+			void resolveAddress(initial.latitude, initial.longitude);
+			return;
 		}
-	}
+		void determinePosition();
+		return () => {
+			if (resolveTimer.current) clearTimeout(resolveTimer.current);
+		};
+	}, [determinePosition, resolveAddress]);
 
 	const handleRegionChangeComplete = (next: Region) => {
 		setCoords({ latitude: next.latitude, longitude: next.longitude });

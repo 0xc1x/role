@@ -1,5 +1,9 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Map, SlidersHorizontal, type LucideIcon } from "lucide-react-native";
+import {
+	Map as MapIcon,
+	SlidersHorizontal,
+	type LucideIcon,
+} from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { strings } from "@/src/core/i18n/strings";
@@ -71,7 +75,7 @@ export function ExploreHeader({
 			</View>
 			<View style={styles.pillsRow}>
 				<ExploreHeaderPillButton
-					icon={Map}
+					icon={MapIcon}
 					label={strings.explore.viewMap}
 					onPress={onToggleMap}
 					onBrand={onBrand}

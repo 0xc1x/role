@@ -116,6 +116,9 @@ export default function BusinessProductsScreen() {
 		refreshing: isFetching,
 	});
 
+	// `businessId` is a deliberate trigger, not a value read inside: the effect
+	// resets the filter state whenever the business changes.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: businessId is the trigger
 	useEffect(() => {
 		setBranchId(null);
 		setSearchInput("");

@@ -94,6 +94,9 @@ const from = (table: string) => {
 	// offer_categories (syncCategories): delete().eq() is awaited.
 	const categoriesChain = {
 		eq: () => categoriesChain,
+		// The repository awaits this chain and supabase-js `PostgrestBuilder`
+		// exposes `then()`, so the double must be awaitable to stay faithful.
+		// biome-ignore lint/suspicious/noThenProperty: intentional thenable double
 		then: (onFulfilled: (value: unknown) => unknown) =>
 			Promise.resolve({ error: null, data: null }).then(onFulfilled),
 	};

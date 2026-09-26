@@ -305,6 +305,7 @@ export function OfferColumnSection({
 			{isLoading ? (
 				<View style={styles.columnContent}>
 					{Array.from({ length: 3 }).map((_, i) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: fixed-count placeholders
 						<View key={`skeleton-${i}`} style={styles.columnItem}>
 							<OfferSkeleton fullWidth />
 						</View>
