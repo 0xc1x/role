@@ -114,15 +114,18 @@ describe("orderRepository", () => {
 		});
 	});
 
-	test("propaga errores de red/postgrest via toAppError", async () => {
+	// El copy es-ES del repo es lo que ve el usuario; el mensaje crudo del
+	// driver viaja solo en context para logs (regla de precedencia de mapper).
+	test("propaga errores de red/postgrest via toAppError con copy es-ES", async () => {
 		rpcMock.mockImplementation(async () => ({
 			data: null,
 			error: { code: "XX000", message: "boom" },
 		}));
 
-		await expect(
-			orderRepository.cancelOrderForBusiness("order-3", "biz-1"),
-		).rejects.toThrow("boom");
+		const attempt = orderRepository.cancelOrderForBusiness("order-3", "biz-1");
+
+		await expect(attempt).rejects.toThrow("Error al cancelar el pedido");
+		await expect(attempt).rejects.not.toThrow("boom");
 	});
 
 	test("updateOrderStatus llama set_order_status (matriz server-side)", async () => {
@@ -313,15 +316,16 @@ describe("orderRepository paginated listing", () => {
 		expect(calls["eq"]).toContainEqual(["offers.business_location_id", "loc1"]);
 	});
 
-	test("countBusinessOrders propaga errores via toAppError", async () => {
+	test("countBusinessOrders propaga errores via toAppError con copy es-ES", async () => {
 		mockOrderChain({
 			count: null,
 			error: { code: "XX000", message: "boom" },
 		});
 
-		await expect(orderRepository.countBusinessOrders("b1")).rejects.toThrow(
-			"boom",
-		);
+		const attempt = orderRepository.countBusinessOrders("b1");
+
+		await expect(attempt).rejects.toThrow("Error al contar los pedidos");
+		await expect(attempt).rejects.not.toThrow("boom");
 	});
 
 	test("getMyReviews pagina con range", async () => {

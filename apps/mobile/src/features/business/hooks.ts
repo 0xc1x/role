@@ -148,13 +148,21 @@ export function useBusinessOfferCount(
 export function useSaveOffer(businessId: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (input: Parameters<typeof saveOffer>[0]) => saveOffer(input),
-		onSuccess: () => {
+		// Alta exige foto: sin ella la oferta se publicaba sin imagen y sin
+		// aviso. En edición la imagen ya almacenada se conserva, así que la
+		// foto nueva es opcional.
+		mutationFn: (input: Parameters<typeof saveOffer>[0]) =>
+			saveOffer(input, input.id == null),
+		onSuccess: (result) => {
 			void queryClient.invalidateQueries({
 				queryKey: ["businesses", businessId, "offers"],
 			});
 			// El detalle y las vistas consumidoras leen de ["offers", ...].
 			void queryClient.invalidateQueries({ queryKey: ["offers"] });
+			// El guardado aplicó con la imagen anterior: el dueño tiene que
+			// saber que su foto nueva no se publicó.
+			if (result.imageUploadFailed)
+				toast.error(strings.business.photoUploadKept);
 		},
 	});
 }

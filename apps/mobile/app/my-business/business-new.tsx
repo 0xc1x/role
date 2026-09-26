@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
 import { strings } from "@/src/core/i18n/strings";
-import { Screen, ScreenHeader } from "@/src/core/ui";
+import { ErrorState, Screen, ScreenHeader } from "@/src/core/ui";
 import { spacing } from "@/src/core/theme/spacing";
 import { useAuthStore } from "@/src/features/auth/store";
 import { useBusinesses, useCreateBusiness } from "@/src/features/business/hooks";
@@ -17,14 +17,32 @@ import { BusinessForm } from "@/src/features/business/components/BusinessForm";
  */
 export default function BusinessNewScreen() {
 	const profile = useAuthStore((s) => s.profile);
-	const { data: businesses, isLoading } = useBusinesses(profile?.id ?? "");
+	const {
+		data: businesses,
+		isLoading,
+		isError: businessesError,
+		error: businessesErrorValue,
+		refetch: refetchBusinesses,
+	} = useBusinesses(profile?.id ?? "");
 	const create = useCreateBusiness();
 
-	// Ya tiene negocio: nada que crear aquí.
-	const hasBusiness = !isLoading && (businesses?.length ?? 0) > 0;
+	// Ya tiene negocio: nada que crear aquí. El error se excluye a propósito:
+	// sin datos no sabemos si ya tiene uno, y crear a ciegas duplicaría el
+	// negocio de un dueño existente.
+	const hasBusiness =
+		!isLoading && !businessesError && (businesses?.length ?? 0) > 0;
 	useEffect(() => {
 		if (hasBusiness) router.replace("/(business)/products");
 	}, [hasBusiness]);
+
+	if (businessesError) {
+		return (
+			<ErrorState
+				error={businessesErrorValue}
+				onRetry={() => void refetchBusinesses()}
+			/>
+		);
+	}
 
 	if (hasBusiness) return null;
 

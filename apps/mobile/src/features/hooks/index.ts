@@ -11,6 +11,8 @@ import type {
 	OrderStatus as OrderStatusType,
 } from "@0xc1x/role-commons";
 import { strings } from "@/src/core/i18n/strings";
+import { toAppError } from "@/src/core/error/mapper";
+import { Errors } from "@/src/core/error/app-error";
 import { formatMoney } from "@/src/core/utils/formatters";
 
 import { useAuthStore } from "@/src/features/auth/store";
@@ -278,7 +280,7 @@ export function useFavorites() {
 		queryKey: ["favorites", "list", profileId],
 		initialPageParam: 0,
 		queryFn: ({ pageParam }) => {
-			if (!profileId) throw new Error("Sesión requerida");
+			if (!profileId) throw Errors.unauthorized();
 			return favoritesRepository.getFavorites(profileId, {
 				limit: PAGE_SIZE,
 				offset: (pageParam as number) * PAGE_SIZE,
@@ -296,7 +298,7 @@ export function useFavoriteOfferIds() {
 	return useQuery({
 		queryKey: ["favorites", "ids", profileId],
 		queryFn: () => {
-			if (!profileId) throw new Error("Sesión requerida");
+			if (!profileId) throw Errors.unauthorized();
 			return favoritesRepository.getFavoriteOfferIds(profileId);
 		},
 		enabled: !!profile,
@@ -314,7 +316,9 @@ export function useToggleFavorite() {
 	return useMutation({
 		mutationFn: async (offerId: string) => {
 			const profileId = profile?.id;
-			if (!profileId) throw new Error("Sesión requerida");
+			// Taxonomy error: the UI needs to tell "sign in" apart from
+			// "something went wrong".
+			if (!profileId) throw Errors.unauthorized();
 			const ids = queryClient.getQueryData<Set<string>>([
 				"favorites",
 				"ids",
@@ -329,7 +333,9 @@ export function useToggleFavorite() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["favorites"] });
 		},
-		onError: () => toast.error(strings.common.error),
+		// Mapped copy: a guest reads "Debes iniciar sesión para continuar",
+		// not the generic "Algo salió mal".
+		onError: (error) => toast.error(toAppError(error).message),
 	});
 }
 

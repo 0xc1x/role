@@ -776,6 +776,11 @@ export const strings = {
 		endTime: "Hora hasta",
 		uploadPhoto: "Subir foto",
 		changePhoto: "Cambiar foto",
+		photoRequired: "Sube una foto del producto",
+		photoUploadFailed:
+			"No pudimos subir la foto. Revisa tu conexión e inténtalo de nuevo.",
+		photoUploadKept:
+			"No pudimos subir la foto nueva. Se conservó la imagen anterior.",
 		invalidPickupWindow:
 			"La fecha/hora de fin debe ser posterior a la de inicio.",
 		requiredField: "Campo requerido",

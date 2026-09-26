@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import {
 	Animated,
 	RefreshControl,
@@ -28,6 +28,7 @@ import {
 import { OfferHero } from "@/src/features/offers/components/detail/OfferHero";
 import { OfferContent } from "@/src/features/offers/components/detail/OfferContent";
 import { OfferBottomBar } from "@/src/features/offers/components/detail/OfferBottomBar";
+import { useAuthStore } from "@/src/features/auth/store";
 
 const HERO_HEIGHT = 320;
 const BOTTOM_BAR_HEIGHT = 92;
@@ -40,6 +41,17 @@ export default function OfferDetailScreen() {
 	const { data, isLoading, isError, error, refetch, isFetching } = useOffer(offerId);
 	const isFavorite = useIsFavorite(offerId);
 	const toggleFavorite = useToggleFavorite();
+	const profile = useAuthStore((s) => s.profile);
+
+	// El corazón no se oculta al invitado: se enruta al login para que tenga
+	// un siguiente paso real en vez de un "algo salió mal" sin contexto.
+	const handleToggleFavorite = () => {
+		if (!profile) {
+			router.push("/login");
+			return;
+		}
+		toggleFavorite.mutate(offerId);
+	};
 
 	const pull = useWebPullToRefresh({
 		onRefresh: () => void refetch(),
@@ -187,7 +199,7 @@ export default function OfferDetailScreen() {
 				headerOpacity={headerOpacity}
 				topOffset={insets.top + spacing.xl}
 				isFavorite={isFavorite}
-				onToggleFavorite={() => toggleFavorite.mutate(data.offer.id)}
+				onToggleFavorite={handleToggleFavorite}
 			/>
 
 			<OfferBottomBar

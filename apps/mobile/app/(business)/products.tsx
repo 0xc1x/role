@@ -50,9 +50,13 @@ import { Text } from "@/components/ui/text";
 export default function BusinessProductsScreen() {
 	const { colors } = useTheme();
 	const profile = useAuthStore((s) => s.profile);
-	const { data: businesses, isLoading: businessesLoading } = useBusinesses(
-		profile?.id ?? "",
-	);
+	const {
+		data: businesses,
+		isLoading: businessesLoading,
+		isError: businessesError,
+		error: businessesErrorValue,
+		refetch: refetchBusinesses,
+	} = useBusinesses(profile?.id ?? "");
 	const business = businesses?.[0];
 	const businessId = business?.id ?? "";
 
@@ -154,6 +158,17 @@ export default function BusinessProductsScreen() {
 		() => <View style={styles.separator} />,
 		[],
 	);
+
+	// Un fallo al listar los negocios no es "no tienes negocio": el prompt de
+	// alta es solo para el caso vacío real.
+	if (businessesError) {
+		return (
+			<ErrorState
+				error={businessesErrorValue}
+				onRetry={() => void refetchBusinesses()}
+			/>
+		);
+	}
 
 	if (businessesLoading || !business) {
 		if (!businessesLoading && !business) {
