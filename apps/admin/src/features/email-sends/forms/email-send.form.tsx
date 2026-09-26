@@ -24,13 +24,14 @@ const schema = z.object({
 	status: z.enum(EMAIL_SEND_STATUSES),
 });
 /**
- * Contexto de solo lectura: estos campos no se editan desde aquí.
+ * Contexto de solo lectura: el contrato no permite escribir estos campos.
  *
- * `error_message` se muestra pero NO se edita. Un textarea libre devolvía por
- * la puerta de atrás la fuga que a7fac68 cerró en el camino de fallo del
- * servidor: el operador escribía a mano el texto crudo de Resend y el PATCH lo
- * persistía. Para limpiar el valor está `POST /sends/:id/retry`, que lo pone a
- * null.
+ * `error_message` se muestra pero NO se edita, y `UpdateEmailSendSchema` lo
+ * hace imposible: es `strict` y no declara el campo, así que un PATCH que lo
+ * lleve es un 400. Antes el textarea libre devolvía por la puerta de atrás la
+ * fuga que a7fac68 cerró en el camino de fallo del servidor: el operador
+ * escribía a mano el texto crudo de Resend y el PATCH lo persistía. Para limpiar
+ * el valor está `POST /sends/:id/retry`, que lo pone a null.
  *
  * LO QUE MUESTRA LA FILA, con precisión: en los envíos fallidos DESDE a7fac68
  * el valor es la huella acotada del fallo (`safeErrorSummary`, p. ej. `Error` o
