@@ -178,10 +178,23 @@ describe("claims de comisión y geografía", () => {
 
 	test("la geografía del FAQ no nombra ciudades fuera de app_config", () => {
 		const answer = FAQ_ITEMS.find((f) => f.q === "¿Dónde operan?")?.a ?? "";
-		expect(LAUNCH_CITIES).toEqual(["Quito", "Guayaquil", "Cuenca", "Manta"]);
+
+		// Espejo de app_config['contact.cities'], en el mismo orden. El primero
+		// importa: es la principal y la que se abre primero, así que el orden
+		// del config es información, no decoración.
+		expect(LAUNCH_CITIES).toEqual([
+			"Santo Domingo",
+			"Quito",
+			"Guayaquil",
+			"Cuenca",
+			"Manta",
+		]);
+
 		for (const city of LAUNCH_CITIES) {
 			expect(answer).toContain(city);
 		}
-		expect(answer).not.toContain("Santo Domingo");
+
+		// "Otra" no es una ciudad de lanzamiento: la landing la agrega al form.
+		expect(LAUNCH_CITIES).not.toContain("Otra");
 	});
 });

@@ -8,9 +8,22 @@ export interface FaqItem {
  * el formulario de contacto lee la lista de la plataforma; este copy es
  * estático y lo actualiza el mismo cambio que abre una ciudad nueva.
  */
-export const LAUNCH_CITIES = ["Quito", "Guayaquil", "Cuenca", "Manta"];
+/**
+ * Ciudades de lanzamiento, en el mismo orden que `app_config.contact.cities`.
+ * La primera es la principal y la que se abre primero. "Otra" no va acá: la
+ * landing la agrega sola al form de contacto, para que se pueda escribir una
+ * ciudad que Rolé todavía no tiene abierta.
+ */
+export const LAUNCH_CITIES = [
+	"Santo Domingo",
+	"Quito",
+	"Guayaquil",
+	"Cuenca",
+	"Manta",
+];
 
-const PLACES = LAUNCH_CITIES.join(", ");
+const PRIMARY_CITY = LAUNCH_CITIES[0];
+const PLACES = LAUNCH_CITIES.slice(1).join(", ");
 
 export const FAQ_ITEMS: FaqItem[] = [
 	{
@@ -23,7 +36,7 @@ export const FAQ_ITEMS: FaqItem[] = [
 	},
 	{
 		q: "¿Dónde operan?",
-		a: `El lanzamiento se activa por ciudad. Empezamos en ${PLACES} y abrimos en más ciudades poco a poco.`,
+		a: `El lanzamiento se activa por ciudad. Empezamos en ${PRIMARY_CITY} y vamos abriendo ${PLACES} poco a poco.`,
 	},
 	{
 		q: "¿Cómo empiezo?",
