@@ -31,25 +31,33 @@ function getItem(key: string): string | null {
 
 /**
  * `setItem` nunca lanza: un fallo de escritura no puede tumbar la mutación que
- * ya se aplicó en el servidor. Devuelve si el dato quedó, para que el camino de
- * auth pueda avisar en vez de perder la sesión en silencio.
+ * ya se aplicó en el servidor.
+ *
+ * POR QUÉ NO DEVUELVE NADA: la pregunta "¿puede este navegador persistir la
+ * sesión?" tiene un owner —`isStoragePersistent()`, que el login consulta antes
+ * de avisar al operador—, y es una pregunta distinta de "¿llegó a escribir esta
+ * clave?". Devolver un booleano que nadie consume solo invitaba a que alguien
+ * lo consumiera con la semántica equivocada; el fallo de escritura se sigue
+ * manifestando como una sesión que no sobrevive a la recarga, que es
+ * justamente lo que el sonda convierte en un aviso explícito.
  */
-function setItem(key: string, value: string | null): boolean {
+function setItem(key: string, value: string | null): void {
 	const s = getStorage();
-	if (!s) return false;
+	if (!s) return;
 	try {
 		if (value) s.setItem(key, value);
 		else s.removeItem(key);
-		return true;
 	} catch {
-		return false;
+		// Fail-safe: el token se pierde, la siguiente request cae en 401 y el
+		// login vuelve a pedirlo. Ninguna escritura de storage es un motivo para
+		// propagar el error.
 	}
 }
 
 export const getToken = () => getItem(KEYS.token);
-export const setToken = (v: string | null) => setItem(KEYS.token, v);
+export const setToken = (v: string | null): void => setItem(KEYS.token, v);
 export const getTokenExpiresAt = () => getItem(KEYS.expiresAt);
-export const setTokenExpiresAt = (v: string | null) =>
+export const setTokenExpiresAt = (v: string | null): void =>
 	setItem(KEYS.expiresAt, v);
 
 export function clearAuth() {
