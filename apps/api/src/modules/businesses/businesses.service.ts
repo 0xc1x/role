@@ -209,7 +209,18 @@ export class BusinessesService {
         html: email.html,
         text: email.text,
       });
-      if (sendError) throw new Error(sendError.message);
+      if (sendError) {
+        // Resend devuelve el texto del fallo Y un código de máquina en `name`
+        // (`validation_error`, `invalid_from_address`, `restricted_api_key`…).
+        // Solo el código se propaga: cabe en la huella acotada de
+        // `safeErrorFields` como `errorType` y es lo accionable ("dominio no
+        // verificado" → `invalid_from_address`), mientras que el texto puede
+        // traer la API key o el destinatario. El mensaje se conserva en la
+        // cadena de `Error` para el stack, nunca para el log.
+        const failure = new Error(sendError.message);
+        failure.name = sendError.name;
+        throw failure;
+      }
 
       this.logger.log({
         event: 'business_confirmation_email_sent',
@@ -219,9 +230,10 @@ export class BusinessesService {
       });
     } catch (err) {
       // Deliberately swallowed: the account exists and the business is queued.
-      // `errorMessage` is capped and kept because the actionable cause of a
-      // Resend failure is its text ("domain not verified", "invalid `from`"),
-      // and this line already logs the recipient address.
+      // Lo que hace falta para triage es el código del proveedor y el
+      // `userId`, y ambos viajan; el texto crudo de Resend no, porque
+      // `docs/operations.md` prohíbe registrar mensajes crudos y esa línea ya
+      // publica la dirección del destinatario.
       this.logger.error({
         event: 'business_confirmation_email_failed',
         userId,
@@ -229,9 +241,6 @@ export class BusinessesService {
         businessName: body.business_name,
         onboarding: 'completed_without_confirmation_email',
         ...safeErrorFields(err),
-        ...(err instanceof Error
-          ? { errorMessage: err.message.slice(0, 200) }
-          : {}),
       });
     }
   }

@@ -304,4 +304,40 @@ describe('BusinessesService.onboard', () => {
     expect(res.message).toContain('revisión');
     expect(mockSupabaseAdmin.auth.admin.deleteUser).not.toHaveBeenCalled();
   });
+
+  // El contrato de `docs/operations.md` prohíbe registrar mensajes crudos. Aquí
+  // el mensaje crudo de Resend solía entrar recortado a 200 caracteres, y el
+  // recorte no cambia nada: sigue siendo texto de proveedor. Lo que se
+  // conserva es el código de máquina, que sí es accionable.
+  it('registra el fallo de envío con el código del proveedor, no con su texto', async () => {
+    // `Logger` enlaza sus métodos a la instancia en el constructor, así que un
+    // spy sobre el prototype llega tarde: se sustituye el logger del servicio.
+    const logged: unknown[] = [];
+    (service as any).logger = {
+      log: (entry: unknown) => logged.push(entry),
+      error: (entry: unknown) => logged.push(entry),
+    };
+    resendSend.mockResolvedValue({
+      data: null,
+      error: {
+        message:
+          'The from address is not verified for re_9fJ2secret. owner@panaderia.com',
+        name: 'invalid_from_address',
+        statusCode: 422,
+      },
+    });
+
+    await onboardSuccessfully(body, 'user-10');
+
+    const failureCall = logged.find(
+      (entry) =>
+        (entry as { event?: string })?.event ===
+        'business_confirmation_email_failed',
+    );
+    expect(failureCall).toBeDefined();
+    const payload = failureCall as Record<string, unknown>;
+    expect(payload.errorType).toBe('invalid_from_address');
+    expect(JSON.stringify(payload)).not.toContain('re_9fJ2secret');
+    expect(JSON.stringify(payload)).not.toContain('not verified');
+  });
 });
