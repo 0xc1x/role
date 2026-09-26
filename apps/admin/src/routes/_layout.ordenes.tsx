@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { useOrdersList } from "@/features/orders";
 import { BusinessFilter } from "@/features/orders/components/business-filter";
 import { ordersColumns } from "@/features/orders/tables/orders.columns";
+import { formatApiError } from "@/lib/api/notify";
 import { orderStatusLabel } from "@/lib/labels";
 
 // Igual que ListAdminOrdersQuerySchema pero con el page size de las tablas (10).
@@ -55,9 +56,7 @@ function RouteComponent() {
 	if (isError) {
 		return (
 			<div className="px-6 py-4">
-				<p className="text-destructive">
-					{error instanceof Error ? error.message : "Error"}
-				</p>
+				<p className="text-destructive">{formatApiError(error, "Error")}</p>
 				<Button variant="outline" onClick={() => void refetch()}>
 					Reintentar
 				</Button>

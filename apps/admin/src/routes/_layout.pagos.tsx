@@ -13,6 +13,7 @@ import {
 	useGeneratePayouts,
 	usePayoutsList,
 } from "@/features/payouts";
+import { formatApiError } from "@/lib/api/notify";
 
 const pagosSearchSchema = ListPayoutsQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
@@ -46,7 +47,7 @@ function RouteComponent() {
 		return (
 			<div className="px-6 py-4">
 				<p className="text-destructive">
-					{error instanceof Error ? error.message : "Error al cargar pagos"}
+					{formatApiError(error, "Error al cargar pagos")}
 				</p>
 				<Button variant="outline" onClick={() => void refetch()}>
 					Reintentar

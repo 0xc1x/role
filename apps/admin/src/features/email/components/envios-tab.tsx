@@ -19,6 +19,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEmailSendsList } from "@/features/email-sends/queries/email-sends.queries";
 import { columns as sendsColumns } from "@/features/email-sends/tables/email-sends.columns";
+import { formatApiError } from "@/lib/api/notify";
 
 const Route = getRouteApi("/_layout/notificaciones/mails");
 
@@ -60,9 +61,7 @@ export function EnviosTab() {
 	if (isError) {
 		return (
 			<div className="space-y-4">
-				<p className="text-destructive">
-					{error instanceof Error ? error.message : "Error"}
-				</p>
+				<p className="text-destructive">{formatApiError(error, "Error")}</p>
 				<Button
 					variant="outline"
 					onClick={() =>

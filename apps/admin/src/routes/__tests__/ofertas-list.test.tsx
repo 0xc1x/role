@@ -196,4 +196,24 @@ describe("/ofertas — query caída", () => {
 		await waitFor(() => expect(listCalls().length).toBeGreaterThan(before));
 		expect(navigate).not.toHaveBeenCalled();
 	});
+
+	// El mensaje va por `formatApiError`, no por `error.message` a secas: el
+	// `requestId` es lo único que soporte puede cruzar con el log del servidor.
+	// Este spec es el dueño de `_layout.ofertas` (ver la nota de
+	// `list-route-retry.test.tsx`), así que la correlación se fija aquí.
+	test("el mensaje incluye el requestId que la API ya devolvió", async () => {
+		stubFetch(500, {
+			statusCode: 500,
+			message: "Internal server error",
+			requestId: "3f7a1b9c-22de",
+		});
+		currentSearch = { page: 1, limit: 10, state: "all" };
+		renderRoute();
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Error interno del servidor · 3f7a1b9c-22de"),
+			).toBeDefined(),
+		);
+	});
 });

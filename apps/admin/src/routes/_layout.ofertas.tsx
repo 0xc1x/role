@@ -14,6 +14,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOffersList } from "@/features/offers";
 import { offersColumns } from "@/features/offers/tables/offers.columns";
+import { formatApiError } from "@/lib/api/notify";
 
 /**
  * `available_only` sale de la URL a propósito: el estado visible lo decide el
@@ -93,9 +94,7 @@ function RouteComponent() {
 	if (isError) {
 		return (
 			<div className="px-6 py-4">
-				<p className="text-destructive">
-					{error instanceof Error ? error.message : "Error"}
-				</p>
+				<p className="text-destructive">{formatApiError(error, "Error")}</p>
 				<Button variant="outline" onClick={() => void refetch()}>
 					Reintentar
 				</Button>

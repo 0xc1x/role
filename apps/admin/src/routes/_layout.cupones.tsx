@@ -24,6 +24,7 @@ import {
 	couponsListOptions,
 	useCouponsList,
 } from "@/features/coupons";
+import { formatApiError } from "@/lib/api/notify";
 
 const couponsSearchSchema = ListCouponsQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
@@ -107,7 +108,7 @@ function RouteComponent() {
 			<div className="px-6 py-4">
 				<div className="flex flex-col items-center gap-4">
 					<p className="text-destructive">
-						{error instanceof Error ? error.message : "Error al cargar cupones"}
+						{formatApiError(error, "Error al cargar cupones")}
 					</p>
 					<Button
 						variant="outline"

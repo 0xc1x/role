@@ -23,6 +23,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessesList } from "@/features/businesses";
 import { columns } from "@/features/businesses/tables/businesses.columns";
+import { formatApiError } from "@/lib/api/notify";
 
 // Igual que ListBusinessesQuerySchema pero con el page size de las tablas (10).
 const schema = ListBusinessesQuerySchema.extend({
@@ -66,9 +67,7 @@ function RouteComponent() {
 	if (isError) {
 		return (
 			<div className="px-6 py-4">
-				<p className="text-destructive">
-					{error instanceof Error ? error.message : "Error"}
-				</p>
+				<p className="text-destructive">{formatApiError(error, "Error")}</p>
 				{/* `navigate` con el mismo search lo deduplica y la query errored
 				    queda bajo la misma key: el botón de recuperación no hacía nada. */}
 				<Button variant="outline" onClick={() => void refetch()}>
