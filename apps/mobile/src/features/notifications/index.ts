@@ -12,6 +12,9 @@ import {
 	deleteDeviceTokens,
 	type DeviceTokenPlatform,
 } from "./data/repository";
+import { pendingDeviceTokenRevocationRepository } from "./data/pending-revocation";
+
+export { pendingDeviceTokenRevocationRepository };
 
 export type NotificationsModule = typeof import("expo-notifications");
 

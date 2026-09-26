@@ -51,6 +51,7 @@ import { syncAnalyticsConsent } from "@/src/features/auth/data/repository";
 import { pendingBusinessOnboardingRepository } from "@/src/features/business/data/onboarding";
 import {
 	initNotificationHandler,
+	pendingDeviceTokenRevocationRepository,
 	syncDeviceToken,
 } from "@/src/features/notifications";
 import { Toaster } from "sonner-native";
@@ -194,6 +195,19 @@ function RootLayout() {
 			syncedFor.current = null;
 		});
 	}, [authStatus, authProfileId]);
+
+	// Revocación de token push que falló en un logout anterior: se reintenta
+	// aquí, el primer momento con sesión del mismo usuario. Es también el
+	// único válido: RLS solo permite borrar los tokens del usuario
+	// autenticado, y el logout que falló ya destruyó esa sesión.
+	useEffect(() => {
+		if (authStatus !== "authenticated" || !authProfileId) return;
+		void pendingDeviceTokenRevocationRepository
+			.drain(authProfileId)
+			.catch(() => {
+				// Se conserva el registro para el próximo arranque autenticado.
+			});
+	}, [authProfileId, authStatus]);
 
 	// Link de recovery aterrizó en cualquier ruta: mandar a actualizar
 	// contraseña antes de que el redirect por rol se lo lleve a home.
