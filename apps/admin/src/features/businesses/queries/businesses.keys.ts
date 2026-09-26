@@ -6,4 +6,6 @@ export const businessesKeys = {
 	detail: (id: string) => [...businessesKeys.details(), id] as const,
 	emailSends: (id: string) =>
 		[...businessesKeys.detail(id), "email-sends"] as const,
+	locations: (id: string) =>
+		[...businessesKeys.detail(id), "locations"] as const,
 };
