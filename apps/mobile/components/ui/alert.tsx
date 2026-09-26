@@ -79,7 +79,7 @@ function getAlertTone(
           backgroundColor: colors.surfaceWarning,
           borderColor: withAlpha(colors.warning, 0.35),
         },
-        iconColor: scheme === 'dark' ? colors.warning : colors.warningDark,
+        iconColor: colors.warningText,
         defaultIcon: TriangleAlert,
       };
     case 'destructive':
@@ -97,7 +97,7 @@ function getAlertTone(
           backgroundColor: colors.infoSurface,
           borderColor: colors.infoSurfaceBorder,
         },
-        iconColor: colors.info,
+        iconColor: colors.infoText,
         defaultIcon: Info,
       };
     default:

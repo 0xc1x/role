@@ -305,9 +305,9 @@ function kpiColor(colors: ReturnType<typeof useTheme>["colors"], key: string) {
 		case "success":
 			return colors.successText;
 		case "warning":
-			return colors.warning;
+			return colors.warningText;
 		case "info":
-			return colors.info;
+			return colors.infoText;
 		default:
 			return colors.primary;
 	}

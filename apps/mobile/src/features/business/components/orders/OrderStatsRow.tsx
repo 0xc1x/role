@@ -17,14 +17,14 @@ export function OrderStatsRow({ stats }: { stats: OrderStats }) {
 			label: strings.business.ordersPendingStat,
 			value: stats.pendingCount,
 			icon: Clock,
-			color: colors.warning,
+			color: colors.warningText,
 			bg: colors.surfaceWarning,
 		},
 		{
 			label: strings.business.ordersReadyStat,
 			value: stats.readyCount,
 			icon: PackageCheck,
-			color: colors.info,
+			color: colors.infoText,
 			bg: colors.infoSurface,
 		},
 		{

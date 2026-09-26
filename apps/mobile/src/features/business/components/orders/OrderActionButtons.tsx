@@ -26,6 +26,12 @@ import { Button } from "@/components/ui/button";
  * Per-status quick actions on the order list cards (ported from Rolé v1
  * `OrderActionButtons`). `pending`/`confirmed` mark the order ready;
  * `ready_for_pickup` routes to the detail to validate the pickup code.
+ *
+ * Both labels are the one control a merchant has to read to run a pickup, so
+ * the fills use the solid tokens that can carry a foreground: `info` (#0D9488)
+ * under `primaryForeground` measured 3.74:1 and `success` (#22C55E) 2.28:1 in
+ * light, both under the 4.5:1 floor for the 14px label. See `infoAction` /
+ * `successAction` in `core/theme/colors.ts` for the measured replacements.
  */
 export function OrderActionButtons({
 	businessId,
@@ -53,7 +59,7 @@ export function OrderActionButtons({
 						style={[
 							styles.action,
 							styles.markReady,
-							{ backgroundColor: colors.info },
+							{ backgroundColor: colors.infoAction },
 						]}
 						onPress={markReady}
 						loading={updateStatus.isPending}
@@ -61,7 +67,7 @@ export function OrderActionButtons({
 						<AppText
 							variant="bodyMedium"
 							weight="semiBold"
-							style={[styles.label, { color: colors.primaryForeground }]}
+							style={[styles.label, { color: colors.infoActionForeground }]}
 						>
 							{strings.business.ordersMarkReady}
 						</AppText>
@@ -113,14 +119,18 @@ export function OrderActionButtons({
 	if (order.status === "confirmed") {
 		return (
 			<Button
-				style={[styles.action, styles.full, { backgroundColor: colors.info }]}
+				style={[
+					styles.action,
+					styles.full,
+					{ backgroundColor: colors.infoAction },
+				]}
 				onPress={markReady}
 				loading={updateStatus.isPending}
 			>
 				<AppText
 					variant="bodyMedium"
 					weight="semiBold"
-					style={[styles.label, { color: colors.primaryForeground }]}
+					style={[styles.label, { color: colors.infoActionForeground }]}
 				>
 					{strings.business.ordersMarkReady}
 				</AppText>
@@ -131,18 +141,18 @@ export function OrderActionButtons({
 	if (order.status === "ready_for_pickup") {
 		return (
 			<Button
-				icon={<QrCode size={18} color={colors.primaryForeground} />}
+				icon={<QrCode size={18} color={colors.successActionForeground} />}
 				style={[
 					styles.action,
 					styles.full,
-					{ backgroundColor: colors.success },
+					{ backgroundColor: colors.successAction },
 				]}
 				onPress={() => router.push(`/business/${businessId}/order/${order.id}`)}
 			>
 				<AppText
 					variant="bodyMedium"
 					weight="semiBold"
-					style={[styles.label, { color: colors.primaryForeground }]}
+					style={[styles.label, { color: colors.successActionForeground }]}
 				>
 					{strings.business.ordersValidateAndDeliver}
 				</AppText>

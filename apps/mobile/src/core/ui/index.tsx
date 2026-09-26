@@ -576,9 +576,9 @@ export function StatusBadge({
 		neutral: { bg: colors.muted, fg: colors.mutedForeground },
 		brand: { bg: colors.secondary, fg: colors.secondaryForeground },
 		success: { bg: colors.surfaceSuccess, fg: colors.successText },
-		warning: { bg: colors.surfaceWarning, fg: colors.warning },
+		warning: { bg: colors.surfaceWarning, fg: colors.warningText },
 		danger: { bg: colors.destructiveSurface, fg: colors.destructive },
-		info: { bg: colors.infoSurface, fg: colors.info },
+		info: { bg: colors.infoSurface, fg: colors.infoText },
 	};
 	const t = toneMap[tone];
 	const opacity = useSharedValue(1);

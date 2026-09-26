@@ -34,7 +34,7 @@ export function BusinessStatsRow({ stats }: { stats: ProductStats }) {
 			label: strings.business.availableStock,
 			value: stats.availableCount,
 			icon: Package,
-			color: colors.warning,
+			color: colors.warningText,
 			bg: colors.surfaceWarning,
 		},
 	];

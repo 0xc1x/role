@@ -162,7 +162,7 @@ const ReviewRow = memo(function ReviewRow({ item }: { item: MyReviewView }) {
 					</AppText>
 				</View>
 				<View style={styles.starsRow}>
-					<Star size={20} color={colors.warning} />
+					<Star size={20} color={colors.warningText} />
 					<AppText variant="bodyMedium" weight="semiBold">
 						{((item.productRating + item.businessRating) / 2).toFixed(1)}
 					</AppText>

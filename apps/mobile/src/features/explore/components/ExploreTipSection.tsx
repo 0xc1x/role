@@ -36,7 +36,7 @@ export function ExploreTipSection() {
 	// Estados del bulb: en dark "encender" es sumar brillo sobre fondo oscuro;
 	// en light hace falta el contraste inverso — gris apagado vs ámbar encendido —
 	// porque oscurecer el mismo tono no se lee como "prender" sobre fondo amarillo.
-	const bulbOn = isDark ? colors.yellow : colors.warning;
+	const bulbOn = isDark ? colors.yellow : colors.warningText;
 	const bulbOff = isDark
 		? withAlpha(colors.yellow, 0.55)
 		: withAlpha(colors.mutedForeground, 0.55);

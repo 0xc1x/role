@@ -476,11 +476,11 @@ function MapOfferCard({
 					) : null}
 				</View>
 				<View style={styles.selectedMeta}>
-					<Clock size={14} color={colors.info} />
+					<Clock size={14} color={colors.infoText} />
 					<AppText
 						variant="bodySmall"
 						weight="semiBold"
-						style={{ color: colors.info }}
+						style={{ color: colors.infoText }}
 					>
 						{strings.explore.pickupWindow
 							.replace("{start}", formatTime(offer.offer.pickup_start))

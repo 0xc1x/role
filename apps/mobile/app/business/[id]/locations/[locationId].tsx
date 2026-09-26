@@ -78,11 +78,11 @@ export default function BusinessLocationDetailScreen() {
 									{ backgroundColor: withAlpha(colors.warning, 0.149) },
 								]}
 							>
-								<Star size={11} color={colors.warning} />
+								<Star size={11} color={colors.warningText} />
 								<AppText
 									variant="bodySmall"
 									weight="semiBold"
-									style={{ color: colors.warning }}
+									style={{ color: colors.warningText }}
 								>
 									{strings.business.headquarter}
 								</AppText>

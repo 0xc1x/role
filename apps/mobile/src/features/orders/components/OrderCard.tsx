@@ -61,11 +61,11 @@ function toneColors(
 		case "success":
 			return { bg: colors.surfaceSuccess, fg: colors.successText };
 		case "warning":
-			return { bg: colors.surfaceWarning, fg: colors.warning };
+			return { bg: colors.surfaceWarning, fg: colors.warningText };
 		case "danger":
 			return { bg: colors.destructiveSurface, fg: colors.destructive };
 		case "info":
-			return { bg: colors.infoSurface, fg: colors.info };
+			return { bg: colors.infoSurface, fg: colors.infoText };
 		default:
 			return { bg: colors.muted, fg: colors.mutedForeground };
 	}
@@ -234,14 +234,21 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 					{steps.map((step, index) => {
 						const isCurrent = index === firstPending;
 						const highlighted = step.done || isCurrent;
+						// A done station is a solid green that has to carry the 20px
+						// glyph inside it. `success` (#22C55E) under a light glyph
+						// measured 2.28:1 — under the 3:1 non-text floor — so the fill
+						// takes the green that can carry a foreground and the glyph its
+						// paired token. Dark is unchanged: 7.65:1.
 						const circleBackground = step.done
-							? colors.success
+							? colors.successAction
 							: isCurrent
 								? colors.primary
 								: colors.muted;
-						const iconColor = highlighted
-							? colors.primaryForeground
-							: colors.mutedForeground;
+						const iconColor = step.done
+							? colors.successActionForeground
+							: highlighted
+								? colors.primaryForeground
+								: colors.mutedForeground;
 						const anim = stepAnims[index];
 						const lineAnim = index > 0 ? lineAnims[index - 1] : null;
 						return (

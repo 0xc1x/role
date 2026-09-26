@@ -444,7 +444,7 @@ function buildTimeline(
 			note: strings.business.ordersTimelinePendingNote,
 			eventKeys: ["pending"],
 			fallback: created,
-			color: colors.warning,
+			color: colors.warningText,
 			background: colors.surfaceWarning,
 		},
 		{
@@ -454,7 +454,7 @@ function buildTimeline(
 			note: strings.business.ordersTimelineConfirmedNote,
 			eventKeys: ["confirmed"],
 			fallback: created,
-			color: colors.info,
+			color: colors.infoText,
 			background: colors.infoSurface,
 		},
 		{

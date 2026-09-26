@@ -23,17 +23,20 @@ const APP = join(import.meta.dir, "..", "..", "..");
 /** Walks app source, skipping build output and the specs themselves. */
 function sourceFiles(dir: string): string[] {
 	return readdirSync(dir).flatMap((entry) => {
-		if (entry === "node_modules" || entry === ".expo") return [];
+		if (entry === "node_modules" || entry === ".expo" || entry === "dist")
+			return [];
 		const path = join(dir, entry);
 		if (statSync(path).isDirectory()) return sourceFiles(path);
 		return /\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry) ? [path] : [];
 	});
 }
 
-const files = [
-	sourceFiles(join(APP, "src")),
-	sourceFiles(join(APP, "app")),
-].flat();
+// `components/` and `lib/` sit beside `src/`, not inside it, and the shadcn port
+// in `components/ui/alert.tsx` is exactly where a semantic foreground would
+// creep back in — so the walk covers every app source root, not two of them.
+const files = ["src", "app", "components", "lib"].flatMap((root) =>
+	sourceFiles(join(APP, root)),
+);
 const rel = (file: string) => file.slice(APP.length + 1);
 
 /**
@@ -45,14 +48,12 @@ const rel = (file: string) => file.slice(APP.length + 1);
 const ALLOWED: Record<string, string> = {
 	"app/business/[id]/payouts/[payoutId].tsx":
 		"hero foreground on colors.ink (#1A1A18) in both schemes: 7.65:1",
-	"src/features/business/components/orders/OrderActionButtons.tsx":
-		"button backgroundColor; its label uses primaryForeground",
 	"src/features/business/components/orders/OrdersFiltersControl.tsx":
 		"status dot fill; the adjacent text label carries the meaning",
 	"src/features/business/components/orders/PickupScannerSheet.tsx":
 		"glyph on a 54% scrim over the camera: scheme-invariant dark surface",
 	"src/features/orders/components/OrderCard.tsx":
-		"progress circle fill and connector fill, not text",
+		"progress connector fill only; the done circle is successAction so its glyph has a foreground",
 	"src/features/orders/components/order-detail/OrderProgressHeader.tsx":
 		"progress circle fill and connector fill, not text",
 	"src/features/offers/components/detail/OfferContent.tsx":
@@ -80,6 +81,17 @@ test("every allowed success site is still on disk (no stale allowlist entry)", (
 	const onDisk = new Set(files.map(rel));
 	const stale = Object.keys(ALLOWED).filter((file) => !onDisk.has(file));
 	expect(stale).toEqual([]);
+});
+
+test("every allowed success site still has a `colors.success` to excuse", () => {
+	// Without this, an allowlist entry for a file that no longer uses the token
+	// becomes a permanent blank cheque: any future `colors.success` in that file
+	// would be waved through. The order action buttons lost theirs when the fill
+	// moved to `successAction`, and the entry went with it.
+	const excusingNothing = Object.keys(ALLOWED).filter(
+		(file) => !/colors\.success\b/.test(readFileSync(join(APP, file), "utf8")),
+	);
+	expect(excusingNothing).toEqual([]);
 });
 
 test("successDark has no call sites left", () => {

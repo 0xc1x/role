@@ -209,7 +209,7 @@ export function ProductDetail({
 						label={strings.business.created}
 						value={String(offer.initial_stock ?? offer.stock)}
 						icon={Package}
-						color={colors.warning}
+						color={colors.warningText}
 						bg={colors.surfaceWarning}
 					/>
 				</View>

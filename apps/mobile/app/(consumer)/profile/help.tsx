@@ -362,7 +362,7 @@ export default function HelpScreen() {
 			label: strings.helpCenter.categoryPolicies,
 			subtitle: strings.helpCenter.categoryPoliciesSubtitle,
 			bgColor: colors.infoSurface,
-			iconColor: colors.info,
+			iconColor: colors.infoText,
 			onPress: () => router.push("/profile/help/policies"),
 		},
 	];

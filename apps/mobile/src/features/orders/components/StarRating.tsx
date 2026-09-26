@@ -43,7 +43,9 @@ export function StarRating({
 				>
 					<AppText
 						variant="h1"
-						style={{ color: n <= value ? colors.warning : colors.foreground }}
+						style={{
+							color: n <= value ? colors.warningText : colors.foreground,
+						}}
 					>
 						★
 					</AppText>

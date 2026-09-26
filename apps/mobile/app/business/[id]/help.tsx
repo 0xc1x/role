@@ -380,7 +380,7 @@ export default function BusinessHelpScreen() {
 			label: strings.business.businessHelpSecurity,
 			subtitle: strings.business.businessHelpSecuritySub,
 			bgColor: colors.infoSurface,
-			iconColor: colors.info,
+			iconColor: colors.infoText,
 			onPress: () => router.push(`/business/${id}/help/security`),
 		},
 	];

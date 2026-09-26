@@ -286,7 +286,7 @@ export function OfferContent({ data }: { data: OfferDetail }) {
 						{ backgroundColor: `${withAlpha(colors.infoForeground, 0.051)}` },
 					]}
 				>
-					<Info size={18} color={colors.info} />
+					<Info size={18} color={colors.infoText} />
 					<AppText
 						variant="bodySmall"
 						style={{ flex: 1, color: muted, lineHeight: 18 }}
