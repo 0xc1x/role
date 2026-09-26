@@ -31,9 +31,13 @@ if (Platform.OS === "web") {
 	global.__reanimatedLoggerConfig = {
 		level: 1, // warn
 		strict: false,
-		logFunction: (data: { level: string; message: { content: string } }) => {
-			if (data.level === "warn") console.warn(data.message.content);
-			else console.error(data.message.content);
+		logFunction: (data: { level: string; message?: { content?: string } }) => {
+			// Reanimated's web build fires logFunction with no message; forwarding
+			// that prints `undefined` and buries the real warnings.
+			const content = data?.message?.content;
+			if (!content) return;
+			if (data.level === "warn") console.warn(content);
+			else console.error(content);
 		},
 	};
 }

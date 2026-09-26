@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { useTheme } from '@/src/core/theme';
 import { cva, type VariantProps } from 'class-variance-authority';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Platform, Pressable, type PressableStateCallbackType, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, type PressableStateCallbackType, type StyleProp, View, type ViewStyle } from 'react-native';
 
 const buttonVariants = cva(
   cn(
@@ -164,8 +164,21 @@ function Button({
         {...props}
       >
         {loading ? (
-          <ActivityIndicator size="small" color={textColor} />
+          Platform.OS === 'web' ? (
+            // RNW's ActivityIndicator rotates a ~77% arc (dasharray 80/60 on a
+            // 32-unit viewBox) with butt caps, at 20px => a 2.5px fractional
+            // stroke. Those hard ends sweep the pixel grid every frame and read
+            // as an off-axis wobble. A conic alpha ramp has no ends at all.
+            // ponytail: web-only because native's ActivityIndicator is a real
+            // platform spinner with no AA problem. Delete if RNW ever fixes it.
+            <View
+              className="size-5 shrink-0 animate-spin rounded-full bg-[conic-gradient(from_90deg,transparent_0%,currentColor_12%,transparent_100%)] [mask-image:radial-gradient(farthest-side,#0000_calc(100%_-_2px),#000_calc(100%_-_2px))]"
+              style={{ color: textColor } as ViewStyle}
+            />
           ) : (
+            <ActivityIndicator size="small" color={textColor} />
+          )
+        ) : (
             <>
               {icon && iconPosition === 'left' ? icon : null}
               {typeof children === 'string' || typeof children === 'number' ? (

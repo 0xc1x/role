@@ -25,3 +25,6 @@ apps/admin/.tanstack/
 # published artifact, and its root placement makes tooling pick it up for
 # unrelated scripts. Regenerate locally when needed.
 deno.lock
+
+# Playwright MCP session artifacts (browser logs and page snapshots)
+.playwright-mcp/
