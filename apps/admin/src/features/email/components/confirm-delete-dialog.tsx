@@ -24,8 +24,8 @@ export function ConfirmDeleteDialog(props: {
 				<AlertDialogHeader>
 					<AlertDialogTitle>{props.title}</AlertDialogTitle>
 					<AlertDialogDescription>
-						Se ocultará de la lista pero se conservan sus métricas e
-						historial. Esta acción no se puede deshacer.
+						Se ocultará de la lista pero se conservan sus métricas e historial.
+						Esta acción no se puede deshacer.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>

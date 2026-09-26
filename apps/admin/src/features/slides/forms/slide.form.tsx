@@ -399,8 +399,8 @@ function RedirectUrlField({
 				aria-invalid={isInvalid}
 			/>
 			<p className="text-xs text-muted-foreground">
-				URL externa (https://...) o ruta interna de la app (ej. /explore). Si
-				se omite no se mostrará botón en mobile.
+				URL externa (https://...) o ruta interna de la app (ej. /explore). Si se
+				omite no se mostrará botón en mobile.
 			</p>
 			{isInvalid && <FieldError errors={errors} />}
 		</Field>
