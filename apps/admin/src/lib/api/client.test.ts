@@ -27,6 +27,7 @@ import {
 	clearAuth,
 	getToken,
 	getTokenExpiresAt,
+	isStoragePersistent,
 	setToken,
 	setTokenExpiresAt,
 } from "./client";
@@ -124,6 +125,77 @@ describe("storage helpers", () => {
 		clearAuth();
 		expect(getToken()).toBeNull();
 		expect(getTokenExpiresAt()).toBeNull();
+	});
+});
+
+/**
+ * Un `localStorage` que lanza (Safari privado, cuota, iOS ITP) dejaba el panel
+ * aparentando sesión guardada y la perdía en cada recarga, sin decir nada. El
+ * sonda convierte ese fallo silencioso en un aviso al operador.
+ */
+describe("sonda de almacenamiento", () => {
+	const originalStorage = (globalThis as unknown as { localStorage: Storage })
+		.localStorage;
+
+	// `Object.assign` y no el spread: los métodos de `Storage` viven en el
+	// prototipo, y un `{...new MemoryStorage()}` perdería `getItem`/`removeItem`
+	// (el sonda fallaría entonces por un motivo equivocado).
+	function stubStorage(overrides: Partial<Storage>) {
+		(globalThis as unknown as { localStorage: Storage }).localStorage =
+			Object.assign(new MemoryStorage(), overrides);
+	}
+
+	afterEach(() => {
+		(globalThis as unknown as { localStorage: Storage }).localStorage =
+			originalStorage;
+		ensureStorage();
+	});
+
+	it("confirma persistencia con un storage que escribe", () => {
+		expect(isStoragePersistent()).toBe(true);
+	});
+
+	it("reporta que no persiste cuando la escritura lanza", () => {
+		stubStorage({
+			setItem: () => {
+				throw new DOMException("QuotaExceededError");
+			},
+		});
+
+		expect(isStoragePersistent()).toBe(false);
+	});
+
+	it("reporta que no persiste cuando la escritura se pierde en silencio", () => {
+		// iOS ITP: `setItem` no lanza, pero el dato no sobrevive. Un sonda que
+		// solo comprueba que no lance daría "persiste" y el panel perdería la
+		// sesión igual: por eso el sonda relee.
+		stubStorage({ setItem: () => undefined });
+
+		expect(isStoragePersistent()).toBe(false);
+	});
+
+	it("no deja la clave del sonda en el storage", () => {
+		stubStorage({});
+		const storage = (globalThis as unknown as { localStorage: Storage })
+			.localStorage;
+
+		expect(isStoragePersistent()).toBe(true);
+		expect(storage.length).toBe(0);
+	});
+
+	it("no propaga el fallo: los helpers siguen siendo fail-safe", () => {
+		stubStorage({
+			setItem: () => {
+				throw new DOMException("QuotaExceededError");
+			},
+			removeItem: () => {
+				throw new DOMException("QuotaExceededError");
+			},
+		});
+
+		expect(() => setToken("t")).not.toThrow();
+		expect(() => clearAuth()).not.toThrow();
+		expect(getToken()).toBeNull();
 	});
 });
 

@@ -3,6 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { clearAuth, useLogin } from "@/features/auth";
+import { isStoragePersistent } from "@/lib/api/client";
 
 // Límites del contrato (`LoginRequestSchema`); mensajes propios para la UX.
 const loginSchema = LoginRequestSchema.extend({
@@ -73,6 +75,15 @@ export function LoginForm({
 						queryClient.clear();
 						setRoleError(true);
 						return;
+					}
+					// Si el navegador no deja guardar el token, el panel entra igual
+					// pero pierde la sesión en cada recarga. El aviso va en un toast y
+					// no en estado local porque la navegación de abajo desmonta el
+					// form: un toast es lo único que sobrevive al salto al panel.
+					if (!isStoragePersistent()) {
+						toast.warning(
+							"Tu navegador no permite guardar la sesión: tendrás que volver a entrar cada vez que recargues la página.",
+						);
 					}
 					// `returnTo` ya viene sanitizada por el `validateSearch` del
 					// login (ruta interna, sin protocolo). El cast es porque el

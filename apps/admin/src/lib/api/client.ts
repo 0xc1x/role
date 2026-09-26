@@ -29,13 +29,21 @@ function getItem(key: string): string | null {
 	}
 }
 
-function setItem(key: string, value: string | null) {
+/**
+ * `setItem` nunca lanza: un fallo de escritura no puede tumbar la mutación que
+ * ya se aplicó en el servidor. Devuelve si el dato quedó, para que el camino de
+ * auth pueda avisar en vez de perder la sesión en silencio.
+ */
+function setItem(key: string, value: string | null): boolean {
 	const s = getStorage();
-	if (!s) return;
+	if (!s) return false;
 	try {
 		if (value) s.setItem(key, value);
 		else s.removeItem(key);
-	} catch {}
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 export const getToken = () => getItem(KEYS.token);
@@ -50,6 +58,32 @@ export function clearAuth() {
 	try {
 		for (const k of Object.values(KEYS)) s.removeItem(k);
 	} catch {}
+}
+
+/** Clave del sonda: fuera de `KEYS` para que `clearAuth` no la confunda. */
+const PROBE_KEY = "role_admin_storage_probe";
+
+/**
+ * Sondea si el navegador deja persistir la sesión: escribe, relee y borra, en
+ * vez de preguntar por la existencia de `localStorage`. Safari privado, la
+ * cuota agotada e iOS ITP dejan el objeto disponible y la escritura falla.
+ *
+ * POR QUÉ IMPORTA: los helpers de storage son fail-safe a propósito, así que un
+ * `localStorage` que lanza produce un panel que parecelogueado y pierde la
+ * sesión en cada recarga sin decir nada. Esto convierte ese fallo silencioso en
+ * un aviso al operador. Nunca lanza: informa.
+ */
+export function isStoragePersistent(): boolean {
+	const s = getStorage();
+	if (!s) return false;
+	try {
+		s.setItem(PROBE_KEY, "1");
+		const written = s.getItem(PROBE_KEY) === "1";
+		s.removeItem(PROBE_KEY);
+		return written;
+	} catch {
+		return false;
+	}
 }
 
 let isRefreshing = false;
