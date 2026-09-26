@@ -1,3 +1,4 @@
+import { DISCOUNT_SAVINGS_CLAIM } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { Footer } from "@/components/footer";
 import { HeroBackground } from "@/components/hero-background";
@@ -43,7 +44,7 @@ const CATEGORIES = [
 			},
 			{
 				q: "¿Cuánto puedo ahorrar?",
-				a: "Normalmente entre 50% y 70% del precio original. Cada oferta muestra el precio rebajado y el precio original tachado antes de que reserves.",
+				a: `Normalmente pagas ${DISCOUNT_SAVINGS_CLAIM} que en el comercio. Cada oferta muestra el precio rebajado y el precio original tachado antes de que reserves.`,
 			},
 			{
 				q: "¿En qué ciudades está disponible Rolé?",

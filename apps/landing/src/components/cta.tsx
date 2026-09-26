@@ -103,7 +103,9 @@ export function Cta({
 					<div className="mt-9 flex flex-wrap justify-center gap-4">
 						<Button
 							variant={isPrimary ? "default" : "brand"}
-							render={<a href={resolvedPrimaryHref} aria-label={primaryLabel} />}
+							render={
+								<a href={resolvedPrimaryHref} aria-label={primaryLabel} />
+							}
 							className={`inline-flex items-center gap-2 rounded-full px-8 py-3 font-semibold active:scale-[0.98] ${styles.primaryButton}`}
 						>
 							{primaryIcon}

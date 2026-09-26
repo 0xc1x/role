@@ -1,5 +1,4 @@
 import {
-	CONTACT_CITIES_FALLBACK,
 	type ContactRole,
 	type CreateContactDto,
 	CreateContactSchema,
@@ -68,23 +67,24 @@ export function Contact() {
 	const [role, setRole] = useState<ContactRole>("negocio");
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
-	const [city, setCity] = useState("Quito");
+	const [city, setCity] = useState("");
 	const [cityOther, setCityOther] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [done, setDone] = useState<string | null>(null);
 
-	const { data: configMap } = useQuery(appConfigQueryOptions);
-	const cities = useMemo(
-		() => [
-			...getConfigStringArray(
-				configMap,
-				"contact.cities",
-				CONTACT_CITIES_FALLBACK,
-			).filter((c) => c !== OTHER_CITY),
-			OTHER_CITY,
-		],
+	const { data: configMap, isFetched } = useQuery(appConfigQueryOptions);
+	// Sin lista hardcodeada: la geografía de lanzamiento llega en
+	// `app_config.contact.cities`. Si el endpoint falla, el select queda en
+	// "Otra" y el usuario escribe su ciudad a mano — preferible a publicar
+	// ciudades que Rolé no tiene abiertas.
+	const enabledCities = useMemo(
+		() =>
+			getConfigStringArray(configMap, "contact.cities", []).filter(
+				(c) => c !== OTHER_CITY,
+			),
 		[configMap],
 	);
+	const cities = useMemo(() => [...enabledCities, OTHER_CITY], [enabledCities]);
 
 	// react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation -- fire-and-forget signup, result handled via localStorage + local state, no cached query goes stale
 	const mutation = useMutation({
@@ -97,9 +97,15 @@ export function Contact() {
 		if (e) setDone(e);
 	}, []);
 
+	// El valor por defecto se deriva de la lista cargada, nunca de una ciudad
+	// fija. Se espera a que la consulta resuelva: antes de eso la lista es
+	// ["Otra"] y corregir sobre ella dejaría "Otra" preseleccionado para
+	// siempre en cuanto llegaran las ciudades reales.
 	useEffect(() => {
-		if (!cities.includes(city)) setCity(cities[0] ?? "Quito");
-	}, [cities, city]);
+		if (!isFetched) return;
+		if (cities.includes(city)) return;
+		setCity(enabledCities[0] ?? OTHER_CITY);
+	}, [isFetched, cities, enabledCities, city]);
 
 	function onSubmit(e: FormEvent) {
 		e.preventDefault();

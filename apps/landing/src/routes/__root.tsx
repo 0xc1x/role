@@ -1,3 +1,4 @@
+import { DISCOUNT_MAX_CLAIM } from "@0xc1x/role-commons";
 import type { QueryClient as QC } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -47,7 +48,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 				{ property: "og:site_name", content: "Rolé" },
 				{
 					property: "og:title",
-					content: "Rolé — Comida deliciosa. Mitad de precio.",
+					content: `Rolé — Comida deliciosa. ${DISCOUNT_MAX_CLAIM} menos.`,
 				},
 				{
 					property: "og:description",
@@ -61,7 +62,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 				{ name: "twitter:card", content: "summary_large_image" },
 				{
 					name: "twitter:title",
-					content: "Rolé — Comida deliciosa. Mitad de precio.",
+					content: `Rolé — Comida deliciosa. ${DISCOUNT_MAX_CLAIM} menos.`,
 				},
 				{
 					name: "twitter:description",

@@ -1,3 +1,4 @@
+import { DISCOUNT_SAVINGS_CLAIM } from "@0xc1x/role-commons";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { HeroBackground } from "@/components/hero-background";
@@ -62,12 +63,12 @@ export function Hero() {
 					<Card className="relative overflow-hidden rounded-xl border border-role-border/50 bg-white p-0 shadow-raised gap-0">
 						<div className="relative h-40 w-full bg-role-muted">
 							{offer?.image ? (
-							<img
-								src={offer.image}
-								alt={offer.title}
-								loading="eager"
-								fetchPriority="high"
-								decoding="async"
+								<img
+									src={offer.image}
+									alt={offer.title}
+									loading="eager"
+									fetchPriority="high"
+									decoding="async"
 									width={320}
 									height={160}
 									className="h-full w-full object-cover"
@@ -152,8 +153,8 @@ export function Hero() {
 					<p className="max-w-lg text-lg leading-relaxed text-white/85 reveal reveal-delay-2">
 						Rolé conecta comercios locales con excedente de comida y personas
 						que quieren rescatar el excedente de restaurantes, panaderías y
-						mercados; fresco, cercano y a un tercio del precio. Recoges el mismo
-						día.
+						mercados; fresco, cercano y {DISCOUNT_SAVINGS_CLAIM}. Recoges el
+						mismo día.
 					</p>
 
 					{/* CTAs */}

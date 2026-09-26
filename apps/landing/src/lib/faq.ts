@@ -3,6 +3,15 @@ export interface FaqItem {
 	a: string;
 }
 
+/**
+ * Ciudades de lanzamiento. Espejo editorial de `app_config['contact.cities']`:
+ * el formulario de contacto lee la lista de la plataforma; este copy es
+ * estático y lo actualiza el mismo cambio que abre una ciudad nueva.
+ */
+export const LAUNCH_CITIES = ["Quito", "Guayaquil", "Cuenca", "Manta"];
+
+const PLACES = LAUNCH_CITIES.join(", ");
+
 export const FAQ_ITEMS: FaqItem[] = [
 	{
 		q: "¿Qué es Rolé?",
@@ -14,7 +23,7 @@ export const FAQ_ITEMS: FaqItem[] = [
 	},
 	{
 		q: "¿Dónde operan?",
-		a: "El lanzamiento cubre Santo Domingo. Pronto estaremos cerca de ti en más ciudades.",
+		a: `El lanzamiento se activa por ciudad. Empezamos en ${PLACES} y abrimos en más ciudades poco a poco.`,
 	},
 	{
 		q: "¿Cómo empiezo?",

@@ -1,7 +1,4 @@
-import {
-	CONTACT_CITIES_FALLBACK,
-	getConfigStringArray,
-} from "@0xc1x/role-commons";
+import { getConfigStringArray } from "@0xc1x/role-commons";
 import { router } from "expo-router";
 import { useEffect } from "react";
 import { useMemo } from "react";
@@ -65,13 +62,10 @@ export default function EditProfileScreen() {
 	const [error, setError] = useState<string | null>(null);
 
 	// Ciudades habilitadas desde app_config; se conserva la ciudad actual
-	// del perfil si ya no está en la lista habilitada.
+	// del perfil si ya no está en la lista habilitada. Sin lista de respaldo
+	// en el código: la geografía de lanzamiento es dato de plataforma.
 	const cities = useMemo(() => {
-		const enabled = getConfigStringArray(
-			configMap,
-			"contact.cities",
-			CONTACT_CITIES_FALLBACK,
-		);
+		const enabled = getConfigStringArray(configMap, "contact.cities", []);
 		if (profile?.city && !enabled.includes(profile.city)) {
 			return [profile.city, ...enabled];
 		}

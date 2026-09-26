@@ -42,7 +42,11 @@ export function Wordmark({
 	);
 }
 
-export function LogoMark({ className, fill = BRAND_PRIMARY, ...props }: LogoProps) {
+export function LogoMark({
+	className,
+	fill = BRAND_PRIMARY,
+	...props
+}: LogoProps) {
 	return (
 		<svg
 			viewBox={MARK_R_VIEWBOX}

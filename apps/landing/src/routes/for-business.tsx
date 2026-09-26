@@ -69,7 +69,7 @@ const PROCESS = [
 	{
 		n: "03",
 		title: "Recibe y cobra",
-		body: "Los usuarios reservan y recogen en el horario que definiste. El pago es directo en el comercio — sin intermediarios, sin comisiones sobre el cobro.",
+		body: "Los usuarios reservan y recogen en el horario que definiste. El pago es directo en el comercio, sin intermediarios. La comisión de Rolé va por bolsa, dentro del plan que elijas, y te la detallamos en la propuesta.",
 	},
 ];
 
@@ -112,8 +112,8 @@ function ForBusinessPage() {
 							</h1>
 							<p className="mt-6 max-w-xl text-lg leading-relaxed text-white/75 reveal reveal-delay-2">
 								Únete a los más de {businessesLabel ?? "miles de"} comercios que
-								ya reducen su desperdicio y recuperan valor con Rolé. Sin costos
-								de registro, sin comisiones sobre el cobro.
+								ya reducen su desperdicio y recuperan valor con Rolé. Sin costo
+								de registro, con comisión por bolsa incluida en tu plan.
 							</p>
 							<div className="mt-10 flex flex-wrap gap-4 reveal reveal-delay-3">
 								<Link
@@ -250,7 +250,7 @@ function ForBusinessPage() {
 					primaryIcon={<StoreIcon className="h-5 w-5" />}
 					secondaryLabel="Contactar a ventas"
 					secondaryHref={`mailto:${salesEmail}`}
-					foot="Sin costo de registro. Sin comisiones sobre el cobro."
+					foot="Sin costo de registro. Comisión por bolsa incluida en tu plan."
 				/>
 			</main>
 			<Footer />

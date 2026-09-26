@@ -1,5 +1,5 @@
+import { DISCOUNT_SAVINGS_CLAIM } from "@0xc1x/role-commons";
 import { createFileRoute, Link } from "@tanstack/react-router";
-
 import { Footer } from "@/components/footer";
 import { HeroBackground } from "@/components/hero-background";
 import { HeartIcon, LeafIcon, SparkIcon, UsersIcon } from "@/components/icons";
@@ -101,7 +101,8 @@ function AboutPage() {
 								comida buena al final del día y, a la vez, muchas personas
 								buscan opciones accesibles para comer bien. Conectamos esos dos
 								extremos. Los comercios recuperan valor de su excedente y los
-								usuarios disfrutan comida de calidad con hasta 70% de descuento.
+								usuarios disfrutan comida de calidad pagando{" "}
+								{DISCOUNT_SAVINGS_CLAIM}.
 							</p>
 						</div>
 
@@ -127,7 +128,8 @@ function AboutPage() {
 								plataforma que conecta comercios con excedente y personas que
 								quieren aprovecharlo. La reserva es gratuita, el pago se hace
 								directo en el comercio y la recogida es presencial. Simple,
-								transparente y sin comisiones ocultas.
+								transparente: cada local elige un plan con una comisión por
+								bolsa, informada antes de firmar.
 							</p>
 						</div>
 					</div>

@@ -5,6 +5,12 @@
  * text — they reference keys here. Ported from the Flutter app's inline
  * strings and centralized for consistency + future i18n.
  */
+import {
+	DISCOUNT_MAX_CLAIM,
+	DISCOUNT_MIN_PERCENT,
+	DISCOUNT_SAVINGS_CLAIM,
+} from "@0xc1x/role-commons";
+
 export const strings = {
 	app: {
 		name: "Rolé",
@@ -106,7 +112,7 @@ export const strings = {
 		haveAccount: "¿Ya tienes una cuenta?",
 		loginCTA: "Inicia sesión",
 		benefitsTitle: "¿Por qué unirte a Rolé?",
-		benefitSave: "Ahorra hasta un 70% en comida deliciosa",
+		benefitSave: `Ahorra ${DISCOUNT_SAVINGS_CLAIM} en comida deliciosa`,
 		benefitReduceWaste: "Ayuda a reducir el desperdicio de alimentos",
 		benefitDiscover: "Descubre nuevos restaurantes y cafés",
 		benefitSustainable: "Contribuye a un planeta más sostenible",
@@ -1132,7 +1138,9 @@ export const strings = {
 							{
 								title: "Precios sugeridos",
 								description:
-									"El precio con descuento debe ser menor al original. Recomendamos ofrecer al menos un 30-50% de descuento para atraer más compradores.",
+									"El precio con descuento debe ser menor al original. Recomendamos ofrecer al menos un " +
+									`${DISCOUNT_MIN_PERCENT}% ` +
+									"de descuento para atraer más compradores.",
 							},
 							{
 								title: "Horarios de recogida",
@@ -1615,13 +1623,13 @@ export const strings = {
 			"Cada año, toneladas de comida perfectamente buena se desperdicia en comercios que no logran venderla a tiempo. A nosotros no nos parece bien.",
 		ideaTitle: "La idea",
 		ideaBody:
-			"Rolé nació de una observación simple: comercios de barrio tiran comida buena al final del día y, a la vez, muchas personas buscan opciones accesibles para comer bien. Conectamos esos dos extremos. Los comercios recuperan valor de su excedente y los usuarios disfrutan comida de calidad con hasta 70% de descuento.",
+			"Rolé nació de una observación simple: comercios de barrio tiran comida buena al final del día y, a la vez, muchas personas buscan opciones accesibles para comer bien. Conectamos esos dos extremos. Los comercios recuperan valor de su excedente y los usuarios disfrutan comida de calidad con descuentos que cada comercio marca sobre el precio original.",
 		missionTitle: "La misión",
 		missionBody:
 			"Reducir el desperdicio de alimentos mientras construimos comunidades más conscientes y solidarias. No buscamos reemplazar la compra regular: queremos que el excedente que ya existe llegue a alguien que lo disfrute. Cada bolsa rescatada es un pequeño triunfo contra el desperdicio.",
 		howTitle: "Cómo funciona",
 		howBody:
-			"No somos un delivery ni un intermediario de pago. Somos una plataforma que conecta comercios con excedente y personas que quieren aprovecharlo. La reserva es gratuita, el pago se hace directo en el comercio y la recogida es presencial. Simple, transparente y sin comisiones ocultas.",
+			"No somos un delivery ni un intermediario de pago. Somos una plataforma que conecta comercios con excedente y personas que quieren aprovecharlo. La reserva es gratuita, el pago se hace directo en el comercio y la recogida es presencial. Simple y transparente: cada local elige un plan con una comisión por bolsa, informada antes de firmar.",
 		statsTitle: "El impacto hasta hoy",
 		statsSubtitle: "Números que cuentan",
 		statUsers: "usuarios activos",
@@ -1775,9 +1783,9 @@ export const strings = {
 		featureReduce: "Reduce el desperdicio",
 		featureReduceBody:
 			"Ayuda a restaurantes y comercios a reducir el desperdicio de alimentos mientras ahorras dinero.",
-		featureSave: "Ahorra hasta 70%",
+		featureSave: DISCOUNT_MAX_CLAIM,
 		featureSaveBody:
-			"Obtén productos de calidad a precios increíbles. Paga menos de la mitad del precio original.",
+			"Obtén productos de calidad a precios increíbles. Cada comercio marca su descuento sobre el precio original y lo ves antes de reservar.",
 		featureImpact: "Impacto positivo",
 		featureImpactBody:
 			"Cada compra que haces ayuda al planeta y apoya a los comercios locales de tu ciudad.",
