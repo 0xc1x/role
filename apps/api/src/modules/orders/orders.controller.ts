@@ -23,6 +23,7 @@ import type { AuthUser } from '../../auth/auth.types';
 import { OrdersService } from './orders.service';
 import {
   CreateOrderRequestSchema,
+  ListAdminOrdersQuerySchema,
   ListBusinessOrdersQuerySchema,
   ListOrdersQuerySchema,
   UpdateOrderStatusSchema,
@@ -30,6 +31,7 @@ import {
 } from '@0xc1x/role-commons';
 import type {
   CreateOrderRequest,
+  ListAdminOrdersQuery,
   ListBusinessOrdersQuery,
   ListOrdersQuery,
   UpdateOrderStatusRequest,
@@ -75,6 +77,21 @@ export class OrdersController {
     query: ListBusinessOrdersQuery,
   ) {
     return this.ordersService.listForBusiness(user, query);
+  }
+
+  // Antes que `:id` — igual que `business`. Un segmento literal declarado
+  // después del comodín nunca se enrutaría.
+  // Sin `@ApiBearerAuth` propio: la clase ya lo declara y duplicarlo produce un
+  // `security` con dos entradas iguales en el openapi exportado.
+  @Get('admin')
+  @Roles('admin')
+  @ApiOperation({ summary: 'List every order across businesses (admin)' })
+  @ApiOkResponse({ description: 'Paginated orders with business and offer' })
+  listForAdmin(
+    @Query(new ZodValidationPipe(ListAdminOrdersQuerySchema))
+    query: ListAdminOrdersQuery,
+  ) {
+    return this.ordersService.listForAdmin(query);
   }
 
   @Get(':id')

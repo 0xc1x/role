@@ -43,4 +43,16 @@ describe("navegación del sidebar", () => {
 			}
 		}
 	});
+
+	// Las superficies operativas de órdenes y ofertas tienen que estar
+	// alcanzables desde el menú: sin entradas, el panel no las tiene.
+	// Nota: aquí NO se contrasta contra `routeTree.gen` porque los specs de
+	// rutas mockean `@tanstack/react-router` para toda la corrida y
+	// `mock.module` no se revierte con `mock.restore()`; importar el árbol ahí
+	// rompe la suite completa.
+	test("órdenes y ofertas tienen entrada de menú con ruta propia", () => {
+		const urls = collectUrls().map((e) => e.url);
+		expect(urls).toContain("/ordenes");
+		expect(urls).toContain("/ofertas");
+	});
 });

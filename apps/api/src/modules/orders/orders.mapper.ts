@@ -1,6 +1,11 @@
+import type {
+  AdminOrderListItemDto,
+  OrderStatus,
+} from '@0xc1x/role-commons';
 import { toNumber } from '../../common/utils/numeric';
-import { canViewPickupCode } from './order-status.machine';
+import { ACTIVE_ORDER_STATUSES, canViewPickupCode } from './order-status.machine';
 import type { orders as ordersTable } from '../../database/schema';
+import type { AdminOrderListRow } from './orders.repository';
 
 export type OrderRow = typeof ordersTable.$inferSelect;
 
@@ -59,4 +64,49 @@ export class OrderMapper {
       updated_at: row.updated_at.toISOString(),
     };
   }
+
+  /**
+   * Listado de back office. Allow-list explícito a propósito: la fila de
+   * `orders` trae `user_id` (identidad de otro tenant), `pickup_code` (secreto)
+   * y los montos internos del negocio, y ninguno pertenece a una pantalla de
+   * soporte. Si mañana se agrega una columna, no sale sola.
+   */
+  static toAdminListItem(
+    row: AdminOrderListRow,
+    now: Date = new Date(),
+  ): AdminOrderListItemDto {
+    return {
+      id: row.id,
+      order_number: row.order_number,
+      status: row.status,
+      business_id: row.business_id,
+      business_name: row.business_name ?? null,
+      offer_id: row.offer_id,
+      offer_title: row.offer_title,
+      price: toNumber(row.price),
+      original_price: toNumber(row.original_price),
+      pickup_start: row.pickup_start.toISOString(),
+      pickup_end: row.pickup_end.toISOString(),
+      is_stuck: isStuckOrder(row.status, row.pickup_end, now),
+      created_at: row.created_at.toISOString(),
+      updated_at: row.updated_at.toISOString(),
+    };
+  }
+}
+
+/**
+ * Orden "atascada": su ventana de pickup ya cerró y sigue sin llegar a un
+ * estado terminal. Comparte la lista de estados no terminales con el filtro
+ * `stuck` del repositorio — una sola definición, para que la insignia de la
+ * fila y el filtro no puedan discrepar.
+ */
+export function isStuckOrder(
+  status: OrderStatus,
+  pickupEnd: Date,
+  now: Date = new Date(),
+): boolean {
+  return (
+    pickupEnd.getTime() < now.getTime() &&
+    (ACTIVE_ORDER_STATUSES as readonly string[]).includes(status)
+  );
 }

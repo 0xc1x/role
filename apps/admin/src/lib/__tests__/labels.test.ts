@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	businessVerificationLabel,
 	emailSendStatusLabel,
+	orderStatusLabel,
 	payoutStatusLabel,
 } from "../labels";
 
@@ -31,10 +32,21 @@ describe("etiquetas de estado", () => {
 		expect(emailSendStatusLabel("complained")).toBe("Marcado como spam");
 	});
 
+	test("estado de orden", () => {
+		expect(orderStatusLabel("pending")).toBe("Pendiente");
+		expect(orderStatusLabel("confirmed")).toBe("Confirmada");
+		expect(orderStatusLabel("ready_for_pickup")).toBe("Lista para recoger");
+		expect(orderStatusLabel("picked_up")).toBe("Recogida");
+		expect(orderStatusLabel("completed")).toBe("Completada");
+		expect(orderStatusLabel("cancelled")).toBe("Cancelada");
+		expect(orderStatusLabel("expired")).toBe("Vencida");
+	});
+
 	// Un valor fuera del contrato no se inventa: se muestra tal cual para que el
 	// operador vea el dato real y no una etiqueta que miente.
 	test("un valor desconocido se devuelve sin inventar traducción", () => {
 		expect(businessVerificationLabel("archived")).toBe("archived");
 		expect(payoutStatusLabel("on_hold")).toBe("on_hold");
+		expect(orderStatusLabel("refunded")).toBe("refunded");
 	});
 });

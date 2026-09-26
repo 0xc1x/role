@@ -54,3 +54,39 @@ export const UpdateOrderSchema = z
 		price: PositiveNumberSchema,
 	})
 	.partial();
+
+/**
+ * Fila del listado de back office (`GET /orders/admin`).
+ *
+ * Deliberadamente NO incluye `user_id`, `pickup_code` ni `idempotency_key`:
+ * el panel no necesita el id del consumidor (identidad de otro tenant) ni el
+ * código de recogida (secreto) ni la clave de idempotencia. Tampoco incluye
+ * `commission_rate`/`platform_fee`/`net_amount`/`payout_id`: el dinero del
+ * negocio lo cuenta la superficie de pagos, no el listado de órdenes.
+ *
+ * `pickup_start`/`pickup_end` son los de la OFERTA, no `pickup_time` de la
+ * orden: `pickup_time` es nullable y casi siempre lo está, así que la ventana
+ * real de recogida solo se puede leer haciendo join a `offers`.
+ */
+export const AdminOrderListItemSchema = z.object({
+	id: UuidSchema,
+	order_number: z.string().min(1),
+	status: OrderStatusSchema,
+	business_id: UuidSchema,
+	/** `leftJoin` a `businesses`: el nombre se resuelve en la misma query. */
+	business_name: z.string().nullable(),
+	offer_id: UuidSchema,
+	offer_title: z.string(),
+	price: PositiveNumberSchema,
+	original_price: PositiveNumberSchema,
+	pickup_start: TimestamptzSchema,
+	pickup_end: TimestamptzSchema,
+	/**
+	 * Ventana de pickup cerrada con la orden todavía en un estado no terminal.
+	 * Viene del servidor (no lo recalcula el panel) para que el filtro `stuck`
+	 * y la insignia de la fila no puedan discrepar entre sí.
+	 */
+	is_stuck: z.boolean(),
+	created_at: TimestamptzSchema,
+	updated_at: TimestamptzSchema,
+});

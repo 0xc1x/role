@@ -1,6 +1,7 @@
 import type {
 	BusinessVerificationStatus,
 	EmailSendStatus,
+	OrderStatus,
 	PayoutStatus,
 } from "@0xc1x/role-commons";
 
@@ -41,6 +42,16 @@ const EMAIL_SEND_STATUS_LABELS: Record<EmailSendStatus, string> = {
 	cancelled: "Cancelado",
 };
 
+const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+	pending: "Pendiente",
+	confirmed: "Confirmada",
+	ready_for_pickup: "Lista para recoger",
+	picked_up: "Recogida",
+	completed: "Completada",
+	cancelled: "Cancelada",
+	expired: "Vencida",
+};
+
 /** Verificación de negocio: `approved` → "Aprobado". */
 export const businessVerificationLabel = (status: string): string =>
 	BUSINESS_VERIFICATION_LABELS[status as BusinessVerificationStatus] ?? status;
@@ -52,3 +63,7 @@ export const payoutStatusLabel = (status: string): string =>
 /** Estado de un envío de correo: `bounced` → "Rebotado". */
 export const emailSendStatusLabel = (status: string): string =>
 	EMAIL_SEND_STATUS_LABELS[status as EmailSendStatus] ?? status;
+
+/** Estado de una orden: `ready_for_pickup` → "Lista para recoger". */
+export const orderStatusLabel = (status: string): string =>
+	ORDER_STATUS_LABELS[status as OrderStatus] ?? status;

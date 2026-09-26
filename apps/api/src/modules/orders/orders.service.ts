@@ -11,7 +11,9 @@ import { randomInt } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import {
   paginatedDataFromQuery,
+  type AdminOrderListItemDto,
   type CreateOrderRequest,
+  type ListAdminOrdersQuery,
   type ListBusinessOrdersQuery,
   type ListOrdersQuery,
   type PaginatedData,
@@ -342,6 +344,34 @@ export class OrdersService {
           isAdmin: user.role === 'admin',
         }),
       ),
+      { page: query.page, limit: query.limit },
+      total,
+    );
+  }
+
+  /**
+   * Back office: listado transversal de órdenes. La autorización vive en el
+   * guard (`@Roles('admin')` en el controller) — un solo punto de enforcement,
+   * y por eso el panel no debe asumir que un `403` aquí es un bug.
+   */
+  async listForAdmin(
+    query: ListAdminOrdersQuery,
+  ): Promise<PaginatedData<AdminOrderListItemDto>> {
+    const { items, total } = await this.ordersRepository.listForAdmin({
+      status: query.status,
+      businessId: query.business_id,
+      // `stuck=false` no significa "todo lo sano": no hay un conjunto
+      // complementario útil, así que se ignora en vez de invertir el filtro.
+      stuckOnly: query.stuck === true,
+      page: query.page,
+      limit: query.limit,
+    });
+
+    // Un solo `new Date()` para toda la página: si se calculara por fila, dos
+    // pedidos del mismo lote podrían caer en lados distintos del umbral.
+    const now = new Date();
+    return paginatedDataFromQuery(
+      items.map((row) => OrderMapper.toAdminListItem(row, now)),
       { page: query.page, limit: query.limit },
       total,
     );

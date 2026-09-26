@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type {
 	CreateOrderRequestSchema,
+	ListAdminOrdersQuerySchema,
 	ListBusinessOrdersQuerySchema,
 	ListOrdersQuerySchema,
 	UpdateOrderStatusSchema,
@@ -16,3 +17,4 @@ export type ListOrdersQuery = z.infer<typeof ListOrdersQuerySchema>;
 export type ListBusinessOrdersQuery = z.infer<
 	typeof ListBusinessOrdersQuerySchema
 >;
+export type ListAdminOrdersQuery = z.infer<typeof ListAdminOrdersQuerySchema>;

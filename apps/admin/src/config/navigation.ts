@@ -8,7 +8,9 @@ import {
 	type LucideIcon,
 	Megaphone,
 	Projector,
+	Receipt,
 	Settings2,
+	ShoppingBag,
 	Store,
 	Ticket,
 } from "lucide-react";
@@ -35,6 +37,16 @@ export const navMain: NavMainItem[] = [
 		title: "Negocios",
 		url: "/negocios",
 		icon: Store,
+	},
+	{
+		title: "Órdenes",
+		url: "/ordenes",
+		icon: Receipt,
+	},
+	{
+		title: "Ofertas",
+		url: "/ofertas",
+		icon: ShoppingBag,
 	},
 	{
 		title: "Categorias",

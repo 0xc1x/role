@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { ORDER_STATUSES } from "../enums/order-status";
-import { PaginationQuerySchema } from "../../_common/schemas/api.schema";
+import {
+	BooleanQuerySchema,
+	PaginationQuerySchema,
+} from "../../_common/schemas/api.schema";
 import { UuidSchema } from "../../_common/schemas/common";
 
 export const CreateOrderRequestSchema = z.object({
@@ -26,4 +29,20 @@ export const ListOrdersQuerySchema = PaginationQuerySchema.extend({
 export const ListBusinessOrdersQuerySchema = PaginationQuerySchema.extend({
 	business_id: UuidSchema.optional(),
 	status: z.enum(ORDER_STATUSES).optional(),
+});
+
+/**
+ * Back office: every order across every business. `business_id` is a plain
+ * filter here (not a scope), and `stuck` exists because the operator's real
+ * question is not "list orders" but "what is not moving": a reservation whose
+ * offer pickup window closed while the order is still non-terminal never
+ * resolves on its own and is invisible in a list sorted by `created_at`.
+ *
+ * Only `stuck=true` narrows — there is no meaningful "not stuck" set, so
+ * `stuck=false` is accepted and ignored rather than silently inverted.
+ */
+export const ListAdminOrdersQuerySchema = PaginationQuerySchema.extend({
+	business_id: UuidSchema.optional(),
+	status: z.enum(ORDER_STATUSES).optional(),
+	stuck: BooleanQuerySchema.optional(),
 });

@@ -118,6 +118,7 @@ describe('OrdersService', () => {
             findByIdForUpdate: jest.fn(),
             listForUser: jest.fn(),
             listForBusiness: jest.fn(),
+            listForAdmin: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
             isBusinessOwner: jest.fn(),
@@ -542,6 +543,126 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('listForAdmin', () => {
+    // El nombre del negocio viene del join de la MISMA query: si el panel
+    // tuviera que pedirlo aparte, la pantalla de soporte haría N+1.
+    const makeAdminRow = (overrides: Record<string, any> = {}) => ({
+      id: 'order-1',
+      order_number: 'FD-2026-0101-001',
+      status: 'pending' as OrderStatus,
+      business_id: 'business-1',
+      business_name: 'Café Central',
+      offer_id: 'offer-1',
+      offer_title: 'Mesa de sobrantes',
+      price: '9.99',
+      original_price: '19.99',
+      pickup_start: new Date('2025-01-01T10:00:00Z'),
+      pickup_end: new Date('2025-01-01T18:00:00Z'),
+      created_at: new Date('2025-01-01T00:00:00Z'),
+      updated_at: new Date('2025-01-01T00:00:00Z'),
+      ...overrides,
+    });
+
+    it('pagina y devuelve el total del repositorio', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({
+        items: [makeAdminRow()],
+        total: 42,
+      });
+
+      const result = await service.listForAdmin({ page: 3, limit: 10 });
+
+      expect(ordersRepository.listForAdmin).toHaveBeenCalledWith({
+        status: undefined,
+        businessId: undefined,
+        stuckOnly: false,
+        page: 3,
+        limit: 10,
+      });
+      expect(result.data).toHaveLength(1);
+      // El total es del conjunto filtrado, no de la página: un "1 de 1" sobre
+      // 42 filas haría creer al operador que ya lo vio todo.
+      expect(result.meta).toEqual({
+        page: 3,
+        limit: 10,
+        total: 42,
+        total_pages: 5,
+      });
+    });
+
+    it.each([
+      ['status', { status: 'confirmed' as OrderStatus }, { status: 'confirmed' }],
+      [
+        'business_id',
+        { business_id: 'business-9' },
+        { businessId: 'business-9' },
+      ],
+    ])('aplica el filtro %s', async (_name, query, expected) => {
+      ordersRepository.listForAdmin.mockResolvedValue({
+        items: [],
+        total: 0,
+      });
+
+      await service.listForAdmin({ page: 1, limit: 10, ...query });
+
+      expect(ordersRepository.listForAdmin).toHaveBeenCalledWith(
+        expect.objectContaining(expected),
+      );
+    });
+
+    it('stuck=true busca la ventana de pickup vencida sin terminar', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({ items: [], total: 0 });
+
+      await service.listForAdmin({ page: 1, limit: 10, stuck: true });
+
+      expect(ordersRepository.listForAdmin).toHaveBeenCalledWith(
+        expect.objectContaining({ stuckOnly: true }),
+      );
+    });
+
+    it('stuck=false no invierte el filtro: no hay un conjunto complementario útil', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({ items: [], total: 0 });
+
+      await service.listForAdmin({ page: 1, limit: 10, stuck: false });
+
+      expect(ordersRepository.listForAdmin).toHaveBeenCalledWith(
+        expect.objectContaining({ stuckOnly: false }),
+      );
+    });
+
+    it('resuelve el nombre del negocio y marca la orden atascada', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({
+        items: [
+          makeAdminRow({ pickup_end: new Date('2020-01-01T18:00:00Z') }),
+          makeAdminRow({
+            id: 'order-2',
+            pickup_end: new Date('2999-01-01T18:00:00Z'),
+          }),
+        ],
+        total: 2,
+      });
+
+      const result = await service.listForAdmin({ page: 1, limit: 10 });
+
+      expect(result.data[0]).toMatchObject({
+        business_name: 'Café Central',
+        offer_title: 'Mesa de sobrantes',
+        is_stuck: true,
+      });
+      expect(result.data[1]?.is_stuck).toBe(false);
+    });
+
+    it('deja business_name en null cuando el join no resuelve', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({
+        items: [makeAdminRow({ business_name: null })],
+        total: 1,
+      });
+
+      const result = await service.listForAdmin({ page: 1, limit: 10 });
+
+      expect(result.data[0]?.business_name).toBeNull();
+    });
+  });
+
   describe('getById', () => {
     it('should return order when user is owner', async () => {
       const row = makeOrderWithBusinessOwner({
@@ -871,6 +992,7 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
             findByIdForUpdate: jest.fn(),
             listForUser: jest.fn(),
             listForBusiness: jest.fn(),
+            listForAdmin: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
             isBusinessOwner: jest.fn(),

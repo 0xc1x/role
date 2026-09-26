@@ -692,6 +692,26 @@
         ]
       }
     },
+    "/api/v1/orders/admin": {
+      "get": {
+        "operationId": "OrdersController_listForAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated orders with business and offer"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List every order across businesses (admin)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
     "/api/v1/orders/{id}": {
       "get": {
         "operationId": "OrdersController_getById",

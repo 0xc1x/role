@@ -6,6 +6,7 @@ import {
   eq,
   inArray,
   isNull,
+  lt,
   or,
   sql,
   type SQL,
@@ -18,11 +19,33 @@ import {
   businessOwnership,
   businesses,
   coupons,
+  offers,
   orders,
 } from '../../database/schema';
 import { ACTIVE_ORDER_STATUSES } from './order-status.machine';
 
 export type DbExecutor = Database;
+
+/**
+ * Listado de back office: una orden + el nombre del negocio + el título y la
+ * ventana de pickup de la oferta, todo en la MISMA query. El panel no puede
+ * pedir el nombre del negocio fila por fila (N+1 sobre la pantalla de soporte).
+ */
+export type AdminOrderListRow = {
+  id: string;
+  order_number: string;
+  status: OrderStatus;
+  business_id: string;
+  business_name: string | null;
+  offer_id: string;
+  offer_title: string;
+  price: string;
+  original_price: string;
+  pickup_start: Date;
+  pickup_end: Date;
+  created_at: Date;
+  updated_at: Date;
+};
 
 @Injectable()
 export class OrdersRepository {
@@ -148,6 +171,68 @@ export class OrdersRepository {
       this.db
         .select({ value: count() })
         .from(orders)
+        .where(where)
+        .then((rows) => rows[0]?.value ?? 0),
+    ]);
+
+    return { items, total: Number(totalRow) };
+  }
+
+  /**
+   * Listado de back office. `stuck` = la ventana de pickup de la oferta ya
+   * cerró y la orden sigue en un estado no terminal: no hay transición que la
+   * cierre sola y el operador la tiene que encontrar. Comparte la definición
+   * de "no terminal" con el mapper (`ACTIVE_ORDER_STATUSES`) para que el
+   * filtro y la insignia de la fila no puedan discrepar.
+   */
+  async listForAdmin(opts: {
+    status?: OrderStatus;
+    businessId?: string;
+    stuckOnly?: boolean;
+    page: number;
+    limit: number;
+  }): Promise<{ items: AdminOrderListRow[]; total: number }> {
+    const filters: SQL[] = [];
+    if (opts.status) filters.push(eq(orders.status, opts.status));
+    if (opts.businessId) filters.push(eq(orders.business_id, opts.businessId));
+    if (opts.stuckOnly) {
+      filters.push(lt(offers.pickup_end, sql`now()`));
+      filters.push(inArray(orders.status, [...ACTIVE_ORDER_STATUSES]));
+    }
+    const where = filters.length ? and(...filters) : undefined;
+    const offset = (opts.page - 1) * opts.limit;
+
+    const columns = {
+      id: orders.id,
+      order_number: orders.order_number,
+      status: orders.status,
+      business_id: orders.business_id,
+      business_name: businesses.name,
+      offer_id: orders.offer_id,
+      offer_title: offers.title,
+      price: orders.price,
+      original_price: orders.original_price,
+      pickup_start: offers.pickup_start,
+      pickup_end: offers.pickup_end,
+      created_at: orders.created_at,
+      updated_at: orders.updated_at,
+    };
+
+    const [items, totalRow] = await Promise.all([
+      this.db
+        .select(columns)
+        .from(orders)
+        .innerJoin(offers, eq(orders.offer_id, offers.id))
+        .leftJoin(businesses, eq(orders.business_id, businesses.id))
+        .where(where)
+        .orderBy(desc(orders.created_at))
+        .limit(opts.limit)
+        .offset(offset),
+      this.db
+        .select({ value: count() })
+        .from(orders)
+        .innerJoin(offers, eq(orders.offer_id, offers.id))
+        .leftJoin(businesses, eq(orders.business_id, businesses.id))
         .where(where)
         .then((rows) => rows[0]?.value ?? 0),
     ]);

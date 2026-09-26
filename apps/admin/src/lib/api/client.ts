@@ -114,6 +114,25 @@ function buildBody(opts?: {
 	return undefined;
 }
 
+/**
+ * Lee el cuerpo tolerando respuestas vacías. Los endpoints `void` (p. ej.
+ * `DELETE /offers/:id`, que desactiva la oferta) contestan 200 sin cuerpo, y
+ * `res.json()` sobre "" lanza SyntaxError: la mutación reportaría fallo DESPUÉS
+ * de haber aplicado el cambio. Un cuerpo no vacío se parsea igual que antes.
+ *
+ * El `text()` primero es justamente para poder distinguir "cuerpo vacío" de
+ * "cuerpo con contenido"; si el objeto de respuesta no lo implementa (stubs y
+ * polyfills), se cae a `json()`.
+ */
+async function parseBody<T>(res: Response): Promise<T> {
+	if (typeof res.text === "function") {
+		const text = await res.text();
+		if (!text) return undefined as T;
+		return JSON.parse(text) as T;
+	}
+	return res.json() as Promise<T>;
+}
+
 async function request<T>(
 	method: string,
 	path: string,
@@ -126,7 +145,7 @@ async function request<T>(
 			body: buildBody(options),
 		});
 		if (!res.ok) return throwFromResponse(res);
-		return res.json() as Promise<T>;
+		return parseBody<T>(res);
 	}
 
 	if (isTokenExpired()) {
@@ -149,7 +168,7 @@ async function request<T>(
 
 	if (response.status !== 401) {
 		if (!response.ok) return throwFromResponse(response);
-		return response.json() as Promise<T>;
+		return parseBody<T>(response);
 	}
 
 	const refreshed = await attemptTokenRefresh();
@@ -161,7 +180,7 @@ async function request<T>(
 			headers,
 			body,
 		});
-		if (retry.ok) return retry.json() as Promise<T>;
+		if (retry.ok) return parseBody<T>(retry);
 		if (!retry.ok) return throwFromResponse(retry);
 	}
 	clearAuth();
@@ -180,4 +199,6 @@ export const api = {
 		request<T>("PATCH", path, { body }),
 	put: <T>(path: string, body?: unknown) => request<T>("PUT", path, { body }),
 	delete: <T>(path: string) => request<T>("DELETE", path),
+	/** Para endpoints que responden sin cuerpo (`void` en la API). */
+	deleteVoid: (path: string) => request<void>("DELETE", path),
 };

@@ -1,5 +1,6 @@
 jest.mock('@0xc1x/role-commons', () => ({
   CreateOrderRequestSchema: {},
+  ListAdminOrdersQuerySchema: {},
   ListBusinessOrdersQuerySchema: {},
   ListOrdersQuerySchema: {},
   UpdateOrderStatusSchema: {},
@@ -26,6 +27,7 @@ describe('OrdersController', () => {
             create: jest.fn(),
             listMine: jest.fn(),
             listForBusiness: jest.fn(),
+            listForAdmin: jest.fn(),
             getById: jest.fn(),
             updateStatus: jest.fn(),
             cancelOrder: jest.fn(),
@@ -55,6 +57,12 @@ describe('OrdersController', () => {
     const query = { business_id: 'b-1', page: 1, limit: 10 } as never;
     controller.listForBusiness(user, query);
     expect(service.listForBusiness).toHaveBeenCalledWith(user, query);
+  });
+
+  it('listForAdmin pasa el query', () => {
+    const query = { status: 'pending', stuck: true, page: 1, limit: 10 } as never;
+    controller.listForAdmin(query);
+    expect(service.listForAdmin).toHaveBeenCalledWith(query);
   });
 
   it('getById delega por id', () => {
