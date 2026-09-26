@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useUpdateBusiness } from "@/features/businesses/queries/businesses.queries";
 import { ActionCell } from "@/features/businesses/tables/cells/action-cell";
 
-const VerificationBadge = ({ status }: { status: string }) => {
+export const VerificationBadge = ({ status }: { status: string }) => {
 	const variant =
 		status === "approved"
 			? "success"
@@ -41,6 +41,29 @@ export const columns: ColumnDef<BusinessDto>[] = [
 		),
 		cell: ({ row }) => (
 			<div className="font-medium">{row.getValue("name")}</div>
+		),
+	},
+	{
+		// El correo es la vía de contacto real: sin él, verificar es un sello.
+		accessorKey: "email",
+		header: ({ column }) => (
+			<DataTableColumnHeader column={column} title="Correo" />
+		),
+		cell: ({ row }) => (
+			<span className="text-sm text-muted-foreground">
+				{row.getValue("email") ?? "—"}
+			</span>
+		),
+	},
+	{
+		accessorKey: "phone",
+		header: ({ column }) => (
+			<DataTableColumnHeader column={column} title="Teléfono" />
+		),
+		cell: ({ row }) => (
+			<span className="text-sm text-muted-foreground">
+				{row.getValue("phone") ?? "—"}
+			</span>
 		),
 	},
 	{

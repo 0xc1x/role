@@ -37,7 +37,8 @@ export const Route = createFileRoute("/_layout/negocios")({
 function RouteComponent() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, isLoading, isError, error } = useBusinessesList(search);
+	const { data, isLoading, isError, error, refetch } =
+		useBusinessesList(search);
 	const [searchInput, setSearchInput] = useState(search.search ?? "");
 
 	useEffect(() => setSearchInput(search.search ?? ""), [search.search]);
@@ -68,12 +69,9 @@ function RouteComponent() {
 				<p className="text-destructive">
 					{error instanceof Error ? error.message : "Error"}
 				</p>
-				<Button
-					variant="outline"
-					onClick={() =>
-						navigate({ search: { page: 1, limit: 10, search: undefined } })
-					}
-				>
+				{/* `navigate` con el mismo search lo deduplica y la query errored
+				    queda bajo la misma key: el botón de recuperación no hacía nada. */}
+				<Button variant="outline" onClick={() => void refetch()}>
 					Reintentar
 				</Button>
 			</div>

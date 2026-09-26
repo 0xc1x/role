@@ -26,7 +26,7 @@ export const Route = createFileRoute("/_layout/pagos")({
 function RouteComponent() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, isLoading, isError } = usePayoutsList(search);
+	const { data, isLoading, isError, error, refetch } = usePayoutsList(search);
 	const gen = useGeneratePayouts();
 
 	if (isLoading)
@@ -39,7 +39,16 @@ function RouteComponent() {
 			</div>
 		);
 	if (isError)
-		return <div className="p-6 text-destructive">Error al cargar pagos</div>;
+		return (
+			<div className="px-6 py-4">
+				<p className="text-destructive">
+					{error instanceof Error ? error.message : "Error al cargar pagos"}
+				</p>
+				<Button variant="outline" onClick={() => void refetch()}>
+					Reintentar
+				</Button>
+			</div>
+		);
 
 	const rows = data?.data ?? [];
 	const meta = data?.meta;
