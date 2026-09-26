@@ -57,6 +57,8 @@ export default function BusinessNewScreen() {
 					submitLabel={strings.business.createBusiness}
 					pending={create.isPending}
 					onSubmit={(input) =>
+						// El aviso de fallo lo emite el hook (copy es-ES nombrado por
+						// operación); aquí solo vive el camino feliz.
 						create.mutate(
 							{ ...input, ownerId: profile?.id ?? "" },
 							{
@@ -64,12 +66,6 @@ export default function BusinessNewScreen() {
 									toast.success(strings.business.businessCreated);
 									router.replace("/(business)/products");
 								},
-								onError: (e) =>
-									toast.error(
-										e instanceof Error
-											? e.message
-											: strings.business.createBusiness,
-									),
 							},
 						)
 					}

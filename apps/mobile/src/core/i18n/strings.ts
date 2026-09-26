@@ -424,6 +424,7 @@ export const strings = {
 		reviewComment: "Comentario (opcional)",
 		submitReview: "Publicar reseña",
 		reviewSubmitted: "¡Gracias por tu reseña!",
+		reviewSubmitError: "No pudimos publicar tu reseña. Inténtalo de nuevo.",
 		myReviews: "Mis reseñas",
 		myReviewsEmpty: "Aún no dejaste reseñas",
 		myReviewsEmptyHint:
@@ -681,6 +682,7 @@ export const strings = {
 		createBusiness: "Registrar negocio",
 		signupDataTitle: "Datos del negocio",
 		signupPhoneLabel: "Teléfono del negocio",
+		signupOwnerTitle: "Datos del responsable",
 		signupConfirmationRequired:
 			"Cuenta creada. Confirma tu correo e inicia sesión; crearemos tu negocio pendiente automáticamente.",
 		signupCompleted:
@@ -696,6 +698,7 @@ export const strings = {
 		businessHours: "Horarios",
 		businessHoursHint: "Formato: 18:00 - 22:00",
 		businessCreated: "Negocio creado",
+		businessCreateError: "No pudimos crear el negocio. Inténtalo de nuevo.",
 		requiredName: "Ingresa el nombre del negocio",
 		requiredType: "Selecciona el tipo de negocio",
 		pickLocation: "Elegir ubicación en el mapa",
@@ -724,6 +727,12 @@ export const strings = {
 		inactive: "Inactivo",
 		productSaved: "Producto guardado",
 		productDeleted: "Producto eliminado",
+		// Cada mutación de gestión nombra su operación: un "algo salió mal"
+		// compartido deja al dueño sin saber qué acción reintentar.
+		productSaveError: "No pudimos guardar el producto. Inténtalo de nuevo.",
+		productToggleError:
+			"No pudimos cambiar el estado del producto. Inténtalo de nuevo.",
+		productDeleteError: "No pudimos eliminar el producto. Inténtalo de nuevo.",
 		productsTitle: "Mis Productos",
 		allProducts: "Todos los productos",
 		searchProducts: "Buscar productos…",
@@ -790,6 +799,19 @@ export const strings = {
 			"No pudimos subir la foto nueva. Se conservó la imagen anterior.",
 		invalidPickupWindow:
 			"La fecha/hora de fin debe ser posterior a la de inicio.",
+		pickupWindowInPast:
+			"La ventana de recogida ya terminó. Elige una fecha y hora futuras.",
+		// Estados de carga/fallo/vacío de los selectores dependientes del
+		// formulario de producto: sin ellos un fallo de red se leía como
+		// "no hay nada que elegir".
+		categoriesLoadError:
+			"No pudimos cargar las categorías. Inténtalo de nuevo.",
+		noCategoriesTitle: "No hay categorías disponibles",
+		noCategoriesBody:
+			"Sin categorías no se puede publicar un producto. Inténtalo de nuevo o contacta con soporte.",
+		locationsLoadError: "No pudimos cargar tus locales. Inténtalo de nuevo.",
+		locationsPickerEmptyBody:
+			"El producto se publicará para todas las sucursales. Puedes agregarlas desde Locales.",
 		requiredField: "Campo requerido",
 		minStock: "Debe ser al menos 1",
 		invalidPrice: "Ingresa un precio mayor a 0",
@@ -958,6 +980,9 @@ export const strings = {
 		locationEditTitle: "Editar sucursal",
 		locationSaveTitle: "Guardar cambios",
 		locationSaved: "Sucursal guardada correctamente",
+		locationSaveError: "No pudimos guardar el local. Inténtalo de nuevo.",
+		locationToggleError:
+			"No pudimos cambiar el estado del local. Inténtalo de nuevo.",
 		requiredFieldLabel: "Este campo es obligatorio",
 		selectLocationMap: "Por favor, selecciona la ubicación en el mapa",
 		savedAddress: "Dirección guardada.",

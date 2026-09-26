@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import {
+	ActivityIndicator,
+	Platform,
+	Pressable,
+	StyleSheet,
+	View,
+} from "react-native";
 import { Image } from "expo-image";
 import {
 	Check,
@@ -9,6 +15,7 @@ import {
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 
+import { toAppError } from "@/src/core/error/mapper";
 import { strings } from "@/src/core/i18n/strings";
 import { AppText, BottomSheetModal, goBackOr, TextField } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
@@ -18,6 +25,10 @@ import {
 	useBusinessLocations,
 	useSaveOffer,
 } from "@/src/features/business/hooks";
+import {
+	defaultPickupWindow,
+	validatePickupWindow,
+} from "@/src/features/business/domain/products";
 import type { OfferDetail } from "@/src/features/offers/domain/offer";
 import { DateTimeField } from "./DateTimeFields";
 import { pickWebImage } from "../../utils/pick-image";
@@ -36,9 +47,12 @@ export function ProductForm({
 	product?: OfferDetail;
 }) {
 	const { colors } = useTheme();
-	const { data: categories } = useCategories();
-	const { data: locations } = useBusinessLocations(businessId);
+	const categoriesQuery = useCategories();
+	const locationsQuery = useBusinessLocations(businessId);
 	const save = useSaveOffer(businessId);
+
+	const categories = categoriesQuery.data;
+	const locations = locationsQuery.data;
 
 	const editing = product != null;
 
@@ -70,11 +84,14 @@ export function ProductForm({
 	const [stock, setStock] = useState(
 		product ? String(product.offer.stock) : "",
 	);
+	// An offer created at 21:00 must not default to a window that already
+	// closed, so the default is derived from "now" and never in the past.
+	const [defaultPickup] = useState(() => defaultPickupWindow());
 	const [pickupStart, setPickupStart] = useState<Date>(() =>
-		product ? new Date(product.offer.pickup_start) : defaultPickup(true),
+		product ? new Date(product.offer.pickup_start) : defaultPickup.start,
 	);
 	const [pickupEnd, setPickupEnd] = useState<Date>(() =>
-		product ? new Date(product.offer.pickup_end) : defaultPickup(false),
+		product ? new Date(product.offer.pickup_end) : defaultPickup.end,
 	);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [locationPickerOpen, setLocationPickerOpen] = useState(false);
@@ -136,8 +153,8 @@ export function ProductForm({
 		const stockNumber = Number(stock);
 		if (!Number.isInteger(stockNumber) || stockNumber < 1)
 			nextErrors.stock = strings.business.minStock;
-		if (!(pickupEnd.getTime() > pickupStart.getTime()))
-			nextErrors.pickup = strings.business.invalidPickupWindow;
+		const pickupError = validatePickupWindow(pickupStart, pickupEnd);
+		if (pickupError) nextErrors.pickup = pickupError;
 		setErrors(nextErrors);
 		if (Object.keys(nextErrors).length > 0) return;
 
@@ -162,9 +179,11 @@ export function ProductForm({
 			},
 			{
 				onSuccess: () => goBackOr("/(business)/products"),
+				// El mensaje crudo del driver (inglés, con nombres de tabla y
+				// constraint) nunca llega al dueño: el copy es-ES manda.
 				onError: (e) =>
 					setErrors({
-						form: e instanceof Error ? e.message : "Error al guardar",
+						form: toAppError(e, strings.business.productSaveError).message,
 					}),
 			},
 		);
@@ -235,48 +254,67 @@ export function ProductForm({
 					>
 						{strings.business.productCategories}
 					</AppText>
-					<View style={styles.optionsWrap}>
-						{(categories ?? []).map((category) => {
-							const selected = selectedCategoryIds.has(category.id);
-							return (
-								<Pressable
-									cssInterop={false}
-									key={category.id}
-									onPress={() => toggleCategory(category.id)}
-									// Categories are a required multi-select: without a
-									// checkbox role and checked state the selection is
-									// carried by background colour alone.
-									accessibilityRole="checkbox"
-									accessibilityLabel={category.name}
-									accessibilityState={{ checked: selected }}
-									style={({ pressed }) => [
-										styles.chip,
-										{
-											backgroundColor: selected
-												? colors.secondary
-												: colors.inputBackground,
-											borderColor: selected ? colors.secondary : colors.border,
-											opacity: pressed ? 0.85 : 1,
-										},
-									]}
-								>
-									<AppText
-										variant="bodySmall"
-										weight={selected ? "semiBold" : "medium"}
-										style={{
-											color: selected
-												? colors.secondaryForeground
-												: colors.foreground,
-										}}
+					{/* A failed query used to render an empty chip row under a
+					    required label: no clue why it failed, no way to retry. */}
+					{categoriesQuery.isPending ? (
+						<FieldLoadState state="loading" message={strings.common.loading} />
+					) : categoriesQuery.isError ? (
+						<FieldLoadState
+							state="error"
+							message={strings.business.categoriesLoadError}
+							onRetry={() => void categoriesQuery.refetch()}
+						/>
+					) : (categories ?? []).length === 0 ? (
+						<FieldLoadState
+							state="empty"
+							message={`${strings.business.noCategoriesTitle}. ${strings.business.noCategoriesBody}`}
+						/>
+					) : (
+						<View style={styles.optionsWrap}>
+							{(categories ?? []).map((category) => {
+								const selected = selectedCategoryIds.has(category.id);
+								return (
+									<Pressable
+										cssInterop={false}
+										key={category.id}
+										onPress={() => toggleCategory(category.id)}
+										// Categories are a required multi-select: without a
+										// checkbox role and checked state the selection is
+										// carried by background colour alone.
+										accessibilityRole="checkbox"
+										accessibilityLabel={category.name}
+										accessibilityState={{ checked: selected }}
+										style={({ pressed }) => [
+											styles.chip,
+											{
+												backgroundColor: selected
+													? colors.secondary
+													: colors.inputBackground,
+												borderColor: selected
+													? colors.secondary
+													: colors.border,
+												opacity: pressed ? 0.85 : 1,
+											},
+										]}
 									>
-										{category.emoji
-											? `${category.emoji} ${category.name}`
-											: category.name}
-									</AppText>
-								</Pressable>
-							);
-						})}
-					</View>
+										<AppText
+											variant="bodySmall"
+											weight={selected ? "semiBold" : "medium"}
+											style={{
+												color: selected
+													? colors.secondaryForeground
+													: colors.foreground,
+											}}
+										>
+											{category.emoji
+												? `${category.emoji} ${category.name}`
+												: category.name}
+										</AppText>
+									</Pressable>
+								);
+							})}
+						</View>
+					)}
 					{errors.categories ? (
 						<AppText
 							variant="bodySmall"
@@ -484,6 +522,22 @@ export function ProductForm({
 							<Check size={18} color={colors.secondaryForeground} />
 						) : null}
 					</Pressable>
+					{/* Same three states as the categories field: a failed or still
+					    loading list of branches is not an empty list of branches. */}
+					{locationsQuery.isPending ? (
+						<FieldLoadState state="loading" message={strings.common.loading} />
+					) : locationsQuery.isError ? (
+						<FieldLoadState
+							state="error"
+							message={strings.business.locationsLoadError}
+							onRetry={() => void locationsQuery.refetch()}
+						/>
+					) : (locations ?? []).length === 0 ? (
+						<FieldLoadState
+							state="empty"
+							message={strings.business.locationsPickerEmptyBody}
+						/>
+					) : null}
 					{(locations ?? []).map((location) => (
 						<Pressable
 							cssInterop={false}
@@ -542,10 +596,55 @@ export function ProductForm({
 	);
 }
 
-function defaultPickup(isStart: boolean): Date {
-	const date = new Date();
-	date.setHours(isStart ? 18 : 20, 0, 0, 0);
-	return date;
+/**
+ * Compact loading / error / empty state for a field fed by a query. Without
+ * it, a failed `useCategories()` renders an empty chip row under a required
+ * label: the owner is blocked with no cause and no retry.
+ */
+function FieldLoadState({
+	state,
+	message,
+	onRetry,
+}: {
+	state: "loading" | "error" | "empty";
+	message: string;
+	onRetry?: () => void;
+}) {
+	const { colors } = useTheme();
+	return (
+		<View style={styles.fieldState}>
+			{state === "loading" ? (
+				<ActivityIndicator size="small" color={colors.mutedForeground} />
+			) : null}
+			<AppText
+				variant="bodySmall"
+				style={{
+					flex: 1,
+					color:
+						state === "error" ? colors.destructive : colors.mutedForeground,
+				}}
+			>
+				{message}
+			</AppText>
+			{onRetry ? (
+				<Pressable
+					cssInterop={false}
+					onPress={onRetry}
+					hitSlop={8}
+					accessibilityRole="button"
+					accessibilityLabel={strings.common.retry}
+				>
+					<AppText
+						variant="bodySmall"
+						weight="semiBold"
+						style={{ color: colors.primary }}
+					>
+						{strings.common.retry}
+					</AppText>
+				</Pressable>
+			) : null}
+		</View>
+	);
 }
 
 function FormSection({
@@ -607,6 +706,11 @@ const styles = StyleSheet.create({
 	},
 	fieldBlock: {
 		gap: 6,
+	},
+	fieldState: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
 	},
 	optionsWrap: {
 		flexDirection: "row",

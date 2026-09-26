@@ -9,8 +9,19 @@ import { submitBusinessOwnerOnboarding } from "@/src/features/business/data/onbo
 import { toAppError } from "@/src/core/error/mapper";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
-import { Text } from "@/components/ui/text";
+import { validateBusinessSignupForm } from "@/src/features/auth/domain/validation";
 import { Button } from "@/components/ui/button";
+
+type BusinessSignupErrors = ReturnType<typeof validateBusinessSignupForm>;
+
+const EMPTY_ERRORS: BusinessSignupErrors = {
+	nameError: null,
+	emailError: null,
+	passwordError: null,
+	confirmPasswordError: null,
+	businessNameError: null,
+	ok: true,
+};
 
 export default function BusinessSignupScreen() {
 	const { colors } = useTheme();
@@ -22,18 +33,30 @@ export default function BusinessSignupScreen() {
 	const [businessPhone, setBusinessPhone] = useState("");
 	const [analyticsConsent, setAnalyticsConsent] = useState(false);
 	const [loading, setLoading] = useState(false);
+	const [fieldErrors, setFieldErrors] = useState<
+		ReturnType<typeof validateBusinessSignupForm>
+	>(EMPTY_ERRORS);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
 
+	// Same validator as the consumer signup (plus the business name and the
+	// confirmation match): the submit button is enabled only when every field
+	// passes, and the errors name the offending field.
+	const validation = validateBusinessSignupForm({
+		fullName,
+		email,
+		password,
+		confirmPassword: confirm,
+		businessName,
+	});
+	// Phone is optional, so it never blocks the submit.
+	const canSubmit = validation.ok && !loading;
+
 	const handleSignup = async () => {
-		if (
-			!fullName.trim() ||
-			!email.trim() ||
-			!password ||
-			password !== confirm ||
-			!businessName.trim()
-		) {
-			setError(strings.auth.completeFields);
+		if (loading) return;
+		setFieldErrors(validation);
+		if (!validation.ok) {
+			setError(null);
 			return;
 		}
 		setLoading(true);
@@ -91,35 +114,48 @@ export default function BusinessSignupScreen() {
 					weight="bold"
 					style={{ marginTop: spacing.sm }}
 				>
-					Datos del responsable
+					{strings.business.signupOwnerTitle}
 				</AppText>
 				<TextField
 					label={strings.auth.fullName}
 					value={fullName}
 					onChangeText={setFullName}
+					error={fieldErrors.nameError}
 					autoComplete="name"
+					returnKeyType="next"
 				/>
 				<TextField
 					label={strings.auth.email}
 					value={email}
 					onChangeText={setEmail}
-					autoCapitalize="none"
+					error={fieldErrors.emailError}
 					keyboardType="email-address"
+					autoCapitalize="none"
 					autoComplete="email"
+					textContentType="emailAddress"
+					returnKeyType="next"
 				/>
 				<TextField
 					label={strings.auth.password}
 					value={password}
 					onChangeText={setPassword}
+					error={fieldErrors.passwordError}
 					secureTextEntry
+					hint={strings.auth.passwordMinHint}
 					autoComplete="new-password"
+					textContentType="newPassword"
+					returnKeyType="next"
 				/>
 				<TextField
 					label={strings.auth.confirmPassword}
 					value={confirm}
 					onChangeText={setConfirm}
+					error={fieldErrors.confirmPasswordError}
 					secureTextEntry
 					autoComplete="new-password"
+					textContentType="newPassword"
+					returnKeyType="done"
+					onSubmitEditing={handleSignup}
 				/>
 
 				<AppText
@@ -133,13 +169,16 @@ export default function BusinessSignupScreen() {
 					label={strings.business.businessName}
 					value={businessName}
 					onChangeText={setBusinessName}
+					error={fieldErrors.businessNameError}
 					autoComplete="name"
+					returnKeyType="next"
 				/>
 				<TextField
 					label={strings.business.signupPhoneLabel}
 					value={businessPhone}
 					onChangeText={setBusinessPhone}
 					keyboardType="phone-pad"
+					returnKeyType="done"
 				/>
 
 				<View style={styles.analyticsRow}>
@@ -176,6 +215,7 @@ export default function BusinessSignupScreen() {
 				<Button
 					onPress={handleSignup}
 					loading={loading}
+					disabled={!canSubmit}
 					fullWidth
 					style={{ marginTop: spacing.md }}
 				>

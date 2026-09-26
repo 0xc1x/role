@@ -177,6 +177,7 @@ export function useDeleteOffer(businessId: string) {
 			});
 			void queryClient.invalidateQueries({ queryKey: ["offers"] });
 		},
+		onError: () => toast.error(strings.business.productDeleteError),
 	});
 }
 
@@ -196,6 +197,7 @@ export function useToggleOfferActive(businessId: string) {
 			});
 			void queryClient.invalidateQueries({ queryKey: ["offers"] });
 		},
+		onError: () => toast.error(strings.business.productToggleError),
 	});
 }
 
@@ -227,6 +229,7 @@ export function useUpsertLocation(businessId: string) {
 			});
 			void queryClient.invalidateQueries({ queryKey: ["business-locations"] });
 		},
+		onError: () => toast.error(strings.business.locationSaveError),
 	});
 }
 
@@ -241,6 +244,7 @@ export function useToggleLocationStatus(businessId: string) {
 			});
 			void queryClient.invalidateQueries({ queryKey: ["business-locations"] });
 		},
+		onError: () => toast.error(strings.business.locationToggleError),
 	});
 }
 
@@ -295,6 +299,7 @@ export function useUpsertCoupon(businessId: string) {
 			});
 			void queryClient.invalidateQueries({ queryKey: ["coupons"] });
 		},
+		onError: () => toast.error(strings.business.couponGenerateError),
 	});
 }
 
@@ -330,6 +335,7 @@ export function useToggleCouponStatus(businessId: string) {
 			});
 			void queryClient.invalidateQueries({ queryKey: ["coupons"] });
 		},
+		onError: () => toast.error(strings.business.couponToggleError),
 	});
 }
 
@@ -342,6 +348,7 @@ export function useCreateBusiness() {
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: ["businesses"] });
 		},
+		onError: () => toast.error(strings.business.businessCreateError),
 	});
 }
 
@@ -365,6 +372,7 @@ export function useUpdateBusiness(businessId: string) {
 			// Los datos del negocio viven embebidos en el detalle de oferta.
 			void queryClient.invalidateQueries({ queryKey: ["offers"] });
 		},
+		onError: () => toast.error(strings.business.editBusinessError),
 	});
 }
 

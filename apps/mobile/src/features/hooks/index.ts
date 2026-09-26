@@ -544,6 +544,9 @@ export function useSubmitReview() {
 			void queryClient.invalidateQueries({ queryKey: ["offers"] });
 			void queryClient.invalidateQueries({ queryKey: ["userStats"] });
 		},
+		// El comentario escrito vive en el estado del formulario: sin este
+		// aviso el botón se desenreda y la reseña parece guardada.
+		onError: () => toast.error(strings.orders.reviewSubmitError),
 	});
 }
 
