@@ -12,6 +12,13 @@ export type BadgeTone =
  * Shared BadgeTone → color mapping (tokens, dark-safe). Single source of truth
  * for `StatusBadge` and any other tone-driven pill.
  *
+ * IMPORT BY LEAF PATH — `@/src/core/ui/badge-tone`, NOT the `@/src/core/ui`
+ * barrel, and do not re-export this from the barrel. Many tests stub the
+ * barrel with a partial `mock.module`, and bun's nominal-import check fails the
+ * moment a component pulls a value the stub doesn't declare. A `type` re-export
+ * is harmless (types are erased); a value re-export is not. `AppText`,
+ * `SegmentedTabs`, `Navbar` and `InfoScreen` are consumed the same way.
+ *
  * The lookup is a `Record<BadgeTone, …>` on purpose: its exhaustiveness is what
  * makes `tsc` fail at compile time when a new tone is added to the union. Do NOT
  * rewrite it as a `switch` with a `default` branch — that silently accepts an

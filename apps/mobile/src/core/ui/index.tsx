@@ -547,7 +547,10 @@ export function TextField({
 }
 
 // ─── StatusBadge ────────────────────────────────────────────────────
-export { badgeToneColors } from "./badge-tone";
+// `badgeToneColors` is intentionally NOT re-exported here: consumers import
+// it from `@/src/core/ui/badge-tone` directly, so the many partial
+// `mock.module("@/src/core/ui", …)` stubs in tests can't break on a value
+// export they don't declare. The type re-export is safe — types are erased.
 export type { BadgeTone } from "./badge-tone";
 
 export function StatusBadge({

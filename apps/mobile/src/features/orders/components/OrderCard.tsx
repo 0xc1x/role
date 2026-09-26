@@ -11,7 +11,8 @@ import {
 import { router } from "expo-router";
 
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, badgeToneColors, type BadgeTone } from "@/src/core/ui";
+import { AppText, type BadgeTone } from "@/src/core/ui";
+import { badgeToneColors } from "@/src/core/ui/badge-tone";
 import {
 	isActiveStatus,
 	orderStatusLabels,
