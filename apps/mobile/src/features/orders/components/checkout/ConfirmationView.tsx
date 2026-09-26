@@ -36,7 +36,7 @@ export function ConfirmationView({
 	return (
 		<View style={styles.wrap}>
 			<View style={styles.successHeader}>
-				<CircleCheck size={54} color={colors.ecoGreen} fill={colors.ecoGreen} />
+				<CircleCheck size={54} color={colors.card} fill={colors.ecoGreen} />
 				<AppText variant="h3" weight="bold" style={styles.successTitle}>
 					{strings.checkout.reservationSuccessTitle}
 				</AppText>
@@ -78,7 +78,11 @@ export function ConfirmationView({
 					{ backgroundColor: colors.muted, borderColor: colors.borderSolid },
 				]}
 			>
-				<Store size={20} color={colors.primary} fill={colors.primary} />
+				<View
+					style={[styles.businessIcon, { backgroundColor: colors.borderSolid }]}
+				>
+					<Store size={18} color={colors.primary} />
+				</View>
 				<View style={styles.businessBody}>
 					<AppText variant="labelSmall" weight="bold" numberOfLines={1}>
 						{business.name}
@@ -140,6 +144,13 @@ const styles = StyleSheet.create({
 	orderNumber: { fontSize: 13 },
 	pickupInfo: { fontSize: 12, textAlign: "center" },
 
+	businessIcon: {
+		width: 32,
+		height: 32,
+		borderRadius: radii.md,
+		alignItems: "center",
+		justifyContent: "center",
+	},
 	businessCard: {
 		flexDirection: "row",
 		alignItems: "center",

@@ -222,7 +222,7 @@ export function ProductDetail({
 							router.push(`/business/${businessId}/offer/${offer.id}/edit`)
 						}
 					>
-						1{strings.common.edit}
+						{strings.common.edit}
 					</Button>
 					<Button
 						variant="outline"

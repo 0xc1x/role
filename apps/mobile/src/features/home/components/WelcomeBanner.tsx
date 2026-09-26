@@ -77,7 +77,7 @@ export function WelcomeBanner() {
 		: (() => {
 				switch (statIndex) {
 					case 0: {
-						const totalSaved = (stats?.total_saved_cents ?? 0) / 100;
+						const totalSaved = stats?.total_saved ?? 0;
 						return {
 							icon: Trophy,
 							value: formatMoney(totalSaved),

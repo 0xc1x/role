@@ -97,9 +97,7 @@ export function ProfileHeader({ profile }: { profile: UserProfile }) {
 			) : (
 				<View style={styles.statsRow}>
 					<StatCard
-						value={formatMoney(
-							Math.round((stats?.total_saved_cents ?? 0) / 100),
-						)}
+						value={formatMoney(stats?.total_saved ?? 0)}
 						label={strings.profile.totalSaved}
 					/>
 					<StatCard
