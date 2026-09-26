@@ -111,6 +111,30 @@ function`, `drop trigger if exists`, `grant`) and recorded as
 that leaves no evidence, and then trusting a commit as proof of application.
 When a fix seems not to work, read the ledger before re-writing the fix.
 
+## Applied: `20260926212729_email_sends_redact_legacy_error_message`
+
+A destructive backfill. It rewrote all 15 historical `email_sends.error_message`
+values that still held raw Resend provider text into the fixed marker
+`Error:legacy_redacted`; after it, zero rows in the table carry raw provider
+text. It changed no column, no schema, and no API.
+
+**The forensic archive exists.** The migration is irreversible, so the affected
+rows (`id`, `created_at`, `error_message`) were exported to
+`~/.local/share/role-archives/email_sends_error_message_20260926T212654Z.csv`
+(mode `600`, outside the repository so it can never be committed) BEFORE the
+migration ran. It is the only copy of the original text.
+
+**The SQL file still says "NOT APPLIED" in its header, and that is deliberate.**
+Editing it would change its bytes and break the `md5sum` equality that is the
+only proof of what ran. The file is the statement the server stored, verbatim —
+do not reformat it, do not add a trailing newline, and record future status
+changes here rather than in the SQL. This applies to every file in this
+directory.
+
+Note that `length(statements[1])` reports 5626 while the file is 5639 bytes:
+`length()` counts characters, and the header contains em dashes and accented
+Spanish. The `md5sum` check is the authoritative one, and it matches.
+
 ## Verifying this directory against the database
 
 ```sh
