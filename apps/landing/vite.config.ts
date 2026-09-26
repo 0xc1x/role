@@ -7,15 +7,11 @@ import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig, type Plugin } from "vite";
 
-const INDEXABLE_ROUTES = [
-	"/",
-	"/how-it-works",
-	"/for-business",
-	"/help-center",
-	"/about",
-	"/privacy",
-	"/terms",
-];
+import {
+	buildRobotsTxt,
+	buildSitemapXml,
+	resolveSeoSiteUrl,
+} from "./src/lib/seo-files";
 
 /**
  * Genera robots.txt y sitemap.xml en publicDir al construir: nitro copia esa
@@ -24,6 +20,10 @@ const INDEXABLE_ROUTES = [
  * build); sin dominio se usa https://role.app como fallback con un warning
  * ruidoso para no emitir nunca un robots.txt sin línea Sitemap.
  * /business-signup es noindex y por eso no entra al sitemap.
+ *
+ * Los dos archivos son artefactos: están en .gitignore y se regeneran en cada
+ * build, para que un preview nunca anuncie el origen de producción. La lógica
+ * vive en src/lib/seo-files.ts para que `bun test src` la pueda verificar.
  */
 function seoFiles(): Plugin {
 	let publicDir = "public";
@@ -35,35 +35,15 @@ function seoFiles(): Plugin {
 		closeBundle() {
 			const raw =
 				process.env.VITE_SITE_URL ?? process.env.VERCEL_PROJECT_PRODUCTION_URL;
-			const normalized = raw
-				? raw.replace(/\/+$/, "").replace(/^(?!https?:\/\/)/, "https://")
-				: undefined;
-			const site = normalized ?? "https://role.app";
-			if (!normalized) {
+			const site = resolveSeoSiteUrl(raw);
+			if (!raw?.trim()) {
 				console.warn(
 					"[seo] falta VITE_SITE_URL/VERCEL_PROJECT_PRODUCTION_URL: usando fallback https://role.app para robots.txt y sitemap.xml",
 				);
 			}
-			const robots = [
-				"User-agent: *",
-				"Allow: /",
-				`Sitemap: ${site}/sitemap.xml`,
-				"",
-			].join("\n");
 			const writes = [
-				writeFile(path.join(publicDir, "robots.txt"), robots),
-				writeFile(
-					path.join(publicDir, "sitemap.xml"),
-					[
-						'<?xml version="1.0" encoding="UTF-8"?>',
-						'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-						...INDEXABLE_ROUTES.map(
-							(route) => `<url><loc>${site}${route}</loc></url>`,
-						),
-						"</urlset>",
-						"",
-					].join("\n"),
-				),
+				writeFile(path.join(publicDir, "robots.txt"), buildRobotsTxt(site)),
+				writeFile(path.join(publicDir, "sitemap.xml"), buildSitemapXml(site)),
 			];
 			mkdir(path.resolve(publicDir), { recursive: true })
 				.then(() => Promise.all(writes))

@@ -59,9 +59,16 @@ function contactErrorMessage(error: ZodError): string {
 const LS_LAST = "role-waitlist-last";
 
 // Tono "cream" de los campos del formulario: variante visual del Input del
-// catálogo (borde por sombra interna, anillo forest al enfocar).
+// catálogo (borde `sage`, anillo forest al enfocar).
+//
+// El borde va en `border-sage` y no en una sombra: el 1px de
+// `rgba(18,36,26,0.12)` sobre cream daba 1.27:1, y WCAG 1.4.11 pide 3:1 para
+// la frontera de un campo de formulario. `border-sage` da 4.26:1 sobre cream.
+// El 1px pasa de estar fuera de la caja (`box-shadow` con spread) a estar
+// dentro (`border-box`); el ancho de los campos no cambia, pero el conjunto
+// del form queda 1px más angosto.
 const inputCream =
-	"h-12 w-full rounded-xl border-0 bg-cream px-4 text-base text-ink shadow-[0_0_0_1px_rgba(18,36,26,0.12)] placeholder:text-muted focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0";
+	"h-12 w-full rounded-xl border border-sage bg-cream px-4 text-base text-ink placeholder:text-muted focus-visible:border-forest focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-0";
 
 export function Contact() {
 	const [role, setRole] = useState<ContactRole>("negocio");
@@ -260,7 +267,7 @@ export function Contact() {
 										id="contact-city"
 										className={cn(
 											inputCream,
-											"data-placeholder:text-muted focus-visible:border-0 [&_svg]:text-muted",
+											"data-placeholder:text-muted [&_svg]:text-muted",
 										)}
 									>
 										<SelectValue placeholder="Selecciona ciudad" />

@@ -140,7 +140,10 @@ function ForBusinessPage() {
 								<div key={s.label}>
 									<dt className="sr-only">{s.label}</dt>
 									<dd>
-										<p className="font-heading text-3xl font-bold tabular-nums text-role-primary md:text-4xl">
+										{/* `role-secondary`, no `role-primary`: el proof number vive
+										    sobre `role-dark-bg` y primary contra dark da 1.25:1
+										    (WCAG AA pide 4.5:1). secondary da 12.40:1. */}
+										<p className="font-heading text-3xl font-bold tabular-nums text-role-secondary md:text-4xl">
 											{s.value}
 										</p>
 										<p className="mt-1 text-sm text-white/70">{s.label}</p>

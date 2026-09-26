@@ -31,13 +31,44 @@ function errorMessage(path: string, status: number, body: string): string {
 	return fallback;
 }
 
+/**
+ * Error de la API con su status HTTP. Sin el status, la landing solo puede
+ * reconocer un caso por el texto del backend ("Email is already registered"),
+ * que además es inglés y no puede depender de una cadena. `message` conserva
+ * el envelope crudo para los errores que no tienen traducción propia.
+ */
+export class ApiError extends Error {
+	readonly status: number;
+	readonly path: string;
+
+	constructor(path: string, status: number, message: string) {
+		super(message);
+		this.name = "ApiError";
+		this.status = status;
+		this.path = path;
+	}
+
+	/** El servidor respondió 409: el recurso ya existe. */
+	get isConflict(): boolean {
+		return this.status === 409;
+	}
+}
+
+function apiError(path: string, response: Response, text: string): ApiError {
+	return new ApiError(
+		path,
+		response.status,
+		errorMessage(path, response.status, text),
+	);
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
 	const response = await fetch(`${API_URL}${path}`, {
 		headers: { Accept: "application/json" },
 	});
 	if (!response.ok) {
 		const text = await response.text().catch(() => "");
-		throw new Error(errorMessage(path, response.status, text));
+		throw apiError(path, response, text);
 	}
 	return (await response.json()) as T;
 }
@@ -50,7 +81,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 	});
 	if (!response.ok) {
 		const text = await response.text().catch(() => "");
-		throw new Error(errorMessage(path, response.status, text));
+		throw apiError(path, response, text);
 	}
 	const ct = response.headers.get("content-type") ?? "";
 	if (ct.includes("application/json")) return (await response.json()) as T;
