@@ -11,6 +11,7 @@ import {
 	DrawerTitle,
 } from "@/components/ui/drawer";
 import { BusinessEmailSendsTable } from "@/features/businesses/components/business-email-sends-table";
+import { BusinessLocationsSection } from "@/features/businesses/components/business-locations-section";
 import { VerificationBadge } from "@/features/businesses/tables/businesses.columns";
 import { formatBusinessDate } from "@/lib/dates";
 
@@ -98,6 +99,15 @@ export function BusinessDetailDrawer({
 						<DetailField label="ID" value={business.id} />
 						<DetailField label="Propietario" value={business.owner_id} />
 						<DetailField label="Tipo" value={business.type} />
+					</section>
+
+					<section className="space-y-3" aria-label="Puntos de retiro">
+						<h3 className="font-medium text-sm">Puntos de retiro</h3>
+						<BusinessLocationsSection
+							businessId={business.id}
+							businessName={business.name}
+							enabled={isOpen}
+						/>
 					</section>
 
 					<section className="space-y-3" aria-label="Notificaciones por correo">
