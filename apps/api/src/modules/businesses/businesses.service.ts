@@ -404,9 +404,13 @@ export class BusinessesService {
    * Entregas de correo transaccional de un negocio (read-only).
    *
    * Admin-only a propósito: la fila de `email_sends` es la única evidencia de
-   * si el aviso de aprobación/rechazo salió, y su `error_message` es el motivo
-   * accionable cuando Resend rechaza el envío. Sin comprobación de existencia
-   * del negocio: la lista vacía ya dice que no hubo avisos.
+   * si el aviso de aprobación/rechazo salió. Ojo con su `error_message`: NO es
+   * el motivo accionable del rechazo — es una huella de diagnóstico acotada
+   * (`errorType` o `errorType:errorCode`, vía `safeErrorSummary`) porque el
+   * mensaje crudo de Resend puede traer la API key o el email del
+   * destinatario, y esta columna se renderiza en el admin. Para el motivo real
+   * hay que mirar los logs estructurados del envío. Sin comprobación de
+   * existencia del negocio: la lista vacía ya dice que no hubo avisos.
    */
   async listEmailSends(
     user: AuthUser,

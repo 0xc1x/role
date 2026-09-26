@@ -16,7 +16,10 @@ import {
   type RenderedEmail,
   type TestCampaignDto,
 } from '@0xc1x/role-commons';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import {
+  safeErrorFields,
+  safeErrorSummary,
+} from '../../common/utils/safe-error';
 import type { Env } from '../../config/env.schema';
 import { AppConfigRepository } from '../app-config/app-config.repository';
 import { resolveOutboundFrom } from '../app-config/outbound-addresses';
@@ -495,10 +498,11 @@ export class CampaignsService {
         });
         await this.repository.markSent(send.id, resendId);
       } catch (err) {
-        await this.repository.markFailed(
-          send.id,
-          err instanceof Error ? err.message : String(err),
-        );
+        // `error_message` se expone en DTOs y se renderiza en el admin, así que
+        // nunca se persiste el mensaje crudo de Resend: puede traer la API key,
+        // el email del destinatario o el id de la cuenta. Solo la huella
+        // acotada tipo/código, que basta para triage.
+        await this.repository.markFailed(send.id, safeErrorSummary(err));
       }
     }
     return transactional.length;
@@ -602,10 +606,9 @@ export class CampaignsService {
         const result = await this.deliver(send.email, rendered);
         await this.repository.markSent(send.id, result);
       } catch (err) {
-        await this.repository.markFailed(
-          send.id,
-          err instanceof Error ? err.message : String(err),
-        );
+        // Misma razón que en `processTransactionalBatch`: el mensaje crudo de
+        // Resend es PII de terceros y esta columna se lee en el admin.
+        await this.repository.markFailed(send.id, safeErrorSummary(err));
       }
     }
     if (batch.length > 0) {
@@ -706,6 +709,10 @@ export class CampaignsService {
       subject: rendered.subject,
       html: rendered.html,
     });
+    // El mensaje crudo de Resend viaja solo en proceso: cada consumidor lo
+    // reduce antes de persistir o loguear (`safeErrorSummary` al marcar failed,
+    // `AllExceptionsFilter` al escapar a HTTP). Conservarlo aquí mantiene el
+    // diagnóstico útil durante el desarrollo sin abrir una vía de fuga.
     if (error) throw new Error(error.message);
     return data?.id ?? null;
   }

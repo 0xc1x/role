@@ -601,7 +601,7 @@ describe('CampaignsService', () => {
       expect(repository.markSent).toHaveBeenCalledWith('s-1', 're_1');
     });
 
-    it('marca failed con el mensaje cuando el envío falla', async () => {
+    it('marca failed con la huella redactada, no con el mensaje de Resend', async () => {
       repository.findPendingBatch.mockResolvedValue([
         makeSend({ type: 'transactional' }),
       ]);
@@ -609,7 +609,9 @@ describe('CampaignsService', () => {
 
       await service.processTransactionalBatch();
 
-      expect(repository.markFailed).toHaveBeenCalledWith('s-1', 'Credit insuficiente');
+      // `error_message` sale por DTO y se renderiza en el admin, así que solo
+      // admite la huella acotada de `safeErrorSummary`.
+      expect(repository.markFailed).toHaveBeenCalledWith('s-1', 'Error');
       expect(repository.markSent).not.toHaveBeenCalled();
     });
 
@@ -621,7 +623,10 @@ describe('CampaignsService', () => {
 
       await service.processTransactionalBatch();
 
-      expect(repository.markFailed).toHaveBeenCalledWith('s-1', 'Plantilla no encontrada');
+      expect(repository.markFailed).toHaveBeenCalledWith(
+        's-1',
+        'NotFoundException',
+      );
     });
   });
 
@@ -662,7 +667,7 @@ describe('CampaignsService', () => {
       expect(queue.add).not.toHaveBeenCalled();
     });
 
-    it('falla el envío individual sin cortar el lote', async () => {
+    it('falla el envío individual sin cortar el lote ni filtrar el mensaje', async () => {
       const sendA = makeSend({ id: 's-1' });
       const sendB = makeSend({ id: 's-2' });
       repository.findQueuedBatch.mockResolvedValue([sendA, sendB]);
@@ -673,7 +678,8 @@ describe('CampaignsService', () => {
 
       await service.processBatch(makeCampaign({ status: 'sending' }));
 
-      expect(repository.markFailed).toHaveBeenCalledWith('s-1', 'Credit insuficiente');
+      // El texto del rechazo de Resend no se persiste: se queda la huella.
+      expect(repository.markFailed).toHaveBeenCalledWith('s-1', 'Error');
       expect(repository.markSent).toHaveBeenCalledWith('s-2', 're_9');
     });
   });
