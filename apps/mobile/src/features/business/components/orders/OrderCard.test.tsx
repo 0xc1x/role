@@ -51,6 +51,11 @@ const { OrderStatsRowSkeleton } = await import("./OrderStatsRow");
 const { BusinessStatsRowSkeleton } = await import(
 	"../products/BusinessStatsRow"
 );
+// OrderDetail.customerName is `string | null`; the fixture pins it to a known
+// value, so the tests assert against this const instead of asserting away the
+// null the type allows.
+const customerName = "Alexandra Montgomery Richardson";
+
 const item: OrderDetail = {
 	order: {
 		id: "order-1",
@@ -78,7 +83,7 @@ const item: OrderDetail = {
 	businessAddress: null,
 	businessPhone: null,
 	businessLocationId: null,
-	customerName: "Alexandra Montgomery Richardson",
+	customerName,
 	customerPhone: null,
 	customerEmail: null,
 	events: [],
@@ -106,13 +111,13 @@ test("renders all business statuses with metadata and independent footer presses
 			);
 			const buttons = [
 				...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g),
-			].map((match) => match[1]!);
+			].map((match) => match[1] ?? "");
 			expect(buttons).toHaveLength(1 + actionCounts[status]);
 			expect(buttons.every((body) => !body.includes("<button"))).toBe(true);
 			for (const value of [
 				item.offerTitle,
 				item.order.order_number,
-				item.customerName!,
+				customerName,
 				formatDateTime(item.order.created_at),
 				formatMoney(item.order.price),
 				orderStatusLabels[status],
@@ -172,7 +177,7 @@ test("disables pending mutations and handles absent customer and an image", () =
 					},
 				}),
 			);
-			expect(html).not.toContain(item.customerName!);
+			expect(html).not.toContain(customerName);
 			expect([...html.matchAll(/aria-disabled="true"/g)]).toHaveLength(
 				actionCounts[status],
 			);

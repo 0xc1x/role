@@ -4,7 +4,6 @@ import { StyleSheet, View } from "react-native";
 import { strings } from "@/src/core/i18n/strings";
 import { goBackOr, Screen, ScreenHeader } from "@/src/core/ui";
 import { useAuthStore } from "@/src/features/auth/store";
-import { useTheme } from "@/src/core/theme";
 import { spacing } from "@/src/core/theme/spacing";
 import {
 	useBusinesses,
@@ -16,7 +15,6 @@ import {
 } from "@/src/features/business/components/LocationForm";
 
 export default function BusinessLocationCreateScreen() {
-	const { colors } = useTheme();
 	const profile = useAuthStore((s) => s.profile);
 	const { data: businesses } = useBusinesses(profile?.id ?? "");
 	const businessId = businesses?.[0]?.id ?? "";

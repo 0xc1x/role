@@ -99,7 +99,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "lint": "biome lint .",
+    "lint": "biome lint . --error-on-warnings",
     "test": "bun test --isolate src",
     "format": "biome format --write .",
     "format:check": "biome format .",

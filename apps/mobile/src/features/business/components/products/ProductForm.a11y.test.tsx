@@ -11,7 +11,16 @@ import { strings } from "@/src/core/i18n/strings";
 // image and a pickup location. All three were unnamed buttons / untyped chips,
 // so the selections were conveyed by background colour and font weight alone.
 
-type PressableProps = Record<string, any>;
+// The probe records the a11y surface each Pressable actually receives; these
+// are the only fields the assertions below read.
+type PressableProps = {
+	accessibilityRole?: string;
+	accessibilityLabel?: string;
+	accessibilityState?: { checked?: boolean };
+	onPress?: () => void;
+	children?: ReactNode;
+};
+
 let received: PressableProps[] = [];
 
 const ProbePressable = (props: PressableProps) => {

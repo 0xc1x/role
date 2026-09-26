@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { supabase } from "@/src/core/supabase/client";
 
 import { parseRole, type UserProfile } from "./domain/user";
-import { authRepository, enrichProfile } from "./data/repository";
+import { enrichProfile } from "./data/repository";
 
 export type AuthStatus = "loading" | "authenticated" | "guest";
 

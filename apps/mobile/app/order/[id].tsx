@@ -42,7 +42,6 @@ import { PriceDetailsCard } from "@/src/features/orders/components/order-detail/
 import { InstructionsCard } from "@/src/features/orders/components/order-detail/InstructionsCard";
 import { TimelineCard } from "@/src/features/orders/components/order-detail/TimelineCard";
 import { ReviewBanner } from "@/src/features/orders/components/order-detail/ReviewBanner";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 export default function OrderDetailScreen() {

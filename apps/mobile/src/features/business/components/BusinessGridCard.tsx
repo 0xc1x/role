@@ -1,10 +1,4 @@
-import {
-	Pressable,
-	StyleSheet,
-	View,
-	type StyleProp,
-	type ViewStyle,
-} from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { MapPin, Star, Store } from "lucide-react-native";

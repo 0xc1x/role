@@ -51,7 +51,6 @@ import { spacing, radii } from "@/src/core/theme/spacing";
 import { typography } from "@/src/core/theme/typography";
 import { useTheme } from "@/src/core/theme";
 import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
 
 export default function BusinessProductsScreen() {
 	const { colors } = useTheme();

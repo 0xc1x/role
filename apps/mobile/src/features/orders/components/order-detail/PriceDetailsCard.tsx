@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function PriceDetailsCard({ order }: { order: Order }) {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const discount = orderDiscount(order);
 	return (
 		<Card>

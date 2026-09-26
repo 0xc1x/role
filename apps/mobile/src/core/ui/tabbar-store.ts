@@ -57,12 +57,7 @@ export function withSyncedTabIndex(
 		// La ruta `index` no aporta segmento (p. ej. `["(consumer)"]`): el tab
 		// activo es el `index` del grupo, si existe entre los visibles.
 		const last = segments[segments.length - 1];
-		if (
-			last !== undefined &&
-			last.startsWith("(") &&
-			last.endsWith(")") &&
-			names.has("index")
-		) {
+		if (last?.startsWith("(") && last.endsWith(")") && names.has("index")) {
 			match = "index";
 		} else {
 			return props;

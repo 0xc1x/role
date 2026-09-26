@@ -9,9 +9,24 @@ import {
 	haversineKm,
 	splitList,
 } from "@/src/features/offers/domain/offer";
-import type { OfferDetail } from "@/src/features/offers/domain/offer";
+import type {
+	EmbeddedLocation,
+	OfferDetail,
+} from "@/src/features/offers/domain/offer";
 
 const now = new Date("2025-01-15T12:00:00Z");
+
+// Shared fixture location. Typed as EmbeddedLocation (not OfferDetail, whose
+// `location` is nullable) so helpers can rebuild it without an index/`!`
+// assertion standing in for a guarantee the fixture actually makes.
+const location: EmbeddedLocation = {
+	id: "l1",
+	name: "Sucursal",
+	address: "Calle 1",
+	latitude: 19.4,
+	longitude: -99.1,
+	zone: "Centro",
+};
 
 function makeOffer(overrides: Partial<OfferDetail["offer"]> = {}): OfferDetail {
 	return {
@@ -47,14 +62,7 @@ function makeOffer(overrides: Partial<OfferDetail["offer"]> = {}): OfferDetail {
 			rating: 4.5,
 			review_count: 3,
 		},
-		location: {
-			id: "l1",
-			name: "Sucursal",
-			address: "Calle 1",
-			latitude: 19.4,
-			longitude: -99.1,
-			zone: "Centro",
-		},
+		location,
 		categories: [],
 	};
 }
@@ -112,7 +120,7 @@ describe("filterByDistance", () => {
 		const base = makeOffer({ id });
 		return {
 			...base,
-			location: { ...base.location!, id, latitude: lat, longitude: lng },
+			location: { ...location, id, latitude: lat, longitude: lng },
 		};
 	}
 

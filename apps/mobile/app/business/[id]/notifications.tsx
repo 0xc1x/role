@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import {

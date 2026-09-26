@@ -198,9 +198,9 @@ describe("orderRepository paginated listing", () => {
 		});
 
 		expect(rows).toEqual([]);
-		expect(calls["eq"]).toContainEqual(["user_id", "u1"]);
-		expect(calls["in"]).toContainEqual(["status", ["pending", "confirmed"]]);
-		expect(calls["range"]).toContainEqual([20, 39]);
+		expect(calls.eq).toContainEqual(["user_id", "u1"]);
+		expect(calls.in).toContainEqual(["status", ["pending", "confirmed"]]);
+		expect(calls.range).toContainEqual([20, 39]);
 	});
 
 	test("getUserOrders aplica filtros server-side + range", async () => {
@@ -215,22 +215,22 @@ describe("orderRepository paginated listing", () => {
 			offset: 0,
 		});
 
-		expect(calls["eq"]).toContainEqual(["user_id", "u1"]);
-		expect(calls["in"]).toContainEqual(["status", ["pending"]]);
-		expect(calls["gte"]).toContainEqual([
+		expect(calls.eq).toContainEqual(["user_id", "u1"]);
+		expect(calls.in).toContainEqual(["status", ["pending"]]);
+		expect(calls.gte).toContainEqual([
 			"created_at",
 			"2026-09-01T00:00:00.000Z",
 		]);
-		expect(calls["lte"]).toContainEqual([
+		expect(calls.lte).toContainEqual([
 			"created_at",
 			"2026-09-08T00:00:00.000Z",
 		]);
-		const orArg = calls["or"]?.[0]?.[0];
+		const orArg = calls.or?.[0]?.[0];
 		expect(typeof orArg).toBe("string");
 		expect(orArg as string).toContain("order_number.ilike.");
 		expect(orArg as string).toContain("aurora");
-		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
-		expect(calls["range"]).toContainEqual([0, 19]);
+		expect(calls.order).toContainEqual(["created_at", { ascending: false }]);
+		expect(calls.range).toContainEqual([0, 19]);
 	});
 
 	test("getUserOrders aplica status/branch/sort server-side", async () => {
@@ -244,11 +244,11 @@ describe("orderRepository paginated listing", () => {
 			offset: 20,
 		});
 
-		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
-		expect(calls["eq"]).toContainEqual(["status", "confirmed"]);
-		expect(calls["eq"]).toContainEqual(["offers.business_location_id", "loc1"]);
-		expect(calls["order"]).toContainEqual(["created_at", { ascending: true }]);
-		expect(calls["range"]).toContainEqual([20, 39]);
+		expect(calls.eq).toContainEqual(["business_id", "b1"]);
+		expect(calls.eq).toContainEqual(["status", "confirmed"]);
+		expect(calls.eq).toContainEqual(["offers.business_location_id", "loc1"]);
+		expect(calls.order).toContainEqual(["created_at", { ascending: true }]);
+		expect(calls.range).toContainEqual([20, 39]);
 	});
 
 	test("getBusinessOrders mapea filas con ORDER_SELECT", async () => {
@@ -305,7 +305,7 @@ describe("orderRepository paginated listing", () => {
 		expect(count).toBe(3);
 		expect(String(selectArgs[0]?.[0])).toContain("offers!inner");
 		expect(String(selectArgs[0]?.[0])).toContain("businesses!inner");
-		const orArg = calls["or"]?.[0]?.[0];
+		const orArg = calls.or?.[0]?.[0];
 		expect(typeof orArg).toBe("string");
 		expect(orArg as string).toContain("offers.title.ilike.");
 	});
@@ -315,8 +315,8 @@ describe("orderRepository paginated listing", () => {
 
 		await orderRepository.countBusinessOrders("b1", { branchId: "loc1" });
 
-		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
-		expect(calls["eq"]).toContainEqual(["offers.business_location_id", "loc1"]);
+		expect(calls.eq).toContainEqual(["business_id", "b1"]);
+		expect(calls.eq).toContainEqual(["offers.business_location_id", "loc1"]);
 	});
 
 	test("countBusinessOrders propaga errores via toAppError con copy es-ES", async () => {
@@ -340,7 +340,7 @@ describe("orderRepository paginated listing", () => {
 		});
 
 		expect(rows).toEqual([]);
-		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
-		expect(calls["range"]).toContainEqual([40, 59]);
+		expect(calls.order).toContainEqual(["created_at", { ascending: false }]);
+		expect(calls.range).toContainEqual([40, 59]);
 	});
 });

@@ -93,12 +93,12 @@ test("renders metadata and independent footer buttons in both themes, including 
 		);
 		const buttons = [
 			...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g),
-		].map((match) => match[1]!);
+		].map((match) => match[1] ?? "");
 		expect(buttons).toHaveLength(4);
 		expect(buttons.every((body) => !body.includes("<button"))).toBe(true);
 		expect(buttons[0]).toContain("Activo");
 		expect(buttons[0]).toContain("8 vendidos");
-		expect(buttons[0]).toContain(product.location!.name);
+		expect(buttons[0]).toContain(product.location?.name);
 		expect(buttons[0]).toContain("Hasta dom 6 sep");
 		expect(buttons[0]).toContain(">0</div>");
 		expect(buttons[1]).toContain("Ver detalles");

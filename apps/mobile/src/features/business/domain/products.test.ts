@@ -132,7 +132,7 @@ describe("filterAndSortProducts", () => {
 			...baseFilters,
 			sort: "newest",
 		});
-		expect(result[0]!.offer.id).toBe("new");
+		expect(result[0]?.offer.id).toBe("new");
 	});
 
 	it("sorts by price low/high", () => {

@@ -191,7 +191,9 @@ function ForgotPasswordDialog({
 
 	const send = async () => {
 		const trimmed = email.trim();
-		if (!trimmed || !trimmed.includes("@")) {
+		// No separate empty-string guard: "".includes("@") is already false,
+		// so the empty input takes this same branch.
+		if (!trimmed.includes("@")) {
 			setError(strings.auth.invalidEmail);
 			return;
 		}

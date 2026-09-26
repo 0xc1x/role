@@ -83,9 +83,11 @@ describe("PWA web shell", () => {
 		);
 		expect(getIosPwaNavbarOverlap("ios", htmlDocument("true"))).toBe(0);
 
-		for (const surface of ["desktop web", "Android web"]) {
-			expect(getIosPwaNavbarOverlap("web", htmlDocument())).toBe(0);
-		}
+		// Desktop web and Android web both resolve to 0 (only the iOS
+		// standalone marker opts in). The loop used to run this same
+		// invariant assertion twice over a label array, so the labels are
+		// kept here as intent rather than as a no-op iteration.
+		expect(getIosPwaNavbarOverlap("web", htmlDocument())).toBe(0);
 	});
 
 	test("applies the shared overlap to both tab shell wrappers", () => {

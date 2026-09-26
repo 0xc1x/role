@@ -44,7 +44,7 @@ export function ExploreActiveFiltersBar({
 	if (filters.maxDistanceKm != null)
 		chips.push({ key: "maxDistanceKm", label: `${filters.maxDistanceKm} km` });
 	if (filters.maxPrice != null)
-		chips.push({ key: "maxPrice", label: `Max \$${filters.maxPrice}` });
+		chips.push({ key: "maxPrice", label: `Max $${filters.maxPrice}` });
 	if (filters.searchQuery.length > 0)
 		chips.push({ key: "searchQuery", label: `"${filters.searchQuery}"` });
 

@@ -13,7 +13,6 @@ import { toAppError } from "@/src/core/error/mapper";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
 
 export default function UpdatePasswordScreen() {
 	const { colors } = useTheme();
@@ -69,6 +68,7 @@ export default function UpdatePasswordScreen() {
 				<AppText variant="h1" weight="bold">
 					{strings.auth.updatePassword}
 				</AppText>
+				{/* biome-ignore lint/complexity/noUselessFragments: this fragment returns four siblings from the component; dropping it would force a wrapper View and change the layout. */}
 				<>
 					{error ? (
 						<AppText variant="bodySmall" style={{ color: colors.destructive }}>

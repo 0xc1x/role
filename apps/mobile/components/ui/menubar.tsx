@@ -11,15 +11,7 @@ import {
 	ChevronUp,
 } from "lucide-react-native";
 import * as React from "react";
-import {
-	Platform,
-	Pressable,
-	type StyleProp,
-	StyleSheet,
-	Text,
-	View,
-	type ViewStyle,
-} from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { FadeIn, ReduceMotion } from "react-native-reanimated";
 import { FullWindowOverlay as RNFullWindowOverlay } from "react-native-screens";
 
@@ -135,7 +127,7 @@ function MenubarSubTrigger({
 				)}
 				{...props}
 			>
-				<>{children}</>
+				{children}
 				<Icon
 					as={icon}
 					className={cn(
@@ -284,7 +276,7 @@ function MenubarCheckboxItem({
 						/>
 					</MenubarPrimitive.ItemIndicator>
 				</View>
-				<>{children}</>
+				{children}
 			</MenubarPrimitive.CheckboxItem>
 		</TextClassContext.Provider>
 	);
@@ -315,7 +307,7 @@ function MenubarRadioItem({
 						<View className="bg-foreground h-2 w-2 rounded-full" />
 					</MenubarPrimitive.ItemIndicator>
 				</View>
-				<>{children}</>
+				{children}
 			</MenubarPrimitive.RadioItem>
 		</TextClassContext.Provider>
 	);

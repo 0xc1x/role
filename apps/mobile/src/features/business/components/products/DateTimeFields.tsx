@@ -1,8 +1,6 @@
 import { createElement, useRef, useState, type ChangeEvent } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
-import DateTimePicker, {
-	type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Calendar, Clock } from "lucide-react-native";
 
 import { AppText } from "@/src/core/ui";

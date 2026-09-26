@@ -7,7 +7,6 @@ import { strings } from "@/src/core/i18n/strings";
 import { AppText, HeartButton } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
-import { withAlpha } from "@/src/core/theme/alpha";
 import { formatDistanceKm, formatMoney } from "@/src/core/utils/formatters";
 import {
 	discountPercentage,

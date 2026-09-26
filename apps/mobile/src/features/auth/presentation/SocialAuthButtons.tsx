@@ -1,5 +1,5 @@
 import { Apple, Globe } from "lucide-react-native";
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { useTheme } from "@/src/core/theme";

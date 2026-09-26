@@ -40,12 +40,7 @@ import { useTheme } from "@/src/core/theme";
 import { withAlpha } from "@/src/core/theme/alpha";
 import type { BusinessStats } from "@/src/features/business/domain/business";
 import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export default function BusinessStatsScreen() {
 	const { colors } = useTheme();

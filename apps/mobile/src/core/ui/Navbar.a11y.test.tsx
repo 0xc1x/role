@@ -48,8 +48,25 @@ const { default: Navbar } = await import("@/src/core/ui/Navbar");
 const TABS = ["home", "explore", "favorites", "profile"] as const;
 
 // `BottomTabBarProps` is a deep navigator type; the bar only reads a handful of
-// fields, so the fixture stays loose instead of faking the whole navigation.
-function tabBarProps(index: number): any {
+// fields, so the fixture is described structurally instead of faking the whole
+// navigation (and instead of falling back to `any`).
+type TabRoute = { key: string; name: string };
+
+type TabBarFixture = {
+	fallbackTabName?: string;
+	state: {
+		index: number;
+		routes: TabRoute[];
+		key: string;
+		type: "tab";
+		routeNames: readonly string[];
+	};
+	descriptors: Record<string, unknown>;
+	navigation: unknown;
+	insets: { top: number; bottom: number; left: number; right: number };
+};
+
+function tabBarProps(index: number): TabBarFixture {
 	const routes = TABS.map((name) => ({ key: `k-${name}`, name }));
 	const descriptors = Object.fromEntries(
 		routes.map((route) => [

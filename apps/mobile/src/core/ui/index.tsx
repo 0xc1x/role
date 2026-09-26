@@ -12,14 +12,11 @@ import {
 	Pressable,
 	ScrollView,
 	StyleSheet,
-	Text,
 	TextInput,
 	type TextInputProps,
 	View,
-	Platform,
 	type RefreshControlProps,
 	type StyleProp,
-	type TextStyle,
 	type ViewStyle,
 } from "react-native";
 
@@ -71,15 +68,11 @@ export function CircleIconButton({
 	icon,
 	onPress,
 	size = 40,
-	iconSize = 20,
-	iconColor,
 	accessibilityLabel,
 }: {
 	icon: ReactNode;
 	onPress?: () => void;
 	size?: number;
-	iconSize?: number;
-	iconColor?: string;
 	accessibilityLabel?: string;
 }) {
 	const { colors } = useTheme();

@@ -10,10 +10,7 @@ import type {
 	EmbeddedBusiness,
 	EmbeddedLocation,
 } from "@/src/features/offers/domain/offer";
-import {
-	type ReservationSuccess,
-	pickupQrValue,
-} from "@/src/features/orders/domain/order";
+import type { ReservationSuccess } from "@/src/features/orders/domain/order";
 import { Button } from "@/components/ui/button";
 
 interface ConfirmationViewProps {

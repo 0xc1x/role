@@ -31,7 +31,7 @@ const STEP_DURATION = 250;
 
 /** Progreso Confirmado → Listo para recoger → Completado derivado del status. */
 export function OrderProgressHeader({ order }: { order: Order }) {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const active = isActiveStatus(order.status);
 
 	const confirmedDone = order.status !== "pending";

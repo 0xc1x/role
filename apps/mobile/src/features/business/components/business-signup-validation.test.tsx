@@ -14,7 +14,15 @@ import { validateBusinessSignupForm } from "@/src/features/auth/domain/validatio
 // only form with no inline validation: one generic line at the top, no email
 // check, no password floor, and a submit button that was always enabled.
 
-type FieldProps = Record<string, any>;
+// TextField and Button are both captured by the same probe; the assertions
+// read the validation surface of a field and the enabled/submit surface of the
+// button, and nothing else.
+type FieldProps = {
+	label?: string;
+	error?: string;
+	disabled?: boolean;
+	onPress?: () => Promise<void> | void;
+};
 
 let fields: FieldProps[] = [];
 let button: { disabled?: boolean; onPress?: () => Promise<void> | void };

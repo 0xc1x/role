@@ -25,7 +25,7 @@ import {
 	useOffer,
 	useReserveOffer,
 } from "@/src/features/hooks";
-import { type ReservationSuccess } from "@/src/features/orders/domain/order";
+import type { ReservationSuccess } from "@/src/features/orders/domain/order";
 import {
 	isOfferAvailable,
 	isOfferExpired,

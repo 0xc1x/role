@@ -13,14 +13,21 @@ import { mockNativeUi } from "@/src/test-utils/native-mocks";
 // the owner saw an empty chip row (or an empty sheet) under a required label —
 // blocked, with no cause and no retry.
 
-type PressableProps = Record<string, any>;
+// The probe records what each Pressable receives; the assertions read the
+// accessibility surface only.
+type PressableProps = {
+	accessibilityRole?: string;
+	accessibilityLabel?: string;
+	onPress?: () => void;
+	children?: ReactNode;
+};
+
 let received: PressableProps[] = [];
 
 const ProbePressable = (props: PressableProps) => {
 	received.push(props);
 	return createElement(nativeWeb.View, null, props.children);
 };
-const empty = () => null;
 
 mockNativeUi({ Pressable: ProbePressable });
 
@@ -122,7 +129,7 @@ test("a failed categories query renders an error with retry, not an empty chip r
 	expect(chips()).toBe(0);
 	expect(retryButton()).toBeDefined();
 
-	retryButton()?.onPress();
+	retryButton()?.onPress?.();
 	expect(refetchCalls).toBe(1);
 });
 
@@ -178,7 +185,7 @@ test("a failed locations query renders an error with retry in the picker", () =>
 	// "Sin sucursal" is a real option and stays available.
 	expect(hasRadio(strings.business.noLocationOption)).toBe(true);
 
-	retryButton()?.onPress();
+	retryButton()?.onPress?.();
 	expect(refetchCalls).toBe(1);
 });
 

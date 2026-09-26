@@ -3,7 +3,6 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
-	useRef,
 	useState,
 	type ComponentProps,
 } from "react";
@@ -39,7 +38,6 @@ import {
 	type OfferFilterState,
 } from "@/src/features/offers/domain/offer";
 import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
 
 const SEARCH_DEBOUNCE_MS = 400;
 

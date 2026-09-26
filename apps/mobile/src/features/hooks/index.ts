@@ -247,7 +247,7 @@ function useRadiusParams() {
 }
 
 export function useNearbyOffersHook(limit = 10, category?: string | null) {
-	const { lat, lng, radiusKm, params } = useRadiusParams();
+	const { lat, lng, radiusKm } = useRadiusParams();
 	return useQuery({
 		queryKey: [
 			"offers",

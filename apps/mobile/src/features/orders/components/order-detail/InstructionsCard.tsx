@@ -15,7 +15,6 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { cn } from "@/lib/utils";
 
 export function InstructionsCard({ item }: { item: OrderDetail }) {
 	const { colors, scheme } = useTheme();

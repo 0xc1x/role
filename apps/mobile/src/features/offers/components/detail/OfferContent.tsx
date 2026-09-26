@@ -59,11 +59,9 @@ function distanceSubtitle(
 }
 
 export function OfferContent({ data }: { data: OfferDetail }) {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const selectedAddress = useSelectedAddress();
 	const muted = colors.mutedForeground;
-	const isDark = scheme === "dark";
-	const cardBg = isDark ? colors.card : colors.background;
 
 	const savings = Math.round(discountPercentage(data.offer));
 	const saveAmount = Math.max(

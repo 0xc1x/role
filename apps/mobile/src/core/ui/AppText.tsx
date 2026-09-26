@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Text, type StyleProp, type TextStyle } from "react-native";
 
 import { useTheme } from "@/src/core/theme";

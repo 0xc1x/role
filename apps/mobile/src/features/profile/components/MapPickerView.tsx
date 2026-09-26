@@ -113,9 +113,15 @@ export function MapPickerView({
 		const initial = initialLocationRef.current;
 		if (initial) {
 			void resolveAddress(initial.latitude, initial.longitude);
-			return;
+		} else {
+			void determinePosition();
 		}
-		void determinePosition();
+		// El cleanup va FUERA de la rama. Con un `return` temprano en el caso de
+		// `initialLocation` guardada, el debounce que dispara
+		// `handleRegionChangeComplete` nunca se limpiaba al desmontar: hacer pan
+		// con el picker abierto sobre una ubicación guardada dejaba vivo un
+		// `setTimeout` que resolvía la dirección contra un componente ya
+		// desmontado.
 		return () => {
 			if (resolveTimer.current) clearTimeout(resolveTimer.current);
 		};

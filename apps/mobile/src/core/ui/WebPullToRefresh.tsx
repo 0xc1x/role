@@ -100,7 +100,7 @@ export function useWebPullToRefresh({ onRefresh, refreshing }: WebPullOptions) {
 	const handleTouchEnd = useCallback(() => {
 		const gesture = gestureRef.current;
 		gestureRef.current = null;
-		if (!gesture || !gesture.pulling) return;
+		if (!gesture?.pulling) return;
 		if (gesture.lastDy * 0.5 >= PULL_THRESHOLD) {
 			onRefreshRef.current();
 		}

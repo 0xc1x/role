@@ -65,7 +65,7 @@ function SelectTrigger({
 			)}
 			{...props}
 		>
-			<>{children}</>
+			{children}
 			<Icon
 				as={ChevronDown}
 				aria-hidden={true}

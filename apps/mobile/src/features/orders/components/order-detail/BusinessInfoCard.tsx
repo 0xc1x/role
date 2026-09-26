@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function BusinessInfoCard({ item }: { item: OrderDetail }) {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const { order } = item;
 	const isActive = isActiveStatus(order.status);
 

@@ -38,7 +38,7 @@ const empty = () => null;
 // effects are made synchronous here so the navigation is observable.
 mock.module("react", () => ({
 	...realReact,
-	useEffect: (effect: () => void | (() => void)) => {
+	useEffect: (effect: () => undefined | (() => void)) => {
 		effect();
 	},
 }));

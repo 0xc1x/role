@@ -11,7 +11,7 @@ import type { OrderDetail } from "@/src/features/orders/domain/order";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function ProductItemsCard({ item }: { item: OrderDetail }) {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	return (
 		<Card>
 			<CardHeader>

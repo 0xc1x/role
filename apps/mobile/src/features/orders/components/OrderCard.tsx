@@ -25,7 +25,6 @@ import { typography } from "@/src/core/theme/typography";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import type { ColorTokens } from "@/src/core/theme/colors";
-import { withAlpha } from "@/src/core/theme/alpha";
 
 /** Iconos del footer: check / bag / clock (mismos labels que OrderProgressHeader). */
 interface CardStep {
@@ -36,19 +35,6 @@ interface CardStep {
 
 const STEP_DELAY = 130;
 const STEP_DURATION = 250;
-
-/** Estación destacada según el estado: pendiente/confirmado → 0, listo/recogido → 1, completado → 2. */
-function activeStepIndex(status: OrderDetail["order"]["status"]): number {
-	switch (status) {
-		case "ready_for_pickup":
-		case "picked_up":
-			return 1;
-		case "completed":
-			return 2;
-		default:
-			return 0;
-	}
-}
 
 /** Mismo mapeo tono → colores que StatusBadge (tokens, dark-safe). */
 function toneColors(

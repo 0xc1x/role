@@ -5,9 +5,8 @@ import {
 	Tags,
 	type LucideIcon,
 } from "lucide-react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import type { Coupon, CouponType } from "@0xc1x/role-commons";
 
 import { strings } from "@/src/core/i18n/strings";

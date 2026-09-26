@@ -1,5 +1,5 @@
 import { expect, mock, test } from "bun:test";
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 // @ts-expect-error react-dom is installed without declarations in this workspace.
 import { renderToStaticMarkup } from "react-dom/server";
 // @ts-expect-error react-native-web provides the renderer without declarations.
@@ -13,8 +13,17 @@ globalThis.__DEV__ ??= false;
 
 // Pressable probe records what each rendered Pressable actually receives at
 // the React boundary, so assertions cover selection and pressed styles.
-let received: Array<Record<string, unknown>> = [];
-const ProbePressable = (props: any) => {
+const received: Array<Record<string, unknown>> = [];
+
+// Only the props the probe below reads: the interop marker, a possibly
+// callback-valued style, and the children to forward.
+type PressableProps = {
+	cssInterop?: unknown;
+	style?: unknown | ((state: { pressed: boolean }) => unknown);
+	children?: ReactNode;
+};
+
+const ProbePressable = (props: PressableProps) => {
 	const style =
 		typeof props.style === "function"
 			? props.style({ pressed: true })
@@ -59,7 +68,7 @@ mock.module("@/src/features/business/hooks", () => ({
 const { AppText } = await import("@/src/core/ui/AppText");
 mock.module("@/src/core/ui", () => ({
 	AppText,
-	BottomSheetModal: ({ children }: any) =>
+	BottomSheetModal: ({ children }: { children?: ReactNode }) =>
 		createElement(nativeWeb.View, null, children),
 	goBackOr: () => {},
 	TextField: () => null,
@@ -79,7 +88,7 @@ const React = await import("react");
 const originalUseState = React.useState;
 mock.module("react", () => ({
 	...React,
-	useState: (initial: any) =>
+	useState: (initial: unknown) =>
 		originalUseState(typeof initial === "boolean" ? true : initial),
 }));
 

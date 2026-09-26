@@ -16,17 +16,52 @@ mock.module("react", () => ({
 }));
 let pressLogin: () => Promise<void>;
 let submitPassword: () => Promise<void>;
+
+/**
+ * The Pressable probe duck-types into React element internals: it reads
+ * `children.props.children` and scans that list. These two narrowers describe
+ * that surface over `unknown`, so the probe needs neither `any` nor a cast and
+ * the traversal itself is unchanged (a non-array child list yields no match,
+ * exactly as the optional `?.some?.()` did).
+ */
+const propsOf = (node: unknown): unknown =>
+	node && typeof node === "object" && "props" in node
+		? (node as { props: unknown }).props
+		: undefined;
+
+const childrenOf = (node: unknown): unknown => {
+	const props = propsOf(node);
+	return props && typeof props === "object" && "children" in props
+		? (props as { children: unknown }).children
+		: undefined;
+};
+
+/** True when `node` renders `label` as one of its direct children. */
+const rendersLabel = (node: unknown, label: string): boolean => {
+	const siblings = childrenOf(node);
+	return (
+		Array.isArray(siblings) &&
+		siblings.some((child) => childrenOf(child) === label)
+	);
+};
+
+type PressableProbeProps = {
+	children?: React.ReactNode;
+	onPress?: () => Promise<void>;
+};
+
+type TextFieldProbeProps = {
+	onSubmitEditing?: () => Promise<void>;
+};
+
 mock.module("react-native", () => ({
 	...nativeWeb,
-	Pressable: (props: any) => {
-		if (
-			props.children?.props?.children?.some?.(
-				(child: any) => child?.props?.children === strings.auth.login,
-			)
-		) {
-			pressLogin = props.onPress;
+	Pressable: (props: PressableProbeProps) => {
+		const { children, onPress } = props;
+		if (onPress && rendersLabel(children, strings.auth.login)) {
+			pressLogin = onPress;
 		}
-		return React.createElement(nativeWeb.View, null, props.children);
+		return React.createElement(nativeWeb.View, null, children);
 	},
 }));
 mock.module("@rn-primitives/slot", () => ({ Slot: nativeWeb.Text }));
@@ -35,7 +70,7 @@ mock.module("@/src/core/theme", () => ({
 }));
 mock.module("@/src/core/ui", () => ({
 	AppText: nativeWeb.Text,
-	TextField: (props: any) => {
+	TextField: (props: TextFieldProbeProps) => {
 		if (props.onSubmitEditing) submitPassword = props.onSubmitEditing;
 		return null;
 	},

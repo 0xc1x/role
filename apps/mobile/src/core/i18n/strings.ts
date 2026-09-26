@@ -254,7 +254,11 @@ export const strings = {
 		maxPrice: "Precio máximo",
 		maxDistance: "Distancia máxima",
 		km: "km",
-		price: "${n}",
+		// Placeholder only. The currency symbol is supplied by the caller
+		// (`.replace("{n}", `$${maxPrice}`)`), matching the convention of every
+		// other entry in this catalogue. It used to read "${n}", which made the
+		// max-price chip render "$$42" — the leading `$` survived the replace.
+		price: "{n}",
 	},
 	allBusinesses: {
 		title: "Negocios cerca",

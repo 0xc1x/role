@@ -8,7 +8,6 @@ import {
 	Platform,
 	Pressable,
 	type PressableStateCallbackType,
-	type StyleProp,
 	View,
 	type ViewStyle,
 } from "react-native";
@@ -153,7 +152,14 @@ function Button({
 				};
 			case "secondary":
 				return { backgroundColor: colors.secondary };
+			// "ghost" and "link" carry no native token overrides: their look is
+			// owned entirely by the className/CSS-var layer below (see
+			// buttonVariants). Listed explicitly so the switch stays exhaustive
+			// over the variant union — a new variant must decide its native
+			// style here instead of silently inheriting `default`.
+			// biome-ignore lint/complexity/noUselessSwitchCase: exhaustive over the variant union; removing these would lose the compiler's exhaustiveness check.
 			case "ghost":
+			// biome-ignore lint/complexity/noUselessSwitchCase: exhaustive over the variant union; removing these would lose the compiler's exhaustiveness check.
 			case "link":
 			default:
 				return {};

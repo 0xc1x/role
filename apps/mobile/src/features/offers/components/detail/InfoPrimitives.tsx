@@ -13,7 +13,6 @@ import {
 	CardFooter,
 	CardHeader,
 } from "@/components/ui/card";
-import { Text } from "react-native-svg";
 
 export function CategoryBadge({ label }: { label: string }) {
 	const { colors } = useTheme();
@@ -58,7 +57,6 @@ export function InfoCard({
 	description?: ReactNode;
 	footer?: ReactNode;
 }) {
-	const { colors, scheme } = useTheme();
 	return (
 		<Card style={[styles.infoCard]}>
 			<CardHeader style={styles.infoCardHead}>

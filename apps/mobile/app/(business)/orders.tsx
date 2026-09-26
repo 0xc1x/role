@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { router } from "expo-router";
 import { Search, ShoppingBag } from "lucide-react-native";
 import {
 	ActivityIndicator,
@@ -27,9 +26,9 @@ import {
 	useBusinessOrders,
 	useBusinessOrderStats,
 } from "@/src/features/business/hooks";
-import {
-	type OrdersSort,
-	type OrdersTab,
+import type {
+	OrdersSort,
+	OrdersTab,
 } from "@/src/features/business/domain/orders";
 import {
 	ACTIVE_ORDER_STATUSES,

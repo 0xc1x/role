@@ -11,8 +11,22 @@ import { emptyExploreFilters } from "../exploreTypes";
 
 let top = 0;
 const views: Record<string, unknown>[] = [];
-const buttons: any[] = [];
-let map: any;
+// The probes record the props the screen hands each primitive; the
+// assertions read only these fields.
+type ButtonProbeProps = {
+	children?: ReactNode;
+	accessibilityLabel?: string;
+	onPress?: () => void;
+};
+type MapProbeProps = {
+	style?: unknown;
+	onRegionChangeComplete?: unknown;
+	onPress?: unknown;
+	scrollEnabled?: boolean;
+};
+
+const buttons: ButtonProbeProps[] = [];
+let map: MapProbeProps;
 const empty = () => null;
 mock.module("react-native", () => ({
 	...nativeWeb,
@@ -20,7 +34,7 @@ mock.module("react-native", () => ({
 		views.push(nativeWeb.StyleSheet.flatten(style) ?? {});
 		return createElement(nativeWeb.View, { style }, children);
 	},
-	Pressable: (props: any) => {
+	Pressable: (props: ButtonProbeProps) => {
 		buttons.push(props);
 		return createElement(nativeWeb.View, {}, props.children);
 	},
@@ -29,7 +43,7 @@ mock.module("react-native-safe-area-context", () => ({
 	useSafeAreaInsets: () => ({ top, bottom: 34, left: 0, right: 0 }),
 }));
 mock.module("react-native-maps", () => ({
-	default: (props: any) => {
+	default: (props: MapProbeProps) => {
 		map = props;
 		return null;
 	},
@@ -86,10 +100,10 @@ for (const inset of [0, 44]) {
 		expect(map.scrollEnabled).not.toBe(false);
 		buttons
 			.find((button) => button.accessibilityLabel === strings.common.back)
-			.onPress();
+			?.onPress?.();
 		buttons
 			.find((button) => button.accessibilityLabel === strings.explore.filters)
-			.onPress();
+			?.onPress?.();
 		expect(onBack).toHaveBeenCalledTimes(1);
 		expect(onFilterTap).toHaveBeenCalledTimes(1);
 	});

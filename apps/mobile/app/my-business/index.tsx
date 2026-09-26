@@ -9,7 +9,7 @@ import {
 	ThemeOptionCard,
 } from "@/src/core/ui";
 import { spacing } from "@/src/core/theme/spacing";
-import { ThemeMode, useTheme } from "@/src/core/theme";
+import { type ThemeMode, useTheme } from "@/src/core/theme";
 
 const THEME_MODES: Array<{ key: ThemeMode; label: string; icon: LucideIcon }> =
 	[

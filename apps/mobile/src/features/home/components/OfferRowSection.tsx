@@ -111,7 +111,6 @@ function OfferRowView({
 	error?: unknown;
 	onRetry?: () => void;
 }) {
-	const { colors } = useTheme();
 	const renderSkeletonItem = useCallback(() => <SkeletonRowItem />, []);
 	const renderOfferItem = useCallback(
 		({ item }: { item: OfferDetail }) => <OfferRowItem item={item} />,

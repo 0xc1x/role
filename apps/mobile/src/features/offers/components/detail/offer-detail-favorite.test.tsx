@@ -10,7 +10,7 @@ import { mockNativeUi } from "@/src/test-utils/native-mocks";
 // A guest pressing the heart must get a real next step (the login screen),
 // never a "Sesión requerida" error or the generic "Algo salió mal" toast.
 
-const push = mock((href: unknown) => {});
+const push = mock((_href: unknown) => {});
 const mutate = mock((_offerId: string) => {});
 const wrapper = ({ children }: { children?: ReactNode }) =>
 	createElement(nativeWeb.View, null, children);

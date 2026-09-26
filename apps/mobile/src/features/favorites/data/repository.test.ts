@@ -65,9 +65,9 @@ describe("favoritesRepository paginated listing", () => {
 		});
 
 		expect(rows).toEqual([]);
-		expect(calls["eq"]).toContainEqual(["user_id", "u1"]);
-		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
-		expect(calls["range"]).toContainEqual([20, 39]);
+		expect(calls.eq).toContainEqual(["user_id", "u1"]);
+		expect(calls.order).toContainEqual(["created_at", { ascending: false }]);
+		expect(calls.range).toContainEqual([20, 39]);
 	});
 
 	test("getFavorites sin params no pagina (compatibilidad)", async () => {
@@ -75,6 +75,6 @@ describe("favoritesRepository paginated listing", () => {
 
 		await favoritesRepository.getFavorites("u1");
 
-		expect(calls["range"]).toEqual([]);
+		expect(calls.range).toEqual([]);
 	});
 });

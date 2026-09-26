@@ -48,9 +48,14 @@ mock.module("@/src/features/orders/data/repository", () => ({
 
 const hooks = await import("@/src/features/business/hooks");
 
-// The eight hooks each take their own variables shape; the probe only needs
-// `mutateAsync` to hand a rejection back to the assertion.
+// The probe only needs `mutateAsync`, then calls it with the case's own
+// variables. The eight cases have eight different variables shapes, and
+// `strictFunctionTypes` makes them mutually unassignable, so no single
+// concrete parameter type can express this probe. Typing it honestly means
+// threading the variables type generically through the probe and the case
+// table — a harness refactor, not a lint fix.
 interface Mutation {
+	// biome-ignore lint/suspicious/noExplicitAny: heterogeneous per-case variables types; see the note above.
 	mutateAsync: (variables: any) => Promise<unknown>;
 }
 
