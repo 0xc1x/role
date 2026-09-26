@@ -502,6 +502,16 @@ export class CampaignsService {
         // nunca se persiste el mensaje crudo de Resend: puede traer la API key,
         // el email del destinatario o el id de la cuenta. Solo la huella
         // acotada tipo/código, que basta para triage.
+        //
+        // Y el log estructurado es el sitio del diagnóstico de verdad: sin esta
+        // línea, la redacción dejaba al admin con `Error` y al operador sin
+        // nada. `sendId` correlaciona con la fila que el admin muestra; el
+        // destinatario NO viaja, porque es PII de un tercero.
+        this.logger.error({
+          event: 'email_send_failed',
+          sendId: send.id,
+          ...safeErrorFields(err),
+        });
         await this.repository.markFailed(send.id, safeErrorSummary(err));
       }
     }
@@ -607,7 +617,14 @@ export class CampaignsService {
         await this.repository.markSent(send.id, result);
       } catch (err) {
         // Misma razón que en `processTransactionalBatch`: el mensaje crudo de
-        // Resend es PII de terceros y esta columna se lee en el admin.
+        // Resend es PII de terceros y esta columna se lee en el admin. Mismo
+        // evento `email_send_failed` para que el operador pueda filtrar ambos
+        // caminos de envío (transaccional y campaña) con una sola búsqueda.
+        this.logger.error({
+          event: 'email_send_failed',
+          sendId: send.id,
+          ...safeErrorFields(err),
+        });
         await this.repository.markFailed(send.id, safeErrorSummary(err));
       }
     }
@@ -713,7 +730,18 @@ export class CampaignsService {
     // reduce antes de persistir o loguear (`safeErrorSummary` al marcar failed,
     // `AllExceptionsFilter` al escapar a HTTP). Conservarlo aquí mantiene el
     // diagnóstico útil durante el desarrollo sin abrir una vía de fuga.
-    if (error) throw new Error(error.message);
+    if (error) {
+      // `name` es el código de máquina del fallo (`validation_error`,
+      // `invalid_from_address`, `rate_limit_exceeded`…): es lo accionable y
+      // cabe en la huella acotada de `safeErrorFields`. Sin esto, un fallo de
+      // envío llega al log como `errorType: "Error"` y no dice nada. El guard
+      // evita degradar la huella a `UnknownError` si el driver no lo trae.
+      const failure = new Error(error.message);
+      if (typeof error.name === 'string' && error.name.length > 0) {
+        failure.name = error.name;
+      }
+      throw failure;
+    }
     return data?.id ?? null;
   }
 }

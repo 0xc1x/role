@@ -136,6 +136,24 @@ describe('CampaignsService', () => {
     findByKey: jest.fn(async (key: string) => appConfigRows[key] ?? null),
   };
 
+  /**
+   * Sustituye el `Logger` del servicio por un recolector de entradas.
+   *
+   * POR QUÉ no un `spyOn(Logger.prototype, ...)`: Nest enlaza sus métodos a la
+   * instancia en el constructor, así que el servicio ya tiene su copia y un spy
+   * posterior sobre el prototype no lo ve.
+   */
+  const captureLogs = (): unknown[] => {
+    const entries: unknown[] = [];
+    (service as unknown as { logger: unknown }).logger = {
+      log: (entry: unknown) => entries.push(entry),
+      warn: (entry: unknown) => entries.push(entry),
+      error: (entry: unknown) => entries.push(entry),
+      debug: () => {},
+    };
+    return entries;
+  };
+
   beforeEach(async () => {
     appConfigRows = {};
     env = {
@@ -628,6 +646,35 @@ describe('CampaignsService', () => {
         'NotFoundException',
       );
     });
+
+    it('registra el fallo por destinatario con la huella del proveedor', async () => {
+      // La redacción de `error_message` quitó el texto del log sin poner nada en
+      // su lugar: el admin veía `Error` y el operador no tenía nada. Este
+      // evento es el sitio del diagnóstico — con `sendId` para correlacionar y
+      // sin el email del destinatario, que es PII de un tercero.
+      const logged = captureLogs();
+      repository.findPendingBatch.mockResolvedValue([
+        makeSend({ type: 'transactional', email: 'ana@correo.com' }),
+      ]);
+      resendSend.mockResolvedValue({
+        data: null,
+        error: {
+          message: 'Domain role.ec is not verified for re_9fJ2secret',
+          name: 'validation_error',
+        },
+      });
+
+      await service.processTransactionalBatch();
+
+      const failure = logged.find(
+        (entry) => (entry as { event?: string }).event === 'email_send_failed',
+      ) as Record<string, unknown> | undefined;
+      expect(failure).toBeDefined();
+      expect(failure!.sendId).toBe('s-1');
+      expect(failure!.errorType).toBe('validation_error');
+      expect(JSON.stringify(failure)).not.toContain('re_9fJ2secret');
+      expect(JSON.stringify(failure)).not.toContain('ana@correo.com');
+    });
   });
 
   describe('processBatch', () => {
@@ -681,6 +728,34 @@ describe('CampaignsService', () => {
       // El texto del rechazo de Resend no se persiste: se queda la huella.
       expect(repository.markFailed).toHaveBeenCalledWith('s-1', 'Error');
       expect(repository.markSent).toHaveBeenCalledWith('s-2', 're_9');
+    });
+
+    it('registra el fallo del lote con el mismo evento que el transaccional', async () => {
+      // Un solo nombre de evento para los dos caminos de envío: el operador
+      // filtra `email_send_failed` una vez y cubre campaña y transaccional.
+      const logged = captureLogs();
+      repository.findQueuedBatch.mockResolvedValue([
+        makeSend({ id: 's-7', email: 'beto@correo.com' }),
+      ]);
+      resendSend.mockResolvedValue({
+        data: null,
+        error: { message: 'rate limited', name: 'rate_limit_exceeded' },
+      });
+      repository.countQueued.mockResolvedValue(0);
+
+      await service.processBatch(makeCampaign({ status: 'sending' }));
+
+      const failure = logged.find(
+        (entry) => (entry as { event?: string }).event === 'email_send_failed',
+      ) as Record<string, unknown> | undefined;
+      expect(failure).toBeDefined();
+      expect(failure!.sendId).toBe('s-7');
+      expect(failure!.errorType).toBe('rate_limit_exceeded');
+      expect(repository.markFailed).toHaveBeenCalledWith(
+        's-7',
+        'rate_limit_exceeded',
+      );
+      expect(JSON.stringify(failure)).not.toContain('beto@correo.com');
     });
   });
 

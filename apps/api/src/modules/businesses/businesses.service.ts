@@ -218,7 +218,9 @@ export class BusinessesService {
         // traer la API key o el destinatario. El mensaje se conserva en la
         // cadena de `Error` para el stack, nunca para el log.
         const failure = new Error(sendError.message);
-        failure.name = sendError.name;
+        if (typeof sendError.name === 'string' && sendError.name.length > 0) {
+          failure.name = sendError.name;
+        }
         throw failure;
       }
 
@@ -418,8 +420,11 @@ export class BusinessesService {
    * (`errorType` o `errorType:errorCode`, vía `safeErrorSummary`) porque el
    * mensaje crudo de Resend puede traer la API key o el email del
    * destinatario, y esta columna se renderiza en el admin. Para el motivo real
-   * hay que mirar los logs estructurados del envío. Sin comprobación de
-   * existencia del negocio: la lista vacía ya dice que no hubo avisos.
+   * están los logs estructurados: el evento `email_send_failed` de
+   * `CampaignsService` lleva el `sendId` de la fila y el código de máquina del
+   * proveedor — no un texto legible, sino el código con el que Resend documenta
+   * el fallo. Sin comprobación de existencia del negocio: la lista vacía ya
+   * dice que no hubo avisos.
    */
   async listEmailSends(
     user: AuthUser,
