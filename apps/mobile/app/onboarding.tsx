@@ -304,7 +304,9 @@ export default function OnboardingScreen() {
 	const markSeen = useMarkOnboardingSeen();
 	const role = useAuthStore((s) => s.profile?.role ?? null);
 	const business = onboardingAudience(role) === "business";
-	const steps = business ? BUSINESS_ONBOARDING_STEPS : CONSUMER_ONBOARDING_STEPS;
+	const steps = business
+		? BUSINESS_ONBOARDING_STEPS
+		: CONSUMER_ONBOARDING_STEPS;
 	const totalPages = steps.length;
 
 	// Marca vista y navega al destino de la audiencia (panel business o

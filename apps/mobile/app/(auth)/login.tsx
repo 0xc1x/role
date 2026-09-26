@@ -149,14 +149,9 @@ export default function LoginScreen() {
 				</View>
 			) : null}
 
-			<Button
-				onPress={handleLogin}
-				size="default"
-				loading={loading}
-			>
+			<Button onPress={handleLogin} size="default" loading={loading}>
 				{strings.auth.login}
 			</Button>
-
 
 			<SocialAuthButtons label={strings.auth.orContinueWith} />
 
@@ -215,7 +210,12 @@ function ForgotPasswordDialog({
 
 	return (
 		<Modal transparent animationType="fade" visible onRequestClose={onClose}>
-			<View style={[styles.overlay, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}>
+			<View
+				style={[
+					styles.overlay,
+					{ backgroundColor: withAlpha(colors.scrim, 0.4) },
+				]}
+			>
 				<View
 					style={[
 						styles.dialog,
@@ -231,9 +231,9 @@ function ForgotPasswordDialog({
 					>
 						{strings.auth.resetDescription}
 					</AppText>
-				<TextField
-					label={strings.auth.email}
-					icon={Mail}
+					<TextField
+						label={strings.auth.email}
+						icon={Mail}
 						value={email}
 						onChangeText={(t) => {
 							setEmail(t);
@@ -257,10 +257,7 @@ function ForgotPasswordDialog({
 							{strings.common.cancel}
 						</Button>
 
-						<Button
-							onPress={send}
-							style={styles.dialogButton}
-						>
+						<Button onPress={send} style={styles.dialogButton}>
 							{strings.auth.sendLink}
 						</Button>
 					</View>

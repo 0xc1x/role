@@ -167,9 +167,7 @@ export default function BusinessCouponsScreen() {
 							size="sm"
 							icon={<Plus size={18} color={colors.primaryForeground} />}
 							style={styles.newButton}
-							onPress={() =>
-								router.push(`/business/${businessId}/coupons/new`)
-							}
+							onPress={() => router.push(`/business/${businessId}/coupons/new`)}
 						>
 							{strings.business.couponNew}
 						</Button>
@@ -208,12 +206,7 @@ export default function BusinessCouponsScreen() {
 				ListEmptyComponent={
 					<Card style={styles.emptyCard}>
 						<EmptyState
-							icon={
-								<Tag
-									size={40}
-									color={colors.mutedForeground}
-								/>
-							}
+							icon={<Tag size={40} color={colors.mutedForeground} />}
 							title={strings.business.noCoupons}
 							message={strings.business.noCouponsBody}
 							action={
@@ -243,15 +236,16 @@ export default function BusinessCouponsScreen() {
 								},
 							]}
 						>
-							<AppText variant="labelSmall" weight="bold" style={{ marginBottom: spacing.sm }}>
+							<AppText
+								variant="labelSmall"
+								weight="bold"
+								style={{ marginBottom: spacing.sm }}
+							>
 								{strings.business.couponTipsTitle}
 							</AppText>
 							{strings.business.couponTips.map((tip) => (
 								<View key={tip} style={styles.tip}>
-									<CircleCheck
-										size={14}
-										color={colors.successText}
-									/>
+									<CircleCheck size={14} color={colors.successText} />
 									<AppText
 										variant="bodySmall"
 										style={{ color: colors.mutedForeground, flex: 1 }}
@@ -281,16 +275,14 @@ function CouponsSkeleton() {
 				))}
 			</View>
 			{[0, 1].map((i) => (
-				<Skeleton
-					key={`coupon-skeleton-${i}`}
-					style={styles.skeletonCard}
-				/>
+				<Skeleton key={`coupon-skeleton-${i}`} style={styles.skeletonCard} />
 			))}
 		</View>
 	);
 }
 
-const styles = StyleSheet.create({	container: { padding: spacing.xl, flexGrow: 1 },
+const styles = StyleSheet.create({
+	container: { padding: spacing.xl, flexGrow: 1 },
 	newButton: { alignSelf: "flex-end", marginTop: spacing.md },
 	stats: {
 		flexDirection: "row",

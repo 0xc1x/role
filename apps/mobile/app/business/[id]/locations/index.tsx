@@ -32,11 +32,7 @@ export default function BusinessLocationsScreen() {
 	);
 
 	const renderItem = useCallback(
-		({
-			item,
-		}: {
-			item: NonNullable<typeof data>[number];
-		}) => (
+		({ item }: { item: NonNullable<typeof data>[number] }) => (
 			<LocationCard
 				name={item.name}
 				address={item.address}
@@ -57,9 +53,7 @@ export default function BusinessLocationsScreen() {
 					</AppText>
 					<Button
 						size="sm"
-						icon={
-							<Plus size={18} color={colors.primaryForeground} />
-						}
+						icon={<Plus size={18} color={colors.primaryForeground} />}
 						onPress={() =>
 							router.push(`/business/${businessId}/locations/create`)
 						}
@@ -74,9 +68,7 @@ export default function BusinessLocationsScreen() {
 					<ErrorState error={error} onRetry={() => void refetch()} />
 				) : !data || data.length === 0 ? (
 					<EmptyState
-						icon={
-							<Map size={28} color={colors.primary} />
-						}
+						icon={<Map size={28} color={colors.primary} />}
 						title={strings.business.noLocations}
 						message={strings.business.noLocationsHint}
 						action={

@@ -33,9 +33,8 @@ export default function BusinessSignupScreen() {
 	const [businessPhone, setBusinessPhone] = useState("");
 	const [analyticsConsent, setAnalyticsConsent] = useState(false);
 	const [loading, setLoading] = useState(false);
-	const [fieldErrors, setFieldErrors] = useState<
-		ReturnType<typeof validateBusinessSignupForm>
-	>(EMPTY_ERRORS);
+	const [fieldErrors, setFieldErrors] =
+		useState<ReturnType<typeof validateBusinessSignupForm>>(EMPTY_ERRORS);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
 

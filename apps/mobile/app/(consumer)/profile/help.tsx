@@ -7,7 +7,17 @@ import {
 	StyleSheet,
 	View,
 } from "react-native";
-import { ChevronRight, CircleHelp, Leaf, Mail, MessagesSquare, Phone, ShieldCheck, ShoppingBag, type LucideIcon } from "lucide-react-native";
+import {
+	ChevronRight,
+	CircleHelp,
+	Leaf,
+	Mail,
+	MessagesSquare,
+	Phone,
+	ShieldCheck,
+	ShoppingBag,
+	type LucideIcon,
+} from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { toast } from "sonner-native";
@@ -92,8 +102,13 @@ function CategoryRow({ category }: { category: Category }) {
 	const { colors } = useTheme();
 	const Icon = category.icon;
 	return (
-		<Pressable onPress={category.onPress} style={[styles.row, { borderTopColor: colors.borderSolid }]}>
-			<View style={[styles.categoryIcon, { backgroundColor: category.bgColor }]}>
+		<Pressable
+			onPress={category.onPress}
+			style={[styles.row, { borderTopColor: colors.borderSolid }]}
+		>
+			<View
+				style={[styles.categoryIcon, { backgroundColor: category.bgColor }]}
+			>
 				<Icon size={20} color={category.iconColor} />
 			</View>
 			<View style={styles.rowBody}>
@@ -267,7 +282,10 @@ function ContactSupportCard({ onPress }: { onPress: () => void }) {
 			</AppText>
 			<AppText
 				variant="bodySmall"
-				style={{ color: `${withAlpha(colors.primaryForeground, 0.902)}`, marginTop: 2 }}
+				style={{
+					color: `${withAlpha(colors.primaryForeground, 0.902)}`,
+					marginTop: 2,
+				}}
 			>
 				{strings.helpCenter.contactSubtitle}
 			</AppText>
@@ -367,7 +385,9 @@ export default function HelpScreen() {
 		},
 	];
 
-	const filteredFaqs = useMemo<Array<{ question: string; answer: string }>>(() => {
+	const filteredFaqs = useMemo<
+		Array<{ question: string; answer: string }>
+	>(() => {
 		const q = query.trim().toLowerCase();
 		if (!q) return [...strings.helpCenter.faqs];
 		return strings.helpCenter.faqs.filter(
@@ -397,7 +417,10 @@ export default function HelpScreen() {
 	return (
 		<Screen scroll>
 			<View style={[styles.container, { backgroundColor: colors.background }]}>
-				<ScreenHeader title={strings.helpCenter.title} fallback="/(consumer)/profile" />
+				<ScreenHeader
+					title={strings.helpCenter.title}
+					fallback="/(consumer)/profile"
+				/>
 				<SearchBar
 					value={query}
 					onChangeText={setQuery}
@@ -432,11 +455,11 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		borderRadius: radii.xl,
 	},
-	card: { 
-		padding: 0, 
-		overflow: "hidden", 
-		borderRadius: radii.xl, 
-		gap: 0,  
+	card: {
+		padding: 0,
+		overflow: "hidden",
+		borderRadius: radii.xl,
+		gap: 0,
 	},
 	cardTitle: {
 		paddingHorizontal: spacing.lg,

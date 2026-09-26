@@ -12,7 +12,10 @@ import {
 	ScreenHeader,
 } from "@/src/core/ui";
 import { spacing } from "@/src/core/theme/spacing";
-import { useBusinessLocation, useUpsertLocation } from "@/src/features/business/hooks";
+import {
+	useBusinessLocation,
+	useUpsertLocation,
+} from "@/src/features/business/hooks";
 import {
 	LocationForm,
 	type LocationFormValues,
@@ -24,8 +27,13 @@ export default function BusinessLocationEditScreen() {
 		locationId: string;
 	}>();
 	const businessId = id ?? "";
-	const { data: location, isLoading, isError, error, refetch } =
-		useBusinessLocation(locationId ?? "");
+	const {
+		data: location,
+		isLoading,
+		isError,
+		error,
+		refetch,
+	} = useBusinessLocation(locationId ?? "");
 	const upsert = useUpsertLocation(businessId);
 	const [submitting, setSubmitting] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);

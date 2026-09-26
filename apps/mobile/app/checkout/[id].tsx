@@ -4,8 +4,18 @@ import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, ErrorState, LoadingView, Screen, ScreenHeader } from "@/src/core/ui";
-import { formatMoney, formatRelativeDay, formatTime } from "@/src/core/utils/formatters";
+import {
+	AppText,
+	ErrorState,
+	LoadingView,
+	Screen,
+	ScreenHeader,
+} from "@/src/core/ui";
+import {
+	formatMoney,
+	formatRelativeDay,
+	formatTime,
+} from "@/src/core/utils/formatters";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { useConfigValue } from "@/src/features/config";
@@ -15,9 +25,7 @@ import {
 	useOffer,
 	useReserveOffer,
 } from "@/src/features/hooks";
-import {
-	type ReservationSuccess,
-} from "@/src/features/orders/domain/order";
+import { type ReservationSuccess } from "@/src/features/orders/domain/order";
 import {
 	isOfferAvailable,
 	isOfferExpired,
@@ -60,7 +68,9 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 		clearCoupon,
 		changeInput,
 	} = useApplyCoupon(offerDetail ?? undefined);
-	const [confirmation, setConfirmation] = useState<ReservationSuccess | null>(null);
+	const [confirmation, setConfirmation] = useState<ReservationSuccess | null>(
+		null,
+	);
 	const reservationAttempt = useRef<{
 		scope: string;
 		idempotencyKey: string;
@@ -148,7 +158,11 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 				showsVerticalScrollIndicator={false}
 			>
 				<ScreenHeader title={strings.checkout.title} />
-				<ProductSummaryCard offer={offer} business={business} location={location} />
+				<ProductSummaryCard
+					offer={offer}
+					business={business}
+					location={location}
+				/>
 				<PickupDetailsCard offer={offer} location={location} />
 				<CouponSection
 					input={couponInput}
@@ -184,7 +198,10 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 					</View>
 				) : null}
 				<View style={styles.totalRow}>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{strings.checkout.total}
 					</AppText>
 					<AppText variant="priceLarge" style={{ color: colors.primary }}>
@@ -198,16 +215,15 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 					fullWidth
 					size="lg"
 				>
-					{isAvailable ? strings.checkout.confirm : strings.checkout.confirmUnavailable}
+					{isAvailable
+						? strings.checkout.confirm
+						: strings.checkout.confirmUnavailable}
 				</Button>
 
 				{/* M16: la línea ya no afirma "términos aplicados" — dice qué
 				    pasa al reservar y enlaza a la ruta legal real. */}
 				<View style={styles.terms}>
-					<AppText
-						variant="caption"
-						style={{ color: colors.mutedForeground }}
-					>
+					<AppText variant="caption" style={{ color: colors.mutedForeground }}>
 						{strings.checkout.termsPrefix}{" "}
 						<Pressable
 							onPress={() => router.push("/(consumer)/profile/terms")}

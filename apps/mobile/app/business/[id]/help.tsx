@@ -1,4 +1,14 @@
-import { BookOpen, ChevronRight, CircleHelp, Mail, MessagesSquare, Package, Phone, ShieldCheck, type LucideIcon } from "lucide-react-native";
+import {
+	BookOpen,
+	ChevronRight,
+	CircleHelp,
+	Mail,
+	MessagesSquare,
+	Package,
+	Phone,
+	ShieldCheck,
+	type LucideIcon,
+} from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -108,7 +118,9 @@ function CategoryRow({ category }: { category: Category }) {
 			onPress={category.onPress}
 			style={[styles.row, { borderTopColor: colors.borderSolid }]}
 		>
-			<View style={[styles.categoryIcon, { backgroundColor: category.bgColor }]}>
+			<View
+				style={[styles.categoryIcon, { backgroundColor: category.bgColor }]}
+			>
 				<Icon size={20} color={category.iconColor} />
 			</View>
 			<View style={styles.rowBody}>
@@ -171,10 +183,7 @@ function FaqChevron({ expanded }: { expanded: boolean }) {
 				],
 			}}
 		>
-			<ChevronRight
-				size={20}
-				color={colors.mutedForeground}
-			/>
+			<ChevronRight size={20} color={colors.mutedForeground} />
 		</Animated.View>
 	);
 }
@@ -285,7 +294,10 @@ function ContactSupportCard({ onPress }: { onPress: () => void }) {
 			</AppText>
 			<AppText
 				variant="bodySmall"
-				style={{ color: `${withAlpha(colors.primaryForeground, 0.902)}`, marginTop: 2 }}
+				style={{
+					color: `${withAlpha(colors.primaryForeground, 0.902)}`,
+					marginTop: 2,
+				}}
 			>
 				{strings.helpCenter.contactSubtitle}
 			</AppText>

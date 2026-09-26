@@ -55,7 +55,7 @@ export default function ConsumerLayout() {
 
 	return (
 		<View style={{ flex: 1 }}>
-		{/* OuterBar va en flujo bajo los tabs (no es overlay) y es el
+			{/* OuterBar va en flujo bajo los tabs (no es overlay) y es el
 		    único dueño del aire inferior: el padding de diseño lo pone el
 		    contenido de cada pantalla y el inset del gesto lo pone Navbar.
 		    Sin padding aquí: apilaba spacing.lg sobre ambos y se leía
@@ -79,9 +79,9 @@ export default function ConsumerLayout() {
 						options={{
 							title: strings.home.title,
 							tabBarLabel: strings.home.title,
-					tabBarIcon: ({ color, size }) => (
-						<House size={size} color={color} />
-					),
+							tabBarIcon: ({ color, size }) => (
+								<House size={size} color={color} />
+							),
 						}}
 					/>
 					<Tabs.Screen
@@ -89,9 +89,9 @@ export default function ConsumerLayout() {
 						options={{
 							title: strings.explore.title,
 							tabBarLabel: strings.explore.title,
-					tabBarIcon: ({ color, size }) => (
-						<Search size={size} color={color} />
-					),
+							tabBarIcon: ({ color, size }) => (
+								<Search size={size} color={color} />
+							),
 						}}
 					/>
 					<Tabs.Screen
@@ -99,9 +99,9 @@ export default function ConsumerLayout() {
 						options={{
 							title: strings.orders.tabTitle,
 							tabBarLabel: strings.orders.tabTitle,
-					tabBarIcon: ({ color, size }) => (
-						<Receipt size={size} color={color} />
-					),
+							tabBarIcon: ({ color, size }) => (
+								<Receipt size={size} color={color} />
+							),
 						}}
 					/>
 					<Tabs.Screen
@@ -109,9 +109,9 @@ export default function ConsumerLayout() {
 						options={{
 							title: strings.profile.title,
 							tabBarLabel: strings.profile.title,
-					tabBarIcon: ({ color, size }) => (
-						<User size={size} color={color} />
-					),
+							tabBarIcon: ({ color, size }) => (
+								<User size={size} color={color} />
+							),
 						}}
 					/>
 				</Tabs>

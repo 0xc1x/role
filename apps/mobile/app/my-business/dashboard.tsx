@@ -50,10 +50,7 @@ export default function BusinessDashboardScreen() {
 				<AppText variant="h2" weight="bold">
 					{strings.myBusiness.dashboardTitle}
 				</AppText>
-				<Button
-					size="sm"
-					onPress={() => router.push("/business-signup")}
-				>
+				<Button size="sm" onPress={() => router.push("/business-signup")}>
 					{strings.myBusiness.newBusiness}
 				</Button>
 			</View>
@@ -93,7 +90,9 @@ const BusinessCardRow = memo(function BusinessCardRow({
 			</AppText>
 			<View style={{ marginTop: spacing.sm }}>
 				<StatusBadge
-					label={item.is_active ? strings.business.active : strings.business.inactive}
+					label={
+						item.is_active ? strings.business.active : strings.business.inactive
+					}
 					tone={item.is_active ? "success" : "neutral"}
 				/>
 			</View>

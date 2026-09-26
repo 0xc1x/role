@@ -33,15 +33,12 @@ function CardPressable({
 			accessibilityRole="button"
 			// className va solo al Card interior (resets p-0/border-0/...):
 			// duplicarlo en el Pressable aplica layout al nivel equivocado.
-			style={({ pressed }) => [
-				style,
-				pressed && { opacity: 0.9 },
-			]}
+			style={({ pressed }) => [style, pressed && { opacity: 0.9 }]}
 		>
 			<Card
 				// Sin flex-1: el contenido (imagen 160 + body) define la altura
 				className={cn(className)}
-				style={[style, {borderRadius: radii.xl}]}
+				style={[style, { borderRadius: radii.xl }]}
 				{...props}
 			/>
 		</Pressable>

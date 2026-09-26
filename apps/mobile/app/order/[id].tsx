@@ -23,8 +23,15 @@ import {
 } from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { spacing, radii } from "@/src/core/theme/spacing";
-import { useCancelOrder, useOrder, useReviewByOrder } from "@/src/features/hooks";
-import { canTransitionTo, isActiveStatus } from "@/src/features/orders/domain/order";
+import {
+	useCancelOrder,
+	useOrder,
+	useReviewByOrder,
+} from "@/src/features/hooks";
+import {
+	canTransitionTo,
+	isActiveStatus,
+} from "@/src/features/orders/domain/order";
 import { useTheme } from "@/src/core/theme";
 import { DetailHeader } from "@/src/features/orders/components/order-detail/DetailHeader";
 import { OrderProgressHeader } from "@/src/features/orders/components/order-detail/OrderProgressHeader";
@@ -41,7 +48,9 @@ import { Button } from "@/components/ui/button";
 export default function OrderDetailScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
-	const { data, isLoading, isError, error, refetch, isFetching } = useOrder(id ?? "");
+	const { data, isLoading, isError, error, refetch, isFetching } = useOrder(
+		id ?? "",
+	);
 	const cancel = useCancelOrder();
 	// Si ya existe reseña, el CTA abre el editor en modo edición.
 	const { data: existingReview } = useReviewByOrder(id ?? "");
@@ -227,7 +236,7 @@ const styles = StyleSheet.create({
 	scroll: { flex: 1 },
 	scrollContent: { paddingBottom: 0 },
 	container: { padding: spacing.xl, gap: spacing.lg },
-	cardBlock: {  },
+	cardBlock: {},
 	bottomBar: {
 		paddingHorizontal: spacing.xl,
 		paddingTop: spacing.md,

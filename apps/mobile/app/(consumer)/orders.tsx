@@ -28,7 +28,10 @@ import {
 	useWebPullToRefresh,
 } from "@/src/core/ui";
 import { useOrderCounts, useOrders } from "@/src/features/hooks";
-import { OrderCard, OrderCardSkeleton } from "@/src/features/orders/components/OrderCard";
+import {
+	OrderCard,
+	OrderCardSkeleton,
+} from "@/src/features/orders/components/OrderCard";
 import { HistoryDateFilter } from "@/src/features/orders/components/HistoryDateFilter";
 import {
 	ACTIVE_ORDER_STATUSES,
@@ -83,7 +86,8 @@ export default function OrdersScreen() {
 		() => historyRange(historyPeriod, weekOffset, new Date()),
 		[historyPeriod, weekOffset],
 	);
-	const search = debouncedQuery.trim().length > 0 ? debouncedQuery.trim() : undefined;
+	const search =
+		debouncedQuery.trim().length > 0 ? debouncedQuery.trim() : undefined;
 	const listFilters =
 		tab === "active"
 			? { statuses: ACTIVE_ORDER_STATUSES, search }
@@ -151,59 +155,60 @@ export default function OrdersScreen() {
 		[],
 	);
 
-	if (!isLoading && isError) return <ErrorState error={error} onRetry={refetch} />;
+	if (!isLoading && isError)
+		return <ErrorState error={error} onRetry={refetch} />;
 
 	const header = (
-			<View
-				style={[
-					styles.stickyHeader,
-					{
-						backgroundColor: colors.background,
-						borderColor: colors.border,
-					},
-				]}
-			>
-				<View style={styles.header}>
-					<AppText variant="h2" weight="bold">
-						{strings.orders.tabTitle}
-					</AppText>
-				</View>
-
-				<View style={styles.searchWrap}>
-					<SearchBar
-						value={query}
-						onChangeText={setQuery}
-						placeholder={strings.orders.searchHint}
-					/>
-				</View>
-
-				<View style={styles.tabsWrap}>
-					<OrdersTabs
-						active={tab}
-						// Counts stay hidden while loading or on error (a failed
-						// head-count must not render stale/undefined badges).
-						activeCount={
-							countsLoading || countsError ? undefined : counts?.activeCount
-						}
-						pastCount={
-							countsLoading || countsError ? undefined : counts?.pastCount
-						}
-						onChange={setTab}
-					/>
-				</View>
-
-				{tab === "past" ? (
-					<HistoryDateFilter
-						period={historyPeriod}
-						weekOffset={weekOffset}
-						onPeriodChange={(p) => {
-							setHistoryPeriod(p);
-							if (p !== "week") setWeekOffset(0);
-						}}
-						onWeekChange={setWeekOffset}
-					/>
-				) : null}
+		<View
+			style={[
+				styles.stickyHeader,
+				{
+					backgroundColor: colors.background,
+					borderColor: colors.border,
+				},
+			]}
+		>
+			<View style={styles.header}>
+				<AppText variant="h2" weight="bold">
+					{strings.orders.tabTitle}
+				</AppText>
 			</View>
+
+			<View style={styles.searchWrap}>
+				<SearchBar
+					value={query}
+					onChangeText={setQuery}
+					placeholder={strings.orders.searchHint}
+				/>
+			</View>
+
+			<View style={styles.tabsWrap}>
+				<OrdersTabs
+					active={tab}
+					// Counts stay hidden while loading or on error (a failed
+					// head-count must not render stale/undefined badges).
+					activeCount={
+						countsLoading || countsError ? undefined : counts?.activeCount
+					}
+					pastCount={
+						countsLoading || countsError ? undefined : counts?.pastCount
+					}
+					onChange={setTab}
+				/>
+			</View>
+
+			{tab === "past" ? (
+				<HistoryDateFilter
+					period={historyPeriod}
+					weekOffset={weekOffset}
+					onPeriodChange={(p) => {
+						setHistoryPeriod(p);
+						if (p !== "week") setWeekOffset(0);
+					}}
+					onWeekChange={setWeekOffset}
+				/>
+			) : null}
+		</View>
 	);
 
 	if (isLoading) {
@@ -302,15 +307,17 @@ function OrdersTabs({
 	const tabs: Array<{ key: OrdersTab; label: string }> = [
 		{
 			key: "active",
-			label: activeCount === undefined
-				? strings.orders.tabActive.replace(" ({n})", "")
-				: strings.orders.tabActive.replace("{n}", String(activeCount)),
+			label:
+				activeCount === undefined
+					? strings.orders.tabActive.replace(" ({n})", "")
+					: strings.orders.tabActive.replace("{n}", String(activeCount)),
 		},
 		{
 			key: "past",
-			label: pastCount === undefined
-				? strings.orders.tabPast.replace(" ({n})", "")
-				: strings.orders.tabPast.replace("{n}", String(pastCount)),
+			label:
+				pastCount === undefined
+					? strings.orders.tabPast.replace(" ({n})", "")
+					: strings.orders.tabPast.replace("{n}", String(pastCount)),
 		},
 	];
 

@@ -247,7 +247,11 @@ export default function SignupScreen() {
 					},
 				]}
 			>
-				<AppText variant="h4" weight="bold" style={{ color: colors.successText }}>
+				<AppText
+					variant="h4"
+					weight="bold"
+					style={{ color: colors.successText }}
+				>
 					{strings.auth.benefitsTitle}
 				</AppText>
 				<View style={styles.benefitsList}>

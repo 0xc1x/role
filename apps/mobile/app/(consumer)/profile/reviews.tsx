@@ -37,7 +37,12 @@ import type { MyReviewView } from "@/src/features/orders/domain/order";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+} from "@/components/ui/card";
 
 export default function MyReviewsScreen() {
 	const { colors } = useTheme();
@@ -57,10 +62,7 @@ export default function MyReviewsScreen() {
 		refreshing: isFetching,
 	});
 
-	const items = useMemo(
-		() => infiniteData?.pages.flat() ?? [],
-		[infiniteData],
-	);
+	const items = useMemo(() => infiniteData?.pages.flat() ?? [], [infiniteData]);
 
 	const handleEndReached = useCallback(() => {
 		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
@@ -125,12 +127,7 @@ export default function MyReviewsScreen() {
 				}
 				ListEmptyComponent={
 					<EmptyState
-						icon={
-							<Star
-								size={28}
-								color={colors.mutedForeground}
-							/>
-						}
+						icon={<Star size={28} color={colors.mutedForeground} />}
 						title={strings.orders.myReviewsEmpty}
 						message={strings.orders.myReviewsEmptyHint}
 					/>
@@ -151,13 +148,16 @@ const ReviewRow = memo(function ReviewRow({ item }: { item: MyReviewView }) {
 		: `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
 
 	return (
-		<Card >
+		<Card>
 			<CardHeader style={styles.headerRow}>
 				<View style={{ flex: 1 }}>
 					<AppText variant="h2" weight="bold">
 						{item.offerTitle}
 					</AppText>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{item.businessName} · {dateLabel}
 					</AppText>
 				</View>
@@ -168,7 +168,7 @@ const ReviewRow = memo(function ReviewRow({ item }: { item: MyReviewView }) {
 					</AppText>
 				</View>
 			</CardHeader>
-			
+
 			<CardContent>
 				{item.comment ? (
 					<AppText
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
 	headerRow: {
 		flexDirection: "row",
 		alignItems: "flex-start",
-		paddingTop: spacing.md
+		paddingTop: spacing.md,
 	},
 	starsRow: {
 		flexDirection: "row",

@@ -31,20 +31,19 @@ export default function LandingScreen() {
 					</AppText>
 					<AppText
 						variant="bodyLarge"
-						style={{ color: colors.primaryForeground, opacity: 0.9, textAlign: "center" }}
+						style={{
+							color: colors.primaryForeground,
+							opacity: 0.9,
+							textAlign: "center",
+						}}
 					>
 						{strings.landing.heroBody}
 					</AppText>
 					<Link href="/login" asChild>
-						<Button fullWidth >
-							{strings.landing.login}
-						</Button>
+						<Button fullWidth>{strings.landing.login}</Button>
 					</Link>
 					<Link href="/signup" asChild>
-						<Button
-							variant="secondary"
-							fullWidth
-						>
+						<Button variant="secondary" fullWidth>
 							{strings.landing.createAccount}
 						</Button>
 					</Link>
@@ -145,7 +144,11 @@ export default function LandingScreen() {
 										{ backgroundColor: colors.primary },
 									]}
 								>
-									<AppText variant="h4" weight="bold" style={{ color: colors.primaryForeground }}>
+									<AppText
+										variant="h4"
+										weight="bold"
+										style={{ color: colors.primaryForeground }}
+									>
 										{s.step}
 									</AppText>
 								</View>
@@ -179,9 +182,7 @@ export default function LandingScreen() {
 						{strings.landing.ctaBody}
 					</AppText>
 					<Link href="/signup" asChild>
-						<Button  fullWidth >
-							{strings.landing.openApp}
-						</Button>
+						<Button fullWidth>{strings.landing.openApp}</Button>
 					</Link>
 				</View>
 

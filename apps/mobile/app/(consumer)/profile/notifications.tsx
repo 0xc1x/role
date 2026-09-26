@@ -1,7 +1,18 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Bell, ChartColumn, Clock, Mail, MessageCircle, MessageSquare, Smartphone, Star, Zap, type LucideIcon } from "lucide-react-native";
+import {
+	Bell,
+	ChartColumn,
+	Clock,
+	Mail,
+	MessageCircle,
+	MessageSquare,
+	Smartphone,
+	Star,
+	Zap,
+	type LucideIcon,
+} from "lucide-react-native";
 
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -194,7 +205,9 @@ function ToggleCard({
 			{configs.map((config, index) => (
 				<View key={config.key}>
 					{index > 0 ? (
-						<View style={[styles.divider, { backgroundColor: colors.border }]} />
+						<View
+							style={[styles.divider, { backgroundColor: colors.border }]}
+						/>
 					) : null}
 					<NotificationRow
 						config={config}
@@ -212,7 +225,8 @@ export default function NotificationsSettingsScreen() {
 	const { colors } = useTheme();
 	const { profile, status, initialized } = useAuthStore();
 	const userId = profile?.id ?? "";
-	const { data: prefs, isLoading: prefsLoading } = useNotificationPreferences(userId);
+	const { data: prefs, isLoading: prefsLoading } =
+		useNotificationPreferences(userId);
 	const update = useUpdateNotificationPreferences(userId);
 	// Lock anti doble-tap y flujo de registro viven en el hook compartido.
 	const { registering, enablePush } = usePushToggle(userId, async () => {
@@ -248,7 +262,10 @@ export default function NotificationsSettingsScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
-				<ScreenHeader title={strings.notificationsSettings.title} fallback="/(consumer)/profile" />
+				<ScreenHeader
+					title={strings.notificationsSettings.title}
+					fallback="/(consumer)/profile"
+				/>
 
 				<Alert variant="info" icon={Bell}>
 					<AlertDescription>
@@ -262,7 +279,9 @@ export default function NotificationsSettingsScreen() {
 					</AlertDescription>
 				</Alert>
 
-				<SectionTitle>{strings.notificationsSettings.channelsSection}</SectionTitle>
+				<SectionTitle>
+					{strings.notificationsSettings.channelsSection}
+				</SectionTitle>
 				{prefsLoading ? (
 					<Skeleton style={{ height: 248, borderRadius: radii.lg }} />
 				) : (
@@ -274,7 +293,9 @@ export default function NotificationsSettingsScreen() {
 					/>
 				)}
 
-				<SectionTitle>{strings.notificationsSettings.smartSection}</SectionTitle>
+				<SectionTitle>
+					{strings.notificationsSettings.smartSection}
+				</SectionTitle>
 				{prefsLoading ? (
 					<Skeleton style={{ height: 248, borderRadius: radii.lg }} />
 				) : (

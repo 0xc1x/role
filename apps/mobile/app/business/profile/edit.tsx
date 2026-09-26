@@ -2,12 +2,7 @@ import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
 import { strings } from "@/src/core/i18n/strings";
-import {
-	ErrorState,
-	goBackOr,
-	Screen,
-	ScreenHeader,
-} from "@/src/core/ui";
+import { ErrorState, goBackOr, Screen, ScreenHeader } from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/src/core/theme";
 import { useAuthStore } from "@/src/features/auth/store";
@@ -21,7 +16,7 @@ import { BusinessForm } from "@/src/features/business/components/BusinessForm";
 import { NoBusinessPrompt } from "@/src/features/business/components/NoBusinessPrompt";
 import { spacing, radii } from "@/src/core/theme/spacing";
 
-/** Edición del negocio con paridad total: mismos campos que la creación. */export default function BusinessEditScreen() {
+/** Edición del negocio con paridad total: mismos campos que la creación. */ export default function BusinessEditScreen() {
 	const initialized = useAuthStore((s) => s.initialized);
 	const profile = useAuthStore((s) => s.profile);
 	const { data: businesses, isLoading: businessesLoading } = useBusinesses(

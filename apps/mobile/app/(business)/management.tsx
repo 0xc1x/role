@@ -1,7 +1,10 @@
 import { useAuthStore } from "@/src/features/auth/store";
 import { ErrorState } from "@/src/core/ui";
 import { NoBusinessPrompt } from "@/src/features/business/components/NoBusinessPrompt";
-import { GestionContent, GestionContentSkeleton } from "@/src/features/business/components/management/GestionContent";
+import {
+	GestionContent,
+	GestionContentSkeleton,
+} from "@/src/features/business/components/management/GestionContent";
 import { useBusinesses } from "@/src/features/business/hooks";
 
 export default function GestionScreen() {

@@ -13,7 +13,11 @@ import {
 	ScreenHeader,
 	TextField,
 } from "@/src/core/ui";
-import { useOrder, useReviewByOrder, useSubmitReview } from "@/src/features/hooks";
+import {
+	useOrder,
+	useReviewByOrder,
+	useSubmitReview,
+} from "@/src/features/hooks";
 import { StarRating } from "@/src/features/orders/components/StarRating";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
@@ -73,18 +77,20 @@ export default function ReviewOrderScreen() {
 		<Screen scroll keyboardShouldPersistTaps="handled">
 			<View style={styles.container}>
 				<ScreenHeader
-					title={isEditing ? strings.orders.editReview : strings.orders.writeReview}
+					title={
+						isEditing ? strings.orders.editReview : strings.orders.writeReview
+					}
 				/>
-				<AppText variant="bodyMedium" style={{ color: colors.mutedForeground, paddingTop: spacing.xl }}>
+				<AppText
+					variant="bodyMedium"
+					style={{ color: colors.mutedForeground, paddingTop: spacing.xl }}
+				>
 					{data.offerTitle} · {data.businessName}
 				</AppText>
 
 				<Card style={{ marginTop: spacing.lg }}>
 					<CardHeader>
-						<AppText
-							variant="bodyMedium"
-							weight="semiBold"
-						>
+						<AppText variant="bodyMedium" weight="semiBold">
 							{strings.orders.rateProduct}
 						</AppText>
 					</CardHeader>
@@ -99,10 +105,7 @@ export default function ReviewOrderScreen() {
 
 				<Card style={{ marginTop: spacing.md }}>
 					<CardHeader>
-						<AppText
-							variant="bodyMedium"
-							weight="semiBold"
-						>
+						<AppText variant="bodyMedium" weight="semiBold">
 							{strings.orders.rateBusiness}
 						</AppText>
 					</CardHeader>
@@ -130,11 +133,9 @@ export default function ReviewOrderScreen() {
 					fullWidth
 					style={{ marginTop: spacing.lg }}
 				>
-					{
-						isEditing
-							? strings.orders.saveReviewChanges
-							: strings.orders.submitReview
-					}
+					{isEditing
+						? strings.orders.saveReviewChanges
+						: strings.orders.submitReview}
 				</Button>
 			</View>
 		</Screen>

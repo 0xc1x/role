@@ -24,7 +24,10 @@ import {
 } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
-import { useBusinessPayouts, useBusinessPayoutTotals } from "@/src/features/business/hooks";
+import {
+	useBusinessPayouts,
+	useBusinessPayoutTotals,
+} from "@/src/features/business/hooks";
 import { PAYOUT_STATUS_LABELS } from "@/src/features/business/domain/business";
 import { formatMoney } from "@/src/core/utils/formatters";
 import type { Payout, PayoutStatus } from "@0xc1x/role-commons";
@@ -154,10 +157,17 @@ export default function BusinessPayoutsScreen() {
 								>
 									{strings.business.totalCollected}
 								</AppText>
-								<AppText variant="h2" weight="bold" style={{ color: colors.successText }}>
+								<AppText
+									variant="h2"
+									weight="bold"
+									style={{ color: colors.successText }}
+								>
 									{formatMoney(paid)}
 								</AppText>
-								<AppText variant="bodySmall" style={{ color: colors.successText }}>
+								<AppText
+									variant="bodySmall"
+									style={{ color: colors.successText }}
+								>
 									{paidCount === 1
 										? strings.business.onePayout
 										: `${paidCount} ${strings.business.payoutsCount}`}
@@ -179,10 +189,17 @@ export default function BusinessPayoutsScreen() {
 								>
 									{strings.business.pendingProcessing}
 								</AppText>
-								<AppText variant="h2" weight="bold" style={{ color: colors.infoForeground }}>
+								<AppText
+									variant="h2"
+									weight="bold"
+									style={{ color: colors.infoForeground }}
+								>
 									{formatMoney(pending)}
 								</AppText>
-								<AppText variant="bodySmall" style={{ color: colors.infoForeground }}>
+								<AppText
+									variant="bodySmall"
+									style={{ color: colors.infoForeground }}
+								>
 									{strings.business.autoCutoff}
 								</AppText>
 							</View>
@@ -224,12 +241,7 @@ export default function BusinessPayoutsScreen() {
 				}
 				ListEmptyComponent={
 					<EmptyState
-						icon={
-							<Receipt
-								size={28}
-								color={colors.mutedForeground}
-							/>
-						}
+						icon={<Receipt size={28} color={colors.mutedForeground} />}
 						title={strings.business.noPayouts}
 						message={strings.business.noPayoutsBody}
 					/>
@@ -246,10 +258,7 @@ export default function BusinessPayoutsScreen() {
 								{ backgroundColor: colors.surfaceMuted },
 							]}
 						>
-							<Info
-								size={16}
-								color={colors.mutedForeground}
-							/>
+							<Info size={16} color={colors.mutedForeground} />
 							<AppText
 								variant="bodySmall"
 								style={{ color: colors.mutedForeground, flex: 1 }}
@@ -308,10 +317,7 @@ function PayoutCard({
 						{periodLabel(payout)}
 					</AppText>
 				</View>
-				<ChevronRight
-					size={16}
-					color={colors.mutedForeground}
-				/>
+				<ChevronRight size={16} color={colors.mutedForeground} />
 			</View>
 		</CardPressable>
 	);

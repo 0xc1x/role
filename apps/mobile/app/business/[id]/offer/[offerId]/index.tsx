@@ -11,10 +11,20 @@ import { ProductDetail } from "@/src/features/business/components/products/Produ
 import { useOffer } from "@/src/features/hooks";
 
 export default function OfferDetailScreen() {
-	const { id, offerId } = useLocalSearchParams<{ id: string; offerId: string }>();
+	const { id, offerId } = useLocalSearchParams<{
+		id: string;
+		offerId: string;
+	}>();
 	const businessId = id ?? "";
 
-	const { data: product, isLoading, isError, error, refetch, isFetching } = useOffer(offerId ?? "");
+	const {
+		data: product,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		isFetching,
+	} = useOffer(offerId ?? "");
 
 	if (isLoading) return <OfferDetailSkeleton />;
 	if (isError || !product)
@@ -49,7 +59,10 @@ function OfferDetailSkeleton() {
 							key={stat}
 							style={[
 								styles.statCard,
-								{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+								{
+									backgroundColor: colors.card,
+									borderColor: colors.borderSolid,
+								},
 							]}
 						>
 							<Skeleton style={styles.statIcon} />

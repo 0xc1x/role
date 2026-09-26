@@ -1,4 +1,11 @@
-import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
+import {
+	memo,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+	type ComponentProps,
+} from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,10 +14,19 @@ import { Button } from "@/components/ui/button";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, CircleIconButton, goBackOr, SearchBar, useWebPullToRefresh } from "@/src/core/ui";
+import {
+	AppText,
+	CircleIconButton,
+	goBackOr,
+	SearchBar,
+	useWebPullToRefresh,
+} from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { radii, spacing } from "@/src/core/theme/spacing";
-import { useAllBusinessesInfinite, useSelectedAddress } from "@/src/features/hooks";
+import {
+	useAllBusinessesInfinite,
+	useSelectedAddress,
+} from "@/src/features/hooks";
 import { BusinessGridCard } from "@/src/features/business/components/BusinessGridCard";
 import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
 import { ChipsBar } from "@/src/features/home/components/CategoryChips";
@@ -88,7 +104,17 @@ export default function AllBusinessesScreen() {
 	);
 
 	const selectedAddress = useSelectedAddress();
-	const { data: infiniteData, isLoading, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching } = useAllBusinessesInfinite(
+	const {
+		data: infiniteData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		isFetching,
+	} = useAllBusinessesInfinite(
 		selectedAddress?.latitude ?? null,
 		selectedAddress?.longitude ?? null,
 		debouncedSearch.length > 0 ? debouncedSearch : null,
@@ -105,10 +131,7 @@ export default function AllBusinessesScreen() {
 		return () => clearTimeout(t);
 	}, [search]);
 
-	const chipItems = useMemo<string[]>(
-		() => ["all", ...BUSINESS_TYPES],
-		[],
-	);
+	const chipItems = useMemo<string[]>(() => ["all", ...BUSINESS_TYPES], []);
 	const selectedChip = selectedType ?? "all";
 
 	const labelFor = useCallback(
@@ -148,9 +171,7 @@ export default function AllBusinessesScreen() {
 			<View style={[styles.header, { paddingTop: spacing.xl + insets.top }]}>
 				<View style={styles.headerRow}>
 					<CircleIconButton
-						icon={
-							<ChevronLeft size={22} color={colors.foreground} />
-						}
+						icon={<ChevronLeft size={22} color={colors.foreground} />}
 						onPress={() => goBackOr("/(consumer)")}
 						accessibilityLabel={strings.common.back}
 					/>
@@ -170,9 +191,7 @@ export default function AllBusinessesScreen() {
 					items={chipItems}
 					selectedId={selectedChip}
 					labelFor={labelFor}
-					onSelect={(item) =>
-						setSelectedType(item === "all" ? null : item)
-					}
+					onSelect={(item) => setSelectedType(item === "all" ? null : item)}
 				/>
 			</View>
 
@@ -190,12 +209,13 @@ export default function AllBusinessesScreen() {
 				</View>
 			) : isError ? (
 				<View style={styles.centerBox}>
-					<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodyMedium"
+						style={{ color: colors.mutedForeground }}
+					>
 						{error instanceof Error ? error.message : strings.common.error}
 					</AppText>
-					<Button onPress={() => void refetch()}>
-						{strings.common.retry}
-					</Button>
+					<Button onPress={() => void refetch()}>{strings.common.retry}</Button>
 				</View>
 			) : data && data.length === 0 ? (
 				<View style={styles.centerBox}>
@@ -219,7 +239,14 @@ export default function AllBusinessesScreen() {
 					columnWrapperStyle={styles.businessRow}
 					contentContainerStyle={styles.businessContent}
 					showsVerticalScrollIndicator={false}
-					refreshControl={<RefreshControl refreshing={!!isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
+					refreshControl={
+						<RefreshControl
+							refreshing={!!isFetching}
+							onRefresh={() => void refetch()}
+							tintColor={colors.primary}
+							colors={[colors.primary]}
+						/>
+					}
 					onEndReached={handleEndReached}
 					onEndReachedThreshold={0.5}
 					ListFooterComponent={listFooter}

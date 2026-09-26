@@ -42,7 +42,10 @@ const FILTERS: Array<{ id: ReviewFilter; label: string }> = [
 
 export default function BusinessReviewsScreen() {
 	const { colors } = useTheme();
-	const { id, offerId } = useLocalSearchParams<{ id: string; offerId?: string }>();
+	const { id, offerId } = useLocalSearchParams<{
+		id: string;
+		offerId?: string;
+	}>();
 	const businessId = id ?? "";
 	const [filter, setFilter] = useState<ReviewFilter>("recent");
 
@@ -83,9 +86,7 @@ export default function BusinessReviewsScreen() {
 		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
 	}, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 	const renderReviewItem = useCallback(
-		({ item }: { item: BusinessReviewView }) => (
-			<ReviewItem review={item} />
-		),
+		({ item }: { item: BusinessReviewView }) => <ReviewItem review={item} />,
 		[],
 	);
 
@@ -93,30 +94,38 @@ export default function BusinessReviewsScreen() {
 	const reviewCount = totalCount ?? profile?.business.review_count ?? 0;
 	const offerTitle =
 		offerIdParam != null
-			? (allReviews.find((r) => r.offerId === offerIdParam)?.offerTitle ??
-				null)
+			? (allReviews.find((r) => r.offerId === offerIdParam)?.offerTitle ?? null)
 			: null;
 
 	const header = (
 		<View style={styles.headerBlock}>
 			<ScreenHeader
-				title={
-					offerTitle ?? strings.businessProfile.reviewsTitle
-				}
+				title={offerTitle ?? strings.businessProfile.reviewsTitle}
 				fallback={`/business/${businessId}`}
 			/>
 
 			{offerTitle == null ? (
 				<View style={styles.summaryRow}>
-					<View style={[styles.ratingBadge, { backgroundColor: colors.surfaceWarning }]}>
+					<View
+						style={[
+							styles.ratingBadge,
+							{ backgroundColor: colors.surfaceWarning },
+						]}
+					>
 						<Star size={16} color={colors.yellowDark} />
 						<View style={{ width: 4 }} />
 						<AppText weight="bold" style={{ color: colors.yellowDark }}>
 							{rating.toFixed(1)}
 						</AppText>
 					</View>
-					<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
-						{strings.businessProfile.communityReviews.replace("{n}", String(reviewCount))}
+					<AppText
+						variant="bodyMedium"
+						style={{ color: colors.mutedForeground }}
+					>
+						{strings.businessProfile.communityReviews.replace(
+							"{n}",
+							String(reviewCount),
+						)}
 					</AppText>
 				</View>
 			) : null}
@@ -142,7 +151,9 @@ export default function BusinessReviewsScreen() {
 								variant="bodySmall"
 								weight={selected ? "semiBold" : "medium"}
 								style={{
-									color: selected ? colors.primaryForeground : colors.mutedForeground,
+									color: selected
+										? colors.primaryForeground
+										: colors.mutedForeground,
 								}}
 							>
 								{option.label}
@@ -164,7 +175,10 @@ export default function BusinessReviewsScreen() {
 					{header}
 					<View style={styles.skeletonList}>
 						{[0, 1, 2].map((i) => (
-							<Skeleton key={`review-skeleton-${i}`} style={styles.skeletonCard} />
+							<Skeleton
+								key={`review-skeleton-${i}`}
+								style={styles.skeletonCard}
+							/>
 						))}
 					</View>
 				</View>
@@ -178,7 +192,10 @@ export default function BusinessReviewsScreen() {
 				<View style={styles.content}>
 					{header}
 					<View style={styles.centerBox}>
-						<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+						<AppText
+							variant="bodyMedium"
+							style={{ color: colors.mutedForeground }}
+						>
 							{strings.common.error}
 						</AppText>
 						<Button onPress={() => void refetch()}>
@@ -219,7 +236,9 @@ export default function BusinessReviewsScreen() {
 							<Button
 								variant="outline"
 								fullWidth
-								onPress={() => router.replace(`/business/${businessId}/reviews`)}
+								onPress={() =>
+									router.replace(`/business/${businessId}/reviews`)
+								}
 							>
 								{strings.businessProfile.seeAllReviews.replace(
 									"{n}",

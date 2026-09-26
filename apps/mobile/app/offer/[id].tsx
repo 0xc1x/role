@@ -9,7 +9,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ErrorState, goBackOr, CircleIconButton, useWebPullToRefresh } from "@/src/core/ui";
+import {
+	ErrorState,
+	goBackOr,
+	CircleIconButton,
+	useWebPullToRefresh,
+} from "@/src/core/ui";
 import { ChevronLeft } from "lucide-react-native";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
@@ -38,7 +43,8 @@ export default function OfferDetailScreen() {
 	const insets = useSafeAreaInsets();
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const offerId = id ?? "";
-	const { data, isLoading, isError, error, refetch, isFetching } = useOffer(offerId);
+	const { data, isLoading, isError, error, refetch, isFetching } =
+		useOffer(offerId);
 	const isFavorite = useIsFavorite(offerId);
 	const toggleFavorite = useToggleFavorite();
 	const profile = useAuthStore((s) => s.profile);
@@ -138,12 +144,7 @@ export default function OfferDetailScreen() {
 				{/* Back remains available; data-dependent actions do not. */}
 				<View style={[styles.skeletonTopBar, { top: insets.top + spacing.xl }]}>
 					<CircleIconButton
-						icon={
-							<ChevronLeft
-								size={20}
-								color={colors.foreground}
-							/>
-						}
+						icon={<ChevronLeft size={20} color={colors.foreground} />}
 						onPress={() => goBackOr("/(consumer)")}
 						accessibilityLabel={strings.common.back}
 					/>
@@ -186,7 +187,14 @@ export default function OfferDetailScreen() {
 					{ useNativeDriver: false },
 				)}
 				showsVerticalScrollIndicator={false}
-				refreshControl={<RefreshControl refreshing={!!isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
+				refreshControl={
+					<RefreshControl
+						refreshing={!!isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
+					/>
+				}
 			>
 				<View style={{ height: HERO_HEIGHT }} />
 
@@ -221,24 +229,52 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.xl,
 	},
 	heroSkeleton: { width: "100%", borderRadius: 0 },
-	skeletonContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, gap: spacing.md },
+	skeletonContent: {
+		paddingHorizontal: spacing.xl,
+		paddingTop: spacing.sm,
+		gap: spacing.md,
+	},
 	skeletonTitle: { height: 26, width: "80%", borderRadius: radii.md },
 	skeletonSubtitle: { height: 16, width: "50%", borderRadius: radii.md },
-	skeletonSavingsBadge: { height: 28, width: 100, marginTop: spacing.xl, borderRadius: radii.pill },
-	skeletonPriceRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.md },
+	skeletonSavingsBadge: {
+		height: 28,
+		width: 100,
+		marginTop: spacing.xl,
+		borderRadius: radii.pill,
+	},
+	skeletonPriceRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		flexWrap: "wrap",
+		gap: spacing.md,
+	},
 	skeletonPrice: { height: 31, width: 110, borderRadius: radii.md },
 	skeletonOriginalPrice: { height: 20, width: 64, borderRadius: radii.md },
 	skeletonSavePill: { height: 24, width: 90, borderRadius: radii.pill },
 	skeletonCard: { marginVertical: spacing.md },
 	skeletonSectionTitle: { height: 21, width: "60%" },
-	skeletonPickupRow: { flexDirection: "row", alignItems: "flex-start", paddingVertical: spacing.sm, gap: spacing.md },
+	skeletonPickupRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		paddingVertical: spacing.sm,
+		gap: spacing.md,
+	},
 	skeletonPickupIcon: { width: 31, height: 31, borderRadius: radii.md },
 	skeletonDetails: { flex: 1, gap: spacing.xxs },
 	skeletonLabel: { height: 16, width: "50%" },
 	skeletonValue: { height: 20, width: "80%" },
-	skeletonNote: { flexDirection: "row", gap: spacing.sm, padding: spacing.sm, marginTop: spacing.sm },
+	skeletonNote: {
+		flexDirection: "row",
+		gap: spacing.sm,
+		padding: spacing.sm,
+		marginTop: spacing.sm,
+	},
 	skeletonNoteIcon: { width: 18, height: 18, borderRadius: radii.pill },
-	skeletonBusinessHead: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+	skeletonBusinessHead: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.md,
+	},
 	skeletonLogo: { width: 48, height: 48, borderRadius: radii.md },
 	skeletonAddress: { flexDirection: "row", gap: spacing.sm },
 	skeletonTopBar: {

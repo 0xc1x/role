@@ -1,18 +1,23 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { Bell, CircleAlert, Mail, MessageCircle, MessageSquare, ShoppingBag, Smartphone, TrendingUp, type LucideIcon } from "lucide-react-native";
+import {
+	Bell,
+	CircleAlert,
+	Mail,
+	MessageCircle,
+	MessageSquare,
+	ShoppingBag,
+	Smartphone,
+	TrendingUp,
+	type LucideIcon,
+} from "lucide-react-native";
 
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { strings } from "@/src/core/i18n/strings";
-import {
-	AppText,
-	ErrorState,
-	Screen,
-	ScreenHeader,
-} from "@/src/core/ui";
+import { AppText, ErrorState, Screen, ScreenHeader } from "@/src/core/ui";
 import {
 	useBusinessNotifications,
 	useUpdateBusinessNotifications,
@@ -206,7 +211,9 @@ function ToggleCard({
 			{configs.map((config, index) => (
 				<View key={config.key}>
 					{index > 0 ? (
-						<View style={[styles.divider, { backgroundColor: colors.border }]} />
+						<View
+							style={[styles.divider, { backgroundColor: colors.border }]}
+						/>
 					) : null}
 					<NotificationRow
 						config={config}
@@ -224,8 +231,13 @@ export default function BusinessNotificationsScreen() {
 	const { colors } = useTheme();
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const businessId = id ?? "";
-	const { data: prefs, isLoading: prefsLoading, isError, error, refetch } =
-		useBusinessNotifications(businessId);
+	const {
+		data: prefs,
+		isLoading: prefsLoading,
+		isError,
+		error,
+		refetch,
+	} = useBusinessNotifications(businessId);
 	const update = useUpdateBusinessNotifications(businessId);
 	const profile = useAuthStore((s) => s.profile);
 	const userId = profile?.id ?? "";
@@ -276,11 +288,7 @@ export default function BusinessNotificationsScreen() {
 				{prefsLoading ? (
 					<Skeleton style={{ height: 310, borderRadius: radii.lg }} />
 				) : (
-					<ToggleCard
-						configs={EVENT_TYPES}
-						prefs={prefs}
-						onToggle={toggle}
-					/>
+					<ToggleCard configs={EVENT_TYPES} prefs={prefs} onToggle={toggle} />
 				)}
 
 				<SectionTitle>{strings.business.notificationsChannels}</SectionTitle>

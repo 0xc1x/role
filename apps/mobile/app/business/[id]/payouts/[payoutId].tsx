@@ -3,10 +3,7 @@ import { useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
-import {
-	MONTHS_FULL_CAP_ES,
-	MONTHS_SHORT_ES,
-} from "@/src/core/i18n/dates";
+import { MONTHS_FULL_CAP_ES, MONTHS_SHORT_ES } from "@/src/core/i18n/dates";
 import {
 	AppText,
 	EmptyState,
@@ -40,8 +37,13 @@ export default function BusinessPayoutDetailScreen() {
 		id: string;
 		payoutId: string;
 	}>();
-	const { data: payout, isLoading, isError, error, refetch } =
-		useBusinessPayout(payoutId ?? "");
+	const {
+		data: payout,
+		isLoading,
+		isError,
+		error,
+		refetch,
+	} = useBusinessPayout(payoutId ?? "");
 
 	if (isLoading) return <LoadingView />;
 	if (isError)
@@ -101,7 +103,11 @@ export default function BusinessPayoutDetailScreen() {
 			</View>
 
 			<Card style={styles.card}>
-				<AppText variant="bodyMedium" weight="bold" style={{ marginBottom: spacing.md }}>
+				<AppText
+					variant="bodyMedium"
+					weight="bold"
+					style={{ marginBottom: spacing.md }}
+				>
 					{strings.business.accountingReconciliation}
 				</AppText>
 				<BreakdownRow
@@ -137,7 +143,11 @@ export default function BusinessPayoutDetailScreen() {
 			</Card>
 
 			<Card style={styles.card}>
-				<AppText variant="bodyMedium" weight="bold" style={{ marginBottom: spacing.sm }}>
+				<AppText
+					variant="bodyMedium"
+					weight="bold"
+					style={{ marginBottom: spacing.sm }}
+				>
 					{strings.business.periodInfo}
 				</AppText>
 				<MetaRow label={strings.business.period} value={periodLabel(payout)} />
@@ -146,7 +156,7 @@ export default function BusinessPayoutDetailScreen() {
 
 			{/* Comprobante no disponible aún — se habilita con el gateway de pagos. */}
 			<Button
-			    style={{ marginTop: spacing.lg }}
+				style={{ marginTop: spacing.lg }}
 				variant="outline"
 				fullWidth
 				disabled
@@ -172,10 +182,7 @@ function BreakdownRow({
 	const { colors } = useTheme();
 	return (
 		<View style={styles.row}>
-			<AppText
-				variant="bodySmall"
-				style={{ color: colors.mutedForeground }}
-			>
+			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 				{label}
 			</AppText>
 			<AppText

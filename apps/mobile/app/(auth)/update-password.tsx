@@ -18,7 +18,9 @@ import { Text } from "@/components/ui/text";
 export default function UpdatePasswordScreen() {
 	const { colors } = useTheme();
 	const initialized = useAuthStore((s) => s.initialized);
-	const pendingPasswordRecovery = useAuthStore((s) => s.pendingPasswordRecovery);
+	const pendingPasswordRecovery = useAuthStore(
+		(s) => s.pendingPasswordRecovery,
+	);
 	const [password, setPassword] = useState("");
 	const [confirm, setConfirm] = useState("");
 	const [loading, setLoading] = useState(false);
@@ -73,28 +75,28 @@ export default function UpdatePasswordScreen() {
 							{error}
 						</AppText>
 					) : null}
-						<TextField
-							label={strings.auth.newPassword}
-							value={password}
-							onChangeText={setPassword}
-							secureTextEntry
-							autoComplete="new-password"
-						/>
-						<TextField
-							label={strings.auth.confirmPassword}
-							value={confirm}
-							onChangeText={setConfirm}
-							secureTextEntry
-							autoComplete="new-password"
-						/>
-						<Button
-							onPress={handleUpdate}
-							loading={loading}
-							fullWidth
-							style={{ marginTop: spacing.md }}
-						>
-							{strings.auth.updatePassword}
-						</Button>
+					<TextField
+						label={strings.auth.newPassword}
+						value={password}
+						onChangeText={setPassword}
+						secureTextEntry
+						autoComplete="new-password"
+					/>
+					<TextField
+						label={strings.auth.confirmPassword}
+						value={confirm}
+						onChangeText={setConfirm}
+						secureTextEntry
+						autoComplete="new-password"
+					/>
+					<Button
+						onPress={handleUpdate}
+						loading={loading}
+						fullWidth
+						style={{ marginTop: spacing.md }}
+					>
+						{strings.auth.updatePassword}
+					</Button>
 				</>
 			</View>
 		</Screen>

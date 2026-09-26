@@ -29,9 +29,7 @@ export default function IndexRedirect() {
 		// vista también vive en AsyncStorage (mismo patrón que `initialized`).
 		if (profile?.role === "business") {
 			if (!resolved) return;
-			router.replace(
-				showOnboarding ? "/onboarding" : "/(business)/products",
-			);
+			router.replace(showOnboarding ? "/onboarding" : "/(business)/products");
 			return;
 		}
 

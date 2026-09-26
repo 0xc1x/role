@@ -6,16 +6,17 @@ import {
 	Screen,
 	ScreenHeader,
 	SectionTitle,
-	ThemeOptionCard
+	ThemeOptionCard,
 } from "@/src/core/ui";
 import { spacing } from "@/src/core/theme/spacing";
 import { ThemeMode, useTheme } from "@/src/core/theme";
 
-const THEME_MODES: Array<{ key: ThemeMode; label: string; icon: LucideIcon }> = [
-	{ key: "light", label: strings.settings.light, icon: Sun },
-	{ key: "dark", label: strings.settings.dark, icon: Moon },
-	{ key: "system", label: strings.settings.system, icon: Smartphone },
-];
+const THEME_MODES: Array<{ key: ThemeMode; label: string; icon: LucideIcon }> =
+	[
+		{ key: "light", label: strings.settings.light, icon: Sun },
+		{ key: "dark", label: strings.settings.dark, icon: Moon },
+		{ key: "system", label: strings.settings.system, icon: Smartphone },
+	];
 
 export default function BusinessProfileScreen() {
 	const { mode, setMode } = useTheme();

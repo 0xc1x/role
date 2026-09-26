@@ -37,7 +37,11 @@ export default function BusinessHubScreen() {
 
 	const renderItem = useCallback(
 		({ item }: { item: { label: string; route: string } }) => (
-			<MenuRow label={item.label} route={item.route} onPress={handleMenuPress} />
+			<MenuRow
+				label={item.label}
+				route={item.route}
+				onPress={handleMenuPress}
+			/>
 		),
 		[handleMenuPress],
 	);
@@ -50,7 +54,10 @@ export default function BusinessHubScreen() {
 					<Skeleton style={styles.skeletonSubtitle} />
 					<Skeleton style={styles.skeletonCard} />
 					{[0, 1, 2].map((i) => (
-						<Skeleton key={`hub-menu-skeleton-${i}`} style={styles.skeletonRow} />
+						<Skeleton
+							key={`hub-menu-skeleton-${i}`}
+							style={styles.skeletonRow}
+						/>
 					))}
 				</View>
 			</Screen>
@@ -67,9 +74,7 @@ export default function BusinessHubScreen() {
 					title={strings.businessProfile.notFoundTitle}
 					message={strings.businessProfile.notFoundBody}
 					action={
-						<Button
-							onPress={() => goBackOr("/(business)/management")}
-						>
+						<Button onPress={() => goBackOr("/(business)/management")}>
 							{strings.businessProfile.backHome}
 						</Button>
 					}
@@ -174,11 +179,18 @@ const MenuRow = memo(function MenuRow({
 	return (
 		<CardPressable onPress={() => onPress(route)}>
 			<View style={styles.rowBetween}>
-				<AppText variant="bodyMedium" numberOfLines={1} style={styles.menuLabel}>
+				<AppText
+					variant="bodyMedium"
+					numberOfLines={1}
+					style={styles.menuLabel}
+				>
 					{label}
 				</AppText>
 				<View style={styles.menuChevron}>
-					<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodyMedium"
+						style={{ color: colors.mutedForeground }}
+					>
 						›
 					</AppText>
 				</View>

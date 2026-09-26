@@ -1,4 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import {
+	memo,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ComponentProps,
+} from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,7 +25,11 @@ import {
 } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { radii, spacing } from "@/src/core/theme/spacing";
-import { useCategories, useFilteredOffersInfinite, useSelectedAddress } from "@/src/features/hooks";
+import {
+	useCategories,
+	useFilteredOffersInfinite,
+	useSelectedAddress,
+} from "@/src/features/hooks";
 import { useAuthStore } from "@/src/features/auth/store";
 import { usePreferences } from "@/src/features/profile/hooks";
 import { OfferGridCard } from "@/src/features/offers/components/OfferGridCard";
@@ -100,8 +112,19 @@ export default function AllOffersScreen() {
 	const { data: preferences } = usePreferences(profile?.id ?? "");
 	const isGuest = !profile;
 	const prefRadius = preferences?.notification_radius_km ?? 5;
-	const effectiveMaxDistanceKm = filters.maxDistanceKm ?? (isGuest ? null : prefRadius);
-	const { data: infiniteData, isLoading, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching } = useFilteredOffersInfinite({
+	const effectiveMaxDistanceKm =
+		filters.maxDistanceKm ?? (isGuest ? null : prefRadius);
+	const {
+		data: infiniteData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		isFetching,
+	} = useFilteredOffersInfinite({
 		category: filters.category,
 		maxPrice: filters.maxPrice,
 		maxDistanceKm: effectiveMaxDistanceKm,
@@ -178,9 +201,7 @@ export default function AllOffersScreen() {
 			<View style={[styles.header, { paddingTop: spacing.xl + insets.top }]}>
 				<View style={styles.headerRow}>
 					<CircleIconButton
-						icon={
-							<ChevronLeft size={22} color={colors.foreground} />
-						}
+						icon={<ChevronLeft size={22} color={colors.foreground} />}
 						onPress={() => goBackOr("/(consumer)")}
 						accessibilityLabel={strings.common.back}
 					/>
@@ -199,7 +220,9 @@ export default function AllOffersScreen() {
 					onPress={() => setSheetVisible(true)}
 					icon={<SlidersHorizontal size={16} color={colors.foreground} />}
 				>
-					{hasActiveFilters ? `${strings.allOffers.filters} •` : strings.allOffers.filters}
+					{hasActiveFilters
+						? `${strings.allOffers.filters} •`
+						: strings.allOffers.filters}
 				</Button>
 			</View>
 
@@ -208,7 +231,10 @@ export default function AllOffersScreen() {
 				<View style={styles.activeFilters}>
 					<View style={styles.activeChips}>
 						{catName ? (
-							<FilterChip label={catName} onClear={() => clearFilter("category")} />
+							<FilterChip
+								label={catName}
+								onClear={() => clearFilter("category")}
+							/>
 						) : null}
 						{filters.maxDistanceKm != null ? (
 							<FilterChip
@@ -241,10 +267,16 @@ export default function AllOffersScreen() {
 			{/* Grid */}
 			{isGuest ? (
 				<View style={styles.centerBox}>
-					<EmptyState title={strings.explore.loginRequiredTitle} message={strings.explore.loginRequiredBody} />
-					<Button  onPress={() => router.push("/login")} style={{ marginTop: spacing.lg }} >
+					<EmptyState
+						title={strings.explore.loginRequiredTitle}
+						message={strings.explore.loginRequiredBody}
+					/>
+					<Button
+						onPress={() => router.push("/login")}
+						style={{ marginTop: spacing.lg }}
+					>
 						{strings.explore.loginCTA}
-					</Button>	
+					</Button>
 				</View>
 			) : isLoading ? (
 				<View style={styles.gridContainer}>
@@ -260,12 +292,13 @@ export default function AllOffersScreen() {
 				</View>
 			) : isError ? (
 				<View style={styles.centerBox}>
-					<AppText variant="bodyMedium" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodyMedium"
+						style={{ color: colors.mutedForeground }}
+					>
 						{error instanceof Error ? error.message : strings.common.error}
 					</AppText>
-					<Button onPress={() => void refetch()}>
-						{strings.common.retry}
-					</Button>
+					<Button onPress={() => void refetch()}>{strings.common.retry}</Button>
 				</View>
 			) : data && data.length === 0 ? (
 				<View style={styles.centerBox}>
@@ -289,7 +322,14 @@ export default function AllOffersScreen() {
 					columnWrapperStyle={styles.gridRow}
 					contentContainerStyle={styles.gridContent}
 					showsVerticalScrollIndicator={false}
-					refreshControl={<RefreshControl refreshing={!!isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
+					refreshControl={
+						<RefreshControl
+							refreshing={!!isFetching}
+							onRefresh={() => void refetch()}
+							tintColor={colors.primary}
+							colors={[colors.primary]}
+						/>
+					}
 					onEndReached={handleEndReached}
 					onEndReachedThreshold={0.5}
 					ListFooterComponent={listFooter}
@@ -369,7 +409,8 @@ const styles = StyleSheet.create({
 		flex: 1,
 		height: 220,
 		borderRadius: radii.md,
-	},	centerBox: {
+	},
+	centerBox: {
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",

@@ -41,11 +41,17 @@ import {
 import { HistoryDateFilter } from "@/src/features/orders/components/HistoryDateFilter";
 import { NoBusinessPrompt } from "@/src/features/business/components/NoBusinessPrompt";
 import { BranchSelector } from "@/src/features/business/components/products/BranchSelector";
-import { OrderStatsRow, OrderStatsRowSkeleton } from "@/src/features/business/components/orders/OrderStatsRow";
+import {
+	OrderStatsRow,
+	OrderStatsRowSkeleton,
+} from "@/src/features/business/components/orders/OrderStatsRow";
 import { OrdersTabs } from "@/src/features/business/components/orders/OrdersTabs";
 import { OrdersSortControl } from "@/src/features/business/components/orders/OrdersSortControl";
 import { OrdersFiltersControl } from "@/src/features/business/components/orders/OrdersFiltersControl";
-import { OrderCard, OrderCardSkeleton } from "@/src/features/business/components/orders/OrderCard";
+import {
+	OrderCard,
+	OrderCardSkeleton,
+} from "@/src/features/business/components/orders/OrderCard";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
@@ -80,7 +86,8 @@ export default function BusinessOrdersScreen() {
 	const business = businesses?.[0];
 	const businessId = business?.id ?? "";
 
-	const { data: locations, isLoading: locationsLoading } = useBusinessLocations(businessId);
+	const { data: locations, isLoading: locationsLoading } =
+		useBusinessLocations(businessId);
 
 	const [tab, setTab] = useState<OrdersTab>("active");
 	const [branchId, setBranchId] = useState<string | null>(null);
@@ -263,7 +270,10 @@ export default function BusinessOrdersScreen() {
 						{loading ? (
 							<View style={styles.loadingList}>
 								{[0, 1, 2].map((i) => (
-									<OrderCardSkeleton key={`order-skeleton-${i}`} active={!isHistory} />
+									<OrderCardSkeleton
+										key={`order-skeleton-${i}`}
+										active={!isHistory}
+									/>
 								))}
 							</View>
 						) : null}
@@ -271,14 +281,12 @@ export default function BusinessOrdersScreen() {
 							<ErrorState error={error} onRetry={() => void refetch()} />
 						) : null}
 
-						{!loading && !isError && orders.length === 0 && !hasActiveFilters ? (
+						{!loading &&
+						!isError &&
+						orders.length === 0 &&
+						!hasActiveFilters ? (
 							<EmptyState
-								icon={
-									<ShoppingBag
-										size={28}
-										color={colors.mutedForeground}
-									/>
-								}
+								icon={<ShoppingBag size={28} color={colors.mutedForeground} />}
 								title={
 									isHistory
 										? strings.business.ordersNoHistoryTitle
@@ -294,12 +302,7 @@ export default function BusinessOrdersScreen() {
 
 						{!loading && !isError && orders.length === 0 && hasActiveFilters ? (
 							<EmptyState
-								icon={
-									<Search
-										size={28}
-										color={colors.mutedForeground}
-									/>
-								}
+								icon={<Search size={28} color={colors.mutedForeground} />}
 								title={strings.allOffers.noResultsTitle}
 								message={strings.allOffers.noResultsBody}
 							/>

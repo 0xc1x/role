@@ -57,7 +57,7 @@ export default function BusinessLayout() {
 
 	return (
 		<View style={{ flex: 1 }}>
-		{/* Igual que el layout consumer: OuterBar en flujo (no overlay)
+			{/* Igual que el layout consumer: OuterBar en flujo (no overlay)
 		    y único dueño del aire inferior (ver comentario allí). Sin
 		    padding duplicado: se leía como franja en todas las tabs. */}
 			<View
@@ -73,37 +73,37 @@ export default function BusinessLayout() {
 					   previo (historial real) en vez de saltar al primer tab. */
 					backBehavior="history"
 				>
-			<Tabs.Screen
-				name="products"
-				options={{
-					title: strings.business.products,
-					tabBarLabel: strings.business.products,
-				tabBarIcon: ({ color, size }) => (
-					<Package size={size} color={color} />
-				),
-				}}
-			/>
-			<Tabs.Screen
-				name="orders"
-				options={{
-					title: strings.business.orders,
-					tabBarLabel: strings.business.orders,
-				tabBarIcon: ({ color, size }) => (
-					<ShoppingBag size={size} color={color} />
-				),
-				}}
-			/>
-			<Tabs.Screen
-				name="management"
-				options={{
-					title: strings.business.title,
-					tabBarLabel: strings.business.title,
-				tabBarIcon: ({ color, size }) => (
-					<Store size={size} color={color} />
-				),
-				}}
-			/>
-		</Tabs>
+					<Tabs.Screen
+						name="products"
+						options={{
+							title: strings.business.products,
+							tabBarLabel: strings.business.products,
+							tabBarIcon: ({ color, size }) => (
+								<Package size={size} color={color} />
+							),
+						}}
+					/>
+					<Tabs.Screen
+						name="orders"
+						options={{
+							title: strings.business.orders,
+							tabBarLabel: strings.business.orders,
+							tabBarIcon: ({ color, size }) => (
+								<ShoppingBag size={size} color={color} />
+							),
+						}}
+					/>
+					<Tabs.Screen
+						name="management"
+						options={{
+							title: strings.business.title,
+							tabBarLabel: strings.business.title,
+							tabBarIcon: ({ color, size }) => (
+								<Store size={size} color={color} />
+							),
+						}}
+					/>
+				</Tabs>
 			</View>
 			<PortalHost name="TAB_SHEET" />
 			<OuterBar />
