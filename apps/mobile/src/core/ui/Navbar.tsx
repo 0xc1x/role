@@ -156,28 +156,32 @@ export default function Navbar({ fallbackTabName, ...props }: NavbarProps) {
 		>
 			<View style={styles.barInner}>
 				{/* Capa 1: iconos muted */}
-				{routes.map((route, index) => {
-					const options = props.descriptors[route.key]?.options;
-					const icon = options?.tabBarIcon;
+				<View accessibilityRole="tablist" style={styles.tabRow}>
+					{routes.map((route, index) => {
+						const options = props.descriptors[route.key]?.options;
+						const icon = options?.tabBarIcon;
+						const selected = index === currentIndex;
 
-					return (
-						<Pressable
-							key={route.key}
-							onPress={() => onTab(index)}
-							accessibilityRole="button"
-							accessibilityLabel={labelFor(options, route.name)}
-							style={styles.item}
-						>
-							{icon
-								? icon({
-										color: colors.mutedForeground,
-										size: 28,
-										focused: false,
-									})
-								: null}
-						</Pressable>
-					);
-				})}
+						return (
+							<Pressable
+								key={route.key}
+								onPress={() => onTab(index)}
+								accessibilityRole="tab"
+								accessibilityLabel={labelFor(options, route.name)}
+								accessibilityState={{ selected }}
+								style={styles.item}
+							>
+								{icon
+									? icon({
+											color: colors.mutedForeground,
+											size: 28,
+											focused: false,
+										})
+									: null}
+							</Pressable>
+						);
+					})}
+				</View>
 
 				{/* Capa 2 + 3: píldora + fila completa (efecto reveal) */}
 				<Animated.View
@@ -241,6 +245,10 @@ const styles = StyleSheet.create({
 		width: "100%",
 		maxWidth: MAX_WIDTH,
 		height: BAR_HEIGHT,
+		flexDirection: "row",
+	},
+	tabRow: {
+		flex: 1,
 		flexDirection: "row",
 	},
 	item: {

@@ -26,6 +26,13 @@ interface AppTextProps {
 	color?: string;
 	style?: StyleProp<TextStyle>;
 	numberOfLines?: number;
+	/**
+	 * Caps OS font scaling for this run of text. Use it where the design pins a
+	 * box around the text (a clamped card, a two-line grid cell) that a large
+	 * system font would otherwise break out of. Defaults to RN's own behaviour
+	 * (scale up to the system limit).
+	 */
+	maxFontSizeMultiplier?: number;
 	children: ReactNode;
 }
 
@@ -35,6 +42,7 @@ export function AppText({
 	color,
 	style,
 	numberOfLines,
+	maxFontSizeMultiplier,
 	children,
 }: AppTextProps) {
 	const { colors } = useTheme();
@@ -42,6 +50,7 @@ export function AppText({
 	return (
 		<Text
 			numberOfLines={numberOfLines}
+			maxFontSizeMultiplier={maxFontSizeMultiplier}
 			style={[
 				{
 					fontFamily: weight ? WEIGHT_FONTS[weight] : base.fontFamily,

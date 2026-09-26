@@ -420,6 +420,7 @@ export const strings = {
 		writeReview: "Deja tu reseña",
 		rateProduct: "Califica el producto",
 		rateBusiness: "Califica el negocio",
+		ratingValue: "{n} de {total} estrellas",
 		reviewComment: "Comentario (opcional)",
 		submitReview: "Publicar reseña",
 		reviewSubmitted: "¡Gracias por tu reseña!",

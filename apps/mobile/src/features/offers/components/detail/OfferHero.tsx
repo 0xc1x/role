@@ -3,6 +3,7 @@ import { Image } from "expo-image";
 import { ChevronLeft } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
+import { strings } from "@/src/core/i18n/strings";
 import { CircleIconButton, goBackOr, HeartButton } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing } from "@/src/core/theme/spacing";
@@ -62,8 +63,17 @@ export function OfferHero({
 				<CircleIconButton
 					icon={<ChevronLeft size={20} color={colors.foreground} />}
 					onPress={() => goBackOr("/(consumer)")}
+					accessibilityLabel={strings.common.back}
 				/>
-				<HeartButton isFavorite={isFavorite} onPress={onToggleFavorite} />
+				<HeartButton
+					isFavorite={isFavorite}
+					onPress={onToggleFavorite}
+					accessibilityLabel={
+						isFavorite
+							? strings.offers.removeFromFavorites
+							: strings.offers.addToFavorites
+					}
+				/>
 			</View>
 		</>
 	);

@@ -182,6 +182,11 @@ export function ProductForm({
 				cssInterop={false}
 				onPress={() => void pickImage()}
 				accessibilityRole="button"
+				// Once a photo is chosen the only child is the <Image>, which
+				// contributes no name: the label has to come from the prop.
+				accessibilityLabel={
+					imageUri ? strings.business.changePhoto : strings.business.uploadPhoto
+				}
 				style={({ pressed }) => [
 					styles.imageArea,
 					{
@@ -238,6 +243,12 @@ export function ProductForm({
 									cssInterop={false}
 									key={category.id}
 									onPress={() => toggleCategory(category.id)}
+									// Categories are a required multi-select: without a
+									// checkbox role and checked state the selection is
+									// carried by background colour alone.
+									accessibilityRole="checkbox"
+									accessibilityLabel={category.name}
+									accessibilityState={{ checked: selected }}
 									style={({ pressed }) => [
 										styles.chip,
 										{
@@ -288,6 +299,7 @@ export function ProductForm({
 						cssInterop={false}
 						onPress={() => setLocationPickerOpen(true)}
 						accessibilityRole="button"
+						accessibilityLabel={`${strings.business.locations}: ${selectedLocationName ?? strings.business.noLocationOption}`}
 						style={({ pressed }) => [
 							styles.selectRow,
 							{
@@ -443,6 +455,9 @@ export function ProductForm({
 							setLocationId("");
 							setLocationPickerOpen(false);
 						}}
+						accessibilityRole="radio"
+						accessibilityLabel={strings.business.noLocationOption}
+						accessibilityState={{ checked: locationId === "" }}
 						style={({ pressed }) => [
 							styles.locationOption,
 							{
@@ -477,6 +492,9 @@ export function ProductForm({
 								setLocationId(location.id);
 								setLocationPickerOpen(false);
 							}}
+							accessibilityRole="radio"
+							accessibilityLabel={location.name}
+							accessibilityState={{ checked: locationId === location.id }}
 							style={({ pressed }) => [
 								styles.locationOption,
 								{

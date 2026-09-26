@@ -420,6 +420,16 @@ export function TextField({
 	const [obscured, setObscured] = useState(
 		secureToggle ? (inputProps.secureTextEntry ?? false) : false,
 	);
+	// The label is rendered as a sibling Text, so assistive tech focusing the
+	// input would only announce its value. Re-attach it as the input's own
+	// accessibility label: RN maps it to VoiceOver/TalkBack labels and to
+	// `aria-label` on the web build, where the sibling Text is not a real
+	// `<label>` element. A `nativeID` + `accessibilityLabelledBy` pair is
+	// deliberately NOT used — a labelledby that fails to resolve makes
+	// TalkBack announce nothing at all, and the visible Text cannot carry a
+	// `nativeID` without widening the AppText API.
+	const callerLabel = inputProps.accessibilityLabel;
+	const labelA11y = label ? { accessibilityLabel: callerLabel ?? label } : {};
 	const labelNode = label ? (
 		<AppText
 			variant="labelSmall"
@@ -476,6 +486,7 @@ export function TextField({
 							inputProps.onBlur?.(e);
 						}}
 						style={[styles.fieldInput, { color: colors.foreground }]}
+						{...labelA11y}
 						{...inputProps}
 						secureTextEntry={
 							secureToggle ? obscured : inputProps.secureTextEntry
@@ -533,6 +544,7 @@ export function TextField({
 						color: colors.foreground,
 					},
 				]}
+				{...labelA11y}
 				{...inputProps}
 			/>
 			{hintNode}

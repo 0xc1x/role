@@ -126,6 +126,12 @@ export function OfferCard({ offer }: { offer: OfferDetail }) {
 								variant="h4"
 								weight="bold"
 								numberOfLines={2}
+								// 1.25 is the largest multiplier whose scaled font
+								// (15pt × 1.25 = 18.75pt) still fits the 19pt line
+								// box below, so a large system font grows the block
+								// instead of clipping mid-glyph, while the two-line
+								// title keeps fitting the 270pt row card.
+								maxFontSizeMultiplier={1.25}
 								style={styles.title}
 							>
 								{offer.offer.title}
@@ -257,7 +263,7 @@ const styles = StyleSheet.create({
 	title: {
 		fontSize: 15,
 		lineHeight: 19,
-		height: 38,
+		minHeight: 38,
 	},
 	metaBlock: {
 		marginTop: 6,
