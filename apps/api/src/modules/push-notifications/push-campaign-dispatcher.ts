@@ -18,6 +18,7 @@ import {
   RecipientsService,
 } from '../email-marketing/recipients.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import { PushNotificationsRepository } from './push-notifications.repository';
 import type { CampaignRow } from '../email-marketing/email-marketing.repository';
 
@@ -116,8 +117,16 @@ export class PushCampaignDispatcher
         },
       );
     } else {
+      // El segundo argumento de `Logger.error` es la posición del STACK: pasar
+      // el error ahí imprime mensaje y stack crudos, que el contrato de
+      // `docs/operations.md` prohíbe. Se registra el mismo evento estructurado
+      // que usa el dispatcher de email.
       void this.processBatch(updated).catch((err: unknown) =>
-        this.logger.error(`Batch campaña push ${campaign.id} falló`, err),
+        this.logger.error({
+          event: 'push_campaign_first_batch_failed',
+          campaignId: campaign.id,
+          ...safeErrorFields(err),
+        }),
       );
     }
     return EmailMarketingMapper.toCampaignDto(updated);
