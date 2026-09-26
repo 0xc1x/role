@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   paginatedDataFromQuery,
   type SlideDto,
@@ -7,11 +12,14 @@ import {
   type ListSlideQuery,
   type UpdateSlideDto,
 } from '@0xc1x/role-commons';
+import { safeErrorFields } from '../../common/utils/safe-error';
 import { SlidesRepository, type SlideRow } from './slides.repository';
 import { SlideMapper } from './mappers/slides.mapper';
 
 @Injectable()
 export class SlidesService {
+  private readonly logger = new Logger(SlidesService.name);
+
   constructor(private readonly slidesRepository: SlidesRepository) {}
 
   async create(body: CreateSlideDto): Promise<SlideDto> {
@@ -58,11 +66,17 @@ export class SlidesService {
       });
       rows = result.rows;
       total = result.total;
-    } catch {
-      return paginatedDataFromQuery(
-        [],
-        { page: query.page, limit: query.limit },
-        0,
+    } catch (err) {
+      // Antes esto devolvía una lista vacía: una caída de Postgres era
+      // indistinguible de "no hay slides" en el admin, sin log ni requestId.
+      // Se registra la huella acotada y se propaga para que
+      // `AllExceptionsFilter` responda 500 con un `requestId` mostrable.
+      this.logger.error({
+        event: 'slides_list_failed',
+        ...safeErrorFields(err),
+      });
+      throw new InternalServerErrorException(
+        'No se pudieron obtener los slides',
       );
     }
 

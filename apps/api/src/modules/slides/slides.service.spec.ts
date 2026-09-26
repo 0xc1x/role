@@ -1,4 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
+import {
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { paginatedDataFromQuery } from '@0xc1x/role-commons';
 import { SlidesService } from './slides.service';
@@ -203,19 +206,17 @@ describe('SlidesService', () => {
       expect(availableAt.getTime()).toBeLessThanOrEqual(after);
     });
 
-    it('should return empty paginated data on repository error', async () => {
+    it('lanza 500 en vez de lista vacía cuando el repositorio falla', async () => {
+      // Antes devolvía `{ data: [], meta: { total: 0 } }`, lo que hacía que una
+      // caída de Postgres fuera indistinguible de "no hay slides" en el admin,
+      // sin log ni requestId. Ahora propaga para que el filtro global responda
+      // 500 con un requestId que el admin pueda mostrar.
       repository.list.mockRejectedValue(new Error('DB error'));
-      (paginatedDataFromQuery as jest.Mock).mockReturnValue({
-        data: [],
-        meta: { page: 1, limit: 10, total: 0 },
-      });
 
-      const result = await service.list({ page: 1, limit: 10, active: undefined });
-
-      expect(result).toEqual({
-        data: [],
-        meta: { page: 1, limit: 10, total: 0 },
-      });
+      await expect(
+        service.list({ page: 1, limit: 10, active: undefined }),
+      ).rejects.toThrow(InternalServerErrorException);
+      expect(paginatedDataFromQuery).not.toHaveBeenCalled();
     });
   });
 
