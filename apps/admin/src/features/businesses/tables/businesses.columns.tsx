@@ -5,6 +5,7 @@ import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
 import { useUpdateBusiness } from "@/features/businesses/queries/businesses.queries";
 import { ActionCell } from "@/features/businesses/tables/cells/action-cell";
+import { businessVerificationLabel } from "@/lib/labels";
 
 export const VerificationBadge = ({ status }: { status: string }) => {
 	const variant =
@@ -13,7 +14,9 @@ export const VerificationBadge = ({ status }: { status: string }) => {
 			: status === "pending"
 				? "warning"
 				: "destructive";
-	return <Badge variant={variant}>{status}</Badge>;
+	// El enum crudo (`approved`) obliga a traducir en la cabeza: en un panel de
+	// verificación un estado mal leído es una aprobación indebida.
+	return <Badge variant={variant}>{businessVerificationLabel(status)}</Badge>;
 };
 
 const ActiveCellWrapper = ({ row }: { row: { original: BusinessDto } }) => {

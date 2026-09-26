@@ -1,9 +1,22 @@
 import type { PayoutDto } from "@0xc1x/role-commons";
 import type { ColumnDef } from "@tanstack/react-table";
+import { useState } from "react";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useMarkPaid } from "@/features/payouts/queries/payouts.queries";
+import { payoutStatusLabel } from "@/lib/labels";
 
 function PayoutStatusBadge({ status }: { status: PayoutDto["status"] }) {
 	const variant =
@@ -14,21 +27,67 @@ function PayoutStatusBadge({ status }: { status: PayoutDto["status"] }) {
 				: status === "pending"
 					? "secondary"
 					: "outline";
-	return <Badge variant={variant}>{status}</Badge>;
+	return <Badge variant={variant}>{payoutStatusLabel(status)}</Badge>;
 }
 
+/**
+ * Marcar un corte como pagado no tiene vuelta atrás: la API lo registra como
+ * liquidado y el operador ya pagó por fuera. Sin confirmación, un misclick
+ * escribe un pago fantasma que nadie recuerda haber hecho.
+ */
 function PayActionCell({ payout }: { payout: PayoutDto }) {
 	const pay = useMarkPaid();
+	const [confirming, setConfirming] = useState(false);
 	if (payout.status !== "pending") return null;
+
 	return (
-		<Button
-			size="sm"
-			variant="outline"
-			onClick={() => pay.mutate(payout.id)}
-			disabled={pay.isPending}
-		>
-			Marcar pagado
-		</Button>
+		<>
+			<Button
+				size="sm"
+				variant="outline"
+				onClick={() => setConfirming(true)}
+				disabled={pay.isPending}
+			>
+				{pay.isPending ? <Spinner /> : null} Marcar pagado
+			</Button>
+
+			<AlertDialog
+				open={confirming}
+				onOpenChange={(open) => !open && setConfirming(false)}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>¿Marcar el corte como pagado?</AlertDialogTitle>
+						<AlertDialogDescription>
+							<span className="font-medium text-foreground">
+								{payout.business_name ?? payout.business_id.slice(0, 8)}
+							</span>{" "}
+							quedará liquidado por{" "}
+							<span className="font-medium text-foreground">
+								${payout.net_amount.toFixed(2)}
+							</span>{" "}
+							del período {payout.period_start} → {payout.period_end}. Esta
+							acción no se puede deshacer.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={pay.isPending}>
+							Cancelar
+						</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={pay.isPending}
+							onClick={() => {
+								pay.mutate(payout.id, {
+									onSettled: () => setConfirming(false),
+								});
+							}}
+						>
+							{pay.isPending ? <Spinner /> : null} Marcar pagado
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</>
 	);
 }
 

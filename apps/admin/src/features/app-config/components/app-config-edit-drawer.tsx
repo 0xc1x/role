@@ -4,7 +4,6 @@ import { useState } from "react";
 import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
 import { Button } from "@/components/ui/button";
 import { AppConfigForm } from "../forms/app-config.form";
-import { appConfigKeys } from "../queries/app-config.keys";
 
 interface AppConfigEditDrawerProps {
 	config: AppConfigDto;
@@ -23,7 +22,6 @@ export function AppConfigEditDrawer({ config }: AppConfigEditDrawerProps) {
 			{isOpen && (
 				<ResourceUpdateDrawer
 					formId={FORM_ID}
-					mutationKey={appConfigKeys.all}
 					title={config.key}
 					description={config.label}
 					isOpen

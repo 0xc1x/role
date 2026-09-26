@@ -4,11 +4,23 @@ import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+/**
+ * `containerClassName` existe para que un consumidor con su propio scroller
+ * (p. ej. `DataTable`, que scrollea en vertical) no termine con dos scrollbars
+ * horizontales anidados: el `div` interno se vuelve `visible` y el externo manda.
+ */
+function Table({
+	className,
+	containerClassName,
+	...props
+}: React.ComponentProps<"table"> & { containerClassName?: string }) {
 	return (
 		<div
 			data-slot="table-container"
-			className="relative w-full max-w-full overflow-x-auto"
+			className={cn(
+				"relative w-full max-w-full overflow-x-auto",
+				containerClassName,
+			)}
 		>
 			<table
 				data-slot="table"

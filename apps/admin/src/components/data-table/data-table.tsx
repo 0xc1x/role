@@ -35,17 +35,21 @@ export function DataTable<TData, TValue>({
 }: DataTableProps<TData, TValue>) {
 	const [columnVisibility, setColumnVisibility] =
 		React.useState<VisibilityState>({});
-	const [rowSelection, setRowSelection] = React.useState({});
 
+	// `rowSelection` se eliminó a propósito: era estado muerto (ninguna columna
+	// declara `enableRowSelection` ni hay toolbar de acciones en lote). Con
+	// `manualPagination` y sin `getRowId` las filas se indexan por posición, así
+	// que una selección heredada de la página anterior apuntaría a la fila
+	// equivocada — el peor defecto posible en una acción masiva. Para habilitar
+	// selección hay que añadir `getRowId` y una toolbar con acciones ya
+	// existentes y confirmadas, no solo una casilla.
 	const table = useReactTable({
 		data,
 		columns,
 		getCoreRowModel: getCoreRowModel(),
 		onColumnVisibilityChange: setColumnVisibility,
-		onRowSelectionChange: setRowSelection,
 		state: {
 			columnVisibility,
-			rowSelection,
 		},
 		manualPagination: true,
 		pageCount: meta?.total_pages ?? -1,
@@ -62,13 +66,20 @@ export function DataTable<TData, TValue>({
 				tabIndex={0}
 				className="h-[65vh] w-full max-w-full overflow-x-auto overflow-y-auto rounded-md border"
 			>
-				<Table>
+				{/* `containerClassName` evita el segundo scroller horizontal: el
+				    <section> es el único que corta, y es el que ancla el header. */}
+				<Table containerClassName="overflow-x-visible">
 					<TableHeader>
 						{table.getHeaderGroups().map((headerGroup) => (
 							<TableRow key={headerGroup.id}>
 								{headerGroup.headers.map((header) => {
 									return (
-										<TableHead key={header.id}>
+										<TableHead
+											key={header.id}
+											// Sin esto las cabeceras se van con el scroll vertical
+											// y el operador pierde de vista la columna "Acciones".
+											className="sticky top-0 z-10 bg-background shadow-[inset_0_-1px_0_var(--border)]"
+										>
 											{header.isPlaceholder
 												? null
 												: flexRender(

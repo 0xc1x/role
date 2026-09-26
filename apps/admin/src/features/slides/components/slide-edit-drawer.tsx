@@ -4,7 +4,6 @@ import { useState } from "react";
 import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
 import { Button } from "@/components/ui/button";
 import { SlideForm } from "../forms/slide.form";
-import { slidesKeys } from "../queries/slides.keys";
 
 interface SlideEditDrawerProps {
 	slide: SlideDto;
@@ -22,7 +21,6 @@ export function SlideEditDrawer({ slide }: SlideEditDrawerProps) {
 			{isOpen && (
 				<ResourceUpdateDrawer
 					formId={`edit-slide-drawer-form-${slide.id}`}
-					mutationKey={slidesKeys.all}
 					title={slide.title}
 					description="Edita el contenido de la slide"
 					isOpen

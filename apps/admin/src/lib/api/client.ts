@@ -1,10 +1,14 @@
 import { env } from "@/config/env";
 import { ApiClientError, throwFromResponse } from "./errors";
+import { notifySessionExpired } from "./session-expiry";
 
 const KEYS = {
 	token: "role_admin_auth_token",
 	expiresAt: "role_admin_token_expires_at",
 } as const;
+
+/** El login explica la caída; este mensaje es el fallback si algo lo muestra. */
+const SESSION_EXPIRED = "Tu sesión expiró. Inicia sesión de nuevo.";
 
 function getStorage(): Storage | undefined {
 	if (typeof window === "undefined") return undefined;
@@ -129,8 +133,8 @@ async function request<T>(
 		const refreshed = await attemptTokenRefresh();
 		if (!refreshed) {
 			clearAuth();
-			if (typeof window !== "undefined") window.location.href = "/login";
-			throw new ApiClientError({ status: 401, message: "Session expired" });
+			notifySessionExpired();
+			throw new ApiClientError({ status: 401, message: SESSION_EXPIRED });
 		}
 	}
 
@@ -161,8 +165,8 @@ async function request<T>(
 		if (!retry.ok) return throwFromResponse(retry);
 	}
 	clearAuth();
-	if (typeof window !== "undefined") window.location.href = "/login";
-	throw new ApiClientError({ status: 401, message: "Session expired" });
+	notifySessionExpired();
+	throw new ApiClientError({ status: 401, message: SESSION_EXPIRED });
 }
 
 export const api = {

@@ -3,7 +3,6 @@ import {
 	BellRing,
 	ChartArea,
 	DollarSign,
-	Glasses,
 	Info,
 	LayoutList,
 	type LucideIcon,
@@ -12,7 +11,6 @@ import {
 	Settings2,
 	Store,
 	Ticket,
-	ToggleLeft,
 } from "lucide-react";
 
 interface NavSubItem {
@@ -25,12 +23,6 @@ interface NavMainItem {
 	url: string;
 	icon: LucideIcon;
 	items?: NavSubItem[];
-}
-
-interface NavProject {
-	name: string;
-	url: string;
-	icon: LucideIcon;
 }
 
 export const navMain: NavMainItem[] = [
@@ -106,34 +98,15 @@ export const navMain: NavMainItem[] = [
 				title: "Mail",
 				url: "/notificaciones/mails",
 			},
-			{
-				title: "Whatsapp",
-				url: "#",
-			},
+			// "Whatsapp" y "Soporte" se retiraron del menú: no existe ruta para
+			// ellos y `NavMain` renderizaba un <Link to="#"> que no lleva a
+			// ninguna parte. Vuelven cuando la ruta exista, no antes.
 		],
-	},
-	{
-		title: "Soporte",
-		url: "#",
-		icon: Glasses,
 	},
 	{
 		title: "Configuración",
 		url: "/configuracion",
 		icon: Settings2,
-	},
-];
-
-export const projects: NavProject[] = [
-	{
-		name: "Feature Flags",
-		url: "#",
-		icon: ToggleLeft,
-	},
-	{
-		name: "Anuncios",
-		url: "#",
-		icon: BadgeDollarSign,
 	},
 ];
 

@@ -7,6 +7,7 @@ import {
 import { useForm } from "@tanstack/react-form";
 import { Fragment } from "react";
 import { z } from "zod";
+import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
 	Select,
@@ -59,6 +60,7 @@ export function EmailSendForm({
 	send: EmailSendDto;
 }) {
 	const updateMutation = useUpdateEmailSend();
+	useReportDrawerPending(updateMutation.isPending);
 	const form = useForm({
 		defaultValues: {
 			status: send.status,

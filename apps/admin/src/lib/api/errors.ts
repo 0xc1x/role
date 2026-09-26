@@ -1,3 +1,8 @@
+import {
+	translateApiMessage,
+	translateValidationMessage,
+} from "./error-messages";
+
 export class ApiClientError extends Error {
 	status: number;
 	error?: string;
@@ -23,6 +28,30 @@ export class ApiClientError extends Error {
 	}
 }
 
+type ApiDetail = { path?: unknown; message?: unknown };
+
+/**
+ * Errores de campo que devuelve la API: `{ details: [{ path, message }] }` de
+ * `ZodValidationPipe` (apps/api). Se indexan por el path del contrato para que
+ * el form los muestre en el campo que falló, en vez de un único párrafo arriba
+ * que obliga a diffear dos cadenas a ojo.
+ */
+export function getApiFieldErrors(error: unknown): Record<string, string> {
+	if (!(error instanceof ApiClientError)) return {};
+	const details = error.details;
+	if (!Array.isArray(details)) return {};
+
+	const fields: Record<string, string> = {};
+	for (const detail of details as ApiDetail[]) {
+		const path = typeof detail?.path === "string" ? detail.path : "";
+		const message = typeof detail?.message === "string" ? detail.message : "";
+		// Sin path no hay campo al que asociarlo: se queda en el mensaje global.
+		if (!path || !message) continue;
+		fields[path] ??= translateValidationMessage(message);
+	}
+	return fields;
+}
+
 export async function throwFromResponse(response: Response): Promise<never> {
 	let body: Record<string, unknown> = {};
 	try {
@@ -30,12 +59,20 @@ export async function throwFromResponse(response: Response): Promise<never> {
 	} catch {
 		throw new ApiClientError({
 			status: response.status,
-			message: `Request failed with status ${response.status}`,
+			message: translateApiMessage(
+				`Request failed with status ${response.status}`,
+				response.status,
+			),
 		});
 	}
+	// Un único punto de traducción para toda la API: los call sites reciben el
+	// mensaje ya en español sin saber nada del idioma del backend.
+	const raw = (body.message as string | string[]) ?? "Unknown error";
 	throw new ApiClientError({
 		status: response.status,
-		message: (body.message as string | string[]) ?? "Unknown error",
+		message: Array.isArray(raw)
+			? raw.map((m) => translateApiMessage(m, response.status))
+			: translateApiMessage(raw, response.status),
 		error: body.error as string | undefined,
 		details: body.details,
 		path: body.path as string | undefined,

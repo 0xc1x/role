@@ -10,6 +10,7 @@ import {
 import { useForm } from "@tanstack/react-form";
 import { type ComponentProps, type FormEvent, useState } from "react";
 import { z } from "zod";
+import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -152,6 +153,9 @@ function useAppConfigForm({
 	const createMutation = useCreateAppConfig();
 	const updateMutation = useUpdateAppConfig();
 	const [localError, setLocalError] = useState<string | null>(null);
+	useReportDrawerPending(
+		config ? updateMutation.isPending : createMutation.isPending,
+	);
 
 	const form = useForm({
 		defaultValues: {

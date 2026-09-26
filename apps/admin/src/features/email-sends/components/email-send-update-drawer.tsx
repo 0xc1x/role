@@ -1,7 +1,6 @@
 import type { EmailSendDto } from "@0xc1x/role-commons";
 import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
 import { EmailSendForm } from "../forms/email-send.form";
-import { emailSendsKeys } from "../queries/email-sends.keys";
 
 export function EmailSendUpdateDrawer({
 	send,
@@ -16,7 +15,6 @@ export function EmailSendUpdateDrawer({
 	return (
 		<ResourceUpdateDrawer
 			formId={formId}
-			mutationKey={emailSendsKeys.all}
 			title="Editar envío"
 			description={`${send.email} — ${send.type}/${send.status}`}
 			isOpen={isOpen}

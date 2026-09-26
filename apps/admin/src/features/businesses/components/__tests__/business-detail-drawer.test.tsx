@@ -82,7 +82,8 @@ describe("ficha del negocio", () => {
 			rejection_reason: "Documentos ilegibles",
 		});
 
-		expect(screen.getByText("rejected")).toBeDefined();
+		// A12: el enum crudo (`rejected`) se muestra traducido en la ficha.
+		expect(screen.getByText("Rechazado")).toBeDefined();
 		expect(screen.getByText("Documentos ilegibles")).toBeDefined();
 	});
 

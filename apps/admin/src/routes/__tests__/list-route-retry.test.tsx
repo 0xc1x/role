@@ -83,8 +83,11 @@ describe.each(routes)("estado de error de /%s", (_name, route) => {
 		currentSearch = { page: 1, limit: 10 };
 		renderRoute(route.component);
 
+		// A12: el mensaje llega por `ApiClientError`, ya traducido en la capa de
+		// error. Lo que se verifica aquí sigue siendo lo mismo: el operador ve
+		// el mensaje del servidor, no un "Error" genérico de la vista.
 		await waitFor(() =>
-			expect(screen.getByText("Internal server error")).toBeDefined(),
+			expect(screen.getByText("Error interno del servidor")).toBeDefined(),
 		);
 	});
 

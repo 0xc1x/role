@@ -10,6 +10,7 @@ import { useBusinessesList } from "@/features/businesses";
 import { useEmailSendsList } from "@/features/email-sends";
 import { usePlatformStats } from "@/features/stats";
 import { formatBusinessDate } from "@/lib/dates";
+import { emailSendStatusLabel } from "@/lib/labels";
 
 export const Route = createFileRoute("/_layout/home")({
 	component: HomePage,
@@ -213,7 +214,7 @@ function QueuedEmailsCard({
 									{e.email}
 								</span>
 								<Badge variant="secondary" className="text-xs">
-									{e.status}
+									{emailSendStatusLabel(e.status)}
 								</Badge>
 							</li>
 						))}

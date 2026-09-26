@@ -5,6 +5,7 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { payoutsApi } from "../api/payouts.api";
 import { payoutsKeys } from "./payouts.keys";
 
@@ -19,11 +20,26 @@ export function usePayoutsList(params?: ListPayoutsQuery) {
 	return useQuery(payoutsListOptions(params));
 }
 
+/** Error de mutación → toast. Pura y sin closure: vive a nivel módulo. */
+function notifyMutationError(err: Error) {
+	toast.error(err.message);
+}
+
 export function useGeneratePayouts() {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: () => payoutsApi.generate(),
-		onSuccess: () => void qc.invalidateQueries({ queryKey: payoutsKeys.all }),
+		onSuccess: (result) => {
+			void qc.invalidateQueries({ queryKey: payoutsKeys.all });
+			// El `{count}` de la API es el resultado de la operación: sin él el
+			// operador no sabe si generó 0 cortes (ya existían) o 12.
+			toast.success(
+				result.count > 0
+					? `Corte generado: ${result.count} corte(s) en estado pendiente`
+					: "No se generaron cortes nuevos: ya existen cortes para el período actual",
+			);
+		},
+		onError: notifyMutationError,
 	});
 }
 
@@ -31,6 +47,10 @@ export function useMarkPaid() {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: (id: string) => payoutsApi.markPaid(id),
-		onSuccess: () => void qc.invalidateQueries({ queryKey: payoutsKeys.all }),
+		onSuccess: () => {
+			void qc.invalidateQueries({ queryKey: payoutsKeys.all });
+			toast.success("Corte marcado como pagado");
+		},
+		onError: notifyMutationError,
 	});
 }

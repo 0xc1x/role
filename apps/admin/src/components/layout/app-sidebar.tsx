@@ -12,10 +12,9 @@ import {
 	SidebarRail,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { navMain, projects } from "@/config/navigation";
+import { navMain } from "@/config/navigation";
 import { useAuthUser } from "@/features/auth";
 import { NavMain } from "./nav-main";
-import { NavProjects } from "./nav-projects";
 import { NavUser } from "./nav-user";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -50,7 +49,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 			</SidebarHeader>
 			<SidebarContent>
 				<NavMain items={navMain} />
-				<NavProjects projects={projects} />
 			</SidebarContent>
 			<SidebarFooter>
 				<SidebarMenu>

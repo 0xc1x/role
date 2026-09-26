@@ -3,6 +3,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
 import { ActionCell } from "@/features/email-sends/tables/cells/action-cell";
+import { emailSendStatusLabel } from "@/lib/labels";
 
 const TYPE_VARIANTS: Record<
 	string,
@@ -36,7 +37,9 @@ const STATUS_VARIANTS: Record<
 /** Estado del envío reutilizable fuera de la tabla (p. ej. el drawer de negocio). */
 export const StatusBadge = ({ status }: { status: string }) => {
 	return (
-		<Badge variant={STATUS_VARIANTS[status] ?? "secondary"}>{status}</Badge>
+		<Badge variant={STATUS_VARIANTS[status] ?? "secondary"}>
+			{emailSendStatusLabel(status)}
+		</Badge>
 	);
 };
 

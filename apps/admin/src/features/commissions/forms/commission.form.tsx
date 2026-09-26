@@ -2,6 +2,7 @@ import type { CommissionDto } from "@0xc1x/role-commons";
 import { UpdateCommissionSchema } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
+import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ApiClientError } from "@/lib/api/errors";
@@ -31,6 +32,7 @@ export function CommissionForm({
 	commission,
 }: CommissionFormProps) {
 	const updateMutation = useUpdateCommission();
+	useReportDrawerPending(updateMutation.isPending);
 	const form = useForm({
 		defaultValues: {
 			// stored as a fraction (0.1); the form works in percent (10)

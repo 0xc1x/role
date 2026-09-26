@@ -1,10 +1,13 @@
 import { ListPayoutsQuerySchema } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import {
+	GeneratePayoutsDialog,
 	payoutsColumns,
 	payoutsListOptions,
 	useGeneratePayouts,
@@ -28,6 +31,7 @@ function RouteComponent() {
 	const navigate = Route.useNavigate();
 	const { data, isLoading, isError, error, refetch } = usePayoutsList(search);
 	const gen = useGeneratePayouts();
+	const [confirmOpen, setConfirmOpen] = useState(false);
 
 	if (isLoading)
 		return (
@@ -57,7 +61,8 @@ function RouteComponent() {
 		<div className="px-6 py-4">
 			<div className="flex items-center justify-between">
 				<h1 className="font-bold text-xl">Pagos a negocios</h1>
-				<Button onClick={() => gen.mutate()} disabled={gen.isPending}>
+				<Button onClick={() => setConfirmOpen(true)} disabled={gen.isPending}>
+					{gen.isPending ? <Spinner /> : null}
 					{gen.isPending ? "Generando..." : "Generar cortes"}
 				</Button>
 			</div>
@@ -75,6 +80,15 @@ function RouteComponent() {
 					}
 				/>
 			</div>
+
+			<GeneratePayoutsDialog
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				isPending={gen.isPending}
+				onConfirm={() => {
+					gen.mutate(undefined, { onSettled: () => setConfirmOpen(false) });
+				}}
+			/>
 		</div>
 	);
 }
