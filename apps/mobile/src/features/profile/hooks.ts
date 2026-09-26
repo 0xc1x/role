@@ -180,7 +180,16 @@ async function syncProfileAfterWrite(
 	patch: ProfileWritePatch,
 ): Promise<void> {
 	void queryClient.invalidateQueries({ queryKey: ["userStats", userId] });
-	const profile = await authRepository.fetchProfile(userId).catch(() => null);
+	// La relectura trae el consentimiento leído de `user_consents`, así que un
+	// fallo de esa lectura no puede devolver un `false` que revoca lo que el
+	// usuario concedió. Se pasa el valor conocido solo si la fila es la misma:
+	// el store puede tener el perfil de otra cuenta.
+	const before = useAuthStore.getState().profile;
+	const knownConsent =
+		before?.id === userId ? before.analyticsConsentGranted : false;
+	const profile = await authRepository
+		.fetchProfile(userId, knownConsent)
+		.catch(() => null);
 	if (profile) {
 		useAuthStore.getState().setProfile(profile);
 		return;

@@ -17,12 +17,22 @@ export interface SignUpResult {
 /**
  * Merges the session-metadata profile with the `profiles` table row so
  * DB-backed fields (phone, city, current role) survive signup/login.
+ *
+ * POR QUÉ `analyticsConsentGranted` NO se mezcla desde la fila: la fuente
+ * autoritativa es `user_consents`, y un alta con confirmación de correo
+ * todavía no la tiene (sin sesión activa nunca corrió `syncAnalyticsConsent`).
+ * Tomar la fila como verdad en ese momento borraría un consentimiento que el
+ * usuario sí concedió; el metadata gana aquí y `_layout` sincroniza la fila
+ * en el siguiente arranque.
  */
 export async function enrichProfile(
 	profile: UserProfile,
 ): Promise<UserProfile> {
 	try {
-		const row = await authRepository.fetchProfile(profile.id);
+		const row = await authRepository.fetchProfile(
+			profile.id,
+			profile.analyticsConsentGranted,
+		);
 		if (!row) return profile;
 		return {
 			...profile,
@@ -36,6 +46,26 @@ export async function enrichProfile(
 	} catch {
 		return profile;
 	}
+}
+
+/**
+ * Consentimiento analytics leído de `user_consents`, que es la fila
+ * autoritativa: `profiles` NO tiene columna de consentimiento (solo existe
+ * `auth.users.user_metadata.analytics_consent_granted`), así que un `select`
+ * sobre `profiles` no puede devolverlo.
+ *
+ * `null` = no se pudo leer. Distinguir "no concedido" de "no se pudo leer" es
+ * lo que evita que un fallo de red se convierta en una revocación silenciosa.
+ */
+async function readAnalyticsConsent(userId: string): Promise<boolean | null> {
+	const { data, error } = await supabase
+		.from("user_consents")
+		.select("granted")
+		.eq("user_id", userId)
+		.eq("consent_type", "analytics")
+		.maybeSingle();
+	if (error) return null;
+	return data?.granted === true;
 }
 
 export const authRepository = {
@@ -112,13 +142,7 @@ export const authRepository = {
 	},
 
 	async fetchAnalyticsConsent(userId: string): Promise<boolean> {
-		const { data } = await supabase
-			.from("user_consents")
-			.select("granted")
-			.eq("user_id", userId)
-			.eq("consent_type", "analytics")
-			.maybeSingle();
-		return data?.granted === true;
+		return (await readAnalyticsConsent(userId)) === true;
 	},
 
 	async setAnalyticsConsent(userId: string, granted: boolean): Promise<void> {
@@ -133,13 +157,24 @@ export const authRepository = {
 		if (error) throw error;
 	},
 
-	async fetchProfile(userId: string): Promise<UserProfile | null> {
+	/**
+	 * `consentFallback` es el valor que el llamador YA conoce; se aplica solo si
+	 * la fila de `user_consents` no se pudo leer. Ante la duda se conserva lo
+	 * conocido: un dato viejo se reconcilia en la siguiente relectura, pero
+	 * devolver un `false` fijo revocaba el consentimiento de todo usuario que
+	 * guardara su perfil — y `_layout` lo propaga a `analytics.setConsent`.
+	 */
+	async fetchProfile(
+		userId: string,
+		consentFallback = false,
+	): Promise<UserProfile | null> {
 		const { data, error } = await supabase
 			.from("profiles")
 			.select("id, email, full_name, avatar_url, phone, city, role")
 			.eq("id", userId)
 			.maybeSingle();
 		if (error || !data) return null;
+		const granted = await readAnalyticsConsent(userId);
 		return {
 			id: data.id,
 			email: data.email ?? "",
@@ -148,7 +183,7 @@ export const authRepository = {
 			phone: data.phone,
 			city: data.city,
 			role: parseRole(data.role),
-			analyticsConsentGranted: false,
+			analyticsConsentGranted: granted ?? consentFallback,
 		};
 	},
 };

@@ -139,9 +139,14 @@ export default function EditProfileScreen() {
 			},
 			{
 				onSuccess: ({ emailChanged }) => {
-					void authRepository.fetchProfile(profile.id).then((updated) => {
-						if (updated) setProfile(updated);
-					});
+					// El valor conocido se pasa como respaldo: si la lectura de
+					// `user_consents` falla, conservar el consentimiento del store
+					// es mejor que publicarlo como revocado.
+					void authRepository
+						.fetchProfile(profile.id, profile.analyticsConsentGranted)
+						.then((updated) => {
+							if (updated) setProfile(updated);
+						});
 					toast.success(
 						emailChanged
 							? strings.profileEdit.updatedWithEmailConfirmation
