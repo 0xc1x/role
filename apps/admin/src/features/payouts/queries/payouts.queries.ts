@@ -6,6 +6,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { notifyMutationError } from "@/lib/api/notify";
 import { payoutsApi } from "../api/payouts.api";
 import { payoutsKeys } from "./payouts.keys";
 
@@ -18,11 +19,6 @@ export const payoutsListOptions = (params?: ListPayoutsQuery) =>
 
 export function usePayoutsList(params?: ListPayoutsQuery) {
 	return useQuery(payoutsListOptions(params));
-}
-
-/** Error de mutación → toast. Pura y sin closure: vive a nivel módulo. */
-function notifyMutationError(err: Error) {
-	toast.error(err.message);
 }
 
 export function useGeneratePayouts() {

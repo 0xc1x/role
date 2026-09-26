@@ -6,6 +6,7 @@ import type {
 } from "@0xc1x/role-commons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { notifyMutationError } from "@/lib/api/notify";
 import {
 	createListOptions,
 	createUseCreate,
@@ -52,11 +53,6 @@ export const useDeleteBusiness = createUseDelete(
 	businessesKeys,
 	businessesApi.remove,
 );
-
-/** Error de mutación → toast. Pura y sin closure: vive a nivel módulo. */
-function notifyMutationError(err: Error) {
-	toast.error(err.message);
-}
 
 export function useVerifyBusiness() {
 	const queryClient = useQueryClient();

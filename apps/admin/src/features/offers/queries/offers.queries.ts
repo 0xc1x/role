@@ -1,6 +1,7 @@
 import type { ListOffersQuery } from "@0xc1x/role-commons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { notifyMutationError } from "@/lib/api/notify";
 import { createListOptions } from "@/lib/query/resource-helpers";
 import { offersApi } from "../api/offers.api";
 import { offersKeys } from "./offers.keys";
@@ -25,9 +26,7 @@ export function useDeactivateOffer() {
 			void queryClient.invalidateQueries({ queryKey: offersKeys.lists() });
 			toast.success("Oferta desactivada.");
 		},
-		onError: (err: Error) => {
-			toast.error(err.message);
-		},
+		onError: notifyMutationError,
 	});
 }
 
@@ -41,8 +40,6 @@ export function useActivateOffer() {
 			void queryClient.invalidateQueries({ queryKey: offersKeys.lists() });
 			toast.success("Oferta reactivada.");
 		},
-		onError: (err: Error) => {
-			toast.error(err.message);
-		},
+		onError: notifyMutationError,
 	});
 }

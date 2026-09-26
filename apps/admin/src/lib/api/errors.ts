@@ -3,11 +3,27 @@ import {
 	translateValidationMessage,
 } from "./error-messages";
 
+/**
+ * `requestId` es lo único que correlaciona el toast del operador con el log del
+ * servidor: la API lo devuelve en cada error (`AllExceptionsFilter`). Se acota
+ * con el mismo patrón que aplica el filtro para que un body inesperado no sirva
+ * para pintar texto arbitrario en el toast.
+ */
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
+
+function readRequestId(value: unknown): string | undefined {
+	return typeof value === "string" && REQUEST_ID_PATTERN.test(value)
+		? value
+		: undefined;
+}
+
 export class ApiClientError extends Error {
 	status: number;
 	error?: string;
 	details?: unknown;
 	path?: string;
+	/** Correlación con el log del servidor; se muestra al operador. */
+	requestId?: string;
 
 	constructor(opts: {
 		status: number;
@@ -15,6 +31,7 @@ export class ApiClientError extends Error {
 		error?: string;
 		details?: unknown;
 		path?: string;
+		requestId?: string;
 	}) {
 		const msg = Array.isArray(opts.message)
 			? opts.message.join(", ")
@@ -25,6 +42,7 @@ export class ApiClientError extends Error {
 		this.error = opts.error;
 		this.details = opts.details;
 		this.path = opts.path;
+		this.requestId = opts.requestId;
 	}
 }
 
@@ -76,5 +94,6 @@ export async function throwFromResponse(response: Response): Promise<never> {
 		error: body.error as string | undefined,
 		details: body.details,
 		path: body.path as string | undefined,
+		requestId: readRequestId(body.requestId),
 	});
 }

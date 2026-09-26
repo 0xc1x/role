@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { EmailPreview } from "@/features/email/components/email-preview";
 import { useTestTemplate } from "@/features/email/queries/emails.queries";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export /** Preview renderizado + envío de prueba real a un email. */
 function TestPanel(props: {
@@ -41,7 +42,7 @@ function TestPanel(props: {
 									toast.success("Correo de prueba enviado");
 									setEmail("");
 								},
-								onError: (err) => toast.error(err.message),
+								onError: notifyMutationError,
 							},
 						)
 					}
