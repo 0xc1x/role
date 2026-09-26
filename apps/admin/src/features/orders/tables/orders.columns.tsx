@@ -1,11 +1,22 @@
-import type { AdminOrderListItemDto } from "@0xc1x/role-commons";
+import type { AdminOrderListItemDto, OrderStatus } from "@0xc1x/role-commons";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Eye } from "lucide-react";
+import { Eye, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { OrderDetailDrawer } from "@/features/orders/components/order-detail-drawer";
+import { OrderStatusDialog } from "@/features/orders/components/order-status-dialog";
+import { orderStatusActions } from "@/features/orders/lib/order-status-actions";
+import { useTransitionOrderStatus } from "@/features/orders/queries/orders.queries";
 import type { CsvColumn } from "@/lib/csv";
 import { orderStatusLabel } from "@/lib/labels";
 
@@ -30,11 +41,53 @@ const stampFmt = new Intl.DateTimeFormat("es-EC", {
 
 function OrderActionsCell({ order }: { order: AdminOrderListItemDto }) {
 	const [detail, setDetail] = useState<AdminOrderListItemDto | null>(null);
+	const [transition, setTransition] = useState<OrderStatus | null>(null);
+	const transitionMutation = useTransitionOrderStatus();
+	// Solo las aristas salientes del estado actual. En un estado terminal la
+	// lista viene vacía y la fila no ofrece el desplegable: no hay nada legal
+	// que ofrecer y un botón que solo puede fallar es ruido en una pantalla de
+	// soporte.
+	const actions = orderStatusActions(order.status);
+
+	const handleConfirm = () => {
+		if (!transition) return;
+		transitionMutation.mutate(
+			{ id: order.id, status: transition },
+			{ onSuccess: () => setTransition(null) },
+		);
+	};
+
 	return (
-		<>
+		<div className="flex items-center gap-2">
 			<Button size="sm" variant="outline" onClick={() => setDetail(order)}>
 				<Eye /> Ver ficha
 			</Button>
+
+			{actions.length > 0 ? (
+				<DropdownMenu>
+					<DropdownMenuTrigger render={<Button size="sm" variant="outline" />}>
+						<MoreHorizontal className="h-4 w-4" /> Cambiar estado
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuGroup>
+							<DropdownMenuLabel>
+								Mover desde {orderStatusLabel(order.status)}
+							</DropdownMenuLabel>
+							{actions.map((action) => (
+								<DropdownMenuItem
+									key={action.status}
+									variant={action.destructive ? "destructive" : "default"}
+									disabled={transitionMutation.isPending}
+									onClick={() => setTransition(action.status)}
+								>
+									{action.label}
+								</DropdownMenuItem>
+							))}
+						</DropdownMenuGroup>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			) : null}
+
 			{detail && (
 				<OrderDetailDrawer
 					order={detail}
@@ -42,7 +95,18 @@ function OrderActionsCell({ order }: { order: AdminOrderListItemDto }) {
 					onClose={() => setDetail(null)}
 				/>
 			)}
-		</>
+
+			{transition && (
+				<OrderStatusDialog
+					order={order}
+					to={transition}
+					open={true}
+					onOpenChange={(open) => !open && setTransition(null)}
+					onConfirm={handleConfirm}
+					isPending={transitionMutation.isPending}
+				/>
+			)}
+		</div>
 	);
 }
 

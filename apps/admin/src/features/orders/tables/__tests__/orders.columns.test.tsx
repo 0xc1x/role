@@ -100,4 +100,22 @@ describe("listado de órdenes", () => {
 		renderTable([{ ...order, business_name: null }]);
 		expect(screen.getByText(order.business_id.slice(0, 8))).toBeDefined();
 	});
+
+	// El operador ve órdenes atascadas y las tiene que poder desbloquear. La
+	// fila ofrece el movimiento solo mientras el grafo tenga salida.
+	test("ofrece cambiar estado mientras el estado tenga transiciones", () => {
+		renderTable();
+		expect(
+			screen.getByRole("button", { name: /Cambiar estado/ }),
+		).toBeDefined();
+	});
+
+	test.each([
+		"completed",
+		"cancelled",
+		"expired",
+	] as const)("no ofrece cambiar estado en un estado terminal (%s)", (status) => {
+		renderTable([{ ...order, status }]);
+		expect(screen.queryByRole("button", { name: /Cambiar estado/ })).toBeNull();
+	});
 });
