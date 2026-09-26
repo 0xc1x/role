@@ -10,7 +10,11 @@ import type {
 import { File } from "expo-file-system";
 
 import { supabase } from "@/src/core/supabase/client";
-import { MONTHS_FULL_CAP_ES, MONTHS_SHORT_ES } from "@/src/core/i18n/dates";
+import {
+	DAYS_SHORT_CAP_ES,
+	MONTHS_FULL_CAP_ES,
+	MONTHS_SHORT_ES,
+} from "@/src/core/i18n/dates";
 import { strings } from "@/src/core/i18n/strings";
 import { toAppError } from "@/src/core/error/mapper";
 import { AppError, Errors } from "@/src/core/error/app-error";
@@ -1055,9 +1059,10 @@ function bucketKey(d: Date, agg: Aggregation): string {
 function bucketLabel(key: string, agg: Aggregation): string {
 	if (agg === "day") {
 		const [y, m, d] = key.split("-").map(Number);
-		const names = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 		return (
-			names[new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).getUTCDay()] ?? key
+			DAYS_SHORT_CAP_ES[
+				new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).getUTCDay()
+			] ?? key
 		);
 	}
 	if (agg === "week") {

@@ -10,7 +10,13 @@
  * a full month name that starts a label is capitalized, while one embedded
  * mid-sentence stays lowercase. Keep all three; never "simplify" to one.
  *
- * `DAYS_SHORT_ES` is indexed by `Date#getDay()`, so index 0 is Sunday.
+ * The same reasoning applies to the DAY case variants: `DAYS_SHORT_CAP_ES` is
+ * the capitalized form used to open a label (a chart bucket that starts with
+ * the weekday), while `DAYS_SHORT_ES` stays lowercase for mid-sentence use.
+ * Keep both; never "simplify" to one.
+ *
+ * `DAYS_SHORT_ES` and `DAYS_SHORT_CAP_ES` are indexed by `Date#getDay()`, so
+ * index 0 is Sunday.
  */
 export const MONTHS_SHORT_ES = [
 	"ene",
@@ -66,4 +72,15 @@ export const DAYS_SHORT_ES = [
 	"jue",
 	"vie",
 	"sáb",
+] as const;
+
+/** Index 0 = Sunday, matching `Date#getDay()`. */
+export const DAYS_SHORT_CAP_ES = [
+	"Dom",
+	"Lun",
+	"Mar",
+	"Mié",
+	"Jue",
+	"Vie",
+	"Sáb",
 ] as const;
