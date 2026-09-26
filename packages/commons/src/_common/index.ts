@@ -5,3 +5,4 @@ export * from "./enums/day-of-week";
 export * from "./enums/platform";
 export * from "./schemas/api.schema";
 export * from "./schemas/common";
+export * from "./utils/safe-error";
