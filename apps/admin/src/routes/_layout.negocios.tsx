@@ -24,6 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessesList } from "@/features/businesses";
 import { businessesApi } from "@/features/businesses/api/businesses.api";
+import { BusinessesBulkActions } from "@/features/businesses/components/businesses-bulk-actions";
 import {
 	businessesCsvColumns,
 	columns,
@@ -139,6 +140,21 @@ function RouteComponent() {
 					onLimitChange={(limit) =>
 						navigate({ search: { ...search, page: 1, limit } })
 					}
+					selection={{
+						getRowId: (business) => business.id,
+						// Aprobar o rechazar solo tiene sentido sobre lo que está
+						// pendiente: un negocio ya aprobado no espera una acción y un
+						// recházado tampoco. La casilla de "todas" respeta esto, así
+						// que "marcar todo" nunca arrastra filas fuera de la cola.
+						enableRowSelection: (row) =>
+							row.original.verification_status === "pending",
+						toolbar: ({ selectedRows, clear }) => (
+							<BusinessesBulkActions
+								selectedRows={selectedRows}
+								onClear={clear}
+							/>
+						),
+					}}
 				/>
 			</div>
 		</div>
