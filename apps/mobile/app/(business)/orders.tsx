@@ -55,8 +55,7 @@ import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import type { OrderStatus as OrderStatusType } from "@0xc1x/role-commons";
 import type { OrderDetail } from "@/src/features/orders/domain/order";
-
-const SEARCH_DEBOUNCE_MS = 400;
+import { SEARCH_DEBOUNCE_MS } from "@/src/core/config/timing";
 
 /** Server-side date range for the history period (undefined = no range). */
 function historyRange(

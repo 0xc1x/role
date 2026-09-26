@@ -30,8 +30,7 @@ import {
 import { BusinessGridCard } from "@/src/features/business/components/BusinessGridCard";
 import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
 import { ChipsBar } from "@/src/features/home/components/CategoryChips";
-
-const SEARCH_DEBOUNCE_MS = 400;
+import { SEARCH_DEBOUNCE_MS } from "@/src/core/config/timing";
 
 const BUSINESS_TYPES = Object.keys(BUSINESS_TYPE_LABELS);
 

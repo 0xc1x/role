@@ -38,8 +38,7 @@ import {
 	type OfferFilterState,
 } from "@/src/features/offers/domain/offer";
 import { Button } from "@/components/ui/button";
-
-const SEARCH_DEBOUNCE_MS = 400;
+import { SEARCH_DEBOUNCE_MS } from "@/src/core/config/timing";
 
 const SKELETON_DATA = [0, 1, 2, 3, 4, 5];
 

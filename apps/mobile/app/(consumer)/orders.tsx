@@ -42,13 +42,12 @@ import {
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { SegmentedTabs } from "@/src/core/ui/SegmentedTabs";
+import { SEARCH_DEBOUNCE_MS } from "@/src/core/config/timing";
 
 type OrdersTab = "active" | "past";
 
 /** Entrada de la lista al cambiar de tab (eco del fadeUp del mock). */
 const LIST_ENTER_DURATION = 280;
-
-const SEARCH_DEBOUNCE_MS = 400;
 
 /** Server-side date range for the history period (undefined = no range). */
 function historyRange(
