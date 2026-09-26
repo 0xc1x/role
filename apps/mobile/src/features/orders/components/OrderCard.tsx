@@ -11,7 +11,7 @@ import {
 import { router } from "expo-router";
 
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, type BadgeTone } from "@/src/core/ui";
+import { AppText, badgeToneColors, type BadgeTone } from "@/src/core/ui";
 import {
 	isActiveStatus,
 	orderStatusLabels,
@@ -24,7 +24,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { typography } from "@/src/core/theme/typography";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
-import type { ColorTokens } from "@/src/core/theme/colors";
 
 /** Iconos del footer: check / bag / clock (mismos labels que OrderProgressHeader). */
 interface CardStep {
@@ -36,31 +35,10 @@ interface CardStep {
 const STEP_DELAY = 130;
 const STEP_DURATION = 250;
 
-/** Mismo mapeo tono → colores que StatusBadge (tokens, dark-safe). */
-function toneColors(
-	colors: ColorTokens,
-	tone: BadgeTone,
-): { bg: string; fg: string } {
-	switch (tone) {
-		case "brand":
-			return { bg: colors.secondary, fg: colors.secondaryForeground };
-		case "success":
-			return { bg: colors.surfaceSuccess, fg: colors.successText };
-		case "warning":
-			return { bg: colors.surfaceWarning, fg: colors.warningText };
-		case "danger":
-			return { bg: colors.destructiveSurface, fg: colors.destructive };
-		case "info":
-			return { bg: colors.infoSurface, fg: colors.infoText };
-		default:
-			return { bg: colors.muted, fg: colors.mutedForeground };
-	}
-}
-
 /** Pill de estado con dot + label (sin handler: la card entera navega). */
 function StatusPill({ label, tone }: { label: string; tone: BadgeTone }) {
 	const { colors } = useTheme();
-	const t = toneColors(colors, tone);
+	const t = badgeToneColors(colors, tone);
 	return (
 		<View style={[styles.pill, { backgroundColor: t.bg }]}>
 			<View style={[styles.pillDot, { backgroundColor: t.fg }]} />

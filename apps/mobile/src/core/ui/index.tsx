@@ -49,6 +49,7 @@ import { fonts, typography, type TypeStyle } from "@/src/core/theme/typography";
 import { withAlpha } from "@/src/core/theme/alpha";
 import { toAppError } from "@/src/core/error/mapper";
 import { AppText } from "./AppText";
+import { badgeToneColors, type BadgeTone } from "./badge-tone";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -546,13 +547,8 @@ export function TextField({
 }
 
 // ─── StatusBadge ────────────────────────────────────────────────────
-export type BadgeTone =
-	| "neutral"
-	| "brand"
-	| "success"
-	| "warning"
-	| "danger"
-	| "info";
+export { badgeToneColors } from "./badge-tone";
+export type { BadgeTone } from "./badge-tone";
 
 export function StatusBadge({
 	label,
@@ -565,15 +561,7 @@ export function StatusBadge({
 	dot?: boolean;
 }) {
 	const { colors } = useTheme();
-	const toneMap: Record<BadgeTone, { bg: string; fg: string }> = {
-		neutral: { bg: colors.muted, fg: colors.mutedForeground },
-		brand: { bg: colors.secondary, fg: colors.secondaryForeground },
-		success: { bg: colors.surfaceSuccess, fg: colors.successText },
-		warning: { bg: colors.surfaceWarning, fg: colors.warningText },
-		danger: { bg: colors.destructiveSurface, fg: colors.destructive },
-		info: { bg: colors.infoSurface, fg: colors.infoText },
-	};
-	const t = toneMap[tone];
+	const t = badgeToneColors(colors, tone);
 	const opacity = useSharedValue(1);
 	useEffect(() => {
 		if (dot) {

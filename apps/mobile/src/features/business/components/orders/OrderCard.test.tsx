@@ -24,8 +24,12 @@ mock.module("@/src/features/business/hooks", () => ({
 	useUpdateOrderStatus: () => ({ isPending, mutate: () => {} }),
 }));
 const { AppText } = await import("@/src/core/ui/AppText");
+// El barrel está mockeado, pero el OrderCard de orders/ pide `badgeToneColors`
+// en runtime: sin reexportarlo aquí la importación nominal falla.
+const { badgeToneColors } = await import("@/src/core/ui/badge-tone");
 mock.module("@/src/core/ui", () => ({
 	AppText,
+	badgeToneColors,
 	StatusBadge: ({ label }: { label: string }) =>
 		createElement(AppText, null, label),
 }));
