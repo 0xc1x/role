@@ -24,15 +24,24 @@ const schema = z.object({
 	status: z.enum(EMAIL_SEND_STATUSES),
 });
 /**
- * Contexto de solo lectura: el API ignora estos campos en el PATCH.
+ * Contexto de solo lectura: estos campos no se editan desde aquí.
  *
- * `error_message` se muestra pero NO se edita. Desde a7fac68 la API escribe ahí
- * la huella acotada del fallo (`safeErrorSummary`) en vez del texto crudo de
- * Resend, precisamente porque ese texto podía traer la API key o el email del
- * destinatario. Un textarea libre devolvía esa fuga por la puerta de atrás: el
- * operador escribía a mano lo que el servidor ya tenía que redimir, y el
- * PATCH lo persistía. Para limpiarlo está `POST /sends/:id/retry`, que lo
- *pone a null.
+ * `error_message` se muestra pero NO se edita. Un textarea libre devolvía por
+ * la puerta de atrás la fuga que a7fac68 cerró en el camino de fallo del
+ * servidor: el operador escribía a mano el texto crudo de Resend y el PATCH lo
+ * persistía. Para limpiar el valor está `POST /sends/:id/retry`, que lo pone a
+ * null.
+ *
+ * LO QUE MUESTRA LA FILA, con precisión: en los envíos fallidos DESDE a7fac68
+ * el valor es la huella acotada del fallo (`safeErrorSummary`, p. ej. `Error` o
+ * `NotFoundException:E42`). En las filas anteriores a ese commit NO hay backfill:
+ * el valor sigue siendo el texto crudo que devolvió Resend, que ese mismo
+ * commit definió como potencialmente sensible. Por eso la etiqueta dice
+ * "Detalle del error del servidor" y no "Huella": para una fila antigua no es
+ * una huella, y prometer una redacción que no ocurrió sería mentir sobre el
+ * estado real de los datos. La redacción de esas filas es una migración escrita
+ * y NO aplicada:
+ * `supabase/migrations/20260926041000_email_sends_redact_legacy_error_message.sql`.
  */
 function ReadOnlyInfo({ send }: { send: EmailSendDto }) {
 	const rows: Array<[label: string, value: string]> = [
@@ -43,7 +52,7 @@ function ReadOnlyInfo({ send }: { send: EmailSendDto }) {
 			send.source_type ? `${send.source_type} · ${send.source_id ?? "—"}` : "—",
 		],
 		["Intentos", `${send.attempts} / ${send.max_attempts}`],
-		["Huella del error", send.error_message ?? "—"],
+		["Detalle del error del servidor", send.error_message ?? "—"],
 	];
 
 	return (

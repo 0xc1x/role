@@ -97,9 +97,11 @@ describe("ficha del negocio", () => {
 						email: "postulante@cafe-central.ec",
 						template_name: "business-approved",
 						status: "failed",
-						// Desde a7fac68 la API guarda la huella acotada del fallo, no
-						// el texto crudo de Resend: la tabla debe rotularla como dato
-						// de diagnóstico, no como motivo legible.
+						// En los envíos fallidos desde a7fac68 el valor es la huella
+						// acotada del fallo; en las filas anteriores no hay backfill y
+						// sigue siendo el texto crudo de Resend. La etiqueta describe
+						// el origen del dato sin prometer una redacción que las filas
+						// históricas no tienen.
 						error_message: "TypeError",
 						created_at: "2026-09-01T10:05:00.000Z",
 					},
@@ -112,7 +114,7 @@ describe("ficha del negocio", () => {
 		await waitFor(() =>
 			expect(screen.getByText("business-approved")).toBeDefined(),
 		);
-		expect(screen.getByText("Huella del error")).toBeDefined();
+		expect(screen.getByText("Detalle del error del servidor")).toBeDefined();
 		expect(screen.getByText("TypeError")).toBeDefined();
 	});
 });

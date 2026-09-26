@@ -16,12 +16,16 @@ import { StatusBadge } from "@/features/email-sends/tables/email-sends.columns";
  * sus estados de carga/error/vacío. Lo consumen el drawer de notificaciones y la
  * ficha del negocio: aprobar sin ver si el aviso salió es aprobar a ciegas.
  *
- * `error_message` NO es un motivo legible: desde a7fac68 la API guarda ahí la
- * huella acotada del fallo (`TypeError`, `NotFoundException:E42`) en vez del
- * texto crudo de Resend, que podía traer la API key o el email del
- * destinatario. La columna se rotula y se tipa como lo que es —un dato de
- * diagnóstico, no una explicación— para no prometer al operador un motivo que
- * ya no existe. El texto crudo está en el log del servidor, no aquí.
+ * `error_message` NO es un motivo legible, y la columna lo dice sin prometer una
+ * redacción que no ocurrió para todas las filas: en los envíos fallidos DESDE
+ * a7fac68 el valor es la huella acotada del fallo (`TypeError`,
+ * `NotFoundException:E42`) en vez del texto crudo de Resend; en las filas
+ * anteriores a ese commit no hay backfill y el valor sigue siendo el texto
+ * crudo que el propio commit definió como potencialmente sensible. Por eso la
+ * etiqueta es "Detalle del error del servidor": describe el origen del dato sin
+ * afirmar una garantía que las filas históricas no tienen. La redacción de esas
+ * filas es una migración escrita y NO aplicada
+ * (`supabase/migrations/20260926041000_email_sends_redact_legacy_error_message.sql`).
  */
 export function BusinessEmailSendsTable({
 	businessId,
@@ -70,7 +74,7 @@ export function BusinessEmailSendsTable({
 						<TableHead>Destinatario</TableHead>
 						<TableHead>Plantilla</TableHead>
 						<TableHead>Estado</TableHead>
-						<TableHead>Huella del error</TableHead>
+						<TableHead>Detalle del error del servidor</TableHead>
 						<TableHead>Creado</TableHead>
 					</TableRow>
 				</TableHeader>
