@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useMarkPaid } from "@/features/payouts/queries/payouts.queries";
+import type { CsvColumn } from "@/lib/csv";
 import { payoutStatusLabel } from "@/lib/labels";
 
 function PayoutStatusBadge({ status }: { status: PayoutDto["status"] }) {
@@ -158,4 +159,23 @@ export const payoutsColumns: ColumnDef<PayoutDto>[] = [
 		enableHiding: false,
 		cell: ({ row }) => <PayActionCell payout={row.original} />,
 	},
+];
+
+/**
+ * Exportación del corte, en el mismo orden que las columnas de arriba.
+ *
+ * Los importes van como número crudo, no como `$1.234,50`: un símbolo de moneda
+ * delante convierte la columna en texto y la conciliación de pagos deja de sumar.
+ * El período va en `YYYY-MM-DD` (lo que ya entrega la API) para que ordene y
+ * compare sin depender del formato regional de quien lo abra.
+ */
+export const payoutsCsvColumns: CsvColumn<PayoutDto>[] = [
+	{ label: "Negocio", value: (p) => p.business_name ?? p.business_id },
+	{ label: "Período desde", value: (p) => p.period_start },
+	{ label: "Período hasta", value: (p) => p.period_end },
+	{ label: "Bruto", value: (p) => p.gross_amount },
+	{ label: "Fee de plataforma", value: (p) => p.platform_fee },
+	{ label: "Neto", value: (p) => p.net_amount },
+	{ label: "Estado", value: (p) => payoutStatusLabel(p.status) },
+	{ label: "Pagado el", value: (p) => p.paid_at },
 ];

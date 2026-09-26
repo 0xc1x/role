@@ -119,7 +119,28 @@ describe("/ordenes — render", () => {
 		renderRoute();
 
 		await screen.findByText("FD-2026-0101-001");
-		expect(screen.getByText(/37/)).toBeDefined();
+		// Texto completo y no `/37/`: el botón de exportar a CSV también rotula
+		// el total del filtro, y un matcher laxo haría match en los dos y
+		// dejaría de comprobar de dónde sale el número.
+		expect(screen.getByText("1-10 de 37 resultados")).toBeDefined();
+	});
+
+	test("el botón de exportar rotula el total del filtro, no el de la página", async () => {
+		stubFetch(200, {
+			data: [order],
+			meta: { page: 1, limit: 10, total: 37, total_pages: 4 },
+		});
+		currentSearch = { page: 1, limit: 10 };
+		renderRoute();
+
+		// Si el rótulo dijera el tamaño de la página (1), el operador leería
+		// "1" como el alcance del archivo y conciliaría contra un subconjunto.
+		await screen.findByText("FD-2026-0101-001");
+		expect(
+			screen.getByRole("button", {
+				name: "Exportar 37 fila(s) del filtro actual a CSV",
+			}),
+		).toBeDefined();
 	});
 });
 

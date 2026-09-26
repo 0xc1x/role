@@ -6,4 +6,7 @@ export {
 	useCommissionsList,
 	useUpdateCommission,
 } from "./queries/commissions.queries";
-export { columns as commissionsColumns } from "./tables/commissions.columns";
+export {
+	columns as commissionsColumns,
+	commissionsCsvColumns,
+} from "./tables/commissions.columns";

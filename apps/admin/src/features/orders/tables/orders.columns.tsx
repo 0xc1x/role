@@ -6,6 +6,7 @@ import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { OrderDetailDrawer } from "@/features/orders/components/order-detail-drawer";
+import type { CsvColumn } from "@/lib/csv";
 import { orderStatusLabel } from "@/lib/labels";
 
 export function OrderStatusBadge({ status }: { status: string }) {
@@ -132,4 +133,24 @@ export const ordersColumns: ColumnDef<AdminOrderListItemDto>[] = [
 		enableHiding: false,
 		cell: ({ row }) => <OrderActionsCell order={row.original} />,
 	},
+];
+
+/**
+ * Exportación del listado de órdenes, en el mismo orden que las columnas de
+ * arriba. Sin `user_id` ni `pickup_code`: el listado no los expone y un archivo
+ * que se descarga al escritorio no es el lugar para ponerlos.
+ *
+ * El importe va como número para que la hoja sume, y la ventana de pickup se
+ * parte en dos columnas ISO: pegadas en una sola, la hoja las trata como texto.
+ */
+export const ordersCsvColumns: CsvColumn<AdminOrderListItemDto>[] = [
+	{ label: "Orden", value: (o) => o.order_number },
+	{ label: "Negocio", value: (o) => o.business_name ?? o.business_id },
+	{ label: "Oferta", value: (o) => o.offer_title },
+	{ label: "Estado", value: (o) => orderStatusLabel(o.status) },
+	{ label: "Atascada", value: (o) => (o.is_stuck ? "Sí" : "No") },
+	{ label: "Importe", value: (o) => o.price },
+	{ label: "Pickup desde", value: (o) => o.pickup_start },
+	{ label: "Pickup hasta", value: (o) => o.pickup_end },
+	{ label: "Creada", value: (o) => o.created_at },
 ];

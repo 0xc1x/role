@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
+import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { Button } from "@/components/ui/button";
 import {
 	Select,
@@ -13,7 +14,12 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOffersList } from "@/features/offers";
-import { offersColumns } from "@/features/offers/tables/offers.columns";
+import { offersApi } from "@/features/offers/api/offers.api";
+import {
+	offersColumns,
+	offersCsvColumns,
+} from "@/features/offers/tables/offers.columns";
+import { fetchAllPages } from "@/lib/api/fetch-all-pages";
 import { formatApiError } from "@/lib/api/notify";
 
 /**
@@ -39,6 +45,16 @@ const OFFER_STATE_LABELS: Record<
 	inactive: "Inactivas",
 };
 
+/**
+ * «Inactivas» no se puede exportar, y el botón lo dice en vez de exportar una
+ * página: `GET /offers` no acepta `is_active`, así que un recorrido de páginas
+ * devolvería el conjunto COMPLETO de ofertas, no las inactivas. Entregarlo como
+ * si fuera el filtro activo es peor que no entregarlo — el operador moderaría
+ * contra un archivo con ofertas publicadas mezcladas.
+ */
+const EXPORT_SIN_FILTRO_SERVIDOR =
+	"«Inactivas» no se puede exportar: la API no permite filtrar por is_active, así que el archivo incluiría también las ofertas publicadas.";
+
 export const Route = createFileRoute("/_layout/ofertas")({
 	validateSearch: (raw) => schema.parse(raw),
 	component: RouteComponent,
@@ -47,27 +63,28 @@ export const Route = createFileRoute("/_layout/ofertas")({
 function RouteComponent() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, isLoading, isError, error, refetch } = useOffersList(
-		useMemo(
-			// Se parsea con el schema del contrato para que los defaults del
-			// servidor (`radius_km`, etc.) queden garantizados por el tipo.
-			() =>
-				ListOffersQuerySchema.parse({
-					business_id: search.business_id,
-					category_id: search.category_id,
-					available_only: search.state === "available",
-					page: search.page,
-					limit: search.limit,
-				}),
-			[
-				search.business_id,
-				search.category_id,
-				search.state,
-				search.page,
-				search.limit,
-			],
-		),
+	// Se parsea con el schema del contrato para que los defaults del servidor
+	// (`radius_km`, etc.) queden garantizados por el tipo. Vive en una variable
+	// y no dentro del `useQuery` porque la exportación debe recortar exactamente
+	// el mismo conjunto que la tabla.
+	const listQuery = useMemo(
+		() =>
+			ListOffersQuerySchema.parse({
+				business_id: search.business_id,
+				category_id: search.category_id,
+				available_only: search.state === "available",
+				page: search.page,
+				limit: search.limit,
+			}),
+		[
+			search.business_id,
+			search.category_id,
+			search.state,
+			search.page,
+			search.limit,
+		],
 	);
+	const { data, isLoading, isError, error, refetch } = useOffersList(listQuery);
 
 	const fetched = useMemo(() => data?.data ?? [], [data]);
 	// Solo en el estado "inactivas" el filtro es del cliente; en los otros dos
@@ -104,31 +121,40 @@ function RouteComponent() {
 
 	return (
 		<div className="px-6 py-4">
-			<div className="flex items-center justify-between">
+			<div className="flex items-center justify-between gap-4">
 				<h1 className="font-bold text-xl">Ofertas</h1>
-				<Select
-					value={search.state}
-					onValueChange={(v) =>
-						navigate({
-							search: {
-								...search,
-								state: v as typeof search.state,
-								page: 1,
-							},
-						})
-					}
-				>
-					<SelectTrigger className="w-56" aria-label="Estado">
-						<SelectValue>
-							{OFFER_STATE_LABELS[search.state] ?? "Todas"}
-						</SelectValue>
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="all">Todas</SelectItem>
-						<SelectItem value="available">Publicables ahora</SelectItem>
-						<SelectItem value="inactive">Inactivas</SelectItem>
-					</SelectContent>
-				</Select>
+				<div className="flex items-center gap-2">
+					<ExportCsvButton
+						fileName="ofertas"
+						columns={offersCsvColumns}
+						total={pageScoped ? 0 : (data?.meta.total ?? 0)}
+						loadRows={() => fetchAllPages(offersApi.list, listQuery)}
+						disabledReason={pageScoped ? EXPORT_SIN_FILTRO_SERVIDOR : undefined}
+					/>
+					<Select
+						value={search.state}
+						onValueChange={(v) =>
+							navigate({
+								search: {
+									...search,
+									state: v as typeof search.state,
+									page: 1,
+								},
+							})
+						}
+					>
+						<SelectTrigger className="w-56" aria-label="Estado">
+							<SelectValue>
+								{OFFER_STATE_LABELS[search.state] ?? "Todas"}
+							</SelectValue>
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">Todas</SelectItem>
+							<SelectItem value="available">Publicables ahora</SelectItem>
+							<SelectItem value="inactive">Inactivas</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
 			</div>
 			{pageScoped ? (
 				<p className="text-muted-foreground mt-2 text-sm">

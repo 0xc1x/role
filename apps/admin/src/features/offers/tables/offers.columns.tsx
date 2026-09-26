@@ -27,6 +27,7 @@ import {
 	useActivateOffer,
 	useDeactivateOffer,
 } from "@/features/offers/queries/offers.queries";
+import type { CsvColumn } from "@/lib/csv";
 import { formatBusinessDate } from "@/lib/dates";
 
 export function OfferStateBadge({ isActive }: { isActive: boolean }) {
@@ -215,4 +216,23 @@ export const offersColumns: ColumnDef<OfferWithBusiness>[] = [
 			</div>
 		),
 	},
+];
+
+/**
+ * Exportación de ofertas, en el mismo orden que las columnas de arriba.
+ *
+ * El precio original se exporta en su propia columna, no junto al precio final
+ * como en pantalla: pegados, la hoja solo puede leer uno de los dos.
+ */
+export const offersCsvColumns: CsvColumn<OfferWithBusiness>[] = [
+	{ label: "Oferta", value: (o) => o.title },
+	{ label: "Negocio", value: (o) => o.business.name },
+	{ label: "Precio", value: (o) => o.discounted_price },
+	{ label: "Precio original", value: (o) => o.original_price },
+	{ label: "Stock", value: (o) => o.stock },
+	{ label: "Stock inicial", value: (o) => o.initial_stock },
+	{ label: "Pickup desde", value: (o) => o.pickup_start },
+	{ label: "Pickup hasta", value: (o) => o.pickup_end },
+	{ label: "Estado", value: (o) => (o.is_active ? "Activa" : "Inactiva") },
+	{ label: "Creada", value: (o) => o.created_at },
 ];

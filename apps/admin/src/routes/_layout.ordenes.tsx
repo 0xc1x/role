@@ -7,6 +7,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
+import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { Button } from "@/components/ui/button";
 import {
 	Select,
@@ -18,8 +19,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useOrdersList } from "@/features/orders";
+import { ordersApi } from "@/features/orders/api/orders.api";
 import { BusinessFilter } from "@/features/orders/components/business-filter";
-import { ordersColumns } from "@/features/orders/tables/orders.columns";
+import {
+	ordersColumns,
+	ordersCsvColumns,
+} from "@/features/orders/tables/orders.columns";
+import { fetchAllPages } from "@/lib/api/fetch-all-pages";
 import { formatApiError } from "@/lib/api/notify";
 import { orderStatusLabel } from "@/lib/labels";
 
@@ -71,6 +77,12 @@ function RouteComponent() {
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<h1 className="font-bold text-xl">Órdenes</h1>
 				<div className="flex flex-wrap items-center gap-3">
+					<ExportCsvButton
+						fileName="ordenes"
+						columns={ordersCsvColumns}
+						total={data?.meta.total ?? 0}
+						loadRows={() => fetchAllPages(ordersApi.list, search)}
+					/>
 					<div className="flex items-center gap-2">
 						<Switch
 							checked={search.stuck === true}

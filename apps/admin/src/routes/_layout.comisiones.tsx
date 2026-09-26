@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DataTable } from "@/components/data-table/data-table";
+import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,10 +12,13 @@ import {
 	InputGroupInput,
 } from "@/components/ui/input-group";
 import {
+	commissionsApi,
 	commissionsColumns,
+	commissionsCsvColumns,
 	commissionsListOptions,
 	useCommissionsList,
 } from "@/features/commissions";
+import { fetchAllPages } from "@/lib/api/fetch-all-pages";
 
 export const Route = createFileRoute("/_layout/comisiones")({
 	validateSearch: (raw) => ListCommissionsQuerySchema.parse(raw),
@@ -91,11 +95,17 @@ function RouteComponent() {
 
 	return (
 		<div className="px-6 py-4">
-			<div className="flex items-center justify-between">
+			<div className="flex items-center justify-between gap-4">
 				<header className="flex items-center">
 					<h1 className="font-bold text-xl">Comisiones</h1>
 				</header>
 				<div className="flex items-center gap-4">
+					<ExportCsvButton
+						fileName="comisiones"
+						columns={commissionsCsvColumns}
+						total={meta?.total ?? 0}
+						loadRows={() => fetchAllPages(commissionsApi.list, search)}
+					/>
 					<InputGroup className="max-w-sm">
 						<InputGroupAddon align="inline-start">
 							<Search className="size-4 text-muted-foreground" />

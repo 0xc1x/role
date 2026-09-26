@@ -172,6 +172,42 @@ describe("/ofertas — filtro de estado", () => {
 	});
 });
 
+/**
+ * El export de «inactivas» está bloqueado a propósito: `GET /offers` no acepta
+ * `is_active`, así que recorrer páginas devolvería el conjunto completo. Estos
+ * tests existen para que nadie lo habilite creyendo que devuelve el filtro.
+ */
+describe("/ofertas — alcance del export", () => {
+	test("con filtro de servidor el botón exporta el total del filtro", async () => {
+		stubFetch(200, {
+			data: [activeOffer, inactiveOffer],
+			meta: { page: 1, limit: 10, total: 2, total_pages: 1 },
+		});
+		currentSearch = { page: 1, limit: 10, state: "all" };
+		renderRoute();
+
+		await screen.findByText("Mesa de sobrantes");
+		expect(
+			screen.getByRole("button", { name: /Exportar 2 fila\(s\)/ }),
+		).toBeDefined();
+	});
+
+	test("«inactivas» bloquea el export y explica por qué", async () => {
+		stubFetch(200, okBody([activeOffer, inactiveOffer]));
+		currentSearch = { page: 1, limit: 10, state: "inactive" };
+		renderRoute();
+
+		await screen.findByText("Pan del día anterior");
+		const button = screen.getByRole("button", {
+			name: /Inactivas.*no se puede exportar/,
+		});
+		expect(button.hasAttribute("disabled")).toBe(true);
+		// Sin el rótulo del total: en este estado el conjunto filtrado no
+		// existe en el servidor, así que cualquier número sería inventado.
+		expect(button.textContent).not.toContain("2");
+	});
+});
+
 describe("/ofertas — query caída", () => {
 	test("muestra el error y ofrece reintentar en vez de una lista vacía", async () => {
 		stubFetch(500, { statusCode: 500, message: "Internal server error" });

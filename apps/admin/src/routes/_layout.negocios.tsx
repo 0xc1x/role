@@ -7,6 +7,7 @@ import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
+import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { Button } from "@/components/ui/button";
 import {
 	InputGroup,
@@ -22,7 +23,12 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessesList } from "@/features/businesses";
-import { columns } from "@/features/businesses/tables/businesses.columns";
+import { businessesApi } from "@/features/businesses/api/businesses.api";
+import {
+	businessesCsvColumns,
+	columns,
+} from "@/features/businesses/tables/businesses.columns";
+import { fetchAllPages } from "@/lib/api/fetch-all-pages";
 import { formatApiError } from "@/lib/api/notify";
 
 // Igual que ListBusinessesQuerySchema pero con el page size de las tablas (10).
@@ -80,9 +86,15 @@ function RouteComponent() {
 	const meta = data?.meta;
 	return (
 		<div className="px-6 py-4">
-			<div className="flex items-center justify-between">
+			<div className="flex items-center justify-between gap-4">
 				<h1 className="font-bold text-xl">Negocios</h1>
 				<div className="flex items-center gap-2">
+					<ExportCsvButton
+						fileName="negocios"
+						columns={businessesCsvColumns}
+						total={meta?.total ?? 0}
+						loadRows={() => fetchAllPages(businessesApi.list, search)}
+					/>
 					<Select
 						value={search.verification_status ?? "all"}
 						onValueChange={(v) =>

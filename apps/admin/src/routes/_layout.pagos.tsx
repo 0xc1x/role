@@ -3,16 +3,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
+import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import {
 	GeneratePayoutsDialog,
+	payoutsApi,
 	payoutsColumns,
+	payoutsCsvColumns,
 	payoutsListOptions,
 	useGeneratePayouts,
 	usePayoutsList,
 } from "@/features/payouts";
+import { fetchAllPages } from "@/lib/api/fetch-all-pages";
 import { formatApiError } from "@/lib/api/notify";
 
 const pagosSearchSchema = ListPayoutsQuerySchema.extend({
@@ -60,12 +64,20 @@ function RouteComponent() {
 
 	return (
 		<div className="px-6 py-4">
-			<div className="flex items-center justify-between">
+			<div className="flex items-center justify-between gap-2">
 				<h1 className="font-bold text-xl">Pagos a negocios</h1>
-				<Button onClick={() => setConfirmOpen(true)} disabled={gen.isPending}>
-					{gen.isPending ? <Spinner /> : null}
-					{gen.isPending ? "Generando..." : "Generar cortes"}
-				</Button>
+				<div className="flex items-center gap-2">
+					<ExportCsvButton
+						fileName="pagos"
+						columns={payoutsCsvColumns}
+						total={meta?.total ?? 0}
+						loadRows={() => fetchAllPages(payoutsApi.list, search)}
+					/>
+					<Button onClick={() => setConfirmOpen(true)} disabled={gen.isPending}>
+						{gen.isPending ? <Spinner /> : null}
+						{gen.isPending ? "Generando..." : "Generar cortes"}
+					</Button>
+				</div>
 			</div>
 			<p className="text-sm text-muted-foreground mt-1">
 				Cortes quincenales · fee congelado por orden · cron 1 y 16 a las 03:00
