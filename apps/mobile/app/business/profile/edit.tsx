@@ -24,23 +24,10 @@ import { spacing, radii } from "@/src/core/theme/spacing";
 	);
 	const business = businesses?.[0];
 	const businessId = business?.id ?? "";
-	const { data, isLoading, isError, error, refetch, fetchStatus } =
+	const { data, isLoading, isError, error, refetch } =
 		useBusinessProfile(businessId);
 	const { data: hours } = useBusinessHours(businessId);
 	const update = useUpdateBusiness(businessId);
-
-	// Temporary diagnostic log for Expo logs; remove after debugging.
-	console.log("[edit-business]", {
-		initialized,
-		profileId: profile?.id,
-		businessesLen: businesses?.length,
-		businessId,
-		isLoading,
-		isError,
-		errorMessage: String(error),
-		hasData: Boolean(data),
-		fetchStatus,
-	});
 
 	if (!initialized || businessesLoading) return <BusinessFormSkeleton />;
 	if (!business) return <NoBusinessPrompt />;
