@@ -16,7 +16,13 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, ErrorState, Screen, ScreenHeader } from "@/src/core/ui";
+import {
+	AppText,
+	ErrorState,
+	Screen,
+	ScreenHeader,
+	SectionTitle,
+} from "@/src/core/ui";
 import {
 	useBusinessNotifications,
 	useUpdateBusinessNotifications,
@@ -102,19 +108,6 @@ const CHANNELS: ToggleConfig[] = [
 		upcoming: true,
 	},
 ];
-
-function SectionTitle({ children }: { children: string }) {
-	const { colors } = useTheme();
-	return (
-		<AppText
-			variant="labelSmall"
-			weight="bold"
-			style={{ color: colors.mutedForeground }}
-		>
-			{children}
-		</AppText>
-	);
-}
 
 function NotificationRow({
 	config,

@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, Screen, ScreenHeader } from "@/src/core/ui";
+import { AppText, Screen, ScreenHeader, SectionTitle } from "@/src/core/ui";
 import { useAuthStore } from "@/src/features/auth/store";
 import { removeDeviceToken } from "@/src/features/notifications";
 import {
@@ -99,19 +99,6 @@ const SMART_ALERTS: ToggleConfig[] = [
 		icon: ChartColumn,
 	},
 ];
-
-function SectionTitle({ children }: { children: string }) {
-	const { colors } = useTheme();
-	return (
-		<AppText
-			variant="labelSmall"
-			weight="bold"
-			style={{ color: colors.mutedForeground }}
-		>
-			{children}
-		</AppText>
-	);
-}
 
 function NotificationRow({
 	config,
