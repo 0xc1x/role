@@ -875,9 +875,9 @@ describe('businesses column split phase 3 closes the anon exposure', () => {
   });
 
   test('phase 3 removes the owner trigger that phase 4 introduced on owner_id', () => {
-    // 20260926000012 adds a BEFORE INSERT trigger that fills owner_id from
-    // auth.uid(). A trigger referencing a dropped column does not fail at
-    // migration time; it fails on the next insert, in production, with 42703.
+    // businesses_client_write_grants adds a BEFORE INSERT trigger that fills
+    // owner_id from auth.uid(). A trigger referencing a dropped column does not
+    // fail at migration time; it fails on the next insert, in production, with 42703.
     // bootstrap_business_companions already derives ownership, so the old
     // trigger must be dropped here or it becomes a live landmine.
     expect(sql()).toMatch(
@@ -909,9 +909,15 @@ describe('businesses column split phase 3 closes the anon exposure', () => {
  * next boundary pass cannot quietly revoke them again.
  */
 describe('businesses client write grants match what the client actually writes', () => {
-  const GRANTS_FILE = '20260926000012_businesses_client_write_grants.sql';
+  // Resolved by name, not by version. Supabase assigns the version, so a
+  // hardcoded one breaks every time this migration is re-applied — and the
+  // resulting failure reads like a missing grant rather than a moved file.
+  const GRANTS_FILE = readdirSync(MIGRATIONS_DIR).find((file) =>
+    file.endsWith('_businesses_client_write_grants.sql'),
+  );
+  expect(GRANTS_FILE).toBeDefined();
   const GRANTS: string = readFileSync(
-    join(MIGRATIONS_DIR, GRANTS_FILE),
+    join(MIGRATIONS_DIR, GRANTS_FILE as string),
     'utf8',
   );
   const GRANTS_SQL = GRANTS.replace(/--[^\n]*/g, '');

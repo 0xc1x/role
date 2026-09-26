@@ -336,9 +336,10 @@ create trigger trg_notify_business_verification
   for each row
   execute function public.notify_business_verification();
 
--- 20260926000012 adds a BEFORE INSERT trigger that fills businesses.owner_id
--- from auth.uid(), so a client can create a business without sending an owner.
--- That column is about to disappear, and a trigger referencing it does not fail
+-- businesses_client_write_grants adds a BEFORE INSERT trigger that fills
+-- businesses.owner_id from auth.uid(), so a client can create a business without
+-- sending an owner. That column is about to disappear, and a trigger referencing
+-- it does not fail
 -- at migration time: it fails on the next insert, in production, with 42703.
 -- bootstrap_business_companions above already derives ownership, so the old
 -- trigger is now dead weight that must go.

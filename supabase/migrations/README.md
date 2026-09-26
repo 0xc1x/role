@@ -74,6 +74,43 @@ attached. The file on disk here contains that defect. `20260925175051` is the
 fix, and it supersedes the earlier file. Replaying the chain in order does
 produce a working database; skipping to the latest file does not.
 
+## How to apply a migration
+
+Always through `apply_migration`. Never `execute_sql`, never the Supabase
+dashboard, never psql against the project. Then:
+
+1. Read back the server-assigned version:
+   `select version, name from supabase_migrations.schema_migrations where name = '<snake_case_name>';`
+2. Rename the file to `<that version>_<that name>.sql`. The server assigns the
+   version, not you; the file must carry the version the ledger recorded.
+3. Prove the file is what ran: `md5sum <file>` must equal
+   `select md5(statements[1]) ... where version = '<that version>'`.
+
+Step 3 is the only check that distinguishes "committed" from "applied". Two
+migrations here have now been repaired after being applied out-of-band, and
+the symptom in both cases was identical: a fix that was correct, tested, and
+committed, and a database that never received it.
+
+## Repaired: migrations applied without touching the ledger
+
+`businesses_client_write_grants` restored the client write path on
+`public.businesses` after `20260925163235` ran `revoke all` and never gave the
+grants back. Every owner action in the mobile business panel was failing with
+`42501 permission denied for table businesses`.
+
+The SQL was executed directly. Its effects were real and are still in the
+database — the column grants, and the `trg_set_business_owner_from_jwt` and
+`trg_default_business_inactive` triggers — but the ledger had no row for it, so
+the migration directory did not describe the database and `supabase db push`
+would have replayed it against a live project as if it had never run. It has
+since been applied through `apply_migration` (idempotent: `create or replace
+function`, `drop trigger if exists`, `grant`) and recorded as
+`20260926010336_businesses_client_write_grants`.
+
+**The failure was not the SQL.** It was writing to the database through a path
+that leaves no evidence, and then trusting a commit as proof of application.
+When a fix seems not to work, read the ledger before re-writing the fix.
+
 ## Verifying this directory against the database
 
 ```sh
