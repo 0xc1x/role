@@ -20,7 +20,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { strings } from "@/src/core/i18n/strings";
 import { AppText, Screen, ScreenHeader, SectionTitle } from "@/src/core/ui";
 import { useAuthStore } from "@/src/features/auth/store";
-import { removeDeviceToken } from "@/src/features/notifications";
+import { revokeDeviceTokensWithRetry } from "@/src/features/notifications";
 import {
 	useNotificationPreferences,
 	useUpdateNotificationPreferences,
@@ -237,9 +237,12 @@ export default function NotificationsSettingsScreen() {
 			return;
 		}
 		if (config.key === "push_enabled" && !value) {
-			// Push off: drop this device's token so it stops receiving pushes,
-			// then persist the preference.
-			await removeDeviceToken(userId).catch(() => {});
+			// Push off: SAME write-ahead que el logout. Desactivar el toggle con
+			// la preferencia ya guardada y el `DELETE` fallido dejaba la fila de
+			// `device_tokens` viva: el usuario seguía recibiendo push con su
+			// preferencia en "off". El registro se drena en el próximo arranque
+			// autenticado, el único momento con sesión que RLS acepta.
+			await revokeDeviceTokensWithRetry(userId);
 		}
 		update.mutate({
 			[config.key]: value,

@@ -25,9 +25,20 @@ export async function upsertDeviceToken(
 }
 
 /**
- * Borra todos los tokens del usuario (logout). Sin check de error: el
- * logout nunca se bloquea por esto (el llamador ya ignora fallos).
+ * Borra todos los tokens del usuario (logout, push desactivado).
+ *
+ * Lanza el PostgrestError crudo cuando la API no confirma el borrado. Es
+ * deliberado: el write-ahead de `pending-revocation` solo sirve si el fallo
+ * es visible, y supabase-js NO lanza — un `DELETE` denegado por RLS resuelve
+ * con `{ error }` y sin excepción, así que un llamador que ignorara el
+ * resultado borraría su registro de reintento y dejaría el token vivo para
+ * siempre, que es exactamente el defecto que el registro existe para evitar.
+ * Los llamadores que no pueden bloquear (el logout) ya ignoran el fallo.
  */
 export async function deleteDeviceTokens(userId: string): Promise<void> {
-	await supabase.from("device_tokens").delete().eq("user_id", userId);
+	const { error } = await supabase
+		.from("device_tokens")
+		.delete()
+		.eq("user_id", userId);
+	if (error) throw error;
 }
