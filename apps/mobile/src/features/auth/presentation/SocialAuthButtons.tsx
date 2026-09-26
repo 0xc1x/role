@@ -1,8 +1,6 @@
 import { Apple, Globe } from "lucide-react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
-import { Button } from "@/components/ui/button";
 
 import { useTheme } from "@/src/core/theme";
 import { radii, spacing } from "@/src/core/theme/spacing";
@@ -10,8 +8,18 @@ import { AppText } from "@/src/core/ui";
 import { strings } from "@/src/core/i18n/strings";
 
 /**
- * Divisor "o … con" + botones sociales (Google/Apple), portados de Fudi.
- * Placeholders: el flujo social aún no está conectado (igual que en Fudi).
+ * Aviso de proveedores sociales (Google/Apple), portado de Fudi.
+ *
+ * El flujo social NO está conectado: Supabase no tiene proveedor OAuth
+ * configurado en este proyecto. Antes esto pintaba dos `Button` con
+ * `disabled` sin explicación, con el mismo estilo que los botones que sí
+ * funcionan y debajo de un divisor "o continuar con" — dos controles que
+ * parecen vivos y no hacen nada.
+ *
+ * Ahora no hay botón: hay una fila estática de proveedores con la etiqueta
+ * "Próximamente" y una frase que dice por qué. Cuando el flujo exista, esta
+ * pieza se sustituye por los botones reales (la decisión de producto está
+ * registrada en `docs/decisions/`).
  */
 export function SocialAuthButtons({ label }: { label: string }) {
 	const { colors } = useTheme();
@@ -28,36 +36,56 @@ export function SocialAuthButtons({ label }: { label: string }) {
 					style={[styles.dividerLine, { backgroundColor: colors.borderSolid }]}
 				/>
 			</View>
-			<View style={styles.providers}>
-				<SocialProvider
-					icon={
-						<Ionicons name="logo-google" size={20} color={colors.foreground} />
-					}
+
+			<View
+				style={[
+					styles.providers,
+					{
+						backgroundColor: colors.muted,
+						borderColor: colors.borderSolid,
+					},
+				]}
+			>
+				<ProviderChip
+					icon={<Globe size={18} color={colors.mutedForeground} />}
 					label={strings.auth.google}
 				/>
-				<SocialProvider
-					icon={
-						<Ionicons name="logo-apple" size={20} color={colors.foreground} />
-					}
+				<ProviderChip
+					icon={<Apple size={18} color={colors.mutedForeground} />}
 					label={strings.auth.apple}
 				/>
+				<AppText
+					variant="labelSmall"
+					weight="semiBold"
+					style={{ color: colors.mutedForeground }}
+				>
+					{strings.auth.socialUnavailableLabel}
+				</AppText>
 			</View>
+
+			<AppText
+				variant="bodySmall"
+				style={[styles.note, { color: colors.mutedForeground }]}
+			>
+				{strings.auth.socialUnavailableBody}
+			</AppText>
 		</>
 	);
 }
 
-function SocialProvider({ icon, label }: { icon: ReactNode; label: string }) {
+function ProviderChip({ icon, label }: { icon: ReactNode; label: string }) {
+	const { colors } = useTheme();
 	return (
-		<Button
-			variant="outline"
-			disabled
-			accessibilityRole="button"
-			accessibilityLabel={label}
-			style={{ flex: 1 }}
-			icon={icon}
-		>
-			{label}
-		</Button>
+		<View style={styles.chip}>
+			{icon}
+			<AppText
+				variant="bodySmall"
+				weight="medium"
+				style={{ color: colors.mutedForeground }}
+			>
+				{label}
+			</AppText>
+		</View>
 	);
 }
 
@@ -66,22 +94,23 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.lg,
-		marginVertical: spacing.xl,
+		marginTop: spacing.xl,
+		marginBottom: spacing.md,
 	},
 	dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
 	providers: {
 		flexDirection: "row",
+		alignItems: "center",
 		gap: spacing.md,
+		borderWidth: 1,
+		borderRadius: radii.md,
+		paddingVertical: spacing.md,
+		paddingHorizontal: spacing.lg,
 	},
-	provider: {
-		flex: 1,
+	chip: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "center",
-		gap: spacing.sm,
-		// Pill como el resto de CTAs (marca web): el rect era resto del port de Fudi.
-		borderRadius: radii.pill,
-		borderWidth: 1,
-		paddingVertical: 14,
+		gap: spacing.xs,
 	},
+	note: { marginTop: spacing.sm },
 });

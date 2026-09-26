@@ -1,13 +1,14 @@
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import { AppText, ErrorState, LoadingView, Screen, ScreenHeader } from "@/src/core/ui";
-import { formatMoney } from "@/src/core/utils/formatters";
+import { formatMoney, formatRelativeDay, formatTime } from "@/src/core/utils/formatters";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
+import { useConfigValue } from "@/src/features/config";
 import {
 	createReservationIdempotencyKey,
 	useApplyCoupon,
@@ -17,7 +18,12 @@ import {
 import {
 	type ReservationSuccess,
 } from "@/src/features/orders/domain/order";
-import { isOfferAvailable } from "@/src/features/offers/domain/offer";
+import {
+	isOfferAvailable,
+	isOfferExpired,
+	isOfferOutOfStock,
+	type OfferDetail,
+} from "@/src/features/offers/domain/offer";
 import {
 	CouponSection,
 	PaymentMethodSection,
@@ -60,12 +66,34 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 		idempotencyKey: string;
 	} | null>(null);
 
+	// Reglas de cancelación: viven en `app_config` (plataforma), no en el
+	// copy. Los defaults son los del seed 20260821205638 y solo aplican si la
+	// config aún no cargó; la pantalla nunca queda sin copy por una config caída.
+	const cancellationWindowMinutes = useConfigValue(
+		"cancellation.window_minutes",
+		10,
+	);
+	const cancellationMax7d = useConfigValue("cancellation.max_per_7d", 3);
+	const cancellationMax30d = useConfigValue("cancellation.max_per_30d", 10);
+
 	if (isLoading) return <LoadingView />;
 	if (isError || !offerDetail)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
 
 	const { offer, business, location } = offerDetail;
 	const isAvailable = isOfferAvailable(offerDetail);
+	const unavailableReason = unavailableCopy(offerDetail);
+	const pickupWindow = strings.checkout.pickupWindow
+		.replace("{day}", formatRelativeDay(offer.pickup_start))
+		.replace("{start}", formatTime(offer.pickup_start))
+		.replace("{end}", formatTime(offer.pickup_end));
+	const termsRules = strings.checkout.termsRules.map((rule) =>
+		rule
+			.replace("{minutes}", String(cancellationWindowMinutes))
+			.replace("{max7d}", String(cancellationMax7d))
+			.replace("{max30d}", String(cancellationMax30d))
+			.replace("{window}", pickupWindow),
+	);
 
 	const confirmReservation = () => {
 		const scope = `${offer.id}:${appliedCoupon?.id ?? "none"}`;
@@ -141,6 +169,20 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 					{ borderTopColor: colors.borderSolid, backgroundColor: colors.card },
 				]}
 			>
+				{unavailableReason ? (
+					<View
+						accessible
+						accessibilityRole="alert"
+						accessibilityLabel={unavailableReason}
+					>
+						<AppText
+							variant="bodySmall"
+							style={[styles.unavailable, { color: colors.destructive }]}
+						>
+							{unavailableReason}
+						</AppText>
+					</View>
+				) : null}
 				<View style={styles.totalRow}>
 					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 						{strings.checkout.total}
@@ -156,14 +198,62 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 					fullWidth
 					size="lg"
 				>
-					{strings.checkout.confirm}
+					{isAvailable ? strings.checkout.confirm : strings.checkout.confirmUnavailable}
 				</Button>
-				<AppText variant="caption" style={[styles.termsNote, { color: colors.mutedForeground }]}>
-					{strings.checkout.termsNote}
-				</AppText>
+
+				{/* M16: la línea ya no afirma "términos aplicados" — dice qué
+				    pasa al reservar y enlaza a la ruta legal real. */}
+				<View style={styles.terms}>
+					<AppText
+						variant="caption"
+						style={{ color: colors.mutedForeground }}
+					>
+						{strings.checkout.termsPrefix}{" "}
+						<Pressable
+							onPress={() => router.push("/(consumer)/profile/terms")}
+							accessibilityRole="link"
+							hitSlop={6}
+						>
+							<AppText
+								variant="caption"
+								style={[styles.termsLink, { color: colors.primary }]}
+							>
+								{strings.checkout.termsLink}
+							</AppText>
+						</Pressable>
+					</AppText>
+					<AppText
+						variant="caption"
+						weight="semiBold"
+						style={[styles.termsTitle, { color: colors.mutedForeground }]}
+					>
+						{strings.checkout.termsRulesTitle}
+					</AppText>
+					{termsRules.map((rule) => (
+						<AppText
+							key={rule}
+							variant="caption"
+							style={{ color: colors.mutedForeground }}
+						>
+							{`· ${rule}`}
+						</AppText>
+					))}
+				</View>
 			</View>
 		</Screen>
 	);
+}
+
+/**
+ * Por qué no se puede confirmar, o `null` si sí se puede. Mismo criterio que
+ * `OfferBottomBar`: el botón cambia de etiqueta y la razón se escribe, en vez
+ * de dejar un control muerto sin explicación.
+ */
+function unavailableCopy(detail: OfferDetail): string | null {
+	if (isOfferAvailable(detail)) return null;
+	if (isOfferOutOfStock(detail)) return strings.checkout.reasonSoldOut;
+	if (isOfferExpired(detail)) return strings.checkout.reasonWindowClosed;
+	return strings.checkout.reasonPaused;
 }
 
 const styles = StyleSheet.create({
@@ -185,5 +275,8 @@ const styles = StyleSheet.create({
 		alignItems: "baseline",
 		justifyContent: "space-between",
 	},
-	termsNote: { textAlign: "center" },
+	unavailable: { textAlign: "center" },
+	terms: { gap: 2, marginTop: spacing.xs },
+	termsLink: { fontWeight: "700" },
+	termsTitle: { marginTop: spacing.xs },
 });

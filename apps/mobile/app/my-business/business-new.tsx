@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
 import { strings } from "@/src/core/i18n/strings";
-import { ErrorState, Screen, ScreenHeader } from "@/src/core/ui";
+import { ErrorState, LoadingView, Screen, ScreenHeader } from "@/src/core/ui";
 import { spacing } from "@/src/core/theme/spacing";
 import { useAuthStore } from "@/src/features/auth/store";
 import { useBusinesses, useCreateBusiness } from "@/src/features/business/hooks";
@@ -44,7 +44,10 @@ export default function BusinessNewScreen() {
 		);
 	}
 
-	if (hasBusiness) return null;
+	// Guard de navegación: ya tiene negocio, el `useEffect` de arriba lo manda
+	// al panel. Antes devolvía `null` mientras la navegación se aplicaba — un
+	// frame en blanco. LoadingView mantiene la espera visible.
+	if (hasBusiness) return <LoadingView />;
 
 	return (
 		<Screen scroll keyboardShouldPersistTaps="handled">

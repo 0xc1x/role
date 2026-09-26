@@ -1,6 +1,7 @@
 import { supabase } from "@/src/core/supabase/client";
 import { env } from "@/src/core/config/env";
-import { Errors } from "@/src/core/error/app-error";
+import { AppError, Errors, type ErrorKind } from "@/src/core/error/app-error";
+import { strings } from "@/src/core/i18n/strings";
 
 import type { UserProfile } from "../domain/user";
 import { parseRole } from "../domain/user";
@@ -45,10 +46,7 @@ export const authRepository = {
 		});
 		if (error) throw mapAuthError(error);
 		const user = data.user;
-		if (!user)
-			throw Errors.unauthorized(
-				"No se pudo iniciar sesión con esas credenciales",
-			);
+		if (!user) throw Errors.unauthorized(strings.auth.noUserOnLogin);
 		// Role must come from the DB row, not signup metadata (it can change).
 		return enrichProfile(profileFromUser(user));
 	},
@@ -73,7 +71,7 @@ export const authRepository = {
 		});
 		if (error) throw mapAuthError(error);
 		const user = data.user;
-		if (!user) throw Errors.validation("No se pudo crear la cuenta");
+		if (!user) throw Errors.validation(strings.auth.signupFailed);
 
 		const hasActiveSession = data.session != null;
 		if (hasActiveSession && input.analyticsConsentGranted) {
@@ -177,25 +175,92 @@ export async function syncAnalyticsConsent(userId: string): Promise<void> {
 	await authRepository.setAnalyticsConsent(userId, true);
 }
 
-function mapAuthError(error: { message: string }): Error {
+/**
+ * Traduce los errores de Supabase Auth a la taxonomía de la app.
+ *
+ * Misma precedencia que `toAppError` (core/error/mapper): el copy es-ES del
+ * catálogo es SIEMPRE lo que ve el usuario, y el mensaje crudo del driver
+ * (inglés, y a veces con nombres de provider) viaja solo en `context` para
+ * logs y Sentry. Antes el `default` era `Errors.unknown(error.message)`, así
+ * que todo lo no listado —rate limits, contraseñas débiles, formato de
+ * correo, errores de SMS— se renderizaba en inglés en login y signup.
+ */
+export function mapAuthError(error: { message: string }): AppError {
 	const message = error.message.toLowerCase();
+	// El orden importa: los mensajes de GoTrue se solapan ("Email rate limit
+	// exceeded" también contiene "limit"; "Password should be at least 8
+	// characters" no, pero "weak password" sí cae en su propia clase).
+	if (
+		/rate limit|too many requests|security purposes|over_request_rate_limit|over_email_send_rate_limit/.test(
+			message,
+		)
+	) {
+		return authError("validation", strings.auth.errorRateLimited, error);
+	}
+	if (/password.*(too weak|is too weak|is weak)|weak password/.test(message)) {
+		return authError("validation", strings.auth.errorPasswordTooWeak, error);
+	}
+	if (/password should be at least|at least \d+ characters/.test(message)) {
+		return authError("validation", strings.auth.passwordMinError, error);
+	}
+	if (
+		/should be different from the previous password|new password should be different/.test(
+			message,
+		)
+	) {
+		return authError("validation", strings.auth.errorPasswordReused, error);
+	}
+	if (/sms/.test(message)) {
+		return authError("validation", strings.auth.errorSmsUnavailable, error);
+	}
+	if (/totp|mfa|authenticator app/.test(message)) {
+		return authError("validation", strings.auth.errorTOTPUnavailable, error);
+	}
+	if (
+		/unable to validate email|email_invalid|invalid email|email address .* invalid|email format/.test(
+			message,
+		)
+	) {
+		return authError(
+			"validation",
+			strings.auth.errorEmailFormatRejected,
+			error,
+		);
+	}
 	if (/invalid login credentials|invalid credentials/.test(message)) {
-		return Errors.unauthorized("Correo o contraseña inválidos");
+		return authError("unauthorized", strings.auth.invalidCredentials, error);
 	}
 	if (/email not confirmed/.test(message)) {
-		return Errors.unauthorized(
-			"Debes confirmar tu correo antes de iniciar sesión",
-		);
+		return authError("unauthorized", strings.auth.emailUnconfirmed, error);
 	}
 	if (
 		/already registered|already been registered|user already registered/.test(
 			message,
 		)
 	) {
-		return Errors.conflict("Ese correo ya está registrado");
+		return authError("conflict", strings.auth.emailAlreadyRegistered, error);
 	}
-	if (/session.*expired/.test(message)) {
-		return Errors.unauthorized("Tu sesión expiró. Inicia sesión de nuevo.");
+	if (
+		/session.*expired|refresh token not found|refresh_token_not_found/.test(
+			message,
+		)
+	) {
+		// `refresh token not found` es la otra mitad de la misma realidad: el
+		// refresh token guardado ya no existe, así que hay que volver a
+		// entrar. Sin esto caía en el genérico y el usuario no sabía qué hacer.
+		return authError("unauthorized", strings.auth.sessionExpired, error);
 	}
-	return Errors.unknown(error.message);
+	// Ningún patrón conocido: copy genérico en español, nunca el driver.
+	return authError("unknown", strings.auth.errorUnexpected, error);
+}
+
+/** AppError con el copy del catálogo y el mensaje crudo solo como diagnóstico. */
+function authError(
+	kind: ErrorKind,
+	message: string,
+	driver: { message: string },
+): AppError {
+	return new AppError(kind, message, "AUTH_ERROR", {
+		driverMessage: driver.message,
+	});
 }

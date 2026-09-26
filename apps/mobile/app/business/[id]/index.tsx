@@ -3,7 +3,13 @@ import { memo, useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, ErrorState, Screen } from "@/src/core/ui";
+import {
+	AppText,
+	EmptyState,
+	ErrorState,
+	goBackOr,
+	Screen,
+} from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessProfile } from "@/src/features/business/hooks";
 import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
@@ -11,6 +17,7 @@ import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { Card } from "@/components/ui/card";
 import { CardPressable } from "@/components/ui/card-presable";
+import { Button } from "@/components/ui/button";
 
 export default function BusinessHubScreen() {
 	const { colors } = useTheme();
@@ -51,7 +58,24 @@ export default function BusinessHubScreen() {
 	}
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!profile) return null;
+	// No es un estado de carga: la query resolvió sin datos (el negocio no
+	// existe o ya no es visible para este usuario). Decirlo, no pintar `null`.
+	if (!profile)
+		return (
+			<Screen>
+				<EmptyState
+					title={strings.businessProfile.notFoundTitle}
+					message={strings.businessProfile.notFoundBody}
+					action={
+						<Button
+							onPress={() => goBackOr("/(business)/management")}
+						>
+							{strings.businessProfile.backHome}
+						</Button>
+					}
+				/>
+			</Screen>
+		);
 
 	const business = profile.business;
 	const menu = [
@@ -120,7 +144,7 @@ export default function BusinessHubScreen() {
 						variant="bodySmall"
 						style={{ color: colors.mutedForeground }}
 					>
-						{profile.address ?? "Sin dirección registrada"}
+						{profile.address ?? strings.business.noAddress}
 					</AppText>
 				</Card>
 

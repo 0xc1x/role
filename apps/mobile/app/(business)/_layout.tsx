@@ -10,6 +10,7 @@ import { useAuthStore } from "@/src/features/auth/store";
 import { strings } from "@/src/core/i18n/strings";
 import { useTheme } from "@/src/core/theme";
 import Navbar from "@/src/core/ui/Navbar";
+import { LoadingView } from "@/src/core/ui";
 import {
 	useTabBarStore,
 	setTabBarProps,
@@ -43,9 +44,13 @@ export default function BusinessLayout() {
 	const { status, profile, initialized } = useAuthStore();
 	const { colors } = useTheme();
 
-	if (status === "loading" || !initialized) return null;
+	// Misma razón que en el layout consumer: la splash raíz se retira a los 6s
+	// aunque la sesión no haya resuelto, y un `null` aquí se leía como pantalla
+	// en blanco sin barra de navegación.
+	if (status === "loading" || !initialized) return <LoadingView />;
 	const isBusiness = profile?.role === "business" || profile?.role === "admin";
 
+	// Guard de navegación, no estado de carga: aquí SÍ se redirige.
 	if (!isBusiness) {
 		return <Redirect href="/" />;
 	}

@@ -2,7 +2,14 @@ import { useEffect } from "react";
 import { useRouter } from "expo-router";
 import { useAuthStore } from "@/src/features/auth/store";
 import { useOnboardingState } from "@/src/features/onboarding";
+import { LoadingView } from "@/src/core/ui";
 
+/**
+ * Gate de arranque: único dueño de la decisión "a dónde va este viewer".
+ * El launcher entra por aquí y también el signup (que publica el perfil en el
+ * store y luego navega a "/"), de modo que un cliente que se registra pasa por
+ * el mismo gate rol-aware que un invitado que abre la app por primera vez.
+ */
 export default function IndexRedirect() {
 	const router = useRouter();
 	const { status, profile, initialized } = useAuthStore();
@@ -40,5 +47,8 @@ export default function IndexRedirect() {
 		router.replace("/(consumer)");
 	}, [status, profile, initialized, resolved, showOnboarding, router]);
 
-	return null;
+	// Gate de redirección, pero la espera es real: la splash raíz tiene un
+	// timeout de 6s y, si la sesión o el storage no resuelven, `null` dejaba al
+	// usuario en una pantalla completamente vacía y sin navegación.
+	return <LoadingView />;
 }

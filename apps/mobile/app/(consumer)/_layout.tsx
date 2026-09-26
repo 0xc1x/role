@@ -10,6 +10,7 @@ import { useAuthStore } from "@/src/features/auth/store";
 import { strings } from "@/src/core/i18n/strings";
 import { useTheme } from "@/src/core/theme";
 import Navbar from "@/src/core/ui/Navbar";
+import { LoadingView } from "@/src/core/ui";
 import {
 	useTabBarStore,
 	setTabBarProps,
@@ -46,7 +47,11 @@ export default function ConsumerLayout() {
 	const status = useAuthStore((s) => s.status);
 	const { colors } = useTheme();
 
-	if (status === "loading") return null;
+	// `null` aquí no era un estado transitorio invisible: la splash raíz tiene
+	// un timeout de 6s, así que si la sesión se cuelga el usuario se queda
+	// con una pantalla en blanco Y sin la Navbar (esta layout es su única
+	// Dueña). LoadingView mantiene la misma espera sin quitarle la navegación.
+	if (status === "loading") return <LoadingView />;
 
 	return (
 		<View style={{ flex: 1 }}>

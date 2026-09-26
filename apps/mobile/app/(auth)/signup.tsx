@@ -20,6 +20,7 @@ import { AuthScreenShell } from "@/src/features/auth/presentation/AuthScreenShel
 import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/src/features/auth/data/repository";
 import { validateSignupForm } from "@/src/features/auth/domain/validation";
+import { useAuthStore } from "@/src/features/auth/store";
 import { Button } from "@/components/ui/button";
 
 const BENEFITS = [
@@ -71,7 +72,17 @@ export default function SignupScreen() {
 				router.replace("/login");
 				return;
 			}
-			router.replace("/(consumer)");
+			// El perfil se publica ANTES de navegar (igual que en login): el
+			// gate de `app/index.tsx` lee el store para resolver rol, audiencia
+			// de onboarding y ámbito de la marca vista. Sin esto leería `guest`
+			// y mandaría al home sin mostrarle el onboarding a quien se acaba
+			// de registrar.
+			if (result.profile) {
+				useAuthStore.getState().setProfile(result.profile);
+			}
+			// "/" es el gate de arranque, no un destino fijo: reutiliza la
+			// lógica rol-aware que ya existe en vez de duplicarla aquí.
+			router.replace("/");
 		} catch (e) {
 			toast.error(toAppError(e, strings.auth.signupFailed).message);
 		} finally {

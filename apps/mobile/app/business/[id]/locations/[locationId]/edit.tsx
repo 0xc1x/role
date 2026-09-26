@@ -4,6 +4,7 @@ import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import {
+	EmptyState,
 	ErrorState,
 	goBackOr,
 	LoadingView,
@@ -32,7 +33,21 @@ export default function BusinessLocationEditScreen() {
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!location) return null;
+	// Resolvió sin datos: no hay formulario que editar. Decirlo con la acción
+	// de vuelta mantiene la pantalla usable en vez de dejar un `null`.
+	if (!location)
+		return (
+			<Screen>
+				<ScreenHeader
+					title={strings.business.locationNotFoundTitle}
+					fallback={`/business/${businessId}/locations`}
+				/>
+				<EmptyState
+					title={strings.business.locationNotFoundTitle}
+					message={strings.business.locationNotFoundBody}
+				/>
+			</Screen>
+		);
 
 	const save = (values: LocationFormValues) => {
 		setSubmitting(true);

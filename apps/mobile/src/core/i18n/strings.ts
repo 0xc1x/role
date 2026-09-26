@@ -41,6 +41,7 @@ export const strings = {
 		clear: "Limpiar",
 		clearSearch: "Limpiar búsqueda",
 		removeFilter: "Quitar filtro: {label}",
+		loadingMore: "Cargando más…",
 	},
 	auth: {
 		login: "Iniciar sesión",
@@ -61,12 +62,18 @@ export const strings = {
 		loginSuccess: "Sesión iniciada",
 		signupSuccess: "Cuenta creada",
 		emailUnconfirmed: "Debes confirmar tu correo antes de iniciar sesión",
+		emailAlreadyRegistered: "Ese correo ya está registrado",
+		sessionExpired: "Tu sesión expiró. Inicia sesión de nuevo.",
 		invalidCredentials: "Correo o contraseña inválidos",
+		noUserOnLogin: "No se pudo iniciar sesión con esas credenciales",
 		passwordResetSent: "Te enviamos un correo para recuperar tu contraseña",
 		passwordUpdated: "Contraseña actualizada",
 		resetLinkInvalid:
 			'El enlace no es válido o expiró. Solicita uno nuevo desde "¿Olvidaste tu contraseña?".',
-		passwordMinLength: "La contraseña debe tener al menos 6 caracteres",
+		// El piso real vive en `PASSWORD_MIN_LENGTH` (auth/domain/validation).
+		// Estas dos son el mismo número y nunca deben divergir de ese 8.
+		passwordMinHint: "Mínimo 8 caracteres",
+		passwordMinError: "Mínimo 8 caracteres",
 		passwordsMismatch: "Las contraseñas no coinciden",
 		signOut: "Cerrar sesión",
 		signOutConfirm: "¿Seguro que quieres cerrar sesión?",
@@ -82,8 +89,6 @@ export const strings = {
 		invalidEmail: "Correo inválido",
 		requiredPassword: "Ingresa tu contraseña",
 		requiredName: "Ingresa tu nombre",
-		passwordMinHint: "Mínimo 8 caracteres",
-		passwordMinError: "Mínimo 8 caracteres",
 		termsRequired: "Debes aceptar los términos y condiciones",
 		termsConsentPrefix: "Acepto los ",
 		termsConsentLink: "Términos y Condiciones",
@@ -100,6 +105,22 @@ export const strings = {
 		resetSendFailed: "No pudimos enviar el correo.",
 		loginFailed: "No pudimos iniciar sesión. Intenta de nuevo.",
 		signupFailed: "No pudimos crear tu cuenta. Intenta de nuevo.",
+		// ── Clases de fallo de Supabase Auth ──────────────────────────
+		// Cada patrón del driver tiene su copy es-ES. El texto crudo va solo a
+		// `context` (diagnóstico); nunca llega a la pantalla.
+		errorRateLimited:
+			"Demasiados intentos. Espera unos minutos antes de volver a intentarlo.",
+		errorPasswordTooWeak:
+			"Esa contraseña es demasiado débil. Combina letras, números y símbolos.",
+		errorPasswordReused:
+			"La nueva contraseña debe ser distinta de la anterior.",
+		errorEmailFormatRejected:
+			"Ese correo no tiene un formato válido. Revísalo e inténtalo de nuevo.",
+		errorSmsUnavailable:
+			"No pudimos verificar tu teléfono por SMS. Inténtalo más tarde.",
+		errorTOTPUnavailable:
+			"No pudimos verificar el código de tu aplicación de autenticación.",
+		errorUnexpected: "Algo salió mal con tu cuenta. Inténtalo de nuevo.",
 		completeFields: "Completa todos los campos y verifica la contraseña",
 		accountCreatedConfirmation:
 			"Cuenta creada. Revisa tu correo para confirmar el registro.",
@@ -107,6 +128,12 @@ export const strings = {
 		orSignupWith: "o regístrate con",
 		google: "Google",
 		apple: "Apple",
+		// Los proveedores sociales son una decisión de producto (docs/decisions)
+		// pero el flujo no está conectado: se anuncia como no disponible en vez
+		// de pintar dos botones que parecen vivos y no hacen nada.
+		socialUnavailableLabel: "Próximamente",
+		socialUnavailableBody:
+			"El acceso con Google y Apple todavía no está disponible. Usa tu correo y contraseña.",
 		noAccount: "¿No tienes una cuenta?",
 		signupFree: "Regístrate gratis",
 		haveAccount: "¿Ya tienes una cuenta?",
@@ -211,6 +238,7 @@ export const strings = {
 		loginRequiredBody:
 			"Inicia sesión para visualizar las ofertas disponibles cerca de tu ubicación seleccionada.",
 		loginCTA: "Iniciar sesión",
+		mapNativeOnly: "El mapa está disponible solo en iOS y Android.",
 	},
 	allOffers: {
 		title: "Todas las ofertas",
@@ -221,6 +249,7 @@ export const strings = {
 		clear: "Limpiar",
 		noResultsTitle: "No se encontraron ofertas",
 		noResultsBody: "Intenta cambiar los filtros o la búsqueda",
+		noMore: "No hay más ofertas",
 		category: "Categoría",
 		maxPrice: "Precio máximo",
 		maxDistance: "Distancia máxima",
@@ -233,6 +262,7 @@ export const strings = {
 		all: "Todos",
 		noResultsTitle: "No se encontraron negocios",
 		noResultsBody: "Intenta cambiar los filtros o la búsqueda",
+		noMore: "No hay más negocios",
 	},
 	offers: {
 		discount: "Descuento",
@@ -327,6 +357,12 @@ export const strings = {
 			"Muestra este código (o el QR en tu pedido) al recoger tu comida.",
 		reviewOrder: "Revisar y confirmar",
 		confirm: "Confirmar reserva",
+		// El botón de confirmar cambia de etiqueta en vez de morir en silencio,
+		// y la razón se escribe justo debajo (mismo criterio que OfferBottomBar).
+		confirmUnavailable: "No se puede reservar",
+		reasonSoldOut: "Esta oferta se agotó mientras la mirabas.",
+		reasonWindowClosed: "La ventana de recogida de esta oferta ya terminó.",
+		reasonPaused: "El negocio pausó esta oferta. Busca otra disponible.",
 		processing: "Procesando…",
 		paymentMethods: "Medios de pago",
 		paymentMethodTitle: "Método de pago",
@@ -334,7 +370,20 @@ export const strings = {
 		pickupDetailsTitle: "Detalles de recogida",
 		pickupAddressLabel: "Dirección del local",
 		pickupWindow: "{day} de {start} a {end}",
-		termsNote: "Términos y condiciones aplicados.",
+		// ── Reglas del commitment (M16) ───────────────────────────────
+		// La línea de 11px que decía "términos aplicados" sin términos deja de
+		// ser una afirmación legal que la app no puede cumplir: pasa a un
+		// resumen accionable + enlace a la ruta legal real. Los números que
+		// viven en `app_config` se interpolan; ninguno está en el copy.
+		termsPrefix: "Al reservar aceptas nuestros",
+		termsLink: "términos y condiciones",
+		termsRulesTitle: "Antes de reservar, ten en cuenta:",
+		termsRules: [
+			"Puedes cancelar sin costo hasta {minutes} minutos después de reservar.",
+			"Cancelas gratis hasta {max7d} veces en 7 días y {max30d} veces en 30 días.",
+			"Recoge dentro de la ventana indicada ({window}). Pasada la ventana, la reserva se libera.",
+			"El pago se realiza en el local al recoger; la app no cobra.",
+		],
 		reservationError: "No pudimos confirmar tu reserva. Inténtalo de nuevo.",
 		reservationSuccessTitle: "¡Reserva Confirmada!",
 		reservationSuccessMessage: "Tu comida ha sido salvada con éxito",
@@ -677,6 +726,15 @@ export const strings = {
 		profile: "Perfil",
 		editProfile: "Editar negocio",
 		noDescription: "Sin descripción registrada",
+		noAddress: "Sin dirección registrada",
+		// ── "Cargó sin datos": no es un redirect, es un registro que ya no
+		// existe. Decirlo en vez de pintar un `null` (pantalla en blanco).
+		locationNotFoundTitle: "Local no encontrado",
+		locationNotFoundBody: "Esta sucursal ya no está disponible.",
+		couponNotFoundTitle: "Cupón no encontrado",
+		couponNotFoundBody: "Este cupón ya no está disponible.",
+		payoutNotFoundTitle: "Transferencia no encontrada",
+		payoutNotFoundBody: "Esta transferencia ya no está disponible.",
 		switchBusiness: "Cambiar de negocio",
 		noBusiness: "No tienes negocios registrados",
 		createBusiness: "Registrar negocio",
@@ -1461,6 +1519,14 @@ export const strings = {
 			"Gestiona tus sucursales desde Mis Locales; cada una tiene productos, horarios y pedidos propios.",
 		helpMailSubject: "Contacto - Soporte de negocio",
 	},
+	// Copy del panel multi-negocio (app/my-business/*). Antes vivía como
+	// literales en la pantalla, fuera del catálogo.
+	myBusiness: {
+		dashboardTitle: "Panel de negocio",
+		newBusiness: "Nuevo negocio",
+		emptyTitle: "Aún no tienes negocios",
+		emptyBody: "Registra tu negocio para empezar a vender excedentes.",
+	},
 	helpCenter: {
 		title: "Centro de ayuda",
 		searchHint: "Buscar en ayuda…",
@@ -1889,6 +1955,19 @@ export const strings = {
 			cycleBody:
 				"Publica tu excedente en minutos, recibe los pedidos en la app y entrégalos validando el código QR del cliente dentro de su ventana de recogida.",
 			panelTitle: "Tu negocio en tres pestañas",
+		},
+	},
+	// ── Sonda de diagnóstico de Google Maps (src/dev/) ────────────
+	// No es una ruta: vive fuera de `app/` para que no entre en el router.
+	// Su copy vive aquí igual para respetar el contrato de i18n.
+	dev: {
+		mapDiagnostic: {
+			title: "Diagnóstico de Google Maps — Ciudad de México",
+			back: "Volver a la pantalla anterior",
+			callbackState: "onMapReady: {ready} · onMapLoaded: {loaded}",
+			callbackNote:
+				"Son señales de callbacks; no prueban que se hayan descargado los mosaicos del mapa.",
+			nativeOnly: "El mapa está disponible solo en iOS y Android.",
 		},
 	},
 } as const;

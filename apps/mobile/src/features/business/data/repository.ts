@@ -10,6 +10,7 @@ import type {
 import { File } from "expo-file-system";
 
 import { supabase } from "@/src/core/supabase/client";
+import { MONTHS_FULL_CAP_ES, MONTHS_SHORT_ES } from "@/src/core/i18n/dates";
 import { strings } from "@/src/core/i18n/strings";
 import { toAppError } from "@/src/core/error/mapper";
 import { AppError, Errors } from "@/src/core/error/app-error";
@@ -91,35 +92,6 @@ const DAY_TO_DB: Record<string, string> = {
 	sabado: "saturday",
 	domingo: "sunday",
 };
-
-const MONTHS_SHORT = [
-	"ene",
-	"feb",
-	"mar",
-	"abr",
-	"may",
-	"jun",
-	"jul",
-	"ago",
-	"sep",
-	"oct",
-	"nov",
-	"dic",
-];
-const MONTHS_FULL = [
-	"Enero",
-	"Febrero",
-	"Marzo",
-	"Abril",
-	"Mayo",
-	"Junio",
-	"Julio",
-	"Agosto",
-	"Septiembre",
-	"Octubre",
-	"Noviembre",
-	"Diciembre",
-];
 
 type Row = Record<string, unknown>;
 
@@ -1097,12 +1069,12 @@ function bucketLabel(key: string, agg: Aggregation): string {
 		const saturday = new Date(monday.getTime() + 6 * 86400000);
 		if (monday.getUTCFullYear() !== y) return `Sem ${weekNum}`;
 		if (monday.getUTCMonth() === saturday.getUTCMonth()) {
-			return `${monday.getUTCDate()}–${saturday.getUTCDate()} ${MONTHS_SHORT[monday.getUTCMonth()]}`;
+			return `${monday.getUTCDate()}–${saturday.getUTCDate()} ${MONTHS_SHORT_ES[monday.getUTCMonth()]}`;
 		}
-		return `${monday.getUTCDate()} ${MONTHS_SHORT[monday.getUTCMonth()]} – ${saturday.getUTCDate()} ${MONTHS_SHORT[saturday.getUTCMonth()]}`;
+		return `${monday.getUTCDate()} ${MONTHS_SHORT_ES[monday.getUTCMonth()]} – ${saturday.getUTCDate()} ${MONTHS_SHORT_ES[saturday.getUTCMonth()]}`;
 	}
 	const [, m] = key.split("-");
-	return MONTHS_FULL[Number(m) - 1] ?? key;
+	return MONTHS_FULL_CAP_ES[Number(m) - 1] ?? key;
 }
 
 /**
@@ -1253,7 +1225,7 @@ function formatMemberSince(createdAt: string | null): string | null {
 	if (!createdAt) return null;
 	const date = new Date(createdAt);
 	if (Number.isNaN(date.getTime())) return null;
-	return `${MONTHS_FULL[date.getMonth()]} ${date.getFullYear()}`;
+	return `${MONTHS_FULL_CAP_ES[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function toRows(data: unknown): Row[] {

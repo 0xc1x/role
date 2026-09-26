@@ -71,8 +71,8 @@ export default function BusinessOffersScreen() {
 			</View>
 		{items.length === 0 ? (
 			<EmptyState
-				title="Sin productos aún"
-				message="Publica tu primer excedente de comida."
+				title={strings.business.noProductsTitle}
+				message={strings.business.noProductsBody}
 			/>
 		) : (
 			<FlatList

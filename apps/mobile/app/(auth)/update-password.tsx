@@ -6,6 +6,7 @@ import { toast } from "sonner-native";
 import { strings } from "@/src/core/i18n/strings";
 import { AppText, Screen, TextField } from "@/src/core/ui";
 import { authRepository } from "@/src/features/auth/data/repository";
+import { PASSWORD_MIN_LENGTH } from "@/src/features/auth/domain/validation";
 import { useAuthStore } from "@/src/features/auth/store";
 import { performSignOut } from "@/src/features/auth/sign-out";
 import { toAppError } from "@/src/core/error/mapper";
@@ -13,8 +14,6 @@ import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
-
-const MIN_PASSWORD_LENGTH = 6;
 
 export default function UpdatePasswordScreen() {
 	const { colors } = useTheme();
@@ -37,8 +36,11 @@ export default function UpdatePasswordScreen() {
 	const handleUpdate = async () => {
 		if (loading) return;
 		setError(null);
-		if (password.length < MIN_PASSWORD_LENGTH) {
-			setError(strings.auth.passwordMinLength);
+		// El piso es el del dominio (compartido con signup), no una constante
+		// local: antes esta pantalla aceptaba 6 caracteres mientras el registro
+		// exigía 8, y el catálogo anunciaba los dos números.
+		if (password.length < PASSWORD_MIN_LENGTH) {
+			setError(strings.auth.passwordMinError);
 			return;
 		}
 		if (password !== confirm) {

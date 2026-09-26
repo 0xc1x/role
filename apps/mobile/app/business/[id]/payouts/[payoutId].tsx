@@ -4,7 +4,12 @@ import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import {
+	MONTHS_FULL_CAP_ES,
+	MONTHS_SHORT_ES,
+} from "@/src/core/i18n/dates";
+import {
 	AppText,
+	EmptyState,
 	ErrorState,
 	LoadingView,
 	Screen,
@@ -41,7 +46,20 @@ export default function BusinessPayoutDetailScreen() {
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!payout) return null;
+	// Resolvió sin datos: la transferencia no existe para este negocio.
+	if (!payout)
+		return (
+			<Screen>
+				<ScreenHeader
+					title={strings.business.payoutNotFoundTitle}
+					fallback="/(business)/management"
+				/>
+				<EmptyState
+					title={strings.business.payoutNotFoundTitle}
+					message={strings.business.payoutNotFoundBody}
+				/>
+			</Screen>
+		);
 
 	const taxes = payout.gross_amount - payout.platform_fee - payout.net_amount;
 
@@ -191,21 +209,13 @@ function periodLabel(payout: Payout): string {
 	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
 		return `${payout.period_start} – ${payout.period_end}`;
 	}
-	const months = [
-		"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-		"Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-	];
-	return `${months[start.getMonth()]} ${start.getDate()}-${end.getDate()}, ${start.getFullYear()}`;
+	return `${MONTHS_FULL_CAP_ES[start.getMonth()]} ${start.getDate()}-${end.getDate()}, ${start.getFullYear()}`;
 }
 
 function formatPaidAt(iso: string): string {
 	const date = new Date(iso);
 	if (Number.isNaN(date.getTime())) return "—";
-	const months = [
-		"ene", "feb", "mar", "abr", "may", "jun",
-		"jul", "ago", "sep", "oct", "nov", "dic",
-	];
-	return `${date.getDate()} de ${months[date.getMonth()]}. de ${date.getFullYear()}`;
+	return `${date.getDate()} de ${MONTHS_SHORT_ES[date.getMonth()]}. de ${date.getFullYear()}`;
 }
 
 const styles = StyleSheet.create({

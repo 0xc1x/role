@@ -18,7 +18,6 @@ import { useTheme } from "@/src/core/theme";
 import { radii, spacing } from "@/src/core/theme/spacing";
 import { SignOutSection } from "@/src/features/auth/presentation/SignOutSection";
 import { Card } from "@/components/ui/card";
-import { color } from "bun";
 
 interface SettingsItem {
 	icon: LucideIcon;

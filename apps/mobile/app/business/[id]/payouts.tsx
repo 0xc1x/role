@@ -11,6 +11,7 @@ import {
 } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
+import { MONTHS_SHORT_ES } from "@/src/core/i18n/dates";
 import {
 	AppText,
 	EmptyState,
@@ -322,11 +323,7 @@ function periodLabel(payout: Payout): string {
 	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
 		return `${payout.period_start} - ${payout.period_end}`;
 	}
-	const months = [
-		"ene", "feb", "mar", "abr", "may", "jun",
-		"jul", "ago", "sep", "oct", "nov", "dic",
-	];
-	return `${months[start.getMonth()]} ${start.getDate()} – ${end.getDate()}, ${start.getFullYear()}`;
+	return `${MONTHS_SHORT_ES[start.getMonth()]} ${start.getDate()} – ${end.getDate()}, ${start.getFullYear()}`;
 }
 
 const styles = StyleSheet.create({

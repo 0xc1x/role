@@ -5,6 +5,7 @@ import { StyleSheet, View } from "react-native";
 import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
+	EmptyState,
 	ErrorState,
 	Screen,
 	ScreenHeader,
@@ -44,7 +45,20 @@ export default function BusinessLocationDetailScreen() {
 	}
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!location) return null;
+	// Resolvió sin datos: la sucursal no existe (o el usuario ya no la ve).
+	if (!location)
+		return (
+			<Screen>
+				<ScreenHeader
+					title={strings.business.locationNotFoundTitle}
+					fallback={`/business/${id}/locations`}
+				/>
+				<EmptyState
+					title={strings.business.locationNotFoundTitle}
+					message={strings.business.locationNotFoundBody}
+				/>
+			</Screen>
+		);
 
 	return (
 		<Screen scroll contentContainerStyle={styles.container}>

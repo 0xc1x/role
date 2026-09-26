@@ -11,6 +11,7 @@ import { Platform, Pressable, StyleSheet, View } from "react-native";
 import type { Coupon, CouponType } from "@0xc1x/role-commons";
 
 import { strings } from "@/src/core/i18n/strings";
+import { MONTHS_FULL_ES } from "@/src/core/i18n/dates";
 import { Switch } from "@/components/ui/switch";
 import { AppText, TextField } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
@@ -37,21 +38,7 @@ function randomCode(length = 8): string {
 }
 
 function formatLongDate(date: Date): string {
-	const months = [
-		"enero",
-		"febrero",
-		"marzo",
-		"abril",
-		"mayo",
-		"junio",
-		"julio",
-		"agosto",
-		"septiembre",
-		"octubre",
-		"noviembre",
-		"diciembre",
-	];
-	return `${date.getDate()} de ${months[date.getMonth()]} de ${date.getFullYear()}`;
+	return `${date.getDate()} de ${MONTHS_FULL_ES[date.getMonth()]} de ${date.getFullYear()}`;
 }
 
 export interface CouponFormValues {

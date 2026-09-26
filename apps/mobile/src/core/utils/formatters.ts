@@ -1,3 +1,5 @@
+import { DAYS_SHORT_ES, MONTHS_SHORT_ES } from "@/src/core/i18n/dates";
+
 const mxnWhole = new Intl.NumberFormat("es-MX", {
 	style: "currency",
 	currency: "MXN",
@@ -29,22 +31,6 @@ export function formatTime(iso: string): string {
 	return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-const DAYS_SHORT = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
-const MONTHS_SHORT = [
-	"ene",
-	"feb",
-	"mar",
-	"abr",
-	"may",
-	"jun",
-	"jul",
-	"ago",
-	"sep",
-	"oct",
-	"nov",
-	"dic",
-];
-
 /** "hoy", "mañana", or "vie 12 jul". */
 export function formatRelativeDay(iso: string): string {
 	const date = new Date(iso);
@@ -56,21 +42,21 @@ export function formatRelativeDay(iso: string): string {
 	if (diffDays === 0) return "hoy";
 	if (diffDays === 1) return "mañana";
 	if (diffDays === -1) return "ayer";
-	return `${DAYS_SHORT[date.getDay()]} ${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`;
+	return `${DAYS_SHORT_ES[date.getDay()]} ${date.getDate()} ${MONTHS_SHORT_ES[date.getMonth()]}`;
 }
 
 /** "12 de julio, 14:30". */
 export function formatDateTime(iso: string): string {
 	const date = new Date(iso);
 	if (Number.isNaN(date.getTime())) return "—";
-	return `${date.getDate()} de ${MONTHS_SHORT[date.getMonth()]}, ${formatTime(iso)}`;
+	return `${date.getDate()} de ${MONTHS_SHORT_ES[date.getMonth()]}, ${formatTime(iso)}`;
 }
 
 /** "16 ago 2026". */
 export function formatShortDate(iso: string): string {
 	const date = new Date(iso);
 	if (Number.isNaN(date.getTime())) return "—";
-	return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]} ${date.getFullYear()}`;
+	return `${date.getDate()} ${MONTHS_SHORT_ES[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 /** "hace 5 min". */

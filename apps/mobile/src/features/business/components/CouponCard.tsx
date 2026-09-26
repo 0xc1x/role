@@ -28,7 +28,7 @@ import {
 	couponIsExhausted,
 	couponIsValid,
 } from "@/src/features/orders/domain/order";
-import { formatMoney } from "@/src/core/utils/formatters";
+import { formatMoney, formatShortDate } from "@/src/core/utils/formatters";
 import {
 	useDeleteCoupon,
 	useToggleCouponStatus,
@@ -389,26 +389,6 @@ function DetailItem({
 			</View>
 		</View>
 	);
-}
-
-function formatShortDate(iso: string): string {
-	const date = new Date(iso);
-	if (Number.isNaN(date.getTime())) return iso;
-	const months = [
-		"ene",
-		"feb",
-		"mar",
-		"abr",
-		"may",
-		"jun",
-		"jul",
-		"ago",
-		"sep",
-		"oct",
-		"nov",
-		"dic",
-	];
-	return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 const styles = StyleSheet.create({

@@ -4,6 +4,7 @@ import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import {
+	EmptyState,
 	ErrorState,
 	goBackOr,
 	LoadingView,
@@ -32,7 +33,20 @@ export default function BusinessCouponEditScreen() {
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!coupon) return null;
+	// Resolvió sin datos: el cupón ya no existe, no hay nada que editar.
+	if (!coupon)
+		return (
+			<Screen>
+				<ScreenHeader
+					title={strings.business.couponNotFoundTitle}
+					fallback={`/business/${businessId}/coupons`}
+				/>
+				<EmptyState
+					title={strings.business.couponNotFoundTitle}
+					message={strings.business.couponNotFoundBody}
+				/>
+			</Screen>
+		);
 
 	const save = (values: CouponFormValues) => {
 		setSubmitting(true);

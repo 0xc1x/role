@@ -65,7 +65,7 @@ function ListFooter({
 		return (
 			<View style={{ padding: spacing.lg, alignItems: "center" }}>
 				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-					Cargando más…
+					{strings.common.loadingMore}
 				</AppText>
 			</View>
 		);
@@ -74,7 +74,7 @@ function ListFooter({
 	return (
 		<View style={{ padding: spacing.lg, alignItems: "center" }}>
 			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
-				No hay más ofertas
+				{strings.allOffers.noMore}
 			</AppText>
 		</View>
 	);

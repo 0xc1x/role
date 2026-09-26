@@ -55,6 +55,9 @@ mock.module("@/src/core/ui", () => ({
 	FilterChip: empty,
 	SearchBar: empty,
 	EmptyState: empty,
+	// business-new lo usa en su guard de navegación: sin él, el import del
+	// barrel revienta aunque la ruta de este test no lo llegue a renderizar.
+	LoadingView: empty,
 	useWebPullToRefresh: () => ({ ref: undefined, indicator: null }),
 	ErrorState: (props: { error: unknown; onRetry?: () => void }) => {
 		errorStates.push(props);
