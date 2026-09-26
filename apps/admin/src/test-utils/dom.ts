@@ -22,7 +22,7 @@ if (typeof g.requestAnimationFrame !== "function") {
 	g.cancelAnimationFrame = ((id: number) => clearTimeout(id)) as unknown;
 }
 
-export const { render, screen, fireEvent, waitFor, cleanup, renderHook } =
+export const { render, screen, fireEvent, waitFor, cleanup, renderHook, act } =
 	await import("@testing-library/react");
 // jest-dom solo registra matchers globales (sus .d.ts no son un módulo).
 // @ts-expect-error: importación solo por efectos laterales
