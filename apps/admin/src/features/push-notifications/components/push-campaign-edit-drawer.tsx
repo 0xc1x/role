@@ -1,6 +1,5 @@
 import type { CampaignDto, SegmentDto } from "@0xc1x/role-commons";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -18,6 +17,7 @@ import {
 } from "@/features/email/forms/campaign-forms";
 import type { useCampaignMutations } from "@/features/email/queries/emails.queries";
 import { PushCampaignFields } from "@/features/push-notifications/components/push-campaign-fields";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export function PushCampaignEditDrawer(props: {
 	campaign: CampaignDto;
@@ -50,7 +50,7 @@ export function PushCampaignEditDrawer(props: {
 			});
 			props.onClose();
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : "Error inesperado");
+			notifyMutationError(err);
 		}
 	};
 

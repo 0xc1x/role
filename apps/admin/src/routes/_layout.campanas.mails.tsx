@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { toast } from "sonner";
 import { FormDrawer } from "@/components/resource/form-drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CampaignFields } from "@/features/email/components/campaign-fields";
@@ -12,6 +11,7 @@ import {
 	useEmailSegments,
 	useEmailTemplates,
 } from "@/features/email/queries/emails.queries";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export const Route = createFileRoute("/_layout/campanas/mails")({
 	component: CampaignsPage,
@@ -70,19 +70,13 @@ function CampaignsPage() {
 						segments={segments.data?.data ?? []}
 						onSend={() =>
 							mutations.send.mutate(c.id, {
-								onError: (err) =>
-									toast.error(
-										err instanceof Error ? err.message : "Error inesperado",
-									),
+								onError: (err) => notifyMutationError(err),
 							})
 						}
 						onResend={() => mutations.resend.mutate(c)}
 						onCancel={() =>
 							mutations.cancel.mutate(c.id, {
-								onError: (err) =>
-									toast.error(
-										err instanceof Error ? err.message : "Error inesperado",
-									),
+								onError: (err) => notifyMutationError(err),
 							})
 						}
 						onRemove={() => mutations.remove.mutateAsync(c.id)}
@@ -93,10 +87,7 @@ function CampaignsPage() {
 							mutations.test.mutate(
 								{ id: c.id, emails },
 								{
-									onError: (err) =>
-										toast.error(
-											err instanceof Error ? err.message : "Error inesperado",
-										),
+									onError: (err) => notifyMutationError(err),
 								},
 							)
 						}

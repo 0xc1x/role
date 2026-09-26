@@ -113,3 +113,13 @@ describe("detalle del error en el drawer de envío", () => {
 		}
 	});
 });
+
+describe("estado inicial del drawer de envío", () => {
+	test("no muestra un error antes de que la mutación falle", () => {
+		renderForm();
+
+		// `formatApiError(null)` devuelve texto: sin el guard, el drawer abriría
+		// con "Error inesperado" escrito encima del formulario.
+		expect(screen.queryByText("Error inesperado")).toBeNull();
+	});
+});

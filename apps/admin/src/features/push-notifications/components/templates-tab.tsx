@@ -1,7 +1,6 @@
 import type { PushTemplateDto } from "@0xc1x/role-commons";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Loading } from "@/components/loading";
 import { FormDrawer } from "@/components/resource/form-drawer";
 import {
@@ -25,6 +24,7 @@ import {
 	usePushTemplates,
 	usePushTestTemplate,
 } from "@/features/push-notifications/queries/push.queries";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export function TemplatesTab() {
 	const list = usePushTemplates();
@@ -147,9 +147,7 @@ export function TemplatesTab() {
 									await mutations.remove.mutateAsync(deleting.id);
 									setDeleting(null);
 								} catch (err) {
-									toast.error(
-										err instanceof Error ? err.message : "Error inesperado",
-									);
+									notifyMutationError(err);
 								}
 							}}
 						>

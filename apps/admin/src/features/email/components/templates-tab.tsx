@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 import { Loading } from "@/components/loading";
 import { FormDrawer } from "@/components/resource/form-drawer";
 import { Button } from "@/components/ui/button";
@@ -13,6 +12,7 @@ import {
 	usePreview,
 	useTemplateMutations,
 } from "@/features/email/queries/emails.queries";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export function TemplatesTab() {
 	const list = useEmailTemplates();
@@ -66,10 +66,7 @@ export function TemplatesTab() {
 								setPreviewId(null);
 								preview.mutate(t.id, {
 									onSuccess: () => setPreviewId(t.id),
-									onError: (err) =>
-										toast.error(
-											err instanceof Error ? err.message : "Error inesperado",
-										),
+									onError: (err) => notifyMutationError(err),
 								});
 							}}
 						>

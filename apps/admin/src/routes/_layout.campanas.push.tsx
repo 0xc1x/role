@@ -27,6 +27,7 @@ import { PushCampaignFields } from "@/features/push-notifications/components/pus
 import { PushCampaignRowCard } from "@/features/push-notifications/components/push-campaign-row-card";
 import { PushTestDrawer } from "@/features/push-notifications/components/push-test-drawer";
 import { usePushTemplates } from "@/features/push-notifications/queries/push.queries";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export const Route = createFileRoute("/_layout/campanas/push")({
 	component: PushCampaignsPage,
@@ -89,10 +90,7 @@ function PushCampaignsPage() {
 						onResend={() => mutations.resend.mutate(c)}
 						onCancel={() =>
 							mutations.cancel.mutate(c.id, {
-								onError: (err) =>
-									toast.error(
-										err instanceof Error ? err.message : "Error inesperado",
-									),
+								onError: (err) => notifyMutationError(err),
 							})
 						}
 						onTest={() => setTesting(c)}
@@ -152,9 +150,7 @@ function PushCampaignsPage() {
 									);
 									setConfirmSend(null);
 								} catch (err) {
-									toast.error(
-										err instanceof Error ? err.message : "Error inesperado",
-									);
+									notifyMutationError(err);
 								}
 							}}
 							disabled={mutations.send.isPending}

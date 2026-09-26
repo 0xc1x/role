@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -10,6 +9,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export function ConfirmDeleteDialog(props: {
 	open: boolean;
@@ -36,9 +36,7 @@ export function ConfirmDeleteDialog(props: {
 								await props.onRemove();
 								props.onOpenChange(false);
 							} catch (err) {
-								toast.error(
-									err instanceof Error ? err.message : "Error inesperado",
-								);
+								notifyMutationError(err);
 							}
 						}}
 						disabled={props.busy}

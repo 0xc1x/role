@@ -16,7 +16,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { ApiClientError } from "@/lib/api/errors";
+import { formatApiError } from "@/lib/api/notify";
 import { useUpdateEmailSend } from "../queries/email-sends.queries";
 
 /** Campos mutables según el contrato (UpdateEmailSendSchema → PATCH /email-marketing/sends/:id). */
@@ -95,7 +95,15 @@ export function EmailSendForm({
 		},
 	});
 
-	const formError = updateMutation.error;
+	// El error de la mutación YA se renderiza aquí, así que no lleva un
+	// `onError` con toast (serían dos avisos del mismo fallo). Lo que le faltaba
+	// era el `requestId`: sin él, soporte no podía correlacionar un 400 de
+	// validación con la petición en los logs del servidor. El guard es
+	// imprescindible: `formatApiError(null)` devuelve texto, y sin él el drawer
+	// mostraría "Error inesperado" antes de que la mutación falle alguna vez.
+	const formError = updateMutation.error
+		? formatApiError(updateMutation.error)
+		: null;
 
 	return (
 		<form
@@ -107,15 +115,7 @@ export function EmailSendForm({
 			}}
 			className="space-y-4"
 		>
-			{formError && (
-				<p className="text-sm text-destructive">
-					{formError instanceof ApiClientError
-						? formError.message
-						: formError instanceof Error
-							? formError.message
-							: "Error inesperado"}
-				</p>
-			)}
+			{formError && <p className="text-sm text-destructive">{formError}</p>}
 
 			<ReadOnlyInfo send={send} />
 

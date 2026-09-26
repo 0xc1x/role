@@ -38,6 +38,26 @@ describe("formatApiError", () => {
 
 		expect(formatApiError(err)).toBe("fallo local");
 	});
+
+	it("respeta el fallback propio del call site para un throw que no es Error", () => {
+		// El copy bespoke de un call site no puede perderse al adopter el
+		// notifier: solo aplica cuando el throw no trae mensaje.
+		expect(formatApiError({ nope: true }, "Payload inválido")).toBe(
+			"Payload inválido",
+		);
+	});
+
+	it("el fallback propio no pisa el mensaje real de la API", () => {
+		const err = new ApiClientError({
+			status: 400,
+			message: "Validation failed",
+			requestId: "aa11bb22",
+		});
+
+		expect(formatApiError(err, "Payload inválido")).toBe(
+			"Validation failed · aa11bb22",
+		);
+	});
 });
 
 describe("requestId en el error de la API", () => {

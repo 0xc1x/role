@@ -41,6 +41,7 @@ import {
 	usePreview,
 	useTestTemplate,
 } from "@/features/email/queries/emails.queries";
+import { formatApiError, notifyMutationError } from "@/lib/api/notify";
 
 export function CampaignRowCard(props: {
 	campaign: CampaignDto;
@@ -198,9 +199,7 @@ export function CampaignRowCard(props: {
 											});
 											setDrawer(null);
 										} catch (err) {
-											toast.error(
-												err instanceof Error ? err.message : "Error inesperado",
-											);
+											notifyMutationError(err);
 										}
 									}}
 								>
@@ -231,6 +230,10 @@ export function CampaignRowCard(props: {
 								toast.success("Correo de prueba enviado");
 								setDrawer(null);
 							}}
+							// El prop lleva el mensaje ya formateado: `onError`
+							// también reporta el caso sin error de API (nadie pudo
+							// recibir la prueba), así que no puede ser el error
+							// crudo. `formatApiError` le añade el `requestId`.
 							onError={(message) => toast.error(message)}
 						/>
 					</DrawerBody>
@@ -302,7 +305,7 @@ function CampaignDetailBody(props: {
 									: props.onError?.(
 											"Ningún correo pudo enviarse — revisa el remitente en Resend",
 										),
-							onError: (err) => props.onError?.(err.message),
+							onError: (err) => props.onError?.(formatApiError(err)),
 						},
 					)
 				}

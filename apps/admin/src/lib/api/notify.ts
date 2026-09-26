@@ -23,9 +23,20 @@ const UNEXPECTED_ERROR = "Error inesperado";
 /**
  * `<mensaje> · <requestId>` cuando la API dio correlación; solo el mensaje si
  * no la dio (fallo local, 401 sintético o body no-JSON).
+ *
+ * `fallbackMessage` sustituye a `UNEXPECTED_ERROR` cuando el throw no es un
+ * `Error`: modela el `err instanceof Error ? err.message : "…"` que tenían los
+ * call sites que ya traían su propio copy, para que adopting el notifier no
+ * obligue a elegir entre perder el `requestId` o perder el texto.
  */
-export function formatApiError(error: unknown): string {
-	const message = error instanceof Error ? error.message : UNEXPECTED_ERROR;
+export function formatApiError(
+	error: unknown,
+	fallbackMessage?: string,
+): string {
+	const message =
+		error instanceof Error
+			? error.message
+			: (fallbackMessage ?? UNEXPECTED_ERROR);
 	const requestId =
 		error instanceof ApiClientError ? error.requestId : undefined;
 	return requestId ? `${message} · ${requestId}` : message;
@@ -34,6 +45,12 @@ export function formatApiError(error: unknown): string {
 /**
  * Error de mutación → toast. Pura y sin closure: se pasa por referencia a
  * `onError` y vive a nivel de módulo.
+ *
+ * NO lleva un segundo parámetro a propósito: los ~30 call sites la pasan por
+ * referencia (`onError: notifyMutationError`) y React Query invoca ese handler
+ * con `(error, variables, context)`. Un parámetro opcional propio se
+ * solaparía con `variables` y rompería el tipado en cada mutación del panel.
+ * Para el copy bespoke de un call site está `formatApiError`.
  */
 export function notifyMutationError(error: unknown): void {
 	toast.error(formatApiError(error));

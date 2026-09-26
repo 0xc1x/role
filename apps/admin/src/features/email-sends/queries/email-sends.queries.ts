@@ -10,6 +10,7 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
+import { notifyMutationError } from "@/lib/api/notify";
 import { createUseUpdate } from "@/lib/query/resource-helpers";
 import { emailSendsApi } from "../api/email-sends.api";
 import { emailSendsKeys } from "./email-sends.keys";
@@ -41,5 +42,8 @@ export function useRetryEmailSend() {
 			});
 			queryClient.setQueryData(emailSendsKeys.detail(send.id), send);
 		},
+		// Un reintento fallido sin aviso es indistinguible de un reintento que no
+		// se dispara: el operador solo veía que la fila no cambiaba.
+		onError: notifyMutationError,
 	});
 }

@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { IdPicker } from "@/features/email/components/id-picker";
 import type { usePushTestTemplate } from "@/features/push-notifications/queries/push.queries";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export function TemplateTestDrawer(props: {
 	template: PushTemplateDto;
@@ -44,7 +45,7 @@ export function TemplateTestDrawer(props: {
 					: "Nadie recibió la prueba — verifica tokens activos",
 			);
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : "Error inesperado");
+			notifyMutationError(err);
 		}
 	};
 
