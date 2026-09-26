@@ -10,11 +10,21 @@ export function useConfig(key: string, fallback: string): string {
 }
 
 /**
- * Procedencia de las métricas publicadas: respuesta real de la API o
- * degradación. `api` solo cuando hay datos; cualquier otro estado (cargando o
- * fallido) se reporta como `fallback` porque no hay cifras reales que publicar.
+ * Procedencia de las métricas publicadas, en tres estados y no en dos.
+ *
+ * - `api`: hay cifras reales de la respuesta.
+ * - `loading`: la petición todavía no ha resuelto (navegación del lado del
+ *   cliente, o primer render sin caché). No hay datos, pero tampoco hay fallo.
+ * - `failed`: la petición de `/stats/platform` falló.
+ *
+ * POR QUÉ el tercer estado: con solo `api`/`fallback`, cargar se reportaba como
+ * fallo. Con la API lenta, media redirección, o cualquier cliente que aún no
+ * haya pintado, el HTML de un sitio sano llevaba `data-stats-source="fallback"`
+ * — y quien estuviera de guardia no podía distinguir "se degradó" de "todavía
+ * no ha llegado". En el HTML SERVIDO el loader SSR espera, así que ahí solo
+ * aparecen `api` y `failed`: `loading` es un estado exclusive del cliente.
  */
-export type PlatformStatsSource = "api" | "fallback";
+export type PlatformStatsSource = "api" | "loading" | "failed";
 
 export interface PlatformStatsResult {
 	/** Métricas reales; `undefined` mientras carga o si falla la API. */
@@ -31,6 +41,10 @@ export interface PlatformStatsResult {
  * hoy") y un `0` por API caída se confunde con un `0` real. Devolver
  * `undefined` lo hacía indistinguible para siempre; el `source` viaja al markup
  * como `data-stats-source` y en el HTML servido.
+ *
+ * El loader no distingue `loading` porque no existe para él: `await` resuelve o
+ * lanza, nunca "todavía no". Esa es también la garantía de que el HTML servido
+ * nunca lleva `loading`.
  */
 export async function ensurePlatformStats(
 	queryClient: QueryClient,
@@ -39,7 +53,7 @@ export async function ensurePlatformStats(
 		const data = await queryClient.ensureQueryData(platformStatsQueryOptions);
 		return { data, source: "api" };
 	} catch {
-		return { data: undefined, source: "fallback" };
+		return { data: undefined, source: "failed" };
 	}
 }
 
@@ -51,6 +65,11 @@ export async function ensurePlatformStats(
  * reconsulta posterior sí trae datos.
  */
 export function usePlatformStats(): PlatformStatsResult {
-	const { data } = useQuery(platformStatsQueryOptions);
-	return { data, source: data === undefined ? "fallback" : "api" };
+	const { data, status } = useQuery(platformStatsQueryOptions);
+	// `data` primero: una query que ya trae datos y está revalidando sigue
+	// siendo `api`. Sin datos, el estado de la query es lo que separa "todavía
+	// no" de "no va a venir".
+	const source: PlatformStatsSource =
+		data !== undefined ? "api" : status === "pending" ? "loading" : "failed";
+	return { data, source };
 }

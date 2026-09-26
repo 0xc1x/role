@@ -136,8 +136,8 @@ function AboutPage() {
 					</div>
 				</section>
 
-				{/* Impact stats. `data-stats-source="fallback"` = la API de stats no
-				    respondió; sin el atributo, este bloque publicaría ceros falsos
+				{/* Impact stats. `data-stats-source` = "api" | "loading" | "failed";
+				    sin el atributo, este bloque publicaría ceros falsos
 				    indistinguibles de un impacto real de cero. */}
 				<section
 					data-stats-source={stats.source}

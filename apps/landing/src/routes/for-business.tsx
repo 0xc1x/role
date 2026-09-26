@@ -136,8 +136,9 @@ function ForBusinessPage() {
 							</p>
 						</div>
 
-						{/* Stats strip. `data-stats-source="fallback"` = la API de stats no
-						    respondió: el "—" no es un dato, y sin el discriminador sería
+						{/* Stats strip. `data-stats-source` = "api" | "loading" |
+						    "failed": cifras reales, petición en curso, o fallo de
+						    la API. El "—" no es un dato, y sin el discriminador sería
 						    indistinguible de un número real. */}
 						<dl
 							data-stats-source={statsData.source}

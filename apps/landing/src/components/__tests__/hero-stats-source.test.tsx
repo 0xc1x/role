@@ -72,15 +72,26 @@ describe("procedencia de las stats del hero", () => {
 		expect(container.textContent).toContain("10");
 	});
 
-	test("una API caída se marca como 'fallback' y no finge un cero", async () => {
+	test("una API caída se marca como 'failed' y no finge un cero", async () => {
 		const { container } = setup({ status: 503, body: { message: "caído" } });
 
 		await waitFor(() =>
 			expect(statsBlock(container)?.getAttribute("data-stats-source")).toBe(
-				"fallback",
+				"failed",
 			),
 		);
 		// El placeholder "—" no es un número: nunca debe publicar un 0 falso.
+		expect(container.textContent).not.toContain("0+");
+	});
+
+	test("una petición en curso se marca como 'loading', no como 'failed'", () => {
+		// Sin el tercer estado, un render inicial sano con la API lenta se
+		// reportaba como degradación y no se podía auditar de verdad.
+		const { container } = setup({ status: 200, body: { users: 10 } });
+
+		expect(statsBlock(container)?.getAttribute("data-stats-source")).toBe(
+			"loading",
+		);
 		expect(container.textContent).not.toContain("0+");
 	});
 });

@@ -176,10 +176,11 @@ export function Hero() {
 					</div>
 
 					{/* Stats with tabular nums.
-					    `data-stats-source="fallback"` = la API de stats no respondió.
-					    Sin ese discriminador, el "—" de una API caída es indistinguible
-					    de un dato ausente y la página publica un cero que nadie puede
-					    auditar. */}
+					    `data-stats-source` = "api" | "loading" | "failed": cifras
+					    reales, petición en curso, o fallo de la API. Sin ese
+					    discriminador, el "—" de una API caída es indistinguible
+					    de un dato ausente y la página publica un cero que nadie
+					    puede auditar. */}
 					<dl
 						data-stats-source={stats.source}
 						className="flex items-stretch reveal reveal-delay-4"
