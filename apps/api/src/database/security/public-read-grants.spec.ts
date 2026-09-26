@@ -873,4 +873,177 @@ describe('businesses column split phase 3 closes the anon exposure', () => {
       );
     }
   });
+
+  test('phase 3 removes the owner trigger that phase 4 introduced on owner_id', () => {
+    // 20260926000012 adds a BEFORE INSERT trigger that fills owner_id from
+    // auth.uid(). A trigger referencing a dropped column does not fail at
+    // migration time; it fails on the next insert, in production, with 42703.
+    // bootstrap_business_companions already derives ownership, so the old
+    // trigger must be dropped here or it becomes a live landmine.
+    expect(sql()).toMatch(
+      /drop trigger if exists trg_set_business_owner_from_jwt on public\.businesses/i,
+    );
+    expect(ALL_MIGRATIONS).toMatch(
+      /create trigger trg_set_business_owner_from_jwt[\s\S]*?before insert on public\.businesses/i,
+    );
+  });
+});
+
+/**
+ * The client write path on public.businesses.
+ *
+ * 20260925163235 ran `revoke all on table public.businesses from anon,
+ * authenticated` and never gave the write grants back; only SELECT was
+ * restored. Supabase's default privileges grant `arwdDxtm` on every new table
+ * in `public`, so businesses was born fully writable and the revoke removed it
+ * silently. Nothing in the ledger ever stated an intent to remove business
+ * self-service — offers kept its grants because it was handled separately, and
+ * businesses was simply not in that pass.
+ *
+ * The symptom was every owner action in the mobile panel failing with
+ * `42501 permission denied for table businesses`, which reads like an RLS
+ * problem and is not one. RLS was correct throughout; the privileges under it
+ * were gone.
+ *
+ * These tests pin the grants against what the client actually writes, so the
+ * next boundary pass cannot quietly revoke them again.
+ */
+describe('businesses client write grants match what the client actually writes', () => {
+  const GRANTS_FILE = '20260926000012_businesses_client_write_grants.sql';
+  const GRANTS: string = readFileSync(
+    join(MIGRATIONS_DIR, GRANTS_FILE),
+    'utf8',
+  );
+  const GRANTS_SQL = GRANTS.replace(/--[^\n]*/g, '');
+
+  const REPOSITORY_PATH = join(
+    import.meta.dir,
+    '..',
+    '..',
+    '..',
+    '..',
+    '..',
+    'apps',
+    'mobile',
+    'src',
+    'features',
+    'business',
+    'data',
+    'repository.ts',
+  );
+
+  function grantColumns(privilege: 'insert' | 'update'): string[] {
+    const block = GRANTS_SQL.match(
+      new RegExp(
+        `grant ${privilege}\\s*\\(([\\s\\S]*?)\\)\\s*on table public\\.businesses`,
+        'i',
+      ),
+    )?.[1];
+    if (!block) throw new Error(`no ${privilege} grant found on businesses`);
+    return block
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
+  }
+
+  test('the owner panel can read, create and edit its business', () => {
+    // The three calls that were failing. SELECT is table-level on purpose:
+    // PostgREST needs it on the referenced table to resolve the offers embed.
+    // It is granted by 20260925224820, not by this file.
+    expect(ALL_MIGRATIONS).toMatch(
+      /grant select on table public\.businesses to anon, authenticated/i,
+    );
+    expect(GRANTS_SQL).toMatch(
+      /grant insert \([\s\S]*?\) on table public\.businesses to authenticated/i,
+    );
+    expect(GRANTS_SQL).toMatch(
+      /grant update \([\s\S]*?\) on table public\.businesses to authenticated/i,
+    );
+  });
+
+  test('no write privilege reaches anon', () => {
+    expect(GRANTS_SQL).not.toMatch(
+      /grant (insert|update|delete)[\s\S]{0,200}?to (anon|public)\b/i,
+    );
+    expect(GRANTS_SQL).not.toMatch(
+      /grant all on table public\.businesses to (anon|authenticated)/i,
+    );
+  });
+
+  test('moderation, derived and platform-money columns stay ungranted', () => {
+    // is_active is the important one: it is how a business appears in the
+    // public catalog, so letting a client set it would be self-approval.
+    // rating and review_count are derived, and the money columns are the
+    // platform's, not the merchant's.
+    const granted = [...grantColumns('insert'), ...grantColumns('update')];
+    for (const column of [
+      'is_active',
+      'rating',
+      'review_count',
+      'balance',
+      'commission_rate',
+      'verification_status',
+      'verified_at',
+      'verified_by',
+      'rejection_reason',
+      'created_at',
+    ]) {
+      expect(granted, `${column} must not be client-writable`).not.toContain(
+        column,
+      );
+    }
+  });
+
+  test('every column the client writes is granted', () => {
+    // The mirror of the offers guard: a missing grant is exactly the 42501 the
+    // owner saw. The client is the source of truth for what it sends.
+    const source = readFileSync(REPOSITORY_PATH, 'utf8');
+
+    const insert = source.match(
+      /\.from\("businesses"\)[\s\S]{0,80}?\.insert\(\{([\s\S]*?)\n[\t ]+\}\)/,
+    )?.[1];
+    if (!insert) {
+      throw new Error(
+        'createBusiness no longer inserts a literal into businesses; update this guard.',
+      );
+    }
+    const insertKeys = [
+      ...insert.matchAll(/^\s*(\w+):/gm),
+    ].map((m) => m[1] as string);
+
+    const update = source.match(
+      /const businessUpdate: Record<string, unknown> = \{([\s\S]*?)\n[\t ]+\};/,
+    )?.[1];
+    if (!update) {
+      throw new Error(
+        'updateBusiness no longer declares a `businessUpdate` literal; update this guard.',
+      );
+    }
+    const updateKeys = [
+      ...update.matchAll(/businessUpdate\.(\w+)\s*=/g),
+    ].map((m) => m[1] as string);
+
+    const ungranted = [
+      ...insertKeys.filter((c) => !grantColumns('insert').includes(c)),
+      ...updateKeys.filter((c) => !grantColumns('update').includes(c)),
+    ];
+    expect(
+      ungranted,
+      `client writes these but the database does not grant them: ${ungranted.join(', ')}`,
+    ).toEqual([]);
+
+    // The client must not send owner_id. A BEFORE INSERT trigger fills it from
+    // auth.uid(), so ownership is assigned rather than claimed.
+    expect(insertKeys).not.toContain('owner_id');
+    expect(GRANTS_SQL).toMatch(
+      /create trigger trg_set_business_owner_from_jwt[\s\S]*?before insert on public\.businesses/i,
+    );
+  });
+
+  test('a new business cannot be born active or approved', () => {
+    expect(GRANTS_SQL).toMatch(
+      /create trigger trg_default_business_inactive[\s\S]*?before insert on public\.businesses/i,
+    );
+    expect(GRANTS_SQL).toMatch(/new\.is_active := false/i);
+  });
 });
