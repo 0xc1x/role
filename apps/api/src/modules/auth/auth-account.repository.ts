@@ -150,12 +150,21 @@ export class AuthAccountRepository {
    * of what was consented to. A consumer-protection claim needs that ledger to
    * outlive the person.
    *
-   * KNOWN LIMIT, STATED RATHER THAN HIDDEN: a `reviews.comment` is personal data
-   * the person wrote, and this method does not scrub it. A review is also a
-   * business's public rating, so deleting or blanking it is a decision about
-   * somebody else's data, and it is not one this method gets to make silently.
-   * The two options (blank the body and keep the score, or drop the review and
-   * recompute the average) need an owner.
+   * REVIEWS ARE DELETED, not blanked. A `reviews.comment` is personal data the
+   * person wrote and it renders publicly, attributed, beside a business name —
+   * so leaving it is not erasure, it is publication. A review is also the
+   * business's rating, which is why this was an explicit decision and not an
+   * obvious one, and why the rejected alternative is recorded here: blanking the
+   * body and keeping the score. A score is a fact about a transaction and
+   * survives the person; the words are theirs and do not.
+   *
+   * The average is not recomputed by hand. `on_review_change` and
+   * `on_review_offer_change` are `AFTER INSERT OR DELETE OR UPDATE FOR EACH ROW`,
+   * so deleting the row fires both and rewrites `businesses.rating`,
+   * `businesses.review_count`, `offers.rating` and `offers.review_count` from
+   * what is left. Writing those updates here would be a second source of truth
+   * for a calculation the database already owns, and it would be the one that
+   * drifts.
    *
    * One transaction, because a half-scrubbed profile is worse than either
    * outcome: a row that is no longer identifiable but is still subscribed and
@@ -185,6 +194,13 @@ export class AuthAccountRepository {
         .update(deviceTokens)
         .set({ is_active: false, updated_at: new Date() })
         .where(eq(deviceTokens.user_id, userId));
+
+      // Last, so the rating triggers see the profile still in place. Deleting a
+      // review fires `on_review_change` and `on_review_offer_change`, which read
+      // `businesses` and `offers` to rewrite the averages; running this after the
+      // scrub keeps the transaction readable top to bottom — identity first, then
+      // what the person can no longer be reached at, then what they published.
+      await tx.delete(reviews).where(eq(reviews.user_id, userId));
     });
   }
 

@@ -327,6 +327,92 @@ export async function createTestDb(): Promise<TestDbContext> {
       for each row
       execute function public.record_order_event();
 
+    -- Rating triggers, verbatim from the live database. Added because
+    -- DELETE /api/v1/auth/account deletes the caller's reviews and relies on
+    -- these to rewrite the averages: without them the harness proves the rows
+    -- are gone while the numbers stay frozen, which is the same shape of blind
+    -- spot as the referential-action drift. The is_hidden column is required by
+    -- both bodies and is installed by the moderation block above.
+    create or replace function public.update_business_rating()
+    returns trigger language plpgsql security definer set search_path = ''
+    as $rating_fn$
+    declare
+      v_business_id uuid;
+    begin
+      if tg_op = 'DELETE' then
+        v_business_id := old.business_id;
+      else
+        v_business_id := new.business_id;
+      end if;
+
+      update public.businesses
+      set
+        rating = (
+          select coalesce(avg(r.business_rating), 0)
+          from public.reviews r
+          where r.business_id = v_business_id
+            and r.is_hidden is not true
+        ),
+        review_count = (
+          select count(*)
+          from public.reviews r
+          where r.business_id = v_business_id
+            and r.is_hidden is not true
+        )
+      where id = v_business_id;
+
+      return coalesce(new, old);
+    end;
+    $rating_fn$;
+
+    create or replace function public.update_offer_rating()
+    returns trigger language plpgsql security definer set search_path = ''
+    as $rating_fn$
+    declare
+      v_offer_id uuid;
+    begin
+      if tg_op = 'DELETE' then
+        select offer_id into v_offer_id from public.orders where id = old.order_id;
+      else
+        select offer_id into v_offer_id from public.orders where id = new.order_id;
+      end if;
+
+      if v_offer_id is not null then
+        update public.offers
+        set
+          rating = (
+            select coalesce(avg(r.product_rating), 0)
+            from public.reviews r
+            join public.orders o on o.id = r.order_id
+            where o.offer_id = v_offer_id
+              and r.is_hidden is not true
+          ),
+          review_count = (
+            select count(*)
+            from public.reviews r
+            join public.orders o on o.id = r.order_id
+            where o.offer_id = v_offer_id
+              and r.is_hidden is not true
+          )
+        where id = v_offer_id;
+      end if;
+
+      return coalesce(new, old);
+    end;
+    $rating_fn$;
+
+    drop trigger if exists on_review_change on public.reviews;
+    create trigger on_review_change
+      after insert or delete or update on public.reviews
+      for each row
+      execute function public.update_business_rating();
+
+    drop trigger if exists on_review_offer_change on public.reviews;
+    create trigger on_review_offer_change
+      after insert or delete or update on public.reviews
+      for each row
+      execute function public.update_offer_rating();
+
     create or replace function public.business_completed_orders_count(p_business_id uuid)
     returns bigint
     language sql

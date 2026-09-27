@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import {
+  businesses,
   businessFinance,
   businessOwnership,
   consumerNotificationPreferences,
@@ -9,7 +10,9 @@ import {
   marketingPreferences,
   orderEvents,
   orders,
+  offers,
   profiles,
+  reviews,
   userConsents,
   userPreferences,
 } from '../../database/schema';
@@ -278,6 +281,18 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     return row ?? null;
   }
 
+  async function businessRow(businessId: string) {
+    const [row] = await ctx.db
+      .select({
+        rating: businesses.rating,
+        review_count: businesses.review_count,
+        is_active: businesses.is_active,
+      })
+      .from(businesses)
+      .where(eq(businesses.id, businessId));
+    return row ?? null;
+  }
+
   async function orderRow(orderId: string) {
     const [row] = await ctx.db
       .select()
@@ -390,6 +405,71 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     expect(after?.role).toBe('business');
     // Account age is needed for cohort reporting and identifies nobody.
     expect(after?.created_at).toEqual(createdAt);
+  });
+
+  test('anonymising deletes the reviews and the averages follow', async () => {
+    const { userId, businessId, orderId } = await seedConsumerWithOrder();
+    const [offer] = await ctx.db
+      .select({ id: offers.id })
+      .from(offers)
+      .where(eq(offers.business_id, businessId));
+
+    // Two reviews, so the recompute is observable as a change rather than as a
+    // row landing on zero: one from the account being anonymised, one that stays.
+    await ctx.db.insert(reviews).values({
+      user_id: userId,
+      business_id: businessId,
+      order_id: orderId,
+      rating: 1,
+      product_rating: 1,
+      business_rating: 1,
+      comment: 'Reseña que la persona escribió y el negocio puede leer',
+    });
+    const otherUser = await seedProfile(ctx.db, undefined);
+    await ctx.db.insert(reviews).values({
+      user_id: otherUser,
+      business_id: businessId,
+      order_id: orderId,
+      rating: 5,
+      product_rating: 5,
+      business_rating: 5,
+      comment: 'La otra persona, esta se queda',
+    });
+
+    const before = await businessRow(businessId);
+    expect(before?.review_count).toBe(2);
+    expect(Number(before?.rating)).toBe(3);
+
+    await accounts().anonymise(userId);
+
+    // The person's words do not survive: a comment renders publicly, attributed,
+    // beside the business name, so leaving it is publication rather than erasure.
+    const mine = await ctx.db
+      .select({ id: reviews.id })
+      .from(reviews)
+      .where(eq(reviews.user_id, userId));
+    expect(mine).toHaveLength(0);
+
+    // Somebody else's review is untouched.
+    const theirs = await ctx.db
+      .select({ id: reviews.id })
+      .from(reviews)
+      .where(eq(reviews.user_id, otherUser));
+    expect(theirs).toHaveLength(1);
+
+    // The average was recomputed by the trigger, not by this service writing the
+    // numbers: 1 and 5 averaged to 3 before, and 5 is what is left after.
+    const after = await businessRow(businessId);
+    expect(after?.review_count).toBe(1);
+    expect(Number(after?.rating)).toBe(5);
+
+    // And the offer's own average, which reaches the offer through orders.
+    const [offerAfter] = await ctx.db
+      .select({ rating: offers.rating, review_count: offers.review_count })
+      .from(offers)
+      .where(eq(offers.id, offer.id));
+    expect(offerAfter?.review_count).toBe(1);
+    expect(Number(offerAfter?.rating)).toBe(5);
   });
 
   test('an anonymised row cannot keep mailing or pushing', async () => {
