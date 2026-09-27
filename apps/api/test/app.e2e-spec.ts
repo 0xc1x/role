@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { eq } from 'drizzle-orm';
 import { SignJWT } from 'jose';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -8,10 +9,12 @@ import { createTestDb, type TestDbContext } from './db';
 import {
   seedBusiness,
   seedBusinessHours,
+  seedCategory,
   seedLocation,
   seedOffer,
   seedProfile,
 } from './seed';
+import { deviceTokens } from '../src/database/schema';
 
 /**
  * E2E marketplace (auth → oferta → orden → recogida → review → payout).
@@ -449,7 +452,9 @@ describe('Marketplace e2e', () => {
     // The admin-only query keys are stripped, not honoured, so they cannot widen
     // the gate: the same list comes back.
     const filtered = await api()
-      .get('/api/v1/businesses/public?verification_status=pending&is_active=false')
+      .get(
+        '/api/v1/businesses/public?verification_status=pending&is_active=false',
+      )
       .expect(200);
     expect(filtered.body.data.map((b: { id: string }) => b.id)).toEqual(ids);
   });
@@ -572,5 +577,242 @@ describe('Marketplace e2e', () => {
     // The appeal record between the business and the platform is not the
     // author's to read.
     expect(own.body.data[0]?.moderation_reason).toBeUndefined();
+  });
+
+  // ─── /me: the caller's own account ─────────────────────────────────────
+  // Every route here requires a token, takes no id, and answers from the token
+  // subject. The e2e value is that the wiring is real: guard, pipe, controller,
+  // service, repository, and the columns actually moving in Postgres.
+
+  test('me: requiere token y devuelve la cuenta entera en una respuesta', async () => {
+    await api().get('/api/v1/me').expect(401);
+
+    // The seeded consumer has a profile but no preferences/consents rows: the
+    // API never wrote them, so it reports null rather than 404-ing or inventing
+    // them. A fresh profile is the honest fixture here.
+    const bare = await seedProfile(ctx.db, `me-${randomUUID()}@t.cl`);
+    const bareToken = await token(bare, 'me@t.cl');
+
+    const res = await api()
+      .get('/api/v1/me')
+      .set('Authorization', `Bearer ${bareToken}`)
+      .expect(200);
+
+    expect(res.body.profile.id).toBe(bare);
+    expect(res.body.preferences).toBeNull();
+    expect(res.body.notification_preferences).toBeNull();
+    expect(res.body.consents).toEqual([]);
+
+    // And a seeded account comes back whole, in ONE round trip: this is the
+    // four-request fan-out mobile does on every app start today.
+    await ctx.db.execute(
+      `insert into user_preferences (user_id) values ('${consumerId}') on conflict do nothing`,
+    );
+    await ctx.db.execute(
+      `insert into consumer_notification_preferences (user_id) values ('${consumerId}') on conflict do nothing`,
+    );
+    const seeded = await api()
+      .get('/api/v1/me')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(200);
+    expect(seeded.body.preferences.user_id).toBe(consumerId);
+    expect(seeded.body.notification_preferences.push_enabled).toBe(true);
+  });
+
+  test('me: un role en el body no cambia el rol, y un email se rechaza con 422', async () => {
+    const patch = await api()
+      .patch('/api/v1/me')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      // `role` is not a key of the request schema, so it parses into nothing.
+      .send({ role: 'admin', full_name: 'Consumidor' })
+      .expect(200);
+    expect(patch.body.role).toBe('user');
+    expect(patch.body.full_name).toBe('Consumidor');
+
+    const asAdmin = await api()
+      .patch('/api/v1/me')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ role: 'business' })
+      .expect(200);
+    expect(asAdmin.body.role).toBe('admin');
+
+    // `email` is the GoTrue identity. A silent strip would answer 200 to a caller
+    // who asked to change their address.
+    const email = await api()
+      .patch('/api/v1/me')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ email: 'nuevo@correo.cl' })
+      .expect(422);
+    expect(JSON.stringify(email.body)).toContain('supabase.auth.updateUser');
+  });
+
+  test('me: favorite_categories se valida contra el catálogo y guarda el nombre canónico', async () => {
+    const category = await seedCategory(ctx.db, 'Panadería');
+    await ctx.db.execute(
+      `update categories set slug = 'panaderia-e2e' where id = '${category.id}'`,
+    );
+
+    const stored = await api()
+      .patch('/api/v1/me/preferences')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ favorite_categories: ['  PANADERÍA  '] })
+      .expect(200);
+    // The display name, not the ASCII-folded slug: that is the string
+    // `dispatch-nearby-offers` compares against.
+    expect(stored.body.preferences.favorite_categories).toEqual(['Panadería']);
+
+    // A value that can never match is refused, and the working list survives.
+    const rejected = await api()
+      .patch('/api/v1/me/preferences')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ favorite_categories: ['No existe'] })
+      .expect(422);
+    expect(rejected.body.details.unmatched).toEqual(['No existe']);
+
+    const after = await api()
+      .get('/api/v1/me/preferences')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(200);
+    expect(after.body.preferences.favorite_categories).toEqual(['Panadería']);
+  });
+
+  test('me: media ventana de quiet hours se rechaza, y las dos puntas se guardan', async () => {
+    // `filterNotInQuietHours` treats a window with one end as no window at all,
+    // so storing this shape would be a setting the user believes is on and that
+    // does nothing.
+    await api()
+      .patch('/api/v1/me/notification-preferences')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ quiet_hours_from: '22:00:00' })
+      .expect(422);
+
+    const set = await api()
+      .patch('/api/v1/me/notification-preferences')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ quiet_hours_from: '22:00:00', quiet_hours_to: '07:00:00' })
+      .expect(200);
+    expect(set.body.notification_preferences.quiet_hours_from).toBe('22:00:00');
+    expect(set.body.notification_preferences.quiet_hours_to).toBe('07:00:00');
+  });
+
+  test('me: PUT de consent es idempotente y el tipo fuera de la unión es 400', async () => {
+    const first = await api()
+      .put('/api/v1/me/consents')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ consent_type: 'marketing', granted: true })
+      .expect(200);
+
+    const second = await api()
+      .put('/api/v1/me/consents')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ consent_type: 'marketing', granted: true })
+      .expect(200);
+    // Byte-identical, timestamps included: a retry after a flaky connection
+    // must not move the grant moment.
+    expect(second.body.id).toBe(first.body.id);
+    expect(second.body.granted_at).toBe(first.body.granted_at);
+    expect(second.body.updated_at).toBe(first.body.updated_at);
+
+    // `consent_type` is a bare text column with no CHECK, so the schema is the
+    // only gate.
+    await api()
+      .put('/api/v1/me/consents')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ consent_type: 'cookies', granted: true })
+      .expect(400);
+  });
+
+  test('me: el token de push se transfiere y el dueño anterior no lo alcanza', async () => {
+    // NOT named `token`: that is the JWT helper at the top of this file.
+    const pushToken = `ExponentPushToken[e2e-${randomUUID()}]`;
+
+    const registered = await api()
+      .post('/api/v1/me/devices')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      // `user_id` is not in the schema: the device belongs to the caller.
+      .send({ token: pushToken, platform: 'ios', user_id: ownerId })
+      .expect(201);
+    expect(registered.body.user_id).toBe(consumerId);
+
+    const other = await seedProfile(ctx.db, `me-dev-${randomUUID()}@t.cl`);
+    const otherToken = await token(other, 'me-dev@t.cl');
+
+    // The same device, another account: transferred, not rejected and not left
+    // pointing at the previous owner.
+    const moved = await api()
+      .post('/api/v1/me/devices')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ token: pushToken, platform: 'ios' })
+      .expect(201);
+    expect(moved.body.user_id).toBe(other);
+    expect(moved.body.id).toBe(registered.body.id);
+
+    // The previous owner revokes it: scoped to their own user_id, so it reaches
+    // nothing and the device stays live for its new owner.
+    await api()
+      .delete(`/api/v1/me/devices?token=${encodeURIComponent(pushToken)}`)
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(204);
+
+    // Read through the schema rather than raw SQL: the assertions are about what
+    // the rows say, not about how they are queried.
+    const [stillOwned] = await ctx.db
+      .select()
+      .from(deviceTokens)
+      .where(eq(deviceTokens.token, pushToken));
+    expect(stillOwned?.user_id).toBe(other);
+    expect(stillOwned?.is_active).toBe(true);
+
+    // The owner revokes its own: 204, and the row is deactivated.
+    await api()
+      .delete(`/api/v1/me/devices?token=${encodeURIComponent(pushToken)}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(204);
+    const [revoked] = await ctx.db
+      .select()
+      .from(deviceTokens)
+      .where(eq(deviceTokens.token, pushToken));
+    expect(revoked?.is_active).toBe(false);
+  });
+
+  test('me: nadie lee ni escribe las preferencias, consents o devices de otro', async () => {
+    const other = await seedProfile(ctx.db, `me-iso-${randomUUID()}@t.cl`);
+    const otherToken = await token(other, 'me-iso@t.cl');
+
+    await api()
+      .patch('/api/v1/me/preferences')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ notification_radius_km: 30 })
+      .expect(200);
+    await api()
+      .patch('/api/v1/me/notification-preferences')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ weekly_summary_enabled: false })
+      .expect(200);
+    const consent = await api()
+      .put('/api/v1/me/consents')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ consent_type: 'analytics', granted: true })
+      .expect(200);
+
+    // The other account reads its own, never the caller's. An explicit null, not
+    // an empty body: this account has no settings rows at all.
+    const prefs = await api()
+      .get('/api/v1/me/preferences')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(200);
+    expect(prefs.body).toEqual({ preferences: null });
+
+    const notif = await api()
+      .get('/api/v1/me/notification-preferences')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(200);
+    expect(notif.body).toEqual({ notification_preferences: null });
+
+    const consents = await api()
+      .get('/api/v1/me/consents')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(200);
+    expect(consents.body).toEqual([]);
   });
 });

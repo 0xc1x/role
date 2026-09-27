@@ -1,6 +1,7 @@
 export * from "./dtos/consumer-notification-preferences.dto";
 export * from "./dtos/device-token.dto";
 export * from "./dtos/favorite.dto";
+export * from "./dtos/me.dto";
 export * from "./dtos/profile.dto";
 export * from "./dtos/saved-address.dto";
 export * from "./dtos/user-consent.dto";
@@ -17,6 +18,7 @@ export * from "./enums/theme-mode";
 export * from "./schemas/consumer-notification-preferences.schema";
 export * from "./schemas/device-token.schema";
 export * from "./schemas/favorite.schema";
+export * from "./schemas/me.schema";
 export * from "./schemas/profile.schema";
 export * from "./schemas/saved-address.schema";
 export * from "./schemas/user-consent.schema";

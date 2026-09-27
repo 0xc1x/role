@@ -117,6 +117,44 @@ export class CategoriesRepository {
     return row ?? null;
   }
 
+  /**
+   * The catalog values a `user_preferences.favorite_categories` entry can
+   * ACTUALLY match, and nothing else.
+   *
+   * The consumer of that column is the `dispatch-nearby-offers` edge function,
+   * which builds its per-offer set from `categories.name` — the Spanish display
+   * names, NOT the ASCII-folded `slug` — and only for rows that are active and
+   * not soft-deleted (`supabase/functions/dispatch-nearby-offers/index.ts`: an
+   * inactive or deleted category is skipped, and an offer with no usable
+   * category gets no entry at all). It lowercases both sides before comparing.
+   *
+   * So the set of strings that can ever match is exactly: `name` of every
+   * category where `active AND deleted_at IS NULL`. The predicate here is
+   * deliberately the SAME one, spelled in Drizzle instead of in the edge
+   * function: a category that is inactive is a value that looks valid, is
+   * accepted by any free-text schema, and filters nothing — which is the silent
+   * failure `favorite_categories` already has today, since nothing writes it.
+   *
+   * Both `name` and `slug` are returned because they are two namespaces a
+   * client may legitimately hold (a picker sends the name, a route param carries
+   * the slug) and the caller normalises into `name`, which is the only one that
+   * matches. Not paginated: this is the whole catalog, it is bounded by the
+   * number of categories a platform has, and it is read once per preference
+   * write.
+   */
+  async listMatchable(): Promise<
+    Array<{ id: string; name: string; slug: string }>
+  > {
+    return this.db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+      })
+      .from(categories)
+      .where(and(isNull(categories.deleted_at), eq(categories.active, true)));
+  }
+
   async list(filter: ListCategoriesFilter): Promise<ListCategoriesResult> {
     const offset = (filter.page - 1) * filter.limit;
     const filters: SQL[] = [isNull(categories.deleted_at)];

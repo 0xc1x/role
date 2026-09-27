@@ -2873,6 +2873,208 @@
         ]
       }
     },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "MeController_getAccount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Profile and every settings row of the caller"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "My account in one payload (profile, preferences, consents)",
+        "tags": [
+          "Me"
+        ]
+      },
+      "patch": {
+        "operationId": "MeController_updateProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Updated profile"
+          },
+          "404": {
+            "description": "No profile for this token subject"
+          },
+          "422": {
+            "description": "The body asked to change `email`, which is the Supabase Auth identity"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit my profile",
+        "tags": [
+          "Me"
+        ]
+      }
+    },
+    "/api/v1/me/preferences": {
+      "get": {
+        "operationId": "MeController_getPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The preferences row, or an explicit null when none was seeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "My preferences",
+        "tags": [
+          "Me"
+        ]
+      },
+      "patch": {
+        "operationId": "MeController_updatePreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Updated preferences"
+          },
+          "422": {
+            "description": "A `favorite_categories` value is outside the active catalog"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit my preferences",
+        "tags": [
+          "Me"
+        ]
+      }
+    },
+    "/api/v1/me/notification-preferences": {
+      "get": {
+        "operationId": "MeController_getNotificationPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The notification preferences row, or an explicit null when none was seeded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "My notification preferences",
+        "tags": [
+          "Me"
+        ]
+      },
+      "patch": {
+        "operationId": "MeController_updateNotificationPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Updated notification preferences"
+          },
+          "422": {
+            "description": "A half-configured quiet-hours window"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit my notification preferences",
+        "tags": [
+          "Me"
+        ]
+      }
+    },
+    "/api/v1/me/consents": {
+      "get": {
+        "operationId": "MeController_listConsents",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Consents of the declared union"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "My consent ledger",
+        "tags": [
+          "Me"
+        ]
+      },
+      "put": {
+        "operationId": "MeController_putConsent",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The consent row in its new state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Grant or revoke one of my consents (idempotent)",
+        "tags": [
+          "Me"
+        ]
+      }
+    },
+    "/api/v1/me/devices": {
+      "post": {
+        "operationId": "MeController_registerDevice",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Device registered"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Register a push token for my account (transfers it from another)",
+        "tags": [
+          "Me"
+        ]
+      },
+      "delete": {
+        "operationId": "MeController_revokeDevice",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Revoked, or never mine — both are 204"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revoke one of my push tokens, by token",
+        "tags": [
+          "Me"
+        ]
+      }
+    },
     "/api/v1/addresses": {
       "get": {
         "operationId": "SavedAddressesController_list",

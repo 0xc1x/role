@@ -33,6 +33,7 @@ import { ContactInboxModule } from './modules/contact-inbox/contact-inbox.module
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { StoreModule } from './modules/store/store.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
+import { MeModule } from './modules/me/me.module';
 import { SavedAddressesModule } from './modules/saved-addresses/saved-addresses.module';
 
 @Module({
@@ -78,6 +79,7 @@ import { SavedAddressesModule } from './modules/saved-addresses/saved-addresses.
     CommissionsModule,
     ReviewsModule,
     FavoritesModule,
+    MeModule,
     SavedAddressesModule,
     NotificationsModule,
     PushNotificationsModule,
