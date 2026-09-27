@@ -5,9 +5,7 @@ import {
   desc,
   eq,
   inArray,
-  isNull,
   lt,
-  or,
   sql,
   type SQL,
 } from 'drizzle-orm';
@@ -321,9 +319,15 @@ export class OrdersRepository {
   }
 
   /**
-   * Cupón activo y vigente del negocio o global (business_id null), con lock
-   * (espejo del SELECT … FOR UPDATE). Ante el mismo código, el cupón del
-   * negocio gana sobre el global.
+   * Coupon lookup by code, locked (SELECT … FOR UPDATE) but deliberately NOT
+   * narrowed by validity or scope: the caller must be able to tell
+   * `not_found` apart from `inactive`, `expired` and `wrong_business`, and a
+   * query that filters those away makes all four collapse into `null`.
+   *
+   * Ranking keeps the scope decision reproducible — own business first, then a
+   * global coupon (`business_id IS NULL`), then foreign ones — so a global
+   * coupon stays reachable from any business and `wrong_business` is only
+   * reported when nothing else could apply.
    */
   async findCouponByCodeForUpdate(
     tx: DbExecutor,
@@ -333,21 +337,17 @@ export class OrdersRepository {
     const [row] = await tx
       .select()
       .from(coupons)
-      .where(
-        and(
-          eq(coupons.code, code),
-          eq(coupons.is_active, true),
-          or(eq(coupons.business_id, businessId), isNull(coupons.business_id)),
-        ),
-      )
+      .where(eq(coupons.code, code))
       .orderBy(
-        sql`case when ${coupons.business_id} = ${businessId} then 0 else 1 end`,
+        sql`case
+          when ${coupons.business_id} = ${businessId} then 0
+          when ${coupons.business_id} is null then 1
+          else 2
+        end`,
       )
       .for('update', { of: coupons })
       .limit(1);
-    if (!row) return null;
-    if (row.expires_at && row.expires_at <= new Date()) return null;
-    return row;
+    return row ?? null;
   }
 
   async incrementCouponUsedCount(tx: DbExecutor, couponId: string) {

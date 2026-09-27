@@ -291,6 +291,11 @@ describe('OrdersService', () => {
       await expect(
         service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
       ).rejects.toThrow('COUPON_EXHAUSTED');
+      // The exhaustion code keeps its own identity: the new code must not
+      // shadow it, or clients that already handle COUPON_EXHAUSTED break.
+      await expect(
+        service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
+      ).rejects.not.toThrow('COUPON_NOT_APPLICABLE');
       expect(offersRepository.decrementStock).not.toHaveBeenCalled();
     });
 
@@ -303,10 +308,15 @@ describe('OrdersService', () => {
       await expect(
         service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
       ).rejects.toThrow('COUPON_MIN_NOT_MET');
+      await expect(
+        service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
+      ).rejects.not.toThrow('COUPON_NOT_APPLICABLE');
     });
 
     it('cupón global (business_id null): aplica igual que el del negocio', async () => {
       mockHappyPath();
+      // business_id null = cupón global de plataforma: no es `wrong_business`,
+      // aplica en ofertas de cualquier negocio.
       ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
         makeCouponRow({ business_id: null, value: '20' }), // 9.99 → 7.99
       );
@@ -320,18 +330,74 @@ describe('OrdersService', () => {
           coupon_id: 'coupon-1',
         }),
       );
+      expect(ordersRepository.incrementCouponUsedCount).toHaveBeenCalledWith(
+        expect.anything(),
+        'coupon-1',
+      );
     });
 
-    it('cupón inexistente/vencido: el SQL continúa sin descuento (espejo idéntico)', async () => {
+    it('sin cupón: la ruta feliz no consulta cupones (comportamiento intacto)', async () => {
       mockHappyPath();
-      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(null);
 
-      await service.create(mockAuthUser, { ...body, coupon_code: 'NOPE' });
+      await service.create(mockAuthUser, body);
 
+      expect(ordersRepository.findCouponByCodeForUpdate).not.toHaveBeenCalled();
       expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ price: '9.99', coupon_id: null }),
       );
+    });
+
+    describe('cupón rejection: COUPON_NOT_APPLICABLE con reason', () => {
+      /**
+       * Every rejection path must be observable by the client. The old code
+       * skipped the whole block on a miss and produced a full-price order.
+       */
+      it.each([
+        [
+          'inexistente',
+          null,
+          'COUPON_NOT_APPLICABLE: not_found - El cupon no existe',
+        ],
+        [
+          'de otro negocio',
+          makeCouponRow({ business_id: 'business-otro' }),
+          'COUPON_NOT_APPLICABLE: wrong_business - El cupon pertenece a otro negocio',
+        ],
+        [
+          'inactivo',
+          makeCouponRow({ is_active: false }),
+          'COUPON_NOT_APPLICABLE: inactive - El cupon esta inactivo',
+        ],
+        [
+          'vencido',
+          makeCouponRow({ expires_at: new Date('2000-01-01T00:00:00Z') }),
+          'COUPON_NOT_APPLICABLE: expired - El cupon ya vencio',
+        ],
+      ])(
+        'cupón %s → COUPON_NOT_APPLICABLE con la razón en el mensaje',
+        async (_name, coupon, message) => {
+          mockHappyPath();
+          ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(coupon);
+
+          await expect(
+            service.create(mockAuthUser, { ...body, coupon_code: 'NOPE' }),
+          ).rejects.toThrow(message);
+        },
+      );
+
+      it('el rechazo ocurre antes de consumir stock, escribir orden o mutar el cupón', async () => {
+        mockHappyPath();
+        ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(null);
+
+        await expect(
+          service.create(mockAuthUser, { ...body, coupon_code: 'NOPE' }),
+        ).rejects.toThrow('COUPON_NOT_APPLICABLE');
+
+        expect(offersRepository.decrementStock).not.toHaveBeenCalled();
+        expect(ordersRepository.insertOrder).not.toHaveBeenCalled();
+        expect(ordersRepository.incrementCouponUsedCount).not.toHaveBeenCalled();
+      });
     });
 
     it('folio FD-YYYY-MMDD-NNN generado por la secuencia SQL compartida', async () => {

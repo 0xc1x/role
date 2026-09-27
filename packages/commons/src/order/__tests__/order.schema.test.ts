@@ -8,6 +8,7 @@ import {
 	UpdateOrderStatusSchema,
 } from "../schemas/order-query.schema";
 import {
+	COUPON_REJECTION_REASONS,
 	ReserveOfferErrorSchema,
 	ReserveOfferResultSchema,
 } from "../schemas/reserve-offer.schema";
@@ -225,5 +226,54 @@ describe("ReserveOfferResponseSchema", () => {
 				message: "La clave ya fue usada para otra reserva",
 			}).success,
 		).toBe(true);
+	});
+
+	it("keeps the pre-existing coupon codes valid without a reason", () => {
+		// `reason` is optional on purpose: COUPON_EXHAUSTED and
+		// COUPON_MIN_NOT_MET have no rejection stage of their own.
+		for (const error of ["COUPON_EXHAUSTED", "COUPON_MIN_NOT_MET"]) {
+			const parsed = ReserveOfferErrorSchema.safeParse({
+				success: false,
+				error,
+				message: "Cupón rechazado",
+			});
+			expect(parsed.success).toBe(true);
+			if (parsed.success) expect(parsed.data.reason).toBeUndefined();
+		}
+	});
+
+	it("accepts COUPON_NOT_APPLICABLE with every rejection reason", () => {
+		for (const reason of COUPON_REJECTION_REASONS) {
+			expect(
+				ReserveOfferErrorSchema.safeParse({
+					success: false,
+					error: "COUPON_NOT_APPLICABLE",
+					message: `COUPON_NOT_APPLICABLE: ${reason} - El cupon no aplica`,
+					reason,
+				}).success,
+			).toBe(true);
+		}
+	});
+
+	it("rejects an unknown rejection reason", () => {
+		expect(
+			ReserveOfferErrorSchema.safeParse({
+				success: false,
+				error: "COUPON_NOT_APPLICABLE",
+				message: "x",
+				reason: "min_not_met",
+			}).success,
+		).toBe(false);
+	});
+});
+
+describe("COUPON_REJECTION_REASONS", () => {
+	it("covers the four stages of the check and nothing else", () => {
+		expect([...COUPON_REJECTION_REASONS]).toEqual([
+			"not_found",
+			"inactive",
+			"expired",
+			"wrong_business",
+		]);
 	});
 });

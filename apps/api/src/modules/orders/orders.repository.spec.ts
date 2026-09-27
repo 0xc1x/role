@@ -136,7 +136,7 @@ describe('OrdersRepository (DB real)', () => {
 });
 
 describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
-  test('findCouponByCodeForUpdate prioriza negocio; vencido → null', async () => {
+  test('findCouponByCodeForUpdate prioriza negocio y luego global', async () => {
     await ctx.db.insert(coupons).values([
       { code: 'MIX', name: 'Global', type: 'fixed', value: '100' },
       {
@@ -146,6 +146,39 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
         value: '200',
         business_id: businessId,
       },
+    ]);
+    const found = await repo.transaction((tx) =>
+      repo.findCouponByCodeForUpdate(tx, businessId, 'MIX'),
+    );
+    expect(found?.business_id).toBe(businessId);
+
+    // Desde otro negocio el global gana: el de este negocio no compite.
+    const otherOwner = await seedProfile(ctx.db);
+    const otherBiz = await seedBusiness(ctx.db, otherOwner);
+    const fromOther = await repo.transaction((tx) =>
+      repo.findCouponByCodeForUpdate(tx, otherBiz.id, 'MIX'),
+    );
+    expect(fromOther?.business_id).toBeNull();
+
+    expect(
+      await repo.transaction((tx) =>
+        repo.findCouponByCodeForUpdate(tx, businessId, 'NOPE'),
+      ),
+    ).toBeNull();
+  });
+
+  // The lookup must NOT filter by validity/scope: the service needs the row to
+  // report `inactive`, `expired` and `wrong_business` instead of a flat null.
+  test('findCouponByCodeForUpdate devuelve inactivo, vencido y ajeno', async () => {
+    const foreignBiz = await seedBusiness(ctx.db, await seedProfile(ctx.db));
+    await ctx.db.insert(coupons).values([
+      {
+        code: 'OFF',
+        name: 'Inactivo',
+        type: 'fixed',
+        value: '1',
+        is_active: false,
+      },
       {
         code: 'VIEJO',
         name: 'V',
@@ -153,21 +186,22 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
         value: '1',
         expires_at: new Date('2000-01-01T00:00:00Z'),
       },
+      {
+        code: 'AJENO',
+        name: 'Ajeno',
+        type: 'fixed',
+        value: '1',
+        business_id: foreignBiz.id,
+      },
     ]);
-    const found = await repo.transaction((tx) =>
-      repo.findCouponByCodeForUpdate(tx, businessId, 'MIX'),
-    );
-    expect(found?.business_id).toBe(businessId);
-    expect(
-      await repo.transaction((tx) =>
-        repo.findCouponByCodeForUpdate(tx, businessId, 'VIEJO'),
-      ),
-    ).toBeNull();
-    expect(
-      await repo.transaction((tx) =>
-        repo.findCouponByCodeForUpdate(tx, businessId, 'NOPE'),
-      ),
-    ).toBeNull();
+    const find = (code: string) =>
+      repo.transaction((tx) =>
+        repo.findCouponByCodeForUpdate(tx, businessId, code),
+      );
+
+    expect((await find('OFF'))?.is_active).toBe(false);
+    expect((await find('VIEJO'))?.expires_at).not.toBeNull();
+    expect((await find('AJENO'))?.business_id).toBe(foreignBiz.id);
   });
 
   test('incrementCouponUsedCount y accrueBusinessBalance', async () => {

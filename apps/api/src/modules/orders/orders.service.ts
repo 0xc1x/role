@@ -107,32 +107,64 @@ export class OrdersService {
       let couponId: string | null = null;
 
       if (body.coupon_code) {
+        // A supplied coupon is never silently ignored: if it cannot be applied
+        // the reservation FAILS. The SQL RPC used to continue at full price on a
+        // miss, which is what let the client see a discount in the UI and get
+        // charged the full amount. Both sides now reject, with the same reasons,
+        // before any stock or order row is touched.
+        //
+        // One divergence remains, and it is in the input, not the outcome: the
+        // SQL receives a coupon ID (`p_coupon_id`) and this mirror receives a
+        // code (`coupon_code`), so the SQL cannot distinguish `not_found` from a
+        // caller that passed a stale ID for a coupon that was deleted. The
+        // resolution order and the resulting `coupon_id` are otherwise identical.
         const coupon = await this.ordersRepository.findCouponByCodeForUpdate(
           tx,
           offer.business_id,
           body.coupon_code,
         );
-        if (coupon) {
-          if (
-            coupon.max_uses !== null &&
-            coupon.used_count >= coupon.max_uses
-          ) {
-            throw new ConflictException('COUPON_EXHAUSTED: Cupon agotado');
-          }
-          if (Number(coupon.min_order_amount ?? 0) > price) {
-            throw new ConflictException(
-              'COUPON_MIN_NOT_MET: Monto minimo no alcanzado para el cupon',
-            );
-          }
-          discount =
-            coupon.type === 'percentage'
-              ? Math.min((price * Number(coupon.value)) / 100, price)
-              : Math.min(Number(coupon.value), price);
-          price = Math.max(price - discount, 0);
-          couponId = coupon.id;
-          await this.ordersRepository.incrementCouponUsedCount(tx, coupon.id);
+        // Check order is the contract: existence -> business scope ->
+        // is_active -> expires_at -> max_uses -> min_order_amount -> apply.
+        // Runs before the stock decrement, so a rejection consumes no stock,
+        // writes no order and mutates no coupon.
+        if (!coupon) {
+          throw new ConflictException(
+            'COUPON_NOT_APPLICABLE: not_found - El cupon no existe',
+          );
         }
-        // Sin coincidencia el SQL continúa sin descuento — espejo idéntico.
+        if (
+          coupon.business_id !== null &&
+          coupon.business_id !== offer.business_id
+        ) {
+          throw new ConflictException(
+            'COUPON_NOT_APPLICABLE: wrong_business - El cupon pertenece a otro negocio',
+          );
+        }
+        if (!coupon.is_active) {
+          throw new ConflictException(
+            'COUPON_NOT_APPLICABLE: inactive - El cupon esta inactivo',
+          );
+        }
+        if (coupon.expires_at && coupon.expires_at <= new Date()) {
+          throw new ConflictException(
+            'COUPON_NOT_APPLICABLE: expired - El cupon ya vencio',
+          );
+        }
+        if (coupon.max_uses !== null && coupon.used_count >= coupon.max_uses) {
+          throw new ConflictException('COUPON_EXHAUSTED: Cupon agotado');
+        }
+        if (Number(coupon.min_order_amount ?? 0) > price) {
+          throw new ConflictException(
+            'COUPON_MIN_NOT_MET: Monto minimo no alcanzado para el cupon',
+          );
+        }
+        discount =
+          coupon.type === 'percentage'
+            ? Math.min((price * Number(coupon.value)) / 100, price)
+            : Math.min(Number(coupon.value), price);
+        price = Math.max(price - discount, 0);
+        couponId = coupon.id;
+        await this.ordersRepository.incrementCouponUsedCount(tx, coupon.id);
       }
 
       const decremented = await this.offersRepository.decrementStock(
