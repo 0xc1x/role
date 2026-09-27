@@ -22,7 +22,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
  * closures de su mock, y el spec hermano que lo importe después recibe un
  * componente que lee el `currentSearch` del otro y falla sin que su código haya
  * cambiado. Por eso `/ordenes` y `/ofertas` fijan su propia correlación en
- * `ordenes-list.test.tsx` y `ofertas-list.test.tsx`, que ya los montan.
+ * `ordenes-list.test.tsx` y `ofertas-list.test.tsx`, que ya los montan, y por eso
+ * `/pagos` NO aparece en las listas de abajo: lo monta `pagos-list.test.tsx`, que
+ * es su único dueño. Antes lo importaban los dos, y el que se ejecutaba segundo
+ * recibía el `currentSearch` del primero: sus propios tests quedaban verdes sobre
+ * un search ajeno.
  */
 let currentSearch: Record<string, unknown> = {};
 let navigate: ReturnType<typeof mock> = mock(() => undefined);
@@ -55,7 +59,6 @@ mock.module("@tanstack/react-router", () => ({
 const { Route: negociosRoute } = await import("../_layout.negocios");
 const { Route: consejosRoute } = await import("../_layout.consejos");
 const { Route: comisionesRoute } = await import("../_layout.comisiones");
-const { Route: pagosRoute } = await import("../_layout.pagos");
 const { Route: cuponesRoute } = await import("../_layout.cupones");
 const { Route: slidesRoute } = await import("../_layout.slides");
 const { Route: categoriasRoute } = await import("../_layout.categorias");
@@ -77,7 +80,6 @@ const routes: Array<[string, { component: RouteComponent }]> = [
 	["negocios", negociosRoute as unknown as { component: RouteComponent }],
 	["consejos", consejosRoute as unknown as { component: RouteComponent }],
 	["comisiones", comisionesRoute as unknown as { component: RouteComponent }],
-	["pagos", pagosRoute as unknown as { component: RouteComponent }],
 	["cupones", cuponesRoute as unknown as { component: RouteComponent }],
 	["slides", slidesRoute as unknown as { component: RouteComponent }],
 	["categorias", categoriasRoute as unknown as { component: RouteComponent }],
@@ -93,7 +95,6 @@ const routes: Array<[string, { component: RouteComponent }]> = [
  */
 const correlatedRoutes: Array<[string, RouteComponent]> = [
 	["negocios", componentOf(negociosRoute)],
-	["pagos", componentOf(pagosRoute)],
 	["cupones", componentOf(cuponesRoute)],
 	["slides", componentOf(slidesRoute)],
 	["categorias", componentOf(categoriasRoute)],

@@ -1,10 +1,22 @@
-import { ListPayoutsQuerySchema } from "@0xc1x/role-commons";
+import {
+	ListPayoutsQuerySchema,
+	PAYOUT_STATUSES,
+	type PayoutStatus,
+} from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
+import { BusinessFilter } from "@/components/business-filter";
 import { DataTable } from "@/components/data-table/data-table";
 import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { Button } from "@/components/ui/button";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -16,9 +28,13 @@ import {
 	useGeneratePayouts,
 	usePayoutsList,
 } from "@/features/payouts";
+import { PayoutsTotalsRow } from "@/features/payouts/components/payouts-totals-row";
 import { fetchAllPages } from "@/lib/api/fetch-all-pages";
 import { formatApiError } from "@/lib/api/notify";
+import { payoutStatusLabel } from "@/lib/labels";
 
+// El contrato ya declara `business_id` y `status` en el listado; el `.extend`
+// solo baja el page size al de las tablas (10).
 const pagosSearchSchema = ListPayoutsQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 });
@@ -37,6 +53,11 @@ function RouteComponent() {
 	const { data, isLoading, isError, error, refetch } = usePayoutsList(search);
 	const gen = useGeneratePayouts();
 	const [confirmOpen, setConfirmOpen] = useState(false);
+
+	// Cambiar un filtro vuelve a la página 1: quedarse en la página 4 de un filtro
+	// nuevo muestra una lista vacía y parece que el filtro no encontró nada.
+	const patch = (next: Partial<typeof search>) =>
+		navigate({ search: { ...search, ...next, page: 1 } });
 
 	if (isLoading)
 		return (
@@ -64,9 +85,38 @@ function RouteComponent() {
 
 	return (
 		<div className="px-6 py-4">
-			<div className="flex items-center justify-between gap-2">
+			<div className="flex flex-wrap items-center justify-between gap-3">
 				<h1 className="font-bold text-xl">Pagos a negocios</h1>
-				<div className="flex items-center gap-2">
+				<div className="flex flex-wrap items-center gap-3">
+					<Select
+						value={search.status ?? "all"}
+						onValueChange={(v) =>
+							patch({ status: v === "all" ? undefined : (v as PayoutStatus) })
+						}
+					>
+						<SelectTrigger className="w-48" aria-label="Estado">
+							{/* Con children explícitos: sin ellos el trigger muestra el
+							    enum crudo (`processing`) en vez de la etiqueta. */}
+							<SelectValue>
+								{search.status
+									? payoutStatusLabel(search.status)
+									: "Todos los estados"}
+							</SelectValue>
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">Todos los estados</SelectItem>
+							{PAYOUT_STATUSES.map((status) => (
+								<SelectItem key={status} value={status}>
+									{payoutStatusLabel(status)}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+					<BusinessFilter
+						value={search.business_id}
+						onChange={(business_id) => patch({ business_id })}
+						searchLabel="Buscar negocio para filtrar los pagos"
+					/>
 					<ExportCsvButton
 						fileName="pagos"
 						columns={payoutsCsvColumns}
@@ -82,7 +132,12 @@ function RouteComponent() {
 			<p className="text-sm text-muted-foreground mt-1">
 				Cortes quincenales · fee congelado por orden · cron 1 y 16 a las 03:00
 			</p>
-			<div className="mt-4">
+			<div className="mt-4 space-y-4">
+				{/* Los totales van ANTES de la tabla y repiten el filtro activo en su
+				    rótulo: una fila de totales debajo de una tabla paginada se lee
+				    sola como el total de las filas visibles, y eso no es lo que
+				    suma. El componente recorre las páginas del filtro completo. */}
+				<PayoutsTotalsRow query={search} filteredTotal={meta?.total ?? 0} />
 				<DataTable
 					columns={payoutsColumns}
 					data={rows}

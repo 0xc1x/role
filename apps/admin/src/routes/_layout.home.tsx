@@ -9,6 +9,7 @@ import { useAuthUser } from "@/features/auth";
 import { useBusinessesList } from "@/features/businesses";
 import { useEmailSendsList } from "@/features/email-sends";
 import { usePlatformStats } from "@/features/stats";
+import { MoneySection } from "@/features/stats/components/money-section";
 import { formatBusinessDate } from "@/lib/dates";
 import { emailSendStatusLabel } from "@/lib/labels";
 
@@ -369,6 +370,8 @@ function HomePage() {
 					</CardContent>
 				</Card>
 			</div>
+
+			<MoneySection />
 
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 				<PendingBusinessesCard

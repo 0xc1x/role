@@ -6,6 +6,7 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 import { z } from "zod";
+import { BusinessFilter } from "@/components/business-filter";
 import { DataTable } from "@/components/data-table/data-table";
 import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useOrdersList } from "@/features/orders";
 import { ordersApi } from "@/features/orders/api/orders.api";
-import { BusinessFilter } from "@/features/orders/components/business-filter";
 import {
 	ordersColumns,
 	ordersCsvColumns,
@@ -120,6 +120,7 @@ function RouteComponent() {
 					<BusinessFilter
 						value={search.business_id}
 						onChange={(business_id) => patch({ business_id })}
+						searchLabel="Buscar negocio para filtrar las órdenes"
 					/>
 				</div>
 			</div>

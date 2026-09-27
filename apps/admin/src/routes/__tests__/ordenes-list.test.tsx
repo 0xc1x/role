@@ -146,7 +146,7 @@ describe("/ordenes — render", () => {
 
 describe("/ordenes — filtros", () => {
 	// El popup de `Select` (Base UI) no monta en happy-dom — la misma limitación
-	// que ya documenta `pagos-generate-confirm.test.tsx`. Por eso el estado se
+	// que ya documenta `pagos-list.test.tsx`. Por eso el estado se
 	// verifica por su efecto observable (lo que viaja al servidor) y el cableado
 	// de `navigate(..., page: 1)` se verifica con el switch, que sí es pulsable.
 	test("el estado del search viaja al servidor y el trigger no muestra el enum crudo", async () => {

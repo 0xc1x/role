@@ -18,17 +18,24 @@ import { directoryKeys } from "@/features/directory/queries/directory.keys";
 import { useDebounce } from "@/hooks/use-debounce";
 
 /**
- * Filtro por negocio del listado de órdenes. Reusa `directoryApi`/`directoryKeys`
- * en vez de crear un endpoint, y a diferencia del picker de campañas NO filtra
- * por `is_active`: una orden vieja pertenece a un negocio que puede estar
- * inactivo, y justo esas son las que hay que investigar.
+ * Filtro por negocio de los listados del panel (órdenes, pagos). Reusa
+ * `directoryApi`/`directoryKeys` en vez de crear un endpoint, y a diferencia del
+ * picker de campañas NO filtra por `is_active`: una orden vieja o un corte viejo
+ * pertenecen a un negocio que puede estar inactivo, y justo esas son las que hay
+ * que investigar.
+ *
+ * Vive en `components/` y no en `features/orders/` porque lo consumen dos dominios
+ * sin relación: el filtro no sabe de órdenes ni de pagos, solo de negocios.
  */
 export function BusinessFilter({
 	value,
 	onChange,
+	searchLabel = "Buscar negocio para filtrar",
 }: {
 	value?: string;
 	onChange: (businessId: string | undefined) => void;
+	/** Texto accesible del buscador; cada vista lo afina a su listado. */
+	searchLabel?: string;
 }) {
 	const [search, setSearch] = useState("");
 	const debounced = useDebounce(search);
@@ -61,7 +68,7 @@ export function BusinessFilter({
 					placeholder="Filtrar por negocio..."
 					value={search}
 					onChange={(e) => setSearch(e.target.value)}
-					aria-label="Buscar negocio para filtrar las órdenes"
+					aria-label={searchLabel}
 				/>
 			</InputGroup>
 			<Select

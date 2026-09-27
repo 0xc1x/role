@@ -33,6 +33,32 @@ const HomePage = (Route as unknown as { component: () => React.ReactNode })
 const previousFetch = globalThis.fetch;
 let fetchCalls = 0;
 
+/**
+ * Reporte de dinero sano. Montos distintos entre devengado y cobrado para que una
+ * mezcla de las dos caras sea visible; el detalle de esa separación vive en
+ * `features/stats/components/__tests__/money-section.test.tsx`, que es el dueño de
+ * la sección.
+ */
+const revenueBody = {
+	period: { from: "2026-09-01", to: "2026-09-30" },
+	accrued: {
+		gross_amount: 150,
+		platform_fees: 20,
+		business_net: 130,
+		effective_commission_rate: 0.1333,
+		orders: { total: 4, completed: 2, cancelled: 1, expired: 1 },
+	},
+	collected: {
+		gross_amount: 50,
+		platform_fees: 10,
+		business_net: 40,
+		paid_payouts: 1,
+		outstanding_business_net: 90,
+		outstanding_payouts: 1,
+		failed_payouts: 1,
+	},
+};
+
 function stubFetch(status: number, body: unknown) {
 	fetchCalls = 0;
 	globalThis.fetch = (async () => {
@@ -111,6 +137,15 @@ describe("panel de inicio con la API sana", () => {
 	test("muestra los valores reales de las métricas", async () => {
 		globalThis.fetch = (async (input: RequestInfo | URL) => {
 			const url = String(input);
+			// `/stats/revenue` también contiene "/stats": sin esta separación el
+			// stub le devolvería el cuerpo de las tres métricas de marketing y el
+			// panel sumaría `undefined` como si fuera dinero.
+			if (url.includes("/stats/revenue")) {
+				return new Response(JSON.stringify(revenueBody), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
+			}
 			if (url.includes("/stats")) {
 				return new Response(
 					JSON.stringify({ users: 120, businesses: 42, meals_saved: 3100 }),
