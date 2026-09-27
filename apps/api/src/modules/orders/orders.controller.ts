@@ -2,12 +2,15 @@ import {
   Body,
   Controller,
   Get,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -50,12 +53,26 @@ export class OrdersController {
   @Post()
   @ApiOperation({ summary: 'Reserve / create an order for an offer' })
   @ApiCreatedResponse({ description: 'Order created' })
-  create(
+  @ApiOkResponse({
+    description:
+      'The order an earlier request with the same idempotency_key already ' +
+      'created. Same body as the 201: this request created nothing.',
+  })
+  async create(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(CreateOrderRequestSchema))
     body: CreateOrderRequest,
+    // `passthrough` keeps Nest's serialization: only the status is set here.
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.ordersService.create(user, body);
+    const { order, replayed } = await this.ordersService.create(user, body);
+    // 201 is "this request created the order", 200 is "this order already
+    // existed" — the `replayed: true` of the RPC, in HTTP's own vocabulary. The
+    // body is the original order either way, so a client that retries over a
+    // flaky connection cannot tell the two apart by content, only by status,
+    // and the reservation it already made is never duplicated.
+    res.status(replayed ? HttpStatus.OK : HttpStatus.CREATED);
+    return order;
   }
 
   @Get()

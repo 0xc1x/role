@@ -47,6 +47,46 @@ const PICKUP_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
+/**
+ * Same code and same wording as the RPC's `IDEMPOTENCY_KEY_REUSED`: both
+ * producers must report a reused key identically, or a client that moves
+ * between them has to learn two different conflicts.
+ */
+const IDEMPOTENCY_KEY_REUSED =
+  'IDEMPOTENCY_KEY_REUSED: La clave de idempotencia ya fue usada para otra reserva';
+
+/**
+ * The outcome of a reservation: the order, plus whether it is a replay of an
+ * earlier request that carried the same key.
+ *
+ * `replayed` is the `replayed: true` of `reserve_offer`. Over there it rode
+ * inside the RPC's jsonb; here it cannot ride in the body, because
+ * `OrderResponse` is the response of eight endpoints and a flag belonging to
+ * one of them would blur the contract of the other seven. The status carries
+ * it instead: 201 means "this request created the order", 200 means "this order
+ * already existed". The body is the SAME order either way, which is the whole
+ * promise of the key.
+ */
+export type CreateOrderOutcome = {
+  order: OrderResponse;
+  replayed: boolean;
+};
+
+/**
+ * `reserve_offer` normalizes the key with `nullif(btrim(...), '')` BEFORE it
+ * hashes it and BEFORE it compares it against the stored row, so the value both
+ * producers persist has to be the same one: otherwise the same logical key
+ * becomes two keys, a mobile `" retry-1 "` and an API `"retry-1"` would lock
+ * different advisory ids and would never recognize each other. A whitespace-only
+ * key means "no key", not "the key ' '".
+ */
+function normalizeIdempotencyKey(
+  raw: string | null | undefined,
+): string | null {
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : null;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -62,9 +102,28 @@ export class OrdersService {
   async create(
     user: AuthUser,
     body: CreateOrderRequest,
-  ): Promise<OrderResponse> {
-    const created = await this.ordersRepository.transaction(async (tx) => {
+  ): Promise<CreateOrderOutcome> {
+    const idempotencyKey = normalizeIdempotencyKey(body.idempotency_key);
+
+    const outcome = await this.ordersRepository.transaction(async (tx) => {
       await this.ordersRepository.setEventActor(tx, user.id);
+
+      // Idempotency comes FIRST, before the offer is even read. That order is
+      // the RPC's, and it is not cosmetic: a replay has to return the original
+      // order even when the offer has since sold out or its pickup window has
+      // closed, which is exactly the moment a retrying client shows up. Running
+      // the checks first would answer OFFER_OUT_OF_STOCK to a client that
+      // already holds a valid reservation.
+      if (idempotencyKey) {
+        const existing = await this.replayReservedOrder(
+          tx,
+          user,
+          body,
+          idempotencyKey,
+        );
+        if (existing) return { order: existing, replayed: true as const };
+      }
+
       // Espejo de `reserve_offer`: los códigos de error son los mismos que
       // devuelve el RPC para que los tests de equivalencia sean directos.
       const offer = await this.offersRepository.findByIdForUpdate(
@@ -196,6 +255,12 @@ export class OrdersService {
         offer_id: offer.id,
         business_id: offer.business_id,
         order_number: orderNumber,
+        // Written, not just checked: the key is what makes the NEXT attempt a
+        // replay instead of a second reservation. The partial unique index
+        // behind `orders_user_idempotency_key_unique` is the backstop, but the
+        // advisory lock is what turns a concurrent loser into a replay rather
+        // than a 23505.
+        idempotency_key: idempotencyKey,
         status: 'pending',
         price: String(price),
         original_price: String(originalPrice),
@@ -207,17 +272,118 @@ export class OrdersService {
         net_amount: String(round2(price - platformFee)),
       });
 
-      return order;
+      return { order, replayed: false as const };
     });
 
-    // Fase 2.3: emisión desde flujo API (dormida hasta flag)
-    this.emitOrderChange(created.id);
+    // A replay changed nothing — no order, no stock, no status transition — so
+    // re-emitting would notify the user about an event that did not happen. The
+    // RPC's replay path emits nothing either.
+    if (!outcome.replayed) {
+      // Fase 2.3: emisión desde flujo API (dormida hasta flag)
+      this.emitOrderChange(outcome.order.id);
+    }
 
-    return OrderMapper.toResponse(created, {
-      isOrderOwner: true,
-      isBusinessOwner: false,
-      isAdmin: user.role === 'admin',
-    });
+    return {
+      order: OrderMapper.toResponse(outcome.order, {
+        isOrderOwner: true,
+        isBusinessOwner: false,
+        isAdmin: user.role === 'admin',
+      }),
+      replayed: outcome.replayed,
+    };
+  }
+
+  /**
+   * The `reserve_offer` idempotency block, in the SQL's order: take the
+   * advisory lock, look the key up, then either replay the stored order or
+   * report that the key already belongs to a different reservation.
+   *
+   * Returns null when the key is unused, which is the caller's signal to fall
+   * through to the reservation flow. A key that is free on entry is NOT
+   * reserved here: the insert at the end of the transaction is what claims it,
+   * and it is the transaction that makes the claim atomic.
+   *
+   * Note the ordering of the two comparisons, which the SQL also uses: the
+   * offer first, because a mismatching offer is already a conflict and must not
+   * pay for a coupon resolution it does not need.
+   */
+  private async replayReservedOrder(
+    tx: DbExecutor,
+    user: AuthUser,
+    body: CreateOrderRequest,
+    key: string,
+  ): Promise<OrderRow | null> {
+    await this.ordersRepository.lockIdempotencyKey(tx, user.id, key);
+    const existing = await this.ordersRepository.findByUserAndIdempotencyKey(
+      tx,
+      user.id,
+      key,
+    );
+    if (!existing) return null;
+
+    if (existing.offer_id !== body.offer_id) {
+      throw new ConflictException(IDEMPOTENCY_KEY_REUSED);
+    }
+    if (!(await this.replayCouponMatches(tx, existing, body))) {
+      throw new ConflictException(IDEMPOTENCY_KEY_REUSED);
+    }
+
+    return existing;
+  }
+
+  /**
+   * Whether the request's coupon is the one the replayed order already used.
+   *
+   * The SQL compares coupon IDs because it RECEIVES one (`p_coupon_id`); this
+   * mirror receives a `coupon_code` and resolves it later in the flow, so the
+   * comparison has to happen on the resolved ID. That is the same comparison,
+   * and not merely a similar one:
+   *
+   *  - The offer already matched, and the offer fixes the business.
+   *  - `coupons` is UNIQUE (business_id, code), so within one business a code
+   *    names at most one coupon and the code -> id mapping is a function, not a
+   *    guess. Same code and same business means same coupon means same id.
+   *  - The resolution is the flow's own `findCouponByCodeForUpdate`, so the
+   *    replay can never disagree with what a fresh reservation would have done
+   *    with the same input.
+   *
+   * The two cases where it is NOT provably equivalent, both reported rather
+   * than papered over:
+   *
+   *  1. Platform coupons carry `business_id IS NULL`, and a btree unique index
+   *    does not constrain NULLs, so two global coupons may share a code. The
+   *    lookup breaks that tie by preference alone, and the ID it returns then
+   *    depends on which row the plan visits first. There are no duplicate
+   *    global codes in the live database today, and the risk is a false
+   *    conflict, not a double reservation.
+   *  2. Coupons are hard-deleted (`coupons.repository.remove` notes that
+   *    `orders.coupon_id` has no FK and survives as history), so a code can stop
+   *    resolving after the original reservation. The SQL, holding the id, would
+   *    replay; here the unresolvable code cannot be proven to be the same
+   *    coupon, so it reports the conflict. A wrong conflict is the safe
+   *    direction: the alternative would be a second reservation.
+   */
+  private async replayCouponMatches(
+    tx: DbExecutor,
+    existing: OrderRow,
+    body: CreateOrderRequest,
+  ): Promise<boolean> {
+    const code = body.coupon_code ?? null;
+
+    // Both sides coupon-less is a match; exactly one side carrying a coupon is
+    // the same mismatch the SQL reports as `coupon_id IS DISTINCT FROM`.
+    if (existing.coupon_id === null || code === null) {
+      return existing.coupon_id === null && code === null;
+    }
+
+    // The stored order's business is the offer's business — the offer matched
+    // on the line above — so resolving against it needs no second offer read.
+    const coupon = await this.ordersRepository.findCouponByCodeForUpdate(
+      tx,
+      existing.business_id,
+      code,
+    );
+    return coupon !== null && coupon.id === existing.coupon_id;
   }
 
   /** Espejo de la RPC `cancel_order`. */

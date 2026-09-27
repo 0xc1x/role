@@ -639,6 +639,9 @@
         "operationId": "OrdersController_create",
         "parameters": [],
         "responses": {
+          "200": {
+            "description": "The order an earlier request with the same idempotency_key already created. Same body as the 201: this request created nothing."
+          },
           "201": {
             "description": "Order created"
           }

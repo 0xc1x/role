@@ -113,6 +113,8 @@ describe('OrdersService', () => {
           useValue: {
             transaction: jest.fn(),
             setEventActor: jest.fn(),
+            lockIdempotencyKey: jest.fn(),
+            findByUserAndIdempotencyKey: jest.fn(),
             findActiveByUserAndOffer: jest.fn(),
             findByIdWithBusinessOwner: jest.fn(),
             findByIdForUpdate: jest.fn(),
@@ -181,9 +183,12 @@ describe('OrdersService', () => {
       const result = await service.create(mockAuthUser, body);
 
       expect(result).toMatchObject({
-        id: 'order-1',
-        status: 'pending',
-        pickup_code: 'ABCDEF',
+        replayed: false,
+        order: {
+          id: 'order-1',
+          status: 'pending',
+          pickup_code: 'ABCDEF',
+        },
       });
       // Snapshot de comisión sobre el precio final tras cupón (sin cupón aquí)
       expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
@@ -349,6 +354,119 @@ describe('OrdersService', () => {
       );
     });
 
+    it('sin idempotency_key no se lockea ni se busca (el camino viejo, intacto)', async () => {
+      // A reservation without a key must cost exactly what it cost before the
+      // key existed: no advisory lock, no extra lookup, null persisted.
+      mockHappyPath();
+
+      await service.create(mockAuthUser, body);
+
+      expect(ordersRepository.lockIdempotencyKey).not.toHaveBeenCalled();
+      expect(
+        ordersRepository.findByUserAndIdempotencyKey,
+      ).not.toHaveBeenCalled();
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ idempotency_key: null }),
+      );
+    });
+
+    it('con idempotency_key: lockea y persiste la clave normalizada', async () => {
+      mockHappyPath();
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(null);
+
+      await service.create(mockAuthUser, {
+        ...body,
+        idempotency_key: '  retry-1  ',
+      });
+
+      // The RPC hashes the trimmed key, so the trimmed key is also what gets
+      // stored; anything else would split one logical key into two rows.
+      expect(ordersRepository.lockIdempotencyKey).toHaveBeenCalledWith(
+        expect.anything(),
+        'user-1',
+        'retry-1',
+      );
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ idempotency_key: 'retry-1' }),
+      );
+    });
+
+    it('clave ya usada: devuelve la orden original sin decrementar stock', async () => {
+      mockHappyPath();
+      const existing = makeOrderRow({ id: 'order-original', coupon_id: null });
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(existing);
+
+      const result = await service.create(mockAuthUser, {
+        ...body,
+        idempotency_key: 'retry-1',
+      });
+
+      expect(result.replayed).toBe(true);
+      expect(result.order.id).toBe('order-original');
+      // No second reservation: no stock, no insert, no folio, no coupon.
+      expect(offersRepository.decrementStock).not.toHaveBeenCalled();
+      expect(ordersRepository.insertOrder).not.toHaveBeenCalled();
+      expect(ordersRepository.nextOrderNumber).not.toHaveBeenCalled();
+      // And the offer is never even read: the RPC resolves the key first.
+      expect(offersRepository.findByIdForUpdate).not.toHaveBeenCalled();
+    });
+
+    it('clave usada con otra oferta → IDEMPOTENCY_KEY_REUSED', async () => {
+      mockHappyPath();
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(
+        makeOrderRow({ offer_id: 'offer-2' }),
+      );
+
+      await expect(
+        service.create(mockAuthUser, {
+          ...body,
+          idempotency_key: 'retry-1',
+        }),
+      ).rejects.toThrow('IDEMPOTENCY_KEY_REUSED');
+      expect(offersRepository.decrementStock).not.toHaveBeenCalled();
+    });
+
+    it('clave usada con otro cupón → IDEMPOTENCY_KEY_REUSED', async () => {
+      mockHappyPath();
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(
+        makeOrderRow({ coupon_id: 'coupon-1' }),
+      );
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
+        makeCouponRow({ id: 'coupon-otro' }),
+      );
+
+      await expect(
+        service.create(mockAuthUser, {
+          ...body,
+          coupon_code: 'PROMO10',
+          idempotency_key: 'retry-1',
+        }),
+      ).rejects.toThrow('IDEMPOTENCY_KEY_REUSED');
+      expect(ordersRepository.insertOrder).not.toHaveBeenCalled();
+    });
+
+    it('clave usada con el mismo cupón → replay de la orden original', async () => {
+      mockHappyPath();
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(
+        makeOrderRow({ id: 'order-original', coupon_id: 'coupon-1' }),
+      );
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
+        makeCouponRow({ id: 'coupon-1' }),
+      );
+
+      const result = await service.create(mockAuthUser, {
+        ...body,
+        coupon_code: 'PROMO10',
+        idempotency_key: 'retry-1',
+      });
+
+      expect(result.replayed).toBe(true);
+      expect(result.order.id).toBe('order-original');
+      expect(ordersRepository.incrementCouponUsedCount).not.toHaveBeenCalled();
+    });
+
     describe('cupón rejection: COUPON_NOT_APPLICABLE con reason', () => {
       /**
        * Every rejection path must be observable by the client. The old code
@@ -420,7 +538,7 @@ describe('OrdersService', () => {
 
       const result = await service.create(mockAuthUser, body);
 
-      expect(result.pickup_code).toMatch(
+      expect(result.order.pickup_code).toMatch(
         /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/,
       );
     });
@@ -1178,6 +1296,8 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
           useValue: {
             transaction: jest.fn(),
             setEventActor: jest.fn(),
+            lockIdempotencyKey: jest.fn(),
+            findByUserAndIdempotencyKey: jest.fn(),
             findActiveByUserAndOffer: jest.fn(),
             findByIdWithBusinessOwner: jest.fn(),
             findByIdForUpdate: jest.fn(),

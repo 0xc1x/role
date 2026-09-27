@@ -43,10 +43,30 @@ describe('OrdersController', () => {
     service = module.get(OrdersService);
   });
 
-  it('create delega con el usuario autenticado', () => {
+  it('create delega con el usuario autenticado', async () => {
     const body = { offer_id: 'of-1', quantity: 2 } as never;
-    controller.create(user, body);
+    const order = { id: 'order-1' } as never;
+    service.create.mockResolvedValue({ order, replayed: false });
+    const res = { status: jest.fn() } as never;
+
+    await controller.create(user, body, res);
+
     expect(service.create).toHaveBeenCalledWith(user, body);
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('create responde 200 y la MISMA orden cuando es un replay', async () => {
+    // The replay is the whole point of the key: the caller must get its
+    // original order back, and the only observable difference is the status.
+    const body = { offer_id: 'of-1', idempotency_key: 'k-1' } as never;
+    const order = { id: 'order-1' } as never;
+    service.create.mockResolvedValue({ order, replayed: true });
+    const res = { status: jest.fn() } as never;
+
+    const returned = await controller.create(user, body, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(returned).toBe(order);
   });
 
   it('listMine pasa el query', () => {

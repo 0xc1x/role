@@ -64,6 +64,53 @@ export class OrdersRepository {
     );
   }
 
+  /**
+   * Serialize every reservation attempt that carries the same
+   * (user, idempotency_key) pair — espejo de
+   * `pg_advisory_xact_lock(hashtextextended(p_user_id::text||':'||p_idempotency_key,0))`.
+   *
+   * Two details are load-bearing and must not be "cleaned up":
+   *
+   *  1. The expression is the SQL's, character for character, including the
+   *     seed. `hashtextextended` is hashed by the DATABASE, so an API that
+   *     hashed in JavaScript would compute a different lock id and the two
+   *     producers would stop excluding each other while still behaving alike in
+   *     tests that never run them against the same database.
+   *  2. It is `pg_advisory_xact_lock`, taken on the transaction's connection and
+   *     released at commit or rollback. A session lock would leak into the
+   *     pooled connection, and a lock taken outside the transaction would leave
+   *     the lookup-then-insert window open — which is the exact race the lock
+   *     exists to close.
+   */
+  async lockIdempotencyKey(
+    tx: DbExecutor,
+    userId: string,
+    key: string,
+  ): Promise<void> {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${userId}::text || ':' || ${key}, 0))`,
+    );
+  }
+
+  /**
+   * The reservation a key already produced, if any. Only meaningful after
+   * `lockIdempotencyKey`, which is what makes "not found" a safe answer: the
+   * partial unique index behind `orders_user_idempotency_key_unique` would
+   * otherwise turn the loser of a concurrent pair into a 23505.
+   */
+  async findByUserAndIdempotencyKey(
+    tx: DbExecutor,
+    userId: string,
+    key: string,
+  ): Promise<typeof orders.$inferSelect | null> {
+    const [row] = await tx
+      .select()
+      .from(orders)
+      .where(and(eq(orders.user_id, userId), eq(orders.idempotency_key, key)))
+      .limit(1);
+    return row ?? null;
+  }
+
   async insertOrder(
     tx: DbExecutor,
     values: typeof orders.$inferInsert,

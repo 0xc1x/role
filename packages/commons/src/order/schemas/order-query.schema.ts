@@ -9,6 +9,20 @@ import { UuidSchema } from "../../_common/schemas/common";
 export const CreateOrderRequestSchema = z.object({
 	offer_id: UuidSchema,
 	coupon_code: z.string().min(1).optional(),
+	/**
+	 * Client-generated key that makes the reservation safe to retry (ADR-0008,
+	 * mirror of the `p_idempotency_key` parameter of `reserve_offer`).
+	 *
+	 * Optional and nullable because a client that does not retry has nothing to
+	 * send, and a key of `null` means the same as an absent one: no
+	 * idempotency, exactly the behaviour that predates the key.
+	 *
+	 * The bound mirrors the `orders_idempotency_key_length` check constraint and
+	 * the `length > 128 -> INVALID_IDEMPOTENCY_KEY` guard of the RPC, which the
+	 * database enforces anyway. Zod counts code points like Postgres counts
+	 * characters, so the two agree on where the limit is.
+	 */
+	idempotency_key: z.string().min(1).max(128).nullable().optional(),
 });
 
 export const UpdateOrderStatusSchema = z.object({
