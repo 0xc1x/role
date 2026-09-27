@@ -25,7 +25,9 @@ describe('CommissionsRepository (DB real)', () => {
     expect(list.total).toBeGreaterThanOrEqual(1);
     const found = await repo.findById(businessId);
     expect(found?.has_pending_payouts).toBe(false);
-    expect(await repo.findById('00000000-0000-0000-0000-000000000000')).toBeNull();
+    expect(
+      await repo.findById('00000000-0000-0000-0000-000000000000'),
+    ).toBeNull();
   });
 
   test('list filtra por búsqueda', async () => {

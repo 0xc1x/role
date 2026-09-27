@@ -9,9 +9,7 @@ import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 describe('StatsController', () => {
   let controller: StatsController;
   let service: jest.Mocked<Pick<StatsService, 'getPlatformStats'>>;
-  let revenueService: jest.Mocked<
-    Pick<RevenueStatsService, 'getRevenueStats'>
-  >;
+  let revenueService: jest.Mocked<Pick<RevenueStatsService, 'getRevenueStats'>>;
   let reflector: Reflector;
 
   beforeEach(async () => {

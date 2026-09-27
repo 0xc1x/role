@@ -67,7 +67,11 @@ describe('BusinessesRepository.listPublic', () => {
   });
 
   test('search filters on the name, and the count follows the same filter', async () => {
-    const hit = await repo.listPublic({ page: 1, limit: 20, search: 'Panader' });
+    const hit = await repo.listPublic({
+      page: 1,
+      limit: 20,
+      search: 'Panader',
+    });
     expect(hit.items.map((b) => b.id)).toEqual([approved]);
     expect(hit.total).toBe(1);
 
@@ -79,7 +83,11 @@ describe('BusinessesRepository.listPublic', () => {
   test('a wildcard in the search is escaped, not interpreted', async () => {
     // `%` is the LIKE wildcard. Unescaped it would match every business, which
     // turns a search box into a full-catalog dump.
-    const { items } = await repo.listPublic({ page: 1, limit: 20, search: '%' });
+    const { items } = await repo.listPublic({
+      page: 1,
+      limit: 20,
+      search: '%',
+    });
     expect(items).toEqual([]);
   });
 
@@ -123,7 +131,10 @@ describe('BusinessesRepository public children', () => {
     await seedLocation(ctx.db, pending, { name: 'Del pendiente' });
 
     const locations = await repo.listPublicLocations(approved);
-    expect(locations.map((l) => l.name).sort()).toEqual(['Centro', 'Sucursal Norte']);
+    expect(locations.map((l) => l.name).sort()).toEqual([
+      'Centro',
+      'Sucursal Norte',
+    ]);
     // A location of another business is never in the answer, whatever its state.
     expect(locations.some((l) => l.business_id === pending)).toBe(false);
   });
@@ -139,7 +150,10 @@ describe('BusinessesRepository public children', () => {
   test('hours are monday-first regardless of insertion order', async () => {
     await seedBusinessHours(ctx.db, approved, { day: 'friday' });
     await seedBusinessHours(ctx.db, approved, { day: 'monday' });
-    await seedBusinessHours(ctx.db, approved, { day: 'wednesday', is_closed: true });
+    await seedBusinessHours(ctx.db, approved, {
+      day: 'wednesday',
+      is_closed: true,
+    });
     await seedBusinessHours(ctx.db, pending, { day: 'monday' });
 
     const hours = await repo.listPublicHours(approved);

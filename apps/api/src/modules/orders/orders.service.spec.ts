@@ -397,7 +397,9 @@ describe('OrdersService', () => {
 
         expect(offersRepository.decrementStock).not.toHaveBeenCalled();
         expect(ordersRepository.insertOrder).not.toHaveBeenCalled();
-        expect(ordersRepository.incrementCouponUsedCount).not.toHaveBeenCalled();
+        expect(
+          ordersRepository.incrementCouponUsedCount,
+        ).not.toHaveBeenCalled();
       });
     });
 
@@ -657,7 +659,11 @@ describe('OrdersService', () => {
     });
 
     it.each([
-      ['status', { status: 'confirmed' as OrderStatus }, { status: 'confirmed' }],
+      [
+        'status',
+        { status: 'confirmed' as OrderStatus },
+        { status: 'confirmed' },
+      ],
       [
         'business_id',
         { business_id: 'business-9' },
@@ -868,7 +874,9 @@ describe('OrdersService', () => {
 
     it('allows an admin who is neither owner nor business owner', async () => {
       ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
-        makeOrderWithBusinessOwner({ order: makeOrderRow({ user_id: 'other' }) }),
+        makeOrderWithBusinessOwner({
+          order: makeOrderRow({ user_id: 'other' }),
+        }),
       );
       ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
 
@@ -879,7 +887,9 @@ describe('OrdersService', () => {
 
     it('forbids a stranger and reads nothing', async () => {
       ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
-        makeOrderWithBusinessOwner({ order: makeOrderRow({ user_id: 'other' }) }),
+        makeOrderWithBusinessOwner({
+          order: makeOrderRow({ user_id: 'other' }),
+        }),
       );
 
       await expect(

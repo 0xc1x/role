@@ -88,12 +88,14 @@ describe('ContactInboxMapper.toDetail', () => {
   });
 
   test('sigue sin emitir las direcciones de ruteo', () => {
-    const claves = Object.keys(ContactInboxMapper.toDetail(fila(valueCompleto)));
+    const claves = Object.keys(
+      ContactInboxMapper.toDetail(fila(valueCompleto)),
+    );
     expect(claves).not.toContain('to');
     expect(claves).not.toContain('from');
-    expect(JSON.stringify(ContactInboxMapper.toDetail(fila(valueCompleto)))).not.toContain(
-      'hola@role.ec',
-    );
+    expect(
+      JSON.stringify(ContactInboxMapper.toDetail(fila(valueCompleto))),
+    ).not.toContain('hola@role.ec');
   });
 });
 
@@ -136,7 +138,10 @@ describe('una fila con value corrupto no rompe el listado', () => {
 describe('el extracto del listado', () => {
   test('colapsa espacios y recorta los mensajes largos', () => {
     const dto = ContactInboxMapper.toListItem(
-      fila({ ...valueCompleto, message: `${'palabra '.repeat(60)}\n\ncon saltos` }),
+      fila({
+        ...valueCompleto,
+        message: `${'palabra '.repeat(60)}\n\ncon saltos`,
+      }),
     );
     expect(dto.excerpt).toBeDefined();
     expect(dto.excerpt?.length).toBeLessThanOrEqual(161);

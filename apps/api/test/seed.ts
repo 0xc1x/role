@@ -85,7 +85,14 @@ export async function seedBusinessHours(
   db: TestDatabase,
   businessId: string,
   overrides: {
-    day?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+    day?:
+      | 'monday'
+      | 'tuesday'
+      | 'wednesday'
+      | 'thursday'
+      | 'friday'
+      | 'saturday'
+      | 'sunday';
     open_time?: string;
     close_time?: string;
     is_closed?: boolean;

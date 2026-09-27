@@ -8,7 +8,10 @@ import {
   seedOffer,
   seedProfile,
 } from '../../../test/seed';
-import { favorites as favoritesTable, offers as offersTable } from '../../database/schema';
+import {
+  favorites as favoritesTable,
+  offers as offersTable,
+} from '../../database/schema';
 import { FavoritesRepository } from './favorites.repository';
 import { FavoritesService } from './favorites.service';
 import { OffersRepository } from '../offers/offers.repository';

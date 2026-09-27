@@ -16,7 +16,9 @@ const makeCampaign = (status: string) => ({
 
 describe('EmailExpeditionProcessor', () => {
   let processor: EmailExpeditionProcessor;
-  let campaignsService: jest.Mocked<Pick<CampaignsService, 'getCampaign' | 'processBatch'>>;
+  let campaignsService: jest.Mocked<
+    Pick<CampaignsService, 'getCampaign' | 'processBatch'>
+  >;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -48,7 +50,9 @@ describe('EmailExpeditionProcessor', () => {
   });
 
   it('no procesa campañas que ya no están en envío', async () => {
-    campaignsService.getCampaign.mockResolvedValue(makeCampaign('cancelled') as never);
+    campaignsService.getCampaign.mockResolvedValue(
+      makeCampaign('cancelled') as never,
+    );
 
     await processor.process({ data: { campaignId: 'c-1' } } as never);
 

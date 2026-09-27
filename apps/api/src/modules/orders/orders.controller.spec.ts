@@ -62,7 +62,12 @@ describe('OrdersController', () => {
   });
 
   it('listForAdmin pasa el query', () => {
-    const query = { status: 'pending', stuck: true, page: 1, limit: 10 } as never;
+    const query = {
+      status: 'pending',
+      stuck: true,
+      page: 1,
+      limit: 10,
+    } as never;
     controller.listForAdmin(query);
     expect(service.listForAdmin).toHaveBeenCalledWith(query);
   });
@@ -91,6 +96,10 @@ describe('OrdersController', () => {
 
   it('validatePickup extrae el pickup_code del body', () => {
     controller.validatePickup(user, 'ord-1', { pickup_code: '4821' } as never);
-    expect(service.validatePickupCode).toHaveBeenCalledWith(user, 'ord-1', '4821');
+    expect(service.validatePickupCode).toHaveBeenCalledWith(
+      user,
+      'ord-1',
+      '4821',
+    );
   });
 });

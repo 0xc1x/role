@@ -5,7 +5,11 @@ import {
 import { Test } from '@nestjs/testing';
 import { paginatedDataFromQuery } from '@0xc1x/role-commons';
 import { SlidesService } from './slides.service';
-import { SlidesRepository, type SlideRow, type DbExecutor } from './slides.repository';
+import {
+  SlidesRepository,
+  type SlideRow,
+  type DbExecutor,
+} from './slides.repository';
 import { SlideMapper } from './mappers/slides.mapper';
 
 jest.mock('@0xc1x/role-commons', () => ({
@@ -119,7 +123,10 @@ describe('SlidesService', () => {
       const result = await service.create(body);
 
       expect(SlideMapper.toInsert).toHaveBeenCalledWith(body);
-      expect(repository.insert).toHaveBeenCalledWith(expect.anything(), insertPayload);
+      expect(repository.insert).toHaveBeenCalledWith(
+        expect.anything(),
+        insertPayload,
+      );
       expect(result).toEqual(makeDto());
     });
   });
@@ -138,13 +145,17 @@ describe('SlidesService', () => {
     it('should throw NotFoundException when not found', async () => {
       repository.findById.mockResolvedValue(null);
 
-      await expect(service.getById('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.getById('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should reject inactive slides', async () => {
       repository.findById.mockResolvedValue(makeRow({ active: false }));
 
-      await expect(service.getById(makeRow().id)).rejects.toThrow(NotFoundException);
+      await expect(service.getById(makeRow().id)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should reject slides outside their current window', async () => {
@@ -152,13 +163,17 @@ describe('SlidesService', () => {
         makeRow({ start_at: new Date(Date.now() + 60_000) }),
       );
 
-      await expect(service.getById(makeRow().id)).rejects.toThrow(NotFoundException);
+      await expect(service.getById(makeRow().id)).rejects.toThrow(
+        NotFoundException,
+      );
 
       repository.findById.mockResolvedValue(
         makeRow({ end_at: new Date(Date.now() - 60_000) }),
       );
 
-      await expect(service.getById(makeRow().id)).rejects.toThrow(NotFoundException);
+      await expect(service.getById(makeRow().id)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -172,7 +187,11 @@ describe('SlidesService', () => {
         meta: { page: 1, limit: 10, total: 1 },
       });
 
-      const result = await service.list({ page: 1, limit: 10, active: undefined });
+      const result = await service.list({
+        page: 1,
+        limit: 10,
+        active: undefined,
+      });
 
       expect(repository.list).toHaveBeenCalledWith({
         page: 1,
@@ -267,11 +286,18 @@ describe('SlidesService', () => {
         ...makeDto(),
         title: 'Updated Title',
       });
-      repository.update.mockResolvedValue({ ...existing, title: 'Updated Title' });
+      repository.update.mockResolvedValue({
+        ...existing,
+        title: 'Updated Title',
+      });
 
-      const result = await service.update(existing.id, { title: 'Updated Title' });
+      const result = await service.update(existing.id, {
+        title: 'Updated Title',
+      });
 
-      expect(SlideMapper.toUpdate).toHaveBeenCalledWith({ title: 'Updated Title' });
+      expect(SlideMapper.toUpdate).toHaveBeenCalledWith({
+        title: 'Updated Title',
+      });
       expect(repository.update).toHaveBeenCalledWith(
         expect.anything(),
         existing.id,
@@ -291,30 +317,44 @@ describe('SlidesService', () => {
 
   describe('remove', () => {
     it('should soft-delete a slide', async () => {
-      repository.softDelete.mockResolvedValue(makeRow({ deleted_at: new Date() }));
+      repository.softDelete.mockResolvedValue(
+        makeRow({ deleted_at: new Date() }),
+      );
 
       await service.remove(makeRow().id);
 
-      expect(repository.softDelete).toHaveBeenCalledWith(expect.anything(), makeRow().id);
+      expect(repository.softDelete).toHaveBeenCalledWith(
+        expect.anything(),
+        makeRow().id,
+      );
     });
 
     it('should throw NotFoundException when slide not found', async () => {
       repository.softDelete.mockResolvedValue(null);
 
-      await expect(service.remove('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('toggleActive', () => {
     it('should toggle active state', async () => {
       repository.update.mockResolvedValue(makeRow({ active: false }));
-      (SlideMapper.toDto as jest.Mock).mockReturnValue({ ...makeDto(), active: false });
+      (SlideMapper.toDto as jest.Mock).mockReturnValue({
+        ...makeDto(),
+        active: false,
+      });
 
       const result = await service.toggleActive(makeRow().id, false);
 
-      expect(repository.update).toHaveBeenCalledWith(expect.anything(), makeRow().id, {
-        active: false,
-      });
+      expect(repository.update).toHaveBeenCalledWith(
+        expect.anything(),
+        makeRow().id,
+        {
+          active: false,
+        },
+      );
       expect(result.active).toBe(false);
     });
 

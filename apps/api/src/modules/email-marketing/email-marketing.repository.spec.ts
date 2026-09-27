@@ -24,7 +24,9 @@ describe('EmailMarketingRepository components (DB real)', () => {
       html_content: '<h1>Hola</h1>',
     });
     if (!c) throw new Error('sin componente');
-    expect(await repo.findComponentById(c.id)).toMatchObject({ name: 'Header' });
+    expect(await repo.findComponentById(c.id)).toMatchObject({
+      name: 'Header',
+    });
     expect(await repo.findComponentById(randomUUID())).toBeNull();
     const listed = await repo.listComponents({ page: 1, limit: 10 });
     expect(listed.total).toBeGreaterThanOrEqual(1);
@@ -84,9 +86,14 @@ describe('EmailMarketingRepository campaigns+sends (DB real)', () => {
       body_html: 'B',
     });
     if (!t) throw new Error('sin plantilla');
-    const [camp] = await repo.insertCampaign({ name: 'Campaña', template_id: t.id });
+    const [camp] = await repo.insertCampaign({
+      name: 'Campaña',
+      template_id: t.id,
+    });
     if (!camp) throw new Error('sin campaña');
-    expect(await repo.getCampaignById(camp.id)).toMatchObject({ status: 'draft' });
+    expect(await repo.getCampaignById(camp.id)).toMatchObject({
+      status: 'draft',
+    });
 
     const sends = await repo.insertSends([
       {
@@ -124,13 +131,18 @@ describe('EmailMarketingRepository campaigns+sends (DB real)', () => {
     expect(await repo.countQueued(camp.id)).toBe(0);
 
     await repo.updateCampaign(camp.id, { status: 'cancelled' });
-    expect(await repo.getCampaignById(camp.id)).toMatchObject({ status: 'cancelled' });
+    expect(await repo.getCampaignById(camp.id)).toMatchObject({
+      status: 'cancelled',
+    });
     // Soft delete en cualquier estado salvo sending en curso.
     expect(await repo.deleteCampaign(camp.id)).toBe(true);
     expect(await repo.getCampaignById(camp.id)).toBeNull();
     expect(await repo.deleteCampaign(camp.id)).toBe(false);
 
-    const [live] = await repo.insertCampaign({ name: 'En curso', template_id: t.id });
+    const [live] = await repo.insertCampaign({
+      name: 'En curso',
+      template_id: t.id,
+    });
     if (!live) throw new Error('sin campaña');
     await repo.updateCampaign(live.id, { status: 'sending' });
     expect(await repo.deleteCampaign(live.id)).toBe(false);
@@ -140,31 +152,47 @@ describe('EmailMarketingRepository campaigns+sends (DB real)', () => {
 describe('EmailMarketingRepository consultas (DB real)', () => {
   test('findIdsMatchingFilters cubre operadores', async () => {
     const u = await seedProfile(ctx.db);
-    await ctx.db.execute(`update profiles set city = 'Santiago' where id = '${u}'`);
+    await ctx.db.execute(
+      `update profiles set city = 'Santiago' where id = '${u}'`,
+    );
     expect(
-      await repo.findIdsMatchingFilters([{ field: 'city', op: 'eq', value: 'Santiago' }]),
+      await repo.findIdsMatchingFilters([
+        { field: 'city', op: 'eq', value: 'Santiago' },
+      ]),
     ).toContain(u);
     expect(
-      await repo.findIdsMatchingFilters([{ field: 'city', op: 'neq', value: 'Santiago' }]),
+      await repo.findIdsMatchingFilters([
+        { field: 'city', op: 'neq', value: 'Santiago' },
+      ]),
     ).not.toContain(u);
     expect(
-      await repo.findIdsMatchingFilters([{ field: 'city', op: 'like', value: 'sant' }]),
+      await repo.findIdsMatchingFilters([
+        { field: 'city', op: 'like', value: 'sant' },
+      ]),
     ).toContain(u);
     expect(
-      await repo.findIdsMatchingFilters([{ field: 'role', op: 'eq', value: 'user' }]),
+      await repo.findIdsMatchingFilters([
+        { field: 'role', op: 'eq', value: 'user' },
+      ]),
     ).toContain(u);
     expect(
-      await repo.findIdsMatchingFilters([{ field: 'created_at', op: 'gte', value: '2000-01-01' }]),
+      await repo.findIdsMatchingFilters([
+        { field: 'created_at', op: 'gte', value: '2000-01-01' },
+      ]),
     ).toContain(u);
     expect(
-      await repo.findIdsMatchingFilters([{ field: 'created_at', op: 'lte', value: '2000-01-01' }]),
+      await repo.findIdsMatchingFilters([
+        { field: 'created_at', op: 'lte', value: '2000-01-01' },
+      ]),
     ).not.toContain(u);
   });
 
   test('findSubscribedRecipients respeta suscripción y categoría', async () => {
     const u = await seedProfile(ctx.db);
     expect(await repo.findSubscribedRecipients([], 'promotions')).toEqual([]);
-    expect(await repo.findSubscribedRecipients([u], 'promotions')).toHaveLength(0);
+    expect(await repo.findSubscribedRecipients([u], 'promotions')).toHaveLength(
+      0,
+    );
     await ctx.db.execute(
       `insert into marketing_preferences (user_id, is_subscribed, categories) values ('${u}', true, ARRAY['promotions'])`,
     );
@@ -174,7 +202,11 @@ describe('EmailMarketingRepository consultas (DB real)', () => {
   });
 
   test('listCampaigns filtra por estado y búsqueda', async () => {
-    const [t] = await repo.insertTemplate({ name: 'T2', subject: 'S', body_html: 'B' });
+    const [t] = await repo.insertTemplate({
+      name: 'T2',
+      subject: 'S',
+      body_html: 'B',
+    });
     if (!t) throw new Error('sin plantilla');
     const [camp] = await repo.insertCampaign({
       name: 'Buscable xyz',
@@ -182,18 +214,33 @@ describe('EmailMarketingRepository consultas (DB real)', () => {
       status: 'scheduled',
     });
     if (!camp) throw new Error('sin campaña');
-    const byStatus = await repo.listCampaigns({ page: 1, limit: 10, status: 'scheduled' });
+    const byStatus = await repo.listCampaigns({
+      page: 1,
+      limit: 10,
+      status: 'scheduled',
+    });
     expect(byStatus.rows.map((r) => r.id)).toContain(camp.id);
-    const bySearch = await repo.listCampaigns({ page: 1, limit: 10, search: 'xyz' });
+    const bySearch = await repo.listCampaigns({
+      page: 1,
+      limit: 10,
+      search: 'xyz',
+    });
     expect(bySearch.rows.map((r) => r.id)).toContain(camp.id);
     const due = await repo.findDueScheduled(new Date(Date.now() + 3600_000));
     expect(Array.isArray(due)).toBe(true);
   });
 
   test('insertSends en lotes: más de 1000 filas en una llamada', async () => {
-    const [t] = await repo.insertTemplate({ name: 'TChunk', subject: 'S', body_html: 'B' });
+    const [t] = await repo.insertTemplate({
+      name: 'TChunk',
+      subject: 'S',
+      body_html: 'B',
+    });
     if (!t) throw new Error('sin plantilla');
-    const [camp] = await repo.insertCampaign({ name: 'CChunk', template_id: t.id });
+    const [camp] = await repo.insertCampaign({
+      name: 'CChunk',
+      template_id: t.id,
+    });
     if (!camp) throw new Error('sin campaña');
     const sends = await repo.insertSends(
       Array.from({ length: 1001 }, (_, i) => ({
@@ -222,44 +269,79 @@ describe('EmailMarketingRepository consultas (DB real)', () => {
   });
 
   test('findQueuedBatch/findPendingBatch/listSends/updateSend', async () => {
-    const [t] = await repo.insertTemplate({ name: 'T3', subject: 'S', body_html: 'B' });
+    const [t] = await repo.insertTemplate({
+      name: 'T3',
+      subject: 'S',
+      body_html: 'B',
+    });
     if (!t) throw new Error('sin plantilla');
     const [camp] = await repo.insertCampaign({ name: 'C3', template_id: t.id });
     if (!camp) throw new Error('sin campaña');
     const sends = await repo.insertSends([
-      { type: 'campaign', source_type: 'campaign', source_id: camp.id, template_id: t.id, email: 'q@q.cl' },
+      {
+        type: 'campaign',
+        source_type: 'campaign',
+        source_id: camp.id,
+        template_id: t.id,
+        email: 'q@q.cl',
+      },
     ]);
     const id = sends[0]?.id as string;
     expect(await repo.findQueuedBatch(camp.id, 10)).toHaveLength(1);
     expect(await repo.findPendingBatch(10)).toHaveLength(1);
-    const listed = await repo.listSends({ page: 1, limit: 10, source_id: camp.id });
+    const listed = await repo.listSends({
+      page: 1,
+      limit: 10,
+      source_id: camp.id,
+    });
     expect(listed.total).toBeGreaterThanOrEqual(1);
-    expect(await repo.updateSend(id, { status: 'cancelled' })).toMatchObject({ id });
+    expect(await repo.updateSend(id, { status: 'cancelled' })).toMatchObject({
+      id,
+    });
     expect(await repo.findQueuedBatch(camp.id, 10)).toHaveLength(0);
   });
 });
 
 describe('EmailMarketingRepository misceláneo (DB real)', () => {
   test('markCancelled, listSendsByCampaign, recountStats, unsubscribe', async () => {
-    const [t] = await repo.insertTemplate({ name: 'TM', subject: 'S', body_html: 'B' });
+    const [t] = await repo.insertTemplate({
+      name: 'TM',
+      subject: 'S',
+      body_html: 'B',
+    });
     if (!t) throw new Error('sin plantilla');
     const [camp] = await repo.insertCampaign({ name: 'CM', template_id: t.id });
     if (!camp) throw new Error('sin campaña');
     const sends = await repo.insertSends([
-      { type: 'campaign', source_type: 'campaign', source_id: camp.id, template_id: t.id, email: 'm@m.cl' },
+      {
+        type: 'campaign',
+        source_type: 'campaign',
+        source_id: camp.id,
+        template_id: t.id,
+        email: 'm@m.cl',
+      },
     ]);
     const id = sends[0]?.id as string;
 
     await repo.markCancelled(id);
     expect(await repo.findSendById(id)).toMatchObject({ status: 'cancelled' });
 
-    const byCamp = await repo.listSendsByCampaign(camp.id, { page: 1, limit: 10 });
+    const byCamp = await repo.listSendsByCampaign(camp.id, {
+      page: 1,
+      limit: 10,
+    });
     expect(byCamp.total).toBe(1);
-    const byStatus = await repo.listSendsByCampaign(camp.id, { page: 1, limit: 10, status: 'cancelled' });
+    const byStatus = await repo.listSendsByCampaign(camp.id, {
+      page: 1,
+      limit: 10,
+      status: 'cancelled',
+    });
     expect(byStatus.total).toBe(1);
 
     await repo.recountStats(camp.id);
-    expect(await repo.getCampaignById(camp.id)).toMatchObject({ total_recipients: 1 });
+    expect(await repo.getCampaignById(camp.id)).toMatchObject({
+      total_recipients: 1,
+    });
 
     const u = await seedProfile(ctx.db);
     await repo.unsubscribe(u);

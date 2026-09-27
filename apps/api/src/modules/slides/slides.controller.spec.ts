@@ -70,10 +70,18 @@ describe('SlidesController', () => {
       };
       service.list.mockResolvedValue(paginated);
 
-      const result = await controller.list({ page: 1, limit: 10, active: undefined });
+      const result = await controller.list({
+        page: 1,
+        limit: 10,
+        active: undefined,
+      });
 
       expect(result).toEqual(paginated);
-      expect(service.list).toHaveBeenCalledWith({ page: 1, limit: 10, active: undefined });
+      expect(service.list).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
+        active: undefined,
+      });
     });
   });
 
@@ -82,7 +90,9 @@ describe('SlidesController', () => {
       expect(reflector.get(IS_PUBLIC_KEY, controller.list)).toBe(true);
       expect(reflector.get(IS_PUBLIC_KEY, controller.getById)).toBe(true);
       expect(reflector.get(ROLES_KEY, controller.listAdmin)).toEqual(['admin']);
-      expect(reflector.get(IS_PUBLIC_KEY, controller.listAdmin)).toBeUndefined();
+      expect(
+        reflector.get(IS_PUBLIC_KEY, controller.listAdmin),
+      ).toBeUndefined();
     });
   });
 

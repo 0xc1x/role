@@ -47,7 +47,12 @@ describe('UploadService', () => {
 
   beforeAll(async () => {
     validPngBuffer = await sharp({
-      create: { width: 100, height: 100, channels: 3, background: { r: 255, g: 0, b: 0 } },
+      create: {
+        width: 100,
+        height: 100,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
     })
       .png()
       .toBuffer();
@@ -72,11 +77,17 @@ describe('UploadService', () => {
     });
 
     it('should compress to WebP and upload to Supabase', async () => {
-      const file = { ...baseFile, buffer: validPngBuffer, size: validPngBuffer.length };
+      const file = {
+        ...baseFile,
+        buffer: validPngBuffer,
+        size: validPngBuffer.length,
+      };
 
       const result = await service.uploadImage(file);
 
-      expect(result.url).toContain('storage/v1/object/public/images/categories/');
+      expect(result.url).toContain(
+        'storage/v1/object/public/images/categories/',
+      );
       expect(result.url).toMatch(/\.webp$/);
       expect(mockSupabase.storage.from).toHaveBeenCalledWith('images');
       expect(mockSupabase.storage.upload).toHaveBeenCalledTimes(1);
@@ -99,7 +110,11 @@ describe('UploadService', () => {
         .png()
         .toBuffer();
 
-      const file = { ...baseFile, buffer: largeBuffer, size: largeBuffer.length };
+      const file = {
+        ...baseFile,
+        buffer: largeBuffer,
+        size: largeBuffer.length,
+      };
 
       await service.uploadImage(file);
 
@@ -111,7 +126,11 @@ describe('UploadService', () => {
     });
 
     it('should throw on upload error', async () => {
-      const file = { ...baseFile, buffer: validPngBuffer, size: validPngBuffer.length };
+      const file = {
+        ...baseFile,
+        buffer: validPngBuffer,
+        size: validPngBuffer.length,
+      };
       mockSupabase.storage.upload.mockResolvedValue({
         error: new Error('Bucket not found'),
       });
@@ -122,7 +141,11 @@ describe('UploadService', () => {
     });
 
     it('should generate unique paths for each upload', async () => {
-      const file = { ...baseFile, buffer: validPngBuffer, size: validPngBuffer.length };
+      const file = {
+        ...baseFile,
+        buffer: validPngBuffer,
+        size: validPngBuffer.length,
+      };
 
       await service.uploadImage(file);
       await service.uploadImage(file);
@@ -133,7 +156,11 @@ describe('UploadService', () => {
     });
 
     it('should store files under categories/ prefix by default', async () => {
-      const file = { ...baseFile, buffer: validPngBuffer, size: validPngBuffer.length };
+      const file = {
+        ...baseFile,
+        buffer: validPngBuffer,
+        size: validPngBuffer.length,
+      };
 
       await service.uploadImage(file);
 
@@ -143,7 +170,11 @@ describe('UploadService', () => {
     });
 
     it('should use custom bucket and folder when provided', async () => {
-      const file = { ...baseFile, buffer: validPngBuffer, size: validPngBuffer.length };
+      const file = {
+        ...baseFile,
+        buffer: validPngBuffer,
+        size: validPngBuffer.length,
+      };
 
       await service.uploadImage(file, { bucket: 'avatars', folder: 'users' });
 
@@ -153,7 +184,11 @@ describe('UploadService', () => {
     });
 
     it('should fallback to env bucket when only folder is provided', async () => {
-      const file = { ...baseFile, buffer: validPngBuffer, size: validPngBuffer.length };
+      const file = {
+        ...baseFile,
+        buffer: validPngBuffer,
+        size: validPngBuffer.length,
+      };
 
       await service.uploadImage(file, { folder: 'products' });
 
@@ -163,7 +198,11 @@ describe('UploadService', () => {
     });
 
     it('should reject a disallowed bucket', async () => {
-      const file = { ...baseFile, buffer: validPngBuffer, size: validPngBuffer.length };
+      const file = {
+        ...baseFile,
+        buffer: validPngBuffer,
+        size: validPngBuffer.length,
+      };
 
       await expect(
         service.uploadImage(file, { bucket: 'invoices', folder: 'categories' }),
@@ -171,7 +210,11 @@ describe('UploadService', () => {
     });
 
     it('should reject a disallowed folder', async () => {
-      const file = { ...baseFile, buffer: validPngBuffer, size: validPngBuffer.length };
+      const file = {
+        ...baseFile,
+        buffer: validPngBuffer,
+        size: validPngBuffer.length,
+      };
 
       await expect(
         service.uploadImage(file, { bucket: 'images', folder: 'admin-panel' }),

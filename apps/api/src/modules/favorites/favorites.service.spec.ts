@@ -220,7 +220,9 @@ describe('FavoritesService', () => {
     it('does not throw when there was nothing to delete', async () => {
       favoritesRepository.deleteByOfferId.mockResolvedValue(false);
 
-      await expect(service.remove(consumer, 'offer-1')).resolves.toBeUndefined();
+      await expect(
+        service.remove(consumer, 'offer-1'),
+      ).resolves.toBeUndefined();
     });
 
     it('removes the caller own favorite whatever their role is', async () => {

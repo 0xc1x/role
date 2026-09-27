@@ -1,8 +1,4 @@
-import {
-  EnvironmentConfigError,
-  envSchema,
-  validateEnv,
-} from './env.schema';
+import { EnvironmentConfigError, envSchema, validateEnv } from './env.schema';
 
 const strongJwtSecret = 'role-prod-jwt-7Qm9!Kx2#Vz4@Lp8!Rk6';
 

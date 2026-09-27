@@ -65,11 +65,13 @@ describe('ReviewFeedMapper', () => {
 
     expect(dto.offer_id).toBe('off-1');
     expect(dto.offer_title).toBe('Pack sorpresa');
-    expect(Object.keys(dto).sort()).toEqual([
-      ...Object.keys(ReviewFeedMapper.toPublicDto(feedRow())),
-      'offer_id',
-      'offer_title',
-    ].sort());
+    expect(Object.keys(dto).sort()).toEqual(
+      [
+        ...Object.keys(ReviewFeedMapper.toPublicDto(feedRow())),
+        'offer_id',
+        'offer_title',
+      ].sort(),
+    );
   });
 
   it('toMyDto adds is_hidden and withholds the moderation record', () => {

@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AppConfigService } from './app-config.service';
-import { AppConfigRepository, type AppConfigRow } from './app-config.repository';
+import {
+  AppConfigRepository,
+  type AppConfigRow,
+} from './app-config.repository';
 
 jest.mock('./mappers/app-config.mapper', () => ({
   AppConfigMapper: {
@@ -101,8 +104,6 @@ describe('AppConfigService', () => {
 
   it('remove lanza NotFoundException si la clave no existe', async () => {
     repository.remove.mockResolvedValue(false);
-    await expect(service.remove('nope.key')).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(service.remove('nope.key')).rejects.toThrow(NotFoundException);
   });
 });

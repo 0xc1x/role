@@ -39,9 +39,7 @@ describe('CommissionsController', () => {
     ]) {
       const metadata = reflector.get(ROLES_KEY, handler);
       expect(metadata).toEqual(['admin']);
-      expect(
-        reflector.get(IS_PUBLIC_KEY, handler),
-      ).toBeUndefined();
+      expect(reflector.get(IS_PUBLIC_KEY, handler)).toBeUndefined();
     }
   });
 

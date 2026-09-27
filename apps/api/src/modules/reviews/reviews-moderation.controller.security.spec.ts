@@ -224,9 +224,9 @@ describe('GET /reviews/moderation (frontera de seguridad)', () => {
       hidden_reason: MOTIVO,
     });
 
-    const res = await comoAdmin(api().get('/reviews/moderation?limit=100')).expect(
-      200,
-    );
+    const res = await comoAdmin(
+      api().get('/reviews/moderation?limit=100'),
+    ).expect(200);
     const ids = res.body.data.map((f: { id: string }) => f.id);
     expect(ids).toContain(visible.id);
     expect(ids).toContain(oculta.id);
@@ -355,8 +355,7 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
         .send({ moderation_reason: RAZON, hidden_reason: MOTIVO }),
     ).expect(200);
     await comoAdmin(
-      api()
-        .patch(`/reviews/moderation/${fila.id}/unhide`),
+      api().patch(`/reviews/moderation/${fila.id}/unhide`),
     ).expect(200);
     await comoAdmin(
       api()
@@ -411,9 +410,7 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
   test('id inexistente → 404', async () => {
     await comoAdmin(
       api()
-        .patch(
-          `/reviews/moderation/${randomUUID()}/hide`,
-        )
+        .patch(`/reviews/moderation/${randomUUID()}/hide`)
         .send({ ...CUERPO }),
     ).expect(404);
   });
@@ -468,12 +465,12 @@ describe('PATCH /reviews/moderation/:id/unhide', () => {
         .send({ ...CUERPO }),
     ).expect(200);
 
-    await comoAdmin(api().patch(`/reviews/moderation/${fila.id}/unhide`)).expect(
-      200,
-    );
-    await comoAdmin(api().patch(`/reviews/moderation/${fila.id}/unhide`)).expect(
-      200,
-    );
+    await comoAdmin(
+      api().patch(`/reviews/moderation/${fila.id}/unhide`),
+    ).expect(200);
+    await comoAdmin(
+      api().patch(`/reviews/moderation/${fila.id}/unhide`),
+    ).expect(200);
 
     expect((await readRow(fila.id))?.is_hidden).toBe(false);
   });
@@ -547,12 +544,10 @@ describe('el filtro de la bandeja', () => {
       moderation_reason: 'identity_discrimination',
     });
     await comoAdmin(
-      api()
-        .patch(`/reviews/moderation/${ocultada.id}/hide`)
-        .send({
-          moderation_reason: 'identity_discrimination',
-          hidden_reason: 'Menciona la etnia del personal',
-        }),
+      api().patch(`/reviews/moderation/${ocultada.id}/hide`).send({
+        moderation_reason: 'identity_discrimination',
+        hidden_reason: 'Menciona la etnia del personal',
+      }),
     ).expect(200);
 
     const res = await comoAdmin(
@@ -573,9 +568,9 @@ describe('el filtro de la bandeja', () => {
         '/reviews/moderation?visibility=hidden&moderation_reason=identity_discrimination&limit=100',
       ),
     ).expect(200);
-    expect(
-      combinado.body.data.map((f: { id: string }) => f.id),
-    ).toContain(ocultada.id);
+    expect(combinado.body.data.map((f: { id: string }) => f.id)).toContain(
+      ocultada.id,
+    );
   });
 
   test('un motivo que no está en la taxonomía → 400, no se filtra a lo bruto', async () => {

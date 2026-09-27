@@ -63,9 +63,15 @@ async function review(options: {
   let orderId = options.orderId ?? null;
   if (!orderId && options.offerId) {
     orderId = (
-      await seedOrder(ctx.db, options.userId ?? authorId, options.offerId, businessId, {
-        order_number: `R-${crypto.randomUUID().slice(0, 8)}`,
-      })
+      await seedOrder(
+        ctx.db,
+        options.userId ?? authorId,
+        options.offerId,
+        businessId,
+        {
+          order_number: `R-${crypto.randomUUID().slice(0, 8)}`,
+        },
+      )
     ).id;
   }
   const [row] = await ctx.db
@@ -94,7 +100,11 @@ describe('ReviewsFeedRepository.listVisibleByBusiness', () => {
 
   test('excludes a hidden review and never returns moderation state', async () => {
     seedVisible = await review({ at: base, comment: 'Visible' });
-    await review({ at: '2026-01-01T11:00:00.000Z', hidden: true, comment: 'Oculta' });
+    await review({
+      at: '2026-01-01T11:00:00.000Z',
+      hidden: true,
+      comment: 'Oculta',
+    });
 
     const feed = await repo.listVisibleByBusiness(businessId, {
       page: 1,
@@ -141,7 +151,9 @@ describe('ReviewsFeedRepository.listVisibleByBusiness', () => {
 
     // The stability claim itself: the same page asked twice returns the same
     // rows in the same order, including the three rows that share a timestamp.
-    expect(firstAgain.rows.map((r) => r.id)).toEqual(first.rows.map((r) => r.id));
+    expect(firstAgain.rows.map((r) => r.id)).toEqual(
+      first.rows.map((r) => r.id),
+    );
 
     // Newest first: the three February rows lead, and the January row from the
     // first test is the very last one.
@@ -150,7 +162,9 @@ describe('ReviewsFeedRepository.listVisibleByBusiness', () => {
 
     // Walking every page visits every visible id exactly once, so no row is
     // dropped or repeated across a page boundary.
-    const walked = [first, second, third].flatMap((p) => p.rows.map((r) => r.id));
+    const walked = [first, second, third].flatMap((p) =>
+      p.rows.map((r) => r.id),
+    );
     expect(walked).toHaveLength(5);
     expect(new Set(walked).size).toBe(5);
     expect(walked.sort()).toEqual([...ids, older, seedVisible].sort());
@@ -226,7 +240,10 @@ describe('ReviewsFeedRepository.listVisibleByOffer', () => {
 
 describe('ReviewsFeedRepository.listForUser', () => {
   test('returns the caller own hidden review', async () => {
-    const hidden = await review({ at: '2026-04-01T10:00:00.000Z', hidden: true });
+    const hidden = await review({
+      at: '2026-04-01T10:00:00.000Z',
+      hidden: true,
+    });
 
     const feed = await repo.listForUser(authorId, { page: 1, limit: 50 });
 
@@ -271,7 +288,10 @@ describe('ReviewsFeedRepository.listForUser', () => {
 describe('public review feed index usage', () => {
   test('the page and the count of a business feed both ride the partial index', async () => {
     const captured: { query: string; params: unknown[] }[] = [];
-    const spyClient = postgres(ctx.connectionString, { prepare: false, max: 1 });
+    const spyClient = postgres(ctx.connectionString, {
+      prepare: false,
+      max: 1,
+    });
     const spyDb = drizzle({
       client: spyClient,
       logger: {

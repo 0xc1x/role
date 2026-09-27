@@ -19,7 +19,9 @@ describe('AppStoreRepository (DB real)', () => {
     const row = await repo.insert({ namespace: 'jobs', value: { a: 1 } });
     expect(row.status).toBe('PENDIENTE');
     expect(await repo.findById(row.id)).toMatchObject({ namespace: 'jobs' });
-    expect(await repo.findById('00000000-0000-0000-0000-000000000000')).toBeNull();
+    expect(
+      await repo.findById('00000000-0000-0000-0000-000000000000'),
+    ).toBeNull();
   });
 
   test('updateStatus con y sin extra', async () => {
@@ -28,7 +30,9 @@ describe('AppStoreRepository (DB real)', () => {
     expect(updated?.status).toBe('PROCESADO');
     const merged = await repo.updateStatus(row.id, 'ERROR', { error: 'x' });
     expect(merged?.value).toMatchObject({ a: 1, error: 'x' });
-    expect(await repo.updateStatus('00000000-0000-0000-0000-000000000000', 'ERROR')).toBeNull();
+    expect(
+      await repo.updateStatus('00000000-0000-0000-0000-000000000000', 'ERROR'),
+    ).toBeNull();
   });
 
   test('list filtra y softDelete oculta', async () => {

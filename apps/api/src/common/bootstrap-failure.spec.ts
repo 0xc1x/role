@@ -1,7 +1,4 @@
-import {
-  EnvironmentConfigError,
-  validateEnv,
-} from '../config/env.schema';
+import { EnvironmentConfigError, validateEnv } from '../config/env.schema';
 import { buildBootstrapFailureLog } from './bootstrap-failure';
 
 // Este spec es el mecanismo de enforcing del contrato de logging del arranque:

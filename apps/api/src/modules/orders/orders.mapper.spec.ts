@@ -1,10 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { OrderStatus } from '@0xc1x/role-commons';
-import {
-  isStuckOrder,
-  OrderMapper,
-  type OrderRow,
-} from './orders.mapper';
+import { isStuckOrder, OrderMapper, type OrderRow } from './orders.mapper';
 import type { AdminOrderListRow } from './orders.repository';
 
 const makeRow = (overrides: Partial<OrderRow> = {}): OrderRow =>

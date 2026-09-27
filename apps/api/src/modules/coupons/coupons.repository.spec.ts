@@ -33,7 +33,9 @@ describe('CouponsRepository (DB real)', () => {
     });
     expect(await repo.findById(row.id)).toMatchObject({ code: 'DESC10' });
     expect(await repo.findGlobalByCode('DESC10')).toMatchObject({ id: row.id });
-    expect(await repo.findGlobalByCode('DESC10', { excludeId: row.id })).toBeNull();
+    expect(
+      await repo.findGlobalByCode('DESC10', { excludeId: row.id }),
+    ).toBeNull();
     expect(await repo.findGlobalByCode('NOPE')).toBeNull();
   });
 

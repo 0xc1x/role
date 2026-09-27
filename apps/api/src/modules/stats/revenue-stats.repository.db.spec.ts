@@ -22,9 +22,7 @@ const DAY_MS = 86_400_000;
 
 /** `YYYY-MM-DD` en UTC, el formato que espera el repository. */
 function dayString(offsetDays: number): string {
-  return new Date(Date.now() + offsetDays * DAY_MS)
-    .toISOString()
-    .slice(0, 10);
+  return new Date(Date.now() + offsetDays * DAY_MS).toISOString().slice(0, 10);
 }
 
 /** Inserta una orden con el dinero explícito (seedOrder no lo expone). */

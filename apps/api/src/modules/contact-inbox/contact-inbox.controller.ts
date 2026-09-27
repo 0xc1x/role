@@ -1,4 +1,11 @@
-import { Controller, Get, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -45,7 +52,9 @@ export class ContactInboxController {
   @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Get a contact message (admin)' })
   @ApiOkResponse({ description: 'Contact message detail' })
-  getById(@Param('id', ParseUUIDPipe) id: string): Promise<ContactMessageDetailDto> {
+  getById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ContactMessageDetailDto> {
     return this.service.getById(id);
   }
 

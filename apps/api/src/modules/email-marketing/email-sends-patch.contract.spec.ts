@@ -29,7 +29,10 @@ describe('PATCH /email-marketing/sends/:id', () => {
 
   it('acepta el estado y las marcas de tiempo del ciclo de vida', () => {
     expect(
-      pipe.transform({ status: 'cancelled', sent_at: '2026-09-26T12:00:00.000Z' }),
+      pipe.transform({
+        status: 'cancelled',
+        sent_at: '2026-09-26T12:00:00.000Z',
+      }),
     ).toEqual({ status: 'cancelled', sent_at: '2026-09-26T12:00:00.000Z' });
   });
 

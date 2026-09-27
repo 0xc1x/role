@@ -37,18 +37,28 @@ describe('PushNotificationsRepository (DB real)', () => {
       data: {},
     });
     if (!tpl) throw new Error('sin template');
-    expect(await repo.findTemplateById(tpl.id)).toMatchObject({ name: 'Ofertas' });
+    expect(await repo.findTemplateById(tpl.id)).toMatchObject({
+      name: 'Ofertas',
+    });
     expect(await repo.findTemplateById(randomUUID())).toBeNull();
     const listed = await repo.listTemplates({ page: 1, limit: 10 });
     expect(listed.total).toBeGreaterThanOrEqual(1);
-    const search = await repo.listTemplates({ page: 1, limit: 10, search: 'ofer' });
+    const search = await repo.listTemplates({
+      page: 1,
+      limit: 10,
+      search: 'ofer',
+    });
     expect(search.rows.map((r) => r.name)).toContain('Ofertas');
     expect(await repo.updateTemplate(tpl.id, { title: 'T2' })).toMatchObject({
       title: 'T2',
     });
     expect(await repo.deleteTemplate(tpl.id)).toBe(true);
     expect(await repo.deleteTemplate(tpl.id)).toBe(true);
-    const after = await repo.listTemplates({ page: 1, limit: 10, search: 'ofer' });
+    const after = await repo.listTemplates({
+      page: 1,
+      limit: 10,
+      search: 'ofer',
+    });
     expect(after.rows.map((r) => r.name)).not.toContain('Ofertas');
   });
 
@@ -59,15 +69,25 @@ describe('PushNotificationsRepository (DB real)', () => {
       data: {},
     });
     if (!n) throw new Error('sin notificación');
-    expect(await repo.findNotificationById(n.id)).toMatchObject({ title: 'Promo' });
+    expect(await repo.findNotificationById(n.id)).toMatchObject({
+      title: 'Promo',
+    });
     const listed = await repo.listNotifications({ page: 1, limit: 10 });
     expect(listed.total).toBeGreaterThanOrEqual(1);
   });
 
   test('tokens: list/update/count/names/filtros', async () => {
-    const android = await repo.listTokens({ page: 1, limit: 10, platform: 'android' });
+    const android = await repo.listTokens({
+      page: 1,
+      limit: 10,
+      platform: 'android',
+    });
     expect(android.rows.map((r) => r.token)).toContain('tok-a');
-    const search = await repo.listTokens({ page: 1, limit: 10, search: 'tok-b' });
+    const search = await repo.listTokens({
+      page: 1,
+      limit: 10,
+      search: 'tok-b',
+    });
     expect(search.rows.map((r) => r.token)).toContain('tok-b');
 
     await repo.updateToken(
@@ -90,6 +110,8 @@ describe('PushNotificationsRepository (DB real)', () => {
     expect(await repo.filterPushEnabled([userA, userB])).toEqual([userB]);
 
     expect(await repo.filterExistingUsers([])).toEqual([]);
-    expect(await repo.filterExistingUsers([userA, randomUUID()])).toEqual([userA]);
+    expect(await repo.filterExistingUsers([userA, randomUUID()])).toEqual([
+      userA,
+    ]);
   });
 });

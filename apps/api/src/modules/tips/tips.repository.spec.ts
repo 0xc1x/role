@@ -21,7 +21,9 @@ describe('TipsRepository (DB real)', () => {
     expect(await repo.findById(row.id)).toMatchObject({
       content: 'Compra local',
     });
-    expect(await repo.findById('00000000-0000-0000-0000-000000000000')).toBeNull();
+    expect(
+      await repo.findById('00000000-0000-0000-0000-000000000000'),
+    ).toBeNull();
   });
 
   test('findRandom solo activos no borrados', async () => {
@@ -42,9 +44,9 @@ describe('TipsRepository (DB real)', () => {
 
   test('update y softDelete', async () => {
     const row = await repo.insert(ctx.db, { content: 'Tmp' });
-    expect(await repo.update(ctx.db, row.id, { content: 'Tmp2' })).toMatchObject(
-      { content: 'Tmp2' },
-    );
+    expect(
+      await repo.update(ctx.db, row.id, { content: 'Tmp2' }),
+    ).toMatchObject({ content: 'Tmp2' });
     await repo.softDelete(ctx.db, row.id);
     expect(await repo.findById(row.id)).toBeNull();
   });

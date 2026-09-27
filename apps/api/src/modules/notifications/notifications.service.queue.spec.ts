@@ -10,7 +10,11 @@ jest.mock('bullmq', () => ({
   Queue: jest.fn(function (this: unknown) {
     return { close: jest.fn(async () => undefined) };
   }),
-  Worker: jest.fn(function (this: unknown, _name: string, processor: Processor) {
+  Worker: jest.fn(function (
+    this: unknown,
+    _name: string,
+    processor: Processor,
+  ) {
     lastProcessor = processor;
     return {
       on: jest.fn(),
@@ -55,14 +59,21 @@ describe('NotificationsService con BullMQ (mocks)', () => {
         NotificationsService,
         {
           provide: NotificationsRepository,
-          useValue: { findActiveTokens, filterByConsumerPrefs: jest.fn(async (ids: string[]) => ids), filterNotInQuietHours: jest.fn(async (ids: string[]) => ids) },
+          useValue: {
+            findActiveTokens,
+            filterByConsumerPrefs: jest.fn(async (ids: string[]) => ids),
+            filterNotInQuietHours: jest.fn(async (ids: string[]) => ids),
+          },
         },
         withRedis,
       ],
     }).compile();
     const svc = module.get(NotificationsService);
     await svc.onModuleInit();
-    await lastProcessor?.({ name: 'send-push', data: { userIds: ['u1'], payload: { title: 'T', body: 'B' } } });
+    await lastProcessor?.({
+      name: 'send-push',
+      data: { userIds: ['u1'], payload: { title: 'T', body: 'B' } },
+    });
     expect(findActiveTokens).toHaveBeenCalledWith(['u1']);
     await svc.onModuleDestroy();
   });

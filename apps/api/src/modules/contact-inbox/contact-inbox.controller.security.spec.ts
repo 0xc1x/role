@@ -120,7 +120,8 @@ afterAll(async () => {
 });
 
 const api = () => request(app.getHttpServer());
-const comoAdmin = <T>(r: request.Test) => r.set('Authorization', `Bearer ${tokens.admin}`);
+const comoAdmin = <T>(r: request.Test) =>
+  r.set('Authorization', `Bearer ${tokens.admin}`);
 
 describe('GET /contact-inbox (frontera de seguridad)', () => {
   test('sin token → 401', async () => {
@@ -156,9 +157,7 @@ describe('GET /contact-inbox (frontera de seguridad)', () => {
 
     const res = await comoAdmin(api().get('/contact-inbox')).expect(200);
 
-    const fila = res.body.data.find(
-      (f: { id: string }) => f.id === mensaje.id,
-    );
+    const fila = res.body.data.find((f: { id: string }) => f.id === mensaje.id);
     expect(fila).toBeDefined();
     expect(fila.readable).toBe(true);
     expect(fila.email).toBe('ana@example.com');
@@ -196,7 +195,10 @@ describe('PATCH /contact-inbox/:id/handled (frontera de seguridad)', () => {
 
 describe('el endpoint no es un app_store genérico', () => {
   test('GET ignora un namespace del cliente', async () => {
-    const contacto = await store.insert({ namespace: 'contact', value: MENSAJE });
+    const contacto = await store.insert({
+      namespace: 'contact',
+      value: MENSAJE,
+    });
     const ajeno = await store.insert({ namespace: 'jobs', value: { a: 1 } });
 
     const res = await comoAdmin(
@@ -220,7 +222,9 @@ describe('el endpoint no es un app_store genérico', () => {
   test('PATCH sobre una fila de otro namespace → 404 y no la escribe', async () => {
     const ajeno = await store.insert({ namespace: 'jobs', value: { a: 1 } });
 
-    await comoAdmin(api().patch(`/contact-inbox/${ajeno.id}/handled`)).expect(404);
+    await comoAdmin(api().patch(`/contact-inbox/${ajeno.id}/handled`)).expect(
+      404,
+    );
 
     expect((await store.findById(ajeno.id))?.status).toBe('PENDIENTE');
   });
@@ -228,10 +232,17 @@ describe('el endpoint no es un app_store genérico', () => {
 
 describe('el listado no filtra datos internos', () => {
   test('ni el listado ni el detalle emiten to/from, y la lista tampoco la ip', async () => {
-    const mensaje = await store.insert({ namespace: 'contact', value: MENSAJE });
+    const mensaje = await store.insert({
+      namespace: 'contact',
+      value: MENSAJE,
+    });
 
-    const lista = await comoAdmin(api().get('/contact-inbox?limit=100')).expect(200);
-    const fila = lista.body.data.find((f: { id: string }) => f.id === mensaje.id);
+    const lista = await comoAdmin(api().get('/contact-inbox?limit=100')).expect(
+      200,
+    );
+    const fila = lista.body.data.find(
+      (f: { id: string }) => f.id === mensaje.id,
+    );
     expect(fila).toBeDefined();
     expect(fila).not.toHaveProperty('to');
     expect(fila).not.toHaveProperty('from');
@@ -257,11 +268,11 @@ describe('una fila con value corrupto no tumba la bandeja', () => {
       value: { lo_que_sea: true },
     });
 
-    const res = await comoAdmin(api().get('/contact-inbox?limit=100')).expect(200);
-
-    const porId = new Map(
-      res.body.data.map((f: { id: string }) => [f.id, f]),
+    const res = await comoAdmin(api().get('/contact-inbox?limit=100')).expect(
+      200,
     );
+
+    const porId = new Map(res.body.data.map((f: { id: string }) => [f.id, f]));
     expect(porId.get(rota.id)?.readable).toBe(false);
     expect(porId.get(rota.id)?.email).toBeNull();
     expect(porId.get(sana.id)?.readable).toBe(true);
@@ -272,9 +283,9 @@ describe('una fila con value corrupto no tumba la bandeja', () => {
       namespace: 'contact',
       value: 'esto no es un objeto',
     });
-    const res = await comoAdmin(
-      api().get(`/contact-inbox/${rota.id}`),
-    ).expect(200);
+    const res = await comoAdmin(api().get(`/contact-inbox/${rota.id}`)).expect(
+      200,
+    );
     expect(res.body.readable).toBe(false);
     expect(res.body.message).toBeNull();
   });

@@ -125,10 +125,7 @@ export class RevenueStatsRepository {
       createdInPeriod,
       inArray(payouts.status, [...OPEN_PAYOUT_STATUSES]),
     )!;
-    const failedInPeriod = and(
-      createdInPeriod,
-      eq(payouts.status, FAILED),
-    )!;
+    const failedInPeriod = and(createdInPeriod, eq(payouts.status, FAILED))!;
 
     const [row] = await this.db
       .select({

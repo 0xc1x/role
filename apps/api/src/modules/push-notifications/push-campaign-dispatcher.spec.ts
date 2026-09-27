@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
-import { consumerNotificationPreferences, deviceTokens } from '../../database/schema';
+import {
+  consumerNotificationPreferences,
+  deviceTokens,
+} from '../../database/schema';
 import { createTestDb, type TestDbContext } from '../../../test/db';
 import { seedProfile } from '../../../test/seed';
 import { AppConfigRepository } from '../app-config/app-config.repository';
@@ -77,9 +80,11 @@ beforeAll(async () => {
   userA = await seedProfile(ctx.db);
   userB = await seedProfile(ctx.db);
   userC = await seedProfile(ctx.db);
-  await ctx.db.insert(deviceTokens).values([
-    { user_id: userA, token: 'tok-a', platform: 'android', is_active: true },
-  ]);
+  await ctx.db
+    .insert(deviceTokens)
+    .values([
+      { user_id: userA, token: 'tok-a', platform: 'android', is_active: true },
+    ]);
   await ctx.db
     .insert(consumerNotificationPreferences)
     .values({ user_id: userC, push_enabled: false });
@@ -98,7 +103,9 @@ afterAll(async () => {
 });
 
 async function seedCampaign(
-  overrides: Partial<Parameters<EmailMarketingRepository['insertCampaign']>[0]> = {},
+  overrides: Partial<
+    Parameters<EmailMarketingRepository['insertCampaign']>[0]
+  > = {},
 ) {
   const [row] = await emailRepo.insertCampaign({
     name: 'Campaña push',
@@ -173,6 +180,8 @@ describe('PushCampaignDispatcher (DB real + fetch stub)', () => {
     await expect(
       dispatcher.assertTemplate('00000000-0000-4000-8000-000000000000'),
     ).rejects.toThrow('Plantilla push no encontrada');
-    await expect(dispatcher.assertTemplate(templateId)).resolves.toBeUndefined();
+    await expect(
+      dispatcher.assertTemplate(templateId),
+    ).resolves.toBeUndefined();
   });
 });

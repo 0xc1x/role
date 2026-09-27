@@ -35,9 +35,8 @@ beforeAll(async () => {
   activeRejected = (
     await seedBusiness(ctx.db, owner, { verification_status: 'rejected' })
   ).id;
-  inactiveApproved = (
-    await seedBusiness(ctx.db, owner, { is_active: false })
-  ).id;
+  inactiveApproved = (await seedBusiness(ctx.db, owner, { is_active: false }))
+    .id;
 
   noModerationRow = (await seedBusiness(ctx.db, owner)).id;
   await ctx.db

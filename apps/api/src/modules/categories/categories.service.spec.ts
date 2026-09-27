@@ -1,8 +1,16 @@
-import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { paginatedDataFromQuery } from '@0xc1x/role-commons';
 import { CategoriesService } from './categories.service';
-import { CategoriesRepository, type CategoryRow, type DbExecutor } from './categories.repository';
+import {
+  CategoriesRepository,
+  type CategoryRow,
+  type DbExecutor,
+} from './categories.repository';
 
 jest.mock('@0xc1x/role-commons', () => ({
   paginatedDataFromQuery: jest.fn(),
@@ -78,7 +86,11 @@ describe('CategoriesService', () => {
         meta: { page: 1, limit: 10, total: 1 },
       });
 
-      const result = await service.list({ page: 1, limit: 10, active: undefined });
+      const result = await service.list({
+        page: 1,
+        limit: 10,
+        active: undefined,
+      });
 
       expect(repository.list).toHaveBeenCalledWith({
         page: 1,
@@ -142,13 +154,17 @@ describe('CategoriesService', () => {
     it('should throw NotFoundException when not found', async () => {
       repository.findById.mockResolvedValue(null);
 
-      await expect(service.getById('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.getById('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should reject an inactive category', async () => {
       repository.findById.mockResolvedValue(makeRow({ active: false }));
 
-      await expect(service.getById(makeRow().id)).rejects.toThrow(NotFoundException);
+      await expect(service.getById(makeRow().id)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -166,7 +182,10 @@ describe('CategoriesService', () => {
 
       expect(repository.insert).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ name: 'Test Category', slug: 'test-category' }),
+        expect.objectContaining({
+          name: 'Test Category',
+          slug: 'test-category',
+        }),
       );
       expect(result).toEqual(makeDto());
     });
@@ -176,7 +195,10 @@ describe('CategoriesService', () => {
       repository.findBySlug.mockResolvedValue(null);
       repository.insert.mockResolvedValue(makeRow({ slug: 'test-category' }));
 
-      const result = await service.create({ name: 'Test Category', active: true });
+      const result = await service.create({
+        name: 'Test Category',
+        active: true,
+      });
 
       expect(repository.insert).toHaveBeenCalledWith(
         expect.anything(),
@@ -228,15 +250,17 @@ describe('CategoriesService', () => {
     it('should throw NotFoundException when category not found', async () => {
       repository.findById.mockResolvedValue(null);
 
-      await expect(service.update('nonexistent', { name: 'Updated' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.update('nonexistent', { name: 'Updated' }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should check name uniqueness on update', async () => {
       const existing = makeRow();
       repository.findById.mockResolvedValue(existing);
-      repository.findByName.mockResolvedValue(makeRow({ id: 'other-id', name: 'Taken' }));
+      repository.findByName.mockResolvedValue(
+        makeRow({ id: 'other-id', name: 'Taken' }),
+      );
 
       await expect(
         service.update(existing.id, { name: 'Taken' }),
@@ -274,7 +298,9 @@ describe('CategoriesService', () => {
     it('should throw NotFoundException when category not found', async () => {
       repository.softDelete.mockResolvedValue(null);
 
-      await expect(service.remove('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

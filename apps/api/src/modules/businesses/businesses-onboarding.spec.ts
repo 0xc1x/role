@@ -77,7 +77,9 @@ describe('BusinessesService.onboard', () => {
         {
           provide: AppConfigRepository,
           useValue: {
-            findByKey: jest.fn(async (key: string) => appConfigRows[key] ?? null),
+            findByKey: jest.fn(
+              async (key: string) => appConfigRows[key] ?? null,
+            ),
           },
         },
         { provide: UserDefaultsService, useValue: mockUserDefaults },
@@ -119,7 +121,9 @@ describe('BusinessesService.onboard', () => {
       AUTH_REDIRECT_TO: 'http://localhost:3001/',
     };
     // resetAllMocks borra la impl del constructor mockeado; se re-arma cada test.
-    resendMock.Resend.mockImplementation(() => ({ emails: { send: resendSend } }));
+    resendMock.Resend.mockImplementation(() => ({
+      emails: { send: resendSend },
+    }));
 
     service = await buildService();
     lastTx = null;

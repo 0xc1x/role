@@ -48,7 +48,9 @@ beforeAll(async () => {
   const approved = await seedBusiness(ctx.db, owner);
   publicBusinessId = approved.id;
   const approvedLocation = await seedLocation(ctx.db, publicBusinessId);
-  publicOfferId = (await seedOffer(ctx.db, publicBusinessId, approvedLocation.id)).id;
+  publicOfferId = (
+    await seedOffer(ctx.db, publicBusinessId, approvedLocation.id)
+  ).id;
   pausedOfferId = (
     await seedOffer(ctx.db, publicBusinessId, approvedLocation.id, { stock: 0 })
   ).id;
@@ -57,9 +59,8 @@ beforeAll(async () => {
     verification_status: 'pending',
   });
   const pendingLocation = await seedLocation(ctx.db, pending.id);
-  unapprovedOfferId = (
-    await seedOffer(ctx.db, pending.id, pendingLocation.id)
-  ).id;
+  unapprovedOfferId = (await seedOffer(ctx.db, pending.id, pendingLocation.id))
+    .id;
 
   hiddenReviewId = await insertReview({
     offerId: publicOfferId,
@@ -158,9 +159,7 @@ describe('ReviewsFeedsService.listBusinessReviews', () => {
 
   test('a deactivated business is 404 too', async () => {
     const owner = await seedProfile(ctx.db);
-    const paused = (
-      await seedBusiness(ctx.db, owner, { is_active: false })
-    ).id;
+    const paused = (await seedBusiness(ctx.db, owner, { is_active: false })).id;
 
     await expect(
       service.listBusinessReviews(paused, { page: 1, limit: 20 }),
@@ -212,7 +211,9 @@ describe('ReviewsFeedsService.listMyReviews', () => {
     });
 
     expect(mine.data.map((r) => r.id)).toContain(hiddenReviewId);
-    expect(mine.data.find((r) => r.id === hiddenReviewId)?.is_hidden).toBe(true);
+    expect(mine.data.find((r) => r.id === hiddenReviewId)?.is_hidden).toBe(
+      true,
+    );
     // The moderation record itself stays behind: the appeal between the business
     // and the platform is not the author's to read.
     expect(Object.keys(mine.data[0] ?? {})).not.toContain('moderation_reason');

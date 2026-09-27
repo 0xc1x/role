@@ -124,7 +124,11 @@ const RECIPIENTS = [
 describe('CampaignsService', () => {
   let service: CampaignsService;
   let repository: jest.Mocked<EmailMarketingRepository>;
-  let renderer: { assemble: jest.Mock; renderVariables: jest.Mock; unsubscribeUrl: jest.Mock };
+  let renderer: {
+    assemble: jest.Mock;
+    renderVariables: jest.Mock;
+    unsubscribeUrl: jest.Mock;
+  };
   let recipients: { resolve: jest.Mock };
   let config: { get: jest.Mock };
   let queue: { add: jest.Mock };
@@ -163,7 +167,9 @@ describe('CampaignsService', () => {
     };
     queue = { add: jest.fn() };
     // resetAllMocks borra la impl del constructor mockeado; se re-arma cada test.
-    resendMock.Resend.mockImplementation(() => ({ emails: { send: resendSend } }));
+    resendMock.Resend.mockImplementation(() => ({
+      emails: { send: resendSend },
+    }));
 
     const module = await Test.createTestingModule({
       providers: [
@@ -207,11 +213,19 @@ describe('CampaignsService', () => {
             renderVariables: jest.fn(
               (tpl: string, vars: Record<string, string>) => sub(tpl, vars),
             ),
-            unsubscribeUrl: jest.fn((id: string) => `https://x/unsubscribe?t=${id}`),
+            unsubscribeUrl: jest.fn(
+              (id: string) => `https://x/unsubscribe?t=${id}`,
+            ),
           },
         },
-        { provide: RecipientsService, useValue: { resolve: jest.fn().mockResolvedValue(RECIPIENTS) } },
-        { provide: ConfigService, useValue: { get: jest.fn((key: string) => env[key]) } },
+        {
+          provide: RecipientsService,
+          useValue: { resolve: jest.fn().mockResolvedValue(RECIPIENTS) },
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((key: string) => env[key]) },
+        },
         { provide: AppConfigRepository, useValue: appConfigRepo },
         { provide: getQueueToken('email-expedition'), useValue: queue },
       ],
@@ -224,7 +238,9 @@ describe('CampaignsService', () => {
     config = module.get(ConfigService);
     // clearAllMocks (no reset): preserva las implementaciones de los providers.
     jest.clearAllMocks();
-    resendMock.Resend.mockImplementation(() => ({ emails: { send: resendSend } }));
+    resendMock.Resend.mockImplementation(() => ({
+      emails: { send: resendSend },
+    }));
     (paginatedDataFromQuery as jest.Mock).mockImplementation(
       (data: unknown[], q: { page: number; limit: number }, total: number) => ({
         data,
@@ -238,7 +254,9 @@ describe('CampaignsService', () => {
     repository.findQueuedBatch.mockResolvedValue([]);
     repository.countQueued.mockResolvedValue(0);
     repository.getCampaignById.mockResolvedValue(makeCampaign());
-    repository.updateCampaign.mockResolvedValue(makeCampaign({ status: 'sending' }));
+    repository.updateCampaign.mockResolvedValue(
+      makeCampaign({ status: 'sending' }),
+    );
     repository.findTemplateById.mockResolvedValue(makeTemplate());
     config.get.mockImplementation((key: string) => env[key]);
   });
@@ -246,7 +264,9 @@ describe('CampaignsService', () => {
   describe('preview', () => {
     it('falla con 404 si la plantilla no existe', async () => {
       repository.findTemplateById.mockResolvedValue(null);
-      await expect(service.preview({ templateId: 'nope' })).rejects.toThrow(NotFoundException);
+      await expect(service.preview({ templateId: 'nope' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('renderiza asunto y cuerpo con variables de ejemplo', async () => {
@@ -256,7 +276,11 @@ describe('CampaignsService', () => {
       expect(out.html).toContain('<p>Hola Ana Torres</p>');
       expect(out.variables_used).toEqual(['nombre']);
       expect(renderer.assemble).toHaveBeenCalledWith(
-        expect.objectContaining({ bodyHtml: '<p>Hola {{nombre}}</p>', headerHtml: null, footerHtml: null }),
+        expect.objectContaining({
+          bodyHtml: '<p>Hola {{nombre}}</p>',
+          headerHtml: null,
+          footerHtml: null,
+        }),
       );
     });
 
@@ -285,7 +309,9 @@ describe('CampaignsService', () => {
 
       const out = await service.preview({ templateId: TEMPLATE_ID });
 
-      expect(out.html).toBe('<header>H</header><p>Hola Ana Torres</p><footer>F</footer>');
+      expect(out.html).toBe(
+        '<header>H</header><p>Hola Ana Torres</p><footer>F</footer>',
+      );
     });
   });
 
@@ -293,8 +319,12 @@ describe('CampaignsService', () => {
     const dto = { emails: ['a@x.com', 'b@x.com'] };
 
     it('falla si la campaña no tiene plantilla', async () => {
-      repository.getCampaignById.mockResolvedValue(makeCampaign({ template_id: null }));
-      await expect(service.test(CAMPAIGN_ID, dto as never)).rejects.toThrow(BadRequestException);
+      repository.getCampaignById.mockResolvedValue(
+        makeCampaign({ template_id: null }),
+      );
+      await expect(service.test(CAMPAIGN_ID, dto as never)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('envía a cada email con asunto [TEST] y cuenta los exitosos', async () => {
@@ -305,7 +335,10 @@ describe('CampaignsService', () => {
       expect(out).toEqual({ sent: 2 });
       expect(resendSend).toHaveBeenCalledTimes(2);
       expect(resendSend).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'a@x.com', subject: '[TEST] Hola Ana Torres' }),
+        expect.objectContaining({
+          to: 'a@x.com',
+          subject: '[TEST] Hola Ana Torres',
+        }),
       );
     });
 
@@ -322,7 +355,10 @@ describe('CampaignsService', () => {
     it('usa el body override cuando viene en el dto', async () => {
       resendSend.mockResolvedValue({ data: { id: 're_1' }, error: null });
 
-      await service.test(CAMPAIGN_ID, { emails: ['a@x.com'], overrides: { body_html: '<p>Custom</p>' } } as never);
+      await service.test(CAMPAIGN_ID, {
+        emails: ['a@x.com'],
+        overrides: { body_html: '<p>Custom</p>' },
+      } as never);
 
       expect(renderer.assemble).toHaveBeenCalledWith(
         expect.objectContaining({ bodyHtml: '<p>Custom</p>' }),
@@ -336,7 +372,10 @@ describe('CampaignsService', () => {
         .mockRejectedValueOnce(new Error('bounce'))
         .mockResolvedValue({ data: { id: 're_1' }, error: null });
 
-      const out = await service.testTemplate(TEMPLATE_ID, ['a@x.com', 'b@x.com']);
+      const out = await service.testTemplate(TEMPLATE_ID, [
+        'a@x.com',
+        'b@x.com',
+      ]);
 
       expect(out).toEqual({ sent: 1 });
       expect(resendSend).toHaveBeenCalledWith(
@@ -375,7 +414,9 @@ describe('CampaignsService', () => {
       await service.testTemplate(TEMPLATE_ID, ['a@x.com']);
 
       expect(resendSend).toHaveBeenCalledWith(
-        expect.objectContaining({ from: 'Equipo Rolé <notificaciones@role.ec>' }),
+        expect.objectContaining({
+          from: 'Equipo Rolé <notificaciones@role.ec>',
+        }),
       );
     });
 
@@ -404,32 +445,44 @@ describe('CampaignsService', () => {
   describe('send', () => {
     it('falla con 404 si la campaña no existe', async () => {
       repository.getCampaignById.mockResolvedValue(null);
-      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(NotFoundException);
+      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it.each(['sent', 'sending', 'cancelled'] as const)(
       'rechaza enviar una campaña en estado %s',
       async (status) => {
         repository.getCampaignById.mockResolvedValue(makeCampaign({ status }));
-        await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(BadRequestException);
+        await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(
+          BadRequestException,
+        );
       },
     );
 
     it('rechaza campañas sin plantilla', async () => {
-      repository.getCampaignById.mockResolvedValue(makeCampaign({ template_id: null }));
-      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(BadRequestException);
+      repository.getCampaignById.mockResolvedValue(
+        makeCampaign({ template_id: null }),
+      );
+      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('rechaza campañas sin segmentos ni usuarios incluidos', async () => {
       repository.getCampaignById.mockResolvedValue(
         makeCampaign({ segment_ids: [], include_user_ids: [] }),
       );
-      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(BadRequestException);
+      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('rechaza cuando ningún destinatario cumple los criterios', async () => {
       recipients.resolve.mockResolvedValue([]);
-      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(BadRequestException);
+      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('rechaza audiencias gigantes con error claro (tope 50_000)', async () => {
@@ -440,16 +493,22 @@ describe('CampaignsService', () => {
           fullName: null,
         })),
       );
-      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(/demasiado grande/);
+      await expect(service.send(CAMPAIGN_ID)).rejects.toThrow(
+        /demasiado grande/,
+      );
       expect(repository.insertSends).not.toHaveBeenCalled();
     });
 
     it('al reintentar una failed limpia los envíos del intento anterior', async () => {
-      repository.getCampaignById.mockResolvedValue(makeCampaign({ status: 'failed' }));
+      repository.getCampaignById.mockResolvedValue(
+        makeCampaign({ status: 'failed' }),
+      );
 
       await service.send(CAMPAIGN_ID);
 
-      expect(repository.deleteSendsByCampaign).toHaveBeenCalledWith(CAMPAIGN_ID);
+      expect(repository.deleteSendsByCampaign).toHaveBeenCalledWith(
+        CAMPAIGN_ID,
+      );
     });
 
     it('encola un email_sends por destinatario y arranca la campaña vía BullMQ', async () => {
@@ -465,12 +524,24 @@ describe('CampaignsService', () => {
         email: 'ana@correo.com',
         status: 'pending',
         max_attempts: 5,
-        variables_used: { nombre: 'Ana', unsubscribe_url: 'https://x/unsubscribe?t=u-1' },
+        variables_used: {
+          nombre: 'Ana',
+          unsubscribe_url: 'https://x/unsubscribe?t=u-1',
+        },
       });
-      expect(rows[1]).toMatchObject({ email: 'beto@correo.com', variables_used: { nombre: '' } });
+      expect(rows[1]).toMatchObject({
+        email: 'beto@correo.com',
+        variables_used: { nombre: '' },
+      });
       expect(repository.recountStats).toHaveBeenCalledWith(CAMPAIGN_ID);
-      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, { status: 'sending' });
-      expect(queue.add).toHaveBeenCalledWith('process-batch', { campaignId: CAMPAIGN_ID }, undefined);
+      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
+        status: 'sending',
+      });
+      expect(queue.add).toHaveBeenCalledWith(
+        'process-batch',
+        { campaignId: CAMPAIGN_ID },
+        undefined,
+      );
       expect(out.status).toBe('sending');
       expect(out.total_recipients).toBe(0);
     });
@@ -492,7 +563,9 @@ describe('CampaignsService', () => {
 
     it('sin REDIS_URL ejecuta el primer lote directo (fallback dev)', async () => {
       env.REDIS_URL = undefined;
-      repository.getCampaignById.mockResolvedValue(makeCampaign({ total_recipients: 2 }));
+      repository.getCampaignById.mockResolvedValue(
+        makeCampaign({ total_recipients: 2 }),
+      );
 
       await service.send(CAMPAIGN_ID);
       await flush();
@@ -514,7 +587,9 @@ describe('CampaignsService', () => {
       await service.send(CAMPAIGN_ID);
       await flush();
 
-      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, { status: 'failed' });
+      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
+        status: 'failed',
+      });
     });
   });
 
@@ -531,12 +606,18 @@ describe('CampaignsService', () => {
 
   describe('cancel', () => {
     it('rechaza cancelar campañas ya cerradas', async () => {
-      repository.getCampaignById.mockResolvedValue(makeCampaign({ status: 'sent' }));
-      await expect(service.cancel(CAMPAIGN_ID)).rejects.toThrow(BadRequestException);
+      repository.getCampaignById.mockResolvedValue(
+        makeCampaign({ status: 'sent' }),
+      );
+      await expect(service.cancel(CAMPAIGN_ID)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('marca cancelled y devuelve el DTO', async () => {
-      repository.updateCampaign.mockResolvedValue(makeCampaign({ status: 'cancelled' }));
+      repository.updateCampaign.mockResolvedValue(
+        makeCampaign({ status: 'cancelled' }),
+      );
 
       const out = await service.cancel(CAMPAIGN_ID);
 
@@ -547,22 +628,34 @@ describe('CampaignsService', () => {
 
   describe('processTick', () => {
     it('dispara el envío de campañas programadas vencidas', async () => {
-      repository.findDueScheduled.mockResolvedValue([makeCampaign({ status: 'scheduled' })]);
+      repository.findDueScheduled.mockResolvedValue([
+        makeCampaign({ status: 'scheduled' }),
+      ]);
 
       await service.processTick();
 
-      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, { status: 'sending' });
-      expect(queue.add).toHaveBeenCalledWith('process-batch', { campaignId: CAMPAIGN_ID }, undefined);
+      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
+        status: 'sending',
+      });
+      expect(queue.add).toHaveBeenCalledWith(
+        'process-batch',
+        { campaignId: CAMPAIGN_ID },
+        undefined,
+      );
     });
 
     it('marca failed la campaña programada cuyo envío falla', async () => {
-      repository.findDueScheduled.mockResolvedValue([makeCampaign({ status: 'scheduled' })]);
+      repository.findDueScheduled.mockResolvedValue([
+        makeCampaign({ status: 'scheduled' }),
+      ]);
       recipients.resolve.mockRejectedValue(new Error('db down'));
 
       await service.processTick();
       await flush();
 
-      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, { status: 'failed' });
+      expect(repository.updateCampaign).toHaveBeenCalledWith(CAMPAIGN_ID, {
+        status: 'failed',
+      });
     });
 
     it('procesa lotes de campañas en sending solo sin Redis (fallback)', async () => {
@@ -590,7 +683,10 @@ describe('CampaignsService', () => {
         rows: [makeCampaign({ status: 'sending', total_recipients: 3 })],
         total: 1,
       });
-      const tx = makeSend({ type: 'transactional', source_type: 'business_verification' });
+      const tx = makeSend({
+        type: 'transactional',
+        source_type: 'business_verification',
+      });
       repository.findPendingBatch.mockResolvedValue([tx]);
       resendSend.mockResolvedValue({ data: { id: 're_1' }, error: null });
 
@@ -604,7 +700,10 @@ describe('CampaignsService', () => {
 
   describe('processTransactionalBatch', () => {
     it('procesa solo transaccionales: renderiza, envía y marca sent', async () => {
-      const send = makeSend({ type: 'transactional', source_type: 'business_verification' });
+      const send = makeSend({
+        type: 'transactional',
+        source_type: 'business_verification',
+      });
       repository.findPendingBatch.mockResolvedValue([send, makeSend()]);
       repository.markSent.mockResolvedValue(undefined);
 
@@ -612,7 +711,10 @@ describe('CampaignsService', () => {
 
       expect(processed).toBe(1);
       expect(repository.markProcessing).toHaveBeenCalledWith('s-1');
-      expect(renderer.renderVariables).toHaveBeenCalledWith('Hola {{nombre}}', send.variables_used);
+      expect(renderer.renderVariables).toHaveBeenCalledWith(
+        'Hola {{nombre}}',
+        send.variables_used,
+      );
       expect(resendSend).toHaveBeenCalledWith(
         expect.objectContaining({ to: 'ana@correo.com', subject: 'Hola Ana' }),
       );
@@ -685,7 +787,9 @@ describe('CampaignsService', () => {
       resendSend.mockResolvedValue({ data: { id: 're_9' }, error: null });
       repository.countQueued.mockResolvedValue(1);
 
-      const processed = await service.processBatch(makeCampaign({ status: 'sending' }));
+      const processed = await service.processBatch(
+        makeCampaign({ status: 'sending' }),
+      );
 
       expect(processed).toBe(2);
       expect(repository.markSent).toHaveBeenCalledWith('s-1', 're_9');
@@ -700,7 +804,9 @@ describe('CampaignsService', () => {
 
       await service.processBatch(makeCampaign({ status: 'sending' }));
 
-      expect(queue.add).toHaveBeenCalledWith('process-batch', { campaignId: CAMPAIGN_ID });
+      expect(queue.add).toHaveBeenCalledWith('process-batch', {
+        campaignId: CAMPAIGN_ID,
+      });
       expect(repository.updateCampaign).not.toHaveBeenCalled();
     });
 
@@ -719,7 +825,10 @@ describe('CampaignsService', () => {
       const sendB = makeSend({ id: 's-2' });
       repository.findQueuedBatch.mockResolvedValue([sendA, sendB]);
       resendSend
-        .mockResolvedValueOnce({ data: null, error: { message: 'Credit insuficiente' } })
+        .mockResolvedValueOnce({
+          data: null,
+          error: { message: 'Credit insuficiente' },
+        })
         .mockResolvedValue({ data: { id: 're_9' }, error: null });
       repository.countQueued.mockResolvedValue(1);
 

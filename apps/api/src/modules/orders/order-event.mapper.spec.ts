@@ -51,11 +51,8 @@ describe('OrderEventMapper', () => {
   it('exposes exactly the four documented fields', () => {
     // If someone widens the projection, this is the test that has to be
     // updated on purpose — with the reason written down next to it.
-    expect(Object.keys(OrderEventMapper.toTimelineEvent(makeRow())).sort()).toEqual([
-      'created_at',
-      'previous_status',
-      'reason',
-      'status',
-    ]);
+    expect(
+      Object.keys(OrderEventMapper.toTimelineEvent(makeRow())).sort(),
+    ).toEqual(['created_at', 'previous_status', 'reason', 'status']);
   });
 });

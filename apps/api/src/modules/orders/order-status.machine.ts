@@ -7,10 +7,10 @@ import type { AppRole, OrderStatus } from '@0xc1x/role-commons';
  * módulo sigue siendo la puerta del dominio de órdenes.
  */
 export {
-	isTransitionAllowed,
-	ORDER_TRANSITIONS,
-	shouldRestockOnTransition,
-	STOCK_HOLDING_STATUSES,
+  isTransitionAllowed,
+  ORDER_TRANSITIONS,
+  shouldRestockOnTransition,
+  STOCK_HOLDING_STATUSES,
 } from '@0xc1x/role-commons';
 
 /** Active (non-terminal) order statuses — used for "one active order per offer/user". */

@@ -250,9 +250,9 @@ describe('BusinessesService', () => {
     });
 
     it('un negocio no puede leer los envíos de su propia verificación', async () => {
-      await expect(
-        service.listEmailSends(owner, businessId),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.listEmailSends(owner, businessId)).rejects.toThrow(
+        ForbiddenException,
+      );
 
       expect(repository.listEmailSends).not.toHaveBeenCalled();
     });

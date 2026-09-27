@@ -222,7 +222,10 @@ describe('BusinessesRepository extras (DB real)', () => {
         ...values,
       });
 
-    await insert(biz, { status: 'pending', created_at: new Date('2026-02-01') });
+    await insert(biz, {
+      status: 'pending',
+      created_at: new Date('2026-02-01'),
+    });
     await insert(biz, {
       status: 'failed',
       error_message: 'You can only send testing emails to your own email',

@@ -91,8 +91,21 @@ describe('OffersController', () => {
         review_count: 10,
         created_at: '2025-01-01T00:00:00.000Z',
         updated_at: '2025-01-01T00:00:00.000Z',
-        business: { id: 'b1', name: 'Test Biz', slug: 'test-biz', image: null, rating: null },
-        location: { id: 'bl1', name: 'Loc', address: 'Addr', latitude: 40.71, longitude: -74.00, zone: null },
+        business: {
+          id: 'b1',
+          name: 'Test Biz',
+          slug: 'test-biz',
+          image: null,
+          rating: null,
+        },
+        location: {
+          id: 'bl1',
+          name: 'Loc',
+          address: 'Addr',
+          latitude: 40.71,
+          longitude: -74.0,
+          zone: null,
+        },
       };
       service.getById.mockResolvedValue(offer);
 
@@ -116,12 +129,31 @@ describe('OffersController', () => {
         category_ids: [],
       };
       const created = {
-        id: 'o1', ...body, description: null, image: null, stock: 1, initial_stock: 1,
-        is_active: true, includes: null, allergens: null, discount_percentage: null,
-        rating: 0, review_count: 0, category_ids: [], categories: [],
-        created_at: '2025-02-01T00:00:00.000Z', updated_at: '2025-02-01T00:00:00.000Z',
+        id: 'o1',
+        ...body,
+        description: null,
+        image: null,
+        stock: 1,
+        initial_stock: 1,
+        is_active: true,
+        includes: null,
+        allergens: null,
+        discount_percentage: null,
+        rating: 0,
+        review_count: 0,
+        category_ids: [],
+        categories: [],
+        created_at: '2025-02-01T00:00:00.000Z',
+        updated_at: '2025-02-01T00:00:00.000Z',
         business: { id: 'b1', name: '', slug: '', image: null, rating: null },
-        location: { id: 'bl1', name: '', address: '', latitude: 0, longitude: 0, zone: null },
+        location: {
+          id: 'bl1',
+          name: '',
+          address: '',
+          latitude: 0,
+          longitude: 0,
+          zone: null,
+        },
       };
       service.create.mockResolvedValue(created);
 
@@ -136,14 +168,37 @@ describe('OffersController', () => {
     it('should update and return an offer', async () => {
       const body = { title: 'Updated' };
       const updated = {
-        id: 'o1', title: 'Updated', business_id: '', business_location_id: '',
-        description: null, image: null, category_ids: [], categories: [],
-        original_price: 0, discounted_price: 0, discount_percentage: null,
-        stock: 0, initial_stock: 0, pickup_start: '', pickup_end: '',
-        is_active: true, includes: null, allergens: null, rating: 0, review_count: 0,
-        created_at: '', updated_at: '',
+        id: 'o1',
+        title: 'Updated',
+        business_id: '',
+        business_location_id: '',
+        description: null,
+        image: null,
+        category_ids: [],
+        categories: [],
+        original_price: 0,
+        discounted_price: 0,
+        discount_percentage: null,
+        stock: 0,
+        initial_stock: 0,
+        pickup_start: '',
+        pickup_end: '',
+        is_active: true,
+        includes: null,
+        allergens: null,
+        rating: 0,
+        review_count: 0,
+        created_at: '',
+        updated_at: '',
         business: { id: '', name: '', slug: '', image: null, rating: null },
-        location: { id: '', name: '', address: '', latitude: 0, longitude: 0, zone: null },
+        location: {
+          id: '',
+          name: '',
+          address: '',
+          latitude: 0,
+          longitude: 0,
+          zone: null,
+        },
       };
       service.update.mockResolvedValue(updated);
 

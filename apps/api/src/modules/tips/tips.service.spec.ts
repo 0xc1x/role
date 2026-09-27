@@ -2,7 +2,11 @@ import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { paginatedDataFromQuery } from '@0xc1x/role-commons';
 import { TipsService } from './tips.service';
-import { TipsRepository, type DbExecutor, type TipRow } from './tips.repository';
+import {
+  TipsRepository,
+  type DbExecutor,
+  type TipRow,
+} from './tips.repository';
 
 jest.mock('@0xc1x/role-commons', () => ({
   paginatedDataFromQuery: jest.fn(),
@@ -70,7 +74,11 @@ describe('TipsService', () => {
         meta: { page: 1, limit: 10, total: 1 },
       });
 
-      const result = await service.list({ page: 1, limit: 10, active: undefined });
+      const result = await service.list({
+        page: 1,
+        limit: 10,
+        active: undefined,
+      });
 
       expect(repository.list).toHaveBeenCalledWith({
         page: 1,
@@ -151,13 +159,17 @@ describe('TipsService', () => {
     it('should throw NotFoundException when not found', async () => {
       repository.findById.mockResolvedValue(null);
 
-      await expect(service.getById('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.getById('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should reject an inactive tip', async () => {
       repository.findById.mockResolvedValue(makeRow({ active: false }));
 
-      await expect(service.getById(makeRow().id)).rejects.toThrow(NotFoundException);
+      await expect(service.getById(makeRow().id)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -165,7 +177,10 @@ describe('TipsService', () => {
     it('should create and return a tip', async () => {
       repository.insert.mockResolvedValue(makeRow());
 
-      const result = await service.create({ content: 'Test tip', active: true });
+      const result = await service.create({
+        content: 'Test tip',
+        active: true,
+      });
 
       expect(repository.insert).toHaveBeenCalledWith(
         expect.anything(),
@@ -209,14 +224,19 @@ describe('TipsService', () => {
 
       const result = await service.remove(makeRow().id);
 
-      expect(repository.softDelete).toHaveBeenCalledWith(expect.anything(), makeRow().id);
+      expect(repository.softDelete).toHaveBeenCalledWith(
+        expect.anything(),
+        makeRow().id,
+      );
       expect(result.deleted_at).toBe('2025-01-03T00:00:00.000Z');
     });
 
     it('should throw NotFoundException when tip not found', async () => {
       repository.softDelete.mockResolvedValue(null);
 
-      await expect(service.remove('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

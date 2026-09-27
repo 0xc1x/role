@@ -23,7 +23,10 @@ const MENSAJE = {
 };
 
 /** Fila de contacto con un `value` válido, como la escribe `POST /contact`. */
-const seedContacto = (value: unknown = MENSAJE, status?: 'PENDIENTE' | 'PROCESADO') =>
+const seedContacto = (
+  value: unknown = MENSAJE,
+  status?: 'PENDIENTE' | 'PROCESADO',
+) =>
   store.insert({ namespace: 'contact', value, ...(status ? { status } : {}) });
 
 beforeAll(async () => {
@@ -135,7 +138,9 @@ describe('marcar como atendido', () => {
   test('no toca el value del mensaje al cambiar el estado', async () => {
     const fila = await seedContacto(MENSAJE, 'PENDIENTE');
     await service.markHandled(fila.id);
-    expect((await store.findById(fila.id))?.value).toMatchObject({ email: 'ana@example.com' });
+    expect((await store.findById(fila.id))?.value).toMatchObject({
+      email: 'ana@example.com',
+    });
   });
 
   test('un id inexistente es 404', async () => {

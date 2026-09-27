@@ -7,7 +7,12 @@ describe('parseRedisUrl', () => {
 
   it('parses redis:// url with auth', () => {
     const opts = parseRedisUrl('redis://user:pass@myhost:6380');
-    expect(opts).toMatchObject({ host: 'myhost', port: 6380, username: 'user', password: 'pass' });
+    expect(opts).toMatchObject({
+      host: 'myhost',
+      port: 6380,
+      username: 'user',
+      password: 'pass',
+    });
   });
 
   it('defaults port to 6379 when missing', () => {
@@ -16,7 +21,10 @@ describe('parseRedisUrl', () => {
   });
 
   it('falls back to localhost on invalid url', () => {
-    expect(parseRedisUrl('not a url')).toMatchObject({ host: 'localhost', port: 6379 });
+    expect(parseRedisUrl('not a url')).toMatchObject({
+      host: 'localhost',
+      port: 6379,
+    });
   });
 
   it('sets maxRetriesPerRequest to null', () => {

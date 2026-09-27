@@ -17,7 +17,8 @@ let businessId: string;
 let offerId: string;
 let orderId: string;
 
-const authUser = (id: string) => ({ id, email: 'u@t.cl', role: 'user' }) as never;
+const authUser = (id: string) =>
+  ({ id, email: 'u@t.cl', role: 'user' }) as never;
 
 beforeAll(async () => {
   ctx = await createTestDb();

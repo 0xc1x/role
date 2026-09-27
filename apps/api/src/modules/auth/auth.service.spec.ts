@@ -112,7 +112,10 @@ describe('AuthService', () => {
 
       mockDb.limit.mockResolvedValueOnce([mockProfile]);
 
-      const result = await service.login({ email: 'test@test.com', password: 'password123' });
+      const result = await service.login({
+        email: 'test@test.com',
+        password: 'password123',
+      });
 
       expect(result.access_token).toBe('access-token');
       expect(result.refresh_token).toBe('refresh-token');
@@ -158,7 +161,10 @@ describe('AuthService', () => {
 
       mockDb.limit.mockResolvedValueOnce([]);
 
-      const result = await service.login({ email: 'test@test.com', password: 'password123' });
+      const result = await service.login({
+        email: 'test@test.com',
+        password: 'password123',
+      });
 
       expect(result.user.id).toBe('user-1');
       expect(result.user.role).toBe('user');
@@ -193,9 +199,9 @@ describe('AuthService', () => {
 
       // First read finds nothing; the repair runs and the re-read finds the row
       // the seeder just wrote.
-      mockDb.limit.mockResolvedValueOnce([]).mockResolvedValueOnce([
-        seededProfile,
-      ]);
+      mockDb.limit
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([seededProfile]);
 
       const result = await service.login({
         email: 'test@test.com',
@@ -358,7 +364,9 @@ describe('AuthService', () => {
 
       mockDb.limit.mockResolvedValueOnce([mockProfile]);
 
-      const result = await service.refresh({ refresh_token: 'valid-refresh-token' });
+      const result = await service.refresh({
+        refresh_token: 'valid-refresh-token',
+      });
 
       expect(result.access_token).toBe('new-access-token');
       expect(result.refresh_token).toBe('new-refresh-token');
@@ -392,7 +400,9 @@ describe('AuthService', () => {
 
       mockDb.limit.mockResolvedValueOnce([]);
 
-      const result = await service.refresh({ refresh_token: 'valid-refresh-token' });
+      const result = await service.refresh({
+        refresh_token: 'valid-refresh-token',
+      });
 
       expect(result.user.id).toBe('user-1');
       expect(result.user.role).toBe('user');

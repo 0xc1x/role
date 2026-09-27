@@ -70,6 +70,8 @@ describe('AuthController', () => {
   it('logout es público y rate-limited', () => {
     expect(reflector.get(IS_PUBLIC_KEY, controller.logout)).toBe(true);
     expect(reflector.get('THROTTLER:LIMITdefault', controller.logout)).toBe(10);
-    expect(reflector.get('THROTTLER:TTLdefault', controller.logout)).toBe(60_000);
+    expect(reflector.get('THROTTLER:TTLdefault', controller.logout)).toBe(
+      60_000,
+    );
   });
 });

@@ -42,7 +42,9 @@ async function loadInitSql(): Promise<string> {
     chunks.push(
       open === -1 || close === -1 || close < open
         ? raw
-        : raw.slice(0, open) + raw.slice(open + 2, close) + raw.slice(close + 2),
+        : raw.slice(0, open) +
+            raw.slice(open + 2, close) +
+            raw.slice(close + 2),
     );
   }
   return chunks.join('\n--> statement-breakpoint\n');

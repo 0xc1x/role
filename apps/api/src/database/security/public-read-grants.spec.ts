@@ -81,9 +81,10 @@ function findStatement(predicate: (s: string) => boolean): string {
 /** Content of the first `grant select (...)` block for a table. */
 function grantBlock(table: string): string {
   const statement = findStatement((s) =>
-    new RegExp(`grant select \\([\\s\\S]*?on table public\\.${table} to `, 'i').test(
-      s,
-    ),
+    new RegExp(
+      `grant select \\([\\s\\S]*?on table public\\.${table} to `,
+      'i',
+    ).test(s),
   );
   const body = statement.match(/grant select \(([\s\S]*?)\) on table/);
   return body ? body[1] : '';
@@ -157,10 +158,14 @@ describe('client read/write boundary migration', () => {
     expect(revoke).toMatch(/truncate, trigger, references/i);
 
     const insertGrant = findStatement((s) =>
-      /grant insert \([\s\S]*?on table public\.offers to authenticated/i.test(s),
+      /grant insert \([\s\S]*?on table public\.offers to authenticated/i.test(
+        s,
+      ),
     );
     const updateGrant = findStatement((s) =>
-      /grant update \([\s\S]*?on table public\.offers to authenticated/i.test(s),
+      /grant update \([\s\S]*?on table public\.offers to authenticated/i.test(
+        s,
+      ),
     );
     for (const column of ['rating', 'review_count']) {
       expect(insertGrant).not.toContain(column);
@@ -168,7 +173,9 @@ describe('client read/write boundary migration', () => {
     }
     // Stock is moved by the reservation RPCs, never by an owner editing an offer.
     expect(updateGrant).not.toMatch(/\bstock\b/);
-    expect(MIGRATION).toMatch(/revoke update \(stock\) on table public\.offers/i);
+    expect(MIGRATION).toMatch(
+      /revoke update \(stock\) on table public\.offers/i,
+    );
   });
 
   test('offers: the missing FK index is added', () => {
@@ -176,7 +183,9 @@ describe('client read/write boundary migration', () => {
       findStatement((s) =>
         /create index if not exists idx_offers_location_business/i.test(s),
       ),
-    ).toMatch(/on public\.offers using btree \(business_location_id, business_id\)/i);
+    ).toMatch(
+      /on public\.offers using btree \(business_location_id, business_id\)/i,
+    );
   });
 
   test('get_platform_stats is definer with a fixed empty search_path and service_role only', () => {
@@ -338,7 +347,9 @@ describe('client read/write boundary migration', () => {
     // Section 0 returns early on a fresh env, so the sync needs its own block;
     // otherwise an operator-seeded secret would never reach the Edge functions.
     const blocks = MIGRATION.match(/do \$\$[\s\S]*?\$\$;/gi) ?? [];
-    const syncing = blocks.filter((b) => b.includes('supabase_functions_secret_'));
+    const syncing = blocks.filter((b) =>
+      b.includes('supabase_functions_secret_'),
+    );
     expect(syncing.length).toBeGreaterThanOrEqual(2);
     for (const b of syncing) {
       expect(b).toMatch(/internal_secret missing from Vault/i);
@@ -382,7 +393,8 @@ describe('client read/write boundary migration', () => {
       .match(
         /create or replace function public\.invoke_internal_edge_function\([\s\S]*?\$\$;/i,
       )?.[0];
-    const allowlist = fn?.match(/if path not in \(([\s\S]*?)\) then/i)?.[1] ?? '';
+    const allowlist =
+      fn?.match(/if path not in \(([\s\S]*?)\) then/i)?.[1] ?? '';
     for (const slug of [
       'handle-order-event',
       'handle-pickup-reminders',
@@ -444,9 +456,9 @@ describe('client read/write boundary migration', () => {
         ),
       )?.[0];
       expect(schedule).toBeDefined();
-      expect(
-        MIGRATION,
-      ).toMatch(new RegExp(`select cron\\.unschedule\\('${jobName}'\\)`, 'i'));
+      expect(MIGRATION).toMatch(
+        new RegExp(`select cron\\.unschedule\\('${jobName}'\\)`, 'i'),
+      );
     }
     // The migration uses the supported cron API and never edits cron.job directly.
     expect(MIGRATION).toMatch(/select cron\.unschedule\(/i);
@@ -539,14 +551,18 @@ describe('offers write grants match what the client actually writes', () => {
     // Indentation is whitespace-agnostic on purpose: the file is formatted by
     // biome, and a guard that hardcodes "two spaces" silently breaks the day
     // the tab convention is enforced.
-    const block = source.match(/const mutableColumns: Row = \{([\s\S]*?)\n[\t ]+\};/);
+    const block = source.match(
+      /const mutableColumns: Row = \{([\s\S]*?)\n[\t ]+\};/,
+    );
     if (!block?.[1]) {
       throw new Error(
         'saveOffer no longer declares a `mutableColumns: Row` object literal; update this guard to match the new shape.',
       );
     }
     const keys = columnList(
-      [...block[1].matchAll(/^\s*(\w+):/gm)].map((m) => m[1] as string).join(','),
+      [...block[1].matchAll(/^\s*(\w+):/gm)]
+        .map((m) => m[1] as string)
+        .join(','),
     );
     // The photo column is assigned imperatively, not in the literal.
     if (/mutableColumns\.image\s*=/.test(source)) keys.push('image');
@@ -566,9 +582,7 @@ describe('offers write grants match what the client actually writes', () => {
         'saveOffer no longer spreads mutableColumns inside .insert({...}); update this guard to match the new shape.',
       );
     }
-    return [...spread[1].matchAll(/^\s*(\w+):/gm)].map(
-      (m) => m[1] as string,
-    );
+    return [...spread[1].matchAll(/^\s*(\w+):/gm)].map((m) => m[1] as string);
   }
 
   test('every column the client writes on UPDATE is granted to authenticated', () => {
@@ -601,9 +615,10 @@ describe('offers write grants match what the client actually writes', () => {
   test('derived columns are never written by the client', () => {
     const written = [...clientMutableColumns(), ...clientInsertOnlyColumns()];
     for (const col of DERIVED_COLUMNS) {
-      expect(written, `client must not write derived column ${col}`).not.toContain(
-        col,
-      );
+      expect(
+        written,
+        `client must not write derived column ${col}`,
+      ).not.toContain(col);
     }
   });
 
@@ -763,9 +778,7 @@ describe('businesses column split phase 3 closes the anon exposure', () => {
   test('a rewrite fails loudly instead of silently no-oping', () => {
     // If someone edited one of those functions after this migration was
     // written, a silent no-op would leave it reading a column that is gone.
-    expect(PHASE3).toMatch(
-      /patron no encontrado en public\.%:\s*\[%\]/i,
-    );
+    expect(PHASE3).toMatch(/patron no encontrado en public\.%:\s*\[%\]/i);
     expect(PHASE3).toMatch(/esperaba exactamente 1 overload de public\.%/i);
   });
 
@@ -1024,9 +1037,9 @@ describe('businesses client write grants match what the client actually writes',
         'createBusiness no longer inserts a literal into businesses; update this guard.',
       );
     }
-    const insertKeys = [
-      ...insert.matchAll(/^\s*(\w+):/gm),
-    ].map((m) => m[1] as string);
+    const insertKeys = [...insert.matchAll(/^\s*(\w+):/gm)].map(
+      (m) => m[1] as string,
+    );
 
     const update = source.match(
       /const businessUpdate: Record<string, unknown> = \{([\s\S]*?)\n[\t ]+\};/,
@@ -1036,9 +1049,9 @@ describe('businesses client write grants match what the client actually writes',
         'updateBusiness no longer declares a `businessUpdate` literal; update this guard.',
       );
     }
-    const updateKeys = [
-      ...update.matchAll(/businessUpdate\.(\w+)\s*=/g),
-    ].map((m) => m[1] as string);
+    const updateKeys = [...update.matchAll(/businessUpdate\.(\w+)\s*=/g)].map(
+      (m) => m[1] as string,
+    );
 
     const ungranted = [
       ...insertKeys.filter((c) => !grantColumns('insert').includes(c)),

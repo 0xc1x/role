@@ -246,7 +246,9 @@ describe('OffersRepository consultas (DB real)', () => {
     // findDtoById, not findById: this offer's pickup window has closed, which is
     // exactly the case the public detail endpoint must hide. The assertion here
     // is about the row's is_active flag, so it reads it unfiltered.
-    expect(await repo.findDtoById(stale.id)).toMatchObject({ is_active: false });
+    expect(await repo.findDtoById(stale.id)).toMatchObject({
+      is_active: false,
+    });
 
     const user = await seedProfile(ctx.db);
     const order = await seedOrder(ctx.db, user, stale.id, businessId);

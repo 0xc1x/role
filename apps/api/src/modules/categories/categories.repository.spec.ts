@@ -22,22 +22,26 @@ describe('CategoriesRepository (DB real)', () => {
     });
     expect(row.id).toBeDefined();
     expect(await repo.findById(row.id)).toMatchObject({ name: 'Panadería' });
-    expect(await repo.findById('00000000-0000-0000-0000-000000000000')).toBeNull();
+    expect(
+      await repo.findById('00000000-0000-0000-0000-000000000000'),
+    ).toBeNull();
   });
 
   test('findByName y findBySlug respetan excludeId', async () => {
     const a = await repo.insert(ctx.db, { name: 'Café', slug: 'cafe' });
     expect(await repo.findByName('Café')).toMatchObject({ id: a.id });
-    expect(
-      await repo.findByName('Café', { excludeId: a.id }),
-    ).toBeNull();
+    expect(await repo.findByName('Café', { excludeId: a.id })).toBeNull();
     expect(await repo.findBySlug('cafe')).toMatchObject({ id: a.id });
     expect(await repo.findBySlug('cafe', { excludeId: a.id })).toBeNull();
     expect(await repo.findBySlug('no-existe')).toBeNull();
   });
 
   test('list filtra por active/search y pagina', async () => {
-    await repo.insert(ctx.db, { name: 'Frutería', slug: 'fruteria', active: false });
+    await repo.insert(ctx.db, {
+      name: 'Frutería',
+      slug: 'fruteria',
+      active: false,
+    });
     const all = await repo.list({ page: 1, limit: 10 });
     expect(all.total).toBeGreaterThanOrEqual(3);
 
