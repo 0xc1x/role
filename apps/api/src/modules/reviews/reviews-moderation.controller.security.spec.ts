@@ -46,10 +46,12 @@ import { ReviewsRepository } from './reviews.repository';
  * TAMPOCO PUEDE PROBAR LOS `check` DE LA MIGRACIÓN: el espejo de test se arma con
  * el DDL generado por `drizzle-kit`, que no modela constraints de CHECK. Que
  * `moderation_reason` sea obligatorio en la base es una afirmación sobre
- * `20260927013000_reviews_moderation_soft_hide.sql`, y ese archivo todavía no se
- * aplicó a ninguna base. Lo que sí se prueba acá es el borde HTTP: la API
- * rechaza un ocultamiento sin razón antes de tocar la fila, y con eso el
- * `check` de la base es la segunda barrera, no la única.
+ * `20260927021015_reviews_moderation_soft_hide.sql`. Ese archivo ya se aplicó
+ * (ledger `20260927021015`) y los `check` están en la base, pero eso se verificó
+ * una vez contra Supabase y no en cada corrida: este spec sigue sin ejecutarlos.
+ * Lo que sí se prueba acá es el borde HTTP: la API rechaza un ocultamiento sin
+ * razón antes de tocar la fila, y con eso el `check` de la base es la segunda
+ * barrera, no la única.
  */
 
 const SUPABASE_URL = 'http://127.0.0.1:9';

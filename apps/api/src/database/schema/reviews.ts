@@ -30,9 +30,9 @@ export const reviews = pgTable('reviews', {
    * de qué se ocultó y por qué, y para que `UNIQUE(user_id, order_id)` siga
    * impeciendo que el autor la vuelva a publicar.
    *
-   * REQUIERE la migración `20260927013000_reviews_moderation_soft_hide`: este
-   * espejo se genera con `drizzle-kit generate`, así que los tests de DB solo
-   * ven estas columnas después de regenerarlo.
+   * REQUIERE la migración `20260927021015_reviews_moderation_soft_hide` (ya
+   * aplicada): este espejo se genera con `drizzle-kit generate`, así que los
+   * tests de DB solo ven estas columnas después de regenerarlo.
    */
   is_hidden: boolean('is_hidden').notNull().default(false),
   moderated_at: timestamp('moderated_at', { withTimezone: true }),
@@ -56,9 +56,9 @@ export const reviews = pgTable('reviews', {
    * columna— por cada motivo que el producto agregue después. Zod es quien valida
    * el conjunto; la base solo exige que haya motivo.
    *
-   * REQUIERE la migración `20260927013000_reviews_moderation_soft_hide`: este
-   * espejo se genera con `drizzle-kit generate`, así que los tests de DB solo
-   * ven estas columnas después de regenerarlo.
+   * REQUIERE la migración `20260927021015_reviews_moderation_soft_hide` (ya
+   * aplicada): este espejo se genera con `drizzle-kit generate`, así que los
+   * tests de DB solo ven estas columnas después de regenerarlo.
    */
   moderation_reason: text('moderation_reason'),
   created_at: timestamp('created_at', { withTimezone: true })
