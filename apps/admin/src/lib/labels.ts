@@ -1,5 +1,6 @@
 import type {
 	BusinessVerificationStatus,
+	ContactMessageStatus,
 	EmailSendStatus,
 	OrderStatus,
 	PayoutStatus,
@@ -67,3 +68,22 @@ export const emailSendStatusLabel = (status: string): string =>
 /** Estado de una orden: `ready_for_pickup` → "Lista para recoger". */
 export const orderStatusLabel = (status: string): string =>
 	ORDER_STATUS_LABELS[status as OrderStatus] ?? status;
+
+/**
+ * Estado de un mensaje de la bandeja de contactos.
+ *
+ * Los valores del enum ya vienen en español, pero se renombran igual porque la
+ * palabra original miente: `status` en `app_store` lo mueve el camino público
+ * de `POST /contact` cuando se ENTREGA el correo de notificación, no cuando
+ * alguien lee el mensaje. Poner "Pendiente"/"Procesado" a secas haría leer
+ * "pendiente" como "sin leer" y "procesado" como "ya atendido", que es
+ * exactamente el malentendido que la columna induce.
+ */
+const CONTACT_MESSAGE_STATUS_LABELS: Record<ContactMessageStatus, string> = {
+	PENDIENTE: "Entrega pendiente",
+	PROCESADO: "Notificado",
+	ERROR: "Error",
+};
+
+export const contactMessageStatusLabel = (status: string): string =>
+	CONTACT_MESSAGE_STATUS_LABELS[status as ContactMessageStatus] ?? status;

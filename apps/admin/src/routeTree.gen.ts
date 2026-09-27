@@ -16,6 +16,7 @@ import { Route as LayoutCategoriasRouteImport } from './routes/_layout.categoria
 import { Route as LayoutComisionesRouteImport } from './routes/_layout.comisiones'
 import { Route as LayoutConfiguracionRouteImport } from './routes/_layout.configuracion'
 import { Route as LayoutConsejosRouteImport } from './routes/_layout.consejos'
+import { Route as LayoutContactosRouteImport } from './routes/_layout.contactos'
 import { Route as LayoutCuponesRouteImport } from './routes/_layout.cupones'
 import { Route as LayoutHomeRouteImport } from './routes/_layout.home'
 import { Route as LayoutNegociosRouteImport } from './routes/_layout.negocios'
@@ -61,6 +62,11 @@ const LayoutConfiguracionRoute = LayoutConfiguracionRouteImport.update({
 const LayoutConsejosRoute = LayoutConsejosRouteImport.update({
   id: '/consejos',
   path: '/consejos',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutContactosRoute = LayoutContactosRouteImport.update({
+  id: '/contactos',
+  path: '/contactos',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutCuponesRoute = LayoutCuponesRouteImport.update({
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/comisiones': typeof LayoutComisionesRoute
   '/configuracion': typeof LayoutConfiguracionRoute
   '/consejos': typeof LayoutConsejosRoute
+  '/contactos': typeof LayoutContactosRoute
   '/cupones': typeof LayoutCuponesRoute
   '/home': typeof LayoutHomeRoute
   '/negocios': typeof LayoutNegociosRoute
@@ -153,6 +160,7 @@ export interface FileRoutesByTo {
   '/comisiones': typeof LayoutComisionesRoute
   '/configuracion': typeof LayoutConfiguracionRoute
   '/consejos': typeof LayoutConsejosRoute
+  '/contactos': typeof LayoutContactosRoute
   '/cupones': typeof LayoutCuponesRoute
   '/home': typeof LayoutHomeRoute
   '/negocios': typeof LayoutNegociosRoute
@@ -175,6 +183,7 @@ export interface FileRoutesById {
   '/_layout/comisiones': typeof LayoutComisionesRoute
   '/_layout/configuracion': typeof LayoutConfiguracionRoute
   '/_layout/consejos': typeof LayoutConsejosRoute
+  '/_layout/contactos': typeof LayoutContactosRoute
   '/_layout/cupones': typeof LayoutCuponesRoute
   '/_layout/home': typeof LayoutHomeRoute
   '/_layout/negocios': typeof LayoutNegociosRoute
@@ -197,6 +206,7 @@ export interface FileRouteTypes {
     | '/comisiones'
     | '/configuracion'
     | '/consejos'
+    | '/contactos'
     | '/cupones'
     | '/home'
     | '/negocios'
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/comisiones'
     | '/configuracion'
     | '/consejos'
+    | '/contactos'
     | '/cupones'
     | '/home'
     | '/negocios'
@@ -238,6 +249,7 @@ export interface FileRouteTypes {
     | '/_layout/comisiones'
     | '/_layout/configuracion'
     | '/_layout/consejos'
+    | '/_layout/contactos'
     | '/_layout/cupones'
     | '/_layout/home'
     | '/_layout/negocios'
@@ -307,6 +319,13 @@ declare module '@tanstack/react-router' {
       path: '/consejos'
       fullPath: '/consejos'
       preLoaderRoute: typeof LayoutConsejosRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/contactos': {
+      id: '/_layout/contactos'
+      path: '/contactos'
+      fullPath: '/contactos'
+      preLoaderRoute: typeof LayoutContactosRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/cupones': {
@@ -401,6 +420,7 @@ interface LayoutRouteChildren {
   LayoutComisionesRoute: typeof LayoutComisionesRoute
   LayoutConfiguracionRoute: typeof LayoutConfiguracionRoute
   LayoutConsejosRoute: typeof LayoutConsejosRoute
+  LayoutContactosRoute: typeof LayoutContactosRoute
   LayoutCuponesRoute: typeof LayoutCuponesRoute
   LayoutHomeRoute: typeof LayoutHomeRoute
   LayoutNegociosRoute: typeof LayoutNegociosRoute
@@ -420,6 +440,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutComisionesRoute: LayoutComisionesRoute,
   LayoutConfiguracionRoute: LayoutConfiguracionRoute,
   LayoutConsejosRoute: LayoutConsejosRoute,
+  LayoutContactosRoute: LayoutContactosRoute,
   LayoutCuponesRoute: LayoutCuponesRoute,
   LayoutHomeRoute: LayoutHomeRoute,
   LayoutNegociosRoute: LayoutNegociosRoute,

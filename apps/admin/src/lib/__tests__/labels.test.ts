@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	businessVerificationLabel,
+	contactMessageStatusLabel,
 	emailSendStatusLabel,
 	orderStatusLabel,
 	payoutStatusLabel,
@@ -42,11 +43,22 @@ describe("etiquetas de estado", () => {
 		expect(orderStatusLabel("expired")).toBe("Vencida");
 	});
 
+	test("estado de un mensaje de contacto", () => {
+		// Estos valores ya vienen en español, pero se renombran igual: el
+		// `status` de `app_store` lo mueve el camino público cuando se ENTREGA
+		// el correo de aviso, no cuando alguien lee el mensaje. "Pendiente" a
+		// secas haría leer la fila como "sin leer".
+		expect(contactMessageStatusLabel("PENDIENTE")).toBe("Entrega pendiente");
+		expect(contactMessageStatusLabel("PROCESADO")).toBe("Notificado");
+		expect(contactMessageStatusLabel("ERROR")).toBe("Error");
+	});
+
 	// Un valor fuera del contrato no se inventa: se muestra tal cual para que el
 	// operador vea el dato real y no una etiqueta que miente.
 	test("un valor desconocido se devuelve sin inventar traducción", () => {
 		expect(businessVerificationLabel("archived")).toBe("archived");
 		expect(payoutStatusLabel("on_hold")).toBe("on_hold");
 		expect(orderStatusLabel("refunded")).toBe("refunded");
+		expect(contactMessageStatusLabel("NUEVO")).toBe("NUEVO");
 	});
 });

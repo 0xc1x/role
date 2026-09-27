@@ -7,6 +7,7 @@ import {
 	LayoutList,
 	type LucideIcon,
 	Megaphone,
+	MessageSquare,
 	Projector,
 	Receipt,
 	Settings2,
@@ -77,6 +78,15 @@ export const navMain: NavMainItem[] = [
 		title: "Comisiones",
 		url: "/comisiones",
 		icon: BadgeDollarSign,
+	},
+	{
+		// Bandeja de los mensajes del formulario público. Va después de
+		// Comisiones porque es la superficie que más se parece a "leer lo que
+		// nos escribieron": en un panel con seis módulos de datos, un ítem más
+		// arriba se confunde con un módulo más.
+		title: "Contactos",
+		url: "/contactos",
+		icon: MessageSquare,
 	},
 	{
 		title: "Campañas de Marketing",
