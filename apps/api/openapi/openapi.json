@@ -81,6 +81,79 @@
         ]
       }
     },
+    "/api/v1/auth/forgot-password": {
+      "post": {
+        "operationId": "AuthController_forgotPassword",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The same body whether or not the address belongs to an account"
+          }
+        },
+        "summary": "Request a password recovery link (always the same 200)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The password was updated"
+          },
+          "401": {
+            "description": "The recovery token is missing, invalid or expired"
+          }
+        },
+        "summary": "Set a new password from a recovery link and revoke all sessions",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/change-email": {
+      "post": {
+        "operationId": "AuthController_changeEmail",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "The change was initiated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Request an email change (applied once the new address confirms)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/account": {
+      "delete": {
+        "operationId": "AuthController_deleteAccount",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Deleted or anonymised — always 204"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete my account (anonymised when order history must survive)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/api/v1/auth/logout": {
       "post": {
         "operationId": "AuthController_logout",
@@ -93,6 +166,943 @@
         "summary": "Log out (revoke the current session)",
         "tags": [
           "Auth"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/components": {
+      "get": {
+        "operationId": "EmailMarketingController_listComponents",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List email components (header/footer)",
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_createComponent",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/components/{id}": {
+      "patch": {
+        "operationId": "EmailMarketingController_updateComponent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "delete": {
+        "operationId": "EmailMarketingController_removeComponent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/templates": {
+      "get": {
+        "operationId": "EmailMarketingController_listTemplates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_createTemplate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/templates/{id}/render": {
+      "post": {
+        "operationId": "EmailMarketingController_renderPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/templates/{id}/test": {
+      "post": {
+        "operationId": "EmailMarketingController_testTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/templates/{id}": {
+      "patch": {
+        "operationId": "EmailMarketingController_updateTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "delete": {
+        "operationId": "EmailMarketingController_removeTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/segments": {
+      "get": {
+        "operationId": "EmailMarketingController_listSegments",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_createSegment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/segments/{id}": {
+      "patch": {
+        "operationId": "EmailMarketingController_updateSegment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "delete": {
+        "operationId": "EmailMarketingController_removeSegment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/segments/{id}/users": {
+      "get": {
+        "operationId": "EmailMarketingController_getSegmentUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "put": {
+        "operationId": "EmailMarketingController_setSegmentUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_addSegmentUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns": {
+      "get": {
+        "operationId": "EmailMarketingController_listCampaigns",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "post": {
+        "operationId": "EmailMarketingController_createCampaign",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}": {
+      "get": {
+        "operationId": "EmailMarketingController_getCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "patch": {
+        "operationId": "EmailMarketingController_updateCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      },
+      "delete": {
+        "operationId": "EmailMarketingController_removeCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/preview": {
+      "post": {
+        "operationId": "EmailMarketingController_previewCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/test": {
+      "post": {
+        "operationId": "EmailMarketingController_testCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/audience": {
+      "post": {
+        "operationId": "EmailMarketingController_audience",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/send": {
+      "post": {
+        "operationId": "EmailMarketingController_sendCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/cancel": {
+      "post": {
+        "operationId": "EmailMarketingController_cancelCampaign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/campaigns/{id}/sends": {
+      "get": {
+        "operationId": "EmailMarketingController_listSends",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/sends": {
+      "get": {
+        "operationId": "EmailMarketingController_listAllSends",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/sends/{id}": {
+      "patch": {
+        "operationId": "EmailMarketingController_updateSend",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/sends/{id}/retry": {
+      "post": {
+        "operationId": "EmailMarketingController_retrySend",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Email Marketing"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/webhooks/resend": {
+      "post": {
+        "operationId": "EmailMarketingPublicController_resendWebhook",
+        "parameters": [
+          {
+            "name": "svix-id",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "svix-timestamp",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "svix-signature",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Email Marketing (public)"
+        ]
+      }
+    },
+    "/api/v1/email-marketing/unsubscribe": {
+      "get": {
+        "operationId": "EmailMarketingPublicController_unsubscribe",
+        "parameters": [
+          {
+            "name": "t",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Email Marketing (public)"
+        ]
+      }
+    },
+    "/api/v1/app-config/public": {
+      "get": {
+        "operationId": "AppConfigController_listPublic",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Public config entries"
+          }
+        },
+        "summary": "List public app config (key/value)",
+        "tags": [
+          "App Config"
+        ]
+      }
+    },
+    "/api/v1/app-config": {
+      "get": {
+        "operationId": "AppConfigController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated config list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all app config (admin)",
+        "tags": [
+          "App Config"
+        ]
+      },
+      "post": {
+        "operationId": "AppConfigController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Config entry created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a config entry (admin)",
+        "tags": [
+          "App Config"
+        ]
+      }
+    },
+    "/api/v1/app-config/{key}": {
+      "patch": {
+        "operationId": "AppConfigController_update",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Config entry updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a config entry by key (admin)",
+        "tags": [
+          "App Config"
+        ]
+      },
+      "delete": {
+        "operationId": "AppConfigController_remove",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Config entry deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a config entry by key (admin)",
+        "tags": [
+          "App Config"
         ]
       }
     },
@@ -1420,115 +2430,6 @@
         ]
       }
     },
-    "/api/v1/app-config/public": {
-      "get": {
-        "operationId": "AppConfigController_listPublic",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Public config entries"
-          }
-        },
-        "summary": "List public app config (key/value)",
-        "tags": [
-          "App Config"
-        ]
-      }
-    },
-    "/api/v1/app-config": {
-      "get": {
-        "operationId": "AppConfigController_list",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated config list"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List all app config (admin)",
-        "tags": [
-          "App Config"
-        ]
-      },
-      "post": {
-        "operationId": "AppConfigController_create",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": "Config entry created"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Create a config entry (admin)",
-        "tags": [
-          "App Config"
-        ]
-      }
-    },
-    "/api/v1/app-config/{key}": {
-      "patch": {
-        "operationId": "AppConfigController_update",
-        "parameters": [
-          {
-            "name": "key",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Config entry updated"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Update a config entry by key (admin)",
-        "tags": [
-          "App Config"
-        ]
-      },
-      "delete": {
-        "operationId": "AppConfigController_remove",
-        "parameters": [
-          {
-            "name": "key",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Config entry deleted"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Delete a config entry by key (admin)",
-        "tags": [
-          "App Config"
-        ]
-      }
-    },
     "/api/v1/stats/platform": {
       "get": {
         "operationId": "StatsController_getPlatformStats",
@@ -1561,834 +2462,6 @@
         "summary": "Money metrics for a period (admin). Accrued (from orders) and collected (from payouts) are reported separately.",
         "tags": [
           "Stats"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/components": {
-      "get": {
-        "operationId": "EmailMarketingController_listComponents",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List email components (header/footer)",
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "post": {
-        "operationId": "EmailMarketingController_createComponent",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/components/{id}": {
-      "patch": {
-        "operationId": "EmailMarketingController_updateComponent",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "delete": {
-        "operationId": "EmailMarketingController_removeComponent",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/templates": {
-      "get": {
-        "operationId": "EmailMarketingController_listTemplates",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "post": {
-        "operationId": "EmailMarketingController_createTemplate",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/templates/{id}/render": {
-      "post": {
-        "operationId": "EmailMarketingController_renderPreview",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/templates/{id}/test": {
-      "post": {
-        "operationId": "EmailMarketingController_testTemplate",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/templates/{id}": {
-      "patch": {
-        "operationId": "EmailMarketingController_updateTemplate",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "delete": {
-        "operationId": "EmailMarketingController_removeTemplate",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/segments": {
-      "get": {
-        "operationId": "EmailMarketingController_listSegments",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "post": {
-        "operationId": "EmailMarketingController_createSegment",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/segments/{id}": {
-      "patch": {
-        "operationId": "EmailMarketingController_updateSegment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "delete": {
-        "operationId": "EmailMarketingController_removeSegment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/segments/{id}/users": {
-      "get": {
-        "operationId": "EmailMarketingController_getSegmentUsers",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "put": {
-        "operationId": "EmailMarketingController_setSegmentUsers",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "post": {
-        "operationId": "EmailMarketingController_addSegmentUsers",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/campaigns": {
-      "get": {
-        "operationId": "EmailMarketingController_listCampaigns",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "post": {
-        "operationId": "EmailMarketingController_createCampaign",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/campaigns/{id}": {
-      "get": {
-        "operationId": "EmailMarketingController_getCampaign",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "patch": {
-        "operationId": "EmailMarketingController_updateCampaign",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      },
-      "delete": {
-        "operationId": "EmailMarketingController_removeCampaign",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/campaigns/{id}/preview": {
-      "post": {
-        "operationId": "EmailMarketingController_previewCampaign",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/campaigns/{id}/test": {
-      "post": {
-        "operationId": "EmailMarketingController_testCampaign",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/campaigns/{id}/audience": {
-      "post": {
-        "operationId": "EmailMarketingController_audience",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/campaigns/{id}/send": {
-      "post": {
-        "operationId": "EmailMarketingController_sendCampaign",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/campaigns/{id}/cancel": {
-      "post": {
-        "operationId": "EmailMarketingController_cancelCampaign",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/campaigns/{id}/sends": {
-      "get": {
-        "operationId": "EmailMarketingController_listSends",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/sends": {
-      "get": {
-        "operationId": "EmailMarketingController_listAllSends",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/sends/{id}": {
-      "patch": {
-        "operationId": "EmailMarketingController_updateSend",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/sends/{id}/retry": {
-      "post": {
-        "operationId": "EmailMarketingController_retrySend",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "Email Marketing"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/webhooks/resend": {
-      "post": {
-        "operationId": "EmailMarketingPublicController_resendWebhook",
-        "parameters": [
-          {
-            "name": "svix-id",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "svix-timestamp",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "svix-signature",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Email Marketing (public)"
-        ]
-      }
-    },
-    "/api/v1/email-marketing/unsubscribe": {
-      "get": {
-        "operationId": "EmailMarketingPublicController_unsubscribe",
-        "parameters": [
-          {
-            "name": "t",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Email Marketing (public)"
         ]
       }
     },
@@ -2906,7 +2979,7 @@
             "description": "No profile for this token subject"
           },
           "422": {
-            "description": "The body asked to change `email`, which is the Supabase Auth identity"
+            "description": "The body asked to change `email`, which belongs to `POST /auth/change-email`"
           }
         },
         "security": [
