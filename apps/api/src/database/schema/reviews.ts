@@ -43,8 +43,24 @@ export const reviews = pgTable('reviews', {
   moderated_by: uuid('moderated_by').references(() => profiles.id, {
     onDelete: 'set null',
   }),
-  /** Motivo del operador. Sobrevive al desocultamiento: es el registro de apelación. */
+  /**
+   * Detalle libre del operador. Sobrevive al desocultamiento: es el registro de
+   * apelación. Lo escribe siempre un ocultamiento, incluido `null` cuando el
+   * motivo nombrado ya se explica solo.
+   */
   hidden_reason: text('hidden_reason'),
+  /**
+   * Token de la taxonomía declarada de motivos (`REVIEW_MODERATION_REASONS` en
+   * commons), NO un enum de Postgres: el archivo de migración entra al ledger una
+   * sola vez, y un enum obligaría a una migración —y a un cambio de tipo de
+   * columna— por cada motivo que el producto agregue después. Zod es quien valida
+   * el conjunto; la base solo exige que haya motivo.
+   *
+   * REQUIERE la migración `20260927013000_reviews_moderation_soft_hide`: este
+   * espejo se genera con `drizzle-kit generate`, así que los tests de DB solo
+   * ven estas columnas después de regenerarlo.
+   */
+  moderation_reason: text('moderation_reason'),
   created_at: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

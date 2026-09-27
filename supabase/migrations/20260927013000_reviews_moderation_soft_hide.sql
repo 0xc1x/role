@@ -3,10 +3,42 @@
 -- WHY
 --
 -- public.reviews had no moderation capability at all: no is_hidden, no
--- moderated_at, no moderated_by, no hidden_reason, and a SELECT policy named
--- "Anyone can view reviews" with `using (true)`. Reviews are user-facing — the
--- mobile reads them straight from PostgREST — so a rating was unreviewable: a
--- user could post an abusive review and no surface could take it down.
+-- moderated_at, no moderated_by, no hidden_reason, no moderation_reason, and a
+-- SELECT policy named "Anyone can view reviews" with `using (true)`. Reviews are
+-- user-facing — the mobile reads them straight from PostgREST — so a rating was
+-- unreviewable: a user could post an abusive review and no surface could take it
+-- down.
+--
+-- WHY THE REASONS ARE A DECLARED TAXONOMY, NOT ONLY A FREE-TEXT BOX
+--
+-- The platform reserves the right to withdraw content that does not comply with
+-- its policies, and that includes content that promotes hate. With only a
+-- free-text box the reservation is unenforceable in practice: reasons end up as
+-- "no me gustó", "malo" o "x", none of which a business can be answered with, and
+-- nobody can tell whether two removals were the same decision. So
+-- `moderation_reason` carries a token from a declared set
+-- (`packages/commons/src/review`, `REVIEW_MODERATION_REASONS`) and
+-- `hidden_reason` remains the free-text detail. The token is the appeal record —
+-- the answer to "under which policy was this withdrawn" — and the free text is
+-- the context around it.
+--
+-- WHY `moderation_reason` IS `text` AND NOT A POSTGRES ENUM
+--
+-- This file is applied to the ledger EXACTLY ONCE, PERMANENTLY. A Postgres enum
+-- (or a CHECK listing the allowed values) turns the next reason into a new
+-- migration plus, for an enum, an ALTER TYPE and a column-type change on a table
+-- the mobile reads on every business page. The taxonomy is a product decision
+-- that WILL evolve — a reason added for one incident is usually a reason needed
+-- for a hundred — and a one-line change in commons, deployed like any other
+-- contract, is the whole cost of that evolution.
+--
+-- So: the column is `text`, the allowed tokens are validated in zod in commons,
+-- and the only thing the database enforces about `moderation_reason` is that it
+-- is present, is not blank, and is short enough to be a token. Everything else
+-- about WHICH values are legal is contract, and contracts are allowed to change
+-- in a deploy. What the database does forbid is a hidden review with no reason
+-- at all, because a moderation decision with nothing recorded is an appeal
+-- record with nothing in it.
 --
 -- WHY SOFT-HIDE AND NOT DELETE
 --
@@ -22,27 +54,41 @@
 -- This migration MUST be applied to Supabase BEFORE the code that reads or
 -- writes these columns is deployed:
 --
---   - apps/api  `GET /reviews/moderation`, `PATCH /reviews/:id/hide`,
---               `PATCH /reviews/:id/unhide` and the moderation mapper
---   - apps/admin the moderation view
+--   - apps/api  `GET /reviews/moderation` (incl. the `moderation_reason`
+--               filter), `PATCH /reviews/:id/hide` —which now REQUIRES a
+--               `moderation_reason` token and writes it—, `PATCH
+--               /reviews/:id/unhide` and the moderation mapper
+--   - apps/admin the moderation view and its reason selector
 --
 -- The other way round is a 500, not a degraded screen: the API selects
--- reviews.is_hidden and the column does not exist yet. There is no feature flag
--- and no backwards-compatible window — the API and the panel ship AFTER this
--- file is in the ledger.
+-- reviews.is_hidden and reviews.moderation_reason and those columns do not exist
+-- yet. There is no feature flag and no backwards-compatible window — the API and
+-- the panel ship AFTER this file is in the ledger.
 --
--- STATUS: NOT APPLIED. This file was written and committed without being sent
--- to any database. Per supabase/migrations/README.md it has to go through
--- `apply_migration` (never `execute_sql`, never the dashboard), and then be
--- renamed to the version the SERVER assigned, with `md5sum <file>` proven equal
--- to `md5(statements[1])` for that version. The `20260927...` version in the
+-- STATUS: NOT APPLIED. This file was written and committed — and later AMENDED,
+-- before anything ran — without being sent to any database. Per
+-- supabase/migrations/README.md it has to go through `apply_migration` (never
+-- `execute_sql`, never the dashboard), and then be renamed to the version the
+-- SERVER assigned, with `md5sum <file>` proven equal to
+-- `md5(statements[1])` for that version. The `20260927...` version in the
 -- filename is a placeholder, not a claim about the ledger.
 --
--- ROLLBACK: drop the four columns, drop the three indexes, drop the constraint,
--- restore "Anyone can view reviews" and re-grant table-level UPDATE. Reviews
--- that were hidden during the period stay hidden=False only if they were
--- unhidden; rows still flagged is_hidden=true become visible again on rollback,
--- which is the one behaviour a rollback cannot preserve. Nothing is deleted.
+-- The amendment matters for that proof: the DDL in the ledger is this file AS
+-- COMMITTED, including the `moderation_reason` column and the three constraints
+-- that go with it. The md5 only matches if the file is applied in this exact
+-- shape. An amendment made AFTER an apply would leave `md5sum` disagreeing with
+-- the ledger, and the fix is then an explicit new migration — never a silent
+-- edit. Amending is free only while the ledger has no memory of this file, which
+-- is the case now.
+--
+-- ROLLBACK: drop the five columns, drop the four indexes, drop the four
+-- constraints, restore "Anyone can view reviews" and re-grant table-level
+-- UPDATE. Reviews that were hidden during the period stay hidden=False only if
+-- they were unhidden; rows still flagged is_hidden=true become visible again on
+-- rollback, which is the one behaviour a rollback cannot preserve. Nothing is
+-- deleted — including the recorded tokens: dropping the column discards the
+-- declared reason of every moderation already performed, which is why a real
+-- rollback of this feature is a decision, not a routine `drop`.
 
 begin;
 
@@ -56,7 +102,8 @@ alter table public.reviews
   add column if not exists is_hidden boolean not null default false,
   add column if not exists moderated_at timestamptz,
   add column if not exists moderated_by uuid references public.profiles (id) on delete set null,
-  add column if not exists hidden_reason text;
+  add column if not exists hidden_reason text,
+  add column if not exists moderation_reason text;
 
 comment on column public.reviews.is_hidden is
   'Soft-hide flag. TRUE = withheld from every reader except the author and admins. The row is never deleted, so UNIQUE(user_id, order_id) keeps holding and the author cannot re-post.';
@@ -65,13 +112,54 @@ comment on column public.reviews.moderated_at is
 comment on column public.reviews.moderated_by is
   'Profile of the admin who last hid or unhid the row. ON DELETE SET NULL: deleting the admin account must not delete the review or the appeal record, it only leaves the name unknown.';
 comment on column public.reviews.hidden_reason is
-  'Why the operator hid the row. This is the appeal record: it SURVIVES an unhide on purpose, so the decision to restore a review can be explained later. NULL only while the row has never been hidden.';
+  'Free-text detail about why the operator hid the row. MANDATORY when moderation_reason is ''other'' and optional for every named reason, where the token already states the reason. Survives an unhide on purpose, so the decision to restore a review can be explained later. NULL is legitimate here; only the ''other'' token forbids it.';
+comment on column public.reviews.moderation_reason is
+  'Machine token of the declared taxonomy of moderation reasons (see REVIEW_MODERATION_REASONS in packages/commons), e.g. insults_hate_speech. text, NOT a Postgres enum, on purpose: the allowed set is product and evolves in a deploy, and this file is applied to the ledger exactly once. NULL only while the row has never been hidden. Survives an unhide, like hidden_reason.';
 
 -- The reason is the appeal record, so " " is not a reason. Enforced in the
 -- database as well as in zod, because the API is not the only possible writer.
 alter table public.reviews
   add constraint reviews_hidden_reason_length
   check (hidden_reason is null or length(btrim(hidden_reason)) between 1 and 500);
+
+-- A LENGTH bound on the token, and deliberately NOT a list of the legal tokens.
+-- Listing them here would be the trap this column exists to avoid: the first
+-- reason the product adds would need a new migration. The bound only stops a
+-- caller from parking a 500-character paragraph in the column that the queue
+-- filters and groups by, which would make that filter meaningless. 100 is far
+-- above the longest current token and generous enough for any future one.
+alter table public.reviews
+  add constraint reviews_moderation_reason_length
+  check (
+    moderation_reason is null
+    or length(btrim(moderation_reason)) between 1 and 100
+  );
+
+-- A hidden review MUST say which declared reason applied. Without this the
+-- appeal record has a timestamp and an author but not a reason, and the
+-- `moderation_reason` index would be full of NULLs an operator cannot act on.
+-- `is_hidden is not true` (not `= false`) matches the read policy and the rating
+-- triggers: a hypothetical NULL flag is treated as not hidden and so is not
+-- forced to carry a reason.
+--
+-- This is safe to add to a table that already has rows: every existing row reads
+-- is_hidden = false from the default set in the ADD COLUMN above, so the check
+-- passes without a backfill and without a full scan rewriting anything.
+alter table public.reviews
+  add constraint reviews_moderation_reason_required
+  check (is_hidden is not true or moderation_reason is not null);
+
+-- "other" is the one token that explains nothing on its own, so it is the one
+-- that cannot stand alone: naming it without describing the case would produce
+-- exactly the unusable appeal record this column set exists to prevent. The
+-- length bound is repeated rather than referenced (a CHECK cannot depend on
+-- another CHECK) so this constraint holds on its own.
+alter table public.reviews
+  add constraint reviews_moderation_reason_other_needs_detail
+  check (
+    moderation_reason is distinct from 'other'
+    or (hidden_reason is not null and length(btrim(hidden_reason)) between 1 and 500)
+  );
 
 -- ============================================
 -- 2. Indexes
@@ -80,6 +168,21 @@ alter table public.reviews
 -- it stays small no matter how many visible reviews accumulate.
 create index if not exists idx_reviews_hidden_created
   on public.reviews (created_at desc)
+  where is_hidden = true;
+
+-- The other half of the moderation queue: "las ocultas por insultos", newest
+-- first. Leading column is moderation_reason, then created_at desc, so the
+-- equality on the reason and the ordering the table already shows are the SAME
+-- scan — the same argument as idx_reviews_business_rating below. Partial on
+-- is_hidden = true for the same reason as the index above: this filter is only
+-- ever asked of hidden rows, and keeping the visible ones out is what keeps the
+-- index from growing with every review the platform ever receives.
+--
+-- It is also the index that makes the taxonomy pay for itself: without it,
+-- filtering the queue by reason degrades to a sequential scan of the hidden set
+-- plus a sort, which is the first thing that breaks as moderation volume grows.
+create index if not exists idx_reviews_hidden_reason_created
+  on public.reviews (moderation_reason, created_at desc)
   where is_hidden = true;
 
 -- The public business profile, which is the hot read: the mobile asks PostgREST
