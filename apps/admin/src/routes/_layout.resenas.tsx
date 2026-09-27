@@ -1,7 +1,6 @@
 import { ListReviewsForModerationQuerySchema } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { ReviewsModerationList } from "@/features/reviews";
-import { reviewsModerationListOptions } from "@/features/reviews/queries/reviews.queries";
 
 /**
  * Moderación de reseñas públicas.
@@ -10,12 +9,18 @@ import { reviewsModerationListOptions } from "@/features/reviews/queries/reviews
  * recargar tiene que devolver al operador la misma lista que estaba mirando. Con
  * el filtro en `useState`, un F5 después de "volver a mostrar" lo deja en la
  * lista completa y da la impresión de que la acción no se guardó.
+ *
+ * SIN `loader` A PROPÓSITO. Un `loader` con `ensureQueryData` corre antes de que
+ * el componente renderice, así que si la consulta falla el error se escapa hacia
+ * el `errorComponent` de la ruta en vez de entrar a la rama `isError` del
+ * componente. Ninguna ruta del panel define `errorComponent`, así que eso
+ * tumbaba la pantalla entera con un error de red en vez de mostrar el mensaje
+ * inline con su "Reintentar". El componente ya resuelve los tres estados, que es
+ * el patrón de las otras veinte rutas. No reintroducir el loader sin añadir
+ * primero un `errorComponent`.
  */
 export const Route = createFileRoute("/_layout/resenas")({
 	validateSearch: (raw) => ListReviewsForModerationQuerySchema.parse(raw),
-	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(reviewsModerationListOptions(deps)),
 	component: RouteComponent,
 	head: () => ({
 		meta: [

@@ -61,14 +61,16 @@ export function ReviewsModerationList({
 		moderation_reason?: ReviewModerationReason;
 	}) => void;
 }) {
-	const { data, isLoading, isError, error } = useReviewsModerationList({
-		page,
-		limit,
-		visibility,
-		business_id: businessId,
-		rating,
-		moderation_reason: moderationReason,
-	} satisfies ListReviewsForModerationQuery);
+	const { data, isLoading, isError, error, refetch } = useReviewsModerationList(
+		{
+			page,
+			limit,
+			visibility,
+			business_id: businessId,
+			rating,
+			moderation_reason: moderationReason,
+		} satisfies ListReviewsForModerationQuery,
+	);
 	const hideMutation = useHideReview();
 	const unhideMutation = useUnhideReview();
 	const [ocultando, setOcultando] = useState<ReviewModerationItemDto | null>(
@@ -100,7 +102,7 @@ export function ReviewsModerationList({
 				<p className="text-destructive">
 					{formatApiError(error, "No se pudieron cargar las reseñas")}
 				</p>
-				<Button variant="outline" onClick={() => onPageChange(1)}>
+				<Button variant="outline" onClick={() => refetch()}>
 					Reintentar
 				</Button>
 			</div>
