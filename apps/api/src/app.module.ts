@@ -28,6 +28,7 @@ import { CommissionsModule } from './modules/commissions/commissions.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PushNotificationsModule } from './modules/push-notifications/push-notifications.module';
 import { ContactModule } from './modules/contact/contact.module';
+import { ContactInboxModule } from './modules/contact-inbox/contact-inbox.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { StoreModule } from './modules/store/store.module';
 
@@ -76,6 +77,7 @@ import { StoreModule } from './modules/store/store.module';
     PushNotificationsModule,
     StoreModule,
     ContactModule,
+    ContactInboxModule,
   ],
   providers: [
     {
