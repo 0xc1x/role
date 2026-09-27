@@ -5,6 +5,7 @@ import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
 import { useUpdateCoupon } from "@/features/coupons/queries/coupons.queries";
 import { ActionCell } from "@/features/coupons/tables/cells/action-cell";
+import { formatMoney } from "@/lib/money";
 
 const ActiveCellWrapper = ({
 	row,
@@ -27,22 +28,17 @@ const ActiveCellWrapper = ({
 	);
 };
 
-const currency = new Intl.NumberFormat("es-MX", {
-	style: "currency",
-	currency: "MXN",
-});
-
 function formatCouponValue(coupon: CouponListItemDto): string {
 	return coupon.type === "percentage"
 		? `${coupon.value}%`
-		: currency.format(coupon.value);
+		: formatMoney(coupon.value);
 }
 
 function formatExpiry(iso: string | null): string {
 	if (!iso) return "—";
 	const date = new Date(iso);
 	if (Number.isNaN(date.getTime())) return "—";
-	return date.toLocaleDateString("es-MX", {
+	return date.toLocaleDateString("es-EC", {
 		day: "2-digit",
 		month: "short",
 		year: "numeric",
@@ -86,7 +82,7 @@ export const columns: ColumnDef<CouponListItemDto>[] = [
 			const min = row.original.min_order_amount;
 			return (
 				<span className="text-muted-foreground">
-					{min != null ? currency.format(min) : "—"}
+					{min != null ? formatMoney(min) : "—"}
 				</span>
 			);
 		},
