@@ -11,6 +11,7 @@ import { validateEnv, type Env } from './config/env.schema';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { TipsModule } from './modules/tips/tips.module';
@@ -57,6 +58,7 @@ import { StoreModule } from './modules/store/store.module';
     DatabaseModule,
     SecurityModule,
     AuthModule,
+    UsersModule,
     HealthModule,
     CategoriesModule,
     CouponsModule,

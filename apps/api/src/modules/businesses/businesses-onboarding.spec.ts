@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { DRIZZLE } from '../../database/database.tokens';
 import { AppConfigRepository } from '../app-config/app-config.repository';
+import { UserDefaultsService } from '../users/user-defaults.service';
 import { BusinessesService } from './businesses.service';
 import { BusinessesRepository } from './businesses.repository';
 
@@ -31,6 +32,10 @@ const mockSupabaseAdmin = {
       deleteUser: jest.fn(),
     },
   },
+};
+
+const mockUserDefaults = {
+  seed: jest.fn().mockResolvedValue(undefined),
 };
 
 const makeTx = () => ({
@@ -75,6 +80,7 @@ describe('BusinessesService.onboard', () => {
             findByKey: jest.fn(async (key: string) => appConfigRows[key] ?? null),
           },
         },
+        { provide: UserDefaultsService, useValue: mockUserDefaults },
         { provide: DRIZZLE, useValue: {} },
       ],
     }).compile();
@@ -118,6 +124,7 @@ describe('BusinessesService.onboard', () => {
     service = await buildService();
     lastTx = null;
     jest.clearAllMocks();
+    mockUserDefaults.seed.mockResolvedValue(undefined);
 
     // Default happy path for the confirmation email. Set after clearAllMocks so
     // per-test overrides win.
@@ -131,7 +138,7 @@ describe('BusinessesService.onboard', () => {
     resendSend.mockResolvedValue({ data: { id: 'resend-1' }, error: null });
   });
 
-  it('creates one Auth user, trigger-owned profile and one pending business', async () => {
+  it('creates one Auth user, seeds its defaults and one pending business', async () => {
     const res = await onboardSuccessfully(body, 'user-1');
 
     expect(res.message).toContain('revisión');
@@ -142,7 +149,17 @@ describe('BusinessesService.onboard', () => {
         user_metadata: { full_name: body.full_name, role: 'business' },
       }),
     );
-    // The Auth trigger owns the profile row; onboarding must not insert it.
+    // The user's own defaults (profile, preferences, consents) are seeded by
+    // UserDefaultsService, not inside the business transaction: they hang off
+    // the auth user, not off the business row.
+    expect(mockUserDefaults.seed).toHaveBeenCalledWith({
+      id: 'user-1',
+      email: body.email,
+      fullName: body.full_name,
+      // The onboarding path is the only one that legitimately asks for the
+      // business role; the seeder allowlists it.
+      requestedRole: 'business',
+    });
     expect(lastTx!.insert).not.toHaveBeenCalled();
     expect(repository.insert).toHaveBeenCalledTimes(1);
     expect(repository.insert).toHaveBeenCalledWith(
@@ -167,6 +184,32 @@ describe('BusinessesService.onboard', () => {
       ConflictException,
     );
     expect(repository.transaction).not.toHaveBeenCalled();
+  });
+
+  it('skips the seeding when the business write is compensated away', async () => {
+    // The auth user is deleted on this path, so seeding its defaults would
+    // leave rows behind for an account that no longer exists.
+    mockSupabaseAdmin.auth.admin.createUser.mockResolvedValue({
+      data: { user: { id: 'user-2' } },
+      error: null,
+    });
+    repository.findBySlug.mockResolvedValue(null);
+    repository.transaction.mockRejectedValue(new Error('db down'));
+    mockSupabaseAdmin.auth.admin.deleteUser.mockResolvedValue({ error: null });
+
+    await expect(service.onboard(body)).rejects.toThrow('db down');
+    expect(mockUserDefaults.seed).not.toHaveBeenCalled();
+  });
+
+  it('still succeeds when the defaults seeding fails', async () => {
+    // The account and the business row already exist: a database blip must not
+    // fail the request, and the owner's first login repairs the profile.
+    mockUserDefaults.seed.mockRejectedValue(new Error('database is down'));
+
+    const res = await onboardSuccessfully(body, 'user-11');
+
+    expect(res.message).toContain('revisión');
+    expect(mockSupabaseAdmin.auth.admin.deleteUser).not.toHaveBeenCalled();
   });
 
   it('deletes the auth user when DB writes fail', async () => {

@@ -6,6 +6,7 @@ import { seedBusiness, seedLocation, seedProfile } from '../../../test/seed';
 import { BusinessesService } from './businesses.service';
 import { BusinessesRepository } from './businesses.repository';
 import { AppConfigRepository } from '../app-config/app-config.repository';
+import { UserDefaultsService } from '../users/user-defaults.service';
 
 let ctx: TestDbContext;
 let service: BusinessesService;
@@ -35,6 +36,7 @@ beforeAll(async () => {
     new BusinessesRepository(ctx.db),
     config,
     new AppConfigRepository(ctx.db),
+    new UserDefaultsService(ctx.db),
   );
   ownerId = await seedProfile(ctx.db);
   businessId = (await seedBusiness(ctx.db, ownerId)).id;

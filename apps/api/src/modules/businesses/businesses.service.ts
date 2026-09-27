@@ -29,6 +29,7 @@ import {
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
 import { AppConfigRepository } from '../app-config/app-config.repository';
+import { UserDefaultsService } from '../users/user-defaults.service';
 import {
   resolveBusinessSupportEmail,
   resolveOutboundFrom,
@@ -59,6 +60,7 @@ export class BusinessesService {
     private readonly businessesRepository: BusinessesRepository,
     private readonly config: ConfigService<Env, true>,
     private readonly appConfigRepo: AppConfigRepository,
+    private readonly userDefaults: UserDefaultsService,
   ) {
     this.supabaseAdmin = createClient(
       config.get('SUPABASE_URL', { infer: true }),
@@ -100,8 +102,9 @@ export class BusinessesService {
   }
 
   /**
-   * Public business onboarding (landing): creates the auth user (whose trigger
-   * creates the profile) and one pending business row. Compensates the auth
+   * Public business onboarding (landing): creates the auth user, its default
+   * rows (profile, preferences, consents — the idempotent mirror of the
+   * Supabase trigger chain) and one pending business row. Compensates the auth
    * user only when the business write fails.
    */
   async onboard(
@@ -147,6 +150,28 @@ export class BusinessesService {
         });
       }
       throw err;
+    }
+
+    // After the business write on purpose: if that write failed, the auth user
+    // was just deleted above and seeding defaults for it would leave rows
+    // behind for an account that does not exist. Best-effort for the same
+    // reason the confirmation email is: the account exists, so a database blip
+    // must not fail the request. AuthService.login repairs a profile-less
+    // account on the owner's first sign-in.
+    try {
+      await this.userDefaults.seed({
+        id: user.id,
+        email: body.email,
+        fullName: body.full_name,
+        requestedRole: 'business',
+      });
+    } catch (err) {
+      this.logger.error({
+        event: 'user_defaults_seeding_failed',
+        flow: 'business_onboarding',
+        userId: user.id,
+        ...safeErrorFields(err),
+      });
     }
 
     await this.sendConfirmationEmail(body, user.id);

@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { DRIZZLE } from '../../database/database.tokens';
+import { UserDefaultsService } from '../users/user-defaults.service';
 
 const mockSupabaseAnon = {
   auth: {
@@ -38,6 +39,10 @@ const mockConfig = {
   get: jest.fn(),
 };
 
+const mockUserDefaults = {
+  seed: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('AuthService', () => {
   let service: AuthService;
 
@@ -64,12 +69,15 @@ describe('AuthService', () => {
     mockSupabaseAnon.auth.signOut.mockReset();
     mockSupabaseAdmin.auth.admin.createUser.mockReset();
     mockSupabaseAdmin.auth.admin.signOut.mockReset();
+    mockUserDefaults.seed.mockReset();
+    mockUserDefaults.seed.mockResolvedValue(undefined);
 
     const module = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: ConfigService, useValue: mockConfig },
         { provide: DRIZZLE, useValue: mockDb },
+        { provide: UserDefaultsService, useValue: mockUserDefaults },
       ],
     }).compile();
 
@@ -156,10 +164,92 @@ describe('AuthService', () => {
       expect(result.user.role).toBe('user');
       expect(result.user.full_name).toBeNull();
     });
+
+    it('repairs a missing profile and returns the seeded one', async () => {
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@test.com',
+        phone: '+593900000000',
+        user_metadata: { full_name: 'Test User', role: 'business' },
+      };
+      const mockSession = {
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+      };
+      const seededProfile = {
+        id: 'user-1',
+        email: 'test@test.com',
+        full_name: 'Test User',
+        avatar_url: null,
+        role: 'business',
+      };
+
+      mockSupabaseAnon.auth.signInWithPassword.mockResolvedValue({
+        data: { user: mockUser, session: mockSession },
+        error: null,
+      });
+
+      // First read finds nothing; the repair runs and the re-read finds the row
+      // the seeder just wrote.
+      mockDb.limit.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        seededProfile,
+      ]);
+
+      const result = await service.login({
+        email: 'test@test.com',
+        password: 'password123',
+      });
+
+      expect(mockUserDefaults.seed).toHaveBeenCalledWith({
+        id: 'user-1',
+        email: 'test@test.com',
+        fullName: 'Test User',
+        avatarUrl: null,
+        phone: '+593900000000',
+        // Passed through verbatim: the seeder owns the allowlist.
+        requestedRole: 'business',
+      });
+      expect(result.user).toEqual(seededProfile);
+    });
+
+    it('does not seed when the profile already exists', async () => {
+      mockSupabaseAnon.auth.signInWithPassword.mockResolvedValue({
+        data: {
+          user: { id: 'user-1', email: 'test@test.com' },
+          session: {
+            access_token: 'access-token',
+            refresh_token: 'refresh-token',
+            expires_in: 3600,
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+          },
+        },
+        error: null,
+      });
+
+      mockDb.limit.mockResolvedValueOnce([
+        {
+          id: 'user-1',
+          email: 'test@test.com',
+          full_name: 'Test User',
+          avatar_url: null,
+          role: 'user',
+        },
+      ]);
+
+      const result = await service.login({
+        email: 'test@test.com',
+        password: 'password123',
+      });
+
+      expect(mockUserDefaults.seed).not.toHaveBeenCalled();
+      expect(result.user.full_name).toBe('Test User');
+    });
   });
 
   describe('register', () => {
-    it('crea el usuario con verificación de email y sin insertar profiles', async () => {
+    it('creates the user unconfirmed and seeds the default rows', async () => {
       const mockUser = { id: 'new-user-1', email: 'new@test.com' };
 
       mockSupabaseAdmin.auth.admin.createUser.mockResolvedValue({
@@ -173,19 +263,43 @@ describe('AuthService', () => {
         full_name: 'New User',
       });
 
-      // Registro con verificación por email y perfil vía trigger SQL.
+      // Registro con verificación por email: sin confirmar no hay sesión.
       expect(mockSupabaseAdmin.auth.admin.createUser).toHaveBeenCalledWith(
         expect.objectContaining({
           email_confirm: false,
           user_metadata: { full_name: 'New User' },
         }),
       );
-      // El perfil lo crea handle_new_user: la API nunca inserta profiles
-      // (y por tanto nunca puede elevar privilegios).
-      expect(mockDb.insert).not.toHaveBeenCalled();
+      // El registro no pide rol: el allowlist vive en el seeder, así que el
+      // metadata de un signup nunca puede pedir 'admin'.
+      expect(mockUserDefaults.seed).toHaveBeenCalledWith({
+        id: 'new-user-1',
+        email: 'new@test.com',
+        fullName: 'New User',
+      });
       expect(mockSupabaseAnon.auth.signInWithPassword).not.toHaveBeenCalled();
       expect(result.id).toBe('new-user-1');
       expect(result.email).toBe('new@test.com');
+      expect(result.message).toContain('confirm your email');
+    });
+
+    it('succeeds even if the seeding fails (login repairs it)', async () => {
+      mockSupabaseAdmin.auth.admin.createUser.mockResolvedValue({
+        data: { user: { id: 'new-user-2', email: 'new2@test.com' } },
+        error: null,
+      });
+      mockUserDefaults.seed.mockRejectedValue(new Error('database is down'));
+
+      // El usuario de auth ya existe y su correo de confirmación puede estar en
+      // camino: un fallo transitorio de la BD no puede devolver 500 (ni borrar
+      // la cuenta). El login repara el perfil.
+      const result = await service.register({
+        email: 'new2@test.com',
+        password: 'password123',
+        full_name: 'Another User',
+      });
+
+      expect(result.id).toBe('new-user-2');
       expect(result.message).toContain('confirm your email');
     });
 

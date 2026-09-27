@@ -8,6 +8,7 @@ import { Test } from '@nestjs/testing';
 import type { AuthUser } from '../../auth/auth.types';
 import { DRIZZLE } from '../../database/database.tokens';
 import { AppConfigRepository } from '../app-config/app-config.repository';
+import { UserDefaultsService } from '../users/user-defaults.service';
 import { BusinessesService } from './businesses.service';
 import { BusinessesRepository } from './businesses.repository';
 import type { BusinessAggregateRow } from './businesses.repository';
@@ -94,6 +95,7 @@ describe('BusinessesService', () => {
         },
         { provide: DRIZZLE, useValue: {} },
         { provide: AppConfigRepository, useValue: { findByKey: jest.fn() } },
+        { provide: UserDefaultsService, useValue: { seed: jest.fn() } },
       ],
     }).compile();
     service = module.get(BusinessesService);

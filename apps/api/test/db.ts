@@ -104,7 +104,20 @@ export async function createTestDb(): Promise<TestDbContext> {
   // idempotency_key column. What remains is the check constraint, the partial
   // unique index, the sequence, and the functions and triggers that Drizzle
   // cannot model.
+  //
+  // Two more that the live database does have and the mirror does not: the
+  // unique constraints behind `user_preferences_user_id` and
+  // `user_consents(user_id, consent_type)`. The user-defaults seeding mirrors
+  // the trigger ON CONFLICT clauses verbatim, and without those constraints
+  // Postgres rejects the inference with 42P10 — the spec would then be testing a
+  // database that cannot express the production statement.
   await client.unsafe(`
+    alter table public.user_preferences
+      add constraint user_preferences_user_id_key unique (user_id);
+    alter table public.user_consents
+      add constraint user_consents_user_id_consent_type_key
+      unique (user_id, consent_type);
+
     alter table public.offers
       alter column is_active set default false;
     alter table public.orders
