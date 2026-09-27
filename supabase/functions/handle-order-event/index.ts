@@ -106,10 +106,16 @@ Deno.serve(async (request) => {
 		return json({ error: "ORDER_NOT_FOUND" }, { status: 404 });
 	}
 
-	const [{ data: business }, { data: offer }] = await Promise.all([
-		supabase.from("businesses").select("name, image, owner_id").eq("id", order.business_id).single(),
+	// Ownership lives in `business_ownership`: the `businesses.owner_id` column is
+	// dropped when the sensitive columns move to the companion tables, and a
+	// business is expected to have exactly one owner row, so `maybeSingle` keeps a
+	// missing owner from failing the whole lookup.
+	const [{ data: business }, { data: offer }, { data: ownership }] = await Promise.all([
+		supabase.from("businesses").select("name, image").eq("id", order.business_id).single(),
 		supabase.from("offers").select("image").eq("id", order.offer_id).single(),
+		supabase.from("business_ownership").select("owner_id").eq("business_id", order.business_id).maybeSingle(),
 	]);
+	const businessOwnerId = ownership?.owner_id ?? null;
 	const businessName = business?.name ?? "Negocio";
 	const label = labels[event.status] ?? event.status;
 	const image = offer?.image ?? business?.image ?? undefined;
@@ -139,7 +145,7 @@ Deno.serve(async (request) => {
 		);
 	}
 
-	if (["pending", "confirmed", "cancelled", "expired"].includes(event.status) && business?.owner_id) {
+	if (["pending", "confirmed", "cancelled", "expired"].includes(event.status) && businessOwnerId) {
 		const { data: businessPrefs } = await supabase
 			.from("business_notification_preferences")
 			.select("push_enabled, new_orders_enabled")
@@ -148,7 +154,7 @@ Deno.serve(async (request) => {
 		const newOrderAllowed = businessPrefs?.new_orders_enabled !== false;
 		if (businessPrefs?.push_enabled !== false && (event.status !== "pending" || newOrderAllowed)) {
 			await sendPush(
-				[business.owner_id],
+				[businessOwnerId],
 				event.status === "pending"
 					? `Nueva reserva #${order.order_number} — ${businessName}`
 					: `Pedido #${order.order_number} — ${label}`,
