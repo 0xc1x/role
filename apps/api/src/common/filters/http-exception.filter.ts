@@ -67,6 +67,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logException('unknown_exception', exception, requestId, request);
     }
 
+    if (status === HttpStatus.TOO_MANY_REQUESTS) {
+      // `ThrottlerException` trae `'ThrottlerException: Too Many Requests'` como
+      // mensaje por defecto, y como 429 es < 500 no lo cubre la redacción de
+      // abajo: el nombre de la clase se iba literal a la pantalla del operador.
+      // El límite y su redacción son del throttle, no del handler.
+      message = 'Demasiadas peticiones. Espera un momento e inténtalo de nuevo.';
+      error = 'Too Many Requests';
+      details = undefined;
+    }
+
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       message = 'Error interno del servidor';
       error = 'Internal Server Error';
