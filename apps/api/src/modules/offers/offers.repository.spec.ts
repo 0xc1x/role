@@ -38,6 +38,10 @@ describe('OffersRepository (DB real)', () => {
       discounted_price: '3000',
       pickup_start: new Date(Date.now() - 1000),
       pickup_end: new Date(Date.now() + 3600_000),
+      // findById is the PUBLIC detail read and only returns reservable offers,
+      // so the fixture has to be one. A row born is_active=false is invisible
+      // there by design.
+      is_active: true,
     });
     const found = await repo.findById(row.id);
     expect(found?.title).toBe('Pack');
@@ -50,6 +54,65 @@ describe('OffersRepository (DB real)', () => {
         title: 'Pack2',
       },
     );
+  });
+
+  test('findById hides an offer that is not reservable', async () => {
+    const base = {
+      business_id: businessId,
+      business_location_id: locationId,
+      title: 'No reservable',
+      original_price: '1000',
+      discounted_price: '500',
+    };
+
+    // Sold out: the catalog, the search and the random hero all hide it, so the
+    // public detail endpoint must not hand it out by UUID either.
+    const soldOut = await repo.insert(ctx.db, {
+      ...base,
+      pickup_start: new Date(Date.now() - 1000),
+      pickup_end: new Date(Date.now() + 3600_000),
+      is_active: true,
+      stock: 0,
+    });
+    expect(await repo.findById(soldOut.id)).toBeNull();
+
+    // Pickup window already closed.
+    const expired = await repo.insert(ctx.db, {
+      ...base,
+      title: 'Vencida por ventana',
+      pickup_start: new Date(Date.now() - 7200_000),
+      pickup_end: new Date(Date.now() - 3600_000),
+      is_active: true,
+    });
+    expect(await repo.findById(expired.id)).toBeNull();
+
+    // Paused by the owner.
+    const paused = await repo.insert(ctx.db, {
+      ...base,
+      title: 'Pausada',
+      pickup_start: new Date(Date.now() - 1000),
+      pickup_end: new Date(Date.now() + 3600_000),
+      is_active: false,
+    });
+    expect(await repo.findById(paused.id)).toBeNull();
+
+    // Business not moderation-approved: the row exists and is active, and it is
+    // still not reservable, so it must not be publicly readable.
+    const owner = await seedProfile(ctx.db);
+    const pending = await seedBusiness(ctx.db, owner, {
+      verification_status: 'pending',
+    });
+    const pendingLocation = await seedLocation(ctx.db, pending.id);
+    const unapproved = await repo.insert(ctx.db, {
+      business_id: pending.id,
+      business_location_id: pendingLocation.id,
+      title: 'Negocio sin aprobar',
+      original_price: '1000',
+      discounted_price: '500',
+      pickup_start: new Date(Date.now() - 1000),
+      pickup_end: new Date(Date.now() + 3600_000),
+    });
+    expect(await repo.findById(unapproved.id)).toBeNull();
   });
 
   test('unapproved business forces new offers inactive', async () => {
@@ -180,7 +243,10 @@ describe('OffersRepository consultas (DB real)', () => {
       is_active: true,
     });
     expect(await repo.expireStale(new Date())).toBeGreaterThanOrEqual(1);
-    expect(await repo.findById(stale.id)).toMatchObject({ is_active: false });
+    // findDtoById, not findById: this offer's pickup window has closed, which is
+    // exactly the case the public detail endpoint must hide. The assertion here
+    // is about the row's is_active flag, so it reads it unfiltered.
+    expect(await repo.findDtoById(stale.id)).toMatchObject({ is_active: false });
 
     const user = await seedProfile(ctx.db);
     const order = await seedOrder(ctx.db, user, stale.id, businessId);

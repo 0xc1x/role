@@ -248,18 +248,32 @@ export class OffersRepository {
     return sql`exists (select 1 from ${businessModeration} m where m.business_id = ${businesses.id} and m.verification_status = 'approved')`;
   }
 
+  /**
+   * The one definition of "this offer can be reserved right now": active, owned
+   * by an active and moderation-approved business, in stock, and inside its
+   * pickup window.
+   *
+   * Single source on purpose. This predicate is a security boundary, and it was
+   * already spelled out twice — the random hero pick and the `available_only`
+   * list filter. A third copy for the detail endpoint is how an offer that is
+   * sold out, expired or under moderation review ends up readable by UUID while
+   * being correctly hidden everywhere else. If a condition belongs here, it
+   * belongs in all three call sites at once.
+   */
+  private availableNow(): SQL[] {
+    return [
+      eq(offers.is_active, true),
+      eq(businesses.is_active, true),
+      this.approvedBusiness(),
+      gt(offers.stock, 0),
+      gt(offers.pickup_end, sql`now()`),
+    ];
+  }
+
   /** Oferta activa aleatoria con stock y pickup vigente (hero landing). */
   async findRandomActive(): Promise<OfferListRow | null> {
     const [row] = await this.baseSelect()
-      .where(
-        and(
-          eq(offers.is_active, true),
-          eq(businesses.is_active, true),
-          this.approvedBusiness(),
-          gt(offers.stock, 0),
-          gt(offers.pickup_end, sql`now()`),
-        ),
-      )
+      .where(and(...this.availableNow()))
       .groupBy(...this.groupByFields())
       .orderBy(sql`random()`)
       .limit(1);
@@ -270,11 +284,7 @@ export class OffersRepository {
     const filters: SQL[] = [];
 
     if (query.available_only) {
-      filters.push(eq(offers.is_active, true));
-      filters.push(eq(businesses.is_active, true));
-      filters.push(this.approvedBusiness());
-      filters.push(gt(offers.stock, 0));
-      filters.push(gt(offers.pickup_end, sql`now()`));
+      filters.push(...this.availableNow());
     }
 
     if (query.category_id) {
@@ -359,6 +369,17 @@ export class OffersRepository {
     return Boolean(row);
   }
 
+  /**
+   * Public detail by id. Availability-filtered for the same reason the list is:
+   * without it, a sold-out, expired or not-yet-moderated offer stayed readable
+   * by UUID even though the catalog, the random hero and the search all hid it.
+   *
+   * Moderation and ownership deliberately do not come through here. The admin
+   * reviews inactive offers with `GET /offers?available_only=false` and edits
+   * them through PATCH/DELETE, which resolve the row with `findDtoById` and
+   * `findByIdForUpdate` — neither of which filters. So this endpoint has exactly
+   * one consumer, a public reader, and gating it costs the panel nothing.
+   */
   async findById(id: string): Promise<OfferListRow | null> {
     const groupBy = [
       offers.id,
@@ -393,7 +414,7 @@ export class OffersRepository {
     ];
 
     const [row] = await this.baseSelect()
-      .where(eq(offers.id, id))
+      .where(and(eq(offers.id, id), ...this.availableNow()))
       .groupBy(...groupBy)
       .limit(1);
     return row ?? null;
