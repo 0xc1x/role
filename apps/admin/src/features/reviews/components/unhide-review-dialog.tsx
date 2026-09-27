@@ -9,6 +9,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { reviewModerationReasonLabel } from "@/lib/labels";
 
 /**
  * Confirmación de "volver a mostrar la reseña".
@@ -19,7 +20,9 @@ import { Spinner } from "@/components/ui/spinner";
  *
  * El copy dice explícitamente que el motivo registrado se conserva: es el
  * registro de apelación y el operador tiene que saberlo ANTES de confirmar, no
- * descubrirlo después cuando el negocio pregunte por qué estuvo oculta.
+ * descubrirlo después cuando el negocio pregunte por qué estuvo oculta. Muestra
+ * el token YA TRADUCIDO y no el `moderation_reason` crudo: un `data:` en una
+ * confirmación no le dice nada a la persona que está decidiendo.
  */
 export function UnhideReviewDialog({
 	open,
@@ -27,6 +30,7 @@ export function UnhideReviewDialog({
 	onConfirm,
 	isPending,
 	authorName,
+	moderationReason,
 	hiddenReason,
 }: {
 	open: boolean;
@@ -34,6 +38,7 @@ export function UnhideReviewDialog({
 	onConfirm: () => void;
 	isPending: boolean;
 	authorName: string | null;
+	moderationReason: string | null;
 	hiddenReason: string | null;
 }) {
 	return (
@@ -46,10 +51,11 @@ export function UnhideReviewDialog({
 						{authorName ? <b>{authorName}</b> : "una persona sin nombre"}{" "}
 						volverá a aparecer en la página del negocio y volverá a contar en su
 						promedio.{" "}
-						{hiddenReason ? (
+						{moderationReason ? (
 							<>
-								El motivo por el que se ocultó se <b>conserva</b>: «
-								{hiddenReason}».
+								El motivo por el que se ocultó se <b>conserva</b>:{" "}
+								<b>{reviewModerationReasonLabel(moderationReason)}</b>
+								{hiddenReason ? <> — «{hiddenReason}»</> : null}.
 							</>
 						) : (
 							<>No hay ningún motivo registrado para esta reseña.</>

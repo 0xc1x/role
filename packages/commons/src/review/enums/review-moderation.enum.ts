@@ -71,3 +71,20 @@ export const REVIEW_MODERATION_REASON_LABELS: Record<
  * dejen de coincidir sin que nada falle.
  */
 export const REVIEW_MODERATION_REASON_NEEDS_DETAIL = "other";
+
+/**
+ * Type guard del token.
+ *
+ * Existe para el caso en que el valor viene de un `string` y hay que decidir si
+ * es un motivo: el selector del panel, un valor de query, o el estado de un
+ * formulario (cuyo tipo es `string`, no el token). Con esto el panel narrowea sin
+ * un `as` que nadie verifica, y la lista de tokens se lee en un solo lugar.
+ *
+ * Deliberadamente NO valida: `HideReviewSchema` y `ReviewModerationReasonSchema`
+ * son los que rechazan, con su mensaje. Esta función responde "¿es un token?",
+ * que es una pregunta distinta de "¿es un motivo válido para esta acción?".
+ */
+export const isReviewModerationReason = (
+	value: string,
+): value is ReviewModerationReason =>
+	(REVIEW_MODERATION_REASONS as readonly string[]).includes(value);

@@ -5,6 +5,7 @@ import {
 	emailSendStatusLabel,
 	orderStatusLabel,
 	payoutStatusLabel,
+	reviewModerationReasonLabel,
 } from "../labels";
 
 /**
@@ -53,6 +54,15 @@ describe("etiquetas de estado", () => {
 		expect(contactMessageStatusLabel("ERROR")).toBe("Error");
 	});
 
+	test("motivo de moderación", () => {
+		expect(reviewModerationReasonLabel("insults_or_hate_speech")).toBe(
+			"Insultos, acoso o lenguaje de odio",
+		);
+		expect(reviewModerationReasonLabel("fake_or_unverified_purchase")).toBe(
+			"Reseña falsa o que no corresponde a una reserva real",
+		);
+	});
+
 	// Un valor fuera del contrato no se inventa: se muestra tal cual para que el
 	// operador vea el dato real y no una etiqueta que miente.
 	test("un valor desconocido se devuelve sin inventar traducción", () => {
@@ -60,5 +70,11 @@ describe("etiquetas de estado", () => {
 		expect(payoutStatusLabel("on_hold")).toBe("on_hold");
 		expect(orderStatusLabel("refunded")).toBe("refunded");
 		expect(contactMessageStatusLabel("NUEVO")).toBe("NUEVO");
+		// Un motivo retirado del contrato con reseñas ya moderadas es un caso
+		// real, y "Desconocido" escondería que la fila dice algo que el panel ya
+		// no sabe nombrar.
+		expect(reviewModerationReasonLabel("motivo_retirado")).toBe(
+			"motivo_retirado",
+		);
 	});
 });

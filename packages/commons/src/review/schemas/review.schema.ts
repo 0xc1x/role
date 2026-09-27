@@ -138,6 +138,53 @@ export const ListReviewsForModerationQuerySchema = PaginationQuerySchema.extend(
 	},
 );
 
+/** Copy del motivo ausente. Vive acá porque lo leen el panel y el toast del 400. */
+const MENSAJE_MOTIVO_AUSENTE = "Elige el motivo por el que se oculta la reseña";
+
+/** Copy del detalle que `other` no puede dejar vacío. */
+const MENSAJE_DETALLE_OBLIGATORIO =
+	"«Otro motivo» no se explica solo: describe por qué se oculta la reseña";
+
+/**
+ * El detalle libre, con sus reglas declaradas UNA vez: `.trim()` para que un
+ * espacio no cuente como descripción, y el tope de 500 igual al `check` de la
+ * columna.
+ *
+ * Es un schema y no una cadena para que el contrato y el formulario compartan
+ * exactamente el mismo campo, con el mismo `.trim()` y el mismo tope.
+ */
+const HideReviewDetailSchema = z
+	.string({ error: "Describe el motivo de la ocultación" })
+	.trim()
+	.max(500, "El detalle no puede superar los 500 caracteres");
+
+/**
+ * La regla condicional del detalle, expresada una vez y reutilizada por los dos
+ * schemas de abajo.
+ *
+ * Que el contrato y el formulario la compartan no es un detalle: si el panel
+ * tuviera su propia copia, el «Otro motivo» no se explica solo» del formulario y
+ * el 400 del servidor podrían divergir sin que nada lo note, y el operador
+ * vería un formulario más permisivo que la API.
+ */
+const detalleObligatorioPara = (
+	value: { moderation_reason: string; hidden_reason?: string },
+	ctx: z.core.$RefinementCtx,
+) => {
+	if (
+		value.moderation_reason === REVIEW_MODERATION_REASON_NEEDS_DETAIL &&
+		!value.hidden_reason
+	) {
+		// El issue lleva `path` para que el panel lo muestre BAJO el detalle y no
+		// junto al selector: el error es de ese campo, no del motivo.
+		ctx.addIssue({
+			code: "custom",
+			path: ["hidden_reason"],
+			message: MENSAJE_DETALLE_OBLIGATORIO,
+		});
+	}
+};
+
 /**
  * Cuerpo de `PATCH /reviews/:id/hide`.
  *
@@ -156,34 +203,56 @@ export const ListReviewsForModerationQuerySchema = PaginationQuerySchema.extend(
  * cuando alguien lee mil filas. `other` es la excepción por definición: es el
  * token que NO dice nada, así que sin el detalle el registro vuelve a estar
  * vacío — que es exactamente lo que el resto del contrato existe para evitar.
- *
- * `.trim()` en el detalle para que un espacio no cuente como descripción, y el
- * tope de 500 igual al `check` de la columna.
  */
 export const HideReviewSchema = z
 	.object({
 		moderation_reason: ReviewModerationReasonSchema,
-		hidden_reason: z
-			.string({ error: "Describe el motivo de la ocultación" })
-			.trim()
-			.max(500, "El detalle no puede superar los 500 caracteres")
-			.optional(),
+		hidden_reason: HideReviewDetailSchema.optional(),
 	})
-	.superRefine((value, ctx) => {
-		if (
-			value.moderation_reason === REVIEW_MODERATION_REASON_NEEDS_DETAIL &&
-			!value.hidden_reason
-		) {
-			// El issue lleva `path` para que el panel lo muestre BAJO el detalle y
-			// no junto al selector: el error es de ese campo, no del motivo.
-			ctx.addIssue({
-				code: "custom",
-				path: ["hidden_reason"],
-				message:
-					"«Otro motivo» no se explica solo: describe por qué se oculta la reseña",
-			});
-		}
-	});
+	.superRefine(detalleObligatorioPara);
+
+/**
+ * "Todavía no se eligió motivo" en un formulario. NO es un token de la
+ * taxonomía y nunca se guarda: es el estado en que arranca un selector, y no
+ * puede ser `null` porque un `Select` distingue "sin valor" de "vacío" y un
+ * formulario necesita un valor por defecto que se pueda resetear.
+ *
+ * Se exporta para que el panel use esta constante y no escriba `""` por su
+ * cuenta: el string es lo que separa "sin elegir" de "elegido", y dos copias
+ * literales de él son dos lugares donde esa diferencia puede desaparecer.
+ */
+export const SIN_MOTIVO = "";
+
+/**
+ * Variante del cuerpo para el formulario del panel.
+ *
+ * NO es otro contrato: son las MISMAS reglas con la forma que tiene el estado de
+ * un formulario. Dos diferencias, y solo dos:
+ *
+ *  - `moderation_reason` acepta `SIN_MOTIVO` (la cadena vacía) porque un selector
+ *    arranca sin elección, y aun así la rechaza al validar: "todavía no eligió"
+ *    no es un motivo, y dejarlo pasar produciría el registro de apelación vacío
+ *    que el resto del contrato existe para evitar.
+ *  - `hidden_reason` es siempre un `string` y no opcional, porque un campo de
+ *    texto siempre tiene un valor; el panel traduce `""` a ausencia antes de
+ *    mandar el PATCH.
+ *
+ * Vive acá y no en el panel, igual que `CreateSlideFormSchema`: las reglas y su
+ * copy se declaran una vez, y el panel no reimplementa el `.trim()`, el tope ni la
+ * condición de `other`.
+ */
+export const HideReviewFormSchema = z
+	.object({
+		moderation_reason: z
+			.union([z.literal(SIN_MOTIVO), ReviewModerationReasonSchema], {
+				error: MENSAJE_MOTIVO_AUSENTE,
+			})
+			.refine((value) => value !== SIN_MOTIVO, {
+				error: MENSAJE_MOTIVO_AUSENTE,
+			}),
+		hidden_reason: HideReviewDetailSchema,
+	})
+	.superRefine(detalleObligatorioPara);
 
 export const ReviewModerationListResponseSchema = PaginatedDataSchema(
 	ReviewModerationItemSchema,

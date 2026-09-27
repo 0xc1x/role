@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import type { HideReviewDto } from "@0xc1x/role-commons";
 import { cleanup, fireEvent, render, screen, waitFor } from "@/test-utils/dom";
 import { HideReviewDialog } from "../hide-review-dialog";
 
@@ -9,8 +10,10 @@ import { HideReviewDialog } from "../hide-review-dialog";
  * lugar, el operador estaría decidiendo sobre una consecuencia que nadie le
  * describió — y descartaría la moderación que sí se puede deshacer.
  *
- * Y el motivo obligatorio: es el registro de apelación. Estos tests fijan las dos
- * cosas.
+ * Y el motivo DECLARADO, no una caja de texto: el token es el registro de
+ * apelación, y el detalle libre es el contexto alrededor. Estos tests fijan las
+ * dos mitades: el motivo es obligatorio siempre, y el detalle solo cuando el
+ * motivo no se explica solo.
  */
 function renderDialog(
 	overrides: Partial<Parameters<typeof HideReviewDialog>[0]> = {},
@@ -30,6 +33,26 @@ function renderDialog(
 	);
 	return { onConfirm };
 }
+
+/**
+ * Abre el selector de motivo y elige una opción por su etiqueta.
+ *
+ * La secuencia `pointerdown` + `pointerup` + `click` NO es redundante: Base UI
+ * escucha eventos de puntero en los items del popup, y un `fireEvent.click` a
+ * secas abre el selector pero no elige nada. Es una limitación del DOM de los
+ * specs, no del componente — en un navegador real el clic del ratón produce los
+ * tres. No "simplificar" esto a un solo `click`.
+ */
+async function elegirMotivo(etiqueta: string) {
+	fireEvent.click(await screen.findByRole("combobox", { name: /Motivo/ }));
+	const opcion = await screen.findByRole("option", { name: etiqueta });
+	fireEvent.pointerDown(opcion, { pointerId: 1, isPrimary: true, button: 0 });
+	fireEvent.pointerUp(opcion, { pointerId: 1, isPrimary: true, button: 0 });
+	fireEvent.click(opcion);
+}
+
+/** El campo de detalle, cuyo rótulo lleva un asterisco cuando es obligatorio. */
+const detalle = () => screen.getByLabelText(/^Detalle/) as HTMLTextAreaElement;
 
 afterEach(cleanup);
 
@@ -73,10 +96,31 @@ describe("copy de la confirmación de ocultar", () => {
 	});
 });
 
-describe("el motivo es obligatorio", () => {
-	test("exige el motivo antes de dejar ocultar", async () => {
-		const confirmed: string[] = [];
-		renderDialog({ onConfirm: (r: string) => confirmed.push(r) });
+describe("el motivo es obligatorio y viene de la taxonomía", () => {
+	test("el selector ofrece todos los motivos en español, no los tokens crudos", async () => {
+		renderDialog();
+
+		fireEvent.click(await screen.findByRole("combobox", { name: /Motivo/ }));
+
+		// Las etiquetas son lo que lee la persona; el token es lo que se guarda.
+		expect(
+			await screen.findByRole("option", {
+				name: "Insultos, acoso o lenguaje de odio",
+			}),
+		).toBeDefined();
+		expect(
+			screen.getByRole("option", {
+				name: "Reseña falsa o que no corresponde a una reserva real",
+			}),
+		).toBeDefined();
+		expect(
+			screen.queryByRole("option", { name: "insults_or_hate_speech" }),
+		).toBeNull();
+	});
+
+	test("sin motivo no se puede ocultar", async () => {
+		const confirmados: HideReviewDto[] = [];
+		renderDialog({ onConfirm: (c) => confirmados.push(c) });
 
 		fireEvent.click(
 			await screen.findByRole("button", { name: "Ocultar reseña" }),
@@ -84,78 +128,163 @@ describe("el motivo es obligatorio", () => {
 
 		await waitFor(() =>
 			expect(
-				screen.getByText(
-					"El motivo no puede estar vacío: es el registro de apelación",
-				),
+				screen.getByText("Elige el motivo por el que se oculta la reseña"),
 			).toBeDefined(),
 		);
-		expect(confirmed).toEqual([]);
+		expect(confirmados).toEqual([]);
 	});
 
-	test("un motivo de solo espacios no cuenta como motivo", async () => {
-		const confirmed: string[] = [];
-		renderDialog({ onConfirm: (r: string) => confirmed.push(r) });
+	test("un motivo nombrado SIN detalle se acepta: el token ya dice por qué", async () => {
+		const confirmados: HideReviewDto[] = [];
+		renderDialog({ onConfirm: (c) => confirmados.push(c) });
 
-		fireEvent.change(await screen.findByLabelText("Motivo del ocultamiento"), {
-			target: { value: "    " },
+		await elegirMotivo("Insultos, acoso o lenguaje de odio");
+		fireEvent.click(screen.getByRole("button", { name: "Ocultar reseña" }));
+
+		await waitFor(() => expect(confirmados).toHaveLength(1));
+		expect(confirmados[0]).toEqual({
+			moderation_reason: "insults_or_hate_speech",
+		});
+		// Sin detalle el `hidden_reason` no viaja: mandar "" sería afirmar que se
+		// escribió una descripción que no existe.
+		expect(confirmados[0]?.hidden_reason).toBeUndefined();
+	});
+
+	test("un motivo nombrado CON detalle envía el token y el detalle", async () => {
+		const confirmados: HideReviewDto[] = [];
+		renderDialog({ onConfirm: (c) => confirmados.push(c) });
+
+		await elegirMotivo("Amenazas o intimidación");
+		fireEvent.change(detalle(), {
+			target: { value: "Mencionó llegar al local el jueves" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Ocultar reseña" }));
 
-		await waitFor(() =>
-			expect(
-				screen.getByText(
-					"El motivo no puede estar vacío: es el registro de apelación",
-				),
-			).toBeDefined(),
-		);
-		expect(confirmed).toEqual([]);
+		await waitFor(() => expect(confirmados).toHaveLength(1));
+		expect(confirmados[0]).toEqual({
+			moderation_reason: "threats_or_intimidation",
+			hidden_reason: "Mencionó llegar al local el jueves",
+		});
 	});
 
-	test("un motivo más largo que el contrato no pasa", async () => {
-		const confirmed: string[] = [];
-		renderDialog({ onConfirm: (r: string) => confirmed.push(r) });
+	test("un detalle más largo que el contrato no pasa", async () => {
+		const confirmados: HideReviewDto[] = [];
+		renderDialog({ onConfirm: (c) => confirmados.push(c) });
 
-		fireEvent.change(await screen.findByLabelText("Motivo del ocultamiento"), {
+		await elegirMotivo("Insultos, acoso o lenguaje de odio");
+		fireEvent.change(detalle(), {
 			target: { value: "a".repeat(501) },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Ocultar reseña" }));
 
 		await waitFor(() =>
 			expect(
-				screen.getByText("El motivo no puede superar los 500 caracteres"),
+				screen.getByText("El detalle no puede superar los 500 caracteres"),
 			).toBeDefined(),
 		);
-		expect(confirmed).toEqual([]);
+		expect(confirmados).toEqual([]);
+	});
+});
+
+describe("el detalle solo es obligatorio para «Otro motivo»", () => {
+	test("con un motivo nombrado, el detalle se anuncia como opcional", async () => {
+		renderDialog();
+
+		const ayuda = await screen.findByText(/Opcional\. El motivo elegido/);
+		expect(ayuda).toBeDefined();
+		expect(ayuda.textContent).toContain("ya dice por qué");
+		expect(detalle().required).toBe(false);
 	});
 
-	test("con un motivo real, confirma y lo entrega tal como se escribió", async () => {
-		const confirmed: string[] = [];
-		renderDialog({ onConfirm: (r: string) => confirmed.push(r) });
+	test("al elegir «Otro motivo», el requisito se DICE, no solo se aplica", async () => {
+		renderDialog();
 
-		fireEvent.change(await screen.findByLabelText("Motivo del ocultamiento"), {
-			target: { value: "Lenguaje abusivo hacia el personal" },
+		await elegirMotivo("Otro motivo");
+
+		// Un requisito que solo aparece como error es un requisito que el
+		// operador descubre después de escribir todo lo demás.
+		expect(await screen.findByText(/Obligatorio para/)).toBeDefined();
+		expect(detalle().required).toBe(true);
+	});
+
+	test("«Otro motivo» sin detalle no deja ocultar", async () => {
+		const confirmados: HideReviewDto[] = [];
+		renderDialog({ onConfirm: (c) => confirmados.push(c) });
+
+		await elegirMotivo("Otro motivo");
+		fireEvent.click(screen.getByRole("button", { name: "Ocultar reseña" }));
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"«Otro motivo» no se explica solo: describe por qué se oculta la reseña",
+				),
+			).toBeDefined(),
+		);
+		expect(confirmados).toEqual([]);
+	});
+
+	test("«Otro motivo» con un detalle de solo espacios sigue sin detalle", async () => {
+		const confirmados: HideReviewDto[] = [];
+		renderDialog({ onConfirm: (c) => confirmados.push(c) });
+
+		await elegirMotivo("Otro motivo");
+		fireEvent.change(detalle(), {
+			target: { value: "   \n  " },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Ocultar reseña" }));
 
-		await waitFor(() => expect(confirmed).toHaveLength(1));
-		// El `.trim()` es del contrato (`HideReviewSchema`) y lo aplica el servidor:
-		// el panel no reescribe lo que el operador escribió.
-		expect(confirmed[0]).toBe("Lenguaje abusivo hacia el personal");
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"«Otro motivo» no se explica solo: describe por qué se oculta la reseña",
+				),
+			).toBeDefined(),
+		);
+		expect(confirmados).toEqual([]);
+	});
+
+	test("«Otro motivo» con detalle se acepta", async () => {
+		const confirmados: HideReviewDto[] = [];
+		renderDialog({ onConfirm: (c) => confirmados.push(c) });
+
+		await elegirMotivo("Otro motivo");
+		fireEvent.change(detalle(), {
+			target: { value: "Habla de un producto que el local no vende" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Ocultar reseña" }));
+
+		await waitFor(() => expect(confirmados).toHaveLength(1));
+		expect(confirmados[0]).toEqual({
+			moderation_reason: "other",
+			hidden_reason: "Habla de un producto que el local no vende",
+		});
+	});
+
+	test("volver a un motivo nombrado devuelve el detalle a opcional", async () => {
+		renderDialog();
+
+		await elegirMotivo("Otro motivo");
+		expect(detalle().required).toBe(true);
+
+		await elegirMotivo("Insultos, acoso o lenguaje de odio");
+		expect(detalle().required).toBe(false);
+		expect(
+			await screen.findByText(/Opcional\. El motivo elegido/),
+		).toBeDefined();
 	});
 });
 
 describe("estado del diálogo", () => {
 	test("cancelar no confirma nada", async () => {
-		const confirmed: string[] = [];
-		renderDialog({ onConfirm: (r: string) => confirmed.push(r) });
+		const confirmados: HideReviewDto[] = [];
+		renderDialog({ onConfirm: (c) => confirmados.push(c) });
 
-		fireEvent.change(await screen.findByLabelText("Motivo del ocultamiento"), {
-			target: { value: "Lenguaje abusivo" },
-		});
+		await elegirMotivo("Insultos, acoso o lenguaje de odio");
 		fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
 		await waitFor(() => expect(screen.getAllByRole("button")).toHaveLength(2));
-		expect(confirmed).toEqual([]);
+		expect(confirmados).toEqual([]);
 	});
 
 	test("mientras guarda, la acción está deshabilitada", async () => {

@@ -7,4 +7,5 @@ export * from "./queries/reviews.queries";
 export {
 	createReviewModerationColumns,
 	EstadoBadge,
+	MotivoBadge,
 } from "./tables/reviews.columns";

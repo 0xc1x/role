@@ -1,4 +1,7 @@
-import type { ListReviewsForModerationQuery } from "@0xc1x/role-commons";
+import type {
+	HideReviewDto,
+	ListReviewsForModerationQuery,
+} from "@0xc1x/role-commons";
 import {
 	keepPreviousData,
 	queryOptions,
@@ -32,12 +35,17 @@ export const reviewsModerationListOptions = (
  * terminaría con un `body` opcional que solo uno de los dos callers usaría.
  */
 
-/** Oculta una reseña. El motivo es obligatorio: lo valida `HideReviewSchema`. */
+/**
+ * Oculta una reseña. El cuerpo es el del contrato entero —el token del motivo y
+ * el detalle— y no un `string`: la mutación no reescribe lo que el operador
+ * eligió en el diálogo. Un panel que reescribe el contrato en el camino es el que
+ * termina mandando un motivo que el servidor nunca pidió.
+ */
 export function useHideReview() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-			reviewsApi.hide(id, { hidden_reason: reason }),
+		mutationFn: ({ id, ...body }: { id: string } & HideReviewDto) =>
+			reviewsApi.hide(id, body),
 		onSuccess: () => {
 			// La fila cambia de estado Y sale del conteo del negocio. Se invalida
 			// la lista en vez de parchear la fila en caché: con el filtro por

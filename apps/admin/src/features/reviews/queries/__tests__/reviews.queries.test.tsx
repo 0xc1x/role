@@ -48,6 +48,7 @@ const fila: ReviewModerationItemDto = {
 	moderated_at: "2026-09-21T12:00:00.000Z",
 	moderated_by: "cccccccc-1111-4111-8111-111111111111",
 	moderated_by_name: "Módulo de moderación",
+	moderation_reason: "insults_or_hate_speech",
 	hidden_reason: "Lenguaje abusivo hacia el personal",
 	author_name: "Bruno",
 	business_name: "Panadería Sur",
@@ -70,21 +71,40 @@ afterEach(() => {
 });
 
 describe("useHideReview", () => {
-	test("manda el motivo en el cuerpo del PATCH", async () => {
+	test("manda el token del motivo y el detalle en el cuerpo del PATCH", async () => {
 		const calls = stubFetch(200, fila);
 		const { result } = renderMutation(() => useHideReview());
 
 		await result.current.mutateAsync({
 			id: fila.id,
-			reason: "Lenguaje abusivo hacia el personal",
+			moderation_reason: "insults_or_hate_speech",
+			hidden_reason: "Lenguaje abusivo hacia el personal",
 		});
 
 		const call = calls[0];
 		expect(call?.method).toBe("PATCH");
 		expect(call?.url).toContain(`/reviews/moderation/${fila.id}/hide`);
 		expect(JSON.parse(call?.body ?? "{}")).toEqual({
+			moderation_reason: "insults_or_hate_speech",
 			hidden_reason: "Lenguaje abusivo hacia el personal",
 		});
+	});
+
+	test("una razón nombrada sin detalle viaja SIN hidden_reason", async () => {
+		const calls = stubFetch(200, fila);
+		const { result } = renderMutation(() => useHideReview());
+
+		await result.current.mutateAsync({
+			id: fila.id,
+			moderation_reason: "threats_or_intimidation",
+		});
+
+		// El token ya dice por qué. Mandar `hidden_reason: ""` affirmaría que se
+		// escribió una descripción que no existe.
+		expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({
+			moderation_reason: "threats_or_intimidation",
+		});
+		expect(calls[0]?.body).not.toContain("hidden_reason");
 	});
 
 	test("un fallo se avisa con el requestId, no en silencio", async () => {
@@ -97,7 +117,10 @@ describe("useHideReview", () => {
 		const { result } = renderMutation(() => useHideReview());
 
 		await result.current
-			.mutateAsync({ id: fila.id, reason: "Lenguaje abusivo" })
+			.mutateAsync({
+				id: fila.id,
+				moderation_reason: "insults_or_hate_speech",
+			})
 			.catch(() => undefined);
 
 		// El toast sin el requestId deja al operador sin nada que darle a soporte.
@@ -116,7 +139,7 @@ describe("useHideReview", () => {
 		const { result } = renderMutation(() => useHideReview());
 
 		await result.current
-			.mutateAsync({ id: fila.id, reason: "x" })
+			.mutateAsync({ id: fila.id, moderation_reason: "other" })
 			.catch(() => undefined);
 
 		// Traducido por la capa de la API, y con el requestId detrás del "·": sin

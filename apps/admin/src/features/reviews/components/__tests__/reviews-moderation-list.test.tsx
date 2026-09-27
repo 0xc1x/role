@@ -4,7 +4,7 @@ import type {
 	ReviewModerationPaginatedData,
 } from "@0xc1x/role-commons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@/test-utils/dom";
+import { cleanup, fireEvent, render, screen, waitFor } from "@/test-utils/dom";
 import { ReviewsModerationList } from "../reviews-moderation-list";
 
 const previousFetch = globalThis.fetch;
@@ -24,6 +24,7 @@ const visible: ReviewModerationItemDto = {
 	moderated_at: null,
 	moderated_by: null,
 	moderated_by_name: null,
+	moderation_reason: null,
 	hidden_reason: null,
 	author_name: "Ana",
 	business_name: "Panadería Sur",
@@ -39,6 +40,7 @@ const oculta: ReviewModerationItemDto = {
 	moderated_at: "2026-09-21T12:00:00.000Z",
 	moderated_by: "cccccccc-1111-4111-8111-111111111111",
 	moderated_by_name: "Módulo de moderación",
+	moderation_reason: "insults_or_hate_speech",
 	hidden_reason: "Lenguaje abusivo hacia el personal",
 };
 
@@ -137,8 +139,74 @@ describe("listado de la bandeja de reseñas", () => {
 		await waitFor(() => expect(screen.getByText("Oculta")).toBeDefined());
 		expect(screen.getByText(/Módulo de moderación/)).toBeDefined();
 		expect(
-			screen.getByText("Motivo: Lenguaje abusivo hacia el personal"),
+			screen.getByText("Detalle: Lenguaje abusivo hacia el personal"),
 		).toBeDefined();
+	});
+
+	test("el motivo se muestra con su etiqueta en español, no con el token", async () => {
+		stubFetch([oculta]);
+		renderList();
+
+		// El token es lo que se guarda y se filtra; la etiqueta es lo que la
+		// persona lee. `insults_or_hate_speech` en la tabla sería ininteligible.
+		await waitFor(() =>
+			expect(
+				screen.getByText("Insultos, acoso o lenguaje de odio"),
+			).toBeDefined(),
+		);
+		expect(screen.queryByText("insults_or_hate_speech")).toBeNull();
+	});
+
+	test("una razón nombrada sin detalle no inventa un texto debajo del motivo", async () => {
+		stubFetch([{ ...oculta, hidden_reason: null }]);
+		renderList();
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Insultos, acoso o lenguaje de odio"),
+			).toBeDefined(),
+		);
+		// El detalle es opcional para un motivo nombrado: su ausencia es un dato,
+		// no algo que la tabla deba rellenar con un texto de relleno.
+		expect(screen.queryByText(/Detalle:/)).toBeNull();
+	});
+
+	test("un token que el contrato ya no conoce se muestra crudo, no como «Desconocido»", async () => {
+		stubFetch([{ ...oculta, moderation_reason: "motivo_retirado" }]);
+		renderList();
+
+		// Es un caso real —un motivo retirado del contrato con reseñas ya
+		// moderadas— y un texto de relleno escondería que la fila dice algo que el
+		// panel ya no sabe nombrar.
+		await waitFor(() =>
+			expect(screen.getByText("motivo_retirado")).toBeDefined(),
+		);
+	});
+
+	test("una fila sin motivo lo dice con sus palabras, no con las de la otra columna", async () => {
+		stubFetch([visible]);
+		renderList();
+
+		// "Sin moderar" es el hecho de la columna de moderación (nunca se tocó);
+		// "sin motivo registrado" es el de esta. Reusar el mismo texto daría dos
+		// celdas idénticas y, peor, affirmaría que una fila visible nunca pasó por
+		// moderación cuando puede haber pasado y luego desocultarse.
+		await waitFor(() => expect(screen.getByText("Sin moderar")).toBeDefined());
+		expect(screen.getByText("Sin motivo registrado")).toBeDefined();
+	});
+
+	test("una fila desocultada conserva su motivo visible en la columna", async () => {
+		stubFetch([{ ...oculta, is_hidden: false }]);
+		renderList();
+
+		// El motivo sobrevive al desocultamiento: por eso la columna se llama
+		// "Motivo" y no "Motivo vigente".
+		await waitFor(() =>
+			expect(
+				screen.getByText("Insultos, acoso o lenguaje de odio"),
+			).toBeDefined(),
+		);
+		expect(screen.getByText("Visible")).toBeDefined();
 	});
 
 	test("sin filas informa que no hay reseñas con ese filtro", async () => {
@@ -174,6 +242,43 @@ describe("filtros de la bandeja", () => {
 
 		await waitFor(() => expect(urls.length).toBeGreaterThan(0));
 		expect(urls[0]).toContain("rating=1");
+	});
+
+	test("sin filtro de motivo no manda moderation_reason en la URL", async () => {
+		const urls = stubFetch([visible]);
+		renderList();
+
+		await waitFor(() => expect(urls.length).toBeGreaterThan(0));
+		expect(urls[0]).not.toContain("moderation_reason=");
+	});
+
+	test("el filtro de motivo viaja a la URL con el token, no con la etiqueta", async () => {
+		const urls = stubFetch([visible]);
+		renderList({ moderationReason: "identity_discrimination" });
+
+		await waitFor(() => expect(urls.length).toBeGreaterThan(0));
+		expect(urls[0]).toContain("moderation_reason=identity_discrimination");
+		// La etiqueta tiene acentos y comas: mandarla en la URL rompería el
+		// `toSearchParams` y el filtro dejaría de ser reproducible.
+		expect(urls[0]).not.toContain("Discriminaci");
+	});
+
+	test("el selector de motivo se arma desde la taxonomía del contrato", async () => {
+		stubFetch([visible]);
+		renderList();
+
+		await waitFor(() => expect(screen.getByText("Ana")).toBeDefined());
+		fireEvent.click(screen.getByRole("combobox", { name: "Motivo" }));
+
+		// Un motivo nuevo en commons aparece en este selector sin tocar la vista.
+		expect(
+			await screen.findByRole("option", {
+				name: "Contenido no relacionado o automatizado",
+			}),
+		).toBeDefined();
+		expect(
+			screen.getByRole("option", { name: "Cualquier motivo" }),
+		).toBeDefined();
 	});
 });
 

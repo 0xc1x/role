@@ -1,14 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import {
+	isReviewModerationReason,
 	REVIEW_MODERATION_REASON_LABELS,
 	REVIEW_MODERATION_REASON_NEEDS_DETAIL,
 	REVIEW_MODERATION_REASONS,
 } from "../enums/review-moderation.enum";
 import {
 	CreateReviewSchema,
+	HideReviewFormSchema,
 	HideReviewSchema,
 	ListReviewsForModerationQuerySchema,
 	ReviewModerationItemSchema,
+	SIN_MOTIVO,
 	ReviewModerationReasonSchema,
 	ReviewSchema,
 } from "../schemas/review.schema";
@@ -320,6 +323,94 @@ describe("HideReviewSchema", () => {
 				hidden_reason: "a".repeat(501),
 			}).success,
 		).toBe(false);
+	});
+});
+
+describe("HideReviewFormSchema (el mismo contrato, con la forma de un formulario)", () => {
+	it("rechaza el motivo sin elegir: un selector vacío no es un motivo", () => {
+		// Este es el ÚNICO cambio respecto del contrato, y va en la dirección
+		// segura: el estado "todavía no eligió" se RECHAZA, no se acepta como
+		// motivo. Aceptarlo produciría el registro de apelación vacío.
+		const parsed = HideReviewFormSchema.safeParse({
+			moderation_reason: SIN_MOTIVO,
+			hidden_reason: "",
+		});
+		expect(parsed.success).toBe(false);
+		expect(parsed.error?.issues[0]?.message).toBe(
+			"Elige el motivo por el que se oculta la reseña",
+		);
+	});
+
+	it("el motivo sigue siendo obligatorio aunque el detalle sea una cadena", () => {
+		expect(
+			HideReviewFormSchema.safeParse({ hidden_reason: "Abuso" }).success,
+		).toBe(false);
+	});
+
+	it("acepta un motivo nombrado con el detalle vacío del formulario", () => {
+		// Un `textarea` siempre tiene un valor: "" es "no escribió", que es un
+		// dato válido del formulario. El panel lo traduce a ausencia antes del
+		// PATCH; el schema no puede exigir algo que el campo nunca va a tener.
+		const parsed = HideReviewFormSchema.parse({
+			moderation_reason: "identity_discrimination",
+			hidden_reason: "",
+		});
+		expect(parsed.moderation_reason).toBe("identity_discrimination");
+		expect(parsed.hidden_reason).toBe("");
+	});
+
+	it("«other» con el detalle vacío también falla: el guard mira el string", () => {
+		const parsed = HideReviewFormSchema.safeParse({
+			moderation_reason: "other",
+			hidden_reason: "",
+		});
+		expect(parsed.success).toBe(false);
+		expect(parsed.error?.issues[0]?.message).toBe(
+			"«Otro motivo» no se explica solo: describe por qué se oculta la reseña",
+		);
+	});
+
+	it("«other» con detalle y con espacios alrededor pasa y limpia los bordes", () => {
+		const parsed = HideReviewFormSchema.parse({
+			moderation_reason: "other",
+			hidden_reason: "  Habla de un producto que el local no vende  ",
+		});
+		expect(parsed.hidden_reason).toBe(
+			"Habla de un producto que el local no vende",
+		);
+	});
+
+	it("comparte el `.trim()`, el tope y el copy con el contrato", () => {
+		// Las dos schemas tienen que decir lo mismo. Si el formulario fuera más
+		// permisivo, el operador vería un formulario que acepta algo que la API
+		// va a rechazar con un 400.
+		const demasiadoLargo = "a".repeat(501);
+		for (const schema of [HideReviewSchema, HideReviewFormSchema]) {
+			const parsed = schema.safeParse({
+				moderation_reason: "insults_or_hate_speech",
+				hidden_reason: demasiadoLargo,
+			});
+			expect(parsed.success).toBe(false);
+			expect(parsed.error?.issues[0]?.message).toBe(
+				"El detalle no puede superar los 500 caracteres",
+			);
+		}
+	});
+});
+
+describe("isReviewModerationReason", () => {
+	it("acepta todos los tokens de la taxonomía y nada más", () => {
+		for (const reason of REVIEW_MODERATION_REASONS) {
+			expect(isReviewModerationReason(reason)).toBe(true);
+		}
+		expect(isReviewModerationReason(SIN_MOTIVO)).toBe(false);
+		expect(isReviewModerationReason("me_gustó_poco")).toBe(false);
+	});
+
+	it("no es el validador: no lanza, solo responde", () => {
+		// La función responde "¿es un token?", no "¿es un motivo válido para esta
+		// acción?". Quien valida es `HideReviewSchema`, con su mensaje.
+		expect(isReviewModerationReason("")).toBe(false);
 	});
 });
 

@@ -50,6 +50,7 @@ function RouteComponent() {
 					visibility={search.visibility}
 					businessId={search.business_id}
 					rating={search.rating}
+					moderationReason={search.moderation_reason}
 					onPageChange={(page) => navigate({ search: { ...search, page } })}
 					onFilterChange={(filters) =>
 						navigate({
@@ -58,6 +59,7 @@ function RouteComponent() {
 								visibility: filters.visibility ?? search.visibility,
 								business_id: filters.business_id,
 								rating: filters.rating,
+								moderation_reason: filters.moderation_reason,
 								page: 1,
 							},
 						})

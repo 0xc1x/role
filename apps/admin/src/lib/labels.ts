@@ -4,8 +4,10 @@ import type {
 	EmailSendStatus,
 	OrderStatus,
 	PayoutStatus,
+	ReviewModerationReason,
 	ReviewVisibility,
 } from "@0xc1x/role-commons";
+import { REVIEW_MODERATION_REASON_LABELS } from "@0xc1x/role-commons";
 
 /**
  * Etiquetas en español de los enums que la API entrega en inglés.
@@ -104,3 +106,19 @@ const REVIEW_VISIBILITY_LABELS: Record<ReviewVisibility, string> = {
 
 export const reviewVisibilityLabel = (visibility: string): string =>
 	REVIEW_VISIBILITY_LABELS[visibility as ReviewVisibility] ?? visibility;
+
+/**
+ * Etiqueta en español del motivo de moderación.
+ *
+ * Reusa el mapa del contrato en vez de re-declararlo acá: la etiqueta es la
+ * MISMA que se le ofrece al operador en el selector del diálogo, y dos listas
+ * que se pueden desincronizar son la forma de que el motivo que se elige no sea
+ * el que se muestra en la fila.
+ *
+ * `?? reason` y no "Motivo desconocido": un token que el contrato de hoy no
+ * conoce es un caso real —un motivo retirado del contrato con reseñas ya
+ * moderadas— y mostrar el token crudo es honesto. Un texto de relleno
+ * escondería que la fila dice algo que el panel ya no sabe nombrar.
+ */
+export const reviewModerationReasonLabel = (reason: string): string =>
+	REVIEW_MODERATION_REASON_LABELS[reason as ReviewModerationReason] ?? reason;

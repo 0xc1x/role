@@ -1,7 +1,12 @@
 import type {
 	ListReviewsForModerationQuery,
 	ReviewModerationItemDto,
+	ReviewModerationReason,
 	ReviewVisibility,
+} from "@0xc1x/role-commons";
+import {
+	REVIEW_MODERATION_REASON_LABELS,
+	REVIEW_MODERATION_REASONS,
 } from "@0xc1x/role-commons";
 import { useMemo, useState } from "react";
 import { DataTable } from "@/components/data-table/data-table";
@@ -28,9 +33,9 @@ import { reviewVisibilityLabel } from "@/lib/labels";
 /**
  * Bandeja de moderación de reseñas.
  *
- * El filtro por visibilidad vive en la URL (lo recibe la ruta), no en estado
- * local: es lo que hace que "volver a mostrar" y después recargar no devuelva al
- * operador a una lista que ya no corresponde con lo que hizo.
+ * Los filtros viven en la URL (los recibe la ruta), no en estado local: es lo
+ * que hace que "volver a mostrar" y después recargar no devuelva al operador a
+ * una lista que ya no corresponde con lo que hizo.
  */
 export function ReviewsModerationList({
 	page = 1,
@@ -38,6 +43,7 @@ export function ReviewsModerationList({
 	visibility = "all",
 	businessId,
 	rating,
+	moderationReason,
 	onPageChange,
 	onFilterChange,
 }: {
@@ -46,11 +52,13 @@ export function ReviewsModerationList({
 	visibility?: ReviewVisibility;
 	businessId?: string;
 	rating?: number;
+	moderationReason?: ReviewModerationReason;
 	onPageChange: (page: number) => void;
 	onFilterChange: (filters: {
 		visibility?: ReviewVisibility;
 		business_id?: string;
 		rating?: number;
+		moderation_reason?: ReviewModerationReason;
 	}) => void;
 }) {
 	const { data, isLoading, isError, error } = useReviewsModerationList({
@@ -59,6 +67,7 @@ export function ReviewsModerationList({
 		visibility,
 		business_id: businessId,
 		rating,
+		moderation_reason: moderationReason,
 	} satisfies ListReviewsForModerationQuery);
 	const hideMutation = useHideReview();
 	const unhideMutation = useUnhideReview();
@@ -110,10 +119,11 @@ export function ReviewsModerationList({
 							visibility: v as ReviewVisibility,
 							business_id: businessId,
 							rating,
+							moderation_reason: moderationReason,
 						})
 					}
 				>
-					<SelectTrigger className="w-44">
+					<SelectTrigger className="w-44" aria-label="Visibilidad">
 						<SelectValue placeholder="Visibilidad" />
 					</SelectTrigger>
 					<SelectContent>
@@ -131,10 +141,11 @@ export function ReviewsModerationList({
 							visibility,
 							business_id: businessId,
 							rating: v === "all" ? undefined : Number(v),
+							moderation_reason: moderationReason,
 						})
 					}
 				>
-					<SelectTrigger className="w-36">
+					<SelectTrigger className="w-36" aria-label="Puntaje">
 						<SelectValue placeholder="Puntaje" />
 					</SelectTrigger>
 					<SelectContent>
@@ -142,6 +153,34 @@ export function ReviewsModerationList({
 						{[1, 2, 3, 4, 5].map((n) => (
 							<SelectItem key={n} value={String(n)}>
 								{n} estrella{n === 1 ? "" : "s"}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				{/* El filtro por motivo es el que da sentido a la taxonomía: sin él,
+				    declararla solo serviría para etiquetar filas que nadie puede
+				    encontrar después. El selector se arma desde el contrato, así que
+				    un motivo nuevo aparece sin tocar esta vista. */}
+				<Select
+					value={moderationReason ?? "all"}
+					onValueChange={(v) =>
+						onFilterChange({
+							visibility,
+							business_id: businessId,
+							rating,
+							moderation_reason:
+								v === "all" ? undefined : (v as ReviewModerationReason),
+						})
+					}
+				>
+					<SelectTrigger className="w-56" aria-label="Motivo">
+						<SelectValue placeholder="Motivo" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="all">Cualquier motivo</SelectItem>
+						{REVIEW_MODERATION_REASONS.map((reason) => (
+							<SelectItem key={reason} value={reason}>
+								{REVIEW_MODERATION_REASON_LABELS[reason]}
 							</SelectItem>
 						))}
 					</SelectContent>
@@ -174,9 +213,9 @@ export function ReviewsModerationList({
 				authorName={ocultando?.author_name ?? null}
 				businessName={ocultando?.business_name ?? null}
 				comment={ocultando?.comment ?? null}
-				onConfirm={(razon) =>
+				onConfirm={(cuerpo) =>
 					hideMutation.mutate(
-						{ id: ocultando?.id ?? "", reason: razon },
+						{ id: ocultando?.id ?? "", ...cuerpo },
 						{ onSuccess: () => setOcultando(null) },
 					)
 				}
@@ -192,6 +231,7 @@ export function ReviewsModerationList({
 				}}
 				isPending={unhideMutation.isPending}
 				authorName={mostrando?.author_name ?? null}
+				moderationReason={mostrando?.moderation_reason ?? null}
 				hiddenReason={mostrando?.hidden_reason ?? null}
 				onConfirm={() =>
 					unhideMutation.mutate(mostrando?.id ?? "", {
