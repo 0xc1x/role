@@ -317,16 +317,28 @@ export class OffersRepository {
       businessLocations.latitude,
       businessLocations.longitude,
       businessLocations.zone,
-      // The distance projection is an EXPRESSION, and this query groups, so it
-      // has to be legal in a grouped select. It is: `geog` is a generated
-      // column, which Postgres expands into `st_makepoint(longitude, latitude)`
-      // over two columns that are group keys already (verified against a
-      // generated column of the same shape). Listing it here as well is a
-      // no-op — grouping by a function of grouped columns cannot split a group
-      // — and it keeps the statement from DEPENDING on that expansion, which is
-      // the one part of this query no harness can execute: the test Postgres is
-      // `postgres:16-alpine` without PostGIS.
-      ...(coords ? [distanceKmSql(coords)] : []),
+      // The distance projection is an EXPRESSION over a column this query does
+      // not group otherwise, and a generated column is NOT expanded into its
+      // generation expression in a grouped select: `geog` stays a Var, so
+      // Postgres rejects the projection with 42803 unless `geog` itself is a
+      // group key. Verified against the real test database, not inferred.
+      //
+      // It has to be the COLUMN, not the projection. Grouping by
+      // `distanceKmSql(coords)` reads as the obvious equivalent and is not:
+      // the projection carries the search point as bound parameters, and this
+      // GROUP BY builds its OWN copy of that expression, so the two copies get
+      // different placeholder numbers ($1,$2 in the SELECT, $4,$5 here).
+      // Postgres matches a grouped expression by structural equality, and two
+      // Params with a different `paramno` are not equal, so the SELECT
+      // expression matched no group key and EVERY `GET /offers` carrying
+      // `lat` + `lng` failed with 42803 regardless of `sort`.
+      //
+      // Nothing caught it because the projection had only ever been COMPILED:
+      // the harness Postgres was `postgres:16-alpine` without PostGIS, so the
+      // geo specs asserted the shape of this statement (`.toSQL()`) and never
+      // ran it. See the geo block in offers.repository.spec.ts, which now
+      // executes the path against a real PostGIS database.
+      ...(coords ? [sql`business_locations.geog`] : []),
     ];
   }
 
