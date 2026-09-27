@@ -154,4 +154,14 @@ export const OfferWithBusinessSchema = OfferSchema.extend({
 	categories: z.array(OfferCategoryEmbedSchema),
 	business: OfferBusinessEmbedSchema,
 	location: OfferLocationEmbedSchema,
+	/**
+	 * Distance in km from the queried point, `null` when the request carried no
+	 * `lat`/`lng` — the same projection `active_offers_near` returns.
+	 *
+	 * Optional (and not merely nullable) because this shape is also served by
+	 * the projections that have no point to measure from: `GET /offers/:id`, the
+	 * random hero and the saved-offers list. Those send `null`; a consumer
+	 * building the shape by hand is not forced to invent a distance.
+	 */
+	distance_km: z.number().nullable().optional(),
 });

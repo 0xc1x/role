@@ -36,6 +36,10 @@ export class OfferMapper {
       review_count: row.review_count,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
+      // Already a `double precision` projection, so it crosses as a number. It
+      // is `null` — not omitted — whenever the read had no point to measure
+      // from, which is what `active_offers_near` returns in the same case.
+      distance_km: row.distance_km,
       business: {
         id: row.business_id,
         name: row.business_name,

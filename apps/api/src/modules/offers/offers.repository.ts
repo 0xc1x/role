@@ -4,14 +4,18 @@ import {
   countDistinct,
   desc,
   eq,
-  gte,
   gt,
+  gte,
+  ilike,
   inArray,
   isNull,
+  lt,
   lte,
+  or,
   sql,
   type SQL,
 } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
 import { type Database } from '../../database/database.module';
 import { publiclyVisibleBusiness } from '../../database/business-availability';
 import { DRIZZLE } from '../../database/database.tokens';
@@ -25,6 +29,82 @@ import {
   orders,
 } from '../../database/schema';
 import type { ListOffersQuery } from '@0xc1x/role-commons';
+
+/**
+ * The searched point, or nothing.
+ *
+ * The RPC treats `p_lat`/`p_lng` as two independent nulls (`p_lat is null or
+ * p_lng is null` disables the geo filter, and `distance_km` is null when
+ * EITHER is absent). Resolving them here as one value is the same decision the
+ * existing `st_dwithin` filter already makes, and it keeps "no point" from
+ * emitting a distance expression the sort does not even use.
+ */
+export type OfferCoords = { lat: number; lng: number };
+
+function offerCoords(
+  query: Pick<ListOffersQuery, 'lat' | 'lng'>,
+): OfferCoords | undefined {
+  return query.lat !== undefined && query.lng !== undefined
+    ? { lat: query.lat, lng: query.lng }
+    : undefined;
+}
+
+/**
+ * `distance_km`, the projection `active_offers_near` returns.
+ *
+ * Raw PostGIS against `extensions.st_*` for the same reason the `st_dwithin`
+ * filter in {@link OffersRepository.buildFilters} is: `business_locations.geog`
+ * is a generated PostGIS column that is deliberately absent from the Drizzle
+ * mirror, so there is no typed column to select (see
+ * `src/database/schema/business-locations.ts`).
+ *
+ * Without a point the projection is a typed NULL, not a PostGIS call — the
+ * column-projection shape is then the same on every other read of this table,
+ * and nothing needs PostGIS to resolve it.
+ */
+export function distanceKmSql(coords?: OfferCoords): SQL<number | null> {
+  if (!coords) {
+    return sql<number | null>`NULL::double precision`;
+  }
+  return sql<number | null>`extensions.st_distance(
+        business_locations.geog,
+        extensions.st_setsrid(extensions.st_makepoint(${coords.lng}, ${coords.lat}), 4326)::extensions.geography
+      ) / 1000.0`;
+}
+
+/**
+ * The `ORDER BY` of `active_offers_near`, key for key.
+ *
+ *   1. distance, `asc nulls last`, non-null ONLY for `sort = 'distance'` with a
+ *      point. For every other sort the key is NULL for the whole set, so
+ *      `nulls last` leaves it inert — that is what makes one static query able
+ *      to serve three orderings.
+ *   2. `pickup_end`, `asc nulls last`, non-null ONLY for `sort = 'pickup_end'`.
+ *   3. `created_at desc`.
+ *   4. `offers.id` — the tiebreaker the previous `desc(pickup_end)` order did not
+ *      have. Without a total order, `LIMIT/OFFSET` is free to return the same
+ *      row on two pages or skip one between them, and the count says N while
+ *      the consumer can only ever see N-1 of them.
+ *
+ * The sort value travels as a bound parameter, so the enum validated by the
+ * contract is what the `CASE` compares against.
+ */
+export function offerListOrderBy(
+  query: Pick<ListOffersQuery, 'sort'>,
+  coords?: OfferCoords,
+): (SQL | PgColumn)[] {
+  const sort = query.sort ?? 'pickup_end';
+  return [
+    // The lat/lng nulls are cast because a parameter that only appears in
+    // `IS NOT NULL` has no type for Postgres to infer (42P18).
+    sql`CASE WHEN ${sort} = 'distance' AND ${coords?.lat ?? null}::double precision IS NOT NULL AND ${coords?.lng ?? null}::double precision IS NOT NULL THEN ${distanceKmSql(
+      coords,
+    )} END ASC NULLS LAST`,
+    sql`CASE WHEN ${sort} = 'pickup_end' THEN ${offers.pickup_end} END ASC NULLS LAST`,
+    desc(offers.created_at),
+    offers.id,
+  ];
+}
 
 export type OfferListRow = {
   id: string;
@@ -59,6 +139,8 @@ export type OfferListRow = {
   location_latitude: string;
   location_longitude: string;
   location_zone: string | null;
+  /** `null` when the request carried no `lat`/`lng`. See `distanceKmSql`. */
+  distance_km: number | null;
 };
 
 export type OfferRow = typeof offers.$inferSelect;
@@ -151,7 +233,7 @@ export class OffersRepository {
     return rows.map((r) => r.category_id);
   }
 
-  private baseSelect() {
+  private baseSelect(coords?: OfferCoords) {
     return this.db
       .select({
         id: offers.id,
@@ -183,6 +265,7 @@ export class OffersRepository {
         location_latitude: businessLocations.latitude,
         location_longitude: businessLocations.longitude,
         location_zone: businessLocations.zone,
+        distance_km: distanceKmSql(coords),
         category_ids: sql<
           string[]
         >`COALESCE(array_agg(DISTINCT ${offerCategories.category_id}) FILTER (WHERE ${offerCategories.category_id} IS NOT NULL), '{}'::uuid[])`,
@@ -203,7 +286,7 @@ export class OffersRepository {
       .leftJoin(categories, eq(categories.id, offerCategories.category_id));
   }
 
-  private groupByFields() {
+  private groupByFields(coords?: OfferCoords) {
     return [
       offers.id,
       offers.business_id,
@@ -234,6 +317,16 @@ export class OffersRepository {
       businessLocations.latitude,
       businessLocations.longitude,
       businessLocations.zone,
+      // The distance projection is an EXPRESSION, and this query groups, so it
+      // has to be legal in a grouped select. It is: `geog` is a generated
+      // column, which Postgres expands into `st_makepoint(longitude, latitude)`
+      // over two columns that are group keys already (verified against a
+      // generated column of the same shape). Listing it here as well is a
+      // no-op — grouping by a function of grouped columns cannot split a group
+      // — and it keeps the statement from DEPENDING on that expansion, which is
+      // the one part of this query no harness can execute: the test Postgres is
+      // `postgres:16-alpine` without PostGIS.
+      ...(coords ? [distanceKmSql(coords)] : []),
     ];
   }
 
@@ -308,6 +401,55 @@ export class OffersRepository {
       );
     }
 
+    // ─── Mirrors of `active_offers_near` (ADR-0008) ────────────────────────
+    //
+    // The three filters below used to exist only inside the Supabase function,
+    // so `GET /offers` answered a different question than the mobile feed for
+    // the same search. They are spelled as the RPC spells them, on purpose.
+
+    if (query.search !== undefined) {
+      // THREE columns: title, description and the business name. Matching only
+      // the offer's own text is how a search for a merchant's name returned
+      // nothing while the map showed their shelf.
+      //
+      // Not wildcard-escaped, unlike the sibling `escapeLike` searches in this
+      // codebase: the RPC concatenates `'%'||p_search||'%'` raw, and the same
+      // term has to select the same rows here as it does on the mobile surface.
+      const pattern = `%${query.search}%`;
+      filters.push(
+        or(
+          ilike(offers.title, pattern),
+          ilike(offers.description, pattern),
+          ilike(businesses.name, pattern),
+        )!,
+      );
+    }
+
+    if (query.max_price !== undefined) {
+      // `discounted_price`, the price actually charged — not `original_price`.
+      // Filtering on the original would admit every offer of a 50%-off
+      // merchant to a `max_price=5` request and hide nothing. The bound value
+      // is sent as a parameter and Postgres resolves it against the numeric
+      // column, so `5` and `5.00` mean the same thing here as in the RPC.
+      filters.push(lte(offers.discounted_price, sql`${query.max_price}`));
+    }
+
+    if (query.expiring_within_hours !== undefined) {
+      // `pickup_end > now()` is the RPC's own first condition, and it is not
+      // redundant: the lower bound of the window is `now()`, and an offer whose
+      // window closed an hour ago is inside "the next 0-N hours" by arithmetic
+      // alone.
+      filters.push(
+        and(
+          gt(offers.pickup_end, sql`now()`),
+          lt(
+            offers.pickup_end,
+            sql`now() + make_interval(hours => ${query.expiring_within_hours})`,
+          ),
+        )!,
+      );
+    }
+
     return filters;
   }
 
@@ -318,16 +460,17 @@ export class OffersRepository {
     const filters = this.buildFilters(query);
     const where = filters.length ? and(...filters) : undefined;
     const offset = (query.page - 1) * query.limit;
+    const coords = offerCoords(query);
 
-    const groupBy = this.groupByFields();
+    const groupBy = this.groupByFields(coords);
 
     // Count without category joins so multi-category offers are not inflated.
     // category_id filter is applied via subquery in buildFilters.
     const [items, totalRow] = await Promise.all([
-      this.baseSelect()
+      this.baseSelect(coords)
         .where(where)
         .groupBy(...groupBy)
-        .orderBy(desc(offers.pickup_end))
+        .orderBy(...offerListOrderBy(query, coords))
         .limit(query.limit)
         .offset(offset),
       this.db

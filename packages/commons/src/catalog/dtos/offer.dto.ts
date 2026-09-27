@@ -21,5 +21,12 @@ export type OfferPaginatedData = PaginatedData<OfferDto>;
 
 export type ListOffersQuery = z.infer<typeof ListOffersQuerySchema>;
 
-/** Oferta con embeds de negocio, ubicación y categorías (proyección PostgREST/API). */
+/**
+ * Oferta con embeds de negocio, ubicación y categorías (proyección PostgREST/API).
+ *
+ * The list/detail shape also carries `distance_km` (nullable): `GET /offers`
+ * projects it when the request carries `lat`/`lng`, and it is `null` otherwise.
+ * It is declared in {@link OfferWithBusinessSchema} — this file only derives the
+ * type, so the field has exactly one definition.
+ */
 export type OfferWithBusiness = z.infer<typeof OfferWithBusinessSchema>;

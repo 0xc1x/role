@@ -35,6 +35,7 @@ const makeListRow = (overrides: Partial<OfferListRow> = {}): OfferListRow => ({
   location_latitude: '-33.45',
   location_longitude: '-70.66',
   location_zone: 'centro',
+  distance_km: null,
   ...overrides,
 });
 
@@ -57,6 +58,13 @@ describe('OfferMapper.toResponse', () => {
       makeListRow({ category_names: [], category_slugs: [] }),
     );
     expect(res.categories).toEqual([{ id: 'cat-1', name: '', slug: '' }]);
+  });
+
+  test('distance_km cruza como número, y null cuando no hay punto', () => {
+    expect(
+      OfferMapper.toResponse(makeListRow({ distance_km: 1.25 })).distance_km,
+    ).toBe(1.25);
+    expect(OfferMapper.toResponse(makeListRow()).distance_km).toBeNull();
   });
 });
 
