@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import type {
 	ReviewModerationItemDto,
 	ReviewModerationPaginatedData,
@@ -59,6 +59,27 @@ function stubFetch(data: ReviewModerationItemDto[]) {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
 		});
+	}) as unknown as typeof fetch;
+	return urls;
+}
+
+/**
+ * Igual que `stubFetch`, pero con la respuesta caída y contando las peticiones.
+ * El conteo es lo que permite distinguir "volvió a pedir los datos" de "no pasó
+ * nada": un botón que solo navega deja el contador igual.
+ */
+function stubFailingFetch(requestId: string) {
+	const urls: string[] = [];
+	globalThis.fetch = (async (input: RequestInfo | URL) => {
+		urls.push(String(input));
+		return new Response(
+			JSON.stringify({
+				statusCode: 500,
+				message: "Internal server error",
+				requestId,
+			}),
+			{ status: 500, headers: { "Content-Type": "application/json" } },
+		);
 	}) as unknown as typeof fetch;
 	return urls;
 }
@@ -301,5 +322,42 @@ describe("fallo al cargar la bandeja", () => {
 				screen.getByText(/Error interno del servidor · a1b2c3d4e5f6/),
 			).toBeDefined(),
 		);
+	});
+
+	test("el fallo se pinta junto a su 'Reintentar', no como pantalla en blanco", async () => {
+		stubFailingFetch("b3c4d5e6f7a8");
+		renderList();
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(/Error interno del servidor · b3c4d5e6f7a8/),
+			).toBeDefined(),
+		);
+		// El mensaje y el botón se pintan en la misma rama: un error sin salida
+		// deja al operador leyendo un 500 sin más remedio que recargar el
+		// navegador a mano.
+		expect(screen.getByRole("button", { name: "Reintentar" })).toBeDefined();
+		// Y no es una lista vacía. "No hay reseñas con este filtro" affirmaría
+		// que moderationFilter corrió y no encontró nada, que es un hecho
+		// distinto —y falso— del que un fallo de red insinúa.
+		expect(screen.queryByText("No hay reseñas con este filtro.")).toBeNull();
+	});
+
+	test("'Reintentar' vuelve a pedir la lista en vez de navegar a la misma página", async () => {
+		const urls = stubFailingFetch("c4d5e6f7a8b9");
+		const onPageChange = mock(() => undefined);
+		renderList({ onPageChange });
+
+		const retry = await screen.findByRole("button", { name: "Reintentar" });
+		const before = urls.length;
+		fireEvent.click(retry);
+
+		await waitFor(() => expect(urls.length).toBeGreaterThan(before));
+		// El defecto: el botón llamaba `onPageChange(1)`. Con la URL ya en
+		// `?page=1` esa navegación es nula —el router la deduplica y React Query
+		// conserva la query errored bajo la misma key—, así que el operador hacía
+		// clic y no pasaba absolutamente nada. Reintentar es refetchar la misma
+		// consulta, no volver a la página 1.
+		expect(onPageChange).not.toHaveBeenCalled();
 	});
 });
