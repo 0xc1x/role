@@ -4,3 +4,23 @@ export type ContactRole = (typeof CONTACT_ROLES)[number];
 // La geografía de lanzamiento NO vive en el contrato: es `app_config`
 // (`contact.cities`). Un fallback hardcodeado en commons convertía la lista en
 // un segundo SSOT que nadie actualiza al abrir una ciudad nueva.
+
+/**
+ * Espejo del enum de Postgres `store_entry_status`, que es donde caen los
+ * mensajes del formulario público de contacto. Vive en commons para que el
+ * panel pueda filtrar por estado sin conocer el schema de la API.
+ *
+ * OJO CON LA SEMÁNTICA, porque el nombre engaña: esto NO es una bandeja de
+ * entrada. `contact.service` inserta la fila en `PENDIENTE` y la mueve a
+ * `PROCESADO` en cuanto el correo de notificación se entrega (y la devuelve a
+ * `PENDIENTE` si la entrega falla y queda encolada para reintento). O sea,
+ * `PENDIENTE` significa "el aviso por correo todavía no se entregó", no
+ * "nadie ha leído el mensaje". `PROCESADO` es la fila mayoritaria: casi todo
+ * mensaje entregado ya está en `PROCESADO` antes de que un humano lo abra.
+ */
+export const CONTACT_MESSAGE_STATUSES = [
+	"PENDIENTE",
+	"PROCESADO",
+	"ERROR",
+] as const;
+export type ContactMessageStatus = (typeof CONTACT_MESSAGE_STATUSES)[number];
