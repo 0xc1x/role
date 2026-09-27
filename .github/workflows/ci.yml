@@ -17,8 +17,17 @@ jobs:
     timeout-minutes: 25
 
     services:
+      # postgis/postgis, not postgres: GET /offers' st_dwithin radius filter and
+      # its st_distance / distance_km projection run against this database, and
+      # the harness (apps/api/test/db.ts) installs the extension into the
+      # `extensions` schema exactly like Supabase does.
+      #
+      # `16-3.4-alpine`, not `16-alpine`: the official PostGIS image is tagged
+      # `<pg>-<postgis>[-alpine]` and has no `16-alpine` tag. Of the PG16 alpine
+      # tags only 3.4 and 3.5 exist, and 3.4 is the nearer to the PostGIS 3.3.7
+      # Supabase runs.
       postgres-test:
-        image: postgres:16-alpine
+        image: postgis/postgis:16-3.4-alpine
         ports:
           - 6432:5432
         env:

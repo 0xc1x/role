@@ -56,10 +56,22 @@ export async function seedBusiness(
   return row;
 }
 
+/**
+ * A business location. `latitude`/`longitude` are NOT NULL in the mirror and
+ * keep the pair every spec has always used as their default; the geo specs
+ * override them because the geo path of `GET /offers` is a function of these two
+ * columns (through the generated `geog`), and one shared coordinate would make
+ * every location equidistant from every search point.
+ */
 export async function seedLocation(
   db: TestDatabase,
   businessId: string,
-  overrides: { name?: string; is_active?: boolean } = {},
+  overrides: {
+    name?: string;
+    is_active?: boolean;
+    latitude?: string;
+    longitude?: string;
+  } = {},
 ) {
   const [row] = await db
     .insert(businessLocations)
@@ -68,8 +80,8 @@ export async function seedLocation(
       name: overrides.name ?? 'Matriz',
       address: 'Calle 123',
       is_active: overrides.is_active ?? true,
-      latitude: '-33.45',
-      longitude: '-70.66',
+      latitude: overrides.latitude ?? '-33.45',
+      longitude: overrides.longitude ?? '-70.66',
     })
     .returning();
   if (!row) throw new Error('seedLocation falló');

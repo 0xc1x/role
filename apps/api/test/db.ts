@@ -72,10 +72,24 @@ export async function createTestDb(): Promise<TestDbContext> {
   base.pathname = `/${dbName}`;
   const client = postgres(base.toString(), { prepare: false, max: 5 });
   await client`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
-  // El espejo de test corre en postgres pelado: sin auth/PostGIS ni roles de
-  // Supabase. Policies, grants y FKs enteras a auth.users se descartan; las
-  // FKs inline dentro de CREATE TABLE pierden solo el REFERENCES (la columna
-  // queda). geog ya se excluyó del baseline a mano (memoria workflow DDL).
+  // El espejo de test corre en Postgres pelado: sin auth ni roles de Supabase.
+  // Policies, grants y FKs enteras a auth.users se descartan; las FKs inline
+  // dentro de CREATE TABLE pierden solo el REFERENCES (la columna queda).
+  // geog ya se excluyó del baseline a mano (memoria workflow DDL).
+  //
+  // PostGIS IS here, and in the SAME schema Supabase uses. That is why the
+  // service image is `postgis/postgis` instead of `postgres:`, and why the
+  // extension is created into the `extensions` schema on purpose: the runtime
+  // reaches it as `extensions.st_*` — the raw SQL of GET /offers does not
+  // resolve PostGIS without that schema qualification. It goes in BEFORE the
+  // mirror's DDL so any future migration touching `geography` resolves. This
+  // session's search_path does NOT include `extensions`, so the rest of the DDL
+  // still cannot resolve an unqualified `st_*` — which is the same discipline
+  // production relies on, and item 5 below reproduces it deliberately.
+  await client.unsafe(`
+    create schema if not exists extensions;
+    create extension if not exists postgis schema extensions;
+  `);
   const parts = (await INIT_SQL)
     .split('--> statement-breakpoint')
     .map((s) => s.trim())
@@ -99,6 +113,9 @@ export async function createTestDb(): Promise<TestDbContext> {
   // The checked-in Drizzle mirror intentionally omits Supabase functions,
   // triggers, RLS and PostGIS. Install only the reservation/order primitives
   // exercised by DB specs so those tests do not pass on trigger-less tables.
+  // PostGIS is the odd one out: it is not patched into the mirror's tables but
+  // into the DATABASE (see item 5 below), because the whole point of the geo
+  // path of GET /offers is to be executed, not to be compiled.
   //
   // Not repeated here, because the mirror already carries them and re-adding
   // raises 42P07: the composite unique on business_locations(id, business_id),
@@ -120,12 +137,12 @@ export async function createTestDb(): Promise<TestDbContext> {
   // of the same offer a no-op instead of a 23505. See the MIRROR GAP note in
   // src/database/schema/favorites.ts for why the constraint is not declared there.
   //
-  // ─── Object-shape gap: the review and schedule objects ────────────────
+  // ─── Object-shape gap: the review, schedule and geo objects ────────────
   //
   // Everything above is a CONSTRAINT or a FUNCTION the mirror declares the
-  // columns of. The three blocks below are different: the mirror does not
-  // declare these objects AT ALL, and the specs that exercise the public
-  // storefront and the review feeds need them to exist.
+  // columns of. The blocks below are different: the mirror does not declare
+  // these objects AT ALL, and the specs that exercise the public storefront,
+  // the review feeds and the geo search need them to exist.
   //
   // They are installed here rather than generated into `drizzle/` on purpose.
   // The live database is owned by Supabase and the Drizzle folders are an
@@ -225,6 +242,99 @@ export async function createTestDb(): Promise<TestDbContext> {
     );
     create index if not exists idx_saved_addresses_user
       on public.saved_addresses (user_id);
+  `);
+
+  //  5. `business_locations.geog` and its GIST index. Same class of gap, and the
+  //     one that made the geo path of `GET /offers` untestable rather than
+  //     merely untested: the radius filter (`extensions.st_dwithin`) and the
+  //     `distance_km` projection (`extensions.st_distance`) both go through
+  //     this generated column, so with a PostGIS-less harness every spec that
+  //     touched the path could only assert the SHAPE of the compiled SQL
+  //     (`.toSQL()`), never that Postgres accepts it or evaluates it.
+  //
+  //     The expectations below were read from the LIVE Supabase database, not
+  //     inferred — re-verify them there before changing anything:
+  //
+  //       - the `postgis` extension, version 3.3.7, installed in schema
+  //         `extensions` (hence `create extension ... schema extensions` above).
+  //       - `business_locations.geog` is `geography`, NULLABLE, and GENERATED
+  //         ALWAYS, holding this expression:
+  //
+  //             (st_setsrid(
+  //               st_makepoint((longitude)::double precision, (latitude)::double precision),
+  //               4326
+  //             ))::geography
+  //
+  //         The `::double precision` casts are not decoration: `latitude` and
+  //         `longitude` are `numeric(10,7)` and `st_makepoint` takes doubles, so
+  //         the cast is what makes the column's stored expression legal.
+  //         Note the argument order: `st_makepoint(longitude, latitude)` — X
+  //         first. Swapping it is the classic way to get a plausible-but-wrong
+  //         distance, and the specs below assert the order by seeding a
+  //         location displaced along ONE axis and checking the number.
+  //
+  //         `STORED` is not optional: PostgreSQL's grammar requires it on a
+  //         generated column, and without it every form above is a 42601. Note
+  //         also that the cast sits INSIDE the generation parentheses —
+  //         `generated always as (<expr>)::geography` is a 42601 too. The
+  //         form in the notes above is the one that parses, and it stores the
+  //         same expression; to confirm the two databases agree, render it in
+  //         both with `extensions` on the search_path (`pg_get_expr` qualifies
+  //         PostGIS names exactly when the extension schema is NOT visible) and
+  //         compare:
+  //
+  //           (st_setsrid(st_makepoint((longitude)::double precision,
+  //             (latitude)::double precision), 4326))::geography
+  //
+  //       - `CREATE INDEX business_locations_geog_idx ON public.business_locations
+  //         USING gist (geog)` — the index the `st_dwithin` filter exists to
+  //         use, installed here so the harness holds the same index production
+  //         does instead of silently answering the filter with a sequential
+  //         scan and per-row trigonometry.
+  //
+  //     WHY THE EXPRESSION IS UNQUALIFIED HERE, AND WHY THAT IS FAITHFUL: in
+  //     production the stored expression reads as a bare `st_setsrid` /
+  //     `st_makepoint`, because Supabase applies migrations with `extensions`
+  //     on the `search_path` — and `pg_get_expr` renders it that way only for
+  //     that reason. This harness therefore reproduces the resolution
+  //     MECHANISM rather than rewriting the DDL to be schema-qualified:
+  //     rewriting the expression to `extensions.st_*` would apply a different
+  //     statement than the one production holds, and it would hide the very fact
+  //     that production depends on this search_path.
+  //
+  //     Two details make that mechanism safe here.
+  //
+  //     `set search_path` + `reset search_path` rather than a transaction. The
+  //     obvious `begin; set local search_path = ...; ...; commit;` does NOT work
+  //     in this harness: postgres.js rejects an explicit BEGIN inside a
+  //     multi-statement query unless the connection is reserved or the pool is
+  //     `max: 1` (UNSAFE_TRANSACTION), and this client is `max: 5`. Setting and
+  //     resetting inside ONE `unsafe` call is a single simple-query round trip,
+  //     so both statements land on the same reserved connection and the
+  //     widening cannot leak into a later query the spec runs.
+  //
+  //     Both objects are named `public.*` explicitly, so the temporary
+  //     search_path moves type and function resolution and nothing else: the
+  //     column goes on `public.business_locations` and the index lands in the
+  //     same schema, not in `extensions`.
+  //
+  //     Also `if not exists`, for the reason the four blocks above are.
+  await client.unsafe(`
+    set search_path = extensions, public;
+    alter table public.business_locations
+      add column if not exists geog geography
+      generated always as (
+        st_setsrid(
+          st_makepoint(
+            (longitude)::double precision,
+            (latitude)::double precision
+          ),
+          4326
+        )::geography
+      ) stored;
+    create index if not exists business_locations_geog_idx
+      on public.business_locations using gist (geog);
+    reset search_path;
   `);
 
   await client.unsafe(`

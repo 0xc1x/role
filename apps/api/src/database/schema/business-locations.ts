@@ -9,10 +9,13 @@ import {
 } from 'drizzle-orm/pg-core';
 import { businesses } from './businesses';
 
-// Nota: la tabla tiene además la columna generada `geog` (geography PostGIS,
-// ADR-0010) que vive solo en Supabase. No se declara en el espejo porque el
-// espejo de test (postgres:16-alpine, sin postgis) no puede crearla; las
-// queries que la usan la referencian como SQL crudo.
+// Note: the table also carries a `geog` column (PostGIS `geography`, GENERATED
+// ALWAYS — ADR-0010) that exists only in Supabase. It is deliberately NOT
+// declared in this mirror: Drizzle cannot model a generated PostGIS column, and
+// the mirror is a portable offline artifact that must not require an extension
+// to introspect. The specs that need it install it in the harness instead (see
+// the MIRROR GAP item 5 in test/db.ts), and the queries that use it reach it
+// through raw SQL qualified as `extensions.st_*`.
 
 export const businessLocations = pgTable(
   'business_locations',
