@@ -349,6 +349,6 @@ $function$;
 
 -- No backfill: is_hidden defaults to false, so every existing row is visible and
 -- the recompute would write back the values already there. Touching every
--- businesses/oferts row to change nothing is a risk, not a safety.
+-- businesses/offers row to change nothing is a risk, not a safety.
 
 commit;
