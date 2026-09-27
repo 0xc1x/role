@@ -46,3 +46,10 @@ export const ListAdminOrdersQuerySchema = PaginationQuerySchema.extend({
 	status: z.enum(ORDER_STATUSES).optional(),
 	stuck: BooleanQuerySchema.optional(),
 });
+
+/**
+ * Order timeline (`GET /orders/{id}/events`). Pure pagination: the timeline is
+ * ordered oldest-first and the caller has already been authorized against the
+ * order, so there is nothing to filter here.
+ */
+export const ListOrderEventsQuerySchema = PaginationQuerySchema;

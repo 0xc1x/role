@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -17,6 +18,7 @@ import {
   businessOwnership,
   businesses,
   coupons,
+  orderEvents,
   offers,
   orders,
 } from '../../database/schema';
@@ -231,6 +233,42 @@ export class OrdersRepository {
         .from(orders)
         .innerJoin(offers, eq(orders.offer_id, offers.id))
         .leftJoin(businesses, eq(orders.business_id, businesses.id))
+        .where(where)
+        .then((rows) => rows[0]?.value ?? 0),
+    ]);
+
+    return { items, total: Number(totalRow) };
+  }
+
+  /**
+   * The order timeline: every recorded transition, OLDEST FIRST.
+   *
+   * Ascending is the whole point of this endpoint — a timeline read newest-first
+   * is a log, and the `id` tiebreaker keeps two transitions written in the same
+   * transaction (the trigger writes them in the same clock tick) in a stable
+   * order across pages, instead of letting Postgres return them arbitrarily.
+   *
+   * No availability or ownership filter happens here: the caller has already
+   * been authorized against the order by the service.
+   */
+  async listEvents(
+    orderId: string,
+    opts: { page: number; limit: number },
+  ): Promise<{ items: (typeof orderEvents.$inferSelect)[]; total: number }> {
+    const where = eq(orderEvents.order_id, orderId);
+    const offset = (opts.page - 1) * opts.limit;
+
+    const [items, totalRow] = await Promise.all([
+      this.db
+        .select()
+        .from(orderEvents)
+        .where(where)
+        .orderBy(asc(orderEvents.created_at), asc(orderEvents.id))
+        .limit(opts.limit)
+        .offset(offset),
+      this.db
+        .select({ value: count() })
+        .from(orderEvents)
         .where(where)
         .then((rows) => rows[0]?.value ?? 0),
     ]);

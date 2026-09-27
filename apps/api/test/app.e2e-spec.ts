@@ -208,4 +208,103 @@ describe('Marketplace e2e', () => {
       .send({ status: 'cancelled' })
       .expect(403);
   });
+
+  // The e2e app shares its Redis throttle counters with whatever else is
+  // talking to the same Redis, so these cases are kept to the few requests
+  // that only HTTP can prove: the wire contract, the owner coming from the
+  // token, and the authorization parity of the timeline. Ordering, pagination
+  // and the field projection are covered in the module specs against real
+  // Postgres, without spending the shared budget.
+  test('favoritos: idempotente, ignora user_id del body y embebe la oferta', async () => {
+    const other = await seedProfile(ctx.db, `f-${randomUUID()}@t.cl`);
+
+    // `user_id` is not in the request schema, so it is stripped: the favorite
+    // belongs to the caller, not to whoever the body named.
+    const first = await api()
+      .post('/api/v1/favorites')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ offer_id: offerId, user_id: other })
+      .expect(201);
+    const second = await api()
+      .post('/api/v1/favorites')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ offer_id: offerId })
+      .expect(201);
+
+    expect(first.body.user_id).toBe(consumerId);
+    expect(second.body.id).toBe(first.body.id);
+
+    const list = await api()
+      .get('/api/v1/favorites')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(200);
+    expect(list.body.meta.total).toBe(1);
+    expect(list.body.data[0].offer.id).toBe(offerId);
+    expect(list.body.data[0].offer.business.name).toBeDefined();
+  });
+
+  test('favoritos: la lista es del caller y quitar por offer id responde 204', async () => {
+    const other = await seedProfile(ctx.db, `g-${randomUUID()}@t.cl`);
+    const otherToken = await token(other, 'g@t.cl');
+
+    const asOther = await api()
+      .get('/api/v1/favorites')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(200);
+    expect(asOther.body.data).toEqual([]);
+
+    await api()
+      .delete(`/api/v1/favorites/${offerId}`)
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(204);
+
+    const empty = await api()
+      .get('/api/v1/favorites')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(200);
+    expect(empty.body.data).toEqual([]);
+  });
+
+  test('timeline: el dueño la lee y ni metadata ni changed_by se exponen', async () => {
+    const res = await api()
+      .get(`/api/v1/orders/${orderId}/events`)
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(200);
+
+    // pending → confirmed → ready_for_pickup → completed, oldest first.
+    expect(res.body.data.map((e: { status: string }) => e.status)).toEqual([
+      'pending',
+      'confirmed',
+      'ready_for_pickup',
+      'completed',
+    ]);
+    for (const event of res.body.data) {
+      expect(Object.keys(event).sort()).toEqual([
+        'created_at',
+        'previous_status',
+        'reason',
+        'status',
+      ]);
+    }
+  });
+
+  test('timeline: mismo acceso que GET /orders/{id}', async () => {
+    // The business that owns the order reads its own order timeline, and a
+    // stranger gets the same 403 it gets on the order itself.
+    await api()
+      .get(`/api/v1/orders/${orderId}/events`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+
+    const stranger = await seedProfile(ctx.db, `t-${randomUUID()}@t.cl`);
+    const strangerToken = await token(stranger, 't@t.cl');
+    await api()
+      .get(`/api/v1/orders/${orderId}`)
+      .set('Authorization', `Bearer ${strangerToken}`)
+      .expect(403);
+    await api()
+      .get(`/api/v1/orders/${orderId}/events`)
+      .set('Authorization', `Bearer ${strangerToken}`)
+      .expect(403);
+  });
 });

@@ -3,6 +3,7 @@ import type {
 	CreateOrderRequestSchema,
 	ListAdminOrdersQuerySchema,
 	ListBusinessOrdersQuerySchema,
+	ListOrderEventsQuerySchema,
 	ListOrdersQuerySchema,
 	UpdateOrderStatusSchema,
 	ValidatePickupCodeSchema,
@@ -18,3 +19,4 @@ export type ListBusinessOrdersQuery = z.infer<
 	typeof ListBusinessOrdersQuerySchema
 >;
 export type ListAdminOrdersQuery = z.infer<typeof ListAdminOrdersQuerySchema>;
+export type ListOrderEventsQuery = z.infer<typeof ListOrderEventsQuerySchema>;

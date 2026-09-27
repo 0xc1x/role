@@ -111,12 +111,20 @@ export async function createTestDb(): Promise<TestDbContext> {
   // the trigger ON CONFLICT clauses verbatim, and without those constraints
   // Postgres rejects the inference with 42P10 — the spec would then be testing a
   // database that cannot express the production statement.
+  //
+  // `favorites(user_id, offer_id)` is that same situation for the same reason:
+  // the favorites add is idempotent through `ON CONFLICT (user_id, offer_id) DO
+  // NOTHING`, so the constraint it infers against is what makes a second save
+  // of the same offer a no-op instead of a 23505. See the MIRROR GAP note in
+  // src/database/schema/favorites.ts for why the constraint is not declared there.
   await client.unsafe(`
     alter table public.user_preferences
       add constraint user_preferences_user_id_key unique (user_id);
     alter table public.user_consents
       add constraint user_consents_user_id_consent_type_key
       unique (user_id, consent_type);
+    alter table public.favorites
+      add constraint favorites_user_id_offer_id_key unique (user_id, offer_id);
 
     alter table public.offers
       alter column is_active set default false;

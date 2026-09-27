@@ -119,6 +119,7 @@ describe('OrdersService', () => {
             listForUser: jest.fn(),
             listForBusiness: jest.fn(),
             listForAdmin: jest.fn(),
+            listEvents: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
             isBusinessOwner: jest.fn(),
@@ -797,6 +798,120 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('listEvents', () => {
+    const makeEventRow = (overrides: Record<string, any> = {}) => ({
+      id: 'event-1',
+      order_id: 'order-1',
+      status: 'confirmed' as OrderStatus,
+      previous_status: 'pending' as OrderStatus | null,
+      changed_by: 'user-1',
+      reason: 'Reserva creada',
+      metadata: { source: 'database' },
+      created_at: new Date('2025-01-01T00:00:00Z'),
+      ...overrides,
+    });
+
+    it('returns the timeline paginated and without the internal columns', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner(),
+      );
+      ordersRepository.listEvents.mockResolvedValue({
+        items: [makeEventRow()],
+        total: 12,
+      });
+
+      const result = await service.listEvents(mockAuthUser, 'order-1', {
+        page: 2,
+        limit: 10,
+      });
+
+      expect(result.meta).toEqual({
+        page: 2,
+        limit: 10,
+        total: 12,
+        total_pages: 2,
+      });
+      expect(result.data[0]).toEqual({
+        status: 'confirmed',
+        previous_status: 'pending',
+        reason: 'Reserva creada',
+        created_at: '2025-01-01T00:00:00.000Z',
+      });
+    });
+
+    it('allows the order owner', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner(),
+      );
+      ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
+
+      await expect(
+        service.listEvents(mockAuthUser, 'order-1', { page: 1, limit: 20 }),
+      ).resolves.toMatchObject({ data: [] });
+    });
+
+    // The business panel needs the timeline of the orders it owns. Narrowing
+    // this to the order owner is the regression this case exists to catch.
+    it('allows the business that owns the order', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner(),
+      );
+      ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
+
+      await expect(
+        service.listEvents(mockBusinessUser, 'order-1', {
+          page: 1,
+          limit: 20,
+        }),
+      ).resolves.toMatchObject({ data: [] });
+    });
+
+    it('allows an admin who is neither owner nor business owner', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner({ order: makeOrderRow({ user_id: 'other' }) }),
+      );
+      ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
+
+      await expect(
+        service.listEvents(mockAdminUser, 'order-1', { page: 1, limit: 20 }),
+      ).resolves.toMatchObject({ data: [] });
+    });
+
+    it('forbids a stranger and reads nothing', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner({ order: makeOrderRow({ user_id: 'other' }) }),
+      );
+
+      await expect(
+        service.listEvents(mockAuthUser, 'order-1', { page: 1, limit: 20 }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(ordersRepository.listEvents).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound for an order that does not exist', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(null);
+
+      await expect(
+        service.listEvents(mockAuthUser, 'missing', { page: 1, limit: 20 }),
+      ).rejects.toThrow(NotFoundException);
+      expect(ordersRepository.listEvents).not.toHaveBeenCalled();
+    });
+
+    it('passes the pagination through to the repository', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner(),
+      );
+      ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
+
+      await service.listEvents(mockAuthUser, 'order-1', { page: 3, limit: 5 });
+
+      expect(ordersRepository.listEvents).toHaveBeenCalledWith('order-1', {
+        page: 3,
+        limit: 5,
+      });
+    });
+  });
+
   describe('updateStatus', () => {
     it('should transition order status when allowed', async () => {
       const locked = makeOrderWithBusinessOwner({
@@ -1059,6 +1174,7 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
             listForUser: jest.fn(),
             listForBusiness: jest.fn(),
             listForAdmin: jest.fn(),
+            listEvents: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
             isBusinessOwner: jest.fn(),

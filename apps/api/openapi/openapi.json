@@ -741,6 +741,35 @@
         ]
       }
     },
+    "/api/v1/orders/{id}/events": {
+      "get": {
+        "operationId": "OrdersController_listEvents",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated order timeline, oldest first"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the status transitions of an order",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
     "/api/v1/orders/{id}/status": {
       "patch": {
         "operationId": "OrdersController_updateStatus",
@@ -2667,6 +2696,73 @@
         "summary": "Restore a review (admin). Keeps the recorded reason. Idempotent.",
         "tags": [
           "Reviews"
+        ]
+      }
+    },
+    "/api/v1/favorites": {
+      "get": {
+        "operationId": "FavoritesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated favorites with the offer embedded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List my favorites",
+        "tags": [
+          "Favorites"
+        ]
+      },
+      "post": {
+        "operationId": "FavoritesController_add",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Favorite created or already present"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add a favorite (idempotent)",
+        "tags": [
+          "Favorites"
+        ]
+      }
+    },
+    "/api/v1/favorites/{offerId}": {
+      "delete": {
+        "operationId": "FavoritesController_remove",
+        "parameters": [
+          {
+            "name": "offerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Favorite removed"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove one of my favorites by offer id",
+        "tags": [
+          "Favorites"
         ]
       }
     },

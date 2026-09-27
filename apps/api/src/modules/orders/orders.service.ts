@@ -15,7 +15,9 @@ import {
   type CreateOrderRequest,
   type ListAdminOrdersQuery,
   type ListBusinessOrdersQuery,
+  type ListOrderEventsQuery,
   type ListOrdersQuery,
+  type OrderEventsPaginatedData,
   type PaginatedData,
   shouldAccrueEarningsOnTransition,
   type UpdateOrderStatusRequest,
@@ -24,12 +26,18 @@ import type { AuthUser } from '../../auth/auth.types';
 import { safeErrorFields } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
 import { OffersRepository } from '../offers/offers.repository';
+import { OrderEventMapper } from './order-event.mapper';
 import {
   canActorTransition,
   isTransitionAllowed,
   shouldRestockOnTransition,
 } from './order-status.machine';
-import { OrderMapper, type OrderResponse } from './orders.mapper';
+import {
+  OrderMapper,
+  type OrderResponse,
+  type OrderRow,
+  type OrderViewer,
+} from './orders.mapper';
 import { OrdersRepository, type DbExecutor } from './orders.repository';
 
 import { NotificationHandlers } from '../notifications/notification.handlers';
@@ -411,22 +419,69 @@ export class OrdersService {
   }
 
   async getById(user: AuthUser, id: string): Promise<OrderResponse> {
+    const { order, viewer } = await this.resolveAccessibleOrder(user, id);
+
+    return OrderMapper.toResponse(order, viewer);
+  }
+
+  /**
+   * The order timeline: its recorded status transitions, oldest first.
+   *
+   * Authorization is `resolveAccessibleOrder` — literally the same check
+   * `GET /orders/{id}` runs, not a lookalike. The business panel needs its own
+   * timeline for the orders it owns, and it reaches them through the same
+   * owner/business/admin rule; a second, narrower check written here would be
+   * the kind of divergence that surfaces later as a 403 nobody remembers
+   * introducing.
+   */
+  async listEvents(
+    user: AuthUser,
+    id: string,
+    query: ListOrderEventsQuery,
+  ): Promise<OrderEventsPaginatedData> {
+    await this.resolveAccessibleOrder(user, id);
+
+    const { items, total } = await this.ordersRepository.listEvents(id, {
+      page: query.page,
+      limit: query.limit,
+    });
+
+    return paginatedDataFromQuery(
+      items.map((row) => OrderEventMapper.toTimelineEvent(row)),
+      { page: query.page, limit: query.limit },
+      total,
+    );
+  }
+
+  /**
+   * The one place that decides who may read an order, shared by every order
+   * read (`GET /orders/{id}` and the timeline): the order's owner, the owner of
+   * the business it belongs to, or an admin. Anything else is a 403, and a
+   * non-existent order stays a 404 so the two cannot be told apart by probing.
+   */
+  private async resolveAccessibleOrder(
+    user: AuthUser,
+    id: string,
+  ): Promise<{ order: OrderRow; viewer: OrderViewer }> {
     const row = await this.ordersRepository.findByIdWithBusinessOwner(id);
     if (!row) {
       throw new NotFoundException(`Order ${id} not found`);
     }
 
-    const isOwner = row.order.user_id === user.id;
+    const isOrderOwner = row.order.user_id === user.id;
     const isBusinessOwner = row.business_owner_id === user.id;
-    if (!isOwner && !isBusinessOwner && user.role !== 'admin') {
+    if (!isOrderOwner && !isBusinessOwner && user.role !== 'admin') {
       throw new ForbiddenException('You cannot access this order');
     }
 
-    return OrderMapper.toResponse(row.order, {
-      isOrderOwner: isOwner,
-      isBusinessOwner,
-      isAdmin: user.role === 'admin',
-    });
+    return {
+      order: row.order,
+      viewer: {
+        isOrderOwner,
+        isBusinessOwner,
+        isAdmin: user.role === 'admin',
+      },
+    };
   }
 
   async updateStatus(

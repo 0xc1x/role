@@ -420,6 +420,26 @@ export class OffersRepository {
     return row ?? null;
   }
 
+  /**
+   * Offer card projection for a known set of ids, with NO availability filter.
+   *
+   * `findById` and `findMany` both answer "what can be reserved right now", and
+   * that filter is a security boundary. This one is deliberately the opposite:
+   * it serves the saved-offers list, where a sold-out, expired or paused offer
+   * must still be RETURNED so the consumer can show it as unavailable. Hiding it
+   * there would make a favorite silently vanish from the user's own list.
+   *
+   * The caller re-keys by id, so no order is guaranteed. `[]` short-circuits
+   * because `inArray` with an empty list is not a query Postgres should see.
+   */
+  async findManyByIds(ids: string[]): Promise<OfferListRow[]> {
+    if (ids.length === 0) return [];
+
+    return this.baseSelect()
+      .where(inArray(offers.id, ids))
+      .groupBy(...this.groupByFields());
+  }
+
   async findByIdForUpdate(
     tx: Database,
     id: string,

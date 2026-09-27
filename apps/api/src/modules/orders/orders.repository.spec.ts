@@ -83,6 +83,54 @@ describe('OrdersRepository (DB real)', () => {
     expect(biz.total).toBeGreaterThanOrEqual(2);
   });
 
+  test('listEvents returns the timeline oldest first and paginates it', async () => {
+    const order = await seedOrder(ctx.db, userId, offerId, businessId);
+
+    await repo.transaction(async (tx) => {
+      await repo.setEventActor(tx, userId);
+      await repo.updateStatus(tx, order.id, 'confirmed');
+    });
+    await repo.transaction(async (tx) => {
+      await repo.setEventActor(tx, userId);
+      await repo.updateStatus(tx, order.id, 'ready_for_pickup');
+    });
+
+    // The trigger wrote the creation event on the INSERT, so the timeline is:
+    // created, confirmed, ready_for_pickup. Ascending order is the claim here.
+    const all = await repo.listEvents(order.id, { page: 1, limit: 10 });
+    expect(all.total).toBe(3);
+    expect(all.items.map((item) => item.status)).toEqual([
+      'pending',
+      'confirmed',
+      'ready_for_pickup',
+    ]);
+
+    const firstPage = await repo.listEvents(order.id, { page: 1, limit: 2 });
+    const secondPage = await repo.listEvents(order.id, { page: 2, limit: 2 });
+    expect(firstPage.items.map((item) => item.status)).toEqual([
+      'pending',
+      'confirmed',
+    ]);
+    expect(secondPage.items.map((item) => item.status)).toEqual([
+      'ready_for_pickup',
+    ]);
+    expect(secondPage.total).toBe(3);
+  });
+
+  test('listEvents only returns events of the requested order', async () => {
+    const mine = await seedOrder(ctx.db, userId, offerId, businessId);
+    const otherUser = await seedProfile(ctx.db);
+    const theirs = await seedOrder(ctx.db, otherUser, offerId, businessId);
+
+    const result = await repo.listEvents(mine.id, { page: 1, limit: 50 });
+
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items.every((item) => item.order_id === mine.id)).toBe(true);
+    expect(result.items.some((item) => item.order_id === theirs.id)).toBe(
+      false,
+    );
+  });
+
   test('findActiveByUserAndOffer', async () => {
     const active = await repo.findActiveByUserAndOffer(ctx.db, userId, offerId);
     expect(active?.user_id).toBe(userId);

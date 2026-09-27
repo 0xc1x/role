@@ -25,6 +25,7 @@ import {
   CreateOrderRequestSchema,
   ListAdminOrdersQuerySchema,
   ListBusinessOrdersQuerySchema,
+  ListOrderEventsQuerySchema,
   ListOrdersQuerySchema,
   UpdateOrderStatusSchema,
   ValidatePickupCodeSchema,
@@ -33,6 +34,7 @@ import type {
   CreateOrderRequest,
   ListAdminOrdersQuery,
   ListBusinessOrdersQuery,
+  ListOrderEventsQuery,
   ListOrdersQuery,
   UpdateOrderStatusRequest,
   ValidatePickupCodeRequest,
@@ -102,6 +104,21 @@ export class OrdersController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.ordersService.getById(user, id);
+  }
+
+  // No `@Roles(...)`: authorization is the same owner/business/admin check
+  // `GET /orders/:id` runs, enforced in the service, so the business panel can
+  // read the timeline of the orders it owns without a role declaration here.
+  @Get(':id/events')
+  @ApiOperation({ summary: 'Get the status transitions of an order' })
+  @ApiOkResponse({ description: 'Paginated order timeline, oldest first' })
+  listEvents(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query(new ZodValidationPipe(ListOrderEventsQuerySchema))
+    query: ListOrderEventsQuery,
+  ) {
+    return this.ordersService.listEvents(user, id, query);
   }
 
   @Patch(':id/status')

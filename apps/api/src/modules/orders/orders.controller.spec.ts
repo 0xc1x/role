@@ -2,6 +2,7 @@ jest.mock('@0xc1x/role-commons', () => ({
   CreateOrderRequestSchema: {},
   ListAdminOrdersQuerySchema: {},
   ListBusinessOrdersQuerySchema: {},
+  ListOrderEventsQuerySchema: {},
   ListOrdersQuerySchema: {},
   UpdateOrderStatusSchema: {},
   ValidatePickupCodeSchema: {},
@@ -29,6 +30,7 @@ describe('OrdersController', () => {
             listForBusiness: jest.fn(),
             listForAdmin: jest.fn(),
             getById: jest.fn(),
+            listEvents: jest.fn(),
             updateStatus: jest.fn(),
             cancelOrder: jest.fn(),
             validatePickupCode: jest.fn(),
@@ -68,6 +70,12 @@ describe('OrdersController', () => {
   it('getById delega por id', () => {
     controller.getById(user, 'ord-1');
     expect(service.getById).toHaveBeenCalledWith(user, 'ord-1');
+  });
+
+  it('listEvents pasa usuario, id y query', () => {
+    const query = { page: 1, limit: 20 } as never;
+    controller.listEvents(user, 'ord-1', query);
+    expect(service.listEvents).toHaveBeenCalledWith(user, 'ord-1', query);
   });
 
   it('updateStatus pasa usuario, id y body', () => {

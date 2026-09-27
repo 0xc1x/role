@@ -32,6 +32,7 @@ import { ContactModule } from './modules/contact/contact.module';
 import { ContactInboxModule } from './modules/contact-inbox/contact-inbox.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { StoreModule } from './modules/store/store.module';
+import { FavoritesModule } from './modules/favorites/favorites.module';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { StoreModule } from './modules/store/store.module';
     PayoutsModule,
     CommissionsModule,
     ReviewsModule,
+    FavoritesModule,
     NotificationsModule,
     PushNotificationsModule,
     StoreModule,
