@@ -61,7 +61,8 @@ export class ReviewsModerationController {
 
   @Patch(':id/hide')
   @ApiOperation({
-    summary: 'Hide a review with a mandatory reason (admin). Idempotent.',
+    summary:
+      'Hide a review with a mandatory reason from the declared taxonomy (admin). Idempotent.',
   })
   @ApiOkResponse({ description: 'Hidden review with its moderation state' })
   hide(

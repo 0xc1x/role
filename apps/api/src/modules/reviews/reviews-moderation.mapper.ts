@@ -10,6 +10,12 @@ import type { ReviewModerationRow } from './reviews.repository';
  * hizo Ana o el sistema. Cuando no hay nombre la respuesta es `null`, nunca un
  * texto de relleno: `null` significa dos cosas distintas y reales (nunca se
  * moderó, o la cuenta se borró) y un "Desconocido" las mezclaría.
+ *
+ * `moderation_reason` viaja como el token crudo, NO como la etiqueta en español:
+ * el token es lo que se puede filtrar y comparar, y traducirlo en el borde
+ * convertiría un identificador estable en copy de panel que habría que cambiar
+ * junto con cada fila ya guardada. La etiqueta la arma el panel, que es donde se
+ * lee.
  */
 export class ReviewModerationMapper {
   static toDto(row: ReviewModerationRow): ReviewModerationItemDto {
@@ -28,6 +34,7 @@ export class ReviewModerationMapper {
       moderated_at: row.moderated_at?.toISOString() ?? null,
       moderated_by: row.moderated_by,
       moderated_by_name: row.moderated_by_name,
+      moderation_reason: row.moderation_reason,
       hidden_reason: row.hidden_reason,
       author_name: row.author_name,
       business_name: row.business_name,

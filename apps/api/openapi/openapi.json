@@ -2635,7 +2635,7 @@
             "bearer": []
           }
         ],
-        "summary": "Hide a review with a mandatory reason (admin). Idempotent.",
+        "summary": "Hide a review with a mandatory reason from the declared taxonomy (admin). Idempotent.",
         "tags": [
           "Reviews"
         ]

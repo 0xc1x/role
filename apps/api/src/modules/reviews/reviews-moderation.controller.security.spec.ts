@@ -42,6 +42,14 @@ import { ReviewsRepository } from './reviews.repository';
  * móvil. Eso lo decide la política de SELECT de `public.reviews` en Supabase, y
  * el espejo de test descarta las policies a propósito (`test/db.ts`). El filtro
  * que se prueba acá es el del API; el del PostgREST se prueba contra la base real.
+ *
+ * TAMPOCO PUEDE PROBAR LOS `check` DE LA MIGRACIÓN: el espejo de test se arma con
+ * el DDL generado por `drizzle-kit`, que no modela constraints de CHECK. Que
+ * `moderation_reason` sea obligatorio en la base es una afirmación sobre
+ * `20260927013000_reviews_moderation_soft_hide.sql`, y ese archivo todavía no se
+ * aplicó a ninguna base. Lo que sí se prueba acá es el borde HTTP: la API
+ * rechaza un ocultamiento sin razón antes de tocar la fila, y con eso el
+ * `check` de la base es la segunda barrera, no la única.
  */
 
 const SUPABASE_URL = 'http://127.0.0.1:9';
@@ -63,6 +71,8 @@ const tokens: Record<'user' | 'business' | 'admin', string> = {
 };
 
 const MOTIVO = 'Lenguaje abusivo hacia el personal del local';
+const RAZON = 'insults_or_hate_speech';
+const CUERPO = { moderation_reason: RAZON, hidden_reason: MOTIVO } as const;
 
 async function tokenFor(role: 'user' | 'business' | 'admin', id: string) {
   return new SignJWT({ email: `${role}-${id}@t.cl` })
@@ -201,7 +211,16 @@ describe('GET /reviews/moderation (frontera de seguridad)', () => {
       business_rating: 5,
       comment: 'Excelente',
     });
-    const oculta = await seedReview({ order_id: null, hidden_reason: 'x' });
+    // Una fila realmente oculta y CON motivo: `hidden_reason: 'x'` sin
+    // `is_hidden` era una visible con un texto, y la prueba pasaba por el motivo
+    // equivocado. Con `moderation_reason` la fila oculta sin motivo ya no es
+    // representable, así que el seed tiene que decir la verdad.
+    const oculta = await seedReview({
+      order_id: null,
+      is_hidden: true,
+      moderation_reason: RAZON,
+      hidden_reason: MOTIVO,
+    });
 
     const res = await comoAdmin(api().get('/reviews/moderation?limit=100')).expect(
       200,
@@ -217,7 +236,7 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
     const fila = await seedReview({ order_id: null });
     await api()
       .patch(`/reviews/moderation/${fila.id}/hide`)
-      .send({ hidden_reason: MOTIVO })
+      .send({ ...CUERPO })
       .expect(401);
     expect((await readRow(fila.id))?.is_hidden).toBe(false);
   });
@@ -227,7 +246,7 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
     await api()
       .patch(`/reviews/moderation/${fila.id}/hide`)
       .set('Authorization', `Bearer ${tokens.user}`)
-      .send({ hidden_reason: MOTIVO })
+      .send({ ...CUERPO })
       .expect(403);
 
     const row = await readRow(fila.id);
@@ -241,15 +260,24 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
     await api()
       .patch(`/reviews/moderation/${fila.id}/hide`)
       .set('Authorization', `Bearer ${tokens.business}`)
-      .send({ hidden_reason: MOTIVO })
+      .send({ ...CUERPO })
       .expect(403);
     expect((await readRow(fila.id))?.is_hidden).toBe(false);
   });
 
-  test('sin motivo → 400 y no escribe: el motivo es el registro de apelación', async () => {
+  test('sin motivo de la taxonomía → 400 y no escribe: el motivo es el registro de apelación', async () => {
     const fila = await seedReview({ order_id: null });
 
-    for (const body of [{}, { hidden_reason: '' }, { hidden_reason: '   ' }]) {
+    // Ninguno de estos cuerpos nombra un motivo, y todos tienen que rechazarse
+    // ANTES de tocar la fila: un ocultamiento sin motivo declarado es un
+    // registro de apelación vacío.
+    for (const body of [
+      {},
+      { hidden_reason: MOTIVO },
+      { hidden_reason: '' },
+      { moderation_reason: 'me_gustó_poco' },
+      { moderation_reason: '' },
+    ]) {
       await comoAdmin(
         api().patch(`/reviews/moderation/${fila.id}/hide`).send(body),
       ).expect(400);
@@ -258,6 +286,88 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
     const row = await readRow(fila.id);
     expect(row?.is_hidden).toBe(false);
     expect(row?.moderated_by).toBeNull();
+    expect(row?.moderation_reason).toBeNull();
+  });
+
+  test('«other» sin detalle → 400: es el único token que no se explica solo', async () => {
+    const fila = await seedReview({ order_id: null });
+
+    for (const hidden_reason of ['', '   ']) {
+      await comoAdmin(
+        api()
+          .patch(`/reviews/moderation/${fila.id}/hide`)
+          .send({ moderation_reason: 'other', hidden_reason }),
+      ).expect(400);
+    }
+    // Sin cuerpo `hidden_reason`: `undefined` tampoco es un detalle.
+    await comoAdmin(
+      api()
+        .patch(`/reviews/moderation/${fila.id}/hide`)
+        .send({ moderation_reason: 'other' }),
+    ).expect(400);
+
+    const row = await readRow(fila.id);
+    expect(row?.is_hidden).toBe(false);
+    expect(row?.moderation_reason).toBeNull();
+  });
+
+  test('«other» con detalle → 200 y queda el token con su descripción', async () => {
+    const fila = await seedReview({ order_id: null });
+    const detalle = 'El comentario habla de un producto que el local no vende';
+
+    const res = await comoAdmin(
+      api()
+        .patch(`/reviews/moderation/${fila.id}/hide`)
+        .send({ moderation_reason: 'other', hidden_reason: detalle }),
+    ).expect(200);
+
+    expect(res.body.moderation_reason).toBe('other');
+    expect(res.body.hidden_reason).toBe(detalle);
+    expect((await readRow(fila.id))?.moderation_reason).toBe('other');
+  });
+
+  test('un motivo nombrado SIN detalle → 200, y el detalle queda en null', async () => {
+    const fila = await seedReview({ order_id: null });
+
+    // El token ya dice por qué: obligar a escribir un párrafo solo haría que el
+    // operador parafraseara la etiqueta.
+    const res = await comoAdmin(
+      api()
+        .patch(`/reviews/moderation/${fila.id}/hide`)
+        .send({ moderation_reason: RAZON }),
+    ).expect(200);
+
+    expect(res.body.moderation_reason).toBe(RAZON);
+    expect(res.body.hidden_reason).toBeNull();
+    const row = await readRow(fila.id);
+    expect(row?.moderation_reason).toBe(RAZON);
+    expect(row?.hidden_reason).toBeNull();
+  });
+
+  test('re-ocultar con otro motivo BORRA el detalle anterior', async () => {
+    const fila = await seedReview({ order_id: null });
+
+    await comoAdmin(
+      api()
+        .patch(`/reviews/moderation/${fila.id}/hide`)
+        .send({ moderation_reason: RAZON, hidden_reason: MOTIVO }),
+    ).expect(200);
+    await comoAdmin(
+      api()
+        .patch(`/reviews/moderation/${fila.id}/unhide`),
+    ).expect(200);
+    await comoAdmin(
+      api()
+        .patch(`/reviews/moderation/${fila.id}/hide`)
+        .send({ moderation_reason: 'sexual_content_or_violence' }),
+    ).expect(200);
+
+    // Si el detalle viejo sobreviviera, la fila affirmaría «lenguaje abusivo
+    // hacia el personal» bajo un token de contenido sexual, que es exactamente
+    // la contradicción que el token vino a evitar.
+    const row = await readRow(fila.id);
+    expect(row?.moderation_reason).toBe('sexual_content_or_violence');
+    expect(row?.hidden_reason).toBeNull();
   });
 
   test('admin → 200 y queda QUIÉN y POR QUÉ', async () => {
@@ -266,10 +376,11 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
     const res = await comoAdmin(
       api()
         .patch(`/reviews/moderation/${fila.id}/hide`)
-        .send({ hidden_reason: MOTIVO }),
+        .send({ ...CUERPO }),
     ).expect(200);
 
     expect(res.body.is_hidden).toBe(true);
+    expect(res.body.moderation_reason).toBe(RAZON);
     expect(res.body.hidden_reason).toBe(MOTIVO);
     expect(res.body.moderated_by).toBe(adminId);
     expect(res.body.moderated_by_name).toBe('admin de prueba');
@@ -277,6 +388,7 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
 
     const row = await readRow(fila.id);
     expect(row?.is_hidden).toBe(true);
+    expect(row?.moderation_reason).toBe(RAZON);
     expect(row?.hidden_reason).toBe(MOTIVO);
     expect(row?.moderated_by).toBe(adminId);
   });
@@ -286,7 +398,7 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
     await comoAdmin(
       api()
         .patch(`/reviews/moderation/${fila.id}/hide`)
-        .send({ hidden_reason: MOTIVO }),
+        .send({ ...CUERPO }),
     ).expect(200);
 
     // La fila sigue ahí, con su (user_id, order_id) ocupado. Ese es el punto del
@@ -300,14 +412,18 @@ describe('PATCH /reviews/moderation/:id/hide (frontera de seguridad)', () => {
         .patch(
           `/reviews/moderation/${randomUUID()}/hide`,
         )
-        .send({ hidden_reason: MOTIVO }),
+        .send({ ...CUERPO }),
     ).expect(404);
   });
 });
 
 describe('PATCH /reviews/moderation/:id/unhide', () => {
   test('usuario sin rol admin → 403 y la reseña sigue oculta', async () => {
-    const fila = await seedReview({ order_id: null, is_hidden: true });
+    const fila = await seedReview({
+      order_id: null,
+      is_hidden: true,
+      moderation_reason: RAZON,
+    });
 
     await api()
       .patch(`/reviews/moderation/${fila.id}/unhide`)
@@ -322,7 +438,7 @@ describe('PATCH /reviews/moderation/:id/unhide', () => {
     await comoAdmin(
       api()
         .patch(`/reviews/moderation/${fila.id}/hide`)
-        .send({ hidden_reason: MOTIVO }),
+        .send({ ...CUERPO }),
     ).expect(200);
 
     const res = await comoAdmin(
@@ -331,10 +447,15 @@ describe('PATCH /reviews/moderation/:id/unhide', () => {
 
     expect(res.body.is_hidden).toBe(false);
     // El motivo NO se borra: es el registro de por qué se ocultó, y borrarlo al
-    // desocultar dejaría la decisión de restauración sin explicación.
+    // desocultar dejaría la decisión de restauración sin explicación. El token
+    // tampoco, y por la misma razón: el negocio apela preguntando bajo qué
+    // política se retiró, no solo qué dijo el operador.
+    expect(res.body.moderation_reason).toBe(RAZON);
     expect(res.body.hidden_reason).toBe(MOTIVO);
     expect(res.body.moderated_by).not.toBeNull();
-    expect((await readRow(fila.id))?.is_hidden).toBe(false);
+    const row = await readRow(fila.id);
+    expect(row?.is_hidden).toBe(false);
+    expect(row?.moderation_reason).toBe(RAZON);
   });
 
   test('es idempotente: desocultar dos veces no es un error', async () => {
@@ -342,7 +463,7 @@ describe('PATCH /reviews/moderation/:id/unhide', () => {
     await comoAdmin(
       api()
         .patch(`/reviews/moderation/${fila.id}/hide`)
-        .send({ hidden_reason: MOTIVO }),
+        .send({ ...CUERPO }),
     ).expect(200);
 
     await comoAdmin(api().patch(`/reviews/moderation/${fila.id}/unhide`)).expect(
@@ -359,7 +480,11 @@ describe('PATCH /reviews/moderation/:id/unhide', () => {
 describe('el filtro de la bandeja', () => {
   test('visibility=hidden deja fuera las visibles, y "all" las trae todas', async () => {
     const visible = await seedReview({ order_id: null, product_rating: 4 });
-    const oculta = await seedReview({ order_id: null, is_hidden: true });
+    const oculta = await seedReview({
+      order_id: null,
+      is_hidden: true,
+      moderation_reason: RAZON,
+    });
 
     const soloOcultas = await comoAdmin(
       api().get('/reviews/moderation?visibility=hidden&limit=100'),
@@ -411,6 +536,68 @@ describe('el filtro de la bandeja', () => {
     }
   });
 
+  test('filtra por motivo, y el filtro se combina con visibility', async () => {
+    // El token de la fila tiene que volver tal cual y ser filtrable: es el
+    // contrato entre lo que el panel grabó y lo que el operador puede pedir.
+    const ocultada = await seedReview({
+      order_id: null,
+      is_hidden: true,
+      moderation_reason: 'identity_discrimination',
+    });
+    await comoAdmin(
+      api()
+        .patch(`/reviews/moderation/${ocultada.id}/hide`)
+        .send({
+          moderation_reason: 'identity_discrimination',
+          hidden_reason: 'Menciona la etnia del personal',
+        }),
+    ).expect(200);
+
+    const res = await comoAdmin(
+      api().get(
+        '/reviews/moderation?moderation_reason=identity_discrimination&limit=100',
+      ),
+    ).expect(200);
+
+    const ids = res.body.data.map((f: { id: string }) => f.id);
+    expect(ids).toContain(ocultada.id);
+    for (const fila of res.body.data as { moderation_reason: string }[]) {
+      expect(fila.moderation_reason).toBe('identity_discrimination');
+    }
+
+    // Y combinado con el otro filtro, que es como lo usa el panel.
+    const combinado = await comoAdmin(
+      api().get(
+        '/reviews/moderation?visibility=hidden&moderation_reason=identity_discrimination&limit=100',
+      ),
+    ).expect(200);
+    expect(
+      combinado.body.data.map((f: { id: string }) => f.id),
+    ).toContain(ocultada.id);
+  });
+
+  test('un motivo que no está en la taxonomía → 400, no se filtra a lo bruto', async () => {
+    // Un token desconocido en la URL devolvería una bandeja que el operador
+    // creyó filtrada y no lo está. Peor que un error.
+    await comoAdmin(
+      api().get('/reviews/moderation?moderation_reason=me_gustó_poco'),
+    ).expect(400);
+    await comoAdmin(api().get('/reviews/moderation?moderation_reason=')).expect(
+      400,
+    );
+  });
+
+  test('meta.total del filtro por motivo cuenta lo mismo que la lista', async () => {
+    const res = await comoAdmin(
+      api().get(
+        '/reviews/moderation?moderation_reason=identity_discrimination&limit=100',
+      ),
+    ).expect(200);
+    // Si el `count` no compartiera el filtro, la cabecera prometería más filas de
+    // las que hay y el operador paginaría páginas vacías creyendo que hay más.
+    expect(res.body.meta.total).toBe(res.body.data.length);
+  });
+
   test('un rating fuera de 1..5 → 400, no se filtra a lo bruto', async () => {
     await comoAdmin(api().get('/reviews/moderation?rating=9')).expect(400);
   });
@@ -456,7 +643,7 @@ describe('una reseña oculta sale del promedio público', () => {
     await comoAdmin(
       api()
         .patch(`/reviews/moderation/${mala.id}/hide`)
-        .send({ hidden_reason: MOTIVO }),
+        .send({ ...CUERPO }),
     ).expect(200);
     const despues = await expected();
 
@@ -475,7 +662,7 @@ describe('una reseña oculta sale del promedio público', () => {
     });
     const antes = await expected();
 
-    await service.hide(mala.id, { hidden_reason: MOTIVO }, adminId);
+    await service.hide(mala.id, { ...CUERPO }, adminId);
     const oculta = await expected();
     expect(oculta.count).toBe(antes.count - 1);
     expect(await stored()).toEqual(oculta);

@@ -126,17 +126,19 @@ export class ReviewsRepository {
   /**
    * Bandeja paginada con el conteo total en la misma pasada de filtros.
    *
+   * Recibe el query del contrato tal cual, sin re-declarar sus campos: la versión
+   * anterior repetía la forma del filtro acá, y un filtro nuevo tenía que tocar
+   * los dos lados o el `where` ignoraba el campo en silencio y la bandeja salía
+   * sin filtrar — el peor fallo posible en una pantalla de moderación, porque el
+   * operador ve una lista y cree que es la que pidió.
+   *
    * Un solo filtro para el listado y para el `count` a propósito: si divergieran,
    * `meta.total` contaría reseñas que la tabla no muestra y el operador vería una
    * página vacía con "42 resultados".
    */
-  async listForModeration(filter: {
-    visibility: ListReviewsForModerationQuery['visibility'];
-    business_id?: string;
-    rating?: number;
-    page: number;
-    limit: number;
-  }): Promise<{ rows: ReviewModerationRow[]; total: number }> {
+  async listForModeration(
+    filter: ListReviewsForModerationQuery,
+  ): Promise<{ rows: ReviewModerationRow[]; total: number }> {
     const where = this.moderationWhere(filter);
 
     // El conteo no necesita los joins: todos los filtros son de `reviews`. Con
@@ -169,16 +171,24 @@ export class ReviewsRepository {
    * Escribe la moderación y devuelve la fila resultante CON los nombres ya
    * resueltos, para que el panel no tenga que releer.
    *
-   * `hidden_reason` solo se escribe si viene en `values`: un desocultamiento no
-   * lo limpia, porque ese motivo es el registro de apelación de por qué se ocultó
-   * en su momento y borrarlo al restaurarla dejaría la decisión sin explicación.
+   * `undefined` en cualquiera de los dos campos de motivo significa NO TOCAR, y es
+   * lo que usa el desocultamiento: el motivo es el registro de apelación de por
+   * qué se ocultó en su momento, y borrarlo al restaurarla dejaría la decisión sin
+   * explicación justo cuando el negocio viene a preguntar.
+   *
+   * `null` significa DEJAR EN NULL, y lo usa un ocultamiento que no trae detalle.
+   * La distinción importa: si el ocultamiento no escribiera el detalle, el texto
+   * del ocultamiento ANTERIOR quedaría pegado a un token que dice otra cosa, y la
+   * fila pasaría a afirmar algo falso — la contradicción exacta que la taxonomía
+   * vino a evitar.
    */
   async setHidden(
     tx: Database,
     id: string,
     values: {
       is_hidden: boolean;
-      hidden_reason?: string;
+      hidden_reason?: string | null;
+      moderation_reason?: string | null;
       moderated_at: Date;
       moderated_by: string;
     },
@@ -192,6 +202,9 @@ export class ReviewsRepository {
         ...(values.hidden_reason === undefined
           ? {}
           : { hidden_reason: values.hidden_reason }),
+        ...(values.moderation_reason === undefined
+          ? {}
+          : { moderation_reason: values.moderation_reason }),
       })
       .where(eq(reviews.id, id));
     return this.findModerationRow(tx, id);
@@ -211,11 +224,9 @@ export class ReviewsRepository {
     return row?.offer_id ?? null;
   }
 
-  private moderationWhere(filter: {
-    visibility: ListReviewsForModerationQuery['visibility'];
-    business_id?: string;
-    rating?: number;
-  }): SQL | undefined {
+  private moderationWhere(
+    filter: ListReviewsForModerationQuery,
+  ): SQL | undefined {
     const filters: SQL[] = [];
     if (filter.visibility === 'hidden')
       filters.push(eq(reviews.is_hidden, true));
@@ -223,6 +234,8 @@ export class ReviewsRepository {
       filters.push(eq(reviews.is_hidden, false));
     if (filter.business_id)
       filters.push(eq(reviews.business_id, filter.business_id));
+    if (filter.moderation_reason)
+      filters.push(eq(reviews.moderation_reason, filter.moderation_reason));
     if (filter.rating !== undefined) {
       // El parámetro se llama `rating` pero `reviews.rating` es legacy y está en
       // NULL en toda fila moderna: filtrar por ahí no devolvería nada. Se busca
@@ -260,6 +273,7 @@ export class ReviewsRepository {
         is_hidden: reviews.is_hidden,
         moderated_at: reviews.moderated_at,
         moderated_by: reviews.moderated_by,
+        moderation_reason: reviews.moderation_reason,
         hidden_reason: reviews.hidden_reason,
         author_name: profiles.full_name,
         business_name: businesses.name,

@@ -15,7 +15,7 @@ import { ReviewsRepository } from './reviews.repository';
  *
  * Ocultar, NUNCA borrar: la fila se queda porque `UNIQUE(user_id, order_id)`
  * tiene que seguir impidiendo que el autor vuelva a publicar lo mismo, y porque
- * el motivo escrito por el operador es el registro de apelación. Un borrado
+ * el motivo registrado por el operador es el registro de apelación. Un borrado
  * devolvería las dos cosas.
  */
 @Injectable()
@@ -34,7 +34,19 @@ export class ReviewsModerationService {
     );
   }
 
-  /** Oculta la reseña y registra el motivo. `adminUserId` es el moderador. */
+  /**
+   * Oculta la reseña y registra el motivo. `adminUserId` es el moderador.
+   *
+   * `moderation_reason` es obligatorio y sale de la taxonomía declarada: lo valida
+   * `HideReviewSchema` en el borde (el `ZodValidationPipe` del controlador), y acá
+   * no se vuelve a comprobar porque un servicio que revalida su entrada tiene dos
+   * reglas que se pueden desincronizar.
+   *
+   * `hidden_reason` se escribe SIEMPRE, y como `null` cuando el operador no
+   * escribió detalle. Es deliberado: un ocultamiento anterior pudo haber dejado un
+   * texto, y si este no lo limpiara el texto viejo quedaría pegado al token nuevo,
+   * con la fila afirmando algo que el operador nunca dijo.
+   */
   hide(
     id: string,
     input: HideReviewDto,
@@ -46,7 +58,8 @@ export class ReviewsModerationService {
       id,
       {
         is_hidden: true,
-        hidden_reason: input.hidden_reason,
+        moderation_reason: input.moderation_reason,
+        hidden_reason: input.hidden_reason ?? null,
       },
       adminUserId,
     );
@@ -55,10 +68,10 @@ export class ReviewsModerationService {
   /**
    * Restaura la visibilidad.
    *
-   * `hidden_reason` NO se limpia: es el registro de por qué se ocultó, y borrar
-   * el motivo al desocultar dejaría la decisión de restauración sin explicación
-   * justo cuando el negocio viene a preguntar. El panel lo muestra como "último
-   * motivo registrado", no como "motivo vigente".
+   * NI `moderation_reason` NI `hidden_reason` se limpian: son el registro de por
+   * qué se ocultó, y borrarlos al desocultar dejaría la decisión de restauración
+   * sin explicación justo cuando el negocio viene a preguntar. El panel los
+   * muestra como "último motivo registrado", no como "motivo vigente".
    */
   unhide(id: string, adminUserId: string): Promise<ReviewModerationItemDto> {
     return this.applyModeration(id, { is_hidden: false }, adminUserId);
@@ -66,7 +79,12 @@ export class ReviewsModerationService {
 
   private async applyModeration(
     id: string,
-    values: { is_hidden: boolean; hidden_reason?: string },
+    values: {
+      is_hidden: boolean;
+      /** `undefined` = no tocar (desocultar). `null` = dejar en NULL. */
+      hidden_reason?: string | null;
+      moderation_reason?: string | null;
+    },
     adminUserId: string,
   ): Promise<ReviewModerationItemDto> {
     return this.reviewsRepository.transaction(async (tx: Database) => {
