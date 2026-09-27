@@ -148,3 +148,38 @@ md5sum -c <(psql "$DATABASE_URL" -At -F' ' -c \
 
 `length()` is not a valid substitute: it counts characters, so any file with
 accents or em dashes differs in bytes without being wrong.
+
+## Applied: `20260927021015_reviews_moderation_soft_hide`
+
+Soft-hide moderation for `public.reviews`: five columns (`is_hidden`,
+`moderated_at`, `moderated_by`, `hidden_reason`, `moderation_reason`), four
+CHECK constraints, four indexes, the replacement of the `"Anyone can view
+reviews"` SELECT policy, column-level UPDATE grants, and a whole-body rewrite of
+`update_business_rating` / `update_offer_rating` so a hidden review leaves the
+public average. Applied through `apply_migration` on 2026-09-27. No backfill: all
+19 existing reviews read `is_hidden = false` and nothing was deleted.
+
+**This file is NOT byte-identical to what the ledger holds, and that is
+documented rather than repaired.** One word inside one SQL comment differs:
+
+| | text |
+| --- | --- |
+| file on disk | `businesses/oferts row` |
+| ledger `statements[1]` | `businesses/offers row` |
+
+`md5sum` of the file is `fb6757485108cda55259792b3ecf6104`; the ledger's is
+`d527a5343579760062c81e4a65633fb6`. Both are exactly 17981 bytes, which is why
+the length check passed and only the md5 caught it — the substitution is the
+same length, so a byte count cannot see it.
+
+The difference is proven to be exactly that and nothing else: substituting that
+one word in the file reproduces the ledger's md5 bit for bit. Every byte of DDL
+is identical; the divergence is one English word where the Spanish table name
+`oferts` was intended, inside a `--` comment.
+
+**The file was deliberately NOT edited to match the ledger.** Editing it would
+have imported the typo into the reviewed source and would have moved the file
+further from the only proof of what ran. The file stays the reviewed version, the
+ledger stays the statement the server stored, and the gap is recorded here —
+the same treatment the `20260925*` files above already have.
+
