@@ -100,4 +100,5 @@ export const PublicReviewListResponseSchema = PaginatedDataSchema(
 	PublicReviewItemSchema,
 );
 
-export const MyReviewListResponseSchema = PaginatedDataSchema(MyReviewItemSchema);
+export const MyReviewListResponseSchema =
+	PaginatedDataSchema(MyReviewItemSchema);

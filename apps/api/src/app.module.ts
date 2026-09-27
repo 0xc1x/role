@@ -33,6 +33,7 @@ import { ContactInboxModule } from './modules/contact-inbox/contact-inbox.module
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { StoreModule } from './modules/store/store.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
+import { SavedAddressesModule } from './modules/saved-addresses/saved-addresses.module';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { FavoritesModule } from './modules/favorites/favorites.module';
     CommissionsModule,
     ReviewsModule,
     FavoritesModule,
+    SavedAddressesModule,
     NotificationsModule,
     PushNotificationsModule,
     StoreModule,

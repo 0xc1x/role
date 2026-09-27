@@ -63,9 +63,11 @@ describe("PublicBusinessSchema", () => {
 
 describe("ListPublicBusinessesQuerySchema", () => {
 	it("defaults pagination and keeps the name search", () => {
-		expect(
-			ListPublicBusinessesQuerySchema.parse({ search: "pan" }),
-		).toEqual({ page: 1, limit: 20, search: "pan" });
+		expect(ListPublicBusinessesQuerySchema.parse({ search: "pan" })).toEqual({
+			page: 1,
+			limit: 20,
+			search: "pan",
+		});
 	});
 
 	it("ignores the admin-only filters instead of failing on them", () => {
@@ -79,9 +81,9 @@ describe("ListPublicBusinessesQuerySchema", () => {
 	});
 
 	it("still rejects a malformed page or limit", () => {
-		expect(
-			ListPublicBusinessesQuerySchema.safeParse({ page: 0 }).success,
-		).toBe(false);
+		expect(ListPublicBusinessesQuerySchema.safeParse({ page: 0 }).success).toBe(
+			false,
+		);
 		expect(
 			ListPublicBusinessesQuerySchema.safeParse({ limit: 500 }).success,
 		).toBe(false);

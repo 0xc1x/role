@@ -103,6 +103,5 @@ export const PublicBusinessStorefrontSchema = z.object({
 });
 
 /** Canonical paginated body for the public catalog. */
-export const PublicBusinessListResponseSchema = PaginatedDataSchema(
-	PublicBusinessSchema,
-);
+export const PublicBusinessListResponseSchema =
+	PaginatedDataSchema(PublicBusinessSchema);

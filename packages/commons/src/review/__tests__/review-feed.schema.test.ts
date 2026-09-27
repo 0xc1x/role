@@ -110,7 +110,10 @@ describe("MyReviewItemSchema", () => {
 
 describe("ListReviewsFeedQuerySchema", () => {
 	it("is pagination only, and drops any attempt to filter", () => {
-		expect(ListReviewsFeedQuerySchema.parse({})).toEqual({ page: 1, limit: 20 });
+		expect(ListReviewsFeedQuerySchema.parse({})).toEqual({
+			page: 1,
+			limit: 20,
+		});
 		const parsed = ListReviewsFeedQuerySchema.parse({
 			business_id: uuid,
 			visibility: "all",

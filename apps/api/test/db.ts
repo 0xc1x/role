@@ -152,8 +152,18 @@ export async function createTestDb(): Promise<TestDbContext> {
   //     migration and the mobile reads it straight from PostgREST, but the API
   //     never declared it, so the storefront's schedule had no way to be read.
   //     See the MIRROR GAP note in src/database/schema/business-hours.ts.
+  //  4. `saved_addresses`. The consumer address book, managed by mobile
+  //     straight through PostgREST and by the API's owner-scoped routes. Same
+  //     shape of gap as `business_hours`: the table is real in Supabase, nothing
+  //     in `drizzle/` declares it, and the specs that exercise the default-flag
+  //     transaction need it to exist. Its `idx_saved_addresses_user` is installed
+  //     with it because every read in the module is `where user_id = $1`; the
+  //     live `set_saved_addresses_updated_at` trigger is deliberately NOT copied
+  //     — the repository writes `updated_at` explicitly, as every other
+  //     repository here already does. See the MIRROR GAP note in
+  //     src/database/schema/saved-addresses.ts.
   //
-  // All three are `if not exists` because the harness runs per spec file against
+  // All four are `if not exists` because the harness runs per spec file against
   // a fresh database: the idempotence is there so a future mirror that DOES
   // carry them does not raise 42P07 or 42701 and take the whole suite down.
   await client.unsafe(`
@@ -195,6 +205,24 @@ export async function createTestDb(): Promise<TestDbContext> {
       updated_at timestamp with time zone not null default now(),
       constraint business_hours_business_id_day_key unique (business_id, day)
     );
+
+    create table if not exists public.saved_addresses (
+      id uuid primary key default gen_random_uuid(),
+      user_id uuid not null references public.profiles (id) on delete cascade,
+      label text not null,
+      address text not null,
+      latitude numeric not null,
+      longitude numeric not null,
+      is_default boolean not null default false,
+      created_at timestamp with time zone not null default now(),
+      updated_at timestamp with time zone not null default now(),
+      "type" text not null default 'home',
+      -- "references" is a reserved word: unquoted it is a syntax error (42601).
+      "references" text,
+      housing_type text
+    );
+    create index if not exists idx_saved_addresses_user
+      on public.saved_addresses (user_id);
   `);
 
   await client.unsafe(`

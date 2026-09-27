@@ -14,6 +14,7 @@ export * from './user-preferences';
 export * from './business-notification-preferences';
 export * from './device-tokens';
 export * from './favorites';
+export * from './saved-addresses';
 export * from './categories';
 export * from './slides';
 export * from './tips';
@@ -44,6 +45,7 @@ import { appConfig } from './app-configs';
 import { appStore } from './app-store';
 import { deviceTokens } from './device-tokens';
 import { favorites } from './favorites';
+import { savedAddresses } from './saved-addresses';
 import {
   campaigns,
   emailComponents,
@@ -88,6 +90,7 @@ export const schema = {
   tips,
   deviceTokens,
   favorites,
+  savedAddresses,
   appConfig,
   appStore,
   emailComponents,

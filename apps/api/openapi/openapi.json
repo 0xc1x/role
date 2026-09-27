@@ -2873,6 +2873,106 @@
         ]
       }
     },
+    "/api/v1/addresses": {
+      "get": {
+        "operationId": "SavedAddressesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "My address book, default first"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List my saved addresses",
+        "tags": [
+          "Saved Addresses"
+        ]
+      },
+      "post": {
+        "operationId": "SavedAddressesController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Address saved"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Save one of my addresses",
+        "tags": [
+          "Saved Addresses"
+        ]
+      }
+    },
+    "/api/v1/addresses/{id}": {
+      "patch": {
+        "operationId": "SavedAddressesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Address updated"
+          },
+          "404": {
+            "description": "No such address of mine"
+          },
+          "409": {
+            "description": "The request would leave the book with no default address"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit one of my addresses",
+        "tags": [
+          "Saved Addresses"
+        ]
+      },
+      "delete": {
+        "operationId": "SavedAddressesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Address removed"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove one of my addresses",
+        "tags": [
+          "Saved Addresses"
+        ]
+      }
+    },
     "/api/v1/push-notifications/templates": {
       "get": {
         "operationId": "PushNotificationsController_listTemplates",

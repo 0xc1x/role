@@ -280,6 +280,90 @@ describe('Marketplace e2e', () => {
     expect(empty.body.data).toEqual([]);
   });
 
+  test('addresses: the owner comes from the token, user_id is stripped, the default flag is the API call', async () => {
+    const other = await seedProfile(ctx.db, `a-${randomUUID()}@t.cl`);
+    const otherToken = await token(other, 'a@t.cl');
+
+    // `user_id` is not in the request schema, so the Zod pipe strips it: the
+    // address belongs to the caller, not to whoever the body named.
+    const created = await api()
+      .post('/api/v1/addresses')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({
+        label: 'Casa',
+        address: 'Calle Falsa 123',
+        latitude: -33.4372,
+        longitude: -70.6506,
+        user_id: other,
+      })
+      .expect(201);
+    expect(created.body.user_id).toBe(consumerId);
+    // The first address a user saves is their default: the API owns that rule,
+    // and `saved_addresses` has no constraint behind it.
+    expect(created.body.is_default).toBe(true);
+    expect(typeof created.body.latitude).toBe('number');
+
+    // The other consumer's book is untouched by the body that named them.
+    const asOther = await api()
+      .get('/api/v1/addresses')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(200);
+    expect(asOther.body).toEqual([]);
+
+    // A second default clears the first, in one transaction.
+    const second = await api()
+      .post('/api/v1/addresses')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({
+        label: 'Trabajo',
+        address: 'Avenida Real 456',
+        latitude: -33.45,
+        longitude: -70.66,
+        is_default: true,
+      })
+      .expect(201);
+    expect(second.body.is_default).toBe(true);
+
+    const list = await api()
+      .get('/api/v1/addresses')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(200);
+    expect(list.body).toHaveLength(2);
+    expect(
+      list.body.filter((a: { is_default: boolean }) => a.is_default),
+    ).toHaveLength(1);
+    expect(list.body[0].id).toBe(second.body.id);
+
+    // Un-defaulting the only default would leave the book with no default at
+    // all, which the edge function that reads this flag cannot answer for: 409.
+    await api()
+      .patch(`/api/v1/addresses/${second.body.id}`)
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .send({ is_default: false })
+      .expect(409);
+
+    // And someone else's address is a 404, never a write.
+    await api()
+      .patch(`/api/v1/addresses/${second.body.id}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ label: 'Sequestrado' })
+      .expect(404);
+    await api()
+      .delete(`/api/v1/addresses/${second.body.id}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(204);
+
+    await api()
+      .delete(`/api/v1/addresses/${second.body.id}`)
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(204);
+    const remaining = await api()
+      .get('/api/v1/addresses')
+      .set('Authorization', `Bearer ${consumerToken}`)
+      .expect(200);
+    expect(remaining.body).toHaveLength(1);
+  });
+
   test('timeline: el dueño la lee y ni metadata ni changed_by se exponen', async () => {
     const res = await api()
       .get(`/api/v1/orders/${orderId}/events`)
