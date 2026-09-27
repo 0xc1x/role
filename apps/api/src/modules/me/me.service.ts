@@ -102,13 +102,18 @@ export class MeService {
    * writes `profiles` as the table owner: RLS and the column grants are both
    * bypassed, and `handle_new_user` keeps the same allowlist for the same reason.
    * A body carrying `role` parses, and the role does not move.
+   *
+   * `email` is the fifth column, and it is refused rather than widened into the
+   * patch: it is an identity change with a confirmation round-trip, and it lives
+   * at `POST /auth/change-email`. See `assertEmailNotChanged`.
    */
   async updateProfile(
     user: AuthUser,
     body: UpdateMyProfileDto,
   ): Promise<ProfileDto> {
     // The one field the schema accepts and this service refuses. See
-    // `assertEmailNotChanged` for why it is a refusal and not a write.
+    // `assertEmailNotChanged` for why it is a refusal and not a write, and for
+    // the route that does it instead.
     this.assertEmailNotChanged(body.email);
 
     const patch: MyProfilePatch = {};
@@ -128,40 +133,43 @@ export class MeService {
   }
 
   /**
-   * WHY `email` IS REFUSED INSTEAD OF ROUTED THROUGH GOVEREE ADMIN
-   * (`supabaseAdmin.auth.admin.updateUserById`, the call `AuthService` and
-   * `BusinessesService` already make).
+   * WHY `email` IS STILL REFUSED HERE, NOW THAT THE API HAS THE ROUTE.
    *
-   * `profiles.email` is a COPY of the GoTrue identity and nothing in the
-   * database keeps it in sync: the only trigger on `auth.users` is
-   * `handle_new_user` on AFTER INSERT. So the two candidate implementations both
-   * end with the two stores disagreeing, in opposite directions:
+   * `profiles.email` is a COPY of the GoTrue identity, and the copy is only ever
+   * written by a trigger: `handle_new_user` on INSERT and
+   * `sync_profile_email_on_auth_user_change` on UPDATE OF email. So a PATCH here
+   * still has no way to move the two stores together, and the two candidate
+   * implementations both end with them disagreeing, in opposite directions:
    *
    *   - Write `profiles.email` directly. Forbidden, and worse than useless: GoTrue
    *     still holds the old address, so the next login re-asserts the old
    *     identity and the column the caller just changed is overwritten. This is
    *     the "next login resurrects the old address" failure.
-   *   - Call `updateUserById` and write nothing. GoTrue does not apply an email
-   *     change until the address is confirmed, and this service cannot deliver
-   *     that confirmation, cannot observe it, and has no trigger that would copy
-   *     the result into `profiles.email` when it lands. A 200 here would be a
-   *     promise about an event this API never sees, and the copy would stay
-   *     permanently stale behind it.
+   *   - Call `updateUserById` from here and write nothing. That is exactly what
+   *     `POST /auth/change-email` now does, and doing it from `/me` would split
+   *     the flow in two: a caller who found one route would not find the other,
+   *     and `/me` would have to answer 202 and initiate a confirmation
+   *     round-trip inside a PATCH whose contract is "the row is now this".
    *
-   * The path that actually works is client-side and already exists: mobile calls
-   * `supabase.auth.updateUser({ email })`, which is the GoTrue flow that owns
-   * the confirmation round-trip. So this is a refusal WITH the path in the
-   * message, not a silent strip — a caller who asks to change their address and
-   * gets a 200 has been lied to, and that is the one outcome worse than a 422.
+   * So the field stays refused HERE and lives at `POST /auth/change-email`, which
+   * initiates the change, delivers the notice, and lets the trigger sync the
+   * copy when GoTrue applies it. Mobile may also drive the same GoTrue flow
+   * directly with `supabase.auth.updateUser({ email })` (ADR-0002: the consumer
+   * app talks to Supabase, not to this API).
+   *
+   * A refusal with the working path named in it, still: a caller who asks to
+   * change their address and gets a 200 has been lied to, and that is worse than
+   * a 422 that tells them where to go.
    */
   private assertEmailNotChanged(email?: string): void {
     if (email === undefined) return;
     throw new UnprocessableEntityException({
       error: 'Unprocessable Entity',
       message:
-        'email is the Supabase Auth identity and cannot be changed through this API. ' +
-        'Update it with the Supabase client (`supabase.auth.updateUser({ email })`), ' +
-        'which owns the confirmation round-trip at the new address.',
+        'email is the Supabase Auth identity and is not a profile column this endpoint can write. ' +
+        'Use POST /api/v1/auth/change-email, which initiates the change and confirms it at the new address; ' +
+        'profiles.email is synced by the auth trigger when the confirmation lands. ' +
+        'Supabase clients may also do it directly with `supabase.auth.updateUser({ email })`.',
     });
   }
 

@@ -93,12 +93,12 @@ export class MeController {
   @ApiNotFoundResponse({ description: 'No profile for this token subject' })
   @ApiUnprocessableEntityResponse({
     description:
-      'The body asked to change `email`, which is the Supabase Auth identity',
+      'The body asked to change `email`, which belongs to `POST /auth/change-email`',
   })
   updateProfile(
     @CurrentUser() user: AuthUser,
     // `role` is not a key of this schema, so it cannot reach the write. `email`
-    // IS a key and is refused by the service with the path that works.
+    // IS a key and is refused by the service, which names the route that does it.
     @Body(new ZodValidationPipe(UpdateMyProfileSchema))
     body: UpdateMyProfileDto,
   ): Promise<ProfileDto> {

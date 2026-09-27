@@ -4,19 +4,16 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { createSecretKey } from 'node:crypto';
-import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from 'jose';
 import { eq } from 'drizzle-orm';
 import { Inject } from '@nestjs/common';
 import type { AppRole } from '@0xc1x/role-commons';
 import { IS_PUBLIC_KEY } from '../common/decorators/public.decorator';
-import type { Env } from '../config/env.schema';
 import { type Database } from '../database/database.module';
 import { DRIZZLE } from '../database/database.tokens';
 import { profiles } from '../database/schema';
 import type { AuthUser } from './auth.types';
+import { SupabaseTokenVerifier } from './supabase-token-verifier';
 
 interface ProfileCacheEntry {
   profile: { id: string; email: string | null; role: AppRole };
@@ -26,20 +23,18 @@ interface ProfileCacheEntry {
 @Injectable()
 export class AuthGuard implements CanActivate {
   protected readonly reflector: Reflector;
-  private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
   private readonly profileCache = new Map<string, ProfileCacheEntry>();
   private readonly cacheTtl = 30000; // 30 seconds
 
   constructor(
     reflector: Reflector,
-    private readonly config: ConfigService<Env, true>,
+    // The JWT parsing itself is not here: `SupabaseTokenVerifier` owns it, so the
+    // recovery token `POST /auth/reset-password` verifies cannot drift away from
+    // the token every protected route accepts.
+    private readonly verifier: SupabaseTokenVerifier,
     @Inject(DRIZZLE) private readonly db: Database,
   ) {
     this.reflector = reflector;
-    const supabaseUrl = this.config.get('SUPABASE_URL', { infer: true });
-    this.jwks = createRemoteJWKSet(
-      new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`),
-    );
   }
 
   /** Cache con techo: purga expirados y, si sigue lleno, reinicia. */
@@ -78,63 +73,7 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing access token');
     }
 
-    let sub: string;
-    let email: string | null = null;
-
-    try {
-      const { alg } = decodeProtectedHeader(token);
-
-      let payload: {
-        sub?: string;
-        email?: string;
-        user_email?: string;
-        iss?: string;
-        aud?: string | string[];
-        exp?: number;
-      };
-
-      const supabaseUrl = this.config.get('SUPABASE_URL', { infer: true });
-      const expectedIss = `${supabaseUrl}/auth/v1`;
-      const expectedAud = 'authenticated';
-
-      if (alg === 'HS256') {
-        const secret = this.config.get('SUPABASE_JWT_SECRET', { infer: true });
-        const key = createSecretKey(Buffer.from(secret, 'utf8'));
-        const result = await jwtVerify(token, key, {
-          algorithms: ['HS256'],
-          issuer: expectedIss,
-          audience: expectedAud,
-        });
-        payload = result.payload;
-      } else {
-        const result = await jwtVerify(token, this.jwks, {
-          algorithms: ['ES256'],
-          issuer: expectedIss,
-          audience: expectedAud,
-        });
-        payload = result.payload;
-      }
-
-      if (!payload.sub || typeof payload.sub !== 'string') {
-        throw new UnauthorizedException('Invalid token subject');
-      }
-      if (!payload.exp || typeof payload.exp !== 'number') {
-        throw new UnauthorizedException('Token missing expiration');
-      }
-      if (payload.exp * 1000 < Date.now()) {
-        throw new UnauthorizedException('Token expired');
-      }
-      sub = payload.sub;
-      email =
-        typeof payload.email === 'string'
-          ? payload.email
-          : typeof payload.user_email === 'string'
-            ? payload.user_email
-            : null;
-    } catch (err) {
-      if (err instanceof UnauthorizedException) throw err;
-      throw new UnauthorizedException('Invalid or expired access token');
-    }
+    const { sub, email } = await this.verifier.verify(token);
 
     // Check cache first
     const cached = this.profileCache.get(sub);

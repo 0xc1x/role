@@ -637,13 +637,16 @@ describe('Marketplace e2e', () => {
     expect(asAdmin.body.role).toBe('admin');
 
     // `email` is the GoTrue identity. A silent strip would answer 200 to a caller
-    // who asked to change their address.
+    // who asked to change their address. The refusal has to name the route that
+    // DOES work, or it is just a dead end: the two halves are the same contract
+    // and a change to one without the other is the bug this pins.
     const email = await api()
       .patch('/api/v1/me')
       .set('Authorization', `Bearer ${consumerToken}`)
       .send({ email: 'nuevo@correo.cl' })
       .expect(422);
     expect(JSON.stringify(email.body)).toContain('supabase.auth.updateUser');
+    expect(JSON.stringify(email.body)).toContain('/auth/change-email');
   });
 
   test('me: favorite_categories se valida contra el catálogo y guarda el nombre canónico', async () => {

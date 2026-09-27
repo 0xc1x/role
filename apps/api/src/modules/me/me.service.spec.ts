@@ -239,6 +239,10 @@ describe('MeService', () => {
       expect(thrown).toBeInstanceOf(UnprocessableEntityException);
       const response = (thrown as UnprocessableEntityException).getResponse();
       expect(JSON.stringify(response)).toContain('email');
+      // The refusal is only useful if it points somewhere that works. Both
+      // routes are real: this API's `POST /auth/change-email`, and the Supabase
+      // client for a consumer app that talks to GoTrue directly (ADR-0002).
+      expect(JSON.stringify(response)).toContain('/auth/change-email');
     });
 
     it('passes a null through so a field can be cleared', async () => {

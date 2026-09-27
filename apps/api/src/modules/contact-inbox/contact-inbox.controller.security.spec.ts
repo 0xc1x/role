@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { SignJWT } from 'jose';
 import request from 'supertest';
 import { AuthGuard } from '../../auth/auth.guard';
+import { SupabaseTokenVerifier } from '../../auth/supabase-token-verifier';
 import { RolesGuard } from '../../auth/roles.guard';
 import { DRIZZLE } from '../../database/database.tokens';
 import type { Env } from '../../config/env.schema';
@@ -100,6 +101,9 @@ beforeAll(async () => {
       { provide: ConfigService, useValue: config },
       AuthGuard,
       RolesGuard,
+      // The guard delegates JWT verification to it; constructed from the same
+      // ConfigService stub, so the real verification still runs here.
+      SupabaseTokenVerifier,
       { provide: 'APP_GUARD', useExisting: AuthGuard },
       { provide: 'APP_GUARD', useExisting: RolesGuard },
     ],

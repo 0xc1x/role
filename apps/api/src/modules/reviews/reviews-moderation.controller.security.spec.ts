@@ -6,6 +6,7 @@ import { SignJWT } from 'jose';
 import { eq } from 'drizzle-orm';
 import request from 'supertest';
 import { AuthGuard } from '../../auth/auth.guard';
+import { SupabaseTokenVerifier } from '../../auth/supabase-token-verifier';
 import { RolesGuard } from '../../auth/roles.guard';
 import { DRIZZLE } from '../../database/database.tokens';
 import { reviews } from '../../database/schema';
@@ -143,6 +144,9 @@ beforeAll(async () => {
       { provide: ConfigService, useValue: config },
       AuthGuard,
       RolesGuard,
+      // The guard delegates JWT verification to it; constructed from the same
+      // ConfigService stub, so the real verification still runs here.
+      SupabaseTokenVerifier,
       { provide: 'APP_GUARD', useExisting: AuthGuard },
       { provide: 'APP_GUARD', useExisting: RolesGuard },
     ],

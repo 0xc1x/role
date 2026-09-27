@@ -6,6 +6,7 @@ import { SignJWT } from 'jose';
 import { AuthGuard } from './auth.guard';
 import { IS_PUBLIC_KEY } from '../common/decorators/public.decorator';
 import type { Env } from '../config/env.schema';
+import { SupabaseTokenVerifier } from './supabase-token-verifier';
 
 const SUPABASE_URL = 'https://test.supabase.co';
 const JWT_SECRET = 'test-jwt-secret-at-least-32-characters-long';
@@ -68,7 +69,7 @@ describe('AuthGuard', () => {
         if (key === 'SUPABASE_JWT_SECRET') return JWT_SECRET;
         return undefined;
       }),
-    } as unknown as ConfigService;
+    } as unknown as ConfigService<Env, true>;
 
     db = {
       select: jest.fn().mockReturnThis(),
@@ -77,9 +78,12 @@ describe('AuthGuard', () => {
       limit: jest.fn(),
     };
 
+    // The real verifier, not a mock: the point of the extraction is that the
+    // guard and `POST /auth/reset-password` share one parser, and a stubbed one
+    // would let this spec keep passing whatever the verifier stops enforcing.
     guard = new AuthGuard(
       reflector,
-      config as unknown as ConfigService<Env, true>,
+      new SupabaseTokenVerifier(config),
       db as any,
     );
   });

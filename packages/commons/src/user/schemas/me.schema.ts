@@ -29,6 +29,13 @@ import {
  * here so the service can answer with a named, actionable error instead of
  * dropping the field the way a plain strip would: a caller who asks to change
  * their address and gets a 200 has been lied to. See `MeService.updateProfile`.
+ *
+ * The refusal is about THIS endpoint, not about the platform: the change lives
+ * at `POST /auth/change-email`, which drives the GoTrue confirmation round-trip
+ * and lets the `auth.users` trigger sync `profiles.email` when it lands. A
+ * client that talks to Supabase directly can also do it with
+ * `supabase.auth.updateUser({ email })` (ADR-0002). What cannot happen either
+ * way is a PATCH on this route writing the column on its own.
  */
 export const UpdateMyProfileSchema = z.object({
 	full_name: z.string().nullable().optional(),
