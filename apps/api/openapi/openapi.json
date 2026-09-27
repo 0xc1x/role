@@ -2592,6 +2592,84 @@
         ]
       }
     },
+    "/api/v1/reviews/moderation": {
+      "get": {
+        "operationId": "ReviewsModerationController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated moderation inbox"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List reviews for moderation (admin)",
+        "tags": [
+          "Reviews"
+        ]
+      }
+    },
+    "/api/v1/reviews/moderation/{id}/hide": {
+      "patch": {
+        "operationId": "ReviewsModerationController_hide",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hidden review with its moderation state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Hide a review with a mandatory reason (admin). Idempotent.",
+        "tags": [
+          "Reviews"
+        ]
+      }
+    },
+    "/api/v1/reviews/moderation/{id}/unhide": {
+      "patch": {
+        "operationId": "ReviewsModerationController_unhide",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored review with its moderation state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Restore a review (admin). Keeps the recorded reason. Idempotent.",
+        "tags": [
+          "Reviews"
+        ]
+      }
+    },
     "/api/v1/push-notifications/templates": {
       "get": {
         "operationId": "PushNotificationsController_listTemplates",
@@ -2875,6 +2953,84 @@
         },
         "tags": [
           "Contact"
+        ]
+      }
+    },
+    "/api/v1/contact-inbox": {
+      "get": {
+        "operationId": "ContactInboxController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated contact inbox"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List public contact messages (admin)",
+        "tags": [
+          "Contact Inbox"
+        ]
+      }
+    },
+    "/api/v1/contact-inbox/{id}": {
+      "get": {
+        "operationId": "ContactInboxController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact message detail"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a contact message (admin)",
+        "tags": [
+          "Contact Inbox"
+        ]
+      }
+    },
+    "/api/v1/contact-inbox/{id}/handled": {
+      "patch": {
+        "operationId": "ContactInboxController_markHandled",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact message marked as handled"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark a contact message as handled (admin). Idempotent.",
+        "tags": [
+          "Contact Inbox"
         ]
       }
     }
