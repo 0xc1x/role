@@ -12,6 +12,7 @@ import {
 	Receipt,
 	Settings2,
 	ShoppingBag,
+	Star,
 	Store,
 	Ticket,
 } from "lucide-react";
@@ -78,6 +79,14 @@ export const navMain: NavMainItem[] = [
 		title: "Comisiones",
 		url: "/comisiones",
 		icon: BadgeDollarSign,
+	},
+	{
+		// Moderación de reseñas. Va junto a Contactos y no con los módulos de
+		// datos: las dos son superficies donde el operador lee lo que escribió la
+		// gente y decide qué hacer con eso.
+		title: "Reseñas",
+		url: "/resenas",
+		icon: Star,
 	},
 	{
 		// Bandeja de los mensajes del formulario público. Va después de

@@ -4,6 +4,7 @@ import type {
 	EmailSendStatus,
 	OrderStatus,
 	PayoutStatus,
+	ReviewVisibility,
 } from "@0xc1x/role-commons";
 
 /**
@@ -87,3 +88,19 @@ const CONTACT_MESSAGE_STATUS_LABELS: Record<ContactMessageStatus, string> = {
 
 export const contactMessageStatusLabel = (status: string): string =>
 	CONTACT_MESSAGE_STATUS_LABELS[status as ContactMessageStatus] ?? status;
+
+/**
+ * Filtro de visibilidad de la bandeja de reseñas.
+ *
+ * "hidden" NO se etiqueta "Eliminadas": la reseña se conserva y se puede volver a
+ * mostrar. Decir "eliminada" haría que el operador creyera que la fila ya no
+ * existe y que su motivo queda sin destinatario.
+ */
+const REVIEW_VISIBILITY_LABELS: Record<ReviewVisibility, string> = {
+	all: "Todas las reseñas",
+	hidden: "Ocultas",
+	visible: "Visibles",
+};
+
+export const reviewVisibilityLabel = (visibility: string): string =>
+	REVIEW_VISIBILITY_LABELS[visibility as ReviewVisibility] ?? visibility;

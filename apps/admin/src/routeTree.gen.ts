@@ -23,6 +23,7 @@ import { Route as LayoutNegociosRouteImport } from './routes/_layout.negocios'
 import { Route as LayoutOfertasRouteImport } from './routes/_layout.ofertas'
 import { Route as LayoutOrdenesRouteImport } from './routes/_layout.ordenes'
 import { Route as LayoutPagosRouteImport } from './routes/_layout.pagos'
+import { Route as LayoutResenasRouteImport } from './routes/_layout.resenas'
 import { Route as LayoutSlidesRouteImport } from './routes/_layout.slides'
 import { Route as LayoutCampanasMailsRouteImport } from './routes/_layout.campanas.mails'
 import { Route as LayoutCampanasPushRouteImport } from './routes/_layout.campanas.push'
@@ -99,6 +100,11 @@ const LayoutPagosRoute = LayoutPagosRouteImport.update({
   path: '/pagos',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutResenasRoute = LayoutResenasRouteImport.update({
+  id: '/resenas',
+  path: '/resenas',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutSlidesRoute = LayoutSlidesRouteImport.update({
   id: '/slides',
   path: '/slides',
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/ofertas': typeof LayoutOfertasRoute
   '/ordenes': typeof LayoutOrdenesRoute
   '/pagos': typeof LayoutPagosRoute
+  '/resenas': typeof LayoutResenasRoute
   '/slides': typeof LayoutSlidesRoute
   '/campanas/mails': typeof LayoutCampanasMailsRoute
   '/campanas/push': typeof LayoutCampanasPushRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/ofertas': typeof LayoutOfertasRoute
   '/ordenes': typeof LayoutOrdenesRoute
   '/pagos': typeof LayoutPagosRoute
+  '/resenas': typeof LayoutResenasRoute
   '/slides': typeof LayoutSlidesRoute
   '/campanas/mails': typeof LayoutCampanasMailsRoute
   '/campanas/push': typeof LayoutCampanasPushRoute
@@ -190,6 +198,7 @@ export interface FileRoutesById {
   '/_layout/ofertas': typeof LayoutOfertasRoute
   '/_layout/ordenes': typeof LayoutOrdenesRoute
   '/_layout/pagos': typeof LayoutPagosRoute
+  '/_layout/resenas': typeof LayoutResenasRoute
   '/_layout/slides': typeof LayoutSlidesRoute
   '/_layout/campanas/mails': typeof LayoutCampanasMailsRoute
   '/_layout/campanas/push': typeof LayoutCampanasPushRoute
@@ -213,6 +222,7 @@ export interface FileRouteTypes {
     | '/ofertas'
     | '/ordenes'
     | '/pagos'
+    | '/resenas'
     | '/slides'
     | '/campanas/mails'
     | '/campanas/push'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/ofertas'
     | '/ordenes'
     | '/pagos'
+    | '/resenas'
     | '/slides'
     | '/campanas/mails'
     | '/campanas/push'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/_layout/ofertas'
     | '/_layout/ordenes'
     | '/_layout/pagos'
+    | '/_layout/resenas'
     | '/_layout/slides'
     | '/_layout/campanas/mails'
     | '/_layout/campanas/push'
@@ -370,6 +382,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutPagosRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/resenas': {
+      id: '/_layout/resenas'
+      path: '/resenas'
+      fullPath: '/resenas'
+      preLoaderRoute: typeof LayoutResenasRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/slides': {
       id: '/_layout/slides'
       path: '/slides'
@@ -427,6 +446,7 @@ interface LayoutRouteChildren {
   LayoutOfertasRoute: typeof LayoutOfertasRoute
   LayoutOrdenesRoute: typeof LayoutOrdenesRoute
   LayoutPagosRoute: typeof LayoutPagosRoute
+  LayoutResenasRoute: typeof LayoutResenasRoute
   LayoutSlidesRoute: typeof LayoutSlidesRoute
   LayoutCampanasMailsRoute: typeof LayoutCampanasMailsRoute
   LayoutCampanasPushRoute: typeof LayoutCampanasPushRoute
@@ -447,6 +467,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutOfertasRoute: LayoutOfertasRoute,
   LayoutOrdenesRoute: LayoutOrdenesRoute,
   LayoutPagosRoute: LayoutPagosRoute,
+  LayoutResenasRoute: LayoutResenasRoute,
   LayoutSlidesRoute: LayoutSlidesRoute,
   LayoutCampanasMailsRoute: LayoutCampanasMailsRoute,
   LayoutCampanasPushRoute: LayoutCampanasPushRoute,
