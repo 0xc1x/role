@@ -3,6 +3,7 @@ export * from './profiles';
 export * from './businesses';
 export * from './business-companions';
 export * from './business-locations';
+export * from './business-hours';
 export * from './offers';
 export * from './offer-categories';
 export * from './orders';
@@ -21,6 +22,7 @@ export * from './app-store';
 export * from './email-marketing';
 export * from './push-notifications';
 
+import { businessHours } from './business-hours';
 import { businessLocations } from './business-locations';
 import { businesses } from './businesses';
 import { offerCategories } from './offer-categories';
@@ -69,6 +71,7 @@ export const schema = {
   profiles,
   businesses,
   businessLocations,
+  businessHours,
   offers,
   offerCategories,
   orders,

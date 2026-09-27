@@ -1045,6 +1045,45 @@
         ]
       }
     },
+    "/api/v1/businesses/public": {
+      "get": {
+        "operationId": "BusinessesPublicController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated public businesses"
+          }
+        },
+        "summary": "List active, moderation-approved businesses (public catalog)",
+        "tags": [
+          "Businesses"
+        ]
+      }
+    },
+    "/api/v1/businesses/public/{id}": {
+      "get": {
+        "operationId": "BusinessesPublicController_storefront",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public business with locations and hours"
+          }
+        },
+        "summary": "Get a business storefront: the business plus its active locations and weekly hours",
+        "tags": [
+          "Businesses"
+        ]
+      }
+    },
     "/api/v1/businesses/onboarding": {
       "post": {
         "operationId": "BusinessesController_onboard",
@@ -2616,6 +2655,74 @@
           }
         ],
         "summary": "Create a review for a completed order",
+        "tags": [
+          "Reviews"
+        ]
+      }
+    },
+    "/api/v1/businesses/public/{businessId}/reviews": {
+      "get": {
+        "operationId": "ReviewsFeedsController_listBusinessReviews",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated reviews of a public business"
+          }
+        },
+        "summary": "Public review feed of a business (visible reviews only)",
+        "tags": [
+          "Reviews"
+        ]
+      }
+    },
+    "/api/v1/offers/{id}/reviews": {
+      "get": {
+        "operationId": "ReviewsFeedsController_listOfferReviews",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated reviews of a public offer"
+          }
+        },
+        "summary": "Public review feed of an offer (visible only)",
+        "tags": [
+          "Reviews"
+        ]
+      }
+    },
+    "/api/v1/me/reviews": {
+      "get": {
+        "operationId": "ReviewsFeedsController_listMyReviews",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated reviews written by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "My review history, including reviews hidden from the public",
         "tags": [
           "Reviews"
         ]

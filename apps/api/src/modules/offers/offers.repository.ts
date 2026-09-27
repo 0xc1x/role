@@ -13,10 +13,10 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
+import { publiclyVisibleBusiness } from '../../database/business-availability';
 import { DRIZZLE } from '../../database/database.tokens';
 import {
   businessLocations,
-  businessModeration,
   businessOwnership,
   businesses,
   categories,
@@ -238,17 +238,6 @@ export class OffersRepository {
   }
 
   /**
-   * The business of the offer is moderation-approved. `verification_status`
-   * lives in business_moderation; a business with no moderation row is not
-   * approved, which is what the old NOT NULL column defaulting to 'pending'
-   * meant. Written as `exists` so it composes with the joins already in the
-   * query without adding a groupBy column.
-   */
-  private approvedBusiness(): SQL {
-    return sql`exists (select 1 from ${businessModeration} m where m.business_id = ${businesses.id} and m.verification_status = 'approved')`;
-  }
-
-  /**
    * The one definition of "this offer can be reserved right now": active, owned
    * by an active and moderation-approved business, in stock, and inside its
    * pickup window.
@@ -259,12 +248,17 @@ export class OffersRepository {
    * sold out, expired or under moderation review ends up readable by UUID while
    * being correctly hidden everywhere else. If a condition belongs here, it
    * belongs in all three call sites at once.
+   *
+   * The business half (`is_active` + moderation approval) is NOT re-spelled
+   * here: it is `publiclyVisibleBusiness()` from
+   * `database/business-availability.ts`, the same gate the public business and
+   * review surfaces use. Two predicates that read the same but live in two files
+   * diverge the first time one of them is edited.
    */
   private availableNow(): SQL[] {
     return [
       eq(offers.is_active, true),
-      eq(businesses.is_active, true),
-      this.approvedBusiness(),
+      publiclyVisibleBusiness(),
       gt(offers.stock, 0),
       gt(offers.pickup_end, sql`now()`),
     ];
@@ -351,6 +345,27 @@ export class OffersRepository {
     return { items: items, total: Number(totalRow) };
   }
 
+  /**
+   * True when this offer is readable by the public — the same `availableNow()`
+   * predicate `findById` filters with, asked as a yes/no question.
+   *
+   * It exists for the surfaces that must not narrate an offer they refuse to
+   * show: the review feed answers 404 for a paused, sold-out, expired or
+   * unapproved offer, and an empty review page would be a way to confirm the
+   * offer exists. Reusing `findById` instead would work and would be wasteful —
+   * it builds the whole offer card projection, groups by 28 columns and
+   * aggregates categories, all to answer a boolean.
+   */
+  async isPubliclyAvailable(id: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: offers.id })
+      .from(offers)
+      .innerJoin(businesses, eq(offers.business_id, businesses.id))
+      .where(and(eq(offers.id, id), ...this.availableNow()))
+      .limit(1);
+    return Boolean(row);
+  }
+
   async isBusinessAvailableForOffers(
     executor: DbExecutor,
     businessId: string,
@@ -358,13 +373,7 @@ export class OffersRepository {
     const [row] = await executor
       .select({ id: businesses.id })
       .from(businesses)
-      .where(
-        and(
-          eq(businesses.id, businessId),
-          eq(businesses.is_active, true),
-          sql`exists (select 1 from ${businessModeration} m where m.business_id = ${businesses.id} and m.verification_status = 'approved')`,
-        ),
-      )
+      .where(and(eq(businesses.id, businessId), publiclyVisibleBusiness()))
       .limit(1);
     return Boolean(row);
   }

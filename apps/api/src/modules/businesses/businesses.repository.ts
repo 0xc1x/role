@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -10,10 +11,16 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
+import {
+  moderationStatus,
+  publiclyVisibleBusiness,
+  type BusinessModerationStatus,
+} from '../../database/business-availability';
 import { DRIZZLE } from '../../database/database.tokens';
 import { escapeLike } from '../../common/utils/like';
 import {
   businessFinance,
+  businessHours,
   businessLocations,
   businessModeration,
   businessNotificationPreferences,
@@ -21,14 +28,43 @@ import {
   businesses,
   emailSends,
   emailTemplates,
+  type BusinessHoursRow,
 } from '../../database/schema';
 import { payouts } from '../../database/schema/payouts';
 import type {
   ListBusinessesQuery,
   ListBusinessLocationsQuery,
+  ListPublicBusinessesQuery,
 } from '@0xc1x/role-commons';
 
 export type BusinessRow = typeof businesses.$inferSelect;
+
+/**
+ * The columns a public business read is allowed to see.
+ *
+ * A `Pick`, not a `&` and not "whatever the select happens to return", so a new
+ * column on `businesses` has to be added to this list on purpose. It is the
+ * repository-side twin of `PublicBusinessSchema` in commons: the contract
+ * declares the payload, this declares the query, and both have to be widened
+ * deliberately for the public surface to change.
+ */
+export type PublicBusinessRow = Pick<
+  BusinessRow,
+  | 'id'
+  | 'name'
+  | 'type'
+  | 'slug'
+  | 'image'
+  | 'cover_image'
+  | 'rating'
+  | 'review_count'
+  | 'description'
+  | 'phone'
+  | 'email'
+  | 'website'
+  | 'created_at'
+  | 'updated_at'
+>;
 
 /**
  * Companion fields of the business aggregate, flattened under their historical
@@ -301,13 +337,14 @@ export class BusinessesRepository {
   }
 
   /**
-   * `verification_status = <status>` over the moderation companion. A business
-   * with no moderation row matches nothing, which is what the old NOT NULL
-   * column defaulting to 'pending' did. Written as `exists` so the count query
-   * keeps reading `businesses` alone.
+   * `verification_status = <status>` over the moderation companion, delegated to
+   * the one predicate definition in `database/business-availability.ts`. A
+   * business with no moderation row matches nothing, which is what the old NOT
+   * NULL column defaulting to 'pending' did. Written as `exists` so the count
+   * query keeps reading `businesses` alone.
    */
-  private moderatedAs(status: string): SQL {
-    return sql`exists (select 1 from ${businessModeration} m where m.business_id = ${businesses.id} and m.verification_status = ${status})`;
+  private moderatedAs(status: BusinessModerationStatus): SQL {
+    return moderationStatus(status);
   }
 
   /** The business is owned by the user (business_ownership is the source). */
@@ -456,6 +493,146 @@ export class BusinessesRepository {
     ]);
 
     return { items, total: Number(totalRow) };
+  }
+
+  // ─── Superficie pública (sin sesión, sin companions) ────────────────
+
+  /**
+   * Base projection for every public business read.
+   *
+   * It selects from `businesses` ALONE — no join to `business_ownership`,
+   * `business_finance` or `business_moderation`. Two reasons, and the second is
+   * the one that matters:
+   *
+   *  - The public contract has none of those columns, so joining would read three
+   *    tables per row to discard all of it.
+   *  - `owner_id` is the merchant's user account. A projection that pulls it and
+   *    then drops it in the mapper is one forgotten `.omit()` away from
+   *    publishing the owner identity of every business on the platform.
+   *
+   * `PublicBusinessRow` is a `Pick` of the business columns for the same reason
+   * the zod schema is not `BusinessSchema.omit()`: adding a column to
+   * `businesses` must not silently add it to the public surface.
+   */
+  private publicSelect() {
+    return this.db
+      .select({
+        id: businesses.id,
+        name: businesses.name,
+        type: businesses.type,
+        slug: businesses.slug,
+        image: businesses.image,
+        cover_image: businesses.cover_image,
+        rating: businesses.rating,
+        review_count: businesses.review_count,
+        description: businesses.description,
+        phone: businesses.phone,
+        email: businesses.email,
+        website: businesses.website,
+        created_at: businesses.created_at,
+        updated_at: businesses.updated_at,
+      })
+      .from(businesses);
+  }
+
+  /**
+   * Public catalog page: active + moderation-approved businesses, newest first.
+   *
+   * The gate (`publiclyVisibleBusiness()`) is applied here and not taken from the
+   * query, which is why the admin-only filters of `ListBusinessesQuerySchema`
+   * (`is_active`, `verification_status`, `owner_id`, `mine`) are simply not part
+   * of `ListPublicBusinessesQuerySchema`: on a public route they could only ever
+   * try to widen this predicate.
+   */
+  async listPublic(query: ListPublicBusinessesQuery): Promise<{
+    items: PublicBusinessRow[];
+    total: number;
+  }> {
+    const filters: SQL[] = [publiclyVisibleBusiness()];
+
+    if (query.search) {
+      filters.push(
+        sql`${businesses.name} ILIKE ${`%${escapeLike(query.search)}%`}`,
+      );
+    }
+
+    const where = and(...filters);
+    const offset = (query.page - 1) * query.limit;
+
+    // Same `where` object for the page and the count, and the count reads
+    // `businesses` alone: with the gate being an `exists` subquery there is
+    // nothing to join, so `meta.total` is the size of the set the page walks.
+    const [items, totalRow] = await Promise.all([
+      this.publicSelect()
+        .where(where)
+        .orderBy(desc(businesses.created_at), desc(businesses.id))
+        .limit(query.limit)
+        .offset(offset),
+      this.db
+        .select({ value: count() })
+        .from(businesses)
+        .where(where)
+        .then((rows) => rows[0]?.value ?? 0),
+    ]);
+
+    return { items, total: Number(totalRow) };
+  }
+
+  /**
+   * One public business, or `null`.
+   *
+   * `null` covers all three "not for you" cases — unknown id, deactivated,
+   * not approved — and the service turns every one of them into the same 404. A
+   * 403 here would confirm that the id exists, which is the only thing the
+   * caller did not already know.
+   */
+  async findPublicById(id: string): Promise<PublicBusinessRow | null> {
+    const [row] = await this.publicSelect()
+      .where(and(eq(businesses.id, id), publiclyVisibleBusiness()))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
+   * Pickup points of a public business, active only.
+   *
+   * `is_active = true` is the same rule the `business_locations` SELECT policy
+   * applies to a direct PostgREST read, and it is a different rule from the one on
+   * the business row: a business can be public while one of its points is
+   * paused, and a paused point is not somewhere to collect food.
+   */
+  async listPublicLocations(
+    businessId: string,
+  ): Promise<BusinessLocationRow[]> {
+    return this.db
+      .select()
+      .from(businessLocations)
+      .where(
+        and(
+          eq(businessLocations.business_id, businessId),
+          eq(businessLocations.is_active, true),
+        ),
+      )
+      .orderBy(
+        desc(businessLocations.is_headquarter),
+        asc(businessLocations.name),
+      );
+  }
+
+  /**
+   * Weekly schedule of a public business, monday first.
+   *
+   * `day` is a Postgres enum, and enums are ordered by their declaration order,
+   * so `order by day` is already monday→sunday. The rows are bounded to seven by
+   * `unique(business_id, day)`, which is why this is not paginated: there is no
+   * second page of a weekly schedule.
+   */
+  async listPublicHours(businessId: string): Promise<BusinessHoursRow[]> {
+    return this.db
+      .select()
+      .from(businessHours)
+      .where(eq(businessHours.business_id, businessId))
+      .orderBy(asc(businessHours.day));
   }
 
   // Business Locations

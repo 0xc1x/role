@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   businessFinance,
+  businessHours,
   businessLocations,
   businessModeration,
   businessOwnership,
@@ -55,18 +56,52 @@ export async function seedBusiness(
   return row;
 }
 
-export async function seedLocation(db: TestDatabase, businessId: string) {
+export async function seedLocation(
+  db: TestDatabase,
+  businessId: string,
+  overrides: { name?: string; is_active?: boolean } = {},
+) {
   const [row] = await db
     .insert(businessLocations)
     .values({
       business_id: businessId,
-      name: 'Matriz',
+      name: overrides.name ?? 'Matriz',
       address: 'Calle 123',
+      is_active: overrides.is_active ?? true,
       latitude: '-33.45',
       longitude: '-70.66',
     })
     .returning();
   if (!row) throw new Error('seedLocation falló');
+  return row;
+}
+
+/**
+ * One weekday of a weekly schedule. `day` accepts any `DAYS_OF_WEEK` value; the
+ * storefront spec seeds two of them out of order on purpose, because the read
+ * orders by the enum's declaration order and not by insertion order.
+ */
+export async function seedBusinessHours(
+  db: TestDatabase,
+  businessId: string,
+  overrides: {
+    day?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+    open_time?: string;
+    close_time?: string;
+    is_closed?: boolean;
+  } = {},
+) {
+  const [row] = await db
+    .insert(businessHours)
+    .values({
+      business_id: businessId,
+      day: overrides.day ?? 'monday',
+      open_time: overrides.open_time ?? '09:00:00',
+      close_time: overrides.close_time ?? '18:00:00',
+      is_closed: overrides.is_closed ?? false,
+    })
+    .returning();
+  if (!row) throw new Error('seedBusinessHours falló');
   return row;
 }
 

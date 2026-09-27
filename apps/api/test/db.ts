@@ -117,6 +117,86 @@ export async function createTestDb(): Promise<TestDbContext> {
   // NOTHING`, so the constraint it infers against is what makes a second save
   // of the same offer a no-op instead of a 23505. See the MIRROR GAP note in
   // src/database/schema/favorites.ts for why the constraint is not declared there.
+  //
+  // ─── Object-shape gap: the review and schedule objects ────────────────
+  //
+  // Everything above is a CONSTRAINT or a FUNCTION the mirror declares the
+  // columns of. The three blocks below are different: the mirror does not
+  // declare these objects AT ALL, and the specs that exercise the public
+  // storefront and the review feeds need them to exist.
+  //
+  // They are installed here rather than generated into `drizzle/` on purpose.
+  // The live database is owned by Supabase and the Drizzle folders are an
+  // offline mirror of it (`drizzle.config.ts`: "Supabase owns DDL. Use
+  // pull/introspect only — do not push migrations from the API"), so a
+  // hand-written CREATE TABLE in a migration folder would claim the API applied
+  // DDL it never applied, and `drizzle-kit generate` is the only sanctioned way
+  // to grow that mirror. Copying an existing Supabase object into the harness
+  // keeps the change to the one file that already documents this class of gap.
+  //
+  // What each block is and why a spec cannot do without it:
+  //
+  //  1. `reviews` moderation columns. The mirror was pulled before
+  //     `20260927021015_reviews_moderation_soft_hide.sql` added `is_hidden`,
+  //     `moderated_at`, `moderated_by` and `hidden_reason` (only the later
+  //     `moderation_reason` column is in a Drizzle folder). A feed that filters
+  //     `is_hidden = false` would fail with 42703, and a spec that could not
+  //     write a hidden row could not prove that a hidden row stays out of a
+  //     public feed — the single behaviour the moderation policy exists for.
+  //  2. The three `reviews` partial indexes. The public feed's whole cost story
+  //     is `idx_reviews_visible_business_created (business_id, created_at desc)
+  //     where is_hidden = false`; without it the harness cannot show that the
+  //     feed and its count are served by that index instead of a sequential
+  //     scan. `idx_reviews_user` is here for the same reason on the "my" feed.
+  //  3. `business_hours`. The table has existed in Supabase since the businesses
+  //     migration and the mobile reads it straight from PostgREST, but the API
+  //     never declared it, so the storefront's schedule had no way to be read.
+  //     See the MIRROR GAP note in src/database/schema/business-hours.ts.
+  //
+  // All three are `if not exists` because the harness runs per spec file against
+  // a fresh database: the idempotence is there so a future mirror that DOES
+  // carry them does not raise 42P07 or 42701 and take the whole suite down.
+  await client.unsafe(`
+    do $$
+    begin
+      if not exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public' and table_name = 'reviews'
+          and column_name = 'is_hidden'
+      ) then
+        alter table public.reviews
+          add column is_hidden boolean not null default false,
+          add column moderated_at timestamp with time zone,
+          add column moderated_by uuid references public.profiles (id) on delete set null,
+          add column hidden_reason text;
+      end if;
+    end
+    $$;
+
+    create index if not exists idx_reviews_visible_business_created
+      on public.reviews (business_id, created_at desc)
+      where is_hidden = false;
+    create index if not exists idx_reviews_hidden_created
+      on public.reviews (created_at desc)
+      where is_hidden = true;
+    create index if not exists idx_reviews_user
+      on public.reviews (user_id);
+    create index if not exists idx_reviews_order_id
+      on public.reviews (order_id);
+
+    create table if not exists public.business_hours (
+      id uuid primary key default gen_random_uuid(),
+      business_id uuid not null references public.businesses (id) on delete cascade,
+      day public.day_of_week not null,
+      open_time time not null,
+      close_time time not null,
+      is_closed boolean not null default false,
+      created_at timestamp with time zone not null default now(),
+      updated_at timestamp with time zone not null default now(),
+      constraint business_hours_business_id_day_key unique (business_id, day)
+    );
+  `);
+
   await client.unsafe(`
     alter table public.user_preferences
       add constraint user_preferences_user_id_key unique (user_id);
