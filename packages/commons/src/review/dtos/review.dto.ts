@@ -28,7 +28,12 @@ export type ListReviewsForModerationQuery = z.infer<
 /** Los tres estados del filtro de la bandeja: todas, ocultas, visibles. */
 export type ReviewVisibility = ListReviewsForModerationQuery["visibility"];
 
-/** Cuerpo de `PATCH /reviews/:id/hide`: el motivo es obligatorio. */
+/**
+ * Cuerpo de `PATCH /reviews/:id/hide`.
+ *
+ * `moderation_reason` es obligatorio y sale de la taxonomía declarada;
+ * `hidden_reason` es el detalle libre, obligatorio solo para `other`.
+ */
 export type HideReviewDto = z.infer<typeof HideReviewSchema>;
 
 export type ReviewModerationPaginatedData =
