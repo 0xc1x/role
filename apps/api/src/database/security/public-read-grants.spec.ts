@@ -670,7 +670,18 @@ describe('businesses column split phase 3 closes the anon exposure', () => {
     'supabase',
     'migrations',
   );
-  const PHASE3_FILE = '20260926000011_businesses_drop_sensitive_columns.sql';
+  // Resolved by suffix, not by a hardcoded version. The Supabase server assigns
+  // the migration version, so the filename differs per environment: pinning
+  // `20260926000011_...` made this whole block fail with ENOENT the moment the
+  // migration was actually applied and renamed to its recorded version.
+  const PHASE3_FILE = readdirSync(MIGRATIONS_DIR).find((f) =>
+    f.endsWith('_businesses_drop_sensitive_columns.sql'),
+  );
+  if (!PHASE3_FILE) {
+    throw new Error(
+      'businesses_drop_sensitive_columns migration not found in supabase/migrations',
+    );
+  }
   const PHASE3_PATH = join(MIGRATIONS_DIR, PHASE3_FILE);
   const PHASE3: string = readFileSync(PHASE3_PATH, 'utf8');
 

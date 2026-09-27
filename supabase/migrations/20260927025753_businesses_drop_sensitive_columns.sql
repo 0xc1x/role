@@ -25,23 +25,6 @@
 
 begin;
 
--- ── 1. Rewrite the ten functions that read the moved columns ────────────────
---
--- These are rewritten IN PLACE from their own current definition rather than
--- pasted here as a full body. Two reasons.
---
--- First, honesty: reserve_offer, generate_payouts, set_order_status,
--- cancel_order, validate_pickup_code and active_offers_near move money and
--- orders. A migration that retypes their bodies is a migration that can
--- silently change behaviour nobody re-reads. Rewriting only the specific
--- predicate guarantees that every other line of a function that was audited is
--- preserved byte for byte.
---
--- Second, drift detection: each substitution asserts that its pattern is
--- present. If someone has edited one of these functions since this migration
--- was written, the migration fails instead of quietly doing nothing and
--- leaving a function that reads a column that no longer exists.
-
 -- PL/pgSQL cannot declare a nested function inside DECLARE, so the helper is a
 -- separate statement. It lives in pg_temp because it exists only for this
 -- migration.
@@ -152,11 +135,6 @@ end $rewrite$;
 -- cannot express. The mobile client used to put owner_id in the insert body and
 -- rely on RLS to validate it.
 --
--- service_role has no auth.uid(), so ownership is left to the API, which writes
--- business_ownership in the same transaction. Finance and moderation are always
--- created, because the API reads businesses INNER JOINed with them and a
--- missing row would read as "business not found".
-
 create or replace function public.bootstrap_business_companions()
 returns trigger
 language plpgsql security definer
@@ -172,11 +150,11 @@ begin
 
   insert into public.business_finance (business_id)
   values (new.id)
-  on conflict (business_id) do nothing;
+    on conflict (business_id) do nothing;
 
   insert into public.business_moderation (business_id)
   values (new.id)
-  on conflict (business_id) do nothing;
+    on conflict (business_id) do nothing;
 
   return new;
 end;
@@ -187,21 +165,6 @@ create trigger trg_bootstrap_business_companions
   after insert on public.businesses
   for each row
   execute function public.bootstrap_business_companions();
-
--- ── 3. Verification state moves to the moderation companion ────────────────
---
--- sync_business_verification splits in two. A BEFORE trigger on
--- business_moderation sets verified_at, because an AFTER trigger cannot modify
--- NEW. A second AFTER trigger propagates is_active to businesses, which is a
--- different table and therefore a separate statement.
---
--- The two notification triggers also move, because after the DROP nothing
--- updates businesses.verification_status.
---
--- notify_business_pending deliberately STAYS on businesses. If it moved to the
--- companion it would fire from inside the bootstrap's insert, and at that point
--- the business row is not readable yet. It also tolerates a missing moderation
--- row, so it does not depend on AFTER trigger firing order.
 
 create or replace function public.sync_business_verification()
 returns trigger
@@ -272,7 +235,7 @@ begin
     select id into owner_template_id from email_templates where name = 'business-pending-owner' and is_active and deleted_at is null limit 1;
     -- resolver emails
     select value #>> '{}' into admin_email from app_config where key = 'contact.negocios_email' and active and is_public;
-    if admin_email is null or admin_email !~ '@' then admin_email := 'negocios@role.app'; end if;
+    if admin_email is null or admin_email !~ '@' then admin_email := 'negocios@role.ec'; end if;
     select coalesce(NEW.email, u.email) into owner_email
       from public.business_ownership o
       join auth.users u on u.id = o.owner_id
