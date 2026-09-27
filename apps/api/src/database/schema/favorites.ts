@@ -24,10 +24,14 @@ export const favorites = pgTable('favorites', {
   id: uuid('id').primaryKey().defaultRandom(),
   user_id: uuid('user_id')
     .notNull()
-    .references(() => profiles.id, { onDelete: 'no action' }),
+    .references(() => profiles.id, {
+      onDelete: 'cascade',
+    }),
   offer_id: uuid('offer_id')
     .notNull()
-    .references(() => offers.id, { onDelete: 'no action' }),
+    .references(() => offers.id, {
+      onDelete: 'cascade',
+    }),
   created_at: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

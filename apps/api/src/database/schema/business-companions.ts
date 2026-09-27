@@ -61,7 +61,9 @@ export const businessModeration = pgTable('business_moderation', {
     .references(() => businesses.id, { onDelete: 'cascade' }),
   verification_status: text('verification_status').notNull().default('pending'),
   verified_at: timestamp('verified_at', { withTimezone: true }),
-  verified_by: uuid('verified_by').references(() => profiles.id),
+  verified_by: uuid('verified_by').references(() => profiles.id, {
+    onDelete: 'no action',
+  }),
   rejection_reason: text('rejection_reason'),
   updated_at: timestamp('updated_at', { withTimezone: true })
     .notNull()

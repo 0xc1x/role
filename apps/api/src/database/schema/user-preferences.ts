@@ -32,7 +32,9 @@ export const userPreferences = pgTable('user_preferences', {
   id: uuid('id').primaryKey().defaultRandom(),
   user_id: uuid('user_id')
     .notNull()
-    .references(() => profiles.id, { onDelete: 'no action' }),
+    .references(() => profiles.id, {
+      onDelete: 'cascade',
+    }),
   notification_radius_km: integer('notification_radius_km').default(5),
   favorite_categories: text('favorite_categories').array().default([]),
   language: text('language').default('es'),
@@ -82,7 +84,9 @@ export const userConsents = pgTable('user_consents', {
   id: uuid('id').primaryKey().defaultRandom(),
   user_id: uuid('user_id')
     .notNull()
-    .references(() => profiles.id, { onDelete: 'no action' }),
+    .references(() => profiles.id, {
+      onDelete: 'cascade',
+    }),
   consent_type: text('consent_type').notNull(),
   granted: boolean('granted').notNull().default(false),
   granted_at: timestamp('granted_at', { withTimezone: true }),

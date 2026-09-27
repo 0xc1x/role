@@ -72,7 +72,9 @@ export const pushSends = pgTable(
       .references(() => campaigns.id, { onDelete: 'cascade' }),
     user_id: uuid('user_id')
       .notNull()
-      .references(() => profiles.id, { onDelete: 'cascade' }),
+      .references(() => profiles.id, {
+        onDelete: 'no action',
+      }),
     status: pushSendStatusEnum('status').notNull().default('pending'),
     attempts: integer('attempts').notNull().default(0),
     max_attempts: integer('max_attempts').notNull().default(3),

@@ -15,7 +15,7 @@ export const coupons = pgTable('coupons', {
   // Nullable: `null` = cupón global de plataforma (creado en admin), aplicable
   // a ofertas de cualquier negocio. Los cupones de negocio lo setean siempre.
   business_id: uuid('business_id').references(() => businesses.id, {
-    onDelete: 'no action',
+    onDelete: 'cascade',
   }),
   code: text('code').notNull(),
   name: text('name').notNull(),
