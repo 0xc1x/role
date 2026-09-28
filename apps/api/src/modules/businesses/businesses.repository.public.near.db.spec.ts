@@ -179,7 +179,7 @@ describe('BusinessesRepository.listPublic — which businesses are in the list',
     expect(alive.items.map((b) => b.id)).toEqual([live.id]);
   });
 
-  test('the moderation gate holds, and the RPC has no gate to fall back on', async () => {
+  test('the moderation gate holds, and the function agrees now', async () => {
     const p = prefix();
     const owner = await seedProfile(ctx.db);
 
@@ -188,6 +188,11 @@ describe('BusinessesRepository.listPublic — which businesses are in the list',
     // rows that reach the API ungated if `publiclyVisibleBusiness()` is ever
     // dropped from this query — and a pending business on the map is a business
     // nobody has approved yet, publishing its address and coordinates.
+    //
+    // Before 20260928044518 the function had no gate at all, so this spec could
+    // only assert the API was stricter and called the difference deliberate. It
+    // now asserts the two agree, which is the property that matters: two
+    // independent implementations of one rule, checked against each other.
     const cases = [
       {
         name: 'revision',

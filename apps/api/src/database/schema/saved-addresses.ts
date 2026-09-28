@@ -43,17 +43,26 @@ import { profiles } from './profiles';
  * test database has no triggers, and setting it here is what every other
  * repository in this API does anyway.
  *
- * INVARIANT — AND IT IS NOT ENFORCED HERE: at most one row per user with
- * `is_default = true`. The live table has a primary key and the foreign key to
- * profiles and NOTHING else — no unique, no partial unique index, no trigger.
- * Two default rows are therefore writable directly in SQL, and
- * `dispatch-nearby-offers` would then pick one of them arbitrarily
- * (`userAddressMap.set` over an unordered result set) and notify the user about
- * offers near an address they may not have chosen. That is why every write that
- * can set the flag goes through `SavedAddressesService`, inside a transaction,
- * and why the comment there says so out loud. A partial unique index
- * (`unique (user_id) where is_default`) is the real fix, but it is DDL: it
- * belongs in a Supabase migration, which this change is not allowed to write.
+ * INVARIANT — enforced in the DATABASE, and deliberately NOT declared in this
+ * mirror. At most one row per user with `is_default = true`, held by
+ * `idx_saved_addresses_one_default` (`unique (user_id) where is_default`),
+ * applied as `20260927141632_saved_addresses_one_default`. Two default rows are
+ * therefore not writable even in plain SQL, and `dispatch-nearby-offers`
+ * (`userAddressMap.set` over an unordered result set) can no longer be handed
+ * two candidates.
+ *
+ * The index is omitted here for the same reason `favorites` omits its unique
+ * and `payment_methods` omits its one-default index: this package generates
+ * migrations under `apps/api/drizzle/`, and declaring it in the schema would
+ * make `drizzle-kit generate` emit an `ADD CONSTRAINT` for something production
+ * already has, which fails on apply. The harness omits it too, so the specs
+ * below pin the SERVICE's transaction and not the index.
+ *
+ * The transaction is not redundant with the index. It closes a window the
+ * index cannot: mobile writes this table through PostgREST in two separate
+ * statements, so between its clear and its set the user has ZERO defaults —
+ * which no unique index forbids, and which is exactly the state that stops
+ * last-minute-deal notifications silently.
  */
 export const savedAddresses = pgTable('saved_addresses', {
   id: uuid('id').primaryKey().defaultRandom(),

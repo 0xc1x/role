@@ -186,7 +186,14 @@ describe('SavedAddressesService (DB real)', () => {
     });
   });
 
-  describe('at most one default — the rule the database does not enforce', () => {
+  describe(// The title used to say 'the rule the database does not enforce'. It had
+  // stopped being true when `20260927141632_saved_addresses_one_default`
+  // landed, and this test kept passing anyway, because the harness omits
+  // that index. So it never pinned what its own comment claimed, and nobody
+  // noticed the claim was false. What it actually pins is the service's
+  // transaction, which is the half that closes mobile's two-statement window
+  // and that no unique index could close.
+  'at most one default — the transaction the index cannot replace', () => {
     test('creating a second default clears the first', async () => {
       const first = await service.create(authUser(consumerId), address());
       const second = await service.create(

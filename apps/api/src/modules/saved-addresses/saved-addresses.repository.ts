@@ -84,11 +84,13 @@ export class SavedAddressesRepository {
   /**
    * Clear the caller's default flag everywhere except `exceptId`.
    *
-   * THIS IS HALF OF THE ONE-DEFAULT RULE, and the database enforces none of it
-   * — `saved_addresses` has a primary key and a foreign key and no unique
-   * constraint of any kind, so without this statement a second default row is
-   * perfectly writable and `dispatch-nearby-offers` would pick one of the two
-   * arbitrarily. Narrowed to `is_default = true` on purpose: a wider update would
+   * THIS IS THE PREVENTING HALF OF THE ONE-DEFAULT RULE; the other half is
+   * `idx_saved_addresses_one_default`, applied as
+   * `20260927141632_saved_addresses_one_default`. Clear prevents, the index
+   * detects: without this statement two promotions can interleave and the loser
+   * gets a 23505 instead of a silently doubled default, and without the index
+   * `dispatch-nearby-offers` would still be free to pick one of two. Narrowed to
+   * `is_default = true` on purpose: a wider update would
    * bump `updated_at` on rows that did not change, and `exceptId` is applied
    * only when there is one because `ne(column, null)` in SQL is `!= null`, which
    * is true for every row and would clear the very row being promoted.

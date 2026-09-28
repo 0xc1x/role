@@ -43,13 +43,16 @@ import { SavedAddressesRepository } from './saved-addresses.repository';
  * consequence is silent: the user gets notifications for offers near an address
  * they may not have meant, or none at all.
  *
- * SO THIS SERVICE IS THE ONLY ENFORCEMENT POINT, and it is deliberately the
- * only one: every write that can set the flag clears the caller's other rows
- * first, inside the same transaction, and the tests in
- * `saved-addresses.service.db.spec.ts` pin that. The real fix is a partial
- * unique index (`unique (user_id) where is_default`), which is DDL and therefore
- * belongs in a Supabase migration — not in a PR that is only allowed to touch
- * the API. Until that index exists, this class is the guarantee.
+ * SO THIS SERVICE IS THE PREVENTING ENFORCEMENT POINT, and the database is the
+ * detecting one. Every write that can set the flag clears the caller's other
+ * rows first, inside the same transaction, and the tests in
+ * `saved-addresses.service.db.spec.ts` pin that. The partial unique index
+ * (`unique (user_id) where is_default`) landed as
+ * `20260927141632_saved_addresses_one_default`; it does not make this redundant,
+ * because it cannot see mobile's two PostgREST statements, and between their
+ * clear and their set the user holds zero defaults — which is not a violation
+ * of any unique index and is exactly what silently stops the nearby-offers
+ * notifications. Only a transaction closes that.
  */
 @Injectable()
 export class SavedAddressesService {

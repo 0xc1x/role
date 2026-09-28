@@ -772,23 +772,28 @@ export class BusinessesRepository {
    *     the distance ORDER BY key inert (`NULLS LAST`) and leaves
    *     `deals_total desc, name asc, id asc` as the ranking.
    *
-   * ─── ONE DIVERGENCE FROM THE SQL, and it is still one ─────────────────────
+   * ─── NO DIVERGENCE FROM THE SQL, AND THERE USED TO BE ONE ───────────────
    *
-   * `publiclyVisibleBusiness()` is applied even though `active_businesses_near`
-   * has no business gate anywhere — neither `b.is_active` nor the
-   * `business_moderation` exists the sibling explore functions now carry. The
-   * function reaches these tables through PostgREST under RLS; the API has no
-   * RLS and would otherwise publish a business still in review. Every other
-   * public surface here resolves through the same function (`availableNow()` in
-   * the offers catalog, the gate on this route's own previous shape,
-   * `activeOfferCounts()` in the categories aggregate, the `listPopularZones`
-   * read), and as of
-   * `20260928041322_explore_aggregates_require_approved_business.sql` the two
-   * aggregates enforce the SAME PREDICATE in SQL — so those two are no longer
-   * API-local copies of a decision, and this read is the last public catalog
-   * surface whose function has no gate to fall back on. The gate sits on the
-   * OUTER query, where `businesses` is already joined for the `type` filter, and
-   * correlates to that row.
+   * `publiclyVisibleBusiness()` is applied here even though the function
+   * `active_businesses_near` carried no business gate of any kind — no
+   * `businesses.is_active`, no `business_moderation`. It was the last public
+   * catalog surface in that position, and the reason it mattered is the
+   * asymmetry between the two callers: the function reaches these tables
+   * through PostgREST under RLS, while this API connects as the table owner
+   * and is exempt from it. A business still in review was therefore invisible
+   * to the API and visible to mobile.
+   *
+   * `20260928044518_active_businesses_near_require_approved_business.sql`
+   * closed it in the function, joining and gating inside `matching_offers`
+   * so the predicate filters before the grouping rather than after it. The
+   * two are now independent implementations of one rule, and the spec runs
+   * the function's own body beside this read to prove they agree — which is
+   * the drift risk ADR-0008 exists to manage, not a divergence to justify.
+   *
+   * The gate sits on the OUTER query here, where `businesses` is already
+   * joined for the `type` filter, and correlates to that row. The two
+   * placements are equivalent in result: moderation is per-business, so a
+   * business whose only offers belong to it is excluded either way.
    *
    * ─── WHAT USED TO BE A SECOND DIVERGENCE, AND IS NOT ──────────────────────
    *

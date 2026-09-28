@@ -91,6 +91,61 @@ migrations here have now been repaired after being applied out-of-band, and
 the symptom in both cases was identical: a fix that was correct, tested, and
 committed, and a database that never received it.
 
+## Repaired: an accidental data change, reverted and recorded here (2026-09-28)
+
+**This one has no migration file, on purpose.** A verification query I wrote to
+prove the new moderation gate worked contained an `UPDATE` inside a data-modifying
+CTE. In PostgreSQL a data-modifying CTE is not a dry run — it executes. The query
+was meant to observe what `active_businesses_near` returned for a business under
+review and instead set that business to `approved`.
+
+The blast radius was larger than the column I typed, because `business_moderation`
+carries three triggers and an approval fires all of them:
+
+- `sync_business_verification` (BEFORE) set `verified_at = now()`.
+- `apply_business_verification_state` (AFTER) set `businesses.is_active = true`.
+- `notify_business_verification` (AFTER) **inserted a `business-approved` email
+  into `email_sends` with status `pending` and `attempts = 0`**, addressed to the
+  owner. It had not been sent. It was the most urgent part of the repair and also
+  the most likely to be missed, because a queued email looks identical to a
+  legitimate one in every table you would think to check.
+
+Repair, in the order that mattered:
+
+1. Deleted the queued `email_sends` row (`b5330ef3-…`, `pending`, `attempts = 0`).
+2. Set the row back to `pending` with `verified_at = null`, which fires
+   `apply_business_verification_state` and so restored `businesses.is_active = false`.
+   The notify trigger was not a risk for the revert: it only acts on `approved` and
+   `rejected`, so `pending` inserts nothing.
+
+**The prior status was not `pending` by luck, it was reconstructed from evidence.**
+The `UPDATE` destroyed `verified_at`, so the direct evidence was gone. What
+settled it is `rejection_reason` still being null: the rejection path always
+records one — the notify function itself writes
+`coalesce(NEW.rejection_reason, 'No especificado')` when it queues a rejection
+email — so a business that had been rejected could not have an empty reason. The
+row was pending, and it is pending again. If that reasoning is ever in doubt,
+check it against this paragraph rather than assuming.
+
+Final state: `Cevicheria Falsa` is `pending`, `is_active = false`, `verified_at`
+null, `updated_at` back to its original `2026-09-02 00:48:47.948573+00` (the
+revert did not touch it, because the BEFORE trigger only rewrites `verified_at`),
+zero queued emails from the window, and the moderation split back to 14 approved /
+2 pending.
+
+**Recorded here rather than in a migration file** because a file named after this
+would put "put a business back to pending" in the permanent schema history, and
+because the rule this directory exists to enforce — every DDL change enters
+through `apply_migration` and is proven with `md5sum` — is about DDL. This was
+data, not schema, and pretending otherwise would have been the same class of
+mistake in a new place.
+
+**The lesson is about the query, not the trigger.** Reading a "before" value by
+running an `UPDATE` and observing what the query returns is a reasonable-sounding
+idiom and a data write. Any verification query here must be a `SELECT`, and
+anything that mutates has to be a separate statement whose effect is stated in
+advance.
+
 ## Repaired: migrations applied without touching the ledger
 
 `businesses_client_write_grants` restored the client write path on
