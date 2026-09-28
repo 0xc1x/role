@@ -1,3 +1,4 @@
+export * from "./dtos/coupon-validation.dto";
 export * from "./dtos/order.dto";
 export * from "./dtos/order-query.dto";
 export * from "./dtos/order-event.dto";
@@ -9,3 +10,4 @@ export * from "./schemas/order.schema";
 export * from "./schemas/order-query.schema";
 export * from "./schemas/order-event.schema";
 export * from "./schemas/reserve-offer.schema";
+export * from "./schemas/coupon-validation.schema";

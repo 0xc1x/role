@@ -5,6 +5,7 @@ import {
   toCouponInsert,
   toCouponListItem,
   toCouponUpdate,
+  toCouponValidation,
 } from './coupons.mapper';
 import type { CouponListRow, CouponRow } from './coupons.repository';
 
@@ -102,11 +103,94 @@ describe('toCouponUpdate', () => {
   });
 });
 
+describe('toCouponValidation', () => {
+  test('aceptado expone el dinero y el código consultado', () => {
+    expect(
+      toCouponValidation(
+        { status: 'accepted', couponId: 'c1', discount: 399, finalPrice: 3591 },
+        'DESC10',
+      ),
+    ).toEqual({
+      applies: true,
+      code: 'DESC10',
+      discount: 399,
+      final_price: 3591,
+    });
+  });
+
+  // `orders.price` is `numeric(12,2)`, so the DB rounds what the evaluator
+  // computes. The wire number has to be the stored one: quoting the raw float
+  // would put 2660.1330000000003 on the checkout screen and 2660.13 on the
+  // receipt, which is the bug this endpoint exists to remove.
+  test('el dinero se redondea a la escala de orders.price', () => {
+    expect(
+      toCouponValidation(
+        {
+          status: 'accepted',
+          couponId: 'c1',
+          discount: 1329.8670000000003,
+          finalPrice: 2660.1330000000003,
+        },
+        'PROMO',
+      ),
+    ).toEqual({
+      applies: true,
+      code: 'PROMO',
+      discount: 1329.87,
+      final_price: 2660.13,
+    });
+  });
+
+  test('rechazado por etapa de revisión lleva code y reason', () => {
+    expect(
+      toCouponValidation(
+        {
+          status: 'rejected',
+          code: 'COUPON_NOT_APPLICABLE',
+          reason: 'wrong_business',
+        },
+        'DESC10',
+      ),
+    ).toEqual({
+      applies: false,
+      code: 'DESC10',
+      error: 'COUPON_NOT_APPLICABLE',
+      reason: 'wrong_business',
+    });
+  });
+
+  // `reason` must be ABSENT, not undefined: the contract makes it optional
+  // precisely because these two codes have no review stage of their own.
+  test('rechazado por max_uses o min_order_amount no inventa reason', () => {
+    for (const code of ['COUPON_EXHAUSTED', 'COUPON_MIN_NOT_MET'] as const) {
+      const out = toCouponValidation({ status: 'rejected', code }, 'DESC10');
+      expect(out).toEqual({ applies: false, code: 'DESC10', error: code });
+      expect('reason' in out).toBe(false);
+    }
+  });
+
+  test('nunca filtra la fila del cupón', () => {
+    const out = toCouponValidation(
+      { status: 'accepted', couponId: 'c1', discount: 10, finalPrice: 90 },
+      'DESC10',
+    );
+    // Everything the coupon row holds beyond the applied discount is back
+    // office material: name, redemption count, scope, expiry.
+    expect(Object.keys(out).sort()).toEqual([
+      'applies',
+      'code',
+      'discount',
+      'final_price',
+    ]);
+  });
+});
+
 describe('CouponMapper', () => {
   test('expone los conversores', () => {
     expect(CouponMapper.toDto).toBe(toCouponDto);
     expect(CouponMapper.toListItem).toBe(toCouponListItem);
     expect(CouponMapper.toInsert).toBe(toCouponInsert);
     expect(CouponMapper.toUpdate).toBe(toCouponUpdate);
+    expect(CouponMapper.toValidation).toBe(toCouponValidation);
   });
 });

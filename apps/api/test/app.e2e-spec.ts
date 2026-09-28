@@ -14,7 +14,7 @@ import {
   seedOffer,
   seedProfile,
 } from './seed';
-import { deviceTokens } from '../src/database/schema';
+import { coupons, deviceTokens } from '../src/database/schema';
 
 /**
  * E2E marketplace (auth → oferta → orden → recogida → review → payout).
@@ -121,6 +121,73 @@ describe('Marketplace e2e', () => {
 
   test('sin token → 401', async () => {
     await api().get('/api/v1/orders').expect(401);
+  });
+
+  // The coupon pre-check is authenticated but NOT role-restricted, and this is
+  // the only layer that can prove the difference: the controller spec reads
+  // metadata, this one crosses the real global guard. A `@Public()` slip would
+  // turn a code oracle into an unauthenticated enumeration of every promotion,
+  // which is the thing the sibling admin routes withhold.
+  //
+  // Two requests, deliberately. The e2e suite shares one throttled IP and sits
+  // close to the 100/min default bucket; the per-stage verdicts belong in the
+  // database parity spec, not here.
+  test('cupones: el pre-check exige sesión, no exige rol, y la lista no', async () => {
+    await api()
+      .post('/api/v1/coupons/validate')
+      .send({ code: 'E2E10', business_id: businessId, amount: 3990 })
+      .expect(401);
+
+    // The pre-check is the ONE exception to the admin-only block. If this ever
+    // returns 200 for a consumer, the enumeration the module withholds is open.
+    await api()
+      .get('/api/v1/coupons')
+      .set('Authorization', `Bearer ${await token(consumerId, 'c@t.cl')}`)
+      .expect(403);
+  });
+
+  test('cupones: el pre-check y la reserva cobran el mismo número', async () => {
+    const [coupon] = await ctx.db
+      .insert(coupons)
+      .values({
+        business_id: businessId,
+        code: 'E2E10',
+        name: 'E2E 10%',
+        type: 'percentage',
+        value: '10',
+      })
+      .returning();
+    const amount = 3990;
+    const expectedFinal = 3591;
+
+    const validation = await api()
+      .post('/api/v1/coupons/validate')
+      .set('Authorization', `Bearer ${await token(consumerId, 'c@t.cl')}`)
+      .send({ code: 'E2E10', business_id: businessId, amount })
+      .expect(200);
+    expect(validation.body).toEqual({
+      applies: true,
+      code: 'E2E10',
+      discount: amount - expectedFinal,
+      final_price: expectedFinal,
+    });
+
+    // And the number the pre-check quoted is the number the order carries.
+    const fresh = await seedProfile(ctx.db);
+    const reserved = await api()
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${await token(fresh, 'coupon@t.cl')}`)
+      .send({ offer_id: offerId, coupon_code: 'E2E10' })
+      .expect(201);
+    expect(reserved.body.price).toBe(expectedFinal);
+    expect(reserved.body.coupon_id).toBe(coupon?.id);
+
+    // The pre-check spent nothing: only the reservation did.
+    const [row] = await ctx.db
+      .select({ used_count: coupons.used_count })
+      .from(coupons)
+      .where(eq(coupons.id, coupon!.id));
+    expect(row?.used_count).toBe(1);
   });
 
   test('emite tokens y lista órdenes vacías', async () => {

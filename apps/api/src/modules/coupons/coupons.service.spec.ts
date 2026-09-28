@@ -64,6 +64,7 @@ describe('CouponsService', () => {
             insert: jest.fn(),
             findById: jest.fn(),
             findGlobalByCode: jest.fn(),
+            findApplicableByCode: jest.fn(),
             list: jest.fn(),
             update: jest.fn(),
             remove: jest.fn(),
@@ -135,6 +136,69 @@ describe('CouponsService', () => {
       await expect(service.getById('nonexistent')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('validate', () => {
+    it('should read the non-locking resolution and map the verdict', async () => {
+      repository.findApplicableByCode.mockResolvedValue(
+        makeRow({ type: 'percentage', value: '10' }),
+      );
+
+      const result = await service.validate({
+        code: 'PROMO10',
+        business_id: '33333333-3333-3333-3333-333333333333',
+        amount: 3990,
+      });
+
+      expect(repository.findApplicableByCode).toHaveBeenCalledWith(
+        '33333333-3333-3333-3333-333333333333',
+        'PROMO10',
+      );
+      expect(result).toEqual({
+        applies: true,
+        code: 'PROMO10',
+        discount: 399,
+        final_price: 3591,
+      });
+    });
+
+    it('should report a rejection instead of throwing', async () => {
+      repository.findApplicableByCode.mockResolvedValue(
+        makeRow({ is_active: false }),
+      );
+
+      const result = await service.validate({
+        code: 'PROMO10',
+        business_id: '33333333-3333-3333-3333-333333333333',
+        amount: 3990,
+      });
+
+      expect(result).toEqual({
+        applies: false,
+        code: 'PROMO10',
+        error: 'COUPON_NOT_APPLICABLE',
+        reason: 'inactive',
+      });
+    });
+
+    it('should not touch the redemption counter', async () => {
+      repository.findApplicableByCode.mockResolvedValue(
+        makeRow({ max_uses: 1, used_count: 0 }),
+      );
+
+      const result = await service.validate({
+        code: 'PROMO10',
+        business_id: '33333333-3333-3333-3333-333333333333',
+        amount: 3990,
+      });
+
+      expect(result.applies).toBe(true);
+      // The pre-check reserves nothing: no transaction, no increment, no insert.
+      // An exhausted-on-lookup coupon is the failure this avoids.
+      expect(repository.transaction).not.toHaveBeenCalled();
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
     });
   });
 

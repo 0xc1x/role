@@ -23,6 +23,7 @@ import {
   orders,
 } from '../../database/schema';
 import { ACTIVE_ORDER_STATUSES } from './order-status.machine';
+import { couponScopeRank } from '../coupons/coupon-resolution';
 
 export type DbExecutor = Database;
 
@@ -412,7 +413,10 @@ export class OrdersRepository {
    * Ranking keeps the scope decision reproducible — own business first, then a
    * global coupon (`business_id IS NULL`), then foreign ones — so a global
    * coupon stays reachable from any business and `wrong_business` is only
-   * reported when nothing else could apply.
+   * reported when nothing else could apply. The expression is NOT written here:
+   * it is `couponScopeRank`, shared with the non-locking read the checkout
+   * pre-check uses, because two ranks that disagree make the pre-check approve a
+   * code this reservation then rejects as `wrong_business`.
    */
   async findCouponByCodeForUpdate(
     tx: DbExecutor,
@@ -423,13 +427,7 @@ export class OrdersRepository {
       .select()
       .from(coupons)
       .where(eq(coupons.code, code))
-      .orderBy(
-        sql`case
-          when ${coupons.business_id} = ${businessId} then 0
-          when ${coupons.business_id} is null then 1
-          else 2
-        end`,
-      )
+      .orderBy(couponScopeRank(businessId))
       .for('update', { of: coupons })
       .limit(1);
     return row ?? null;

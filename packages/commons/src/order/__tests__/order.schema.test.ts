@@ -9,9 +9,15 @@ import {
 } from "../schemas/order-query.schema";
 import {
 	COUPON_REJECTION_REASONS,
+	RESERVE_OFFER_ERROR_CODES,
 	ReserveOfferErrorSchema,
 	ReserveOfferResultSchema,
 } from "../schemas/reserve-offer.schema";
+import {
+	COUPON_VALIDATION_ERROR_CODES,
+	CouponValidationSchema,
+	ValidateCouponRequestSchema,
+} from "../schemas/coupon-validation.schema";
 
 const uuid = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
@@ -275,5 +281,168 @@ describe("COUPON_REJECTION_REASONS", () => {
 			"expired",
 			"wrong_business",
 		]);
+	});
+});
+
+describe("ValidateCouponRequestSchema", () => {
+	it("accepts code, business and amount", () => {
+		const parsed = ValidateCouponRequestSchema.parse({
+			code: "PROMO10",
+			business_id: uuid,
+			amount: 3990,
+		});
+		expect(parsed.amount).toBe(3990);
+	});
+
+	// `amount` is required, not optional: `min_order_amount` cannot be
+	// evaluated without it, and a pre-check that skipped the stage would approve
+	// coupons the reservation rejects at submit.
+	it("rejects a body with no amount", () => {
+		expect(
+			ValidateCouponRequestSchema.safeParse({
+				code: "PROMO10",
+				business_id: uuid,
+			}).success,
+		).toBe(false);
+	});
+
+	it("coerces a numeric string amount", () => {
+		// Prices travel as strings from a JSON client; the pre-check must judge
+		// the same number the reservation will.
+		expect(
+			ValidateCouponRequestSchema.parse({
+				code: "PROMO10",
+				business_id: uuid,
+				amount: "3990.50",
+			}).amount,
+		).toBe(3990.5);
+	});
+
+	it("rejects a negative amount", () => {
+		expect(
+			ValidateCouponRequestSchema.safeParse({
+				code: "PROMO10",
+				business_id: uuid,
+				amount: -1,
+			}).success,
+		).toBe(false);
+	});
+
+	it("rejects a non-uuid business_id", () => {
+		expect(
+			ValidateCouponRequestSchema.safeParse({
+				code: "PROMO10",
+				business_id: "biz-1",
+				amount: 10,
+			}).success,
+		).toBe(false);
+	});
+
+	it("rejects an empty code", () => {
+		expect(
+			ValidateCouponRequestSchema.safeParse({
+				code: "",
+				business_id: uuid,
+				amount: 10,
+			}).success,
+		).toBe(false);
+	});
+
+	// The reservation compares the code verbatim, so the pre-check must not
+	// normalize it: validating a trimmed code and reserving an untrimmed one
+	// would be a disagreement about which code was judged.
+	it("does not trim the code", () => {
+		expect(
+			ValidateCouponRequestSchema.parse({
+				code: "  PROMO10  ",
+				business_id: uuid,
+				amount: 10,
+			}).code,
+		).toBe("  PROMO10  ");
+	});
+});
+
+describe("CouponValidationSchema", () => {
+	it("accepts the applied verdict with its money", () => {
+		expect(
+			CouponValidationSchema.safeParse({
+				applies: true,
+				code: "PROMO10",
+				discount: 399,
+				final_price: 3591,
+			}).success,
+		).toBe(true);
+	});
+
+	it("accepts every rejection code with no reason", () => {
+		for (const error of COUPON_VALIDATION_ERROR_CODES) {
+			expect(
+				CouponValidationSchema.safeParse({
+					applies: false,
+					code: "PROMO10",
+					error,
+				}).success,
+			).toBe(true);
+		}
+	});
+
+	it("accepts COUPON_NOT_APPLICABLE with every shared rejection reason", () => {
+		// The pre-check reuses the reservation's reasons, not a parallel list.
+		for (const reason of COUPON_REJECTION_REASONS) {
+			expect(
+				CouponValidationSchema.safeParse({
+					applies: false,
+					code: "PROMO10",
+					error: "COUPON_NOT_APPLICABLE",
+					reason,
+				}).success,
+			).toBe(true);
+		}
+	});
+
+	it("rejects a reason outside the shared vocabulary", () => {
+		expect(
+			CouponValidationSchema.safeParse({
+				applies: false,
+				code: "PROMO10",
+				error: "COUPON_NOT_APPLICABLE",
+				reason: "min_not_met",
+			}).success,
+		).toBe(false);
+	});
+
+	// A code outside the subset would be a vocabulary only this endpoint knows,
+	// and the client would have no branch for it.
+	it("rejects a code that is not a reservation code", () => {
+		expect(
+			CouponValidationSchema.safeParse({
+				applies: false,
+				code: "PROMO10",
+				error: "OFFER_OUT_OF_STOCK",
+			}).success,
+		).toBe(false);
+	});
+
+	it("rejects an applied verdict carrying a rejection code", () => {
+		expect(
+			CouponValidationSchema.safeParse({
+				applies: true,
+				code: "PROMO10",
+				error: "COUPON_EXHAUSTED",
+			}).success,
+		).toBe(false);
+	});
+});
+
+describe("COUPON_VALIDATION_ERROR_CODES", () => {
+	it("is the coupon subset of the reservation codes, nothing invented", () => {
+		expect([...COUPON_VALIDATION_ERROR_CODES]).toEqual([
+			"COUPON_NOT_APPLICABLE",
+			"COUPON_EXHAUSTED",
+			"COUPON_MIN_NOT_MET",
+		]);
+		for (const code of COUPON_VALIDATION_ERROR_CODES) {
+			expect(RESERVE_OFFER_ERROR_CODES).toContain(code);
+		}
 	});
 });

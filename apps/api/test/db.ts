@@ -137,6 +137,16 @@ export async function createTestDb(): Promise<TestDbContext> {
   // of the same offer a no-op instead of a 23505. See the MIRROR GAP note in
   // src/database/schema/favorites.ts for why the constraint is not declared there.
   //
+  // `coupons(business_id, code)` is the fourth member of that class. Postgres
+  // treats NULLs as DISTINCT in a unique index, so it does NOT stop two
+  // platform-wide coupons from sharing a code, which is what leaves the
+  // `limit(1)` of the coupon resolution read ambiguous; the redemption lookup
+  // and the checkout pre-check both rank by that resolution, so a difference
+  // between them shows up as a code the pre-check approves and the reservation
+  // rejects as `wrong_business`. `CouponsService.assertGlobalCodeAvailable` is
+  // the service-level half of the promise. See the MIRROR GAP note in
+  // src/database/schema/coupons.ts for why the constraint is not declared there.
+  //
   // ─── Object-shape gap: the review, schedule and geo objects ────────────
   //
   // Everything above is a CONSTRAINT or a FUNCTION the mirror declares the
@@ -345,7 +355,12 @@ export async function createTestDb(): Promise<TestDbContext> {
       unique (user_id, consent_type);
     alter table public.favorites
       add constraint favorites_user_id_offer_id_key unique (user_id, offer_id);
-
+    -- The fourth member of the constraint class documented above: see the note
+    -- on coupons(business_id, code) in the comments of this file, and the
+    -- MIRROR GAP note in src/database/schema/coupons.ts for why it is patched
+    -- here instead of declared in the mirror.
+    alter table public.coupons
+      add constraint coupons_business_id_code_key unique (business_id, code);
     alter table public.offers
       alter column is_active set default false;
     alter table public.orders

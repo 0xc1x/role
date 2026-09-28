@@ -38,14 +38,17 @@ import {
   type OrderRow,
   type OrderViewer,
 } from './orders.mapper';
+import { round2 } from '../../common/utils/numeric';
 import { OrdersRepository, type DbExecutor } from './orders.repository';
+import {
+  couponRejectionException,
+  evaluateCoupon,
+} from '../coupons/coupon-evaluator';
 
 import { NotificationHandlers } from '../notifications/notification.handlers';
 
 /** Espejo del charset de `generate_pickup_code` (sin caracteres ambiguos). */
 const PICKUP_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /**
  * Same code and same wording as the RPC's `IDEMPOTENCY_KEY_REUSED`: both
@@ -170,7 +173,6 @@ export class OrdersService {
 
       let price = Number(offer.discounted_price);
       const originalPrice = Number(offer.original_price);
-      let discount = 0;
       let couponId: string | null = null;
 
       if (body.coupon_code) {
@@ -190,48 +192,34 @@ export class OrdersService {
           offer.business_id,
           body.coupon_code,
         );
-        // Check order is the contract: existence -> business scope ->
-        // is_active -> expires_at -> max_uses -> min_order_amount -> apply.
-        // Runs before the stock decrement, so a rejection consumes no stock,
-        // writes no order and mutates no coupon.
-        if (!coupon) {
-          throw new ConflictException(
-            'COUPON_NOT_APPLICABLE: not_found - El cupon no existe',
-          );
+        // The stages themselves live in `evaluateCoupon`, shared with
+        // `POST /coupons/validate`: the checkout pre-check must not be able to
+        // approve a code this reservation rejects. `now` is passed in rather
+        // than read here so both callers judge expiry against one instant, and
+        // `price` is the pre-discount amount, which is what stage 6 compares
+        // `min_order_amount` against.
+        //
+        // Stage order is the contract (existence -> business scope -> is_active
+        // -> expires_at -> max_uses -> min_order_amount -> apply) and it is
+        // documented where the stages are. It runs before the stock decrement,
+        // so a rejection consumes no stock, writes no order and mutates no
+        // coupon.
+        const evaluation = evaluateCoupon(coupon, {
+          businessId: offer.business_id,
+          amount: price,
+          now: new Date(),
+        });
+        if (evaluation.status === 'rejected') {
+          throw couponRejectionException(evaluation);
         }
-        if (
-          coupon.business_id !== null &&
-          coupon.business_id !== offer.business_id
-        ) {
-          throw new ConflictException(
-            'COUPON_NOT_APPLICABLE: wrong_business - El cupon pertenece a otro negocio',
-          );
-        }
-        if (!coupon.is_active) {
-          throw new ConflictException(
-            'COUPON_NOT_APPLICABLE: inactive - El cupon esta inactivo',
-          );
-        }
-        if (coupon.expires_at && coupon.expires_at <= new Date()) {
-          throw new ConflictException(
-            'COUPON_NOT_APPLICABLE: expired - El cupon ya vencio',
-          );
-        }
-        if (coupon.max_uses !== null && coupon.used_count >= coupon.max_uses) {
-          throw new ConflictException('COUPON_EXHAUSTED: Cupon agotado');
-        }
-        if (Number(coupon.min_order_amount ?? 0) > price) {
-          throw new ConflictException(
-            'COUPON_MIN_NOT_MET: Monto minimo no alcanzado para el cupon',
-          );
-        }
-        discount =
-          coupon.type === 'percentage'
-            ? Math.min((price * Number(coupon.value)) / 100, price)
-            : Math.min(Number(coupon.value), price);
-        price = Math.max(price - discount, 0);
-        couponId = coupon.id;
-        await this.ordersRepository.incrementCouponUsedCount(tx, coupon.id);
+        // Only the final price is persisted: `orders` has no discount column,
+        // and `original_price - price` is the discount of the row.
+        price = evaluation.finalPrice;
+        couponId = evaluation.couponId;
+        await this.ordersRepository.incrementCouponUsedCount(
+          tx,
+          evaluation.couponId,
+        );
       }
 
       const decremented = await this.offersRepository.decrementStock(
