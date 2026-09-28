@@ -45,7 +45,7 @@ import {
  * hold TRUNCATE, REFERENCES and TRIGGER as well. That was Supabase's `alter
  * default privileges`, it was what production had, and it was not hardened here —
  * this file reproduced and tested, it did not fix. Since
- * `20260928203000_revoke_client_destructive_privileges.sql` the three are gone,
+ * `20260928181714_revoke_client_destructive_privileges.sql` the three are gone,
  * for `anon` and `authenticated`, on every RLS table in `public` and in the
  * default privileges. The consequence, for the four that remain, is still the
  * point of the whole exercise:
@@ -324,7 +324,7 @@ describe('public.categories: what the grants allow', () => {
    * privileges were reproduced, EVERY client query failed with `permission
    * denied for table categories` and not one policy was ever evaluated.
    *
-   * It was seven until `20260928203000_revoke_client_destructive_privileges.sql`.
+   * It was seven until `20260928181714_revoke_client_destructive_privileges.sql`.
    * That migration took TRUNCATE, TRIGGER and REFERENCES away from `anon` and
    * `authenticated` on every RLS table in `public` and revoked the same three
    * from the DEFAULT privileges, so `categories` — the table the default
@@ -476,7 +476,7 @@ describe('public.categories: what the grants allow', () => {
    * evidence that a truncate was blocked; a table without a referencing foreign
    * key would not have been blocked at all.
    *
-   * `20260928203000_revoke_client_destructive_privileges.sql` changed the
+   * `20260928181714_revoke_client_destructive_privileges.sql` changed the
    * conclusion, and the refusal now happens one layer earlier. The statement
    * never reaches the foreign key, because `anon` does not hold TRUNCATE on this
    * table any more: it is `42501 permission denied for table categories`.

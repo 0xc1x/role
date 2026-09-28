@@ -28,7 +28,7 @@ import {
  *
  * ─── What the migration did, in one paragraph ───────────────────────────────
  *
- * `20260928203000_revoke_client_destructive_privileges.sql` revokes `truncate`,
+ * `20260928181714_revoke_client_destructive_privileges.sql` revokes `truncate`,
  * `trigger` and `references` from `anon` and `authenticated` on every table in
  * `public` that has RLS enabled, and revokes the same three from the DEFAULT
  * privileges so the next `create table` is born without them. `service_role`
@@ -60,22 +60,34 @@ import {
  * `order_events` survived by four clauses. Everything below is asserted over the
  * set so the assertion has the same shape as the fix.
  *
- * ─── THE HARNESS HAS FEWER RLS TABLES THAN PRODUCTION, AND THAT IS KNOWN ────
+ * ─── THE HARNESS AND PRODUCTION NOW AGREE: 39 OF 39 ─────────────────────────
  *
  * Production has 39 tables in `public` and RLS enabled on all 39. This replay
- * has 39 tables and RLS enabled on 34: `business_finance`, `business_moderation`,
- * `app_store`, `offer_categories` and `slides` land without it here and with it
- * there, because production runs `public.rls_auto_enable()` as an event trigger
- * and the harness bootstrap does not create that trigger.
+ * used to have 39 tables and RLS enabled on 34 — `business_finance`,
+ * `business_moderation`, `app_store`, `offer_categories` and `slides` all landed
+ * without it, because no statement in `supabase/migrations/` ever enabled RLS on
+ * them. `20260928184943_enable_rls_on_unrecorded_tables.sql` is the five
+ * `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` statements that the ledger was
+ * missing, and it closes the gap.
  *
- * That gap is pre-existing, it is not this migration's doing, and it is stated
- * here because it decides what these tests can claim. The migration's filter is
- * `relrowsecurity`, so it covers 34 tables here and 39 in production, and the
- * assertions below are scoped the same way and therefore hold in both. What they
- * cannot claim from the harness alone is that production's 39 are all covered —
- * that claim is measured against production, not against this file. The residue
- * the filter leaves behind is asserted explicitly below so the gap is visible
- * rather than assumed away.
+ * That matters for THIS file specifically, and the reason is not tidiness. The
+ * migration's filter is `relrowsecurity`, so for as long as the gap existed the
+ * migration was proven over 34 tables in the harness while running over 39 in
+ * production: the coverage was correct where it counted and UNDERSTATED where it
+ * was measured. Every assertion below was scoped to the RLS tables precisely so
+ * it would hold in both places, which is why a 34-table harness could not
+ * distinguish a correct migration from an incomplete one. `rlsTableCount()` now
+ * returns 39 and the filter selects the same set in both, so the scope below is
+ * the whole schema rather than a subset of it.
+ *
+ * The false claim this replaces is worth recording, because the earlier version
+ * of this header asserted that production runs `public.rls_auto_enable()` as an
+ * event trigger and that the gap was therefore an artefact of the harness
+ * bootstrap. That is not true. The function exists in production and is attached
+ * to nothing: `select evtname from pg_event_trigger` returns zero rows. Nothing
+ * was auto-enabling anything, in either environment, and the 34 came from the
+ * ledger being incomplete rather than from the harness being lossy.
+ * `enable_rls.rls.db.spec.ts` now pins that as a measured fact.
  */
 
 let ctx: SupabaseTestDb;
@@ -90,12 +102,21 @@ function plainRows<T>(result: unknown): T[] {
 }
 
 /**
- * The 39 tables with RLS in `public`, counted as the owner.
+ * The tables with RLS in `public`, counted as the owner.
  *
- * Not a fixture: the assertions below compare against this number rather than
- * against a hardcoded 39, because the harness has 34 and production has 39, and
- * a literal would make this file describe the production database while running
- * against another one.
+ * The number itself is 39 in both the harness and production, and the
+ * `expect(tables).toBe(39)` in the residue test below pins it. The count is
+ * still read from the catalog rather than returned as a literal, because the
+ * assertions above COMPARE against it — `service_role`'s grant rows are expected
+ * to equal this number — and a hardcoded 39 there would make those comparisons
+ * assertions about a constant rather than about the database.
+ *
+ * `public._harness_fingerprint` is a table this harness creates to cache the
+ * template fingerprint. It is created after the replay, carries no RLS, and has
+ * no business being in a count that describes the product schema, so it is
+ * excluded explicitly. The exclusion is named rather than applied by a
+ * `not like` on a name pattern: a pattern would silently swallow a real product
+ * table that happened to match it.
  */
 async function rlsTableCount(): Promise<number> {
   const rows = await ctx.sql.unsafe<{ c: number }[]>(
@@ -104,7 +125,8 @@ async function rlsTableCount(): Promise<number> {
        join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public'
         and c.relkind = 'r'
-        and c.relrowsecurity`,
+        and c.relrowsecurity
+        and c.relname <> '_harness_fingerprint'`,
   );
   return plainRows(rows)[0]?.c ?? -1;
 }
@@ -146,6 +168,9 @@ describe('no client role holds a privilege RLS cannot govern', () => {
       'no table in public has RLS enabled, so this file is asserting against an ' +
         'empty set and every result below would pass for the wrong reason',
     ).toBeGreaterThan(30);
+    // And the exact number, so a schema that lost RLS wholesale fails HERE with
+    // a count in the message rather than three tests later as an empty set.
+    expect(tables).toBe(39);
 
     const residue = await ctx.sql.unsafe<
       { grantee: string; table_name: string; privilege_type: string }[]
@@ -224,20 +249,23 @@ describe('no client role holds a privilege RLS cannot govern', () => {
   });
 
   /**
-   * The residue the `relrowsecurity` filter deliberately leaves, named.
+   * The residue the `relrowsecurity` filter leaves behind is now EMPTY, and that
+   * is the assertion that makes this file's coverage demonstrable.
    *
-   * This is the cost of scoping the fix to the RLS tables, and it is a cost, not
-   * a bug: the tables below have no RLS here, so the migration skips them, and
-   * the harness has five of them while production has none. Asserting the
-   * residue explicitly is what stops a reader from concluding that `anon` holds
-   * nothing at all — the claim this file makes is scoped, and the scope is
-   * written down.
+   * This used to assert the residue was exactly the set of tables WITHOUT RLS,
+   * and to assert `rlsTableCount()` was `toBeLessThan(39)` — an assertion that
+   * documented the gap as permanent. It was honest about what it could not see:
+   * with five tables outside the filter, this file proved a revoke over 34 tables
+   * while the migration ran over 39.
    *
-   * If production ever grows a table in `public` without RLS, this assertion is
-   * the one that stops describing reality, because the harness would have to
-   * match it. That is the intended direction of the failure.
+   * Both halves are now the strong claim. Every table a client role holds one of
+   * the three privileges on must have RLS — so nothing escapes the filter — AND
+   * the RLS table count must be exactly 39, matching production. The count is
+   * what makes the first half mean something: "no residue" is trivially true in
+   * a database where almost nothing has RLS, and `toBe(39)` is what rules that
+   * out.
    */
-  test('what the filter leaves behind is only tables without RLS, and production has none', async () => {
+  test('the filter leaves nothing behind: every table a client role holds a destructive privilege on has RLS', async () => {
     const residue = await ctx.sql.unsafe<{ table_name: string }[]>(
       `select distinct g.table_name
          from information_schema.role_table_grants g
@@ -273,9 +301,18 @@ describe('no client role holds a privilege RLS cannot govern', () => {
         'client role. The first assertion in this file should have caught this.',
     ).toEqual([]);
 
-    // And the harness's out-of-scope set is smaller than production's whole set,
-    // which is the fact that makes the production claim in the header safe.
-    expect(await rlsTableCount()).toBeLessThan(39);
+    // The number on the right is the point of the whole file. 39 is what
+    // production has and what this harness now has, so the `relrowsecurity`
+    // filter that the migration iterates selects the same set of tables in both.
+    // A 38 here would mean a table lost its RLS, and a 40 would mean a new table
+    // arrived without the ledger row that would enable it — both are the exact
+    // class of gap `20260928184943` exists to close, arriving again.
+    expect(
+      await rlsTableCount(),
+      "the harness no longer reproduces production's RLS coverage. This file " +
+        'can only claim the migration covers every RLS table in public if every ' +
+        'table in public has RLS.',
+    ).toBe(39);
   });
 });
 

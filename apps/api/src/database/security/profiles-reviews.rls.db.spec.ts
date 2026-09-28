@@ -75,7 +75,7 @@ import {
  * DELETE policy on this table was irrelevant to it: `anon` was refused deleting
  * one review at a time and could empty the table in a single statement.
  *
- * `20260928203000_revoke_client_destructive_privileges.sql` revoked TRUNCATE —
+ * `20260928181714_revoke_client_destructive_privileges.sql` revoked TRUNCATE —
  * with TRIGGER and REFERENCES — from `anon` and `authenticated` on every RLS
  * table in `public`, and from the default privileges. The statement is now
  * `42501 permission denied for table reviews`. The finding underneath did not
@@ -1440,7 +1440,7 @@ describe('public.reviews: the grants anon actually holds', () => {
    * privileges with UPDATE the single exception — a real write surface on a table
    * whose policies are written as if nobody could write it.
    *
-   * `20260928203000_revoke_client_destructive_privileges.sql` took the three
+   * `20260928181714_revoke_client_destructive_privileges.sql` took the three
    * back: TRUNCATE, TRIGGER and REFERENCES are gone for `anon` and
    * `authenticated` on every RLS table in `public`, and gone from the default
    * privileges too. What remains on `reviews` is DELETE, INSERT and SELECT —
@@ -3016,7 +3016,7 @@ describe('the two things the reviews grant does not stop', () => {
    *
    * ─── WHAT IT CONCLUDES NOW ─────────────────────────────────────────────────
    *
-   * `20260928203000_revoke_client_destructive_privileges.sql` took TRUNCATE away,
+   * `20260928181714_revoke_client_destructive_privileges.sql` took TRUNCATE away,
    * so the first half is now `42501 permission denied for table reviews`. The
    * composition no longer exists and cannot be re-created from the client side.
    *

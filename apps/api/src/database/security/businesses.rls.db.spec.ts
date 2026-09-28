@@ -525,7 +525,7 @@ describe('public.businesses: the shape of the grants', () => {
    * default privileges hand `anon` all seven table privileges and the POLICIES
    * are the only thing refusing, so a denial there needs the grant asserted to
    * be meaningful — except that since
-   * `20260928203000_revoke_client_destructive_privileges.sql` `anon` no longer
+   * `20260928181714_revoke_client_destructive_privileges.sql` `anon` no longer
    * holds all seven there either; it holds four and the three RLS cannot govern
    * are gone. The reason this file's claim needs no such correction is narrower
    * and older: `20260925163235` ran `revoke all on table public.businesses`, and
@@ -538,7 +538,7 @@ describe('public.businesses: the shape of the grants', () => {
    * difference between the two tables. `businesses` was closed by a broad
    * revoke that happened to be complete; most tables in this schema were closed
    * by a partial one that ran out of clauses, and
-   * `20260928203000_revoke_client_destructive_privileges.sql` exists because that
+   * `20260928181714_revoke_client_destructive_privileges.sql` exists because that
    * is how `order_events` and thirty-one other tables kept TRUNCATE. Nothing
    * below depends on that migration having run — every assertion in this file
    * held before it and holds after — and saying so is the point: a hardening
@@ -785,24 +785,34 @@ describe('public.businesses: the shape of the grants', () => {
   });
 
   /**
-   * RLS is enabled on `businesses` and `business_ownership`, and NOT on the two
-   * money/moderation companions.
+   * RLS is enabled on all four of these tables, `business_finance` and
+   * `business_moderation` included.
    *
-   * `relforcerowsecurity = false` is the production setting, and it is why the
-   * impersonation in `as()` is load bearing rather than ceremonial: RLS applies
-   * to every role except the table owner, and the owner is the role the harness
-   * connects as.
+   * This assertion used to read `false` for the two companions, and it was
+   * recording a real gap rather than a design: production has RLS enabled on
+   * both, and no statement in `supabase/migrations/` did it.
+   * `20260928184943_enable_rls_on_unrecorded_tables.sql` is the `ALTER` the
+   * ledger was missing, so the harness now matches production and this row
+   * reads `true`.
    *
-   * The companions being OFF is not an oversight and is the reason the next test
-   * is shaped the way it is. There is nothing to filter rows with on
-   * `business_finance`: the table is unreadable because no client role holds a
-   * single privilege on it, not because a policy refuses them. If a future
-   * migration granted SELECT to `authenticated` without enabling RLS, the table
-   * would become a full, unfiltered read of every business's balance and
-   * commission rate in one statement, and this assertion is the only thing in the
-   * suite that would notice.
+   * The change makes these two tables STRONGER, not weaker, and that is worth
+   * being precise about, because the previous version of this comment predicted
+   * the failure mode and the prediction was half right. It said that a future
+   * `grant select on business_finance to authenticated` without RLS would produce
+   * a full unfiltered read of every balance in one statement. That grant, on its
+   * own, still cannot do that now — but only because of the two changes made
+   * together: the tables already had `revoke all` from both client roles
+   * (`20260925225227`), and they now have RLS as well. Either layer alone leaves
+   * a hole; a grant that lands on a table with the other layer missing opens it,
+   * and that is the case this row now covers.
+   *
+   * `relforcerowsecurity = false` is the production setting and is unchanged: it
+   * is why the impersonation in `as()` is load bearing rather than ceremonial,
+   * because RLS applies to every role except the table owner, and the owner is
+   * the role the harness connects as. The next test is unaffected by the flag
+   * here and is still the one that proves no client role reaches these rows.
    */
-  test('RLS is on for businesses and ownership, and off for the money and moderation companions', async () => {
+  test('RLS is on for all four, including the money and moderation companions', async () => {
     const rows = await ctx.sql.unsafe<
       {
         relname: string;
@@ -825,8 +835,8 @@ describe('public.businesses: the shape of the grants', () => {
         r.relforcerowsecurity,
       ]),
     ).toEqual([
-      ['business_finance', false, false],
-      ['business_moderation', false, false],
+      ['business_finance', true, false],
+      ['business_moderation', true, false],
       ['business_ownership', true, false],
       ['businesses', true, false],
     ]);
@@ -1870,16 +1880,28 @@ describe('self-approval and the public catalog', () => {
    * it, completing the escalation on the row. The column is gone, so that door is
    * gone with it. The equivalent door is now `business_moderation` itself, and
    * this test walks through it to prove where the line is drawn: give a client
-   * UPDATE on `business_moderation.verification_status` and the business is
-   * published immediately, correctly, because an approved business in the
-   * catalog is exactly what the policy promises.
+   * UPDATE on `business_moderation.verification_status` and the escalation does
+   * NOT complete.
    *
-   * That is not a finding of a hole. It is the statement that the gate is the
-   * GRANT on the moderation table and nothing else — which is why that table has
-   * no client privilege at all, and why a future migration that grants it even
-   * one column is a red assertion here rather than a silent widening. The
-   * asymmetry is worth stating: `business_moderation` has RLS DISABLED, so a
-   * client that could write it would be writing it with no policy in the way.
+   * That is a change in the answer, and it is a real one rather than a test
+   * being adjusted to match a migration. Until
+   * `20260928184943_enable_rls_on_unrecorded_tables.sql`, `business_moderation`
+   * had no RLS anywhere — not in production, where the flag was on, and not in
+   * this harness, where it was off. So the GRANT was the entire boundary, and
+   * the previous version of this test asserted the consequence directly: with
+   * the grant in place the update returned the row and the business was
+   * published. The old comment named the asymmetry as the risk — "a client that
+   * could write it would be writing it with no policy in the way" — which is
+   * exactly what the assertion above was doing.
+   *
+   * The table now has RLS and still no policy, so that grant reaches the table
+   * and stops there: the UPDATE is permitted and matches zero rows. The gate is
+   * no longer the GRANT alone, and the table is closed twice over rather than
+   * once. This is the change that makes the two layers worth having on the two
+   * tables `enable-rls.rls.db.spec.ts` describes as double-layered: a future
+   * migration that grants a client one column of `business_moderation` no longer
+   * opens anything on its own, and the assertion that would have caught it is
+   * now the one proving it.
    *
    * ─── WHAT NOT TO DO ───────────────────────────────────────────────────────
    *
@@ -1892,7 +1914,7 @@ describe('self-approval and the public catalog', () => {
    * and the test asserts they are absent both before and after. That is a
    * measurement. Moving them to the harness would make it a fiction.
    */
-  test('with the write grant restored the trigger still escalates the row, the policy holds the catalog, and the moderation table is the line', async () => {
+  test('with the write grant restored the trigger still escalates the row, the policy holds the catalog, and RLS closes the moderation table', async () => {
     // The barrier, asserted first so that a failure below points at the cause.
     const before = await as(ctx.sql, 'authenticated', OWNER_B, (tx) =>
       tx.unsafe<{ ins: boolean; upd: boolean; mod: boolean }[]>(`
@@ -1959,14 +1981,41 @@ describe('self-approval and the public catalog', () => {
           'has stopped applying.',
       ).toEqual([]);
 
-      // Door two, and the boundary itself: give the client the moderation table
-      // and the escalation completes, all the way into the catalog. Expected, and
-      // asserted as expected — an approved business being published is the
-      // policy working, not failing.
-      // `select (business_id)` alongside the UPDATE column, and it is not
-      // decoration: the escalation statement filters on `business_id`, and a
-      // WHERE clause needs SELECT on the column it names. Granting only
-      // `update (verification_status)` produces
+      // Door two, and it is now SHUT. Give the client the moderation table —
+      // exactly the grant below, the same columns — and the escalation does not
+      // complete, because `business_moderation` now has RLS enabled with no
+      // policy and the client's UPDATE matches zero visible rows.
+      //
+      // This assertion used to read `[BIZ_B]`, and the change is the whole point
+      // of `20260928184943`. Before it, `business_moderation` had RLS DISABLED,
+      // so this GRANT alone was a complete escalation path: one statement moved a
+      // business from `pending` to `approved` and the trigger pair published it.
+      // The old comment said so plainly — "a client that could write it would be
+      // writing it with no policy in the way" — and named the table as having no
+      // client privilege so that a future grant would be a red assertion here.
+      // That future grant is now made, in this test, deliberately, and it does
+      // not work.
+      //
+      // Measured both ways in a scratch database, same grant, same row:
+      //
+      //     business_moderation RLS off  -> UPDATE 1, business_id returned
+      //     business_moderation RLS on   -> UPDATE 0, zero rows
+      //
+      // The grant is not the boundary any more. RLS is the boundary, and the
+      // privilege is only what would let a client REACH it. Asserting the empty
+      // result is asserting that the table has no policy to admit the row, which
+      // is the second layer described in
+      // `enable-rls.rls.db.spec.ts` — the two tables there are closed twice over
+      // precisely so that this one statement cannot undo phase 3.
+      //
+      // `as()` and not `deniedAs()` on purpose: the statement is ALLOWED and
+      // affects nothing, so there is no error to catch. The permission is real
+      // and the row filter is what refuses it, and those are different failures
+      // with different fixes.
+      //
+      // `select (business_id)` alongside the UPDATE column is not decoration: the
+      // statement filters on `business_id`, and a WHERE clause needs SELECT on the
+      // column it names. Granting only `update (verification_status)` produces
       // `42501 permission denied for table business_moderation` on the WHERE
       // rather than on the SET, which reads like the probe failed to arm itself.
       await ctx.sql.unsafe(
@@ -1981,15 +2030,45 @@ describe('self-approval and the public catalog', () => {
           )
           .then((rows) => plainRows(rows)),
       );
-      expect(approved.map((r) => r.business_id)).toEqual([BIZ_B]);
+      expect(
+        approved.map((r) => r.business_id),
+        'a client holding UPDATE (verification_status) on business_moderation ' +
+          'escalated the row. There is no policy on that table, so the only ' +
+          'thing that can stop this is the RLS — if this fails, either RLS was ' +
+          'disabled or a policy was added, and the table that holds every ' +
+          "business's verification state is one statement from being writable by " +
+          'any client.',
+      ).toEqual([]);
 
-      // The trigger pair fired on the way: `businesses.is_active` is derived from
-      // the moderation row, so the copy followed the source this time.
-      const derived = await ctx.sql.unsafe<{ is_active: boolean }[]>(
-        `select is_active from public.businesses where id = '${BIZ_B}'`,
+      // The privilege really was granted. Without this the assertion above would
+      // be indistinguishable from a grant that failed to apply, and it would
+      // pass for the wrong reason — the shape `destructive-privileges.rls.db.
+      // spec.ts` guards against with its anti-vacuity check.
+      const armed = await ctx.sql.unsafe<{ sel: boolean; upd: boolean }[]>(
+        `select has_column_privilege('authenticated', 'public.business_moderation', 'business_id', 'select') as sel,
+                has_column_privilege('authenticated', 'public.business_moderation', 'verification_status', 'update') as upd`,
       );
-      expect(plainRows(derived)[0]?.is_active).toBe(true);
+      expect(plainRows(armed)[0]).toEqual({ sel: true, upd: true });
 
+      // The source did not move, so the trigger pair never fired:
+      // `businesses.is_active` is still the one door one set, and the derived
+      // copy did not follow.
+      const stillPending = await ctx.sql.unsafe<
+        {
+          verification_status: string;
+        }[]
+      >(
+        `select verification_status::text from public.business_moderation where business_id = '${BIZ_B}'`,
+      );
+      expect(plainRows(stillPending).map((r) => r.verification_status)).toEqual(
+        ['pending'],
+      );
+
+      // And the catalog does not follow. The row is active only because door one
+      // set it, and the policy is still refusing to publish an unapproved
+      // business — so the gate above is holding on its own, which is what makes
+      // the empty UPDATE above attributable to RLS rather than to the policy
+      // having already covered for it.
       const published = await as(ctx.sql, 'anon', null, (tx) =>
         tx
           .unsafe<{ slug: string }[]>(
@@ -2000,10 +2079,9 @@ describe('self-approval and the public catalog', () => {
       );
       expect(
         published.map((r) => r.slug),
-        'a moderation grant did NOT reach the catalog. If this fails, the policy ' +
-          'is no longer reading business_moderation, and the gate above was ' +
-          'passing for the wrong reason.',
-      ).toEqual([SLUG_B]);
+        'the unapproved business reached the anonymous catalog. The policy gate ' +
+          'has stopped applying, so the UPDATE above proves nothing about RLS.',
+      ).toEqual([]);
     } finally {
       /**
        * Order matters here, and the first draft of this block had it backwards.

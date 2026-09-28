@@ -72,7 +72,7 @@ import {
  * short. Everywhere else the residue went because some migration said `revoke
  * all`, and `all` sweeps all seven by accident rather than by decision.
  *
- * `20260928203000_revoke_client_destructive_privileges.sql` ends it: TRUNCATE,
+ * `20260928181714_revoke_client_destructive_privileges.sql` ends it: TRUNCATE,
  * TRIGGER and REFERENCES are revoked from `anon` and `authenticated` on every RLS
  * table in `public`, and from the default privileges, and `service_role` keeps
  * all three. The pinned residue tests below are inverted rather than deleted —
@@ -88,7 +88,7 @@ import {
  * reaches the function check at all — that ordering is what made the privilege
  * worth measuring rather than dismissing.
  *
- * Until `20260928203000` only the second layer was ever closed, and it was closed
+ * Until `20260928181714` only the second layer was ever closed, and it was closed
  * by the migration whose job is to revoke EXECUTE on trigger functions:
  * `20260906125927_harden_rpc_grants.sql`, whose line 16 is
  * `revoke execute on function public.accrue_order_earnings() from public, anon, authenticated`.
@@ -539,7 +539,7 @@ describe('what the grants allow', () => {
    * sentence and a false one, and the next person reading the ledger would have
    * had no way to tell which of the two was the lie.
    *
-   * The lie stopped being a lie in `20260928203000_revoke_client_destructive_
+   * The lie stopped being a lie in `20260928181714_revoke_client_destructive_
    * privileges.sql`. The exact same query now returns an empty set for `anon` and
    * SELECT alone for `authenticated`, and that is the stronger claim — it holds
    * on a database where the residue never existed too, while the old assertion
@@ -1332,7 +1332,7 @@ describe('order_events is append-only, and no client role can attach a trigger t
    *
    * ─── WHAT IT CONCLUDES NOW ─────────────────────────────────────────────────
    *
-   * `20260928203000_revoke_client_destructive_privileges.sql` revoked TRIGGER
+   * `20260928181714_revoke_client_destructive_privileges.sql` revoked TRIGGER
    * from `anon` and `authenticated` on every RLS table in `public`. The composite
    * is no longer held shut by one layer with the other half resting on a
    * function grant elsewhere: it is closed at the table, and the function revoke
