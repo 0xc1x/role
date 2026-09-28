@@ -4,6 +4,7 @@ import {
   seedBusiness,
   seedBusinessHours,
   seedLocation,
+  seedOffer,
   seedProfile,
 } from '../../../test/seed';
 import { BusinessesRepository } from './businesses.repository';
@@ -36,7 +37,18 @@ afterAll(async () => {
 });
 
 describe('BusinessesRepository.listPublic', () => {
-  test('only active, moderation-approved businesses are listed', async () => {
+  test('only active, moderation-approved businesses with a LIVE OFFER are listed', async () => {
+    // `active_businesses_near` (ADR-0008): the list is built from live offers, so
+    // a business with none is absent rather than listed with a count of `0`. The
+    // offer is what makes the approved row appear at all — which is the whole
+    // difference between this being a business list and being a directory.
+    const loc = await seedLocation(ctx.db, approved, { name: 'Sucursal' });
+    await seedOffer(ctx.db, approved, loc.id);
+    // A published location and nothing else for the other two: the gate still
+    // keeps them out, and now the aggregate does too.
+    await seedLocation(ctx.db, pending, { name: 'Del pendiente' });
+    await seedLocation(ctx.db, inactive, { name: 'Del inactivo' });
+
     const { items, total } = await repo.listPublic({ page: 1, limit: 20 });
 
     expect(items.map((b) => b.id)).toEqual([approved]);
@@ -48,7 +60,11 @@ describe('BusinessesRepository.listPublic', () => {
     // column is added to `businesses` and to `publicSelect`, the DTO has to be
     // widened deliberately or this test fails.
     const { items } = await repo.listPublic({ page: 1, limit: 1 });
-    expect(Object.keys(items[0] ?? {}).sort()).toEqual([
+    // The fourteen public business columns, plus the five
+    // `active_businesses_near` fields. Split by origin on purpose: a future
+    // column added to one group and not the other is a mistake, and a flat list
+    // would not say which.
+    const businessColumns = [
       'cover_image',
       'created_at',
       'description',
@@ -63,7 +79,19 @@ describe('BusinessesRepository.listPublic', () => {
       'type',
       'updated_at',
       'website',
-    ]);
+    ];
+    const nearColumns = [
+      'active_deals_count',
+      'address',
+      'business_location_id',
+      'distance_km',
+      'latitude',
+      'longitude',
+      'zone',
+    ];
+    expect(Object.keys(items[0] ?? {}).sort()).toEqual(
+      [...businessColumns, ...nearColumns].sort(),
+    );
   });
 
   test('search filters on the name, and the count follows the same filter', async () => {
@@ -83,6 +111,11 @@ describe('BusinessesRepository.listPublic', () => {
   test('a wildcard in the search is escaped, not interpreted', async () => {
     // `%` is the LIKE wildcard. Unescaped it would match every business, which
     // turns a search box into a full-catalog dump.
+    //
+    // This is a DIVERGENCE from `active_businesses_near`, which concatenates
+    // `'%'||p_search||'%'` raw the way the offers feed does. It is kept because
+    // it is a tested property of this route that predates the geo work, and
+    // relaxing it to match a sibling endpoint is a separate decision.
     const { items } = await repo.listPublic({
       page: 1,
       limit: 20,
@@ -91,16 +124,24 @@ describe('BusinessesRepository.listPublic', () => {
     expect(items).toEqual([]);
   });
 
-  test('meta.total counts the whole gated set, not the page', async () => {
+  test('meta.total counts the whole gated, offer-backed set, not the page', async () => {
     const owner = await seedProfile(ctx.db);
     for (let i = 0; i < 4; i++) {
-      await seedBusiness(ctx.db, owner, { name: `Extra ${i}` });
+      const extra = await seedBusiness(ctx.db, owner, { name: `Extra ${i}` });
+      const extraLoc = await seedLocation(ctx.db, extra.id, {
+        name: 'Sucursal',
+      });
+      await seedOffer(ctx.db, extra.id, extraLoc.id);
     }
+    // One approved business with NO offer: it is absent from the count too, which
+    // is the point — `total` is the size of the set the page walks, and the page
+    // walks businesses that have a live offer.
+    await seedBusiness(ctx.db, owner, { name: 'Extra sin oferta' });
 
     const page = await repo.listPublic({ page: 1, limit: 2 });
     expect(page.items).toHaveLength(2);
     // Four seeded above plus `approved`; the pending and inactive ones are not in
-    // the set the count walks.
+    // the set the count walks, and neither is the offer-less one.
     expect(page.total).toBe(5);
   });
 });
@@ -125,12 +166,22 @@ describe('BusinessesRepository.findPublicById', () => {
 
 describe('BusinessesRepository public children', () => {
   test('locations are scoped to the business and only the active ones', async () => {
-    await seedLocation(ctx.db, approved, { name: 'Centro' });
-    await seedLocation(ctx.db, approved, { name: 'Sucursal Norte' });
-    await seedLocation(ctx.db, approved, { name: 'Pausada', is_active: false });
+    // A business of this test's own, not `approved`: the `listPublic` block above
+    // seeds locations for `approved` too, and sharing one business between two
+    // blocks makes each one's assertions depend on the other having run.
+    const owner = await seedProfile(ctx.db);
+    const scoped = await seedBusiness(ctx.db, owner, {
+      name: 'Con sucursales',
+    });
+    await seedLocation(ctx.db, scoped.id, { name: 'Centro' });
+    await seedLocation(ctx.db, scoped.id, { name: 'Sucursal Norte' });
+    await seedLocation(ctx.db, scoped.id, {
+      name: 'Pausada',
+      is_active: false,
+    });
     await seedLocation(ctx.db, pending, { name: 'Del pendiente' });
 
-    const locations = await repo.listPublicLocations(approved);
+    const locations = await repo.listPublicLocations(scoped.id);
     expect(locations.map((l) => l.name).sort()).toEqual([
       'Centro',
       'Sucursal Norte',
@@ -141,10 +192,10 @@ describe('BusinessesRepository public children', () => {
 
   test('the headquarters sorts first', async () => {
     await ctx.db.execute(
-      `update business_locations set is_headquarter = true where business_id = '${approved}' and name = 'Centro'`,
+      `update business_locations set is_headquarter = true where business_id = '${approved}' and name = 'Sucursal'`,
     );
     const locations = await repo.listPublicLocations(approved);
-    expect(locations[0]?.name).toBe('Centro');
+    expect(locations[0]?.name).toBe('Sucursal');
   });
 
   test('hours are monday-first regardless of insertion order', async () => {

@@ -6,6 +6,7 @@ import {
   desc,
   eq,
   getTableColumns,
+  gt,
   or,
   sql,
   type SQL,
@@ -28,6 +29,7 @@ import {
   businesses,
   emailSends,
   emailTemplates,
+  offers,
   type BusinessHoursRow,
 } from '../../database/schema';
 import { payouts } from '../../database/schema/payouts';
@@ -97,6 +99,33 @@ export type BusinessCompanionInsert = {
   rejection_reason?: string | null;
 };
 
+/**
+ * A `listPublic` row: the public business columns plus what
+ * `active_businesses_near` adds.
+ *
+ * Optional fields, and NOT because they might be absent. Every field here is
+ * always present on a row this repository returns: the `matching_offers` inner
+ * join guarantees a live offer, and the LATERAL guarantees a location. They are
+ * optional because `findPublicById` returns the same business WITHOUT the offer
+ * aggregate, and one row type is what lets both public reads and one mapper
+ * serve them — the same arrangement `PublicBusinessRow` + `PublicBusinessSchema`
+ * already had before the geo work. `toDto` therefore omits rather than invents.
+ *
+ * The types are the SQL's types, not the contract's: `active_deals_count` is a
+ * `bigint` and arrives as a string, and the coordinates are `numeric(10,7)`. The
+ * mapper converts both, exactly as `toCategoryDto` does for `active_count` and
+ * `toLocationDto` for latitude.
+ */
+export type PublicBusinessNearRow = PublicBusinessRow & {
+  active_deals_count: string;
+  distance_km: number | null;
+  business_location_id: string;
+  address: string;
+  latitude: string;
+  longitude: string;
+  zone: string | null;
+};
+
 export type BusinessInsert = typeof businesses.$inferInsert &
   BusinessCompanionInsert;
 export type BusinessUpdate = Partial<
@@ -142,6 +171,50 @@ export type BusinessLocationUpdate = Partial<
 >;
 
 export type DbExecutor = Database;
+
+/**
+ * The searched point, or nothing.
+ *
+ * The RPC treats `p_lat` and `p_lng` as two independent nulls: the radius filter
+ * is disabled by `p_lat is null or p_lng is null`, and `distance_km` is null when
+ * EITHER is absent. Resolving them here as one value is the same decision the
+ * `st_dwithin` filter in `OffersRepository` already makes, and it keeps "no
+ * point" from emitting a distance expression nothing reads.
+ */
+type BusinessCoords = { lat: number; lng: number };
+
+function businessCoords(
+  query: Pick<ListPublicBusinessesQuery, 'lat' | 'lng'>,
+): BusinessCoords | undefined {
+  return query.lat !== undefined && query.lng !== undefined
+    ? { lat: query.lat, lng: query.lng }
+    : undefined;
+}
+
+/**
+ * The geodesic distance, in kilometres, from the searched point to
+ * `business_locations.geog`.
+ *
+ * Two things about the emitted SQL are not choices:
+ *
+ *  - `extensions.` qualification. PostGIS lives in the `extensions` schema and
+ *    `business_locations.geog` is a generated column deliberately absent from
+ *    the Drizzle mirror (see `database/schema/business-locations.ts`), so this is
+ *    raw qualified SQL and the only way in.
+ *  - `st_makepoint(lng, lat)`. X first. Swapping it is the classic way to get a
+ *    plausible-but-wrong distance: at the latitudes this platform operates in a
+ *    degree of longitude is only ~0.84 of a degree of latitude, so the mistake
+ *    survives a smoke test and not a distance assertion.
+ */
+function distanceKmSql(coords?: BusinessCoords): SQL<number | null> {
+  if (!coords) {
+    return sql<number | null>`NULL::double precision`;
+  }
+  return sql<number | null>`extensions.st_distance(
+        business_locations.geog,
+        extensions.st_setsrid(extensions.st_makepoint(${coords.lng}, ${coords.lat}), 4326)::extensions.geography
+      ) / 1000.0`;
+}
 
 /** Drops the keys whose value is `undefined` so the column keeps its default. */
 function defined<T extends object>(values: T): Partial<T> {
@@ -515,39 +588,114 @@ export class BusinessesRepository {
    * `businesses` must not silently add it to the public surface.
    */
   private publicSelect() {
-    return this.db
-      .select({
-        id: businesses.id,
-        name: businesses.name,
-        type: businesses.type,
-        slug: businesses.slug,
-        image: businesses.image,
-        cover_image: businesses.cover_image,
-        rating: businesses.rating,
-        review_count: businesses.review_count,
-        description: businesses.description,
-        phone: businesses.phone,
-        email: businesses.email,
-        website: businesses.website,
-        created_at: businesses.created_at,
-        updated_at: businesses.updated_at,
-      })
-      .from(businesses);
+    return this.db.select(this.publicColumns()).from(businesses);
   }
 
   /**
-   * Public catalog page: active + moderation-approved businesses, newest first.
+   * The column map behind both public reads.
    *
-   * The gate (`publiclyVisibleBusiness()`) is applied here and not taken from the
-   * query, which is why the admin-only filters of `ListBusinessesQuerySchema`
-   * (`is_active`, `verification_status`, `owner_id`, `mine`) are simply not part
-   * of `ListPublicBusinessesQuerySchema`: on a public route they could only ever
-   * try to widen this predicate.
+   * The `satisfies` is the repository-side twin of the `PublicBusinessSchema`
+   * comment in commons, and it is deliberately an EXACT key-set check
+   * (`Record<keyof PublicBusinessRow, unknown>` accepts every value and rejects a
+   * missing or extra key) rather than a plain `Pick`. `PublicBusinessRow` is the
+   * SELECTED row, so asserting the column BUILDER against it would be a
+   * category error; what the two lists have in common is which columns they name,
+   * and that is the thing worth pinning. Widening the public surface therefore
+   * has to happen in `PublicBusinessRow` AND here AND in the contract, in that
+   * order, and the compiler says so.
+   */
+  private publicColumns() {
+    return {
+      id: businesses.id,
+      name: businesses.name,
+      type: businesses.type,
+      slug: businesses.slug,
+      image: businesses.image,
+      cover_image: businesses.cover_image,
+      rating: businesses.rating,
+      review_count: businesses.review_count,
+      description: businesses.description,
+      phone: businesses.phone,
+      email: businesses.email,
+      website: businesses.website,
+      created_at: businesses.created_at,
+      updated_at: businesses.updated_at,
+    } satisfies Record<keyof PublicBusinessRow, unknown>;
+  }
+
+  /**
+   * Public catalog page: `public.active_businesses_near`, mirrored (ADR-0008).
+   *
+   * The RPC this replaces was a plain directory — every active, approved
+   * business, newest first. This is a BUSINESS LIST BUILT FROM LIVE OFFERS, and
+   * three of its properties are not what a directory reader would assume. They
+   * are the SQL's behaviour and the specs pin each one, so read them before
+   * "fixing" anything here:
+   *
+   *  1. `matching_offers` is an INNER join. A business with zero live offers is
+   *     absent from the result entirely, not returned with a count of `0`. The
+   *     `is_active and stock > 0 and pickup_end > now()` triple is inside the
+   *     aggregate, so an expired, sold-out or deactivated offer does not merely
+   *     count as nothing — it makes the business disappear.
+   *
+   *  2. THE TWO DISTANCES ARE COMPUTED INDEPENDENTLY AND CANNOT DISAGREE. The
+   *     ORDER BY sorts on `m.min_distance_km`, the minimum over the locations of
+   *     the offers that passed the RADIUS filter. The `distance_km` it RETURNS
+   *     is measured against the location the LATERAL picked, which is the
+   *     nearest among ALL of the business's active offers, with NO radius
+   *     filter. Two different subqueries, two different sets — and yet they
+   *     return the same number for every row this query can produce:
+   *
+   *       Let S = the active offers that passed the radius. A row exists at all
+   *       only if S is non-empty (property 1), so `min(S) <= radius`. Let D be
+   *       the minimum over ALL active offers. `D <= min(S) <= radius`, so the
+   *       offer achieving D IS within the radius, so it IS in S, so `D = min(S)`
+   *       and the LATERAL picks the same location `min(S)` does.
+   *
+   *     So the scenario this shape invites — "a radius that excludes the
+   *     nearest-by-LATERAL location, leaving the ordering value inside the radius
+   *     and the returned one outside it" — is UNREACHABLE. Excluding the
+   *     nearest location excludes every location, S empties, and the inner join
+   *     drops the business entirely. `businesses.repository.public.near.db.spec.ts`
+   *     asserts exactly that at the radius just below the nearest location.
+   *
+   *     The two subqueries are kept anyway, and deliberately NOT collapsed into
+   *     one. They are the RPC's, they are computed from different sets, and
+   *     "they provably agree today" is a property of the radius being a
+   *     distance bound — not a license to rewrite the SQL into something that
+   *     happens to answer the same question. The next person to touch this should
+   *     re-derive the argument above before simplifying anything.
+   *
+   *  3. `min_distance_km` is null when the request carried no point, which makes
+   *     the distance ORDER BY key inert (`NULLS LAST`) and leaves
+   *     `deals_total desc, name asc` as the ranking.
+   *
+   * ─── DIVERGENCES FROM THE SQL, both deliberate ───────────────────────────
+   *
+   *  - `publiclyVisibleBusiness()` is applied even though the RPC has no
+   *    moderation gate anywhere. The RPC reaches this table through PostgREST
+   *    under RLS; the API has no RLS and would otherwise publish a business
+   *    still in review. Every other public surface here resolves through the
+   *    same function (`availableNow()` in the offers catalog, the gate on this
+   *    route's own previous shape, `activeOfferCounts()` in the categories
+   *    aggregate), and this is the fourth copy of the same rule arriving at the
+   *    same place. The gate sits on the OUTER query, where `businesses` is
+   *    already joined for the `type` filter, and correlates to that row.
+   *
+   *  - `search` KEEPS `escapeLike`, which the RPC does not. This route escaped it
+   *    before the geo work and a spec asserts it; the offers feed does not
+   *    escape. Reversing a tested property of this route to match a sibling
+   *    endpoint is a separate decision, not a side effect of mirroring a
+   *    function, so it was left alone.
    */
   async listPublic(query: ListPublicBusinessesQuery): Promise<{
-    items: PublicBusinessRow[];
+    items: PublicBusinessNearRow[];
     total: number;
   }> {
+    const coords = businessCoords(query);
+    const matching = this.matchingOffers(coords, query.radius_km);
+    const loc = this.nearestLocation(matching, coords);
+
     const filters: SQL[] = [publiclyVisibleBusiness()];
 
     if (query.search) {
@@ -556,26 +704,190 @@ export class BusinessesRepository {
       );
     }
 
+    // `b.type::text = lower(p_type)`: the PARAMETER is lowercased, so a caller
+    // that sends `Restaurant` matches `restaurant`. The cast is needed because
+    // `businesses.type` is a Postgres enum and `=` has no enum/text operator.
+    if (query.type) {
+      filters.push(sql`${businesses.type}::text = lower(${query.type})`);
+    }
+
     const where = and(...filters);
     const offset = (query.page - 1) * query.limit;
 
-    // Same `where` object for the page and the count, and the count reads
-    // `businesses` alone: with the gate being an `exists` subquery there is
-    // nothing to join, so `meta.total` is the size of the set the page walks.
+    // Same `where` object for the page and the count, over the same set the page
+    // walks: the count joins the SAME `matching_offers` aggregate, so `meta.total`
+    // counts businesses with live offers rather than the whole catalog. The two
+    // `Promise.all` branches build the statement independently, so a drift
+    // between them would show up here as a `total` that does not match the page.
     const [items, totalRow] = await Promise.all([
-      this.publicSelect()
+      this.db
+        .select({
+          ...this.publicColumns(),
+          // `m.deals_total`, projected as the RPC's `active_deals_count`. It is
+          // a `bigint`, so it arrives as a STRING; the mapper runs `toNumber`,
+          // the same as `CategoryDto.active_count`.
+          active_deals_count: matching.deals_total,
+          // Measured against the LATERAL's location, not against
+          // `min_distance_km` — see property 2 on this method.
+          distance_km: loc.distance_km,
+          business_location_id: loc.id,
+          address: loc.address,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          zone: loc.zone,
+        })
+        .from(matching)
+        .innerJoin(businesses, eq(matching.business_id, businesses.id))
+        // `join lateral (...) loc on true` verbatim. The subquery is a correlated
+        // one-row pick, so `on true` is not a cross join dressed up: it is how
+        // LATERAL is spelled.
+        .innerJoinLateral(loc, sql`true`)
         .where(where)
-        .orderBy(desc(businesses.created_at), desc(businesses.id))
+        .orderBy(
+          // The RPC's ONE static `order by` serving TWO orderings: a `CASE` whose
+          // value is non-null only for `sort = 'distance'`, and `NULLS LAST` so
+          // every other value leaves the key inert and falls through to
+          // `deals_total desc, name asc`. Same technique, and the same reason, as
+          // `offerListOrderBy` in the offers catalog.
+          sql`CASE WHEN ${query.sort ?? 'deals'} = 'distance' AND ${matching.min_distance_km} IS NOT NULL THEN ${matching.min_distance_km} END ASC NULLS LAST`,
+          desc(matching.deals_total),
+          asc(businesses.name),
+        )
         .limit(query.limit)
         .offset(offset),
       this.db
         .select({ value: count() })
-        .from(businesses)
+        .from(matching)
+        .innerJoin(businesses, eq(matching.business_id, businesses.id))
         .where(where)
         .then((rows) => rows[0]?.value ?? 0),
     ]);
 
     return { items, total: Number(totalRow) };
+  }
+
+  /**
+   * The `matching_offers` CTE of `active_businesses_near`, as a derived table.
+   *
+   * Column-for-column the RPC's aggregate: `business_id`, `count(*)` as
+   * `deals_total`, and `min(...)` of the distance as `min_distance_km`. The
+   * radius filter lives HERE and not in the outer query, which is what makes
+   * property 2 on `listPublic` true: `min_distance_km` is a minimum over the
+   * offers that passed it.
+   *
+   * `businesses` is NOT joined, because the gate that needs it is applied on the
+   * outer query where the table is already there. That is the whole difference
+   * from `CategoriesRepository.activeOfferCounts()`, which has to join it for the
+   * same predicate — the offers aggregate genuinely filters the offers, this one
+   * filters the businesses around them.
+   */
+  private matchingOffers(coords?: BusinessCoords, radiusKm?: number) {
+    const filters: SQL[] = [
+      eq(offers.is_active, true),
+      gt(offers.stock, 0),
+      gt(offers.pickup_end, sql`now()`),
+    ];
+
+    // `(p_lat is null or p_lng is null or p_radius_km is null or st_dwithin(...))`
+    // collapsed into "push the filter only when all three are present", the same
+    // decision `OffersRepository.buildFilters` makes. A search that silently
+    // became a 0 km radius would answer nothing at all.
+    if (coords && radiusKm !== undefined) {
+      filters.push(
+        sql`extensions.st_dwithin(
+          business_locations.geog,
+          extensions.st_setsrid(extensions.st_makepoint(${coords.lng}, ${coords.lat}), 4326)::extensions.geography,
+          ${radiusKm} * 1000.0
+        )`,
+      );
+    }
+
+    return this.db
+      .select({
+        business_id: offers.business_id,
+        // `.as()` is mandatory, not cosmetic: the outer select reads both of
+        // these, and Drizzle cannot reference a raw SQL field of a subquery
+        // without one. Same as `CategoryRepository.activeOfferCounts`.
+        deals_total: sql<string>`count(*)::bigint`.as('deals_total'),
+        // `min(case when <no point> then null else <distance> end)`, which is
+        // `min(NULL::double precision)` when there is no point — a null
+        // `min_distance_km`, and that is what makes the distance ORDER BY key
+        // inert instead of ranking everything at 0 km.
+        //
+        // The `.as()` is mandatory, not cosmetic: the ORDER BY references this
+        // field, and Drizzle cannot reference a raw SQL field of a subquery
+        // without one (it throws at build time). Same as `deals_total`.
+        min_distance_km: sql<number | null>`min(${distanceKmSql(coords)})`.as(
+          'min_distance_km',
+        ),
+      })
+      .from(offers)
+      .innerJoin(
+        businessLocations,
+        eq(offers.business_location_id, businessLocations.id),
+      )
+      .where(and(...filters))
+      .groupBy(offers.business_id)
+      .as('matching_offers');
+  }
+
+  /**
+   * The RPC's `join lateral (...) loc on true`, as a correlated one-row pick.
+   *
+   * The nearest location among ALL of the business's active offers — no radius
+   * filter. The `order by <distance> asc nulls last, l2.id` is reproduced
+   * verbatim, and the `l2.id` is not decoration: without it a business with two
+   * offers at the same distance could name a different pickup point on two
+   * requests of the same response, and `businesses.name` is NOT unique so the
+   * page-level order has no tiebreaker of its own either.
+   *
+   * `distance_km` is selected HERE rather than recomputed on the outer query
+   * against `loc.geog`. Same value — it is the same `st_distance` over the same
+   * row — and it is emitted once instead of twice. See property 2 on
+   * `listPublic` for why the two subqueries are kept separate even though they
+   * agree.
+   */
+  private nearestLocation(
+    matching: ReturnType<BusinessesRepository['matchingOffers']>,
+    coords?: BusinessCoords,
+  ) {
+    return (
+      this.db
+        .select({
+          id: businessLocations.id,
+          address: businessLocations.address,
+          latitude: businessLocations.latitude,
+          longitude: businessLocations.longitude,
+          zone: businessLocations.zone,
+          // `.as()` for the same reason `min_distance_km` has one: the outer
+          // select reads this field off the lateral.
+          distance_km: distanceKmSql(coords).as('distance_km'),
+        })
+        .from(offers)
+        .innerJoin(
+          businessLocations,
+          eq(offers.business_location_id, businessLocations.id),
+        )
+        // `o2.is_active and o2.stock > 0 and o2.pickup_end > now()`: the SAME
+        // triple as `matchingOffers`, re-stated, because the RPC re-states it too.
+        // It is not redundant there either — the LATERAL reads every active offer
+        // of the business, and an offer that sold out an instant after the
+        // aggregate ran must not send a reader to a point with nothing on it.
+        .where(
+          and(
+            eq(offers.business_id, matching.business_id),
+            eq(offers.is_active, true),
+            gt(offers.stock, 0),
+            gt(offers.pickup_end, sql`now()`),
+          ),
+        )
+        .orderBy(
+          sql`${distanceKmSql(coords)} ASC NULLS LAST`,
+          asc(businessLocations.id),
+        )
+        .limit(1)
+        .as('loc')
+    );
   }
 
   /**

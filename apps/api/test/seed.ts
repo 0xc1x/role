@@ -31,6 +31,7 @@ export async function seedBusiness(
   overrides: {
     name?: string;
     slug?: string;
+    type?: 'restaurant' | 'bakery' | 'cafe' | 'grocery' | 'other';
     is_active?: boolean;
     verification_status?: 'pending' | 'approved' | 'rejected';
   } = {},
@@ -41,6 +42,10 @@ export async function seedBusiness(
     .values({
       name: overrides.name ?? `Negocio ${suffix}`,
       slug: overrides.slug ?? `negocio-${suffix}`,
+      // Defaults to `restaurant` the same way the table does. Overridable
+      // because the public catalog filters on `b.type::text = lower(p_type)`, and
+      // a spec that cannot set a type cannot prove that comparison.
+      type: overrides.type,
       is_active: overrides.is_active ?? true,
     })
     .returning();
@@ -146,20 +151,31 @@ export async function seedOffer(
   db: TestDatabase,
   businessId: string,
   locationId: string,
-  overrides: { stock?: number; is_active?: boolean } = {},
+  overrides: {
+    stock?: number;
+    is_active?: boolean;
+    /**
+     * Overridable because `pickup_end > now()` is one third of the definition of
+     * a live offer, and a spec that cannot write an expired window cannot prove
+     * that an expired offer removes its BUSINESS from `active_businesses_near`
+     * rather than merely counting as nothing.
+     */
+    pickup_end?: Date;
+    title?: string;
+  } = {},
 ) {
   const [row] = await db
     .insert(offers)
     .values({
       business_id: businessId,
       business_location_id: locationId,
-      title: 'Pack sorpresa',
+      title: overrides.title ?? 'Pack sorpresa',
       original_price: '10000',
       discounted_price: '3990',
       stock: overrides.stock ?? 5,
       initial_stock: 5,
       pickup_start: new Date(Date.now() - 3600_000),
-      pickup_end: new Date(Date.now() + 3600_000),
+      pickup_end: overrides.pickup_end ?? new Date(Date.now() + 3600_000),
       is_active: overrides.is_active ?? true,
     })
     .returning();

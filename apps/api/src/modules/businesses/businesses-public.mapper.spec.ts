@@ -50,6 +50,77 @@ describe('PublicBusinessMapper', () => {
     expect(dto.created_at).toBe('2026-01-01T00:00:00.000Z');
   });
 
+  it('emits the five active_businesses_near fields on a list row', () => {
+    // A `listPublic` row: the same business plus the aggregate. `active_deals_count`
+    // is a `bigint` and the coordinates are `numeric(10,7)`, so all three arrive
+    // as STRINGS and the mapper converts them — exactly as `toCategoryDto` does
+    // for `active_count` and `toLocationDto` for latitude.
+    const dto = PublicBusinessMapper.toDto({
+      ...publicRow(),
+      active_deals_count: '7',
+      distance_km: 1.109124,
+      business_location_id: 'l1',
+      address: 'Calle 123',
+      latitude: '-33.4500000',
+      longitude: '-70.6600000',
+      zone: 'Centro',
+    });
+
+    expect(dto.active_deals_count).toBe(7);
+    expect(dto.distance_km).toBe(1.109124);
+    expect(dto.business_location_id).toBe('l1');
+    expect(dto.address).toBe('Calle 123');
+    expect(dto.latitude).toBe(-33.45);
+    expect(dto.longitude).toBe(-70.66);
+    expect(dto.zone).toBe('Centro');
+    // And nothing that was not on the row leaks in: the DTO is the business
+    // columns plus the aggregate, still with no owner, money or moderation state.
+    expect(Object.keys(dto)).not.toContain('owner_id');
+    expect(Object.keys(dto)).not.toContain('balance');
+    expect(Object.keys(dto)).not.toContain('verification_status');
+    expect(Object.keys(dto)).not.toContain('is_active');
+  });
+
+  it('keeps a null distance — it is a measurement, not a missing one', () => {
+    // A list row with no `lat`/`lng` in the request. `distance_km: null` means
+    // "no search point"; dropping the key instead would make it indistinguishable
+    // from a storefront row, which never measured it at all.
+    const dto = PublicBusinessMapper.toDto({
+      ...publicRow(),
+      active_deals_count: '1',
+      distance_km: null,
+      business_location_id: 'l1',
+      address: 'Calle 123',
+      latitude: '-33.4500000',
+      longitude: '-70.6600000',
+      zone: null,
+    });
+
+    expect(Object.keys(dto)).toContain('distance_km');
+    expect(dto.distance_km).toBeNull();
+    expect(dto.zone).toBeNull();
+  });
+
+  it('omits the aggregate entirely for a row that has none', () => {
+    // The storefront read: same mapper, no aggregate behind it. Reporting
+    // `active_deals_count: 0` here would state a count nobody measured — the lie
+    // `toCategoryDto` also refuses for `active_count`, and the reason those five
+    // contract fields are OPTIONAL in the first place.
+    const dto = PublicBusinessMapper.toDto(publicRow());
+
+    for (const key of [
+      'active_deals_count',
+      'distance_km',
+      'business_location_id',
+      'address',
+      'latitude',
+      'longitude',
+      'zone',
+    ]) {
+      expect(Object.keys(dto)).not.toContain(key);
+    }
+  });
+
   it('never emits owner, money or moderation state', () => {
     // A panel row carries all of these; the public mapper is handed the same kind
     // of object and must still drop them.

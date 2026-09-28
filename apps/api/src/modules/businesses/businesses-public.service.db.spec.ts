@@ -5,6 +5,7 @@ import {
   seedBusiness,
   seedBusinessHours,
   seedLocation,
+  seedOffer,
   seedProfile,
 } from '../../../test/seed';
 import { BusinessesPublicService } from './businesses-public.service';
@@ -111,6 +112,16 @@ describe('BusinessesPublicService.storefront', () => {
 
 describe('BusinessesPublicService.list', () => {
   test('paginates the gated set and never leaks a panel field', async () => {
+    // `active_businesses_near` (ADR-0008): the list is built from live offers, so
+    // both approved businesses need one. This is the service-level half of the
+    // inner-join contract — before the mirror, a business with nothing to sell
+    // was still listed, and the count included it.
+    const owner = await seedProfile(ctx.db);
+    for (const businessId of [approved, bareBusinessId]) {
+      const loc = await seedLocation(ctx.db, businessId, { name: 'Sucursal' });
+      await seedOffer(ctx.db, businessId, loc.id);
+    }
+
     const page = await service.list({ page: 1, limit: 10 });
 
     // Two approved businesses by now: the seeded one and the bare one from the
@@ -130,5 +141,72 @@ describe('BusinessesPublicService.list', () => {
     expect(page.data[0]?.rating).toBe(0);
     expect(page.data[0]?.review_count).toBe(0);
     expect(page.data[0]?.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  test('the list carries the offer aggregate, and the storefront does not', async () => {
+    // The five `active_businesses_near` fields are OPTIONAL on the contract
+    // precisely because these two reads differ. The list measures them; the
+    // storefront reads a business through the same mapper with no aggregate
+    // behind it, and must omit them rather than report a `0` it never counted.
+    const owner = await seedProfile(ctx.db);
+    const business = await seedBusiness(ctx.db, owner, {
+      name: 'Con aggregate',
+    });
+    const loc = await seedLocation(ctx.db, business.id, { name: 'Sucursal' });
+    await seedOffer(ctx.db, business.id, loc.id);
+    await seedOffer(ctx.db, business.id, loc.id);
+
+    const { data } = await service.list({
+      page: 1,
+      limit: 50,
+      search: 'Con aggregate',
+    });
+    const row = data[0]!;
+
+    expect(row.active_deals_count).toBe(2);
+    // No `lat`/`lng` in the request, so the distance is a measured `null` and the
+    // location is still named.
+    expect(row.distance_km).toBeNull();
+    expect(row.business_location_id).toBe(loc.id);
+    expect(row.address).toBe('Calle 123');
+    expect(row.latitude).toBe(-33.45);
+    expect(row.longitude).toBe(-70.66);
+    expect(row.zone).toBeNull();
+
+    const storefront = await service.storefront(business.id);
+    expect(storefront.business.id).toBe(business.id);
+    expect(Object.keys(storefront.business)).not.toContain(
+      'active_deals_count',
+    );
+    expect(Object.keys(storefront.business)).not.toContain('distance_km');
+    expect(Object.keys(storefront.business)).not.toContain(
+      'business_location_id',
+    );
+  });
+
+  test('the geo parameters reach the service untouched', async () => {
+    const owner = await seedProfile(ctx.db);
+    const business = await seedBusiness(ctx.db, owner, { name: 'Geo service' });
+    const loc = await seedLocation(ctx.db, business.id, {
+      name: 'Sucursal',
+      latitude: '-33.44',
+      longitude: '-70.66',
+    });
+    await seedOffer(ctx.db, business.id, loc.id);
+
+    const { data } = await service.list({
+      page: 1,
+      limit: 50,
+      search: 'Geo service',
+      lat: -33.45,
+      lng: -70.66,
+      radius_km: 5,
+      sort: 'distance',
+    });
+
+    expect(data[0]?.active_deals_count).toBe(1);
+    // 0.01 deg north of the searched point, measured on this PostGIS database.
+    expect(data[0]?.distance_km ?? -1).toBeGreaterThan(1.09);
+    expect(data[0]?.distance_km ?? -1).toBeLessThan(1.13);
   });
 });

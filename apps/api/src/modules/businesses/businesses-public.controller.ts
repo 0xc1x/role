@@ -38,7 +38,14 @@ export class BusinessesPublicController {
   @Public()
   @Get()
   @ApiOperation({
-    summary: 'List active, moderation-approved businesses (public catalog)',
+    summary: 'List businesses with at least one live offer (public catalog)',
+    description:
+      'Mirrors `public.active_businesses_near` (ADR-0008). This is a list built ' +
+      'from live offers, not a business directory: a business with no active, ' +
+      'in-stock, unexpired offer is absent rather than listed with a count of 0. ' +
+      '`lat` + `lng` + `radius_km` are independent — the radius filters only when ' +
+      'all three are present — and the default order is `deals` ' +
+      '(`active_deals_count desc`, then `name asc`), not distance.',
   })
   @ApiOkResponse({ description: 'Paginated public businesses' })
   list(

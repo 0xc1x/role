@@ -585,12 +585,22 @@ describe('Marketplace e2e', () => {
 
     for (const business of res.body.data) {
       expect(Object.keys(business).sort()).toEqual([
+        // The fourteen public business columns, plus the five
+        // `active_businesses_near` fields (and the two location coordinates).
+        // Widened on purpose when the RPC was mirrored (ADR-0008): the list is
+        // now built from live offers and names the pickup point it ranked.
+        'active_deals_count',
+        'address',
+        'business_location_id',
         'cover_image',
         'created_at',
         'description',
+        'distance_km',
         'email',
         'id',
         'image',
+        'latitude',
+        'longitude',
         'name',
         'phone',
         'rating',
@@ -599,6 +609,7 @@ describe('Marketplace e2e', () => {
         'type',
         'updated_at',
         'website',
+        'zone',
       ]);
     }
 
@@ -610,6 +621,28 @@ describe('Marketplace e2e', () => {
       )
       .expect(200);
     expect(filtered.body.data.map((b: { id: string }) => b.id)).toEqual(ids);
+  });
+
+  test('el catálogo público acepta los parámetros de active_businesses_near', async () => {
+    // Only the ROUTE and the query-string coercion are asserted here; the
+    // ordering, radius and distance semantics live against real Postgres in
+    // businesses.repository.public.near.db.spec.ts. What HTTP adds is that
+    // `lat`/`lng`/`radius_km`/`type`/`sort` arrive as STRINGS and survive
+    // `ZodValidationPipe` as numbers and an enum — a coercion that a repository
+    // test cannot catch, because it calls the repository with already-typed input.
+    const res = await api()
+      .get(
+        '/api/v1/businesses/public?lat=-33.45&lng=-70.66&radius_km=50&type=BUSINESS&sort=distance',
+      )
+      .expect(200);
+
+    // `type` is a free string on purpose: the RPC lowercases the PARAMETER, so
+    // `BUSINESS` is a valid request and simply matches nothing here.
+    for (const business of res.body.data) {
+      expect(business.active_deals_count).toBeGreaterThanOrEqual(1);
+      expect(business.distance_km).not.toBeNull();
+      expect(typeof business.business_location_id).toBe('string');
+    }
   });
 
   test('storefront público: negocio con ubicaciones y horarios, en una respuesta', async () => {
