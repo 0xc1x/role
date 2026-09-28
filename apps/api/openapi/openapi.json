@@ -3287,6 +3287,90 @@
         ]
       }
     },
+    "/api/v1/payment-methods": {
+      "get": {
+        "operationId": "PaymentMethodsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "My usable cards. Soft-deleted and inactive cards are filtered out, and no response ever carries the gateway token (PCI DSS)."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List my saved cards (default first, newest after)",
+        "tags": [
+          "Payment Methods"
+        ]
+      }
+    },
+    "/api/v1/payment-methods/{id}/default": {
+      "put": {
+        "operationId": "PaymentMethodsController_setDefault",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The card in its new state"
+          },
+          "404": {
+            "description": "No such usable card of mine"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Make one of my cards the default (clears my previous one)",
+        "tags": [
+          "Payment Methods"
+        ]
+      }
+    },
+    "/api/v1/payment-methods/{id}": {
+      "delete": {
+        "operationId": "PaymentMethodsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Card removed, or already removed — both are 204"
+          },
+          "404": {
+            "description": "No such card of mine — or not mine at all, which reads the same"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove one of my cards (soft delete: active=false, deleted_at set)",
+        "tags": [
+          "Payment Methods"
+        ]
+      }
+    },
     "/api/v1/push-notifications/templates": {
       "get": {
         "operationId": "PushNotificationsController_listTemplates",
