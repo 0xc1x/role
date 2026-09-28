@@ -1,8 +1,11 @@
 -- Make the public business catalog require moderation approval, and make the
 -- database enforce it instead of a column grant convention.
 --
--- STATUS: NOT APPLIED TO PRODUCTION. This file is committed for review; the
--- operator applies it through `apply_migration` as a separate, deliberate step.
+-- PROVENANCE. Sent verbatim through `apply_migration`; the version in this
+-- filename is the one the server assigned, and `md5sum` of this file equals
+-- `md5(statements[1])` in the ledger. If the two ever disagree, the ledger is
+-- what the database actually ran and the disagreement is a bug to fix — not a
+-- licence to assume they match.
 --
 -- ─── What this changes ─────────────────────────────────────────────────────
 --
