@@ -1,16 +1,21 @@
 import {
   CONSENT_TYPES,
+  MARKETING_CATEGORIES,
   type ConsumerNotificationPreferencesDto,
   type DeviceTokenDto,
+  type MarketingPreferencesDto,
   type ProfileDto,
   type UserConsentDto,
+  type UserOrderStatsDto,
   type UserPreferencesDto,
 } from '@0xc1x/role-commons';
 import type {
   ConsumerNotificationPreferencesRow,
   DeviceTokenRow,
+  MarketingPreferencesRow,
   ProfileRow,
   UserConsentRow,
+  UserOrderStatsRow,
   UserPreferencesRow,
 } from './me.repository';
 
@@ -28,6 +33,36 @@ import type {
  * values for no gain.
  */
 const DECLARED_CONSENT_TYPES = new Set<string>(CONSENT_TYPES);
+
+/**
+ * The declared marketing categories, as a lookup — the same reason and the same
+ * trade as `DECLARED_CONSENT_TYPES` above, on a column that is a `text[]` with
+ * no CHECK.
+ *
+ * A row can hold a value outside the union because mobile writes this table
+ * through PostgREST (ADR-0002) with no validation, and
+ * `EmailMarketingRepository.findSubscribedRecipients` resolves recipients with
+ * `arrayContains(categories, [category])` where `category` comes from a
+ * campaign that IS validated. So an undeclared category can never match a
+ * campaign: it is a preference the person believes they hold and that delivers
+ * nothing.
+ *
+ * Filtering it out is therefore not a lossy projection — it is the honest one.
+ * The response now says "these are the categories that can actually reach you",
+ * and a client that PATCHes back what it read writes the same set that was
+ * already doing something. Keeping the value would have meant shipping a string
+ * the contract cannot name, and a client rendering it as a checked box.
+ */
+const DECLARED_MARKETING_CATEGORIES = new Set<string>(MARKETING_CATEGORIES);
+
+/**
+ * `sum(numeric)` reaches the mapper as the string Postgres sends. The rounding
+ * to money is the mapper's job, exactly as in `RevenueStatsMapper` — the
+ * repository returns the raw aggregate.
+ */
+function money(value: string | null): number {
+  return Math.round(Number(value ?? 0) * 100) / 100;
+}
 
 /**
  * Row -> DTO for the `/me` surface. Five shapes, five methods, no database row
@@ -86,6 +121,33 @@ export class MeMapper {
       quiet_hours_to: row.quiet_hours_to,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
+    };
+  }
+
+  static toMarketingPreferencesDto(
+    row: MarketingPreferencesRow,
+  ): MarketingPreferencesDto {
+    return {
+      user_id: row.user_id,
+      is_subscribed: row.is_subscribed,
+      // See DECLARED_MARKETING_CATEGORIES: a value outside the union cannot
+      // match a campaign, so it is not reported as a held preference.
+      categories: row.categories.filter((category) =>
+        DECLARED_MARKETING_CATEGORIES.has(category),
+      ) as MarketingPreferencesDto['categories'],
+      // Read-only, and read verbatim: this is the moment the unsubscribe
+      // happened, and the API never lets a caller write it.
+      unsubscribed_at: row.unsubscribed_at?.toISOString() ?? null,
+      source: row.source,
+      updated_at: row.updated_at.toISOString(),
+    };
+  }
+
+  static toUserOrderStatsDto(row: UserOrderStatsRow): UserOrderStatsDto {
+    return {
+      orders_count: row.orders_count,
+      // No floor at zero: see `UserOrderStatsSchema.total_saved`.
+      total_saved: money(row.total_saved),
     };
   }
 

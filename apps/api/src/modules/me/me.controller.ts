@@ -24,6 +24,7 @@ import {
   RegisterMyDeviceSchema,
   RevokeMyDeviceQuerySchema,
   UpdateConsumerNotificationPreferencesSchema,
+  UpdateMyMarketingPreferencesSchema,
   UpdateMyPreferencesSchema,
   UpdateMyProfileSchema,
   UpsertMyConsentSchema,
@@ -31,15 +32,18 @@ import {
 import type {
   DeviceTokenDto,
   MeAccountDto,
+  MeMarketingPreferencesDto,
   MeNotificationPreferencesDto,
   MePreferencesDto,
   ProfileDto,
   RegisterMyDeviceDto,
+  UpdateMyMarketingPreferencesDto,
   UpdateMyNotificationPreferencesDto,
   UpdateMyPreferencesDto,
   UpdateMyProfileDto,
   UpsertMyConsentDto,
   UserConsentDto,
+  UserOrderStatsResponseDto,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -153,6 +157,80 @@ export class MeController {
     body: UpdateMyNotificationPreferencesDto,
   ): Promise<MeNotificationPreferencesDto> {
     return this.me.updateNotificationPreferences(user, body);
+  }
+
+  /**
+   * NOT A SECOND NOTIFICATION PREFERENCES ROUTE. The pairing is worth naming
+   * because the three tables are easy to confuse:
+   *
+   *  - `consumer_notification_preferences` — this controller, below. Channels
+   *    and quiet hours for the person.
+   *  - `business_notification_preferences` — the MERCHANT-side counterpart, at
+   *    `/businesses/:businessId/notification-preferences`. Same flags, other
+   *    side of the marketplace.
+   *  - `marketing_preferences` — this pair. Not channels at all: it decides
+   *    whether CAMPAIGNS (email marketing, push campaigns) may reach the person
+   *    and which categories, and it is the only one of the three with a
+   *    compliance-visible unsubscribe timestamp.
+   *
+   * So a reader who finds `marketing_preferences` and assumes
+   * `/me/notification-preferences` already covers it is wrong, and a reader who
+   * adds a route here for it is adding the second one.
+   */
+  @Get('marketing-preferences')
+  @ApiOperation({
+    summary: 'My marketing (campaign) subscription and categories',
+  })
+  @ApiOkResponse({
+    description:
+      'The marketing preferences row, or an explicit null when the account has never had one',
+  })
+  getMarketingPreferences(
+    @CurrentUser() user: AuthUser,
+  ): Promise<MeMarketingPreferencesDto> {
+    return this.me.getMarketingPreferences(user);
+  }
+
+  @Patch('marketing-preferences')
+  @ApiOperation({
+    summary:
+      'Edit my marketing subscription or categories. `unsubscribed_at` and `source` are stamped by the server.',
+  })
+  @ApiOkResponse({
+    description:
+      'The marketing preferences row in its new state. The unsubscribe timestamp moves only on the transition.',
+  })
+  updateMarketingPreferences(
+    @CurrentUser() user: AuthUser,
+    // `user_id`, `unsubscribed_at` and `source` are not keys of this schema, so
+    // the pipe strips them: the row belongs to the caller, and the record of
+    // when they unsubscribed is the server's to write.
+    @Body(new ZodValidationPipe(UpdateMyMarketingPreferencesSchema))
+    body: UpdateMyMarketingPreferencesDto,
+  ): Promise<MeMarketingPreferencesDto> {
+    return this.me.updateMarketingPreferences(user, body);
+  }
+
+  /**
+   * `GET /me/order-stats` — the consumer aggregate, and it takes NO id.
+   *
+   * `public.user_order_stats(p_user_id)` takes the caller's id as a parameter,
+   * which is safe in Supabase only because it runs under the caller's RLS.
+   * There is no RLS in this request path, so the ONLY place a user id could
+   * come from here is a query parameter — and a `?user_id=` on a route whose
+   * whole sibling set is "the token subject is the owner" is the kind of thing
+   * a client fills in from a cached value. There is no parameter to fill in.
+   */
+  @Get('order-stats')
+  @ApiOperation({
+    summary:
+      'My order count and total saved. Counts every order that is not cancelled.',
+  })
+  @ApiOkResponse({ description: 'My order aggregate' })
+  getOrderStats(
+    @CurrentUser() user: AuthUser,
+  ): Promise<UserOrderStatsResponseDto> {
+    return this.me.getOrderStats(user);
   }
 
   @Get('consents')

@@ -39,6 +39,9 @@ describe('MeController', () => {
             updatePreferences: jest.fn(),
             getNotificationPreferences: jest.fn(),
             updateNotificationPreferences: jest.fn(),
+            getMarketingPreferences: jest.fn(),
+            updateMarketingPreferences: jest.fn(),
+            getOrderStats: jest.fn(),
             listConsents: jest.fn(),
             putConsent: jest.fn(),
             registerDevice: jest.fn(),
@@ -88,14 +91,50 @@ describe('MeController', () => {
       'DELETE /api/v1/me/devices',
       'GET /api/v1/me',
       'GET /api/v1/me/consents',
+      'GET /api/v1/me/marketing-preferences',
       'GET /api/v1/me/notification-preferences',
+      'GET /api/v1/me/order-stats',
       'GET /api/v1/me/preferences',
       'PATCH /api/v1/me',
+      'PATCH /api/v1/me/marketing-preferences',
       'PATCH /api/v1/me/notification-preferences',
       'PATCH /api/v1/me/preferences',
       'POST /api/v1/me/devices',
       'PUT /api/v1/me/consents',
     ]);
+  });
+
+  /**
+   * The whole authorisation story of this controller, in one assertion.
+   *
+   * `GET /me/order-stats` mirrors `public.user_order_stats(p_user_id)`, a SQL
+   * function that takes the caller's id as a PARAMETER. That is safe in Supabase
+   * only because it runs under the caller's RLS; there is no RLS in this request
+   * path, since the pooler role OWNS `orders` and answers to none of its policies.
+   * So the way this API keeps the function's safety is refusing to accept the
+   * parameter at all — and the way that is PROVEN is arity: no handler on this
+   * controller takes more than the token subject plus a settings body whose
+   * schema has no owner column.
+   *
+   * Same shape as `payment-methods.controller.spec.ts`'s "no handler takes a
+   * user_id". A `?user_id=` on `GET /me/order-stats` fails here.
+   */
+  it('no handler takes a user_id, and no handler takes an owner at all', () => {
+    // Every GET on this controller takes the token subject and nothing else, so
+    // there is no argument that could name another account.
+    expect(MeController.prototype.getAccount.length).toBe(1);
+    expect(MeController.prototype.getPreferences.length).toBe(1);
+    expect(MeController.prototype.getNotificationPreferences.length).toBe(1);
+    expect(MeController.prototype.getMarketingPreferences.length).toBe(1);
+    expect(MeController.prototype.getOrderStats.length).toBe(1);
+    expect(MeController.prototype.listConsents.length).toBe(1);
+    // And the writes take the subject plus a body the Zod pipe has already
+    // stripped: `UpdateMyMarketingPreferencesSchema` has no `user_id`,
+    // `unsubscribed_at` or `source` key, so none of them can reach a write.
+    expect(MeController.prototype.updateMarketingPreferences.length).toBe(2);
+    expect(MeController.prototype.updateProfile.length).toBe(2);
+    expect(MeController.prototype.updatePreferences.length).toBe(2);
+    expect(MeController.prototype.updateNotificationPreferences.length).toBe(2);
   });
 
   it('no route is public: the global AuthGuard is default-deny', () => {
@@ -119,6 +158,8 @@ describe('MeController', () => {
     me.getAccount.mockReturnValue(undefined as never);
     me.getPreferences.mockReturnValue(undefined as never);
     me.getNotificationPreferences.mockReturnValue(undefined as never);
+    me.getMarketingPreferences.mockReturnValue(undefined as never);
+    me.getOrderStats.mockReturnValue(undefined as never);
     me.listConsents.mockReturnValue(undefined as never);
     me.revokeDevice.mockReturnValue(undefined as never);
 
@@ -128,6 +169,9 @@ describe('MeController', () => {
     controller.updatePreferences(user, { notification_radius_km: 10 });
     controller.getNotificationPreferences(user);
     controller.updateNotificationPreferences(user, { push_enabled: false });
+    controller.getMarketingPreferences(user);
+    controller.updateMarketingPreferences(user, { is_subscribed: false });
+    controller.getOrderStats(user);
     controller.listConsents(user);
     controller.putConsent(user, { consent_type: 'analytics', granted: true });
     controller.registerDevice(user, {
@@ -150,6 +194,15 @@ describe('MeController', () => {
     expect(me.updateNotificationPreferences).toHaveBeenCalledWith(user, {
       push_enabled: false,
     });
+    // Marketing is its own TABLE, not a second notification-preferences route:
+    // `consumer_notification_preferences` is the two flags above and
+    // `business_notification_preferences` is the merchant's counterpart of them.
+    expect(me.getMarketingPreferences).toHaveBeenCalledWith(user);
+    expect(me.updateMarketingPreferences).toHaveBeenCalledWith(user, {
+      is_subscribed: false,
+    });
+    // The aggregate takes the subject and nothing else — no `user_id` anywhere.
+    expect(me.getOrderStats).toHaveBeenCalledWith(user);
     expect(me.listConsents).toHaveBeenCalledWith(user);
     expect(me.putConsent).toHaveBeenCalledWith(user, {
       consent_type: 'analytics',

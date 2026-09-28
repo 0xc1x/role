@@ -58,6 +58,18 @@ const makeNotificationPreferencesRow = (
   ...overrides,
 });
 
+const makeMarketingPreferencesRow = (
+  overrides: Record<string, unknown> = {},
+) => ({
+  user_id: 'user-1',
+  is_subscribed: true,
+  categories: ['announcements'],
+  unsubscribed_at: null,
+  source: 'app',
+  updated_at: now,
+  ...overrides,
+});
+
 describe('MeService', () => {
   let service: MeService;
   let me: jest.Mocked<MeRepository>;
@@ -72,6 +84,9 @@ describe('MeService', () => {
       updatePreferences: jest.fn(),
       findNotificationPreferences: jest.fn(),
       updateNotificationPreferences: jest.fn(),
+      findMarketingPreferences: jest.fn(),
+      upsertMarketingPreferences: jest.fn(),
+      userOrderStats: jest.fn(),
       listConsents: jest.fn(),
       upsertConsent: jest.fn(),
       registerDevice: jest.fn(),
@@ -639,6 +654,104 @@ describe('MeService', () => {
 
       expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
+    });
+  });
+
+  describe('marketing preferences', () => {
+    it('an account with no row reads as an explicit null', async () => {
+      me.findMarketingPreferences.mockResolvedValue(null);
+
+      await expect(service.getMarketingPreferences(user)).resolves.toEqual({
+        marketing_preferences: null,
+      });
+    });
+
+    it('the read is keyed on the token subject and takes nothing else', async () => {
+      me.findMarketingPreferences.mockResolvedValue(
+        makeMarketingPreferencesRow() as never,
+      );
+
+      await service.getMarketingPreferences(user);
+
+      expect(me.findMarketingPreferences).toHaveBeenCalledWith('user-1');
+    });
+
+    it('only the two owned columns cross into the patch', async () => {
+      me.upsertMarketingPreferences.mockResolvedValue(
+        makeMarketingPreferencesRow() as never,
+      );
+
+      await service.updateMarketingPreferences(user, {
+        is_subscribed: false,
+        categories: ['news'],
+      });
+
+      // No `unsubscribed_at`, no `source`, no `updated_at`: those are derived in
+      // the repository, and a patch that carried them would be a caller writing
+      // its own compliance record.
+      expect(me.upsertMarketingPreferences).toHaveBeenCalledWith('user-1', {
+        is_subscribed: false,
+        categories: ['news'],
+      });
+    });
+
+    it('each key is optional on its own, and the other is left alone', async () => {
+      me.upsertMarketingPreferences.mockResolvedValue(
+        makeMarketingPreferencesRow() as never,
+      );
+
+      await service.updateMarketingPreferences(user, { is_subscribed: true });
+      expect(me.upsertMarketingPreferences).toHaveBeenLastCalledWith('user-1', {
+        is_subscribed: true,
+      });
+
+      await service.updateMarketingPreferences(user, { categories: ['news'] });
+      expect(me.upsertMarketingPreferences).toHaveBeenLastCalledWith('user-1', {
+        categories: ['news'],
+      });
+    });
+
+    it('an empty body is a no-op patch, which the repository turns into a read', async () => {
+      me.upsertMarketingPreferences.mockResolvedValue(null);
+
+      const answer = await service.updateMarketingPreferences(user, {});
+
+      expect(me.upsertMarketingPreferences).toHaveBeenCalledWith('user-1', {});
+      expect(answer).toEqual({ marketing_preferences: null });
+    });
+  });
+
+  describe('getOrderStats', () => {
+    it("asks for the CALLER's aggregate and nothing else", async () => {
+      // `public.user_order_stats(p_user_id)` takes the id as a PARAMETER, safe in
+      // Supabase only because it runs under the caller's RLS. There is no RLS here
+      // — the pooler role owns `orders` — so the id must not be an argument this
+      // route can widen, and the only argument it has is the token subject.
+      me.userOrderStats.mockResolvedValue({
+        orders_count: 3,
+        total_saved: '50.00',
+      });
+
+      const answer = await service.getOrderStats(user);
+
+      expect(me.userOrderStats).toHaveBeenCalledWith('user-1');
+      expect(answer).toEqual({
+        order_stats: { orders_count: 3, total_saved: 50 },
+      });
+    });
+
+    it('a negative saving is reported as it is, not floored to zero', async () => {
+      // A discount that rounded against the customer is a fact about the data. A
+      // `nonnegative()` floor would turn it into a 400 on a GET, and the sign is
+      // the caller's to interpret.
+      me.userOrderStats.mockResolvedValue({
+        orders_count: 1,
+        total_saved: '-3.50',
+      });
+
+      const answer = await service.getOrderStats(user);
+
+      expect(answer.order_stats.total_saved).toBe(-3.5);
     });
   });
 

@@ -155,6 +155,46 @@ export type BusinessEmailSendRow = Pick<
 > & { template_name: string };
 
 export type BusinessLocationRow = typeof businessLocations.$inferSelect;
+
+/**
+ * The merchant's own notification switches, keyed by `business_id`.
+ *
+ * THE BUSINESS-SIDE COUNTERPART OF `consumer_notification_preferences`, and the
+ * pair is worth naming in both places: `GET/PATCH /me/notification-preferences`
+ * already serves the consumer row, and this is the other half of the same
+ * feature for the other side of the marketplace. Same flags, same quiet-hours
+ * columns, one owner per row — so a reader who meets this table must not go
+ * looking for a second consumer route for it.
+ */
+export type BusinessNotificationPreferencesRow =
+  typeof businessNotificationPreferences.$inferSelect;
+
+/**
+ * The columns a merchant write may carry.
+ *
+ * `business_id` is the path, not a field, and it is the one that matters: this
+ * API connects as the table's owner and is therefore exempt from
+ * `business_notification_preferences`' own RLS policies, so the check that
+ * `business_ownership.owner_id = caller` is the ONLY thing between a crafted id
+ * and another merchant's settings. `created_at` and `updated_at` are derived,
+ * never carried — the latter because nothing in the database maintains it.
+ */
+export type BusinessNotificationPreferencesPatch = Partial<
+  Pick<
+    BusinessNotificationPreferencesRow,
+    | 'push_enabled'
+    | 'email_enabled'
+    | 'sms_enabled'
+    | 'whatsapp_enabled'
+    | 'new_orders_enabled'
+    | 'pickup_ready_enabled'
+    | 'reviews_enabled'
+    | 'low_stock_enabled'
+    | 'daily_summary_enabled'
+    | 'quiet_hours_from'
+    | 'quiet_hours_to'
+  >
+>;
 export type BusinessLocationInsert = typeof businessLocations.$inferInsert;
 export type BusinessLocationUpdate = Partial<
   Pick<
@@ -521,6 +561,68 @@ export class BusinessesRepository {
       )
       .limit(1);
     return Boolean(row);
+  }
+
+  // ─── Preferencias de notificación del negocio ────────────────────
+
+  async findNotificationPreferences(
+    businessId: string,
+  ): Promise<BusinessNotificationPreferencesRow | null> {
+    const [row] = await this.db
+      .select()
+      .from(businessNotificationPreferences)
+      .where(eq(businessNotificationPreferences.business_id, businessId))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
+   * `business_notification_preferences`, the MERCHANT-side counterpart of the
+   * `consumer_notification_preferences` row that `GET/PATCH
+   * /me/notification-preferences` already serves. Same idea, other side of the
+   * marketplace — a name this close to the consumer one is worth stating in a
+   * comment so nobody adds a second consumer route for this table.
+   *
+   * THE `updated_at` IS WRITTEN HERE, BECAUSE NOBODY ELSE WRITES IT. There is
+   * no `updated_at` trigger on this table: the only trigger in its migration is
+   * `trg_create_business_notification_preferences`, an AFTER INSERT on
+   * `businesses` that seeds the row, and the only other migration that mentions
+   * the table grants and policies it. So the column would sit at its creation
+   * value forever and every consumer of it — a "last changed" line in the
+   * panel, an audit of when a merchant muted their order alerts — would be
+   * reading a lie. Contrast `saved_addresses`, whose `set_saved_addresses_updated_at`
+   * trigger IS real: there, and only there, the repository's explicit write is
+   * redundant rather than necessary.
+   *
+   * AN UPSERT, and the row is normally already there: the trigger above plus
+   * the `onConflictDoNothing` insert in `create()` both seed it, so a plain
+   * UPDATE would be the common case. The upsert is here because the common case
+   * is not the only one — a business whose preferences row predates the table,
+   * or one inserted into `businesses` with the trigger disabled, has no row, and
+   * a PATCH that 404s on that state is a PATCH the merchant cannot recover from.
+   * `business_id` is the primary key, so `ON CONFLICT (business_id) DO UPDATE`
+   * is one statement against the race as well.
+   *
+   * Columns the caller cannot reach: `business_id` (it is the path, and the
+   * service checked ownership before calling this), `created_at`, and — see
+   * `BusinessNotificationPreferencesPatch` — `updated_at`, which is derived.
+   */
+  async upsertNotificationPreferences(
+    businessId: string,
+    patch: BusinessNotificationPreferencesPatch,
+  ): Promise<BusinessNotificationPreferencesRow | null> {
+    if (Object.keys(patch).length === 0) {
+      return this.findNotificationPreferences(businessId);
+    }
+    const [row] = await this.db
+      .insert(businessNotificationPreferences)
+      .values({ business_id: businessId, ...patch })
+      .onConflictDoUpdate({
+        target: businessNotificationPreferences.business_id,
+        set: { ...patch, updated_at: new Date() },
+      })
+      .returning();
+    return row ?? null;
   }
 
   async findIdsOwnedBy(userId: string): Promise<string[]> {

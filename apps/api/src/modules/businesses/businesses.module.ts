@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AppConfigModule } from '../app-config/app-config.module';
 import { UsersModule } from '../users/users.module';
+import { BusinessOwnerStatsController } from './business-owner-stats.controller';
+import { BusinessOwnerStatsRepository } from './business-owner-stats.repository';
+import { BusinessOwnerStatsService } from './business-owner-stats.service';
 import { BusinessesController } from './businesses.controller';
 import { BusinessesPublicController } from './businesses-public.controller';
 import { BusinessesPublicService } from './businesses-public.service';
@@ -29,11 +32,27 @@ import { BusinessesService } from './businesses.service';
  * `ReviewsFeedsController` owns `businesses/public/{id}/reviews` and is immune to
  * the same hazard: it is three segments after `businesses`, and neither
  * `public/:id` nor `:id` can match it, in any registration order.
+ *
+ * `BusinessOwnerStatsController` is third, and for the opposite reason: it does
+ * not need a position. Every path it serves is four segments and ends in a
+ * literal (`businesses/:businessId/stats/…`), which no route on the other two
+ * controllers can match and none of them can be matched by. It is registered
+ * last so the reader meets it last, not because Express depends on it.
  */
 @Module({
   imports: [AppConfigModule, UsersModule],
-  controllers: [BusinessesPublicController, BusinessesController],
-  providers: [BusinessesService, BusinessesPublicService, BusinessesRepository],
+  controllers: [
+    BusinessesPublicController,
+    BusinessesController,
+    BusinessOwnerStatsController,
+  ],
+  providers: [
+    BusinessesService,
+    BusinessesPublicService,
+    BusinessesRepository,
+    BusinessOwnerStatsService,
+    BusinessOwnerStatsRepository,
+  ],
   // Exported for the review feeds, which gate the public business feed on the
   // same predicate this module's public reads use.
   exports: [BusinessesRepository],

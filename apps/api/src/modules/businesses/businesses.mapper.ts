@@ -2,12 +2,14 @@ import type {
   BusinessDto,
   BusinessEmailSendDto,
   BusinessLocationDto,
+  BusinessNotificationPreferencesDto,
 } from '@0xc1x/role-commons';
 import { toNumber, toNumberOrNull } from '../../common/utils/numeric';
 import type {
   BusinessAggregateRow,
   BusinessEmailSendRow,
   BusinessLocationRow,
+  BusinessNotificationPreferencesRow,
 } from './businesses.repository';
 
 /**
@@ -58,6 +60,33 @@ export class BusinessMapper {
       template_name: row.template_name,
       status: row.status,
       error_message: row.error_message ?? null,
+      created_at: row.created_at.toISOString(),
+      updated_at: row.updated_at.toISOString(),
+    };
+  }
+
+  static toNotificationPreferencesDto(
+    row: BusinessNotificationPreferencesRow,
+  ): BusinessNotificationPreferencesDto {
+    return {
+      business_id: row.business_id,
+      push_enabled: row.push_enabled,
+      email_enabled: row.email_enabled,
+      sms_enabled: row.sms_enabled,
+      whatsapp_enabled: row.whatsapp_enabled,
+      new_orders_enabled: row.new_orders_enabled,
+      pickup_ready_enabled: row.pickup_ready_enabled,
+      reviews_enabled: row.reviews_enabled,
+      low_stock_enabled: row.low_stock_enabled,
+      daily_summary_enabled: row.daily_summary_enabled,
+      // `time` (not `timestamp`): the column crosses the wire as Postgres
+      // already formats it, 'HH:MM:SS', which is what `TimeSchema` accepts.
+      // Same representation `MeMapper.toNotificationPreferencesDto` uses for the
+      // consumer row, deliberately — the two DTOs are siblings and a client
+      // that renders both should not have to know they came from different
+      // tables.
+      quiet_hours_from: row.quiet_hours_from,
+      quiet_hours_to: row.quiet_hours_to,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
     };

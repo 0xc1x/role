@@ -7,20 +7,24 @@ import {
 import type {
   DeviceTokenDto,
   MeAccountDto,
+  MeMarketingPreferencesDto,
   MeNotificationPreferencesDto,
   MePreferencesDto,
   ProfileDto,
   RegisterMyDeviceDto,
+  UpdateMyMarketingPreferencesDto,
   UpdateMyNotificationPreferencesDto,
   UpdateMyPreferencesDto,
   UpdateMyProfileDto,
   UpsertMyConsentDto,
   UserConsentDto,
+  UserOrderStatsResponseDto,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
 import { CategoriesRepository } from '../categories/categories.repository';
 import { MeMapper } from './me.mapper';
 import type {
+  MyMarketingPreferencesPatch,
   MyNotificationPreferencesPatch,
   MyPreferencesPatch,
   MyProfilePatch,
@@ -38,15 +42,17 @@ import { MeRepository } from './me.repository';
  *     can be widened by a crafted body or path.
  *  2. This service connects as the `postgres` pooler role, which OWNS
  *     `profiles`, `user_preferences`, `consumer_notification_preferences`,
- *     `user_consents` and `device_tokens`, and a table owner is exempt from both
- *     RLS and the column-level grants. Every RLS policy in the brief — "own
- *     SELECT/UPDATE", "to authenticated" — describes a boundary that does not
- *     exist for these statements. The scoping is the `where user_id = caller` in
- *     each query, and the invariants below.
+ *     `marketing_preferences`, `user_consents` and `device_tokens`, and a table
+ *     owner is exempt from both RLS and the column-level grants. Every RLS
+ *     policy in the brief — "own SELECT/UPDATE", "to authenticated" — describes
+ *     a boundary that does not exist for these statements. The scoping is the
+ *     `where user_id = caller` in each query, and the invariants below.
  *  3. Rows seeded by `UserDefaultsService` and by the Supabase trigger chain are
  *     ASSUMED, never created. A missing row is a `null` in a response, not a 404
  *     and not an insert: the API did not write it, so inventing it here would
- *     make this surface a second source of truth for a table it only reads.
+ *     make this surface a second source of truth for a table it only reads. The
+ *     one row this service DOES create is `marketing_preferences`, and only
+ *     because an unsubscribe has to work for an account that has never had one.
  */
 @Injectable()
 export class MeService {
@@ -369,6 +375,103 @@ export class MeService {
         ? MeMapper.toNotificationPreferencesDto(row)
         : null,
     };
+  }
+
+  /**
+   * `GET /me/marketing-preferences`.
+   *
+   * THE THIRD PREFERENCE ROW, AND NOT A FOURTH SETTINGS SCREEN. There are two
+   * other preference tables in the system and they answer different questions:
+   * `consumer_notification_preferences` (`/me/notification-preferences`) is
+   * about CHANNELS and quiet hours, and `business_notification_preferences` is
+   * the merchant-side counterpart of that one. `marketing_preferences` is about
+   * CAMPAIGN SUBSCRIPTION — may `EmailMarketingRepository` put this person in a
+   * segment at all — so it is a different row on a different route, and the
+   * name is deliberately close to the other two because the pairing is real.
+   *
+   * A MISSING ROW IS `null`, and that is this module's standing rule rather than
+   * a new decision: the row is created by a one-off backfill in the
+   * email-marketing migration (`insert ... select from profiles ... on conflict
+   * do nothing`) and by the upsert below, and there is no signup trigger, so an
+   * account created since that migration legitimately has none. Inventing it on
+   * a read would make this a second source of truth for a table whose creation
+   * the API does not own — and it would do it on a GET, which is not a place to
+   * write. What the column defaults would have said is not invented either: the
+   * PATCH is the moment the API starts writing this row, and its answer is the
+   * stored one.
+   */
+  async getMarketingPreferences(
+    user: AuthUser,
+  ): Promise<MeMarketingPreferencesDto> {
+    const row = await this.me.findMarketingPreferences(user.id);
+    return {
+      marketing_preferences: row
+        ? MeMapper.toMarketingPreferencesDto(row)
+        : null,
+    };
+  }
+
+  /**
+   * `PATCH /me/marketing-preferences`.
+   *
+   * ONLY TWO COLUMNS CROSS THE BORDER, and the three that do not are the
+   * interesting part of this method:
+   *
+   *  - `unsubscribed_at` is STAMPED BY THE SERVER, in the repository, on the
+   *    transition. It is the compliance-visible half of an unsubscribe — the
+   *    column an auditor reads to answer "when did this person stop receiving
+   *    our campaigns" — and a value the caller supplied would be a
+   *    caller-supplied audit record. This is the position the rest of the
+   *    codebase already takes: `EmailMarketingRepository.unsubscribe` (footer
+   *    link) and `AuthAccountRepository` (account anonymisation) both write
+   *    `new Date()`. The one writer that does not is mobile's PostgREST upsert,
+   *    which is exactly the weakness this route removes.
+   *  - `source` is the server's to write, for the same reason and because
+   *    provenance claimed by the subject of the record is not provenance.
+   *  - `updated_at` follows the row.
+   *
+   * `is_subscribed` and `categories` are independently optional and a PATCH
+   * that sets either leaves the other exactly as stored, so a client that only
+   * renders a master switch does not have to restate the category list — and a
+   * restatement that dropped a category would silently unsubscribe the person
+   * from it.
+   */
+  async updateMarketingPreferences(
+    user: AuthUser,
+    body: UpdateMyMarketingPreferencesDto,
+  ): Promise<MeMarketingPreferencesDto> {
+    const patch: MyMarketingPreferencesPatch = {};
+    if (body.is_subscribed !== undefined) {
+      patch.is_subscribed = body.is_subscribed;
+    }
+    if (body.categories !== undefined) patch.categories = body.categories;
+
+    const row = await this.me.upsertMarketingPreferences(user.id, patch);
+    return {
+      marketing_preferences: row
+        ? MeMapper.toMarketingPreferencesDto(row)
+        : null,
+    };
+  }
+
+  /**
+   * `GET /me/order-stats` — mirror of `public.user_order_stats(p_user_id)`.
+   *
+   * THE ONLY ARGUMENT IS THE CALLER. The SQL function takes the user's id as a
+   * parameter, and that is safe in Supabase only because it runs under the
+   * caller's own RLS. There is no RLS in this request path — the API connects
+   * as the `postgres` pooler role, which OWNS `orders` and is exempt from every
+   * policy on it — so an id from a body or a query string here would be an
+   * unchecked read of another account's history. The scoping is the `where
+   * user_id = $1` inside `MeRepository.userOrderStats` and nothing else.
+   *
+   * The rule this reports is the function's, not this method's: everything that
+   * is not `cancelled` counts, and a cancelled-but-never-completed order still
+   * contributes its saving. See `MeRepository.userOrderStats`.
+   */
+  async getOrderStats(user: AuthUser): Promise<UserOrderStatsResponseDto> {
+    const row = await this.me.userOrderStats(user.id);
+    return { order_stats: MeMapper.toUserOrderStatsDto(row) };
   }
 
   async listConsents(user: AuthUser): Promise<UserConsentDto[]> {

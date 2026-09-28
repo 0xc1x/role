@@ -1,10 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, ne, sql, type SQL } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import {
   consumerNotificationPreferences,
   deviceTokens,
+  marketingPreferences,
+  orders,
   profiles,
   userConsents,
   userPreferences,
@@ -14,8 +16,39 @@ export type ProfileRow = typeof profiles.$inferSelect;
 export type UserPreferencesRow = typeof userPreferences.$inferSelect;
 export type ConsumerNotificationPreferencesRow =
   typeof consumerNotificationPreferences.$inferSelect;
+export type MarketingPreferencesRow = typeof marketingPreferences.$inferSelect;
 export type UserConsentRow = typeof userConsents.$inferSelect;
 export type DeviceTokenRow = typeof deviceTokens.$inferSelect;
+
+/**
+ * `unsubscribed_at`, `source` and `updated_at` are NOT here, and their absence
+ * is the point: the caller owns the subscription DECISION, the server owns the
+ * record of when the decision was taken and of which surface took it. See
+ * `MeService.updateMarketingPreferences` and `upsertMarketingPreferences`.
+ */
+export type MyMarketingPreferencesPatch = Partial<
+  Pick<MarketingPreferencesRow, 'is_subscribed' | 'categories'>
+>;
+
+/**
+ * The two columns of `user_order_stats` as Postgres returns them: `count(*)`
+ * already cast to `int` so it arrives as a number instead of a bigint string,
+ * and `numeric` left as the string Postgres sends.
+ */
+export type UserOrderStatsRow = { orders_count: number; total_saved: string };
+
+/**
+ * The one value this API ever writes to `marketing_preferences.source`.
+ *
+ * The column is provenance — WHO performed the change — and there are exactly
+ * three writers in the system: the migration backfill (`seed`), the footer
+ * unsubscribe link (`email_link`, in `EmailMarketingRepository`), and this route
+ * (`app`). It is deliberately not a request field: a caller that could label
+ * its own unsubscribe would make the column worthless for the one question it
+ * exists to answer, and `UpdateMyMarketingPreferencesSchema` has no `source`
+ * key for the pipe to leave it in.
+ */
+const MARKETING_SOURCE_APP = 'app';
 
 /**
  * Every write patch is built from an explicit allowlist of columns, and
@@ -169,6 +202,178 @@ export class MeRepository {
       .from(userConsents)
       .where(eq(userConsents.user_id, userId))
       .orderBy(asc(userConsents.consent_type));
+  }
+
+  // ─── Preferencias de marketing ─────────────────────────────────────
+
+  /**
+   * `marketing_preferences` is not seeded by `handle_new_user` and not by
+   * `UserDefaultsService`; the only writer at signup time is a one-off
+   * `insert ... select` backfill in the email-marketing migration, which covers
+   * the profiles that existed that day. So a `null` here is the NORMAL state of
+   * an account created since, and the caller reads it as "subscribed, with the
+   * column default" — which is what `MeService` resolves it to.
+   */
+  async findMarketingPreferences(
+    userId: string,
+  ): Promise<MarketingPreferencesRow | null> {
+    const [row] = await this.db
+      .select()
+      .from(marketingPreferences)
+      .where(eq(marketingPreferences.user_id, userId))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
+   * THE STAMPING IS SERVER-SIDE, and this statement is where it happens.
+   *
+   * `unsubscribed_at` is the compliance-visible half of an unsubscribe: it is
+   * the column an auditor reads to answer "when did this person stop receiving
+   * our campaigns", and a value the CALLER supplied would be a caller-supplied
+   * audit record. So `is_subscribed` is written, and the timestamp is derived
+   * from it here — the caller never gets to say when.
+   *
+   * This is not a new position. Every other writer of this column in the
+   * codebase already derives it: `EmailMarketingRepository.unsubscribe` (the
+   * footer link) sets `new Date()`, and `AuthAccountRepository`'s account
+   * anonymisation sets `new Date()`. The one writer that does NOT derive it is
+   * mobile's PostgREST upsert, which is precisely the weakness this route
+   * removes. Consistency was the tiebreaker; the audit trail was the argument.
+   *
+   * WHY THE `case`, AND WHY IT IS NOT `now()` UNCONDITIONALLY: this has to
+   * survive a client that retries on a flaky connection, and `now()` on every
+   * call would move the moment of withdrawal forward on a retry of the very
+   * request that withdrew it. The timestamp advances on the TRANSITION only:
+   *
+   *   - unsubscribing from something that was not unsubscribed stamps `now()`.
+   *   - re-subscribing clears it, because a subscribed person has no moment of
+   *     withdrawal; keeping the old value would leave a row that says
+   *     `is_subscribed = true, unsubscribed_at = <date>` and any audit reading
+   *     the pair would have to guess which column wins.
+   *   - unsubscribing an already-unsubscribed row preserves the first
+   *     withdrawal, which is the moment the audit asks about.
+   *
+   * THE INSERT PATH STAMPS TOO, and that is not a detail: `ON CONFLICT DO
+   * UPDATE` does not run when there is no conflict, so an account that has
+   * never had a `marketing_preferences` row — the normal state of an account
+   * created since the backfill migration — would take its FIRST unsubscribe
+   * with a NULL `unsubscribed_at`. The one unsubscribe that creates the
+   * compliance record would be the one that does not record it. There is no
+   * previous state to measure a transition against on that path, so the
+   * transition there is unconditional, and it is written with the DATABASE's
+   * `now()` rather than the API host's clock: the value is an audit record and
+   * it should not depend on which application process handled the request.
+   *
+   * `excluded` is the row the INSERT proposed; every other reference on the
+   * right-hand side of the conflict clause is the row already in the table,
+   * which is the state the transition is measured against. Same shape as
+   * `upsertConsent`.
+   *
+   * AN UPSERT, not an update-then-insert, and for the same reason as
+   * `upsertConsent`: the row may not exist, `user_id` is the primary key, and
+   * one statement closes the race between "read it, it is missing" and "two
+   * requests create it" without a retry path.
+   *
+   * `source` is in the INSERT values and NOT in the conflict SET, so it is
+   * written when the row is created and preserved afterwards. That is
+   * `EmailMarketingRepository.unsubscribe`'s convention exactly, and it is the
+   * right one: the column records where the CURRENT state came from, and a
+   * later edit of `categories` does not retroactively reattribute the
+   * unsubscribe.
+   *
+   * AN EMPTY PATCH IS A READ. `ON CONFLICT DO UPDATE` with no `SET` columns is
+   * a syntax error, and the alternative — writing nothing but still bumping
+   * `updated_at` — would make "last changed" mean "last asked". So a PATCH that
+   * changes nothing returns the stored row untouched, and `updated_at` keeps
+   * meaning what its name says.
+   */
+  async upsertMarketingPreferences(
+    userId: string,
+    patch: MyMarketingPreferencesPatch,
+  ): Promise<MarketingPreferencesRow | null> {
+    if (Object.keys(patch).length === 0) {
+      return this.findMarketingPreferences(userId);
+    }
+
+    const changed: SQL[] = [];
+    const set: Record<string, SQL> = {};
+
+    if (patch.is_subscribed !== undefined) {
+      set.is_subscribed = sql`excluded.is_subscribed`;
+      set.unsubscribed_at = sql`case
+        when excluded.is_subscribed then null
+        when ${marketingPreferences.is_subscribed} is not false then now()
+        else ${marketingPreferences.unsubscribed_at}
+      end`;
+      changed.push(
+        sql`${marketingPreferences.is_subscribed} is distinct from excluded.is_subscribed`,
+      );
+    }
+    if (patch.categories !== undefined) {
+      set.categories = sql`excluded.categories`;
+      // `is distinct from` compares arrays element-wise, so re-sending the list
+      // the user already had is a no-op rather than a "change".
+      changed.push(
+        sql`${marketingPreferences.categories} is distinct from excluded.categories`,
+      );
+    }
+    set.updated_at = sql`case when ${sql.join(changed, sql` and `)} then now() else ${marketingPreferences.updated_at} end`;
+
+    const [row] = await this.db
+      .insert(marketingPreferences)
+      .values({
+        user_id: userId,
+        source: MARKETING_SOURCE_APP,
+        ...(patch.is_subscribed !== undefined
+          ? {
+              is_subscribed: patch.is_subscribed,
+              // `null` is passed as a value, not as SQL: there is nothing to
+              // derive on this path beyond "a subscribed person has no moment of
+              // withdrawal".
+              unsubscribed_at: patch.is_subscribed ? null : sql`now()`,
+            }
+          : {}),
+        ...(patch.categories !== undefined
+          ? { categories: patch.categories }
+          : {}),
+      })
+      .onConflictDoUpdate({
+        target: marketingPreferences.user_id,
+        set,
+      })
+      .returning();
+    return row ?? null;
+  }
+
+  /**
+   * `user_order_stats` for the CALLER, and the caller is the only argument.
+   *
+   * THE RULE, WHICH IS NOT THE RULE THE TWO BUSINESS AGGREGATES USE:
+   * `status <> 'cancelled'`, not `status = 'completed'`. A cancelled order
+   * that was never completed still counts here, and its `original_price -
+   * price` still counts toward the "ahorrado" this endpoint reports. That is
+   * the SQL's behaviour, and the mobile copy of it was built against it; a
+   * mirror that "fixed" the asymmetry would report a different number than the
+   * screen the user has been reading, and the difference would be a silent
+   * change to a figure people trust about their own impact.
+   *
+   * `<> 'cancelled'` rather than `not in (...)`: it is what the function says,
+   * and it keeps a status added to the `order_status` enum later from silently
+   * dropping out of this aggregate.
+   */
+  async userOrderStats(userId: string): Promise<UserOrderStatsRow> {
+    const [row] = await this.db
+      .select({
+        orders_count: sql<number>`count(*)::int`,
+        total_saved: sql<string>`coalesce(sum(${orders.original_price} - ${orders.price}), 0)::numeric`,
+      })
+      .from(orders)
+      .where(and(eq(orders.user_id, userId), ne(orders.status, 'cancelled')));
+    return {
+      orders_count: row?.orders_count ?? 0,
+      total_saved: row?.total_saved ?? '0',
+    };
   }
 
   /**
