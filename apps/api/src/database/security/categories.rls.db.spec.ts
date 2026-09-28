@@ -41,13 +41,17 @@ import {
  *
  * ─── The one thing to read before believing anything below ─────────────────
  *
- * `anon` holds SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES and
- * TRIGGER on this table. That is Supabase's `alter default privileges`, it is
- * what production has, and it is NOT hardened here — this file reproduces and
- * tests, it does not fix. The consequence is the point of the whole exercise:
+ * `anon` holds SELECT, INSERT, UPDATE and DELETE on this table, and USED to
+ * hold TRUNCATE, REFERENCES and TRIGGER as well. That was Supabase's `alter
+ * default privileges`, it was what production had, and it was not hardened here —
+ * this file reproduced and tested, it did not fix. Since
+ * `20260928203000_revoke_client_destructive_privileges.sql` the three are gone,
+ * for `anon` and `authenticated`, on every RLS table in `public` and in the
+ * default privileges. The consequence, for the four that remain, is still the
+ * point of the whole exercise:
  *
- *     the grants permit everything, and the POLICIES are the only thing
- *     standing between `anon` and the catalog.
+ *     the grants permit everything the policies govern, and the POLICIES are
+ *     the only thing standing between `anon` and the catalog.
  *
  * So a test in this file that asserts a denial is worthless unless it also
  * asserts the privilege exists. `the grants permit what the policies forbid`
@@ -312,15 +316,28 @@ describe('public.categories: what the grants allow', () => {
    * The precondition for every denial in this file.
    *
    * Supabase's default privileges make a new `public` table fully writable by
-   * `anon` the moment it is created, and this table is not hardened. If this
-   * test ever fails, every other denial here becomes vacuous — they would all
-   * still pass, and all of them would be reporting a 42501 from the GRANT layer
-   * instead of a policy. It is the canary for the failure mode this harness
-   * already produced once: before the default privileges were reproduced, EVERY
-   * client query failed with `permission denied for table categories` and not
-   * one policy was ever evaluated.
+   * `anon` the moment it is created, and this table USED to be unhardened — it
+   * held all seven. If this test ever fails, every other denial here becomes
+   * vacuous — they would all still pass, and all of them would be reporting a
+   * 42501 from the GRANT layer instead of a policy. It is the canary for the
+   * failure mode this harness already produced once: before the default
+   * privileges were reproduced, EVERY client query failed with `permission
+   * denied for table categories` and not one policy was ever evaluated.
+   *
+   * It was seven until `20260928203000_revoke_client_destructive_privileges.sql`.
+   * That migration took TRUNCATE, TRIGGER and REFERENCES away from `anon` and
+   * `authenticated` on every RLS table in `public` and revoked the same three
+   * from the DEFAULT privileges, so `categories` — the table the default
+   * privileges were measured against — is now down to the four that the
+   * policies actually govern.
+   *
+   * The name is the inverse of what it used to be, deliberately. "anon holds
+   * every table privilege, and the policies are what refuse" described a
+   * database this project no longer has, and leaving the old name on a new
+   * assertion would let the next reader believe the canary is still a canary for
+   * all seven.
    */
-  test('anon holds every table privilege, and the policies are what refuse', async () => {
+  test('anon holds the four privileges the policies govern, and not the three RLS cannot', async () => {
     const rows = await ctx.sql.unsafe<{ privilege_type: string }[]>(
       `select privilege_type
          from information_schema.table_privileges
@@ -330,27 +347,48 @@ describe('public.categories: what the grants allow', () => {
     );
     const held = rows.map((r) => r.privilege_type).sort();
 
-    expect(held).toEqual([
-      'DELETE',
-      'INSERT',
-      'REFERENCES',
-      'SELECT',
-      'TRIGGER',
-      'TRUNCATE',
-      'UPDATE',
-    ]);
+    expect(held).toEqual(['DELETE', 'INSERT', 'SELECT', 'UPDATE']);
+
+    // The three that are gone are named rather than counted, because a count
+    // cannot distinguish "the revoke happened" from "this table never had them".
+    // They came from `alter default privileges ... grant all`, which is `arwdDxtm`,
+    // and this table was the one the whole default-privilege story was measured
+    // on, so a future migration that grants the default privileges back has to
+    // fail HERE rather than in a file nobody thinks to read.
+    expect(held).not.toContain('TRUNCATE');
+    expect(held).not.toContain('TRIGGER');
+    expect(held).not.toContain('REFERENCES');
 
     // The same question, asked of the live session rather than the catalog, so
     // the test cannot pass on a grant that exists but was revoked for this role
     // by something the catalog view does not show.
     const asAnon = await as(ctx.sql, 'anon', null, (tx) =>
-      tx.unsafe<{ ins: boolean; upd: boolean; del: boolean }[]>(
-        `select has_table_privilege('anon', 'public.categories', 'insert')  as ins,
-                has_table_privilege('anon', 'public.categories', 'update')  as upd,
-                has_table_privilege('anon', 'public.categories', 'delete')  as del`,
+      tx.unsafe<
+        {
+          ins: boolean;
+          upd: boolean;
+          del: boolean;
+          trunc: boolean;
+          trg: boolean;
+          refs: boolean;
+        }[]
+      >(
+        `select has_table_privilege('anon', 'public.categories', 'insert')    as ins,
+                has_table_privilege('anon', 'public.categories', 'update')    as upd,
+                has_table_privilege('anon', 'public.categories', 'delete')    as del,
+                has_table_privilege('anon', 'public.categories', 'truncate')  as trunc,
+                has_table_privilege('anon', 'public.categories', 'trigger')   as trg,
+                has_table_privilege('anon', 'public.categories', 'references') as refs`,
       ),
     );
-    expect(asAnon[0]).toEqual({ ins: true, upd: true, del: true });
+    expect(asAnon[0]).toEqual({
+      ins: true,
+      upd: true,
+      del: true,
+      trunc: false,
+      trg: false,
+      refs: false,
+    });
   });
 
   /**
@@ -431,20 +469,46 @@ describe('public.categories: what the grants allow', () => {
   /**
    * `TRUNCATE` is not subject to RLS at all, and this suite does not cover it.
    *
-   * Written down because the grants test above lists TRUNCATE, and a reader
-   * could reasonably assume the policy tests cover it. They do not: RLS has no
-   * opinion on TRUNCATE. Here the statement is refused — but with
-   * `0A000 cannot truncate a table referenced in a foreign key constraint`,
-   * which is `offer_categories.category_id`, not any policy. Nothing in this
-   * file is evidence that a truncate is blocked, and a table without a
-   * referencing foreign key would not be.
+   * This test used to say so by demonstrating the opposite: `anon` held
+   * TRUNCATE, the statement reached Postgres, and it was refused by
+   * `0A000 cannot truncate a table referenced in a foreign key constraint` —
+   * `offer_categories.category_id`, not any policy. Nothing in this file was
+   * evidence that a truncate was blocked; a table without a referencing foreign
+   * key would not have been blocked at all.
+   *
+   * `20260928203000_revoke_client_destructive_privileges.sql` changed the
+   * conclusion, and the refusal now happens one layer earlier. The statement
+   * never reaches the foreign key, because `anon` does not hold TRUNCATE on this
+   * table any more: it is `42501 permission denied for table categories`.
+   *
+   * Both codes are named here because the difference is the whole finding. The
+   * old `0A000` said "the privilege was there and the SCHEMA saved you", which is
+   * a property of `offer_categories` existing and not of anything anyone decided.
+   * The `42501` says the privilege is not there at all. The old name is cited in
+   * this comment because a reader who remembers the previous conclusion should
+   * find it explained rather than find the test silently disagreeing with what
+   * they were told.
    */
-  test('TRUNCATE is refused by the foreign key, not by RLS', async () => {
+  test('TRUNCATE is refused by the GRANT, and the foreign key is no longer what saves this table', async () => {
     const denial = await deniedAs(ctx.sql, 'anon', null, (tx) =>
       tx.unsafe(`truncate public.categories`),
     );
-    expect(denial?.code).toBe('0A000');
-    expect(denial?.message).toContain('foreign key constraint');
+    expect(
+      denial,
+      'anon truncated categories. If this fails the TRUNCATE privilege came ' +
+        'back — and note that nothing on this table would have refused it: RLS ' +
+        'does not evaluate a USING clause for TRUNCATE at all.',
+    ).not.toBeNull();
+    expect(denial?.code).toBe('42501');
+    expect(denial?.message).toContain('permission denied for table categories');
+
+    // Said explicitly, so the regression this file exists to prevent cannot pass
+    // by going back to being blocked by a constraint rather than by the grant.
+    expect(
+      denial?.message,
+      'the refusal came from the referencing foreign key again, which means the ' +
+        'TRUNCATE privilege came back with the migration',
+    ).not.toContain('foreign key');
   });
 });
 

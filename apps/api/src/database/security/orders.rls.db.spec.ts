@@ -47,8 +47,8 @@ import {
  * Grants (from `information_schema` and from the live session, both asserted):
  *
  *   orders        anon: (none)          authenticated: SELECT   service_role: all 7
- *   order_events  anon: REFERENCES, TRIGGER
- *                 authenticated: SELECT, REFERENCES, TRIGGER    service_role: all 7
+ *   order_events  anon: (none)
+ *                 authenticated: SELECT                            service_role: all 7
  *
  * Policies: three on each table, all `FOR SELECT`, all PERMISSIVE. There is no
  * INSERT, UPDATE or DELETE policy on either table, and none has been left behind
@@ -56,21 +56,48 @@ import {
  * as text precisely so that a future migration cannot drop a policy and leave the
  * grant, which would turn a loud refusal into a silent zero-row no-op.
  *
- * The `anon` residue on `order_events` is real and is NOT a typo in this
- * comment. `20260507193539` creates the table, so Supabase's default privileges
- * give `anon` all seven; `20260507201408` revokes SELECT; `20260925163235` revokes
- * INSERT/UPDATE/DELETE/TRUNCATE. Nothing ever revokes REFERENCES or TRIGGER, in
- * this directory or on the live project. It is pinned and measured below rather
- * than tidied away, because it is a production property too.
+ * The `order_events` row above USED to read `anon: REFERENCES, TRIGGER`. That was
+ * real and not a typo, and this comment used to defend it at length. The chain,
+ * measured against this ledger rather than remembered:
+ *
+ *   20260507193539  creates the table  -> anon gets all seven by default
+ *   20260507201408  revoke select from anon        -> six left
+ *   20260925163235  revoke insert, update, delete, truncate from anon,
+ *                   authenticated and from public  -> REFERENCES and TRIGGER
+ *
+ * `order_events` is the one table in the project that survived by the narrowest
+ * margin. `20260925163235` gave `public.offers` the full list — `insert, update,
+ * delete, truncate, trigger, references` — ninety lines before giving
+ * `order_events` `insert, update, delete, truncate` and stopping. Four clauses
+ * short. Everywhere else the residue went because some migration said `revoke
+ * all`, and `all` sweeps all seven by accident rather than by decision.
+ *
+ * `20260928203000_revoke_client_destructive_privileges.sql` ends it: TRUNCATE,
+ * TRIGGER and REFERENCES are revoked from `anon` and `authenticated` on every RLS
+ * table in `public`, and from the default privileges, and `service_role` keeps
+ * all three. The pinned residue tests below are inverted rather than deleted —
+ * they now assert the absence, which is the stronger statement, because
+ * "anon holds nothing here" also holds on a database where the table never had
+ * the grants in the first place, while the old assertion would not.
  *
  * ─── The composite, and what closed it ──────────────────────────────────────
  *
- * `anon` holds TRIGGER on `order_events`, and attaching a trigger requires
- * EXECUTE on the function it names. So there are two layers, on two different
- * objects, and only the second one was ever at risk: the migration whose job is
- * to revoke EXECUTE on the trigger functions is
+ * Attaching a trigger to `order_events` required two things on two different
+ * objects: the TRIGGER privilege on the TABLE, and EXECUTE on the function the
+ * trigger names. Postgres checks the table first, so a role holding TRIGGER
+ * reaches the function check at all — that ordering is what made the privilege
+ * worth measuring rather than dismissing.
+ *
+ * Until `20260928203000` only the second layer was ever closed, and it was closed
+ * by the migration whose job is to revoke EXECUTE on trigger functions:
  * `20260906125927_harden_rpc_grants.sql`, whose line 16 is
  * `revoke execute on function public.accrue_order_earnings() from public, anon, authenticated`.
+ *
+ * That is a composite held shut by a grant on an unrelated object, which is the
+ * shape that breaks silently: a future migration that grants EXECUTE back, or
+ * adds a SECURITY DEFINER trigger function and forgets the revoke, reopens the
+ * write primitive without touching this table's ACL. The TRIGGER revoke closes
+ * it from the side any privilege audit actually looks at.
  *
  * That file used NOT to apply here, and this file used to demonstrate the OPEN
  * composite as a finding about the test database rather than about production.
@@ -83,10 +110,8 @@ import {
  * succeeded in production and the signature existed. `APPLICATION_ORDER_OVERRIDES`
  * in `test/supabase-platform.ts` now replays that pair in the order production used.
  *
- * The composite is therefore CLOSED, and closed the same way it is in production:
- * the TRIGGER privilege is still there and still real, and the function is not
- * executable. Both halves are asserted, because the interesting property is
- * precisely that the first one alone would have been enough.
+ * The composite is therefore closed twice over, on both objects, and the second
+ * closure is the one that no longer depends on a function grant elsewhere.
  *
  * WHAT NOT TO DO WITH IT: do not add the revoke to `PLATFORM_GRANTS_AFTER_REPLAY`
  * to make a demonstration stop. That array is documented in
@@ -505,27 +530,29 @@ describe('what the grants allow', () => {
   });
 
   /**
-   * The `anon` residue on `order_events`, pinned exactly, including the part that
-   * is uncomfortable.
+   * The `anon` residue on `order_events` is GONE, and this test was the pin that
+   * said it was still there.
    *
-   * `anon` holds REFERENCES and TRIGGER, and holds nothing else. The chain is
-   * worth writing out because each step is a separate migration and the residue
-   * is what is left over:
+   * It read `anon is left holding REFERENCES and TRIGGER on order_events, and
+   * nothing else`, and the reason it was pinned rather than tidied away was
+   * deliberate: a test asserting "anon holds nothing" would have been a nicer
+   * sentence and a false one, and the next person reading the ledger would have
+   * had no way to tell which of the two was the lie.
    *
-   *   20260507193539  creates the table  -> anon gets all seven by default
-   *   20260507201408  revoke select from anon        -> six left
-   *   20260925163235  revoke insert, update, delete, truncate
-   *                   from anon, authenticated and from public
-   *                                              -> REFERENCES and TRIGGER
+   * The lie stopped being a lie in `20260928203000_revoke_client_destructive_
+   * privileges.sql`. The exact same query now returns an empty set for `anon` and
+   * SELECT alone for `authenticated`, and that is the stronger claim — it holds
+   * on a database where the residue never existed too, while the old assertion
+   * would have failed there for a reason that had nothing to do with the fix.
    *
-   * REFERENCES and TRIGGER are the two the hardening pass did not name. Both are
-   * pinned here rather than tidied away, because a test that asserted "anon holds
-   * nothing" would be a nicer sentence and a false one, and the next person to
-   * read the ledger would have no way to tell which of the two is the lie.
-   *
-   * The next test is the one that says whether the residue is usable.
+   * The chain that produced the residue is in the header, and the table that
+   * escaped it by the narrowest margin is this one. `order_events` received
+   * `revoke insert, update, delete, truncate` on `20260925163235` and stopped,
+   * while `public.offers` on the same migration got the two extra clauses. The
+   * whole point of revoking over the SET rather than over a list is that this
+   * kind of near-miss is not something a human is going to catch next time.
    */
-  test('anon is left holding REFERENCES and TRIGGER on order_events, and nothing else', async () => {
+  test('anon holds nothing on order_events and authenticated holds only SELECT', async () => {
     const catalog = await ctx.sql.unsafe<
       { grantee: string; privilege_type: string }[]
     >(
@@ -538,11 +565,7 @@ describe('what the grants allow', () => {
     );
 
     expect(catalog.map((r) => `${r.grantee}:${r.privilege_type}`)).toEqual([
-      'anon:REFERENCES',
-      'anon:TRIGGER',
-      'authenticated:REFERENCES',
       'authenticated:SELECT',
-      'authenticated:TRIGGER',
     ]);
 
     const live = await as(ctx.sql, 'anon', null, (tx) =>
@@ -555,39 +578,82 @@ describe('what the grants allow', () => {
                has_table_privilege('anon', 'public.order_events', 'references') as refs,
                has_table_privilege('anon', 'public.order_events', 'trigger')    as trg`),
     );
-    expect(live[0]).toEqual({
+    expect(
+      live[0],
+      'anon holds a privilege on the append-only event log. TRIGGER here is ' +
+        'the one that mattered: it lets anon attach its own SECURITY DEFINER ' +
+        'trigger to a table it does not own.',
+    ).toEqual({
       sel: false,
       ins: false,
       upd: false,
       del: false,
       trunc: false,
-      refs: true,
-      trg: true,
+      refs: false,
+      trg: false,
     });
+
+    // `service_role` still holds all seven, and this file asserts it on the
+    // other two tables but not here, so it is said here rather than assumed: a
+    // revoke that swept the backend role too would leave every event-write path
+    // broken and this file would still be green.
+    const svc = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ priv: string; held: boolean }[]>(`
+        select p.priv, has_table_privilege('service_role', 'public.order_events', p.priv) as held
+          from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) as p(priv)
+         order by p.priv`),
+    );
+    expect(plainRows(svc).filter((r) => !r.held)).toEqual([]);
   });
 
   /**
-   * REFERENCES is inert because `anon` cannot create a table to reference from,
-   * and that is a fact about the SCHEMA rather than about this table. Asserted
-   * so the residue above has a stated consequence instead of being left as a
-   * shrug.
+   * The REFERENCES privilege used to be pinned here as INERT — known, real, and
+   * harmless, because `anon` could not create a table to reference from.
    *
-   * The refusal is `42501 permission denied for schema public`, which is a
-   * different object from the `permission denied for table order_events` the
-   * INSERT paths produce. The two are asserted apart on purpose: they are
-   * different layers, and a test that accepted either would stop being evidence.
+   * Both halves of that sentence are now inverted. The privilege is gone, so it
+   * is no longer inert; it is absent. And the schema-level refusal is no longer
+   * what was holding the line — it is a separate fact about the schema that
+   * would still be true on a database where the privilege existed.
+   *
+   * The reason that ordering matters: "inert" is a claim about a DIFFERENT
+   * object, and it is the same fragility as the TRIGGER residue, one privilege
+   * cheaper. The day anyone grants CREATE on schema `public` — including by
+   * accident, and including through a `security invoker` function that runs
+   * with its caller's rights — REFERENCES becomes live for every client role at
+   * once, on all 39 tables, with no migration to review because none was needed.
+   * Revoking it costs one clause and removes the question.
+   *
+   * The `create table` refusal is still asserted, because it is still true and
+   * still worth knowing: it is now a fact about the schema rather than the reason
+   * a privilege was harmless. The two codes stay asserted apart for exactly that
+   * reason — a test that accepted either would stop being evidence.
    */
-  test('the REFERENCES residue is inert because anon cannot create a table', async () => {
+  test('anon holds no REFERENCES on order_events, and the schema refusal is a separate fact', async () => {
+    const held = await as(ctx.sql, 'anon', null, (tx) =>
+      tx.unsafe<Record<string, boolean>[]>(`
+        select has_table_privilege('anon', 'public.order_events', 'references') as refs,
+               has_table_privilege('anon', 'public.order_events', 'trigger')    as trg,
+               has_table_privilege('anon', 'public.order_events', 'truncate')   as trunc`),
+    );
+    expect(plainRows(held)[0]).toEqual({
+      refs: false,
+      trg: false,
+      trunc: false,
+    });
+
+    // Unchanged by the migration and unchanged on purpose: `anon` still cannot
+    // create anything in `public`, and that is what `42501 permission denied for
+    // schema public` means. It is a DIFFERENT object from the
+    // `permission denied for table order_events` the INSERT paths produce, and
+    // it is now the only thing standing between a future CREATE grant and the
+    // REFERENCES privilege on 39 tables.
     const denial = await deniedAs(ctx.sql, 'anon', null, (tx) =>
       tx.unsafe(
         `create table public.rls_orders_probe_scratch (id int references public.order_events(id))`,
       ),
     );
 
-    expect(
-      denial,
-      'anon created a table referencing order_events',
-    ).not.toBeNull();
+    expect(denial, 'anon created a table in schema public').not.toBeNull();
     expect(denial?.code).toBe('42501');
     expect(denial?.message).toContain('permission denied for schema public');
   });
@@ -1238,57 +1304,82 @@ describe('who reads what', () => {
   });
 });
 
-describe('order_events is append-only, and the trigger is the only writer a client can reach', () => {
+describe('order_events is append-only, and no client role can attach a trigger to it', () => {
   /**
-   * `anon` holds TRIGGER, and IN THIS DATABASE that is enough to attach a
-   * SECURITY DEFINER trigger to the append-only log.
+   * This test used to measure a live capability and now measures that the
+   * capability is gone. Both conclusions were real; the difference is one
+   * migration.
    *
-   * ─── READ THIS BEFORE READING THE ASSERTION ────────────────────────────────
+   * ─── WHAT IT CONCLUDED BEFORE ───────────────────────────────────────────────
    *
-   * THIS IS NOT PRODUCTION. It is the documented consequence of
-   * `20260906125927_harden_rpc_grants.sql` being one of the seven pinned replay
-   * failures: that migration's line 16,
+   * The name was `anon holds TRIGGER on order_events, and the composite is
+   * closed by the function revoke`, and its first half was a deliberate
+   * measurement rather than a shrug. `anon` really did hold TRIGGER. Naming a
+   * function that does not return `trigger` failed with `42P17 must return type
+   * trigger` and NOT with `42501`, and that difference was the proof: Postgres
+   * checks the TRIGGER privilege on the TABLE before it looks at the function at
+   * all, so a complaint about the return type meant the table ACL had passed.
    *
-   *     revoke execute on function public.accrue_order_earnings() from public, anon, authenticated
+   * So the privilege was live, it was not cosmetic, and the only thing between it
+   * and a write primitive on the append-only order log was a grant on a
+   * DIFFERENT object — `20260906125927_harden_rpc_grants.sql` revoking EXECUTE on
+   * the trigger functions. `anon` could pass the table check and could not name
+   * a function.
    *
-   * is the barrier, and one transaction per file means the whole file rolled
-   * back. In production the revoke applied — the ledger is the proof, per this
-   * repository's own rule — so `anon` cannot name a trigger-returning function
-   * and this is not reachable.
+   * THAT WAS THE POINT, and it is why the demonstration was kept in a file whose
+   * trigger it looked like it was breaking: the interesting property is that the
+   * first layer alone would have been enough.
    *
-   * The demonstration is here anyway, for two reasons. First, the TRIGGER
-   * privilege is not cosmetic: it really does pass the ACL check, and the only
-   * thing standing between it and a write primitive is a function grant on a
-   * different object. A reader who assumed the residue was inert because the
-   * revocation of a function is easy to miss would be wrong in the same way a
-   * reader who assumed `anon` holds nothing on `order_events` would be. Second,
-   * the barrier being on another object is exactly the kind of coupling that
-   * breaks silently, and the way to notice it breaking is to have the composite
-   * written down while it is still closed.
+   * ─── WHAT IT CONCLUDES NOW ─────────────────────────────────────────────────
    *
-   * WHAT NOT TO DO: do not add the revoke to `PLATFORM_GRANTS_AFTER_REPLAY` to
-   * make this test stop reporting. That array is documented in
-   * `test/supabase-platform.ts` as having already been used exactly that way,
-   * with a `grant usage on schema auth_helpers` that made the pilot assert a
-   * privilege production does not have. A harness that closes a hole the
-   * database has open stops being a measurement. The debt is the pinned failure
-   * list, and the fix belongs to the replay.
+   * `20260928203000_revoke_client_destructive_privileges.sql` revoked TRIGGER
+   * from `anon` and `authenticated` on every RLS table in `public`. The composite
+   * is no longer held shut by one layer with the other half resting on a
+   * function grant elsewhere: it is closed at the table, and the function revoke
+   * is now a second, independent closure rather than the only one.
+   *
+   * The first probe is the load-bearing assertion and it is the same statement as
+   * before. What changed is the refusal code: `42P17` meant the table ACL passed
+   * and the function was wrong; `42501 permission denied for table order_events`
+   * means the statement never got past the table. The old expectation is cited in
+   * the assertion message so a reader who remembers `42P17` finds it explained
+   * rather than finds the test quietly disagreeing with what it was told.
+   *
+   * ─── WHY THIS IS THE MOST IMPORTANT TEST IN THE FILE ───────────────────────
+   *
+   * TRUNCATE is a latent privilege PostgREST cannot reach: there is no verb for
+   * it. TRIGGER is closer to live, because `trg_order_event_push` on this very
+   * table calls `public.handle_order_event_push()`, which is SECURITY DEFINER, and
+   * 31 SECURITY DEFINER functions live in this schema. A role that can attach a
+   * trigger to `order_events` does not need to be able to write to it — the
+   * trigger body runs as the owner. So of the three privileges this migration
+   * removes, this is the one where removing the privilege is the only thing that
+   * changed the world.
+   *
+   * ─── WHAT NOT TO DO ────────────────────────────────────────────────────────
+   *
+   * Do not restore the trigger in a `finally` "to prove the capability is still
+   * there", and do not grant TRIGGER back into `PLATFORM_GRANTS_AFTER_REPLAY` to
+   * make a demonstration come back. That array is documented in
+   * `test/supabase-platform.ts` as having already been used exactly that way, and
+   * a harness that closes a hole the database has open stops being a
+   * measurement. What replaced the demonstration is the grant assertion: the
+   * capability is gone because the privilege is gone, and the privilege is
+   * asserted absent on every RLS table in
+   * `destructive-privileges.rls.db.spec.ts`.
    */
-  test('anon holds TRIGGER on order_events, and the composite is closed by the function revoke', async () => {
+  test('anon cannot attach any trigger to order_events, because it does not hold TRIGGER', async () => {
     /**
-     * Half one: the TRIGGER privilege is LIVE, and it is not cosmetic. It really
-     * does pass the ACL check.
+     * The same probe as before, unchanged: `auth.uid()` is used because `anon`
+     * may execute it — the bootstrap grants EXECUTE on the `auth` schema to all
+     * three client roles — so a refusal here cannot be attributed to a missing
+     * function grant instead of to the table.
      *
-     * Naming a function that does not return `trigger` fails with `42P17` rather
-     * than `42501`, and that difference is the measurement: Postgres checks the
-     * TRIGGER privilege on the TABLE before it looks at the function at all, so
-     * getting as far as a complaint about the return type means the table ACL
-     * passed. A `42501` here would mean the residue is cosmetic, and this file
-     * should say so instead.
-     *
-     * `auth.uid()` is used because `anon` may execute it — the bootstrap grants
-     * EXECUTE on the `auth` schema to all three client roles — so the failure
-     * cannot be attributed to a missing function grant.
+     * Before the migration this returned `42P17 must return type trigger`, and
+     * the absence of `permission denied` was the measurement. Now it is
+     * `42501` on the table, and the presence of `permission denied` is the
+     * measurement. Both are asserted, because either one alone would be
+     * satisfied by a database for the wrong reason.
      */
     const wrongShape = await deniedAs(ctx.sql, 'anon', null, (tx) =>
       tx.unsafe(
@@ -1297,22 +1388,22 @@ describe('order_events is append-only, and the trigger is the only writer a clie
            for each row execute function auth.uid()`,
       ),
     );
-    expect(wrongShape?.code).toBe('42P17');
-    expect(wrongShape?.message).toContain('must return type trigger');
+    expect(wrongShape?.code).toBe('42501');
+    expect(wrongShape?.message).toContain(
+      'permission denied for table order_events',
+    );
     expect(
       wrongShape?.message,
-      'anon was refused the table before the function was even considered, so ' +
-        'the TRIGGER privilege is not what this test assumed it was',
-    ).not.toContain('permission denied');
+      'anon got past the table ACL and failed on the function shape instead. ' +
+        'That is 42P17 "must return type trigger", which is what this probe ' +
+        'returned BEFORE the migration — meaning the TRIGGER privilege on ' +
+        'order_events came back and the append-only log can be attacked again.',
+    ).not.toContain('must return type trigger');
 
-    // Half two: with a function of the RIGHT shape — one that really is a
-    // trigger — the refusal is now on the function, not the table. That is the
-    // closed composite, and it is asserted as a code so a reader can tell which
-    // of the two layers produced it.
-    //
-    // This statement used to SUCCEED here, and the test existed to demonstrate
-    // that it did. It is the same composite production has, minus the hole: the
-    // table privilege is unchanged, and the function grant is what closes it.
+    // And the real probe: a genuine SECURITY DEFINER trigger function, which is
+    // what an attacker would name. This is the same statement that produced the
+    // original finding, and it is refused one layer earlier now. Asserted as a
+    // code so a reader can tell which of the two layers produced it.
     const attach = await deniedAs(ctx.sql, 'anon', null, (tx) =>
       tx.unsafe(
         `create trigger rls_orders_probe_attach
@@ -1322,16 +1413,40 @@ describe('order_events is append-only, and the trigger is the only writer a clie
     );
     expect(
       attach,
-      'anon could attach a SECURITY DEFINER trigger to the append-only event log. ' +
-        'The revoke on accrue_order_earnings() is the only thing standing between ' +
-        'the TRIGGER privilege and a write primitive, and it is present in this ' +
-        'database — the composite is closed here exactly as it is in production.',
+      'anon attached a trigger to the append-only event log. The TRIGGER ' +
+        'privilege on this table is the whole boundary now that the function ' +
+        'revoke is a second closure rather than the only one, so this failing ' +
+        'means the grant came back and not that a coupling elsewhere broke.',
     ).not.toBeNull();
     expect(attach?.code).toBe('42501');
+    expect(attach?.message).toContain(
+      'permission denied for table order_events',
+    );
+
+    // `authenticated` gets the same treatment, because it is not a special case
+    // here: it holds the same privileges on this table as `anon` did and it has
+    // a session, which is what makes it the more dangerous of the two.
+    const asAuthenticated = await deniedAs(
+      ctx.sql,
+      'authenticated',
+      '11111111-1111-1111-1111-111111111111',
+      (tx) =>
+        tx.unsafe(
+          `create trigger rls_orders_probe_authenticated
+             before insert on public.order_events
+             for each row execute function public.accrue_order_earnings()`,
+        ),
+    );
+    expect(
+      asAuthenticated,
+      'a signed-in consumer attached a trigger to the append-only event log',
+    ).not.toBeNull();
+    expect(asAuthenticated?.code).toBe('42501');
 
     // Nothing was left behind either way. Asserted rather than assumed, because
-    // the first draft of this probe attached successfully and the `finally` was
-    // the only reason the rest of the file still measured the ledger.
+    // the first draft of the original probe DID attach successfully and the
+    // `finally` was the only reason the rest of the file still measured the
+    // ledger.
     const left = await ctx.sql.unsafe<{ tgname: string }[]>(
       `select t.tgname
          from pg_trigger t
@@ -1373,7 +1488,8 @@ describe('order_events is append-only, and the trigger is the only writer a clie
       ),
       '20260906125927 is pinned replay debt again, so every function-grant ' +
         'assertion in this file describes a database production does not have. ' +
-        'The trigger composite above would be open again too.',
+        'The trigger composite would be closed by only one layer again — the ' +
+        'table revoke — where before the migration it depended on this one.',
     ).toBeUndefined();
 
     // The revokes themselves, read back. Line 16 of the migration and the ones

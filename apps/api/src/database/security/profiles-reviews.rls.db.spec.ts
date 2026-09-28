@@ -52,7 +52,7 @@ import {
  * whether the caller is an admin.
  *
  * CORRECTION 3 — the `anon` write surface is decided by the CLAIM, not the role,
- * and `anon` can empty `reviews` outright.
+ * and `anon` USED TO be able to empty `reviews` outright.
  *
  * The INSERT and DELETE policies on `reviews` are both written
  * `TO public` with `auth.uid()` in them and neither of them tests whether the
@@ -68,26 +68,43 @@ import {
  * design — `'1111…'::uuid = auth.uid()` evaluates to NULL, not false, and a NULL
  * `WITH CHECK` is treated as not-satisfied. See "the anon insert" below.
  *
- * And the headline: `anon` holds TRUNCATE on `public.reviews` and the statement
- * succeeds. RLS does not govern TRUNCATE — there is no policy for it to govern
- * and no `USING` clause is evaluated — so an anonymous session can empty the
- * table outright, including rows its own policies had hidden from it. The DELETE
- * policy is irrelevant to that: `anon` holds DELETE and the policy stops it,
- * while TRUNCATE has no policy and stops nothing. The abuse path in a
- * marketplace is not "anon deletes reviews one at a time". It is one statement
- * per table.
+ * And the headline used to be this: `anon` held TRUNCATE on `public.reviews`, the
+ * statement succeeded, and the table was empty afterwards — including rows that
+ * same session's own policies had hidden from it. RLS does not govern TRUNCATE.
+ * There is no policy for it to govern and no `USING` clause is evaluated, so the
+ * DELETE policy on this table was irrelevant to it: `anon` was refused deleting
+ * one review at a time and could empty the table in a single statement.
+ *
+ * `20260928203000_revoke_client_destructive_privileges.sql` revoked TRUNCATE —
+ * with TRIGGER and REFERENCES — from `anon` and `authenticated` on every RLS
+ * table in `public`, and from the default privileges. The statement is now
+ * `42501 permission denied for table reviews`. The finding underneath did not
+ * change, only the exposure: TRUNCATE is still a privilege RLS cannot see, and
+ * it is still one `security definer` RPC away from being reachable, because
+ * PostgREST has no verb for it. What the migration removed is the table half of
+ * that composite. The reasoning, including why "anon can delete the database"
+ * would have been the wrong description, is in the migration header — and it is
+ * in there because getting the severity wrong here would send the next reader
+ * looking for an incident instead of reading the ledger.
  *
  * ─── The measured posture, stated so a reader does not reconstruct it ────────
  *
  *   profiles   anon: (none)   authenticated: SELECT, and column UPDATE on
  *                                    (avatar_url, city, email, full_name, phone)
- *   reviews     anon: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE
- *             authenticated: the same six, and column UPDATE on
+ *   reviews     anon: DELETE, INSERT, SELECT
+ *             authenticated: the same three, and column UPDATE on
  *                                    (business_rating, comment, product_rating, rating)
  *
- * RLS is enabled and NOT forced on both. `reviews` is the only table in the
- * ledger where `anon` holds a write privilege that no policy meaningfully
- * constrains, and that is the finding the file is built around.
+ * `reviews` was six-of-seven for both roles until that migration and is three
+ * now: TRUNCATE, TRIGGER and REFERENCES are gone and SELECT, INSERT and DELETE
+ * remain. It is still the one table in this pair where `anon` — an
+ * unauthenticated visitor with nothing but the project's public API key — holds
+ * INSERT and DELETE, and the policies on it are still the only thing standing
+ * between a script and the reputation of every business in the catalog. That is
+ * the finding the file is built around, and the revoke changed which half of it
+ * is load-bearing rather than whether it is true.
+ *
+ * RLS is enabled and NOT forced on both.
  *
  * ─── What the beforeAll seeds, and why each piece is not optional ───────────
  *
@@ -1418,17 +1435,26 @@ describe('public.reviews: the grants anon actually holds', () => {
    * the live session, because it is the premise of every write assertion in this
    * file.
    *
-   * `anon` holds SIX of the seven table privileges — everything except UPDATE.
-   * On `categories` and `orders` `anon` is either fully privileged with the
-   * policies doing the refusing, or fully revoked with the grant doing it. Here
-   * it is neither: `anon` holds a real write surface on a table whose policies
-   * are written as if nobody could write it.
+   * It used to read `anon and authenticated hold six of seven table privileges
+   * on reviews, and TRUNCATE is one of them`, and it held that from the default
+   * privileges with UPDATE the single exception — a real write surface on a table
+   * whose policies are written as if nobody could write it.
    *
-   * TRUNCATE is in that set and it is the reason for the first correction in the
-   * header. Asserted as part of the exact list rather than in a separate test so
-   * that a future migration revoking it fails on a one-line diff.
+   * `20260928203000_revoke_client_destructive_privileges.sql` took the three
+   * back: TRUNCATE, TRIGGER and REFERENCES are gone for `anon` and
+   * `authenticated` on every RLS table in `public`, and gone from the default
+   * privileges too. What remains on `reviews` is DELETE, INSERT and SELECT —
+   * which is the interesting shape, and a different one from "fully granted" and
+   * from "fully revoked". Every row the anonymous session can see is still
+   * filtered by the policies, and `anon` still cannot write a row its own claim
+   * does not attribute to it.
+   *
+   * Asserted as the exact list rather than as a count so a future migration that
+   * grants one of the three back fails on a one-line diff. UPDATE is still absent
+   * for both roles — the column-level UPDATE on four columns is asserted
+   * separately below and is unaffected by this one.
    */
-  test('anon and authenticated hold six of seven table privileges on reviews, and TRUNCATE is one of them', async () => {
+  test('anon and authenticated hold three table privileges on reviews, and none of the three RLS cannot govern', async () => {
     const catalog = await ctx.sql.unsafe<
       { grantee: string; privilege_type: string }[]
     >(
@@ -1443,16 +1469,10 @@ describe('public.reviews: the grants anon actually holds', () => {
     expect(catalog.map((r) => `${r.grantee}:${r.privilege_type}`)).toEqual([
       'anon:DELETE',
       'anon:INSERT',
-      'anon:REFERENCES',
       'anon:SELECT',
-      'anon:TRIGGER',
-      'anon:TRUNCATE',
       'authenticated:DELETE',
       'authenticated:INSERT',
-      'authenticated:REFERENCES',
       'authenticated:SELECT',
-      'authenticated:TRIGGER',
-      'authenticated:TRUNCATE',
     ]);
 
     for (const role of ['anon', 'authenticated'] as const) {
@@ -1475,55 +1495,61 @@ describe('public.reviews: the grants anon actually holds', () => {
         ins: true,
         upd: false,
         del: true,
-        trunc: true,
-        refs: true,
-        trg: true,
+        trunc: false,
+        refs: false,
+        trg: false,
       });
     }
   });
 
   /**
-   * CORRECTION 1 as a test: `anon` can EMPTY `reviews`, and RLS does not
-   * govern it.
+   * CORRECTION 1, inverted: `anon` can NO LONGER EMPTY `reviews`, because it no
+   * longer holds TRUNCATE.
    *
-   * This is the headline finding of the file. `anon` holds TRUNCATE, the
-   * statement succeeds, and every row goes — including the one row the same
-   * anonymous session can SEE. TRUNCATE is not in the list of commands RLS
-   * filters: there is no `USING` to evaluate and no policy to evaluate it
-   * against, so a table can be emptied by a role that its policies have hidden
-   * almost everything from.
+   * ─── WHAT THIS TEST CONCLUDED BEFORE ───────────────────────────────────────
    *
-   * The count assertions bracket the statement, because `deniedAs` returning
-   * `null` alone cannot tell "TRUNCATE succeeded" from "TRUNCATE succeeded on an
-   * empty table", and a test that only checked the return value would pass
-   * against a database where the statement was a no-op. The seeded rows are
-   * re-read before the statement so the count going to zero is a change and not a
-   * coincidence.
+   * It was the headline finding of this file and it was measured, not argued. The
+   * name was `anon can TRUNCATE reviews, and it empties the table RLS was hiding
+   * rows from`, `anon` held TRUNCATE, the statement succeeded, and every row
+   * went — including a row the same anonymous session could SEE. RLS does not
+   * govern TRUNCATE: there is no policy for it to govern and no `USING` clause
+   * evaluated, so the policy that filters rows on this table is not consulted at
+   * all. `cascade` and `restart identity cascade` worked too.
    *
-   * `cascade` succeeds too, and the comment says the honest thing: nothing in
-   * the ledger references `reviews` by foreign key today, so the cascade reaches
-   * nothing else. That is a property of THIS schema, not of the privilege, and a
-   * future migration adding one would widen it silently.
+   * ─── WHAT IT CONCLUDES NOW, AND WHY IT IS STILL WORTH KEEPING ──────────────
    *
-   * The reset is in a `finally`, and it is the seeding of a replacement row
-   * rather than a restore of the originals: the originals are gone. It cannot
-   * fail on a foreign key because the insert names a live `user_id` and a live
-   * `business_id`, and it must not be preceded by any cleanup that can throw —
-   * a `finally` stops at its first throw, and a failed reset would leave every
-   * review assertion in this file measuring an empty table.
+   * The privilege is gone, so the same statement is `42501 permission denied for
+   * table reviews`. This is the inverse written deliberately rather than the old
+   * test deleted: same write, same role, same database, one migration between
+   * them — which is what makes the before/after attributable to the migration and
+   * not to a schema change nobody noticed.
+   *
+   * The finding underneath it did not change, only the exposure. TRUNCATE is
+   * still a privilege RLS cannot see, and it is still one `security definer` RPC
+   * away from being reachable through PostgREST, which has no verb for it. What
+   * this migration removed is the table half of that composite, so the function
+   * half can no longer stand alone. The full argument, including why "anon can
+   * delete the database" would have been the wrong description, is in the
+   * migration header.
+   *
+   * The count assertion is kept in inverted form for the same reason the old one
+   * had it: a refusal alone cannot tell "the privilege is gone" from "the
+   * statement was a no-op against an empty table". The seeded rows are re-read
+   * before and after, so a table that was emptied by something else still fails
+   * here.
    */
-  test('anon can TRUNCATE reviews, and it empties the table RLS was hiding rows from', async () => {
+  test('anon cannot TRUNCATE reviews: the statement is refused and the table is untouched', async () => {
     const before = await as(ctx.sql, 'anon', null, (tx) =>
       tx.unsafe<{ c: number }[]>(
         `select count(*)::int as c from public.reviews`,
       ),
     );
-    // The session can see exactly one of the two seeded rows: `REV_S` is not
-    // hidden yet, so both are visible. Asserted so the "one visible row" claim
-    // in the header is a measurement and not a story.
+    // The same precondition the previous version of this test asserted, for the
+    // same reason: the count going to zero has to be a change and not a
+    // coincidence.
     expect(
       plainRows(before)[0]?.c,
-      'the anonymous session should see both seeded reviews before the hide',
+      'the anonymous session should see both seeded reviews before the attempt',
     ).toBe(2);
 
     const truncated = await deniedAs(ctx.sql, 'anon', null, (tx) =>
@@ -1531,64 +1557,60 @@ describe('public.reviews: the grants anon actually holds', () => {
     );
     expect(
       truncated,
-      'anon was refused TRUNCATE on reviews. If this now fails, the privilege ' +
-        'was revoked and this file describes a database nobody runs.',
-    ).toBeNull();
+      'anon TRUNCATEd reviews with no error. Nothing on this table would have ' +
+        'refused it: RLS does not evaluate a USING clause for TRUNCATE, so the ' +
+        'DELETE policy below is irrelevant to that statement. The privilege is ' +
+        'back.',
+    ).not.toBeNull();
+    expect(truncated?.code).toBe('42501');
+    expect(truncated?.message).toContain('permission denied for table reviews');
 
-    // The count is the assertion. `deniedAs` returning `null` is the absence of
-    // an error, and the absence of an error is not a count.
+    // The count is the assertion. `42501` alone says the statement was refused;
+    // it does not say the table still has its rows.
     expect(
       await reviewCount(),
-      'anon held TRUNCATE and the statement reported no error, but the table ' +
-        'still has rows in it — so this test was asserting a no-op and the ' +
-        'TRUNCATE finding is wrong',
-    ).toBe(0);
+      'anon was refused TRUNCATE and the table is empty anyway — so the ' +
+        'refusal is being produced by something other than the grant and this ' +
+        'test is asserting the wrong layer',
+    ).toBe(2);
 
-    try {
-      // `cascade` is a separate statement because it is a separate capability.
-      // On THIS schema it reaches nothing else, because nothing references
-      // `reviews`; that is asserted rather than assumed, so a future migration
-      // that adds the reference fails here with a count instead of widening the
-      // blast radius silently.
-      const cascaded = await deniedAs(ctx.sql, 'anon', null, (tx) =>
-        tx.unsafe(`truncate public.reviews cascade`),
-      );
-      expect(cascaded, 'anon was refused TRUNCATE … CASCADE').toBeNull();
-      expect(await reviewCount()).toBe(0);
-
-      // And the same for `authenticated`, which holds the same TRUNCATE. A
-      // signed-in consumer is not a special case here; it is the same hole with
-      // a worse blast radius, because the consumer also has a session.
-      const authTruncated = await deniedAs(
-        ctx.sql,
-        'authenticated',
-        MEMBER,
-        (tx) =>
-          tx.unsafe(`truncate table public.reviews restart identity cascade`),
-      );
-      expect(
-        authTruncated,
-        'a consumer was refused TRUNCATE on reviews',
-      ).toBeNull();
-      expect(await reviewCount()).toBe(0);
-    } finally {
-      // The reset cannot fail on a foreign key: both references are live rows.
-      // It is the FIRST statement in the finally because a later throw would
-      // otherwise skip it and leave the rest of the file measuring an empty
-      // table.
-      await ctx.sql.unsafe(`
-        insert into public.reviews
-          (id, user_id, business_id, order_id, rating, business_rating, product_rating, comment)
-        values ('${REVIEW.M}', '${MEMBER}',   '${BIZ_A}', '${ORDER.M}', 5, 5, 5, 'RLS review mine'),
-               ('${REVIEW.S}', '${STRANGER}', '${BIZ_A}', '${ORDER.S}', 4, 4, 4, 'RLS review stranger')
-        on conflict (id) do nothing
-      `);
-    }
-
-    // The fixture is back, both rows and neither hidden. Asserted because a
-    // reset that restored one row would make every later visibility assertion in
-    // this file pass for the wrong reason.
+    // `cascade` is a separate statement because it is a separate capability, and
+    // it is refused the same way. Before the migration both of these SUCCEEDED.
+    // The old expectation was `null` with a count of zero; the new one names the
+    // refusal, and the count assertion is what makes it a measurement.
+    const cascaded = await deniedAs(ctx.sql, 'anon', null, (tx) =>
+      tx.unsafe(`truncate public.reviews cascade`),
+    );
+    expect(
+      cascaded,
+      'anon was not refused TRUNCATE … CASCADE, so the revoke covered the bare ' +
+        'statement but not the cascade form',
+    ).not.toBeNull();
+    expect(cascaded?.code).toBe('42501');
     expect(await reviewCount()).toBe(2);
+
+    // And the same for `authenticated`, which held the same TRUNCATE. A
+    // signed-in consumer is not a special case here; it was the same hole with a
+    // worse blast radius, because the consumer also has a session.
+    const authTruncated = await deniedAs(
+      ctx.sql,
+      'authenticated',
+      MEMBER,
+      (tx) =>
+        tx.unsafe(`truncate table public.reviews restart identity cascade`),
+    );
+    expect(
+      authTruncated,
+      'a consumer was not refused TRUNCATE on reviews',
+    ).not.toBeNull();
+    expect(authTruncated?.code).toBe('42501');
+    expect(await reviewCount()).toBe(2);
+
+    // The fixture is intact, both rows and neither hidden. Asserted because a
+    // refusal that emptied the table would leave every later visibility assertion
+    // in this file passing for the wrong reason — and because the previous
+    // version of this test needed a `finally` here to rebuild the two rows it
+    // destroyed. There is no cleanup left to do, and that is the point.
     const restored = await ctx.sql.unsafe<{ id: string; is_hidden: boolean }[]>(
       `select id, is_hidden from public.reviews order by id`,
     );
@@ -2980,59 +3002,97 @@ describe('the two things the reviews grant does not stop', () => {
   });
 
   /**
-   * `anon` can TRUNCATE and then insert — and the insert is the same policy the
-   * no-claim case refuses.
+   * The composition this file used to end on, inverted: `anon` cannot TRUNCATE,
+   * so there is nothing left for the INSERT policy to be composed with.
    *
-   * The two findings compose, and that composition is the thing worth stating:
-   * the TRUNCATE privilege is a table-level grant that no policy touches, and
-   * the INSERT `WITH CHECK` is a predicate on `user_id`. There is no statement a
-   * client cannot make about this table.
+   * ─── WHAT IT CONCLUDED BEFORE ───────────────────────────────────────────────
    *
-   * The refusal asserted at the end is the no-claim one, unchanged from the
-   * earlier test: `TRUNCATE` first does not weaken the policy, it just empties
-   * the table the policy was protecting. Asserted in that order so the
-   * composition is visible rather than inferred.
+   * The name was `anon can truncate and then re-seed a table it was just denied
+   * writes to`, and it was the sharpest sentence in the file. Two findings
+   * compose: TRUNCATE is a table-level grant no policy touches, and the INSERT
+   * `WITH CHECK` is a predicate on `user_id`. `anon` could empty `reviews` and
+   * then still be refused an insert into it by the same policy. The conclusion
+   * was that there is no statement a client cannot make about this table.
+   *
+   * ─── WHAT IT CONCLUDES NOW ─────────────────────────────────────────────────
+   *
+   * `20260928203000_revoke_client_destructive_privileges.sql` took TRUNCATE away,
+   * so the first half is now `42501 permission denied for table reviews`. The
+   * composition no longer exists and cannot be re-created from the client side.
+   *
+   * The second half is KEPT, unchanged and still asserted, because it was never
+   * the half that was broken: the no-claim INSERT is still refused by the policy
+   * with the same message. Keeping it matters more now, not less — a reader who
+   * saw only "TRUNCATE is refused" would reasonably conclude that this table is
+   * closed to `anon`, and it is not. `anon` still holds SELECT, INSERT and
+   * DELETE. What changed is that one statement no longer empties it.
+   *
+   * The order is still the point: the attempted TRUNCATE happens first, and the
+   * insert is attempted afterwards, so the reader can see that a failed TRUNCATE
+   * leaves the policy exactly as it was.
    */
-  test('anon can truncate and then re-seed a table it was just denied writes to', async () => {
+  test('anon cannot truncate reviews, and the INSERT policy refuses it exactly as it did before', async () => {
     const before = await reviewCount();
     expect(before, 'the fixture is not in its seeded state').toBe(2);
 
     const truncated = await deniedAs(ctx.sql, 'anon', null, (tx) =>
       tx.unsafe(`truncate public.reviews`),
     );
-    expect(truncated, 'anon was refused TRUNCATE on reviews').toBeNull();
-    expect(await reviewCount()).toBe(0);
-
-    try {
-      // The insert is still refused, and refused by the same policy with the
-      // same message. The table being empty changes nothing about the check.
-      const refused = await deniedAs(ctx.sql, 'anon', null, (tx) =>
-        tx.unsafe(
-          `insert into public.reviews (user_id, business_id, rating, comment)
-           values ('${MEMBER}', '${BIZ_A}', 5, 'RLS anon after truncate')`,
-        ),
-      );
-      expect(
-        refused,
-        'anon inserted into the table it just truncated. The WITH CHECK is ' +
-          'unchanged, so this means `user_id = auth.uid()` stopped being the ' +
-          'gate.',
-      ).not.toBeNull();
-      expect(refused?.message).toContain(
-        'new row violates row-level security policy',
-      );
-      expect(await reviewCount()).toBe(0);
-    } finally {
-      await ctx.sql.unsafe(`
-        insert into public.reviews
-          (id, user_id, business_id, order_id, rating, business_rating, product_rating, comment)
-        values ('${REVIEW.M}', '${MEMBER}',   '${BIZ_A}', '${ORDER.M}', 5, 5, 5, 'RLS review mine'),
-               ('${REVIEW.S}', '${STRANGER}', '${BIZ_A}', '${ORDER.S}', 4, 4, 4, 'RLS review stranger')
-        on conflict (id) do nothing
-      `);
-    }
-
+    expect(
+      truncated,
+      'anon was NOT refused TRUNCATE on reviews. This is the same statement ' +
+        'the previous version of this test ran successfully.',
+    ).not.toBeNull();
+    expect(truncated?.code).toBe('42501');
+    expect(
+      truncated?.message,
+      'the refusal came from somewhere other than the table ACL, so this ' +
+        'assertion is measuring the wrong layer',
+    ).toContain('permission denied for table reviews');
     expect(await reviewCount()).toBe(2);
+
+    // The insert is still refused, and refused by the same policy with the same
+    // message. The table being untouched changes nothing about the check, and
+    // this arm is the reason the test survives the inversion: it is the half
+    // that documents what `anon` STILL cannot do on this table.
+    const refused = await deniedAs(ctx.sql, 'anon', null, (tx) =>
+      tx.unsafe(
+        `insert into public.reviews (user_id, business_id, rating, comment)
+         values ('${MEMBER}', '${BIZ_A}', 5, 'RLS anon after truncate')`,
+      ),
+    );
+    expect(
+      refused,
+      'anon inserted into reviews with no claim. The WITH CHECK is ' +
+        'unchanged, so this means `user_id = auth.uid()` stopped being the ' +
+        'gate.',
+    ).not.toBeNull();
+    expect(refused?.message).toContain(
+      'new row violates row-level security policy',
+    );
+    expect(
+      await reviewCount(),
+      'the refused INSERT still left a row behind. `deniedAs` COMMITS when the ' +
+        'statement SUCCEEDS, so a policy refusal rolls back but a successful ' +
+        'write would not — and the count is what says which happened.',
+    ).toBe(2);
+
+    // Nothing needed cleaning up, and that is asserted rather than assumed. The
+    // previous version of this test had to re-seed both rows in a `finally`
+    // because the TRUNCATE had genuinely destroyed them; a leaked probe row here
+    // would put every count assertion in the rest of the file off by one with
+    // nothing pointing at the cause.
+    const rows = await ctx.sql.unsafe<{ id: string; comment: string }[]>(
+      `select id, comment from public.reviews order by id`,
+    );
+    expect(plainRows(rows).map((r) => r.id)).toEqual([REVIEW.M, REVIEW.S]);
+    expect(
+      plainRows(rows).map((r) => r.comment),
+      'the INSERT probe was refused by the policy and yet a row carrying its ' +
+        'comment exists. Either the policy let it through or a `deniedAs` ' +
+        'success committed something this test believes was rolled back.',
+    ).not.toContain('RLS anon after truncate');
+
     const restored = await ctx.sql.unsafe<
       { id: string; rating: string; review_count: number }[]
     >(

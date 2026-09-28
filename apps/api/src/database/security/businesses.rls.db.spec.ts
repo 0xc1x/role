@@ -524,9 +524,25 @@ describe('public.businesses: the shape of the grants', () => {
    * This is the INVERSE of the pilot's canary. On `categories`, Supabase's
    * default privileges hand `anon` all seven table privileges and the POLICIES
    * are the only thing refusing, so a denial there needs the grant asserted to
-   * be meaningful. Here `20260925163235` revoked the rest and nothing gave it
-   * back, so the GRANT is the boundary and every refusal in this file has to name
-   * the layer that produced it.
+   * be meaningful — except that since
+   * `20260928203000_revoke_client_destructive_privileges.sql` `anon` no longer
+   * holds all seven there either; it holds four and the three RLS cannot govern
+   * are gone. The reason this file's claim needs no such correction is narrower
+   * and older: `20260925163235` ran `revoke all on table public.businesses`, and
+   * `20260925225227` did the same for the three companions, and the word `all`
+   * swept the seven by accident rather than by decision. Nothing has given any of
+   * it back, so the GRANT is the boundary and every refusal in this file has to
+   * name the layer that produced it.
+   *
+   * That is worth stating rather than leaving implicit, because it is the
+   * difference between the two tables. `businesses` was closed by a broad
+   * revoke that happened to be complete; most tables in this schema were closed
+   * by a partial one that ran out of clauses, and
+   * `20260928203000_revoke_client_destructive_privileges.sql` exists because that
+   * is how `order_events` and thirty-one other tables kept TRUNCATE. Nothing
+   * below depends on that migration having run — every assertion in this file
+   * held before it and holds after — and saying so is the point: a hardening
+   * migration should not change what an unrelated file is measuring.
    *
    * The companion tables are asserted in the same query on purpose. `anon` holds
    * absolutely nothing on any of them — not even SELECT — and that is the whole
