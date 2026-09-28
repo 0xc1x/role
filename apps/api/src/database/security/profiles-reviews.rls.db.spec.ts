@@ -150,6 +150,33 @@ const LOC_A = 'bbbbbbbb-0000-4000-8000-000000000001';
 const OFFER_A = 'cccccccc-0000-4000-8000-000000000001';
 const OFFER_B = 'cccccccc-0000-4000-8000-000000000002';
 
+/**
+ * ─── Why four of these say `completed` and two do not ────────────────────────
+ *
+ * The four seeded orders were `confirmed` and stayed `confirmed` for their whole
+ * life here, and the reason is worth writing down before the next reader
+ * mistakes the value for decoration.
+ *
+ * Until `20260928195355` the order's `status` was NOT part of any predicate on
+ * this table. `Users can insert own reviews` asked whether the order existed,
+ * belonged to the caller and matched the business being reviewed — never what
+ * state the order was in. So the four orders could be seeded in any state at all
+ * and every test in this file would have measured exactly the same thing, which
+ * is precisely why they all said `confirmed`: it was the value the column took
+ * by default when nobody had an opinion.
+ *
+ * They are `completed` now because the opinion exists. `o.status = 'completed'`
+ * is a term of the `WITH CHECK`, and a fixture whose orders are `confirmed` makes
+ * a policy that is CORRECT look broken: every legitimate insert in the file — the
+ * happy path, the moderation probes, the `anon` sub-claim control — is refused
+ * for the right reason and looks like a regression.
+ *
+ * So this is not a fixture relaxed to make a test green. It is a fixture
+ * corrected to match the rule that now exists, and the tests it feeds keep
+ * EXACTLY the meaning they had: they are all about ownership, business match,
+ * moderation columns, counts and visibility, and none of them is about order
+ * state. The order state is the constant every one of them holds fixed.
+ */
 const ORDER: Record<string, string> = {
   /** MEMBER at `BIZ_A`. */
   M: 'dddddddd-0000-4000-8000-000000000001',
@@ -177,6 +204,28 @@ const ORDER: Record<string, string> = {
    * whether the previous probe had been cleaned up yet.
    */
   Q: 'dddddddd-0000-4000-8000-000000000004',
+  /**
+   * MEMBER's order at `BIZ_A` in `confirmed`, and the ONLY seeded order left in
+   * a non-`completed` state.
+   *
+   * It exists so the refusal arm is measured against a real order in a real
+   * state, rather than against a value invented inside the test. Three
+   * properties make the refusal attributable to the status term and to nothing
+   * else, and all three are asserted in the test that uses it:
+   *
+   *   - it is MEMBER's own order, so the ownership term of the `EXISTS` holds;
+   *   - it is at `BIZ_A`, so the business term holds;
+   *   - the (MEMBER, ORDER.C) pair is unspent, so `UNIQUE (user_id, order_id)`
+   *     cannot be what refuses the write.
+   *
+   * That last one is the reason this is a separate order and not a re-used one.
+   * Measured rather than assumed: a NEW insert naming a SPENT (user, order) pair
+   * comes back `42501` from the POLICY, not `23505` from the constraint — the
+   * `WITH CHECK` is evaluated before the index is probed — so on a spent pair the
+   * two layers are indistinguishable from the error code alone and the test
+   * cannot tell which one refused. On an unspent pair only the policy can.
+   */
+  C: 'dddddddd-0000-4000-8000-000000000005',
 };
 
 const REVIEW: Record<string, string> = {
@@ -289,10 +338,12 @@ beforeAll(async () => {
     );
 
     /**
-     * Two businesses, two offers, FOUR orders and two reviews.
+     * Two businesses, two offers, FIVE orders and two reviews.
      *
      * `ORDER.R` and `ORDER.Q` are unreviewed orders for `MEMBER`; see their
-     * comments.
+     * comments. `ORDER.C` is `confirmed` and is used only by the refusal arm; see
+     * its comment and the one on `ORDER` above for why the other four are
+     * `completed` rather than `confirmed`.
      *
      * `business_ownership` is seeded by hand because
      * `trg_bootstrap_business_companions` writes that row only when
@@ -308,6 +359,12 @@ beforeAll(async () => {
      * tell a poisoned aggregate from an empty one. The moderation-forging test
      * below deliberately writes a review WITHOUT them, and asserts the derived
      * `0.00` rather than tidying it away.
+     *
+     * The two seeded reviews are planted on `completed` orders, which is what a
+     * row written AFTER `20260928195355` looks like. It is also what they looked
+     * like before it, because the seed is written as the schema owner and no
+     * policy applies to the owner — which is the point the legacy-row test makes
+     * explicitly rather than relying on this paragraph to carry it.
      */
     await tx.unsafe(`
       insert into public.businesses (id, name, type, slug)
@@ -330,10 +387,15 @@ beforeAll(async () => {
       insert into public.orders
         (id, user_id, offer_id, business_id, order_number, status, price,
          original_price, pickup_code, commission_rate, platform_fee, net_amount)
-      values ('${ORDER.M}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-M', 'confirmed', 4.00, 10.00, 'PICK-M', 0.4000, 0.4000, 3.2000),
-             ('${ORDER.S}', '${STRANGER}', '${OFFER_B}', '${BIZ_A}', 'RLS-PR-S', 'confirmed', 4.00, 10.00, 'PICK-S', 0.4000, 0.4000, 3.2000),
-             ('${ORDER.R}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-R', 'confirmed', 4.00, 10.00, 'PICK-R', 0.4000, 0.4000, 3.2000),
-             ('${ORDER.Q}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-Q', 'confirmed', 4.00, 10.00, 'PICK-Q', 0.4000, 0.4000, 3.2000);
+      -- completed on M, S, R and Q; confirmed on C. See the ORDER map: the
+      -- status is a term of the INSERT policy's WITH CHECK, so these four are
+      -- the CONSTANT every ownership, moderation and visibility test below
+      -- holds fixed, and C is the only seeded order left outside it.
+      values ('${ORDER.M}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-M', 'completed', 4.00, 10.00, 'PICK-M', 0.4000, 0.4000, 3.2000),
+             ('${ORDER.S}', '${STRANGER}', '${OFFER_B}', '${BIZ_A}', 'RLS-PR-S', 'completed', 4.00, 10.00, 'PICK-S', 0.4000, 0.4000, 3.2000),
+             ('${ORDER.R}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-R', 'completed', 4.00, 10.00, 'PICK-R', 0.4000, 0.4000, 3.2000),
+             ('${ORDER.Q}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-Q', 'completed', 4.00, 10.00, 'PICK-Q', 0.4000, 0.4000, 3.2000),
+             ('${ORDER.C}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-C', 'confirmed', 4.00, 10.00, 'PICK-C', 0.4000, 0.4000, 3.2000);
 
       insert into public.reviews
         (id, user_id, business_id, order_id, rating, business_rating, product_rating, comment)
@@ -3359,7 +3421,7 @@ describe('the two things the reviews grant does not stop', () => {
  * The file is long, and the fixture is the reason it stays one file. Seeding
  * means three Vault secrets, five `auth.users` rows, a role promotion, two
  * businesses with hand-written `business_ownership`, a location, two offers and
- * four orders, and it is all coupled: `auth_helpers.my_role()` reads `profiles`,
+ * five orders, and it is all coupled: `auth_helpers.my_role()` reads `profiles`,
  * `trg_bootstrap_business_companions` only fires with a JWT, and
  * `on_order_status_change` raises without the Vault rows. Duplicating that to
  * satisfy a line count would buy a shorter file and a second place for the
@@ -4114,5 +4176,770 @@ describe('the reviews insert, after 20260928192000', () => {
       'REVIEW.S was not restored, so the soft-hide block above starts from a ' +
         'table with one review already hidden.',
     ).toEqual([{ is_hidden: false, moderated_by: null }]);
+  });
+});
+
+/**
+ * `20260928195355_require_completed_order_to_review.sql`, measured on its own
+ * terms.
+ *
+ * ─── WHY THIS IS A SEPARATE BLOCK AND NOT THREE MORE TESTS ABOVE ─────────────
+ *
+ * The previous block ended on a claim that this migration made false. It said:
+ *
+ *     "The status gap is worth naming because it is real and this migration did
+ *      not close it: the API refuses a non-completed order, the mobile does not
+ *      check status, and the database has never expressed it. Adding
+ *      `o.status = 'completed'` to the EXISTS would be a product decision taken
+ *      inside a security migration."
+ *
+ * That was true when it was written and it is not true now, and the sentence was
+ * left in place on purpose by the version of this file that preceded this one:
+ * it describes a gap, and a gap that gets silently closed by a neighbouring
+ * commit is how the next reader concludes the database never expressed the rule
+ * and goes looking for where the mobile is supposed to be stopped instead. The
+ * block above is not edited to remove the warning; it is left as the record of
+ * what was true, and THIS block is what supersedes it.
+ *
+ * What superseded it: the database now says it. The API's own check is still
+ * there and still worth having — it rejects with a product-shaped 422 naming the
+ * status before the database is ever consulted — but the mobile, which writes
+ * straight to PostgREST with the anon key and checked nothing, is now held by
+ * the policy rather than by nothing.
+ *
+ * ─── What the fixture had to become, and why that is not a weakened test ────
+ *
+ * The four seeded orders were `confirmed` and had been since the fixture was
+ * written, because until this migration the order's status was not a term of any
+ * predicate on this table and the value was simply the one nobody had an opinion
+ * about. Adding the term made the fixture wrong: the legitimate insert, the
+ * moderation probes and the `anon` sub-claim control all started failing with
+ * `42501`, correctly, because they name orders that were never fulfilled.
+ *
+ * Those are the SAME refusals the block above is built to detect, arriving for a
+ * NEW reason, which is the specific failure mode a refusal-heavy suite has. The
+ * fix is the fixture, not the assertion: M, S, R and Q are `completed` now, so
+ * every test above measures exactly what it measured before — ownership, business
+ * match, moderation columns, counts, visibility — with order state held
+ * constant. `ORDER.C` was added as a `confirmed` order used by nothing except
+ * the refusal arm below.
+ *
+ * ─── The three things this block has to get right ────────────────────────────
+ *
+ * 1. The refusal. A consumer cannot review a `confirmed` order, and the refusal
+ *    is the `WITH CHECK`.
+ * 2. The permission. It is the only test here that would fail against a policy
+ *    that refused everything, so it is the one that gives the refusals meaning.
+ * 3. The boundaries of the rule, which are NOT what the migration implies. A dead
+ *    enum value is refused. And an admin is not subject to any of it.
+ */
+describe('the reviews insert, after 20260928195355', () => {
+  /**
+   * The refusal, with the layer named.
+   *
+   * "The client cannot" is one sentence and four different layers — GRANT,
+   * policy, CHECK constraint, trigger — of which only the policy is true today.
+   * Every one of them is a `42501` or a `2350x` on a client, and a reader
+   * debugging a production rejection is told the same four words either way, so
+   * the distinction has to live in a test rather than in the reader's memory.
+   *
+   * What is asserted about the layer:
+   *
+   *   - `42501` with `new row violates row-level security policy` — the
+   *     `WITH CHECK`, and only the `WITH CHECK`. There is no `USING` on an
+   *     INSERT policy; there is no old row to qualify.
+   *   - NOT `violates foreign key constraint`. `ORDER.C` is a real row owned by a
+   *     real `auth.users` profile, so an FK refusal would mean the fixture is
+   *     missing rather than that the policy fired. This is the same guard
+   *     `a client cannot insert a review against another consumer's order` uses.
+   *   - NOT `duplicate key value`. The (MEMBER, ORDER.C) pair is unspent, so
+   *     `UNIQUE (user_id, order_id)` cannot be what refused it. This is the
+   *     reason `ORDER.C` is its own order rather than a re-used one: measured, a
+   *     NEW insert naming a SPENT pair also comes back `42501` from the policy,
+   *     because the `WITH CHECK` is evaluated before the index is probed, so on a
+   *     spent pair the error code alone cannot tell the two layers apart.
+   *
+   * And the two facts that make the status the ONLY thing wrong with the
+   * statement, asserted as the fixture rather than assumed: the order is this
+   * consumer's, and it is at the business the review names. Without them the
+   * test would still pass against a policy that checked nothing but the status,
+   * and would equally pass against one that checked nothing at all.
+   */
+  test('a consumer cannot review its own order while that order is still confirmed', async () => {
+    const before = await reviewCount();
+
+    // The fixture, read as the owner so this checks the SEED and not the policy.
+    const order = await ctx.sql.unsafe<
+      { id: string; user_id: string; business_id: string; status: string }[]
+    >(
+      `select id::text, user_id::text, business_id::text, status::text
+         from public.orders where id = '${ORDER.C}'`,
+    );
+    expect(
+      plainRows(order),
+      'ORDER.C stopped being MEMBER’s own order at BIZ_A in `confirmed`, so ' +
+        'this test is no longer measuring the status term — it would be ' +
+        'measuring a missing fixture or an ownership refusal.',
+    ).toEqual([
+      {
+        id: ORDER.C,
+        user_id: MEMBER,
+        business_id: BIZ_A,
+        status: 'confirmed',
+      },
+    ]);
+
+    /**
+     * The probe, wrapped, and the wrapping is the lesson rather than tidiness.
+     *
+     * A refusal test normally needs no cleanup: the statement is refused, the
+     * transaction rolls back, nothing was written. That reasoning is correct and
+     * it is exactly what makes such a test fragile — the moment the policy stops
+     * refusing, `deniedAs` COMMITS and the probe row is real.
+     *
+     * Mutation testing found this. Removing `o.status = 'completed'` from the
+     * `EXISTS` made this insert land, and because the test had no cleanup the row
+     * outlived it: it spent the (MEMBER, ORDER.C) pair, so the `picked_up` test
+     * after it failed with `23505` on the CONSTRAINT instead of the policy, and
+     * the admin and legacy tests failed on a `review_count` of 3. One missing
+     * term in one policy produced three failures that pointed at three
+     * unrelated places, and the one test that detected the mutation was the only
+     * one whose message was about it.
+     *
+     * The cleanup is therefore unconditional and `.catch()`-wrapped, and it runs
+     * in a `finally` so a failed assertion cannot skip it. On the green path it
+     * deletes nothing, which is asserted immediately after.
+     */
+    try {
+      // The status is the only difference from the insert the block above proves
+      // is accepted: same consumer, same business, same own order, same
+      // unspent pair. That is what makes this a measurement of the status term
+      // rather than of a near-miss.
+      const refused = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+        tx.unsafe(
+          `insert into public.reviews
+             (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+           values ('${MEMBER}', '${BIZ_A}', '${ORDER.C}', 1, 1, 1, 'RLS reviewed before pickup')
+           returning id`,
+        ),
+      );
+
+      expect(
+        refused,
+        'a consumer reviewed an order that has not been fulfilled yet. This is ' +
+          'the gap this migration closed: the mobile writes to PostgREST with the ' +
+          'anon key and checked nothing, so before it the database expressed no ' +
+          'opinion on the order’s state at all. Check `o.status` in the EXISTS.',
+      ).not.toBeNull();
+      expect(refused?.code).toBe('42501');
+      expect(refused?.message).toContain(
+        'new row violates row-level security policy',
+      );
+      expect(
+        refused?.message,
+        'the refusal came from a foreign key rather than from the policy. ' +
+          'ORDER.C is a real row and MEMBER is a real profile in this fixture, ' +
+          'so an FK error here would mean a missing fixture, not a rule.',
+      ).not.toContain('violates foreign key constraint');
+      expect(
+        refused?.message,
+        'the refusal came from UNIQUE (user_id, order_id) rather than from the ' +
+          'policy. The (MEMBER, ORDER.C) pair is unspent, so this is either a ' +
+          'leaked probe row from an earlier test or the fixture drifted.',
+      ).not.toContain('duplicate key value');
+    } finally {
+      // Nothing to delete on the green path; the DELETE below is the assertion
+      // that says so rather than a comment that hopes so.
+      await ctx.sql
+        .unsafe(
+          `delete from public.reviews where comment = 'RLS reviewed before pickup'`,
+        )
+        .catch(() => {});
+    }
+
+    // Nothing landed, on the count and on the row itself. `deniedAs` COMMITS on
+    // the success path, so a policy refusal rolls back but a successful write
+    // would not — the count is what says which happened. The cleanup above makes
+    // the second assertion true by construction; the first is what proves the
+    // policy did the refusing rather than the DELETE doing the tidying.
+    expect(await reviewCount()).toBe(before);
+    const residual = await ctx.sql.unsafe<{ c: number }[]>(
+      `select count(*)::int as c from public.reviews
+        where comment = 'RLS reviewed before pickup'`,
+    );
+    expect(plainRows(residual)[0]?.c).toBe(0);
+  });
+
+  /**
+   * The permission, and the reason it is its own test.
+   *
+   * Everything else in this block asserts a refusal, and a suite of refusals
+   * passes just as happily against a policy that refuses everything. Delete
+   * `o.status = 'completed'` from the `EXISTS` and every test in this file still
+   * passes except this one — which is the definition of the control.
+   *
+   * The statement is the one the mobile issues and the one the API writes, on an
+   * order that is `completed`, and it is asserted on the row that landed rather
+   * than on the absence of an error: `deniedAs` returning `null` means "no
+   * error", and a malformed statement also produces no error.
+   *
+   * The order is `ORDER.Q`, the same order the happy path in the block above
+   * uses, deliberately. The point is that the ONLY thing that distinguishes that
+   * test from the one before it is the status of the order, and reusing the
+   * order makes that difference impossible to argue with.
+   */
+  test('a consumer CAN review its own order once that order is completed', async () => {
+    const before = await reviewCount();
+
+    const order = await ctx.sql.unsafe<{ status: string }[]>(
+      `select status::text from public.orders where id = '${ORDER.Q}'`,
+    );
+    expect(
+      plainRows(order)[0]?.status,
+      'ORDER.Q is not `completed`, so the positive arm is not measuring what ' +
+        'the refusal arm is measuring the absence of. The comparison between ' +
+        'the two tests is only meaningful if the orders differ in status alone.',
+    ).toBe('completed');
+
+    const inserted = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+      tx.unsafe(
+        `insert into public.reviews
+           (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+         values ('${MEMBER}', '${BIZ_A}', '${ORDER.Q}', 4, 4, 4, 'RLS reviewed after pickup')
+         returning id, order_id::text`,
+      ),
+    );
+    expect(
+      inserted,
+      'the legitimate review was REFUSED. This is the test that stops the fix ' +
+        'from being a break: `submitReview` declares orderId as required and ' +
+        'passes the business read off the same order row, so if the policy ' +
+        'rejects this the mobile review flow is broken in production. Check ' +
+        'the o.status term in the EXISTS before anything else — and check the ' +
+        'fixture too, because an order seeded in the wrong state fails here ' +
+        'identically.',
+    ).toBeNull();
+
+    // The row, re-read as the owner rather than through the client session, so
+    // the values are the row's own and not a projection through the SELECT
+    // policy.
+    const landed = await ctx.sql.unsafe<
+      {
+        user_id: string;
+        business_id: string;
+        order_id: string;
+        rating: number;
+        comment: string;
+        is_hidden: boolean;
+      }[]
+    >(
+      `select user_id::text, business_id::text, order_id::text, rating, comment, is_hidden
+         from public.reviews where comment = 'RLS reviewed after pickup'`,
+    );
+    expect(
+      plainRows(landed),
+      'the row did not land with the values that were sent. The policy is a ' +
+        'WITH CHECK, so it can only refuse — it cannot rewrite — and anything ' +
+        'different here is the trigger or a column default.',
+    ).toEqual([
+      {
+        user_id: MEMBER,
+        business_id: BIZ_A,
+        order_id: ORDER.Q,
+        rating: 4,
+        comment: 'RLS reviewed after pickup',
+        is_hidden: false,
+      },
+    ]);
+
+    /**
+     * Unconditional, and the last statement in the `finally`.
+     *
+     * `deniedAs` COMMITS when the statement SUCCEEDS, so the row above is real
+     * and `on_review_change` already folded its `business_rating` of 4 into
+     * `businesses.rating`. Without this DELETE every count and every aggregate
+     * assertion in the rest of the file would be measuring one row too many, and
+     * they would fail with messages pointing at their own arithmetic rather than
+     * at this probe.
+     */
+    try {
+      expect(
+        await reviewCount(),
+        'the insert did not land, so the assertion that it succeeded is ' +
+          'measuring something else.',
+      ).toBe(before + 1);
+    } finally {
+      await ctx.sql
+        .unsafe(
+          `delete from public.reviews where comment = 'RLS reviewed after pickup'`,
+        )
+        .catch(() => {});
+    }
+
+    // The AFTER DELETE trigger recomputes, so the aggregate is back without this
+    // test writing it.
+    expect(await reviewCount()).toBe(before);
+    const restored = await ctx.sql.unsafe<
+      { rating: string; review_count: number }[]
+    >(
+      `select rating, review_count from public.businesses where id = '${BIZ_A}'`,
+    );
+    expect(plainRows(restored)).toEqual([{ rating: '4.50', review_count: 2 }]);
+  });
+
+  /**
+   * `picked_up` is refused too, and this test exists for a reason that has
+   * nothing to do with the rule.
+   *
+   * It is a LEGAL value. `public.order_status` carries it
+   * (`20260507193004`), between `ready_for_pickup` and `completed` in the enum
+   * order, and a predicate that omitted it would be excluding a state Postgres
+   * is perfectly willing to store. A reader is entitled to think that is an
+   * oversight, and the only way to settle it is to assert the refusal.
+   *
+   * It is DEAD, and that is the part worth pinning:
+   *
+   *   - `20260615195645` defines `validate_pickup_code` and it sets
+   *     `status = 'completed'` directly, so the state machine records a validated
+   *     pickup as `completed` and never as `picked_up`.
+   *   - `20260906081534` documents in its own header that `picked_up` and
+   *     `completed` both go through `validate_pickup_code` and that the pickup
+   *     code is mandatory, so `set_order_status` is not a second way in.
+   *
+   * So the predicate would be including a value nothing can create, which is a
+   * rule that looks careful and is not. Adding `picked_up` "for robustness"
+   * would be indistinguishable from a correct predicate by any behavioural test
+   * — nothing produces the state, so nothing would ever exercise the branch —
+   * and this test is what makes the two distinguishable.
+   *
+   * The order is `ORDER.C` with its status changed to `picked_up` for the
+   * duration, rather than a second order seeded that way, and the reason is
+   * mechanical: `on_order_status_change` is an `after insert or update` trigger
+   * on `public.orders`, so both arms write a row to `order_events` whichever way
+   * the order is seeded. Flipping one order and restoring it in a `finally` keeps
+   * the fixture at five orders and the restore unconditional.
+   */
+  test('picked_up is refused even though it is a legal enum value nothing can produce', async () => {
+    const before = await reviewCount();
+
+    // It is legal. Asserted first, because a test that proves a value is
+    // rejected is vacuous if the value does not exist — the INSERT would fail on
+    // the enum cast and the assertion would be measuring `22P02` instead of the
+    // policy.
+    const legal = await ctx.sql.unsafe<{ v: string }[]>(
+      `select unnest(enum_range(null::public.order_status))::text as v`,
+    );
+    expect(
+      plainRows(legal).map((r) => r.v),
+      '`picked_up` left public.order_status, so this test is now measuring an ' +
+        'invalid enum value rather than a policy decision. Removing the value ' +
+        'from the type is a product decision about historical data and is not ' +
+        'done by a security migration; when it happens, say so here.',
+    ).toContain('picked_up');
+
+    await ctx.sql.unsafe(
+      `update public.orders set status = 'picked_up' where id = '${ORDER.C}'`,
+    );
+    try {
+      const refused = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+        tx.unsafe(
+          `insert into public.reviews
+             (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+           values ('${MEMBER}', '${BIZ_A}', '${ORDER.C}', 1, 1, 1, 'RLS reviewed at picked_up')
+           returning id`,
+        ),
+      );
+
+      expect(
+        refused,
+        'a review on a `picked_up` order was accepted. The state is dead — ' +
+          '`validate_pickup_code` sets `completed` and no code path produces ' +
+          '`picked_up` — so this is not a live hole, but a predicate admitting it ' +
+          'would be a rule written for a state that cannot exist, and it would be ' +
+          'indistinguishable from the correct one.',
+      ).not.toBeNull();
+      expect(refused?.code).toBe('42501');
+      expect(
+        refused?.message,
+        'the refusal is not a policy refusal. `picked_up` is a legal enum value ' +
+          'and the pair is unspent, so a cast or constraint error would mean ' +
+          'this test is measuring the wrong layer.',
+      ).toContain('new row violates row-level security policy');
+      expect(
+        refused?.message,
+        'the refusal is an enum cast failure, which is what an INVALID value ' +
+          'would produce. The legality assertion above is what makes this ' +
+          'assertion about the policy rather than about the type.',
+      ).not.toContain('invalid input value for enum');
+    } finally {
+      /**
+       * Two unconditional resets, and the ORDER matters: the review row first,
+       * then the order's status.
+       *
+       * The row is deleted unconditionally for the reason the refusal test above
+       * documents at length — `deniedAs` COMMITS when the statement succeeds,
+       * and this one is expected to be refused, which is precisely the condition
+       * under which nobody is looking. A `picked_up` leak would spend the
+       * (MEMBER, ORDER.C) pair and turn the NEXT run's refusal test into a
+       * `23505` that names the constraint instead of the policy.
+       *
+       * The status is written back second because a `finally` stops at its first
+       * throw, and a `picked_up` ORDER.C left behind would make the refusal test
+       * above measure the wrong state on the next run — so the two resets are
+       * both here, in damage order, and neither is allowed to skip the other.
+       */
+      await ctx.sql
+        .unsafe(
+          `delete from public.reviews where comment = 'RLS reviewed at picked_up'`,
+        )
+        .catch(() => {});
+      await ctx.sql.unsafe(
+        `update public.orders set status = 'confirmed' where id = '${ORDER.C}'`,
+      );
+    }
+
+    expect(await reviewCount()).toBe(before);
+
+    const restored = await ctx.sql.unsafe<{ status: string }[]>(
+      `select status::text from public.orders where id = '${ORDER.C}'`,
+    );
+    expect(
+      plainRows(restored)[0]?.status,
+      'ORDER.C was not restored to `confirmed`, so the refusal test above is ' +
+        'measuring `picked_up` on the next run and this block has silently ' +
+        'become a duplicate of the picked_up test.',
+    ).toBe('confirmed');
+  });
+
+  /**
+   * ─── THE FINDING: the admin policy is not subject to any of it ─────────────
+   *
+   * Measured on this database, in this fixture, with the real policies:
+   *
+   *     an `authenticated` session whose profile is `role = 'admin'` inserts a
+   *     review attributed to ANOTHER user, naming ANOTHER user's `confirmed`
+   *     order — and the row lands.
+   *
+   * It lands with a NULL `order_id` too, which is the primitive
+   * `20260928192000` closed for consumers and which the admin policy never had.
+   *
+   * The reason is structural and it is not a mistake in this migration:
+   *
+   *   - `Admins can manage all reviews` is `FOR ALL` with
+   *     `WITH CHECK (auth_helpers.my_role() = 'admin')`. It is a PERMISSIVE
+   *     policy, and Postgres ORs permissive policies together.
+   *   - So an admin satisfies its own `WITH CHECK` on its own, and the OR is
+   *     already true. `Users can insert own reviews` is evaluated, comes out
+   *     false, and the result is discarded.
+   *   - Tightening the consumer policy therefore cannot reach an admin, and no
+   *     value added to that `EXISTS` will ever change what an admin can write.
+   *
+   * Two things this is NOT, because both are true and both matter for how much
+   * effort the next person spends on it:
+   *
+   *   - It is not a new hole. The admin policy is `FOR ALL` and has been since
+   *     `20260509231501`, so an admin could already write any row on this table.
+   *     This migration did not widen anything.
+   *   - It is not reachable by a consumer. The escalation that would be needed
+   *     first is measured in the block above: it requires a column grant on
+   *     `profiles.role` that the ledger deliberately revoked, and the admin
+   *     policy additionally calls `auth_helpers.my_role()`, which a client
+   *     session cannot reach by name because the schema carries EXECUTE and no
+   *     USAGE (`categories.rls.db.spec.ts` measures that). The admin path
+   *     through PostgREST does not exist today.
+   *
+   * So the honest description is narrow and it is pinned here rather than left
+   * for a reader to infer: the `completed` rule governs CONSUMER writes. An
+   * admin write is governed by `my_role()` and nothing else, and the API's
+   * moderation path does not go through here anyway — it connects as the schema
+   * owner and bypasses RLS entirely.
+   *
+   * Asserting the finding rather than asserting the absence of it is deliberate.
+   * "Admins can do anything" is the kind of sentence that reads as a design and
+   * is actually an unexamined default; writing the measurement down is what
+   * turns it into a fact somebody can decide about. And a future migration that
+   * narrows the admin policy would fail THIS test, which is the correct
+   * direction for it to fail in: the day the admin path is tightened, the test
+   * that documented the hole is what tells you.
+   */
+  test('an admin bypasses the completed-order rule entirely, and the admin policy is why', async () => {
+    const before = await reviewCount();
+
+    // The mechanism, from the catalog rather than from this comment.
+    const policies = await ctx.sql.unsafe<
+      {
+        policyname: string;
+        cmd: string;
+        permissive: string;
+        with_check: string | null;
+      }[]
+    >(
+      `select policyname, cmd, permissive, with_check
+         from pg_policies
+        where schemaname = 'public' and tablename = 'reviews'
+          and cmd in ('INSERT', 'ALL')
+        order by policyname`,
+    );
+    expect(
+      plainRows(policies),
+      'the INSERT surface on reviews is not the two policies this file ' +
+        'measures. The admin path depends on there being exactly these two, ' +
+        'both PERMISSIVE, so that Postgres ORs them.',
+    ).toEqual([
+      {
+        policyname: 'Admins can manage all reviews',
+        cmd: 'ALL',
+        permissive: 'PERMISSIVE',
+        with_check:
+          "(( SELECT auth_helpers.my_role() AS my_role) = 'admin'::app_role)",
+      },
+      {
+        policyname: 'Users can insert own reviews',
+        cmd: 'INSERT',
+        permissive: 'PERMISSIVE',
+        with_check: plainRows(policies).find(
+          (p) => p.policyname === 'Users can insert own reviews',
+        )?.with_check,
+      },
+    ]);
+    // Asserted rather than read off the object above, because the whole finding
+    // is about what the admin policy does NOT mention.
+    expect(
+      plainRows(policies)[0]?.with_check,
+      'the admin policy no longer decides on my_role() alone, so this block is ' +
+        'describing a different database than the one it measured.',
+    ).not.toContain('orders');
+    expect(
+      plainRows(policies)[0]?.cmd,
+      'the admin policy is no longer FOR ALL. That is a narrowing, and if it was ' +
+        'deliberate the finding this test pins is no longer true.',
+    ).toBe('ALL');
+
+    // The probe: a review attributed to MEMBER, naming MEMBER's own `confirmed`
+    // order, written by ADMIN. Everything the consumer policy checks is either
+    // false or irrelevant to this caller.
+    const byAdmin = await deniedAs(ctx.sql, 'authenticated', ADMIN, (tx) =>
+      tx.unsafe(
+        `insert into public.reviews
+           (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+         values ('${MEMBER}', '${BIZ_A}', '${ORDER.C}', 1, 1, 1, 'RLS admin on a confirmed order')
+         returning id`,
+      ),
+    );
+    expect(
+      byAdmin,
+      'the admin was REFUSED. This test pins the measured behaviour: an admin ' +
+        'satisfies `Admins can manage all reviews` on its own, the OR with the ' +
+        'consumer policy is already true, and the `completed` term never gets a ' +
+        'vote. If this now fails, the admin policy was narrowed — check whether ' +
+        'that was deliberate and update this test to say so.',
+    ).toBeNull();
+
+    try {
+      // It really landed, attributed to somebody who never reviewed it. The
+      // BEFORE INSERT trigger still forces `is_hidden = false`, so the row is
+      // public on arrival: the moderation half of the table is not bypassed, only
+      // the order half.
+      const landed = await ctx.sql.unsafe<
+        { user_id: string; order_id: string; is_hidden: boolean }[]
+      >(
+        `select user_id::text, order_id::text, is_hidden
+           from public.reviews where comment = 'RLS admin on a confirmed order'`,
+      );
+      expect(
+        plainRows(landed),
+        'the admin insert did not land with the values it sent. It should be ' +
+          'attributed to MEMBER, name MEMBER’s own confirmed order, and be ' +
+          'unmoderated — an admin write is not a moderation write.',
+      ).toEqual([
+        {
+          user_id: MEMBER,
+          order_id: ORDER.C,
+          is_hidden: false,
+        },
+      ]);
+
+      expect(
+        await reviewCount(),
+        'the admin insert did not land, so the assertion above is measuring ' +
+          'something other than the write it describes.',
+      ).toBe(before + 1);
+    } finally {
+      /**
+       * Unconditional, and the reason it matters MORE here than anywhere else in
+       * this file.
+       *
+       * `deniedAs` COMMITS on the success path and this probe SUCCEEDED by
+       * design, so the row is real. It is a review attributed to a consumer who
+       * never wrote it, on a business whose `review_count` and `rating` the
+       * `on_review_change` trigger has already recomputed around it. Every count
+       * and aggregate assertion after this test would be one row too high, and
+       * each of them would fail with a message describing its own arithmetic.
+       */
+      await ctx.sql
+        .unsafe(
+          `delete from public.reviews where comment = 'RLS admin on a confirmed order'`,
+        )
+        .catch(() => {});
+    }
+
+    expect(await reviewCount()).toBe(before);
+    const restored = await ctx.sql.unsafe<
+      { rating: string; review_count: number }[]
+    >(
+      `select rating, review_count from public.businesses where id = '${BIZ_A}'`,
+    );
+    expect(plainRows(restored)).toEqual([{ rating: '4.50', review_count: 2 }]);
+  });
+
+  /**
+   * The migration's "no-op on existing data" claim, for THIS migration.
+   *
+   * The block above already proves it for a NULL `order_id`, and this proves it
+   * for the term this migration added. A review on a `confirmed` order that
+   * already exists is still there and still readable, because RLS is evaluated
+   * at write time and never retroactively.
+   *
+   * This is not a hypothetical row. Production carries exactly this shape: one
+   * order in `picked_up` (seed data from before the state machine existed, id
+   * `f0000000-…-000000000003`, created 2026-05-07) holding the platform's only
+   * review on a non-completed order. The migration header names it; this is the
+   * assertion that the header is not describing a wish.
+   *
+   * The row is planted AS THE OWNER, which is exactly how a pre-migration row
+   * looks: no policy applies, because the owner is not subject to RLS. The
+   * BEFORE INSERT trigger does fire and correctly changes nothing, since
+   * `is_hidden` is already the column default.
+   *
+   * Read as a PAIR with the refusal test above, and that pairing is the point: the
+   * same order, the same consumer, the same business, the same `confirmed` state
+   * — one row that exists and one write that is refused. "RLS is not retroactive"
+   * and "RLS is evaluated at write time" are the same claim, and only the
+   * juxtaposition makes either of them falsifiable.
+   */
+  test('a review written on a confirmed order before the migration survives and is still readable', async () => {
+    const before = await reviewCount();
+    const aggregateBefore = await ctx.sql.unsafe<
+      { rating: string; review_count: number }[]
+    >(
+      `select rating, review_count from public.businesses where id = '${BIZ_A}'`,
+    );
+    expect(plainRows(aggregateBefore)).toEqual([
+      { rating: '4.50', review_count: 2 },
+    ]);
+
+    try {
+      // Planted as the owner, on an order in the state the policy now refuses.
+      await ctx.sql.unsafe(
+        `insert into public.reviews
+           (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+         values ('${MEMBER}', '${BIZ_A}', '${ORDER.C}', 5, 5, 5, 'RLS legacy on a confirmed order')`,
+      );
+      expect(
+        await reviewCount(),
+        'the legacy row did not land, so everything below would be vacuous.',
+      ).toBe(before + 1);
+
+      // READ, by the author. RLS did not start re-evaluating existing rows the day
+      // the policy changed, and that is the whole claim.
+      const byAuthor = await as(ctx.sql, 'authenticated', MEMBER, (tx) =>
+        tx
+          .unsafe<{ comment: string }[]>(
+            `select comment from public.reviews
+              where comment = 'RLS legacy on a confirmed order'`,
+          )
+          .then((rows) => rows.map((r) => r.comment)),
+      );
+      expect(
+        byAuthor,
+        'a pre-existing review on a non-completed order became unreadable to its ' +
+          'author. RLS governs writes; if this fails, something is re-checking ' +
+          'rows that already exist.',
+      ).toEqual(['RLS legacy on a confirmed order']);
+
+      // And by `anon`, because the SELECT policy carries no order requirement at
+      // all — the second half of the same claim, and the half that would be
+      // silently narrowed by a future migration that added the status to the
+      // SELECT side as well.
+      const byAnon = await as(ctx.sql, 'anon', null, (tx) =>
+        tx
+          .unsafe<{ comment: string }[]>(
+            `select comment from public.reviews
+              where comment = 'RLS legacy on a confirmed order'`,
+          )
+          .then((rows) => rows.map((r) => r.comment)),
+      );
+      expect(
+        byAnon,
+        'a pre-existing review left the public feed. The INSERT policy governs ' +
+          'INSERT; the SELECT policy is TO public and has no order requirement. ' +
+          'If this fails, the feed was narrowed as a side effect.',
+      ).toEqual(['RLS legacy on a confirmed order']);
+
+      // And a NEW one is still refused, on the same order, in the same test. Old
+      // rows and new writes are governed by different things and the only way to
+      // show that is to put them side by side.
+      //
+      // The (MEMBER, ORDER.C) pair is spent by the planted row, so this insert is
+      // the one case where `UNIQUE` could plausibly be the thing refusing it —
+      // and the code is what settles it. The `WITH CHECK` is evaluated before
+      // the index is probed, so the policy wins and the answer is `42501`, not
+      // `23505`. Asserted rather than assumed: if that ordering ever changes, this
+      // is the assertion that notices, and the refusal above would then be
+      // measuring the constraint instead of the rule.
+      const newRow = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+        tx.unsafe(
+          `insert into public.reviews
+             (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+           values ('${MEMBER}', '${BIZ_A}', '${ORDER.C}', 1, 1, 1, 'RLS new row on a confirmed order')
+           returning id`,
+        ),
+      );
+      expect(
+        newRow,
+        'a NEW review on the confirmed order was accepted next to a legacy one. ' +
+          'The policy is the gate and it applies to writes, not to rows.',
+      ).not.toBeNull();
+      expect(
+        newRow?.code,
+        'the refusal came from UNIQUE (user_id, order_id) rather than from the ' +
+          'policy. This assertion exists to prove which layer refuses: a ' +
+          '`23505` here would mean the pair is spent and the status term is gone, ' +
+          'so the legacy row above would be the only thing standing between a ' +
+          'new write and a duplicate.',
+      ).toBe('42501');
+      expect(newRow?.message).toContain(
+        'new row violates row-level security policy',
+      );
+    } finally {
+      /**
+       * Unconditional and `.catch()`-free, on purpose. This runs as the owner,
+       * nothing references `reviews`, and a throwing cleanup at the end of a
+       * `finally` is indistinguishable from a finding.
+       *
+       * It covers the planted row AND the refused write's comment, because a
+       * successful refused write would leave its row behind and put every count
+       * assertion in the rest of the file off by one with nothing pointing at
+       * the cause.
+       */
+      await ctx.sql.unsafe(
+        `delete from public.reviews
+            where comment in ('RLS legacy on a confirmed order',
+                              'RLS new row on a confirmed order')`,
+      );
+    }
+
+    // BIZ_A's aggregate is back to its seeded value, recomputed by the AFTER
+    // DELETE trigger. Asserted because the legacy row carried a
+    // `business_rating` of 5 and would otherwise leave the average at 4.50 over
+    // three reviews — the same number, a different denominator, which is the
+    // kind of drift no count assertion above would catch.
+    expect(await reviewCount()).toBe(before);
+    const restored = await ctx.sql.unsafe<
+      { rating: string; review_count: number }[]
+    >(
+      `select rating, review_count from public.businesses where id = '${BIZ_A}'`,
+    );
+    expect(plainRows(restored)).toEqual([{ rating: '4.50', review_count: 2 }]);
   });
 });
