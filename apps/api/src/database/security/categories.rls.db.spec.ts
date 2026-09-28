@@ -610,7 +610,11 @@ describe('public.categories: what the policies refuse', () => {
    */
   test('authenticated holds EXECUTE on my_role() and no USAGE on its schema', async () => {
     const rows = await ctx.sql.unsafe<
-      { usage_authenticated: boolean; usage_anon: boolean; exec_my_role: boolean }[]
+      {
+        usage_authenticated: boolean;
+        usage_anon: boolean;
+        exec_my_role: boolean;
+      }[]
     >(`select has_schema_privilege('authenticated'::name, 'auth_helpers'::regnamespace, 'usage') as usage_authenticated,
               has_schema_privilege('anon'::name,         'auth_helpers'::regnamespace, 'usage') as usage_anon,
               has_function_privilege('authenticated'::name, 'auth_helpers.my_role()'::regprocedure, 'execute') as exec_my_role`);
@@ -646,9 +650,14 @@ describe('public.categories: what the policies refuse', () => {
         (tx) => tx.unsafe(`select auth_helpers.my_role()::text as role`),
       );
 
-      expect(denial, `${role} was able to call the helper by name`).not.toBeNull();
+      expect(
+        denial,
+        `${role} was able to call the helper by name`,
+      ).not.toBeNull();
       expect(denial?.code).toBe('42501');
-      expect(denial?.message).toContain('permission denied for schema auth_helpers');
+      expect(denial?.message).toContain(
+        'permission denied for schema auth_helpers',
+      );
     }
   });
 
@@ -744,9 +753,14 @@ describe('public.categories: what the policies refuse', () => {
     const query = `select slug from public.categories
                     where slug in ('${ACTIVE_SLUG}', '${DRAFT_SLUG}', '${ARCHIVED_SLUG}')
                     order by slug`;
-    const pilot = (role: 'owner' | 'anon' | 'authenticated', userId: string | null) =>
+    const pilot = (
+      role: 'owner' | 'anon' | 'authenticated',
+      userId: string | null,
+    ) =>
       role === 'owner'
-        ? ctx.sql.unsafe<{ slug: string }[]>(query).then((r) => r.map((x) => x.slug))
+        ? ctx.sql
+            .unsafe<{ slug: string }[]>(query)
+            .then((r) => r.map((x) => x.slug))
         : as(ctx.sql, role, userId, (tx) =>
             tx.unsafe<{ slug: string }[]>(query),
           ).then((r) => r.map((x) => x.slug));
@@ -759,7 +773,9 @@ describe('public.categories: what the policies refuse', () => {
     // The admin is held to a DIFFERENT result from a member, on the same table
     // and in the same session role. Only the admin policy can produce this
     // difference, so the two sets differing is the evidence that it ran.
-    expect(asAdmin, 'an admin cannot see more than a member').not.toEqual(asMember);
+    expect(asAdmin, 'an admin cannot see more than a member').not.toEqual(
+      asMember,
+    );
     expect(asAdmin).toEqual([ACTIVE_SLUG, ARCHIVED_SLUG, DRAFT_SLUG]);
 
     // The member is in the admin policy's TO list, so its expression was
