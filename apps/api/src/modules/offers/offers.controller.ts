@@ -21,13 +21,16 @@ import {
 import {
   CreateOfferSchema,
   ListOffersQuerySchema,
+  ListZonesQuerySchema,
   UpdateOfferSchema,
 } from '@0xc1x/role-commons';
 import type {
   CreateOfferDto,
   ListOffersQuery,
+  ListZonesQuery,
   OfferDto,
   OfferWithBusiness,
+  PopularZoneDto,
   UpdateOfferDto,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
@@ -59,6 +62,36 @@ export class OffersController {
   @ApiOkResponse({ description: 'Offer with business and location, or null' })
   getRandom(): Promise<OfferWithBusiness | null> {
     return this.offersService.getRandom();
+  }
+
+  /**
+   * `GET /offers/zones` — mirror of `public.popular_zones` (ADR-0008).
+   *
+   * WHY IT LIVES ON OFFERS AND NOT ON BUSINESSES: the rows it returns are
+   * `business_locations.zone` labels, so `businesses` looks like the natural
+   * home — but every column it projects is an OFFER aggregate (`count(*)` over
+   * reservable offers). A route on `businesses` would have to import the offers
+   * repository to answer a question about offers, and the client that needs it
+   * (the Explore screen) already fetches offers to know which zone is worth
+   * tapping. `businesses` keeps answering "which merchants are public"; this
+   * answers "how much is on the shelf over there". One projection, one module,
+   * no new module for a single read.
+   *
+   * Declared BEFORE `@Get(':id')` because Nest matches routes in declaration
+   * order and `:id` is `ParseUUIDPipe`d — without this, `zones` would be read as
+   * an id and 400. Same reason `random` sits above it.
+   */
+  @Public()
+  @Get('zones')
+  @ApiOperation({ summary: 'Popular zones by live offers (Explore chips)' })
+  @ApiOkResponse({
+    description:
+      'Zones with their reservable-offer counts, most deals first then zone name',
+  })
+  listZones(
+    @Query(new ZodValidationPipe(ListZonesQuerySchema)) query: ListZonesQuery,
+  ): Promise<PopularZoneDto[]> {
+    return this.offersService.listZones(query);
   }
 
   @Public()

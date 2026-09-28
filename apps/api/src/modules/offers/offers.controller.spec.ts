@@ -2,9 +2,13 @@ jest.mock('@0xc1x/role-commons', () => ({
   CreateOfferSchema: {},
   UpdateOfferSchema: {},
   ListOffersQuerySchema: {},
+  ListZonesQuerySchema: {},
 }));
 
+import { PATH_METADATA } from '@nestjs/common/constants';
+import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
+import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
 import { OffersController } from './offers.controller';
 import { OffersService } from './offers.service';
 import type { AuthUser } from '../../auth/auth.types';
@@ -18,6 +22,7 @@ const mockUser: AuthUser = {
 describe('OffersController', () => {
   let controller: OffersController;
   let service: jest.Mocked<OffersService>;
+  let reflector: Reflector;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -29,6 +34,7 @@ describe('OffersController', () => {
             list: jest.fn(),
             getById: jest.fn(),
             getRandom: jest.fn(),
+            listZones: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
             remove: jest.fn(),
@@ -39,6 +45,7 @@ describe('OffersController', () => {
 
     controller = module.get(OffersController);
     service = module.get(OffersService);
+    reflector = module.get(Reflector);
   });
 
   describe('list', () => {
@@ -216,6 +223,50 @@ describe('OffersController', () => {
       await controller.remove(mockUser, 'o1');
 
       expect(service.remove).toHaveBeenCalledWith(mockUser, 'o1');
+    });
+  });
+
+  describe('listZones', () => {
+    it('delega en el servicio y devuelve un array SIN meta', async () => {
+      const rows = [
+        { zone: 'centro', deals: 12 },
+        { zone: 'providencia', deals: 4 },
+      ];
+      service.listZones.mockResolvedValue(rows);
+
+      const query = { lat: -33.45, lng: -70.66, radius_km: 5, limit: 5 };
+      const result = await controller.listZones(query);
+
+      expect(result).toEqual(rows);
+      expect(service.listZones).toHaveBeenCalledWith(query);
+      // `popular_zones` returns a top-N and never a total, so there is no
+      // `meta` to invent here: a `PaginatedData` would announce a `total`
+      // nobody counted.
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).not.toHaveProperty('meta');
+    });
+  });
+
+  describe('authorization and routing metadata', () => {
+    it('listZones is public, like list and random', () => {
+      expect(reflector.get(IS_PUBLIC_KEY, controller.listZones)).toBe(true);
+      expect(reflector.get(IS_PUBLIC_KEY, controller.list)).toBe(true);
+      expect(reflector.get(IS_PUBLIC_KEY, controller.getRandom)).toBe(true);
+    });
+
+    it('listZones is its own path, not swallowed by :id', () => {
+      // Declaration ORDER is what actually keeps `zones` out of
+      // `@Get(':id')` — a unit spec cannot see the router, so the ordering is
+      // pinned over HTTP in test/app.e2e-spec.ts. What this asserts is the
+      // cheaper half: the path string is `zones` and not a parameter, so the
+      // only thing that can go wrong here is someone writing `@Get(':zones')`
+      // or moving the handler into another controller.
+      expect(
+        Reflect.getMetadata(
+          PATH_METADATA,
+          OffersController.prototype.listZones,
+        ),
+      ).toBe('zones');
     });
   });
 });

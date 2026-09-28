@@ -78,3 +78,27 @@ describe('OfferMapper.toDto', () => {
     expect(dto.title).toBe('Pack sorpresa');
   });
 });
+
+describe('OfferMapper.toZonesResponse', () => {
+  test('deals cruza como número, no como el string de int8', () => {
+    // The repository keeps the RPC's `count(*)::bigint`, and postgres.js returns
+    // `int8` as a STRING (verified against the test database, not assumed). The
+    // mapper is the only thing standing between that and `{"deals":"7"}` on a
+    // public endpoint, so it is asserted here rather than left to an e2e's
+    // `toBeGreaterThan` — which a string would also pass.
+    const res = OfferMapper.toZonesResponse([
+      { zone: 'centro', deals: '7' },
+      { zone: 'providencia', deals: 3 },
+    ]);
+    expect(res).toEqual([
+      { zone: 'centro', deals: 7 },
+      { zone: 'providencia', deals: 3 },
+    ]);
+    expect(res[0]!.deals).toBe(7);
+    expect(typeof res[0]!.deals).toBe('number');
+  });
+
+  test('una lista vacía devuelve [], no undefined', () => {
+    expect(OfferMapper.toZonesResponse([])).toEqual([]);
+  });
+});

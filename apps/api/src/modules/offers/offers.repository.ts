@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   and,
+  asc,
   countDistinct,
   desc,
   eq,
@@ -8,6 +9,7 @@ import {
   gte,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   lt,
   lte,
@@ -28,7 +30,7 @@ import {
   offers,
   orders,
 } from '../../database/schema';
-import type { ListOffersQuery } from '@0xc1x/role-commons';
+import type { ListOffersQuery, ListZonesQuery } from '@0xc1x/role-commons';
 
 /**
  * The searched point, or nothing.
@@ -165,6 +167,21 @@ export type OfferUpdate = Partial<
 >;
 
 export type DbExecutor = Database;
+
+/**
+ * One row of `listPopularZones`.
+ *
+ * `deals` is `string | number` and not `number` because postgres.js hands back
+ * `bigint`/`int8` as a STRING to avoid silent precision loss — verified against
+ * the test database, not assumed. The count crosses the wire as a number (every
+ * count in this contract does), so the coercion belongs in the mapper that owns
+ * the DB/wire boundary, exactly like `toNumber(row.rating)` in
+ * `OfferMapper.toResponse`.
+ */
+export type PopularZoneRow = {
+  zone: string;
+  deals: string | number;
+};
 
 @Injectable()
 export class OffersRepository {
@@ -377,6 +394,122 @@ export class OffersRepository {
       .orderBy(sql`random()`)
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * `public.popular_zones`, key for key (ADR-0008) — the mobile Explore screen's
+   * "top zones by live deals", optionally inside a radius of the user.
+   *
+   * ─── DELIBERATE DIVERGENCE FROM THE RPC: the moderation gate ─────────────
+   *
+   * THE SQL COUNTS MORE THAN THIS DOES, and on purpose. The function's `where`
+   * clause is `o.is_active and o.stock > 0 and o.pickup_end > now()` and nothing
+   * about the business. It cannot do better as written: the functions are
+   * `security invoker`, and both RLS policies it reads through are weaker than
+   * the API's gate —
+   *
+   *   * `offers` — "Anyone can view active offers" is `USING (is_active = true)`
+   *     and nothing else (supabase/migrations/20260507193325_create_offers_and_coupons.sql).
+   *   * `business_locations` — "Anyone can view active business locations" is
+   *     `USING (is_active = true)` (20260507193215_create_businesses_and_locations.sql).
+   *     The RPC never reads `businesses` at all, so no policy on that table can
+   *     narrow it either.
+   *
+   * The only thing keeping a suspended merchant's offers out of that count in
+   * production is the `enforce_offer_business_availability` BEFORE INSERT/UPDATE
+   * trigger, which forces `is_active := false` at WRITE time. There is no
+   * trigger in the opposite direction: nothing deactivates a business's offers
+   * when the business is deactivated or its moderation status moves off
+   * `approved`. So the moment a merchant is suspended, their offers keep
+   * `is_active = true` and `popular_zones` keeps counting them.
+   *
+   * That is a leak on a public, unauthenticated endpoint, and it contradicts
+   * every other public surface in this API: `GET /offers`, the random hero, the
+   * business list and the review feeds all resolve through
+   * `publiclyVisibleBusiness()`. A caller would see a zone full of deals, tap
+   * it, and get an empty result from the list the same gate protects. So this
+   * read applies that gate even though the SQL does not, and the `businesses`
+   * join below exists for that half alone.
+   *
+   * Consequence, stated plainly: for a zone holding offers of an unapproved or
+   * deactivated business, this returns a LOWER `deals` than the RPC, and the
+   * zone can drop out of the top-N entirely. That is the intended reading, not a
+   * bug to be "fixed" by copying the RPC.
+   *
+   * The rest is verbatim, including the parts that look odd:
+   *
+   *   * `greatest(p_limit, 1)` — the RPC clamps, so `limit=0` yields ONE row
+   *     there. Mirrored instead of rejected, or the clamp would be dead code.
+   *   * The geo filter is all-or-nothing: `p_lat`, `p_lng` and `p_radius_km`
+   *     are independent nulls there, and the filter only engages when all three
+   *     are present. Same test as `buildFilters`.
+   *   * `zone <> ''` is not redundant with `zone is not null`: a location whose
+   *     zone was never filled in is stored as `''` as often as `NULL`, and
+   *     either way it is not a zone.
+   */
+  async listPopularZones(query: ListZonesQuery): Promise<PopularZoneRow[]> {
+    const filters: SQL[] = [
+      ...this.availableNow(),
+      isNotNull(businessLocations.zone),
+      sql`${businessLocations.zone} <> ''`,
+    ];
+
+    if (
+      query.lat !== undefined &&
+      query.lng !== undefined &&
+      query.radius_km !== undefined
+    ) {
+      // Same expression, same `extensions.` qualification and same
+      // `st_makepoint(longitude, latitude)` argument order as the radius filter
+      // in `buildFilters` — the generated `geog` column it reads is not in the
+      // Drizzle mirror, so raw qualified SQL is the only way in.
+      filters.push(
+        sql`extensions.st_dwithin(
+          business_locations.geog,
+          extensions.st_setsrid(extensions.st_makepoint(${query.lng}, ${query.lat}), 4326)::extensions.geography,
+          ${query.radius_km} * 1000.0
+        )`,
+      );
+    }
+
+    return (
+      this.db
+        .select({
+          // `string`, not `string | null`: `isNotNull(zone)` above already decided
+          // it, and the Drizzle type of the column cannot see that. The `sql` cast
+          // states the invariant the WHERE clause enforces instead of widening the
+          // contract to admit the `null` the query can never return.
+          zone: sql<string>`${businessLocations.zone}`,
+          deals: sql<string | number>`count(*)::bigint`,
+        })
+        .from(offers)
+        // Present only so `publiclyVisibleBusiness()` — which correlates against
+        // `businesses.id` — has a `businesses` row to correlate to. See the
+        // divergence note above.
+        .innerJoin(businesses, eq(offers.business_id, businesses.id))
+        .innerJoin(
+          businessLocations,
+          eq(offers.business_location_id, businessLocations.id),
+        )
+        .where(and(...filters))
+        .groupBy(businessLocations.zone)
+        // `order by deals desc, l.zone` verbatim — with the alias spelled as the
+        // expression it stands for, because Drizzle's object-form `select()` keys
+        // are the JS result mapping and NOT SQL aliases: `deals: sql\`count(*)\``
+        // emits `count(*)` with no `as deals`, and an `order by deals` against that
+        // is a 42703 (verified by running it, not by reading the docs). The second
+        // key is the group key, so a tie on `deals` resolves deterministically
+        // instead of in whatever order the hash aggregate happened to emit.
+        .orderBy(desc(sql`count(*)::bigint`), asc(businessLocations.zone))
+        // The RPC's `limit greatest(p_limit, 1)`. Applied in JS rather than as
+        // `sql\`greatest(...)\`` because Drizzle's `.limit()` takes a bound value
+        // and not a SQL expression, and because the two are the same number for
+        // every value that can reach here: `ListZonesQuerySchema` defaults `limit`
+        // and rejects a non-integer, so it is never null, never NaN, and
+        // `greatest(x, 1)` is `Math.max(x, 1)`. The clamp is the point — it is
+        // what makes `limit=0` return one row on both surfaces instead of none.
+        .limit(Math.max(query.limit, 1))
+    );
   }
 
   private buildFilters(query: ListOffersQuery): SQL[] {

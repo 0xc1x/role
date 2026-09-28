@@ -62,6 +62,12 @@ export async function seedBusiness(
  * override them because the geo path of `GET /offers` is a function of these two
  * columns (through the generated `geog`), and one shared coordinate would make
  * every location equidistant from every search point.
+ *
+ * `zone` is a three-state override on purpose: pass a string for a labelled
+ * location, `null` for "never filled in" and `''` for "filled in with nothing".
+ * `popular_zones` filters those last two out with two DIFFERENT predicates
+ * (`zone is not null` and `zone <> ''`), so a spec that cannot produce both
+ * cannot prove either.
  */
 export async function seedLocation(
   db: TestDatabase,
@@ -71,6 +77,7 @@ export async function seedLocation(
     is_active?: boolean;
     latitude?: string;
     longitude?: string;
+    zone?: string | null;
   } = {},
 ) {
   const [row] = await db
@@ -82,6 +89,7 @@ export async function seedLocation(
       is_active: overrides.is_active ?? true,
       latitude: overrides.latitude ?? '-33.45',
       longitude: overrides.longitude ?? '-70.66',
+      zone: overrides.zone ?? null,
     })
     .returning();
   if (!row) throw new Error('seedLocation falló');

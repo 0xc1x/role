@@ -14,7 +14,11 @@ import {
   seedOffer,
   seedProfile,
 } from './seed';
-import { coupons, deviceTokens } from '../src/database/schema';
+import {
+  coupons,
+  deviceTokens,
+  businessLocations,
+} from '../src/database/schema';
 
 /**
  * E2E marketplace (auth → oferta → orden → recogida → review → payout).
@@ -204,6 +208,88 @@ describe('Marketplace e2e', () => {
   test('ofertas públicas incluyen la seed', async () => {
     const res = await api().get('/api/v1/offers').expect(200);
     expect(res.body.data.map((o: { id: string }) => o.id)).toContain(offerId);
+  });
+
+  test('GET /offers/zones resuelve por HTTP y devuelve deals numérico', async () => {
+    // The point of doing this over HTTP and not in the controller spec: Nest
+    // matches routes in DECLARATION order, and `@Get(':id')` is
+    // `ParseUUIDPipe`d. If `zones` were ever declared below it, this is the test
+    // that fails — a unit spec calling `controller.listZones()` directly cannot
+    // see the router at all, which is exactly how that mistake ships green.
+    const zone = `e2e-centro-${randomUUID().slice(0, 8)}`;
+    await ctx.db
+      .update(businessLocations)
+      .set({ zone })
+      .where(eq(businessLocations.id, locationId));
+
+    const res = await api().get('/api/v1/offers/zones').expect(200);
+    // A bare array, NOT a 400 from the uuid pipe and not a 404.
+    expect(Array.isArray(res.body)).toBe(true);
+
+    const row = (res.body as Array<{ zone: string; deals: number }>).find(
+      (r) => r.zone === zone,
+    );
+    expect(row).toBeDefined();
+    expect(row!.deals).toBeGreaterThan(0);
+    // A JSON number, not `"7"`: postgres.js hands back `int8` as a string and the
+    // mapper is what makes this a number. A string here would be invisible to
+    // every other assertion in this file and would break the mobile chip.
+    expect(typeof row!.deals).toBe('number');
+
+    // The query params are the RPC's, reached through validation. Searched from
+    // (0, 0) with a 100 m radius the seeded location in Santiago is thousands of
+    // km away, so the zone drops out: `limit=1` caps, it does not manufacture a
+    // row, and an empty array here can only mean the radius filter ran.
+    const far = await api()
+      .get('/api/v1/offers/zones?lat=0&lng=0&radius_km=0.1&limit=1')
+      .expect(200);
+    expect(Array.isArray(far.body)).toBe(true);
+    expect(far.body).toEqual([]);
+
+    // The same request from the location's OWN coordinates brings it back, which
+    // is what makes the assertion above about distance and not about the zone
+    // being unlistable.
+    const [here] = await ctx.db
+      .select({
+        latitude: businessLocations.latitude,
+        longitude: businessLocations.longitude,
+      })
+      .from(businessLocations)
+      .where(eq(businessLocations.id, locationId));
+    const near = await api()
+      .get(
+        `/api/v1/offers/zones?lat=${here!.latitude}&lng=${here!.longitude}&radius_km=2`,
+      )
+      .expect(200);
+    expect((near.body as Array<{ zone: string }>).map((r) => r.zone)).toContain(
+      zone,
+    );
+
+    // `limit=0` is clamped to one row by `greatest(p_limit, 1)`, not rejected and
+    // not emptied: an empty array here would mean the clamp was turned into a
+    // validation, and a 400 would mean it was rejected outright.
+    const zero = await api().get('/api/v1/offers/zones?limit=0').expect(200);
+    expect(zero.body).toHaveLength(1);
+
+    // A non-integer limit IS rejected, so the clamp is not a free pass for junk.
+    await api().get('/api/v1/offers/zones?limit=1.5').expect(400);
+  });
+
+  test('GET /categories trae active_count numérico y 0 para una vacía', async () => {
+    const category = await seedCategory(
+      ctx.db,
+      `E2E ${randomUUID().slice(0, 6)}`,
+    );
+    const res = await api().get('/api/v1/categories').expect(200);
+    const data = res.body.data as Array<{ id: string; active_count?: number }>;
+    const row = data.find((c) => c.id === category.id);
+    expect(row).toBeDefined();
+    // Present, a NUMBER, and a real zero — not absent and not null. The API
+    // always emits it on the list, whatever the category holds.
+    expect(row!.active_count).toBeDefined();
+    expect(row!.active_count).not.toBeNull();
+    expect(typeof row!.active_count).toBe('number');
+    expect(row!.active_count).toBe(0);
   });
 
   test('consumer crea orden y descuenta stock', async () => {

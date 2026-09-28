@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
-import type { ListOffersQuery } from '@0xc1x/role-commons';
+import type { ListOffersQuery, ListZonesQuery } from '@0xc1x/role-commons';
 import { createTestDb, type TestDbContext } from '../../../test/db';
 import {
   seedBusiness,
@@ -10,7 +11,7 @@ import {
   seedOrder,
   seedProfile,
 } from '../../../test/seed';
-import { offers } from '../../database/schema';
+import { businessModeration, offers } from '../../database/schema';
 import {
   distanceKmSql,
   offerListOrderBy,
@@ -920,5 +921,346 @@ describe('OffersRepository — geo ejecutado (PostGIS real)', () => {
     // `st_makepoint(longitude, latitude)`, X first: a swapped generation
     // expression would mirror the point and this would be false.
     expect(probe[0]!.same_as_lng_lat).toBe(true);
+  });
+});
+
+// ─── `public.popular_zones` (ADR-0008) ──────────────────────────────────────
+//
+// The database is per FILE, so every test above shares it with these, and the
+// `limit` of `popular_zones` is a GLOBAL top-N. Two consequences drive the
+// shape of this block:
+//
+//   * Every zone name is unique per test. Asserting "the result is exactly
+//     [a, b, c]" would be a claim about rows another test created.
+//   * Every count/absence assertion asks for `limit: 500` and then looks its own
+//     zones up, instead of asserting a total. `limit: 1` is tested separately,
+//     where the only claim is the row COUNT — which is 1 whatever it contains.
+//
+// The alternative (an exclusive database per RPC, as
+// `business-completed-orders-count.spec.ts` has) would make the assertions
+// shorter, but it splits the repository's spec across two files that each have
+// to re-seed the same fixture, and a global top-N is exactly the kind of thing
+// that deserves its assertions written the hard way once.
+describe('OffersRepository.listPopularZones (mirror of popular_zones)', () => {
+  const HOUR = 3_600_000;
+
+  /** A zone name no other test in this file can produce. */
+  const zone = (label: string) => `zt-${label}-${randomUUID().slice(0, 8)}`;
+
+  /**
+   * The same origin and the same four displacements the `GET /offers` geo block
+   * uses, so the numbers below are already established in this file:
+   *
+   *   origin  0.000 km
+   *   nearN   1.109124 km   0.01 deg north
+   *   nearE   0.929759 km   0.01 deg east
+   *   farN   55.454012 km   0.50 deg north
+   */
+  const ORIGIN = { lat: -33.45, lng: -70.66 };
+  const SPOTS = {
+    origin: { latitude: '-33.45', longitude: '-70.66' },
+    nearN: { latitude: '-33.44', longitude: '-70.66' },
+    nearE: { latitude: '-33.45', longitude: '-70.65' },
+    farN: { latitude: '-32.95', longitude: '-70.66' },
+  } as const;
+
+  /** Approved business + one location carrying `zone`, at `coords` if given. */
+  async function placeIn(
+    zoneName: string,
+    coords?: { latitude: string; longitude: string },
+  ) {
+    const owner = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner);
+    const loc = await seedLocation(ctx.db, biz.id, {
+      zone: zoneName,
+      ...coords,
+    });
+    return { zone: zoneName, bizId: biz.id, locationId: loc.id };
+  }
+
+  /** One reservable offer in `locationId`, `count` of them. */
+  async function offersIn(
+    bizId: string,
+    locationId: string,
+    count: number,
+    overrides: { is_active?: boolean; stock?: number } = {},
+  ) {
+    const rows = [];
+    for (let i = 0; i < count; i++) {
+      rows.push(
+        await seedOffer(ctx.db, bizId, locationId, {
+          stock: overrides.stock,
+          is_active: overrides.is_active,
+        }),
+      );
+    }
+    return rows;
+  }
+
+  /** Every zone, then only the ones this test created. */
+  async function zonesIn(
+    mine: string[],
+    query: Partial<ListZonesQuery> = {},
+  ): Promise<Array<{ zone: string; deals: number }>> {
+    const rows = await repo.listPopularZones({ limit: 500, ...query });
+    return rows
+      .filter((r) => mine.includes(r.zone))
+      .map((r) => ({ zone: r.zone, deals: Number(r.deals) }));
+  }
+
+  test('counts reservable offers per zone, ordered by deals desc then zone', async () => {
+    // The labels sort aaa < bbb < ccc and the counts are 1 < 5 < 2, so
+    // alphabetical order and `deals desc` order DISAGREE on all three
+    // positions. The returned list can therefore only be one of the two, which
+    // is what makes this an assertion about the first sort key instead of an
+    // assertion that three numbers happen to be right.
+    const aaa = zone('aaa');
+    const bbb = zone('bbb');
+    const ccc = zone('ccc');
+    const a = await placeIn(aaa);
+    const b = await placeIn(bbb);
+    const c = await placeIn(ccc);
+    await offersIn(a.bizId, a.locationId, 1);
+    await offersIn(b.bizId, b.locationId, 5);
+    await offersIn(c.bizId, c.locationId, 2);
+
+    expect(aaa < bbb && bbb < ccc).toBe(true);
+    const rows = await zonesIn([aaa, bbb, ccc]);
+    expect(rows).toEqual([
+      { zone: bbb, deals: 5 },
+      { zone: ccc, deals: 2 },
+      { zone: aaa, deals: 1 },
+    ]);
+    // And explicitly NOT the alphabetical reading of the same three rows.
+    expect(rows.map((r) => r.zone)).not.toEqual([aaa, bbb, ccc]);
+  });
+
+  test('breaks a deals tie on the zone name', async () => {
+    // Two zones with the SAME count: without `l.zone` as the second sort key
+    // their relative order is whatever the hash aggregate emitted, which is not
+    // a promise this endpoint can make to a chip row.
+    const alpha = zone('zzz-alpha');
+    const beta = zone('aaa-beta');
+    const a = await placeIn(alpha);
+    const b = await placeIn(beta);
+    await offersIn(a.bizId, a.locationId, 3);
+    await offersIn(b.bizId, b.locationId, 3);
+
+    // `zt-aaa-beta…` sorts BEFORE `zt-zzz-alpha…`, so this is the reverse of the
+    // order they were created in and of the order the labels read.
+    expect(beta < alpha).toBe(true);
+    const rows = await zonesIn([alpha, beta]);
+    expect(rows).toEqual([
+      { zone: beta, deals: 3 },
+      { zone: alpha, deals: 3 },
+    ]);
+  });
+
+  test('a zone with no reservable offers does not appear', async () => {
+    const soldOut = zone('sold-out');
+    const paused = zone('paused');
+    const closed = zone('closed-window');
+    const noOffers = zone('no-offers');
+    const control = zone('control');
+
+    const a = await placeIn(soldOut);
+    await offersIn(a.bizId, a.locationId, 1, { stock: 0 });
+    const b = await placeIn(paused);
+    await offersIn(b.bizId, b.locationId, 1, { is_active: false });
+    const c = await placeIn(closed);
+    const expired = await seedOffer(ctx.db, c.bizId, c.locationId);
+    await ctx.db
+      .update(offers)
+      .set({ pickup_end: new Date(Date.now() - HOUR) })
+      .where(eq(offers.id, expired.id));
+    // A location with a zone and NO offers at all: the RPC inner-joins, so it
+    // cannot produce a row.
+    await placeIn(noOffers);
+    // The control exists so the exclusions above are not vacuous: if the gate
+    // were dropping everything, this would be missing too.
+    const d = await placeIn(control);
+    await offersIn(d.bizId, d.locationId, 1);
+
+    const mine = [soldOut, paused, closed, noOffers, control];
+    const rows = await zonesIn(mine);
+    expect(rows).toEqual([{ zone: control, deals: 1 }]);
+  });
+
+  test('excludes a NULL zone and an empty-string zone, and is not vacuous', async () => {
+    // Both are separate predicates in the SQL (`is not null` and `<> ''`), so the
+    // spec has to produce BOTH states: a location whose zone was never filled in
+    // is `NULL`, one that was filled in and cleared is `''`.
+    const owner = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner);
+    const nullZone = await seedLocation(ctx.db, biz.id, { zone: null });
+    const emptyZone = await seedLocation(ctx.db, biz.id, { zone: '' });
+    const control = await placeIn(zone('zone-control'));
+    await offersIn(biz.id, nullZone.id, 1);
+    await offersIn(biz.id, emptyZone.id, 1);
+    await offersIn(control.bizId, control.locationId, 1);
+
+    // Non-vacuity, part 1: both offers are PUBLICLY RESERVABLE. The public offer
+    // list is the surface that shares this gate, so if these rows were invisible
+    // for any reason other than the zone predicates, the exclusion below would
+    // prove nothing.
+    const visible = await repo.findMany({
+      page: 1,
+      limit: 50,
+      business_id: biz.id,
+    });
+    expect(visible.items).toHaveLength(2);
+    expect(visible.total).toBe(2);
+
+    // Non-vacuity, part 2: and they DO aggregate, into no zone at all.
+    const all = await repo.listPopularZones({ limit: 500 });
+    const rawNull = all.filter((r) => r.zone === '' || r.zone === null);
+    expect(rawNull).toEqual([]);
+
+    const rows = await zonesIn([control.zone]);
+    expect(rows).toEqual([{ zone: control.zone, deals: 1 }]);
+  });
+
+  test('the radius filter runs against real coordinates (PostGIS executed)', async () => {
+    const names = {} as Record<keyof typeof SPOTS, string>;
+    const ids = {} as Record<keyof typeof SPOTS, string>;
+    for (const [spot, coords] of Object.entries(SPOTS) as [
+      keyof typeof SPOTS,
+      { latitude: string; longitude: string },
+    ][]) {
+      names[spot] = zone(spot);
+      const place = await placeIn(names[spot], coords);
+      ids[spot] = place.locationId;
+      await offersIn(place.bizId, place.locationId, 1);
+    }
+    const mine = Object.values(names);
+
+    // 2 km admits origin + nearN (1.109) + nearE (0.930) and rejects farN
+    // (55.45). The boundary is a generous multiple of the seed, not a computed
+    // geodesic: these four are ~30x apart from each other, so no tolerance
+    // choice can make a 2 km radius ambiguous. The exact-metre boundary case
+    // belongs to the `GET /offers` spec, which already asserts it against
+    // `st_distance`; repeating it here would test the same PostGIS call twice.
+    const inside = await zonesIn(mine, { ...ORIGIN, radius_km: 2 });
+    expect(inside.map((r) => r.zone).sort()).toEqual(
+      [names.origin, names.nearN, names.nearE].sort(),
+    );
+
+    // A radius only the searched point itself reaches: 0.1 km admits `origin` at
+    // 0 km and nothing else, so this also proves the filter is measured, not
+    // applied as a boolean "are coordinates present".
+    const tight = await zonesIn(mine, { ...ORIGIN, radius_km: 0.1 });
+    expect(tight.map((r) => r.zone)).toEqual([names.origin]);
+
+    // No radius at all: the same four rows, unfiltered.
+    expect(await zonesIn(mine)).toHaveLength(4);
+
+    // All-or-nothing, exactly as the RPC's `p_lat is null or p_lng is null or
+    // p_radius_km is null` reads. A search point WITHOUT a radius must not
+    // silently become a 0 km radius, which would answer nothing.
+    expect(
+      await zonesIn(mine, { lat: ORIGIN.lat, lng: ORIGIN.lng }),
+    ).toHaveLength(4);
+    expect(await zonesIn(mine, { lat: ORIGIN.lat })).toHaveLength(4);
+    expect(await zonesIn(mine, { lng: ORIGIN.lng })).toHaveLength(4);
+    expect(await zonesIn(mine, { lat: ORIGIN.lat, radius_km: 2 })).toHaveLength(
+      4,
+    );
+
+    // Moving the origin reverses which end of the pair survives: searched from
+    // `farN`, `farN` is at 0 km and `origin` is 55 km away.
+    const fromFar = await zonesIn(mine, {
+      lat: Number(SPOTS.farN.latitude),
+      lng: Number(SPOTS.farN.longitude),
+      radius_km: 2,
+    });
+    expect(fromFar.map((r) => r.zone)).toEqual([names.farN]);
+  });
+
+  test('the limit applies, and greatest(p_limit, 1) returns one row at limit=0', async () => {
+    const a = await placeIn(zone('lim-a'));
+    const b = await placeIn(zone('lim-b'));
+    const c = await placeIn(zone('lim-c'));
+    await offersIn(a.bizId, a.locationId, 1);
+    await offersIn(b.bizId, b.locationId, 1);
+    await offersIn(c.bizId, c.locationId, 1);
+
+    // Row COUNT only, never which row: the top-N is global across this file's
+    // database, so the identity of the single survivor is not this test's to
+    // claim. That it is one of the three zones is asserted separately below.
+    const one = await repo.listPopularZones({ limit: 1 });
+    expect(one).toHaveLength(1);
+
+    // `limit greatest(p_limit, 1)`: 0 returns ONE row on the RPC, not zero and
+    // not an error. Rejecting it in the schema instead would have made the
+    // clamp unreachable and this assertion impossible to write.
+    const zero = await repo.listPopularZones({ limit: 0 });
+    expect(zero).toHaveLength(1);
+    // And a negative value clamps the same way rather than reaching Postgres as
+    // `limit -5`, which is a 42601 there.
+    const negative = await repo.listPopularZones({ limit: -5 });
+    expect(negative).toHaveLength(1);
+
+    const all = await repo.listPopularZones({ limit: 500 });
+    expect(all.length).toBeGreaterThanOrEqual(3);
+  });
+
+  test('DIVERGENCE: an offer of an unapproved business is NOT counted, and the RPC counts it', async () => {
+    // The one behaviour that makes this endpoint DIFFERENT from the SQL, pinned
+    // as executable fact on both sides.
+    const z = zone('gated');
+    const place = await placeIn(z);
+    const seeded = await seedOffer(ctx.db, place.bizId, place.locationId);
+
+    // Baseline: the offer counts while its business is approved.
+    expect(await zonesIn([z])).toEqual([{ zone: z, deals: 1 }]);
+
+    // Now the business stops being publicly visible. Nothing here touches the
+    // offer: `enforce_offer_business_availability` is a BEFORE INSERT/UPDATE
+    // trigger on `offers`, and no trigger runs in the other direction when a
+    // business is suspended. So the offer row keeps `is_active = true` — which
+    // is exactly the state production is in, and the state the RPC reads.
+    await ctx.db
+      .update(businessModeration)
+      .set({ verification_status: 'pending' })
+      .where(eq(businessModeration.business_id, place.bizId));
+
+    // Asserted directly, because everything below depends on it: if the offer
+    // were NOT still active, the exclusion that follows would prove nothing
+    // about moderation — it would be the `is_active` filter doing the work, and
+    // this test would keep passing with the gate deleted.
+    const [raw] = await ctx.db
+      .select({ is_active: offers.is_active, stock: offers.stock })
+      .from(offers)
+      .where(eq(offers.id, seeded.id));
+    expect(raw?.is_active).toBe(true);
+    expect(raw?.stock).toBeGreaterThan(0);
+    // And its pickup window is still open, so the third condition is satisfied
+    // too. Only the business gate is left to exclude it.
+    const [window] = await ctx.db
+      .select({ pickup_end: offers.pickup_end })
+      .from(offers)
+      .where(eq(offers.id, seeded.id));
+    expect(window!.pickup_end.getTime()).toBeGreaterThan(Date.now());
+
+    // The API: the zone is gone.
+    expect(await zonesIn([z])).toEqual([]);
+
+    // The RPC: the zone is NOT gone. The function's own body, run verbatim, so
+    // the divergence is measured instead of asserted from a comment — and so
+    // this test fails if somebody "fixes" the mirror by copying the SQL.
+    const rpc = await ctx.db.execute<{ zone: string; deals: string }>(sql`
+      select l.zone, count(*)::bigint as deals
+        from offers o
+        join business_locations l on l.id = o.business_location_id
+       where o.is_active
+         and o.stock > 0
+         and o.pickup_end > now()
+         and l.zone is not null
+         and l.zone <> ''
+       group by l.zone
+      having l.zone = ${z}
+    `);
+    expect(rpc).toHaveLength(1);
+    expect(Number(rpc[0]!.deals)).toBe(1);
   });
 });

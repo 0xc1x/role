@@ -1,9 +1,26 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, ilike, isNull, ne, type SQL } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gt,
+  ilike,
+  isNull,
+  ne,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
+import { publiclyVisibleBusiness } from '../../database/business-availability';
 import { DRIZZLE } from '../../database/database.tokens';
 import { escapeLike } from '../../common/utils/like';
-import { categories } from '../../database/schema';
+import {
+  businesses,
+  categories,
+  offerCategories,
+  offers,
+} from '../../database/schema';
 
 /** Row as stored in Postgres (Date timestamps). */
 export type CategoryRow = typeof categories.$inferSelect;
@@ -33,9 +50,22 @@ export type ListCategoriesFilter = {
 };
 
 export type ListCategoriesResult = {
-  rows: CategoryRow[];
+  rows: CategoryListRow[];
   total: number;
 };
+
+/**
+ * A category plus its `active_count`, the `active_offer_category_counts`
+ * aggregate.
+ *
+ * `active_count` is `string | number` for the same reason `PopularZoneRow.deals`
+ * is: the SQL keeps the RPC's `count(*)` (a `bigint`) and postgres.js returns
+ * `int8` as a string — verified against the test database, not assumed. It is
+ * `coalesce(..., 0)`d in SQL, so it is never null: a category nobody has an
+ * active offer for reports `0`, which is an answer, where `null` would only mean
+ * "this read did not count".
+ */
+export type CategoryListRow = CategoryRow & { active_count: string | number };
 
 /**
  * DB executor: root client or an open transaction.
@@ -155,6 +185,35 @@ export class CategoriesRepository {
       .where(and(isNull(categories.deleted_at), eq(categories.active, true)));
   }
 
+  /**
+   * The public/admin list, each row carrying `active_count` — the
+   * `active_offer_category_counts` aggregate of ADR-0008.
+   *
+   * ─── DELIBERATE DIVERGENCE FROM THE RPC: the moderation gate ─────────────
+   *
+   * The RPC's subquery is `where o.is_active and o.stock > 0 and
+   * o.pickup_end > now()` — no business condition — and it is `security invoker`
+   * over an `offers` policy that is `USING (is_active = true)` and nothing else
+   * (supabase/migrations/20260507193325_create_offers_and_coupons.sql). So it
+   * counts offers of a business that is deactivated or no longer
+   * moderation-approved: the write-time `enforce_offer_business_availability`
+   * trigger is the only thing keeping those rows out, and nothing cascades a
+   * later suspension back into `offers.is_active`.
+   *
+   * This read applies `publiclyVisibleBusiness()` anyway. `GET /categories` is
+   * public, and a chip that says "12 deals" for a suspended merchant sends the
+   * caller to `GET /offers` — which does apply the gate — to find nothing. The
+   * consequence is that this count is LOWER than the RPC's for a category whose
+   * offers belong to an unapproved business, and that is the intended reading.
+   *
+   * A LEFT JOIN over a pre-aggregated subquery, not a join on `offer_categories`
+   * and not a correlated scalar subquery, for one reason: an offer can carry
+   * several categories, so joining the raw join table would emit one row per
+   * (category, offer) pair and inflate BOTH the count and the page — `limit` and
+   * `offset` would apply to duplicated rows. Aggregating first makes the
+   * subquery one row per category, so the LEFT JOIN cannot multiply and the
+   * pagination above it stays honest.
+   */
   async list(filter: ListCategoriesFilter): Promise<ListCategoriesResult> {
     const offset = (filter.page - 1) * filter.limit;
     const filters: SQL[] = [isNull(categories.deleted_at)];
@@ -173,9 +232,26 @@ export class CategoriesRepository {
       .from(categories)
       .where(where);
 
+    const activeCounts = this.activeOfferCounts();
+
     const rows = await this.db
-      .select()
+      .select({
+        id: categories.id,
+        name: categories.name,
+        description: categories.description,
+        emoji: categories.emoji,
+        slug: categories.slug,
+        image_url: categories.image_url,
+        active: categories.active,
+        created_at: categories.created_at,
+        updated_at: categories.updated_at,
+        deleted_at: categories.deleted_at,
+        active_count: sql<
+          string | number
+        >`coalesce(${activeCounts.active_count}, 0)::bigint`,
+      })
       .from(categories)
+      .leftJoin(activeCounts, eq(categories.id, activeCounts.category_id))
       .where(where)
       .orderBy(desc(categories.created_at))
       .limit(filter.limit)
@@ -185,6 +261,44 @@ export class CategoriesRepository {
       rows,
       total: totalRow?.count ?? 0,
     };
+  }
+
+  /**
+   * `active_offer_category_counts`' inner aggregate, as a derived table.
+   *
+   * Column-for-column the RPC's subquery, plus the moderation gate documented on
+   * `list()`. Kept as its own method because it is a self-contained subquery
+   * with a security decision inside it, not a fragment of the outer query.
+   */
+  private activeOfferCounts() {
+    return (
+      this.db
+        .select({
+          category_id: offerCategories.category_id,
+          // The `.as()` is mandatory, not cosmetic: Drizzle cannot reference a raw
+          // SQL field of a subquery without one and throws at build time
+          // ("it doesn't have an alias declared"), and the outer select has to read
+          // this value to `coalesce` it.
+          active_count: sql<string | number>`count(*)::bigint`.as(
+            'active_count',
+          ),
+        })
+        .from(offerCategories)
+        .innerJoin(offers, eq(offerCategories.offer_id, offers.id))
+        // Joined only for `publiclyVisibleBusiness()`, which correlates against
+        // `businesses.id`.
+        .innerJoin(businesses, eq(offers.business_id, businesses.id))
+        .where(
+          and(
+            eq(offers.is_active, true),
+            publiclyVisibleBusiness(),
+            gt(offers.stock, 0),
+            gt(offers.pickup_end, sql`now()`),
+          ),
+        )
+        .groupBy(offerCategories.category_id)
+        .as('active_offer_counts')
+    );
   }
 
   async update(

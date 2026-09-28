@@ -124,6 +124,30 @@ export const PatchOfferSchema = UpdateOfferSchema;
 
 export const OfferListResponseSchema = PaginatedDataSchema(OfferSchema);
 
+// ─── `GET /offers/zones` — espejo de `public.popular_zones` ────────────────
+
+/**
+ * One row of `public.popular_zones`: a `business_locations.zone` and how many
+ * reservable offers sit in it.
+ *
+ * `zone` is `.min(1)` and not `.nullable()` because the RPC already filters
+ * `zone is not null and zone <> ''` in SQL. A blank or missing zone is a
+ * location that has not been placed on the map yet, and it is not a zone with
+ * zero deals — emitting it as one would put an empty chip in the UI.
+ */
+export const PopularZoneSchema = z.object({
+	zone: z.string().min(1),
+	/** `count(*)` — the RPC's `deals bigint`, as a number like every count here. */
+	deals: z.number().int().nonnegative(),
+});
+
+/**
+ * `GET /offers/zones` response: the RPC's result set, UNPAGINATED — most deals
+ * first, then zone name ascending. Not a `PaginatedDataSchema`, because the RPC
+ * returns a top-N and never a total.
+ */
+export const PopularZonesResponseSchema = z.array(PopularZoneSchema);
+
 // ─── Embeds de la proyección "oferta con negocio" ───────────────────────────
 
 export const OfferBusinessEmbedSchema = z.object({

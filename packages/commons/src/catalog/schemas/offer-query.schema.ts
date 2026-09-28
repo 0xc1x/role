@@ -49,3 +49,37 @@ export const ListOffersQuerySchema = PaginationQuerySchema.extend({
 		.optional()
 		.default("pickup_end"),
 });
+
+/**
+ * Query contract of `GET /offers/zones` — the parameters of
+ * `public.popular_zones`, same names and same semantics, so a consumer can move
+ * a mobile query to this endpoint without translating it (ADR-0008).
+ *
+ * NOT a `PaginationQuerySchema` extension: the RPC takes an explicit `p_limit`
+ * and returns a top-N result set, not a page of a total. It has no `page` and
+ * no `meta`, and pretending otherwise would make `total` mean something this
+ * endpoint never computes.
+ */
+export const ListZonesQuerySchema = z.object({
+	lat: z.coerce.number().min(-90).max(90).optional(),
+	lng: z.coerce.number().min(-180).max(180).optional(),
+	/**
+	 * NO default, unlike {@link ListOffersQuerySchema}: the RPC declares
+	 * `p_radius_km double precision default null`, and defaulting it here would
+	 * silently turn a location-less request into a 10 km search.
+	 */
+	radius_km: z.coerce.number().positive().max(100).optional(),
+	/**
+	 * `p_limit integer default 5`, and deliberately NOT `.positive()`: the RPC
+	 * ends in `limit greatest(p_limit, 1)`, so `limit=0` (or below) returns ONE
+	 * row there instead of failing. The API mirrors the clamp in SQL rather than
+	 * rejecting the value, because the point of the endpoint is to answer the
+	 * same question the mobile RPC answers.
+	 *
+	 * No upper bound either, and that is safe: the result is bounded by the
+	 * number of distinct `business_locations.zone` values, so an absurd `limit`
+	 * costs a group-by over an already-bounded set and not a scan of anything
+	 * larger.
+	 */
+	limit: z.coerce.number().int().optional().default(5),
+});
