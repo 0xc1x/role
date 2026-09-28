@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import type { Server } from 'node:http';
 import { eq } from 'drizzle-orm';
+import type { Express } from 'express';
 import { SignJWT } from 'jose';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter';
 import { createTestDb, type TestDbContext } from './db';
 import {
   seedBusiness,
@@ -53,6 +56,57 @@ async function token(sub: string, email: string): Promise<string> {
     .sign(new TextEncoder().encode(JWT_SECRET));
 }
 
+/**
+ * One distinct `X-Forwarded-For` per request, from a random /64 per run.
+ *
+ * `ThrottlerGuard` keys on `req.ip`, and this file makes roughly forty requests
+ * through one socket. Every one of them used to arrive from the same address, so
+ * the suite spent its own throttle budget: with `REDIS_URL` set — which
+ * `apps/api/.env` does — the run exhausted the `orders` bucket partway through
+ * and thirteen tests came back `429 Too Many Requests`, growing on every re-run
+ * because the counters sit in Redis under a 60s TTL.
+ *
+ * CI got away with it by accident. That step sets only `TEST_DATABASE_URL`, so
+ * there is no Redis and `RedisThrottlerStorage` falls back to the in-memory map,
+ * which resets with the process. One service added to the workflow, or one
+ * developer with `REDIS_URL` exported, and the suite starts failing for a reason
+ * that has nothing to do with the code under test.
+ *
+ * Randomised per run rather than fixed, because a fixed address only hides the
+ * re-run problem: the second run inside the TTL window inherits the first run's
+ * budget and fails identically. `normalizeIp` masks a v6 address to its /64
+ * before it becomes a key, so one random /64 per run is 2^32 throttle namespaces
+ * and the remaining 64 bits stay free for the per-request sequence.
+ * `2001:db8::/32` is RFC 3847's documentation prefix.
+ */
+const RUN_PREFIX = `2001:db8:${randomUUID().slice(0, 4)}:${randomUUID().slice(0, 4)}`;
+let ipSequence = 0;
+function nextIp(): string {
+  ipSequence += 1;
+  return `${RUN_PREFIX}::${ipSequence.toString(16)}`;
+}
+
+/**
+ * Block until the throttler's storage can answer.
+ *
+ * Fails loudly rather than returning quietly, so a throttle backend that is
+ * genuinely broken reads as "the harness is not ready" and not as "the first
+ * assertion in the suite is wrong".
+ */
+async function waitForThrottleBackend(server: Server): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const res = await request(server).get('/api/v1/health');
+    if (res.status !== 500) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(
+    'app.e2e-spec: /health kept answering 500 after boot. RedisThrottlerStorage ' +
+      'builds its client with enableOfflineQueue: false, so the first request ' +
+      'through ThrottlerGuard races the connection — the harness is not ready, ' +
+      'and the next assertion is not the thing that is broken.',
+  );
+}
+
 beforeAll(async () => {
   ctx = await createTestDb();
   process.env.DATABASE_URL = ctx.connectionString;
@@ -70,8 +124,26 @@ beforeAll(async () => {
   }).compile();
 
   app = moduleFixture.createNestApplication();
+
+  // The two pieces of `main.ts` this suite's behaviour depends on, and that it
+  // never installed. Without `trust proxy`, `req.ip` ignores `X-Forwarded-For`
+  // and the per-run isolation below does nothing at all — the header would be
+  // sent, honoured by nothing, and every request would still arrive from one
+  // address. Production sets it, so setting it here is the faithful choice
+  // rather than a concession to the test.
+  (app.getHttpAdapter().getInstance() as Express).set('trust proxy', 1);
   app.setGlobalPrefix('api/v1');
+  app.useGlobalFilters(new AllExceptionsFilter());
   await app.init();
+
+  // `RedisThrottlerStorage` builds its client with `enableOfflineQueue: false`,
+  // so the first command after boot — which is the first request through
+  // `ThrottlerGuard` — is refused and the guard answers 500. This suite used to
+  // dodge that by accident: it spends several Postgres round trips seeding between
+  // `init()` and its first request, and the client is connected by then. Relying
+  // on that is how a race becomes a mystery, so it is waited out explicitly, on
+  // `/health` and not on a route this suite asserts on.
+  await waitForThrottleBackend(app.getHttpServer());
 
   consumerId = await seedProfile(ctx.db, `consumer-${randomUUID()}@t.cl`);
   await ctx.db.execute(
@@ -112,7 +184,28 @@ afterAll(async () => {
 });
 
 describe('Marketplace e2e', () => {
-  const api = () => request(app.getHttpServer());
+  /**
+   * Every verb here carries its own `X-Forwarded-For`, so none of the tests
+   * below had to change and none of them can forget.
+   *
+   * It has to be done per verb rather than on the supertest object: given a
+   * server, `request()` returns a `Test`, and `.set()` does not exist on one
+   * until a method has been chosen. A `.get(...)`-first chain would make the
+   * header a property of each call site, and the next verb someone reaches for
+   * would quietly not have it.
+   */
+  const api = () => {
+    const agent = request(app.getHttpServer());
+    const ip = <T extends { set(k: string, v: string): T }>(t: T) =>
+      t.set('X-Forwarded-For', nextIp());
+    return {
+      get: (url: string) => ip(agent.get(url)),
+      post: (url: string) => ip(agent.post(url)),
+      put: (url: string) => ip(agent.put(url)),
+      patch: (url: string) => ip(agent.patch(url)),
+      delete: (url: string) => ip(agent.delete(url)),
+    };
+  };
   let consumerToken = '';
   let ownerToken = '';
   let adminToken = '';
