@@ -1586,6 +1586,21 @@
         ]
       }
     },
+    "/api/v1/offers/zones": {
+      "get": {
+        "operationId": "OffersController_listZones",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Zones with their reservable-offer counts, most deals first then zone name"
+          }
+        },
+        "summary": "Popular zones by live offers (Explore chips)",
+        "tags": [
+          "Offers"
+        ]
+      }
+    },
     "/api/v1/offers/{id}": {
       "get": {
         "operationId": "OffersController_getById",
