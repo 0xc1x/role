@@ -1251,6 +1251,26 @@
         ]
       }
     },
+    "/api/v1/coupons/validate": {
+      "post": {
+        "operationId": "CouponsController_validate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Whether the code applies, and the final price"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pre-check a discount code for a checkout (advisory)",
+        "tags": [
+          "Coupons"
+        ]
+      }
+    },
     "/api/v1/coupons": {
       "get": {
         "operationId": "CouponsController_list",
