@@ -69,6 +69,20 @@ const EXPECTED: ReadonlyArray<readonly [string, string, string]> = [
   ['orders', 'offer_id', 'CASCADE'],
   ['orders', 'user_id', 'CASCADE'],
   ['payouts', 'business_id', 'CASCADE'],
+  // KNOWN MODELLING DIVERGENCE, same class as `marketing_preferences` above and
+  // for the same reason. Supabase holds
+  // `payment_methods_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+  // ON DELETE CASCADE`; the Drizzle mirror points at `profiles`, the closest
+  // thing it can name without a stub for a schema the harness does not create.
+  //
+  // Listed rather than hidden because this spec asserts BOTH directions: an
+  // unlisted foreign key in the test database is itself reported as drift, so
+  // adding the table to the mirror without adding it here would fail the suite
+  // for a reason that has nothing to do with the change. The observable
+  // difference is that the cascade follows a profile delete here and an
+  // auth-user delete in production — and nothing in this module's delete path
+  // depends on it, because removal is always a soft delete.
+  ['payment_methods', 'user_id', 'CASCADE'],
   ['push_notifications', 'template_id', 'NO ACTION'],
   ['push_sends', 'campaign_id', 'CASCADE'],
   ['push_sends', 'user_id', 'NO ACTION'],

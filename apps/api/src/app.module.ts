@@ -35,6 +35,7 @@ import { StoreModule } from './modules/store/store.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { MeModule } from './modules/me/me.module';
 import { SavedAddressesModule } from './modules/saved-addresses/saved-addresses.module';
+import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { SavedAddressesModule } from './modules/saved-addresses/saved-addresses.
     FavoritesModule,
     MeModule,
     SavedAddressesModule,
+    PaymentMethodsModule,
     NotificationsModule,
     PushNotificationsModule,
     StoreModule,

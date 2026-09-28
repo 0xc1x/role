@@ -192,7 +192,48 @@ export async function createTestDb(): Promise<TestDbContext> {
   //     repository here already does. See the MIRROR GAP note in
   //     src/database/schema/saved-addresses.ts.
   //
-  // All four are `if not exists` because the harness runs per spec file against
+  //  5. `payment_methods`. The tokenized-card table, read and written by mobile
+  //     through PostgREST and served by the API's owner-scoped routes. Same
+  //     shape of gap again, and the reason it is NOT a bare `create table` is
+  //     the two CHECKs, which are the only thing in the schema able to keep
+  //     `exp_month = 0`, `exp_month = 13` or a `last4` that is not four
+  //     characters out of the table:
+  //
+  //       payment_methods_exp_month_check   CHECK (exp_month >= 1 AND exp_month <= 12)
+  //       payment_methods_last4_check       CHECK (char_length(last4) = 4)
+  //
+  //     Drizzle cannot express a CHECK here without a schema-level `.check()`,
+  //     and a schema-level `.check()` is DDL that `drizzle-kit generate` would
+  //     emit for constraints production has held since
+  //     `20260822231809_commissions_payouts_payment_methods` — see the MIRROR
+  //     GAP note in src/database/schema/payment-methods.ts. So they are installed
+  //     here, in the harness's own DDL, and the payment-methods specs assert
+  //     they are really there: a harness that dropped them would let exactly the
+  //     bad rows production forbids into the test database and the suite would
+  //     be green.
+  //
+  //     `gateway_token` is declared because the COLUMN exists — the row is what
+  //     the database holds, and the PCI rule is a rule about the projection, not
+  //     about storage. What the specs pin is that it never reaches a response.
+  //
+  //     `idx_payment_methods_user` is installed with the table, and it is NOT
+  //     unique: production has no unique constraint on `(user_id)` and no
+  //     partial unique index on `is_default`, so the one-default rule is
+  //     enforced by the application alone. Making it unique here would leave the
+  //     harness STRICTER than production and hide the very race the set-default
+  //     transaction exists to close.
+  //
+  //     NO `updated_at` TRIGGER, deliberately and verified: no trigger maintains
+  //     `updated_at` on the live `public.payment_methods`. The only two
+  //     migrations that touch the table are the one that creates it and
+  //     `20260925155451_performance_advisors` (index + policy), and neither
+  //     creates a trigger — contrast `saved_addresses`, whose
+  //     `set_saved_addresses_updated_at` trigger IS a real object that this
+  //     mirror also omits. So the repository writes `updated_at` explicitly, and
+  //     giving the test database a trigger production does not have would let a
+  //     stale `updated_at` pass for the right reason.
+  //
+  // All five are `if not exists` because the harness runs per spec file against
   // a fresh database: the idempotence is there so a future mirror that DOES
   // carry them does not raise 42P07 or 42701 and take the whole suite down.
   await client.unsafe(`
@@ -252,9 +293,45 @@ export async function createTestDb(): Promise<TestDbContext> {
     );
     create index if not exists idx_saved_addresses_user
       on public.saved_addresses (user_id);
+
+    -- The tokenized-card table. Columns and types are the live ones; the two
+    -- CHECK constraints are the load-bearing part (see item 5 above) and are
+    -- inline here because Drizzle cannot carry them into this mirror.
+    --
+    -- gateway is written with the bare payment_gateway enum, which this
+    -- harness does have: the enums arrive with the drizzle/ mirror DDL.
+    -- user_id references public.profiles rather than auth.users, matching the
+    -- Drizzle mirror's own documented divergence -- auth.users does not exist
+    -- on a bare Postgres, which is the same reason the harness strips
+    -- REFERENCES auth.users out of the mirror DDL above.
+    --
+    -- No backticks in this comment on purpose: the SQL below lives inside a
+    -- JS template literal, so one of them would end the string.
+    create table if not exists public.payment_methods (
+      id uuid primary key default gen_random_uuid(),
+      user_id uuid not null references public.profiles (id) on delete cascade,
+      gateway payment_gateway not null default 'place_to_pay',
+      gateway_token text not null,
+      brand text not null,
+      last4 text not null,
+      exp_month int not null,
+      exp_year int not null,
+      holder_name text not null,
+      is_default boolean not null default false,
+      active boolean not null default true,
+      created_at timestamp with time zone not null default now(),
+      updated_at timestamp with time zone not null default now(),
+      deleted_at timestamp with time zone,
+      constraint payment_methods_exp_month_check
+        check (exp_month >= 1 and exp_month <= 12),
+      constraint payment_methods_last4_check
+        check (char_length(last4) = 4)
+    );
+    create index if not exists idx_payment_methods_user
+      on public.payment_methods (user_id);
   `);
 
-  //  5. `business_locations.geog` and its GIST index. Same class of gap, and the
+  //  6. `business_locations.geog` and its GIST index. Same class of gap, and the
   //     one that made the geo path of `GET /offers` untestable rather than
   //     merely untested: the radius filter (`extensions.st_dwithin`) and the
   //     `distance_km` projection (`extensions.st_distance`) both go through

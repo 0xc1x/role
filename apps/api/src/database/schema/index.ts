@@ -8,6 +8,7 @@ export * from './offers';
 export * from './offer-categories';
 export * from './orders';
 export * from './payouts';
+export * from './payment-methods';
 export * from './coupons';
 export * from './reviews';
 export * from './user-preferences';
@@ -61,6 +62,7 @@ import {
   pushTemplates,
 } from './push-notifications';
 import { payouts } from './payouts';
+import { paymentMethods } from './payment-methods';
 import {
   businessFinance,
   businessModeration,
@@ -85,6 +87,7 @@ export const schema = {
   userConsents,
   businessNotificationPreferences,
   payouts,
+  paymentMethods,
   categories,
   slides,
   tips,
