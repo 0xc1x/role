@@ -21,7 +21,8 @@ import {
  *
  * 1. `businesses` is read by `anon`. It is the only table in the ledger where an
  *    unauthenticated browser holds a grant, so the public catalog is defined by
- *    a policy whose entire predicate is `is_active = true`.
+ *    exactly one policy — and that policy now carries the moderation gate, which
+ *    makes it the most load-bearing `USING` clause in the product.
  *
  * 2. `businesses` is written by `authenticated`, and the write is COLUMN-SCOPED.
  *    `20260926010336_businesses_client_write_grants.sql` restores the client
@@ -60,27 +61,43 @@ import {
  * a harness grant, and `PLATFORM_GRANTS_AFTER_REPLAY` in
  * `test/supabase-platform.ts` stays empty.
  *
- * ─── The invariant nobody owns: what makes the public catalog trustworthy ─────
+ * ─── The invariant: what makes the public catalog trustworthy ─────────────
  *
- * `anon` sees a business if and only if `is_active = true`. That is the whole
- * predicate. It says NOTHING about moderation, and no policy anywhere in the
- * ledger says otherwise.
+ * `anon` sees a business if and only if it is `is_active = true` AND its
+ * moderation state is `approved`. Two conditions, and the second one is a
+ * policy rather than a column grant.
  *
- * The product meaning of `is_active` is "approved and published", because
- * `trg_default_business_inactive` forces it false on insert and
- * `trg_sync_business_verification` re-derives it from `verification_status`. So
- * today the catalog is correct by TRIGGER, not by POLICY. This file measures
- * what happens when a row is active and not approved, and the answer is
- * uncomfortable and is asserted rather than smoothed over:
+ * This file used to be about the absence of that second condition, and the
+ * history is worth keeping because the shape of the hole is the reason the fix
+ * is shaped the way it is. `is_active` is a DERIVED COPY: `trg_default_business_
+ * inactive` forces it false on insert, and `trg_sync_business_verification`
+ * re-derives it from `verification_status`. The policy used to read the copy
+ * rather than the source, and a business written `is_active = true` while
+ * `verification_status` stayed `pending` WAS in the anonymous catalog.
  *
- *   a business whose `is_active` is written to `true` while
- *   `verification_status` stays `pending` IS in the anonymous catalog.
+ * Two other layers did not hold the line either, and both were measured here
+ * rather than argued:
  *
- * `trg_sync_business_verification` is `BEFORE INSERT OR UPDATE OF
- * verification_status`. An UPDATE that touches only `is_active` never fires it.
- * The single thing preventing that today is that `is_active` is not in the
- * client column grants — and the test that proves it is a test that has to
- * temporarily restore that grant, which is the most useful thing in this file.
+ *   - the column grant. `is_active` being absent from the client write grants
+ *     in 20260926010336 was the only thing stopping the escalation. A grant
+ *     lives in information_schema.column_privileges, it can be restored by a
+ *     routine migration — and this ledger HAS restored one, twenty minutes
+ *     after revoking it (20260925163235, then 20260925224820) — and it protects
+ *     a COLUMN while the invariant to protect is a ROW.
+ *
+ *   - the trigger, which does not block. It is `BEFORE INSERT OR UPDATE OF
+ *     verification_status`, so an UPDATE touching only `is_active` never fires
+ *     it, and one that sets `verification_status` fires it and gets `is_active`
+ *     derived. The trigger is the propagation mechanism that makes moderation
+ *     work for the API. It has no idea who is asking.
+ *
+ * So the gate is now a policy that reads the SOURCE, on
+ * `public.business_moderation`, through a SECURITY DEFINER helper. The two
+ * tests that used to prove the hole are still here and still valuable: the one
+ * that restores the write grant now proves the escalation no longer reaches the
+ * catalog, and the one that writes an active-but-unapproved row now proves the
+ * policy hides it. Both are the same measurement pointed the other way, and
+ * they are the tests that fail if this gate is ever quietly dropped.
  */
 
 /** Personas. The `1111…` shape matches the other two specs so they read alike. */
@@ -260,6 +277,20 @@ beforeAll(async () => {
      * `a client-created business writes no ownership row` asserts that nothing
      * else wrote them, so this substitution cannot quietly become a claim that
      * the trigger works.
+     *
+     * The `business_moderation` row is now LOAD-BEARING in a way the other two
+     * are not, and the substitution has to be read differently because of it.
+     * Since 20260928101500 the public catalog policy reads this table, so if this
+     * row were missing, `anon` would see NOTHING rather than seeing `BIZ_A` too
+     * much. That is a different failure from every other fixture mistake in this
+     * file — it HIDES rows instead of inventing them — and it is why the seeded
+     * row is asserted to exist and to be `approved` before any catalog assertion
+     * runs, rather than only here.
+     *
+     * `BIZ_B` and `BIZ_C` deliberately get NO moderation row. They are the
+     * unapproved fixtures the gate has to hide, and an explicit `pending` row
+     * would be a weaker test: an absent row is the shape every client-created
+     * business has, and the gate has to fail closed on it.
      *
      * `business_finance` is given a non-default balance and commission rate on
      * purpose: a reader who could reach the table must not be able to say the
@@ -1554,15 +1585,44 @@ describe('self-approval and the public catalog', () => {
   });
 
   /**
-   * THE TRIGGER IS NOT THE SECOND LAYER. It is an amplifier, and this is the
-   * measured proof.
+   * THE TRIGGER IS NOT A LAYER. It is an amplifier — and that has not changed.
    *
    * The previous test shows the column grant refusing. This one asks the
    * question that test cannot: if somebody gave the grant back, would anything
-   * else stop the escalation? The answer is no, and both halves of it are
-   * demonstrated — the grant is temporarily restored inside the test, the
-   * escalation is performed, the truth is asserted, and the grant is removed
-   * again in a `finally` with a re-assertion that it is gone.
+   * else stop the escalation? The grant is temporarily restored inside the test,
+   * the escalation is performed, the truth is asserted, and the grant is
+   * removed again in a `finally` with a re-assertion that it is gone.
+   *
+   * ─── What this test concluded BEFORE 20260928101500, and what it concludes now ──
+   *
+   * The escalation reached the catalog. The grant was the only layer, because
+   * "Anyone can view active businesses" said `is_active = true` and nothing
+   * else. That is the finding this file was written to record, and the policy
+   * text of that era is quoted in this comment on purpose: it is the thing the
+   * migration changed, and a test that quietly forgets what it used to prove is
+   * a test that stops being evidence.
+   *
+   * The escalation STILL reaches the ROW. That is unchanged and is asserted
+   * below exactly as it was — the trigger still derives `is_active`, and an
+   * INSERT still lands ACTIVE. What changed is the second half: the catalog no
+   * longer follows, because the policy now asks
+   * `public.business_is_approved(businesses.id)` and the answer is read from
+   * `business_moderation`, which this escalation never writes.
+   *
+   * ─── Why the test is still worth having, and is not now redundant ─────────
+   *
+   * Because it is the one measurement that distinguishes the two layers. Every
+   * other test in this file grants nothing and so cannot tell "the grant holds
+   * the line" from "the policy holds the line" — with the grant in place, both
+   * produce the same empty result for a client. Restoring it removes the grant
+   * from the picture and leaves the policy alone, which is the only way to show
+   * the policy is carrying the invariant on its own.
+   *
+   * It is also the test that catches the failure mode this migration is most
+   * exposed to. A future migration that re-grants table-wide UPDATE on
+   * `businesses` — the shape `20260925224820` already shipped once for SELECT —
+   * re-opens every door below, and this test is what turns that from a silent
+   * widening into a red assertion.
    *
    * ─── What actually happens, on UPDATE ─────────────────────────────────────
    *
@@ -1576,9 +1636,16 @@ describe('self-approval and the public catalog', () => {
    *
    * Setting `verification_status = 'approved'` fires the trigger, and the
    * phase-2 version of that trigger DERIVES `is_active` from the status — so the
-   * escalation completes itself. The trigger is not a check; it is the
+   * escalation completes itself on the row. The trigger is not a check; it is the
    * propagation mechanism that makes the moderation flow work, and it has no
    * idea who is asking.
+   *
+   * This door is also where the gate's design shows itself. In this database the
+   * escalated row carries `verification_status = 'approved'` ON THE ROW and is
+   * still invisible, because the policy does not read that column — it reads
+   * `business_moderation`, where this write never lands. The policy consults the
+   * source, not the copy, and a self-approved copy is exactly what the copy
+   * approach would have published.
    *
    * ─── And on INSERT ────────────────────────────────────────────────────────
    *
@@ -1588,13 +1655,6 @@ describe('self-approval and the public catalog', () => {
    * That is the correct behaviour for the API, which is what writes that column —
    * it is approving a business on purpose. It is also, from the client's side, a
    * single self-approving statement.
-   *
-   * ─── So what is actually holding the line ─────────────────────────────────
-   *
-   * One layer: the column grant. Not the trigger, and not a policy. There is no
-   * policy anywhere in the ledger that ties catalog visibility to moderation
-   * state — "Anyone can view active businesses" says `is_active = true` and
-   * nothing else.
    *
    * ─── WHAT NOT TO DO ───────────────────────────────────────────────────────
    *
@@ -1607,7 +1667,7 @@ describe('self-approval and the public catalog', () => {
    * and the test asserts they are absent both before and after. That is a
    * measurement. Moving them to the harness would make it a fiction.
    */
-  test('with the write grant restored, the trigger chain does not stop self-approval — it performs it', async () => {
+  test('with the write grant restored the trigger still escalates the row, and the policy no longer lets the escalation reach the catalog', async () => {
     // The barrier, asserted first so that a failure below points at the cause.
     const before = await as(ctx.sql, 'authenticated', OWNER_B, (tx) =>
       tx.unsafe<{ ins: boolean; upd: boolean }[]>(`
@@ -1655,7 +1715,9 @@ describe('self-approval and the public catalog', () => {
         { is_active: true, verification_status: 'pending' },
       ]);
 
-      // And it is in the public catalog immediately, unapproved.
+      // And the catalog does NOT follow. The row is active and unapproved, which
+      // used to be exactly the state that published it; the policy now asks the
+      // moderation table, where this write never landed.
       const catalog = await as(ctx.sql, 'anon', null, (tx) =>
         tx
           .unsafe<{ slug: string; verification_status: string }[]>(
@@ -1666,9 +1728,11 @@ describe('self-approval and the public catalog', () => {
       );
       expect(
         catalog,
-        'the unapproved business did not reach the anonymous catalog. Something ' +
-          'else is holding the invariant, and the header of this file is wrong.',
-      ).toEqual([{ slug: SLUG_B, verification_status: 'pending' }]);
+        'the unapproved business reached the anonymous catalog WITH the write ' +
+          'grant restored. The column grant is holding the line again, which is ' +
+          'the whole failure this migration exists to remove — the policy gate ' +
+          'has stopped applying.',
+      ).toEqual([]);
 
       // Reset between the two doors so they are independent measurements, not a
       // sequence in which the second one inherits the first one's state.
@@ -1714,6 +1778,30 @@ describe('self-approval and the public catalog', () => {
           verification_status: 'approved',
         },
       ]);
+
+      // Door three's result, in the catalog: still nothing. The row says
+      // `approved` and `is_active = true` — a self-approving statement, from a
+      // client, that got all the way through — and it is not published, because
+      // there is no `business_moderation` row for it and the policy reads that
+      // table rather than the row's own copy of the status.
+      //
+      // This is the sharpest form of the whole migration. In production the
+      // client could not write `verification_status` at all, since phase 3 moved
+      // the column; here it can, and the row still stays out. The gate does not
+      // depend on the column being unwritable.
+      const selfApproved = await as(ctx.sql, 'anon', null, (tx) =>
+        tx
+          .unsafe<{ slug: string }[]>(
+            `select slug from public.businesses where slug = 'rls-biz-self-approved'`,
+          )
+          .then((rows) => plainRows(rows)),
+      );
+      expect(
+        selfApproved,
+        'a self-approved business reached the anonymous catalog. The policy is ' +
+          'reading a column on the row rather than the moderation table, so a ' +
+          'client that can write the column controls its own visibility.',
+      ).toEqual([]);
     } finally {
       /**
        * Order matters here, and the first draft of this block had it backwards.
@@ -1773,9 +1861,10 @@ describe('self-approval and the public catalog', () => {
       u_status: false,
     });
 
-    // And the real invariant is intact: nothing pending is in the catalog. Scoped
-    // to the three seeded slugs, so the probe rows this file created are outside
-    // the comparison even if one of them leaked.
+    // And the real invariant is intact after the probe: the catalog holds the
+    // one approved, active business and nothing else. Scoped to the three seeded
+    // slugs, so the probe rows this file created are outside the comparison even
+    // if one of them leaked.
     const catalog = await as(ctx.sql, 'anon', null, (tx) =>
       tx
         .unsafe<{ slug: string; verification_status: string }[]>(
@@ -1799,8 +1888,14 @@ describe('self-approval and the public catalog', () => {
    * on this table: it is `TO public`, it is `FOR SELECT`, and the other four
    * policies are `TO authenticated` with an `auth.uid()` or `my_role()` predicate
    * that is false — or NULL, for `anon` — under a request with no JWT. So the
-   * catalog is exactly the active rows, and the assertion is a complete statement
-   * about what an anonymous visitor can read.
+   * catalog is exactly what that one policy admits, and the assertion is a
+   * complete statement about what an anonymous visitor can read.
+   *
+   * It is ALSO the control for the gate block: on this fixture every seeded
+   * business is either inactive or approved, so the answer is the same under
+   * `is_active = true` alone. The gate's own effect is only observable on a row
+   * that is active AND unapproved, which is why the block below builds one
+   * rather than relying on the seed to contain it.
    */
   test('anon sees the active businesses and not the inactive ones', async () => {
     const slugs = await visibleSlugs(ctx.sql, 'anon', null);
@@ -1827,38 +1922,50 @@ describe('self-approval and the public catalog', () => {
   });
 
   /**
-   * ─── THE ANSWER TO THE QUESTION THIS FILE WAS ASKED TO MEASURE ─────────────
+   * ─── THE ANSWER TO THE QUESTION THIS FILE WAS ASKED TO MEASURE, AND THE
+   * ─── ANSWER AFTER 20260928101500 ──────────────────────────────────────────
+   *
+   * This test used to assert the opposite of what it asserts now, and the old
+   * claim is recorded here rather than deleted, because a test that forgets what
+   * it used to prove is a test that has quietly stopped being evidence.
+   *
+   * ─── WHAT IT FOUND ────────────────────────────────────────────────────────
    *
    * A business that is `is_active = true` while `verification_status` is still
-   * `pending` IS in the anonymous catalog. It is written above, as the schema
-   * owner, and read back as `anon`, and the row is legible with every column
-   * including the pending status.
-   *
-   * The write is one column, on purpose, and that is the whole finding:
-   * `trg_sync_business_verification` is `BEFORE INSERT OR UPDATE OF
+   * `pending` WAS in the anonymous catalog, legible with every column including
+   * the pending status. The write was one column, and that was the whole
+   * finding: `trg_sync_business_verification` is `BEFORE INSERT OR UPDATE OF
    * verification_status`, so a statement that does not mention
-   * `verification_status` never fires it. Nothing re-derives `is_active`, and no
-   * policy anywhere in the ledger requires moderation to be approved in order
-   * to be visible. "Anyone can view active businesses" is the whole predicate:
-   * it does not know what `is_active` means.
+   * `verification_status` never fires it, nothing re-derives `is_active`, and
+   * "Anyone can view active businesses" was the entire predicate — it did not
+   * know what `is_active` meant.
    *
-   * So the invariant "the public catalog contains only approved businesses" is
-   * held by the COLUMN GRANT, in one layer, on one table. It is not held by a
-   * trigger on UPDATE and it is not held by a policy at all. The previous test
-   * shows exactly how much that one layer is carrying.
+   * So the invariant was held by the COLUMN GRANT, in one layer, on one table.
+   * Not by a trigger on UPDATE, and not by a policy at all.
    *
-   * Every writer that can set `is_active` today is a trusted one — the API, as
-   * schema owner or `service_role` — and every such writer goes through the
-   * moderation flow that sets the status first. That is why the exposure is
-   * latent rather than live. What makes it worth a test rather than a note is
-   * that the guarantee is one `GRANT` away from changing shape, and the ledger
-   * has already shipped a migration that grants exactly those columns to
-   * `authenticated` for a different reason.
+   * ─── WHY THAT WAS LATENT RATHER THAN LIVE, AND WHY IT WAS STILL A FINDING ───
    *
-   * The direct UPDATE is committed and then undone in a `finally`, so the
-   * measurement leaves no state for the tests that follow.
+   * Every writer that could set `is_active` was a trusted one — the API, as
+   * schema owner or `service_role` — and every such writer went through the
+   * moderation flow that sets the status first. What made it worth a test
+   * rather than a note is that the guarantee was one `GRANT` away from changing
+   * shape, and the ledger has already shipped a migration that hands
+   * `authenticated` table-wide grants on this very table.
+   *
+   * ─── WHAT CHANGED, AND WHAT THIS NOW ASSERTS ──────────────────────────────
+   *
+   * 20260928101500 added `and public.business_is_approved(businesses.id)` to the
+   * policy, so the same row is now invisible. The measurement below is
+   * deliberately UNCHANGED — same write, same role, same single column, same
+   * re-read — and only the expected answer moved. That is what makes it a
+   * before/after pair rather than two unrelated tests: the fixture, the write
+   * and the read are all identical, so the difference in the result is
+   * attributable to the policy and nothing else.
+   *
+   * The UPDATE is committed and then undone in a `finally`, so the measurement
+   * leaves no state for the tests that follow.
    */
-  test('a business that is active but NOT approved is in the public catalog, and only the column grant keeps that from happening', async () => {
+  test('a business that is active but NOT approved is no longer in the public catalog, and the policy is what keeps it out', async () => {
     // Precondition, re-read rather than trusted from the seed.
     const before = await ctx.sql.unsafe<
       { is_active: boolean; verification_status: string }[]
@@ -1889,14 +1996,20 @@ describe('self-approval and the public catalog', () => {
       });
 
       // And the companion, which is where the moderation state lives in
-      // production, is empty for this business. So even the join the phase-3
-      // policies were going to write would have found nothing to check.
+      // production, is empty for this business. This is what the new policy
+      // reads, and an absent row is a false answer: the gate fails closed. The
+      // companion is also the reason the policy can be written at all without
+      // granting anything — the table is unreadable to every client role BY
+      // GRANT, which is what makes it a trustworthy anchor.
       const moderation = await ctx.sql.unsafe<{ business_id: string }[]>(
         `select business_id::text from public.business_moderation where business_id = '${BIZ_C}'`,
       );
       expect(plainRows(moderation)).toEqual([]);
 
-      // The finding. An anonymous browser reads it, with the pending status.
+      // The answer, reversed. An anonymous browser reads zero rows, and no
+      // error: a policy filtering a row out and a policy that was never reached
+      // are indistinguishable from here, which is why the policy's text and its
+      // dependency on the helper are asserted separately in the gate block.
       const visible = await as(ctx.sql, 'anon', null, (tx) =>
         tx.unsafe<
           { slug: string; is_active: boolean; verification_status: string }[]
@@ -1907,21 +2020,27 @@ describe('self-approval and the public catalog', () => {
       );
       expect(
         plainRows(visible),
-        'the active-but-unapproved business is NOT in the anonymous catalog. ' +
-          'Something other than the column grant is enforcing the invariant, ' +
-          'and the finding this file documents is out of date.',
-      ).toEqual([
-        { slug: SLUG_C, is_active: true, verification_status: 'pending' },
-      ]);
+        'the active-but-unapproved business IS in the anonymous catalog. The ' +
+          'moderation gate is not applying, which means the column grant is ' +
+          'carrying the invariant again on its own — the condition this ' +
+          'migration was written to remove.',
+      ).toEqual([]);
 
-      // It is also visible to any signed-in consumer, and it is NOT visible as an
-      // inactive one. The read is keyed on `is_active` alone.
+      // A signed-in CONSUMER is gated too, which is correct and worth stating:
+      // the catalog is the same catalog for a consumer and for a browser, and a
+      // gate that only `anon` respected would be defeated by signing in. MEMBER
+      // owns nothing, so no owner policy can OR its way in.
       const member = await as(ctx.sql, 'authenticated', MEMBER, (tx) =>
         tx.unsafe<{ slug: string }[]>(
           `select slug from public.businesses where slug = '${SLUG_C}'`,
         ),
       );
-      expect(plainRows(member).map((r) => r.slug)).toEqual([SLUG_C]);
+      expect(
+        plainRows(member).map((r) => r.slug),
+        'a signed-in consumer that owns nothing can read an active but ' +
+          'unapproved business. The gate has to apply to the catalog role, not ' +
+          'only to the anonymous one.',
+      ).toEqual([]);
     } finally {
       await ctx.sql.unsafe(
         `update public.businesses set is_active = false where id = '${BIZ_C}'`,
@@ -2091,5 +2210,582 @@ describe('self-approval and the public catalog', () => {
     expect(denial?.message).toContain(
       'permission denied for schema auth_helpers',
     );
+  });
+});
+
+/**
+ * ─── THE MODERATION GATE ON THE PUBLIC CATALOG ─────────────────────────────
+ *
+ * 20260928101500 rewrote "Anyone can view active businesses" from
+ * `using (is_active = true)` to
+ * `using (is_active = true and public.business_is_approved(businesses.id))`.
+ *
+ * ─── Why this is a `describe` and not four more tests upstairs ─────────────
+ *
+ * Two reasons, and the second is the one that decided it.
+ *
+ * The first is that it is a CHANGE OF CONCLUSIONS, not an addition. The file
+ * already contains the measurement this migration reverses, stated as a finding
+ * and asserted: a business written `is_active = true` while unapproved IS in the
+ * anonymous catalog, and only the column grant prevents it. That test cannot be
+ * left where it is, and it cannot be a one-line flip either, because its
+ * `finally`, its catalog assertion and its comment all exist to make a point
+ * that is now the opposite. A block that gathers the gate's own behaviour makes
+ * the reversal legible as one thing rather than as drift across a 2000-line
+ * file.
+ *
+ * The second is the fixture. The gate is only observable with a row that is
+ * active and unapproved, and this file already has one: `BIZ_C` is inactive and
+ * pending with no `business_moderation` row, which is the exact shape the gate
+ * hides. Building a second file means a second `beforeAll` re-seeding the same
+ * four users, the same three businesses and the same companion rows, and a
+ * second clone of the template. Duplicated fixtures are how two files end up
+ * disagreeing about what `BIZ_C` is.
+ *
+ * ─── What the gate is, and what it is not ─────────────────────────────────
+ *
+ * It narrows exactly one surface: the ANONYMOUS catalog. It is one PERMISSIVE
+ * SELECT policy among five, and the other four OR into it — the admin policy and
+ * the two owner policies. So a business owner and an admin still see
+ * unapproved businesses, and `service_role` bypasses RLS entirely.
+ *
+ * That is asserted, not assumed, and it is the half of this block that matters
+ * most. An RLS hardening that breaks the admin panel or the owner panel is not a
+ * hardening, it is a different incident — and the inline-EXISTS spelling of this
+ * very policy does exactly that, measured: it returns `42501 permission denied
+ * for table business_moderation` for `anon`, a member, an admin and an owner
+ * alike, because the subquery is permission-checked at executor startup before
+ * any row is read. Which is why the gate is a SECURITY DEFINER helper, and why
+ * `public.business_is_approved` is asserted to be one below.
+ */
+describe('the public catalog requires moderation, not just is_active', () => {
+  /**
+   * The gate, as text, exactly as the migration wrote it.
+   *
+   * Asserted as the stored `qual` rather than as behaviour first, because the
+   * behaviour has two independent failure modes and this pins the one that is
+   * invisible: a policy that was never recreated at all still yields a plausible
+   * catalog, because `is_active = true` on `BIZ_A` produces the same one row
+   * either way. If the gate is dropped, the row assertions in this block fail;
+   * if the gate is written wrong — the helper called with the wrong argument, or
+   * `is_active` dropped by accident — this fails and says which of the two
+   * conditions went missing.
+   */
+  test('the catalog policy is is_active AND an approved-moderation check, and the check is a SECURITY DEFINER function', async () => {
+    const policies = await ctx.sql.unsafe<
+      { policyname: string; cmd: string; roles: string[]; qual: string }[]
+    >(
+      `select policyname, cmd, roles, qual::text as qual
+         from pg_policies
+        where schemaname = 'public'
+          and tablename   = 'businesses'
+          and policyname  = 'Anyone can view active businesses'`,
+    );
+
+    expect(
+      plainRows(policies),
+      'the public catalog policy is missing, or it is no longer a permissive ' +
+        'SELECT policy TO public — which is the surface anon reads through',
+    ).toEqual([
+      {
+        policyname: 'Anyone can view active businesses',
+        cmd: 'SELECT',
+        roles: ['public'],
+        qual: '((is_active = true) AND business_is_approved(id))',
+      },
+    ]);
+
+    // The qual is stored unqualified because `public` is on the search_path at
+    // CREATE time, so the text alone cannot tell a helper call from a bare table
+    // name. `pg_depend` can. A policy records its expression's dependencies on
+    // `pg_policy` — NOT on `pg_rewrite`, which is the first thing to reach for
+    // and returns nothing, because a policy has no rewrite rule at all. Getting
+    // that wrong produces a test that passes on zero rows.
+    //
+    // So this distinguishes the two spellings the migration rejected: the
+    // SECURITY DEFINER function, which is an `n` (normal) dependency of the
+    // policy, and the inline EXISTS subquery, which depends on the TABLE
+    // business_moderation instead. The first draft of this assertion joined
+    // pg_rewrite, found nothing, and would have reported a count of 0 for a
+    // policy that was correct.
+    const refs = await ctx.sql.unsafe<{ proname: string; relname: string }[]>(
+      `select p.proname, c.relname
+         from pg_depend d
+         join pg_policy pol on pol.oid = d.objid
+         join pg_class c    on c.oid = pol.polrelid
+         join pg_namespace n on n.oid = c.relnamespace
+         join pg_proc p     on p.oid = d.refobjid
+        where n.nspname = 'public'
+          and c.relname = 'businesses'
+          and d.classid = 'pg_policy'::regclass
+          and d.refclassid = 'pg_proc'::regclass`,
+    );
+    expect(
+      plainRows(refs).map((r) => r.proname),
+      'the catalog policy no longer depends on public.business_is_approved. The ' +
+        'gate was rewritten to something else — and the inline-EXISTS spelling ' +
+        'breaks every client role with 42501, so this is not cosmetic.',
+    ).toContain('business_is_approved');
+
+    // SECURITY DEFINER, STABLE, and a pinned empty search_path. The first is
+    // the whole mechanism: a policy subquery is permission-checked as the
+    // CALLING role, so only a definer function can read a table the caller
+    // cannot. The third is the standard definer hardening, and it is load
+    // bearing precisely because the function runs with elevated rights.
+    const fn = await ctx.sql.unsafe<
+      {
+        prosecdef: boolean;
+        provolatile: string;
+        proconfig: string[] | null;
+        proisstrict: boolean;
+      }[]
+    >(
+      `select p.prosecdef, p.provolatile, p.proconfig, p.proisstrict
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'business_is_approved'
+          and p.pronargs = 1`,
+    );
+    expect(
+      plainRows(fn),
+      'public.business_is_approved is missing or is not the shape the policy ' +
+        'needs: SECURITY DEFINER so it can read business_moderation, STABLE so ' +
+        'the planner treats it as a stable predicate, and a pinned search_path.',
+    ).toEqual([
+      {
+        prosecdef: true,
+        provolatile: 's',
+        proconfig: ['search_path=""'],
+        proisstrict: false,
+      },
+    ]);
+
+    // The EXECUTE grant is explicit and PUBLIC is excluded.
+    //
+    // 20260507215323 revoked EXECUTE on public-schema functions as a DEFAULT
+    // privilege, so in production a function created by a later migration is not
+    // callable by anyone until the migration says so, and the policy fails with
+    // `42501 permission denied for function`. The harness does NOT reproduce
+    // that default revoke — a new public function is executable by PUBLIC there
+    // — so this assertion is what keeps the harness describing the production
+    // surface rather than a locally wider one.
+    const grants = await ctx.sql.unsafe<Record<string, boolean>[]>(
+      `select has_function_privilege('anon',         'public.business_is_approved(uuid)', 'execute') as anon,
+              has_function_privilege('authenticated','public.business_is_approved(uuid)', 'execute') as authenticated,
+              has_function_privilege('public',       'public.business_is_approved(uuid)', 'execute') as public`,
+    );
+    expect(grants[0]).toEqual({
+      anon: true,
+      authenticated: true,
+      public: false,
+    });
+  });
+
+  /**
+   * THE TEST THIS MIGRATION EXISTS FOR.
+   *
+   * `BIZ_C` is active and its moderation state is `pending`, and `anon` cannot
+   * see it. Before 20260928101500 the very same row was visible, and this file
+   * asserted that it was — the measurement is in `anon sees the active
+   * businesses` below, unchanged, and the two together are the before and after.
+   *
+   * The row is written by the SCHEMA OWNER, not by a client role. That is the
+   * point: this is not a claim about what a malicious client can do, it is the
+   * stronger claim that the catalog does not depend on WHO wrote the row. Every
+   * writer that can legitimately set `is_active` — the API, as schema owner or
+   * `service_role` — can get the row into this state by accident, and the
+   * invariant must hold for them too.
+   *
+   * Committed and undone in a `finally`, so the tests after it measure the
+   * ledger rather than this probe.
+   */
+  test('a business that is active but NOT approved is not in the anonymous catalog', async () => {
+    // Precondition, re-read rather than trusted from the seed: an INSERT that
+    // names neither moderation column is decided entirely by the trigger chain.
+    const before = await ctx.sql.unsafe<
+      { is_active: boolean; verification_status: string; moderation: number }[]
+    >(
+      `select b.is_active,
+              b.verification_status::text,
+              (select count(*)::int from public.business_moderation m
+                where m.business_id = b.id) as moderation
+         from public.businesses b
+        where b.id = '${BIZ_C}'`,
+    );
+    expect(before[0]).toEqual({
+      is_active: false,
+      verification_status: 'pending',
+      moderation: 0,
+    });
+
+    await ctx.sql.unsafe(
+      `update public.businesses set is_active = true where id = '${BIZ_C}'`,
+    );
+    try {
+      // The trigger did not fire and did not correct it. `is_active` is now true
+      // with the status still pending — the exact state that used to publish.
+      const row = await ctx.sql.unsafe<
+        { is_active: boolean; verification_status: string }[]
+      >(
+        `select is_active, verification_status::text
+           from public.businesses where id = '${BIZ_C}'`,
+      );
+      expect(row[0]).toEqual({
+        is_active: true,
+        verification_status: 'pending',
+      });
+
+      // The finding. Zero rows, no error — a policy filtering a row out and a
+      // policy that was never reached look identical from here, which is why the
+      // text of the policy is asserted separately above.
+      const visible = await as(ctx.sql, 'anon', null, (tx) =>
+        tx.unsafe<{ slug: string }[]>(
+          `select slug from public.businesses where id = '${BIZ_C}'`,
+        ),
+      );
+      expect(
+        plainRows(visible),
+        'the active-but-unapproved business IS in the anonymous catalog. The ' +
+          'moderation gate is not being applied: either the policy was not ' +
+          'recreated or the helper returns true for an unapproved business.',
+      ).toEqual([]);
+
+      // And it is out of the catalog as a LISTING too, not just unaddressable
+      // by id — an id-keyed miss is not what a browser sees.
+      const catalog = await visibleSlugs(ctx.sql, 'anon', null);
+      expect(catalog).toEqual([SLUG_A]);
+      expect(catalog).not.toContain(SLUG_C);
+    } finally {
+      await ctx.sql.unsafe(
+        `update public.businesses set is_active = false where id = '${BIZ_C}'`,
+      );
+    }
+
+    // Back to the ledger, so the tests after this one are not measuring the
+    // probe.
+    expect(await visibleSlugs(ctx.sql, 'anon', null)).toEqual([SLUG_A]);
+  });
+
+  /**
+   * The gate narrows the CATALOG and nothing else. This is the half that a
+   * hardening can silently break, and the half the inline-EXISTS spelling does
+   * break, so it is asserted per role rather than as one contrast.
+   *
+   * Three reads of the same active-but-unapproved row, all while it is active:
+   *
+   *   anon    zero rows    the gate
+   *   owner   one row      "Owners can view own businesses" ORed in
+   *   admin   one row      "Admins full access on businesses" ORed in
+   *   service one row      BYPASSRLS
+   *
+   * The owner reading is the one that looks wrong to a reviewer and is the
+   * point: `OWNER_B` owns `BIZ_C` and must be able to see and edit its own
+   * business whether or not it has been approved, because that is what the
+   * owner panel is. Hiding it from its own owner would be a product bug, not a
+   * security improvement.
+   */
+  test('the gate is for the public catalog only: the owner, the admin and service_role still see an unapproved business', async () => {
+    await ctx.sql.unsafe(
+      `update public.businesses set is_active = true where id = '${BIZ_C}'`,
+    );
+    try {
+      const asAnon = await as(ctx.sql, 'anon', null, (tx) =>
+        tx.unsafe<{ slug: string }[]>(
+          `select slug from public.businesses where id = '${BIZ_C}'`,
+        ),
+      );
+      const asOwner = await as(ctx.sql, 'authenticated', OWNER_B, (tx) =>
+        tx.unsafe<{ slug: string }[]>(
+          `select slug from public.businesses where id = '${BIZ_C}'`,
+        ),
+      );
+      const asAdmin = await as(ctx.sql, 'authenticated', ADMIN, (tx) =>
+        tx.unsafe<{ slug: string }[]>(
+          `select slug from public.businesses where id = '${BIZ_C}'`,
+        ),
+      );
+      const asService = await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ slug: string }[]>(
+          `select slug from public.businesses where id = '${BIZ_C}'`,
+        ),
+      );
+
+      expect(plainRows(asAnon)).toEqual([]);
+      expect(
+        plainRows(asOwner).map((r) => r.slug),
+        'a business owner cannot read its own unapproved business. The gate is ' +
+          'one permissive policy among several and must not narrow the owner panel.',
+      ).toEqual([SLUG_C]);
+      expect(
+        plainRows(asAdmin).map((r) => r.slug),
+        'an admin cannot read an unapproved business. The admin policy is ' +
+          'FOR ALL and has to keep working.',
+      ).toEqual([SLUG_C]);
+      expect(plainRows(asService).map((r) => r.slug)).toEqual([SLUG_C]);
+
+      // The owner can still WRITE to it as well, which is what makes the read
+      // above a policy result and not a fixture that happens to be visible.
+      const renamed = await as(ctx.sql, 'authenticated', OWNER_B, (tx) =>
+        tx.unsafe<{ name: string }[]>(
+          `update public.businesses set name = 'renamed while unapproved'
+            where id = '${BIZ_C}' returning name`,
+        ),
+      );
+      expect(plainRows(renamed).map((r) => r.name)).toEqual([
+        'renamed while unapproved',
+      ]);
+    } finally {
+      await ctx.sql.unsafe(
+        `update public.businesses
+            set is_active = false, name = 'RLS businesses C'
+          where id = '${BIZ_C}'`,
+      );
+    }
+  });
+
+  /**
+   * `is_active` still rules, and the gate is an ADDITION rather than a
+   * replacement.
+   *
+   * This is the reason the migration keeps `is_active = true` in the predicate
+   * instead of replacing it: deactivation is an operator action that must keep
+   * working on an approved business. `BIZ_A` has an approved moderation row
+   * throughout, so flipping it active=false is a test of `is_active` alone with
+   * the gate held satisfied.
+   *
+   * It is also the control for the test above. Without it, "the gate works" and
+   * "the predicate is `is_active` only" would produce identical results on this
+   * fixture, since `BIZ_C` is inactive anyway. Together the two tests say: the
+   * row is hidden by moderation when it is active, and by `is_active` when it
+   * is deactivated despite being approved.
+   */
+  test('an approved business that is deactivated leaves the catalog, so is_active still rules', async () => {
+    const before = await ctx.sql.unsafe<
+      { is_active: boolean; approved: boolean }[]
+    >(
+      `select b.is_active,
+              (select m.verification_status::text = 'approved'
+                 from public.business_moderation m where m.business_id = b.id) as approved
+         from public.businesses b where b.id = '${BIZ_A}'`,
+    );
+    expect(before[0]).toEqual({ is_active: true, approved: true });
+
+    await ctx.sql.unsafe(
+      `update public.businesses set is_active = false where id = '${BIZ_A}'`,
+    );
+    try {
+      const asAnon = await visibleSlugs(ctx.sql, 'anon', null);
+      expect(
+        asAnon,
+        'a deactivated but approved business is still in the anonymous catalog, ' +
+          'so the migration replaced is_active instead of adding to it',
+      ).toEqual([]);
+    } finally {
+      await ctx.sql.unsafe(
+        `update public.businesses set is_active = true where id = '${BIZ_A}'`,
+      );
+    }
+
+    // Restored, and back in the catalog — so the zero above was the policy and
+    // not a broken fixture.
+    expect(await visibleSlugs(ctx.sql, 'anon', null)).toEqual([SLUG_A]);
+  });
+
+  /**
+   * The creation path, re-checked against the gate rather than against the
+   * grant.
+   *
+   * A client-created business has to fail three times over to reach the catalog
+   * now, and each layer is worth naming because the gate is what makes the first
+   * two optional rather than sufficient:
+   *
+   *   1. `is_active` and `verification_status` are outside the client column
+   *      grants, so naming either on INSERT is a 42501;
+   *   2. the trigger chain derives `is_active` from `verification_status`, which
+   *      defaults to `pending`;
+   *   3. and now, even if a row DID land active and approved, there is no
+   *      `business_moderation` row for it — and in production the row is written
+   *      by `trg_bootstrap_business_companions`, which is a platform trigger, so
+   *      a client cannot create one.
+   *
+   * Layer 3 is asserted directly, without needing the grant, by inserting a row
+   * with no moderation companion at all. That is the shape of every business a
+   * client creates, and it is the one the gate is really for.
+   */
+  test('a newly created business is not in the catalog, and it has no moderation row to satisfy the gate', async () => {
+    const created = await as(ctx.sql, 'authenticated', MEMBER, (tx) =>
+      tx.unsafe<{ id: string; slug: string; is_active: boolean }[]>(
+        `insert into public.businesses (name, slug, type)
+         values ('RLS businesses gated', 'rls-biz-gated', 'restaurant')
+         returning id::text, slug, is_active`,
+      ),
+    );
+    const businessId = plainRows(created)[0]?.id as string;
+    expect(plainRows(created)[0]?.is_active).toBe(false);
+
+    // No companion row, in this database AND in production: the bootstrap
+    // trigger writes `pending`, and either way it is not `approved`, and no
+    // client role can write that table.
+    const moderation = await ctx.sql.unsafe<{ verification_status: string }[]>(
+      `select verification_status::text from public.business_moderation
+        where business_id = '${businessId}'`,
+    );
+    expect(
+      plainRows(moderation),
+      'the client-created business has a moderation row. It should be ' +
+        'absent or pending — an APPROVED row would mean a client can approve its ' +
+        'own business, which is a larger finding than the one this file covers.',
+    ).not.toEqual([{ verification_status: 'approved' }]);
+
+    const asAnon = await as(ctx.sql, 'anon', null, (tx) =>
+      tx.unsafe<{ slug: string }[]>(
+        `select slug from public.businesses where slug = 'rls-biz-gated'`,
+      ),
+    );
+    expect(plainRows(asAnon)).toEqual([]);
+
+    // The client that created it can read it, so this is the catalog narrowing
+    // and not the row being unreachable.
+    const asCreator = await as(ctx.sql, 'authenticated', MEMBER, (tx) =>
+      tx.unsafe<{ slug: string }[]>(
+        `select slug from public.businesses where slug = 'rls-biz-gated'`,
+      ),
+    );
+    expect(plainRows(asCreator).map((r) => r.slug)).toEqual(['rls-biz-gated']);
+  });
+
+  /**
+   * THE GATE IS NOT AN EMPTY SET. With the rows it returns the catalog, and
+   * without them it returns nothing while the panel keeps working.
+   *
+   * Both halves are one test because a gate can fail in two opposite ways and
+   * only measuring both distinguishes them. A policy wired wrong can publish too
+   * much — the failure this migration closes — or it can publish nothing at all,
+   * which is a TOTAL catalog outage that looks like a successful hardening in a
+   * suite that only ever asserts "the bad row is absent". Every other test in
+   * this block would pass under a policy that returned zero rows
+   * unconditionally.
+   *
+   * The empty case is also what this harness produces by accident rather than by
+   * design. `trg_bootstrap_business_companions` is one of the seven pinned
+   * replay failures, so nothing writes `business_moderation` here and the
+   * `beforeAll` fixture stands in for it. In PRODUCTION the table is populated —
+   * 20260925225227 backfilled it and phase 3's trigger maintains it — so the
+   * empty case is a shape this gate must HANDLE, not a state it lives in. What
+   * matters is the direction it fails in, and it fails closed: the catalog
+   * empties, and the admin, the owner and service_role do not notice.
+   *
+   * That last part is the assertion worth having. A fail-closed gate that also
+   * broke the owner panel would turn a moderation regression into a total
+   * platform outage, and it is the admin policy's `FOR ALL` plus the two owner
+   * policies that keep the blast radius to one surface.
+   */
+  test('the gate returns the catalog when the moderation rows exist, and only the catalog fails closed when they do not', async () => {
+    // The populated case first, and asserted POSITIVELY: `BIZ_A` is active and
+    // approved, and it IS listed. This is the assertion that fails under a gate
+    // that hid everything.
+    const seeded = await ctx.sql.unsafe<
+      { slug: string; is_active: boolean; status: string }[]
+    >(
+      `select b.slug, b.is_active, m.verification_status::text as status
+         from public.businesses b
+         join public.business_moderation m on m.business_id = b.id
+        where b.id = '${BIZ_A}'`,
+    );
+    expect(plainRows(seeded)).toEqual([
+      { slug: SLUG_A, is_active: true, status: 'approved' },
+    ]);
+    expect(
+      await visibleSlugs(ctx.sql, 'anon', null),
+      'the approved, active business is not in the catalog. The gate is refusing ' +
+        'everything, which would be a total outage rather than a hardening.',
+    ).toEqual([SLUG_A]);
+
+    // Now take the moderation table away, and watch which surface notices.
+    await ctx.sql.unsafe(`delete from public.business_moderation`);
+    try {
+      const asAnon = await visibleSlugs(ctx.sql, 'anon', null);
+      const asMember = await visibleSlugs(ctx.sql, 'authenticated', MEMBER);
+      const asAdmin = await visibleSlugs(ctx.sql, 'authenticated', ADMIN);
+      const asOwnerA = await visibleSlugs(ctx.sql, 'authenticated', OWNER_A);
+      const asOwnerB = await visibleSlugs(ctx.sql, 'authenticated', OWNER_B);
+      const asService = await visibleSlugs(ctx.sql, 'service_role', null);
+
+      expect(
+        asAnon,
+        'anon still sees the catalog with no moderation rows at all',
+      ).toEqual([]);
+      expect(asMember).toEqual([]);
+      // The panel is untouched, and this is the assertion that makes the
+      // fail-closed direction affordable: missing moderation data must cost the
+      // public catalog its rows, not the owner panel and not the admin's queue.
+      expect(asAdmin).toEqual([SLUG_A, SLUG_B, SLUG_C]);
+      expect(asOwnerA).toEqual([SLUG_A]);
+      expect(asOwnerB).toEqual([SLUG_B, SLUG_C]);
+      expect(asService).toEqual([SLUG_A, SLUG_B, SLUG_C]);
+    } finally {
+      await ctx.sql.unsafe(
+        `insert into public.business_moderation (business_id, verification_status)
+         values ('${BIZ_A}', 'approved')
+         on conflict (business_id) do nothing`,
+      );
+    }
+
+    // And the catalog comes back, so the zero above was the gate reading an
+    // empty table rather than a fixture that had gone wrong.
+    expect(await visibleSlugs(ctx.sql, 'anon', null)).toEqual([SLUG_A]);
+  });
+
+  /**
+   * The helper is reachable from a client and it is still not a way to read the
+   * table.
+   *
+   * The residual is real and this asserts it rather than describing it in a
+   * comment: `anon` can call `public.business_is_approved(uuid)` and learn a
+   * boolean about a business id. The disclosure is nil-practical — for any
+   * business the catalog lists the answer is knowably true, and for any other
+   * business the id is an unguessable uuid — but a SECURITY DEFINER function
+   * added to a security policy has to be held to the same standard as one
+   * added to an RPC surface, and the honest description includes this.
+   *
+   * What it must NOT become is a read of the table. That is the invariant the
+   * companion split bought, and it is asserted on the grant layer and on the
+   * live session, because `businesses.rls.db.spec.ts` upstream already pins it
+   * for the seeded rows and this is where the reason is written down.
+   */
+  test('the helper answers with a boolean and grants no read of business_moderation', async () => {
+    const asAnon = await as(ctx.sql, 'anon', null, (tx) =>
+      tx.unsafe<{ approved: boolean }[]>(
+        `select public.business_is_approved('${BIZ_A}') as approved`,
+      ),
+    );
+    expect(plainRows(asAnon)).toEqual([{ approved: true }]);
+
+    const asUnapproved = await as(ctx.sql, 'anon', null, (tx) =>
+      tx.unsafe<{ approved: boolean }[]>(
+        `select public.business_is_approved('${BIZ_C}') as approved`,
+      ),
+    );
+    expect(plainRows(asUnapproved)).toEqual([{ approved: false }]);
+
+    // The boundary. Still zero privileges, still a grant-layer refusal naming
+    // the TABLE rather than a policy error — a function that returned a row
+    // instead of a boolean would have produced a `row-level security policy`
+    // message here, since the table has no policies at all.
+    const denial = await deniedAs(ctx.sql, 'anon', null, (tx) =>
+      tx.unsafe(
+        `select business_id::text, verification_status::text from public.business_moderation`,
+      ),
+    );
+    expect(
+      denial,
+      'anon read the moderation table through the helper',
+    ).not.toBeNull();
+    expect(denial?.code).toBe('42501');
+    expect(denial?.message).toContain(
+      'permission denied for table business_moderation',
+    );
+    expect(denial?.message).not.toContain('row-level security policy');
   });
 });
