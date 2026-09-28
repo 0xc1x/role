@@ -54,17 +54,17 @@ recoverable the same way.
 
 ## The `20260925*` files are not byte-identical to what was applied
 
-Eight of the nine hardening migrations in this directory differ from the
-`statements` value in the ledger. The files here are the reviewed, documented
-versions written before applying; the database received equivalent SQL sent
-through the Supabase MCP. Only `20260925165931_offer_stock_write_grant.sql` is
-byte-identical.
+Eleven of the twelve `20260925*` hardening migrations in this directory differ
+from the `statements` value in the ledger. The files here are the reviewed,
+documented versions written before applying; the database received equivalent SQL
+sent through the Supabase MCP. Only `20260925165931_offer_stock_write_grant.sql`
+is byte-identical. (This section said "eight of the nine" when it was written;
+the block has grown by three files since, and the count was not revisited.)
 
 **The practical consequence: the local versions have never been executed.** They
-are semantically equivalent and are what `supabase db push` would replay on a
-fresh project, but equivalence was reasoned about, not proven. Before trusting
-this directory to rebuild an environment, replay it on a disposable Supabase
-branch and let the database be the judge.
+are what `supabase db push` would replay on a fresh project, but equivalence was
+reasoned about, and the reasoning has now been **disproved** — see the next
+section, which is the more important half of this page.
 
 The most recent divergence is a good illustration. `20260925163235` shipped a
 dispatcher that passed its HTTP header map as
@@ -73,6 +73,180 @@ query string — the map shipped as a query parameter and no header was ever
 attached. The file on disk here contains that defect. `20260925175051` is the
 fix, and it supersedes the earlier file. Replaying the chain in order does
 produce a working database; skipping to the latest file does not.
+
+## The `20260925*` divergence is not cosmetic, and it broke three migrations
+
+This is the finding that matters on this page, and it was found by replaying the
+directory rather than by reading it.
+
+`20260927025753_businesses_drop_sensitive_columns.sql` rewrites ten functions in
+place by locating literal text in `pg_get_functiondef` and aborting if a literal
+is absent. Its search strings are single lines:
+
+```sql
+'select commission_rate into v_commission_rate from public.businesses where id=v_offer.business_id;'
+'b.verification_status=''approved'''
+```
+
+That file is **byte-identical to the ledger** (md5
+`31607cd05ddc60a962c582c2c2223ed3`), so those literals are exactly what
+production ran, and in production they matched. Two files in this directory that
+recreate those function bodies do not:
+
+| file | ledger md5 | what the ledger holds | what this directory held |
+| --- | --- | --- | --- |
+| `20260925155433` | `57b55f217ebe259d372de2555ab93dc8` | the tight one-liners | pretty-printed, one clause per line |
+| `20260925163235` | `61c2a13f3bb83394e8a2d6e9fcc669d2` | `verification_status='approved'` | `verification_status = 'approved'` |
+
+A cosmetic reformat is a semantic no-op to Postgres and a **hard failure** to a
+literal-matching guard. Verified against the ledger text rather than assumed:
+
+```sql
+-- 20260925155433
+select statements[1] ~ 'select commission_rate into v_commission_rate from public\.businesses where id=v_offer\.business_id;'  -- t
+select statements[1] ~ 'select commission_rate\s+into v_commission_rate\s+from public\.businesses\s+where id = v_offer\.business_id;' -- f
+```
+
+**Both files were corrected, in place, toward the ledger** — the literals the
+guards need were restored to the exact characters the ledger holds, and nothing
+else in either file was touched. They still do not match the ledger
+(`a87cb10a6034f99f92c34c6b6dc7a75a` and
+`c9272d3941829bdd57bd6c025788ea4d`), because the rest of the reformatting is
+still there. That is deliberate: the repair direction is the one production
+dictates, and a partial edit toward the ledger is strictly closer to it than the
+file was.
+
+**This is not the same as editing a file that matches the ledger.** A file whose
+md5 equals `md5(statements[1])` is the proof of what ran, and editing it destroys
+that proof — which is why `20260906125927` was left alone when it failed, and why
+its failure was closed in the harness instead. These two files were already
+divergent; moving them toward the ledger cannot lose evidence.
+
+### The divergence is semantic, and the next fidelity gap
+
+Whitespace is not the whole story, and it is worth not pretending otherwise.
+Comparing the replayed function bodies against the live database with **all**
+whitespace stripped still does not match:
+
+| function | replay | production |
+| --- | --- | --- |
+| `reserve_offer(uuid,uuid,uuid,text)` | `07e070b5f9a39f200bdec6ec2adb9c12` | `550e53b7d60c069166c827f69787637d` |
+| `notify_business_pending()` | `61d1d1dc2172bc919b230b1e78a045b7` | `0ea2c908b1aa70d8f44e6069cf2b16e4` |
+
+```sql
+select p.proname, md5(regexp_replace(p.prosrc, '\s+', '', 'g'))
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = 'reserve_offer';
+```
+
+So the `20260925*` block is **not** semantically equivalent to what production
+received, which is the thing the previous version of this section asserted and
+could not support. The harness now reproduces production's `businesses` shape
+exactly — 16 columns, `trg_bootstrap_business_companions` installed, every owner
+policy resolving through `business_ownership`, and the two grant facts from
+`20260906125927` matching the live database one for one — but these two function
+bodies do not match. Closing that means reconstructing all eleven divergent files
+byte-for-byte from the ledger, which would discard the reviewed documentation in
+them. It is a deliberate, separate decision and it has not been taken.
+
+## The ledger does not describe the database: four `app_config` values
+
+`20260927141336_confirm_admin_domain.sql` sets `links.admin_url` and then
+asserts that **no** non-social `app_config` value still contains `role.app`. It
+fails on a fresh replay, and it is byte-identical to the ledger
+(`78dd39c9c15c52da9dd3be4b71f7bfe5`), so it is exactly what ran.
+
+Four of the five keys it names are moved by **no row in the ledger**, the one on
+the live project included:
+
+```sql
+select version from supabase_migrations.schema_migrations
+ where statements[1] like '%soporte@role.ec%'
+    or statements[1] like '%hola@role.ec%'
+    or statements[1] like '%legal@role.ec%';
+-- 0 rows
+```
+
+`20260821205638` seeds them as `role.app`; `20260830014803` inserts only
+`email.from` and `contact.cities`; `20260926021657` touches
+`email_templates.body_html` and never `app_config`; `20260927053728` moves
+`privacy.contact_email` and nothing else. The live database holds all five as
+`role.ec`:
+
+```
+contact.hola_email      = "hola@role.ec"
+contact.negocios_email   = "negocios@role.ec"
+legal.contact_email     = "legal@role.ec"
+privacy.contact_email   = "privacidad@role.ec"
+support.email           = "soporte@role.ec"
+```
+
+So those values were changed on the live project by a write path that left no
+ledger row — the same class of gap as the `cancel_order` arity-2 drop that
+`20260906131000` documents, and the same consequence: **`supabase db push` against
+production would fail on `20260927141336`.**
+
+The fix is a data migration recorded in the ledger, and it is deliberately NOT
+written here. This directory may not gain a file claiming to be history that did
+not happen, and it may not be applied to production from a test harness.
+
+One correction to a claim made while investigating this, because the file itself
+is easy to misread: `20260926021657`'s header does **not** say it moved eight
+`app_config` values. It says eight values *agree* on `role.ec` and cites them as
+the reason the template bodies are wrong. What it does claim, in its last line —
+"A fresh environment replays the wrong value and then this one corrects it" — is
+false, and that sentence is the actual defect.
+
+## `20260906125927` and `20260906130017` are applied out of version order
+
+`20260906125927_harden_rpc_grants.sql` revokes EXECUTE on
+`public.cancel_order(uuid, uuid, uuid)`, and a `REVOKE ... ON FUNCTION` with a
+signature that does not resolve raises `42883`. The file is byte-identical to the
+ledger (`dac0889de56742d5b536806a0ae3fbad`) and the ledger holds a row for it, so
+it succeeded — which means the arity-3 signature already existed. The only
+migration here that creates it is `20260906130017`, and `CREATE OR REPLACE` keys
+on identity argument types, so the arity-2 definition left by `20260829005426`
+cannot have satisfied it.
+
+**`130017` was therefore applied before `125927`**, and `125927`'s version
+records when it was authored rather than when it ran. The ledger has no
+timestamp column, so the inversion cannot be observed directly — it is provable
+only from the dependency.
+
+The harness records this as an audited inversion
+(`APPLICATION_ORDER_OVERRIDES` in `apps/api/test/supabase-platform.ts`) and
+replays that one pair in the order production used. The result is verified
+against the live database rather than assumed: all seven grant facts that
+`125927` establishes — `anon` EXECUTE on `reserve_offer` and `cancel_order`,
+`authenticated` EXECUTE on `cancel_order` and `validate_pickup_code`, the
+revokes on `notify_business_pending` and `get_platform_stats`, and
+`sync_business_verification`'s `search_path` — match it one for one.
+
+## The two seed migrations cannot replay, and closing them would be worse
+
+`20260507200106` and `20260507200508` fail on foreign keys, and the reason is not
+the one the constraint name suggests. The chain is
+
+```
+businesses.owner_id -> public.profiles(id) -> auth.users(id)
+```
+
+so satisfying it needs THREE things the repository does not have: the four
+`b0000000-*` user ids (which the seed file itself carries literally), a
+`public.profiles` row per id, and — because `profiles.email` is `NOT NULL` and
+`profiles.role` is `NOT NULL DEFAULT 'user'` — an invented email and an invented
+role. The rows that would supply them lived in `20260507195823`, which is a
+documented `select 1;` because the original embedded bcrypt hashes.
+
+Production holds 22 users and 20 profiles, including exactly four
+`b0000000-*` users. Inventing the rest would not help anyway:
+`trg_bootstrap_business_companions` is created by `20260927025753`, which runs
+**after** both seeds, so seeded businesses would land with no
+`business_ownership` row — while production holds 16 businesses and 16
+`business_ownership` rows, a strict 1:1 invariant. Forcing the seeds to apply
+would trade a loud, correct failure for a silent state production has never
+been in, on the one table the harness exists to measure. Seed credentials are
+operator data and are supplied out of band.
 
 ## How to apply a migration
 

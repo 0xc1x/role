@@ -59,53 +59,44 @@ import {
  * The `anon` residue on `order_events` is real and is NOT a typo in this
  * comment. `20260507193539` creates the table, so Supabase's default privileges
  * give `anon` all seven; `20260507201408` revokes SELECT; `20260925163235` revokes
- * INSERT/UPDATE/DELETE/TRUNCATE. Nothing ever revokes REFERENCES or TRIGGER.
- * It is pinned, measured and shown to be inert below rather than tidied away.
+ * INSERT/UPDATE/DELETE/TRUNCATE. Nothing ever revokes REFERENCES or TRIGGER, in
+ * this directory or on the live project. It is pinned and measured below rather
+ * than tidied away, because it is a production property too.
  *
- * ─── FINDING, and it is a finding about THIS DATABASE, not production ────────
+ * ─── The composite, and what closed it ──────────────────────────────────────
  *
- * Because `anon` holds TRIGGER on `order_events`, and because the one migration
- * whose job is to revoke EXECUTE on the trigger functions did not apply here,
- * `anon` can attach a SECURITY DEFINER trigger to the append-only event log in
- * this test database. The demonstration is in
- * `anon holds TRIGGER, and in THIS database that is enough to attach a
- * SECURITY DEFINER trigger` below, and it is the single most important thing in
- * this file to not misread.
- *
- * The reason is a version-ordering failure, not a ledger hole:
- * `20260906125927_harden_rpc_grants.sql` is one of the seven pinned
- * `KNOWN_REPLAY_FAILURES`, because it revokes EXECUTE on
- * `public.cancel_order(uuid, uuid, uuid)` and the only migration in the directory
- * creating that three-argument signature is `20260906130017`, which sorts
- * AFTER it. `replayMigrations()` runs one transaction per file, so the whole file
- * rolls back — including its line 16,
+ * `anon` holds TRIGGER on `order_events`, and attaching a trigger requires
+ * EXECUTE on the function it names. So there are two layers, on two different
+ * objects, and only the second one was ever at risk: the migration whose job is
+ * to revoke EXECUTE on the trigger functions is
+ * `20260906125927_harden_rpc_grants.sql`, whose line 16 is
  * `revoke execute on function public.accrue_order_earnings() from public, anon, authenticated`.
- * That revoke is the only thing standing between the TRIGGER privilege and a
- * usable write primitive, so in this database it is absent.
  *
- * In production it is present, and the evidence is the ledger itself: this
- * repository's rule is that the only proof of what was applied is
- * `supabase_migrations.schema_migrations`, and a file is in
- * `supabase/migrations/` because `apply_migration` put it there. So production
- * has the revoke and this database does not.
+ * That file used NOT to apply here, and this file used to demonstrate the OPEN
+ * composite as a finding about the test database rather than about production.
+ * The cause was a version-ordering inversion, not a ledger hole: the file revokes
+ * EXECUTE on `public.cancel_order(uuid, uuid, uuid)`, the only migration in the
+ * directory creating that three-argument signature is `20260906130017`, and the
+ * ledger on the live project proves `130017` ran FIRST — a `revoke ... on
+ * function` with a signature that does not resolve raises 42883, the file is
+ * byte-identical to the ledger, and the ledger holds a row for it, so it
+ * succeeded in production and the signature existed. `APPLICATION_ORDER_OVERRIDES`
+ * in `test/supabase-platform.ts` now replays that pair in the order production used.
  *
- * WHAT NOT TO DO WITH IT: do not add the revoke to
- * `PLATFORM_GRANTS_AFTER_REPLAY` in `test/supabase-platform.ts` to make the
- * demonstration stop. That is the exact mistake that array already documents
- * making once — it once held `grant usage on schema auth_helpers` so that the
- * pilot's admin test would pass, which made the harness describe a database
- * nobody runs. The correct fix belongs in the replay, not in the grants list, and
- * until the ordering debt is resolved the honest thing is to assert the debt and
- * label the artefact. That is what the test does.
+ * The composite is therefore CLOSED, and closed the same way it is in production:
+ * the TRIGGER privilege is still there and still real, and the function is not
+ * executable. Both halves are asserted, because the interesting property is
+ * precisely that the first one alone would have been enough.
  *
- * A second consequence, stated here so nobody assumes otherwise: the RPC GRANT
- * surface in this database is wider than production's, for the same reason.
- * `anon` can still execute `public.validate_pickup_code(uuid, text)` and
- * `public.accrue_order_earnings()`, which `20260906125927` lines 9 and 16 revoke
- * from `public, anon`. So the `anon` denial assertions in this file that concern
- * a TABLE are production claims, and the ones that concern a FUNCTION are not.
- * Each test says which it is.
+ * WHAT NOT TO DO WITH IT: do not add the revoke to `PLATFORM_GRANTS_AFTER_REPLAY`
+ * to make a demonstration stop. That array is documented in
+ * `test/supabase-platform.ts` as having already been used exactly that way, with a
+ * `grant usage on schema auth_helpers` so that the pilot's admin test would pass,
+ * which made the harness describe a database nobody runs. The fix belonged in the
+ * replay, and it is there now; a harness that closes a hole by granting less
+ * stops being a measurement.
  *
+
  * ─── What the beforeAll seeds, and why each piece is not optional ───────────
  *
  * Vault: `trg_order_event_push` is `AFTER INSERT ... FOR EACH ROW` and calls
@@ -262,33 +253,48 @@ beforeAll(async () => {
     );
 
     /**
-     * `is_active` is NOT settable here, and that is the whole trick.
+     * Two businesses, one active-and-approved and one neither, and the seed is
+     * written the way phase 3 requires rather than the way the table reads most
+     * naturally.
      *
-     * Two BEFORE INSERT triggers run in name order, and the second one wins:
-     * `trg_default_business_inactive` forces `is_active := false` unless the
-     * incoming value is exactly false, and then `trg_sync_business_verification`
-     * derives `is_active` from `verification_status` —
-     * `approved` sets it true, `pending` or `rejected` set it false. So an
-     * INSERT carrying `is_active = false, verification_status = 'approved'` lands
-     * ACTIVE, which is what the first draft of this seed did and what made the
-     * "inactive business" persona read an active business and pass anyway.
+     * `owner_id` and `verification_status` are not columns of `businesses` any
+     * more: ownership lives on `business_ownership` and moderation state on
+     * `business_moderation`, and the INSERT below is the minimum a client could
+     * write. `trg_bootstrap_business_companions` fires AFTER INSERT and writes the
+     * two companion rows itself, so the moderation row for a new business already
+     * exists by the time the next statement runs and has to be UPDATED rather
+     * than inserted over.
      *
-     * That failure mode is worth naming: the assertion that caught it is the one
-     * that re-reads `is_active` from the row rather than trusting the INSERT, and
-     * it is kept below for exactly that reason. A fixture that quietly is not what
-     * it claims leaves every test using it green and meaningless.
+     * The old comment here described a BEFORE-trigger ordering trick —
+     * `trg_default_business_inactive` forcing `is_active` false and
+     * `trg_sync_business_verification` deriving it back from the status — and
+     * recorded that the first draft of this seed wrote `is_active = false,
+     * verification_status = 'approved'` and got an ACTIVE business, which made
+     * the "inactive business" persona read an active business and pass anyway.
+     * That failure mode is still the reason the assertion below re-reads the row
+     * instead of trusting the INSERT, so the habit is kept. The mechanism moved:
+     * the derive trigger now lives on `business_moderation`, and
+     * `trg_apply_business_verification_state` sets `businesses.is_active` from the
+     * moderation row AFTER it changes.
      *
-     * The moderation invariant that falls out — a business cannot make itself
-     * active by writing the column, because the column is not the client's to
-     * write — is `businesses`' own subject and is not asserted here. What is
-     * asserted is the narrower thing this file depends on: the row really is
-     * inactive, so "does deactivating a business hide its history" is the question
-     * the next test actually asked.
+     * What this file depends on is unchanged and is still asserted: the inactive
+     * business really is inactive, so "does deactivating a business hide its
+     * history" remains the question the next test asks. The moderation invariant
+     * itself — a business cannot make itself active by writing a column, because
+     * there is no column left to write — is `businesses.rls.db.spec.ts`'s subject.
      */
     await tx.unsafe(`
-      insert into public.businesses (id, owner_id, name, type, slug, is_active, verification_status)
-      values ('${BIZ_ACTIVE}',   '${OWNER}',  'RLS orders active',   'restaurant', 'rls-orders-active',   true,  'approved'),
-             ('${BIZ_INACTIVE}', '${OWNER2}', 'RLS orders inactive', 'restaurant', 'rls-orders-inactive', false, 'pending');
+      insert into public.businesses (id, name, type, slug)
+      values ('${BIZ_ACTIVE}',   'RLS orders active',   'restaurant', 'rls-orders-active'),
+             ('${BIZ_INACTIVE}', 'RLS orders inactive', 'restaurant', 'rls-orders-inactive');
+
+      insert into public.business_ownership (business_id, owner_id)
+      values ('${BIZ_ACTIVE}',   '${OWNER}'),
+             ('${BIZ_INACTIVE}', '${OWNER2}');
+
+      update public.business_moderation
+         set verification_status = 'approved'
+       where business_id = '${BIZ_ACTIVE}';
 
       insert into public.business_locations (id, business_id, name, address, latitude, longitude)
       values ('${LOC_ACTIVE}',   '${BIZ_ACTIVE}',   'Main', 'Street 1', 40.41680000, -3.70380000),
@@ -1005,8 +1011,12 @@ describe('who reads what', () => {
    * `businesses` has its own RLS — so the order policy inherits whatever
    * `businesses` decides. `Anyone can view active businesses` would have hidden
    * C and D from OWNER2. They are not hidden, because the PERMISSIVE
-   * "Owners can view own businesses" is `owner_id = auth.uid()` with no
-   * `is_active` term, and Postgres ORs the two.
+   * "Owners can view own businesses" is an EXISTS against
+   * `public.business_ownership` with no `is_active` term, and Postgres ORs the
+   * two. Phase 3 rewrote that predicate — it used to be `owner_id = auth.uid()`
+   * on a column that no longer exists — and the conclusion is unchanged, which is
+   * the point: the property is about ORing a permissive owner policy, not about
+   * where ownership is stored.
    *
    * The member is unaffected either way: "Users can view own orders" is
    * `user_id = auth.uid()` and never mentions the business at all, so a
@@ -1040,20 +1050,27 @@ describe('who reads what', () => {
     ]);
 
     // The business really is inactive, or the test above proves nothing. Both
-    // columns are read because only the second one is what the trigger chain
-    // derives `is_active` from — see the beforeAll note — and a future migration
-    // that changed that derivation would leave the first column true and leave
-    // this assertion as the only thing that noticed.
+    // halves are read because only the second one is what the trigger chain
+    // derives `is_active` from, and a future migration that changed that
+    // derivation would leave the first column true and leave this assertion as
+    // the only thing that noticed.
+    //
+    // The moderation state is read from `business_moderation` rather than from
+    // `businesses`, which is where it moved in phase 3. Asking this table for
+    // `verification_status` is a 42703, and a test that quietly stopped asking
+    // would be a test that stopped checking anything.
     const state = await ctx.sql.unsafe<
-      { slug: string; is_active: boolean; verification_status: string }[]
+      { slug: string; is_active: boolean; status: string }[]
     >(
-      `select slug, is_active, verification_status::text
-         from public.businesses where id = '${BIZ_INACTIVE}'`,
+      `select b.slug, b.is_active, m.verification_status::text as status
+         from public.businesses b
+         join public.business_moderation m on m.business_id = b.id
+        where b.id = '${BIZ_INACTIVE}'`,
     );
     expect(state[0]).toEqual({
       slug: 'rls-orders-inactive',
       is_active: false,
-      verification_status: 'pending',
+      status: 'pending',
     });
   });
 
@@ -1257,22 +1274,10 @@ describe('order_events is append-only, and the trigger is the only writer a clie
    * database has open stops being a measurement. The debt is the pinned failure
    * list, and the fix belongs to the replay.
    */
-  test('anon holds TRIGGER, and in THIS database that is enough to attach a SECURITY DEFINER trigger', async () => {
-    // The barrier, and it is absent here. Asserted first so the failure message
-    // on the demonstration below points at the actual cause.
-    const exec = await ctx.sql.unsafe<{ anon: boolean }[]>(
-      `select has_function_privilege('anon'::name, 'public.accrue_order_earnings()'::regprocedure, 'execute') as anon`,
-    );
-    expect(
-      exec[0]?.anon,
-      'anon can no longer execute accrue_order_earnings(), so the composite ' +
-        'below is closed. Either the replay debt was fixed — in which case this ' +
-        'database now matches production and this test should be rewritten to say ' +
-        'so — or something granted it back.',
-    ).toBe(true);
-
+  test('anon holds TRIGGER on order_events, and the composite is closed by the function revoke', async () => {
     /**
-     * Half one, and it is the half that actually proves the privilege is live.
+     * Half one: the TRIGGER privilege is LIVE, and it is not cosmetic. It really
+     * does pass the ACL check.
      *
      * Naming a function that does not return `trigger` fails with `42P17` rather
      * than `42501`, and that difference is the measurement: Postgres checks the
@@ -1300,48 +1305,33 @@ describe('order_events is append-only, and the trigger is the only writer a clie
         'the TRIGGER privilege is not what this test assumed it was',
     ).not.toContain('permission denied');
 
-    // Half two: with a function of the right shape, the statement succeeds.
+    // Half two: with a function of the RIGHT shape — one that really is a
+    // trigger — the refusal is now on the function, not the table. That is the
+    // closed composite, and it is asserted as a code so a reader can tell which
+    // of the two layers produced it.
     //
-    // `deniedAs` COMMITS when the statement succeeds — it rolls back only on a
-    // throw — so this trigger outlives the call and has to be dropped by hand.
-    // The `finally` is not defensive tidiness: without it the probe would fire
-    // for the rest of the file, and the assertion below would be checking a
-    // database it had quietly modified.
-    const attached = await deniedAs(ctx.sql, 'anon', null, (tx) =>
+    // This statement used to SUCCEED here, and the test existed to demonstrate
+    // that it did. It is the same composite production has, minus the hole: the
+    // table privilege is unchanged, and the function grant is what closes it.
+    const attach = await deniedAs(ctx.sql, 'anon', null, (tx) =>
       tx.unsafe(
         `create trigger rls_orders_probe_attach
            before insert on public.order_events
            for each row execute function public.accrue_order_earnings()`,
       ),
     );
-    try {
-      expect(
-        attached,
-        'anon could NOT attach a trigger here. If this starts failing, the replay ' +
-          'debt was fixed and this file is now describing production — see the header.',
-      ).toBeNull();
+    expect(
+      attach,
+      'anon could attach a SECURITY DEFINER trigger to the append-only event log. ' +
+        'The revoke on accrue_order_earnings() is the only thing standing between ' +
+        'the TRIGGER privilege and a write primitive, and it is present in this ' +
+        'database — the composite is closed here exactly as it is in production.',
+    ).not.toBeNull();
+    expect(attach?.code).toBe('42501');
 
-      const withProbe = await ctx.sql.unsafe<{ tgname: string }[]>(
-        `select t.tgname
-           from pg_trigger t
-           join pg_class c on c.oid = t.tgrelid
-           join pg_namespace n on n.oid = c.relnamespace
-          where n.nspname = 'public'
-            and c.relname = 'order_events'
-            and not t.tgisinternal
-          order by t.tgname`,
-      );
-      expect(plainRows(withProbe).map((t) => t.tgname)).toEqual([
-        'rls_orders_probe_attach',
-        'trg_order_event_push',
-      ]);
-    } finally {
-      await ctx.sql.unsafe(
-        `drop trigger if exists rls_orders_probe_attach on public.order_events`,
-      );
-    }
-
-    // Back to the ledger's own trigger, and nothing this file left behind.
+    // Nothing was left behind either way. Asserted rather than assumed, because
+    // the first draft of this probe attached successfully and the `finally` was
+    // the only reason the rest of the file still measured the ledger.
     const left = await ctx.sql.unsafe<{ tgname: string }[]>(
       `select t.tgname
          from pg_trigger t
@@ -1358,34 +1348,58 @@ describe('order_events is append-only, and the trigger is the only writer a clie
   });
 
   /**
-   * The debt that makes the previous test describe a database production does
-   * not have, asserted as debt.
+   * The revoke that closes the composite is present, and it is present because
+   * `20260906125927` APPLIES — asserted here rather than assumed by the test
+   * above.
    *
-   * Two things move together or neither means anything. The composite above is
-   * open because `accrue_order_earnings()` is still executable; that revoke
-   * lives in a file that does not apply; and the file does not apply because of
-   * a version-ordering problem with `cancel_order`'s arity. If someone fixes the
-   * ordering, the previous test's first assertion fails and this one fails too,
-   * which is the correct outcome: the file was describing a pre-fix database and
-   * has to be rewritten, not silently re-baselined.
+   * This file used to assert the opposite: that the file was pinned replay debt
+   * failing with `42883` on `cancel_order(uuid, uuid, uuid)`, and that the
+   * missing revoke was therefore a property of the test database rather than of
+   * production. That is no longer true and the difference is the whole point of
+   * the pair: the function-grant half of the file's `anon` denials is now a
+   * PRODUCTION claim, exactly like the table-grant half.
    *
-   * The message pin is included because a set comparison would accept this file
-   * failing for any reason as the same known failure, and this list was already
-   * wrong once for exactly that reason.
+   * The ordering is not asserted as a fixture any more but as a fact about the
+   * ledger, and the fact is cheap to state: `20260906130017` is applied before
+   * `20260906125927` because `20260906125927` cannot succeed otherwise, and it
+   * did succeed — the file is byte-identical to
+   * `supabase_migrations.schema_migrations` (md5 `dac0889de56742d5b536806a0ae3fbad`)
+   * and the ledger holds a row for it.
    */
-  test('the missing grant revoke is the pinned replay debt, not an unexplained gap', async () => {
-    const failure = KNOWN_REPLAY_FAILURES.find(
-      (k) => k.file === '20260906125927_harden_rpc_grants.sql',
-    );
-
+  test('the function revoke applies, so the anon denials here are production claims', async () => {
     expect(
-      failure,
-      '20260906125927 is no longer in KNOWN_REPLAY_FAILURES. If you fixed the ' +
-        'replay, the trigger demonstration in this file is now describing ' +
-        'production and both of its assertions need rewriting.',
-    ).toBeDefined();
-    expect(failure?.code).toBe('42883');
-    expect(failure?.msgIncludes).toBe('cancel_order(uuid, uuid, uuid)');
+      KNOWN_REPLAY_FAILURES.find(
+        (k) => k.file === '20260906125927_harden_rpc_grants.sql',
+      ),
+      '20260906125927 is pinned replay debt again, so every function-grant ' +
+        'assertion in this file describes a database production does not have. ' +
+        'The trigger composite above would be open again too.',
+    ).toBeUndefined();
+
+    // The revokes themselves, read back. Line 16 of the migration and the ones
+    // above it, and this is the assertion that would fail first if a future
+    // `grant ... to anon` or a blanket default privilege gave any of it back.
+    const revoked = await ctx.sql.unsafe<{ name: string; anon: boolean }[]>(
+      `select p.proname as name,
+              has_function_privilege('anon'::name, p.oid, 'execute') as anon
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('accrue_order_earnings', 'validate_pickup_code',
+                            'get_platform_stats', 'generate_payouts',
+                            'notify_business_pending', 'notify_business_verification',
+                            'sync_business_verification')
+        order by p.proname`,
+    );
+    expect(plainRows(revoked)).toEqual([
+      { name: 'accrue_order_earnings', anon: false },
+      { name: 'generate_payouts', anon: false },
+      { name: 'get_platform_stats', anon: false },
+      { name: 'notify_business_pending', anon: false },
+      { name: 'notify_business_verification', anon: false },
+      { name: 'sync_business_verification', anon: false },
+      { name: 'validate_pickup_code', anon: false },
+    ]);
   });
 
   /**

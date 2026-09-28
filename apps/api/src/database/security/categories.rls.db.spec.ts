@@ -848,17 +848,24 @@ describe('public.categories: what the policies refuse', () => {
 
 describe('the replayed ledger', () => {
   /**
-   * Seven migrations in `supabase/migrations/` cannot apply to a fresh
+   * Four migrations in `supabase/migrations/` cannot apply to a fresh
    * database. That is a fact about the ledger, and it is asserted here so it
    * stays a fact instead of becoming a habit.
    *
    * The alternative — a harness that tolerates failures up to a number — is the
    * worst of both worlds: the suite keeps running against a schema nobody
-   * reviewed, and a NEW break is indistinguishable from the seven that were
+   * reviewed, and a NEW break is indistinguishable from the ones that were
    * already there. So the set is a fixture. Add a migration that fails and
    * `createSupabaseTestDb()` refuses to produce a database and prints the file;
-   * fix one of these seven and it does the same, and prints the file that
+   * fix one of these four and it does the same, and prints the file that
    * stopped failing.
+   *
+   * It was seven until this set was worked through. Three of the seven were
+   * closed by restoring the exact function-body text that two byte-identical
+   * migrations rewrite by literal matching, and one by an audited application-
+   * order inversion; the reasoning lives in the `why` on each remaining entry and
+   * in `supabase/migrations/README.md`. The count is asserted rather than
+   * described, so the next closure is as visible as this one.
    */
   test('the failing set is exactly the pinned debt, nothing added or removed', async () => {
     const drift = diffReplayFailures(ctx.replay.failures);
@@ -873,17 +880,22 @@ describe('the replayed ledger', () => {
     expect(
       ctx.replay.failures.map((f) => `${f.file} ${f.code}`).sort(),
     ).toEqual(KNOWN_REPLAY_FAILURES.map((k) => `${k.file} ${k.code}`).sort());
-    expect(KNOWN_REPLAY_FAILURES).toHaveLength(7);
+    expect(KNOWN_REPLAY_FAILURES).toHaveLength(4);
   });
 
   /**
-   * Each of the seven still fails FOR ITS OWN REASON.
+   * Each of the four still fails FOR ITS OWN REASON.
    *
-   * A set comparison would accept `20260927025753` failing for any reason at
-   * all as the same known failure, and this list was already wrong once: it was
-   * first written when the failures carried no SQLSTATE, so every entry read as
-   * `?` and matched anything. Pinning the code plus a fragment of the message
-   * is what makes "the same failure" a checkable claim.
+   * A set comparison would accept a file failing for any reason at all as the
+   * same known failure, and this list was already wrong once: it was first
+   * written when the failures carried no SQLSTATE, so every entry read as `?` and
+   * matched anything. Pinning the code plus a fragment of the message is what
+   * makes "the same failure" a checkable claim.
+   *
+   * It has already earned its keep twice. `20260927053728` used to fail on its
+   * function-body guard and now fails on its data assertion instead — the same
+   * file, a different reason, and the two are unrelated findings — and a
+   * file-only comparison would have called that unchanged.
    */
   test('each pinned failure still fails the way it is documented', async () => {
     const actual = new Map(
@@ -902,15 +914,20 @@ describe('the replayed ledger', () => {
   });
 
   /**
-   * The rest of the ledger applied, which is what makes the seven meaningful.
+   * The rest of the ledger applied, which is what makes the four meaningful.
    *
-   * 937 statements across 109 files, and the end state carries 103 policies on
-   * 34 RLS-enabled tables. Without this the "7 known failures" number could be
+   * 1023 statements across 113 files, and the end state carries 103 policies on
+   * 34 RLS-enabled tables. Without this the "4 known failures" number could be
    * satisfied by a replay that applied almost nothing, and every policy
    * assertion above would be asserting against a database that never got built.
+   *
+   * The floor is on `applied` and not an equality on a count, because the point
+   * is the shape — a substantial ledger built, minus four files — and pinning
+   * 1023 exactly would make this test fail every time a migration is added, which
+   * is the wrong reason for a database spec to go red.
    */
-  test('the other 109 migrations applied and the schema is populated', async () => {
-    expect(ctx.replay.applied).toBeGreaterThan(900);
+  test('the other 113 migrations applied and the schema is populated', async () => {
+    expect(ctx.replay.applied).toBeGreaterThan(1000);
     // Two statements are deliberately not executed: the harness provides
     // `pg_cron` and `pg_net` as schema stubs, because neither extension is
     // installable in this image. Recorded rather than left as a mystery count.

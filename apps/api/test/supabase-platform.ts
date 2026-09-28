@@ -28,8 +28,11 @@
  *     a different mechanism would pass while production failed.
  *   - the `anon` / `authenticated` / `service_role` role names, because GRANTs
  *     and `TO authenticated` in the policies are written against them.
- *   - `auth.users` as a real table, because 20+ foreign keys point at it and
- *     a stub that accepts the FK but has no rows would hide every seed failure.
+ *   - `auth.users` as a real table, because 20+ foreign keys point at it. It is
+ *     a real relation with no rows: production holds 22 users and 20 profiles,
+ *     and the rows the seed migrations need are credentials this repository must
+ *     not carry. That leaves two seed migrations failing, and the failure is
+ *     reported rather than papered over — see `KNOWN_REPLAY_FAILURES`.
  *
  * Stub (right surface, no behaviour):
  *   - `storage`, `cron`, `net`, `vault`. The signatures match what the
@@ -125,9 +128,17 @@ $b$`,
 
   // ── auth ──────────────────────────────────────────────────────────────────
   // `auth.users` is a stub of a GoTrue-managed table. It must still be a real
-  // relation: 20+ foreign keys resolve against it, and `businesses.owner_id`
-  // among them, so the seed migrations fail here exactly as they would in
-  // production.
+  // relation: 20+ foreign keys resolve against it, and `businesses.owner_id` ->
+  // `public.profiles` -> `auth.users` among them.
+  //
+  // It is EMPTY on purpose, and that is a fidelity choice, not an oversight.
+  // Production holds 22 users and 20 profiles; the rows that would let the seed
+  // migrations apply are operator data whose credentials this repository must
+  // not carry (see `20260507195823` and `KNOWN_REPLAY_FAILURES`). Inventing them
+  // would be worse than failing: `trg_bootstrap_business_companions` is created
+  // long after the seeds, so seeded businesses would arrive with no
+  // `business_ownership` row, while production holds a strict 1:1
+  // businesses-to-ownership invariant. A loud failure is the honest report.
   `create schema if not exists auth`,
   `create table if not exists auth.users (
      id uuid primary key default gen_random_uuid(),
@@ -643,7 +654,7 @@ const TEMPLATE_LOCK_KEY = 'role:apps/api:supabase-platform:template';
  * the class of bug a fingerprint is supposed to prevent, so the revision is
  * part of the input and has to be moved by hand.
  */
-const HARNESS_REVISION = 1;
+const HARNESS_REVISION = 2;
 
 /** One migration that did not apply, in the shape a test can assert on. */
 export interface ReplayFailure {
@@ -674,7 +685,7 @@ export interface KnownReplayFailure {
 }
 
 /**
- * The seven migrations `supabase/migrations/` cannot apply to a fresh database.
+ * The four migrations `supabase/migrations/` cannot apply to a fresh database.
  *
  * ─── Why this is a hard list and not a tolerance ───────────────────────────
  *
@@ -688,17 +699,22 @@ export interface KnownReplayFailure {
  *
  * ─── What the resulting database therefore is ──────────────────────────────
  *
- * 109 of 116 migrations applied cleanly, 937 of 944 statements. The seven
+ * 113 of 117 migrations applied cleanly, 1023 of 1027 statements. The four
  * aborted files contributed nothing: each ran in its own transaction and rolled
  * back whole. The end state carries 103 policies on 34 RLS-enabled tables out
- * of 39, and that is a real schema, not a partial one — but three of the
- * failures are rewrites of `public.reserve_offer` and
- * `public.notify_business_pending`, so those two functions are at their
- * pre-rewrite definitions. Anything that asserts on their bodies is asserting
- * on a version production replaced.
+ * of 39, and `public.businesses` carries the 16 columns production carries,
+ * with `trg_bootstrap_business_companions` installed and every owner policy
+ * resolving through `public.business_ownership`.
  *
- * Read every `why` before "fixing" one. Three of them are not ledger bugs and
- * must never be papered over by editing a migration.
+ * ─── All four are DATA this repository must not contain ─────────────────────
+ *
+ * Not one of these is a schema defect, and none of them may be closed by
+ * editing a migration. Two are seed rows whose foreign keys need `auth.users`
+ * credentials that were deliberately never committed; two are `app_config`
+ * values that production carries and that NO migration in the ledger — the
+ * ledger on the live project included — ever wrote. Read the `why` on each
+ * before touching anything, and measure against production rather than against
+ * this file.
  */
 export const KNOWN_REPLAY_FAILURES: readonly KnownReplayFailure[] = [
   {
@@ -706,97 +722,82 @@ export const KNOWN_REPLAY_FAILURES: readonly KnownReplayFailure[] = [
     code: '23503',
     msgIncludes: 'businesses_owner_id_fkey',
     why:
-      'BY DESIGN, and unfixable in this repository. The seed businesses carry ' +
-      'owner ids that must exist in `auth.users`, and the migration that created ' +
-      'them — `20260507195823_insert_seed_auth_users_and_profiles.sql` — is a ' +
-      'deliberate `select 1;` in this directory, because the original embedded ' +
-      'bcrypt password hashes and the repository is public. `supabase/migrations/README.md` ' +
-      'documents the removal and how to restore it. A fresh replay has no seed ' +
-      'users, so `businesses.owner_id` has nothing to point at.',
+      'NOT REPLICABLE, and closing it would make the harness LESS faithful ' +
+      'than leaving it. The constraint is not the one the name suggests. ' +
+      '`20260507193215` declares `businesses.owner_id UUID NOT NULL REFERENCES ' +
+      'public.profiles(id)`, and `20260507193004` declares `profiles.id UUID ' +
+      'PRIMARY KEY REFERENCES auth.users(id)`. So the chain is ' +
+      'businesses -> profiles -> auth.users, and satisfying it takes THREE ' +
+      'things, not one: the four `b0000000-*` user ids (which the file itself ' +
+      'carries literally), a `public.profiles` row per id, and — because ' +
+      '`profiles.email` is `NOT NULL` and `profiles.role` is `NOT NULL ' +
+      "DEFAULT 'user'` — an invented email and an invented role for each. The " +
+      'rows that ' +
+      'would supply them lived in `20260507195823`, which is a documented ' +
+      '`select 1;` here because the original embedded bcrypt hashes; ' +
+      '`supabase/migrations/README.md` records the removal. Production holds 22 ' +
+      'users and 20 profiles, and this repository holds none of them. ' +
+      'The reason not to fake it is the decisive one: `trg_bootstrap_business_' +
+      'companions` is created by `20260927025753`, which runs AFTER both seeds, ' +
+      'so seeded businesses would land with NO `business_ownership` row. ' +
+      'Production holds 16 businesses and 16 `business_ownership` rows — a 1:1 ' +
+      'invariant. Inventing the users would therefore trade a loud, correct ' +
+      'failure for a silent state production has never been in, on the exact ' +
+      'table this harness exists to measure. Seed credentials are operator data, ' +
+      'supplied out of band.',
   },
   {
     file: '20260507200508_insert_seed_offers_coupons_orders.sql',
     code: '23503',
     msgIncludes: 'offers_business_id_fkey',
     why:
-      'Cascade of the entry above. `offers.business_id` references the ' +
-      '`businesses` rows that never landed, so the seed cannot proceed. Fixing ' +
-      'the FK or the order would be treating a symptom and would leave the ' +
-      'first failure in place.',
-  },
-  {
-    file: '20260906125927_harden_rpc_grants.sql',
-    code: '42883',
-    msgIncludes: 'cancel_order(uuid, uuid, uuid)',
-    why:
-      'A version-ordering problem, not a content problem. The file revokes and ' +
-      'grants `execute` on `public.cancel_order(uuid, uuid, uuid)`, and the only ' +
-      'migration in this directory that creates that three-argument signature is ' +
-      '`20260906130017_bind_order_rpc_identity.sql` — whose version is LATER. In a ' +
-      'filename-ordered replay the function does not exist yet. Before this file, ' +
-      'the newest definition is the arity-2 `20260829005426` one, and `CREATE OR ' +
-      'REPLACE` keys on argument types, so arity 2 cannot be rewritten into arity ' +
-      "3. So either the directory's versions for this pair do not reflect the " +
-      'order the server applied them in, or this migration could not have applied ' +
-      'where it is. `20260906131000_drop_legacy_cancel_order_overload.sql` ' +
-      'documents the surviving overload in detail.',
-  },
-  {
-    file: '20260927025753_businesses_drop_sensitive_columns.sql',
-    code: 'P0001',
-    msgIncludes: 'patron no encontrado en public.reserve_offer',
-    why:
-      'The root of the other three rewrite failures, so fix this one first. The ' +
-      'migration rewrites ten functions in place by locating literal text in ' +
-      '`pg_get_functiondef` and asserting each substitution matched. It searches ' +
-      'for `select commission_rate into v_commission_rate from public.businesses ' +
-      'where id=v_offer.business_id;` — and `20260925155433_harden_business_order_reservations.sql` ' +
-      'already recreated `public.reserve_offer` with a four-argument signature ' +
-      '`(uuid, uuid, uuid, text)` and a different body, so the literal is gone. ' +
-      'The rewrite raises instead of no-oping, which is the right call and the ' +
-      'reason the failure is legible. Note the whole file rolls back, so this ' +
-      'also leaves `public.notify_business_pending()` at its pre-rewrite ' +
-      'definition — which is what breaks `20260927053728`.',
-  },
-  {
-    file: '20260927033509_reserve_offer_coupon_rejection.sql',
-    code: 'P0001',
-    msgIncludes: 'reserve_offer coupon block does not match the expected text',
-    why:
-      'Cascade of `20260927025753`. This migration rewrites the coupon block of ' +
-      '`public.reserve_offer`, and the text it searches for exists only in the ' +
-      'body the previous migration was supposed to have produced. Same ' +
-      'in-place-rewrite design, same `pg_get_functiondef` text matching, same ' +
-      'fail-loud behaviour.',
+      'Cascade of the entry above, and the same decision. `offers.business_id` ' +
+      'references the `businesses` rows that never landed. Note the scope is ' +
+      'narrower than it looks: this file references only `d0000000-*` ' +
+      '(businesses), `c*`/`e*`/`f*` (offers, coupons, orders) and inserts ' +
+      '`orders.user_id` with NO foreign key to `auth.users` — `20260507193539` ' +
+      'never declared one. So `auth.users` is not this file’s problem; the four ' +
+      'seed businesses are. Fixing the FK or the order would treat a symptom and ' +
+      'leave the first failure in place.',
   },
   {
     file: '20260927053728_normalize_role_domain.sql',
     code: 'P0001',
-    msgIncludes: 'notify_business_pending does not match the expected text',
+    msgIncludes: 'non-social app_config still references role.app',
     why:
-      'Cascade of `20260927025753`, through the trigger and not through the ' +
-      "function it names. That migration's rewrite of " +
-      '`public.notify_business_pending()` is what introduced the ' +
-      '`adminUrl` literal this one searches for; rolled back, the function still ' +
-      'has its `20260902001059` body and the literal does not exist. Also a ' +
-      'cascade for the data half: this is the only migration in the directory ' +
-      'that moves `privacy.contact_email` off `role.app`.',
+      'NOT REPLICABLE: the ledger does not describe this database. The half of ' +
+      'this migration that rewrites `public.notify_business_pending()` now ' +
+      'applies. What fails is its closing assertion, and it fails on four keys — ' +
+      '`support.email`, `contact.hola_email`, `contact.negocios_email`, ' +
+      '`legal.contact_email` — that are `role.app` in a replay and `role.ec` in ' +
+      'production. `privacy.contact_email`, the fifth key, is moved by this very ' +
+      'file and is no longer reported. Measured against the live ledger: NO row ' +
+      'in `supabase_migrations.schema_migrations` writes `soporte@role.ec`, ' +
+      '`hola@role.ec` or `legal@role.ec` at all. `20260821205638` seeds them as ' +
+      '`role.app`; `20260830014803` inserts only `email.from` and ' +
+      '`contact.cities`; `20260926021657` touches `email_templates.body_html` and ' +
+      'never `app_config`. So those four values were changed on the live project ' +
+      'by a write path that left no ledger row — the same class of gap as the ' +
+      '`cancel_order` arity-2 drop documented in `20260906131000`. The fix is a ' +
+      'data migration recorded in the ledger, and it is NOT written here: this ' +
+      'directory may not gain a file claiming to be history that did not happen, ' +
+      'and it may not be applied to production from this task.',
   },
   {
     file: '20260927141336_confirm_admin_domain.sql',
     code: 'P0001',
     msgIncludes: 'non-social app_config still references role.app',
     why:
-      'Two causes, and only one of them is a cascade. `privacy.contact_email` is ' +
-      'here because `20260927053728` failed. The other four — `support.email`, ' +
-      '`contact.hola_email`, `contact.negocios_email`, `legal.contact_email` — ' +
-      'are moved by NO migration in this directory: ' +
-      '`20260926021657_business_templates_support_domain.sql` announces in its own ' +
-      'header that it moved eight `app_config` values and then updates only ' +
-      '`email_templates.body_html`, never `app_config`. Its header documents an ' +
-      'intent its SQL does not implement. `20260821205638_create_app_config.sql` ' +
-      'seeds the keys with the `role.app` values, so a fresh replay can never ' +
-      'satisfy this assertion.',
+      'Cascade of the entry above, plus one key of its own. This file sets ' +
+      '`links.admin_url` to `https://admin.role.ec` — which succeeds — and then ' +
+      'asserts that no non-social `app_config` value still contains `role.app`. ' +
+      'It reports FIVE keys: the four of the entry above, plus ' +
+      '`privacy.contact_email`, which is only still `role.app` here because ' +
+      '`20260927053728` rolled back. Read together, the two messages are the ' +
+      'same single fact, and the difference between four and five is the only ' +
+      'thing this file contributes. The `social.%` exemption is deliberate and ' +
+      'correct: `facebook.com/role.app` and `tiktok.com/@role.app` are account ' +
+      'names on someone else’s domain.',
   },
 ];
 
@@ -889,11 +890,139 @@ function describeError(error: unknown): { code: string; msg: string } {
   return { code, msg: msg.length > 180 ? `${msg.slice(0, 180)}...` : msg };
 }
 
-/** Every migration file, in the order `supabase db push` would apply them. */
+/**
+ * One migration that must be applied OUTSIDE version order, and why.
+ *
+ * ─── Why this list exists at all ────────────────────────────────────────────
+ *
+ * A migration filename carries a version, and `apply_migration` applies the
+ * ledger in version order. That is the correct default and it is what almost
+ * every file here assumes. It is not, however, a law: the Supabase server
+ * assigns the version when the row is written, and nothing records the
+ * application order after the fact. `supabase_migrations.schema_migrations` has
+ * `version`, `name`, `statements`, `created_by`, `idempotency_key` and
+ * `rollback` — and no timestamp, so a version inversion cannot be observed
+ * directly. It can still be PROVEN from the contents, which is what the one
+ * entry below does.
+ *
+ * ─── The rule for adding an entry ───────────────────────────────────────────
+ *
+ * An override is admissible only when the ledger itself forces the order, not
+ * when the harness would merely prefer a different one. "It failed, so let me
+ * try the other order" is not evidence; it is a bug report about a file nobody
+ * has read. Every entry below therefore cites a statement in one file that
+ * cannot succeed unless another file has already run, plus the ledger row that
+ * proves the first file did succeed in production.
+ *
+ * The alternative — leaving the pair failing — is not neutral. It costs a whole
+ * hardening migration, and the grants it issues are the difference between a
+ * `SECURITY DEFINER` RPC being callable by `anon` and not. A harness that
+ * cannot model a file the ledger proves ran is a harness quietly asserting
+ * something false about the database.
+ */
+export interface ApplicationOrderOverride {
+  /** Applied first, despite carrying the LATER version. */
+  first: string;
+  /** Applied second, despite carrying the EARLIER version. */
+  second: string;
+  /** The proof. One paragraph, because the proof is the whole justification. */
+  why: string;
+}
+
+/**
+ * The audited application-order inversions. Currently exactly one, and it is
+ * proven rather than assumed.
+ *
+ * ─── 20260906130017 before 20260906125927 ───────────────────────────────────
+ *
+ * `20260906125927_harden_rpc_grants.sql` opens with
+ *
+ *     revoke execute on function public.cancel_order(uuid, uuid, uuid)
+ *       from public, anon;
+ *
+ * and `revoke ... on function` with a signature that does not resolve raises
+ * `42883 function ... does not exist`. The file is byte-identical to the
+ * ledger — `md5sum` of the file equals `md5(statements[1])` for version
+ * `20260906125927`, both `dac0889de56742d5b536806a0ae3fbad` — and the ledger
+ * HAS a row for it, so in production the statement executed and the arity-3
+ * `cancel_order` existed at that moment.
+ *
+ * The only migration in this directory that creates that signature is
+ * `20260906130017_bind_order_rpc_identity.sql`. `CREATE OR REPLACE` keys on
+ * the identity argument types, so the arity-2 definition that
+ * `20260829005426` left behind cannot become an arity-3 function: before
+ * `130017` runs, the newest `cancel_order` takes two uuids and the revoke names
+ * three.
+ *
+ * Therefore `130017` was applied before `125927` on the live project, and the
+ * version it carries reflects when it was AUTHORED, not when it ran. That is
+ * legal — `apply_migration` applies whatever arrives — and it is the only
+ * ordering consistent with both ledger rows existing.
+ *
+ * WHAT THE INVERSION COSTS: nothing, and that is checked rather than hoped.
+ * `CREATE OR REPLACE FUNCTION` preserves the privileges of the function it
+ * replaces, but here there is nothing to preserve — `130017` creates the
+ * function and `125927` is the first thing to touch its ACL, so create-then-
+ * grant is also the order the file intends. Replaying the pair the other way
+ * round would leave `anon` holding EXECUTE on a `SECURITY DEFINER` RPC.
+ *
+ * WHAT IT IS NOT: permission to reorder anything else. The list is a list.
+ * A second entry needs its own proof or it is a guess wearing a proof's
+ * clothes.
+ */
+export const APPLICATION_ORDER_OVERRIDES: readonly ApplicationOrderOverride[] =
+  [
+    {
+      first: '20260906130017_bind_order_rpc_identity.sql',
+      second: '20260906125927_harden_rpc_grants.sql',
+      why:
+        'Proven inversion, not a guess. `20260906125927` revokes execute on ' +
+        '`public.cancel_order(uuid, uuid, uuid)`, which raises 42883 unless ' +
+        'that exact signature exists; the file is byte-identical to the ledger ' +
+        '(md5 dac0889de56742d5b536806a0ae3fbad) and the ledger holds a row for ' +
+        'it, so it ran in production and the signature existed. ' +
+        '`20260906130017` is the only file here that creates it, and CREATE OR ' +
+        'REPLACE cannot turn the arity-2 definition left by ' +
+        '`20260829005426` into an arity-3 one. So `130017` ran first and its ' +
+        'version records authorship, not application.',
+    },
+  ];
+
+/**
+ * Every migration file, in the order the ledger was actually applied.
+ *
+ * Filename order first, then the audited inversions above. A file named in an
+ * override is moved to immediately after its partner; anything not named keeps
+ * version order, so an override cannot silently reorder the rest of the ledger.
+ * An override that names a file this directory does not contain throws rather
+ * than being ignored, because an override that does not fire is an override
+ * that looks applied and is not.
+ */
 export function migrationFiles(): string[] {
-  return readdirSync(MIGRATIONS_DIR)
+  const files = readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith('.sql'))
     .sort();
+
+  for (const override of APPLICATION_ORDER_OVERRIDES) {
+    const firstAt = files.indexOf(override.first);
+    const secondAt = files.indexOf(override.second);
+    if (firstAt === -1 || secondAt === -1) {
+      throw new Error(
+        `APPLICATION_ORDER_OVERRIDES names a file this directory does not ` +
+          `contain: ${firstAt === -1 ? override.first : override.second}. An ` +
+          `override that cannot fire is worse than none, because it reads as ` +
+          `applied.`,
+      );
+    }
+    if (firstAt < secondAt) continue; // Already in the required order.
+    // Remove `first`, then re-insert it directly BEFORE `second`. Both indices
+    // are re-read after the splice: removing an element shifts everything after
+    // it, and reusing the stale index would insert one position too late.
+    const moved = files.splice(firstAt, 1)[0] as string;
+    files.splice(files.indexOf(override.second), 0, moved);
+  }
+
+  return files;
 }
 
 /**
@@ -923,7 +1052,7 @@ export function migrationFiles(): string[] {
  * cascade of derived failures that sends the next reader hunting a hole in the
  * ledger that is not there. `createSupabaseTestDb` refuses to build a template
  * at all when this returns any failure, so the failures a test sees are always
- * the seven real ones and never a cascade.
+ * the four real ones and never a cascade.
  */
 export async function replayMigrations(sql: Sql): Promise<ReplayResult> {
   const failures: ReplayFailure[] = [];
@@ -1083,7 +1212,7 @@ async function templateIsFresh(
 /**
  * Build `rls_template` from scratch. Only called with the advisory lock held.
  *
- * Throws on any replay failure. A template that is missing seven migrations is
+ * Throws on any replay failure. A template that is missing four migrations is
  * not a degraded test database, it is a different one, and every assertion made
  * against it would be about a schema that production does not have.
  */
@@ -1124,8 +1253,8 @@ async function buildTemplate(
     }
 
     const replay = await replayMigrations(db);
-    // The gate is on the SET, not on the count. Seven known failures build a
-    // real database; seven DIFFERENT ones do not, and neither does six.
+    // The gate is on the SET, not on the count. Four known failures build a
+    // real database; four DIFFERENT ones do not, and neither does three.
     const drift = diffReplayFailures(replay.failures);
     if (drift.length > 0) {
       const detail = replay.failures
@@ -1140,8 +1269,8 @@ async function buildTemplate(
           `does not have.\n\n${detail}\n\nDrift against KNOWN_REPLAY_FAILURES:\n` +
           `${drift.map((d) => `  ${d}`).join('\n')}\n\n` +
           `Each entry in KNOWN_REPLAY_FAILURES carries a paragraph on why it ` +
-          `fails. Read it before changing anything — three of the seven are not ` +
-          `ledger bugs and must not be closed by editing a migration.`,
+          `fails. Read it before changing anything — none of the four is a ` +
+          `schema defect, and none may be closed by editing a migration.`,
       );
     }
 
