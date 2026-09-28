@@ -155,6 +155,28 @@ const ORDER: Record<string, string> = {
   M: 'dddddddd-0000-4000-8000-000000000001',
   /** STRANGER at `BIZ_A`. The owner must see this consumer's profile. */
   S: 'dddddddd-0000-4000-8000-000000000002',
+  /**
+   * A SECOND order for MEMBER at `BIZ_A`, deliberately unreviewed.
+   *
+   * Exists for one reason: `UNIQUE (user_id, order_id)` means the happy-path
+   * insert needs a (user, order) pair nobody has spent yet, and `ORDER.M` is
+   * already spent by `REVIEW.M`. Seeding a spare order is cheaper and more
+   * honest than having the test delete and re-insert a fixture, and it is the
+   * shape production actually has — a consumer has several orders and reviews
+   * one of them.
+   */
+  R: 'dddddddd-0000-4000-8000-000000000003',
+  /**
+   * A THIRD order for MEMBER, for the same reason as `R`.
+   *
+   * `UNIQUE (user_id, order_id)` allows exactly one review per (consumer,
+   * order), so a test that needs TWO rows written by MEMBER needs two unspent
+   * pairs. Giving each probe its own order is what lets both rows exist at once,
+   * which is what makes the aggregate assertions below readable: a mid-test
+   * delete-and-reinsert would make every count in the block a function of
+   * whether the previous probe had been cleaned up yet.
+   */
+  Q: 'dddddddd-0000-4000-8000-000000000004',
 };
 
 const REVIEW: Record<string, string> = {
@@ -267,7 +289,10 @@ beforeAll(async () => {
     );
 
     /**
-     * Two businesses, two offers, two orders and two reviews.
+     * Two businesses, two offers, FOUR orders and two reviews.
+     *
+     * `ORDER.R` and `ORDER.Q` are unreviewed orders for `MEMBER`; see their
+     * comments.
      *
      * `business_ownership` is seeded by hand because
      * `trg_bootstrap_business_companions` writes that row only when
@@ -306,7 +331,9 @@ beforeAll(async () => {
         (id, user_id, offer_id, business_id, order_number, status, price,
          original_price, pickup_code, commission_rate, platform_fee, net_amount)
       values ('${ORDER.M}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-M', 'confirmed', 4.00, 10.00, 'PICK-M', 0.4000, 0.4000, 3.2000),
-             ('${ORDER.S}', '${STRANGER}', '${OFFER_B}', '${BIZ_A}', 'RLS-PR-S', 'confirmed', 4.00, 10.00, 'PICK-S', 0.4000, 0.4000, 3.2000);
+             ('${ORDER.S}', '${STRANGER}', '${OFFER_B}', '${BIZ_A}', 'RLS-PR-S', 'confirmed', 4.00, 10.00, 'PICK-S', 0.4000, 0.4000, 3.2000),
+             ('${ORDER.R}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-R', 'confirmed', 4.00, 10.00, 'PICK-R', 0.4000, 0.4000, 3.2000),
+             ('${ORDER.Q}', '${MEMBER}',   '${OFFER_A}', '${BIZ_A}', 'RLS-PR-Q', 'confirmed', 4.00, 10.00, 'PICK-Q', 0.4000, 0.4000, 3.2000);
 
       insert into public.reviews
         (id, user_id, business_id, order_id, rating, business_rating, product_rating, comment)
@@ -1755,39 +1782,46 @@ describe('public.reviews: the grants anon actually holds', () => {
 
 describe('the anon insert', () => {
   /**
-   * #1, and the honest answer is "both, and neither of them is a design".
+   * ─── WHAT IT CONCLUDED BEFORE ─────────────────────────────────────────────
    *
-   * The gate for an INSERT is the `WITH CHECK`, and the `USING` is NULL — which
-   * is the expected shape for an INSERT, since there is no old row to qualify.
-   * Asserted from `pg_policies` rather than assumed, because the two being
-   * confused is how a "the policy prevents it" claim gets made about a column
-   * that nothing constrains.
-   *
-   * The real `with_check` is `user_id = auth.uid()`. For an anonymous session
-   * `auth.uid()` is NULL, so the comparison is NULL, so the row does not satisfy
-   * the check, so the INSERT is refused. The refusal is REAL and it is a POLICY
-   * refusal — the message is `new row violates row-level security policy for
-   * table "reviews"`, not a grant error, and that distinction is asserted.
-   *
-   * But the mechanism is a three-valued-logic coincidence, not a design:
+   * The finding was: the anon insert is refused by the `WITH CHECK`, and the
+   * mechanism is a three-valued-logic coincidence rather than a design.
    *
    *     '1111…'::uuid = auth.uid()   ->  NULL, not false
    *
-   * The policy never says "an anonymous caller may not post". It says "the row's
-   * user_id must be the caller's", and with no caller that comparison is
-   * undefined. It happens to be safe because a NULL `WITH CHECK` is treated as
-   * not-satisfied. Change the predicate to `user_id is not distinct from
-   * auth.uid()` — a rewrite that reads as a strictness improvement — and the
-   * same anonymous request would be ACCEPTED with `user_id` NULL, except the
-   * column is NOT NULL, and then the error would be `23502` instead, and the
-   * policy would no longer be the thing protecting anything.
+   * The policy never said "an anonymous caller may not post". It said "the row's
+   * user_id must be the caller's", and with no caller that comparison was
+   * undefined. It happened to be safe because a NULL `WITH CHECK` is treated as
+   * not-satisfied — and the next test showed the accident had a hole.
    *
-   * So the correct statement of the finding is: the refusal is enforced by the
-   * POLICY, and it is enforced by an accident of how NULL compares. Both facts
-   * are asserted, and the next test shows the accident has a hole.
+   * ─── WHAT IT CONCLUDES NOW, AND WHY THE MECHANISM CHANGED ─────────────────
+   *
+   * The refusal is STILL a policy refusal with the SAME message, and that is
+   * asserted below, because a reader who saw "the gate moved" would reasonably
+   * expect the error to have changed with it. It did not.
+   *
+   * What changed is WHY. `Users can insert own reviews` is now `TO authenticated`
+   * instead of `TO public` (`20260928192000`), so an `anon` session no longer
+   * matches the policy at all. Postgres reports "no applicable policy" in exactly
+   * the same words as "the applicable policy said no", and both are `42501`.
+   *
+   * That is the whole point of the change, and it is worth being precise about
+   * what was bought: the denial is no longer an accident of how NULL compares.
+   * It is now a statement about which role the policy was written for. The old
+   * form would have been re-opened by a rewrite that reads as a strictness
+   * improvement — `user_id is not distinct from auth.uid()` would have ACCEPTED
+   * the anonymous request, and only the NOT NULL column would have stood between
+   * it and a row, with the error changing to `23502`.
+   *
+   * The `auth.uid()` probe is KEPT, deliberately. It is the measurement that
+   * makes the before/after legible: the predicate is still NULL for an anonymous
+   * session, and the policy no longer depends on that being true.
    */
-  test('the anon insert is refused by the WITH CHECK, and the WITH CHECK reaches it through NULL comparison', async () => {
-    // The shape of the INSERT policy, read from the catalog.
+  test('the anon insert is refused by the policy, and the policy no longer applies to the role at all', async () => {
+    // The shape of the INSERT policy, read from the catalog. `roles` is the
+    // change; `with_check` is the new order check, asserted in full because a
+    // partial assertion here is what let the previous version survive the
+    // migration unnoticed.
     const policy = await ctx.sql.unsafe<
       {
         policyname: string;
@@ -1801,19 +1835,34 @@ describe('the anon insert', () => {
         where schemaname = 'public' and tablename = 'reviews'
           and policyname = 'Users can insert own reviews'`);
 
-    expect(plainRows(policy)).toEqual([
-      {
-        policyname: 'Users can insert own reviews',
-        cmd: 'INSERT',
-        roles: ['public'],
-        qual: null,
-        with_check: '(user_id = ( SELECT auth.uid() AS uid))',
-      },
-    ]);
+    const insertPolicy = plainRows(policy);
+    expect(insertPolicy).toHaveLength(1);
+    expect(insertPolicy[0]?.cmd).toBe('INSERT');
+    // The gate is still the WITH CHECK, not the USING — there is no old row to
+    // qualify on an INSERT, and confusing the two is how a "the policy prevents
+    // it" claim gets made about a column nothing constrains.
+    expect(insertPolicy[0]?.qual).toBeNull();
+    expect(
+      insertPolicy[0]?.roles,
+      'the INSERT policy is TO public again. That is the state ' +
+        '20260928192000 was written to end: `anon` would again be inside the ' +
+        'policy, and the only thing refusing it would be the NULL arithmetic ' +
+        'the next test measures.',
+    ).toEqual(['authenticated']);
+    expect(insertPolicy[0]?.with_check).toContain('order_id IS NOT NULL');
+    expect(insertPolicy[0]?.with_check).toContain('auth.uid()');
+    expect(insertPolicy[0]?.with_check).toContain(
+      'o.business_id = reviews.business_id',
+    );
+    expect(insertPolicy[0]?.with_check).toContain(
+      'o.user_id = reviews.user_id',
+    );
 
-    // Why `anon` has no `user_id` to satisfy it: the claim is absent, so
-    // `auth.uid()` is NULL. Measured, because "it must be NULL" is the whole
-    // mechanism and a harness that always set a sub would not see it.
+    // Why `anon` has no `user_id` to satisfy the old predicate: the claim is
+    // absent, so `auth.uid()` is NULL. Measured, because "it must be NULL" was
+    // the entire old mechanism and a harness that always set a sub would not
+    // have seen it. It is still NULL — the predicate is still NULL — and the
+    // policy no longer cares.
     const mechanism = await as(ctx.sql, 'anon', null, (tx) =>
       tx.unsafe<Record<string, unknown>[]>(`
         select auth.uid() is null                                          as uid_null,
@@ -1828,10 +1877,10 @@ describe('the anon insert', () => {
       coalesced_to_false: false,
     });
 
-    // And the refusal itself: a POLICY error, not a grant error. The negative
-    // assertion is the load-bearing half — `anon` DOES hold the INSERT grant, so
-    // if the message ever says `permission denied for table reviews` the file
-    // would be describing a different database.
+    // And the refusal itself: a POLICY error, not a grant error, and the SAME
+    // policy error as before the migration. `anon` still holds the INSERT grant
+    // on this table, so if the message ever says `permission denied for table
+    // reviews` this file would be describing a different database.
     const before = await reviewCount();
     const denial = await deniedAs(ctx.sql, 'anon', null, (tx) =>
       tx.unsafe(
@@ -1862,128 +1911,147 @@ describe('the anon insert', () => {
   });
 
   /**
-   * The hole in that accident, and it is not hypothetical.
+   * ─── WHAT IT CONCLUDED BEFORE ─────────────────────────────────────────────
    *
-   * The `WITH CHECK` tests `user_id = auth.uid()`. It does not test that the
-   * caller is authenticated. So the ONLY thing standing between an anonymous
-   * request and a forged review is whether the request carries a `sub` claim —
-   * and a JWT is not required to carry one. The Supabase `anon` key ships with
-   * a `sub` of `anonymous`, and any client that presents a JWT whose `sub` is a
-   * real user id, signed by the project's own secret, arrives at the same
-   * predicate as that user.
+   * The sharpest sentence this file used to hold: `anon` with a sub-claim
+   * forges a review attributed to that user, and the INSERT policy permits it,
+   * because `WITH CHECK (user_id = auth.uid())` is satisfied by a claim and a
+   * claim is not something the ROLE grants. The row landed public, moved
+   * `businesses.rating`, and the only mitigation was the victim noticing and
+   * deleting it.
    *
-   * Measured on this database: `anon` with a sub-claim set to a real user id
-   * inserts a review attributed to that user, and the INSERT policy permits it,
-   * because the predicate is satisfied. The role is still `anon` — the grant
-   * layer is unchanged, the policy is unchanged, and the RLS `WITH CHECK` did
-   * exactly what it says.
+   * ─── WHAT IT CONCLUDES NOW ─────────────────────────────────────────────────
    *
-   * The consequence for the product is concrete: a review is public, it is
-   * permanent unless the author deletes it, and `businesses.rating` /
-   * `review_count` are derived from it by `on_review_change`. So this is a
-   * reputation primitive, and the table's own INSERT policy is what lets it be
-   * aimed at somebody else.
+   * Refused, by the same `42501` policy error, and nothing lands. The policy is
+   * `TO authenticated`, so a session whose current_role is `anon` does not match
+   * it no matter what claims it carries.
    *
-   * This is asserted, not asserted-against. The claim "anon cannot forge reviews"
-   * is TRUE for a request with no `sub` and FALSE for a request with one, and a
-   * spec that only recorded the first half would be the kind of measurement that
-   * is right and useless.
+   * The severity note from the file header is KEPT and is the reason this is a
+   * fix and not an incident write-up: forging that `sub` requires the JWT
+   * signing secret, so this was not reachable with the public anon key. What
+   * WAS reachable with the public anon key is fixed by the order check in the
+   * same migration, and asserted in `the reviews insert, after 20260928192000`.
+   *
+   * The negative assertions below are the load-bearing half, because "the insert
+   * failed" is also what a test sees if the whole statement was malformed. So
+   * each one is paired with the same statement succeeding as `authenticated`
+   * where a legitimate version of it exists.
    */
-  test('anon with a sub-claim forges a review attributed to that user, and the INSERT policy permits it', async () => {
+  test('anon with a sub-claim cannot insert, and the policy no longer covers the role', async () => {
     const before = await reviewCount();
 
-    const landed = await deniedAs(ctx.sql, 'anon', MEMBER, (tx) =>
+    const refused = await deniedAs(ctx.sql, 'anon', MEMBER, (tx) =>
       tx.unsafe(
-        `insert into public.reviews (user_id, business_id, rating, comment)
-         values ('${MEMBER}', '${BIZ_A}', 1, 'RLS anon forged with a sub') returning id`,
+        `insert into public.reviews
+           (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+         values ('${MEMBER}', '${BIZ_A}', '${ORDER.R}', 1, 1, 1, 'RLS anon forged with a sub')
+         returning id`,
       ),
     );
     expect(
-      landed,
-      'the anon-with-sub insert was refused. If this now fails, the WITH CHECK ' +
-        'is no longer `user_id = auth.uid()` — the accidental protection is ' +
-        'real and the accidental hole is closed, and the header is wrong.',
-    ).toBeNull();
+      refused,
+      'anon with a sub-claim inserted a review. This insert is otherwise ' +
+        'LEGITIMATE — it is MEMBER’s own order at MEMBER’s own business — so the ' +
+        'only thing that can refuse it is the role, which is the point: the ' +
+        'policy is TO authenticated and the role here is anon.',
+    ).not.toBeNull();
+    expect(refused?.code).toBe('42501');
+    expect(
+      refused?.message,
+      'the refusal is not a policy refusal, so the gate is not the one this ' +
+        'migration moved. anon still holds the INSERT grant.',
+    ).toContain('new row violates row-level security policy');
 
-    // The row is attributed to the member, not to nobody. That is the finding.
-    const forged = await ctx.sql.unsafe<
-      { user_id: string; comment: string; rating: number }[]
-    >(
-      `select user_id::text, comment, rating
-         from public.reviews
+    // The row is absent, and absent for the second reason too: this insert would
+    // be legal for `authenticated`, so a leftover row would mean the statement
+    // was refused by something incidental.
+    const forged = await ctx.sql.unsafe<{ c: number }[]>(
+      `select count(*)::int as c from public.reviews
         where comment = 'RLS anon forged with a sub'`,
     );
-    expect(plainRows(forged)).toEqual([
-      { user_id: MEMBER, comment: 'RLS anon forged with a sub', rating: 1 },
-    ]);
+    expect(plainRows(forged)[0]?.c).toBe(0);
+    expect(await reviewCount()).toBe(before);
 
-    // It is public immediately, because the moderation state defaults to
-    // visible and the "Anyone can view non-hidden reviews" policy is
-    // `TO public`.
-    const visibleToAnon = await as(ctx.sql, 'anon', null, (tx) =>
-      tx
-        .unsafe<{ comment: string }[]>(
-          `select comment from public.reviews where comment = 'RLS anon forged with a sub'`,
-        )
-        .then((rows) => rows.map((r) => r.comment)),
-    );
-    expect(
-      visibleToAnon,
-      'the forged review is not in the anonymous feed',
-    ).toEqual(['RLS anon forged with a sub']);
-
-    // The delete policy is the same predicate, so the victim can remove it —
-    // which is the one mitigation this shape has, and it depends on the victim
-    // noticing.
-    const victimCanClean = await deniedAs(
+    // And the same statement, unchanged, as the role the policy names. This is
+    // the control that turns "it failed" into "it failed BECAUSE of the role":
+    // without it the previous assertion is satisfied by any failure at all,
+    // including a typo in the SQL above.
+    const landedForTheRealUser = await deniedAs(
       ctx.sql,
       'authenticated',
       MEMBER,
       (tx) =>
         tx.unsafe(
-          `delete from public.reviews where comment = 'RLS anon forged with a sub'`,
+          `insert into public.reviews
+             (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+           values ('${MEMBER}', '${BIZ_A}', '${ORDER.R}', 1, 1, 1, 'RLS anon forged with a sub')
+           returning id`,
         ),
     );
     expect(
-      victimCanClean,
-      'the victim cannot delete a review attributed to them, so the forge is ' +
-        'permanent',
+      landedForTheRealUser,
+      'the identical statement was refused as `authenticated` too, so the ' +
+        'asymmetry above is not about the role — this migration broke the ' +
+        'legitimate path as well.',
     ).toBeNull();
 
-    expect(
-      await reviewCount(),
-      'the forged row was not removed by its own delete policy, so the ' +
-        'mitigation assertion above is passing for the wrong reason',
-    ).toBe(before);
+    // `deniedAs` COMMITS on the success path, so the row the control just
+    // created is real and has to be removed, whether or not the assertion above
+    // held. Unconditional, and in a `finally` so a failed assertion cannot skip
+    // it and leave the rest of the file measuring a probe row.
+    try {
+      expect(
+        await reviewCount(),
+        'the control insert did not land, so the assertion that it succeeded is ' +
+          'measuring something else',
+      ).toBe(before + 1);
+    } finally {
+      await ctx.sql.unsafe(
+        `delete from public.reviews where comment = 'RLS anon forged with a sub'`,
+      );
+    }
+    expect(await reviewCount()).toBe(before);
   });
 
   /**
-   * `anon` with a sub-claim still cannot post as somebody ELSE.
+   * ─── WHAT IT CONCLUDED BEFORE ─────────────────────────────────────────────
    *
-   * The half of the previous test that keeps it from being a total compromise,
-   * and it is worth pinning because it is what makes the finding a
-   * wrong-attribution hole rather than an open door: the forged row has to name
-   * the same id the claim does.
+   * "anon with a sub-claim can only forge as the user that claim names." It was
+   * worth pinning: the forged row had to name the same id the claim did, which
+   * is what made the finding a wrong-attribution hole rather than an open door.
    *
-   * A second fixture user exists for exactly this. STRANGER is a real
-   * `auth.users` row, so the statement is refused by the POLICY and not by a
-   * foreign key — the negative assertion on `violates foreign key constraint` is
-   * what proves it, the same guard `orders.rls.db.spec.ts` uses.
+   * ─── WHY IT NO LONGER SAYS ANYTHING, AND WHY IT WAS NOT LEFT AS IT WAS ─────
+   *
+   * It kept PASSING after the migration, and that is exactly the problem. With
+   * the policy `TO authenticated`, BOTH attempts are refused — the one naming
+   * the claim's own user and the one naming somebody else — so "can only forge as
+   * the user the claim names" became true for the same reason "cannot forge at
+   * all" is: nothing is inserted. A test that passes because the thing it
+   * measures no longer exists is not evidence, and leaving it would have put a
+   * green check in this file that a reader would reasonably take as a bound.
+   *
+   * What replaces it is the same statement with the roles swapped, which is the
+   * half that still means something: a real signed-in consumer still cannot
+   * write a review attributed to somebody else. The wrong-attribution property
+   * was never the finding — the claim-forging one was — but it is still true and
+   * still worth a line.
    */
-  test('anon with a sub-claim can only forge as the user that claim names', async () => {
+  test('a signed-in consumer still cannot write a review attributed to somebody else', async () => {
     const before = await reviewCount();
 
-    const denial = await deniedAs(ctx.sql, 'anon', MEMBER, (tx) =>
+    const denial = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
       tx.unsafe(
-        `insert into public.reviews (user_id, business_id, rating, comment)
-         values ('${STRANGER}', '${BIZ_A}', 1, 'RLS anon forged as somebody else')`,
+        `insert into public.reviews
+           (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+         values ('${STRANGER}', '${BIZ_A}', '${ORDER.S}', 1, 1, 1, 'RLS written as somebody else')`,
       ),
     );
 
     expect(
       denial,
-      'anon with a sub-claim for MEMBER posted a review attributed to ' +
-        'STRANGER. The WITH CHECK is not doing what the header says it does.',
+      'a consumer signed in as MEMBER wrote a review attributed to STRANGER. ' +
+        'The WITH CHECK compares user_id to the caller, so nothing should have ' +
+        'let this through.',
     ).not.toBeNull();
     expect(denial?.code).toBe('42501');
     expect(denial?.message).toContain(
@@ -1999,47 +2067,53 @@ describe('the anon insert', () => {
   });
 });
 
-describe('the moderation columns a client can write', () => {
+describe('the moderation columns a client could write', () => {
   /**
-   * #2, measured: a signed-in client CAN write `is_hidden`, `moderated_by`,
+   * ─── WHAT IT CONCLUDED BEFORE ─────────────────────────────────────────────
+   *
+   * #2, measured: a signed-in client COULD write `is_hidden`, `moderated_by`,
    * `moderated_at`, `moderation_reason` and `hidden_reason` on INSERT, and the
-   * row lands with exactly the values it sent.
+   * row landed with exactly the values it sent. `users: [public]` plus INSERT on
+   * all 15 columns put the moderation surface inside the INSERT grant, and the
+   * only thing on the table that touched a moderation column was the CHECK
+   * `reviews_moderation_reason_required` — which constrains WHAT, never WHO. A
+   * client that hid its own review had to supply a reason and could invent one.
    *
-   * `users: [public]` + `INSERT` on all 15 columns means the moderation surface
-   * is inside the INSERT grant. Nothing in the `WITH CHECK` — which is only
-   * `user_id = auth.uid()` — looks at any of them, and the two triggers on
-   * `reviews` do not overwrite them: `on_review_change` calls
-   * `update_business_rating()` and `on_review_offer_change` calls
-   * `update_offer_rating()`, and BOTH are `AFTER INSERT OR DELETE OR UPDATE`
-   * functions whose entire body is an `update` on `businesses` and `offers`
-   * respectively. They derive the AGGREGATE from the review, they never write
-   * back to `reviews`. So there is no trigger defence here either.
+   * The consequence that was measured, and it is the reason this was more than
+   * cosmetic: the inserted row was invisible to the anonymous feed immediately,
+   * and `update_business_rating()` filters `is_hidden is not true`, so it
+   * contributed nothing to the average or the count. A one-star review could
+   * arrive at a business, take itself out of the public feed, and leave the
+   * rating untouched — a review that removes itself on arrival.
    *
-   * That is the distinction the brief asks for and it is worth stating plainly:
-   * a trigger that overwrote the value would be a DIFFERENT defence from a
-   * grant that refuses the statement, and neither exists. The only thing that
-   * touches a moderation column is a CHECK constraint, and it is the
-   * `reviews_moderation_reason_required` one — which requires a reason WHEN
-   * HIDING and says nothing about who may hide. A client that hides its own
-   * review has to supply a reason, and can invent one.
+   * ─── WHAT IT CONCLUDES NOW ─────────────────────────────────────────────────
    *
-   * Why this matters in a marketplace: `is_hidden` is the entire moderation
-   * switch. It is what `Anyone can view non-hidden reviews` filters on, and it
-   * is what `update_business_rating()` excludes from the aggregate. So a client
-   * that inserts with `is_hidden = true` writes a row that is invisible AND
-   * contributes nothing to the business rating, and a client that inserts with
-   * `is_hidden = false` writes a row that is public immediately with no
-   * approval step at all — the second is the one that makes the moderation queue
-   * optional rather than real, and it is also just the column default.
+   * A `BEFORE INSERT` trigger resets all five columns
+   * (`20260928192000_close_reviews_insert_and_narrow_policies.sql`). The client
+   * still HOLDS the grant on those columns and the statement still SUCCEEDS —
+   * what changed is that the values it sent are discarded before the row exists.
    *
-   * `moderated_by` is the sharper half: it is a foreign key to `profiles(id)`,
-   * so a client can stamp its forged review as though a REAL ADMIN had approved
-   * it, and nothing downstream distinguishes that from the genuine article
-   * because nothing downstream re-derives it. That is a data-integrity claim
-   * about a moderation AUDIT TRAIL, and it is asserted as a value.
+   * That is a different layer from the one that used to be measured here, and
+   * the distinction is the whole point: a trigger that overwrites is not a grant
+   * that refuses. The same sentence covers both, and only one of them is still
+   * true after the next migration touches the ACLs.
+   *
+   * Note what the trigger is NOT: it is not role-conditional. It does not ask
+   * who is calling, so it holds for `service_role` too, and no
+   * `auth_helpers.my_role()` call is made from inside it. That is sound because
+   * moderation is an UPDATE and always has been — `ReviewsModerationService.hide`
+   * and `.unhide` both route to `ReviewsRepository.setHidden` — so no legitimate
+   * writer ever inserts a hidden review.
+   *
+   * Both probes below now carry an `order_id`. They did not before, and the
+   * reason is the sibling migration rather than this one: the INSERT policy now
+   * requires the order. A probe that omits it would be refused by the policy
+   * before the trigger ever ran, and the test would pass while measuring
+   * nothing about moderation.
    */
-  test('a client can INSERT the moderation columns verbatim, and no trigger overwrites them', async () => {
-    // The trigger set, so the "no trigger defends this" claim is a measurement.
+  test('a client can still send the moderation columns, and a BEFORE INSERT trigger discards all five', async () => {
+    // The trigger set, so the "which layer catches this" claim is a measurement
+    // and not a recollection of the migration.
     const triggers = await ctx.sql.unsafe<{ tgname: string; def: string }[]>(
       `select t.tgname, pg_get_triggerdef(t.oid) as def
          from pg_trigger t
@@ -2048,38 +2122,53 @@ describe('the moderation columns a client can write', () => {
         where n.nspname = 'public' and c.relname = 'reviews' and not t.tgisinternal
         order by t.tgname`,
     );
-    const names = plainRows(triggers).map((t) => t.tgname);
-    expect(names).toEqual([
+    const byName = new Map(plainRows(triggers).map((t) => [t.tgname, t.def]));
+
+    expect([...byName.keys()]).toEqual([
       'on_review_change',
       'on_review_offer_change',
       'set_reviews_updated_at',
+      'trg_reviews_unmoderated_on_insert',
     ]);
-    // Only two of the three are on INSERT, and the relevant fact about both is
-    // that they are AFTER triggers calling functions that write to OTHER tables.
-    for (const def of plainRows(triggers)
-      .filter((t) => t.tgname !== 'set_reviews_updated_at')
-      .map((t) => t.def)) {
-      expect(def).toContain('AFTER INSERT OR DELETE OR UPDATE');
-    }
+
+    // The new one is BEFORE INSERT, and the two that fire on INSERT for other
+    // reasons are still AFTER. The ordering is the argument: a BEFORE trigger
+    // runs before the row exists, an AFTER one derives an aggregate from it.
+    // If the reset had been an AFTER trigger it would have arrived too late to
+    // be a reset.
     expect(
-      plainRows(triggers).find((t) => t.tgname === 'set_reviews_updated_at')
-        ?.def,
-      'set_reviews_updated_at changed shape. It is BEFORE UPDATE and touches ' +
-        'updated_at only, which is why the INSERT assertions below are not ' +
-        'affected — but assert the change if it happens.',
-    ).toContain('BEFORE UPDATE');
+      byName.get('trg_reviews_unmoderated_on_insert'),
+      'the reset trigger is gone or changed shape. Everything below measures ' +
+        'that it fires BEFORE INSERT, so assert the change deliberately if it ' +
+        'happens.',
+    ).toContain('BEFORE INSERT ON public.reviews');
+    for (const name of ['on_review_change', 'on_review_offer_change']) {
+      expect(byName.get(name)).toContain('AFTER INSERT OR DELETE OR UPDATE');
+    }
+    expect(byName.get('set_reviews_updated_at')).toContain('BEFORE UPDATE');
+
+    // The function itself is SECURITY INVOKER and reads no table, which is why
+    // it needs no privilege of its own and why it cannot be a route to anything
+    // but the row it was handed.
+    const fn = await ctx.sql.unsafe<{ secdef: boolean; reads: boolean }[]>(
+      `select prosecdef as secdef,
+              prosrc ~* '\\bfrom\\b|\\binsert\\b|\\bupdate\\b|\\bdelete\\b|\\bselect\\b' as reads
+         from pg_proc
+        where proname = 'default_reviews_unmoderated_on_insert'`,
+    );
+    expect(plainRows(fn)).toEqual([{ secdef: false, reads: false }]);
 
     const before = await reviewCount();
 
     /**
      * ─── Why the cleanup wraps the WHOLE body, and not the end of it ──────────
      *
-     * The first draft put the DELETE in a `try { … } finally { … }` around a
-     * trailing FK assertion, which put it AFTER every behavioural probe. The
-     * first probe's aggregate assertion then failed, the `finally` was never
-     * reached, and the hidden review stayed in the table for the next six tests
-     * — each of which failed on a count that was one too high, with a message
-     * that pointed at the wrong thing entirely.
+     * The first draft of the previous version of this test put the DELETE in a
+     * `try { … } finally { … }` around a trailing FK assertion, which put it
+     * AFTER every behavioural probe. The first probe's aggregate assertion then
+     * failed, the `finally` was never reached, and the hidden review stayed in
+     * the table for the next six tests — each of which failed on a count that
+     * was one too high, with a message that pointed at the wrong thing entirely.
      *
      * That is the exact failure `businesses.rls.db.spec.ts` documents in its own
      * counterfactual ("the first draft of this test reset between the two
@@ -2094,36 +2183,41 @@ describe('the moderation columns a client can write', () => {
      */
     try {
       // The client supplies the moderation state AND stamps a real admin as the
-      // moderator. The check constraint is satisfied: `is_hidden = true` requires
-      // a `moderation_reason`, and the client supplies one.
+      // moderator, on a legitimate order of its own. The statement is accepted:
+      // the INSERT grant is untouched by this migration, and the policy is
+      // satisfied because ORDER.R really is MEMBER's at BIZ_A.
       const inserted = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
         tx.unsafe(
           `insert into public.reviews
-             (user_id, business_id, rating, comment, is_hidden, moderated_by,
+             (user_id, business_id, order_id, rating, comment, is_hidden, moderated_by,
               moderated_at, moderation_reason, hidden_reason)
-           values ('${MEMBER}', '${BIZ_A}', 5, 'RLS self-moderated', true,
+           values ('${MEMBER}', '${BIZ_A}', '${ORDER.R}', 5, 'RLS self-moderated', true,
                    '${ADMIN}', now(), 'client supplied this', 'client also supplied this')
            returning id, is_hidden, moderated_by::text, moderation_reason, hidden_reason`,
         ),
       );
       expect(
         inserted,
-        'a client could not write the moderation columns on INSERT. If this now ' +
-          'fails, the INSERT grant no longer covers them and the moderation ' +
-          'surface described in the header is closed.',
+        'the INSERT was refused, so this test is measuring the POLICY rather ' +
+          'than the trigger. A client writing the moderation columns on a ' +
+          'legitimate order is still accepted — the grant was not changed — and ' +
+          'the values it sent are what the trigger is expected to discard.',
       ).toBeNull();
 
       // Re-read as the owner, because reading it back through a client session
       // would go through the moderation SELECT policy this test is not about.
+      // All five columns, all reset, and `moderated_by` is NULL rather than the
+      // admin the client named — the falseable half, and the one that was the
+      // sharpest part of the old finding.
       const landed = await ctx.sql.unsafe<
         {
           user_id: string;
           comment: string;
           is_hidden: boolean;
-          moderated_by: string;
+          moderated_by: string | null;
           moderated_at_set: boolean;
-          moderation_reason: string;
-          hidden_reason: string;
+          moderation_reason: string | null;
+          hidden_reason: string | null;
         }[]
       >(
         `select user_id::text, comment, is_hidden, moderated_by::text,
@@ -2134,23 +2228,26 @@ describe('the moderation columns a client can write', () => {
       );
       expect(
         plainRows(landed),
-        'the row did not keep the moderation values the client sent. A trigger ' +
-          'overwrote them, which is a DIFFERENT defence from a grant and would ' +
-          'change what the header claims — assert it deliberately if it happens.',
+        'the row kept the moderation values the client sent, or the trigger ' +
+          'reset only some of them. All FIVE are reset: resetting only the flag ' +
+          'would leave a row claiming it was hidden by an account that never ' +
+          'saw it, which is the same falseable trail with one field repaired.',
       ).toEqual([
         {
           user_id: MEMBER,
           comment: 'RLS self-moderated',
-          is_hidden: true,
-          moderated_by: ADMIN,
-          moderated_at_set: true,
-          moderation_reason: 'client supplied this',
-          hidden_reason: 'client also supplied this',
+          is_hidden: false,
+          moderated_by: null,
+          moderated_at_set: false,
+          moderation_reason: null,
+          hidden_reason: null,
         },
       ]);
 
-      // The soft-hide consequence, and the reason this matters: the row is
-      // invisible to the anonymous feed immediately, on the client's own say-so.
+      // The soft-hide escape is CLOSED, and this is the assertion that says so.
+      // Before the migration this row was absent from the anonymous feed on the
+      // client's own say-so. It is present now, which is what a review that
+      // cannot delete itself looks like.
       const inAnonFeed = await as(ctx.sql, 'anon', null, (tx) =>
         tx
           .unsafe<{ comment: string }[]>(
@@ -2160,17 +2257,19 @@ describe('the moderation columns a client can write', () => {
       );
       expect(
         inAnonFeed,
-        'a client-hid review is in the anonymous feed, so `is_hidden` written by ' +
-          'a client does not gate visibility',
-      ).toEqual([]);
+        'a review the client tried to insert already hidden is in the ' +
+          'anonymous feed. Before the trigger it was not, and that absence was ' +
+          'the finding: a 1-star review that removed itself from the feed and ' +
+          'from the average on arrival.',
+      ).toEqual(['RLS self-moderated']);
 
-      // The aggregate consequence. `update_business_rating()` filters
-      // `is_hidden is not true`, so a client-hidden row is EXCLUDED from both
-      // halves of the aggregate: `review_count` does not move and the average is
-      // untouched. The baseline is the two seeded reviews, which carry
-      // `business_rating` 5 and 4 — so the business sits at 4.50 / 2, and both
-      // numbers are asserted because "the aggregate did not change" is a claim
-      // and the claim is only interesting if the baseline is stated.
+      // The aggregate consequence, which INVERTED rather than merely changed.
+      // `update_business_rating()` filters `is_hidden is not true`, so a hidden
+      // row was excluded from both halves. This row is visible now, and it
+      // carries `rating` with `business_rating` NULL, so `avg()` skips it: the
+      // count moves by one and the average does not. The baseline is the two
+      // seeded reviews (5 and 4 → 4.50) and both halves are asserted, because
+      // "the count moved" is only interesting next to "the average did not".
       const aggregate = await ctx.sql.unsafe<
         { rating: string; review_count: number }[]
       >(
@@ -2178,61 +2277,70 @@ describe('the moderation columns a client can write', () => {
       );
       expect(
         plainRows(aggregate),
-        'a client-hidden review changed the business aggregate. ' +
-          '`update_business_rating()` is documented as filtering on ' +
-          '`is_hidden is not true`, so this is a change in the trigger.',
-      ).toEqual([{ rating: '4.50', review_count: 2 }]);
+        'the self-moderated review did not reach the aggregate as a visible ' +
+          'row. Before the trigger this assertion read 4.50 / 2 — the row was ' +
+          'excluded precisely because the client had hidden it.',
+      ).toEqual([{ rating: '4.50', review_count: 3 }]);
 
-      // And the OTHER direction, which is the approval step: `is_hidden = false`
-      // is the column DEFAULT, so a client writing it explicitly gets a public
-      // review with no moderation queue involved at all. Asserted because the
-      // interesting property is that nothing distinguishes the explicit write from
-      // the default — there is no "pending" state on this table.
+      // And the OTHER direction: a client that writes the moderation columns to
+      // make a review look APPROVED gets the same answer, and the reason token
+      // it sent is discarded. Asserted because "the flag is reset" would not
+      // cover a client forging a reason string, and `moderation_reason` is the
+      // column the CHECK constraint reasons about.
       const publicOnInsert = await deniedAs(
         ctx.sql,
         'authenticated',
         MEMBER,
         (tx) =>
           tx.unsafe(
-            `insert into public.reviews (user_id, business_id, rating, comment, is_hidden, moderation_reason)
-           values ('${MEMBER}', '${BIZ_A}', 5, 'RLS published on insert', false, 'approved')
-           returning id, is_hidden`,
+            `insert into public.reviews
+               (user_id, business_id, order_id, rating, comment, is_hidden, moderation_reason)
+             values ('${MEMBER}', '${BIZ_A}', '${ORDER.Q}', 5, 'RLS published on insert', false, 'approved')
+             returning id, is_hidden`,
           ),
       );
       expect(
         publicOnInsert,
-        'a client could not publish a review on insert',
+        'a client could not insert a review on its own order at all. That is ' +
+          'the INSERT policy refusing a legitimate write, which is a different ' +
+          'failure from the one this test is about.',
       ).toBeNull();
+
       const published = await as(ctx.sql, 'anon', null, (tx) =>
         tx
-          .unsafe<{ comment: string }[]>(
-            `select comment from public.reviews where comment = 'RLS published on insert'`,
+          .unsafe<{ comment: string; moderation_reason: string | null }[]>(
+            `select comment, moderation_reason from public.reviews
+              where comment = 'RLS published on insert'`,
           )
-          .then((rows) => rows.map((r) => r.comment)),
+          .then((rows) =>
+            rows.map((r) => ({
+              comment: r.comment,
+              reason: r.moderation_reason,
+            })),
+          ),
       );
       expect(
         published,
-        'a review a client published on insert is not in the anonymous feed, so ' +
-          'the INSERT path does publish immediately',
-      ).toEqual(['RLS published on insert']);
+        "the client's approval token survived the insert. The row is public — " +
+          'correct, and unchanged, because there is no approval step on this ' +
+          'table and never was — but the moderation_reason it sent must be gone.',
+      ).toEqual([{ comment: 'RLS published on insert', reason: null }]);
 
-      // And the aggregate DOES move for the visible one, by exactly one and with
-      // the average unchanged — because this client wrote `rating` and left
-      // `business_rating` NULL, and `avg()` skips NULLs. So the count is the
-      // number a client can move unilaterally, and it moves it on the business
-      // it just reviewed.
-      const afterPublic = await ctx.sql.unsafe<
+      // Both rows now count, so the aggregate is 4.50 / 4: two seeded reviews
+      // at 5 and 4, plus two client rows that carry no `business_rating`.
+      const afterBoth = await ctx.sql.unsafe<
         { rating: string; review_count: number }[]
       >(
         `select rating, review_count from public.businesses where id = '${BIZ_A}'`,
       );
       expect(
-        plainRows(afterPublic),
-        'a client-published review did not move review_count, or moved the ' +
-          'average as well. Both halves are measured: the count is client ' +
-          'controlled and the average is not, because `avg(business_rating)` ' +
-          'skips the NULL the client left behind.',
-      ).toEqual([{ rating: '4.50', review_count: 3 }]);
+        plainRows(afterBoth),
+        'the aggregate did not reach 4.50 / 4. Both client rows are visible ' +
+          'now, and both left `business_rating` NULL, so the count is ' +
+          'client-controlled while the average is not — which is the same ' +
+          'asymmetry the old version of this test measured, with the hiding ' +
+          'half taken away.',
+      ).toEqual([{ rating: '4.50', review_count: 4 }]);
     } finally {
       /**
        * The DELETE, and it is the only statement in this `finally` — a finally
@@ -2272,25 +2380,38 @@ describe('the moderation columns a client can write', () => {
   });
 
   /**
-   * The moderation columns are NOT writable by UPDATE, and that is the
-   * asymmetry the previous test makes legible.
+   * ─── WHAT IT CONCLUDED BEFORE ─────────────────────────────────────────────
    *
-   * A client can write `is_hidden` on INSERT and cannot write it on UPDATE. Both
-   * halves are the same column grant, seen from two directions: the INSERT
-   * grant covers all 15 columns and the UPDATE grant covers 4, and
-   * `is_hidden` is in the first list and not the second. The consequence is
-   * that a review's moderation state is decided once, at insert time, by the
-   * client, and is thereafter immutable to it.
+   * "The moderation columns are insert-writable and update-inert, which is an
+   * asymmetry not a boundary." A client could write `is_hidden` on INSERT and
+   * could not write it on UPDATE, both halves being the same column grant seen
+   * from two directions. The stated consequence was strange and worth
+   * recording: the client chose the review's moderation state at birth and could
+   * never change it — not to un-hide one it hid, not to hide one a real admin
+   * published. The moderation decision was a property of the INSERT, not a state
+   * the row moved through.
    *
-   * That is worth pinning because it is easy to read the previous test as "a
-   * client controls moderation" and conclude the queue is meaningless. What it
-   * actually means is narrower and stranger: the client chooses the review's
-   * moderation state at birth and can never change it, including to un-hide a
-   * review it hid and including to hide one a real admin published. The
-   * moderation decision is a property of the INSERT, not a state the row moves
-   * through.
+   * ─── WHAT IT CONCLUDES NOW: THE ASYMMETRY IS GONE, AND THE TWO DIRECTIONS
+   * ARE CLOSED BY TWO DIFFERENT KINDS OF LAYER ───────────────────────────────
+   *
+   *   INSERT → a TRIGGER. `trg_reviews_unmoderated_on_insert` overwrites the
+   *            values. This survives being re-granted, because it is not
+   *            consulted about privileges at all.
+   *   UPDATE → a COLUMN GRANT. `authenticated` holds no UPDATE privilege on
+   *            these five, and the refusal is `42501 permission denied for
+   *            table reviews` — the ACL, not RLS.
+   *
+   * Naming that difference is the point of keeping this test. "A client cannot
+   * write the moderation columns" is one sentence covering two mechanisms, and
+   * only the trigger half is guaranteed to still be true after a routine
+   * migration touches the grants. This ledger has the receipt: `20260925163235`
+   * revoked everything on `businesses` and `20260925224820` put it back twenty
+   * minutes later.
+   *
+   * So the UPDATE half is asserted HERE, as a grant, with its error code, and is
+   * deliberately not described as a boundary. It is a convention.
    */
-  test('the moderation columns are insert-writable and update-inert, which is an asymmetry not a boundary', async () => {
+  test('the moderation columns are discarded on INSERT by a trigger and refused on UPDATE by the grant', async () => {
     const canWrite = async (
       column: string,
       value: string,
@@ -2312,9 +2433,52 @@ describe('the moderation columns a client can write', () => {
       expect(
         denial,
         `reviews.${column} became UPDATE-writable, so the insert/update ` +
-          'asymmetry this test describes is gone',
+          'asymmetry this test used to describe is gone',
       ).not.toBeNull();
+      // The layer is asserted, not assumed. This is the GRANT and not RLS: an
+      // RLS refusal on UPDATE would be a policy error, and would mean this
+      // table had gained an UPDATE boundary it has never had.
+      expect(denial?.code).toBe('42501');
       expect(denial?.message).toContain('permission denied for table reviews');
+      expect(
+        denial?.message,
+        `reviews.${column} was refused by RLS rather than by the column grant. ` +
+          'That would be a DIFFERENT and stronger defence than the one this ' +
+          'test claims, and it would change what the migration header says.',
+      ).not.toContain('row-level security policy');
+    }
+
+    // And the INSERT half, stated as the complement: same columns, same client,
+    // accepted by the grant and discarded by the trigger. One probe is enough —
+    // the previous test asserts all five on a real insert.
+    const inserted = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+      tx.unsafe(
+        `insert into public.reviews
+           (user_id, business_id, order_id, rating, comment, is_hidden, moderation_reason)
+         values ('${MEMBER}', '${BIZ_A}', '${ORDER.R}', 5, 'RLS insert half', true, 'client said so')
+         returning id`,
+      ),
+    );
+    expect(
+      inserted,
+      'the INSERT was refused. The column grant was NOT changed by this ' +
+        'migration, so a refusal here means the statement is being stopped by ' +
+        'something other than the trigger the previous test measures.',
+    ).toBeNull();
+    try {
+      const kept = await ctx.sql.unsafe<
+        { is_hidden: boolean; moderation_reason: string | null }[]
+      >(
+        `select is_hidden, moderation_reason from public.reviews
+          where comment = 'RLS insert half'`,
+      );
+      expect(plainRows(kept)).toEqual([
+        { is_hidden: false, moderation_reason: null },
+      ]);
+    } finally {
+      await ctx.sql
+        .unsafe(`delete from public.reviews where comment = 'RLS insert half'`)
+        .catch(() => {});
     }
 
     // Both seeded rows unchanged, read as the owner. `is_hidden` and the reason
@@ -2335,18 +2499,23 @@ describe('the moderation columns a client can write', () => {
 describe('the anon delete', () => {
   /**
    * #3, asserted on the COUNT and not on the exception, because there is no
-   * exception: `anon` holds the DELETE grant, "Users can delete own reviews" is
-   * `TO public` with `USING (user_id = auth.uid())`, and with `auth.uid()` NULL
-   * that matches nothing. The statement SUCCEEDS and deletes zero rows.
+   * exception: `anon` holds the DELETE grant, and no DELETE policy on `reviews`
+   * applies to it at all since `20260928192000` moved the policy to
+   * `TO authenticated`. The statement SUCCEEDS and deletes zero rows.
    *
    * The consequence is stated here because it is the part that survives into
    * production behaviour: the refusal is SILENT. A client that checks for an
    * error and not for a row count will conclude it deleted a review it did not
-   * delete. That is not a database bug, it is the ordinary contract of a PERMISSIVE
-   * DELETE policy with a NULL subject, and it is the exact opposite of the write
-   * paths on `orders` in `orders.rls.db.spec.ts`, where the revoke turned the same
-   * statement shape into a `42501`. Same statement, opposite outcome, purely
-   * because of the grant.
+   * delete. That is not a database bug, it is the ordinary contract of a
+   * PERMISSIVE DELETE policy that matches no row, and it is the exact opposite
+   * of the write paths on `orders` in `orders.rls.db.spec.ts`, where the revoke
+   * turned the same statement shape into a `42501`. Same statement, opposite
+   * outcome, purely because of the grant.
+   *
+   * This is NOT a new finding and NOT a regression from the migration. The
+   * no-claim arm behaved this way before it and behaves this way now; only the
+   * reason changed, from NULL arithmetic to role mismatch. Both are spelled out
+   * where the two arms are compared below.
    *
    * So the assertion is deliberately about the count and the assertions about
    * `deniedAs` returning `null` are supporting evidence, not the claim. A test
@@ -2385,35 +2554,47 @@ describe('the anon delete', () => {
     expect(returning, 'delete … returning raised for anon').toBeNull();
     expect(await reviewCount()).toBe(before);
 
-    // The contrast that makes the silence a finding rather than an observation:
-    // the SAME role, the same policy, the same statement shape — with a claim.
-    // The only difference is `auth.uid()` being NULL instead of set, and the
-    // count is what separates them.
+    // ─── WHAT THE CLAIM ARMS CONCLUDED BEFORE ────────────────────────────────
     //
-    // AND THE CLAIMED VERSION DELETES. This is the third thing a brief about
-    // `anon` and `reviews` gets wrong, and it is the one that matters most,
-    // because it is silent in BOTH directions: the no-claim delete raises
-    // nothing and removes nothing, and the claimed delete raises nothing and
-    // removes everything that user wrote.
+    // This was the sharpest thing in the file: the SAME role, the same policy,
+    // the same statement shape — with a claim. The only difference was
+    // `auth.uid()` being NULL instead of set, and the count is what separated
+    // them. `anon` with a sub for a real user deleted that user's reviews,
+    // silently, in both directions: the no-claim delete raised nothing and
+    // removed nothing, and the claimed delete raised nothing and removed
+    // everything that user wrote.
     //
-    // `USING (user_id = auth.uid())` is satisfied by a claim, and a claim is not
-    // something the ROLE grants. So an `anon` session presenting a sub for a real
-    // user deletes that user's reviews — including the ones it forged a moment
-    // earlier, which is the one mitigation the table has, and which is therefore
-    // available to the same party that planted them.
+    // It was worse than a delete primitive, because it removed the table's only
+    // mitigation. The victim could delete a forged review attributed to them —
+    // that was the one escape — and the same party that planted the row was the
+    // one holding the claim that could take it away again, silently.
     //
-    // The scope is asserted, not just the count, because "it deleted something"
-    // and "it deleted that user's rows and nobody else's" are different claims
-    // and only the second one is a boundary. A claim for a user with no reviews
-    // deletes nothing, which is the control.
+    // ─── WHAT THEY CONCLUDE NOW, AND WHY THE SILENCE IS NOT A NEW FINDING ────
+    //
+    // Both arms remove nothing. `Users can delete own reviews` is
+    // `TO authenticated` (`20260928192000`), so an `anon` session matches no
+    // DELETE policy at all and `where true` matches zero rows.
+    //
+    // The no-claim arm is UNCHANGED, and that is worth saying rather than
+    // leaving implied: before the migration it was refused by NULL arithmetic,
+    // and now it is refused because the policy does not apply. Same outcome,
+    // same absence of an error — and the difference only shows up in the arm
+    // below, which is the whole reason the narrowing was worth doing.
+    //
+    // The silence is therefore NOT a new finding and NOT a regression. A
+    // PERMISSIVE DELETE policy that matches no row is a successful statement
+    // that deleted nothing, whatever the reason nothing matched, and a client
+    // checking for an error rather than a count is still misled. This migration
+    // did not fix that and does not claim to; the fix for that is a statement
+    // that raises, which is a grant change and out of scope here.
     const withClaim = await deniedAs(ctx.sql, 'anon', MEMBER, (tx) =>
       tx.unsafe(`delete from public.reviews where true`),
     );
     expect(
       withClaim,
-      'anon with MEMBER’s sub-claim raised on delete. The DELETE policy is ' +
-        '`user_id = auth.uid()`, so a claim makes it match — if that ever ' +
-        'raises, the policy is not the thing deciding.',
+      'anon with MEMBER’s sub-claim raised on delete. A missing DELETE policy ' +
+        'is a silent zero-row match, not an error, so a raise here would mean ' +
+        'something other than the policy is deciding — check the grants.',
     ).toBeNull();
 
     const afterClaim = await ctx.sql.unsafe<{ id: string; user_id: string }[]>(
@@ -2421,13 +2602,17 @@ describe('the anon delete', () => {
     );
     expect(
       plainRows(afterClaim),
-      'anon with a sub-claim did not delete exactly the claimed user’s rows. ' +
-        'The claim is what satisfies `user_id = auth.uid()`, so this must be ' +
-        'MEMBER’s review gone and STRANGER’s untouched.',
-    ).toEqual([{ id: REVIEW.S, user_id: STRANGER }]);
+      'anon with a sub-claim deleted rows. The DELETE policy is TO ' +
+        'authenticated, so the role decides and not the claim — this is the ' +
+        'arm the narrowing exists for, and both seeded rows must survive.',
+    ).toEqual([
+      { id: REVIEW.M, user_id: MEMBER },
+      { id: REVIEW.S, user_id: STRANGER },
+    ]);
 
-    // The control: a claim for a user who wrote nothing removes nothing, so the
-    // previous assertion is measuring the policy and not "anon can delete".
+    // The control, kept because it costs one statement and it separates "the
+    // role was refused" from "there was nothing to delete anyway": a claim for
+    // ADMIN, who wrote no reviews, must also leave both rows alone.
     const noRowsClaim = await deniedAs(ctx.sql, 'anon', ADMIN, (tx) =>
       tx.unsafe(`delete from public.reviews where true`),
     );
@@ -2441,18 +2626,12 @@ describe('the anon delete', () => {
     expect(
       plainRows(afterControl),
       'a claim for a user with no reviews removed somebody else’s row',
-    ).toEqual([{ id: REVIEW.S }]);
+    ).toEqual([{ id: REVIEW.M }, { id: REVIEW.S }]);
 
-    // Restore, in the shape the rest of the file uses: a keyed re-insert rather
-    // than an UPDATE, because the row is genuinely gone. `on conflict (id) do
-    // nothing` keeps it safe to re-run, and the three rating columns are written
-    // so the derived business aggregate is the one the rest of the file expects.
-    await ctx.sql.unsafe(`
-      insert into public.reviews
-        (id, user_id, business_id, order_id, rating, business_rating, product_rating, comment)
-      values ('${REVIEW.M}', '${MEMBER}', '${BIZ_A}', '${ORDER.M}', 5, 5, 5, 'RLS review mine')
-      on conflict (id) do nothing
-    `);
+    // No restore is needed, and the absence is asserted rather than assumed: the
+    // previous version of this test had to re-insert REVIEW.M because the claim
+    // arm had genuinely deleted it, and a version that still re-inserted would
+    // be silently overwriting a row that is supposed to be there.
     expect(await reviewCount()).toBe(before);
   });
 
@@ -2796,14 +2975,38 @@ describe('the soft-hide', () => {
    * The full policy set on `reviews`, asserted as text, so a widened policy
    * fails on a one-line diff.
    *
-   * The absence that matters is the last two rows: "Users can update own reviews"
-   * is `TO public` and is NOT dead code (the column grant makes it reachable),
-   * and there is no INSERT policy restricting `is_hidden`. `anon` reaches every
-   * row of this table through five policies, four of them `TO public`, and the
-   * only command none of them governs is the one `anon` can perform without
-   * limit: TRUNCATE.
+   * ─── WHAT THIS ASSERTED BEFORE ─────────────────────────────────────────────
+   *
+   * "Five policies, four of them TO public", and the absence that mattered was
+   * the write half: `anon` reached every row of this table through four
+   * `TO public` policies, and the only command none of them governed was the
+   * one `anon` could perform without limit — TRUNCATE, since removed.
+   *
+   * ─── WHAT IT ASSERTS NOW, AND WHY ONE POLICY IS STILL `TO public` ──────────
+   *
+   * Four of the five are now `TO authenticated`
+   * (`20260928192000_close_reviews_insert_and_narrow_policies.sql`). The one
+   * that stays is the SELECT policy, and that is a DECISION with a recorded
+   * reason, not an oversight left behind:
+   *
+   *   - `20260927021015` dropped its `to` clause deliberately, writing that
+   *     narrowing it to `anon, authenticated` "would be a silent read
+   *     regression for any role not named here". Reversing a documented choice
+   *     is not this migration's job.
+   *   - Its first branch, `is_hidden IS NOT TRUE`, IS the public review feed.
+   *     It is consumed by `GET /businesses/public/:id/reviews` and
+   *     `GET /offers/:id/reviews`, both `@Public()`, both callable with no
+   *     token. Narrowing it would delete the public review feed — a product
+   *     change wearing a security fix's clothes.
+   *   - It carries no write surface, so there was never a finding here to fix.
+   *
+   * So the count is one, not zero, and the assertion below says which one and
+   * why. A future reader who disagrees with that reasoning can change it in one
+   * line here and one in the migration; what they cannot do is do it by
+   * accident, because this array is the whole policy set and any edit shows up
+   * as a diff.
    */
-  test('the policy set on reviews is five policies, four of them TO public', async () => {
+  test('the policy set on reviews is five policies, and the only one still TO public is the SELECT feed', async () => {
     const rows = await ctx.sql.unsafe<
       { policyname: string; cmd: string; permissive: string; roles: string[] }[]
     >(`select policyname, cmd, permissive, roles
@@ -2828,56 +3031,84 @@ describe('the soft-hide', () => {
         policyname: 'Users can delete own reviews',
         cmd: 'DELETE',
         permissive: 'PERMISSIVE',
-        roles: ['public'],
+        roles: ['authenticated'],
       },
       {
         policyname: 'Users can insert own reviews',
         cmd: 'INSERT',
         permissive: 'PERMISSIVE',
-        roles: ['public'],
+        roles: ['authenticated'],
       },
       {
         policyname: 'Users can update own reviews',
         cmd: 'UPDATE',
         permissive: 'PERMISSIVE',
-        roles: ['public'],
+        roles: ['authenticated'],
       },
     ]);
 
-    // Said a second way, so a future migration that adds a sixth policy fails on
-    // the count rather than inside a five-element array.
-    expect(
-      plainRows(rows).filter((r) => r.roles.includes('public')),
-    ).toHaveLength(4);
+    // Said a second way, so a future migration that widens a write policy back
+    // to `public` fails on the count rather than inside a five-element array —
+    // and named by NAME, so the one policy that is legitimately `public` is not
+    // the one a reader has to guess about.
+    const publicPolicies = plainRows(rows).filter((r) =>
+      r.roles.includes('public'),
+    );
+    expect(publicPolicies).toHaveLength(1);
+    expect(publicPolicies[0]?.policyname).toBe(
+      'Anyone can view non-hidden reviews',
+    );
+    expect(publicPolicies[0]?.cmd).toBe('SELECT');
   });
 });
 
 describe('the two things the reviews grant does not stop', () => {
   /**
-   * A consumer can post a review for a business it never bought from, and
-   * nothing in the policies notices.
+   * ─── WHAT IT CONCLUDED BEFORE ─────────────────────────────────────────────
    *
-   * `Users can insert own reviews` is `WITH CHECK (user_id = auth.uid())` and
-   * that is the whole check. There is no `EXISTS` against `orders`, so the
-   * "you reviewed a place you went to" invariant is not expressed anywhere in
-   * the database — not in a policy, not in a CHECK constraint, not in a trigger.
+   * The severe finding in this file, and the one that needed nothing but the
+   * public anon key: a consumer could post a review for a business it never
+   * bought from, because `Users can insert own reviews` was
+   * `WITH CHECK (user_id = auth.uid())` and that was the whole check. There was
+   * no `EXISTS` against `orders`, so "you reviewed a place you went to" was not
+   * expressed anywhere in the database — not in a policy, not in a CHECK, not in
+   * a trigger.
    *
-   * In a marketplace that is the review-fraud primitive, and it is cheaper than
-   * it looks: `reviews_user_id_order_id_key` is `UNIQUE (user_id, order_id)`,
-   * and `order_id` is NULLABLE, and a UNIQUE constraint does not treat NULLs as
-   * equal to each other. So a consumer can insert as many reviews as it likes
-   * against any `business_id` by leaving `order_id` NULL, and each one is a
-   * distinct row.
+   * It was cheap to exploit. `reviews_user_id_order_id_key` is
+   * `UNIQUE (user_id, order_id)`, `order_id` is NULLABLE, and a UNIQUE
+   * constraint does not treat NULLs as equal to each other — so a consumer could
+   * insert unlimited reviews against ANY `business_id` by leaving `order_id`
+   * NULL, and each one was a distinct row. Measured: 2 rows, 0 distinct orders,
+   * a business nobody had bought from sitting at `review_count` 2 with its
+   * average dragged to 0.00, and both rows public immediately.
    *
-   * The consequence is measured on the aggregate, because that is where a
-   * marketplace's reputation actually lives: `on_review_change` fires
-   * `update_business_rating()`, and a review with a NULL `business_rating`
-   * contributes to `review_count` while dragging the average towards zero. Both
-   * halves are asserted as values, and the count is asserted to be larger than
-   * the number of distinct orders — that ratio IS the finding.
+   * ─── WHAT IT CONCLUDES NOW ─────────────────────────────────────────────────
+   *
+   * Closed, by the same policy, on two conditions at once: `order_id IS NOT
+   * NULL`, and an `EXISTS` requiring the order to be the caller's own and to
+   * belong to the `business_id` being reviewed
+   * (`20260928192000_close_reviews_insert_and_narrow_policies.sql`).
+   *
+   * The structural facts that MADE the hole are kept as assertions, and they
+   * have to be: the column is still NULLABLE and the constraint is still
+   * `UNIQUE (user_id, order_id)`. Both are unchanged by this migration, on
+   * purpose — the column is nullable because the foreign key is
+   * `ON DELETE SET NULL` and historical rows depend on that. What changed is
+   * that neither can be used to mint a row any more. A reader who saw only the
+   * old conclusion would be looking for a column grant to close this; there is
+   * no grant change anywhere in this migration, and there must not be one.
+   *
+   * The UNIQUE-with-NULLs observation is also the reason the fix is an order
+   * check and not a NOT NULL column: a NOT NULL would have been the smaller
+   * diff, and it would have failed on every historical row whose order has been
+   * deleted, and it would have said nothing about whether the order belongs to
+   * the caller.
    */
-  test('a consumer can review a business it never bought from, once per row while order_id is NULL', async () => {
-    // The UNIQUE constraint that looks like it would stop this, and does not.
+  test('a consumer can no longer review a business it never bought from, and the UNIQUE constraint never bounded it', async () => {
+    // Both structural facts, asserted first because they are what the fix has
+    // to work AROUND rather than what it changed. The UNIQUE constraint looks
+    // like it would stop a NULL-order flood and does not; the column is nullable
+    // and stays nullable.
     const constraints = await ctx.sql.unsafe<
       { conname: string; def: string }[]
     >(
@@ -2899,15 +3130,17 @@ describe('the two things the reviews grant does not stop', () => {
     );
     expect(
       plainRows(orderIdColumn)[0]?.is_nullable,
-      'reviews.order_id became NOT NULL, so UNIQUE (user_id, order_id) now ' +
-        'actually bounds how many reviews a consumer can post and this test is ' +
-        'describing a hole that is closed',
+      'reviews.order_id became NOT NULL. That is not what this migration did ' +
+        'and it would be a different design: the column is nullable because ' +
+        'the foreign key is ON DELETE SET NULL, and historical rows whose ' +
+        'order was deleted depend on it. If this ever does become NOT NULL, ' +
+        'say so deliberately and update the migration header.',
     ).toBe('YES');
 
     const before = await reviewCount();
 
     // A review for `BIZ_B`, which this consumer never bought from, and with no
-    // `order_id` at all.
+    // `order_id` at all — the exact statement that used to succeed.
     const forged = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
       tx.unsafe(
         `insert into public.reviews (user_id, business_id, rating, comment)
@@ -2916,12 +3149,20 @@ describe('the two things the reviews grant does not stop', () => {
     );
     expect(
       forged,
-      'a consumer could not review a business it never bought from. The ' +
-        'WITH CHECK is only `user_id = auth.uid()`, so nothing should have ' +
-        'refused it — if this fails, a policy was added and this file is stale.',
-    ).toBeNull();
+      'a consumer could post a review for a business it never bought from. ' +
+        'The WITH CHECK now requires an order belonging to the caller, and ' +
+        'there is no column grant or trigger that could be the thing refusing ' +
+        'it — this is the policy, and if this fails the policy moved.',
+    ).not.toBeNull();
+    expect(forged?.code).toBe('42501');
+    expect(forged?.message).toContain(
+      'new row violates row-level security policy',
+    );
 
-    // And the UNIQUE constraint does not stop a second one either.
+    // A second one would have been a distinct row too, and is refused the same
+    // way — asserted separately because "the first was refused" and "a flood is
+    // refused" are different claims, and the second is the one that was the
+    // actual primitive.
     const second = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
       tx.unsafe(
         `insert into public.reviews (user_id, business_id, rating, comment)
@@ -2930,11 +3171,15 @@ describe('the two things the reviews grant does not stop', () => {
     );
     expect(
       second,
-      'a second NULL-order_id review was refused by UNIQUE',
-    ).toBeNull();
+      'a second NULL-order_id review was accepted. UNIQUE (user_id, order_id) ' +
+        'does not treat NULLs as equal, so before the policy change this was a ' +
+        'distinct row every time and a flood was one loop.',
+    ).not.toBeNull();
 
-    // The measurement: two rows, ZERO distinct orders, at a business with no
-    // relationship to this consumer. The ratio is the finding.
+    // The measurement that used to BE the finding: two rows, ZERO distinct
+    // orders. Now zero of both, and the ratio is asserted as a ratio so a
+    // partial fix — one that stops the second insert but not the first — cannot
+    // pass.
     const planted = await ctx.sql.unsafe<
       { c: number; distinct_orders: number }[]
     >(
@@ -2942,25 +3187,28 @@ describe('the two things the reviews grant does not stop', () => {
          from public.reviews
         where business_id = '${BIZ_B}' and user_id = '${MEMBER}'`,
     );
-    expect(plainRows(planted)).toEqual([{ c: 2, distinct_orders: 0 }]);
+    expect(plainRows(planted)).toEqual([{ c: 0, distinct_orders: 0 }]);
 
-    // The aggregate consequence. `rating` is written and `business_rating` is
-    // not, so the review counts toward `review_count` and averages towards zero.
-    // Both columns are read, because "it is in the table" is not the claim —
-    // "it moves the business's public reputation" is.
+    // The aggregate consequence, which is the one that made this severe. BIZ_B
+    // was driven to `review_count` 2 and `rating` 0.00 by reviews of a
+    // relationship that never existed, because `on_review_change` fires
+    // `update_business_rating()` on INSERT and both filters exclude nothing a
+    // client supplied. It is back at zero, and the seeded business is untouched.
+    //
+    // Read as a pair, not as one string: "the aggregate did not change" would
+    // also be true if the plants had never reached the aggregate at all, and
+    // that is a different (and harmless) world.
     const aggregate = await ctx.sql.unsafe<
       { id: string; rating: string; review_count: number }[]
     >(`select id, rating, review_count from public.businesses order by id`);
-    const b = plainRows(aggregate).find((r) => r.id === BIZ_B);
-    expect(
-      b,
-      'the planted reviews did not reach business_moderation-adjacent ' +
-        'aggregates at all, so the reputation consequence this test claims ' +
-        'does not happen',
-    ).toEqual({ id: BIZ_B, rating: '0.00', review_count: 2 });
+    expect(plainRows(aggregate)).toEqual([
+      { id: BIZ_A, rating: '4.50', review_count: 2 },
+      { id: BIZ_B, rating: '0.00', review_count: 0 },
+    ]);
 
-    // And they are public immediately, which is what makes it reputation and not
-    // a moderation queue.
+    // And nothing is public, which is what makes it reputation rather than a
+    // moderation queue. Anon can still READ the public feed — that policy is
+    // deliberately still `TO public` — it just has nothing new to read.
     const inFeed = await as(ctx.sql, 'anon', null, (tx) =>
       tx
         .unsafe<{ comment: string }[]>(
@@ -2970,35 +3218,27 @@ describe('the two things the reviews grant does not stop', () => {
         )
         .then((rows) => rows.map((r) => r.comment)),
     );
-    expect(inFeed).toEqual([
-      'RLS never bought here',
-      'RLS never bought here either',
-    ]);
+    expect(
+      inFeed,
+      'the anonymous feed is showing reviews this consumer planted. The SELECT ' +
+        'policy is TO public on purpose — this is the feed working, not a hole ' +
+        '— so an empty result here means the ROWS are gone, not the read.',
+    ).toEqual([]);
 
-    // The cleanup is a plain DELETE of rows this test created, and it is guarded
-    // by the same incoming-FK assertion the moderation block uses: nothing
-    // references `reviews` today, and a `finally` that raises would skip the
-    // aggregate restore below and leave the rest of the file measuring planted
-    // reviews.
-    try {
-      const noIncomingFk = await ctx.sql.unsafe<{ c: number }[]>(
-        `select count(*)::int as c from pg_constraint where confrelid = 'public.reviews'::regclass`,
-      );
-      expect(plainRows(noIncomingFk)[0]?.c).toBe(0);
-    } finally {
-      await ctx.sql.unsafe(
-        `delete from public.reviews where comment in ('RLS never bought here', 'RLS never bought here either')`,
-      );
-    }
-
+    // Nothing was written, so there is nothing to clean up. Asserted rather than
+    // assumed: `deniedAs` COMMITS on the success path, so if either insert had
+    // gone through, a silent `finally` here would leave planted reviews behind
+    // for the rest of the file to measure.
     expect(await reviewCount()).toBe(before);
-    const restored = await ctx.sql.unsafe<
-      { id: string; rating: string; review_count: number }[]
-    >(`select id, rating, review_count from public.businesses order by id`);
-    expect(plainRows(restored)).toEqual([
-      { id: BIZ_A, rating: '4.50', review_count: 2 },
-      { id: BIZ_B, rating: '0.00', review_count: 0 },
-    ]);
+    const residual = await ctx.sql.unsafe<{ c: number }[]>(
+      `select count(*)::int as c from public.reviews
+        where comment in ('RLS never bought here', 'RLS never bought here either')`,
+    );
+    expect(
+      plainRows(residual)[0]?.c,
+      'a probe row survived a refused insert. The two statements above report ' +
+        '42501, so this means something else created it.',
+    ).toBe(0);
   });
 
   /**
@@ -3099,5 +3339,780 @@ describe('the two things the reviews grant does not stop', () => {
       `select rating, review_count from public.businesses where id = '${BIZ_A}'`,
     );
     expect(plainRows(restored)).toEqual([{ rating: '4.50', review_count: 2 }]);
+  });
+});
+
+/**
+ * `20260928192000_close_reviews_insert_and_narrow_policies.sql`, measured on
+ * its own terms.
+ *
+ * ─── WHY A NEW BLOCK AND NOT MORE TESTS IN THE EXISTING ONES ─────────────────
+ *
+ * Every test in the blocks above concluded something that the migration
+ * inverted, so none of them could be extended — each was rewritten to state the
+ * new conclusion and keep the old one visible. What is left is a different kind
+ * of test: not "what did this hole look like" but "does the thing the mobile
+ * actually does still work, and what exactly is the boundary now". Those are
+ * positive assertions against a policy that has to be RIGHT, and mixing them
+ * into the inverted blocks would have buried them under before/after prose.
+ *
+ * The file is long, and the fixture is the reason it stays one file. Seeding
+ * means three Vault secrets, five `auth.users` rows, a role promotion, two
+ * businesses with hand-written `business_ownership`, a location, two offers and
+ * four orders, and it is all coupled: `auth_helpers.my_role()` reads `profiles`,
+ * `trg_bootstrap_business_companions` only fires with a JWT, and
+ * `on_order_status_change` raises without the Vault rows. Duplicating that to
+ * satisfy a line count would buy a shorter file and a second place for the
+ * fixture to drift. Split when the SEED can be split, not when the line count
+ * is uncomfortable.
+ */
+describe('the reviews insert, after 20260928192000', () => {
+  /**
+   * The one that matters most, and it is first for that reason.
+   *
+   * Every other test in this block asserts a refusal. A suite of refusals
+   * passes just as happily against a policy that refuses everything, so the
+   * positive arm is not decoration — it is the only thing that distinguishes a
+   * boundary from a wall.
+   *
+   * This is the exact statement `submitReview` issues
+   * (`apps/mobile/src/features/orders/data/repository.ts`), and the exact shape
+   * `ReviewsService.create` writes: the consumer's own order, the business that
+   * order belongs to, the two ratings and the comment. Nothing here is a
+   * weakened variant to make it pass — `business_id` is taken from the order,
+   * because that is what the client does and what the API does.
+   *
+   * On the "201": the database does not return status codes, and this is the
+   * layer beneath that number. `POST /reviews` is `@ApiCreatedResponse` and
+   * returns 201 when this insert is accepted, and `ReviewsService.create` runs
+   * the two checks that are STRICTER than the policy — the order must belong to
+   * the caller, and its status must be `completed`
+   * (`apps/api/src/modules/reviews/reviews.service.db.spec.ts` covers both, the
+   * second as `Forbidden`/`BadRequest`). The mobile does not go through that
+   * service at all; it writes to PostgREST directly, which is why the rule has
+   * to be here as well as there.
+   *
+   * The status gap is worth naming because it is real and this migration did not
+   * close it: the API refuses a non-completed order, the mobile does not check
+   * status, and the database has never expressed it. Adding
+   * `o.status = 'completed'` to the EXISTS would be a product decision taken
+   * inside a security migration — the mobile's review screen is reachable from
+   * an order detail page whatever the status — so it is reported in the
+   * migration header and left alone.
+   */
+  test('the order owner reviewing their own order at its own business still works', async () => {
+    const before = await reviewCount();
+    const aggregateBefore = await ctx.sql.unsafe<
+      { rating: string; review_count: number }[]
+    >(
+      `select rating, review_count from public.businesses where id = '${BIZ_A}'`,
+    );
+    expect(plainRows(aggregateBefore)).toEqual([
+      { rating: '4.50', review_count: 2 },
+    ]);
+
+    // `deniedAs` hands back `null` on SUCCESS, so this is the shape of the
+    // assertions throughout: a null here is a 201 at the layer above.
+    const inserted = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+      tx.unsafe(
+        `insert into public.reviews
+           (user_id, business_id, order_id, product_rating, business_rating, comment)
+         values ('${MEMBER}', '${BIZ_A}', '${ORDER.Q}', 4, 3, 'RLS the legitimate path')
+         returning id, user_id::text, business_id::text, order_id::text,
+                   product_rating, business_rating, comment, is_hidden, moderated_by::text`,
+      ),
+    );
+    expect(
+      inserted,
+      'the legitimate review was REFUSED. This is the test that stops the fix ' +
+        'from being a break: `submitReview` declares orderId as required and ' +
+        'passes the business read off the same order row, so if the policy ' +
+        'rejects this, the mobile review flow is broken in production. Check ' +
+        'the EXISTS before anything else.',
+    ).toBeNull();
+
+    // Re-read as the owner rather than through the client session, so the
+    // values are the row's own and not a projection through the SELECT policy.
+    const landed = await ctx.sql.unsafe<
+      {
+        user_id: string;
+        business_id: string;
+        order_id: string;
+        product_rating: number;
+        business_rating: number;
+        comment: string;
+        is_hidden: boolean;
+        moderated_by: string | null;
+      }[]
+    >(
+      `select user_id::text, business_id::text, order_id::text, product_rating,
+              business_rating, comment, is_hidden, moderated_by::text
+         from public.reviews
+        where comment = 'RLS the legitimate path'`,
+    );
+    expect(
+      plainRows(landed),
+      'the row did not land with the values that were sent. The policy is a ' +
+        'WITH CHECK, so it can only refuse — it cannot rewrite — and anything ' +
+        'different here is the trigger or a column default.',
+    ).toEqual([
+      {
+        user_id: MEMBER,
+        business_id: BIZ_A,
+        order_id: ORDER.Q,
+        product_rating: 4,
+        business_rating: 3,
+        comment: 'RLS the legitimate path',
+        // Unmoderated, because the row is new. Asserted as values rather than
+        // omitted: "the moderation columns are fine" is exactly the claim that
+        // was false before this migration, and it is cheap to keep true.
+        is_hidden: false,
+        moderated_by: null,
+      },
+    ]);
+
+    // The aggregate MOVED, which is the half that says this is a real review
+    // and not a row that satisfies a predicate. `business_rating` 3 joins the
+    // seeded 5 and 4: avg = 4.00 over three reviews.
+    const aggregateAfter = await ctx.sql.unsafe<
+      { rating: string; review_count: number }[]
+    >(
+      `select rating, review_count from public.businesses where id = '${BIZ_A}'`,
+    );
+    expect(plainRows(aggregateAfter)).toEqual([
+      { rating: '4.00', review_count: 3 },
+    ]);
+
+    // It is in the public feed with no token, because the SELECT policy is
+    // deliberately still `TO public` and the two `@Public()` routes depend on
+    // it. Asserted so a future narrowing of THAT policy fails here, where the
+    // reason is written down, rather than in a product bug report.
+    const inAnonFeed = await as(ctx.sql, 'anon', null, (tx) =>
+      tx
+        .unsafe<{ comment: string }[]>(
+          `select comment from public.reviews where comment = 'RLS the legitimate path'`,
+        )
+        .then((rows) => rows.map((r) => r.comment)),
+    );
+    expect(
+      inAnonFeed,
+      'the legitimate review is not readable by anon. The SELECT policy is ' +
+        'intentionally TO public — it is the public review feed behind two ' +
+        '@Public() routes — so this failing means the FEED was narrowed.',
+    ).toEqual(['RLS the legitimate path']);
+
+    try {
+      // A second review on the SAME order is still refused, and that is a
+      // different layer from everything above: `UNIQUE (user_id, order_id)`, a
+      // constraint, not a policy. Asserted because the mobile writes with
+      // `upsert(… onConflict: 'user_id,order_id')`, so this is the exact
+      // statement shape the edit path depends on, and the distinction matters
+      // for anyone who later reads the refusal as "the policy got stricter".
+      const duplicate = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+        tx.unsafe(
+          `insert into public.reviews
+               (user_id, business_id, order_id, product_rating, business_rating, comment)
+             values ('${MEMBER}', '${BIZ_A}', '${ORDER.Q}', 1, 1, 'RLS duplicate on the same order')`,
+        ),
+      );
+      expect(duplicate?.code).toBe('23505');
+    } finally {
+      await ctx.sql
+        .unsafe(
+          `delete from public.reviews where comment = 'RLS the legitimate path'`,
+        )
+        .catch(() => {});
+    }
+
+    // The AFTER DELETE trigger recomputes, so the aggregate is back without this
+    // test writing it. Asserted because a leaked row here makes every count
+    // assertion in the file that runs after it pass for the wrong reason.
+    expect(await reviewCount()).toBe(before);
+    const restored = await ctx.sql.unsafe<
+      { rating: string; review_count: number }[]
+    >(
+      `select rating, review_count from public.businesses where id = '${BIZ_A}'`,
+    );
+    expect(plainRows(restored)).toEqual([{ rating: '4.50', review_count: 2 }]);
+  });
+
+  /**
+   * The NULL-order arm on its own, separate from the flood test in the block
+   * above, because the two are refused for different reasons and a reader
+   * debugging a production rejection will be told one of them.
+   *
+   * The honest detail: `order_id IS NOT NULL` is NOT what refuses this. The
+   * `EXISTS` alone would, because `o.id = NULL` is never true. The explicit
+   * term is in the policy to name the invariant rather than to rely on that
+   * accident — and relying on an accident of NULL comparison is precisely what
+   * made the four `TO public` policies look defended.
+   *
+   * Measured, not assumed. Deleting the `IS NOT NULL` term from the policy
+   * leaves this test and every other behavioural test in this file green; the
+   * only assertion that notices is the `toContain('order_id IS NOT NULL')` on
+   * the catalog text in `the anon insert` above. That is a guard against
+   * someone deleting the term on purpose, and it is NOT evidence that the term
+   * stops a NULL insert. Loosening the EXISTS to "the caller owns SOME order"
+   * is a different mutation, and that one this test DOES catch.
+   *
+   * So the assertion below is about the OUTCOME, and the message says which
+   * layer to look at, rather than claiming the term is load-bearing.
+   */
+  test('a client cannot insert a review with a NULL order_id, for any business', async () => {
+    const before = await reviewCount();
+
+    for (const [businessId, why] of [
+      [BIZ_A, 'a business this consumer has actually bought from'],
+      [BIZ_B, 'a business it has not'],
+    ] as const) {
+      const refused = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+        tx.unsafe(
+          `insert into public.reviews
+             (user_id, business_id, rating, comment)
+           values ('${MEMBER}', '${businessId}', 1, 'RLS null order at ${businessId}')
+           returning id`,
+        ),
+      );
+      expect(
+        refused,
+        `a review with a NULL order_id was accepted against ${why}. Before ` +
+          '20260928192000 this was the unlimited-review primitive: ' +
+          'UNIQUE (user_id, order_id) never treats NULLs as equal, so every ' +
+          'one of these was a distinct row.',
+      ).not.toBeNull();
+      expect(refused?.code).toBe('42501');
+      expect(refused?.message).toContain(
+        'new row violates row-level security policy',
+      );
+    }
+
+    expect(
+      await reviewCount(),
+      'a NULL-order_id probe row survived a refused insert. `deniedAs` COMMITS ' +
+        'on the success path, so a silently committed row would outlive this ' +
+        'test and shift every count after it.',
+    ).toBe(before);
+  });
+
+  /**
+   * Somebody else's order.
+   *
+   * This is the arm the NULL test cannot cover and the reason the fix is an
+   * `EXISTS` rather than a NOT NULL: a NOT NULL column would refuse every NULL
+   * review and every real one would still pass, including a review written
+   * against another consumer's order. The order has to be checked for OWNERSHIP
+   * or the check is only a shape.
+   *
+   * Two things are asserted that a reader should not skip. First, the order is
+   * real and belongs to STRANGER, so the refusal is not a missing-fixture
+   * accident. Second, the negative assertion on `violates foreign key
+   * constraint`: STRANGER is an `auth.users` row and a `profiles` row, so if the
+   * policy were not the thing refusing, the error would say FK — the same guard
+   * `orders.rls.db.spec.ts` uses.
+   */
+  test('a client cannot insert a review against another consumer’s order', async () => {
+    const before = await reviewCount();
+
+    // The order is real and is not this consumer's. Read as the owner so the
+    // fixture, not the policy, is what is being checked.
+    const order = await ctx.sql.unsafe<
+      { id: string; user_id: string; business_id: string }[]
+    >(`select id::text, user_id::text, business_id::text
+         from public.orders where id = '${ORDER.S}'`);
+    expect(plainRows(order)).toEqual([
+      { id: ORDER.S, user_id: STRANGER, business_id: BIZ_A },
+    ]);
+
+    // Note the `business_id` is CORRECT here: this is STRANGER's order at
+    // BIZ_A and the review names BIZ_A. The only thing wrong with the statement
+    // is whose order it is, which is the arm under test.
+    const refused = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+      tx.unsafe(
+        `insert into public.reviews
+           (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+         values ('${MEMBER}', '${BIZ_A}', '${ORDER.S}', 1, 1, 1, 'RLS somebody else order')
+         returning id`,
+      ),
+    );
+    expect(
+      refused,
+      'a consumer wrote a review on another consumer’s order. The EXISTS ' +
+        'requires o.user_id = reviews.user_id, and user_id is already pinned ' +
+        'to the caller, so this can only mean the order half of the check is ' +
+        'gone.',
+    ).not.toBeNull();
+    expect(refused?.code).toBe('42501');
+    expect(refused?.message).toContain(
+      'new row violates row-level security policy',
+    );
+    expect(
+      refused?.message,
+      'the refusal came from a foreign key or a CHECK rather than from the ' +
+        'policy. STRANGER has a real profile row in this fixture, so an FK ' +
+        'error would mean a different statement than the one above.',
+    ).not.toContain('violates foreign key constraint');
+
+    expect(await reviewCount()).toBe(before);
+  });
+
+  /**
+   * The right order, the wrong business.
+   *
+   * The other arm the ownership check does not cover on its own, and the reason
+   * the EXISTS compares `o.business_id` as well as `o.user_id`. Without that
+   * comparison a consumer holding a real order at BIZ_A can post a review
+   * against BIZ_B, and the row is attributed to an order that has nothing to do
+   * with the business being reviewed — which is the same reputation primitive as
+   * the NULL-order flood, wearing a valid order as a disguise.
+   *
+   * Asserted as a pair on purpose: the order is genuinely MEMBER's, and the
+   * business is genuinely not the order's. Remove either fact and the test would
+   * be measuring a different arm.
+   */
+  test('a client cannot insert a review whose business is not the order’s business', async () => {
+    const before = await reviewCount();
+
+    const order = await ctx.sql.unsafe<
+      { user_id: string; business_id: string }[]
+    >(
+      `select user_id::text, business_id::text
+         from public.orders where id = '${ORDER.R}'`,
+    );
+    expect(
+      plainRows(order),
+      'ORDER.R stopped being MEMBER’s order at BIZ_A, so this test is no ' +
+        'longer measuring a business mismatch — it would be measuring a ' +
+        'missing fixture.',
+    ).toEqual([{ user_id: MEMBER, business_id: BIZ_A }]);
+
+    // A real order of this consumer, on a business the order does not belong to.
+    const refused = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+      tx.unsafe(
+        `insert into public.reviews
+           (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+         values ('${MEMBER}', '${BIZ_B}', '${ORDER.R}', 1, 1, 1, 'RLS wrong business')
+         returning id`,
+      ),
+    );
+    expect(
+      refused,
+      'a consumer reviewed a business its order does not belong to, using a ' +
+        'real order of its own. This is the arm that survives a fix which only ' +
+        'checked ownership: o.business_id = reviews.business_id is the ' +
+        'comparison doing this, and it is a separate term.',
+    ).not.toBeNull();
+    expect(refused?.code).toBe('42501');
+    expect(refused?.message).toContain(
+      'new row violates row-level security policy',
+    );
+
+    // And BIZ_B's aggregate is untouched, which is where the consequence lived.
+    const aggregate = await ctx.sql.unsafe<
+      { id: string; rating: string; review_count: number }[]
+    >(`select id, rating, review_count from public.businesses order by id`);
+    expect(plainRows(aggregate)).toEqual([
+      { id: BIZ_A, rating: '4.50', review_count: 2 },
+      { id: BIZ_B, rating: '0.00', review_count: 0 },
+    ]);
+
+    expect(await reviewCount()).toBe(before);
+  });
+
+  /**
+   * `anon` is outside all three write policies, and the read surface it is
+   * legitimately inside still works.
+   *
+   * Two halves, and the second is the one that would be easy to break. The first
+   * is the narrowing: the roles in `pg_policies` are the assertion, because
+   * "anon cannot write" and "anon is not in the policy" are different claims and
+   * only the second is what the migration did. `anon` still HOLDS the INSERT and
+   * DELETE grants — that is unchanged and asserted elsewhere in this file — so
+   * the boundary here is the policy and nothing else. If the grants were revoked
+   * instead, every refusal in this block would still pass while describing a
+   * different layer.
+   *
+   * The second half is the SELECT policy, which stayed `TO public` on purpose.
+   * It is asserted with a real anonymous read of a real review, because the
+   * failure mode of narrowing it is not a test failure — it is an empty
+   * `GET /businesses/public/:id/reviews` in production, and no assertion about
+   * refusals would ever have caught it.
+   */
+  test('anon is outside the three write policies, and the public review feed is still readable without a token', async () => {
+    const policyRows = await ctx.sql.unsafe<
+      { policyname: string; cmd: string; roles: string[] }[]
+    >(`select policyname, cmd, roles
+         from pg_policies
+        where schemaname = 'public' and tablename = 'reviews'
+          and cmd in ('INSERT', 'UPDATE', 'DELETE')
+        order by cmd`);
+    expect(
+      plainRows(policyRows),
+      'a write policy on reviews is not TO authenticated. Every one of them ' +
+        'was TO public before 20260928192000, and the whole point of that ' +
+        'migration was that the role should decide.',
+    ).toEqual([
+      {
+        policyname: 'Users can delete own reviews',
+        cmd: 'DELETE',
+        roles: ['authenticated'],
+      },
+      {
+        policyname: 'Users can insert own reviews',
+        cmd: 'INSERT',
+        roles: ['authenticated'],
+      },
+      {
+        policyname: 'Users can update own reviews',
+        cmd: 'UPDATE',
+        roles: ['authenticated'],
+      },
+    ]);
+
+    // The layer, stated so a reader is not misled into thinking the grant moved:
+    // `anon` still holds INSERT and DELETE on this table, and the statements are
+    // still refused by RLS rather than by `42501 permission denied`.
+    for (const [role, claim] of [
+      ['anon', null],
+      ['anon', MEMBER],
+    ] as const) {
+      const insertRefusal = await deniedAs(ctx.sql, role, claim, (tx) =>
+        tx.unsafe(
+          `insert into public.reviews
+             (user_id, business_id, order_id, rating, product_rating, business_rating, comment)
+           values ('${MEMBER}', '${BIZ_A}', '${ORDER.Q}', 1, 1, 1, 'RLS anon after narrowing')`,
+        ),
+      );
+      expect(insertRefusal?.code).toBe('42501');
+      expect(insertRefusal?.message).toContain(
+        'new row violates row-level security policy',
+      );
+    }
+    const deleteRefusal = await deniedAs(ctx.sql, 'anon', MEMBER, (tx) =>
+      tx.unsafe(`delete from public.reviews where true`),
+    );
+    expect(
+      deleteRefusal,
+      'anon with a claim raised on delete. A DELETE policy that matches no ' +
+        'role is a silent zero-row match, not an error.',
+    ).toBeNull();
+    expect(await reviewCount()).toBe(2);
+
+    // ─── THE READ, which is the half that matters for the product ───────────
+    //
+    // `GET /businesses/public/:id/reviews` and `GET /offers/:id/reviews` are
+    // both `@Public()` in `reviews-feeds.controller.ts`, so the mobile's
+    // business page and offer page read reviews with no token at all. The
+    // policy's first branch, `is_hidden IS NOT TRUE`, is what serves them.
+    //
+    // Both branches are asserted: a visible review is readable by anon, and a
+    // hidden one is not. The second is the part a naive `TO public` narrowing
+    // would have broken in the other direction — `20260927021015` dropped the
+    // `to` clause deliberately for exactly this reason, and reversing a
+    // documented decision inside a security migration is how a read regression
+    // gets shipped as a fix.
+    const visible = await as(ctx.sql, 'anon', null, (tx) =>
+      tx
+        .unsafe<{ comment: string }[]>(
+          `select comment from public.reviews
+            where business_id = '${BIZ_A}' and is_hidden is not true
+            order by comment`,
+        )
+        .then((rows) => rows.map((r) => r.comment)),
+    );
+    expect(
+      visible,
+      'anon cannot read the public review feed. The SELECT policy is ' +
+        'intentionally TO public and this is what that buys.',
+    ).toEqual(['RLS review mine', 'RLS review stranger']);
+
+    // Hide one as the service role — the same path the API's moderation uses —
+    // and confirm anon loses it while the author keeps it.
+    await ctx.sql.unsafe(
+      `update public.reviews set is_hidden = true, moderation_reason = 'other',
+              hidden_reason = 'pinned by the anon read test', moderated_at = now(),
+              moderated_by = '${ADMIN}'
+         where id = '${REVIEW.S}'`,
+    );
+    try {
+      const afterHide = await as(ctx.sql, 'anon', null, (tx) =>
+        tx
+          .unsafe<{ comment: string }[]>(
+            `select comment from public.reviews
+              where business_id = '${BIZ_A}' and is_hidden is not true
+              order by comment`,
+          )
+          .then((rows) => rows.map((r) => r.comment)),
+      );
+      expect(afterHide).toEqual(['RLS review mine']);
+
+      const authorStillReads = await as(
+        ctx.sql,
+        'authenticated',
+        STRANGER,
+        (tx) =>
+          tx
+            .unsafe<{ comment: string }[]>(
+              `select comment from public.reviews where id = '${REVIEW.S}'`,
+            )
+            .then((rows) => rows.map((r) => r.comment)),
+      );
+      expect(
+        authorStillReads,
+        "an author can no longer read their own hidden review. The policy's " +
+          'second branch is `or user_id = auth.uid()`, and that branch is the ' +
+          'reason the policy is a disjunction rather than a single predicate.',
+      ).toEqual(['RLS review stranger']);
+    } finally {
+      // Unconditional: `ctx.sql` is the owner, so this cannot be refused, and a
+      // hidden REVIEW.S would make the soft-hide block above measure the wrong
+      // starting state.
+      await ctx.sql.unsafe(
+        `update public.reviews set is_hidden = false, moderation_reason = null,
+                hidden_reason = null, moderated_at = null, moderated_by = null
+           where id = '${REVIEW.S}'`,
+      );
+    }
+    expect(
+      await as(ctx.sql, 'anon', null, (tx) =>
+        tx
+          .unsafe<{ comment: string }[]>(
+            `select comment from public.reviews where id = '${REVIEW.S}'`,
+          )
+          .then((rows) => rows.map((r) => r.comment)),
+      ),
+      'REVIEW.S was not restored to visible, so the soft-hide tests above are ' +
+        'measuring a table that starts with one review already hidden.',
+    ).toEqual(['RLS review stranger']);
+  });
+
+  /**
+   * The migration's "no-op on existing data" claim, measured rather than
+   * asserted in a comment.
+   *
+   * RLS is evaluated at write time and never retroactively, so a row written
+   * before this migration keeps whatever it holds — including a NULL
+   * `order_id`, which the new policy would refuse on any new write. Production
+   * has such rows: the foreign key is `ON DELETE SET NULL`, so deleting an
+   * order nulls `order_id` on reviews written years ago. "The policy now
+   * requires an order" is therefore not the same claim as "every review has an
+   * order", and only this test tells the two apart.
+   *
+   * The row is planted AS THE OWNER, which is exactly how a pre-migration row
+   * looks: no policy applies, because the owner is not subject to RLS. The
+   * BEFORE INSERT trigger does fire for it, and correctly changes nothing —
+   * `is_hidden` is already the column default — so this doubles as evidence
+   * that the trigger is invisible to anything that was already true.
+   *
+   * `UNIQUE (user_id, order_id)` does not block a NULL `order_id` a second
+   * time, which is the whole reason the historical rows could accumulate. The
+   * second insert is what proves the constraint is still NULL-tolerant — and
+   * therefore that the new policy, not the constraint, is what closes the door.
+   */
+  test('a row written before the migration with a NULL order_id is still readable and still deletable', async () => {
+    const before = await reviewCount();
+    const aggregateBefore = await ctx.sql.unsafe<
+      { rating: string; review_count: number }[]
+    >(
+      `select rating, review_count from public.businesses where id = '${BIZ_B}'`,
+    );
+    expect(plainRows(aggregateBefore)).toEqual([
+      { rating: '0.00', review_count: 0 },
+    ]);
+
+    try {
+      // Two legacy rows, planted as the owner, exactly as a pair written before
+      // 20260928192000 would look: NULL order_id, no relationship to BIZ_B.
+      await ctx.sql.unsafe(`
+        insert into public.reviews (user_id, business_id, rating, comment)
+        values ('${MEMBER}', '${BIZ_B}', 1, 'RLS legacy row one'),
+               ('${MEMBER}', '${BIZ_B}', 1, 'RLS legacy row two')
+      `);
+      expect(
+        await reviewCount(),
+        'the legacy rows did not land, so everything below would be vacuous.',
+      ).toBe(before + 2);
+
+      // The structural fact that let them accumulate, still true.
+      const legacy = await ctx.sql.unsafe<
+        { c: number; distinct_orders: number }[]
+      >(
+        `select count(*)::int as c, count(distinct order_id)::int as distinct_orders
+           from public.reviews where business_id = '${BIZ_B}' and user_id = '${MEMBER}'`,
+      );
+      expect(plainRows(legacy)).toEqual([{ c: 2, distinct_orders: 0 }]);
+
+      // READ: the author still sees them, and so does anon, because the SELECT
+      // policy has no order requirement. RLS did not start re-evaluating old
+      // rows the day the policy changed, and that is the point.
+      const byAnon = await as(ctx.sql, 'anon', null, (tx) =>
+        tx
+          .unsafe<{ comment: string }[]>(
+            `select comment from public.reviews where comment like 'RLS legacy row%' order by comment`,
+          )
+          .then((rows) => rows.map((r) => r.comment)),
+      );
+      expect(
+        byAnon,
+        'a pre-existing NULL-order_id review became unreadable. The new ' +
+          'policy governs NEW writes; if this fails, something is re-checking ' +
+          'rows that already exist.',
+      ).toEqual(['RLS legacy row one', 'RLS legacy row two']);
+
+      // DELETE: the author can still remove its own row, which is the other
+      // thing the old policy granted and the new one must not have taken away.
+      const removed = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+        tx.unsafe(
+          `delete from public.reviews where comment = 'RLS legacy row one' returning id`,
+        ),
+      );
+      expect(
+        removed,
+        'the author could not delete its own review. The DELETE policy is ' +
+          'unchanged apart from its role, and this row is a legitimate own-row ' +
+          'delete — if this fails, the narrowing went too far.',
+      ).toBeNull();
+
+      // The second row survives, so the delete was scoped by the policy and not
+      // by the table emptying itself.
+      expect(
+        await as(ctx.sql, 'anon', null, (tx) =>
+          tx
+            .unsafe<{ comment: string }[]>(
+              `select comment from public.reviews where comment like 'RLS legacy row%' order by comment`,
+            )
+            .then((rows) => rows.map((r) => r.comment)),
+        ),
+      ).toEqual(['RLS legacy row two']);
+
+      // A NEW NULL-order_id review is still refused, on the same table, in the
+      // same test. Old rows and new writes are governed by different things and
+      // the only way to show that is to put them side by side.
+      const newRow = await deniedAs(ctx.sql, 'authenticated', MEMBER, (tx) =>
+        tx.unsafe(
+          `insert into public.reviews (user_id, business_id, rating, comment)
+           values ('${MEMBER}', '${BIZ_B}', 1, 'RLS new row, not legacy') returning id`,
+        ),
+      );
+      expect(
+        newRow,
+        'a NEW NULL-order_id review was accepted next to two legacy ones. The ' +
+          'policy is the gate and it applies to writes, not to rows.',
+      ).not.toBeNull();
+      expect(newRow?.code).toBe('42501');
+    } finally {
+      // Unconditional, and `.catch()`-free on purpose: this runs as the owner,
+      // nothing references `reviews`, and a throwing cleanup at the end of a
+      // `finally` is indistinguishable from a finding.
+      await ctx.sql.unsafe(
+        `delete from public.reviews where comment like 'RLS legacy row%'
+            or comment = 'RLS new row, not legacy'`,
+      );
+    }
+
+    // BIZ_B's aggregate is back to zero, recomputed by the AFTER DELETE trigger.
+    expect(await reviewCount()).toBe(before);
+    const restored = await ctx.sql.unsafe<
+      { id: string; rating: string; review_count: number }[]
+    >(`select id, rating, review_count from public.businesses order by id`);
+    expect(plainRows(restored)).toEqual([
+      { id: BIZ_A, rating: '4.50', review_count: 2 },
+      { id: BIZ_B, rating: '0.00', review_count: 0 },
+    ]);
+  });
+
+  /**
+   * The trigger is INSERT-only, and moderation is still an UPDATE.
+   *
+   * This is the assertion that keeps the previous describe block honest. The
+   * reset function forces `is_hidden := false` on every insert with no
+   * condition on the caller, which is sound only because nothing legitimately
+   * inserts a hidden review — so the thing that has to be true is that hiding a
+   * review is still an UPDATE, and still works.
+   *
+   * The role here is `service_role`, and that is the honest detail rather than a
+   * convenience: `authenticated` holds a column UPDATE grant on four columns
+   * and `is_hidden` is not one of them, so the admin panel cannot hide a review
+   * by talking to Postgres as an admin. It does it through the API, which
+   * connects with the service role and bypasses RLS
+   * (`ReviewsModerationService.applyModeration` → `setHidden`, an UPDATE).
+   * Neither of those changed here, and neither is described as a boundary: the
+   * column grant is a convention, the service role is a privilege.
+   */
+  test('hiding a review is still an UPDATE, and the BEFORE INSERT trigger does not touch it', async () => {
+    const triggerDef = await ctx.sql.unsafe<{ def: string }[]>(
+      // `oid` is qualified because `pg_trigger`, `pg_class` and
+      // `pg_namespace` all carry one, and an unqualified reference is a 42702
+      // that reads like a broken test rather than a broken query.
+      `select pg_get_triggerdef(t.oid) as def
+         from pg_trigger t
+         join pg_class c on c.oid = t.tgrelid
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relname = 'reviews'
+          and t.tgname = 'trg_reviews_unmoderated_on_insert' and not t.tgisinternal`,
+    );
+    expect(
+      plainRows(triggerDef)[0]?.def,
+      'the reset trigger is no longer BEFORE INSERT only. If it gained an ' +
+        'UPDATE arm it would overwrite every moderation decision the API makes, ' +
+        'which is the one way this design could be wrong.',
+    ).toContain('BEFORE INSERT ON public.reviews');
+    expect(plainRows(triggerDef)[0]?.def).not.toContain('UPDATE');
+
+    // Hide, as the API does.
+    const hidden = await deniedAs(ctx.sql, 'service_role', ADMIN, (tx) =>
+      tx.unsafe(
+        `update public.reviews
+            set is_hidden = true, moderation_reason = 'other',
+                hidden_reason = 'hidden by the moderation test',
+                moderated_at = now(), moderated_by = '${ADMIN}'
+          where id = '${REVIEW.S}'
+          returning id::text, is_hidden, moderated_by::text`,
+      ),
+    );
+    expect(hidden, 'the service role could not hide a review').toBeNull();
+
+    const landed = await ctx.sql.unsafe<
+      { is_hidden: boolean; moderated_by: string; moderation_reason: string }[]
+    >(
+      `select is_hidden, moderated_by::text, moderation_reason
+         from public.reviews where id = '${REVIEW.S}'`,
+    );
+    expect(plainRows(landed)).toEqual([
+      {
+        is_hidden: true,
+        moderated_by: ADMIN,
+        moderation_reason: 'other',
+      },
+    ]);
+
+    // And unhide, which is the direction no client can reach at all.
+    try {
+      const unhidden = await deniedAs(ctx.sql, 'service_role', ADMIN, (tx) =>
+        tx.unsafe(
+          `update public.reviews
+              set is_hidden = false
+            where id = '${REVIEW.S}'
+            returning is_hidden`,
+        ),
+      );
+      expect(unhidden, 'the service role could not unhide a review').toBeNull();
+      expect(await reviewCount()).toBe(2);
+    } finally {
+      await ctx.sql.unsafe(
+        `update public.reviews
+            set is_hidden = false, moderation_reason = null, hidden_reason = null,
+                moderated_at = null, moderated_by = null
+          where id = '${REVIEW.S}'`,
+      );
+    }
+    expect(
+      await ctx.sql.unsafe<
+        { is_hidden: boolean; moderated_by: string | null }[]
+      >(
+        `select is_hidden, moderated_by::text from public.reviews where id = '${REVIEW.S}'`,
+      ),
+      'REVIEW.S was not restored, so the soft-hide block above starts from a ' +
+        'table with one review already hidden.',
+    ).toEqual([{ is_hidden: false, moderated_by: null }]);
   });
 });

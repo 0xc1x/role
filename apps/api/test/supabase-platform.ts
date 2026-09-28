@@ -1615,8 +1615,15 @@ export async function as<T>(
  * not an exception: a test asserting a denial has to say so, and the honest
  * way to say it is to have the harness hand back the absence of a failure.
  *
- * The transaction is always rolled back, so the data is untouched whether the
- * statement was refused or not.
+ * The transaction is rolled back only when the statement was REFUSED, which is
+ * the path that throws. On the success path the callback resolves, `as()`
+ * commits, and whatever the statement wrote is persisted.
+ *
+ * That asymmetry has burned two writers in this repository, so it is stated here
+ * rather than in the tests that tripped over it. `deniedAs` returning `null` is
+ * the interesting result, and it is exactly the result under which the writes are
+ * real. A caller that treats this as "always safe to call" will leak a row.
+ * Unconditional cleanup is the obligation, not the default.
  */
 export async function deniedAs<T>(
   sql: Sql,
