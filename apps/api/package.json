@@ -17,7 +17,7 @@
     "test": "bun test --isolate --timeout 60000 ./src",
     "test:watch": "bun test --watch --isolate ./src",
     "test:cov": "bun test --isolate --coverage ./src",
-    "test:e2e": "bun test --isolate --timeout 120000 ./test/app.e2e-spec.ts",
+    "test:e2e": "bun test --isolate --timeout 120000 ./test/*.e2e-spec.ts",
     "db:pull": "drizzle-kit pull",
     "db:studio": "drizzle-kit studio",
     "db:drift": "bash scripts/db-drift-check.sh",
