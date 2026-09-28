@@ -366,6 +366,70 @@ describe('OffersRepository — espejo de active_offers_near (ADR-0008)', () => {
     );
   });
 
+  test('a wildcard in the search is escaped, on this side AND in the SQL', async () => {
+    // `20260928041036_explore_search_escape_wildcards.sql` made
+    // `active_offers_near` escape `p_search` the way this read always did. Before
+    // it, the two disagreed and the API was the only one that did: a `%` typed
+    // into the search box matched EVERY offer here and a literal percent on the
+    // mobile feed, which is one intent answered two ways.
+    //
+    // Four offers in ONE business, so every assertion below is about which rows
+    // the search let through and not about what else the file seeded. Only the
+    // first three contain a metacharacter; the control carries none and must
+    // never be reachable by a term made of one.
+    const { bizId, offer } = await fixture('Panadería Aurora');
+    const percent = await offer({ title: 'Pack 50% off' });
+    const underscore = await offer({ title: 'Pack_5 piezas' });
+    // `!` is the ESCAPE CHARACTER the function uses. It is an ordinary literal
+    // here, and the two spellings have to agree about that.
+    const bang = await offer({ title: 'Pack! urgente' });
+    const control = await offer({ title: 'Pack normal' });
+
+    // The function's own `p_search` expression, verbatim, including its `escape
+    // '!'`. Run beside this repository's read because the two escape with
+    // DIFFERENT characters — `\` here, `!` there — and the claim worth pinning is
+    // that the difference is invisible in the result, not that the patterns match.
+    const rpcSearchIds = async (term: string): Promise<string[]> => {
+      const rows = await ctx.db.execute<{ id: string }>(sql`
+        select o.id
+          from offers o
+          join businesses b on b.id = o.business_id
+         where o.business_id = ${bizId}
+           and (o.title ilike '%' || replace(replace(replace(${term}, '!', '!!'), '%', '!%'), '_', '!_') || '%' escape '!'
+             or o.description ilike '%' || replace(replace(replace(${term}, '!', '!!'), '%', '!%'), '_', '!_') || '%' escape '!'
+             or b.name ilike '%' || replace(replace(replace(${term}, '!', '!!'), '%', '!%'), '_', '!_') || '%' escape '!')
+      `);
+      return [...(rows as unknown as Iterable<{ id: string }>)]
+        .map((r) => r.id)
+        .sort();
+    };
+
+    for (const [term, hit] of [
+      ['%', percent],
+      ['_', underscore],
+      ['!', bang],
+    ] as const) {
+      // Exactly the literal, never the catch-all — and `control` is absent from
+      // every one of these. Unescaped, `%` and `_` would return all four rows and
+      // `!` would return none.
+      expect(
+        await listIds(bizId, { sort: 'pickup_end', search: term }),
+      ).toEqual([hit.id]);
+      // And the same answer from the function's own expression.
+      expect(await rpcSearchIds(term)).toEqual([hit.id]);
+    }
+
+    // A term with no metacharacter is still a plain substring match over all
+    // three columns, which is what makes the escaping above a change to the
+    // WILDCARDS and not to the match itself.
+    expect(await listIds(bizId, { sort: 'pickup_end', search: '50%' })).toEqual(
+      [percent.id],
+    );
+    expect(
+      (await listIds(bizId, { sort: 'pickup_end', search: 'Aurora' })).sort(),
+    ).toEqual([percent.id, underscore.id, bang.id, control.id].sort());
+  });
+
   test('max_price filtra por discounted_price, no por original_price', async () => {
     const { bizId, offer } = await fixture();
     // Same original price AND the same window on both rows: if the filter
@@ -1204,21 +1268,62 @@ describe('OffersRepository.listPopularZones (mirror of popular_zones)', () => {
     expect(all.length).toBeGreaterThanOrEqual(3);
   });
 
-  test('DIVERGENCE: an offer of an unapproved business is NOT counted, and the RPC counts it', async () => {
-    // The one behaviour that makes this endpoint DIFFERENT from the SQL, pinned
-    // as executable fact on both sides.
+  /**
+   * The moderation gate, measured on BOTH sides and required to agree.
+   *
+   * This used to assert the opposite, and the change is worth naming: before
+   * `20260928041322_explore_aggregates_require_approved_business.sql` the
+   * function counted a zone whose offers belonged to a suspended merchant and
+   * this repository did not, the difference was deliberate, and the test pinned
+   * it — including the "and the RPC counts it" half that would have caught
+   * somebody "fixing" the mirror by copying the SQL. The function carries the
+   * gate now, so the risk is no longer an intentional difference: it is two
+   * independent spellings of one rule drifting apart, which is what ADR-0008
+   * exists to manage. The function's own body is run verbatim BESIDE the
+   * repository read, and the two have to agree.
+   *
+   * Regression net, not divergence record — and the gate is load-bearing on both
+   * sides of it. The `is_active`/`stock`/`pickup_end` assertions below are what
+   * make the exclusion a statement about the business gate: without them, a
+   * deleted `publiclyVisibleBusiness()` would still pass.
+   */
+  test('the repository applies the same moderation gate the function does', async () => {
     const z = zone('gated');
     const place = await placeIn(z);
     const seeded = await seedOffer(ctx.db, place.bizId, place.locationId);
 
-    // Baseline: the offer counts while its business is approved.
+    // The function's own body, verbatim, as
+    // `20260928041322_explore_aggregates_require_approved_business.sql` left it.
+    const rpcDeals = async () => {
+      const rpc = await ctx.db.execute<{ zone: string; deals: string }>(sql`
+        select l.zone, count(*)::bigint as deals
+          from offers o
+          join business_locations l on l.id = o.business_location_id
+          join businesses b on b.id = o.business_id
+         where o.is_active
+           and b.is_active
+           and exists (select 1 from public.business_moderation m
+                       where m.business_id = b.id
+                         and m.verification_status = 'approved')
+           and o.stock > 0
+           and o.pickup_end > now()
+           and l.zone is not null
+           and l.zone <> ''
+         group by l.zone
+        having l.zone = ${z}
+      `);
+      return rpc.length === 0 ? 0 : Number(rpc[0]!.deals);
+    };
+
+    // Baseline: both count the live offer of an approved merchant.
     expect(await zonesIn([z])).toEqual([{ zone: z, deals: 1 }]);
+    expect(await rpcDeals()).toBe(1);
 
     // Now the business stops being publicly visible. Nothing here touches the
     // offer: `enforce_offer_business_availability` is a BEFORE INSERT/UPDATE
     // trigger on `offers`, and no trigger runs in the other direction when a
     // business is suspended. So the offer row keeps `is_active = true` — which
-    // is exactly the state production is in, and the state the RPC reads.
+    // is exactly why the gate has to be what excludes it.
     await ctx.db
       .update(businessModeration)
       .set({ verification_status: 'pending' })
@@ -1242,25 +1347,9 @@ describe('OffersRepository.listPopularZones (mirror of popular_zones)', () => {
       .where(eq(offers.id, seeded.id));
     expect(window!.pickup_end.getTime()).toBeGreaterThan(Date.now());
 
-    // The API: the zone is gone.
+    // The zone is gone from both sides now. Before the migration this half of
+    // the test asserted the opposite, and that disagreement WAS the behaviour.
     expect(await zonesIn([z])).toEqual([]);
-
-    // The RPC: the zone is NOT gone. The function's own body, run verbatim, so
-    // the divergence is measured instead of asserted from a comment — and so
-    // this test fails if somebody "fixes" the mirror by copying the SQL.
-    const rpc = await ctx.db.execute<{ zone: string; deals: string }>(sql`
-      select l.zone, count(*)::bigint as deals
-        from offers o
-        join business_locations l on l.id = o.business_location_id
-       where o.is_active
-         and o.stock > 0
-         and o.pickup_end > now()
-         and l.zone is not null
-         and l.zone <> ''
-       group by l.zone
-      having l.zone = ${z}
-    `);
-    expect(rpc).toHaveLength(1);
-    expect(Number(rpc[0]!.deals)).toBe(1);
+    expect(await rpcDeals()).toBe(0);
   });
 });

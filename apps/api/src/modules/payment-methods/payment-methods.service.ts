@@ -63,20 +63,31 @@ export class PaymentMethodsService {
    * ─── WHAT THE TRANSACTION GUARANTEES, AND WHAT IT DOES NOT ────────────────
    *
    * At most one of a user's cards may carry `is_default = true`, and THE
-   * DATABASE DOES NOT ENFORCE IT. `public.payment_methods` has a primary key, a
-   * foreign key, two CHECKs and `idx_payment_methods_user` — which is NOT unique
-   * — and no partial unique index on `is_default`. Two default rows are writable
-   * in plain SQL today, and mobile's own `setDefaultPaymentMethod` is two
-   * separate PostgREST statements that no index and no API method can make atomic.
+   * DATABASE ENFORCES IT AS OF `20260928040349_payment_methods_one_default`:
+   * `idx_payment_methods_one_default` is a partial unique index on
+   * `(user_id) where is_default and deleted_at is null`, the same shape
+   * `20260927141632_saved_addresses_one_default` added for addresses. Until then
+   * it was the application alone, and mobile's own `setDefaultPaymentMethod` —
+   * two separate PostgREST statements no index could make atomic — was the hole.
    *
-   * SO THIS OPERATION IS ONE TRANSACTION, and the order inside it is the rule:
-   * take the per-user advisory lock, read the target row to prove ownership,
-   * clear the user's other defaults, then set the target. The lock is what makes
-   * clear-then-set one decision rather than two statements with a window between
-   * them; without it two concurrent promotions can interleave into two defaults,
-   * and the schema has nothing behind this rule to repair that afterwards. See
-   * `PaymentMethodsRepository.lockDefaultForUser` for why it is an advisory lock
-   * rather than `SELECT … FOR UPDATE` on the rows.
+   * SO THIS OPERATION IS STILL ONE TRANSACTION, and the order inside it is the
+   * rule: take the per-user advisory lock, read the target row to prove
+   * ownership, clear the user's other defaults, then set the target. The lock is
+   * what makes clear-then-set one decision rather than two statements with a
+   * window between them. The index is a backstop underneath that, not a
+   * replacement for it, and the difference is the whole point of keeping the
+   * clear:
+   *
+   *   * It does not close the window BETWEEN mobile's own two statements. A user
+   *     whose promotion runs in the app can be left with NO default for the
+   *     duration, and no unique index on `is_default` is violated by zero rows.
+   *   * It makes the concurrent loser fail with a 23505 instead of silently
+   *     writing two defaults. That is strictly better than corruption and
+   *     strictly worse than the API's own serialisation, which decides the
+   *     winner instead of refusing it.
+   *
+   * See `PaymentMethodsRepository.lockDefaultForUser` for why it is an advisory
+   * lock rather than `SELECT … FOR UPDATE` on the rows.
    *
    * A 404 thrown after the clear rolls the clear back with it, so a failed
    * request never demotes a default. That ordering is deliberate: the ownership
@@ -90,21 +101,19 @@ export class PaymentMethodsService {
    *     this table directly through PostgREST (ADR-0002), so a promotion running
    *     in the app takes no advisory lock and is invisible to this one. The
    *     transaction makes two concurrent API calls serialise; it does not make
-   *     the API and the app serialise. The fix for that is a partial unique index
-   *     — `unique (user_id) where is_default and deleted_at is null`, the same
-   *     shape `20260927141632_saved_addresses_one_default` added for addresses —
-   *     which is DDL and therefore belongs in a Supabase migration this change
-   *     is not allowed to write. Until it exists, this class is the guarantee on
-   *     the API path only.
+   *     the API and the app serialise, and the index does not either — it only
+   *     refuses the second writer once both are done.
    *  2. IT DOES NOT COVER THE PATH BETWEEN MOBILE'S OWN TWO STATEMENTS. That
-   *     window is mobile's, and out of scope here; the same migration that would
-   *     add the index says so about addresses.
+   *     window is mobile's, and out of scope here; the migration that added the
+   *     index says the same thing about addresses.
    *  3. A SOFT-DELETED ROW STILL CARRIES `is_default` until the next promotion
    *     sweeps it, and no replacement is invented on delete. That is the same
    *     decision `SavedAddressesService.remove` makes: "I no longer have a
    *     default" is a statement a user can make about their own wallet. The flag
    *     is harmless while the row is invisible to every list, and the clear in the
-   *     next promotion is what removes it.
+   *     next promotion is what removes it. Note the index is partial on
+   *     `deleted_at is null` for exactly this reason: a tombstone claiming to be
+   *     the default must not block a live one.
    */
   async setDefault(user: AuthUser, id: string): Promise<MyPaymentMethodDto> {
     return this.paymentMethodsRepository.transaction(async (tx) => {

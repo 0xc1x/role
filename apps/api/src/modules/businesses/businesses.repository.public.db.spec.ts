@@ -112,10 +112,13 @@ describe('BusinessesRepository.listPublic', () => {
     // `%` is the LIKE wildcard. Unescaped it would match every business, which
     // turns a search box into a full-catalog dump.
     //
-    // This is a DIVERGENCE from `active_businesses_near`, which concatenates
-    // `'%'||p_search||'%'` raw the way the offers feed does. It is kept because
-    // it is a tested property of this route that predates the geo work, and
-    // relaxing it to match a sibling endpoint is a separate decision.
+    // It USED TO be a divergence: `active_businesses_near` concatenated
+    // `'%'||p_search||'%'` raw, the same way the offers feed did, and this route
+    // escaped it anyway. `20260928041036_explore_search_escape_wildcards.sql`
+    // made the function escape too, so the two surfaces now agree and this is
+    // simply a property of the route. The escape CHARACTER still differs — `\`
+    // here, `!` there — and the offers spec pins that the difference is invisible
+    // in the result.
     const { items } = await repo.listPublic({
       page: 1,
       limit: 20,

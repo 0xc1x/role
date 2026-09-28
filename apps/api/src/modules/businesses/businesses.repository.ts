@@ -770,25 +770,42 @@ export class BusinessesRepository {
    *
    *  3. `min_distance_km` is null when the request carried no point, which makes
    *     the distance ORDER BY key inert (`NULLS LAST`) and leaves
-   *     `deals_total desc, name asc` as the ranking.
+   *     `deals_total desc, name asc, id asc` as the ranking.
    *
-   * ─── DIVERGENCES FROM THE SQL, both deliberate ───────────────────────────
+   * ─── ONE DIVERGENCE FROM THE SQL, and it is still one ─────────────────────
    *
-   *  - `publiclyVisibleBusiness()` is applied even though the RPC has no
-   *    moderation gate anywhere. The RPC reaches this table through PostgREST
-   *    under RLS; the API has no RLS and would otherwise publish a business
-   *    still in review. Every other public surface here resolves through the
-   *    same function (`availableNow()` in the offers catalog, the gate on this
-   *    route's own previous shape, `activeOfferCounts()` in the categories
-   *    aggregate), and this is the fourth copy of the same rule arriving at the
-   *    same place. The gate sits on the OUTER query, where `businesses` is
-   *    already joined for the `type` filter, and correlates to that row.
+   * `publiclyVisibleBusiness()` is applied even though `active_businesses_near`
+   * has no business gate anywhere — neither `b.is_active` nor the
+   * `business_moderation` exists the sibling explore functions now carry. The
+   * function reaches these tables through PostgREST under RLS; the API has no
+   * RLS and would otherwise publish a business still in review. Every other
+   * public surface here resolves through the same function (`availableNow()` in
+   * the offers catalog, the gate on this route's own previous shape,
+   * `activeOfferCounts()` in the categories aggregate, the `listPopularZones`
+   * read), and as of
+   * `20260928041322_explore_aggregates_require_approved_business.sql` the two
+   * aggregates enforce the SAME PREDICATE in SQL — so those two are no longer
+   * API-local copies of a decision, and this read is the last public catalog
+   * surface whose function has no gate to fall back on. The gate sits on the
+   * OUTER query, where `businesses` is already joined for the `type` filter, and
+   * correlates to that row.
    *
-   *  - `search` KEEPS `escapeLike`, which the RPC does not. This route escaped it
-   *    before the geo work and a spec asserts it; the offers feed does not
-   *    escape. Reversing a tested property of this route to match a sibling
-   *    endpoint is a separate decision, not a side effect of mirroring a
-   *    function, so it was left alone.
+   * ─── WHAT USED TO BE A SECOND DIVERGENCE, AND IS NOT ──────────────────────
+   *
+   * `search` escapes the LIKE metacharacters, and so does the SQL.
+   * `20260928041036_explore_search_escape_wildcards.sql` replaced the function's
+   * `'%' || p_search || '%'` with
+   * `'%' || replace(replace(replace(p_search, '!', '!!'), '%', '!%'), '_', '!_') || '%' escape '!'`,
+   * so a `%` typed by a user matches a literal percent there too. This route
+   * escaped it before that migration and the offers feed did not; the two are now
+   * the same rule on both surfaces, and the divergence note this comment used to
+   * carry is gone.
+   *
+   * The escape CHARACTER is still different — `\` in `escapeLike`, `!` in the
+   * function — so the two patterns are NOT the same string and the semantics are
+   * mirrored rather than shared. What is identical is the meaning: `%`, `_` and
+   * the escape character itself match literally, and everything else stays a
+   * substring match.
    */
   async listPublic(query: ListPublicBusinessesQuery): Promise<{
     items: PublicBusinessNearRow[];
@@ -849,11 +866,20 @@ export class BusinessesRepository {
           // The RPC's ONE static `order by` serving TWO orderings: a `CASE` whose
           // value is non-null only for `sort = 'distance'`, and `NULLS LAST` so
           // every other value leaves the key inert and falls through to
-          // `deals_total desc, name asc`. Same technique, and the same reason, as
-          // `offerListOrderBy` in the offers catalog.
+          // `deals_total desc, name asc, id asc`. Same technique, and the same
+          // reason, as `offerListOrderBy` in the offers catalog.
           sql`CASE WHEN ${query.sort ?? 'deals'} = 'distance' AND ${matching.min_distance_km} IS NOT NULL THEN ${matching.min_distance_km} END ASC NULLS LAST`,
           desc(matching.deals_total),
           asc(businesses.name),
+          // `b.id`, the final key added by
+          // `20260928041114_active_businesses_near_total_order.sql`. `name` is
+          // not unique — only `slug` is — so two businesses sharing a name and a
+          // deal count used to be free to swap between pages, which is the
+          // classic way for `LIMIT/OFFSET` to serve the same row twice and skip
+          // another: `total` says N and the caller can only ever see N-1. With
+          // the id appended the order is total, and the page walk is a partition
+          // of the set rather than a sample of it.
+          asc(businesses.id),
         )
         .limit(query.limit)
         .offset(offset),
@@ -940,8 +966,14 @@ export class BusinessesRepository {
    * filter. The `order by <distance> asc nulls last, l2.id` is reproduced
    * verbatim, and the `l2.id` is not decoration: without it a business with two
    * offers at the same distance could name a different pickup point on two
-   * requests of the same response, and `businesses.name` is NOT unique so the
-   * page-level order has no tiebreaker of its own either.
+   * requests of the same response.
+   *
+   * It is the PAGE order that is now total, not only this one.
+   * `20260928041114_active_businesses_near_total_order.sql` appended `b.id` to
+   * `active_businesses_near`'s `order by`, so `businesses.name` being
+   * non-unique no longer leaves the list without a final key; before it, that
+   * gap was the reason this comment also had to justify itself against the
+   * outer query.
    *
    * `distance_km` is selected HERE rather than recomputed on the outer query
    * against `loc.geog`. Same value — it is the same `st_distance` over the same

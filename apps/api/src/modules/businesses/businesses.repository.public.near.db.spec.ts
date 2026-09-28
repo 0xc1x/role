@@ -364,6 +364,68 @@ describe('BusinessesRepository.listPublic — ordering', () => {
     expect(items.map((b) => Number(b.active_deals_count))).toEqual([1, 1]);
   });
 
+  test('b.id orders same-named businesses that also tie on deal count', async () => {
+    // `20260928041114_active_businesses_near_total_order.sql` appended `b.id` to
+    // the RPC's `order by`, and this is the case that made it necessary.
+    // `businesses` is unique on `slug`, NOT on `name`, so two merchants can
+    // carry the same name; with one offer each they also tie on `deals_total`,
+    // which leaves `b.name asc` unable to order them at all.
+    //
+    // FIVE rows, and the count is the point: a tie the order cannot break is
+    // resolved by whatever the sort happened to produce, so a two-row fixture
+    // passes by coin flip roughly half the time and proves nothing — which is
+    // how this test was written first and how it survived the missing key. With
+    // five indistinguishable rows, an order that is not the id order is one
+    // specific arrangement out of 120.
+    //
+    // The ids are random uuids, so "id ascending" and "insertion order" are
+    // unrelated; running the query twice pins that it is deterministic, and the
+    // three pages make the consequence visible — without a total order
+    // `LIMIT/OFFSET` may serve the same row on two pages, so `total` says 5 and
+    // the caller sees one business twice and the rest never.
+    const p = prefix();
+    const owner = await seedProfile(ctx.db);
+    const TIES = 5;
+    const make = async () => {
+      const business = await seedBusiness(ctx.db, owner, {
+        name: `${p} Gemelo`,
+      });
+      const loc = await seedLocation(ctx.db, business.id, { ...SPOTS.origin });
+      await seedOffer(ctx.db, business.id, loc.id);
+      return business.id;
+    };
+    const seeded: string[] = [];
+    for (let i = 0; i < TIES; i++) {
+      seeded.push(await make());
+    }
+    const expected = [...seeded].sort();
+    const query = { search: `${p} Gemelo`, sort: 'deals' } as const;
+
+    const first = await repo.listPublic({ page: 1, limit: 20, ...query });
+    const again = await repo.listPublic({ page: 1, limit: 20, ...query });
+    expect(first.items.map((b) => b.id)).toEqual(expected);
+    expect(again.items.map((b) => b.id)).toEqual(expected);
+    expect(first.total).toBe(TIES);
+
+    // Nothing else in the result can have produced that order: same name, same
+    // deal count, so `deals_total desc, name asc` is a tie and only the id is
+    // left.
+    expect(first.items.map((b) => b.name)).toEqual(
+      Array.from({ length: TIES }, () => `${p} Gemelo`),
+    );
+    expect(first.items.map((b) => Number(b.active_deals_count))).toEqual(
+      Array.from({ length: TIES }, () => 1),
+    );
+
+    // And pagination walks the whole set exactly once.
+    const pageOne = await repo.listPublic({ page: 1, limit: 2, ...query });
+    const pageTwo = await repo.listPublic({ page: 2, limit: 2, ...query });
+    const pageThree = await repo.listPublic({ page: 3, limit: 2, ...query });
+    expect(
+      [...pageOne.items, ...pageTwo.items, ...pageThree.items].map((b) => b.id),
+    ).toEqual(expected);
+  });
+
   test('sort=distance ranks by the real distance and the ranking follows the POINT', async () => {
     const p = prefix();
     const owner = await seedProfile(ctx.db);

@@ -104,10 +104,31 @@ export const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z
     .string()
     .min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
-  /** Supabase Storage bucket name for image uploads */
+  /**
+   * The bucket an upload lands in when the caller does not name one. Distinct
+   * from the allowlist below: this is where a file goes, that is where it may go.
+   */
   SUPABASE_STORAGE_BUCKET: z.string().min(1).default('images'),
-  /** Comma-separated allowed buckets (allowlist). Default: the default bucket */
-  SUPABASE_ALLOWED_BUCKETS: z.string().default('images'),
+  /**
+   * Comma-separated allowlist of buckets the API may write to.
+   *
+   * Every non-empty bucket that exists in the project's storage, minus
+   * `buisness_images` — a misspelling of `business_images` that holds zero
+   * objects. Listing it would make the typo a supported destination, and the
+   * next person to trust the allowlist as documentation would write to an empty
+   * bucket and wonder where the images went. Delete it in the dashboard instead.
+   *
+   * The default was `images` alone, which is a production trap rather than a
+   * conservative default: this variable was absent from `render.yaml` entirely,
+   * so the deployed API fell back to the code default and could not write to
+   * `product_images` — the bucket the mobile business panel actually uploads to,
+   * and the one holding the most objects by a wide margin. A default that
+   * silently disagrees with the app's real storage layout fails closed on
+   * business features and looks like a permissions problem.
+   */
+  SUPABASE_ALLOWED_BUCKETS: z
+    .string()
+    .default('images,business_images,categories_images,product_images'),
   /** Comma-separated allowed folders (allowlist). Default: categories */
   SUPABASE_ALLOWED_FOLDERS: z.string().default('categories'),
   /**

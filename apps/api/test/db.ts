@@ -217,11 +217,17 @@ export async function createTestDb(): Promise<TestDbContext> {
   //     about storage. What the specs pin is that it never reaches a response.
   //
   //     `idx_payment_methods_user` is installed with the table, and it is NOT
-  //     unique: production has no unique constraint on `(user_id)` and no
-  //     partial unique index on `is_default`, so the one-default rule is
-  //     enforced by the application alone. Making it unique here would leave the
-  //     harness STRICTER than production and hide the very race the set-default
-  //     transaction exists to close.
+  //     unique: production has no unique constraint on `(user_id)`. Production
+  //     DOES now have `idx_payment_methods_one_default` — the partial unique
+  //     index `20260928040349_payment_methods_one_default` added — and it is
+  //     deliberately NOT installed here, for the same reason
+  //     `20260927141632_saved_addresses_one_default`'s index is not installed
+  //     with `saved_addresses` above: a spec that wants to observe the API's own
+  //     clear-then-set transaction has to be able to produce the state the
+  //     transaction exists to prevent. With the index present, every "two
+  //     defaults are writable" assertion becomes a 23505 and the transaction is
+  //     never exercised. The specs that assert it say explicitly that they are
+  //     pinning the HARNESS and not production.
   //
   //     NO `updated_at` TRIGGER, deliberately and verified: no trigger maintains
   //     `updated_at` on the live `public.payment_methods`. The only two

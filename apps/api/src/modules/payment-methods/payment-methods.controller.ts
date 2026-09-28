@@ -32,10 +32,11 @@ import { PaymentMethodsService } from './payment-methods.service';
  * `/addresses` — the same shape (an owner-scoped resource, not a settings row),
  * the same one-default rule, the same soft delete. The `/me` controller is for
  * the caller's SETTINGS (`/me/preferences`, `/me/consents`, `/me/devices`): rows
- * that hold one value each. Cards are a collection with a lifecycle, an
- * invariant the database does not enforce and an ADR that bounds what may be
- * written — that is a resource, and giving it a repository, a mapper and its own
- * controller is the same call `saved-addresses` already made.
+ * that hold one value each. Cards are a collection with a lifecycle, a one-default
+ * rule the service has to decide rather than merely detect (the partial unique
+ * index catches a second default only AFTER both writes landed) and an ADR that
+ * bounds what may be written — that is a resource, and giving it a repository, a
+ * mapper and its own controller is the same call `saved-addresses` already made.
  *
  * GUARDS: no `@Public()` and no `@Roles(...)`. The global `AuthGuard` is
  * default-deny, so a token is required on all three routes, and the absent role

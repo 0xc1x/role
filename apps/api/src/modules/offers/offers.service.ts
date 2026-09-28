@@ -71,8 +71,8 @@ export class OffersService {
    *
    * Unpaginated and without `meta`: the function is a top-N and never returns a
    * total, so a `PaginatedData` here would advertise a `total` nobody counted.
-   * See `OffersRepository.listPopularZones` for the deliberate moderation
-   * divergence from the SQL.
+   * `OffersRepository.listPopularZones` mirrors `popular_zones` key for key, the
+   * moderation gate included.
    */
   async listZones(query: ListZonesQuery): Promise<PopularZoneDto[]> {
     const rows = await this.offersRepository.listPopularZones(query);

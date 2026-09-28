@@ -249,7 +249,12 @@ describe('PaymentMethodsService (DB real)', () => {
     });
   });
 
-  describe('set default — the rule the database does not enforce', () => {
+  // "The database does not enforce it" is now a statement about THIS HARNESS,
+  // not about production: `20260928040349_payment_methods_one_default` added the
+  // partial unique index there, and the test harness omits it so the clear-then-
+  // set transaction below is actually exercised. See the test at the bottom of
+  // this file and the note in `test/db.ts`.
+  describe('set default — the rule this test database does not enforce', () => {
     test('clears the previous default and sets the new one', async () => {
       const first = await seedCard(consumerId, { last4: '0001' });
       const second = await seedCard(consumerId, { last4: '0002' });
@@ -619,11 +624,24 @@ describe('the mirror is faithful to the live table', () => {
     expect(await rowsOf(consumerId)).toHaveLength(2);
   });
 
-  test('the one-default rule is NOT backed by a database constraint here', async () => {
-    // Asserted so the service stays honest about being the only enforcement
-    // point. If a future migration adds a partial unique index on `is_default`,
-    // THIS test fails and the service's comment gets updated with it — which is
-    // the moment the service could stop doing the clear itself.
+  test('the one-default rule is NOT backed by a database constraint HERE', async () => {
+    // "HERE" is the load-bearing word, and it used to be unnecessary: this
+    // asserted that PRODUCTION had no backstop, as a deliberate guard — the
+    // service's comment said so, and the test was supposed to fail the day a
+    // migration added the index so both would be updated together.
+    //
+    // That day was `20260928040349_payment_methods_one_default`, and the test did
+    // not fail: production gained `idx_payment_methods_one_default`, and the test
+    // database still has nothing, because the harness installs the Drizzle mirror
+    // and deliberately omits that index (see `test/db.ts`, item 5, and the same
+    // choice for `saved_addresses`). So what this pins now is the HARNESS, which
+    // is what lets the rest of this file observe the API's own clear-then-set
+    // transaction doing the work the index would otherwise refuse.
+    //
+    // Production's backstop is a separate object and is asserted separately in
+    // the sense that nothing here contradicts it: `setDefault` does not rely on
+    // the index, so a harness with it and a harness without it both pass the
+    // transaction specs.
     const result = await ctx.db.execute(sql`
       select
         exists (
@@ -639,8 +657,9 @@ describe('the mirror is faithful to the live table', () => {
     ];
     expect(rows[0].user_index_is_unique).toBe(false);
 
-    // And two defaults really are writable in plain SQL through this database,
-    // which is the whole reason `setDefault` is a transaction.
+    // And two defaults really are writable in plain SQL through THIS database,
+    // which is what makes the clear in `setDefault` load-bearing rather than
+    // decorative.
     const card = await seedCard(consumerId);
     const other = await seedCard(consumerId);
     await ctx.db

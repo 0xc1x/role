@@ -68,15 +68,23 @@ import { profiles } from './profiles';
  * referential actions in BOTH directions and would otherwise fail on an unknown
  * foreign key.
  *
- * INVARIANT — AND IT IS NOT ENFORCED HERE: at most one row per user with
- * `is_default = true`. `idx_payment_methods_user` is NOT unique and there is no
- * partial unique index on `is_default`, so two default rows are writable in
- * plain SQL today. `PaymentMethodsService.setDefault` is the only enforcement
- * point on this path, and it takes a per-user advisory lock to make the
- * clear-then-set sequence one decision. The real fix is the same partial unique
- * index that `20260927141632_saved_addresses_one_default` added for addresses —
- * `unique (user_id) where is_default and deleted_at is null` — but that is DDL:
- * it belongs in a Supabase migration, which this change is not allowed to write.
+ * INVARIANT — AND IT IS NOT ENFORCED BY THIS MIRROR: at most one row per user
+ * with `is_default = true`. `idx_payment_methods_user` is NOT unique, and the
+ * partial unique index that enforces the rule in the live database is not
+ * declared here either. Production has it —
+ * `20260928040349_payment_methods_one_default` added
+ * `idx_payment_methods_one_default on (user_id) where is_default and deleted_at
+ * is null`, the same shape `20260927141632_saved_addresses_one_default` added
+ * for addresses. Declaring it in the mirror would make `drizzle-kit generate`
+ * emit DDL for an object that already exists, which fails on apply; the test
+ * harness omits it for the same reason, and the specs say so where they would
+ * otherwise read as claims about production.
+ *
+ * That index does NOT replace `PaymentMethodsService.setDefault`: it closes the
+ * concurrent case (the loser gets a 23505) and it does not close the window
+ * between mobile's own two PostgREST statements, where the user briefly has no
+ * default at all. The clear-then-set transaction is still what guarantees the
+ * invariant rather than merely detecting a violation of it.
  */
 export const paymentMethods = pgTable('payment_methods', {
   id: uuid('id').primaryKey().defaultRandom(),

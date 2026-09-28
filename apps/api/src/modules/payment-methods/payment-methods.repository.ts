@@ -101,6 +101,13 @@ export class PaymentMethodsRepository {
    * `OrdersRepository.lockIdempotencyKey` takes the same
    * `pg_advisory_xact_lock(hashtextextended(...))` for the same reason.
    *
+   * `idx_payment_methods_one_default` (20260928040349) sits under all of this,
+   * and it does not change what this lock is for. It turns the interleaving above
+   * from "two defaults, silently" into "the second commit raises 23505" — which
+   * is a correct outcome instead of a corrupt one, but it is still a failed
+   * request, and a client cannot tell a race from a real error. Deciding the
+   * winner is this lock's job; the index only makes losing visible.
+   *
    * TWO DETAILS ARE LOAD-BEARING AND MUST NOT BE "CLEANED UP":
    *
    *  1. It is `pg_advisory_xact_lock`, so it is taken on the transaction's
@@ -190,11 +197,13 @@ export class PaymentMethodsRepository {
   /**
    * Clear the caller's default flag everywhere except `exceptId`.
    *
-   * THIS IS HALF OF THE ONE-DEFAULT RULE, and the database enforces none of it:
-   * `payment_methods` has a primary key, a foreign key, two CHECKs and a
-   * NON-UNIQUE index on `(user_id)`. There is no unique constraint and no partial
-   * unique index on `is_default`, so a second default row is perfectly writable
-   * in plain SQL today, through PostgREST included.
+   * THIS IS HALF OF THE ONE-DEFAULT RULE, and the database is the other half:
+   * `20260928040349_payment_methods_one_default` added the partial unique index
+   * `unique (user_id) where is_default and deleted_at is null`, so a second
+   * default row is now a 23505 in production. The clear is not redundant with
+   * it — the index catches a violation AFTER the fact, this prevents it, and
+   * only this one also covers the two-statement path mobile takes through
+   * PostgREST, where the winner must be decided rather than refused.
    *
    * Narrowed to `is_default = true` on purpose: a wider update would bump
    * `updated_at` on rows that did not change. `exceptId` is applied only when
@@ -202,10 +211,12 @@ export class PaymentMethodsRepository {
    * for every row and would clear the very row being promoted.
    *
    * Deleted and inactive rows are included in the sweep, and that is not an
-   * oversight: a card that is soft-deleted can still carry `is_default = true`
-   * (nothing clears it on delete, and inventing a replacement default during a
-   * delete would move the user's default under them), so leaving it alone could
-   * make it the only row with the flag while being invisible in every list.
+   * oversight on either side: a card that is soft-deleted can still carry
+   * `is_default = true` (nothing clears it on delete, and inventing a replacement
+   * default during a delete would move the user's default under them), so leaving
+   * it alone could make it the only row with the flag while being invisible in
+   * every list. The index agrees — it is partial on `deleted_at is null`, so a
+   * tombstone claiming to be the default cannot block a live one.
    *
    * Returns how many rows it touched, so the caller can tell "there was a
    * previous default" from "there was nothing to move".

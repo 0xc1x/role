@@ -190,11 +190,25 @@ describe('CategoriesRepository.list — active_count (mirror of active_offer_cat
     expect(page.rows.length).toBeLessThanOrEqual(100);
   });
 
-  test('DIVERGENCE: an offer of an unapproved business is NOT counted, and the RPC counts it', async () => {
-    // The one behaviour that makes this count DIFFERENT from the SQL, pinned on
-    // both sides. Dropping the gate from `activeOfferCounts()` fails the second
-    // assertion, and the first is what makes the second a statement about
-    // moderation instead of about `is_active`.
+  /**
+   * The moderation gate, measured on BOTH sides and required to agree.
+   *
+   * This used to assert the opposite, and the change is worth naming: before
+   * `20260928041322_explore_aggregates_require_approved_business.sql` the
+   * function counted offers of an unapproved business and this repository did
+   * not, the difference was deliberate, and the test pinned it. The function
+   * carries the gate now, so the risk is no longer an intentional difference —
+   * it is two independent spellings of one rule drifting apart, which is exactly
+   * what ADR-0008 exists to manage. So the function's own subquery is run
+   * verbatim BESIDE this read, and the two have to say the same thing.
+   *
+   * That makes it a regression net rather than a divergence record, and it also
+   * makes the gate load-bearing on BOTH implementations: dropping
+   * `publiclyVisibleBusiness()` from `activeOfferCounts()` fails the API half,
+   * and the first assertion below is what makes that failure a statement about
+   * moderation instead of about `is_active`.
+   */
+  test('the repository applies the same moderation gate the function does', async () => {
     const cat = await seedCategory(ctx.db, 'Gated');
     const owner = await seedProfile(ctx.db);
     const biz = await seedBusiness(ctx.db, owner);
@@ -202,11 +216,33 @@ describe('CategoriesRepository.list — active_count (mirror of active_offer_cat
     const offer = await seedOffer(ctx.db, biz.id, loc.id);
     await tag([offer], [cat.id]);
 
+    // The function's subquery, verbatim, as
+    // `20260928041322_explore_aggregates_require_approved_business.sql` left it.
+    const rpcCount = async () => {
+      const rpc = await ctx.db.execute<{ active_count: string }>(sql`
+        select oc.category_id, count(*) as active_count
+          from offers o
+          join offer_categories oc on oc.offer_id = o.id
+          join businesses b on b.id = o.business_id
+         where o.is_active and o.stock > 0 and o.pickup_end > now()
+           and b.is_active
+           and exists (select 1 from public.business_moderation m
+                       where m.business_id = b.id
+                         and m.verification_status = 'approved')
+         group by oc.category_id
+        having oc.category_id = ${cat.id}::uuid
+      `);
+      return rpc.length === 0 ? 0 : Number(rpc[0]!.active_count);
+    };
+
+    // Both halves count the live offer of an approved merchant.
     expect(Number((await rowFor(cat.id))?.active_count)).toBe(1);
+    expect(await rpcCount()).toBe(1);
 
     // Suspend the merchant. The offer row is untouched: the availability trigger
     // fires on `offers` writes, and nothing runs when a `business_moderation`
-    // row changes, so `is_active` stays true — the state the RPC reads.
+    // row changes, so `is_active` stays true — which is why the gate, and not
+    // the offer's own columns, is the only thing that can exclude it.
     await ctx.db
       .update(businessModeration)
       .set({ verification_status: 'pending' })
@@ -220,20 +256,11 @@ describe('CategoriesRepository.list — active_count (mirror of active_offer_cat
     expect(raw?.stock).toBeGreaterThan(0);
 
     // The API reports 0 — the category still exists, it just has nothing
-    // publicly reservable behind it.
+    // publicly reservable behind it — and the function reports 0 for the same
+    // reason. Before the migration this is the assertion that failed, and its
+    // failure was the point.
     expect(Number((await rowFor(cat.id))?.active_count)).toBe(0);
-
-    // The RPC's own subquery, verbatim, still counts it.
-    const rpc = await ctx.db.execute<{ active_count: string }>(sql`
-      select oc.category_id, count(*) as active_count
-        from offers o
-        join offer_categories oc on oc.offer_id = o.id
-       where o.is_active and o.stock > 0 and o.pickup_end > now()
-       group by oc.category_id
-      having oc.category_id = ${cat.id}::uuid
-    `);
-    expect(rpc).toHaveLength(1);
-    expect(Number(rpc[0]!.active_count)).toBe(1);
+    expect(await rpcCount()).toBe(0);
   });
 
   test('the list filters keep meaning what they meant before the aggregate', async () => {

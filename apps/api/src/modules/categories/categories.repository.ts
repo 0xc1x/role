@@ -189,22 +189,25 @@ export class CategoriesRepository {
    * The public/admin list, each row carrying `active_count` — the
    * `active_offer_category_counts` aggregate of ADR-0008.
    *
-   * ─── DELIBERATE DIVERGENCE FROM THE RPC: the moderation gate ─────────────
+   * ─── THE MODERATION GATE IS NOW IN THE FUNCTION TOO ───────────────────────
    *
-   * The RPC's subquery is `where o.is_active and o.stock > 0 and
-   * o.pickup_end > now()` — no business condition — and it is `security invoker`
-   * over an `offers` policy that is `USING (is_active = true)` and nothing else
-   * (supabase/migrations/20260507193325_create_offers_and_coupons.sql). So it
-   * counts offers of a business that is deactivated or no longer
-   * moderation-approved: the write-time `enforce_offer_business_availability`
-   * trigger is the only thing keeping those rows out, and nothing cascades a
-   * later suspension back into `offers.is_active`.
+   * This read applied `publiclyVisibleBusiness()` while the SQL did not, and
+   * documented the gap as deliberate: the RPC's subquery was
+   * `o.is_active and o.stock > 0 and o.pickup_end > now()` with no business
+   * condition, over an `offers` policy that is `USING (is_active = true)` and
+   * nothing else, so it counted offers of a business that was deactivated or no
+   * longer approved. The consequence — a count LOWER than the RPC's for a
+   * category whose offers belong to an unapproved business — was stated as the
+   * intended reading, and a spec pinned both sides disagreeing.
    *
-   * This read applies `publiclyVisibleBusiness()` anyway. `GET /categories` is
-   * public, and a chip that says "12 deals" for a suspended merchant sends the
-   * caller to `GET /offers` — which does apply the gate — to find nothing. The
-   * consequence is that this count is LOWER than the RPC's for a category whose
-   * offers belong to an unapproved business, and that is the intended reading.
+   * `20260928041322_explore_aggregates_require_approved_business.sql` put the
+   * same gate inside the function, and the two implementations now agree. The
+   * spec beside it asserts agreement rather than divergence, and the gate below
+   * is the function's rule mirrored rather than a local decision that happens to
+   * be stricter. It still matters on this endpoint — `GET /categories` is public,
+   * and a chip that says "12 deals" for a suspended merchant sends the caller to
+   * `GET /offers`, which applies the same gate, to find nothing — but the two
+   * are no longer at risk of drifting apart.
    *
    * A LEFT JOIN over a pre-aggregated subquery, not a join on `offer_categories`
    * and not a correlated scalar subquery, for one reason: an offer can carry
@@ -266,9 +269,12 @@ export class CategoriesRepository {
   /**
    * `active_offer_category_counts`' inner aggregate, as a derived table.
    *
-   * Column-for-column the RPC's subquery, plus the moderation gate documented on
-   * `list()`. Kept as its own method because it is a self-contained subquery
-   * with a security decision inside it, not a fragment of the outer query.
+   * Column-for-column the RPC's subquery, moderation gate included: the function
+   * carries it as of
+   * `20260928041322_explore_aggregates_require_approved_business.sql`, so the
+   * `publiclyVisibleBusiness()` below is the same rule on this side. Kept as its
+   * own method because it is a self-contained subquery that the outer select
+   * `coalesce`s, not a fragment of that query.
    */
   private activeOfferCounts() {
     return (

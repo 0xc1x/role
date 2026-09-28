@@ -21,6 +21,7 @@ import type { PgColumn } from 'drizzle-orm/pg-core';
 import { type Database } from '../../database/database.module';
 import { publiclyVisibleBusiness } from '../../database/business-availability';
 import { DRIZZLE } from '../../database/database.tokens';
+import { escapeLike } from '../../common/utils/like';
 import {
   businessLocations,
   businessOwnership,
@@ -400,41 +401,24 @@ export class OffersRepository {
    * `public.popular_zones`, key for key (ADR-0008) — the mobile Explore screen's
    * "top zones by live deals", optionally inside a radius of the user.
    *
-   * ─── DELIBERATE DIVERGENCE FROM THE RPC: the moderation gate ─────────────
+   * ─── THE MODERATION GATE IS NOW IN THE FUNCTION TOO ───────────────────────
    *
-   * THE SQL COUNTS MORE THAN THIS DOES, and on purpose. The function's `where`
-   * clause is `o.is_active and o.stock > 0 and o.pickup_end > now()` and nothing
-   * about the business. It cannot do better as written: the functions are
-   * `security invoker`, and both RLS policies it reads through are weaker than
-   * the API's gate —
+   * This read applied `publiclyVisibleBusiness()` while the SQL did not, and the
+   * difference was documented at length as a deliberate divergence: the function
+   * was `security invoker` over `USING (is_active = true)` policies, it never
+   * read `businesses`, and the only thing keeping a suspended merchant's offers
+   * out of the count was the write-time
+   * `enforce_offer_business_availability` trigger, which nothing runs in the
+   * opposite direction. The API therefore counted LESS than the RPC, on purpose,
+   * and a spec pinned both sides disagreeing.
    *
-   *   * `offers` — "Anyone can view active offers" is `USING (is_active = true)`
-   *     and nothing else (supabase/migrations/20260507193325_create_offers_and_coupons.sql).
-   *   * `business_locations` — "Anyone can view active business locations" is
-   *     `USING (is_active = true)` (20260507193215_create_businesses_and_locations.sql).
-   *     The RPC never reads `businesses` at all, so no policy on that table can
-   *     narrow it either.
-   *
-   * The only thing keeping a suspended merchant's offers out of that count in
-   * production is the `enforce_offer_business_availability` BEFORE INSERT/UPDATE
-   * trigger, which forces `is_active := false` at WRITE time. There is no
-   * trigger in the opposite direction: nothing deactivates a business's offers
-   * when the business is deactivated or its moderation status moves off
-   * `approved`. So the moment a merchant is suspended, their offers keep
-   * `is_active = true` and `popular_zones` keeps counting them.
-   *
-   * That is a leak on a public, unauthenticated endpoint, and it contradicts
-   * every other public surface in this API: `GET /offers`, the random hero, the
-   * business list and the review feeds all resolve through
-   * `publiclyVisibleBusiness()`. A caller would see a zone full of deals, tap
-   * it, and get an empty result from the list the same gate protects. So this
-   * read applies that gate even though the SQL does not, and the `businesses`
-   * join below exists for that half alone.
-   *
-   * Consequence, stated plainly: for a zone holding offers of an unapproved or
-   * deactivated business, this returns a LOWER `deals` than the RPC, and the
-   * zone can drop out of the top-N entirely. That is the intended reading, not a
-   * bug to be "fixed" by copying the RPC.
+   * `20260928041322_explore_aggregates_require_approved_business.sql` closed that
+   * by putting the same gate INSIDE the function — `b.is_active` plus the
+   * `business_moderation` exists — and the two implementations now agree. The
+   * gate below is no longer a local decision; it is the function's rule, mirrored.
+   * The spec beside it now asserts agreement instead of divergence, and the
+   * `businesses` join exists because `publiclyVisibleBusiness()` correlates
+   * against `businesses.id`.
    *
    * The rest is verbatim, including the parts that look odd:
    *
@@ -483,9 +467,8 @@ export class OffersRepository {
           deals: sql<string | number>`count(*)::bigint`,
         })
         .from(offers)
-        // Present only so `publiclyVisibleBusiness()` — which correlates against
-        // `businesses.id` — has a `businesses` row to correlate to. See the
-        // divergence note above.
+        // The function joins it too, for the same reason: the moderation gate
+        // correlates against `businesses.id`. See the note above.
         .innerJoin(businesses, eq(offers.business_id, businesses.id))
         .innerJoin(
           businessLocations,
@@ -557,10 +540,20 @@ export class OffersRepository {
       // the offer's own text is how a search for a merchant's name returned
       // nothing while the map showed their shelf.
       //
-      // Not wildcard-escaped, unlike the sibling `escapeLike` searches in this
-      // codebase: the RPC concatenates `'%'||p_search||'%'` raw, and the same
-      // term has to select the same rows here as it does on the mobile surface.
-      const pattern = `%${query.search}%`;
+      // ESCAPED, and it used to not be. The RPC concatenated `'%'||p_search||'%'`
+      // raw, so a `%` typed by a user matched every offer on the platform; this
+      // read did not, and the divergence was deliberate to keep one search term
+      // selecting the same rows on both surfaces. It no longer can: a search term
+      // that matched everything HERE and a literal percent THERE is not one term
+      // selecting the same rows twice, it is two feeds answering different
+      // questions. `20260928041036_explore_search_escape_wildcards.sql` made the
+      // function escape, and the two surfaces agree again.
+      //
+      // The escape CHARACTER is different — `\` here, `!` in the function — so
+      // the patterns are not the same string and the semantics are mirrored, not
+      // shared. What matches is identical: `%`, `_` and the escape character
+      // itself are literals, and anything else stays a case-insensitive substring.
+      const pattern = `%${escapeLike(query.search)}%`;
       filters.push(
         or(
           ilike(offers.title, pattern),
