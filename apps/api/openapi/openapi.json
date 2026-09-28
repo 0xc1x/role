@@ -2466,6 +2466,123 @@
         ]
       }
     },
+    "/api/v1/businesses/{businessId}/notification-preferences": {
+      "get": {
+        "operationId": "BusinessesController_getNotificationPreferences",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The preferences row, or an explicit null when the business has none"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The business's own notification preferences (merchant side)",
+        "tags": [
+          "Businesses"
+        ]
+      },
+      "patch": {
+        "operationId": "BusinessesController_updateNotificationPreferences",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The preferences row in its new state"
+          },
+          "422": {
+            "description": "A half-configured quiet-hours window"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit the business's notification preferences. `updated_at` is written by the server; no trigger maintains it.",
+        "tags": [
+          "Businesses"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/stats/completed-orders": {
+      "get": {
+        "operationId": "BusinessOwnerStatsController_getCompletedOrders",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The completed-order aggregate"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Completed-order count for a business I own (mirror of business_completed_orders_count)",
+        "tags": [
+          "Business Stats (owner)"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/stats/sales": {
+      "get": {
+        "operationId": "BusinessOwnerStatsController_getSalesStats",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The applied window, next to the numbers computed from it"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sales for a window I own: count, revenue, top 5 products and a UTC daily series. `from` and `to` are required and both inclusive.",
+        "tags": [
+          "Business Stats (owner)"
+        ]
+      }
+    },
     "/api/v1/stats/platform": {
       "get": {
         "operationId": "StatsController_getPlatformStats",
@@ -3106,6 +3223,64 @@
           }
         ],
         "summary": "Edit my notification preferences",
+        "tags": [
+          "Me"
+        ]
+      }
+    },
+    "/api/v1/me/marketing-preferences": {
+      "get": {
+        "operationId": "MeController_getMarketingPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The marketing preferences row, or an explicit null when the account has never had one"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "My marketing (campaign) subscription and categories",
+        "tags": [
+          "Me"
+        ]
+      },
+      "patch": {
+        "operationId": "MeController_updateMarketingPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The marketing preferences row in its new state. The unsubscribe timestamp moves only on the transition."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit my marketing subscription or categories. `unsubscribed_at` and `source` are stamped by the server.",
+        "tags": [
+          "Me"
+        ]
+      }
+    },
+    "/api/v1/me/order-stats": {
+      "get": {
+        "operationId": "MeController_getOrderStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "My order aggregate"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "My order count and total saved. Counts every order that is not cancelled.",
         "tags": [
           "Me"
         ]
