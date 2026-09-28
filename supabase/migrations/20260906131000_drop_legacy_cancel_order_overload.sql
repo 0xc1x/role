@@ -1,0 +1,179 @@
+-- Backfilled gap: the 2-argument overload of public.cancel_order, which this
+-- directory creates three times and never drops. Production holds only the
+-- 3-argument one. This file reconstructs the missing drop.
+--
+-- RECONSTRUCTION, 2026-09-28. NOT APPLIED TO PRODUCTION. PRODUCTION NEVER RAN
+-- THIS FILE. NOT BYTE-IDENTICAL TO ANY LEDGER ROW (there is no ledger row; that
+-- is the whole problem).
+--
+-- ============================ WHAT THIS CLOSES ===============================
+--
+-- `public.cancel_order` exists twice in a replay of this directory and once in
+-- production. The history, in version order:
+--
+--   20260508153344_add_cancel_order_rpc.sql
+--     `create or replace function public.cancel_order(p_user_id uuid,
+--     p_order_id uuid)` — arity 2.
+--   20260829005358_fix_cancel_order_enum_cast.sql
+--     `create or replace` on the same arity-2 signature.
+--   20260829005426_fix_cancel_order_remove_duplicate_insert.sql
+--     `create or replace` on the same arity-2 signature, again.
+--   20260906130017_bind_order_rpc_identity.sql
+--     `create or replace function public.cancel_order(p_user_id uuid DEFAULT
+--     NULL::uuid, p_order_id uuid DEFAULT NULL::uuid, p_business_id uuid
+--     DEFAULT NULL::uuid)` — arity 3.
+--
+-- `CREATE OR REPLACE` keys on the identity argument types. Three uuids is not
+-- the same function as two, so the arity-2 body survives all three replaces
+-- and is still there at the end of the replay. `grep -rniE 'drop +function[^;]*
+-- cancel_order' supabase/migrations/` returns nothing across the whole
+-- directory: this repository has never dropped that function.
+--
+-- ---- Why the extra overload is not cosmetic =================================
+--
+-- Read the two bodies. They are not two versions of the same check.
+--
+-- The arity-2 body (20260829005426) contains ZERO references to `auth.uid()`
+-- — `grep -c 'auth\.uid'` on that file returns 0. Its entire ownership
+-- condition is:
+--
+--     IF p_user_id IS NULL OR v_order.user_id != p_user_id THEN
+--
+-- `p_user_id` is a caller-supplied argument. The function therefore verifies
+-- that the order belongs to *whoever the caller said it belongs to*, which is
+-- not a check at all: an attacker passes someone else's user id and the
+-- comparison succeeds. The `IF NOT EXISTS (SELECT 1 FROM public.businesses b
+-- WHERE b.id = ... AND b.owner_id = auth.uid())` branch — the one that binds
+-- the caller — only exists on the business path of the arity-3 body, which
+-- takes `p_business_id`. The arity-2 function has no such branch and no
+-- `auth.uid()` anywhere.
+--
+-- The arity-3 body (20260906130017) does bind identity. It rejects
+-- `p_user_id IS DISTINCT FROM auth.uid()`, and its business path validates
+-- `b.owner_id = auth.uid()`. That is the correct shape.
+--
+-- And the arity-2 overload is never mentioned by any grant statement in this
+-- directory. `20260906125927_harden_rpc_grants.sql` and
+-- `20260906081854_set_order_status_grants.sql` revoke and grant specific
+-- signatures; none of them names `cancel_order(uuid, uuid)`. That matters
+-- because `CREATE FUNCTION` grants EXECUTE to `PUBLIC` by default, so an
+-- environment built from this repository would end up with an EXECUTE grant
+-- on the arity-2 overload held by `PUBLIC` — and therefore by `anon` — on a
+-- SECURITY DEFINER function whose only ownership check is a value the caller
+-- supplies. Every revoke in this directory aimed at `cancel_order` names the
+-- arity-3 signature, so none of them touch it. On a fresh environment built
+-- from this directory, the arity-2 overload is an unauthenticated
+-- order-cancellation primitive.
+--
+-- ---- How the extra overload broke two later migrations ---------------------
+--
+-- `20260927025753_businesses_drop_sensitive_columns.sql` opens with a
+-- `pg_temp.apply_rewrite` helper that refuses to run unless the function has
+-- exactly one signature:
+--
+--     if v_count <> 1 then
+--       raise exception 'esperaba exactamente 1 overload de public.%, hay %', ...
+--
+-- With two overloads it raises, so the body rewrites for `set_order_status`,
+-- `cancel_order`, `validate_pickup_code`, `reserve_offer` and the rest never
+-- happen. That is failure one.
+--
+-- The second failure is the direct consequence. The arity-2 plpgsql body
+-- references `public.businesses.owner_id`, and plpgsql bodies are parsed at
+-- creation time, so the function holds a real dependency on that column. The
+-- same migration then runs
+--
+--     alter table public.businesses drop column if exists owner_id, ...
+--
+-- without CASCADE, precisely so a missed dependency aborts the migration.
+-- It aborts:
+--
+--     cannot drop column owner_id of table businesses
+--     because other objects depend on it
+--
+-- Deleting the arity-2 overload removes the dependency, and both failures go
+-- away together. That is why they are one file and not two findings.
+--
+-- ======================== WHY PRODUCTION IS SAFE =============================
+--
+-- Production has exactly one `cancel_order`, and it is the correct one.
+-- Read back from `pg_proc` on the live database:
+--
+--   proname      | cancel_order
+--   identity_args| p_user_id uuid, p_order_id uuid, p_business_id uuid
+--   args         | p_user_id uuid DEFAULT NULL::uuid,
+--                | p_order_id uuid DEFAULT NULL::uuid,
+--                | p_business_id uuid DEFAULT NULL::uuid
+--   prosecdef    | true
+--   prosrc ~ auth\.uid | true
+--
+-- One row. No arity-2 overload. The arity-2 function was removed on production
+-- by some write path that left no ledger row, and the ledger confirms it was
+-- never a migration:
+--
+--   select version, name from supabase_migrations.schema_migrations
+--    where name ilike '%cancel_order%';
+--   -- 20260508153344 | add_cancel_order_rpc
+--   -- 20260829005358 | fix_cancel_order_enum_cast
+--   -- 20260829005426 | fix_cancel_order_remove_duplicate_insert
+--   -- 20260906130017 | bind_order_rpc_identity
+--
+-- Three creations, zero drops. Production is therefore already in the state
+-- this file describes, which is why it must not be applied there: it would be
+-- a no-op on the database, and a lie in the ledger.
+--
+-- ==================== WHY THIS MUST NOT BE APPLIED TO PRODUCTION ============
+--
+-- Two independent reasons, and the second is the one that matters.
+--
+-- First: the arity-2 function does not exist there, so `drop function if
+-- exists` does nothing. Harmless, but pointless.
+--
+-- Second, and this is the real hazard: the version `20260906131000` is
+-- synthetic. It is a slot picked so that
+--
+--     20260906130017_bind_order_rpc_identity.sql
+--     20260906131000_drop_legacy_cancel_order_overload.sql   <-- this file
+--     20260927025753_businesses_drop_sensitive_columns.sql
+--
+-- orders the drop after the arity-3 function exists and before the migration
+-- that requires exactly one overload. The Supabase server assigns versions;
+-- this one was assigned by hand. If `supabase db push` ran against production
+-- with this file present, the ledger would acquire a version the server never
+-- issued. A directory that claims to describe a drop production performed out
+-- of band is worse than one that admits the gap, because a later reader would
+-- treat this row as evidence that the drop was reviewed and applied. It was
+-- not. It was reconstructed from the shape of the live catalog.
+--
+-- ROLLBACK: there is none that this repository can express. Recreating the
+-- arity-2 function would mean restoring a body with no identity binding and
+-- a PUBLIC EXECUTE grant, which is the defect this file exists to remove. If
+-- an environment genuinely needs the arity-2 signature, it needs a new
+-- migration that creates it WITH the arity-3 identity check and an explicit
+-- `revoke ... from public, anon` — a different, deliberate decision, not a
+-- rollback.
+--
+-- VERIFYING: after replay, exactly one signature must remain, and it must be
+-- the one that binds identity.
+--
+--   select p.proname,
+--          pg_get_function_identity_arguments(p.oid) as identity_args,
+--          p.prosecdef,
+--          p.prosrc ~ 'auth\.uid' as binds_auth_uid
+--     from pg_proc p
+--     join pg_namespace n on n.oid = p.pronamespace
+--    where n.nspname = 'public' and p.proname = 'cancel_order';
+--
+-- One row, arity 3, `prosecdef` true, `binds_auth_uid` true — identical to the
+-- production read-back quoted above.
+
+begin;
+
+-- Fully qualified argument types, because a bare `drop function cancel_order`
+-- is ambiguous while two overloads coexist — which is precisely the state this
+-- file is written to end. Named explicitly, and `if exists` so a re-run on an
+-- environment where production's out-of-band drop already took effect is a
+-- no-op rather than an error.
+drop function if exists public.cancel_order(uuid, uuid);
+
+commit;

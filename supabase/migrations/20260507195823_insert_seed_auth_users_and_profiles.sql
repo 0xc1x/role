@@ -1,0 +1,78 @@
+-- Backfilled gap: documented no-op for a data seed. Reconstruction, 2026-09-28.
+--
+-- NOT APPLIED TO PRODUCTION. NOT BYTE-IDENTICAL TO THE LEDGER ROW. This file
+-- executes no DDL and inserts no rows.
+--
+-- WHAT THIS CLOSES
+--
+-- The ledger records `20260507195823` / `insert_seed_auth_users_and_profiles` as
+-- applied. No file for it existed in this directory. It inserted 22 rows into
+-- `auth.users` and 20 rows into `public.profiles`.
+--
+-- WHY NO-OP INSTEAD OF A RECONSTRUCTION — AND WHY NOT (B)
+--
+-- There are two ways to fill this slot honestly and one way that looks easiest:
+--
+--   (a) No-op, documented.  <-- this file
+--   (b) Reinsert the rows with freshly generated UUIDs. Rejected: see below.
+--   (c) Reinsert the rows with the original UUIDs. Impossible: see below.
+--
+-- (c) is out of reach. The production rows exist, so the ledger row for this
+-- migration is the only place their text ever was, and that text is not
+-- available to this directory by policy — the migration embeds bcrypt
+-- `encrypted_password` hashes for the seed accounts, and bcrypt hashes are
+-- permanent regardless of key rotation. Publishing them republishes seed
+-- credentials into a public repository forever. See
+-- `supabase/migrations/README.md`, section "Six migrations are deliberately
+-- absent", which already records this exact decision for this exact version.
+--
+-- (b) is available and is the wrong answer. The point of a migration history is
+-- that replaying it produces a database in a known state. Inventing 22 UUIDs
+-- would produce a *different* database that claims to be the same one, and it
+-- would be worse than an empty slot in a specific, non-obvious way: the seed is
+-- load-bearing for the migrations that follow it. 20260507200106
+-- inserts businesses whose `owner_id` references these auth users, and
+-- 20260507200508 inserts offers whose `business_id` references those businesses.
+-- Both already fail on a replay with
+--
+--   insert or update on table "businesses" violates foreign key constraint
+--   "businesses_owner_id_fkey"
+--   insert or update on table "offers" violates foreign key constraint
+--   "offers_business_id_fkey"
+--
+-- Regenerating the UUIDs would not fix that — the failures are in files this
+-- task must not touch, and they would need the same regenerated UUIDs threaded
+-- through them, which means editing historical migrations, which is exactly the
+-- thing this directory forbids. A seed whose identifiers do not match the ones
+-- the rest of the history expects is not a reconstruction; it is a second,
+-- contradicting history that happens to be in the same directory.
+--
+-- Seed credentials must be supplied out of band. They are operator data, not
+-- schema, and the schema this migration was adjacent to is fully described by
+-- 20260507193004_create_enums_and_profiles.sql, which does create the tables
+-- these rows would have populated.
+--
+-- WHAT IS NOT REPRODUCED
+--
+--   * 22 `auth.users` rows: admin@fudi.app, cafe@fudi.app, carlos@fudi.app,
+--     leo@fudi.app, lucia@fudi.app, panaderia@fudi.app, pizzeria@fudi.app,
+--     sushi@fudi.app, emelec_leo@outlook.com, emelec11emn@gmail.com,
+--     emelec11mn@gmail.com, emelec11pmn@gmail.com, emelecmn@gmail.com,
+--     fake@mail.com, falso@mail.com, leonardo11emn@gmail.com,
+--     negocio-falso@mail.com, negocio@mail.com,
+--     probe-confirm-1790385758051@example.invalid, romina_mitte@outlook.com —
+--     their UUIDs and their bcrypt hashes. Neither is recoverable, and neither
+--     should be.
+--   * 20 `public.profiles` rows for the above, and the 2 accounts that exist in
+--     auth.users without a profile.
+--
+-- `select 1;` below is a valid statement so the slot is honest about having
+-- produced no effect — a file containing only comments would read as "not yet
+-- reconstructed" rather than "reconstructed, and the answer is nothing".
+--
+-- For an audit, the ledger is authoritative:
+--
+--   select statements[1] from supabase_migrations.schema_migrations
+--    where version = '20260507195823';
+
+select 1;
