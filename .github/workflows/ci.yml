@@ -83,6 +83,15 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
           EXPO_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
 
+      # Playwright's browser download is ~170 MB and is not part of the Bun
+      # store cache, so it is installed once here and shared by every app e2e
+      # (api's PostgREST suite, plus the browser suites in admin, landing and
+      # mobile). `--with-deps` pulls the runner's system libraries; without this
+      # step every browser suite below fails at launch with a missing shared
+      # object rather than at an assertion.
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
       - name: E2E marketplace
         run: bun run test:e2e
         env:

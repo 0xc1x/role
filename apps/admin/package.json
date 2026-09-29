@@ -17,6 +17,7 @@
     "preview": "vite preview",
     "test": "bun test src",
     "test:watch": "bun test --watch src",
+    "test:e2e": "playwright test --config playwright.config.ts",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write",
     "lint": "biome lint",

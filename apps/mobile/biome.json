@@ -12,6 +12,7 @@
 			"**/components/**/*",
 			"**/lib/**/*",
 			"**/src/**/*",
+			"**/e2e/**/*",
 			"!**/routeTree.gen.ts"
 		]
 	},

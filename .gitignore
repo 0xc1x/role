@@ -28,3 +28,11 @@ deno.lock
 
 # Playwright MCP session artifacts (browser logs and page snapshots)
 .playwright-mcp/
+
+# Playwright runner output. Traces, screenshots and the HTML report are
+# regenerated on every run and are only useful right after a failure; they
+# belong in a CI artifact, not in the tree.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
