@@ -97,6 +97,33 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:6432/role_test
 
+      # Coverage is measured, never enforced. There is deliberately no
+      # threshold: Bun's coverageThreshold is per FILE (stricter than the
+      # global Jest average it replaced) and CI never gated on it, so a
+      # threshold today would break builds on a rule written nowhere visible.
+      # This step RE-RUNS the suites with --coverage instead of reusing the
+      # plain run above, because `turbo run test` has no `outputs` and a cache
+      # hit replays logs without restoring an artifact -- a restored lcov would
+      # in any case be a STALE lcov from an earlier run. Re-running is cheaper
+      # and more honest than caching coverage output.
+      - name: Coverage (unit + e2e, merged and reported)
+        run: bun run coverage
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:6432/role_test
+          # Dummies para el validador zod de apps/mobile (los tests usan mocks, sin red)
+          EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: |
+            coverage/lcov.info
+            coverage/summary.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Build
         run: bun run build
 

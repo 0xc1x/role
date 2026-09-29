@@ -101,6 +101,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome lint . --error-on-warnings",
     "test": "bun test --isolate src",
+    "test:cov": "bun test --isolate --coverage --coverage-reporter=lcov --coverage-dir=coverage/unit src",
     "test:e2e": "playwright test --config playwright.config.ts",
     "format": "biome format --write .",
     "format:check": "biome format .",

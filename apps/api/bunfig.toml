@@ -3,4 +3,10 @@
 # los jest.mock de un spec no fugan a otros).
 # Sin umbral: el threshold de jest era promedio global y Bun lo exige
 # por archivo (más estricto); CI nunca lo usó como gate.
-coveragePathIgnorePatterns = ["**/*.spec.ts", "src/database/schema/**", "src/main.ts"]
+#
+# El patrón de specs tiene que cubrir AMBAS convenciones de nombre del repo:
+# unit usan `*.spec.ts` y e2e usan `*.e2e-spec.ts`. El patrón anterior era
+# sólo `**/*.spec.ts`, y en un glob `*` no cruza el punto, así que
+# `app.e2e-spec.ts` NO matcheaba `*.spec.ts` (matchea `*.e2e-spec.ts`) y los
+# dos archivos e2e entraban al reporte como si fueran código de aplicación.
+coveragePathIgnorePatterns = ["**/*.spec.ts", "**/*.e2e-spec.ts", "src/database/schema/**", "src/main.ts"]

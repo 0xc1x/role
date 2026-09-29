@@ -24,6 +24,7 @@
     "clean": "rm -rf dist",
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
     "test": "bun test src",
+    "test:cov": "bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/unit src",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "brand:sync": "bun scripts/sync-brand-assets.mjs",
