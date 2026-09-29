@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 
 /**
@@ -64,16 +64,41 @@ import { describe, expect, test } from 'bun:test';
  * exist in source. The proof that the swap happened belongs to the migration's
  * own post-condition guard, which runs in the target environment.
  */
-const MIGRATIONS_DIR = join(
-  import.meta.dir,
-  '..',
-  '..',
-  '..',
-  '..',
-  '..',
-  'supabase',
-  'migrations',
-);
+/**
+ * Walks up from this file until it finds `supabase/migrations`.
+ *
+ * The sibling spec in this directory counts five `..` segments, which is right
+ * for `apps/api/src/database/security` and wrong for the compiled copy at
+ * `apps/api/dist/src/database/security` — one level deeper, so the count
+ * resolves to `apps/supabase/migrations` and the module throws ENOENT at load.
+ * `bun test --isolate src` matches that compiled path too, because `src` is a
+ * substring filter, and a load-time throw surfaces as "Unhandled error between
+ * tests" rather than a failure: the suite still reports green.
+ *
+ * Searching beats counting because the answer is verified rather than assumed.
+ * A wrong guess here cannot skip a test quietly — `readdirSync` throws, and
+ * every assertion in this file depends on the directory being real.
+ */
+function resolveMigrationsDir(): string {
+  let dir = import.meta.dir;
+  for (let depth = 0; depth < 12; depth += 1) {
+    const candidate = join(dir, 'supabase', 'migrations');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  throw new Error(
+    `supabase/migrations not found walking up from ${import.meta.dir}. ` +
+      'This spec reads the migration ledger; it cannot assert anything without it.',
+  );
+}
+
+const MIGRATIONS_DIR = resolveMigrationsDir();
 
 /** Replay order. The `YYYYMMDDHHMMSS` prefix sorts lexicographically, which is
  *  exactly the order `supabase db push` applies them in, so index in this
