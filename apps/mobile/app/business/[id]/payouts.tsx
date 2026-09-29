@@ -69,8 +69,20 @@ export default function BusinessPayoutsScreen() {
 	});
 	// Balance cards come from an unfiltered aggregate (exact under any
 	// filter); the list below stays status-filtered and paginated.
-	const { data: totals, refetch: refetchTotals } =
-		useBusinessPayoutTotals(businessId);
+	//
+	// Los estados de ESTA query se leen, y no es decorativo: las tarjetas
+	// se renderizan desde `totals?.paid ?? 0`, así que sin este gate una
+	// agregada que todavía no había respondido —o que falló— pintaba
+	// "$0" como si fuera el saldo. En una pantalla de dinero eso se lee
+	// como "no tienes nada": el dueño ve $0 cobrado y $0 por procesar
+	// encima de la lista, que sí le muestra sus transferencias reales.
+	const {
+		data: totals,
+		isLoading: totalsLoading,
+		isError: totalsError,
+		error: totalsErrorValue,
+		refetch: refetchTotals,
+	} = useBusinessPayoutTotals(businessId);
 	const pull = useWebPullToRefresh({
 		onRefresh: () => {
 			void refetch();
@@ -94,12 +106,23 @@ export default function BusinessPayoutsScreen() {
 		[businessId],
 	);
 
-	if (isLoading) return <LoadingView />;
+	// The balances ARE the headline of this screen, so the screen is not
+	// "ready" until they have an answer — and it must not answer with a
+	// fabricated zero when they do not.
+	if (isLoading || totalsLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
+	if (totalsError)
+		return (
+			<ErrorState
+				error={totalsErrorValue}
+				onRetry={() => void refetchTotals()}
+			/>
+		);
 
 	// Balance cards are exact (unfiltered aggregate); the list itself is
-	// server-filtered by status.
+	// server-filtered by status. Past the gate above, `totals` is a real
+	// answer — the `?? 0` is now only a type guard, not a silent lie.
 	const paid = totals?.paid ?? 0;
 	const paidCount = totals?.paidCount ?? 0;
 	const pending = totals?.pending ?? 0;

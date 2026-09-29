@@ -43,6 +43,22 @@ export const SUPABASE_URL = "https://test.supabase.co";
 export const TEST_USER_ID = "11111111-2222-3333-4444-555555555555";
 
 /**
+ * The signed-in OWNER of the business panel. Distinct from `TEST_USER_ID` on
+ * purpose — see `VIEWER_IDS`.
+ */
+export const BUSINESS_USER_ID = "6b6b6b6b-7c7c-8d8d-9e9e-0a0a0a0a0a0a";
+
+/**
+ * The one business that owner controls.
+ *
+ * It is ALSO the `business_id` embedded in `offerFixture`, so a row rendered
+ * by the panel and a row rendered by the consumer home describe the same
+ * merchant. Without that, a spec asserting "the panel lists MY offers" would
+ * pass on any business id in the world.
+ */
+export const BUSINESS_ID = "99999999-8888-7777-6666-555555555555";
+
+/**
  * AsyncStorage on web is a thin wrapper over `localStorage`, and the
  * onboarding "already seen" flag is a PER-VIEWER key: a guest and each
  * account mark it separately, so a fresh login does not inherit the flag the
@@ -55,6 +71,14 @@ export const TEST_USER_ID = "11111111-2222-3333-4444-555555555555";
 const VIEWER_IDS = {
 	guest: null,
 	consumer: TEST_USER_ID,
+	/**
+	 * The business owner. A DISTINCT id from the consumer, and that is the
+	 * point: `useBusinesses` reads `business_ownership` filtered by
+	 * `owner_id = auth.uid()`, so a fixture that reused `TEST_USER_ID` would
+	 * prove nothing about the panel's tenant scoping — it would look correct
+	 * precisely because the app and the fixture shared an id.
+	 */
+	business: BUSINESS_USER_ID,
 } as const;
 
 /** A viewer whose onboarding flag is already set, by id. */
@@ -80,6 +104,26 @@ export function profileRow(overrides: Record<string, unknown> = {}) {
 		role: "user",
 		...overrides,
 	};
+}
+
+/**
+ * The `profiles` row for a business owner.
+ *
+ * `role` is the whole fixture: `enrichProfile` OVERWRITES the session
+ * metadata's role with this column (the repository is explicit that signup
+ * metadata "can change"), and `app/(business)/_layout.tsx` gates the panel on
+ * `profile?.role`. A fixture that only set `user_metadata.role` would be
+ * bounced to `/` and every business locator would time out for a reason that
+ * has nothing to do with the panel.
+ */
+export function businessProfileRow(overrides: Record<string, unknown> = {}) {
+	return profileRow({
+		id: BUSINESS_USER_ID,
+		email: "negocio@role.test",
+		full_name: "Dueña de Negocio",
+		role: "business",
+		...overrides,
+	});
 }
 
 /** A Supabase session in the shape `supabase.auth.getSession` reads back. */
@@ -127,6 +171,15 @@ export type SupabaseLog = {
 	/** e.g. `POST /rest/v1/rpc/active_offers_near` */
 	route: string;
 	body: unknown;
+	/**
+	 * The raw query string, leading `?` included ("" when there is none).
+	 *
+	 * `route` alone cannot express what a PostgREST request ASKED for, and on
+	 * the business panel the ask IS the assertion: three head-counts that
+	 * differ only by `status=eq.…`, a catalog scoped by `business_id=eq.…`,
+	 * a search that has to become an `or=(…)` filter. All of that lives here.
+	 */
+	search: string;
 };
 
 export type SupabaseStubs = {
@@ -147,7 +200,61 @@ export type SupabaseStubs = {
 	recover: (endpoint: string) => void;
 };
 
+/**
+ * An ordered response rule, for the requests `bodies`/`fail` cannot express.
+ *
+ * ─── Why the panel needs this and the consumer suite does not ────────────────
+ *
+ * `bodies` is keyed on the LAST PATH SEGMENT, which is enough while every
+ * screen makes one kind of call per table. The business panel breaks that in
+ * two ways, and both are the interesting assertions rather than incidental:
+ *
+ * 1. **One endpoint, three different questions.** `useBusinessOrderStats`
+ *    fires three head-counts at `orders` that differ ONLY by a `status` query
+ *    filter. "Pendientes: 3, Listos: 1, Hoy: 2" is the panel's headline row —
+ *    a segment-keyed stub gives all three the same number, and a spec that
+ *    asserted only "a number appeared" would pass against a repository that
+ *    passed the same filter to all three.
+ *
+ * 2. **One endpoint, two different windows.** `getBusinessStats` calls
+ *    `business_sales_stats` twice — current period and previous period — with
+ *    different `p_from`/`p_to` in the POST body. The growth percentage on the
+ *    stats screen is computed from the DIFFERENCE between those two answers,
+ *    so a stub that returns the same body twice renders "+0%" and still
+ *    looks like a working screen.
+ *
+ * Rules are evaluated in order and the first match wins, so a spec can put
+ * the narrow case (a `status` filter) before the broad one. A rule that
+ * matches nothing falls through to `fail` → `bodies` → `defaultBody`, which
+ * is what keeps a new panel query from turning the suite red for the wrong
+ * reason.
+ */
+export type SupabaseRule = {
+	/** HTTP method. Omitted matches any. */
+	method?: string;
+	/** Pathname, or its last segment (`"orders"`). Omitted matches any. */
+	path?: string;
+	/** Substring that must appear in the query string. */
+	query?: string;
+	/** Predicate over the decoded POST body (RPC arguments). */
+	body?: (body: unknown) => boolean;
+	status?: number;
+	/** JSON response body. Ignored when `count` is set. */
+	json?: unknown;
+	/**
+	 * PostgREST head-count total. Answers with a `content-range` header and
+	 * an empty body, which is exactly what `.select(…, { count: "exact",
+	 * head: true })` reads — postgrest-js never looks at the body on a HEAD.
+	 */
+	count?: number;
+};
+
 export type StubOptions = {
+	/**
+	 * Ordered response rules, consulted BEFORE `fail` and `bodies`. See
+	 * `SupabaseRule` for why the panel needs them.
+	 */
+	rules?: SupabaseRule[];
 	/**
 	 * PostgREST RPC and table names that must FAIL, keyed by the last path
 	 * segment. Everything else answers with `defaultBody`.
@@ -220,7 +327,9 @@ export async function stubSupabase(
 	const remainingFailures = new Map<string, number>(
 		Object.keys(fail).map((key) => [key, options.failTimes ?? Infinity]),
 	);
-	const profile = options.profile ?? profileRow();
+	const profile =
+		options.profile ??
+		(options.viewer === "business" ? businessProfileRow() : profileRow());
 	const viewer: ViewerId = options.viewer ?? "guest";
 	const viewerId = VIEWER_IDS[viewer];
 	// A signed-in viewer carries a session; the session's own id is the one
@@ -233,6 +342,14 @@ export async function stubSupabase(
 					user: {
 						...sessionEnvelope().user,
 						id: viewerId,
+						email:
+							viewer === "business"
+								? "negocio@role.test"
+								: sessionEnvelope().user.email,
+						user_metadata: {
+							...sessionEnvelope().user.user_metadata,
+							role: viewer === "business" ? "business" : "user",
+						},
 					},
 				});
 
@@ -247,14 +364,58 @@ export async function stubSupabase(
 		} catch {
 			body = request.postData();
 		}
-		calls.push({ route: route_, body });
+		calls.push({ route: route_, body, search: url.search });
 
-		const json = (payload: unknown, status = 200) =>
+		const json = (
+			payload: unknown,
+			status = 200,
+			headers: Record<string, string> = {},
+		) =>
 			route.fulfill({
 				status,
 				contentType: "application/json; charset=utf-8",
+				headers: {
+					/**
+					 * Without this the BROWSER hides `content-range` from the
+					 * page's `Response.headers`, because it is not a CORS
+					 * safelisted response header — so `fetch` returns `null` for
+					 * it even though CDP/Playwright still reports it. Real
+					 * PostgREST sends `*`, and so must this stub: without it
+					 * every head-count silently reads 0 and the panel's
+					 * headline row looks correct while being fiction.
+					 */
+					"access-control-expose-headers": "*",
+					...headers,
+				},
 				body: JSON.stringify(payload),
 			});
+
+		/**
+		 * PostgREST's object mode, which every `.single()` / `.maybeSingle()`
+		 * in this app relies on.
+		 *
+		 * `.single()` sets `Accept: application/vnd.pgrst.object+json`, and
+		 * the real server answers with the ROW, not a one-element array.
+		 * postgrest-js only unwraps a single-element array when it set
+		 * `isMaybeSingle` itself; for `.single()` the array comes straight
+		 * off the wire. So without this, `getBusinessProfile`'s
+		 * `businessResult.data as Record<string, unknown>` would spread an
+		 * ARRAY — `business.name` is `undefined` and the panel renders a
+		 * blank hero that still "passes" a heading assertion.
+		 *
+		 * The empty case matters just as much: `maybeSingle()` on no rows is
+		 * `null` data and NO error, which is what `getBusinessProfile`'s
+		 * "negocio no encontrado" branch and `getLocation`'s null return are
+		 * written against.
+		 */
+		const objectMode = request
+			.headers()
+			.accept?.includes("application/vnd.pgrst.object+json");
+		const asRows = (payload: unknown): unknown => {
+			if (!objectMode) return payload;
+			if (Array.isArray(payload)) return payload[0] ?? null;
+			return payload;
+		};
 
 		// ── Auth ────────────────────────────────────────────────────────────
 		if (url.pathname === "/auth/v1/token") {
@@ -281,8 +442,12 @@ export async function stubSupabase(
 		}
 
 		// ── The session's own row: `authRepository.fetchProfile` ────────────
+		// `fetchProfile` uses `.maybeSingle()`, so the object mode applies
+		// here too — and it is the one endpoint where getting it wrong is
+		// most expensive, because a broken profile takes down EVERY screen
+		// including the business role guard.
 		if (url.pathname === "/rest/v1/profiles") {
-			return json(profile);
+			return json(asRows(profile));
 		}
 		// Consent lives in `user_consents`, not `profiles`. The repository
 		// distinguishes "row absent" (null) from "not granted" (false), and
@@ -295,10 +460,38 @@ export async function stubSupabase(
 			});
 		}
 
+		// ── Ordered rules (narrow cases the segment map cannot express) ──────
+		const segment = url.pathname.split("/").filter(Boolean).at(-1) ?? "";
+		const search = url.search;
+		for (const rule of options.rules ?? []) {
+			if (rule.method != null && rule.method !== method) continue;
+			if (
+				rule.path != null &&
+				rule.path !== url.pathname &&
+				rule.path !== segment
+			) {
+				continue;
+			}
+			if (rule.query != null && !search.includes(rule.query)) continue;
+			if (rule.body != null && !rule.body(body)) continue;
+
+			if (rule.count != null) {
+				return route.fulfill({
+					status: rule.status ?? 200,
+					headers: {
+						"content-range": `*/${rule.count}`,
+						"content-type": "application/json; charset=utf-8",
+						"access-control-expose-headers": "*",
+					},
+					body: "",
+				});
+			}
+			return json(rule.json, rule.status ?? 200);
+		}
+
 		// ── Named failures ──────────────────────────────────────────────────
 		// Keyed on the last path segment, so `fail: { active_offers_near: … }`
 		// covers both the RPC and a hypothetical table of that name.
-		const segment = url.pathname.split("/").filter(Boolean).at(-1) ?? "";
 		const budget = remainingFailures.get(segment) ?? 0;
 		const failure = fail[segment];
 		if (failure && budget > 0) {
@@ -317,9 +510,32 @@ export async function stubSupabase(
 			);
 		}
 
-		if (segment in bodies) return json(bodies[segment]);
+		if (segment in bodies) {
+			const payload = bodies[segment];
+			// A head-count (`.select(…, { count: "exact", head: true })`)
+			// carries its number in a HEADER, not a body — postgrest-js
+			// reads `content-range: */N` and skips the body entirely. The
+			// business panel is built on these: the orders headline
+			// (Pendientes / Listos / Hoy) is three of them.
+			//
+			// A `number` body is the honest way to say "this endpoint is a
+			// head-count, and here is the total", because it cannot be
+			// confused with a list that happens to have one row.
+			if (typeof payload === "number") {
+				return route.fulfill({
+					status: 200,
+					headers: {
+						"content-range": `*/${payload}`,
+						"content-type": "application/json; charset=utf-8",
+						"access-control-expose-headers": "*",
+					},
+					body: "",
+				});
+			}
+			return json(asRows(payload));
+		}
 
-		return json(defaultBody);
+		return json(asRows(defaultBody));
 	});
 
 	await seedViewerState(page, {
@@ -444,6 +660,172 @@ export function offerFixture(overrides: Record<string, unknown> = {}) {
 }
 
 /**
+ * A `businesses` row as `BUSINESS_PUBLIC_COLUMNS` returns it.
+ *
+ * The column list is COPIED from the repository on purpose. That select is
+ * column-scoped by a table grant (migration 20260926000004), so the withheld
+ * platform columns (`balance`, `commission_rate`, moderation) are not on the
+ * wire at all and `toBusiness` normalises them to `null`. A fixture that
+ * included `balance` would typecheck, render, and hide the fact that the app
+ * can never read the merchant's balance from the client.
+ *
+ * The return type is spelled out rather than left to inference so a spec can
+ * read `BUSINESS_NAME` off the row without a cast — and so adding a column
+ * to the fixture is a type error at the call site, not a silent `unknown`.
+ */
+export function businessFixture(
+	overrides: Record<string, unknown> = {},
+): Record<string, unknown> & { id: string; name: string; type: string } {
+	return {
+		id: BUSINESS_ID,
+		name: "Panadería La Espiga",
+		type: "bakery",
+		slug: "panaderia-la-espiga",
+		image: null,
+		cover_image: null,
+		rating: 4.6,
+		review_count: 88,
+		description: "Panadería de barrio con excedente diario.",
+		phone: "+52 55 5555 0101",
+		email: "hola@laespiga.test",
+		website: null,
+		is_active: true,
+		created_at: "2025-11-02T10:00:00.000Z",
+		updated_at: "2026-09-20T10:00:00.000Z",
+		currency: "MXN",
+		...overrides,
+	};
+}
+
+/** The merchant's display name, as the fixture serves it. */
+export const BUSINESS_NAME = businessFixture().name;
+
+/**
+ * A `business_locations` row, matching `BusinessLocationSchema` (the SSOT
+ * shape) rather than what any one screen happens to read.
+ */
+export function businessLocationFixture(
+	overrides: Record<string, unknown> = {},
+) {
+	return {
+		id: "12121212-3434-5656-7878-909090909090",
+		business_id: BUSINESS_ID,
+		name: "Sucursal Roma",
+		address: "Av. Álvaro Obregón 220, Roma Norte",
+		phone: "+52 55 5555 0101",
+		latitude: 19.4194,
+		longitude: -99.1626,
+		is_active: true,
+		zone: "Roma Norte",
+		is_headquarter: true,
+		created_at: "2025-11-02T10:00:00.000Z",
+		updated_at: "2026-09-20T10:00:00.000Z",
+		...overrides,
+	};
+}
+
+/**
+ * One row of the business orders list, in the shape `ORDER_SELECT` returns.
+ *
+ * The embedded `offers` / `businesses` / `profiles` objects are what
+ * `mapOrderDetail` reads to fill `offerTitle`, `businessName` and
+ * `customerName`. `OrderCard` renders all three, so a fixture missing them
+ * would still render a card — with "Oferta" and "Negocio" as the fallbacks
+ * the mapper itself supplies, which is exactly the mapper regression the
+ * loaded-orders spec exists to catch.
+ */
+export function businessOrderFixture(
+	overrides: Record<string, unknown> = {},
+): Record<string, unknown> & {
+	id: string;
+	order_number: string;
+	status: string;
+	price: number;
+	offers: {
+		title: string;
+		image: string | null;
+		business_location_id: string;
+		business_locations: { address: string };
+	};
+} {
+	return {
+		id: "0a0a0a0a-1b1b-2c2c-3d3d-4e4e4e4e4e4e",
+		user_id: TEST_USER_ID,
+		offer_id: offerFixture().id,
+		business_id: BUSINESS_ID,
+		order_number: "ROL-1042",
+		status: "pending",
+		price: 60,
+		original_price: 180,
+		pickup_code: "424242",
+		pickup_time: "2026-09-28T20:30:00.000Z",
+		coupon_id: null,
+		created_at: "2026-09-28T15:00:00.000Z",
+		order_events: [
+			{ status: "pending", created_at: "2026-09-28T15:00:00.000Z" },
+		],
+		offers: {
+			title: "Mystery Box de Panadería",
+			image: null,
+			business_location_id: "12121212-3434-5656-7878-909090909090",
+			business_locations: {
+				address: "Av. Álvaro Obregón 220, Roma Norte",
+			},
+		},
+		businesses: {
+			name: "Panadería La Espiga",
+			phone: "+52 55 5555 0101",
+			image: null,
+			cover_image: null,
+		},
+		profiles: {
+			full_name: "Consumidora de Prueba",
+			phone: "+52 55 5555 0202",
+			email: "consumer@role.test",
+		},
+		...overrides,
+	};
+}
+
+/**
+ * One `payouts` row, in the shape `PAYOUT_FIELDS` selects.
+ *
+ * The three money fields are DISTINCT and non-zero on purpose: gross 100,
+ * fee 15, net 85. A fixture with `net_amount` equal to `gross_amount` would
+ * make the balance cards pass against a repository that dropped the fee, which
+ * is the one class of bug in this panel that costs the owner real money.
+ */
+export function payoutFixture(overrides: Record<string, unknown> = {}): Record<
+	string,
+	unknown
+> & {
+	id: string;
+	status: string;
+	period_start: string;
+	period_end: string;
+	gross_amount: number;
+	platform_fee: number;
+	net_amount: number;
+} {
+	return {
+		id: "7f7f7f7f-8e8e-9d9d-acac-bbbbcccccccc",
+		business_id: BUSINESS_ID,
+		business_name: "Panadería La Espiga",
+		period_start: "2026-09-01",
+		period_end: "2026-09-15",
+		gross_amount: 100,
+		platform_fee: 15,
+		net_amount: 85,
+		status: "paid",
+		gateway_payout_id: "pi_3RolE01",
+		paid_at: "2026-09-18T12:00:00.000Z",
+		created_at: "2026-09-16T09:00:00.000Z",
+		updated_at: "2026-09-18T12:00:00.000Z",
+		...overrides,
+	};
+}
+
+/**
  * Fills and submits the sign-in form, the way a person does.
  *
  * The fields are found by their catalogue label, which `TextField` forwards to
@@ -516,4 +898,95 @@ export function consumerTab(page: Page, name: string) {
  */
 export async function waitForConsumerShell(page: Page) {
 	await expect(consumerTablist(page)).toBeVisible();
+}
+
+/**
+ * The three destinations of the business panel, named by the catalog.
+ *
+ * Same reasoning as `CONSUMER_TABS`: a tab label is a product decision, and
+ * `/orders` here is the COLLIDING path — the reason this list exists as a
+ * named constant is that a spec asserting "the business panel owns /orders"
+ * needs a tab that is only reachable once the role guard let it through.
+ */
+export const BUSINESS_TABS = [
+	{ name: strings.business.products, path: "/products" },
+	{ name: strings.business.orders, path: "/orders" },
+	{ name: strings.business.title, path: "/management" },
+] as const;
+
+/**
+ * The business bottom navigation, identified by CONTENT.
+ *
+ * `.first()` would be wrong here for a different reason than on the consumer
+ * side: this panel's own screens add segmented tablists (Activos/Historial on
+ * orders, the payout status chips), and `app/(business)/orders.tsx` renders
+ * one BEFORE the header. Filtering by "the tablist that carries the Gestión
+ * tab" is unambiguous and survives any number of in-screen tab strips.
+ */
+export function businessTablist(page: Page) {
+	return page
+		.getByRole("tablist")
+		.filter({ has: page.getByRole("tab", { name: strings.business.title }) });
+}
+
+/** One destination in the business bottom navigation, by its catalog label. */
+export function businessTab(page: Page, name: string) {
+	return businessTablist(page).getByRole("tab", { name });
+}
+
+/**
+ * Waits until the business shell is mounted and interactive.
+ *
+ * The same signal as `waitForConsumerShell`, and for the same reason: the
+ * `(business)` layout returns `LoadingView` while the auth store is still
+ * resolving, and `<Redirect href="/" />`s anyone whose profile is not a
+ * business. The tab bar only exists once the guard has passed, so it is the
+ * honest "you are actually in the panel" condition — and a spec that asserted
+ * on a screen heading instead would also pass on a redirect that had already
+ * bounced the viewer home.
+ */
+export async function waitForBusinessShell(page: Page) {
+	await expect(businessTablist(page)).toBeVisible();
+}
+
+/**
+ * The network world every business-panel spec needs unless it says otherwise.
+ *
+ * It is a function, not a constant, because a spec that mutates one body must
+ * not leak that mutation into the next test. Returning a fresh object per call
+ * is the whole point.
+ *
+ * `business_ownership` is the FIRST read the panel makes and the one that
+ * decides whether the owner has a business at all: `useBusinesses` resolves
+ * ids through it and returns `[]` when it is empty, which is the app's
+ * "you have no business" state. Every other business read is keyed on the id
+ * it hands back.
+ */
+export function businessBodies(
+	overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+	return {
+		business_ownership: [{ business_id: BUSINESS_ID }],
+		businesses: [businessFixture()],
+		business_locations: [businessLocationFixture()],
+		business_hours: [
+			{
+				business_id: BUSINESS_ID,
+				day: "monday",
+				open_time: "08:00:00",
+				close_time: "20:00:00",
+				is_closed: false,
+			},
+			{
+				business_id: BUSINESS_ID,
+				day: "tuesday",
+				open_time: "08:00:00",
+				close_time: "20:00:00",
+				is_closed: false,
+			},
+		],
+		// A single resolved head-count: the profile screen's "rescued" total.
+		business_completed_orders_count: 137,
+		...overrides,
+	};
 }

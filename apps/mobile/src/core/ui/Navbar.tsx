@@ -169,6 +169,17 @@ export default function Navbar({ fallbackTabName, ...props }: NavbarProps) {
 								accessibilityRole="tab"
 								accessibilityLabel={labelFor(options, route.name)}
 								accessibilityState={{ selected }}
+								/* `accessibilityState` SOLO no dice nada en la PWA.
+								 * react-native-web 0.21 reenvía los props `aria-*` pero
+								 * ya NO traduce `accessibilityState` (solo conserva
+								 * `disabled`/`busy`), así que el tab salía con
+								 * `role="tab"` y sin `aria-selected`: ARIA exige ese
+								 * atributo en cada tab, y un lector de pantalla
+								 * anunciaba tres destinos sin decir cuál era el
+								 * actual. Nativo sigue leyendo `accessibilityState`;
+								 * RN 0.71+ acepta `aria-selected` en ambas
+								 * plataformas, y es el mismo valor. */
+								aria-selected={selected}
 								style={styles.item}
 							>
 								{icon
