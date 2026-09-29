@@ -239,7 +239,10 @@ export class NotificationHandlers {
         {
           title: 'Recordatorio de recogida',
           body: `Tu pedido vence a las ${c.pickup_end.toLocaleTimeString()}`,
-          data: { link: `/orders/${c.id}`, type: 'pickup_reminder' },
+          // `order/[id]`, not `orders/[id]`: the order detail screen is
+          // singular. `/orders/<id>` resolves to nothing, so this push opened a
+          // blank page. Mirrors handle-pickup-reminders in supabase/functions.
+          data: { link: `/order/${c.id}`, type: 'pickup_reminder' },
         },
         { prefFlag: 'pickup_reminders_enabled' },
       );
