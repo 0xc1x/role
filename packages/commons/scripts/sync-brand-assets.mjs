@@ -46,10 +46,18 @@ const WANT_PNG = process.argv.includes("--png");
 
 function parseTokens() {
 	const src = readFileSync(join(brandDir, "tokens.ts"), "utf8");
+	// A token may be a literal hex OR a reference to another token. The literal
+	// form is tried first; the alias form resolves one level, which is all
+	// tokens.ts uses. Without it an alias is unreachable: it is declared and
+	// documented but no caller can read its value, so it silently rots.
 	const grab = (name) => {
-		const m = src.match(new RegExp(`export const ${name} = "(.*)";`));
-		if (!m) throw new Error(`Cannot parse ${name} from tokens.ts`);
-		return m[1];
+		const lit = src.match(new RegExp(`export const ${name} = "(.*)";`));
+		if (lit) return lit[1];
+		const alias = src.match(
+			new RegExp(`export const ${name} = (BRAND_[A-Z_]+);`),
+		);
+		if (alias) return grab(alias[1]);
+		throw new Error(`Cannot parse ${name} from tokens.ts`);
 	};
 	return {
 		BRAND_PRIMARY: grab("BRAND_PRIMARY"),
@@ -57,6 +65,7 @@ function parseTokens() {
 		BRAND_PAPER: grab("BRAND_PAPER"),
 		BRAND_CREAM: grab("BRAND_CREAM"),
 		BRAND_ACCENT_LIGHT: grab("BRAND_ACCENT_LIGHT"),
+		BRAND_SPLASH_BACKGROUND: grab("BRAND_SPLASH_BACKGROUND"),
 		BRAND_ASSET_VERSION: Number(
 			src.match(/BRAND_ASSET_VERSION = (\d+)/)[1],
 		),
@@ -427,6 +436,15 @@ results.push([
 
 // Mobile web shell: boot-splash block, theme color, favicon cache-bust,
 // PWA manifest colors — all derived, never hand-edited between markers.
+//
+// The overlay's 60% is NOT a styling preference, it is the handoff contract.
+// This div is what the user sees between the native splash going away and
+// React mounting, so the wordmark has to land on the same pixels the native
+// splash just left, or the mark visibly resizes on the way in. Both surfaces
+// are built as a square canvas with the wordmark at 60% of its width:
+// splash-icon.png composites it that way, and the apple-splash images reuse
+// the same 0.6 constant. This overlay has to agree with them for all three to
+// read as one continuous moment.
 {
 	const rel = "apps/mobile/public/index.html";
 	const abs = join(root, rel);
@@ -434,7 +452,7 @@ results.push([
 	const white = whiteInner(wordmark.inner, tokens.BRAND_PAPER);
 	const block =
 		`    <div id="boot-splash" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:${tokens.BRAND_PRIMARY_DARK};">\n` +
-		`      <svg width="75%" height="75%" viewBox="${wordmark.viewBox}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">${white}</svg>\n` +
+		`      <svg width="60%" height="60%" viewBox="${wordmark.viewBox}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">${white}</svg>\n` +
 		`    </div>`;
 	const parts = html.split(/<!-- brand:boot-splash:(?:start|end)[^>]*-->/);
 	if (parts.length !== 3)
@@ -464,7 +482,8 @@ if (WANT_PNG && !CHECK) {
 		const jobs = [
 			["apps/mobile/assets/icon.png", 1024, iconT.file, null],
 			["apps/mobile/assets/favicon.png", 64, iconT.file, null],
-			["apps/mobile/assets/splash-icon.png", 1024, iconT.file, null],
+			// splash-icon.png is NOT in this list: it is a splash surface, not a
+			// launcher icon, and it carries the wordmark. See below.
 			["apps/mobile/assets/android-icon-foreground.png", 1024, iconT.file, null],
 			// Apple touch: transparent like the SVG (iOS composites transparency
 			// over black — no light margin by design).
@@ -551,10 +570,55 @@ if (WANT_PNG && !CHECK) {
 				results.push([`apps/mobile/public/splash/apple-splash-${w}-${h}.png`, "updated"]);
 			}
 		}
-		results.push([
-			"android-icon-monochrome.png",
-			"skipped (needs single-color glyph from design)",
-		]);
+		// Native splash image (expo-splash-screen, app.json): dark canvas with the
+		// centered white wordmark, same construction as the PWA startup images
+		// above so the two splash surfaces cannot drift apart.
+		//
+		// This used to be the ICON, and the mismatch was invisible for a
+		// specific reason: the icon's tile is BRAND_PRIMARY_DARK and the splash
+		// backgroundColor is BRAND_PRIMARY_DARK too, so the tile vanished into
+		// the background and left a floating R + sparkles — a launcher asset
+		// presented as the brand's first impression, and different from what the
+		// in-app splash renders. The splash is the wordmark; the launcher is the
+		// icon. They are different surfaces and they should carry different art.
+		{
+			const white = whiteInner(wordmark.inner, tokens.BRAND_PAPER);
+			const [vw, vh] = wordmark.viewBox.split(" ").slice(2).map(Number);
+			const size = 1024;
+			const wmW = Math.round(size * 0.6);
+			const wmH = Math.round((wmW * vh) / vw);
+			const mark = `<svg xmlns="http://www.w3.org/2000/svg" width="${wmW}" height="${wmH}" viewBox="${wordmark.viewBox}">${white}</svg>`;
+			await sharp({
+				create: {
+					width: size,
+					height: size,
+					channels: 4,
+					background: tokens.BRAND_SPLASH_BACKGROUND,
+				},
+			})
+				.composite([{ input: Buffer.from(mark), gravity: "center" }])
+				.png()
+				.toFile(join(root, "apps/mobile/assets/splash-icon.png"));
+			results.push(["apps/mobile/assets/splash-icon.png", "updated"]);
+		}
+		// Android themed icon: one flat colour on transparent, tinted by the
+		// system. This used to be skipped for "needs single-color glyph from
+		// design" and the slot held a hand-placed glyph that had since fallen
+		// out of the identity — a stale asset nobody could regenerate, which is
+		// the worst kind. The mark is two-tone (paper R + accent sparkles), so
+		// the monochrome form is derived with the same `monoInner` the wordmark
+		// already uses, and rendered inside the icon canvas so the glyph keeps
+		// the same optical size and position as every other icon target.
+		{
+			const monoSvg =
+				`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="${iconT.viewBox}">` +
+				`${monoInner(markFull.inner).replace(/currentColor/g, "#000000")}</svg>`;
+			await sharp(Buffer.from(monoSvg))
+				.resize(432, 432)
+				.png()
+				.toFile(join(root, "apps/mobile/assets/android-icon-monochrome.png"));
+			results.push(["apps/mobile/assets/android-icon-monochrome.png", "updated"]);
+		}
 	} catch (e) {
 		results.push(["png", `skipped (sharp unavailable: ${e.message})`]);
 	}
