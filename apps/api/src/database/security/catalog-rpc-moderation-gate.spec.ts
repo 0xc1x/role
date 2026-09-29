@@ -108,7 +108,8 @@ const MIGRATION_FILES: string[] = readdirSync(MIGRATIONS_DIR)
   .filter((f) => f.endsWith('.sql'))
   .sort();
 
-const GATE_MIGRATION = '20260928161526_add_business_moderation_catalog_gate.sql';
+const GATE_MIGRATION =
+  '20260928161526_add_business_moderation_catalog_gate.sql';
 const ROUTING_MIGRATION =
   '20260929010149_route_client_rpcs_through_moderation_helper.sql';
 const COMPANION_TABLES_MIGRATION =
@@ -401,7 +402,9 @@ interface RewritePair {
 function rewritePairs(): RewritePair[] {
   const sql = sqlOf(ROUTING_MIGRATION);
   const constants = new Map<string, string>();
-  for (const match of sql.matchAll(/(\w+_pred)\s+constant text\s*:=\s*([\s\S]*?);/g)) {
+  for (const match of sql.matchAll(
+    /(\w+_pred)\s+constant text\s*:=\s*([\s\S]*?);/g,
+  )) {
     const name = match[1];
     const expression = match[2];
     if (name === undefined || expression === undefined) {
@@ -423,8 +426,7 @@ function rewritePairs(): RewritePair[] {
   }
 
   const pairs: RewritePair[] = [];
-  const calls =
-    /apply_rewrite\('(\w+)',\s*array\[(\w+),\s*'((?:[^']|'')*)'\]/g;
+  const calls = /apply_rewrite\('(\w+)',\s*array\[(\w+),\s*'((?:[^']|'')*)'\]/g;
   for (const match of sql.matchAll(calls)) {
     const fn = match[1];
     const constant = match[2];
@@ -499,7 +501,10 @@ describe('the four client-facing catalog RPCs', () => {
     for (const pair of REWRITE_PAIRS) {
       const body = latestDefinitionOf(pair.fn).body;
       const alias = /m\.business_id = (\w+)\.id/.exec(pair.from)?.[1];
-      expect(alias, `${pair.fn}: no id alias in ${pair.constant}`).toBeDefined();
+      expect(
+        alias,
+        `${pair.fn}: no id alias in ${pair.constant}`,
+      ).toBeDefined();
       expect(
         body.includes(pair.from),
         `${pair.fn}: ${ROUTING_MIGRATION} searches for a predicate the body does not contain`,
@@ -553,7 +558,9 @@ describe('the four client-facing catalog RPCs', () => {
     expect(sql).toMatch(
       /if not \(coalesce\(v_anon, false\) and coalesce\(v_auth, false\)\) then/,
     );
-    expect(sql).toMatch(/Apply 20260928161526_add_business_moderation_catalog_gate/);
+    expect(sql).toMatch(
+      /Apply 20260928161526_add_business_moderation_catalog_gate/,
+    );
   });
 
   test('the routing migration aborts if any of the four keeps the subquery afterwards', () => {
@@ -567,7 +574,9 @@ describe('the four client-facing catalog RPCs', () => {
     for (const name of ROUTED_FUNCTIONS) {
       expect(guard?.[0]).toContain(name);
     }
-    expect(guard?.[0]).toMatch(/prosrc like '%from public\.business_moderation%'/);
+    expect(guard?.[0]).toMatch(
+      /prosrc like '%from public\.business_moderation%'/,
+    );
     expect(guard?.[0]).toMatch(/if v_leftovers > 0 then/);
   });
 
@@ -635,11 +644,13 @@ describe('public.business_is_approved is the only door to the moderation table',
     // policy the database replaced long ago, and would have passed while the
     // live one said something else. This is the same replay-position rule
     // `latestDefinitionOf` applies to function bodies.
-    const policy = policyBodies().findLast(
-      (p) => p.policy.includes('"Anyone can view active businesses"'),
+    const policy = policyBodies().findLast((p) =>
+      p.policy.includes('"Anyone can view active businesses"'),
     );
     expect(policy?.file).toBe(GATE_MIGRATION);
-    expect(policy?.policy).toMatch(/public\.business_is_approved\(businesses\.id\)/);
+    expect(policy?.policy).toMatch(
+      /public\.business_is_approved\(businesses\.id\)/,
+    );
     expect(policy?.policy).toMatch(/is_active = true/);
     expect(readsGatedTable(policy?.policy ?? '')).toBe(false);
   });
@@ -702,15 +713,17 @@ describe('no client role holds a privilege on the two companion tables', () => {
     const created = sqlOf(COMPANION_TABLES_MIGRATION);
     for (const table of GATED_TABLES) {
       expect(created).toMatch(
-        new RegExp(
-          `revoke all on public\\.${table} from anon, authenticated;`,
-        ),
+        new RegExp(`revoke all on public\\.${table} from anon, authenticated;`),
       );
     }
     // A policy on either companion would make it readable again through the
     // deny-all, so zero policies is part of the state, not a footnote.
     for (const policy of policyBodies()) {
-      if (!/on public\.(business_finance|business_moderation)\b/.test(policy.policy)) {
+      if (
+        !/on public\.(business_finance|business_moderation)\b/.test(
+          policy.policy,
+        )
+      ) {
         continue;
       }
       expect(
@@ -779,7 +792,10 @@ describe('an invoker-owned body never inlines a subquery against a gated table',
     // And the shape that made the split: the same subquery, sound under an
     // owner and fatal under a caller.
     expect(
-      referencing.filter((d) => d.definer).map((d) => d.name).sort(),
+      referencing
+        .filter((d) => d.definer)
+        .map((d) => d.name)
+        .sort(),
     ).toEqual(['business_is_approved', 'notify_business_pending']);
   });
 
