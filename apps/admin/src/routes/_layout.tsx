@@ -43,7 +43,6 @@ export const Route = createFileRoute("/_layout")({
 function RouteComponent() {
 	const { data: user, isLoading, isError } = useAuthUser();
 	const navigate = useNavigate();
-	const hasToken = Boolean(getToken());
 
 	// La mitad del guard que `beforeLoad` no cubre: la hidratación inicial.
 	useRequireSession();
@@ -60,7 +59,13 @@ function RouteComponent() {
 		}
 	}, [user, isLoading, isError, navigate]);
 
-	if (isLoading || isError || !hasToken || !user || user.role !== "admin") {
+	// SOLO estado de la query, nunca `getToken()`: el token vive en localStorage,
+	// así que leerlo durante el render hace que el servidor y el cliente elijan
+	// ramas distintas (React Doctor: no-hydration-branch-on-browser-global). El
+	// ciclo de la query ya da el estado pendiente y coincide con el SSR por
+	// construcción; `useRequireSession` se encarga de expulsar al anónimo, en un
+	// effect, que es donde se puede tocar el navegador.
+	if (isLoading || isError || !user || user.role !== "admin") {
 		return <SessionPending />;
 	}
 

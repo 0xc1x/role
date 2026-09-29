@@ -28,11 +28,15 @@ import { RedisThrottlerStorage } from './redis-throttler.storage';
 const appliesOnlyWhenNamedOnRoute =
   (bucket: string) =>
   (context: ExecutionContext): boolean => {
-    const reflectorMetadata = Reflect.getMetadata(
+    // `unknown`, not `any`: `Reflect.getMetadata` is typed to return `any`, and
+    // the only question asked of either value is whether it was ever set, so
+    // widening it to `unknown` states exactly that and keeps the rule from
+    // spreading past this expression.
+    const reflectorMetadata: unknown = Reflect.getMetadata(
       'THROTTLER:LIMIT' + bucket,
       context.getHandler(),
     );
-    const classMetadata = Reflect.getMetadata(
+    const classMetadata: unknown = Reflect.getMetadata(
       'THROTTLER:LIMIT' + bucket,
       context.getClass(),
     );
