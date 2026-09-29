@@ -5,8 +5,9 @@ import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 
+import { apiUrlStartupError } from "./src/lib/api-url.ts";
 import {
 	buildRobotsTxt,
 	buildSitemapXml,
@@ -54,24 +55,61 @@ function seoFiles(): Plugin {
 	};
 }
 
-const config = defineConfig({
-	resolve: { tsconfigPaths: true },
-	server: {
-		watch: {
-			usePolling: true,
+/**
+ * El destino de la API se valida al ARRANCAR del dev server, no en la primera
+ * request.
+ *
+ * POR QUÉ acá y no solo en `src/lib/env.ts`: los loaders de cada ruta se tragan
+ * su propio fallo (`.catch()`), así que sin la var la landing levantaba igual
+ * —200, con el hero en "—" y los emails de fallback— y el error real aparecía
+ * unas líneas más abajo del log del server, si aparecía. Con el check en el
+ * proceso de arranque, `bun run dev` muere al instante y con el mismo mensaje
+ * que el server de producción.
+ *
+ * `command === "serve"`: el build NO se valida a propósito. CI compila sin la
+ * var (paso `Build` de .github/workflows/ci.yml) y el bundle de cliente se
+ * arma con la env de Vercel; atar el build a una var rompería ambos. El destino
+ * solo importa cuando algo corre y hace una petición, y eso es `serve` (local)
+ * o el server ya construido (producción, que valida `env.ts`).
+ *
+ * `process.env` va primero porque en Vite el env de proceso le gana al archivo
+ * `.env`; es el mismo orden que usa Vite al resolver `import.meta.env`.
+ */
+function assertApiUrlConfigured(
+	command: string,
+	root: string,
+	mode: string,
+): void {
+	if (command !== "serve") return;
+	const fromFile = loadEnv(mode, root, "VITE_");
+	const error = apiUrlStartupError(
+		process.env.VITE_API_URL ?? fromFile.VITE_API_URL,
+	);
+	if (error) throw error;
+}
+
+const config = defineConfig(({ command, mode }) => {
+	assertApiUrlConfigured(command, process.cwd(), mode);
+
+	return {
+		resolve: { tsconfigPaths: true },
+		server: {
+			watch: {
+				usePolling: true,
+			},
 		},
-	},
-	optimizeDeps: {
-		include: ["@0xc1x/role-commons"],
-	},
-	plugins: [
-		devtools(),
-		nitro(),
-		tailwindcss(),
-		tanstackStart(),
-		viteReact(),
-		seoFiles(),
-	],
+		optimizeDeps: {
+			include: ["@0xc1x/role-commons"],
+		},
+		plugins: [
+			devtools(),
+			nitro(),
+			tailwindcss(),
+			tanstackStart(),
+			viteReact(),
+			seoFiles(),
+		],
+	};
 });
 
 export default config;

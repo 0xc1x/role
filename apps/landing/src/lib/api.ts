@@ -4,7 +4,11 @@
  */
 import { env } from "./env";
 
-const API_URL = env.VITE_API_URL ?? "http://localhost:4001/api/v1";
+// Sin default: ver el motivo en `env.ts`. En el server la ausencia ya es un
+// error de arranque, así que acá solo se evita inventar un destino. En el
+// cliente una build sin la var deja las peticiones relativas y el fallo se ve
+// en la pestaña Network, en vez de pegarle a un localhost que nadie eligió.
+const API_URL = env.VITE_API_URL ?? "";
 
 export function apiUrl(): string {
 	return API_URL;
