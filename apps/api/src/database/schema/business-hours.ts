@@ -18,9 +18,12 @@ import { dayOfWeekEnum } from './enums';
  * can see any schedule). Nothing in the API declared it, which is exactly why the
  * public storefront had to be assembled from two of its three parts.
  *
- * MIRROR GAP: this table is declared here and created by the test harness, but it
- * is NOT in the checked-in `drizzle/` migration folders — see the note in
- * `test/db.ts`. The live table is the one from
+ * DECLARED IN THE SCHEMA, SO THE TEST DATABASE GETS IT FROM THE MIRROR. This
+ * used to be a hand-written `create table if not exists` in `test/db.ts`
+ * alongside a `pgTable` here, and the two raced: the mirror emitted its own
+ * `CREATE TABLE` first, `if not exists` downgraded the harness copy to a
+ * NOTICE, and the table existed by accident of which statement ran first. The
+ * live table is the one from
  * `supabase/migrations/20260507193215_create_businesses_and_locations.sql`; this
  * declaration is that table, not a redesign of it.
  *

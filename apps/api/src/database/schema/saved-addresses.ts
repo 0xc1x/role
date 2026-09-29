@@ -25,23 +25,25 @@ import { profiles } from './profiles';
  * so these owner-scoped routes widen nothing: the API can only ever do what the
  * calling user's own policy already allowed.
  *
- * MIRROR GAP: this table is declared here and created by the test harness, but it
- * is NOT in the checked-in `drizzle/` migration folders — see the note in
- * `test/db.ts`. This declaration mirrors the live `public.saved_addresses`; it is
- * not a redesign of it. Two objects the live table has are NOT declared here:
+ * DECLARED IN THE SCHEMA, SO THE TEST DATABASE GETS IT FROM THE MIRROR. This
+ * used to be a hand-written `create table if not exists` in `test/db.ts`
+ * alongside a `pgTable` here, and the two raced: the mirror emitted its own
+ * `CREATE TABLE` first, `if not exists` downgraded the harness copy to a
+ * NOTICE, and the table existed by accident of which statement ran first. This
+ * declaration mirrors the live `public.saved_addresses`; it is not a redesign of
+ * it. Two objects the live table has are NOT declared here:
  *
  *   idx_saved_addresses_user   INDEX (user_id)
  *   set_saved_addresses_updated_at   BEFORE UPDATE trigger
  *
  * The index is the one that serves every read in the module — the service only
- * ever queries `where user_id = $1` — and it is left undeclared for the same
- * reason `favorites_user_id_offer_id_key` and
- * `user_preferences_user_id_key` are: this package generates migrations under
- * `drizzle/`, and declaring an object the live database already has would make
- * `drizzle-kit generate` emit DDL that fails on apply. The trigger is the
- * reason the repository also writes `updated_at` explicitly: the mirror-based
- * test database has no triggers, and setting it here is what every other
- * repository in this API does anyway.
+ * ever queries `where user_id = $1` — and it is left to the harness for the same
+ * reason `favorites_user_id_offer_id_key` and `user_preferences_user_id_key` are
+ * kept there: it is a secondary access path, not part of the table's shape, and
+ * declaring it in both places would be a 42P07 the moment either side moved.
+ * The trigger is the reason the repository also writes `updated_at` explicitly:
+ * the mirror-based test database has no triggers, and setting it here is what
+ * every other repository in this API does anyway.
  *
  * INVARIANT — enforced in the DATABASE, and deliberately NOT declared in this
  * mirror. At most one row per user with `is_default = true`, held by

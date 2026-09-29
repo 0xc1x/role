@@ -110,19 +110,25 @@ export async function createTestDb(): Promise<TestDbContext> {
     await client.unsafe(parts.slice(i, i + 25).join(';\n'));
   }
 
-  // The checked-in Drizzle mirror intentionally omits Supabase functions,
-  // triggers, RLS and PostGIS. Install only the reservation/order primitives
-  // exercised by DB specs so those tests do not pass on trigger-less tables.
-  // PostGIS is the odd one out: it is not patched into the mirror's tables but
-  // into the DATABASE (see item 5 below), because the whole point of the geo
-  // path of GET /offers is to be executed, not to be compiled.
+  // The Drizzle mirror intentionally omits Supabase functions, triggers, RLS
+  // and PostGIS. Install only the reservation/order primitives exercised by DB
+  // specs so those tests do not pass on trigger-less tables. PostGIS is the odd
+  // one out: it is not patched into the mirror's tables but into the DATABASE
+  // (see item 6 below), because the whole point of the geo path of GET /offers
+  // is to be executed, not to be compiled.
   //
   // Not repeated here, because the mirror already carries them and re-adding
   // raises 42P07: the composite unique on business_locations(id, business_id),
-  // the offers_location_business_fkey composite foreign key, and the orders
-  // idempotency_key column. What remains is the check constraint, the partial
-  // unique index, the sequence, and the functions and triggers that Drizzle
-  // cannot model.
+  // the offers_location_business_fkey composite foreign key, the orders
+  // idempotency_key column, `offers.is_active DEFAULT false` (an `alter column
+  // set default` that used to be repeated here — idempotent, so it never
+  // errored, but it hid the fact that the mirror already carried the default),
+  // and every TABLE — including the `payment_methods_exp_month_check` and
+  // `payment_methods_last4_check` CHECKs, which are declared as table-level
+  // `.check()` in the schema for exactly the reason spelled out in the block
+  // below. What remains is the orders idempotency CHECK, the partial unique
+  // indexes, the sequence, and the functions and triggers that Drizzle cannot
+  // model.
   //
   // Two more that the live database does have and the mirror does not: the
   // unique constraints behind `user_preferences_user_id` and
@@ -147,87 +153,66 @@ export async function createTestDb(): Promise<TestDbContext> {
   // the service-level half of the promise. See the MIRROR GAP note in
   // src/database/schema/coupons.ts for why the constraint is not declared there.
   //
-  // ─── Object-shape gap: the review, schedule and geo objects ────────────
+  // ─── Object-shape gap: indexes and geo ──────────────────────────────────
   //
-  // Everything above is a CONSTRAINT or a FUNCTION the mirror declares the
-  // columns of. The blocks below are different: the mirror does not declare
-  // these objects AT ALL, and the specs that exercise the public storefront,
-  // the review feeds and the geo search need them to exist.
+  // Everything above is a CONSTRAINT or a FUNCTION over columns the mirror
+  // declares. The block below is different: the mirror does not declare these
+  // INDEXES at all, and the specs that exercise the public review feeds and the
+  // address book need them to exist.
   //
   // They are installed here rather than generated into `drizzle/` on purpose.
   // The live database is owned by Supabase and the Drizzle folders are an
   // offline mirror of it (`drizzle.config.ts`: "Supabase owns DDL. Use
-  // pull/introspect only — do not push migrations from the API"), so a
-  // hand-written CREATE TABLE in a migration folder would claim the API applied
-  // DDL it never applied, and `drizzle-kit generate` is the only sanctioned way
-  // to grow that mirror. Copying an existing Supabase object into the harness
-  // keeps the change to the one file that already documents this class of gap.
+  // pull/introspect only — do not push migrations from the API"), and
+  // `drizzle-kit generate` is the only sanctioned way to grow that mirror.
   //
-  // What each block is and why a spec cannot do without it:
+  // TABLES AND CHECK CONSTRAINTS ARE NOT IN THIS CLASS ANYMORE. They used to
+  // be: `business_hours`, `saved_addresses` and `payment_methods` each had a
+  // hand-written `create table if not exists` here alongside their declaration
+  // in the schema. The mirror emits its own `CREATE TABLE` first, the `if not
+  // exists` made the harness copy a silent no-op (a NOTICE, not an error), and
+  // for `payment_methods` that silently dropped the two CHECK constraints —
+  // which is the only thing in the schema that can keep `exp_month = 0` or a
+  // three-character `last4` out. Three specs caught it; the 2204 that did not
+  // look could not have. The tables and those CHECKs are declared in
+  // `src/database/schema/` and generated like everything else now, so the two
+  // can no longer disagree.
   //
-  //  1. `reviews` moderation columns. The mirror was pulled before
-  //     `20260927021015_reviews_moderation_soft_hide.sql` added `is_hidden`,
-  //     `moderated_at`, `moderated_by` and `hidden_reason` (only the later
-  //     `moderation_reason` column is in a Drizzle folder). A feed that filters
-  //     `is_hidden = false` would fail with 42703, and a spec that could not
-  //     write a hidden row could not prove that a hidden row stays out of a
-  //     public feed — the single behaviour the moderation policy exists for.
-  //  2. The three `reviews` partial indexes. The public feed's whole cost story
-  //     is `idx_reviews_visible_business_created (business_id, created_at desc)
+  // What each block below is, and why a spec cannot do without it:
+  //
+  //  1. The four `reviews` indexes. The public feed's whole cost story is
+  //     `idx_reviews_visible_business_created (business_id, created_at desc)
   //     where is_hidden = false`; without it the harness cannot show that the
   //     feed and its count are served by that index instead of a sequential
-  //     scan. `idx_reviews_user` is here for the same reason on the "my" feed.
-  //  3. `business_hours`. The table has existed in Supabase since the businesses
-  //     migration and the mobile reads it straight from PostgREST, but the API
-  //     never declared it, so the storefront's schedule had no way to be read.
-  //     See the MIRROR GAP note in src/database/schema/business-hours.ts.
-  //  4. `saved_addresses`. The consumer address book, managed by mobile
-  //     straight through PostgREST and by the API's owner-scoped routes. Same
-  //     shape of gap as `business_hours`: the table is real in Supabase, nothing
-  //     in `drizzle/` declares it, and the specs that exercise the default-flag
-  //     transaction need it to exist. Its `idx_saved_addresses_user` is installed
-  //     with it because every read in the module is `where user_id = $1`; the
-  //     live `set_saved_addresses_updated_at` trigger is deliberately NOT copied
-  //     — the repository writes `updated_at` explicitly, as every other
-  //     repository here already does. See the MIRROR GAP note in
+  //     scan. `idx_reviews_user` is here for the same reason on the "my" feed,
+  //     `idx_reviews_order_id` because the order-detail view joins through it.
+  //     (The `reviews` moderation COLUMNS — `is_hidden`, `moderated_at`,
+  //     `moderated_by`, `hidden_reason`, `moderation_reason` — are declared in
+  //     `src/database/schema/reviews.ts` and come from the mirror; a feed that
+  //     filters `is_hidden = false` needs them, and a spec that could not write
+  //     a hidden row could not prove that a hidden row stays out of a public
+  //     feed, which is the single behaviour the moderation policy exists for.)
+  //  2. `idx_saved_addresses_user`. Every read in the address-book module is
+  //     `where user_id = $1`. The live `set_saved_addresses_updated_at` trigger
+  //     is deliberately NOT copied — the repository writes `updated_at`
+  //     explicitly, as every other repository here already does. See the note in
   //     src/database/schema/saved-addresses.ts.
+  //  3. `idx_payment_methods_user`, and it is NOT unique: production has no
+  //     unique constraint on `(user_id)`. Index-only, for the same reason as 2 —
+  //     the table, its columns and its two CHECK constraints all come from the
+  //     mirror, the CHECKs through the table-level `.check()` in
+  //     src/database/schema/payment-methods.ts.
   //
-  //  5. `payment_methods`. The tokenized-card table, read and written by mobile
-  //     through PostgREST and served by the API's owner-scoped routes. Same
-  //     shape of gap again, and the reason it is NOT a bare `create table` is
-  //     the two CHECKs, which are the only thing in the schema able to keep
-  //     `exp_month = 0`, `exp_month = 13` or a `last4` that is not four
-  //     characters out of the table:
-  //
-  //       payment_methods_exp_month_check   CHECK (exp_month >= 1 AND exp_month <= 12)
-  //       payment_methods_last4_check       CHECK (char_length(last4) = 4)
-  //
-  //     Drizzle cannot express a CHECK here without a schema-level `.check()`,
-  //     and a schema-level `.check()` is DDL that `drizzle-kit generate` would
-  //     emit for constraints production has held since
-  //     `20260822231809_commissions_payouts_payment_methods` — see the MIRROR
-  //     GAP note in src/database/schema/payment-methods.ts. So they are installed
-  //     here, in the harness's own DDL, and the payment-methods specs assert
-  //     they are really there: a harness that dropped them would let exactly the
-  //     bad rows production forbids into the test database and the suite would
-  //     be green.
-  //
-  //     `gateway_token` is declared because the COLUMN exists — the row is what
-  //     the database holds, and the PCI rule is a rule about the projection, not
-  //     about storage. What the specs pin is that it never reaches a response.
-  //
-  //     `idx_payment_methods_user` is installed with the table, and it is NOT
-  //     unique: production has no unique constraint on `(user_id)`. Production
-  //     DOES now have `idx_payment_methods_one_default` — the partial unique
-  //     index `20260928040349_payment_methods_one_default` added — and it is
-  //     deliberately NOT installed here, for the same reason
+  //     Production DOES have `idx_payment_methods_one_default` — the partial
+  //     unique index `20260928040349_payment_methods_one_default` added — and it
+  //     is deliberately NOT installed here, for the same reason
   //     `20260927141632_saved_addresses_one_default`'s index is not installed
-  //     with `saved_addresses` above: a spec that wants to observe the API's own
-  //     clear-then-set transaction has to be able to produce the state the
-  //     transaction exists to prevent. With the index present, every "two
-  //     defaults are writable" assertion becomes a 23505 and the transaction is
-  //     never exercised. The specs that assert it say explicitly that they are
-  //     pinning the HARNESS and not production.
+  //     either: a spec that wants to observe the API's own clear-then-set
+  //     transaction has to be able to produce the state the transaction exists to
+  //     prevent. With the index present, every "two defaults are writable"
+  //     assertion becomes a 23505 and the transaction is never exercised. The
+  //     specs that assert it say explicitly that they are pinning the HARNESS and
+  //     not production.
   //
   //     NO `updated_at` TRIGGER, deliberately and verified: no trigger maintains
   //     `updated_at` on the live `public.payment_methods`. The only two
@@ -239,26 +224,13 @@ export async function createTestDb(): Promise<TestDbContext> {
   //     giving the test database a trigger production does not have would let a
   //     stale `updated_at` pass for the right reason.
   //
-  // All five are `if not exists` because the harness runs per spec file against
-  // a fresh database: the idempotence is there so a future mirror that DOES
-  // carry them does not raise 42P07 or 42701 and take the whole suite down.
+  // These indexes are NOT wrapped in `if not exists` for the sake of symmetry
+  // with anything: an index declared in both the schema and here is a 42P07
+  // waiting for the next run, and `if not exists` would downgrade it to a
+  // NOTICE nobody reads. If one of these ever moves into the schema, delete it
+  // from this file in the same change — that is the whole point of the note
+  // above.
   await client.unsafe(`
-    do $$
-    begin
-      if not exists (
-        select 1 from information_schema.columns
-        where table_schema = 'public' and table_name = 'reviews'
-          and column_name = 'is_hidden'
-      ) then
-        alter table public.reviews
-          add column is_hidden boolean not null default false,
-          add column moderated_at timestamp with time zone,
-          add column moderated_by uuid references public.profiles (id) on delete set null,
-          add column hidden_reason text;
-      end if;
-    end
-    $$;
-
     create index if not exists idx_reviews_visible_business_created
       on public.reviews (business_id, created_at desc)
       where is_hidden = false;
@@ -270,69 +242,8 @@ export async function createTestDb(): Promise<TestDbContext> {
     create index if not exists idx_reviews_order_id
       on public.reviews (order_id);
 
-    create table if not exists public.business_hours (
-      id uuid primary key default gen_random_uuid(),
-      business_id uuid not null references public.businesses (id) on delete cascade,
-      day public.day_of_week not null,
-      open_time time not null,
-      close_time time not null,
-      is_closed boolean not null default false,
-      created_at timestamp with time zone not null default now(),
-      updated_at timestamp with time zone not null default now(),
-      constraint business_hours_business_id_day_key unique (business_id, day)
-    );
-
-    create table if not exists public.saved_addresses (
-      id uuid primary key default gen_random_uuid(),
-      user_id uuid not null references public.profiles (id) on delete cascade,
-      label text not null,
-      address text not null,
-      latitude numeric not null,
-      longitude numeric not null,
-      is_default boolean not null default false,
-      created_at timestamp with time zone not null default now(),
-      updated_at timestamp with time zone not null default now(),
-      "type" text not null default 'home',
-      -- "references" is a reserved word: unquoted it is a syntax error (42601).
-      "references" text,
-      housing_type text
-    );
     create index if not exists idx_saved_addresses_user
       on public.saved_addresses (user_id);
-
-    -- The tokenized-card table. Columns and types are the live ones; the two
-    -- CHECK constraints are the load-bearing part (see item 5 above) and are
-    -- inline here because Drizzle cannot carry them into this mirror.
-    --
-    -- gateway is written with the bare payment_gateway enum, which this
-    -- harness does have: the enums arrive with the drizzle/ mirror DDL.
-    -- user_id references public.profiles rather than auth.users, matching the
-    -- Drizzle mirror's own documented divergence -- auth.users does not exist
-    -- on a bare Postgres, which is the same reason the harness strips
-    -- REFERENCES auth.users out of the mirror DDL above.
-    --
-    -- No backticks in this comment on purpose: the SQL below lives inside a
-    -- JS template literal, so one of them would end the string.
-    create table if not exists public.payment_methods (
-      id uuid primary key default gen_random_uuid(),
-      user_id uuid not null references public.profiles (id) on delete cascade,
-      gateway payment_gateway not null default 'place_to_pay',
-      gateway_token text not null,
-      brand text not null,
-      last4 text not null,
-      exp_month int not null,
-      exp_year int not null,
-      holder_name text not null,
-      is_default boolean not null default false,
-      active boolean not null default true,
-      created_at timestamp with time zone not null default now(),
-      updated_at timestamp with time zone not null default now(),
-      deleted_at timestamp with time zone,
-      constraint payment_methods_exp_month_check
-        check (exp_month >= 1 and exp_month <= 12),
-      constraint payment_methods_last4_check
-        check (char_length(last4) = 4)
-    );
     create index if not exists idx_payment_methods_user
       on public.payment_methods (user_id);
   `);
@@ -444,8 +355,6 @@ export async function createTestDb(): Promise<TestDbContext> {
     -- here instead of declared in the mirror.
     alter table public.coupons
       add constraint coupons_business_id_code_key unique (business_id, code);
-    alter table public.offers
-      alter column is_active set default false;
     alter table public.orders
       add constraint orders_idempotency_key_length
       check (
