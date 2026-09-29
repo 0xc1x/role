@@ -7,20 +7,20 @@
  * `page.route()` intercepts requests made BY THE BROWSER. The admin's auth calls
  * are not made by the browser: `features/auth/server.ts` wraps them in
  * `createServerFn`, so the browser POSTs to the `_serverFn` path on its own
- * origin and the Vite SERVER process is the one that calls the API. Two section
- * routes are the same — `_layout.pagos.tsx` and `_layout.categorias.tsx` declare
- * a route `loader`, and loaders run during SSR.
+ * origin and the Vite SERVER process is the one that calls the API.
  *
- * All three were measured, not assumed: with a `page.route()` handler installed
- * for the whole API surface, a full login and a visit to `/pagos` produced hits
- * only for `/auth/me`, while this server logged the login POST, `GET /payouts`
- * and `GET /categories/admin`.
+ * That was measured, not assumed: with a `page.route()` handler installed for
+ * the whole API surface, a full login produced hits only for `/auth/me`, while
+ * this server logged the login POST.
  *
- * So the two boundaries are:
+ * `/payouts` and `/categories/admin` were the same case until their route
+ * `loader`s were removed — loaders run during SSR, so the Vite server fetched
+ * them and `page.route()` never saw either request. They no longer do, so the
+ * split is now:
  *
  * | caller                        | who fetches   | how it is stubbed  |
  * | ----------------------------- | ------------- | ------------------ |
- * | auth, `/payouts`, `/categorias/admin` | Vite server | this file    |
+ * | auth                          | Vite server   | this file          |
  * | everything else in the panel  | the browser   | `page.route()`     |
  *
  * Both halves import the SAME payload table (`fixtures/api-fixtures.ts`), so they
@@ -34,6 +34,7 @@
 import {
 	ADMIN_EMAIL,
 	ADMIN_PASSWORD,
+	failureSentinelFor,
 	respondTo,
 } from "./fixtures/api-fixtures";
 
@@ -97,13 +98,40 @@ const port = Number(process.env.ADMIN_E2E_STUB_PORT ?? 4110);
 Bun.serve({
 	port,
 	async fetch(req) {
-		const path = new URL(req.url).pathname.replace(/^\/api\/v1/, "");
+		const url = new URL(req.url);
+		const path = url.pathname.replace(/^\/api\/v1/, "");
 
 		// Playwright's `webServer` polls this before running a single spec.
 		if (path === "/__health") return Response.json({ ok: true });
 
 		if (req.method === "OPTIONS") {
 			return new Response(null, { status: 204, headers: CORS });
+		}
+
+		// ─── The deliberate outage, on the boundary that can produce it ───────
+		//
+		// `page.route()` cannot reach a server-function or a route-`loader`
+		// fetch, so a browser-only stub cannot express "the API is down" for
+		// those. That gap is not hypothetical: it is exactly why a `loader` on
+		// `/pagos` or `/categorias` could blank the entire panel with no test able
+		// to see it. MEASURED with a probe spec — with the `loader` restored,
+		// `page.route()` still saw the browser issue `GET /payouts` and the
+		// section rendered its own "Reintentar", because the browser query is not
+		// the one that dies. The test passed against the exact defect it was
+		// written for.
+		//
+		// The predicate lives in the shared table and is consulted by BOTH halves
+		// of the stub, so the outage means the same thing whichever side fetches.
+		// Keying it on a SENTINEL FILTER rather than a global switch is what
+		// keeps the suite parallel-safe: this server is shared by every worker,
+		// so a boolean one spec flipped would blank the panel inside an unrelated
+		// spec running at the same moment. See `failureSentinelFor` for why the
+		// sentinel has to be a value the real contract already accepts.
+		if (failureSentinelFor(path, url.searchParams)) {
+			return Response.json(
+				{ message: "stub-api: deliberate outage sentinel" },
+				{ status: 500, headers: CORS },
+			);
 		}
 
 		if (path === "/auth/login" && req.method === "POST") {

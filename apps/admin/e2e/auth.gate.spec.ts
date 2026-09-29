@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { stubApi, waitForLoginForm } from "./support/admin";
+import { stubApi, waitForGuardDecision, waitForLoginForm } from "./support/admin";
 
 /**
  * The authentication gate of the whole panel.
@@ -132,10 +132,39 @@ test("a protected section never renders its content for an anonymous browser", a
  * The security property above this test still holds: the fixture row and the
  * section heading are asserted absent, so "we now redirect the anonymous user"
  * can never be satisfied by "we now leak the panel to everyone".
+ *
+ * ─── And then the test itself went flaky, which is a second bug ─────────────
+ *
+ * With the gate fixed, this test was green 6 of 6 in isolation and red 5 of 6
+ * under three-way contention — with the changes stashed, so it is PRE-EXISTING
+ * and not something the section work introduced. The cause is a race, not a
+ * regression: the redirect is driven by a `useEffect`, so under a loaded box
+ * "the URL says /login" and "the guard has decided" are two different moments,
+ * and the default 5 s `toHaveURL` budget expires between them.
+ *
+ * The temptation was to make the suite slower instead — capping workers so the
+ * race stops appearing. That trades a real 2.2 m → 3.0 m for a symptom nobody
+ * can explain when it comes back, so the fix belongs in the WAIT, not in the
+ * scheduler: `waitForGuardDecision` gates on React having committed the login
+ * form, which is downstream of the guard's decision and cannot be reached by
+ * server-rendered markup. See its comment in `support/admin.ts` for the
+ * measurements, including why the landing's own `/api/v1/` gate has no analogue
+ * on this route and would simply hang here.
  */
 test("an anonymous deep-link reaches the login form", async ({ page }) => {
 	await stubApi(page);
 	await page.goto("/negocios");
+
+	// The TERMINAL condition, and the order is the whole point: the guard has to
+	// have run and decided before either assertion below means anything. Both are
+	// then instant facts about a settled page instead of polls on a URL that is
+	// still mid-redirect.
+	//
+	// `toHaveURL` first, deliberately: it is still the claim being made — an
+	// anonymous deep-link lands on the LOGIN route, not merely on any page with a
+	// password field. It no longer carries the race, because the guard is already
+	// known to have committed its navigation when it runs.
+	await waitForGuardDecision(page);
 
 	await expect(page).toHaveURL(/\/login$/);
 	await expect(

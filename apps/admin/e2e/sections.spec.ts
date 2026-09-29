@@ -70,9 +70,11 @@ test.describe("protected sections", () => {
 			// query resolved, table rendered it — and waiting on it first means the
 			// heading assertion costs nothing, because by then the success branch
 			// has rendered. Asserting the 5 s-default heading first made this flake
-			// under parallel load on the two loader-backed sections (`/pagos`,
-			// `/categorias`), whose data arrives via the Vite server rather than the
-			// browser. 20 s is the SSR-plus-dev-transform budget, not padding.
+			// under parallel load, when `/pagos` and `/categorias` were still
+			// loader-backed and their data arrived via the Vite server rather than
+			// the browser. Both loaders are gone, so every section here now takes
+			// the same path — browser query, `page.route()` stub, same budget — and
+			// 20 s is the dev-transform budget, not padding.
 			await expect(page.getByText(section.row)).toBeVisible({
 				timeout: 20_000,
 			});

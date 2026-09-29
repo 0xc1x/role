@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+import {
+	CATEGORIES_FAILURE_FILTER,
+	PAYOUTS_FAILURE_FILTER,
+} from "./fixtures/api-fixtures";
 import { signIn, stubApi } from "./support/admin";
 
 /**
@@ -206,6 +210,89 @@ test.describe("API failures", () => {
 			).toHaveText("—");
 		}
 	});
+
+	/**
+	 * ─── The two sections that could not fail this test until their loaders went ──
+	 *
+	 * `/pagos` and `/categorias` used to declare a route
+	 * `loader: ensureQueryData(...)`, and a route loader runs during SSR in the
+	 * Vite Node process — so `page.route()` never saw `GET /payouts` or
+	 * `GET /categories/admin`. An override of either path in `stubApi(page, …)`
+	 * was an override nobody consulted, which is worse than no test at all: these
+	 * sections had no error coverage and the suite could not tell, because the
+	 * only way to write that test was to write one that could not fail.
+	 *
+	 * The blank-panel symptom, measured: the loader threw, the throw escaped to
+	 * the route's `errorComponent`, and no route in the panel defines one — so
+	 * TanStack Router's default "Something went wrong!" replaced the ENTIRE
+	 * panel. No sidebar, no section, and none of the "Reintentar" the component
+	 * already implements. The `isError` branch in both components was dead code.
+	 *
+	 * ─── WHY THESE USE A SERVER-SIDE FAILURE, NOT `stubApi(page, …)` ──────────
+	 *
+	 * The first draft of this test overrode the path in `page.route()` and passed
+	 * — WITH THE LOADER STILL RESTORED. A probe spec is the reason: with the
+	 * loader back, `page.route()` saw the browser issue `GET /payouts` and the
+	 * section rendered its own "Reintentar" anyway, because the browser query is
+	 * not the one that dies. The test was green against the precise defect it was
+	 * written for, which is the whole failure mode this test exists to close.
+	 *
+	 * So the 500 is injected on the boundary that can actually produce it: the
+	 * stub SERVER, keyed on a sentinel filter (`stub-api.ts`). Both the SSR
+	 * request and any browser request carrying that filter get a 500, so the
+	 * test now describes the same outage from either side of the loader — and
+	 * removing the loader is what makes it survivable.
+	 *
+	 * The sidebar assertion is the load-bearing one. A `loader` failure replaced
+	 * the whole panel, so "the nav is still there" is the difference between
+	 * "this section reports a failed query" and "the admin panel is gone", and no
+	 * assertion scoped to the section can tell those two apart.
+	 */
+	for (const section of [
+		{
+			path: "/pagos",
+			filter: { business_id: PAYOUTS_FAILURE_FILTER } as Record<string, string>,
+			sidebar: "Pagos",
+		},
+		{
+			path: "/categorias",
+			filter: { search: CATEGORIES_FAILURE_FILTER } as Record<string, string>,
+			sidebar: "Categorias",
+		},
+	] as const) {
+		test(`${section.path} shows its own retry when the API fails, not a blanked panel`, async ({
+			page,
+		}) => {
+			await stubApi(page);
+			await signIn(page);
+
+			// The sentinel travels in the URL, so it reaches the loader's fetch on
+			// the server AND the component's query in the browser. That symmetry is
+			// the point: the same outage, described once, must be survivable either way.
+			const query = new URLSearchParams(section.filter).toString();
+			await page.goto(`${section.path}?${query}`);
+
+			// Same 20 s reasoning as the negocios case above: `createListOptions`
+			// sets no `retry`, so React Query's 3 retries delay the error state by
+			// roughly 1 s + 2 s + 4 s of backoff.
+			await expect(
+				page.getByRole("button", { name: "Reintentar" }),
+				`${section.path} left the operator with no way forward`,
+			).toBeVisible({ timeout: 20_000 });
+
+			// The defect itself, and the assertion that would have caught it.
+			await expect(
+				page.getByRole("link", { name: section.sidebar }),
+				`${section.path} blanked the entire panel instead of showing its error state`,
+			).toBeVisible();
+
+			// And the error is the SECTION's, not a router-level one.
+			await expect(
+				page.getByText("Something went wrong!"),
+				`${section.path} escaped to the router error boundary`,
+			).toHaveCount(0);
+		});
+	}
 
 	/**
 	 * A failure in one card must not take the dashboard down with it.
