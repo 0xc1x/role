@@ -1,5 +1,11 @@
 import * as Sentry from "@sentry/react-native";
-import { Stack, useRouter } from "expo-router";
+import {
+	Redirect,
+	Stack,
+	usePathname,
+	useRouter,
+	useSegments,
+} from "expo-router";
 import {
 	DefaultTheme,
 	ThemeProvider as NavigationThemeProvider,
@@ -43,6 +49,8 @@ if (Platform.OS === "web") {
 }
 import "../global.css";
 import { ThemeProvider, useTheme } from "@/src/core/theme";
+import { LoadingView } from "@/src/core/ui";
+import { decideSharedRoute } from "@/src/core/routing/shared-routes";
 import { queryClient } from "@/src/core/query/client";
 import { analytics } from "@/src/core/analytics";
 import { appConfigQueryOptions } from "@/src/features/config";
@@ -266,6 +274,37 @@ function ThemedRootStack() {
 		}),
 		[colors, scheme],
 	);
+
+	// ─── Desempate de las rutas que dos grupos reclaman ──────────────────────
+	//
+	// `/orders` la escriben `app/(consumer)/orders.tsx` y
+	// `app/(business)/orders.tsx`: los grupos de paréntesis no van en la URL, así
+	// que en web las dos hojas son la MISMA ruta y el router se queda con una.
+	// Ganaba el grupo `(business)`, de modo que el link de "mis pedidos" de un
+	// email — y el deep link de una orden — le caía a un consumer en el panel de
+	// negocio, cuyo guard de rol lo expulsaba a la home sin explicación.
+	//
+	// Aquí, y no en `app/(business)/_layout.tsx`, porque el layout del grupo se
+	// monta un commit TARDE que el router: para entonces su `<Tabs>` (sin ruta
+	// `index`) ya escribió `/management` en el history y `useSegments()` todavía
+	// no tiene hoja, así que el deep link original ya no se puede leer. La
+	// medición está en `src/core/routing/shared-routes.ts`.
+	//
+	// La política (qué rutas colisionan y a quién le tocan) vive en ese módulo,
+	// que es puro y tiene test; aquí sólo se aplica.
+	const sharedRoute = decideSharedRoute(usePathname(), useSegments(), {
+		role: useAuthStore((s) => s.profile?.role),
+		sessionResolved: useAuthStore((s) => s.initialized),
+	});
+
+	// Esperar por el rol SÓLO en una ruta compartida. Cualquier otro path se
+	// sirve en su primer render, como siempre. Sin esto habría que adivinar, y
+	// adivinar mal significa mandarle al panel de negocio.
+	if (sharedRoute.kind === "wait") return <LoadingView />;
+	if (sharedRoute.kind === "redirect") {
+		return <Redirect href={sharedRoute.href} />;
+	}
+
 	return (
 		<NavigationThemeProvider value={navigationTheme}>
 			<Stack
