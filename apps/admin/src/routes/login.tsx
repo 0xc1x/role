@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { LoginForm, redirectIfAuthenticated } from "@/features/auth";
+import {
+	LoginForm,
+	redirectIfAuthenticated,
+	useRequireGuest,
+} from "@/features/auth";
 
 /**
  * `from` es la ruta donde se cayó la sesión (ver `lib/api/session-expiry.ts`).
@@ -42,6 +46,8 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
 	const { from, reason } = Route.useSearch();
+	// Cubre la hidratación, que es donde `beforeLoad` no llega.
+	useRequireGuest();
 	return (
 		<div className="flex justify-center items-center min-h-screen">
 			<LoginForm sessionExpired={reason === "expired"} returnTo={from} />
