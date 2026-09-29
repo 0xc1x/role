@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { FormDrawer } from "@/components/resource/form-drawer";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CampaignFields } from "@/features/email/components/campaign-fields";
 import { CampaignRowCard } from "@/features/email/components/campaign-row-card";
@@ -11,7 +12,7 @@ import {
 	useEmailSegments,
 	useEmailTemplates,
 } from "@/features/email/queries/emails.queries";
-import { notifyMutationError } from "@/lib/api/notify";
+import { formatApiError, notifyMutationError } from "@/lib/api/notify";
 
 export const Route = createFileRoute("/_layout/campanas/mails")({
 	component: CampaignsPage,
@@ -27,6 +28,35 @@ function CampaignsPage() {
 	const mutations = useCampaignMutations();
 
 	if (list.isLoading || templates.isLoading) return <Loading />;
+
+	// Una consulta fallida tiene que decir que falló. `list.data?.data ?? []`
+	// convierte un 500 en "no hay campañas de email", que el operador lee como un
+	// hecho y sobre el que decide si relanza o no. Es el mismo estado inline
+	// que el resto del panel ya resuelve, con su "Reintentar".
+	if (list.isError || templates.isError) {
+		return (
+			<div className="px-6 py-4">
+				<h1 className="font-bold text-xl">Campañas de Marketing</h1>
+				<div className="mt-4 space-y-4">
+					<p className="text-destructive">
+						{formatApiError(
+							list.error ?? templates.error,
+							"Error al cargar campañas",
+						)}
+					</p>
+					<Button
+						variant="outline"
+						onClick={() => {
+							void list.refetch();
+							void templates.refetch();
+						}}
+					>
+						Reintentar
+					</Button>
+				</div>
+			</div>
+		);
+	}
 
 	const campaigns = list.data?.data ?? [];
 

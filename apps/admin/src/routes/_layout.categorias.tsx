@@ -14,7 +14,6 @@ import {
 import {
 	CategoryCreateDrawer,
 	categoriesColumns,
-	categoriesListOptions,
 	useCategoriesList,
 } from "@/features/categories";
 import { formatApiError } from "@/lib/api/notify";
@@ -23,11 +22,27 @@ const categoriesSearchSchema = ListCategoriesQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 });
 
+/**
+ * SIN `loader` A PROPÓSITO — el mismo motivo documentado en `_layout.cupones.tsx`
+ * y `_layout.contactos.tsx`.
+ *
+ * Este route sí tenía
+ * `loader: ensureQueryData(categoriesListOptions(deps))`, y con
+ * `/categories/admin` en 500 el fallo del loader escapaba al `errorComponent`
+ * (que ninguna ruta define) en vez de entrar a la rama `isError` de
+ * `RouteComponent`, dejando el panel entero sustituido por el "Something went
+ * wrong!" por defecto de TanStack Router — sin barra lateral, sin sección y sin
+ * el "Reintentar" de más abajo. Medido, no supuesto.
+ *
+ * Y el `loader` además hacía que la request la emitiera el proceso Node de Vite
+ * durante el SSR, donde `page.route()` no llega: un override de
+ * `/categories/admin` en `stubApi(page, …)` no lo consultaba nadie, así que el
+ * test de esta sección afirmaba contra el fixture de éxito sin poder ejercitar
+ * el error. Sin `loader`, `useCategoriesList` corre en el navegador y la rama
+ * `isError` es alcanzable desde un test.
+ */
 export const Route = createFileRoute("/_layout/categorias")({
 	validateSearch: (raw) => categoriesSearchSchema.parse(raw),
-	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(categoriesListOptions(deps)),
 	component: RouteComponent,
 	head: () => ({
 		meta: [

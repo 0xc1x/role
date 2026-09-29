@@ -23,17 +23,22 @@ import {
 } from "@/components/ui/select";
 import { slidesColumns } from "@/features/slides";
 import { SlideCreateDrawer } from "@/features/slides/components/slide-create-drawer";
-import {
-	slidesListOptions,
-	useSlideList,
-} from "@/features/slides/queries/slides.queries";
+import { useSlideList } from "@/features/slides/queries/slides.queries";
 import { formatApiError } from "@/lib/api/notify";
 
+/**
+ * SIN `loader` A PROPÓSITO — el mismo motivo documentado en `_layout.resenas.tsx`
+ * y `_layout.cupones.tsx`.
+ *
+ * Con `loader: ensureQueryData(...)` un fallo del API escapa al
+ * `errorComponent` de la ruta en vez de entrar a la rama `isError` de este
+ * componente, y ninguna ruta del panel define `errorComponent`: con
+ * `/slides/admin` en 500 el panel entero se sustituía por el "Something went
+ * wrong!" por defecto de TanStack Router, sin el mensaje de abajo y sin su
+ * "Reintentar". Medido, no supuesto.
+ */
 export const Route = createFileRoute("/_layout/slides")({
 	validateSearch: (raw) => ListSlidesQuerySchema.parse(raw),
-	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(slidesListOptions(deps)),
 	component: RouteComponent,
 	head: () => ({
 		meta: [

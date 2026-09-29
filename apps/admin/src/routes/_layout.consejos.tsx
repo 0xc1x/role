@@ -11,22 +11,25 @@ import {
 	InputGroupAddon,
 	InputGroupInput,
 } from "@/components/ui/input-group";
-import {
-	TipCreateDrawer,
-	tipsColumns,
-	tipsListOptions,
-	useTipsList,
-} from "@/features/tips";
+import { TipCreateDrawer, tipsColumns, useTipsList } from "@/features/tips";
 
 const tipsSearchSchema = ListTipsQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 });
 
+/**
+ * SIN `loader` A PROPÓSITO — el mismo motivo documentado en `_layout.resenas.tsx`
+ * y `_layout.cupones.tsx`.
+ *
+ * Con `loader: ensureQueryData(...)` un fallo del API escapa al
+ * `errorComponent` de la ruta en vez de entrar a la rama `isError` de este
+ * componente, y ninguna ruta del panel define `errorComponent`: con
+ * `/tips/admin` en 500 el panel entero se sustituía por el "Something went
+ * wrong!" por defecto de TanStack Router, sin el mensaje de abajo y sin su
+ * "Reintentar". Medido, no supuesto.
+ */
 export const Route = createFileRoute("/_layout/consejos")({
 	validateSearch: (raw) => tipsSearchSchema.parse(raw),
-	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(tipsListOptions(deps)),
 	component: RouteComponent,
 	head: () => ({
 		meta: [

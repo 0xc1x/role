@@ -12,7 +12,7 @@ import {
 	usePreview,
 	useTemplateMutations,
 } from "@/features/email/queries/emails.queries";
-import { notifyMutationError } from "@/lib/api/notify";
+import { formatApiError, notifyMutationError } from "@/lib/api/notify";
 
 export function TemplatesTab() {
 	const list = useEmailTemplates();
@@ -20,6 +20,23 @@ export function TemplatesTab() {
 	const mutations = useTemplateMutations();
 	const preview = usePreview("template");
 	const [previewId, setPreviewId] = useState<string | null>(null);
+
+	// Una consulta fallida tiene que decir que falló: `list.data?.data ?? []`
+	// convierte un 500 en "no hay plantillas", y el operador leería un fallo de
+	// red como un hecho sobre el catálogo de correo. Mismo estado inline del
+	// resto del panel, con su "Reintentar".
+	if (list.isError) {
+		return (
+			<div className="space-y-4">
+				<p className="text-destructive">
+					{formatApiError(list.error, "Error al cargar plantillas")}
+				</p>
+				<Button variant="outline" onClick={() => void list.refetch()}>
+					Reintentar
+				</Button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="space-y-6">

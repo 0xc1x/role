@@ -21,7 +21,6 @@ import {
 import {
 	CouponCreateDrawer,
 	couponsColumns,
-	couponsListOptions,
 	useCouponsList,
 } from "@/features/coupons";
 import { formatApiError } from "@/lib/api/notify";
@@ -30,11 +29,21 @@ const couponsSearchSchema = ListCouponsQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 });
 
+/**
+ * SIN `loader` A PROPÓSITO — el mismo motivo documentado en `_layout.resenas.tsx`.
+ *
+ * Este route sí tenía `loader: ensureQueryData(couponsListOptions(deps))`, y
+ * medido en el e2e convertía la rama `isError` del componente en código
+ * muerto: el loader corre en el servidor Vite durante el SSR, un fallo ahí
+ * escapa al `errorComponent` de la ruta en vez de entrar al `isError`, y ninguna
+ * ruta del panel define `errorComponent`. Con `/coupons` en 500 el panel
+ * entero se sustituía por el "Something went wrong!" por defecto de TanStack
+ * Router — sin barra lateral, sin el mensaje de este archivo y sin el
+ * "Reintentar" que el operador necesita para reintentar. El componente ya
+ * resuelve los tres estados; el loader era lo que impedía llegar al tercero.
+ */
 export const Route = createFileRoute("/_layout/cupones")({
 	validateSearch: (raw) => couponsSearchSchema.parse(raw),
-	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(couponsListOptions(deps)),
 	component: RouteComponent,
 	head: () => ({
 		meta: [

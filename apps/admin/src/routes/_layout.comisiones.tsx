@@ -15,16 +15,23 @@ import {
 	commissionsApi,
 	commissionsColumns,
 	commissionsCsvColumns,
-	commissionsListOptions,
 	useCommissionsList,
 } from "@/features/commissions";
 import { fetchAllPages } from "@/lib/api/fetch-all-pages";
 
+/**
+ * SIN `loader` A PROPÓSITO — el mismo motivo documentado en `_layout.resenas.tsx`
+ * y `_layout.cupones.tsx`.
+ *
+ * Con `loader: ensureQueryData(...)` un fallo del API escapa al
+ * `errorComponent` de la ruta en vez de entrar a la rama `isError` de este
+ * componente, y ninguna ruta del panel define `errorComponent`: con
+ * `/commissions` en 500 el panel entero se sustituía por el "Something went
+ * wrong!" por defecto de TanStack Router, sin el mensaje de abajo y sin su
+ * "Reintentar". Medido, no supuesto.
+ */
 export const Route = createFileRoute("/_layout/comisiones")({
 	validateSearch: (raw) => ListCommissionsQuerySchema.parse(raw),
-	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(commissionsListOptions(deps)),
 	component: RouteComponent,
 	head: () => ({
 		meta: [

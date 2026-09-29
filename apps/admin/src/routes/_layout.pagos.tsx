@@ -24,7 +24,6 @@ import {
 	payoutsApi,
 	payoutsColumns,
 	payoutsCsvColumns,
-	payoutsListOptions,
 	useGeneratePayouts,
 	usePayoutsList,
 } from "@/features/payouts";
@@ -39,11 +38,28 @@ const pagosSearchSchema = ListPayoutsQuerySchema.extend({
 	limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 });
 
+/**
+ * SIN `loader` A PROPÓSITO — el mismo motivo documentado en `_layout.cupones.tsx`
+ * y `_layout.contactos.tsx`.
+ *
+ * Este route sí tenía
+ * `loader: ensureQueryData(payoutsListOptions(deps))`, y con `/payouts` en 500
+ * el fallo del loader escapaba al `errorComponent` (que ninguna ruta define)
+ * en vez de entrar a la rama `isError` de `RouteComponent`, dejando el panel
+ * entero sustituido por el "Something went wrong!" por defecto de TanStack
+ * Router — sin barra lateral, sin sección y sin el "Reintentar" de más abajo.
+ * Medido, no supuesto.
+ *
+ * La consecuencia para el e2e es la parte que de verdad importa: un `loader`
+ * corre en el proceso Node de Vite durante el SSR, así que la request la hace
+ * el servidor y `page.route()` no la ve. Un override de `/payouts` en
+ * `stubApi(page, …)` era un override que nadie consultaba, y el test de esta
+ * sección afirmaba contra el fixture de éxito sin poder ejercitar el error.
+ * Sin `loader`, `usePayoutsList` corre en el navegador, la request sí pasa por
+ * `page.route()`, y la rama `isError` es alcanzable desde un test.
+ */
 export const Route = createFileRoute("/_layout/pagos")({
 	validateSearch: (raw) => pagosSearchSchema.parse(raw),
-	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(payoutsListOptions(deps)),
 	component: RouteComponent,
 });
 

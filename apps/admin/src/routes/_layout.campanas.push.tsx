@@ -14,6 +14,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { campaignDefaults } from "@/features/email/forms/campaign-forms";
@@ -27,7 +28,7 @@ import { PushCampaignFields } from "@/features/push-notifications/components/pus
 import { PushCampaignRowCard } from "@/features/push-notifications/components/push-campaign-row-card";
 import { PushTestDrawer } from "@/features/push-notifications/components/push-test-drawer";
 import { usePushTemplates } from "@/features/push-notifications/queries/push.queries";
-import { notifyMutationError } from "@/lib/api/notify";
+import { formatApiError, notifyMutationError } from "@/lib/api/notify";
 
 export const Route = createFileRoute("/_layout/campanas/push")({
 	component: PushCampaignsPage,
@@ -46,6 +47,35 @@ function PushCampaignsPage() {
 	const [testing, setTesting] = useState<CampaignDto | null>(null);
 
 	if (list.isLoading || templates.isLoading) return <Loading />;
+
+	// Una consulta fallida tiene que decir que falló. `list.data?.data ?? []`
+	// convierte un 500 en "no hay campañas push", que el operador lee como un
+	// hecho y sobre el que decide si relanza o no. Es el mismo estado inline
+	// que el resto del panel ya resuelve, con su "Reintentar".
+	if (list.isError || templates.isError) {
+		return (
+			<div className="px-6 py-4">
+				<h1 className="font-bold text-xl">Campañas Push</h1>
+				<div className="mt-4 space-y-4">
+					<p className="text-destructive">
+						{formatApiError(
+							list.error ?? templates.error,
+							"Error al cargar campañas push",
+						)}
+					</p>
+					<Button
+						variant="outline"
+						onClick={() => {
+							void list.refetch();
+							void templates.refetch();
+						}}
+					>
+						Reintentar
+					</Button>
+				</div>
+			</div>
+		);
+	}
 
 	const campaigns = list.data?.data ?? [];
 
