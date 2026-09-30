@@ -8,10 +8,12 @@
   },
   "scripts": {
     "dev": "vite dev --port 3001",
+    "dev:fresh": "rm -rf node_modules/.vite && vite dev --port 3001",
+    "clean": "rm -rf node_modules/.vite dist .output",
     "generate-routes": "tsr generate",
     "build": "vite build",
     "format:check": "biome format .",
-    "build:vercel": "NITRO_PRESET=vercel vite build",
+    "build:vercel": "bun run clean && NITRO_PRESET=vercel vite build",
     "deploy": "bun run build:vercel && bunx vercel deploy --prebuilt --prod",
     "preview": "vite preview",
     "test": "bun test src",

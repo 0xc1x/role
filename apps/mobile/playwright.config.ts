@@ -62,8 +62,10 @@ export default defineConfig({
 		// serves it. Chained so Playwright's readiness probe owns both.
 		command: `bun run export:web && node e2e/static-server.mjs ${PORT} dist`,
 		url: BASE_URL,
-		// Cold `expo export --clear` on this machine is ~48 s; the warm path
-		// is ~4 s. 180 s leaves room for a first run on a cold CI runner
+		// `export:web` always runs with `--clear` (Metro ignores EXPO_PUBLIC_*
+		// changes otherwise and a test-env export would poison later prod
+		// bundles, or vice versa). Cold export on this machine is ~48 s;
+		// 180 s leaves room for a first run on a cold CI runner
 		// without turning a genuine hang into a silent pass.
 		timeout: 180_000,
 		stdout: "pipe",

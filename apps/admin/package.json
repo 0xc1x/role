@@ -13,7 +13,7 @@
     "generate-routes": "tsr generate",
     "build": "vite build",
     "format:check": "biome format .",
-    "build:vercel": "NITRO_PRESET=vercel vite build",
+    "build:vercel": "bun run clean && NITRO_PRESET=vercel vite build",
     "preview": "vite preview",
     "test": "bun test src",
     "test:cov": "bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/unit src",
