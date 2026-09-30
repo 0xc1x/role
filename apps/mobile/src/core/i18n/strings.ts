@@ -128,12 +128,8 @@ export const strings = {
 		orSignupWith: "o regístrate con",
 		google: "Google",
 		apple: "Apple",
-		// Los proveedores sociales son una decisión de producto (docs/decisions)
-		// pero el flujo no está conectado: se anuncia como no disponible en vez
-		// de pintar dos botones que parecen vivos y no hacen nada.
-		socialUnavailableLabel: "Próximamente",
-		socialUnavailableBody:
-			"El acceso con Google y Apple todavía no está disponible. Usa tu correo y contraseña.",
+		socialLoginFailed:
+			"No pudimos completar el acceso con tu proveedor. Inténtalo de nuevo.",
 		noAccount: "¿No tienes una cuenta?",
 		signupFree: "Regístrate gratis",
 		haveAccount: "¿Ya tienes una cuenta?",
