@@ -412,3 +412,60 @@ further from the only proof of what ran. The file stays the reviewed version, th
 ledger stays the statement the server stored, and the gap is recorded here —
 the same treatment the `20260925*` files above already have.
 
+## Applied: `20260930234450_bug_reports_and_delivery_axis`
+
+Applied through `apply_migration` on 2026-09-30. `md5sum` of the file is
+`3b302c90f0ae124e5697d5879cdd3263` and that is also the ledger's
+`md5(statements[1])`, so the file and the database agree byte for byte — unlike
+the two entries above it. Nothing was deleted and no backfill ran: the
+migration is additive plus one rename, and no `bug_report` row exists in
+production yet.
+
+Three things in it are not obvious from reading the DDL:
+
+**The rename is of three objects, not one.** `public.app_store.status` became
+`delivery_status`, the type `public.store_entry_status` became
+`public.delivery_status`, and the index `app_store_status_idx` became
+`app_store_delivery_status_idx`. Postgres does not undo a `rename`, so §13 of
+the design treats this as one-way on purpose: the alternative is keeping a
+column called `status` that means one specific thing. The label the admin panel
+already used (`PROCESADO: "Notificado"`) was what the column should have been
+called all along. The two new axes — `state text` and
+`origin public.entry_origin` — are orthogonal, not variants: `delivery_status`
+answers "did the notice reach the team?" and `state` answers "is the bug
+fixed?". Contact messages use only the first and always carry `state = NULL`.
+
+**The bucket is private and that is the point.** `bug_report_images` is
+created with `public = false`, 5 MB and three MIME types, unlike the five
+existing buckets, which are all publicly readable. A bug screenshot can carry
+order contents, addresses and phone numbers, and a public bucket exposes it to
+anyone holding the URL. The two policies on `storage.objects` copy the full form
+of `20260925155445` (lines 66-74) rather than the abbreviated one in §4 of the
+design: `bucket_id`, plus `owner = (select auth.uid())`, plus the first folder
+segment equal to the caller's uid. That is why the admin panel has to ask the
+API for short-lived signed URLs instead of reading the bucket.
+
+**`revoke select on public.app_store from anon, authenticated` travels with
+this migration on purpose.** `20260928184943` revoked only `truncate`,
+`trigger` and `references` from that table, so `SELECT`, `INSERT`, `UPDATE`
+and `DELETE` were all still in the client roles' hands and the only thing
+holding them back was zero policies. The table therefore hung on an
+accident: one GRANT, or one permissive SELECT policy written later for
+convenience, would have made the whole table — the contact inbox included —
+readable to anyone with the anon key, which ships inside the mobile bundle.
+`anon` and `authenticated` no longer hold `SELECT` on `app_store`; `postgres`
+and `service_role` do. The API reads the table over a `postgres` connection
+built from `DATABASE_URL`, not as a client role
+(`apps/api/src/database/database.module.ts:22-25`), and the Edge Functions use
+the service key — the same two facts `20260928181714` rests on, and the reason
+this revoke does not touch them.
+
+The client write path this leaves behind is exactly one INSERT policy,
+"Users submit bug reports", whose `WITH CHECK` pins `namespace`,
+`delivery_status = 'PENDIENTE'`, `state = 'ABIERTO'` and an origin in
+`('ios','android','pwa')`. There is no UPDATE or DELETE policy, so those stay
+denied by RLS: a user can report, never self-triage. Authorship is stamped
+server-side by the `on_bug_report_stamped` BEFORE INSERT trigger
+(`security definer`, `search_path = public`), so `value.reporter_id` is
+whatever `auth.uid()` says and not whatever the client sent.
+
