@@ -5,7 +5,7 @@ import {
 	UpdateEmailSendSchema,
 } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
-import { Fragment } from "react";
+import { type FormEvent, Fragment } from "react";
 import { z } from "zod";
 import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -105,16 +105,17 @@ export function EmailSendForm({
 		? formatApiError(updateMutation.error)
 		: null;
 
+	// SPA admin: TanStack Form owns validation + Query mutation to the REST
+	// API (zod validators, pending via drawer, inline error with requestId).
+	// No hay server action: el preventDefault es el ciclo cliente intencional.
+	const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+		e.preventDefault();
+		e.stopPropagation();
+		form.handleSubmit();
+	};
+
 	return (
-		<form
-			id={formId}
-			onSubmit={(e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				form.handleSubmit();
-			}}
-			className="space-y-4"
-		>
+		<form id={formId} onSubmit={handleSubmit} className="space-y-4">
 			{formError && <p className="text-sm text-destructive">{formError}</p>}
 
 			<ReadOnlyInfo send={send} />

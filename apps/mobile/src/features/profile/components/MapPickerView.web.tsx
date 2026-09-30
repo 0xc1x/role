@@ -88,12 +88,15 @@ export function MapPickerView({
 
 	useEffect(() => {
 		const initial = initialLocationRef.current;
-		if (initial) resolve(initial);
-	}, [resolve]);
-
-	useEffect(() => {
-		if (!initialLocationRef.current) void requestMyLocation();
-	}, [requestMyLocation]);
+		if (initial) {
+			resolve(initial);
+		} else {
+			void requestMyLocation();
+		}
+		// Mount-once bootstrap: lee el valor inicial desde el ref para no
+		// re-dispararse cuando el padre reconstruye el objeto `initialLocation`.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	const handleRegionChange = (next: {
 		latitude: number;
