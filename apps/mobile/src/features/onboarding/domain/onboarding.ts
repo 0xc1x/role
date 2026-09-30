@@ -42,6 +42,37 @@ export const BUSINESS_ONBOARDING_STEPS: readonly OnboardingStep[] = [
 	{ id: "panel" },
 ];
 
+/** Acota un índice de página al rango [0, totalPages - 1]. */
+export function clampPage(index: number, totalPages: number): number {
+	if (totalPages <= 0) return 0;
+	return Math.min(Math.max(index, 0), totalPages - 1);
+}
+
+/**
+ * Índice de página a partir del offset horizontal del pager.
+ *
+ * Es la única fuente de verdad del progreso cuando el avance viene de un
+ * gesto: el índice se deriva del offset en cada `onScroll` (evento que sí
+ * existe en nativo y en web) en vez de esperar a `onMomentumScrollEnd`, que
+ * react-native-web nunca emite. El redondeo al entero más cercano hace que
+ * el paso cambie al cruzar la mitad de la página, es decir, el progreso sigue
+ * al dedo. Se acota con `clampPage` para que el rubber-band del borde o un
+ * offset residual no dejen los puntos fuera de rango.
+ */
+export function pageFromOffset(
+	offsetX: number,
+	pageWidth: number,
+	totalPages: number,
+): number {
+	// Sin ancho medido aún la división no es interpretable: se queda en la
+	// primera página en vez de propagar NaN al estado. `NaN` en el offset
+	// (RN lo emite en algunas transiciones) se filtra por la misma puerta:
+	// si llegara al estado, `page` sería NaN y los puntos nunca marcarían
+	// activo ni el botón mostraría "Siguiente".
+	if (!(pageWidth > 0) || !Number.isFinite(offsetX)) return 0;
+	return clampPage(Math.round(offsetX / pageWidth), totalPages);
+}
+
 /**
  * Prefijo versionado de la clave de storage. v1: si cambia el formato del
  * valor o el ámbito, un bump invalida las marcas viejas sin migración.

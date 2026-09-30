@@ -3,8 +3,10 @@ import {
 	BUSINESS_ONBOARDING_STEPS,
 	CONSUMER_ONBOARDING_STEPS,
 	ONBOARDING_SEEN_KEY_PREFIX,
+	clampPage,
 	onboardingAudience,
 	onboardingSeenKey,
+	pageFromOffset,
 	shouldShowOnboarding,
 } from "@/src/features/onboarding/domain/onboarding";
 
@@ -72,6 +74,53 @@ describe("onboardingSeenKey", () => {
 		expect(onboardingSeenKey("u-1")).toBe(`${ONBOARDING_SEEN_KEY_PREFIX}:u-1`);
 		expect(onboardingSeenKey("u-1")).not.toBe(onboardingSeenKey("u-2"));
 		expect(onboardingSeenKey("u-1")).not.toBe(onboardingSeenKey(null));
+	});
+});
+
+describe("clampPage", () => {
+	test("acota al rango válido", () => {
+		expect(clampPage(0, 3)).toBe(0);
+		expect(clampPage(2, 3)).toBe(2);
+		expect(clampPage(-1, 3)).toBe(0);
+		expect(clampPage(7, 3)).toBe(2);
+	});
+
+	test("sin páginas → 0 (nunca -1)", () => {
+		expect(clampPage(4, 0)).toBe(0);
+		expect(clampPage(-2, 0)).toBe(0);
+	});
+});
+
+describe("pageFromOffset", () => {
+	const W = 390; // ancho de página
+	const TOTAL = 3;
+
+	test("offset en página completa → esa página", () => {
+		expect(pageFromOffset(0, W, TOTAL)).toBe(0);
+		expect(pageFromOffset(W, W, TOTAL)).toBe(1);
+		expect(pageFromOffset(W * 2, W, TOTAL)).toBe(2);
+	});
+
+	test("el progreso cambia al cruzar la mitad, no al soltar", () => {
+		// Este es el fix: el índice sale del offset en cada onScroll, así que
+		// arrastrar a la mitad de la segunda página ya avanza el paso (antes
+		// solo avanzaba el botón, porque web nunca emite momentum).
+		expect(pageFromOffset(W * 0.49, W, TOTAL)).toBe(0);
+		expect(pageFromOffset(W * 0.51, W, TOTAL)).toBe(1);
+	});
+
+	test("arrastre corto que vuelve (snap back) no deja el paso a medias", () => {
+		expect(pageFromOffset(W * 0.4, W, TOTAL)).toBe(0);
+	});
+
+	test("rubber-band del borde queda acotado", () => {
+		expect(pageFromOffset(-40, W, TOTAL)).toBe(0);
+		expect(pageFromOffset(W * 2 + 60, W, TOTAL)).toBe(2);
+	});
+
+	test("ancho sin medir no propaga NaN", () => {
+		expect(pageFromOffset(W, 0, TOTAL)).toBe(0);
+		expect(pageFromOffset(Number.NaN, W, TOTAL)).toBe(0);
 	});
 });
 
