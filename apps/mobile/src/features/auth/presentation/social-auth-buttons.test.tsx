@@ -21,6 +21,7 @@ type ButtonCapture = {
 	loading?: boolean;
 	onPress?: () => Promise<void>;
 	children?: React.ReactNode;
+	icon?: React.ReactElement<{ name?: string }>;
 };
 const renderedButtons: ButtonCapture[] = [];
 const events: string[] = [];
@@ -31,6 +32,10 @@ mock.module("@/src/core/theme", () => ({
 	useTheme: () => ({ colors: light }),
 }));
 mock.module("@/src/core/ui", () => ({ AppText: nativeWeb.Text }));
+mock.module("@expo/vector-icons", () => ({
+	Ionicons: (props: { name?: string }) =>
+		React.createElement(nativeWeb.Text, null, props.name),
+}));
 mock.module("@/components/ui/button", () => ({
 	Button: (props: ButtonCapture) => {
 		renderedButtons.push(props);
@@ -92,6 +97,10 @@ test("renders two enabled provider buttons and no unavailable notice", () => {
 	expect(google.loading).toBe(false);
 	expect(apple.disabled).toBe(false);
 	expect(apple.loading).toBe(false);
+
+	// Brand glyphs, not generic icons: each button carries its provider logo.
+	expect(google.icon?.props.name).toBe("logo-google");
+	expect(apple.icon?.props.name).toBe("logo-apple");
 });
 
 test("success sets the profile and navigates by role", async () => {

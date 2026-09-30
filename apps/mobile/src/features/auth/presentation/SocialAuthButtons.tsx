@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Apple, Globe, X } from "lucide-react-native";
+import { X } from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router, type Href } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 
@@ -105,14 +106,18 @@ export function SocialAuthButtons({ label }: { label: string }) {
 			<View style={styles.providers}>
 				<SocialProviderButton
 					provider="google"
-					icon={<Globe size={18} color={colors.foreground} />}
+					icon={
+						<Ionicons name="logo-google" size={20} color={colors.foreground} />
+					}
 					label={strings.auth.google}
 					pending={pending}
 					onPress={handlePress}
 				/>
 				<SocialProviderButton
 					provider="apple"
-					icon={<Apple size={18} color={colors.foreground} />}
+					icon={
+						<Ionicons name="logo-apple" size={20} color={colors.foreground} />
+					}
 					label={strings.auth.apple}
 					pending={pending}
 					onPress={handlePress}
