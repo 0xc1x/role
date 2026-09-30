@@ -1,5 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { eq, sql } from 'drizzle-orm';
 import { createTestDb, type TestDbContext } from '../../../test/db';
+import {
+  seedBusiness,
+  seedCategory,
+  seedLocation,
+  seedOffer,
+  seedProfile,
+} from '../../../test/seed';
+import {
+  businessModeration,
+  offerCategories,
+  offers,
+} from '../../database/schema';
 import { CategoriesRepository } from './categories.repository';
 
 let ctx: TestDbContext;
@@ -22,22 +35,26 @@ describe('CategoriesRepository (DB real)', () => {
     });
     expect(row.id).toBeDefined();
     expect(await repo.findById(row.id)).toMatchObject({ name: 'Panadería' });
-    expect(await repo.findById('00000000-0000-0000-0000-000000000000')).toBeNull();
+    expect(
+      await repo.findById('00000000-0000-0000-0000-000000000000'),
+    ).toBeNull();
   });
 
   test('findByName y findBySlug respetan excludeId', async () => {
     const a = await repo.insert(ctx.db, { name: 'Café', slug: 'cafe' });
     expect(await repo.findByName('Café')).toMatchObject({ id: a.id });
-    expect(
-      await repo.findByName('Café', { excludeId: a.id }),
-    ).toBeNull();
+    expect(await repo.findByName('Café', { excludeId: a.id })).toBeNull();
     expect(await repo.findBySlug('cafe')).toMatchObject({ id: a.id });
     expect(await repo.findBySlug('cafe', { excludeId: a.id })).toBeNull();
     expect(await repo.findBySlug('no-existe')).toBeNull();
   });
 
   test('list filtra por active/search y pagina', async () => {
-    await repo.insert(ctx.db, { name: 'Frutería', slug: 'fruteria', active: false });
+    await repo.insert(ctx.db, {
+      name: 'Frutería',
+      slug: 'fruteria',
+      active: false,
+    });
     const all = await repo.list({ page: 1, limit: 10 });
     expect(all.total).toBeGreaterThanOrEqual(3);
 
@@ -67,5 +84,202 @@ describe('CategoriesRepository (DB real)', () => {
       repo.insert(tx, { name: 'Tx', slug: 'tx' }),
     );
     expect(await repo.findByName('Tx')).toMatchObject({ id: row.id });
+  });
+});
+
+// ─── `public.active_offer_category_counts` (ADR-0008) ────────────────────────
+//
+// `seedCategory` leaves `active` at its default (true) and `deleted_at` null, so
+// a seeded category is already inside the RPC's `where c.active`. Each test
+// below looks its own category up by id rather than asserting on the whole list,
+// because the database is shared by every test in this file.
+describe('CategoriesRepository.list — active_count (mirror of active_offer_category_counts)', () => {
+  const HOUR = 3_600_000;
+
+  /** An approved business with one active location and `count` live offers. */
+  async function liveOffers(count: number) {
+    const owner = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner);
+    const loc = await seedLocation(ctx.db, biz.id);
+    const rows = [];
+    for (let i = 0; i < count; i++) {
+      rows.push(await seedOffer(ctx.db, biz.id, loc.id));
+    }
+    return { bizId: biz.id, offers: rows };
+  }
+
+  /** Tag every offer with every category id. */
+  async function tag(offers: Array<{ id: string }>, categoryIds: string[]) {
+    for (const categoryId of categoryIds) {
+      for (const offer of offers) {
+        await ctx.db
+          .insert(offerCategories)
+          .values({ offer_id: offer.id, category_id: categoryId });
+      }
+    }
+  }
+
+  const rowFor = async (id: string) =>
+    (await repo.list({ page: 1, limit: 100 })).rows.find((r) => r.id === id);
+
+  test('a category with offers reports the count; an empty one reports 0, not null', async () => {
+    const full = await seedCategory(ctx.db, 'Con ofertas');
+    const empty = await seedCategory(ctx.db, 'Sin ofertas');
+    const { offers: live } = await liveOffers(3);
+    await tag(live, [full.id]);
+
+    const fullRow = await rowFor(full.id);
+    expect(fullRow?.active_count).toBeDefined();
+    // The contract is a NUMBER, and it arrives as a `bigint` string from the
+    // driver — asserted through the mapper's coercion in
+    // categories.mapper.spec.ts, and read as a number here.
+    expect(Number(fullRow?.active_count)).toBe(3);
+
+    // `0`, never `null` and never `undefined`: a chip rendering "0 deals" is
+    // correct, and one rendering nothing because the number was missing is not.
+    const emptyRow = await rowFor(empty.id);
+    expect(emptyRow).toBeDefined();
+    expect(emptyRow?.active_count).not.toBeNull();
+    expect(emptyRow?.active_count).not.toBeUndefined();
+    expect(Number(emptyRow?.active_count)).toBe(0);
+  });
+
+  test('does not count sold-out, paused or closed-window offers', async () => {
+    const cat = await seedCategory(ctx.db, 'Filtros de disponibilidad');
+    const owner = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner);
+    const loc = await seedLocation(ctx.db, biz.id);
+    const soldOut = await seedOffer(ctx.db, biz.id, loc.id, { stock: 0 });
+    const paused = await seedOffer(ctx.db, biz.id, loc.id, {
+      is_active: false,
+    });
+    const closing = await seedOffer(ctx.db, biz.id, loc.id);
+    await ctx.db
+      .update(offers)
+      .set({ pickup_end: new Date(Date.now() - HOUR) })
+      .where(eq(offers.id, closing.id));
+    // One live offer, so the category is present at all and the zeros below are
+    // an exclusion rather than an absent row.
+    const live = await seedOffer(ctx.db, biz.id, loc.id);
+    await tag([soldOut, paused, closing, live], [cat.id]);
+
+    expect(Number((await rowFor(cat.id))?.active_count)).toBe(1);
+  });
+
+  test('a multi-category offer inflates neither the count nor the page', async () => {
+    // The reason the aggregate is a pre-aggregated subquery and not a join on
+    // `offer_categories`: one offer carrying N categories emits N join rows, so
+    // a naive join counts it N times AND — worse — makes `limit`/`offset` apply
+    // to duplicated rows.
+    const one = await seedCategory(ctx.db, ' multicat ');
+    const two = await seedCategory(ctx.db, ' multicat 2');
+    const three = await seedCategory(ctx.db, ' multicat 3');
+    const { offers: live } = await liveOffers(1);
+    await tag(live, [one.id, two.id, three.id]);
+
+    expect(Number((await rowFor(one.id))?.active_count)).toBe(1);
+    expect(Number((await rowFor(two.id))?.active_count)).toBe(1);
+    expect(Number((await rowFor(three.id))?.active_count)).toBe(1);
+
+    // And the ROW COUNT is unaffected: the total comes from a query over
+    // `categories` alone, so it can never be multiplied by the aggregate either.
+    const page = await repo.list({ page: 1, limit: 100 });
+    expect(page.total).toBe(
+      page.rows.length === 100 ? page.total : page.rows.length,
+    );
+    expect(page.rows.length).toBeLessThanOrEqual(100);
+  });
+
+  /**
+   * The moderation gate, measured on BOTH sides and required to agree.
+   *
+   * This used to assert the opposite, and the change is worth naming: before
+   * `20260928041322_explore_aggregates_require_approved_business.sql` the
+   * function counted offers of an unapproved business and this repository did
+   * not, the difference was deliberate, and the test pinned it. The function
+   * carries the gate now, so the risk is no longer an intentional difference —
+   * it is two independent spellings of one rule drifting apart, which is exactly
+   * what ADR-0008 exists to manage. So the function's own subquery is run
+   * verbatim BESIDE this read, and the two have to say the same thing.
+   *
+   * That makes it a regression net rather than a divergence record, and it also
+   * makes the gate load-bearing on BOTH implementations: dropping
+   * `publiclyVisibleBusiness()` from `activeOfferCounts()` fails the API half,
+   * and the first assertion below is what makes that failure a statement about
+   * moderation instead of about `is_active`.
+   */
+  test('the repository applies the same moderation gate the function does', async () => {
+    const cat = await seedCategory(ctx.db, 'Gated');
+    const owner = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner);
+    const loc = await seedLocation(ctx.db, biz.id);
+    const offer = await seedOffer(ctx.db, biz.id, loc.id);
+    await tag([offer], [cat.id]);
+
+    // The function's subquery, verbatim, as
+    // `20260928041322_explore_aggregates_require_approved_business.sql` left it.
+    const rpcCount = async () => {
+      const rpc = await ctx.db.execute<{ active_count: string }>(sql`
+        select oc.category_id, count(*) as active_count
+          from offers o
+          join offer_categories oc on oc.offer_id = o.id
+          join businesses b on b.id = o.business_id
+         where o.is_active and o.stock > 0 and o.pickup_end > now()
+           and b.is_active
+           and exists (select 1 from public.business_moderation m
+                       where m.business_id = b.id
+                         and m.verification_status = 'approved')
+         group by oc.category_id
+        having oc.category_id = ${cat.id}::uuid
+      `);
+      return rpc.length === 0 ? 0 : Number(rpc[0]!.active_count);
+    };
+
+    // Both halves count the live offer of an approved merchant.
+    expect(Number((await rowFor(cat.id))?.active_count)).toBe(1);
+    expect(await rpcCount()).toBe(1);
+
+    // Suspend the merchant. The offer row is untouched: the availability trigger
+    // fires on `offers` writes, and nothing runs when a `business_moderation`
+    // row changes, so `is_active` stays true — which is why the gate, and not
+    // the offer's own columns, is the only thing that can exclude it.
+    await ctx.db
+      .update(businessModeration)
+      .set({ verification_status: 'pending' })
+      .where(eq(businessModeration.business_id, biz.id));
+
+    const [raw] = await ctx.db
+      .select({ is_active: offers.is_active, stock: offers.stock })
+      .from(offers)
+      .where(eq(offers.id, offer.id));
+    expect(raw?.is_active).toBe(true);
+    expect(raw?.stock).toBeGreaterThan(0);
+
+    // The API reports 0 — the category still exists, it just has nothing
+    // publicly reservable behind it — and the function reports 0 for the same
+    // reason. Before the migration this is the assertion that failed, and its
+    // failure was the point.
+    expect(Number((await rowFor(cat.id))?.active_count)).toBe(0);
+    expect(await rpcCount()).toBe(0);
+  });
+
+  test('the list filters keep meaning what they meant before the aggregate', async () => {
+    // `active` and `search` keep meaning exactly what they meant before the
+    // aggregate joined: a 0-deal category is still an active category and still
+    // matches its name.
+    const cat = await seedCategory(ctx.db, 'Filtros de lista');
+    expect(Number((await rowFor(cat.id))?.active_count)).toBe(0);
+
+    const search = await repo.list({ page: 1, limit: 100, search: 'Filtros' });
+    expect(search.rows.map((r) => r.id)).toContain(cat.id);
+    expect(Number(search.rows.find((r) => r.id === cat.id)?.active_count)).toBe(
+      0,
+    );
+
+    const active = await repo.list({ page: 1, limit: 100, active: true });
+    expect(active.rows.map((r) => r.id)).toContain(cat.id);
+
+    const inactive = await repo.list({ page: 1, limit: 100, active: false });
+    expect(inactive.rows.map((r) => r.id)).not.toContain(cat.id);
   });
 });

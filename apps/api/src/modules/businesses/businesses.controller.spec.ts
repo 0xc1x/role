@@ -9,6 +9,7 @@ jest.mock('@0xc1x/role-commons', () => ({
 
 import { Test } from '@nestjs/testing';
 import type { AuthUser } from '../../auth/auth.types';
+import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { BusinessesController } from './businesses.controller';
 import { BusinessesService } from './businesses.service';
 
@@ -30,6 +31,7 @@ describe('BusinessesController', () => {
             getById: jest.fn(),
             update: jest.fn(),
             remove: jest.fn(),
+            listEmailSends: jest.fn(),
             listLocations: jest.fn(),
             getLocation: jest.fn(),
             createLocation: jest.fn(),
@@ -69,6 +71,21 @@ describe('BusinessesController', () => {
     expect(service.getById).toHaveBeenCalledWith(user, 'biz-1');
     expect(service.update).toHaveBeenCalledWith(user, 'biz-1', body);
     expect(service.remove).toHaveBeenCalledWith(user, 'biz-1');
+  });
+
+  it('listEmailSends delega con el usuario y el id del negocio', () => {
+    controller.listEmailSends(user, 'biz-1');
+
+    expect(service.listEmailSends).toHaveBeenCalledWith(user, 'biz-1');
+  });
+
+  it('listEmailSends queda restringido al rol admin por el guard de roles', () => {
+    const roles = Reflect.getMetadata(
+      ROLES_KEY,
+      BusinessesController.prototype.listEmailSends,
+    );
+
+    expect(roles).toEqual(['admin']);
   });
 
   it('locations: CRUD delega con businessId y locationId correctos', () => {

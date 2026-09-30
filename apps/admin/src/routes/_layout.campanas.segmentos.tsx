@@ -14,6 +14,7 @@ import {
 	useSegmentMutations,
 	useSetSegmentUsers,
 } from "@/features/email/queries/emails.queries";
+import { formatApiError } from "@/lib/api/notify";
 
 export const Route = createFileRoute("/_layout/campanas/segmentos")({
 	component: SegmentosPage,
@@ -25,6 +26,28 @@ function SegmentosPage() {
 	const mutations = useSegmentMutations();
 	const setUsers = useSetSegmentUsers();
 	const [editing, setEditing] = useState<SegmentDto | null>(null);
+
+	// Una consulta fallida tiene que decir que falló. Este caso era el peor de
+	// los tres: sin esta rama, `list.isLoading` ya es false y `list.data` es
+	// undefined, así que la página renderizaba el encabezado, el botón de crear
+	// y NADA MÁS — ni una tarjeta, ni un error, ni un "Reintentar". El
+	// operador veía un módulo vacío indistinguible de "todavía no creaste
+	// segmentos", con la API caída.
+	if (list.isError) {
+		return (
+			<div className="px-6 py-4">
+				<h1 className="font-bold text-xl">Segmentos</h1>
+				<div className="mt-4 space-y-4">
+					<p className="text-destructive">
+						{formatApiError(list.error, "Error al cargar segmentos")}
+					</p>
+					<Button variant="outline" onClick={() => void list.refetch()}>
+						Reintentar
+					</Button>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="px-6 py-4">

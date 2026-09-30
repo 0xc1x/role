@@ -2,7 +2,7 @@ import { memo, useCallback, useState } from "react";
 import { useEffect } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Map, Plus } from "lucide-react-native";
+import { Map as MapIcon, Plus } from "lucide-react-native";
 
 import {
 	AlertDialog,
@@ -26,14 +26,22 @@ import {
 } from "@/src/core/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/src/features/auth/store";
-import { useSavedAddresses, useDeleteAddress } from "@/src/features/profile/hooks";
+import {
+	useSavedAddresses,
+	useDeleteAddress,
+} from "@/src/features/profile/hooks";
 import { AddAddressSheet } from "@/src/features/profile/components/AddAddressSheet";
 import type { SavedAddress } from "@0xc1x/role-commons";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+} from "@/components/ui/card";
 
 export default function AddressesScreen() {
 	const { colors } = useTheme();
@@ -88,7 +96,10 @@ export default function AddressesScreen() {
 	return (
 		<Screen>
 			<View style={styles.container}>
-				<ScreenHeader title={strings.addresses.title} fallback="/(consumer)/profile" />
+				<ScreenHeader
+					title={strings.addresses.title}
+					fallback="/(consumer)/profile"
+				/>
 
 				<Button
 					onPress={() => setShowAddSheet(true)}
@@ -123,14 +134,11 @@ export default function AddressesScreen() {
 					<ErrorState error={error} onRetry={() => void refetch()} />
 				) : !data || data.length === 0 ? (
 					<EmptyState
-						icon={<Map size={26} color={colors.primary} />}
+						icon={<MapIcon size={26} color={colors.primary} />}
 						title={strings.addresses.emptyTitle}
 						message={strings.addresses.emptyDescription}
 						action={
-							<Button
-								variant="ghost"
-								onPress={() => setShowAddSheet(true)}
-							>
+							<Button variant="ghost" onPress={() => setShowAddSheet(true)}>
 								{strings.addresses.configureFirst}
 							</Button>
 						}
@@ -218,7 +226,10 @@ const AddressCard = memo(function AddressCard({
 					{item.address}
 				</AppText>
 				{item.references ? (
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{item.references}
 					</AppText>
 				) : null}

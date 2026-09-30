@@ -113,11 +113,15 @@ describe('OrdersService', () => {
           useValue: {
             transaction: jest.fn(),
             setEventActor: jest.fn(),
+            lockIdempotencyKey: jest.fn(),
+            findByUserAndIdempotencyKey: jest.fn(),
             findActiveByUserAndOffer: jest.fn(),
             findByIdWithBusinessOwner: jest.fn(),
             findByIdForUpdate: jest.fn(),
             listForUser: jest.fn(),
             listForBusiness: jest.fn(),
+            listForAdmin: jest.fn(),
+            listEvents: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
             isBusinessOwner: jest.fn(),
@@ -179,9 +183,12 @@ describe('OrdersService', () => {
       const result = await service.create(mockAuthUser, body);
 
       expect(result).toMatchObject({
-        id: 'order-1',
-        status: 'pending',
-        pickup_code: 'ABCDEF',
+        replayed: false,
+        order: {
+          id: 'order-1',
+          status: 'pending',
+          pickup_code: 'ABCDEF',
+        },
       });
       // Snapshot de comisión sobre el precio final tras cupón (sin cupón aquí)
       expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
@@ -290,6 +297,11 @@ describe('OrdersService', () => {
       await expect(
         service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
       ).rejects.toThrow('COUPON_EXHAUSTED');
+      // The exhaustion code keeps its own identity: the new code must not
+      // shadow it, or clients that already handle COUPON_EXHAUSTED break.
+      await expect(
+        service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
+      ).rejects.not.toThrow('COUPON_NOT_APPLICABLE');
       expect(offersRepository.decrementStock).not.toHaveBeenCalled();
     });
 
@@ -302,10 +314,15 @@ describe('OrdersService', () => {
       await expect(
         service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
       ).rejects.toThrow('COUPON_MIN_NOT_MET');
+      await expect(
+        service.create(mockAuthUser, { ...body, coupon_code: 'X' }),
+      ).rejects.not.toThrow('COUPON_NOT_APPLICABLE');
     });
 
     it('cupón global (business_id null): aplica igual que el del negocio', async () => {
       mockHappyPath();
+      // business_id null = cupón global de plataforma: no es `wrong_business`,
+      // aplica en ofertas de cualquier negocio.
       ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
         makeCouponRow({ business_id: null, value: '20' }), // 9.99 → 7.99
       );
@@ -319,18 +336,189 @@ describe('OrdersService', () => {
           coupon_id: 'coupon-1',
         }),
       );
+      expect(ordersRepository.incrementCouponUsedCount).toHaveBeenCalledWith(
+        expect.anything(),
+        'coupon-1',
+      );
     });
 
-    it('cupón inexistente/vencido: el SQL continúa sin descuento (espejo idéntico)', async () => {
+    it('sin cupón: la ruta feliz no consulta cupones (comportamiento intacto)', async () => {
       mockHappyPath();
-      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(null);
 
-      await service.create(mockAuthUser, { ...body, coupon_code: 'NOPE' });
+      await service.create(mockAuthUser, body);
 
+      expect(ordersRepository.findCouponByCodeForUpdate).not.toHaveBeenCalled();
       expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ price: '9.99', coupon_id: null }),
       );
+    });
+
+    it('sin idempotency_key no se lockea ni se busca (el camino viejo, intacto)', async () => {
+      // A reservation without a key must cost exactly what it cost before the
+      // key existed: no advisory lock, no extra lookup, null persisted.
+      mockHappyPath();
+
+      await service.create(mockAuthUser, body);
+
+      expect(ordersRepository.lockIdempotencyKey).not.toHaveBeenCalled();
+      expect(
+        ordersRepository.findByUserAndIdempotencyKey,
+      ).not.toHaveBeenCalled();
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ idempotency_key: null }),
+      );
+    });
+
+    it('con idempotency_key: lockea y persiste la clave normalizada', async () => {
+      mockHappyPath();
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(null);
+
+      await service.create(mockAuthUser, {
+        ...body,
+        idempotency_key: '  retry-1  ',
+      });
+
+      // The RPC hashes the trimmed key, so the trimmed key is also what gets
+      // stored; anything else would split one logical key into two rows.
+      expect(ordersRepository.lockIdempotencyKey).toHaveBeenCalledWith(
+        expect.anything(),
+        'user-1',
+        'retry-1',
+      );
+      expect(ordersRepository.insertOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ idempotency_key: 'retry-1' }),
+      );
+    });
+
+    it('clave ya usada: devuelve la orden original sin decrementar stock', async () => {
+      mockHappyPath();
+      const existing = makeOrderRow({ id: 'order-original', coupon_id: null });
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(existing);
+
+      const result = await service.create(mockAuthUser, {
+        ...body,
+        idempotency_key: 'retry-1',
+      });
+
+      expect(result.replayed).toBe(true);
+      expect(result.order.id).toBe('order-original');
+      // No second reservation: no stock, no insert, no folio, no coupon.
+      expect(offersRepository.decrementStock).not.toHaveBeenCalled();
+      expect(ordersRepository.insertOrder).not.toHaveBeenCalled();
+      expect(ordersRepository.nextOrderNumber).not.toHaveBeenCalled();
+      // And the offer is never even read: the RPC resolves the key first.
+      expect(offersRepository.findByIdForUpdate).not.toHaveBeenCalled();
+    });
+
+    it('clave usada con otra oferta → IDEMPOTENCY_KEY_REUSED', async () => {
+      mockHappyPath();
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(
+        makeOrderRow({ offer_id: 'offer-2' }),
+      );
+
+      await expect(
+        service.create(mockAuthUser, {
+          ...body,
+          idempotency_key: 'retry-1',
+        }),
+      ).rejects.toThrow('IDEMPOTENCY_KEY_REUSED');
+      expect(offersRepository.decrementStock).not.toHaveBeenCalled();
+    });
+
+    it('clave usada con otro cupón → IDEMPOTENCY_KEY_REUSED', async () => {
+      mockHappyPath();
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(
+        makeOrderRow({ coupon_id: 'coupon-1' }),
+      );
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
+        makeCouponRow({ id: 'coupon-otro' }),
+      );
+
+      await expect(
+        service.create(mockAuthUser, {
+          ...body,
+          coupon_code: 'PROMO10',
+          idempotency_key: 'retry-1',
+        }),
+      ).rejects.toThrow('IDEMPOTENCY_KEY_REUSED');
+      expect(ordersRepository.insertOrder).not.toHaveBeenCalled();
+    });
+
+    it('clave usada con el mismo cupón → replay de la orden original', async () => {
+      mockHappyPath();
+      ordersRepository.findByUserAndIdempotencyKey.mockResolvedValue(
+        makeOrderRow({ id: 'order-original', coupon_id: 'coupon-1' }),
+      );
+      ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(
+        makeCouponRow({ id: 'coupon-1' }),
+      );
+
+      const result = await service.create(mockAuthUser, {
+        ...body,
+        coupon_code: 'PROMO10',
+        idempotency_key: 'retry-1',
+      });
+
+      expect(result.replayed).toBe(true);
+      expect(result.order.id).toBe('order-original');
+      expect(ordersRepository.incrementCouponUsedCount).not.toHaveBeenCalled();
+    });
+
+    describe('cupón rejection: COUPON_NOT_APPLICABLE con reason', () => {
+      /**
+       * Every rejection path must be observable by the client. The old code
+       * skipped the whole block on a miss and produced a full-price order.
+       */
+      it.each([
+        [
+          'inexistente',
+          null,
+          'COUPON_NOT_APPLICABLE: not_found - El cupon no existe',
+        ],
+        [
+          'de otro negocio',
+          makeCouponRow({ business_id: 'business-otro' }),
+          'COUPON_NOT_APPLICABLE: wrong_business - El cupon pertenece a otro negocio',
+        ],
+        [
+          'inactivo',
+          makeCouponRow({ is_active: false }),
+          'COUPON_NOT_APPLICABLE: inactive - El cupon esta inactivo',
+        ],
+        [
+          'vencido',
+          makeCouponRow({ expires_at: new Date('2000-01-01T00:00:00Z') }),
+          'COUPON_NOT_APPLICABLE: expired - El cupon ya vencio',
+        ],
+      ])(
+        'cupón %s → COUPON_NOT_APPLICABLE con la razón en el mensaje',
+        async (_name, coupon, message) => {
+          mockHappyPath();
+          ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(coupon);
+
+          await expect(
+            service.create(mockAuthUser, { ...body, coupon_code: 'NOPE' }),
+          ).rejects.toThrow(message);
+        },
+      );
+
+      it('el rechazo ocurre antes de consumir stock, escribir orden o mutar el cupón', async () => {
+        mockHappyPath();
+        ordersRepository.findCouponByCodeForUpdate.mockResolvedValue(null);
+
+        await expect(
+          service.create(mockAuthUser, { ...body, coupon_code: 'NOPE' }),
+        ).rejects.toThrow('COUPON_NOT_APPLICABLE');
+
+        expect(offersRepository.decrementStock).not.toHaveBeenCalled();
+        expect(ordersRepository.insertOrder).not.toHaveBeenCalled();
+        expect(
+          ordersRepository.incrementCouponUsedCount,
+        ).not.toHaveBeenCalled();
+      });
     });
 
     it('folio FD-YYYY-MMDD-NNN generado por la secuencia SQL compartida', async () => {
@@ -350,7 +538,7 @@ describe('OrdersService', () => {
 
       const result = await service.create(mockAuthUser, body);
 
-      expect(result.pickup_code).toMatch(
+      expect(result.order.pickup_code).toMatch(
         /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/,
       );
     });
@@ -542,6 +730,130 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('listForAdmin', () => {
+    // El nombre del negocio viene del join de la MISMA query: si el panel
+    // tuviera que pedirlo aparte, la pantalla de soporte haría N+1.
+    const makeAdminRow = (overrides: Record<string, any> = {}) => ({
+      id: 'order-1',
+      order_number: 'FD-2026-0101-001',
+      status: 'pending' as OrderStatus,
+      business_id: 'business-1',
+      business_name: 'Café Central',
+      offer_id: 'offer-1',
+      offer_title: 'Mesa de sobrantes',
+      price: '9.99',
+      original_price: '19.99',
+      pickup_start: new Date('2025-01-01T10:00:00Z'),
+      pickup_end: new Date('2025-01-01T18:00:00Z'),
+      created_at: new Date('2025-01-01T00:00:00Z'),
+      updated_at: new Date('2025-01-01T00:00:00Z'),
+      ...overrides,
+    });
+
+    it('pagina y devuelve el total del repositorio', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({
+        items: [makeAdminRow()],
+        total: 42,
+      });
+
+      const result = await service.listForAdmin({ page: 3, limit: 10 });
+
+      expect(ordersRepository.listForAdmin).toHaveBeenCalledWith({
+        status: undefined,
+        businessId: undefined,
+        stuckOnly: false,
+        page: 3,
+        limit: 10,
+      });
+      expect(result.data).toHaveLength(1);
+      // El total es del conjunto filtrado, no de la página: un "1 de 1" sobre
+      // 42 filas haría creer al operador que ya lo vio todo.
+      expect(result.meta).toEqual({
+        page: 3,
+        limit: 10,
+        total: 42,
+        total_pages: 5,
+      });
+    });
+
+    it.each([
+      [
+        'status',
+        { status: 'confirmed' as OrderStatus },
+        { status: 'confirmed' },
+      ],
+      [
+        'business_id',
+        { business_id: 'business-9' },
+        { businessId: 'business-9' },
+      ],
+    ])('aplica el filtro %s', async (_name, query, expected) => {
+      ordersRepository.listForAdmin.mockResolvedValue({
+        items: [],
+        total: 0,
+      });
+
+      await service.listForAdmin({ page: 1, limit: 10, ...query });
+
+      expect(ordersRepository.listForAdmin).toHaveBeenCalledWith(
+        expect.objectContaining(expected),
+      );
+    });
+
+    it('stuck=true busca la ventana de pickup vencida sin terminar', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({ items: [], total: 0 });
+
+      await service.listForAdmin({ page: 1, limit: 10, stuck: true });
+
+      expect(ordersRepository.listForAdmin).toHaveBeenCalledWith(
+        expect.objectContaining({ stuckOnly: true }),
+      );
+    });
+
+    it('stuck=false no invierte el filtro: no hay un conjunto complementario útil', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({ items: [], total: 0 });
+
+      await service.listForAdmin({ page: 1, limit: 10, stuck: false });
+
+      expect(ordersRepository.listForAdmin).toHaveBeenCalledWith(
+        expect.objectContaining({ stuckOnly: false }),
+      );
+    });
+
+    it('resuelve el nombre del negocio y marca la orden atascada', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({
+        items: [
+          makeAdminRow({ pickup_end: new Date('2020-01-01T18:00:00Z') }),
+          makeAdminRow({
+            id: 'order-2',
+            pickup_end: new Date('2999-01-01T18:00:00Z'),
+          }),
+        ],
+        total: 2,
+      });
+
+      const result = await service.listForAdmin({ page: 1, limit: 10 });
+
+      expect(result.data[0]).toMatchObject({
+        business_name: 'Café Central',
+        offer_title: 'Mesa de sobrantes',
+        is_stuck: true,
+      });
+      expect(result.data[1]?.is_stuck).toBe(false);
+    });
+
+    it('deja business_name en null cuando el join no resuelve', async () => {
+      ordersRepository.listForAdmin.mockResolvedValue({
+        items: [makeAdminRow({ business_name: null })],
+        total: 1,
+      });
+
+      const result = await service.listForAdmin({ page: 1, limit: 10 });
+
+      expect(result.data[0]?.business_name).toBeNull();
+    });
+  });
+
   describe('getById', () => {
     it('should return order when user is owner', async () => {
       const row = makeOrderWithBusinessOwner({
@@ -607,6 +919,124 @@ describe('OrdersService', () => {
       await expect(service.getById(mockAuthUser, 'order-1')).rejects.toThrow(
         ForbiddenException,
       );
+    });
+  });
+
+  describe('listEvents', () => {
+    const makeEventRow = (overrides: Record<string, any> = {}) => ({
+      id: 'event-1',
+      order_id: 'order-1',
+      status: 'confirmed' as OrderStatus,
+      previous_status: 'pending' as OrderStatus | null,
+      changed_by: 'user-1',
+      reason: 'Reserva creada',
+      metadata: { source: 'database' },
+      created_at: new Date('2025-01-01T00:00:00Z'),
+      ...overrides,
+    });
+
+    it('returns the timeline paginated and without the internal columns', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner(),
+      );
+      ordersRepository.listEvents.mockResolvedValue({
+        items: [makeEventRow()],
+        total: 12,
+      });
+
+      const result = await service.listEvents(mockAuthUser, 'order-1', {
+        page: 2,
+        limit: 10,
+      });
+
+      expect(result.meta).toEqual({
+        page: 2,
+        limit: 10,
+        total: 12,
+        total_pages: 2,
+      });
+      expect(result.data[0]).toEqual({
+        status: 'confirmed',
+        previous_status: 'pending',
+        reason: 'Reserva creada',
+        created_at: '2025-01-01T00:00:00.000Z',
+      });
+    });
+
+    it('allows the order owner', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner(),
+      );
+      ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
+
+      await expect(
+        service.listEvents(mockAuthUser, 'order-1', { page: 1, limit: 20 }),
+      ).resolves.toMatchObject({ data: [] });
+    });
+
+    // The business panel needs the timeline of the orders it owns. Narrowing
+    // this to the order owner is the regression this case exists to catch.
+    it('allows the business that owns the order', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner(),
+      );
+      ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
+
+      await expect(
+        service.listEvents(mockBusinessUser, 'order-1', {
+          page: 1,
+          limit: 20,
+        }),
+      ).resolves.toMatchObject({ data: [] });
+    });
+
+    it('allows an admin who is neither owner nor business owner', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner({
+          order: makeOrderRow({ user_id: 'other' }),
+        }),
+      );
+      ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
+
+      await expect(
+        service.listEvents(mockAdminUser, 'order-1', { page: 1, limit: 20 }),
+      ).resolves.toMatchObject({ data: [] });
+    });
+
+    it('forbids a stranger and reads nothing', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner({
+          order: makeOrderRow({ user_id: 'other' }),
+        }),
+      );
+
+      await expect(
+        service.listEvents(mockAuthUser, 'order-1', { page: 1, limit: 20 }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(ordersRepository.listEvents).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound for an order that does not exist', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(null);
+
+      await expect(
+        service.listEvents(mockAuthUser, 'missing', { page: 1, limit: 20 }),
+      ).rejects.toThrow(NotFoundException);
+      expect(ordersRepository.listEvents).not.toHaveBeenCalled();
+    });
+
+    it('passes the pagination through to the repository', async () => {
+      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
+        makeOrderWithBusinessOwner(),
+      );
+      ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
+
+      await service.listEvents(mockAuthUser, 'order-1', { page: 3, limit: 5 });
+
+      expect(ordersRepository.listEvents).toHaveBeenCalledWith('order-1', {
+        page: 3,
+        limit: 5,
+      });
     });
   });
 
@@ -866,11 +1296,15 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
           useValue: {
             transaction: jest.fn(),
             setEventActor: jest.fn(),
+            lockIdempotencyKey: jest.fn(),
+            findByUserAndIdempotencyKey: jest.fn(),
             findActiveByUserAndOffer: jest.fn(),
             findByIdWithBusinessOwner: jest.fn(),
             findByIdForUpdate: jest.fn(),
             listForUser: jest.fn(),
             listForBusiness: jest.fn(),
+            listForAdmin: jest.fn(),
+            listEvents: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
             isBusinessOwner: jest.fn(),

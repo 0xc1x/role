@@ -6,8 +6,7 @@ import {
 } from "@/src/features/explore/exploreTypes";
 import type { ActiveFilterKey } from "@/src/features/explore/components/ExploreActiveFiltersBar";
 import type { OfferFilterState } from "@/src/features/offers/domain/offer";
-
-const SEARCH_DEBOUNCE_MS = 400;
+import { SEARCH_DEBOUNCE_MS } from "@/src/core/config/timing";
 
 /** Estado de filtros + búsqueda con debounce de Explorar. */
 export function useExploreFilters() {

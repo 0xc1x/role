@@ -10,8 +10,14 @@ import type {
 import { File } from "expo-file-system";
 
 import { supabase } from "@/src/core/supabase/client";
+import {
+	DAYS_SHORT_CAP_ES,
+	MONTHS_FULL_CAP_ES,
+	MONTHS_SHORT_ES,
+} from "@/src/core/i18n/dates";
+import { strings } from "@/src/core/i18n/strings";
 import { toAppError } from "@/src/core/error/mapper";
-import { Errors } from "@/src/core/error/app-error";
+import { AppError, Errors } from "@/src/core/error/app-error";
 
 import type { OfferDetail } from "@/src/features/offers/domain/offer";
 import { isOfferOutOfStock } from "@/src/features/offers/domain/offer";
@@ -41,9 +47,6 @@ export { isOfferOutOfStock };
  */
 const BUSINESS_PUBLIC_COLUMNS =
 	"id, name, type, slug, image, cover_image, rating, review_count, description, phone, email, website, is_active, created_at, updated_at, currency";
-
-/** Owner-scoped read: adds owner_id, still without platform/financial columns. */
-const BUSINESS_OWNER_COLUMNS = `owner_id, ${BUSINESS_PUBLIC_COLUMNS}`;
 
 /**
  * Row shape actually returned for a public/owner client read. The withheld
@@ -93,35 +96,6 @@ const DAY_TO_DB: Record<string, string> = {
 	sabado: "saturday",
 	domingo: "sunday",
 };
-
-const MONTHS_SHORT = [
-	"ene",
-	"feb",
-	"mar",
-	"abr",
-	"may",
-	"jun",
-	"jul",
-	"ago",
-	"sep",
-	"oct",
-	"nov",
-	"dic",
-];
-const MONTHS_FULL = [
-	"Enero",
-	"Febrero",
-	"Marzo",
-	"Abril",
-	"Mayo",
-	"Junio",
-	"Julio",
-	"Agosto",
-	"Septiembre",
-	"Octubre",
-	"Noviembre",
-	"Diciembre",
-];
 
 type Row = Record<string, unknown>;
 
@@ -376,10 +350,24 @@ export const businessRepository = {
 	},
 
 	async getBusinessesByOwnerId(ownerId: string): Promise<Business[]> {
+		// owner_id lives in business_ownership, not on businesses. The RLS on that
+		// table is `owner_id = auth.uid()`, so a caller passing someone else's id
+		// gets an empty result instead of another tenant's businesses.
+		const { data: owned, error: ownedError } = await supabase
+			.from("business_ownership")
+			.select("business_id")
+			.eq("owner_id", ownerId);
+		if (ownedError) throw toAppError(ownedError, "Error al cargar negocios");
+
+		const ids = (owned ?? [])
+			.map((row) => (row as { business_id?: string }).business_id)
+			.filter((id): id is string => Boolean(id));
+		if (ids.length === 0) return [];
+
 		const { data, error } = await supabase
 			.from("businesses")
-			.select(BUSINESS_OWNER_COLUMNS)
-			.eq("owner_id", ownerId)
+			.select(BUSINESS_PUBLIC_COLUMNS)
+			.in("id", ids)
 			.order("name");
 		if (error) throw toAppError(error, "Error al cargar negocios");
 		return (data ?? []).map((row) =>
@@ -429,7 +417,9 @@ export const businessRepository = {
 		const businessResult = await supabase
 			.from("businesses")
 			.insert({
-				owner_id: input.ownerId,
+				// owner_id is NOT sent by the client. It lives in
+				// business_ownership and the database derives it from auth.uid()
+				// on insert, so ownership can no longer be written by a caller.
 				name: input.name,
 				slug,
 				type: input.type,
@@ -789,6 +779,16 @@ export const businessRepository = {
 };
 
 // ─── Offer save/delete (catalog mutations) ───────────────────────────
+export interface SaveOfferResult {
+	offer: OfferDetail;
+	/**
+	 * True when a newly picked photo could not be uploaded while editing: the
+	 * offer was saved keeping its previously stored image, so the owner has to
+	 * be warned. Never true on insert — a failed upload aborts the insert.
+	 */
+	imageUploadFailed: boolean;
+}
+
 export async function saveOffer(
 	input: {
 		id?: string;
@@ -809,13 +809,32 @@ export async function saveOffer(
 		imageUri: string | null;
 	},
 	requireImage = false,
-): Promise<OfferDetail> {
+): Promise<SaveOfferResult> {
 	let imageUrl: string | null = null;
+	let imageUploadFailed = false;
 	if (input.imageUri) {
-		imageUrl = await uploadImage(
-			input.imageUri,
-			`products/${input.businessId}_${Date.now()}.jpg`,
-		);
+		try {
+			imageUrl = await uploadImage(
+				input.imageUri,
+				`products/${input.businessId}_${Date.now()}.jpg`,
+			);
+		} catch (cause) {
+			// Nunca persistir una URI local, muere al recargar. En alta la
+			// oferta no se publica sin foto: el error sube al formulario y el
+			// dueño decide. En edición el resto del guardado sí aplica y la
+			// imagen almacenada se conserva (no se deja en blanco).
+			if (!input.id) {
+				throw new AppError(
+					"validation",
+					strings.business.photoUploadFailed,
+					"OFFER_IMAGE_UPLOAD_FAILED",
+					// The storage/network cause is diagnostic only: it never
+					// reaches the copy the owner reads.
+					{ cause: cause instanceof Error ? cause.message : cause },
+				);
+			}
+			imageUploadFailed = true;
+		}
 	}
 
 	// Insert and update send deliberately different column sets. The database
@@ -852,7 +871,7 @@ export async function saveOffer(
 			throw toAppError(result.error, "Error al actualizar la oferta");
 	} else {
 		if (requireImage && !imageUrl) {
-			throw Errors.validation("Sube una foto del producto");
+			throw Errors.validation(strings.business.photoRequired);
 		}
 		const result = await supabase
 			.from("offers")
@@ -872,7 +891,7 @@ export async function saveOffer(
 
 	const saved = mapOfferDetail(inserted as unknown as Row);
 	await syncCategories(saved.offer.id, input.categories);
-	return saved;
+	return { offer: saved, imageUploadFailed };
 }
 
 export async function deleteOffer(offerId: string): Promise<void> {
@@ -933,47 +952,38 @@ export function detectImageContentType(
 	return null;
 }
 
-async function uploadImage(
-	uri: string,
-	remotePath: string,
-): Promise<string | null> {
-	try {
-		let bytes: ArrayBuffer;
-		if (Platform.OS === "web") {
-			// expo-image-picker devuelve blob:/data: URIs — hay que fetchearlos.
-			const response = await fetch(uri);
-			if (!response.ok) throw new Error(`fetch imagen: ${response.status}`);
-			bytes = await response.arrayBuffer();
-		} else {
-			bytes = await new File(uri).arrayBuffer();
-		}
-		const {
-			data: { user },
-		} = await supabase.auth.getUser();
-		if (!user?.id) throw new Error("Missing authenticated owner for upload");
-		const contentType = detectImageContentType(bytes);
-		if (!contentType) throw new Error("Invalid image content");
-		const extension =
-			contentType === "image/png"
-				? "png"
-				: contentType === "image/webp"
-					? "webp"
-					: "jpg";
-		const normalizedPath = remotePath.replace(/\.[^/.]+$/, `.${extension}`);
-		const scopedPath = `${user.id}/${normalizedPath}`;
-		const { error } = await supabase.storage
-			.from("product_images")
-			.upload(scopedPath, bytes, { contentType, upsert: true });
-		if (error) throw error;
-		const { data } = supabase.storage
-			.from("product_images")
-			.getPublicUrl(scopedPath);
-		return data.publicUrl;
-	} catch {
-		// Upload fallido: null mantiene la imagen anterior en la oferta
-		// (nunca persistir una URI local, muere al recargar).
-		return null;
+async function uploadImage(uri: string, remotePath: string): Promise<string> {
+	let bytes: ArrayBuffer;
+	if (Platform.OS === "web") {
+		// expo-image-picker devuelve blob:/data: URIs — hay que fetchearlos.
+		const response = await fetch(uri);
+		if (!response.ok) throw new Error(`fetch imagen: ${response.status}`);
+		bytes = await response.arrayBuffer();
+	} else {
+		bytes = await new File(uri).arrayBuffer();
 	}
+	const {
+		data: { user },
+	} = await supabase.auth.getUser();
+	if (!user?.id) throw new Error("Missing authenticated owner for upload");
+	const contentType = detectImageContentType(bytes);
+	if (!contentType) throw new Error("Invalid image content");
+	const extension =
+		contentType === "image/png"
+			? "png"
+			: contentType === "image/webp"
+				? "webp"
+				: "jpg";
+	const normalizedPath = remotePath.replace(/\.[^/.]+$/, `.${extension}`);
+	const scopedPath = `${user.id}/${normalizedPath}`;
+	const { error } = await supabase.storage
+		.from("product_images")
+		.upload(scopedPath, bytes, { contentType, upsert: true });
+	if (error) throw error;
+	const { data } = supabase.storage
+		.from("product_images")
+		.getPublicUrl(scopedPath);
+	return data.publicUrl;
 }
 
 /** Fila que devuelve business_sales_stats (agregación server-side). */
@@ -1049,9 +1059,10 @@ function bucketKey(d: Date, agg: Aggregation): string {
 function bucketLabel(key: string, agg: Aggregation): string {
 	if (agg === "day") {
 		const [y, m, d] = key.split("-").map(Number);
-		const names = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 		return (
-			names[new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).getUTCDay()] ?? key
+			DAYS_SHORT_CAP_ES[
+				new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).getUTCDay()
+			] ?? key
 		);
 	}
 	if (agg === "week") {
@@ -1063,12 +1074,12 @@ function bucketLabel(key: string, agg: Aggregation): string {
 		const saturday = new Date(monday.getTime() + 6 * 86400000);
 		if (monday.getUTCFullYear() !== y) return `Sem ${weekNum}`;
 		if (monday.getUTCMonth() === saturday.getUTCMonth()) {
-			return `${monday.getUTCDate()}–${saturday.getUTCDate()} ${MONTHS_SHORT[monday.getUTCMonth()]}`;
+			return `${monday.getUTCDate()}–${saturday.getUTCDate()} ${MONTHS_SHORT_ES[monday.getUTCMonth()]}`;
 		}
-		return `${monday.getUTCDate()} ${MONTHS_SHORT[monday.getUTCMonth()]} – ${saturday.getUTCDate()} ${MONTHS_SHORT[saturday.getUTCMonth()]}`;
+		return `${monday.getUTCDate()} ${MONTHS_SHORT_ES[monday.getUTCMonth()]} – ${saturday.getUTCDate()} ${MONTHS_SHORT_ES[saturday.getUTCMonth()]}`;
 	}
 	const [, m] = key.split("-");
-	return MONTHS_FULL[Number(m) - 1] ?? key;
+	return MONTHS_FULL_CAP_ES[Number(m) - 1] ?? key;
 }
 
 /**
@@ -1219,7 +1230,7 @@ function formatMemberSince(createdAt: string | null): string | null {
 	if (!createdAt) return null;
 	const date = new Date(createdAt);
 	if (Number.isNaN(date.getTime())) return null;
-	return `${MONTHS_FULL[date.getMonth()]} ${date.getFullYear()}`;
+	return `${MONTHS_FULL_CAP_ES[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function toRows(data: unknown): Row[] {

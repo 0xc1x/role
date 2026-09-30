@@ -337,7 +337,7 @@ set search_path = ''
 as $$
   select jsonb_build_object(
     'users', (select count(*) from auth.users),
-    'businesses', (select count(*) from public.businesses where verification_status = 'approved' and is_active),
+    'businesses', (select count(*) from public.businesses where verification_status='approved' and is_active),
     'meals', (select count(*) from public.orders where status in ('completed', 'picked_up'))
   );
 $$;
@@ -357,7 +357,7 @@ set search_path = ''
 as $$
   select jsonb_build_object(
     'users', (select count(*) from public.profiles),
-    'businesses', (select count(*) from public.businesses where verification_status = 'approved' and is_active),
+    'businesses', (select count(*) from public.businesses where verification_status='approved' and is_active),
     'meals', (select count(*) from public.orders where status in ('completed', 'picked_up'))
   );
 $$;

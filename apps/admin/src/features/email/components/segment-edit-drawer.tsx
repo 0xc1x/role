@@ -1,13 +1,15 @@
 import type { SegmentDto } from "@0xc1x/role-commons";
 import { type FormEvent, useEffect, useState } from "react";
-import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
+import {
+	ResourceUpdateDrawer,
+	useReportDrawerPending,
+} from "@/components/resource/resource-drawer";
 import { segmentDefaults } from "@/features/email/forms/email-defaults";
 import {
 	SegmentFields,
 	type SegmentFormValues,
 } from "@/features/email/forms/email-forms";
 import {
-	emailKeys,
 	type useSegmentMutations,
 	useSegmentUsers,
 	type useSetSegmentUsers,
@@ -67,7 +69,6 @@ export function SegmentEditDrawer(props: {
 	return (
 		<ResourceUpdateDrawer
 			formId={FORM_ID}
-			mutationKey={emailKeys.all}
 			title={`Editar ${props.segment.name}`}
 			description="Actualiza los datos del segmento"
 			isOpen
@@ -75,13 +76,44 @@ export function SegmentEditDrawer(props: {
 			submitLabel="Guardar cambios"
 			updatingLabel="Guardando"
 		>
-			<form id={FORM_ID} onSubmit={handleSubmit} className="space-y-4">
-				{members.isLoading ? (
-					<p className="text-sm text-muted-foreground">Cargando miembros…</p>
-				) : (
-					<SegmentFields values={values} setValues={setValues} />
-				)}
-			</form>
+			{/* El reporte de "enviando" vive dentro del drawer: es el provider del
+			    footer el que lo lee, y este componente queda fuera de él. */}
+			<SegmentEditForm
+				formId={FORM_ID}
+				pending={props.update.isPending || props.setUsers.isPending}
+				isLoadingMembers={members.isLoading}
+				values={values}
+				setValues={setValues}
+				onSubmit={handleSubmit}
+			/>
 		</ResourceUpdateDrawer>
+	);
+}
+
+function SegmentEditForm({
+	formId,
+	pending,
+	isLoadingMembers,
+	values,
+	setValues,
+	onSubmit,
+}: {
+	formId: string;
+	pending: boolean;
+	isLoadingMembers: boolean;
+	values: SegmentFormValues;
+	setValues: React.Dispatch<React.SetStateAction<SegmentFormValues>>;
+	onSubmit: (e: FormEvent) => void;
+}) {
+	useReportDrawerPending(pending);
+
+	return (
+		<form id={formId} onSubmit={onSubmit} className="space-y-4">
+			{isLoadingMembers ? (
+				<p className="text-sm text-muted-foreground">Cargando miembros…</p>
+			) : (
+				<SegmentFields values={values} setValues={setValues} />
+			)}
+		</form>
 	);
 }

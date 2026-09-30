@@ -1,3 +1,4 @@
+import { DISCOUNT_MAX_CLAIM } from "@0xc1x/role-commons";
 import type { QueryClient as QC } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -6,10 +7,10 @@ import {
 	Link,
 	Outlet,
 	Scripts,
+	useRouter,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { CookieBanner } from "@/components/cookie-banner";
-import { createAppQueryClient } from "@/lib/query-client";
 import { absoluteUrl } from "@/lib/seo";
 import appCss from "../styles.css?url";
 
@@ -47,7 +48,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 				{ property: "og:site_name", content: "Rolé" },
 				{
 					property: "og:title",
-					content: "Rolé — Comida deliciosa. Mitad de precio.",
+					content: `Rolé — Comida deliciosa. ${DISCOUNT_MAX_CLAIM} menos.`,
 				},
 				{
 					property: "og:description",
@@ -61,7 +62,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 				{ name: "twitter:card", content: "summary_large_image" },
 				{
 					name: "twitter:title",
-					content: "Rolé — Comida deliciosa. Mitad de precio.",
+					content: `Rolé — Comida deliciosa. ${DISCOUNT_MAX_CLAIM} menos.`,
 				},
 				{
 					name: "twitter:description",
@@ -114,8 +115,22 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-	// Un solo QueryClient por montaje: el prefetch SSR del router se reutiliza.
-	const [queryClient] = useState(() => createAppQueryClient());
+	// El QueryClient del router es el MISMO que primieron los loaders: `getRouter()`
+	// lo crea y lo publica en `context.queryClient`, y los loaders de cada ruta
+	// hacen `ensureQueryData` sobre esa instancia antes de que se produzca el
+	// markup. Por eso el provider toma el del router en vez de crear otro: un
+	// `useState(() => createAppQueryClient())` aquí abre una caché vacía, deja
+	// los loaders resuelto en otra y el HTML servido sale con
+	// `data-stats-source="loading"` y los emails de fallback aunque el payload de
+	// hidratación de esa MISMA respuesta ya lleve las cifras reales. Los loaders
+	// existen para SEO, así que sus datos tienen que llegar a los bytes.
+	//
+	// `router.options.context` es `PickAsRequired<RouterOptions, ... | 'context'>`
+	// en @tanstack/router-core, y `InferRouterContext` lo tipa desde
+	// `createRootRouteWithContext<RouterContext>()`: sin cast. Y es seguro
+	// compartirlo porque `getRouter()` corre una vez por request en SSR (verificado
+	// en el reporte), así que no hay caché que se filtre entre usuarios.
+	const { queryClient } = useRouter().options.context;
 
 	// react-doctor-disable-next-line react-doctor/effect-needs-cleanup -- cleanup below disconnects both IntersectionObserver and MutationObserver
 	useEffect(() => {

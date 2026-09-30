@@ -9,7 +9,9 @@ import { useAuthUser } from "@/features/auth";
 import { useBusinessesList } from "@/features/businesses";
 import { useEmailSendsList } from "@/features/email-sends";
 import { usePlatformStats } from "@/features/stats";
+import { MoneySection } from "@/features/stats/components/money-section";
 import { formatBusinessDate } from "@/lib/dates";
+import { emailSendStatusLabel } from "@/lib/labels";
 
 export const Route = createFileRoute("/_layout/home")({
 	component: HomePage,
@@ -59,11 +61,66 @@ function HomeLoadingSkeleton() {
 	);
 }
 
+/**
+ * Una métrica sin dato NUNCA es 0: "0 negocios por aprobar" con la API caída se
+ * lee como "no hay nada que aprobar". Si la query falló se muestra "—".
+ */
+function MetricValue({
+	isLoading,
+	value,
+	suffix,
+}: {
+	isLoading: boolean;
+	value: number | undefined;
+	suffix?: string;
+}) {
+	if (isLoading) return <Skeleton className="h-8 w-12" />;
+	if (value === undefined) {
+		return (
+			<span
+				className="text-muted-foreground"
+				title="Dato no disponible: la consulta falló"
+			>
+				—
+			</span>
+		);
+	}
+	return (
+		<>
+			{value}
+			{suffix}
+		</>
+	);
+}
+
+function UnavailableState({
+	message,
+	onRetry,
+}: {
+	message: string;
+	onRetry: () => void;
+}) {
+	return (
+		<div className="flex flex-col items-start gap-3">
+			<p className="text-destructive text-sm">{message}</p>
+			<Button variant="outline" size="sm" onClick={onRetry}>
+				Reintentar
+			</Button>
+		</div>
+	);
+}
+
 // react-doctor-disable-next-line react-doctor/no-multi-component-file -- route-colocated cards, single-use in HomePage
 function PendingBusinessesCard({
 	businesses,
+	isError,
+	error,
+	onRetry,
 }: {
 	businesses: PendingBusinessView[];
+	isError: boolean;
+	error: unknown;
+	onRetry: () => void;
 }) {
 	return (
 		<Card>
@@ -79,7 +136,16 @@ function PendingBusinessesCard({
 				</Link>
 			</CardHeader>
 			<CardContent>
-				{businesses.length ? (
+				{isError ? (
+					<UnavailableState
+						message={
+							error instanceof Error
+								? `No se pudieron cargar los negocios pendientes: ${error.message}`
+								: "No se pudieron cargar los negocios pendientes"
+						}
+						onRetry={onRetry}
+					/>
+				) : businesses.length ? (
 					<ul className="space-y-3">
 						{businesses.map((b) => (
 							<li
@@ -104,7 +170,17 @@ function PendingBusinessesCard({
 }
 
 // react-doctor-disable-next-line react-doctor/no-multi-component-file -- route-colocated cards, single-use in HomePage
-function QueuedEmailsCard({ emails }: { emails: EmailSendItem[] }) {
+function QueuedEmailsCard({
+	emails,
+	isError,
+	error,
+	onRetry,
+}: {
+	emails: EmailSendItem[];
+	isError: boolean;
+	error: unknown;
+	onRetry: () => void;
+}) {
 	return (
 		<Card>
 			<CardHeader className="flex flex-row items-center justify-between">
@@ -119,7 +195,16 @@ function QueuedEmailsCard({ emails }: { emails: EmailSendItem[] }) {
 				</Link>
 			</CardHeader>
 			<CardContent>
-				{emails.length ? (
+				{isError ? (
+					<UnavailableState
+						message={
+							error instanceof Error
+								? `No se pudo cargar la cola de correos: ${error.message}`
+								: "No se pudo cargar la cola de correos"
+						}
+						onRetry={onRetry}
+					/>
+				) : emails.length ? (
 					<ul className="space-y-3">
 						{emails.map((e) => (
 							<li
@@ -130,7 +215,7 @@ function QueuedEmailsCard({ emails }: { emails: EmailSendItem[] }) {
 									{e.email}
 								</span>
 								<Badge variant="secondary" className="text-xs">
-									{e.status}
+									{emailSendStatusLabel(e.status)}
 								</Badge>
 							</li>
 						))}
@@ -146,13 +231,27 @@ function QueuedEmailsCard({ emails }: { emails: EmailSendItem[] }) {
 // react-doctor-disable-next-line react-doctor/no-multi-component-file -- route file owns HomePage + its loading skeleton
 function HomePage() {
 	const { data: user, isLoading: authLoading } = useAuthUser();
-	const { data: stats, isLoading: statsLoading } = usePlatformStats();
+	const {
+		data: stats,
+		isLoading: statsLoading,
+		isError: statsError,
+		refetch: refetchStats,
+	} = usePlatformStats();
 
-	const { data: pendingData, isLoading: pendingLoading } = useBusinessesList(
-		PENDING_BUSINESSES_QUERY,
-	);
+	const {
+		data: pendingData,
+		isLoading: pendingLoading,
+		isError: pendingError,
+		error: pendingErrorDetail,
+		refetch: refetchPending,
+	} = useBusinessesList(PENDING_BUSINESSES_QUERY);
 	const { data: totalData } = useBusinessesList({ limit: 1, page: 1 });
-	const { data: emailsData } = useEmailSendsList(PENDING_SENDS_QUERY);
+	const {
+		data: emailsData,
+		isError: emailsError,
+		error: emailsErrorDetail,
+		refetch: refetchEmails,
+	} = useEmailSendsList(PENDING_SENDS_QUERY);
 
 	const pendingBusinesses: PendingBusinessView[] = useMemo(
 		() =>
@@ -172,10 +271,11 @@ function HomePage() {
 		return <HomeLoadingSkeleton />;
 	}
 
-	const pendingCount = pendingData?.meta.total ?? 0;
-	const totalBusinesses = totalData?.meta.total ?? stats?.businesses ?? 0;
-	const usersCount = stats?.users ?? 0;
-	const mealsCount = stats?.meals_saved ?? 0;
+	// `undefined` = sin dato conocido. Se distingue de 0 a propósito: sin esta
+	// separación una API caída muestra "0" y el operador aprueba sobre una mentira.
+	const totalBusinesses = totalData?.meta.total ?? stats?.businesses;
+	const usersCount = stats?.users;
+	const mealsCount = stats?.meals_saved;
 
 	return (
 		<div className="w-full p-8 space-y-6">
@@ -194,22 +294,35 @@ function HomePage() {
 					</CardHeader>
 					<CardContent>
 						<div className="text-3xl font-bold">
-							{statsLoading || pendingLoading ? (
-								<Skeleton className="h-8 w-12" />
-							) : (
-								pendingCount
-							)}
+							<MetricValue
+								isLoading={statsLoading || pendingLoading}
+								value={pendingData?.meta.total}
+							/>
 						</div>
 						<p className="text-xs text-muted-foreground">
 							Negocios por aprobar
 						</p>
-						<Link
-							to="/negocios"
-							search={{ page: 1, limit: 10, verification_status: "pending" }}
-							className="text-xs text-warning hover:underline inline-flex items-center gap-1 mt-2"
-						>
-							Ver pendientes <ArrowRight className="h-3 w-3" />
-						</Link>
+						<div className="mt-2 flex items-center gap-3">
+							<Link
+								to="/negocios"
+								search={{ page: 1, limit: 10, verification_status: "pending" }}
+								className="text-xs text-warning hover:underline inline-flex items-center gap-1"
+							>
+								Ver pendientes <ArrowRight className="h-3 w-3" />
+							</Link>
+							{statsError || pendingError ? (
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => {
+										void refetchStats();
+										void refetchPending();
+									}}
+								>
+									Reintentar
+								</Button>
+							) : null}
+						</div>
 					</CardContent>
 				</Card>
 				<Card>
@@ -219,11 +332,7 @@ function HomePage() {
 					</CardHeader>
 					<CardContent>
 						<div className="text-3xl font-bold">
-							{statsLoading ? (
-								<Skeleton className="h-8 w-12" />
-							) : (
-								totalBusinesses
-							)}
+							<MetricValue isLoading={statsLoading} value={totalBusinesses} />
 						</div>
 						<p className="text-xs text-muted-foreground">Total comercios</p>
 					</CardContent>
@@ -235,7 +344,11 @@ function HomePage() {
 					</CardHeader>
 					<CardContent>
 						<div className="text-3xl font-bold">
-							{statsLoading ? <Skeleton className="h-8 w-12" /> : usersCount}+
+							<MetricValue
+								isLoading={statsLoading}
+								value={usersCount}
+								suffix="+"
+							/>
 						</div>
 						<p className="text-xs text-muted-foreground">Usuarios activos</p>
 					</CardContent>
@@ -247,16 +360,32 @@ function HomePage() {
 					</CardHeader>
 					<CardContent>
 						<div className="text-3xl font-bold">
-							{statsLoading ? <Skeleton className="h-8 w-12" /> : mealsCount}+
+							<MetricValue
+								isLoading={statsLoading}
+								value={mealsCount}
+								suffix="+"
+							/>
 						</div>
 						<p className="text-xs text-muted-foreground">Rescatadas</p>
 					</CardContent>
 				</Card>
 			</div>
 
+			<MoneySection />
+
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-				<PendingBusinessesCard businesses={pendingBusinesses} />
-				<QueuedEmailsCard emails={queuedEmails} />
+				<PendingBusinessesCard
+					businesses={pendingBusinesses}
+					isError={pendingError}
+					error={pendingErrorDetail}
+					onRetry={() => void refetchPending()}
+				/>
+				<QueuedEmailsCard
+					emails={queuedEmails}
+					isError={emailsError}
+					error={emailsErrorDetail}
+					onRetry={() => void refetchEmails()}
+				/>
 			</div>
 		</div>
 	);

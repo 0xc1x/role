@@ -57,8 +57,8 @@ export function PickupDetailsCard({ offer, location }: PickupDetailsCardProps) {
 						},
 					]}
 				>
-					<Clock size={18} color={colors.successDark} />
-					<AppText style={[styles.windowText, { color: colors.successDark }]}>
+					<Clock size={18} color={colors.successText} />
+					<AppText style={[styles.windowText, { color: colors.successText }]}>
 						{window}
 					</AppText>
 				</View>

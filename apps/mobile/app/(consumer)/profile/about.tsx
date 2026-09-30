@@ -1,6 +1,12 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
-import { Leaf, Sparkles, Tag, Users, type LucideIcon } from "lucide-react-native";
+import {
+	Leaf,
+	Sparkles,
+	Tag,
+	Users,
+	type LucideIcon,
+} from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 
@@ -17,7 +23,11 @@ function Hero() {
 	const { colors } = useTheme();
 	return (
 		<LinearGradient
-			colors={[`${withAlpha(colors.secondary, 0.302)}`, `${withAlpha(colors.secondary, 0.102)}`, `${withAlpha(colors.primary, 0.102)}`]}
+			colors={[
+				`${withAlpha(colors.secondary, 0.302)}`,
+				`${withAlpha(colors.secondary, 0.102)}`,
+				`${withAlpha(colors.primary, 0.102)}`,
+			]}
 			start={{ x: 0, y: 0 }}
 			end={{ x: 1, y: 1 }}
 			style={styles.hero}
@@ -26,7 +36,10 @@ function Hero() {
 				<AppText variant="h2" weight="bold" style={styles.centered}>
 					{strings.aboutScreen.heroTitle}
 				</AppText>
-				<AppText variant="bodyLarge" style={[styles.centered, { color: colors.mutedForeground }]}>
+				<AppText
+					variant="bodyLarge"
+					style={[styles.centered, { color: colors.mutedForeground }]}
+				>
 					{strings.aboutScreen.heroBody}
 				</AppText>
 			</View>
@@ -42,7 +55,14 @@ function TextSection({ title, body }: { title: string; body: string }) {
 				<AppText variant="h2" weight="bold" style={styles.centered}>
 					{title}
 				</AppText>
-				<AppText variant="bodyLarge" style={[styles.centered, styles.bodyText, { color: colors.mutedForeground }]}>
+				<AppText
+					variant="bodyLarge"
+					style={[
+						styles.centered,
+						styles.bodyText,
+						{ color: colors.mutedForeground },
+					]}
+				>
 					{body}
 				</AppText>
 			</View>
@@ -61,8 +81,18 @@ function ValueCard({
 }) {
 	const { colors } = useTheme();
 	return (
-		<View style={[styles.valueCard, { backgroundColor: colors.card, borderColor: colors.borderSolid }]}>
-			<View style={[styles.valueIcon, { backgroundColor: `${withAlpha(colors.secondary, 0.302)}` }]}>
+		<View
+			style={[
+				styles.valueCard,
+				{ backgroundColor: colors.card, borderColor: colors.borderSolid },
+			]}
+		>
+			<View
+				style={[
+					styles.valueIcon,
+					{ backgroundColor: `${withAlpha(colors.secondary, 0.302)}` },
+				]}
+			>
 				<Icon size={24} color={colors.primary} />
 			</View>
 			<View style={styles.valueBody}>
@@ -81,10 +111,18 @@ function Principles() {
 	const { colors } = useTheme();
 	return (
 		<View style={[styles.section, { backgroundColor: colors.background }]}>
-			<AppText variant="bodySmall" weight="bold" style={[styles.eyebrow, { color: colors.primary }]}>
+			<AppText
+				variant="bodySmall"
+				weight="bold"
+				style={[styles.eyebrow, { color: colors.primary }]}
+			>
 				{strings.aboutScreen.principlesEyebrow.toUpperCase()}
 			</AppText>
-			<AppText variant="h2" weight="bold" style={[styles.centered, styles.sectionTitle]}>
+			<AppText
+				variant="h2"
+				weight="bold"
+				style={[styles.centered, styles.sectionTitle]}
+			>
 				{strings.aboutScreen.principlesTitle}
 			</AppText>
 			<View style={styles.valueList}>
@@ -123,14 +161,23 @@ function Stats() {
 	if (isLoading && !data) {
 		return (
 			<View style={styles.section}>
-				<AppText variant="h2" weight="bold" style={[styles.centered, styles.sectionTitle]}>
+				<AppText
+					variant="h2"
+					weight="bold"
+					style={[styles.centered, styles.sectionTitle]}
+				>
 					{strings.aboutScreen.statsTitle}
 				</AppText>
 				<View style={styles.statsGrid}>
 					{[0, 1, 2].map((i) => (
 						<Skeleton
 							key={`about-stat-skeleton-${i}`}
-							style={{ flex: 1, minWidth: 90, height: 76, borderRadius: radii.lg }}
+							style={{
+								flex: 1,
+								minWidth: 90,
+								height: 76,
+								borderRadius: radii.lg,
+							}}
 						/>
 					))}
 				</View>
@@ -144,19 +191,34 @@ function Stats() {
 	];
 	return (
 		<View style={styles.section}>
-			<AppText variant="h2" weight="bold" style={[styles.centered, styles.sectionTitle]}>
+			<AppText
+				variant="h2"
+				weight="bold"
+				style={[styles.centered, styles.sectionTitle]}
+			>
 				{strings.aboutScreen.statsTitle}
 			</AppText>
-			<AppText variant="bodyMedium" weight="semiBold" style={[styles.centered, { color: colors.mutedForeground }]}>
+			<AppText
+				variant="bodyMedium"
+				weight="semiBold"
+				style={[styles.centered, { color: colors.mutedForeground }]}
+			>
 				{strings.aboutScreen.statsSubtitle}
 			</AppText>
 			<View style={styles.statsGrid}>
 				{items.map((item) => (
 					<View key={item.label} style={styles.statItem}>
-						<AppText variant="h2" weight="bold" style={{ color: colors.primary }}>
+						<AppText
+							variant="h2"
+							weight="bold"
+							style={{ color: colors.primary }}
+						>
 							{item.value}
 						</AppText>
-						<AppText variant="bodyMedium" style={[styles.centered, { color: colors.mutedForeground }]}>
+						<AppText
+							variant="bodyMedium"
+							style={[styles.centered, { color: colors.mutedForeground }]}
+						>
 							{item.label}
 						</AppText>
 					</View>
@@ -180,12 +242,24 @@ export default function AboutScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.header}>
-				<ScreenHeader title={strings.aboutScreen.title} fallback="/(consumer)/profile" />
+				<ScreenHeader
+					title={strings.aboutScreen.title}
+					fallback="/(consumer)/profile"
+				/>
 			</View>
 			<Hero />
-			<TextSection title={strings.aboutScreen.ideaTitle} body={strings.aboutScreen.ideaBody} />
-			<TextSection title={strings.aboutScreen.missionTitle} body={strings.aboutScreen.missionBody} />
-			<TextSection title={strings.aboutScreen.howTitle} body={strings.aboutScreen.howBody} />
+			<TextSection
+				title={strings.aboutScreen.ideaTitle}
+				body={strings.aboutScreen.ideaBody}
+			/>
+			<TextSection
+				title={strings.aboutScreen.missionTitle}
+				body={strings.aboutScreen.missionBody}
+			/>
+			<TextSection
+				title={strings.aboutScreen.howTitle}
+				body={strings.aboutScreen.howBody}
+			/>
 			<Stats />
 			<Principles />
 		</Screen>
@@ -219,7 +293,13 @@ const styles = StyleSheet.create({
 	},
 	bodyText: { lineHeight: 24 },
 	sectionTitle: { marginBottom: spacing.sm },
-	valueList: { gap: spacing.lg, maxWidth: 700, alignSelf: "center", width: "100%", marginTop: spacing.lg },
+	valueList: {
+		gap: spacing.lg,
+		maxWidth: 700,
+		alignSelf: "center",
+		width: "100%",
+		marginTop: spacing.lg,
+	},
 	valueCard: {
 		flexDirection: "row",
 		alignItems: "center",

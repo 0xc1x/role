@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { queryClient } from "@/src/core/query/client";
 import { authRepository } from "./data/repository";
 import { useAuthStore } from "./store";
-import { removeDeviceToken } from "@/src/features/notifications";
+import { revokeDeviceTokensWithRetry } from "@/src/features/notifications";
 
 /**
  * Cierre de sesión completo: desvincula el token push de este dispositivo,
@@ -12,9 +12,12 @@ import { removeDeviceToken } from "@/src/features/notifications";
 export async function performSignOut(): Promise<void> {
 	const userId = useAuthStore.getState().profile?.id;
 	if (userId) {
-		await removeDeviceToken(userId).catch(() => {
-			// Si falla la desvinculación, cerramos sesión igual.
-		});
+		// Write-ahead: la revocación se registra antes de tocar la red. Si el
+		// `DELETE` falla, la fila de `device_tokens` sobrevive al cierre de
+		// sesión y Supabase sigue entregando push a un dispositivo sin sesión.
+		// El logout nunca se bloquea por eso: el registro reintenta en el
+		// próximo arranque autenticado del mismo usuario.
+		await revokeDeviceTokensWithRetry(userId);
 	}
 	await authRepository.signOut();
 	useAuthStore.getState().clear();

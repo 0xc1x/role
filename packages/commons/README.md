@@ -16,10 +16,12 @@ bun run typecheck                             # valida commons + todos los consu
 Desde este directorio:
 
 ```bash
-bun run build        # tsc + scripts/fix-imports.mjs
-bun run test         # vitest
-bun run docs:export  # openapi.json desde schemas
+bun run build     # tsc + scripts/fix-imports.mjs
+bun run test      # bun:test
+bun run typecheck # tsc --noEmit
 ```
+
+Este paquete **no genera OpenAPI**. La especificación HTTP se deriva de los decoradores de Nest en `apps/api` (`bun run --cwd apps/api openapi:export`), y CI verifica que el artefacto commiteado esté sincronizado.
 
 ## Estructura
 

@@ -5,7 +5,6 @@ import { LoadingView, Screen, ScreenHeader, spacing } from "@/src/core/ui";
 import { ProductForm } from "@/src/features/business/components/products/ProductForm";
 import { StyleSheet } from "react-native";
 
-
 export default function NewProductScreen() {
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const businessId = id ?? "";

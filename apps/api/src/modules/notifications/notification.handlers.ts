@@ -9,6 +9,7 @@ import {
   orderEvents,
   businesses,
   businessNotificationPreferences,
+  businessOwnership,
 } from '../../database/schema';
 import { NotificationsService } from './notifications.service';
 import { NotificationsRepository } from './notifications.repository';
@@ -25,13 +26,17 @@ export class NotificationHandlers {
     const [row] = await this.db
       .select({
         order: orders,
-        business_owner_id: businesses.owner_id,
+        business_owner_id: businessOwnership.owner_id,
         business_name: businesses.name,
         business_image: businesses.image,
         offer_image: offers.image,
       })
       .from(orders)
       .innerJoin(businesses, eq(orders.business_id, businesses.id))
+      .innerJoin(
+        businessOwnership,
+        eq(orders.business_id, businessOwnership.business_id),
+      )
       .innerJoin(offers, eq(orders.offer_id, offers.id))
       .where(eq(orders.id, orderId))
       .limit(1);
@@ -234,7 +239,10 @@ export class NotificationHandlers {
         {
           title: 'Recordatorio de recogida',
           body: `Tu pedido vence a las ${c.pickup_end.toLocaleTimeString()}`,
-          data: { link: `/orders/${c.id}`, type: 'pickup_reminder' },
+          // `order/[id]`, not `orders/[id]`: the order detail screen is
+          // singular. `/orders/<id>` resolves to nothing, so this push opened a
+          // blank page. Mirrors handle-pickup-reminders in supabase/functions.
+          data: { link: `/order/${c.id}`, type: 'pickup_reminder' },
         },
         { prefFlag: 'pickup_reminders_enabled' },
       );

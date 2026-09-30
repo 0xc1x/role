@@ -41,7 +41,9 @@ describe('AppConfigService (DB real)', () => {
       }),
     ).rejects.toThrow();
 
-    expect((await service.list({ page: 1, limit: 10 })).meta.total).toBeGreaterThanOrEqual(1);
+    expect(
+      (await service.list({ page: 1, limit: 10 })).meta.total,
+    ).toBeGreaterThanOrEqual(1);
     expect(await service.listPublic()).toHaveLength(1);
 
     expect((await service.update('k1', { label: 'N' })).label).toBe('N');

@@ -31,4 +31,21 @@ describe("businessesKeys", () => {
 			"abc-123",
 		]);
 	});
+
+	// Las ubicaciones cuelgan de la ficha: invalidar una no puede tocar la lista
+	// de negocios ni otra ficha.
+	test("locations cuelgan del detalle del negocio", () => {
+		expect(businessesKeys.locations("abc-123")).toEqual([
+			"businesses",
+			"detail",
+			"abc-123",
+			"locations",
+		]);
+	});
+
+	test("locations de negocios distintos no comparten clave", () => {
+		expect(businessesKeys.locations("abc-123")).not.toEqual(
+			businessesKeys.locations("def-456"),
+		);
+	});
 });

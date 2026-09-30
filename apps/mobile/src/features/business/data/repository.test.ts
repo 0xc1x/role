@@ -49,6 +49,9 @@ function mockChain(result: {
 			return chain;
 		};
 	}
+	// The repository awaits this chain and supabase-js `PostgrestBuilder`
+	// exposes `then()`, so the double must be awaitable to stay faithful.
+	// biome-ignore lint/suspicious/noThenProperty: intentional thenable double
 	chain.then = (onF: unknown, onR: unknown) =>
 		Promise.resolve(result).then(
 			onF as (value: typeof result) => unknown,
@@ -135,9 +138,9 @@ describe("businessRepository paginated listing", () => {
 		});
 
 		expect(rows).toEqual([]);
-		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
-		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
-		expect(calls["range"]).toContainEqual([20, 39]);
+		expect(calls.eq).toContainEqual(["business_id", "b1"]);
+		expect(calls.order).toContainEqual(["created_at", { ascending: false }]);
+		expect(calls.range).toContainEqual([20, 39]);
 	});
 
 	test("getBusinessReviews filtra por oferta via orders!inner", async () => {
@@ -150,8 +153,8 @@ describe("businessRepository paginated listing", () => {
 		});
 
 		expect(String(selectArgs[0]?.[0])).toContain("!inner");
-		expect(calls["eq"]).toContainEqual(["orders.offer_id", "of1"]);
-		expect(calls["range"]).toContainEqual([0, 2]);
+		expect(calls.eq).toContainEqual(["orders.offer_id", "of1"]);
+		expect(calls.range).toContainEqual([0, 2]);
 	});
 
 	test("countBusinessReviews devuelve el head-count con head:true", async () => {
@@ -175,10 +178,10 @@ describe("businessRepository paginated listing", () => {
 			offset: 0,
 		});
 
-		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
-		expect(calls["eq"]).toContainEqual(["business_location_id", "loc1"]);
-		expect(calls["ilike"]).toContainEqual(["title", "%pan%"]);
-		expect(calls["range"]).toContainEqual([0, 19]);
+		expect(calls.eq).toContainEqual(["business_id", "b1"]);
+		expect(calls.eq).toContainEqual(["business_location_id", "loc1"]);
+		expect(calls.ilike).toContainEqual(["title", "%pan%"]);
+		expect(calls.range).toContainEqual([0, 19]);
 	});
 
 	test("countBusinessOffers filtra is_active con head:true", async () => {
@@ -189,7 +192,7 @@ describe("businessRepository paginated listing", () => {
 		});
 
 		expect(count).toBe(4);
-		expect(calls["eq"]).toContainEqual(["is_active", true]);
+		expect(calls.eq).toContainEqual(["is_active", true]);
 	});
 
 	test("getBusinessOffers filtra categoría server-side con !inner", async () => {
@@ -204,12 +207,9 @@ describe("businessRepository paginated listing", () => {
 		});
 
 		expect(String(selectArgs[0]?.[0])).toContain("offer_categories!inner");
-		expect(calls["eq"]).toContainEqual([
-			"offer_categories.category_id",
-			"cat-9",
-		]);
-		expect(calls["order"]).toContainEqual(["title", { ascending: true }]);
-		expect(calls["range"]).toContainEqual([0, 19]);
+		expect(calls.eq).toContainEqual(["offer_categories.category_id", "cat-9"]);
+		expect(calls.order).toContainEqual(["title", { ascending: true }]);
+		expect(calls.range).toContainEqual([0, 19]);
 	});
 
 	test("countBusinessOffers incluye el embed para el filtro de categoría", async () => {
@@ -221,10 +221,7 @@ describe("businessRepository paginated listing", () => {
 
 		expect(count).toBe(2);
 		expect(String(selectArgs[0]?.[0])).toContain("offer_categories!inner");
-		expect(calls["eq"]).toContainEqual([
-			"offer_categories.category_id",
-			"cat-9",
-		]);
+		expect(calls.eq).toContainEqual(["offer_categories.category_id", "cat-9"]);
 	});
 
 	test("getCoupons filtra is_active y pagina con range", async () => {
@@ -236,8 +233,8 @@ describe("businessRepository paginated listing", () => {
 			offset: 20,
 		});
 
-		expect(calls["eq"]).toContainEqual(["is_active", true]);
-		expect(calls["range"]).toContainEqual([20, 39]);
+		expect(calls.eq).toContainEqual(["is_active", true]);
+		expect(calls.range).toContainEqual([20, 39]);
 	});
 
 	test("countCoupons devuelve el head-count", async () => {
@@ -255,9 +252,9 @@ describe("businessRepository paginated listing", () => {
 			offset: 0,
 		});
 
-		expect(calls["eq"]).toContainEqual(["status", "paid"]);
-		expect(calls["order"]).toContainEqual(["period_end", { ascending: false }]);
-		expect(calls["range"]).toContainEqual([0, 19]);
+		expect(calls.eq).toContainEqual(["status", "paid"]);
+		expect(calls.order).toContainEqual(["period_end", { ascending: false }]);
+		expect(calls.range).toContainEqual([0, 19]);
 	});
 
 	test("getPayout lee una sola fila por id", async () => {
@@ -283,7 +280,7 @@ describe("businessRepository paginated listing", () => {
 			paidCount: 2,
 			pending: 30,
 		});
-		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
-		expect(calls["limit"]).toContainEqual([1000]);
+		expect(calls.eq).toContainEqual(["business_id", "b1"]);
+		expect(calls.limit).toContainEqual([1000]);
 	});
 });

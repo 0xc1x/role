@@ -3,7 +3,6 @@ import {
 	Animated,
 	// react-doctor-disable-next-line rn-no-panresponder
 	PanResponder,
-	Platform,
 	Pressable,
 	StyleSheet,
 	useWindowDimensions,
@@ -14,7 +13,6 @@ import { Portal } from "@rn-primitives/portal";
 import { cn } from "@/lib/utils";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
-import { BAR_HEIGHT } from "@/src/core/ui/Navbar";
 import { useTabBarStore } from "@/src/core/ui/tabbar-store";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -46,7 +44,10 @@ export function Drawer({
 }) {
 	const [internalOpen, setInternalOpen] = React.useState(defaultOpen);
 	const isControlled = controlledOpen !== undefined;
-	const open = isControlled ? controlledOpen! : internalOpen;
+	// `??` states the same thing as `isControlled ? controlledOpen : internalOpen`
+	// without asserting: a controlled drawer always has a boolean `open`, and an
+	// uncontrolled one always falls back to the internal state.
+	const open = controlledOpen ?? internalOpen;
 	const setOpen = React.useCallback(
 		(v: boolean) => {
 			if (!isControlled) setInternalOpen(v);
@@ -87,7 +88,6 @@ export function DrawerClose({
 		<Pressable
 			onPress={(e) => {
 				onOpenChange(false);
-				// @ts-ignore
 				onPress?.(e);
 			}}
 			{...props}
@@ -233,7 +233,7 @@ export function DrawerContent({
 						paddingBottom: bottomOffset,
 						transform: [{ translateY: Animated.add(offset, dragY) }],
 					},
-					{ zIndex: 1001 } as any,
+					{ zIndex: 1001 },
 				]}
 				className={cn("bg-card", className)}
 				{...props}

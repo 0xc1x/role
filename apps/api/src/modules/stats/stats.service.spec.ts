@@ -34,10 +34,20 @@ describe('StatsService', () => {
   });
 
   it('devuelve ceros si las consultas no encuentran filas', async () => {
-    db.select = jest
-      .fn()
-      .mockImplementation(() => makeBuilder({ count: 0 }));
+    db.select = jest.fn().mockImplementation(() => makeBuilder({ count: 0 }));
     const stats = await service.getPlatformStats();
     expect(stats).toEqual({ users: 0, businesses: 0, meals_saved: 0 });
+  });
+
+  // El panel público es la superficie de marketing: si alguna vez apareciera
+  // una métrica de dinero acá, quedaría publicada para callers sin token.
+  it('no expone ningún campo de dinero', async () => {
+    const stats = await service.getPlatformStats();
+
+    expect(Object.keys(stats).sort()).toEqual([
+      'businesses',
+      'meals_saved',
+      'users',
+    ]);
   });
 });

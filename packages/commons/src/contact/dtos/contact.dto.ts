@@ -1,4 +1,4 @@
-import { z } from "zod";
-import { CreateContactSchema } from "../schemas/contact.schema";
+import type { z } from "zod";
+import type { CreateContactSchema } from "../schemas/contact.schema";
 
 export type CreateContactDto = z.infer<typeof CreateContactSchema>;

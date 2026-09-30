@@ -1,6 +1,7 @@
 import {
   ArgumentsHost,
   BadRequestException,
+  HttpException,
   HttpStatus,
   InternalServerErrorException,
   Logger,
@@ -50,6 +51,30 @@ describe('AllExceptionsFilter', () => {
         timestamp: expect.any(String),
       }),
     );
+  });
+
+  it('un 429 no muestra el nombre de la clase de excepción al operador', () => {
+    const filter = makeFilter();
+    const { host, response } = mockHost();
+
+    // Exactamente lo que produce `ThrottlerException` de @nestjs/throttler.
+    filter.catch(
+      new HttpException(
+        { statusCode: 429, message: 'ThrottlerException: Too Many Requests' },
+        HttpStatus.TOO_MANY_REQUESTS,
+      ),
+      host,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(HttpStatus.TOO_MANY_REQUESTS);
+    const body = response.json.mock.calls[0]?.[0];
+    expect(body.statusCode).toBe(429);
+    expect(body.error).toBe('Too Many Requests');
+    expect(body.message).toBe(
+      'Demasiadas peticiones. Espera un momento e inténtalo de nuevo.',
+    );
+    // El nombre de la clase no puede aparecer por ninguna clave de la respuesta.
+    expect(JSON.stringify(body)).not.toContain('ThrottlerException');
   });
 
   it('mapea HttpException con cuerpo objeto incluyendo details (Zod pipe)', () => {

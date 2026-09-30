@@ -41,6 +41,9 @@ function mockChain(result: { data?: unknown; error: unknown }) {
 			return chain;
 		};
 	}
+	// The repository awaits this chain and supabase-js `PostgrestBuilder`
+	// exposes `then()`, so the double must be awaitable to stay faithful.
+	// biome-ignore lint/suspicious/noThenProperty: intentional thenable double
 	chain.then = (onF: unknown, onR: unknown) =>
 		Promise.resolve(result).then(
 			onF as (value: typeof result) => unknown,
@@ -62,9 +65,9 @@ describe("favoritesRepository paginated listing", () => {
 		});
 
 		expect(rows).toEqual([]);
-		expect(calls["eq"]).toContainEqual(["user_id", "u1"]);
-		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
-		expect(calls["range"]).toContainEqual([20, 39]);
+		expect(calls.eq).toContainEqual(["user_id", "u1"]);
+		expect(calls.order).toContainEqual(["created_at", { ascending: false }]);
+		expect(calls.range).toContainEqual([20, 39]);
 	});
 
 	test("getFavorites sin params no pagina (compatibilidad)", async () => {
@@ -72,6 +75,6 @@ describe("favoritesRepository paginated listing", () => {
 
 		await favoritesRepository.getFavorites("u1");
 
-		expect(calls["range"]).toEqual([]);
+		expect(calls.range).toEqual([]);
 	});
 });

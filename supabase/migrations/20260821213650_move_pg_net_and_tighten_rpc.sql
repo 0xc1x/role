@@ -1,0 +1,61 @@
+-- Backfilled gap: documented no-op. Reconstruction, 2026-09-28.
+--
+-- NOT APPLIED TO PRODUCTION. NOT BYTE-IDENTICAL TO THE LEDGER ROW. This file
+-- executes no DDL.
+--
+-- WHAT THIS CLOSES
+--
+-- The ledger records `20260821213650` / `move_pg_net_and_tighten_rpc` as
+-- applied. No file for it existed in this directory, so the version sequence
+-- had a hole and a replay could not prove it reached the state production is in.
+--
+-- WHY A NO-OP IS THE HONEST ANSWER
+--
+-- The original text is not available. It embedded the Supabase anon JWT as a
+-- literal, which is precisely the reason the six absent files were left absent
+-- in the first place — see `supabase/migrations/README.md`, section "Six
+-- migrations are deliberately absent". Adding a reconstruction that drops the
+-- credential would produce a file that looks like a recovery and is not one.
+--
+-- What IS known about the state this migration left behind, read from
+-- production:
+--
+--   * The `net` schema exists and provides
+--       net.http_post(url text, body jsonb, params jsonb, headers jsonb,
+--                     timeout_milliseconds integer) -> bigint
+--     This is the pg_net extension's own signature. It is not something a
+--     migration authors; it is what `create extension pg_net` installs. The
+--     replay harness reproduces the same object by stubbing it
+--     (apps/api/test/spike-rls.mjs, BOOTSTRAP, `create schema if not exists
+--     net` + a `net.http_post` returning 1::bigint), which is the right shape
+--     for a throwaway: the migrations under test only need the function to
+--     resolve, not a live HTTP client.
+--   * The RPC it tightened was `public.invoke_internal_edge_function`, whose
+--     final body is 20260925175051_fix_dispatch_http_headers.sql and whose
+--     credential handling is 20260925163235_client_read_boundaries_vault_secrets.sql.
+--
+-- Moving pg_net "somewhere" is therefore not a durable schema fact that a file
+-- could restore: the schema comes from the extension, and the extension is
+-- enabled by the platform, not by this directory. A `create extension if not
+-- exists pg_net` here would be a no-op on Supabase, where it is already
+-- installed in `extensions` and exposed as `net`, and it would be a hard failure
+-- on any environment that does not ship the extension — including the replay
+-- harness, which stubs `net.http_post` precisely because it cannot install
+-- pg_net. Writing the extension call would make the directory less portable,
+-- not more.
+--
+-- Nothing in this directory calls `net.http_post` before
+-- 20260615211014_setup_push_cron.sql, and that call is inside a cron command
+-- string, so it is never resolved at creation time. The first hard dependency on
+-- the schema is 20260925163235. By then the function exists regardless of what
+-- this slot did, which is the practical proof that the slot is inert.
+--
+-- The one real lesson from this pair of migrations is already recorded where it
+-- belongs, in 20260925175051_fix_dispatch_http_headers.sql: pg_net's `params`
+-- argument is the query string, not the header map, and wrapping a header map in
+-- it dispatches an unauthenticated request that returns 401 with no error
+-- surface in Postgres. Reconstructing these two slots would put that bug back
+-- into the history of a replay if the guess were wrong. Leaving them empty
+-- cannot.
+
+select 1;

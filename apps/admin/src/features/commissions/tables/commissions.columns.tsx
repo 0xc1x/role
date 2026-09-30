@@ -3,6 +3,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
 import { ActionCell } from "@/features/commissions/tables/cells/action-cell";
+import type { CsvColumn } from "@/lib/csv";
 
 export const columns: ColumnDef<CommissionDto>[] = [
 	{
@@ -44,5 +45,27 @@ export const columns: ColumnDef<CommissionDto>[] = [
 		header: "Acciones",
 		enableHiding: false,
 		cell: ({ row }) => <ActionCell row={row} />,
+	},
+];
+
+/**
+ * Exportación de comisiones, en el mismo orden que las columnas de arriba.
+ *
+ * La tasa se exporta en puntos (15 = 15%) y no como `0.15` con `%` detrás: el
+ * símbolo lo vuelve texto en la hoja y el operador deja de poder comparar
+ *commissiones entre negocios. El `id` de la columna dice que la unidad es
+ * porcentaje, que es la duda que aparece al abrir el archivo.
+ */
+export const commissionsCsvColumns: CsvColumn<CommissionDto>[] = [
+	{ label: "Negocio", value: (c) => c.name },
+	{ label: "Slug", value: (c) => c.slug },
+	{
+		label: "Comisión (%)",
+		value: (c) => Number((c.commission_rate * 100).toFixed(2)),
+	},
+	{ label: "Estado", value: (c) => (c.active ? "Activo" : "Inactivo") },
+	{
+		label: "Pagos pendientes",
+		value: (c) => (c.has_pending_payouts ? "Sí" : "No"),
 	},
 ];

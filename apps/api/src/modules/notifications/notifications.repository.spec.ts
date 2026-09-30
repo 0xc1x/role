@@ -57,14 +57,20 @@ describe('NotificationsRepository (DB real)', () => {
 
   test('filterByConsumerPrefs: sin fila = permitido', async () => {
     expect(
-      await repo.filterByConsumerPrefs([userA, userB], 'pickup_reminders_enabled'),
+      await repo.filterByConsumerPrefs(
+        [userA, userB],
+        'pickup_reminders_enabled',
+      ),
     ).toEqual([userA, userB]);
     await ctx.db.insert(consumerNotificationPreferences).values({
       user_id: userB,
       pickup_reminders_enabled: false,
     });
     expect(
-      await repo.filterByConsumerPrefs([userA, userB], 'pickup_reminders_enabled'),
+      await repo.filterByConsumerPrefs(
+        [userA, userB],
+        'pickup_reminders_enabled',
+      ),
     ).toEqual([userA]);
   });
 

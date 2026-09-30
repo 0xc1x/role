@@ -50,7 +50,11 @@ describe('ProfilesRepository (DB real)', () => {
       is_active: false,
     });
 
-    const withRes = await repo.list({ page: 1, limit: 50, hasActivePushToken: true });
+    const withRes = await repo.list({
+      page: 1,
+      limit: 50,
+      hasActivePushToken: true,
+    });
     const ids = withRes.rows.map((r) => r.id);
     expect(ids).toContain(withToken);
     expect(ids).not.toContain(withoutToken);

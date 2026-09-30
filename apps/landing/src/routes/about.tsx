@@ -1,21 +1,19 @@
+import { DISCOUNT_SAVINGS_CLAIM } from "@0xc1x/role-commons";
 import { createFileRoute, Link } from "@tanstack/react-router";
-
 import { Footer } from "@/components/footer";
 import { HeroBackground } from "@/components/hero-background";
 import { HeartIcon, LeafIcon, SparkIcon, UsersIcon } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
-import { platformStatsQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
 import { useStoreLink } from "@/lib/store-links";
-import { usePlatformStats } from "@/lib/use-config";
+import { ensurePlatformStats, usePlatformStats } from "@/lib/use-config";
 
 export const Route = createFileRoute("/about")({
 	component: AboutPage,
-	loader: ({ context }) =>
-		context.queryClient
-			.ensureQueryData(platformStatsQueryOptions)
-			.catch(() => undefined),
+	// La degradación a `fallback` no rompe el render (esta página publica
+	// cifras, no las esconde), pero queda explícita en el markup.
+	loader: ({ context }) => ensurePlatformStats(context.queryClient),
 	head: () =>
 		pageHead(
 			"/about",
@@ -58,9 +56,12 @@ function AboutPage() {
 	const stats = usePlatformStats();
 	const storeLink = useStoreLink();
 	const IMPACT = [
-		{ value: formatStat(stats?.users), label: "usuarios activos" },
-		{ value: formatStat(stats?.businesses), label: "comercios aliados" },
-		{ value: formatStat(stats?.meals_saved), label: "comidas salvadas" },
+		{ value: formatStat(stats.data?.users), label: "usuarios activos" },
+		{ value: formatStat(stats.data?.businesses), label: "comercios aliados" },
+		{
+			value: formatStat(stats.data?.meals_saved),
+			label: "comidas salvadas",
+		},
 	];
 
 	return (
@@ -101,7 +102,8 @@ function AboutPage() {
 								comida buena al final del día y, a la vez, muchas personas
 								buscan opciones accesibles para comer bien. Conectamos esos dos
 								extremos. Los comercios recuperan valor de su excedente y los
-								usuarios disfrutan comida de calidad con hasta 70% de descuento.
+								usuarios disfrutan comida de calidad pagando{" "}
+								{DISCOUNT_SAVINGS_CLAIM}.
 							</p>
 						</div>
 
@@ -127,14 +129,20 @@ function AboutPage() {
 								plataforma que conecta comercios con excedente y personas que
 								quieren aprovecharlo. La reserva es gratuita, el pago se hace
 								directo en el comercio y la recogida es presencial. Simple,
-								transparente y sin comisiones ocultas.
+								transparente: cada local elige un plan con una comisión por
+								bolsa, informada antes de firmar.
 							</p>
 						</div>
 					</div>
 				</section>
 
-				{/* Impact stats */}
-				<section className="bg-role-surface-muted px-6 py-24 md:py-32">
+				{/* Impact stats. `data-stats-source` = "api" | "loading" | "failed";
+				    sin el atributo, este bloque publicaría ceros falsos
+				    indistinguibles de un impacto real de cero. */}
+				<section
+					data-stats-source={stats.source}
+					className="bg-role-surface-muted px-6 py-24 md:py-32"
+				>
 					<div className="mx-auto max-w-4xl">
 						<div className="mb-12 max-w-2xl reveal">
 							<Eyebrow>El impacto hasta hoy</Eyebrow>

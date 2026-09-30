@@ -21,7 +21,7 @@ src/
 - **Cambiar un contrato rompe consumidores**: `bun run typecheck` en la raíz valida el blast radius. Los breaking changes se actualizan con TODOS sus consumidores **en el mismo PR**.
 - **Nuevo dominio** = carpeta nueva en `src/`. NO crear un paquete workspace separado sin consumidor real.
 - **Build**: `bun run build` = `tsc` + `scripts/fix-imports.mjs` → `dist/` (ESM puro). Los consumidores usan `dist/` compilado (Metro/Vite no transpilan TS del paquete); turbo lo regenera antes de typecheck/build.
-- **OpenAPI**: `bun run docs:export` → `openapi.json`.
+- **OpenAPI**: este paquete **no genera** especificación OpenAPI. No hay `docs:export` aquí; la spec HTTP se deriva de los decoradores de Nest en `apps/api` (`bun run --cwd apps/api openapi:export`) y CI la verifica. La SSOT de contratos son los schemas Zod de aquí, y su guard es `bun run typecheck` en la raíz.
 
 ## Política de purga (decisión 2026-09-06)
 

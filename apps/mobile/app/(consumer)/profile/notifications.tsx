@@ -1,15 +1,26 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { Bell, ChartColumn, Clock, Mail, MessageCircle, MessageSquare, Smartphone, Star, Zap, type LucideIcon } from "lucide-react-native";
+import {
+	Bell,
+	ChartColumn,
+	Clock,
+	Mail,
+	MessageCircle,
+	MessageSquare,
+	Smartphone,
+	Star,
+	Zap,
+	type LucideIcon,
+} from "lucide-react-native";
 
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { strings } from "@/src/core/i18n/strings";
-import { AppText, Screen, ScreenHeader } from "@/src/core/ui";
+import { AppText, Screen, ScreenHeader, SectionTitle } from "@/src/core/ui";
 import { useAuthStore } from "@/src/features/auth/store";
-import { removeDeviceToken } from "@/src/features/notifications";
+import { revokeDeviceTokensWithRetry } from "@/src/features/notifications";
 import {
 	useNotificationPreferences,
 	useUpdateNotificationPreferences,
@@ -88,19 +99,6 @@ const SMART_ALERTS: ToggleConfig[] = [
 		icon: ChartColumn,
 	},
 ];
-
-function SectionTitle({ children }: { children: string }) {
-	const { colors } = useTheme();
-	return (
-		<AppText
-			variant="labelSmall"
-			weight="bold"
-			style={{ color: colors.mutedForeground }}
-		>
-			{children}
-		</AppText>
-	);
-}
 
 function NotificationRow({
 	config,
@@ -194,7 +192,9 @@ function ToggleCard({
 			{configs.map((config, index) => (
 				<View key={config.key}>
 					{index > 0 ? (
-						<View style={[styles.divider, { backgroundColor: colors.border }]} />
+						<View
+							style={[styles.divider, { backgroundColor: colors.border }]}
+						/>
 					) : null}
 					<NotificationRow
 						config={config}
@@ -212,7 +212,8 @@ export default function NotificationsSettingsScreen() {
 	const { colors } = useTheme();
 	const { profile, status, initialized } = useAuthStore();
 	const userId = profile?.id ?? "";
-	const { data: prefs, isLoading: prefsLoading } = useNotificationPreferences(userId);
+	const { data: prefs, isLoading: prefsLoading } =
+		useNotificationPreferences(userId);
 	const update = useUpdateNotificationPreferences(userId);
 	// Lock anti doble-tap y flujo de registro viven en el hook compartido.
 	const { registering, enablePush } = usePushToggle(userId, async () => {
@@ -236,9 +237,12 @@ export default function NotificationsSettingsScreen() {
 			return;
 		}
 		if (config.key === "push_enabled" && !value) {
-			// Push off: drop this device's token so it stops receiving pushes,
-			// then persist the preference.
-			await removeDeviceToken(userId).catch(() => {});
+			// Push off: SAME write-ahead que el logout. Desactivar el toggle con
+			// la preferencia ya guardada y el `DELETE` fallido dejaba la fila de
+			// `device_tokens` viva: el usuario seguía recibiendo push con su
+			// preferencia en "off". El registro se drena en el próximo arranque
+			// autenticado, el único momento con sesión que RLS acepta.
+			await revokeDeviceTokensWithRetry(userId);
 		}
 		update.mutate({
 			[config.key]: value,
@@ -248,7 +252,10 @@ export default function NotificationsSettingsScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
-				<ScreenHeader title={strings.notificationsSettings.title} fallback="/(consumer)/profile" />
+				<ScreenHeader
+					title={strings.notificationsSettings.title}
+					fallback="/(consumer)/profile"
+				/>
 
 				<Alert variant="info" icon={Bell}>
 					<AlertDescription>
@@ -262,7 +269,9 @@ export default function NotificationsSettingsScreen() {
 					</AlertDescription>
 				</Alert>
 
-				<SectionTitle>{strings.notificationsSettings.channelsSection}</SectionTitle>
+				<SectionTitle>
+					{strings.notificationsSettings.channelsSection}
+				</SectionTitle>
 				{prefsLoading ? (
 					<Skeleton style={{ height: 248, borderRadius: radii.lg }} />
 				) : (
@@ -274,7 +283,9 @@ export default function NotificationsSettingsScreen() {
 					/>
 				)}
 
-				<SectionTitle>{strings.notificationsSettings.smartSection}</SectionTitle>
+				<SectionTitle>
+					{strings.notificationsSettings.smartSection}
+				</SectionTitle>
 				{prefsLoading ? (
 					<Skeleton style={{ height: 248, borderRadius: radii.lg }} />
 				) : (

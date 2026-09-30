@@ -222,7 +222,7 @@ export const profileRepository = {
 		const row = Array.isArray(data) ? ((data[0] ?? {}) as Row) : {};
 		const count = num(row.orders_count) ?? 0;
 		return {
-			total_saved_cents: num(row.total_saved) ?? 0,
+			total_saved: num(row.total_saved) ?? 0,
 			total_orders: count,
 			co2_saved_kg: count * CO2_KG_PER_ORDER,
 		};

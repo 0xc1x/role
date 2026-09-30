@@ -4,10 +4,13 @@ import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
 import { strings } from "@/src/core/i18n/strings";
-import { Screen, ScreenHeader } from "@/src/core/ui";
+import { ErrorState, LoadingView, Screen, ScreenHeader } from "@/src/core/ui";
 import { spacing } from "@/src/core/theme/spacing";
 import { useAuthStore } from "@/src/features/auth/store";
-import { useBusinesses, useCreateBusiness } from "@/src/features/business/hooks";
+import {
+	useBusinesses,
+	useCreateBusiness,
+} from "@/src/features/business/hooks";
 import { BusinessForm } from "@/src/features/business/components/BusinessForm";
 
 /**
@@ -17,16 +20,37 @@ import { BusinessForm } from "@/src/features/business/components/BusinessForm";
  */
 export default function BusinessNewScreen() {
 	const profile = useAuthStore((s) => s.profile);
-	const { data: businesses, isLoading } = useBusinesses(profile?.id ?? "");
+	const {
+		data: businesses,
+		isLoading,
+		isError: businessesError,
+		error: businessesErrorValue,
+		refetch: refetchBusinesses,
+	} = useBusinesses(profile?.id ?? "");
 	const create = useCreateBusiness();
 
-	// Ya tiene negocio: nada que crear aquí.
-	const hasBusiness = !isLoading && (businesses?.length ?? 0) > 0;
+	// Ya tiene negocio: nada que crear aquí. El error se excluye a propósito:
+	// sin datos no sabemos si ya tiene uno, y crear a ciegas duplicaría el
+	// negocio de un dueño existente.
+	const hasBusiness =
+		!isLoading && !businessesError && (businesses?.length ?? 0) > 0;
 	useEffect(() => {
 		if (hasBusiness) router.replace("/(business)/products");
 	}, [hasBusiness]);
 
-	if (hasBusiness) return null;
+	if (businessesError) {
+		return (
+			<ErrorState
+				error={businessesErrorValue}
+				onRetry={() => void refetchBusinesses()}
+			/>
+		);
+	}
+
+	// Guard de navegación: ya tiene negocio, el `useEffect` de arriba lo manda
+	// al panel. Antes devolvía `null` mientras la navegación se aplicaba — un
+	// frame en blanco. LoadingView mantiene la espera visible.
+	if (hasBusiness) return <LoadingView />;
 
 	return (
 		<Screen scroll keyboardShouldPersistTaps="handled">
@@ -39,6 +63,8 @@ export default function BusinessNewScreen() {
 					submitLabel={strings.business.createBusiness}
 					pending={create.isPending}
 					onSubmit={(input) =>
+						// El aviso de fallo lo emite el hook (copy es-ES nombrado por
+						// operación); aquí solo vive el camino feliz.
 						create.mutate(
 							{ ...input, ownerId: profile?.id ?? "" },
 							{
@@ -46,12 +72,6 @@ export default function BusinessNewScreen() {
 									toast.success(strings.business.businessCreated);
 									router.replace("/(business)/products");
 								},
-								onError: (e) =>
-									toast.error(
-										e instanceof Error
-											? e.message
-											: strings.business.createBusiness,
-									),
 							},
 						)
 					}

@@ -2,12 +2,13 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import type { CreateContactDto } from '@0xc1x/role-commons';
-import {
-  safeErrorFields,
-  safeErrorSummary,
-} from '../../common/utils/safe-error';
+import { safeErrorFields, safeErrorSummary } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
 import { AppConfigRepository } from '../app-config/app-config.repository';
+import {
+  readConfigEmail,
+  resolveOutboundFrom,
+} from '../app-config/outbound-addresses';
 import { EmailMarketingRepository } from '../email-marketing/email-marketing.repository';
 import { RendererService } from '../email-marketing/renderer.service';
 import { AppStoreRepository } from '../store/app-store.repository';
@@ -44,7 +45,7 @@ export class ContactService {
 
     // 2. resolver destinos y remitente desde app_config
     const to = await this.resolveTo(dto.role);
-    const from = await this.resolveFrom();
+    const from = await resolveOutboundFrom(this.appConfigRepo, this.config);
 
     // 3. insertar en app_store con PENDIENTE
     const entry = await this.storeRepo.insert({
@@ -141,31 +142,10 @@ export class ContactService {
   private async resolveTo(role: string): Promise<string> {
     const key =
       role === 'negocio' ? 'contact.negocios_email' : 'contact.hola_email';
-    const row = await this.appConfigRepo.findByKey(key);
-    if (
-      row?.value &&
-      typeof row.value === 'string' &&
-      row.value.includes('@')
-    ) {
-      return row.value;
-    }
+    const configured = await readConfigEmail(this.appConfigRepo, key);
+    if (configured) return configured;
     // fallback por rol
     return role === 'negocio' ? 'negocios@role.ec' : 'hola@role.ec';
-  }
-
-  private async resolveFrom(): Promise<string> {
-    const row = await this.appConfigRepo.findByKey('email.from');
-    if (
-      row?.value &&
-      typeof row.value === 'string' &&
-      row.value.includes('@')
-    ) {
-      const v = row.value;
-      return v.includes('<') ? v : `Rolé <${v}>`;
-    }
-    const envFrom = this.config.get('EMAIL_FROM', { infer: true });
-    if (envFrom && envFrom.includes('@')) return envFrom;
-    return 'Rolé <notificaciones@role.ec>';
   }
 
   private async renderContactEmail(

@@ -12,16 +12,18 @@ import {
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
 import { StepsGrid } from "@/components/steps-grid";
-import { platformStatsQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
-import { useConfig, usePlatformStats } from "@/lib/use-config";
+import {
+	ensurePlatformStats,
+	useConfig,
+	usePlatformStats,
+} from "@/lib/use-config";
 
 export const Route = createFileRoute("/for-business")({
 	component: ForBusinessPage,
-	loader: ({ context }) =>
-		context.queryClient
-			.ensureQueryData(platformStatsQueryOptions)
-			.catch(() => undefined),
+	// Misma degradación que el resto de páginas públicas: el render nunca
+	// depende de la API, pero el `source` queda expuesto en el markup.
+	loader: ({ context }) => ensurePlatformStats(context.queryClient),
 	head: () =>
 		pageHead(
 			"/for-business",
@@ -69,7 +71,7 @@ const PROCESS = [
 	{
 		n: "03",
 		title: "Recibe y cobra",
-		body: "Los usuarios reservan y recogen en el horario que definiste. El pago es directo en el comercio — sin intermediarios, sin comisiones sobre el cobro.",
+		body: "Los usuarios reservan y recogen en el horario que definiste. El pago es directo en el comercio, sin intermediarios. La comisión de Rolé va por bolsa, dentro del plan que elijas, y te la detallamos en la propuesta.",
 	},
 ];
 
@@ -80,9 +82,9 @@ function ForBusinessPage() {
 		{ value: "12%", label: "ingresos extra en promedio" },
 		{
 			value:
-				statsData === undefined
+				statsData.data === undefined
 					? "—"
-					: `${numberFormat.format(statsData.businesses)}+`,
+					: `${numberFormat.format(statsData.data.businesses)}+`,
 			label: "comercios ya con nosotros",
 		},
 		{ value: "<24h", label: "para empezar a vender" },
@@ -112,8 +114,8 @@ function ForBusinessPage() {
 							</h1>
 							<p className="mt-6 max-w-xl text-lg leading-relaxed text-white/75 reveal reveal-delay-2">
 								Únete a los más de {businessesLabel ?? "miles de"} comercios que
-								ya reducen su desperdicio y recuperan valor con Rolé. Sin costos
-								de registro, sin comisiones sobre el cobro.
+								ya reducen su desperdicio y recuperan valor con Rolé. Sin costo
+								de registro, con comisión por bolsa incluida en tu plan.
 							</p>
 							<div className="mt-10 flex flex-wrap gap-4 reveal reveal-delay-3">
 								<Link
@@ -134,13 +136,22 @@ function ForBusinessPage() {
 							</p>
 						</div>
 
-						{/* Stats strip */}
-						<dl className="mt-16 grid grid-cols-3 gap-4 border-t border-white/10 pt-10 reveal reveal-delay-5">
+						{/* Stats strip. `data-stats-source` = "api" | "loading" |
+						    "failed": cifras reales, petición en curso, o fallo de
+						    la API. El "—" no es un dato, y sin el discriminador sería
+						    indistinguible de un número real. */}
+						<dl
+							data-stats-source={statsData.source}
+							className="mt-16 grid grid-cols-3 gap-4 border-t border-white/10 pt-10 reveal reveal-delay-5"
+						>
 							{(stats ?? []).map((s) => (
 								<div key={s.label}>
 									<dt className="sr-only">{s.label}</dt>
 									<dd>
-										<p className="font-heading text-3xl font-bold tabular-nums text-role-primary md:text-4xl">
+										{/* `role-secondary`, no `role-primary`: el proof number vive
+										    sobre `role-dark-bg` y primary contra dark da 1.25:1
+										    (WCAG AA pide 4.5:1). secondary da 12.40:1. */}
+										<p className="font-heading text-3xl font-bold tabular-nums text-role-secondary md:text-4xl">
 											{s.value}
 										</p>
 										<p className="mt-1 text-sm text-white/70">{s.label}</p>
@@ -250,7 +261,7 @@ function ForBusinessPage() {
 					primaryIcon={<StoreIcon className="h-5 w-5" />}
 					secondaryLabel="Contactar a ventas"
 					secondaryHref={`mailto:${salesEmail}`}
-					foot="Sin costo de registro. Sin comisiones sobre el cobro."
+					foot="Sin costo de registro. Comisión por bolsa incluida en tu plan."
 				/>
 			</main>
 			<Footer />

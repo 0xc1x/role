@@ -1,7 +1,14 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AppConfigService } from './app-config.service';
-import { AppConfigRepository, type AppConfigRow } from './app-config.repository';
+import {
+  AppConfigRepository,
+  type AppConfigRow,
+} from './app-config.repository';
 
 jest.mock('./mappers/app-config.mapper', () => ({
   AppConfigMapper: {
@@ -74,6 +81,18 @@ describe('AppConfigService', () => {
     expect(result).toEqual([{ key: 'fees.vat_percent', value: 15 }]);
   });
 
+  it('list lanza 500 en vez de lista vacía cuando el repositorio falla', async () => {
+    // Antes devolvía `{ data: [], meta: { total: 0 } }`, lo que hacía que una
+    // caída de Postgres fuera indistinguible de "no hay configuraciones" en el
+    // admin, sin log ni requestId. Ahora propaga para que el filtro global
+    // responda 500 con un requestId que el admin pueda mostrar.
+    repository.list.mockRejectedValue(new Error('DB error'));
+
+    await expect(service.list({ page: 1, limit: 10 })).rejects.toThrow(
+      InternalServerErrorException,
+    );
+  });
+
   it('update lanza NotFoundException si la clave no existe', async () => {
     repository.transaction.mockImplementation(
       () => Promise.resolve(null) as never,
@@ -85,8 +104,6 @@ describe('AppConfigService', () => {
 
   it('remove lanza NotFoundException si la clave no existe', async () => {
     repository.remove.mockResolvedValue(false);
-    await expect(service.remove('nope.key')).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(service.remove('nope.key')).rejects.toThrow(NotFoundException);
   });
 });

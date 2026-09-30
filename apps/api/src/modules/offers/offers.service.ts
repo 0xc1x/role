@@ -7,16 +7,18 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
 import { NotificationHandlers } from '../notifications/notification.handlers';
 import {
   paginatedDataFromQuery,
   type CreateOfferDto,
   type ListOffersQuery,
+  type ListZonesQuery,
   type OfferDto,
   type OfferWithBusiness,
   type PaginatedData,
+  type PopularZoneDto,
   type UpdateOfferDto,
 } from '@0xc1x/role-commons';
 import { toNumber } from '../../common/utils/numeric';
@@ -61,6 +63,20 @@ export class OffersService {
       { page: query.page, limit: query.limit },
       total,
     );
+  }
+
+  /**
+   * Mirror of `public.popular_zones` (ADR-0008): zones with the most reservable
+   * offers, optionally inside a radius of the searched point.
+   *
+   * Unpaginated and without `meta`: the function is a top-N and never returns a
+   * total, so a `PaginatedData` here would advertise a `total` nobody counted.
+   * `OffersRepository.listPopularZones` mirrors `popular_zones` key for key, the
+   * moderation gate included.
+   */
+  async listZones(query: ListZonesQuery): Promise<PopularZoneDto[]> {
+    const rows = await this.offersRepository.listPopularZones(query);
+    return OfferMapper.toZonesResponse(rows);
   }
 
   async getById(id: string): Promise<OfferWithBusiness> {

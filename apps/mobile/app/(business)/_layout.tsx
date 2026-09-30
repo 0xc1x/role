@@ -10,6 +10,7 @@ import { useAuthStore } from "@/src/features/auth/store";
 import { strings } from "@/src/core/i18n/strings";
 import { useTheme } from "@/src/core/theme";
 import Navbar from "@/src/core/ui/Navbar";
+import { LoadingView } from "@/src/core/ui";
 import {
 	useTabBarStore,
 	setTabBarProps,
@@ -43,16 +44,20 @@ export default function BusinessLayout() {
 	const { status, profile, initialized } = useAuthStore();
 	const { colors } = useTheme();
 
-	if (status === "loading" || !initialized) return null;
+	// Misma razón que en el layout consumer: la splash raíz se retira a los 6s
+	// aunque la sesión no haya resuelto, y un `null` aquí se leía como pantalla
+	// en blanco sin barra de navegación.
+	if (status === "loading" || !initialized) return <LoadingView />;
 	const isBusiness = profile?.role === "business" || profile?.role === "admin";
 
+	// Guard de navegación, no estado de carga: aquí SÍ se redirige.
 	if (!isBusiness) {
 		return <Redirect href="/" />;
 	}
 
 	return (
 		<View style={{ flex: 1 }}>
-		{/* Igual que el layout consumer: OuterBar en flujo (no overlay)
+			{/* Igual que el layout consumer: OuterBar en flujo (no overlay)
 		    y único dueño del aire inferior (ver comentario allí). Sin
 		    padding duplicado: se leía como franja en todas las tabs. */}
 			<View
@@ -68,37 +73,37 @@ export default function BusinessLayout() {
 					   previo (historial real) en vez de saltar al primer tab. */
 					backBehavior="history"
 				>
-			<Tabs.Screen
-				name="products"
-				options={{
-					title: strings.business.products,
-					tabBarLabel: strings.business.products,
-				tabBarIcon: ({ color, size }) => (
-					<Package size={size} color={color} />
-				),
-				}}
-			/>
-			<Tabs.Screen
-				name="orders"
-				options={{
-					title: strings.business.orders,
-					tabBarLabel: strings.business.orders,
-				tabBarIcon: ({ color, size }) => (
-					<ShoppingBag size={size} color={color} />
-				),
-				}}
-			/>
-			<Tabs.Screen
-				name="management"
-				options={{
-					title: strings.business.title,
-					tabBarLabel: strings.business.title,
-				tabBarIcon: ({ color, size }) => (
-					<Store size={size} color={color} />
-				),
-				}}
-			/>
-		</Tabs>
+					<Tabs.Screen
+						name="products"
+						options={{
+							title: strings.business.products,
+							tabBarLabel: strings.business.products,
+							tabBarIcon: ({ color, size }) => (
+								<Package size={size} color={color} />
+							),
+						}}
+					/>
+					<Tabs.Screen
+						name="orders"
+						options={{
+							title: strings.business.orders,
+							tabBarLabel: strings.business.orders,
+							tabBarIcon: ({ color, size }) => (
+								<ShoppingBag size={size} color={color} />
+							),
+						}}
+					/>
+					<Tabs.Screen
+						name="management"
+						options={{
+							title: strings.business.title,
+							tabBarLabel: strings.business.title,
+							tabBarIcon: ({ color, size }) => (
+								<Store size={size} color={color} />
+							),
+						}}
+					/>
+				</Tabs>
 			</View>
 			<PortalHost name="TAB_SHEET" />
 			<OuterBar />

@@ -114,15 +114,18 @@ describe("orderRepository", () => {
 		});
 	});
 
-	test("propaga errores de red/postgrest via toAppError", async () => {
+	// El copy es-ES del repo es lo que ve el usuario; el mensaje crudo del
+	// driver viaja solo en context para logs (regla de precedencia de mapper).
+	test("propaga errores de red/postgrest via toAppError con copy es-ES", async () => {
 		rpcMock.mockImplementation(async () => ({
 			data: null,
 			error: { code: "XX000", message: "boom" },
 		}));
 
-		await expect(
-			orderRepository.cancelOrderForBusiness("order-3", "biz-1"),
-		).rejects.toThrow("boom");
+		const attempt = orderRepository.cancelOrderForBusiness("order-3", "biz-1");
+
+		await expect(attempt).rejects.toThrow("Error al cancelar el pedido");
+		await expect(attempt).rejects.not.toThrow("boom");
 	});
 
 	test("updateOrderStatus llama set_order_status (matriz server-side)", async () => {
@@ -167,6 +170,9 @@ function mockOrderChain(result: {
 			return chain;
 		};
 	}
+	// The repository awaits this chain and supabase-js `PostgrestBuilder`
+	// exposes `then()`, so the double must be awaitable to stay faithful.
+	// biome-ignore lint/suspicious/noThenProperty: intentional thenable double
 	chain.then = (onF: unknown, onR: unknown) =>
 		Promise.resolve(result).then(
 			onF as (value: typeof result) => unknown,
@@ -192,9 +198,9 @@ describe("orderRepository paginated listing", () => {
 		});
 
 		expect(rows).toEqual([]);
-		expect(calls["eq"]).toContainEqual(["user_id", "u1"]);
-		expect(calls["in"]).toContainEqual(["status", ["pending", "confirmed"]]);
-		expect(calls["range"]).toContainEqual([20, 39]);
+		expect(calls.eq).toContainEqual(["user_id", "u1"]);
+		expect(calls.in).toContainEqual(["status", ["pending", "confirmed"]]);
+		expect(calls.range).toContainEqual([20, 39]);
 	});
 
 	test("getUserOrders aplica filtros server-side + range", async () => {
@@ -209,22 +215,22 @@ describe("orderRepository paginated listing", () => {
 			offset: 0,
 		});
 
-		expect(calls["eq"]).toContainEqual(["user_id", "u1"]);
-		expect(calls["in"]).toContainEqual(["status", ["pending"]]);
-		expect(calls["gte"]).toContainEqual([
+		expect(calls.eq).toContainEqual(["user_id", "u1"]);
+		expect(calls.in).toContainEqual(["status", ["pending"]]);
+		expect(calls.gte).toContainEqual([
 			"created_at",
 			"2026-09-01T00:00:00.000Z",
 		]);
-		expect(calls["lte"]).toContainEqual([
+		expect(calls.lte).toContainEqual([
 			"created_at",
 			"2026-09-08T00:00:00.000Z",
 		]);
-		const orArg = calls["or"]?.[0]?.[0];
+		const orArg = calls.or?.[0]?.[0];
 		expect(typeof orArg).toBe("string");
 		expect(orArg as string).toContain("order_number.ilike.");
 		expect(orArg as string).toContain("aurora");
-		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
-		expect(calls["range"]).toContainEqual([0, 19]);
+		expect(calls.order).toContainEqual(["created_at", { ascending: false }]);
+		expect(calls.range).toContainEqual([0, 19]);
 	});
 
 	test("getUserOrders aplica status/branch/sort server-side", async () => {
@@ -238,11 +244,11 @@ describe("orderRepository paginated listing", () => {
 			offset: 20,
 		});
 
-		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
-		expect(calls["eq"]).toContainEqual(["status", "confirmed"]);
-		expect(calls["eq"]).toContainEqual(["offers.business_location_id", "loc1"]);
-		expect(calls["order"]).toContainEqual(["created_at", { ascending: true }]);
-		expect(calls["range"]).toContainEqual([20, 39]);
+		expect(calls.eq).toContainEqual(["business_id", "b1"]);
+		expect(calls.eq).toContainEqual(["status", "confirmed"]);
+		expect(calls.eq).toContainEqual(["offers.business_location_id", "loc1"]);
+		expect(calls.order).toContainEqual(["created_at", { ascending: true }]);
+		expect(calls.range).toContainEqual([20, 39]);
 	});
 
 	test("getBusinessOrders mapea filas con ORDER_SELECT", async () => {
@@ -299,7 +305,7 @@ describe("orderRepository paginated listing", () => {
 		expect(count).toBe(3);
 		expect(String(selectArgs[0]?.[0])).toContain("offers!inner");
 		expect(String(selectArgs[0]?.[0])).toContain("businesses!inner");
-		const orArg = calls["or"]?.[0]?.[0];
+		const orArg = calls.or?.[0]?.[0];
 		expect(typeof orArg).toBe("string");
 		expect(orArg as string).toContain("offers.title.ilike.");
 	});
@@ -309,19 +315,20 @@ describe("orderRepository paginated listing", () => {
 
 		await orderRepository.countBusinessOrders("b1", { branchId: "loc1" });
 
-		expect(calls["eq"]).toContainEqual(["business_id", "b1"]);
-		expect(calls["eq"]).toContainEqual(["offers.business_location_id", "loc1"]);
+		expect(calls.eq).toContainEqual(["business_id", "b1"]);
+		expect(calls.eq).toContainEqual(["offers.business_location_id", "loc1"]);
 	});
 
-	test("countBusinessOrders propaga errores via toAppError", async () => {
+	test("countBusinessOrders propaga errores via toAppError con copy es-ES", async () => {
 		mockOrderChain({
 			count: null,
 			error: { code: "XX000", message: "boom" },
 		});
 
-		await expect(orderRepository.countBusinessOrders("b1")).rejects.toThrow(
-			"boom",
-		);
+		const attempt = orderRepository.countBusinessOrders("b1");
+
+		await expect(attempt).rejects.toThrow("Error al contar los pedidos");
+		await expect(attempt).rejects.not.toThrow("boom");
 	});
 
 	test("getMyReviews pagina con range", async () => {
@@ -333,7 +340,7 @@ describe("orderRepository paginated listing", () => {
 		});
 
 		expect(rows).toEqual([]);
-		expect(calls["order"]).toContainEqual(["created_at", { ascending: false }]);
-		expect(calls["range"]).toContainEqual([40, 59]);
+		expect(calls.order).toContainEqual(["created_at", { ascending: false }]);
+		expect(calls.range).toContainEqual([40, 59]);
 	});
 });

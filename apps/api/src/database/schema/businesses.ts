@@ -8,13 +8,14 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { businessTypeEnum } from './enums';
-import { profiles } from './profiles';
 
+// Solo datos públicos: `owner_id`, `balance`, `commission_rate` y el estado de
+// moderación viven en business_ownership / business_finance /
+// business_moderation (ver business-companions.ts) para que anon pueda tener
+// SELECT de tabla sobre `businesses`, que PostgREST necesita para resolver
+// relaciones.
 export const businesses = pgTable('businesses', {
   id: uuid('id').primaryKey().defaultRandom(),
-  owner_id: uuid('owner_id')
-    .notNull()
-    .references(() => profiles.id, { onDelete: 'no action' }),
   name: text('name').notNull(),
   type: businessTypeEnum('type').notNull().default('restaurant'),
   slug: text('slug').notNull().unique(),
@@ -26,19 +27,8 @@ export const businesses = pgTable('businesses', {
   phone: text('phone'),
   email: text('email'),
   website: text('website'),
-  commission_rate: numeric('commission_rate', {
-    precision: 10,
-    scale: 4,
-  }).default('0.1000'),
-  balance: numeric('balance', { precision: 12, scale: 2 }).default('0.00'),
   currency: text('currency').notNull().default('USD'),
   is_active: boolean('is_active').notNull().default(true),
-  verification_status: text('verification_status').notNull().default('pending'),
-  verified_at: timestamp('verified_at', { withTimezone: true }),
-  verified_by: uuid('verified_by').references(() => profiles.id, {
-    onDelete: 'no action',
-  }),
-  rejection_reason: text('rejection_reason'),
   created_at: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

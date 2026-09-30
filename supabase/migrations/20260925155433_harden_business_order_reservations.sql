@@ -311,7 +311,7 @@ as $$
   join businesses b on b.id = o.business_id
   where o.is_active
     and b.is_active
-    and b.verification_status = 'approved'
+    and b.verification_status='approved'
     and o.stock > 0
     and o.pickup_end > now()
     and (
@@ -359,6 +359,28 @@ $$;
 -- Replace the three-argument function with a compatible four-argument signature.
 -- The last two parameters are optional, so existing named-argument callers keep
 -- working while mobile can supply a replay key.
+--
+-- ─── The body below is NOT reformatted, and must not be ──────────────────────
+--
+-- `20260927025753_businesses_drop_sensitive_columns.sql` rewrites this function
+-- in place by locating literal text in `pg_get_functiondef` and aborting if a
+-- literal is absent, and that file is byte-identical to what production ran — so
+-- its search strings are the ones the live database satisfied. Two of them live
+-- in this body: the `select commission_rate into v_commission_rate ...` line and
+-- the whole coupon block below it.
+--
+-- A cosmetic reformat of a function body is a semantic no-op to Postgres and a
+-- HARD FAILURE to that guard, which is exactly how a reviewed-but-unexecuted
+-- file breaks a migration that did execute. The two blocks are reproduced here in
+-- the ledger's exact characters; read them back with
+--
+--   select statements[1] from supabase_migrations.schema_migrations
+--    where version = '20260925155433';
+--
+-- before "tidying" them. The `b.verification_status` predicate further up in this
+-- function is tightened for the same reason, and the one in the
+-- `enforce_offer_business_availability` body is deliberately LEFT spaced: the
+-- guard for that function searches the spaced form.
 drop function if exists public.reserve_offer(uuid, uuid, uuid);
 drop function if exists public.reserve_offer(uuid, uuid, uuid, text);
 
@@ -449,7 +471,7 @@ begin
   where o.id = p_offer_id
     and o.is_active = true
     and b.is_active = true
-    and b.verification_status = 'approved'
+    and b.verification_status='approved'
   for update of o;
 
   if not found then
@@ -490,52 +512,16 @@ begin
     );
   end if;
 
-  select commission_rate
-  into v_commission_rate
-  from public.businesses
-  where id = v_offer.business_id;
-
-  v_price := v_offer.discounted_price;
-  v_original_price := v_offer.original_price;
-
+  select commission_rate into v_commission_rate from public.businesses where id=v_offer.business_id;
+  v_price:=v_offer.discounted_price; v_original_price:=v_offer.original_price;
   if p_coupon_id is not null then
-    select *
-    into v_coupon
-    from public.coupons
-    where id = p_coupon_id
-      and is_active = true
-      and (expires_at is null or expires_at > now())
-      and (business_id = v_offer.business_id or business_id is null)
-    for update;
-
+    select * into v_coupon from public.coupons where id=p_coupon_id and is_active=true and (expires_at is null or expires_at>now()) and (business_id=v_offer.business_id or business_id is null) for update;
     if found then
-      if v_coupon.max_uses is not null
-        and v_coupon.used_count >= v_coupon.max_uses then
-        return jsonb_build_object(
-          'success', false,
-          'error', 'COUPON_EXHAUSTED',
-          'message', 'Cupon agotado'
-        );
-      end if;
-
-      if v_coupon.min_order_amount > v_price then
-        return jsonb_build_object(
-          'success', false,
-          'error', 'COUPON_MIN_NOT_MET',
-          'message', 'Monto minimo no alcanzado para el cupon'
-        );
-      end if;
-
-      if v_coupon.type = 'percentage' then
-        v_discount := least(v_price * v_coupon.value / 100, v_price);
-      else
-        v_discount := least(v_coupon.value, v_price);
-      end if;
-
-      v_price := greatest(v_price - v_discount, 0);
-      update public.coupons
-      set used_count = used_count + 1
-      where id = p_coupon_id;
+      if v_coupon.max_uses is not null and v_coupon.used_count>=v_coupon.max_uses then return jsonb_build_object('success',false,'error','COUPON_EXHAUSTED','message','Cupon agotado'); end if;
+      if v_coupon.min_order_amount>v_price then return jsonb_build_object('success',false,'error','COUPON_MIN_NOT_MET','message','Monto minimo no alcanzado para el cupon'); end if;
+      if v_coupon.type='percentage' then v_discount:=least(v_price*v_coupon.value/100,v_price); else v_discount:=least(v_coupon.value,v_price); end if;
+      v_price:=greatest(v_price-v_discount,0);
+      update public.coupons set used_count=used_count+1 where id=p_coupon_id;
     end if;
   end if;
 

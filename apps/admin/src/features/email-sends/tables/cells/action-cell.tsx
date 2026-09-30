@@ -2,7 +2,6 @@ import type { EmailSendDto } from "@0xc1x/role-commons";
 import type { Row } from "@tanstack/react-table";
 import { MoreHorizontal, Pen, RotateCw } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -41,15 +40,11 @@ export function ActionCell({ row }: { row: Row<EmailSendDto> }) {
 						<DropdownMenuItem onClick={() => setEditing(row.original)}>
 							<Pen /> Editar
 						</DropdownMenuItem>
+						{/* El `onError` vive en la mutación: con uno también en la
+						    llamada se dispararían los dos y salían dos toasts del
+						    mismo fallo. */}
 						<DropdownMenuItem
-							onClick={() =>
-								retryMutation.mutate(row.original.id, {
-									onError: (err) =>
-										toast.error(
-											err instanceof Error ? err.message : "Error inesperado",
-										),
-								})
-							}
+							onClick={() => retryMutation.mutate(row.original.id)}
 						>
 							<RotateCw /> Reintentar
 						</DropdownMenuItem>

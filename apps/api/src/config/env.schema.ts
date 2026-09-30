@@ -1,5 +1,46 @@
 import { z } from 'zod';
 
+import { SAFE_ERROR_FIELD } from '@0xc1x/role-commons';
+
+/**
+ * Fallo de validación de entorno que separa lo público de lo sensible.
+ *
+ * POR QUÉ EXISTE: `docs/operations.md` prohíbe registrar mensajes crudos, y el
+ * `message` de este error es exactamente eso — una concatenación de mensajes de
+ * issues de zod. No se depende de que hoy ese texto no cargue un valor: la
+ * dependencia correcta es que el canal prohibido no se toque nunca. El nombre
+ * de la variable, en cambio, no es un secreto y es justo lo que el operador
+ * necesita para arreglar un contenedor reiniciando en bucle. Separar los dos
+ * canales en campos distintos es lo que permite loguear el segundo sin abrir el
+ * primero.
+ *
+ * `variables` se filtra aquí y no al construir el log: una lista filtrada en el
+ * punto de consumo sigue pudiendo recibir cualquier texto de cualquier llamador,
+ * mientras que este constructor no deja entrar un nombre fuera de la gramática.
+ */
+export class EnvironmentConfigError extends Error {
+  /** Nombres de las variables rechazadas. Nunca valores. */
+  readonly variables: readonly string[];
+
+  constructor(variables: readonly string[], message: string) {
+    super(message);
+    this.name = 'EnvironmentConfigError';
+    this.variables = [
+      ...new Set(
+        variables.filter(
+          (name): name is string =>
+            typeof name === 'string' && SAFE_ERROR_FIELD.test(name),
+        ),
+      ),
+    ];
+  }
+}
+
+/** Lanza el rechazo fail-closed nombrando las variables implicadas. */
+function invalidEnv(variables: string[], message: string): never {
+  throw new EnvironmentConfigError(variables, message);
+}
+
 /**
  * Flag booleano de env ("true"/"false") para los espejos del ADR-0008.
  * Default false: el SQL de Supabase sigue siendo el emisor activo hasta el cutover.
@@ -63,12 +104,39 @@ export const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z
     .string()
     .min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
-  /** Supabase Storage bucket name for image uploads */
+  /**
+   * The bucket an upload lands in when the caller does not name one. Distinct
+   * from the allowlist below: this is where a file goes, that is where it may go.
+   */
   SUPABASE_STORAGE_BUCKET: z.string().min(1).default('images'),
-  /** Comma-separated allowed buckets (allowlist). Default: the default bucket */
-  SUPABASE_ALLOWED_BUCKETS: z.string().default('images'),
+  /**
+   * Comma-separated allowlist of buckets the API may write to.
+   *
+   * Every non-empty bucket that exists in the project's storage, minus
+   * `buisness_images` — a misspelling of `business_images` that holds zero
+   * objects. Listing it would make the typo a supported destination, and the
+   * next person to trust the allowlist as documentation would write to an empty
+   * bucket and wonder where the images went. Delete it in the dashboard instead.
+   *
+   * The default was `images` alone, which is a production trap rather than a
+   * conservative default: this variable was absent from `render.yaml` entirely,
+   * so the deployed API fell back to the code default and could not write to
+   * `product_images` — the bucket the mobile business panel actually uploads to,
+   * and the one holding the most objects by a wide margin. A default that
+   * silently disagrees with the app's real storage layout fails closed on
+   * business features and looks like a permissions problem.
+   */
+  SUPABASE_ALLOWED_BUCKETS: z
+    .string()
+    .default('images,business_images,categories_images,product_images'),
   /** Comma-separated allowed folders (allowlist). Default: categories */
   SUPABASE_ALLOWED_FOLDERS: z.string().default('categories'),
+  /**
+   * Public site URL Supabase appends to the confirmation link generated for
+   * business onboarding (a site URL, not the API). Must be listed in
+   * Supabase → Authentication → URL Configuration → Redirect URLs.
+   */
+  AUTH_REDIRECT_TO: z.string().default('http://localhost:3001/'),
   /** Comma-separated origins for CORS. Required in production (no '*') */
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   /** Basic auth username for /docs in production */
@@ -77,8 +145,12 @@ export const envSchema = z.object({
   DOCS_PASSWORD: z.string().optional(),
   /** Resend API key — vacío deshabilita el envío real de emails de marketing */
   RESEND_API_KEY: z.string().default(''),
-  /** Remitente por defecto para emails de marketing */
-  EMAIL_FROM: z.string().default('Rolé <no-reply@role.app>'),
+  /**
+   * Remitente por defecto para emails de marketing. Último recurso: la
+   * resolución real es `app_config['email.from']` → `EMAIL_FROM` → este valor
+   * (ver `resolveOutboundFrom`), y debe caer en el dominio real del producto.
+   */
+  EMAIL_FROM: z.string().default('Rolé <notificaciones@role.ec>'),
   /** Secreto de firma del webhook de Resend — vacío deshabilita la verificación */
   RESEND_WEBHOOK_SECRET: z.string().default(''),
   /** Secreto HMAC para tokens de desuscripción */
@@ -120,17 +192,25 @@ export type Env = z.infer<typeof envSchema>;
 export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
-    const details = parsed.error.issues
+    const issues = parsed.error.issues;
+    const details = issues
       .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
       .join('; ');
-    throw new Error(`Invalid environment variables: ${details}`);
+    // Los `path` de zod son las claves del schema, o sea los nombres de las
+    // variables: es el único dato del fallo que el operador necesita y el
+    // único que este error garantiza poder exponer sin abrir el `message`.
+    throw new EnvironmentConfigError(
+      issues.map((issue) => issue.path.join('.')),
+      `Invalid environment variables: ${details}`,
+    );
   }
   const env = parsed.data;
 
   if (env.NODE_ENV === 'production') {
     const normalizedSecret = normalizeSecret(env.SUPABASE_JWT_SECRET);
     if (insecureJwtSecretValues.has(normalizedSecret)) {
-      throw new Error(
+      invalidEnv(
+        ['SUPABASE_JWT_SECRET'],
         'SUPABASE_JWT_SECRET must not use a placeholder, test, or change-me value in production',
       );
     }
@@ -138,32 +218,37 @@ export function validateEnv(config: Record<string, unknown>): Env {
       env.SUPABASE_JWT_SECRET.length < 32 ||
       !hasStrongJwtSecretVariation(env.SUPABASE_JWT_SECRET)
     ) {
-      throw new Error(
+      invalidEnv(
+        ['SUPABASE_JWT_SECRET'],
         'SUPABASE_JWT_SECRET must be at least 32 characters and use at least 3 character types in production',
       );
     }
   }
 
   if (env.NODE_ENV === 'production' && env.CORS_ORIGINS === '*') {
-    throw new Error(
+    invalidEnv(
+      ['CORS_ORIGINS'],
       'CORS_ORIGINS must be explicitly set in production (cannot be "*")',
     );
   }
 
   if (env.NODE_ENV === 'production' && (!env.DOCS_USER || !env.DOCS_PASSWORD)) {
-    throw new Error(
+    invalidEnv(
+      ['DOCS_USER', 'DOCS_PASSWORD'],
       'DOCS_USER and DOCS_PASSWORD must be set in production to protect /docs',
     );
   }
 
   if (env.NODE_ENV === 'production' && !env.REDIS_URL) {
-    throw new Error(
+    invalidEnv(
+      ['REDIS_URL'],
       'REDIS_URL must be set in production for durable throttling and queues',
     );
   }
 
   if (env.NODE_ENV === 'production' && !env.ENABLE_JOBS_ORDERS_EXPIRATION) {
-    throw new Error(
+    invalidEnv(
+      ['ENABLE_JOBS_ORDERS_EXPIRATION'],
       'ENABLE_JOBS_ORDERS_EXPIRATION must be enabled in production',
     );
   }
@@ -173,13 +258,15 @@ export function validateEnv(config: Record<string, unknown>): Env {
   // (HMAC con key vacía). En producción deben existir, aunque el envío esté
   // deshabilitado (RESEND_API_KEY vacío).
   if (env.NODE_ENV === 'production' && !env.RESEND_WEBHOOK_SECRET) {
-    throw new Error(
+    invalidEnv(
+      ['RESEND_WEBHOOK_SECRET'],
       'RESEND_WEBHOOK_SECRET must be set in production to verify Resend webhooks',
     );
   }
 
   if (env.NODE_ENV === 'production' && !env.UNSUBSCRIBE_SECRET) {
-    throw new Error(
+    invalidEnv(
+      ['UNSUBSCRIBE_SECRET'],
       'UNSUBSCRIBE_SECRET must be set in production to sign unsubscribe tokens',
     );
   }

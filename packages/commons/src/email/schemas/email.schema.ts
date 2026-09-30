@@ -258,12 +258,29 @@ export const PreviewCampaignRequestSchema = z.object({
 	body_html: z.string().min(1).optional(),
 });
 
-/** Campos mutables de un envío (PATCH /email-marketing/sends/:id). */
+/**
+ * Campos mutables de un envío (PATCH /email-marketing/sends/:id).
+ *
+ * `error_message` y `error_code` NO son campos mutables, aunque la columna
+ * exista: son diagnósticos derivados del servidor. `error_message` sale por DTO
+ * y se renderiza en el admin, así que dejarlo escribible por el cliente era una
+ * puerta trasera a la redacción que a7fac68 hizo en el camino de fallo: el
+ * operador escribía a mano el texto crudo de Resend (que puede traer la API key
+ * o el email del destinatario) y el PATCH lo persistía. Redactar solo en el
+ * camino de fallo era el error de taxonomía: la propiedad de no filtrar
+ * dependía de que nadie escribiera el campo, y eso es una convención, no una
+ * garantía del servidor.
+ *
+ * `.strict()` para que ignorarlos no sea el comportamiento: un `PATCH` que los
+ * lleve es un 400, no un 200 silencioso que aparenta haber guardado lo que el
+ * cliente cree que guardó. Es el mismo criterio que el `ValidationPipe` global
+ * de la API (`forbidNonWhitelisted`), pero esa pipe solo actúa sobre DTOs de
+ * class-validator: esta ruta valida con `ZodValidationPipe`, y sin `strict` el
+ * objeto de zod descarta la clave desconocida en vez de rechazarla.
+ */
 export const UpdateEmailSendSchema = z
 	.object({
 		status: z.enum(EMAIL_SEND_STATUSES),
-		error_message: z.string().nullable(),
-		error_code: z.string().nullable(),
 		scheduled_at: TimestamptzSchema.nullable(),
 		queued_at: TimestamptzSchema.nullable(),
 		processed_at: TimestamptzSchema.nullable(),
@@ -273,7 +290,8 @@ export const UpdateEmailSendSchema = z
 		clicked_at: TimestamptzSchema.nullable(),
 		bounced_at: TimestamptzSchema.nullable(),
 	})
-	.partial();
+	.partial()
+	.strict();
 
 // ─── Listas paginadas ──────────────────────────────────────────────────
 

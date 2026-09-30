@@ -1,4 +1,4 @@
-import { AppRole } from "@0xc1x/role-commons";
+import type { AppRole } from "@0xc1x/role-commons";
 
 export type UserRole = AppRole;
 

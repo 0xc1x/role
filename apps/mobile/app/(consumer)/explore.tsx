@@ -4,7 +4,12 @@ import { router } from "expo-router";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/src/core/i18n/strings";
-import { EmptyState, ErrorState, LoadingView, useWebPullToRefresh } from "@/src/core/ui";
+import {
+	EmptyState,
+	ErrorState,
+	LoadingView,
+	useWebPullToRefresh,
+} from "@/src/core/ui";
 import { SectionHeader } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { radii, spacing } from "@/src/core/theme/spacing";
@@ -21,9 +26,7 @@ import { ExploreCategoryGrid } from "@/src/features/explore/components/ExploreCa
 import { ExploreTipSection } from "@/src/features/explore/components/ExploreTipSection";
 import { OfferCard } from "@/src/features/offers/components/OfferCard";
 import { ExploreMapView } from "@/src/features/explore/components/ExploreMapView";
-import {
-	hasActiveExploreFilters,
-} from "@/src/features/explore/exploreTypes";
+import { hasActiveExploreFilters } from "@/src/features/explore/exploreTypes";
 import { useExploreFilters } from "@/src/features/explore/hooks";
 import { Button } from "@/components/ui/button";
 
@@ -61,17 +64,19 @@ export default function ExploreScreen() {
 		[filters.category, filters.maxPrice, filters.maxDistanceKm],
 	);
 
-	const effectiveMaxDistanceKm = filters.maxDistanceKm ?? (isGuest ? null : prefRadius);
+	const effectiveMaxDistanceKm =
+		filters.maxDistanceKm ?? (isGuest ? null : prefRadius);
 	// Preview section shows 8 cards — cap server-side instead of slicing 100 rows client-side.
-	const { data, isLoading, isError, error, refetch, isFetching } = useFilteredOffers({
-		category: filters.category,
-		maxPrice: filters.maxPrice,
-		maxDistanceKm: effectiveMaxDistanceKm,
-		lat: selectedAddress?.latitude ?? undefined,
-		lng: selectedAddress?.longitude ?? undefined,
-		searchQuery: debouncedSearch.length > 0 ? debouncedSearch : null,
-		limit: 8,
-	});
+	const { data, isLoading, isError, error, refetch, isFetching } =
+		useFilteredOffers({
+			category: filters.category,
+			maxPrice: filters.maxPrice,
+			maxDistanceKm: effectiveMaxDistanceKm,
+			lat: selectedAddress?.latitude ?? undefined,
+			lng: selectedAddress?.longitude ?? undefined,
+			searchQuery: debouncedSearch.length > 0 ? debouncedSearch : null,
+			limit: 8,
+		});
 
 	const pull = useWebPullToRefresh({
 		onRefresh: () => void refetch(),
@@ -97,7 +102,10 @@ export default function ExploreScreen() {
 	const handleSeeAllOffers = useCallback(() => router.push("/all-offers"), []);
 	const handleLoginPress = useCallback(() => router.push("/login"), []);
 	// Remonta el mapa al cambiar filtros: reinicia selección y encuadre sin efectos.
-	const mapResetKey = JSON.stringify({ ...filters, searchQuery: debouncedSearch });
+	const mapResetKey = JSON.stringify({
+		...filters,
+		searchQuery: debouncedSearch,
+	});
 
 	const handleCategoryTapWithMap = useCallback(
 		(categoryId: string) => {
@@ -119,11 +127,24 @@ export default function ExploreScreen() {
 	if (viewModeMap) {
 		if (isGuest) {
 			return (
-				<View style={[styles.flex, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center", padding: spacing.xl }]}>
-					<EmptyState title={strings.explore.loginRequiredTitle} message={strings.explore.loginRequiredBody} />
-					<Button onPress={handleLoginPress} style={{ marginTop: spacing.lg }} >
+				<View
+					style={[
+						styles.flex,
+						{
+							backgroundColor: colors.background,
+							justifyContent: "center",
+							alignItems: "center",
+							padding: spacing.xl,
+						},
+					]}
+				>
+					<EmptyState
+						title={strings.explore.loginRequiredTitle}
+						message={strings.explore.loginRequiredBody}
+					/>
+					<Button onPress={handleLoginPress} style={{ marginTop: spacing.lg }}>
 						{strings.explore.loginCTA}
-					</Button>	
+					</Button>
 				</View>
 			);
 		}
@@ -172,7 +193,12 @@ export default function ExploreScreen() {
 				showsVerticalScrollIndicator={false}
 				keyboardShouldPersistTaps="handled"
 				refreshControl={
-					<RefreshControl refreshing={isFetching} onRefresh={() => void refetch()} tintColor={colors.primary} colors={[colors.primary]} />
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={() => void refetch()}
+						tintColor={colors.primary}
+						colors={[colors.primary]}
+					/>
 				}
 			>
 				<ExploreHeader
@@ -208,9 +234,19 @@ export default function ExploreScreen() {
 
 				{/* ── Ofertas ─────────────────────────────────────────── */}
 				{isGuest ? (
-					<View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.lg, gap: spacing.md, alignItems: "center" }}>
-						<EmptyState title={strings.explore.loginRequiredTitle} message={strings.explore.loginRequiredBody} />
-						<Button onPress={handleLoginPress} >
+					<View
+						style={{
+							paddingHorizontal: spacing.lg,
+							marginTop: spacing.lg,
+							gap: spacing.md,
+							alignItems: "center",
+						}}
+					>
+						<EmptyState
+							title={strings.explore.loginRequiredTitle}
+							message={strings.explore.loginRequiredBody}
+						/>
+						<Button onPress={handleLoginPress}>
 							{strings.explore.loginCTA}
 						</Button>
 					</View>
@@ -221,10 +257,7 @@ export default function ExploreScreen() {
 						))}
 					</View>
 				) : isError ? (
-					<ErrorState
-						error={error}
-						onRetry={handleRetry}
-					/>
+					<ErrorState error={error} onRetry={handleRetry} />
 				) : data && data.length === 0 ? (
 					<EmptyState
 						title={strings.allOffers.noResultsTitle}

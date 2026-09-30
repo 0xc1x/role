@@ -124,6 +124,30 @@ export const PatchOfferSchema = UpdateOfferSchema;
 
 export const OfferListResponseSchema = PaginatedDataSchema(OfferSchema);
 
+// ─── `GET /offers/zones` — espejo de `public.popular_zones` ────────────────
+
+/**
+ * One row of `public.popular_zones`: a `business_locations.zone` and how many
+ * reservable offers sit in it.
+ *
+ * `zone` is `.min(1)` and not `.nullable()` because the RPC already filters
+ * `zone is not null and zone <> ''` in SQL. A blank or missing zone is a
+ * location that has not been placed on the map yet, and it is not a zone with
+ * zero deals — emitting it as one would put an empty chip in the UI.
+ */
+export const PopularZoneSchema = z.object({
+	zone: z.string().min(1),
+	/** `count(*)` — the RPC's `deals bigint`, as a number like every count here. */
+	deals: z.number().int().nonnegative(),
+});
+
+/**
+ * `GET /offers/zones` response: the RPC's result set, UNPAGINATED — most deals
+ * first, then zone name ascending. Not a `PaginatedDataSchema`, because the RPC
+ * returns a top-N and never a total.
+ */
+export const PopularZonesResponseSchema = z.array(PopularZoneSchema);
+
 // ─── Embeds de la proyección "oferta con negocio" ───────────────────────────
 
 export const OfferBusinessEmbedSchema = z.object({
@@ -154,4 +178,14 @@ export const OfferWithBusinessSchema = OfferSchema.extend({
 	categories: z.array(OfferCategoryEmbedSchema),
 	business: OfferBusinessEmbedSchema,
 	location: OfferLocationEmbedSchema,
+	/**
+	 * Distance in km from the queried point, `null` when the request carried no
+	 * `lat`/`lng` — the same projection `active_offers_near` returns.
+	 *
+	 * Optional (and not merely nullable) because this shape is also served by
+	 * the projections that have no point to measure from: `GET /offers/:id`, the
+	 * random hero and the saved-offers list. Those send `null`; a consumer
+	 * building the shape by hand is not forced to invent a distance.
+	 */
+	distance_km: z.number().nullable().optional(),
 });

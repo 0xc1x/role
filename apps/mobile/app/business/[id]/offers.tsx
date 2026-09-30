@@ -36,10 +36,7 @@ export default function BusinessOffersScreen() {
 		isFetchingNextPage,
 	} = useBusinessOffers(id ?? "");
 
-	const items = useMemo(
-		() => infiniteData?.pages.flat() ?? [],
-		[infiniteData],
-	);
+	const items = useMemo(() => infiniteData?.pages.flat() ?? [], [infiniteData]);
 
 	const handleEndReached = useCallback(() => {
 		if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
@@ -69,26 +66,26 @@ export default function BusinessOffersScreen() {
 					{strings.business.newProduct}
 				</Button>
 			</View>
-		{items.length === 0 ? (
-			<EmptyState
-				title="Sin productos aún"
-				message="Publica tu primer excedente de comida."
-			/>
-		) : (
-			<FlatList
-				data={items}
-				keyExtractor={(item) => item.offer.id}
-				contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}
-				renderItem={renderItem}
-				onEndReached={handleEndReached}
-				onEndReachedThreshold={0.5}
-				ListFooterComponent={
-					isFetchingNextPage ? (
-						<ActivityIndicator color={colors.primary} />
-					) : null
-				}
-			/>
-		)}
+			{items.length === 0 ? (
+				<EmptyState
+					title={strings.business.noProductsTitle}
+					message={strings.business.noProductsBody}
+				/>
+			) : (
+				<FlatList
+					data={items}
+					keyExtractor={(item) => item.offer.id}
+					contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}
+					renderItem={renderItem}
+					onEndReached={handleEndReached}
+					onEndReachedThreshold={0.5}
+					ListFooterComponent={
+						isFetchingNextPage ? (
+							<ActivityIndicator color={colors.primary} />
+						) : null
+					}
+				/>
+			)}
 		</Screen>
 	);
 }
@@ -104,7 +101,9 @@ const BusinessOfferRow = memo(function BusinessOfferRow({
 	const discount = discountPercentage(item.offer);
 	return (
 		<CardPressable
-			onPress={() => router.push(`/business/${businessId}/offer/${item.offer.id}`)}
+			onPress={() =>
+				router.push(`/business/${businessId}/offer/${item.offer.id}`)
+			}
 		>
 			<View style={styles.row}>
 				{item.offer.image ? (
@@ -114,7 +113,10 @@ const BusinessOfferRow = memo(function BusinessOfferRow({
 					<AppText variant="h4" weight="bold" numberOfLines={1}>
 						{item.offer.title}
 					</AppText>
-					<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
 						{formatMoney(item.offer.discounted_price)} · {discount}% OFF
 					</AppText>
 					<StatusBadge

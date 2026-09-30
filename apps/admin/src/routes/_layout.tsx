@@ -7,7 +7,13 @@ import {
 import { useEffect } from "react";
 import Layout from "@/components/layout/layout";
 import { Skeleton } from "@/components/ui/skeleton";
-import { authKeys, clearAuth, getToken, useAuthUser } from "@/features/auth";
+import {
+	authKeys,
+	clearAuth,
+	getToken,
+	useAuthUser,
+	useRequireSession,
+} from "@/features/auth";
 
 export const Route = createFileRoute("/_layout")({
 	beforeLoad: ({ context }) => {
@@ -38,6 +44,9 @@ function RouteComponent() {
 	const { data: user, isLoading, isError } = useAuthUser();
 	const navigate = useNavigate();
 
+	// La mitad del guard que `beforeLoad` no cubre: la hidratación inicial.
+	useRequireSession();
+
 	useEffect(() => {
 		if (isError) {
 			clearAuth();
@@ -50,24 +59,39 @@ function RouteComponent() {
 		}
 	}, [user, isLoading, isError, navigate]);
 
-	if (isLoading) {
-		return (
-			<div className="flex items-center justify-center min-h-screen">
-				<div className="flex flex-col items-center gap-4">
-					<Skeleton className="h-12 w-48" />
-					<Skeleton className="h-4 w-32" />
-				</div>
-			</div>
-		);
-	}
-
-	if (isError || !user || user.role !== "admin") {
-		return null;
+	// SOLO estado de la query, nunca `getToken()`: el token vive en localStorage,
+	// así que leerlo durante el render hace que el servidor y el cliente elijan
+	// ramas distintas (React Doctor: no-hydration-branch-on-browser-global). El
+	// ciclo de la query ya da el estado pendiente y coincide con el SSR por
+	// construcción; `useRequireSession` se encarga de expulsar al anónimo, en un
+	// effect, que es donde se puede tocar el navegador.
+	if (isLoading || isError || !user || user.role !== "admin") {
+		return <SessionPending />;
 	}
 
 	return (
 		<Layout>
 			<Outlet />
 		</Layout>
+	);
+}
+
+/**
+ * Lo que se ve mientras no hay sesión utilizable.
+ *
+ * Sin sesión no hay panel que renderizar, y `useRequireSession` ya está
+ * navegando al login. Antes esta rama devolvía `null` sin más, y ese `null` era
+ * indistinguible de "cargando": el deep-link anónimo se quedaba en blanco para
+ * siempre. El skeleton mantiene la pantalla viva durante la redirección sin
+ * prometer datos que nunca van a llegar.
+ */
+function SessionPending() {
+	return (
+		<div className="flex items-center justify-center min-h-screen">
+			<div className="flex flex-col items-center gap-4">
+				<Skeleton className="h-12 w-48" />
+				<Skeleton className="h-4 w-32" />
+			</div>
+		</div>
 	);
 }

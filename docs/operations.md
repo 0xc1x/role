@@ -22,6 +22,7 @@ La API registra eventos estructurados con nombre, tipo y código de error. No re
 - Mobile ya tiene Sentry nativo/web condicionado por consentimiento y DSN.
 - Admin y landing no tienen dependencia Sentry configurada. No se instala una integração especulativa.
 - Si se integra Sentry, agrega la dependencia del workspace, inicialización con release/SHA, muestreo, PII scrubbing y pruebas de consentimiento antes de producción.
+- `data-stats-source` en el HTML servido de la landing (hero, `/about`, `/for-business`) dice de dónde salió el bloque de métricas, con tres valores y no dos: `"api"` = cifras reales de `/stats/platform`; `"failed"` = la petición falló; `"loading"` = la petición sigue en curso. Los dos últimos pintan el placeholder `"—"`, que no es un número, así que la página nunca publica un `0` falso. `"loading"` solo aparece en el DOM del cliente: el loader SSR espera la respuesta, así que el HTML servido por el servidor nunca lo lleva. Un `fallback` en el HTML servido es siempre un fallo real de la API.
 
 ## Expiración de órdenes
 

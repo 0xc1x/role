@@ -1,5 +1,8 @@
+import {
+	DISCOUNT_MAX_CLAIM,
+	DISCOUNT_SAVINGS_CLAIM,
+} from "@0xc1x/role-commons";
 import { LeafIcon, SparkIcon, StoreIcon, TagIcon } from "@/components/icons";
-
 import { Eyebrow, Section } from "@/components/section";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -11,8 +14,8 @@ const FEATURES = [
 	},
 	{
 		icon: TagIcon,
-		title: "Ahorra hasta 70%",
-		body: "Obtén productos de calidad a precios increíbles. Paga menos de la mitad del precio original.",
+		title: `Ahorra ${DISCOUNT_MAX_CLAIM}`,
+		body: `Obtén productos de calidad a precios increíbles: paga ${DISCOUNT_SAVINGS_CLAIM} que en el comercio.`,
 	},
 	{
 		icon: StoreIcon,

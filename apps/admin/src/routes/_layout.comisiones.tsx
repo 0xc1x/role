@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DataTable } from "@/components/data-table/data-table";
+import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,16 +12,26 @@ import {
 	InputGroupInput,
 } from "@/components/ui/input-group";
 import {
+	commissionsApi,
 	commissionsColumns,
-	commissionsListOptions,
+	commissionsCsvColumns,
 	useCommissionsList,
 } from "@/features/commissions";
+import { fetchAllPages } from "@/lib/api/fetch-all-pages";
 
+/**
+ * SIN `loader` A PROPÓSITO — el mismo motivo documentado en `_layout.resenas.tsx`
+ * y `_layout.cupones.tsx`.
+ *
+ * Con `loader: ensureQueryData(...)` un fallo del API escapa al
+ * `errorComponent` de la ruta en vez de entrar a la rama `isError` de este
+ * componente, y ninguna ruta del panel define `errorComponent`: con
+ * `/commissions` en 500 el panel entero se sustituía por el "Something went
+ * wrong!" por defecto de TanStack Router, sin el mensaje de abajo y sin su
+ * "Reintentar". Medido, no supuesto.
+ */
 export const Route = createFileRoute("/_layout/comisiones")({
 	validateSearch: (raw) => ListCommissionsQuerySchema.parse(raw),
-	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(commissionsListOptions(deps)),
 	component: RouteComponent,
 	head: () => ({
 		meta: [
@@ -39,7 +50,8 @@ export const Route = createFileRoute("/_layout/comisiones")({
 function RouteComponent() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, isLoading, isError, error } = useCommissionsList(search);
+	const { data, isLoading, isError, error, refetch } =
+		useCommissionsList(search);
 
 	const [searchInput, setSearchInput] = useState(search.search ?? "");
 
@@ -75,12 +87,9 @@ function RouteComponent() {
 							? error.message
 							: "Error al cargar comisiones"}
 					</p>
-					<Button
-						variant="outline"
-						onClick={() =>
-							navigate({ search: { page: 1, limit: 10, search: undefined } })
-						}
-					>
+					{/* `navigate` con el mismo search lo deduplica y la query errored
+					    queda bajo la misma key: el botón de recuperación no hacía nada. */}
+					<Button variant="outline" onClick={() => void refetch()}>
 						Reintentar
 					</Button>
 				</div>
@@ -93,11 +102,17 @@ function RouteComponent() {
 
 	return (
 		<div className="px-6 py-4">
-			<div className="flex items-center justify-between">
+			<div className="flex items-center justify-between gap-4">
 				<header className="flex items-center">
 					<h1 className="font-bold text-xl">Comisiones</h1>
 				</header>
 				<div className="flex items-center gap-4">
+					<ExportCsvButton
+						fileName="comisiones"
+						columns={commissionsCsvColumns}
+						total={meta?.total ?? 0}
+						loadRows={() => fetchAllPages(commissionsApi.list, search)}
+					/>
 					<InputGroup className="max-w-sm">
 						<InputGroupAddon align="inline-start">
 							<Search className="size-4 text-muted-foreground" />

@@ -6,20 +6,20 @@ import { toast } from "sonner-native";
 import { strings } from "@/src/core/i18n/strings";
 import { AppText, Screen, TextField } from "@/src/core/ui";
 import { authRepository } from "@/src/features/auth/data/repository";
+import { PASSWORD_MIN_LENGTH } from "@/src/features/auth/domain/validation";
 import { useAuthStore } from "@/src/features/auth/store";
 import { performSignOut } from "@/src/features/auth/sign-out";
 import { toAppError } from "@/src/core/error/mapper";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
-
-const MIN_PASSWORD_LENGTH = 6;
 
 export default function UpdatePasswordScreen() {
 	const { colors } = useTheme();
 	const initialized = useAuthStore((s) => s.initialized);
-	const pendingPasswordRecovery = useAuthStore((s) => s.pendingPasswordRecovery);
+	const pendingPasswordRecovery = useAuthStore(
+		(s) => s.pendingPasswordRecovery,
+	);
 	const [password, setPassword] = useState("");
 	const [confirm, setConfirm] = useState("");
 	const [loading, setLoading] = useState(false);
@@ -37,8 +37,11 @@ export default function UpdatePasswordScreen() {
 	const handleUpdate = async () => {
 		if (loading) return;
 		setError(null);
-		if (password.length < MIN_PASSWORD_LENGTH) {
-			setError(strings.auth.passwordMinLength);
+		// El piso es el del dominio (compartido con signup), no una constante
+		// local: antes esta pantalla aceptaba 6 caracteres mientras el registro
+		// exigía 8, y el catálogo anunciaba los dos números.
+		if (password.length < PASSWORD_MIN_LENGTH) {
+			setError(strings.auth.passwordMinError);
 			return;
 		}
 		if (password !== confirm) {
@@ -65,34 +68,35 @@ export default function UpdatePasswordScreen() {
 				<AppText variant="h1" weight="bold">
 					{strings.auth.updatePassword}
 				</AppText>
+				{/* biome-ignore lint/complexity/noUselessFragments: this fragment returns four siblings from the component; dropping it would force a wrapper View and change the layout. */}
 				<>
 					{error ? (
 						<AppText variant="bodySmall" style={{ color: colors.destructive }}>
 							{error}
 						</AppText>
 					) : null}
-						<TextField
-							label={strings.auth.newPassword}
-							value={password}
-							onChangeText={setPassword}
-							secureTextEntry
-							autoComplete="new-password"
-						/>
-						<TextField
-							label={strings.auth.confirmPassword}
-							value={confirm}
-							onChangeText={setConfirm}
-							secureTextEntry
-							autoComplete="new-password"
-						/>
-						<Button
-							onPress={handleUpdate}
-							loading={loading}
-							fullWidth
-							style={{ marginTop: spacing.md }}
-						>
-							{strings.auth.updatePassword}
-						</Button>
+					<TextField
+						label={strings.auth.newPassword}
+						value={password}
+						onChangeText={setPassword}
+						secureTextEntry
+						autoComplete="new-password"
+					/>
+					<TextField
+						label={strings.auth.confirmPassword}
+						value={confirm}
+						onChangeText={setConfirm}
+						secureTextEntry
+						autoComplete="new-password"
+					/>
+					<Button
+						onPress={handleUpdate}
+						loading={loading}
+						fullWidth
+						style={{ marginTop: spacing.md }}
+					>
+						{strings.auth.updatePassword}
+					</Button>
 				</>
 			</View>
 		</Screen>

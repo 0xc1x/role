@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { ChevronLeft, LocateFixed } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -36,6 +36,11 @@ export function MapPickerView({
 	const mapRef = useRef<MapCanvasHandle>(null);
 	const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const latestKey = useRef<string>("");
+	// `initialLocation` is a prop object that parents commonly rebuild on every
+	// render. The two bootstrap effects below must fire exactly once, so they
+	// read the mount-time value from a ref instead of depending on the prop
+	// identity.
+	const initialLocationRef = useRef(initialLocation);
 
 	useEffect(() => {
 		return () => {
@@ -43,37 +48,24 @@ export function MapPickerView({
 		};
 	}, []);
 
-	useEffect(() => {
-		if (initialLocation) resolve(initialLocation);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	// Stable ([]): reads only refs, setters and the module-level geocode util.
+	const resolve = useCallback(
+		(next: { latitude: number; longitude: number }) => {
+			const key = `${next.latitude.toFixed(4)},${next.longitude.toFixed(4)}`;
+			latestKey.current = key;
+			setResolving(true);
+			void reverseGeocode(next).then((result) => {
+				if (latestKey.current !== key) return;
+				setResolvedAddress(result.displayName || null);
+				setResolving(false);
+			});
+		},
+		[],
+	);
 
-	useEffect(() => {
-		if (!initialLocation) void useMyLocation();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
-
-	const resolve = (next: { latitude: number; longitude: number }) => {
-		const key = `${next.latitude.toFixed(4)},${next.longitude.toFixed(4)}`;
-		latestKey.current = key;
-		setResolving(true);
-		void reverseGeocode(next).then((result) => {
-			if (latestKey.current !== key) return;
-			setResolvedAddress(result.displayName || null);
-			setResolving(false);
-		});
-	};
-
-	const handleRegionChange = (next: {
-		latitude: number;
-		longitude: number;
-	}) => {
-		setCoords(next);
-		if (debounce.current) clearTimeout(debounce.current);
-		debounce.current = setTimeout(() => resolve(next), 800);
-	};
-
-	const useMyLocation = () => {
+	// Not a hook: an imperative geolocation request fired from a press handler.
+	// Stable ([resolve]) so the mount-once effect can depend on it safely.
+	const requestMyLocation = useCallback(() => {
 		if (typeof navigator === "undefined" || !navigator.geolocation) return;
 		setLocating(true);
 		// Direct Geolocation API: expo-location on web serves a cached fix;
@@ -92,6 +84,29 @@ export function MapPickerView({
 			() => setLocating(false),
 			{ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
 		);
+	}, [resolve]);
+
+	// Mount-once bootstrap: lee el valor inicial desde el ref para no
+	// re-dispararse cuando el padre reconstruye el objeto `initialLocation`.
+	// `resolve` y `requestMyLocation` son estables (useCallback con deps
+	// estables), así que [] es seguro y no re-dispara en re-renders.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-once bootstrap intencional
+	useEffect(() => {
+		const initial = initialLocationRef.current;
+		if (initial) {
+			resolve(initial);
+		} else {
+			void requestMyLocation();
+		}
+	}, []);
+
+	const handleRegionChange = (next: {
+		latitude: number;
+		longitude: number;
+	}) => {
+		setCoords(next);
+		if (debounce.current) clearTimeout(debounce.current);
+		debounce.current = setTimeout(() => resolve(next), 800);
 	};
 
 	if (!env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) {
@@ -163,7 +178,7 @@ export function MapPickerView({
 			<Button
 				variant="ghost"
 				size="icon"
-				onPress={() => void useMyLocation()}
+				onPress={() => void requestMyLocation()}
 				loading={locating}
 				accessibilityRole="button"
 				aria-label={strings.addresses.useMyLocation}

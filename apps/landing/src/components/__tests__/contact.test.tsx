@@ -10,7 +10,9 @@ interface CapturedRequest {
 
 const previousFetch = globalThis.fetch;
 
-function setup() {
+function setup(
+	cities: string[] = ["Quito", "Guayaquil", "Cuenca", "Manta", "Otra", "Otra"],
+) {
 	const captured: CapturedRequest[] = [];
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
@@ -28,7 +30,7 @@ function setup() {
 				JSON.stringify([
 					{
 						key: "contact.cities",
-						value: ["Quito", "Guayaquil", "Cuenca", "Manta", "Otra", "Otra"],
+						value: cities,
 						value_type: "json",
 					},
 				]),
@@ -68,7 +70,10 @@ describe("Contact", () => {
 		const { captured } = setup();
 
 		fireEvent.click(screen.getByRole("combobox"));
-		const otherOption = await screen.findByRole("option", { name: "Otra" });
+		// La lista viene de app_config, no de una constante: hay que esperar a
+		// que la consulta resuelva antes de mirar las opciones.
+		await screen.findByRole("option", { name: "Quito" });
+		const otherOption = screen.getByRole("option", { name: "Otra" });
 		for (const city of ["Quito", "Guayaquil", "Cuenca", "Manta"]) {
 			expect(screen.getByRole("option", { name: city })).toBeDefined();
 		}
@@ -92,5 +97,25 @@ describe("Contact", () => {
 			city_other: "Ambato",
 			email: "test@example.com",
 		});
+	});
+
+	test("default city comes from the configured list, not a hardcoded one", async () => {
+		setup(["Guayaquil", "Cuenca", "Otra"]);
+
+		// El valor por defecto es la primera ciudad habilitada, la que sea.
+		await waitFor(() =>
+			expect(screen.getByRole("combobox").textContent).toContain("Guayaquil"),
+		);
+	});
+
+	test("falls back to Otra when no city is configured", async () => {
+		setup([]);
+
+		// Sin lista de respaldo en el código: el select ofrece escribir la
+		// ciudad a mano en vez de inventar una.
+		await waitFor(() =>
+			expect(screen.getByRole("combobox").textContent).toContain("Otra"),
+		);
+		expect(screen.getByPlaceholderText("Escribe tu ciudad")).toBeDefined();
 	});
 });

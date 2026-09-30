@@ -1,0 +1,176 @@
+-- Backfilled gap: public.offers.includes and public.offers.allergens — two
+-- nullable text columns that production has and this directory never created.
+--
+-- RECONSTRUCTION, 2026-09-28. NOT APPLIED TO PRODUCTION. NOT BYTE-IDENTICAL TO
+-- ANY LEDGER ROW (there is no ledger row; that is the whole problem).
+--
+-- ============================ WHAT THIS CLOSES ===============================
+--
+-- `supabase_migrations.schema_migrations` has no row that adds either column.
+-- Both exist in production. Replaying this directory produces an `offers` table
+-- without them, and six migrations downstream abort:
+--
+--   20260904210516_rpc_active_offers_near.sql
+--     `create or replace function public.active_offers_near(...) returns table
+--     (... includes text, allergens text, ...)` selecting `o.includes,
+--     o.allergens` in a single SQL body. The whole statement is one unit, so it
+--     fails as `column o.includes does not exist` — and because plpgsql and SQL
+--     function bodies are parsed at creation, the function is never created at
+--     all. The harness then reports the second-order symptom too:
+--     `could not find a function named "public.active_offers_near"`, because
+--     three later migrations revoke, grant or drop-replace that signature.
+--     This is the RPC that powers the offer catalogue with a radius filter.
+--   20260925155433_harden_business_order_reservations.sql
+--     redefines the same body and then revokes/grants the same 10-argument
+--     signature, producing the same cascade.
+--   20260925163235_client_read_boundaries_vault_secrets.sql
+--     two `grant insert/update (..., includes, allergens) on table public.offers`
+--     statements, i.e. `column "includes" of relation "offers" does not exist`.
+--     This is the more serious of the two: it fails at the point where the
+--     migration is trying to *narrow* client writes. The grant it would have
+--     issued never gets issued.
+--   20260927021015_reviews_moderation_soft_hide.sql
+--     no column reference; included here only because the surrounding body
+--     rewrite is validated as a unit in the same pass.
+--   20260928040349_payment_methods_one_default.sql
+--     no column reference; same reason.
+--   20260928041036_explore_search_escape_wildcards.sql
+--     redefines the same body with the same two columns selected.
+--
+-- ---- Why both columns, and why this was measured rather than assumed --------
+--
+-- The obvious reading of "add `includes`" is one column. That does not work,
+-- and the harness is what proved it. `includes` and `allergens` are selected
+-- adjacently on the *same line* of the same SQL body:
+--
+--     o.pickup_start, o.pickup_end, o.is_active, o.includes, o.allergens,
+--
+-- so Postgres resolves them left to right and reports only the first one it
+-- cannot find. A run of the replay with `includes` alone moved every failure
+-- from `column o.includes does not exist` to `column o.allergens does not
+-- exist` and fixed nothing: 25 failures before, 25 after, 998/1023 statements.
+-- That is why the two columns are added together here, and it is the reason
+-- the DDL below is not the DDL this file was first scoped to carry.
+--
+-- `allergens` is not a separate finding smuggled in; it is the same gap. In
+-- production the two columns are adjacent ordinals 18 and 19, both `text`,
+-- both nullable, both with no default. They were added together, by one
+-- out-of-band DDL statement that left no ledger row.
+--
+-- ---- The evidence that this is a ledger gap, not a misreading ---------------
+--
+-- Three independent signals, and they agree:
+--
+--   1. Production read-back, `information_schema.columns` on `public.offers`:
+--
+--        ordinal_position | column_name | data_type | is_nullable | column_default
+--        -----------------+-------------+-----------+-------------+---------------
+--                      18 | includes    | text      | YES         | null
+--                      19 | allergens   | text      | YES         | null
+--
+--   2. This directory never adds them. Across all migrations in
+--      `supabase/migrations/` the only `ADD COLUMN` statements touching
+--      `public.offers` are `geog` (20260904210442), and `rating` /
+--      `review_count` (20260529201439). The table is created in
+--      20260507193325_create_offers_and_coupons.sql, and that CREATE TABLE
+--      lists neither column. `20260731002818` drops `category` from it. There
+--      is no other path by which `includes` could appear.
+--
+--   3. The API's Drizzle schema declares both, and has for a long time:
+--      `apps/api/src/database/schema/offers.ts:46` — `includes: text('includes')`
+--      — with the same for `allergens`, mirrored in
+--      `apps/api/drizzle/20260927193802_tough_swarm/migration.sql:114`
+--      (`"includes" text`) and in that snapshot's JSON. A schema generated
+--      from a live database sees the column; the migration ledger does not
+--      describe it. The DDL therefore entered through a write path that never
+--      registered a version — the dashboard, or `execute_sql`, or a squashed
+--      edit — and that is precisely the failure mode
+--      `supabase/migrations/README.md` exists to prevent.
+--
+-- ======================= WHAT IS DELIBERATELY NOT HERE ======================
+--
+--   * Backfill of data. Both columns are nullable with no default and this
+--     directory has never contained a single `offers` row written by
+--     anything other than the seed migrations. Inventing values here would be
+--     fabricating marketplace content, not reconstructing schema.
+--   * Indexes. Production has no index on either column — a catalogue filter
+--     on a free-text `includes` blob is not something Postgres can use a btree
+--     for. None is added.
+--   * Column comments. Production carries no comment on either column. A
+--     `comment on column` here would make this directory disagree with the
+--     database on a point that is trivially checkable.
+--   * A `not null` and a `default`. Both are nullable with `column_default =
+--     null` in production. Adding either would be a behaviour change disguised
+--     as a reconstruction.
+--   * Position in the column list. See below — this is the one thing about
+--     these columns that this file provably does NOT reproduce, and it is
+--     called out rather than papered over.
+--   * The other known `offers` divergences (production has `is_active` with
+--     `default false` where 20260507193325 says `default true`, and production
+--     retains ordinal gaps at 6 and 10 from dropped columns). Those are
+--     separate findings with separate blast radius. Bundling them into a file
+--     whose job is one missing statement would make the next reviewer unable
+--     to tell which change is load-bearing.
+--
+-- ---- The one thing this file does not reproduce: ordinal position ----------
+--
+-- In production these columns sit at ordinals 18 and 19, immediately after
+-- `updated_at`, because the out-of-band DDL appended them to a table that was
+-- already fully populated at the time. `ALTER TABLE ... ADD COLUMN` in a
+-- replay also appends, but the replayed table is at a different point in its
+-- own history, and later migrations in this directory
+-- (`20260904210442_postgis_geo_offers.sql` adds `geog`) will land in a
+-- different order than production did. Matching ordinals would require
+-- dropping and re-adding the column, which is a destructive rewrite of a live
+-- column for zero behavioural gain. Postgres resolves column references by
+-- name, not by position; `information_schema.ordinal_position` will differ
+-- from production and that difference is expected, harmless, and recorded
+-- here instead of being hidden.
+--
+-- ==================== WHY THIS MUST NOT BE APPLIED TO PRODUCTION ============
+--
+-- The columns are already there. Beyond being pointless, the *version* is the
+-- real hazard: `20260507193400` is synthetic. It is a slot picked so that
+--
+--     20260507193325_create_offers_and_coupons.sql
+--     20260507193400_add_offers_includes.sql   <-- this file
+--     20260507193539_create_orders_and_events.sql
+--
+-- places the columns after the table exists and before anything reads them.
+-- The Supabase server assigns versions; this one was assigned by hand. If
+-- `supabase db push` ever ran against production with this file in the
+-- directory, the ledger would acquire a version the server never issued, and
+-- the directory would then claim to describe history in a form it did not
+-- happen in. The DDL is idempotent (`add column if not exists`) so applying
+-- it changes nothing in the database — but the ledger entry would not be
+-- nothing, and the ledger is the only proof of what was applied. The rule
+-- `supabase/migrations/README.md` enforces — every DDL change enters through
+-- `apply_migration` and is proven with `md5sum` — cannot be satisfied by a
+-- file with no ledger row to match against. That is exactly why this is
+-- labelled a backfill and not treated as a normal migration.
+--
+-- ROLLBACK: `alter table public.offers drop column if exists includes,
+-- drop column if exists allergens;` — on an environment where no function body
+-- selects them. On production this is not a rollback, it is data loss.
+--
+-- VERIFYING: there is no `md5sum` to run, and that absence is the defect being
+-- documented. A read-back comparison is the only available check, and it must
+-- be run against the *replayed* database, not assumed from this comment:
+--
+--   select ordinal_position, column_name, data_type, is_nullable, column_default
+--     from information_schema.columns
+--    where table_schema = 'public' and table_name = 'offers'
+--      and column_name in ('includes', 'allergens')
+--    order by ordinal_position;
+--
+-- Expect `text` / `YES` / `null` for both, matching production. Expect the
+-- ordinals to differ, as explained above.
+
+begin;
+
+-- Nullable `text`, no default, exactly as production has them. See the header
+-- for why `includes` alone does not clear the failures.
+alter table public.offers add column if not exists includes text;
+alter table public.offers add column if not exists allergens text;
+
+commit;

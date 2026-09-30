@@ -19,9 +19,7 @@ describe("detectOS", () => {
 		expect(detectOS("Mozilla/5.0 (Linux; Android 14; Pixel 8)")).toBe(
 			"android",
 		);
-		expect(detectOS("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe(
-			"other",
-		);
+		expect(detectOS("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("other");
 		expect(detectOS("")).toBe("other");
 	});
 });
@@ -45,9 +43,7 @@ describe("resolveStoreLink", () => {
 		expect(
 			resolveStoreLink("other", "https://ios", "https://play", "https://pwa"),
 		).toBe("https://pwa");
-		expect(resolveStoreLink("ios", "", "", "https://pwa")).toBe(
-			"https://pwa",
-		);
+		expect(resolveStoreLink("ios", "", "", "https://pwa")).toBe("https://pwa");
 		expect(resolveStoreLink("other", "", "", "")).toBe(PWA_FALLBACK);
 	});
 });

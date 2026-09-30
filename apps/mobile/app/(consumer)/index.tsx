@@ -1,5 +1,11 @@
 import { useCallback, useState } from "react";
-import { View, StyleSheet, RefreshControl, ScrollView, Platform } from "react-native";
+import {
+	View,
+	StyleSheet,
+	RefreshControl,
+	ScrollView,
+	Platform,
+} from "react-native";
 import { router } from "expo-router";
 import { Clock, Flame, TrendingUp } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -45,7 +51,10 @@ export default function ConsumerHomeScreen() {
 			setRefreshing(false);
 		}
 	}, []);
-	const pull = useWebPullToRefresh({ onRefresh: () => void onRefresh(), refreshing });
+	const pull = useWebPullToRefresh({
+		onRefresh: () => void onRefresh(),
+		refreshing,
+	});
 
 	const openAllOffers = useCallback(
 		() =>
@@ -59,7 +68,12 @@ export default function ConsumerHomeScreen() {
 
 	return (
 		<View style={{ flex: 1, backgroundColor: colors.background }}>
-			<View style={[styles.topBar, { borderBottomColor: colors.background, paddingTop: insets.top }]}>
+			<View
+				style={[
+					styles.topBar,
+					{ borderBottomColor: colors.background, paddingTop: insets.top },
+				]}
+			>
 				<LocationSelector />
 				<Logo width={100} height={50} />
 			</View>

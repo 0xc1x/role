@@ -1,5 +1,9 @@
 import { MapPin } from "lucide-react-native";
-import { APIProvider, Map, useMap } from "@vis.gl/react-google-maps";
+import {
+	APIProvider,
+	Map as GoogleMap,
+	useMap,
+} from "@vis.gl/react-google-maps";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 
@@ -87,7 +91,7 @@ const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 
 		return (
 			<View style={fullscreen ? styles.fullscreenMap : styles.map}>
-				<Map
+				<GoogleMap
 					mapId={ROLE_MAP_ID}
 					colorScheme={scheme === "dark" ? "DARK" : "LIGHT"}
 					defaultCenter={{ lat: coords.latitude, lng: coords.longitude }}
@@ -107,7 +111,7 @@ const MapCanvasInner = forwardRef<MapCanvasHandle, MapCanvasProps>(
 					}}
 				>
 					{children}
-				</Map>
+				</GoogleMap>
 				{centerPin ? (
 					<View style={[styles.pinWrap, { pointerEvents: "none" }]}>
 						<MapPin

@@ -58,7 +58,9 @@ import { orderStatusTone } from "@/src/features/orders/domain/order";
 import {
 	isTerminalStatus,
 	lastEventTimeFor,
-	type OrderDetail,
+	// Aliased: this module also exports a component named `OrderDetail`, and a
+	// type/value name collision in one scope reads as a redeclaration.
+	type OrderDetail as OrderDetailModel,
 } from "@/src/features/orders/domain/order";
 import type { OrderStatus } from "@0xc1x/role-commons";
 import {
@@ -82,7 +84,7 @@ export function OrderDetail({
 	onRefresh,
 }: {
 	businessId: string;
-	item: OrderDetail;
+	item: OrderDetailModel;
 	isRefreshing?: boolean;
 	onRefresh?: () => void;
 }) {
@@ -283,7 +285,7 @@ export function OrderDetail({
 
 // ─── Producto ────────────────────────────────────────────────────────
 
-function ProductCard({ item }: { item: OrderDetail }) {
+function ProductCard({ item }: { item: OrderDetailModel }) {
 	const { colors } = useTheme();
 	return (
 		<Card
@@ -327,7 +329,7 @@ function ProductCard({ item }: { item: OrderDetail }) {
 
 // ─── Información del cliente ─────────────────────────────────────────
 
-function CustomerInfoCard({ item }: { item: OrderDetail }) {
+function CustomerInfoCard({ item }: { item: OrderDetailModel }) {
 	const { colors } = useTheme();
 	const handleCall = () => {
 		if (item.customerPhone) {
@@ -367,7 +369,7 @@ function CustomerInfoCard({ item }: { item: OrderDetail }) {
 
 // ─── Información de recogida ─────────────────────────────────────────
 
-function PickupInfoCard({ item }: { item: OrderDetail }) {
+function PickupInfoCard({ item }: { item: OrderDetailModel }) {
 	const { colors } = useTheme();
 	const { order } = item;
 	const pickupTime =
@@ -423,7 +425,7 @@ type TimelineStep = {
 };
 
 function buildTimeline(
-	item: OrderDetail,
+	item: OrderDetailModel,
 	colors: ReturnType<typeof useTheme>["colors"],
 ): TimelineEntry[] {
 	const { order, events } = item;
@@ -444,7 +446,7 @@ function buildTimeline(
 			note: strings.business.ordersTimelinePendingNote,
 			eventKeys: ["pending"],
 			fallback: created,
-			color: colors.warning,
+			color: colors.warningText,
 			background: colors.surfaceWarning,
 		},
 		{
@@ -454,7 +456,7 @@ function buildTimeline(
 			note: strings.business.ordersTimelineConfirmedNote,
 			eventKeys: ["confirmed"],
 			fallback: created,
-			color: colors.info,
+			color: colors.infoText,
 			background: colors.infoSurface,
 		},
 		{
@@ -464,7 +466,7 @@ function buildTimeline(
 			note: strings.business.ordersTimelineReadyNote,
 			eventKeys: ["ready_for_pickup"],
 			fallback: readyFallback,
-			color: colors.success,
+			color: colors.successText,
 			background: colors.surfaceSuccess, // ajusta al token correcto
 		},
 		{
@@ -474,7 +476,7 @@ function buildTimeline(
 			note: strings.business.ordersTimelineCompletedNote,
 			eventKeys: ["picked_up", "completed"],
 			fallback: readyFallback,
-			color: colors.success,
+			color: colors.successText,
 			background: colors.surfaceSuccess,
 		},
 		{
@@ -511,7 +513,7 @@ function buildTimeline(
 		}));
 }
 
-function TimelineCard({ item }: { item: OrderDetail }) {
+function TimelineCard({ item }: { item: OrderDetailModel }) {
 	const { colors } = useTheme();
 	const entries = buildTimeline(item, colors);
 	return (
@@ -591,7 +593,7 @@ function TimelineEntryRow({
 
 // ─── Número y fecha ──────────────────────────────────────────────────
 
-function OrderInfoCard({ item }: { item: OrderDetail }) {
+function OrderInfoCard({ item }: { item: OrderDetailModel }) {
 	const { colors } = useTheme();
 	return (
 		<View

@@ -9,9 +9,26 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
-    "test": {},
+    "test": {
+      "env": [
+        "TEST_DATABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+        "VITE_API_URL"
+      ]
+    },
     "test:e2e": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": [
+        "TEST_DATABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+        "VITE_API_URL",
+        "EXPO_PUBLIC_FIREBASE_API_KEY",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+        "EXPO_PUBLIC_FIREBASE_APP_ID"
+      ]
     },
     "lint": {},
     "format:check": {}

@@ -3,15 +3,76 @@ import {
 	OnboardingBusinessResponseSchema,
 } from "@0xc1x/role-commons";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import { Footer } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiPost } from "@/lib/api";
+import { ApiError, apiPost } from "@/lib/api";
 import { pageHead } from "@/lib/seo";
+import { useStoreLink } from "@/lib/store-links";
+
+/**
+ * Borrador del formulario. `sessionStorage` y no `localStorage` a propósito: el
+ * borrador muere con la pestaña, que es exactamente el alcance del problema
+ * (recargar o cambiar de pestaña). NUNCA la contraseña: `sessionStorage` es
+ * legible por cualquier script del origen y sobrevive a un XSS en la página.
+ */
+const DRAFT_KEY = "role-business-signup-draft";
+
+interface SignupDraft {
+	fullName: string;
+	email: string;
+	businessName: string;
+	phone: string;
+}
+
+const EMPTY_DRAFT: SignupDraft = {
+	fullName: "",
+	email: "",
+	businessName: "",
+	phone: "",
+};
+
+/**
+ * 409 = el correo ya existe. El backend responde `ConflictException('Email is
+ * already registered')`; mostrar eso crudo es un error en inglés dentro de un
+ * formulario en español, y además no le dice al usuario qué hacer. Rolé no tiene
+ * ruta de login propia: la cuenta vive en la app, así que el mensaje manda ahí.
+ */
+const CONFLICT_MESSAGE = "Ya existe una cuenta con este correo.";
+const CONFLICT_HINT =
+	"Puede que ya te hayas registrado antes. Inicia sesión en la app de Rolé con ese correo para administrar tu negocio.";
+
+function readDraft(): SignupDraft {
+	if (typeof window === "undefined") return EMPTY_DRAFT;
+	try {
+		const raw = window.sessionStorage.getItem(DRAFT_KEY);
+		if (!raw) return EMPTY_DRAFT;
+		const parsed = JSON.parse(raw) as Partial<SignupDraft>;
+		return {
+			fullName: typeof parsed.fullName === "string" ? parsed.fullName : "",
+			email: typeof parsed.email === "string" ? parsed.email : "",
+			businessName:
+				typeof parsed.businessName === "string" ? parsed.businessName : "",
+			phone: typeof parsed.phone === "string" ? parsed.phone : "",
+		};
+	} catch {
+		// Un borrador corrupto no puede impedir cargar el formulario.
+		return EMPTY_DRAFT;
+	}
+}
+
+function clearDraft() {
+	if (typeof window === "undefined") return;
+	try {
+		window.sessionStorage.removeItem(DRAFT_KEY);
+	} catch {
+		// Modo privado / cuota negada: el formulario funciona igual.
+	}
+}
 
 export const Route = createFileRoute("/business-signup")({
 	head: () => {
@@ -29,18 +90,51 @@ export const Route = createFileRoute("/business-signup")({
 });
 
 function BusinessSignupPage() {
-	const [fullName, setFullName] = useState("");
-	const [email, setEmail] = useState("");
+	// El borrador se restaura en un efecto y NO en el inicializador de useState:
+	// esta ruta se renderiza en el servidor, y un inicializador que leyera
+	// sessionStorage en el cliente haría que el primer render hidratara con los
+	// campos llenos contra un HTML servidor con los campos vacíos. Eso es un
+	// hydration mismatch. `restored` evita que el efecto de guardado borre el
+	// borrador antes de haberlo leído.
+	const [draft, setDraft] = useState<SignupDraft>(EMPTY_DRAFT);
+	const [restored, setRestored] = useState(false);
 	const [password, setPassword] = useState("");
 	const [confirm, setConfirm] = useState("");
-	const [businessName, setBusinessName] = useState("");
-	const [phone, setPhone] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [done, setDone] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	// El 409 tiene su propio bloque: no es solo un string, necesita el enlace a
+	// iniciar sesión. El login real vive en la app, no en el sitio.
+	const [conflict, setConflict] = useState(false);
+	const signInLink = useStoreLink();
+
+	const { fullName, email, businessName, phone } = draft;
+
+	function update(patch: Partial<SignupDraft>) {
+		setDraft((prev) => ({ ...prev, ...patch }));
+	}
+
+	useEffect(() => {
+		setDraft(readDraft());
+		setRestored(true);
+	}, []);
+
+	// Se guarda en cada cambio, no en `onSubmit`: el borrador existe para el
+	// usuario que NO llegó a enviar.
+	useEffect(() => {
+		if (!restored) return;
+		const isEmpty = Object.values(draft).every((v) => v === "");
+		try {
+			if (isEmpty) window.sessionStorage.removeItem(DRAFT_KEY);
+			else window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+		} catch {
+			// Sin storage el formulario sigue siendo usable.
+		}
+	}, [draft, restored]);
 
 	const submit = async (e: FormEvent) => {
 		e.preventDefault();
+		setConflict(false);
 		if (password !== confirm) {
 			setError("Las contraseñas no coinciden");
 			return;
@@ -71,9 +165,17 @@ function BusinessSignupPage() {
 		try {
 			const raw = await apiPost<unknown>("/businesses/onboarding", parsed.data);
 			OnboardingBusinessResponseSchema.parse(raw);
+			// El borrador se borra solo al confirmar, no al enviar: si la API
+			// falla, los datos que el usuario escribió siguen ahí.
+			clearDraft();
 			setDone(true);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Error al registrar");
+			if (err instanceof ApiError && err.isConflict) {
+				setError(CONFLICT_MESSAGE);
+				setConflict(true);
+			} else {
+				setError(err instanceof Error ? err.message : "Error al registrar");
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -124,7 +226,7 @@ function BusinessSignupPage() {
 						<Input
 							id="signup-name"
 							value={fullName}
-							onChange={(e) => setFullName(e.target.value)}
+							onChange={(e) => update({ fullName: e.target.value })}
 							placeholder="Nombre completo"
 							required
 						/>
@@ -135,7 +237,7 @@ function BusinessSignupPage() {
 							id="signup-email"
 							type="email"
 							value={email}
-							onChange={(e) => setEmail(e.target.value)}
+							onChange={(e) => update({ email: e.target.value })}
 							placeholder="tu@email.com"
 							required
 						/>
@@ -165,7 +267,7 @@ function BusinessSignupPage() {
 						<Input
 							id="signup-business"
 							value={businessName}
-							onChange={(e) => setBusinessName(e.target.value)}
+							onChange={(e) => update({ businessName: e.target.value })}
 							placeholder="Panadería La Espiga"
 							required
 						/>
@@ -175,7 +277,7 @@ function BusinessSignupPage() {
 						<Input
 							id="signup-phone"
 							value={phone}
-							onChange={(e) => setPhone(e.target.value)}
+							onChange={(e) => update({ phone: e.target.value })}
 							placeholder="+593 ..."
 						/>
 					</div>
@@ -186,6 +288,17 @@ function BusinessSignupPage() {
 							className="text-sm text-destructive"
 						>
 							{error}
+						</p>
+					) : null}
+					{conflict ? (
+						<p className="text-sm text-role-muted-foreground">
+							{CONFLICT_HINT}{" "}
+							<a
+								href={signInLink}
+								className="font-semibold text-role-primary underline underline-offset-2"
+							>
+								Iniciar sesión en la app de Rolé
+							</a>
 						</p>
 					) : null}
 					<Button
@@ -199,6 +312,26 @@ function BusinessSignupPage() {
 						Al registrar, tu negocio quedará en <b>pendiente</b> y no será
 						visible hasta ser aprobado desde el admin. Recibirás un email para
 						confirmar tu cuenta y el equipo de Rolé te contactará.
+					</p>
+					{/* Consentimiento en el momento en que se crea la cuenta y la
+					    contraseña. El footer tiene los enlaces, pero el footer no es
+					    el lugar donde se decide si crear una cuenta. */}
+					<p className="text-xs leading-relaxed text-role-muted-foreground text-center">
+						Al registrar tu negocio creas una cuenta de Rolé y aceptas los{" "}
+						<Link
+							to="/terms"
+							className="underline underline-offset-2 hover:text-ink"
+						>
+							términos y condiciones
+						</Link>{" "}
+						y la{" "}
+						<Link
+							to="/privacy"
+							className="underline underline-offset-2 hover:text-ink"
+						>
+							política de privacidad
+						</Link>
+						.
 					</p>
 				</form>
 			</main>

@@ -1,10 +1,22 @@
-import { Calendar, ChevronRight, Map, MapPin, Pencil, Phone, Pin, Star, Store, type LucideIcon } from "lucide-react-native";
+import {
+	Calendar,
+	ChevronRight,
+	Map as MapIcon,
+	MapPin,
+	Pencil,
+	Phone,
+	Pin,
+	Star,
+	Store,
+	type LucideIcon,
+} from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import {
 	AppText,
+	EmptyState,
 	ErrorState,
 	Screen,
 	ScreenHeader,
@@ -26,8 +38,13 @@ export default function BusinessLocationDetailScreen() {
 		id: string;
 		locationId: string;
 	}>();
-	const { data: location, isLoading, isError, error, refetch } =
-		useBusinessLocation(locationId ?? "");
+	const {
+		data: location,
+		isLoading,
+		isError,
+		error,
+		refetch,
+	} = useBusinessLocation(locationId ?? "");
 
 	if (isLoading) {
 		return (
@@ -44,7 +61,20 @@ export default function BusinessLocationDetailScreen() {
 	}
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!location) return null;
+	// Resolvió sin datos: la sucursal no existe (o el usuario ya no la ve).
+	if (!location)
+		return (
+			<Screen>
+				<ScreenHeader
+					title={strings.business.locationNotFoundTitle}
+					fallback={`/business/${id}/locations`}
+				/>
+				<EmptyState
+					title={strings.business.locationNotFoundTitle}
+					message={strings.business.locationNotFoundBody}
+				/>
+			</Screen>
+		);
 
 	return (
 		<Screen scroll contentContainerStyle={styles.container}>
@@ -53,11 +83,16 @@ export default function BusinessLocationDetailScreen() {
 			{/* ── Hero ─────────────────────────────────────────────────── */}
 			<Card style={styles.hero}>
 				<CardHeader>
-					<View style={[styles.icon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}>
+					<View
+						style={[
+							styles.icon,
+							{ backgroundColor: withAlpha(colors.primary, 0.102) },
+						]}
+					>
 						<Store size={26} color={colors.primary} />
 					</View>
 				</CardHeader>
-				
+
 				<View style={styles.heroText}>
 					<AppText variant="h3" weight="bold">
 						{location.name}
@@ -78,11 +113,11 @@ export default function BusinessLocationDetailScreen() {
 									{ backgroundColor: withAlpha(colors.warning, 0.149) },
 								]}
 							>
-								<Star size={11} color={colors.warning} />
+								<Star size={11} color={colors.warningText} />
 								<AppText
 									variant="bodySmall"
 									weight="semiBold"
-									style={{ color: colors.warning }}
+									style={{ color: colors.warningText }}
 								>
 									{strings.business.headquarter}
 								</AppText>
@@ -122,7 +157,7 @@ export default function BusinessLocationDetailScreen() {
 					) : null}
 					{location.zone ? (
 						<InfoRow
-							icon={Map}
+							icon={MapIcon}
 							label={strings.business.zone}
 							value={location.zone}
 						/>
@@ -146,24 +181,23 @@ export default function BusinessLocationDetailScreen() {
 			{/* ── Acciones ─────────────────────────────────────────────── */}
 			<CardPressable
 				style={styles.card}
-				onPress={() => router.push(`/business/${id}/locations/${location.id}/edit`)}
+				onPress={() =>
+					router.push(`/business/${id}/locations/${location.id}/edit`)
+				}
 			>
 				<CardContent style={styles.actionRow}>
 					<View
-						style={[styles.actionIcon, { backgroundColor: withAlpha(colors.primary, 0.102) }]}
+						style={[
+							styles.actionIcon,
+							{ backgroundColor: withAlpha(colors.primary, 0.102) },
+						]}
 					>
-						<Pencil
-							size={18}
-							color={colors.primary}
-						/>
+						<Pencil size={18} color={colors.primary} />
 					</View>
 					<AppText variant="bodyMedium" weight="medium" style={styles.flex1}>
 						{strings.business.editInformation}
 					</AppText>
-					<ChevronRight
-						size={18}
-						color={colors.mutedForeground}
-					/>
+					<ChevronRight size={18} color={colors.mutedForeground} />
 				</CardContent>
 			</CardPressable>
 		</Screen>
@@ -184,14 +218,16 @@ function InfoRow({
 	const { colors } = useTheme();
 	return (
 		<View style={[styles.infoRow, last && { marginBottom: 0 }]}>
-			<View style={[styles.infoIcon, { backgroundColor: withAlpha(colors.primary, 0.051) }]}>
+			<View
+				style={[
+					styles.infoIcon,
+					{ backgroundColor: withAlpha(colors.primary, 0.051) },
+				]}
+			>
 				<Icon size={14} color={colors.mutedForeground} />
 			</View>
 			<View style={styles.infoRowText}>
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.mutedForeground }}
-				>
+				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 					{label}
 				</AppText>
 				<AppText variant="bodyMedium" weight="medium">

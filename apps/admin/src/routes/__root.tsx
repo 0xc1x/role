@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 
 const queryClient = getQueryClient();
 
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export interface RouterContext {
@@ -122,6 +123,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 					<QueryClientProvider client={queryClient}>
 						<TooltipProvider>{children}</TooltipProvider>
 					</QueryClientProvider>
+					{/* Sin este montaje cada toast.* de la app es un no-op silencioso. */}
+					<Toaster />
 				</ThemeProvider>
 				<Devtools />
 				<Scripts />

@@ -1,3 +1,5 @@
+import { MONTHS_SHORT_ES } from "@/src/core/i18n/dates";
+
 /** Statistics period granularity for the business stats screen. */
 export type StatsPeriod = "week" | "month" | "year";
 
@@ -51,21 +53,6 @@ export function statsDaysInRange(range: { start: Date; end: Date }): number {
 	return Math.round(days) + 1;
 }
 
-const MONTH_ABBR = [
-	"ene",
-	"feb",
-	"mar",
-	"abr",
-	"may",
-	"jun",
-	"jul",
-	"ago",
-	"sep",
-	"oct",
-	"nov",
-	"dic",
-] as const;
-
 /** Human label for a stats period+offset (labels injected to keep i18n in UI). */
 export function statsRangeLabel(
 	period: StatsPeriod,
@@ -81,10 +68,10 @@ export function statsRangeLabel(
 	const { start, end } = statsRangeFor(period, offset, now);
 	if (period === "year") return String(end.getUTCFullYear());
 	if (period === "month")
-		return `${MONTH_ABBR[start.getUTCMonth()]} ${start.getUTCFullYear()}`;
+		return `${MONTHS_SHORT_ES[start.getUTCMonth()]} ${start.getUTCFullYear()}`;
 	const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
 	const day = (d: Date) =>
-		`${d.getUTCDate()} ${MONTH_ABBR[d.getUTCMonth()]}${sameYear ? "" : ` ${d.getUTCFullYear()}`}`;
+		`${d.getUTCDate()} ${MONTHS_SHORT_ES[d.getUTCMonth()]}${sameYear ? "" : ` ${d.getUTCFullYear()}`}`;
 	return `${day(start)} – ${day(end)} ${end.getUTCFullYear()}`;
 }
 

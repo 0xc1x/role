@@ -74,9 +74,13 @@ interface OrderQuery {
 	range(from: number, to: number): OrderQuery;
 }
 
-// biome-ignore lint: dynamic builder passthrough — generics over the untyped
-// Supabase client blow up tsc (TS2589); the interface above documents the shape.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// PostgREST builder passthrough. `any` in and out is deliberate and verified:
+// naming the concrete builder type, or even structurally checking it against
+// `OrderQuery` at the call site, both overflow tsc with TS2589. `OrderQuery`
+// below documents the surface these helpers are allowed to use. The only real
+// fix is typing the Supabase client (generated Database types) — see the
+// `noExplicitAny` note in docs/security-debt.md.
+// biome-ignore lint/suspicious/noExplicitAny: PostgREST builder passthrough; TS2589 on any attempt to name or structurally check the generic builder.
 function applyOrderListFilters(query: any, params: OrderListParams): any {
 	let q: OrderQuery = query;
 	if (params.status != null) q = q.eq("status", params.status);
@@ -113,7 +117,7 @@ function quoteOrValue(value: string): string {
 	return /[,()"\\]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: PostgREST builder passthrough; TS2589 on any attempt to name or structurally check the generic builder.
 function applyOrderPaging(query: any, params: OrderListParams): any {
 	let q: OrderQuery = query.order("created_at", {
 		ascending: params.ascending ?? false,

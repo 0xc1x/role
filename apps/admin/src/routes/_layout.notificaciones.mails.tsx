@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageTabs } from "@/components/page-tabs";
+import { PageTabs, TabPanel } from "@/components/page-tabs";
 import { ComponentsTab } from "@/features/email/components/components-tab";
 import { EnviosTab } from "@/features/email/components/envios-tab";
 import { SendTab } from "@/features/email/components/send-tab";
@@ -43,11 +43,19 @@ function MailsPage() {
 					onChange={setTab}
 				/>
 			</div>
-			<div className="mt-6">
-				{tab === "enviar" && <SendTab />}
-				{tab === "plantillas" && <TemplatesTab />}
-				{tab === "componentes" && <ComponentsTab />}
-				{tab === "envios" && <EnviosTab />}
+			<div className="mt-6 space-y-6">
+				<TabPanel tab="enviar" active={tab === "enviar"}>
+					<SendTab />
+				</TabPanel>
+				<TabPanel tab="plantillas" active={tab === "plantillas"}>
+					<TemplatesTab />
+				</TabPanel>
+				<TabPanel tab="componentes" active={tab === "componentes"}>
+					<ComponentsTab />
+				</TabPanel>
+				<TabPanel tab="envios" active={tab === "envios"}>
+					<EnviosTab />
+				</TabPanel>
 			</div>
 		</div>
 	);

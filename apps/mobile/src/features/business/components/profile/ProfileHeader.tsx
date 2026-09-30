@@ -109,13 +109,13 @@ export function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
 			]}
 		>
 			<View style={styles.statsRow}>
-				<Leaf size={24} color={colors.successDark} />
+				<Leaf size={24} color={colors.successText} />
 				<AppText
 					// Display one-off: cifra de impacto del hero (fuera de escala).
 					style={{
 						fontSize: 32,
 						fontWeight: "800",
-						color: colors.successDark,
+						color: colors.successText,
 						marginLeft: spacing.sm,
 					}}
 				>
@@ -125,7 +125,7 @@ export function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
 			<AppText
 				weight="bold"
 				style={{
-					color: colors.success,
+					color: colors.successText,
 					textAlign: "center",
 					marginTop: spacing.xs,
 				}}
@@ -135,7 +135,7 @@ export function StatsCard({ profile }: { profile: BusinessProfileDetail }) {
 			{profile.memberSince ? (
 				<AppText
 					style={{
-						color: `${withAlpha(colors.success, 0.702)}`,
+						color: `${withAlpha(colors.successText, 0.702)}`,
 						fontSize: 11,
 						textAlign: "center",
 						marginTop: spacing.sm,

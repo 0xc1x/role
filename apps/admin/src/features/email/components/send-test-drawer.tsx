@@ -13,6 +13,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import type { useTestTemplate } from "@/features/email/queries/emails.queries";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export function SendTestDrawer(props: {
 	open: boolean;
@@ -43,7 +44,7 @@ export function SendTestDrawer(props: {
 				);
 			}
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : "Error inesperado");
+			notifyMutationError(err);
 		}
 	};
 

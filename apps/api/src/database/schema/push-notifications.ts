@@ -40,7 +40,14 @@ export const pushTemplates = pgTable('push_templates', {
 /** Espejo de public.push_notifications (Supabase): historial de envíos manuales. */
 export const pushNotifications = pgTable('push_notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
-  template_id: uuid('template_id'),
+  // NO ACTION, matching the database: a notification outlives the template it
+  // was sent from, so retiring a template must not retract what was already
+  // delivered. Declared here because it was missing from the mirror entirely,
+  // which is what made `mirror-fidelity.db.spec.ts` fail against a CI-generated
+  // database while passing against a locally cached one.
+  template_id: uuid('template_id').references(() => pushTemplates.id, {
+    onDelete: 'no action',
+  }),
   title: text('title').notNull(),
   body: text('body').notNull(),
   data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
@@ -72,7 +79,9 @@ export const pushSends = pgTable(
       .references(() => campaigns.id, { onDelete: 'cascade' }),
     user_id: uuid('user_id')
       .notNull()
-      .references(() => profiles.id, { onDelete: 'cascade' }),
+      .references(() => profiles.id, {
+        onDelete: 'no action',
+      }),
     status: pushSendStatusEnum('status').notNull().default('pending'),
     attempts: integer('attempts').notNull().default(0),
     max_attempts: integer('max_attempts').notNull().default(3),

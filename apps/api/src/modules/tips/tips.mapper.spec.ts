@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  TipMapper,
-  toTipDto,
-  toTipInsert,
-  toTipUpdate,
-} from './tips.mapper';
+import { TipMapper, toTipDto, toTipInsert, toTipUpdate } from './tips.mapper';
 import type { TipRow } from './tips.repository';
 
 const makeRow = (overrides: Partial<TipRow> = {}): TipRow =>

@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import * as nativeWeb from "react-native-web";
 import { light, dark } from "@/src/core/theme/colors";
 import type { OfferDetail } from "@/src/features/offers/domain/offer";
+import { compositeOver, contrast } from "@/src/test-utils/contrast";
 
 let colors = light;
 mock.module("react-native", () => nativeWeb);
@@ -92,12 +93,12 @@ test("renders metadata and independent footer buttons in both themes, including 
 		);
 		const buttons = [
 			...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g),
-		].map((match) => match[1]!);
+		].map((match) => match[1] ?? "");
 		expect(buttons).toHaveLength(4);
 		expect(buttons.every((body) => !body.includes("<button"))).toBe(true);
 		expect(buttons[0]).toContain("Activo");
 		expect(buttons[0]).toContain("8 vendidos");
-		expect(buttons[0]).toContain(product.location!.name);
+		expect(buttons[0]).toContain(product.location?.name);
 		expect(buttons[0]).toContain("Hasta dom 6 sep");
 		expect(buttons[0]).toContain(">0</div>");
 		expect(buttons[1]).toContain("Ver detalles");
@@ -116,4 +117,44 @@ test("renders metadata and independent footer buttons in both themes, including 
 	);
 	expect(html).toContain("Inactivo");
 	expect(html).not.toContain("vendidos");
+});
+
+test("the sold chip text and icon use successText, never the decorative success", () => {
+	// The renderer emits colours as `rgba(r,g,b,a)`, so match on the foreground
+	// property. `success` is deliberately absent from the palette surface set:
+	// the chip background is `surfaceSuccess` (a translucent tint of the same
+	// hue in dark), and that one is allowed to keep the decorative value.
+	const foreground = (hex: string) => {
+		const v = hex.replace("#", "").slice(0, 6);
+		const [r, g, b] = [0, 2, 4].map((o) => parseInt(v.slice(o, o + 2), 16));
+		return `color:rgba(${r},${g},${b},1.00)`;
+	};
+	for (const palette of [light, dark]) {
+		colors = palette;
+		const html = renderToStaticMarkup(
+			createElement(ProductCard, { businessId: "business-1", product }),
+		);
+		// `sold > 0`, so the chip renders. Both roles have to move together.
+		expect(html).toContain("8 vendidos");
+		expect(html).toContain(foreground(palette.successText));
+		// Light clears AA (4.57:1). Dark's `surfaceSuccess` is a 20% tint of
+		// the same hue over `card`, which lands at 4.27:1 — the known unfixed
+		// shortfall, asserted at 4.2 so it stays visible.
+		const chipSurface =
+			palette === dark
+				? compositeOver(palette.surfaceSuccess, palette.card)
+				: palette.surfaceSuccess;
+		expect(contrast(palette.successText, chipSurface)).toBeGreaterThanOrEqual(
+			palette === dark ? 4.2 : 4.5,
+		);
+	}
+	// In light the two tokens differ, so the decorative one must be gone from
+	// every foreground in the markup. (In dark `successText` is `success`, so
+	// the negative assertion would be vacuous there.)
+	colors = light;
+	const lightHtml = renderToStaticMarkup(
+		createElement(ProductCard, { businessId: "business-1", product }),
+	);
+	expect(lightHtml).not.toContain(foreground(light.success));
+	expect(light.success).not.toBe(light.successText);
 });

@@ -21,4 +21,15 @@ describe("PlatformStatsSchema", () => {
 			}).success,
 		).toBe(false);
 	});
+
+	// Guarda de seguridad del endpoint público: los conteos de marketing no
+	// crecen hacia el dinero. Las métricas de plataforma viven en RevenueStats,
+	// que exige rol admin.
+	it("no expone campos de dinero", () => {
+		expect(Object.keys(PlatformStatsSchema.shape).sort()).toEqual([
+			"businesses",
+			"meals_saved",
+			"users",
+		]);
+	});
 });

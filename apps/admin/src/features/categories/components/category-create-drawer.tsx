@@ -1,12 +1,10 @@
 import { ResourceCreateDrawer } from "@/components/resource/resource-drawer";
-import { categoriesKeys } from "@/features/categories";
 import { CategoryForm } from "../forms/category.form";
 
 export function CategoryCreateDrawer() {
 	return (
 		<ResourceCreateDrawer
 			formId="create-category-drawer-form"
-			mutationKey={categoriesKeys.all}
 			title="Categoría"
 			description="Crear una nueva categoría"
 			triggerLabel="Crear Categoría"

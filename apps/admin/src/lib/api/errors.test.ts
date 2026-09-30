@@ -61,9 +61,11 @@ describe("throwFromResponse", () => {
 			json: () => Promise.reject(new Error("Invalid JSON")),
 		} as Response;
 		await expect(throwFromResponse(res)).rejects.toThrow(ApiClientError);
+		// A12: el mensaje generado por el cliente también sale en español; el
+		// status se conserva porque es la parte accionable del diagnóstico.
 		await expect(throwFromResponse(res)).rejects.toMatchObject({
 			status: 500,
-			message: "Request failed with status 500",
+			message: "La solicitud falló con el estado 500",
 		});
 	});
 

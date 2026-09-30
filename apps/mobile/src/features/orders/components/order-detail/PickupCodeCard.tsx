@@ -9,10 +9,10 @@ import { useTheme } from "@/src/core/theme";
 import { spacing } from "@/src/core/theme/spacing";
 import { PickupQr } from "@/src/features/orders/components/pickup-qr";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 
 export function PickupCodeCard({ order }: { order: Order }) {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	if (!order.pickup_code) return null;
 
 	const handleCopy = () => {

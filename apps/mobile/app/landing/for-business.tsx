@@ -44,10 +44,7 @@ export default function LandingForBusinessScreen() {
 					))}
 				</Card>
 				<Link href="/business-signup" asChild>
-					<Button
-						fullWidth
-						style={{ marginTop: spacing.lg }}
-					>
+					<Button fullWidth style={{ marginTop: spacing.lg }}>
 						{strings.business.createBusiness}
 					</Button>
 				</Link>

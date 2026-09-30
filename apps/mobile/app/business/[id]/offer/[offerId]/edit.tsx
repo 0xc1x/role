@@ -10,10 +10,19 @@ import { ProductForm } from "@/src/features/business/components/products/Product
 import { useOffer } from "@/src/features/hooks";
 
 export default function EditProductScreen() {
-	const { id, offerId } = useLocalSearchParams<{ id: string; offerId: string }>();
+	const { id, offerId } = useLocalSearchParams<{
+		id: string;
+		offerId: string;
+	}>();
 	const businessId = id ?? "";
 
-	const { data: product, isLoading, isError, error, refetch } = useOffer(offerId ?? "");
+	const {
+		data: product,
+		isLoading,
+		isError,
+		error,
+		refetch,
+	} = useOffer(offerId ?? "");
 
 	if (isLoading) return <ProductFormSkeleton />;
 	if (isError || !product)
@@ -27,7 +36,6 @@ export default function EditProductScreen() {
 	);
 }
 
-
 function ProductFormSkeleton() {
 	return (
 		<Screen scroll>
@@ -35,7 +43,10 @@ function ProductFormSkeleton() {
 				<ScreenHeader title={strings.business.editProduct} />
 				<Skeleton style={styles.skeletonImage} />
 				{[0, 1, 2, 3, 4, 5].map((i) => (
-					<Skeleton key={`product-form-skeleton-${i}`} style={styles.skeletonField} />
+					<Skeleton
+						key={`product-form-skeleton-${i}`}
+						style={styles.skeletonField}
+					/>
 				))}
 				<Skeleton style={styles.skeletonCta} />
 			</View>

@@ -54,7 +54,7 @@ function TermsPage() {
 					<div className="grid gap-4 md:grid-cols-3">
 						{[
 							{ k: "Pago", v: "En el comercio", d: "Sin intermediarios" },
-							{ k: "Reserva", v: "Gratis", d: "Sin comisiones ocultas" },
+							{ k: "Reserva", v: "Gratis", d: "Sin costo para quien reserva" },
 							{ k: "Recogida", v: "Presencial", d: "En horario pactado" },
 						].map((b) => (
 							<div

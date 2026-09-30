@@ -1,6 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { CONTACT_CITIES_FALLBACK } from "../enums/contact.enum";
+import * as contactEnums from "../enums/contact.enum";
 import { CreateContactSchema } from "../schemas/contact.schema";
+
+describe("contact enums", () => {
+	// La geografía de lanzamiento es dato de plataforma (`app_config`), no de
+	// contrato. Un fallback de ciudades en commons era un segundo SSOT que
+	// nadie actualizaba al abrir una ciudad.
+	it("no publica una lista de ciudades de respaldo", () => {
+		expect("CONTACT_CITIES_FALLBACK" in contactEnums).toBe(false);
+		expect(contactEnums.CONTACT_ROLES).toEqual(["negocio", "persona"]);
+	});
+});
 
 describe("CreateContactSchema", () => {
 	const base = {
@@ -8,15 +18,6 @@ describe("CreateContactSchema", () => {
 		role: "persona" as const,
 		city: "Quito",
 	};
-
-	it("excludes Otra from the shared city fallback", () => {
-		expect(CONTACT_CITIES_FALLBACK).toEqual([
-			"Quito",
-			"Guayaquil",
-			"Cuenca",
-			"Manta",
-		]);
-	});
 
 	it("accepts valid contact and normalizes email", () => {
 		const parsed = CreateContactSchema.parse(base);

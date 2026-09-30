@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function PriceDetailsCard({ order }: { order: Order }) {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const discount = orderDiscount(order);
 	return (
 		<Card>
@@ -34,13 +34,13 @@ export function PriceDetailsCard({ order }: { order: Order }) {
 					</AppText>
 				</View>
 				<View style={styles.priceRow}>
-					<AppText variant="bodyMedium" style={{ color: colors.success }}>
+					<AppText variant="bodyMedium" style={{ color: colors.successText }}>
 						{strings.orders.discountLabel}
 					</AppText>
 					<AppText
 						variant="bodyMedium"
 						weight="semiBold"
-						style={[{ color: colors.success }, styles.tabular]}
+						style={[{ color: colors.successText }, styles.tabular]}
 					>
 						-{formatMoney(discount)}
 					</AppText>
@@ -59,7 +59,7 @@ export function PriceDetailsCard({ order }: { order: Order }) {
 						<AppText
 							variant="bodySmall"
 							weight="semiBold"
-							style={{ color: colors.success, flex: 1 }}
+							style={{ color: colors.successText, flex: 1 }}
 						>
 							{strings.orders.moneySaved.replace(
 								"{saved}",

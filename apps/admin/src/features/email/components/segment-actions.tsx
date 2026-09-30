@@ -1,7 +1,6 @@
 import type { SegmentDto } from "@0xc1x/role-commons";
 import { MoreHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -23,6 +22,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
+import { notifyMutationError } from "@/lib/api/notify";
 
 /** Menú de acciones + confirmación (mismo patrón que categorías). */
 export function SegmentActions(props: {
@@ -76,9 +76,7 @@ export function SegmentActions(props: {
 									await props.onRemove();
 									setConfirmOpen(false);
 								} catch (err) {
-									toast.error(
-										err instanceof Error ? err.message : "Error inesperado",
-									);
+									notifyMutationError(err);
 								}
 							}}
 						>

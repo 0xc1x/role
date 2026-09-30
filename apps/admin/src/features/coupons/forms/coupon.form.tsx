@@ -3,6 +3,7 @@ import { CreateCouponBaseSchema } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import type { ReactNode } from "react";
 import { z } from "zod";
+import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { StatusSwitch } from "@/components/status-switch";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -88,6 +89,9 @@ function FieldShell({
 export function CouponForm({ formId, onSuccess, coupon }: CouponFormProps) {
 	const createMutation = useCreateCoupon();
 	const updateMutation = useUpdateCoupon();
+	useReportDrawerPending(
+		coupon ? updateMutation.isPending : createMutation.isPending,
+	);
 	const form = useForm({
 		defaultValues: {
 			code: coupon?.code ?? "",

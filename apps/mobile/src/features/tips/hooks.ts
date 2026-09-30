@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchRandomTip } from "./data/repository";
-import type { DailyTip } from "./domain/tip";
 
 export const RANDOM_TIP_QUERY_KEY = ["tips", "random"] as const;
 

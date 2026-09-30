@@ -10,12 +10,9 @@ import { HowItWorks } from "@/components/how-it-works";
 import { Navbar } from "@/components/navbar";
 import { Testimonials } from "@/components/testimonials";
 import { FAQ_ITEMS } from "@/lib/faq";
-import {
-	appConfigQueryOptions,
-	platformStatsQueryOptions,
-	randomOfferQueryOptions,
-} from "@/lib/queries";
+import { appConfigQueryOptions, randomOfferQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
+import { ensurePlatformStats } from "@/lib/use-config";
 
 const FAQ_JSON_LD = {
 	"@context": "https://schema.org",
@@ -29,12 +26,12 @@ const FAQ_JSON_LD = {
 
 export const Route = createFileRoute("/")({
 	component: LandingPage,
-	// SSR: config + stats reales se resuelven en el server para SEO.
+	// SSR: config + stats reales se resuelven en el server para SEO. Ningún
+	// fallo rompe el render; el loader solo deja constancia de si las stats
+	// salieron de la API (`source`) para que el markup lo exponga.
 	loader: ({ context }) =>
 		Promise.all([
-			context.queryClient
-				.ensureQueryData(platformStatsQueryOptions)
-				.catch(() => undefined),
+			ensurePlatformStats(context.queryClient),
 			context.queryClient
 				.ensureQueryData(appConfigQueryOptions)
 				.catch(() => undefined),

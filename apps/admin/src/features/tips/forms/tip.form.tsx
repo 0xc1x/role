@@ -1,6 +1,7 @@
 import { CreateTipSchema, type TipDto } from "@0xc1x/role-commons";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
+import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { StatusSwitch } from "@/components/status-switch";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +22,9 @@ interface TipFormProps {
 export function TipForm({ formId, onSuccess, tip }: TipFormProps) {
 	const createMutation = useCreateTip();
 	const updateMutation = useUpdateTip();
+	useReportDrawerPending(
+		tip ? updateMutation.isPending : createMutation.isPending,
+	);
 	const form = useForm({
 		defaultValues: {
 			content: tip?.content ?? "",

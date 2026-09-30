@@ -16,8 +16,10 @@ import {
   type RenderedEmail,
   type TestCampaignDto,
 } from '@0xc1x/role-commons';
-import { safeErrorFields } from '../../common/utils/safe-error';
+import { safeErrorFields, safeErrorSummary } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
+import { AppConfigRepository } from '../app-config/app-config.repository';
+import { resolveOutboundFrom } from '../app-config/outbound-addresses';
 import type { CampaignChannelDispatcher } from '../../common/campaigns/campaign-dispatcher.port';
 import { MAX_AUDIENCE_SIZE, RecipientsService } from './recipients.service';
 import { RendererService } from './renderer.service';
@@ -58,6 +60,7 @@ export class CampaignsService {
     private readonly renderer: RendererService,
     private readonly recipients: RecipientsService,
     private readonly config: ConfigService<Env, true>,
+    private readonly appConfigRepo: AppConfigRepository,
     @Optional()
     @InjectQueue('email-expedition')
     private readonly queue?: Queue<{ campaignId: string }>,
@@ -492,10 +495,21 @@ export class CampaignsService {
         });
         await this.repository.markSent(send.id, resendId);
       } catch (err) {
-        await this.repository.markFailed(
-          send.id,
-          err instanceof Error ? err.message : String(err),
-        );
+        // `error_message` se expone en DTOs y se renderiza en el admin, así que
+        // nunca se persiste el mensaje crudo de Resend: puede traer la API key,
+        // el email del destinatario o el id de la cuenta. Solo la huella
+        // acotada tipo/código, que basta para triage.
+        //
+        // Y el log estructurado es el sitio del diagnóstico de verdad: sin esta
+        // línea, la redacción dejaba al admin con `Error` y al operador sin
+        // nada. `sendId` correlaciona con la fila que el admin muestra; el
+        // destinatario NO viaja, porque es PII de un tercero.
+        this.logger.error({
+          event: 'email_send_failed',
+          sendId: send.id,
+          ...safeErrorFields(err),
+        });
+        await this.repository.markFailed(send.id, safeErrorSummary(err));
       }
     }
     return transactional.length;
@@ -599,10 +613,16 @@ export class CampaignsService {
         const result = await this.deliver(send.email, rendered);
         await this.repository.markSent(send.id, result);
       } catch (err) {
-        await this.repository.markFailed(
-          send.id,
-          err instanceof Error ? err.message : String(err),
-        );
+        // Misma razón que en `processTransactionalBatch`: el mensaje crudo de
+        // Resend es PII de terceros y esta columna se lee en el admin. Mismo
+        // evento `email_send_failed` para que el operador pueda filtrar ambos
+        // caminos de envío (transaccional y campaña) con una sola búsqueda.
+        this.logger.error({
+          event: 'email_send_failed',
+          sendId: send.id,
+          ...safeErrorFields(err),
+        });
+        await this.repository.markFailed(send.id, safeErrorSummary(err));
       }
     }
     if (batch.length > 0) {
@@ -698,12 +718,27 @@ export class CampaignsService {
       return `dev_${Date.now()}`;
     }
     const { data, error } = await this.resend.emails.send({
-      from: this.config.get('EMAIL_FROM', { infer: true }),
+      from: await resolveOutboundFrom(this.appConfigRepo, this.config),
       to: email,
       subject: rendered.subject,
       html: rendered.html,
     });
-    if (error) throw new Error(error.message);
+    // El mensaje crudo de Resend viaja solo en proceso: cada consumidor lo
+    // reduce antes de persistir o loguear (`safeErrorSummary` al marcar failed,
+    // `AllExceptionsFilter` al escapar a HTTP). Conservarlo aquí mantiene el
+    // diagnóstico útil durante el desarrollo sin abrir una vía de fuga.
+    if (error) {
+      // `name` es el código de máquina del fallo (`validation_error`,
+      // `invalid_from_address`, `rate_limit_exceeded`…): es lo accionable y
+      // cabe en la huella acotada de `safeErrorFields`. Sin esto, un fallo de
+      // envío llega al log como `errorType: "Error"` y no dice nada. El guard
+      // evita degradar la huella a `UnknownError` si el driver no lo trae.
+      const failure = new Error(error.message);
+      if (typeof error.name === 'string' && error.name.length > 0) {
+        failure.name = error.name;
+      }
+      throw failure;
+    }
     return data?.id ?? null;
   }
 }

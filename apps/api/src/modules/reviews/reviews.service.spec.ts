@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ReviewsService } from './reviews.service';
 import { ReviewsRepository } from './reviews.repository';
@@ -91,9 +95,9 @@ describe('ReviewsService (espejo de triggers de rating)', () => {
   it('ORDER_NOT_FOUND cuando la orden no existe', async () => {
     repository.findOrderById.mockResolvedValue(null);
 
-    await expect(
-      service.create(mockUser, { order_id: 'x' }),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.create(mockUser, { order_id: 'x' })).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('rechaza reviews de órdenes ajenas', async () => {
@@ -107,7 +111,9 @@ describe('ReviewsService (espejo de triggers de rating)', () => {
   });
 
   it('rechaza reseñar pedidos no completados', async () => {
-    repository.findOrderById.mockResolvedValue(makeOrder({ status: 'pending' }));
+    repository.findOrderById.mockResolvedValue(
+      makeOrder({ status: 'pending' }),
+    );
 
     await expect(
       service.create(mockUser, { order_id: 'order-1' }),

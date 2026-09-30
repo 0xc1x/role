@@ -7,14 +7,18 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { AuthUser } from '../../auth/auth.types';
 import { DRIZZLE } from '../../database/database.tokens';
+import { AppConfigRepository } from '../app-config/app-config.repository';
+import { UserDefaultsService } from '../users/user-defaults.service';
 import { BusinessesService } from './businesses.service';
 import { BusinessesRepository } from './businesses.repository';
-import type { BusinessRow } from './businesses.repository';
+import type { BusinessAggregateRow } from './businesses.repository';
 
 const businessId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const ownerId = 'a1b2c3d4-e5f6-4789-a012-3456789abcde';
 
-const makeBusinessRow = (overrides: Partial<BusinessRow> = {}): BusinessRow =>
+const makeBusinessRow = (
+  overrides: Partial<BusinessAggregateRow> = {},
+): BusinessAggregateRow =>
   ({
     id: businessId,
     owner_id: ownerId,
@@ -32,10 +36,14 @@ const makeBusinessRow = (overrides: Partial<BusinessRow> = {}): BusinessRow =>
     rating: null,
     review_count: null,
     is_active: true,
+    verification_status: 'pending',
+    verified_at: null,
+    verified_by: null,
+    rejection_reason: null,
     created_at: new Date('2026-01-01T00:00:00.000Z'),
     updated_at: new Date('2026-01-02T00:00:00.000Z'),
     ...overrides,
-  }) as BusinessRow;
+  }) as BusinessAggregateRow;
 
 describe('BusinessesService', () => {
   let service: BusinessesService;
@@ -45,6 +53,7 @@ describe('BusinessesService', () => {
     findById: jest.fn(),
     findBySlug: jest.fn(),
     isOwner: jest.fn(),
+    listEmailSends: jest.fn(),
     hasPendingPayout: jest.fn(),
     insert: jest.fn(),
     update: jest.fn(),
@@ -85,6 +94,8 @@ describe('BusinessesService', () => {
           },
         },
         { provide: DRIZZLE, useValue: {} },
+        { provide: AppConfigRepository, useValue: { findByKey: jest.fn() } },
+        { provide: UserDefaultsService, useValue: { seed: jest.fn() } },
       ],
     }).compile();
     service = module.get(BusinessesService);
@@ -187,6 +198,63 @@ describe('BusinessesService', () => {
 
       expect(repository.findById).not.toHaveBeenCalled();
       expect(repository.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listEmailSends', () => {
+    const makeEmailRow = (overrides: Record<string, unknown> = {}) =>
+      ({
+        id: 'c0ffee00-0000-4000-8000-000000000001',
+        email: 'owner@role.ec',
+        status: 'pending',
+        error_message: null,
+        created_at: new Date('2026-02-01T10:00:00.000Z'),
+        updated_at: new Date('2026-02-01T10:00:00.000Z'),
+        template_name: 'business-approved',
+        ...overrides,
+      }) as never;
+
+    it('admin lee los envíos mapeados a DTO (no filas crudas)', async () => {
+      repository.listEmailSends.mockResolvedValue([
+        makeEmailRow(),
+        makeEmailRow({
+          id: 'c0ffee00-0000-4000-8000-000000000002',
+          status: 'failed',
+          error_message: 'You can only send testing emails to your own email',
+        }),
+      ]);
+
+      const dtos = await service.listEmailSends(admin, businessId);
+
+      expect(repository.listEmailSends).toHaveBeenCalledWith(businessId);
+      expect(dtos).toEqual([
+        {
+          id: 'c0ffee00-0000-4000-8000-000000000001',
+          email: 'owner@role.ec',
+          template_name: 'business-approved',
+          status: 'pending',
+          error_message: null,
+          created_at: '2026-02-01T10:00:00.000Z',
+          updated_at: '2026-02-01T10:00:00.000Z',
+        },
+        {
+          id: 'c0ffee00-0000-4000-8000-000000000002',
+          email: 'owner@role.ec',
+          template_name: 'business-approved',
+          status: 'failed',
+          error_message: 'You can only send testing emails to your own email',
+          created_at: '2026-02-01T10:00:00.000Z',
+          updated_at: '2026-02-01T10:00:00.000Z',
+        },
+      ]);
+    });
+
+    it('un negocio no puede leer los envíos de su propia verificación', async () => {
+      await expect(service.listEmailSends(owner, businessId)).rejects.toThrow(
+        ForbiddenException,
+      );
+
+      expect(repository.listEmailSends).not.toHaveBeenCalled();
     });
   });
 

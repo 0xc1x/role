@@ -10,6 +10,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { notifyMutationError } from "@/lib/api/notify";
 import { emailApi } from "../api/emails.api";
 import { emailKeys } from "./email.keys";
 
@@ -109,7 +110,7 @@ export const useSegmentMutations = () => {
 		mutationFn: ({ id, user_ids }: { id: string; user_ids: string[] }) =>
 			emailApi.setSegmentUsers(id, user_ids),
 		onSuccess: invalidate,
-		onError: (err) => toast.error(err.message),
+		onError: notifyMutationError,
 	});
 	return { ...base, setUsers };
 };
@@ -129,13 +130,8 @@ export function useSetSegmentUsers() {
 		mutationFn: ({ id, user_ids }: { id: string; user_ids: string[] }) =>
 			emailApi.setSegmentUsers(id, user_ids),
 		onSuccess: () => void qc.invalidateQueries({ queryKey: ["email"] }),
-		onError: (err) => toast.error(err.message),
+		onError: notifyMutationError,
 	});
-}
-
-/** Error de mutación → toast. Pura y sin closure: vive a nivel módulo. */
-function notifyMutationError(err: Error) {
-	toast.error(err.message);
 }
 
 export function useCampaignMutations() {

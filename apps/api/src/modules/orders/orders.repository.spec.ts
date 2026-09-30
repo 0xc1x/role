@@ -8,7 +8,7 @@ import {
   seedOrder,
   seedProfile,
 } from '../../../test/seed';
-import { coupons, orderEvents } from '../../database/schema';
+import { businessFinance, coupons, orderEvents } from '../../database/schema';
 import { OrdersRepository } from './orders.repository';
 
 let ctx: TestDbContext;
@@ -83,6 +83,54 @@ describe('OrdersRepository (DB real)', () => {
     expect(biz.total).toBeGreaterThanOrEqual(2);
   });
 
+  test('listEvents returns the timeline oldest first and paginates it', async () => {
+    const order = await seedOrder(ctx.db, userId, offerId, businessId);
+
+    await repo.transaction(async (tx) => {
+      await repo.setEventActor(tx, userId);
+      await repo.updateStatus(tx, order.id, 'confirmed');
+    });
+    await repo.transaction(async (tx) => {
+      await repo.setEventActor(tx, userId);
+      await repo.updateStatus(tx, order.id, 'ready_for_pickup');
+    });
+
+    // The trigger wrote the creation event on the INSERT, so the timeline is:
+    // created, confirmed, ready_for_pickup. Ascending order is the claim here.
+    const all = await repo.listEvents(order.id, { page: 1, limit: 10 });
+    expect(all.total).toBe(3);
+    expect(all.items.map((item) => item.status)).toEqual([
+      'pending',
+      'confirmed',
+      'ready_for_pickup',
+    ]);
+
+    const firstPage = await repo.listEvents(order.id, { page: 1, limit: 2 });
+    const secondPage = await repo.listEvents(order.id, { page: 2, limit: 2 });
+    expect(firstPage.items.map((item) => item.status)).toEqual([
+      'pending',
+      'confirmed',
+    ]);
+    expect(secondPage.items.map((item) => item.status)).toEqual([
+      'ready_for_pickup',
+    ]);
+    expect(secondPage.total).toBe(3);
+  });
+
+  test('listEvents only returns events of the requested order', async () => {
+    const mine = await seedOrder(ctx.db, userId, offerId, businessId);
+    const otherUser = await seedProfile(ctx.db);
+    const theirs = await seedOrder(ctx.db, otherUser, offerId, businessId);
+
+    const result = await repo.listEvents(mine.id, { page: 1, limit: 50 });
+
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items.every((item) => item.order_id === mine.id)).toBe(true);
+    expect(result.items.some((item) => item.order_id === theirs.id)).toBe(
+      false,
+    );
+  });
+
   test('findActiveByUserAndOffer', async () => {
     const active = await repo.findActiveByUserAndOffer(ctx.db, userId, offerId);
     expect(active?.user_id).toBe(userId);
@@ -136,7 +184,7 @@ describe('OrdersRepository (DB real)', () => {
 });
 
 describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
-  test('findCouponByCodeForUpdate prioriza negocio; vencido → null', async () => {
+  test('findCouponByCodeForUpdate prioriza negocio y luego global', async () => {
     await ctx.db.insert(coupons).values([
       { code: 'MIX', name: 'Global', type: 'fixed', value: '100' },
       {
@@ -146,6 +194,39 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
         value: '200',
         business_id: businessId,
       },
+    ]);
+    const found = await repo.transaction((tx) =>
+      repo.findCouponByCodeForUpdate(tx, businessId, 'MIX'),
+    );
+    expect(found?.business_id).toBe(businessId);
+
+    // Desde otro negocio el global gana: el de este negocio no compite.
+    const otherOwner = await seedProfile(ctx.db);
+    const otherBiz = await seedBusiness(ctx.db, otherOwner);
+    const fromOther = await repo.transaction((tx) =>
+      repo.findCouponByCodeForUpdate(tx, otherBiz.id, 'MIX'),
+    );
+    expect(fromOther?.business_id).toBeNull();
+
+    expect(
+      await repo.transaction((tx) =>
+        repo.findCouponByCodeForUpdate(tx, businessId, 'NOPE'),
+      ),
+    ).toBeNull();
+  });
+
+  // The lookup must NOT filter by validity/scope: the service needs the row to
+  // report `inactive`, `expired` and `wrong_business` instead of a flat null.
+  test('findCouponByCodeForUpdate devuelve inactivo, vencido y ajeno', async () => {
+    const foreignBiz = await seedBusiness(ctx.db, await seedProfile(ctx.db));
+    await ctx.db.insert(coupons).values([
+      {
+        code: 'OFF',
+        name: 'Inactivo',
+        type: 'fixed',
+        value: '1',
+        is_active: false,
+      },
       {
         code: 'VIEJO',
         name: 'V',
@@ -153,21 +234,22 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
         value: '1',
         expires_at: new Date('2000-01-01T00:00:00Z'),
       },
+      {
+        code: 'AJENO',
+        name: 'Ajeno',
+        type: 'fixed',
+        value: '1',
+        business_id: foreignBiz.id,
+      },
     ]);
-    const found = await repo.transaction((tx) =>
-      repo.findCouponByCodeForUpdate(tx, businessId, 'MIX'),
-    );
-    expect(found?.business_id).toBe(businessId);
-    expect(
-      await repo.transaction((tx) =>
-        repo.findCouponByCodeForUpdate(tx, businessId, 'VIEJO'),
-      ),
-    ).toBeNull();
-    expect(
-      await repo.transaction((tx) =>
-        repo.findCouponByCodeForUpdate(tx, businessId, 'NOPE'),
-      ),
-    ).toBeNull();
+    const find = (code: string) =>
+      repo.transaction((tx) =>
+        repo.findCouponByCodeForUpdate(tx, businessId, code),
+      );
+
+    expect((await find('OFF'))?.is_active).toBe(false);
+    expect((await find('VIEJO'))?.expires_at).not.toBeNull();
+    expect((await find('AJENO'))?.business_id).toBe(foreignBiz.id);
   });
 
   test('incrementCouponUsedCount y accrueBusinessBalance', async () => {
@@ -181,10 +263,12 @@ describe('OrdersRepository cupones/balance/expiración (DB real)', () => {
     await repo.transaction((tx) =>
       repo.accrueBusinessBalance(tx, businessId, '500'),
     );
-    const biz = await ctx.db.execute(
-      `select balance from businesses where id = '${businessId}'`,
-    );
-    expect(biz).toBeDefined();
+    // El saldo vive en business_finance (se movió fuera de businesses).
+    const [finance] = await ctx.db
+      .select({ balance: businessFinance.balance })
+      .from(businessFinance)
+      .where(eq(businessFinance.business_id, businessId));
+    expect(finance?.balance).toBe('500.00');
   });
 
   test('findByIdForUpdate bloquea la orden', async () => {

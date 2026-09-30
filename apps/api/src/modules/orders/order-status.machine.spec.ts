@@ -36,9 +36,12 @@ describe('order status machine', () => {
           allowed: (ORDER_TRANSITIONS[from] as readonly string[]).includes(to),
         })),
       ),
-    )('isTransitionAllowed($from → $to) === $allowed', ({ from, to, allowed }) => {
-      expect(isTransitionAllowed(from, to)).toBe(allowed);
-    });
+    )(
+      'isTransitionAllowed($from → $to) === $allowed',
+      ({ from, to, allowed }) => {
+        expect(isTransitionAllowed(from, to)).toBe(allowed);
+      },
+    );
   });
 
   describe('canActorTransition matrix', () => {

@@ -89,7 +89,7 @@ function buildTimeline(
 			title: strings.orders.timelineCompleted,
 			note: strings.orders.timelineCompletedNote,
 			time: timeOf(["picked_up", "completed"]),
-			color: colors.success,
+			color: colors.successText,
 			background: colors.surfaceSuccess,
 			filled: true,
 		});

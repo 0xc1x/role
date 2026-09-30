@@ -1,3 +1,4 @@
+import { DISCOUNT_SAVINGS_CLAIM } from "@0xc1x/role-commons";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { HeroBackground } from "@/components/hero-background";
@@ -34,9 +35,9 @@ export function Hero() {
 	const { data: offer } = useQuery(randomOfferQueryOptions);
 
 	const STATS = [
-		{ value: formatStat(stats?.users), label: "usuarios rescatando" },
-		{ value: formatStat(stats?.businesses), label: "comercios aliados" },
-		{ value: formatStat(stats?.meals_saved), label: "comidas salvadas" },
+		{ value: formatStat(stats.data?.users), label: "usuarios rescatando" },
+		{ value: formatStat(stats.data?.businesses), label: "comercios aliados" },
+		{ value: formatStat(stats.data?.meals_saved), label: "comidas salvadas" },
 	];
 
 	const originalPrice = offer?.original_price ?? 120;
@@ -62,12 +63,12 @@ export function Hero() {
 					<Card className="relative overflow-hidden rounded-xl border border-role-border/50 bg-white p-0 shadow-raised gap-0">
 						<div className="relative h-40 w-full bg-role-muted">
 							{offer?.image ? (
-							<img
-								src={offer.image}
-								alt={offer.title}
-								loading="eager"
-								fetchPriority="high"
-								decoding="async"
+								<img
+									src={offer.image}
+									alt={offer.title}
+									loading="eager"
+									fetchPriority="high"
+									decoding="async"
 									width={320}
 									height={160}
 									className="h-full w-full object-cover"
@@ -152,8 +153,8 @@ export function Hero() {
 					<p className="max-w-lg text-lg leading-relaxed text-white/85 reveal reveal-delay-2">
 						Rolé conecta comercios locales con excedente de comida y personas
 						que quieren rescatar el excedente de restaurantes, panaderías y
-						mercados; fresco, cercano y a un tercio del precio. Recoges el mismo
-						día.
+						mercados; fresco, cercano y {DISCOUNT_SAVINGS_CLAIM}. Recoges el
+						mismo día.
 					</p>
 
 					{/* CTAs */}
@@ -174,8 +175,16 @@ export function Hero() {
 						</Button>
 					</div>
 
-					{/* Stats with tabular nums */}
-					<dl className="flex items-stretch reveal reveal-delay-4">
+					{/* Stats with tabular nums.
+					    `data-stats-source` = "api" | "loading" | "failed": cifras
+					    reales, petición en curso, o fallo de la API. Sin ese
+					    discriminador, el "—" de una API caída es indistinguible
+					    de un dato ausente y la página publica un cero que nadie
+					    puede auditar. */}
+					<dl
+						data-stats-source={stats.source}
+						className="flex items-stretch reveal reveal-delay-4"
+					>
 						{STATS.map((s, idx) => (
 							<div key={s.label} className="flex items-stretch">
 								<div

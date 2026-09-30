@@ -17,7 +17,9 @@ export const offers = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     business_id: uuid('business_id')
       .notNull()
-      .references(() => businesses.id, { onDelete: 'no action' }),
+      .references(() => businesses.id, {
+        onDelete: 'cascade',
+      }),
     business_location_id: uuid('business_location_id')
       .notNull()
       .references(() => businessLocations.id, { onDelete: 'no action' }),

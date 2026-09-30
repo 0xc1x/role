@@ -57,8 +57,18 @@ describe('RecipientsService', () => {
     it('ignora segmentos inactivos y de otra categoría cuando hay categoría', async () => {
       repository.findSegmentById.mockImplementation(async (id) =>
         id === 'seg-inactivo'
-          ? ({ id, type: 'static', is_active: false, category: 'announcements' } as never)
-          : ({ id, type: 'static', is_active: true, category: 'promotions' } as never),
+          ? ({
+              id,
+              type: 'static',
+              is_active: false,
+              category: 'announcements',
+            } as never)
+          : ({
+              id,
+              type: 'static',
+              is_active: true,
+              category: 'promotions',
+            } as never),
       );
       repository.getSegmentUserIds.mockResolvedValue(['u-2']);
 
@@ -156,7 +166,11 @@ describe('RecipientsService', () => {
       ]);
 
       const recipients = await service.resolve(
-        { segmentIds: [], includeUserIds: ['u-1', 'u-2', 'u-3'], excludeUserIds: [] },
+        {
+          segmentIds: [],
+          includeUserIds: ['u-1', 'u-2', 'u-3'],
+          excludeUserIds: [],
+        },
         'announcements',
       );
 

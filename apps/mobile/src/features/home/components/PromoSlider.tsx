@@ -142,6 +142,7 @@ function DotsIndicator({
 		<View style={styles.dotsContainer}>
 			{Array.from({ length: count }).map((_, index) => (
 				<Dot
+					// biome-ignore lint/suspicious/noArrayIndexKey: stateless Dot, identity is index
 					key={`promo-dot-${index}`}
 					index={index}
 					count={count}

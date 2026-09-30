@@ -1,3 +1,4 @@
+import { DISCOUNT_SAVINGS_CLAIM } from "@0xc1x/role-commons";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Cta } from "@/components/cta";
 import { Footer } from "@/components/footer";
@@ -37,7 +38,7 @@ const STEPS = [
 	{
 		n: "01",
 		title: "Descubre las ofertas",
-		body: "Abre la app y explora un mapa de comercios cerca de ti con excedente de comida fresca. Cada oferta muestra el contenido aproximado, el horario de recogida y el descuento aplicado — desde 50% hasta 70% del precio original.",
+		body: `Abre la app y explora un mapa de comercios cerca de ti con excedente de comida fresca. Cada oferta muestra el contenido aproximado, el horario de recogida y el descuento aplicado — pagas ${DISCOUNT_SAVINGS_CLAIM} que en el comercio.`,
 		detail:
 			"Filtra por tipo de comida, distancia y horario. Guarda tus comercios favoritos para recibir alertas cuando publiquen.",
 	},
@@ -61,7 +62,7 @@ const VALUE_PROPS = [
 	{
 		icon: TagIcon,
 		title: "Ahorro real",
-		body: "Paga entre 50% y 70% menos por comida de calidad que de otra forma se desperdiciaría.",
+		body: `Paga ${DISCOUNT_SAVINGS_CLAIM} por comida de calidad que de otra forma se desperdiciaría.`,
 	},
 	{
 		icon: LeafIcon,

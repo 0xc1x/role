@@ -1,10 +1,14 @@
 import { env } from "@/config/env";
 import { ApiClientError, throwFromResponse } from "./errors";
+import { notifySessionExpired } from "./session-expiry";
 
 const KEYS = {
 	token: "role_admin_auth_token",
 	expiresAt: "role_admin_token_expires_at",
 } as const;
+
+/** El login explica la caída; este mensaje es el fallback si algo lo muestra. */
+const SESSION_EXPIRED = "Tu sesión expiró. Inicia sesión de nuevo.";
 
 function getStorage(): Storage | undefined {
 	if (typeof window === "undefined") return undefined;
@@ -25,19 +29,35 @@ function getItem(key: string): string | null {
 	}
 }
 
-function setItem(key: string, value: string | null) {
+/**
+ * `setItem` nunca lanza: un fallo de escritura no puede tumbar la mutación que
+ * ya se aplicó en el servidor.
+ *
+ * POR QUÉ NO DEVUELVE NADA: la pregunta "¿puede este navegador persistir la
+ * sesión?" tiene un owner —`isStoragePersistent()`, que el login consulta antes
+ * de avisar al operador—, y es una pregunta distinta de "¿llegó a escribir esta
+ * clave?". Devolver un booleano que nadie consume solo invitaba a que alguien
+ * lo consumiera con la semántica equivocada; el fallo de escritura se sigue
+ * manifestando como una sesión que no sobrevive a la recarga, que es
+ * justamente lo que el sonda convierte en un aviso explícito.
+ */
+function setItem(key: string, value: string | null): void {
 	const s = getStorage();
 	if (!s) return;
 	try {
 		if (value) s.setItem(key, value);
 		else s.removeItem(key);
-	} catch {}
+	} catch {
+		// Fail-safe: el token se pierde, la siguiente request cae en 401 y el
+		// login vuelve a pedirlo. Ninguna escritura de storage es un motivo para
+		// propagar el error.
+	}
 }
 
 export const getToken = () => getItem(KEYS.token);
-export const setToken = (v: string | null) => setItem(KEYS.token, v);
+export const setToken = (v: string | null): void => setItem(KEYS.token, v);
 export const getTokenExpiresAt = () => getItem(KEYS.expiresAt);
-export const setTokenExpiresAt = (v: string | null) =>
+export const setTokenExpiresAt = (v: string | null): void =>
 	setItem(KEYS.expiresAt, v);
 
 export function clearAuth() {
@@ -46,6 +66,32 @@ export function clearAuth() {
 	try {
 		for (const k of Object.values(KEYS)) s.removeItem(k);
 	} catch {}
+}
+
+/** Clave del sonda: fuera de `KEYS` para que `clearAuth` no la confunda. */
+const PROBE_KEY = "role_admin_storage_probe";
+
+/**
+ * Sondea si el navegador deja persistir la sesión: escribe, relee y borra, en
+ * vez de preguntar por la existencia de `localStorage`. Safari privado, la
+ * cuota agotada e iOS ITP dejan el objeto disponible y la escritura falla.
+ *
+ * POR QUÉ IMPORTA: los helpers de storage son fail-safe a propósito, así que un
+ * `localStorage` que lanza produce un panel que parecelogueado y pierde la
+ * sesión en cada recarga sin decir nada. Esto convierte ese fallo silencioso en
+ * un aviso al operador. Nunca lanza: informa.
+ */
+export function isStoragePersistent(): boolean {
+	const s = getStorage();
+	if (!s) return false;
+	try {
+		s.setItem(PROBE_KEY, "1");
+		const written = s.getItem(PROBE_KEY) === "1";
+		s.removeItem(PROBE_KEY);
+		return written;
+	} catch {
+		return false;
+	}
 }
 
 let isRefreshing = false;
@@ -110,6 +156,25 @@ function buildBody(opts?: {
 	return undefined;
 }
 
+/**
+ * Lee el cuerpo tolerando respuestas vacías. Los endpoints `void` (p. ej.
+ * `DELETE /offers/:id`, que desactiva la oferta) contestan 200 sin cuerpo, y
+ * `res.json()` sobre "" lanza SyntaxError: la mutación reportaría fallo DESPUÉS
+ * de haber aplicado el cambio. Un cuerpo no vacío se parsea igual que antes.
+ *
+ * El `text()` primero es justamente para poder distinguir "cuerpo vacío" de
+ * "cuerpo con contenido"; si el objeto de respuesta no lo implementa (stubs y
+ * polyfills), se cae a `json()`.
+ */
+async function parseBody<T>(res: Response): Promise<T> {
+	if (typeof res.text === "function") {
+		const text = await res.text();
+		if (!text) return undefined as T;
+		return JSON.parse(text) as T;
+	}
+	return res.json() as Promise<T>;
+}
+
 async function request<T>(
 	method: string,
 	path: string,
@@ -122,15 +187,15 @@ async function request<T>(
 			body: buildBody(options),
 		});
 		if (!res.ok) return throwFromResponse(res);
-		return res.json() as Promise<T>;
+		return parseBody<T>(res);
 	}
 
 	if (isTokenExpired()) {
 		const refreshed = await attemptTokenRefresh();
 		if (!refreshed) {
 			clearAuth();
-			if (typeof window !== "undefined") window.location.href = "/login";
-			throw new ApiClientError({ status: 401, message: "Session expired" });
+			notifySessionExpired();
+			throw new ApiClientError({ status: 401, message: SESSION_EXPIRED });
 		}
 	}
 
@@ -145,7 +210,7 @@ async function request<T>(
 
 	if (response.status !== 401) {
 		if (!response.ok) return throwFromResponse(response);
-		return response.json() as Promise<T>;
+		return parseBody<T>(response);
 	}
 
 	const refreshed = await attemptTokenRefresh();
@@ -157,12 +222,12 @@ async function request<T>(
 			headers,
 			body,
 		});
-		if (retry.ok) return retry.json() as Promise<T>;
+		if (retry.ok) return parseBody<T>(retry);
 		if (!retry.ok) return throwFromResponse(retry);
 	}
 	clearAuth();
-	if (typeof window !== "undefined") window.location.href = "/login";
-	throw new ApiClientError({ status: 401, message: "Session expired" });
+	notifySessionExpired();
+	throw new ApiClientError({ status: 401, message: SESSION_EXPIRED });
 }
 
 export const api = {
@@ -176,4 +241,6 @@ export const api = {
 		request<T>("PATCH", path, { body }),
 	put: <T>(path: string, body?: unknown) => request<T>("PUT", path, { body }),
 	delete: <T>(path: string) => request<T>("DELETE", path),
+	/** Para endpoints que responden sin cuerpo (`void` en la API). */
+	deleteVoid: (path: string) => request<void>("DELETE", path),
 };

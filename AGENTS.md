@@ -58,6 +58,7 @@ Reglas derivadas:
 - Nada de builds de stores (EAS/App Store) en el flujo de desarrollo.
 - Si hay ambigüedad crítica: **una** pregunta y detente.
 - No asumas claims técnicos: verifica en código, docs o configuración.
+- **Toda migración entra por `apply_migration`, nunca por `execute_sql` ni por el dashboard de Supabase.** El ledger `supabase_migrations.schema_migrations` es la única prueba de qué se aplicó; si el DDL entra por la puerta de atrás, el entorno deja de ser reproducible y `supabase db push` reproduce una historia que no ocurrió. Tras aplicar: renombra el archivo a la versión que asignó el servidor y confirma que `md5sum` del archivo == `md5(statements[1])` del ledger. Detalle y procedimiento en `supabase/migrations/README.md`.
 - No crear nuevos paquetes en `packages/` sin consumidor real (un `commons` con carpetas de dominio adentro es suficiente; se divide solo si el grafo lo exige).
 
 ## Buenas prácticas profesionales (obligatorias)

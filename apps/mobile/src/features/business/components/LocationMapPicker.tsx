@@ -1,4 +1,9 @@
-import { Expand, LocateFixed, Map, Navigation } from "lucide-react-native";
+import {
+	Expand,
+	LocateFixed,
+	Map as MapIcon,
+	Navigation,
+} from "lucide-react-native";
 import * as Location from "expo-location";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, StyleSheet, View } from "react-native";
@@ -88,7 +93,10 @@ export function LocationMapPicker({
 		}, 600);
 	};
 
-	const useMyLocation = async () => {
+	// Not a hook: an imperative geolocation request fired from onPress. The
+	// name deliberately avoids the `use` prefix so hook linters and React
+	// DevTools do not treat it as one.
+	const requestMyLocation = async () => {
 		setLocating(true);
 		try {
 			const { status } = await Location.requestForegroundPermissionsAsync();
@@ -133,7 +141,7 @@ export function LocationMapPicker({
 					},
 				]}
 			>
-				<Map size={28} color={colors.mutedForeground} />
+				<MapIcon size={28} color={colors.mutedForeground} />
 				<AppText
 					variant="bodySmall"
 					style={{ color: colors.mutedForeground, textAlign: "center" }}
@@ -161,7 +169,7 @@ export function LocationMapPicker({
 			</Suspense>
 			<View style={styles.actions}>
 				<Pressable
-					onPress={() => void useMyLocation()}
+					onPress={() => void requestMyLocation()}
 					style={({ pressed }) => [
 						styles.actionButton,
 						{

@@ -117,20 +117,31 @@ describe('PushNotificationsController', () => {
 
   describe('plantillas', () => {
     it('listTemplates mapea filas a DTO paginado', async () => {
-      pushAdminService.listTemplates.mockResolvedValue({ rows: [TEMPLATE_ROW], total: 1 } as never);
+      pushAdminService.listTemplates.mockResolvedValue({
+        rows: [TEMPLATE_ROW],
+        total: 1,
+      } as never);
 
-      const out = (await controller.listTemplates({ page: 1, limit: 20 } as never)) as {
+      const out = (await controller.listTemplates({
+        page: 1,
+        limit: 20,
+      } as never)) as {
         data: { id: string; created_at: string }[];
         meta: { total: number };
       };
 
-      expect(out.data[0]).toMatchObject({ id: 'tpl-1', title: 'Nuevas ofertas' });
+      expect(out.data[0]).toMatchObject({
+        id: 'tpl-1',
+        title: 'Nuevas ofertas',
+      });
       expect(typeof out.data[0]!.created_at).toBe('string');
       expect(out.meta.total).toBe(1);
     });
 
     it('createTemplate inyecta created_by y data default', async () => {
-      pushAdminService.insertTemplate.mockResolvedValue([TEMPLATE_ROW] as never);
+      pushAdminService.insertTemplate.mockResolvedValue([
+        TEMPLATE_ROW,
+      ] as never);
 
       await controller.createTemplate(admin, {
         name: 'Promo',
@@ -145,7 +156,9 @@ describe('PushNotificationsController', () => {
 
     it('updateTemplate devuelve null si la fila no existe', async () => {
       pushAdminService.updateTemplate.mockResolvedValue(null);
-      await expect(controller.updateTemplate('tpl-1', { title: 'x' } as never)).resolves.toBeNull();
+      await expect(
+        controller.updateTemplate('tpl-1', { title: 'x' } as never),
+      ).resolves.toBeNull();
     });
 
     it('removeTemplate delega', () => {
@@ -192,25 +205,38 @@ describe('PushNotificationsController', () => {
 
   describe('dispositivos', () => {
     it('listTokens mapea el join a DTO', async () => {
-      pushAdminService.listTokens.mockResolvedValue({ rows: [TOKEN_ROW], total: 1 } as never);
+      pushAdminService.listTokens.mockResolvedValue({
+        rows: [TOKEN_ROW],
+        total: 1,
+      } as never);
 
-      const out = (await controller.listTokens({ page: 1, limit: 20 } as never)) as {
+      const out = (await controller.listTokens({
+        page: 1,
+        limit: 20,
+      } as never)) as {
         data: { id: string; user_email: string }[];
       };
 
-      expect(out.data[0]).toMatchObject({ id: 'tok-1', user_email: 'ana@x.com' });
+      expect(out.data[0]).toMatchObject({
+        id: 'tok-1',
+        user_email: 'ana@x.com',
+      });
     });
 
     it('updateToken mapea a DTO', async () => {
       pushAdminService.updateToken.mockResolvedValue(TOKEN_ROW as never);
 
-      const out = (await controller.updateToken('tok-1', { is_active: false } as never)) as {
+      const out = (await controller.updateToken('tok-1', {
+        is_active: false,
+      } as never)) as {
         id: string;
         user_email: string;
         created_at: string;
       };
 
-      expect(pushAdminService.updateToken).toHaveBeenCalledWith('tok-1', { is_active: false });
+      expect(pushAdminService.updateToken).toHaveBeenCalledWith('tok-1', {
+        is_active: false,
+      });
       expect(out).toMatchObject({ id: 'tok-1', user_email: 'ana@x.com' });
       expect(typeof out.created_at).toBe('string');
     });
@@ -225,9 +251,15 @@ describe('PushNotificationsController', () => {
 
   describe('historial', () => {
     it('listNotifications mapea filas a DTO paginado', async () => {
-      pushAdminService.listNotifications.mockResolvedValue({ rows: [NOTIFICATION_ROW], total: 1 } as never);
+      pushAdminService.listNotifications.mockResolvedValue({
+        rows: [NOTIFICATION_ROW],
+        total: 1,
+      } as never);
 
-      const out = (await controller.listNotifications({ page: 1, limit: 20 } as never)) as {
+      const out = (await controller.listNotifications({
+        page: 1,
+        limit: 20,
+      } as never)) as {
         data: { id: string; status: string }[];
       };
 

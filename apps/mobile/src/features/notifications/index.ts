@@ -12,6 +12,9 @@ import {
 	deleteDeviceTokens,
 	type DeviceTokenPlatform,
 } from "./data/repository";
+import { pendingDeviceTokenRevocationRepository } from "./data/pending-revocation";
+
+export { pendingDeviceTokenRevocationRepository };
 
 export type NotificationsModule = typeof import("expo-notifications");
 
@@ -88,6 +91,37 @@ export async function syncDeviceToken(
 
 export async function removeDeviceToken(userId: string): Promise<void> {
 	await deleteDeviceTokens(userId);
+}
+
+/**
+ * Revoca los tokens push del usuario con write-ahead: registra la intención
+ * ANTES de tocar la red y solo borra el registro cuando la API confirma.
+ *
+ * POR QUÉ ES UNA FUNCIÓN COMPARTIDA y no dos call sites con la misma secuencia:
+ * los dos caminos que dejan un token huérfano son el logout y el toggle de push
+ * en "off", y ninguno puede bloquearse ni abandonar la revocación a medias. Un
+ * `DELETE` fallido con la preferencia ya guardada deja al usuario recibiendo
+ * push con su preferencia en "off". Un segundo mecanismo sería una segunda
+ * oportunidad de olvidarse del registro.
+ *
+ * Nunca lanza: el logout no puede quedar bloqueado por la red, y apagar el
+ * toggle tampoco. El reintento ocurre en el próximo arranque autenticado del
+ * mismo usuario (`app/_layout.tsx`), el único momento con sesión que RLS acepta
+ * para borrar tokens.
+ */
+export async function revokeDeviceTokensWithRetry(
+	userId: string,
+): Promise<void> {
+	await pendingDeviceTokenRevocationRepository.schedule(userId).catch(() => {
+		// Sin registro local no hay reintento posible, pero ni el logout ni el
+		// toggle pueden quedar bloqueados por el almacenamiento del dispositivo.
+	});
+	await removeDeviceToken(userId)
+		.then(() => pendingDeviceTokenRevocationRepository.clear())
+		.catch(() => {
+			// El registro pendiente conserva la revocación para el próximo
+			// arranque autenticado.
+		});
 }
 
 // ─── In-app notification handler (solo nativo) ──────────────────────

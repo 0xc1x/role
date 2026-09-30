@@ -1,17 +1,21 @@
 export * from './enums';
 export * from './profiles';
 export * from './businesses';
+export * from './business-companions';
 export * from './business-locations';
+export * from './business-hours';
 export * from './offers';
 export * from './offer-categories';
 export * from './orders';
 export * from './payouts';
+export * from './payment-methods';
 export * from './coupons';
 export * from './reviews';
 export * from './user-preferences';
 export * from './business-notification-preferences';
 export * from './device-tokens';
 export * from './favorites';
+export * from './saved-addresses';
 export * from './categories';
 export * from './slides';
 export * from './tips';
@@ -20,6 +24,7 @@ export * from './app-store';
 export * from './email-marketing';
 export * from './push-notifications';
 
+import { businessHours } from './business-hours';
 import { businessLocations } from './business-locations';
 import { businesses } from './businesses';
 import { offerCategories } from './offer-categories';
@@ -41,6 +46,7 @@ import { appConfig } from './app-configs';
 import { appStore } from './app-store';
 import { deviceTokens } from './device-tokens';
 import { favorites } from './favorites';
+import { savedAddresses } from './saved-addresses';
 import {
   campaigns,
   emailComponents,
@@ -56,12 +62,20 @@ import {
   pushTemplates,
 } from './push-notifications';
 import { payouts } from './payouts';
+import { paymentMethods } from './payment-methods';
+import {
+  businessFinance,
+  businessModeration,
+  businessOwnership,
+} from './business-companions';
+import { defineRelations } from 'drizzle-orm';
 
 /** Schema map passed to drizzle() for typed queries. */
 export const schema = {
   profiles,
   businesses,
   businessLocations,
+  businessHours,
   offers,
   offerCategories,
   orders,
@@ -73,11 +87,13 @@ export const schema = {
   userConsents,
   businessNotificationPreferences,
   payouts,
+  paymentMethods,
   categories,
   slides,
   tips,
   deviceTokens,
   favorites,
+  savedAddresses,
   appConfig,
   appStore,
   emailComponents,
@@ -90,6 +106,42 @@ export const schema = {
   pushTemplates,
   pushNotifications,
   pushSends,
+  businessOwnership,
+  businessFinance,
+  businessModeration,
 };
 
 export type DatabaseSchema = typeof schema;
+
+/**
+ * Relations for the relational query builder. Only the business aggregate is
+ * declared: it is the one relation set that is not inferable from a join in
+ * the query (a business is read together with its three companions). The
+ * repositories still join explicitly, so this is the RQB view of the same
+ * shape.
+ */
+export const relations = defineRelations(schema, (helpers) => ({
+  businesses: {
+    ownership: helpers.one.businessOwnership(),
+    finance: helpers.one.businessFinance(),
+    moderation: helpers.one.businessModeration(),
+  },
+  businessOwnership: {
+    business: helpers.one.businesses({
+      from: helpers.businessOwnership.business_id,
+      to: helpers.businesses.id,
+    }),
+  },
+  businessFinance: {
+    business: helpers.one.businesses({
+      from: helpers.businessFinance.business_id,
+      to: helpers.businesses.id,
+    }),
+  },
+  businessModeration: {
+    business: helpers.one.businesses({
+      from: helpers.businessModeration.business_id,
+      to: helpers.businesses.id,
+    }),
+  },
+}));

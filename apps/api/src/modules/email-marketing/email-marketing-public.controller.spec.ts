@@ -16,7 +16,10 @@ const resendId = 're_123456';
 
 /** Firma svix válida para el payload dado (id.timestamp.payload). */
 function svixSign(id: string, timestamp: string, payload: string): string {
-  const signature = createHmac('sha256', Buffer.from(SECRET.replace(/^whsec_/, ''), 'base64'))
+  const signature = createHmac(
+    'sha256',
+    Buffer.from(SECRET.replace(/^whsec_/, ''), 'base64'),
+  )
     .update(`${id}.${timestamp}.${payload}`)
     .digest('base64');
   return `v1,${signature}`;
@@ -28,7 +31,9 @@ function webhookRequest(payload: string) {
 
 describe('EmailMarketingPublicController', () => {
   let controller: EmailMarketingPublicController;
-  let campaignsService: jest.Mocked<Pick<CampaignsService, 'applyResendEvent' | 'unsubscribe'>>;
+  let campaignsService: jest.Mocked<
+    Pick<CampaignsService, 'applyResendEvent' | 'unsubscribe'>
+  >;
   let renderer: { verifyUnsubscribeToken: jest.Mock };
   let config: { get: jest.Mock };
   let env: Record<string, string | undefined>;
@@ -40,8 +45,11 @@ describe('EmailMarketingPublicController', () => {
     payload?: string;
   }) => {
     const id = input.id ?? 'msg_1';
-    const timestamp = input.timestamp ?? Math.floor(Date.now() / 1000).toString();
-    const payload = input.payload ?? JSON.stringify({ type: 'email.delivered', data: { id: resendId } });
+    const timestamp =
+      input.timestamp ?? Math.floor(Date.now() / 1000).toString();
+    const payload =
+      input.payload ??
+      JSON.stringify({ type: 'email.delivered', data: { id: resendId } });
     return controller.resendWebhook(
       webhookRequest(payload),
       input.id ?? id,
@@ -60,8 +68,14 @@ describe('EmailMarketingPublicController', () => {
           provide: CampaignsService,
           useValue: { applyResendEvent: jest.fn(), unsubscribe: jest.fn() },
         },
-        { provide: RendererService, useValue: { verifyUnsubscribeToken: jest.fn() } },
-        { provide: ConfigService, useValue: { get: jest.fn((key: string) => env[key]) } },
+        {
+          provide: RendererService,
+          useValue: { verifyUnsubscribeToken: jest.fn() },
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((key: string) => env[key]) },
+        },
       ],
     }).compile();
 
@@ -77,7 +91,10 @@ describe('EmailMarketingPublicController', () => {
       const out = await sendWebhook({});
 
       expect(out).toEqual({ ok: true });
-      expect(campaignsService.applyResendEvent).toHaveBeenCalledWith(resendId, 'email.delivered');
+      expect(campaignsService.applyResendEvent).toHaveBeenCalledWith(
+        resendId,
+        'email.delivered',
+      );
     });
 
     it('rechaza firma inválida', async () => {
@@ -89,20 +106,28 @@ describe('EmailMarketingPublicController', () => {
 
     it('rechaza cuando faltan headers de firma', async () => {
       await expect(
-        sendWebhook({ id: '', timestamp: Math.floor(Date.now() / 1000).toString() }),
+        sendWebhook({
+          id: '',
+          timestamp: Math.floor(Date.now() / 1000).toString(),
+        }),
       ).rejects.toThrow('Faltan headers de firma svix');
     });
 
     it('rechaza timestamps fuera de tolerancia (replay)', async () => {
       const stale = Math.floor(Date.now() / 1000 - 3600).toString();
-      const payload = JSON.stringify({ type: 'email.delivered', data: { id: resendId } });
-      await expect(
-        sendWebhook({ timestamp: stale, payload }),
-      ).rejects.toThrow('Timestamp fuera de tolerancia');
+      const payload = JSON.stringify({
+        type: 'email.delivered',
+        data: { id: resendId },
+      });
+      await expect(sendWebhook({ timestamp: stale, payload })).rejects.toThrow(
+        'Timestamp fuera de tolerancia',
+      );
     });
 
     it('ignora eventos sin id de resend', async () => {
-      const out = await sendWebhook({ payload: JSON.stringify({ type: 'email.sent' }) });
+      const out = await sendWebhook({
+        payload: JSON.stringify({ type: 'email.sent' }),
+      });
 
       expect(out).toEqual({ ok: true });
       expect(campaignsService.applyResendEvent).not.toHaveBeenCalled();
@@ -111,8 +136,13 @@ describe('EmailMarketingPublicController', () => {
     it('sin secret configurado (dev) no verifica firma', async () => {
       env.RESEND_WEBHOOK_SECRET = undefined;
 
-      await expect(sendWebhook({ signature: 'v1,cualquiera' })).resolves.toEqual({ ok: true });
-      expect(campaignsService.applyResendEvent).toHaveBeenCalledWith(resendId, 'email.delivered');
+      await expect(
+        sendWebhook({ signature: 'v1,cualquiera' }),
+      ).resolves.toEqual({ ok: true });
+      expect(campaignsService.applyResendEvent).toHaveBeenCalledWith(
+        resendId,
+        'email.delivered',
+      );
     });
 
     it('sin secret en producción rechaza en vez de aceptar eventos forjados', async () => {
@@ -128,17 +158,23 @@ describe('EmailMarketingPublicController', () => {
 
   describe('unsubscribe', () => {
     it('rechaza sin token', async () => {
-      await expect(controller.unsubscribe('')).rejects.toThrow('Token requerido');
+      await expect(controller.unsubscribe('')).rejects.toThrow(
+        'Token requerido',
+      );
     });
 
     it('rechaza tokens sin separador userId.firma', async () => {
-      await expect(controller.unsubscribe('solo-user-id')).rejects.toThrow('Token inválido');
+      await expect(controller.unsubscribe('solo-user-id')).rejects.toThrow(
+        'Token inválido',
+      );
     });
 
     it('rechaza firma inválida y no da de baja', async () => {
       renderer.verifyUnsubscribeToken.mockReturnValue(false);
 
-      await expect(controller.unsubscribe('u-1.mala-firma')).rejects.toThrow('Token inválido');
+      await expect(controller.unsubscribe('u-1.mala-firma')).rejects.toThrow(
+        'Token inválido',
+      );
       expect(campaignsService.unsubscribe).not.toHaveBeenCalled();
     });
 
@@ -147,7 +183,10 @@ describe('EmailMarketingPublicController', () => {
 
       const html = await controller.unsubscribe('u-1.firma-valida');
 
-      expect(renderer.verifyUnsubscribeToken).toHaveBeenCalledWith('u-1', 'firma-valida');
+      expect(renderer.verifyUnsubscribeToken).toHaveBeenCalledWith(
+        'u-1',
+        'firma-valida',
+      );
       expect(campaignsService.unsubscribe).toHaveBeenCalledWith('u-1');
       expect(html).toContain('Has sido dado de baja');
     });
@@ -155,6 +194,8 @@ describe('EmailMarketingPublicController', () => {
 
   it('expone el secret desde config', () => {
     config.get('RESEND_WEBHOOK_SECRET', { infer: true });
-    expect(config.get).toHaveBeenCalledWith('RESEND_WEBHOOK_SECRET', { infer: true });
+    expect(config.get).toHaveBeenCalledWith('RESEND_WEBHOOK_SECRET', {
+      infer: true,
+    });
   });
 });

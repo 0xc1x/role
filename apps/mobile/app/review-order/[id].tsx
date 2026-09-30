@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
 import { strings } from "@/src/core/i18n/strings";
@@ -13,40 +13,16 @@ import {
 	ScreenHeader,
 	TextField,
 } from "@/src/core/ui";
-import { useOrder, useReviewByOrder, useSubmitReview } from "@/src/features/hooks";
+import {
+	useOrder,
+	useReviewByOrder,
+	useSubmitReview,
+} from "@/src/features/hooks";
+import { StarRating } from "@/src/features/orders/components/StarRating";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-function Stars({
-	value,
-	onChange,
-	colors,
-}: {
-	value: number;
-	onChange: (v: number) => void;
-	colors: ReturnType<typeof useTheme>["colors"];
-}) {
-	return (
-		<View style={styles.stars}>
-			{[1, 2, 3, 4, 5].map((n) => (
-				<Pressable
-					key={n}
-					onPress={() => onChange(n)}
-					accessibilityRole="button"
-				>
-					<AppText
-						variant="h1"
-						style={{ color: n <= value ? colors.warning : colors.foreground, }}
-					>
-						★
-					</AppText>
-				</Pressable>
-			))}
-		</View>
-	);
-}
 
 export default function ReviewOrderScreen() {
 	const { colors } = useTheme();
@@ -101,37 +77,44 @@ export default function ReviewOrderScreen() {
 		<Screen scroll keyboardShouldPersistTaps="handled">
 			<View style={styles.container}>
 				<ScreenHeader
-					title={isEditing ? strings.orders.editReview : strings.orders.writeReview}
+					title={
+						isEditing ? strings.orders.editReview : strings.orders.writeReview
+					}
 				/>
-				<AppText variant="bodyMedium" style={{ color: colors.mutedForeground, paddingTop: spacing.xl }}>
+				<AppText
+					variant="bodyMedium"
+					style={{ color: colors.mutedForeground, paddingTop: spacing.xl }}
+				>
 					{data.offerTitle} · {data.businessName}
 				</AppText>
 
 				<Card style={{ marginTop: spacing.lg }}>
 					<CardHeader>
-						<AppText
-							variant="bodyMedium"
-							weight="semiBold"
-						>
+						<AppText variant="bodyMedium" weight="semiBold">
 							{strings.orders.rateProduct}
 						</AppText>
 					</CardHeader>
 					<CardContent>
-						<Stars value={productRating} onChange={setProductRating} colors={colors} />
+						<StarRating
+							label={strings.orders.rateProduct}
+							value={productRating}
+							onChange={setProductRating}
+						/>
 					</CardContent>
 				</Card>
 
 				<Card style={{ marginTop: spacing.md }}>
 					<CardHeader>
-						<AppText
-							variant="bodyMedium"
-							weight="semiBold"
-						>
+						<AppText variant="bodyMedium" weight="semiBold">
 							{strings.orders.rateBusiness}
 						</AppText>
 					</CardHeader>
 					<CardContent>
-						<Stars value={businessRating} onChange={setBusinessRating} colors={colors} />
+						<StarRating
+							label={strings.orders.rateBusiness}
+							value={businessRating}
+							onChange={setBusinessRating}
+						/>
 					</CardContent>
 				</Card>
 
@@ -150,11 +133,9 @@ export default function ReviewOrderScreen() {
 					fullWidth
 					style={{ marginTop: spacing.lg }}
 				>
-					{
-						isEditing
-							? strings.orders.saveReviewChanges
-							: strings.orders.submitReview
-					}
+					{isEditing
+						? strings.orders.saveReviewChanges
+						: strings.orders.submitReview}
 				</Button>
 			</View>
 		</Screen>
@@ -163,5 +144,4 @@ export default function ReviewOrderScreen() {
 
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl },
-	stars: { flexDirection: "row", gap: spacing.sm },
 });

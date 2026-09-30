@@ -4,6 +4,7 @@ import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import {
+	EmptyState,
 	ErrorState,
 	goBackOr,
 	LoadingView,
@@ -11,7 +12,10 @@ import {
 	ScreenHeader,
 } from "@/src/core/ui";
 import { spacing } from "@/src/core/theme/spacing";
-import { useBusinessCoupon, useUpsertCoupon } from "@/src/features/business/hooks";
+import {
+	useBusinessCoupon,
+	useUpsertCoupon,
+} from "@/src/features/business/hooks";
 import {
 	CouponForm,
 	type CouponFormValues,
@@ -23,8 +27,13 @@ export default function BusinessCouponEditScreen() {
 		couponId: string;
 	}>();
 	const businessId = id ?? "";
-	const { data: coupon, isLoading, isError, error, refetch } =
-		useBusinessCoupon(couponId ?? "");
+	const {
+		data: coupon,
+		isLoading,
+		isError,
+		error,
+		refetch,
+	} = useBusinessCoupon(couponId ?? "");
 	const upsert = useUpsertCoupon(businessId);
 	const [submitting, setSubmitting] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
@@ -32,7 +41,20 @@ export default function BusinessCouponEditScreen() {
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!coupon) return null;
+	// Resolvió sin datos: el cupón ya no existe, no hay nada que editar.
+	if (!coupon)
+		return (
+			<Screen>
+				<ScreenHeader
+					title={strings.business.couponNotFoundTitle}
+					fallback={`/business/${businessId}/coupons`}
+				/>
+				<EmptyState
+					title={strings.business.couponNotFoundTitle}
+					message={strings.business.couponNotFoundBody}
+				/>
+			</Screen>
+		);
 
 	const save = (values: CouponFormValues) => {
 		setSubmitting(true);

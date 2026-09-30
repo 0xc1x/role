@@ -99,13 +99,16 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "lint": "biome lint . --error-on-warnings",
     "test": "bun test --isolate src",
+    "test:cov": "bun test --isolate --coverage --coverage-reporter=lcov --coverage-dir=coverage/unit src",
+    "test:e2e": "playwright test --config playwright.config.ts",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "generate:css-vars": "bun scripts/generate-css-vars.mjs",
     "preexport:web": "bun scripts/generate-firebase-config.mjs && bun scripts/generate-css-vars.mjs",
-    "export:web": "expo export --platform web",
-    "build:vercel": "bun run preexport:web && expo export --platform web && bun scripts/fix-web-dist.mjs && bun scripts/build-vercel-output.mjs",
+    "export:web": "expo export --platform web --clear",
+    "build:vercel": "bun run preexport:web && expo export --platform web --clear && bun scripts/fix-web-dist.mjs && bun scripts/build-vercel-output.mjs",
     "deploy": "bun run build:vercel && vercel deploy --prebuilt --prod"
   },
   "trustedDependencies": [

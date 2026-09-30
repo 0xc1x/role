@@ -5,6 +5,12 @@
  * text — they reference keys here. Ported from the Flutter app's inline
  * strings and centralized for consistency + future i18n.
  */
+import {
+	DISCOUNT_MAX_CLAIM,
+	DISCOUNT_MIN_PERCENT,
+	DISCOUNT_SAVINGS_CLAIM,
+} from "@0xc1x/role-commons";
+
 export const strings = {
 	app: {
 		name: "Rolé",
@@ -35,6 +41,7 @@ export const strings = {
 		clear: "Limpiar",
 		clearSearch: "Limpiar búsqueda",
 		removeFilter: "Quitar filtro: {label}",
+		loadingMore: "Cargando más…",
 	},
 	auth: {
 		login: "Iniciar sesión",
@@ -55,12 +62,18 @@ export const strings = {
 		loginSuccess: "Sesión iniciada",
 		signupSuccess: "Cuenta creada",
 		emailUnconfirmed: "Debes confirmar tu correo antes de iniciar sesión",
+		emailAlreadyRegistered: "Ese correo ya está registrado",
+		sessionExpired: "Tu sesión expiró. Inicia sesión de nuevo.",
 		invalidCredentials: "Correo o contraseña inválidos",
+		noUserOnLogin: "No se pudo iniciar sesión con esas credenciales",
 		passwordResetSent: "Te enviamos un correo para recuperar tu contraseña",
 		passwordUpdated: "Contraseña actualizada",
 		resetLinkInvalid:
 			'El enlace no es válido o expiró. Solicita uno nuevo desde "¿Olvidaste tu contraseña?".',
-		passwordMinLength: "La contraseña debe tener al menos 6 caracteres",
+		// El piso real vive en `PASSWORD_MIN_LENGTH` (auth/domain/validation).
+		// Estas dos son el mismo número y nunca deben divergir de ese 8.
+		passwordMinHint: "Mínimo 8 caracteres",
+		passwordMinError: "Mínimo 8 caracteres",
 		passwordsMismatch: "Las contraseñas no coinciden",
 		signOut: "Cerrar sesión",
 		signOutConfirm: "¿Seguro que quieres cerrar sesión?",
@@ -76,8 +89,6 @@ export const strings = {
 		invalidEmail: "Correo inválido",
 		requiredPassword: "Ingresa tu contraseña",
 		requiredName: "Ingresa tu nombre",
-		passwordMinHint: "Mínimo 8 caracteres",
-		passwordMinError: "Mínimo 8 caracteres",
 		termsRequired: "Debes aceptar los términos y condiciones",
 		termsConsentPrefix: "Acepto los ",
 		termsConsentLink: "Términos y Condiciones",
@@ -94,6 +105,22 @@ export const strings = {
 		resetSendFailed: "No pudimos enviar el correo.",
 		loginFailed: "No pudimos iniciar sesión. Intenta de nuevo.",
 		signupFailed: "No pudimos crear tu cuenta. Intenta de nuevo.",
+		// ── Clases de fallo de Supabase Auth ──────────────────────────
+		// Cada patrón del driver tiene su copy es-ES. El texto crudo va solo a
+		// `context` (diagnóstico); nunca llega a la pantalla.
+		errorRateLimited:
+			"Demasiados intentos. Espera unos minutos antes de volver a intentarlo.",
+		errorPasswordTooWeak:
+			"Esa contraseña es demasiado débil. Combina letras, números y símbolos.",
+		errorPasswordReused:
+			"La nueva contraseña debe ser distinta de la anterior.",
+		errorEmailFormatRejected:
+			"Ese correo no tiene un formato válido. Revísalo e inténtalo de nuevo.",
+		errorSmsUnavailable:
+			"No pudimos verificar tu teléfono por SMS. Inténtalo más tarde.",
+		errorTOTPUnavailable:
+			"No pudimos verificar el código de tu aplicación de autenticación.",
+		errorUnexpected: "Algo salió mal con tu cuenta. Inténtalo de nuevo.",
 		completeFields: "Completa todos los campos y verifica la contraseña",
 		accountCreatedConfirmation:
 			"Cuenta creada. Revisa tu correo para confirmar el registro.",
@@ -101,12 +128,18 @@ export const strings = {
 		orSignupWith: "o regístrate con",
 		google: "Google",
 		apple: "Apple",
+		// Los proveedores sociales son una decisión de producto (docs/decisions)
+		// pero el flujo no está conectado: se anuncia como no disponible en vez
+		// de pintar dos botones que parecen vivos y no hacen nada.
+		socialUnavailableLabel: "Próximamente",
+		socialUnavailableBody:
+			"El acceso con Google y Apple todavía no está disponible. Usa tu correo y contraseña.",
 		noAccount: "¿No tienes una cuenta?",
 		signupFree: "Regístrate gratis",
 		haveAccount: "¿Ya tienes una cuenta?",
 		loginCTA: "Inicia sesión",
 		benefitsTitle: "¿Por qué unirte a Rolé?",
-		benefitSave: "Ahorra hasta un 70% en comida deliciosa",
+		benefitSave: `Ahorra ${DISCOUNT_SAVINGS_CLAIM} en comida deliciosa`,
 		benefitReduceWaste: "Ayuda a reducir el desperdicio de alimentos",
 		benefitDiscover: "Descubre nuevos restaurantes y cafés",
 		benefitSustainable: "Contribuye a un planeta más sostenible",
@@ -205,6 +238,7 @@ export const strings = {
 		loginRequiredBody:
 			"Inicia sesión para visualizar las ofertas disponibles cerca de tu ubicación seleccionada.",
 		loginCTA: "Iniciar sesión",
+		mapNativeOnly: "El mapa está disponible solo en iOS y Android.",
 	},
 	allOffers: {
 		title: "Todas las ofertas",
@@ -215,11 +249,16 @@ export const strings = {
 		clear: "Limpiar",
 		noResultsTitle: "No se encontraron ofertas",
 		noResultsBody: "Intenta cambiar los filtros o la búsqueda",
+		noMore: "No hay más ofertas",
 		category: "Categoría",
 		maxPrice: "Precio máximo",
 		maxDistance: "Distancia máxima",
 		km: "km",
-		price: "${n}",
+		// Placeholder only. The currency symbol is supplied by the caller
+		// (`.replace("{n}", `$${maxPrice}`)`), matching the convention of every
+		// other entry in this catalogue. It used to read "${n}", which made the
+		// max-price chip render "$$42" — the leading `$` survived the replace.
+		price: "{n}",
 	},
 	allBusinesses: {
 		title: "Negocios cerca",
@@ -227,6 +266,7 @@ export const strings = {
 		all: "Todos",
 		noResultsTitle: "No se encontraron negocios",
 		noResultsBody: "Intenta cambiar los filtros o la búsqueda",
+		noMore: "No hay más negocios",
 	},
 	offers: {
 		discount: "Descuento",
@@ -321,6 +361,12 @@ export const strings = {
 			"Muestra este código (o el QR en tu pedido) al recoger tu comida.",
 		reviewOrder: "Revisar y confirmar",
 		confirm: "Confirmar reserva",
+		// El botón de confirmar cambia de etiqueta en vez de morir en silencio,
+		// y la razón se escribe justo debajo (mismo criterio que OfferBottomBar).
+		confirmUnavailable: "No se puede reservar",
+		reasonSoldOut: "Esta oferta se agotó mientras la mirabas.",
+		reasonWindowClosed: "La ventana de recogida de esta oferta ya terminó.",
+		reasonPaused: "El negocio pausó esta oferta. Busca otra disponible.",
 		processing: "Procesando…",
 		paymentMethods: "Medios de pago",
 		paymentMethodTitle: "Método de pago",
@@ -328,7 +374,20 @@ export const strings = {
 		pickupDetailsTitle: "Detalles de recogida",
 		pickupAddressLabel: "Dirección del local",
 		pickupWindow: "{day} de {start} a {end}",
-		termsNote: "Términos y condiciones aplicados.",
+		// ── Reglas del commitment (M16) ───────────────────────────────
+		// La línea de 11px que decía "términos aplicados" sin términos deja de
+		// ser una afirmación legal que la app no puede cumplir: pasa a un
+		// resumen accionable + enlace a la ruta legal real. Los números que
+		// viven en `app_config` se interpolan; ninguno está en el copy.
+		termsPrefix: "Al reservar aceptas nuestros",
+		termsLink: "términos y condiciones",
+		termsRulesTitle: "Antes de reservar, ten en cuenta:",
+		termsRules: [
+			"Puedes cancelar sin costo hasta {minutes} minutos después de reservar.",
+			"Cancelas gratis hasta {max7d} veces en 7 días y {max30d} veces en 30 días.",
+			"Recoge dentro de la ventana indicada ({window}). Pasada la ventana, la reserva se libera.",
+			"El pago se realiza en el local al recoger; la app no cobra.",
+		],
 		reservationError: "No pudimos confirmar tu reserva. Inténtalo de nuevo.",
 		reservationSuccessTitle: "¡Reserva Confirmada!",
 		reservationSuccessMessage: "Tu comida ha sido salvada con éxito",
@@ -414,9 +473,11 @@ export const strings = {
 		writeReview: "Deja tu reseña",
 		rateProduct: "Califica el producto",
 		rateBusiness: "Califica el negocio",
+		ratingValue: "{n} de {total} estrellas",
 		reviewComment: "Comentario (opcional)",
 		submitReview: "Publicar reseña",
 		reviewSubmitted: "¡Gracias por tu reseña!",
+		reviewSubmitError: "No pudimos publicar tu reseña. Inténtalo de nuevo.",
 		myReviews: "Mis reseñas",
 		myReviewsEmpty: "Aún no dejaste reseñas",
 		myReviewsEmptyHint:
@@ -669,11 +730,21 @@ export const strings = {
 		profile: "Perfil",
 		editProfile: "Editar negocio",
 		noDescription: "Sin descripción registrada",
+		noAddress: "Sin dirección registrada",
+		// ── "Cargó sin datos": no es un redirect, es un registro que ya no
+		// existe. Decirlo en vez de pintar un `null` (pantalla en blanco).
+		locationNotFoundTitle: "Local no encontrado",
+		locationNotFoundBody: "Esta sucursal ya no está disponible.",
+		couponNotFoundTitle: "Cupón no encontrado",
+		couponNotFoundBody: "Este cupón ya no está disponible.",
+		payoutNotFoundTitle: "Transferencia no encontrada",
+		payoutNotFoundBody: "Esta transferencia ya no está disponible.",
 		switchBusiness: "Cambiar de negocio",
 		noBusiness: "No tienes negocios registrados",
 		createBusiness: "Registrar negocio",
 		signupDataTitle: "Datos del negocio",
 		signupPhoneLabel: "Teléfono del negocio",
+		signupOwnerTitle: "Datos del responsable",
 		signupConfirmationRequired:
 			"Cuenta creada. Confirma tu correo e inicia sesión; crearemos tu negocio pendiente automáticamente.",
 		signupCompleted:
@@ -689,6 +760,7 @@ export const strings = {
 		businessHours: "Horarios",
 		businessHoursHint: "Formato: 18:00 - 22:00",
 		businessCreated: "Negocio creado",
+		businessCreateError: "No pudimos crear el negocio. Inténtalo de nuevo.",
 		requiredName: "Ingresa el nombre del negocio",
 		requiredType: "Selecciona el tipo de negocio",
 		pickLocation: "Elegir ubicación en el mapa",
@@ -717,6 +789,12 @@ export const strings = {
 		inactive: "Inactivo",
 		productSaved: "Producto guardado",
 		productDeleted: "Producto eliminado",
+		// Cada mutación de gestión nombra su operación: un "algo salió mal"
+		// compartido deja al dueño sin saber qué acción reintentar.
+		productSaveError: "No pudimos guardar el producto. Inténtalo de nuevo.",
+		productToggleError:
+			"No pudimos cambiar el estado del producto. Inténtalo de nuevo.",
+		productDeleteError: "No pudimos eliminar el producto. Inténtalo de nuevo.",
 		productsTitle: "Mis Productos",
 		allProducts: "Todos los productos",
 		searchProducts: "Buscar productos…",
@@ -776,8 +854,26 @@ export const strings = {
 		endTime: "Hora hasta",
 		uploadPhoto: "Subir foto",
 		changePhoto: "Cambiar foto",
+		photoRequired: "Sube una foto del producto",
+		photoUploadFailed:
+			"No pudimos subir la foto. Revisa tu conexión e inténtalo de nuevo.",
+		photoUploadKept:
+			"No pudimos subir la foto nueva. Se conservó la imagen anterior.",
 		invalidPickupWindow:
 			"La fecha/hora de fin debe ser posterior a la de inicio.",
+		pickupWindowInPast:
+			"La ventana de recogida ya terminó. Elige una fecha y hora futuras.",
+		// Estados de carga/fallo/vacío de los selectores dependientes del
+		// formulario de producto: sin ellos un fallo de red se leía como
+		// "no hay nada que elegir".
+		categoriesLoadError:
+			"No pudimos cargar las categorías. Inténtalo de nuevo.",
+		noCategoriesTitle: "No hay categorías disponibles",
+		noCategoriesBody:
+			"Sin categorías no se puede publicar un producto. Inténtalo de nuevo o contacta con soporte.",
+		locationsLoadError: "No pudimos cargar tus locales. Inténtalo de nuevo.",
+		locationsPickerEmptyBody:
+			"El producto se publicará para todas las sucursales. Puedes agregarlas desde Locales.",
 		requiredField: "Campo requerido",
 		minStock: "Debe ser al menos 1",
 		invalidPrice: "Ingresa un precio mayor a 0",
@@ -946,6 +1042,9 @@ export const strings = {
 		locationEditTitle: "Editar sucursal",
 		locationSaveTitle: "Guardar cambios",
 		locationSaved: "Sucursal guardada correctamente",
+		locationSaveError: "No pudimos guardar el local. Inténtalo de nuevo.",
+		locationToggleError:
+			"No pudimos cambiar el estado del local. Inténtalo de nuevo.",
 		requiredFieldLabel: "Este campo es obligatorio",
 		selectLocationMap: "Por favor, selecciona la ubicación en el mapa",
 		savedAddress: "Dirección guardada.",
@@ -1127,7 +1226,9 @@ export const strings = {
 							{
 								title: "Precios sugeridos",
 								description:
-									"El precio con descuento debe ser menor al original. Recomendamos ofrecer al menos un 30-50% de descuento para atraer más compradores.",
+									"El precio con descuento debe ser menor al original. Recomendamos ofrecer al menos un " +
+									`${DISCOUNT_MIN_PERCENT}% ` +
+									"de descuento para atraer más compradores.",
 							},
 							{
 								title: "Horarios de recogida",
@@ -1422,6 +1523,14 @@ export const strings = {
 			"Gestiona tus sucursales desde Mis Locales; cada una tiene productos, horarios y pedidos propios.",
 		helpMailSubject: "Contacto - Soporte de negocio",
 	},
+	// Copy del panel multi-negocio (app/my-business/*). Antes vivía como
+	// literales en la pantalla, fuera del catálogo.
+	myBusiness: {
+		dashboardTitle: "Panel de negocio",
+		newBusiness: "Nuevo negocio",
+		emptyTitle: "Aún no tienes negocios",
+		emptyBody: "Registra tu negocio para empezar a vender excedentes.",
+	},
 	helpCenter: {
 		title: "Centro de ayuda",
 		searchHint: "Buscar en ayuda…",
@@ -1610,13 +1719,13 @@ export const strings = {
 			"Cada año, toneladas de comida perfectamente buena se desperdicia en comercios que no logran venderla a tiempo. A nosotros no nos parece bien.",
 		ideaTitle: "La idea",
 		ideaBody:
-			"Rolé nació de una observación simple: comercios de barrio tiran comida buena al final del día y, a la vez, muchas personas buscan opciones accesibles para comer bien. Conectamos esos dos extremos. Los comercios recuperan valor de su excedente y los usuarios disfrutan comida de calidad con hasta 70% de descuento.",
+			"Rolé nació de una observación simple: comercios de barrio tiran comida buena al final del día y, a la vez, muchas personas buscan opciones accesibles para comer bien. Conectamos esos dos extremos. Los comercios recuperan valor de su excedente y los usuarios disfrutan comida de calidad con descuentos que cada comercio marca sobre el precio original.",
 		missionTitle: "La misión",
 		missionBody:
 			"Reducir el desperdicio de alimentos mientras construimos comunidades más conscientes y solidarias. No buscamos reemplazar la compra regular: queremos que el excedente que ya existe llegue a alguien que lo disfrute. Cada bolsa rescatada es un pequeño triunfo contra el desperdicio.",
 		howTitle: "Cómo funciona",
 		howBody:
-			"No somos un delivery ni un intermediario de pago. Somos una plataforma que conecta comercios con excedente y personas que quieren aprovecharlo. La reserva es gratuita, el pago se hace directo en el comercio y la recogida es presencial. Simple, transparente y sin comisiones ocultas.",
+			"No somos un delivery ni un intermediario de pago. Somos una plataforma que conecta comercios con excedente y personas que quieren aprovecharlo. La reserva es gratuita, el pago se hace directo en el comercio y la recogida es presencial. Simple y transparente: cada local elige un plan con una comisión por bolsa, informada antes de firmar.",
 		statsTitle: "El impacto hasta hoy",
 		statsSubtitle: "Números que cuentan",
 		statUsers: "usuarios activos",
@@ -1770,9 +1879,9 @@ export const strings = {
 		featureReduce: "Reduce el desperdicio",
 		featureReduceBody:
 			"Ayuda a restaurantes y comercios a reducir el desperdicio de alimentos mientras ahorras dinero.",
-		featureSave: "Ahorra hasta 70%",
+		featureSave: DISCOUNT_MAX_CLAIM,
 		featureSaveBody:
-			"Obtén productos de calidad a precios increíbles. Paga menos de la mitad del precio original.",
+			"Obtén productos de calidad a precios increíbles. Cada comercio marca su descuento sobre el precio original y lo ves antes de reservar.",
 		featureImpact: "Impacto positivo",
 		featureImpactBody:
 			"Cada compra que haces ayuda al planeta y apoya a los comercios locales de tu ciudad.",
@@ -1850,6 +1959,19 @@ export const strings = {
 			cycleBody:
 				"Publica tu excedente en minutos, recibe los pedidos en la app y entrégalos validando el código QR del cliente dentro de su ventana de recogida.",
 			panelTitle: "Tu negocio en tres pestañas",
+		},
+	},
+	// ── Sonda de diagnóstico de Google Maps (src/dev/) ────────────
+	// No es una ruta: vive fuera de `app/` para que no entre en el router.
+	// Su copy vive aquí igual para respetar el contrato de i18n.
+	dev: {
+		mapDiagnostic: {
+			title: "Diagnóstico de Google Maps — Ciudad de México",
+			back: "Volver a la pantalla anterior",
+			callbackState: "onMapReady: {ready} · onMapLoaded: {loaded}",
+			callbackNote:
+				"Son señales de callbacks; no prueban que se hayan descargado los mosaicos del mapa.",
+			nativeOnly: "El mapa está disponible solo en iOS y Android.",
 		},
 	},
 } as const;

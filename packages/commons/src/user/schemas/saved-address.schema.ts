@@ -32,6 +32,28 @@ export const CreateSavedAddressSchema = z.object({
 	housing_type: z.string().nullable().optional(),
 });
 
+/**
+ * Body for saving one of my addresses.
+ *
+ * `user_id` is absent ON PURPOSE, while {@link CreateSavedAddressSchema} keeps it:
+ * that schema mirrors the table row (and is what a service-level insert is built
+ * from), whereas this one is a public request body. The owner of an address is
+ * always the authenticated caller, so accepting it from the wire would only
+ * create a way to write into someone else's address book.
+ *
+ * `is_default` stays optional on the wire because its effective value is an
+ * application rule and not a column default: the first address a user saves has
+ * to become their default, or the book would start with no default at all. See
+ * `SavedAddressesService.create` — the API is the only place that rule lives.
+ */
+export const AddSavedAddressRequestSchema = CreateSavedAddressSchema.omit({
+	user_id: true,
+});
+
+/**
+ * Body for editing one of my addresses. Already safe to expose: it is the
+ * {@link CreateSavedAddressSchema} partial, so it never carried `user_id`.
+ */
 export const UpdateSavedAddressSchema = CreateSavedAddressSchema.partial().omit(
 	{
 		user_id: true,

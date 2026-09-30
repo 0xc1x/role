@@ -17,8 +17,17 @@ jobs:
     timeout-minutes: 25
 
     services:
+      # postgis/postgis, not postgres: GET /offers' st_dwithin radius filter and
+      # its st_distance / distance_km projection run against this database, and
+      # the harness (apps/api/test/db.ts) installs the extension into the
+      # `extensions` schema exactly like Supabase does.
+      #
+      # `16-3.4-alpine`, not `16-alpine`: the official PostGIS image is tagged
+      # `<pg>-<postgis>[-alpine]` and has no `16-alpine` tag. Of the PG16 alpine
+      # tags only 3.4 and 3.5 exist, and 3.4 is the nearer to the PostGIS 3.3.7
+      # Supabase runs.
       postgres-test:
-        image: postgres:16-alpine
+        image: postgis/postgis:16-3.4-alpine
         ports:
           - 6432:5432
         env:
@@ -73,11 +82,102 @@ jobs:
           # Dummies para el validador zod de apps/mobile (los tests usan mocks, sin red)
           EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
           EXPO_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          # Landing resuelve esto al importar y, desde que se quito el default
+          # silencioso, no tiene nada que devolver cuando falta. Los specs unitarios
+          # afirman que la base configurada vuelve, asi que necesitan una para
+          # afirmar sobre ella; nunca abren un socket, el dummy solo tiene que ser
+          # una URL.
+          #
+          # Deliberadamente NO va en el paso `Build`: el bundle de cliente toma el
+          # valor real de Vercel en el deploy, y atar el build a una variable que no
+          # usa lo dejaria esperando algo que no necesita.
+          VITE_API_URL: https://test.invalid/api/v1
+
+      # Playwright's browser download is ~170 MB and is not part of the Bun
+      # store cache, so it is installed once here and shared by every app e2e
+      # (api's PostgREST suite, plus the browser suites in admin, landing and
+      # mobile). `--with-deps` pulls the runner's system libraries; without this
+      # step every browser suite below fails at launch with a missing shared
+      # object rather than at an assertion.
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
 
       - name: E2E marketplace
         run: bun run test:e2e
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:6432/role_test
+          # Landing's SSR and mobile's env validator both read these at import
+          # time. Each e2e config also overrides them for its own server, but
+          # the value has to exist in the process either way.
+          EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          VITE_API_URL: https://test.invalid/api/v1
+          # The mobile e2e builds the PWA, and its pre-export step writes the
+          # Firebase config the web-push client reads at load. The script exits
+          # non-zero when any of the four is missing, so without them the
+          # webServer dies before a single spec runs. Dummies: the suite stubs
+          # the network at the browser edge, so no request ever reaches them.
+          EXPO_PUBLIC_FIREBASE_API_KEY: test-firebase-key
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: role-test
+          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          EXPO_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000000000"
+
+      # Coverage is measured, never enforced. There is deliberately no
+      # threshold: Bun's coverageThreshold is per FILE (stricter than the
+      # global Jest average it replaced) and CI never gated on it, so a
+      # threshold today would break builds on a rule written nowhere visible.
+      # This step RE-RUNS the suites with --coverage instead of reusing the
+      # plain run above, because `turbo run test` has no `outputs` and a cache
+      # hit replays logs without restoring an artifact -- a restored lcov would
+      # in any case be a STALE lcov from an earlier run. Re-running is cheaper
+      # and more honest than caching coverage output.
+      - name: Coverage (unit + e2e, merged and reported)
+        run: bun run coverage
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:6432/role_test
+          # Dummies para el validador zod de apps/mobile (los tests usan mocks, sin red)
+          EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          # Mismo motivo que en el paso Test: `bun run coverage` corre la suite para
+          # producir el lcov, asi que hereda su exigencia de una base configurada.
+          VITE_API_URL: https://test.invalid/api/v1
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: |
+            coverage/lcov.info
+            coverage/summary.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build
         run: bun run build
+
+      - name: OpenAPI export is in sync
+        working-directory: apps/api
+        env:
+          # The export only builds the Swagger document; it never opens the
+          # database or the network. Dummy-but-valid values satisfy the zod
+          # env validator. NODE_ENV stays off 'production' on purpose so the
+          # production-only assertions (strong JWT secret, CORS, DOCS_*, REDIS_URL)
+          # do not apply — this step is not a boot test.
+          NODE_ENV: development
+          DATABASE_URL: postgres://postgres:postgres@localhost:6432/role_test
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_JWT_SECRET: openapi-export-placeholder-secret
+          SUPABASE_ANON_KEY: openapi-export-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: openapi-export-service-role-key
+        run: |
+          bun run openapi:export
+          # Scalar does not read this file — /docs is built in memory at boot
+          # (main.ts). This artifact exists for external consumers and was left
+          # to rot by hand: nothing regenerated it and nothing checked it.
+          # The export is deterministic (verified across repeated runs), so any
+          # diff here is real drift, not noise.
+          if ! git diff --quiet -- openapi/openapi.json; then
+            echo "::error::apps/api/openapi/openapi.json is stale. Run 'bun run --cwd apps/api openapi:export' and commit the result."
+            git --no-pager diff --stat -- openapi/openapi.json
+            exit 1
+          fi

@@ -12,14 +12,11 @@ import {
 	Pressable,
 	ScrollView,
 	StyleSheet,
-	Text,
 	TextInput,
 	type TextInputProps,
 	View,
-	Platform,
 	type RefreshControlProps,
 	type StyleProp,
-	type TextStyle,
 	type ViewStyle,
 } from "react-native";
 
@@ -52,6 +49,7 @@ import { fonts, typography, type TypeStyle } from "@/src/core/theme/typography";
 import { withAlpha } from "@/src/core/theme/alpha";
 import { toAppError } from "@/src/core/error/mapper";
 import { AppText } from "./AppText";
+import { badgeToneColors, type BadgeTone } from "./badge-tone";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -71,15 +69,11 @@ export function CircleIconButton({
 	icon,
 	onPress,
 	size = 40,
-	iconSize = 20,
-	iconColor,
 	accessibilityLabel,
 }: {
 	icon: ReactNode;
 	onPress?: () => void;
 	size?: number;
-	iconSize?: number;
-	iconColor?: string;
 	accessibilityLabel?: string;
 }) {
 	const { colors } = useTheme();
@@ -420,6 +414,16 @@ export function TextField({
 	const [obscured, setObscured] = useState(
 		secureToggle ? (inputProps.secureTextEntry ?? false) : false,
 	);
+	// The label is rendered as a sibling Text, so assistive tech focusing the
+	// input would only announce its value. Re-attach it as the input's own
+	// accessibility label: RN maps it to VoiceOver/TalkBack labels and to
+	// `aria-label` on the web build, where the sibling Text is not a real
+	// `<label>` element. A `nativeID` + `accessibilityLabelledBy` pair is
+	// deliberately NOT used — a labelledby that fails to resolve makes
+	// TalkBack announce nothing at all, and the visible Text cannot carry a
+	// `nativeID` without widening the AppText API.
+	const callerLabel = inputProps.accessibilityLabel;
+	const labelA11y = label ? { accessibilityLabel: callerLabel ?? label } : {};
 	const labelNode = label ? (
 		<AppText
 			variant="labelSmall"
@@ -476,6 +480,7 @@ export function TextField({
 							inputProps.onBlur?.(e);
 						}}
 						style={[styles.fieldInput, { color: colors.foreground }]}
+						{...labelA11y}
 						{...inputProps}
 						secureTextEntry={
 							secureToggle ? obscured : inputProps.secureTextEntry
@@ -533,6 +538,7 @@ export function TextField({
 						color: colors.foreground,
 					},
 				]}
+				{...labelA11y}
 				{...inputProps}
 			/>
 			{hintNode}
@@ -541,13 +547,11 @@ export function TextField({
 }
 
 // ─── StatusBadge ────────────────────────────────────────────────────
-export type BadgeTone =
-	| "neutral"
-	| "brand"
-	| "success"
-	| "warning"
-	| "danger"
-	| "info";
+// `badgeToneColors` is intentionally NOT re-exported here: consumers import
+// it from `@/src/core/ui/badge-tone` directly, so the many partial
+// `mock.module("@/src/core/ui", …)` stubs in tests can't break on a value
+// export they don't declare. The type re-export is safe — types are erased.
+export type { BadgeTone } from "./badge-tone";
 
 export function StatusBadge({
 	label,
@@ -560,15 +564,7 @@ export function StatusBadge({
 	dot?: boolean;
 }) {
 	const { colors } = useTheme();
-	const toneMap: Record<BadgeTone, { bg: string; fg: string }> = {
-		neutral: { bg: colors.muted, fg: colors.mutedForeground },
-		brand: { bg: colors.secondary, fg: colors.secondaryForeground },
-		success: { bg: colors.surfaceSuccess, fg: colors.success },
-		warning: { bg: colors.surfaceWarning, fg: colors.warning },
-		danger: { bg: colors.destructiveSurface, fg: colors.destructive },
-		info: { bg: colors.infoSurface, fg: colors.info },
-	};
-	const t = toneMap[tone];
+	const t = badgeToneColors(colors, tone);
 	const opacity = useSharedValue(1);
 	useEffect(() => {
 		if (dot) {

@@ -17,9 +17,10 @@ import { radii, spacing } from "@/src/core/theme/spacing";
 import { AppText, TextField } from "@/src/core/ui";
 import { Logo } from "@/src/core/ui/Logo";
 import { AuthScreenShell } from "@/src/features/auth/presentation/AuthScreenShell";
-import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
+// import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/src/features/auth/data/repository";
 import { validateSignupForm } from "@/src/features/auth/domain/validation";
+import { useAuthStore } from "@/src/features/auth/store";
 import { Button } from "@/components/ui/button";
 
 const BENEFITS = [
@@ -30,7 +31,7 @@ const BENEFITS = [
 ];
 
 export default function SignupScreen() {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const router = useRouter();
 	const [fullName, setFullName] = useState("");
 	const [email, setEmail] = useState("");
@@ -71,7 +72,17 @@ export default function SignupScreen() {
 				router.replace("/login");
 				return;
 			}
-			router.replace("/(consumer)");
+			// El perfil se publica ANTES de navegar (igual que en login): el
+			// gate de `app/index.tsx` lee el store para resolver rol, audiencia
+			// de onboarding y ámbito de la marca vista. Sin esto leería `guest`
+			// y mandaría al home sin mostrarle el onboarding a quien se acaba
+			// de registrar.
+			if (result.profile) {
+				useAuthStore.getState().setProfile(result.profile);
+			}
+			// "/" es el gate de arranque, no un destino fijo: reutiliza la
+			// lógica rol-aware que ya existe en vez de duplicarla aquí.
+			router.replace("/");
 		} catch (e) {
 			toast.error(toAppError(e, strings.auth.signupFailed).message);
 		} finally {
@@ -79,7 +90,6 @@ export default function SignupScreen() {
 		}
 	};
 
-	const accent = scheme === "dark" ? colors.success : colors.successDark;
 	const linkStyle = { color: colors.primary, fontWeight: "700" as const };
 
 	return (
@@ -216,7 +226,7 @@ export default function SignupScreen() {
 				{strings.auth.createAccount}
 			</Button>
 
-			<SocialAuthButtons label={strings.auth.orSignupWith} />
+			{/* <SocialAuthButtons label={strings.auth.orSignupWith} /> */}
 
 			<AppText
 				variant="bodyMedium"
@@ -237,16 +247,20 @@ export default function SignupScreen() {
 					},
 				]}
 			>
-				<AppText variant="h4" weight="bold" style={{ color: accent }}>
+				<AppText
+					variant="h4"
+					weight="bold"
+					style={{ color: colors.successText }}
+				>
 					{strings.auth.benefitsTitle}
 				</AppText>
 				<View style={styles.benefitsList}>
 					{BENEFITS.map((benefit) => (
 						<View key={benefit} style={styles.benefitItem}>
-							<CircleCheck size={18} color={accent} />
+							<CircleCheck size={18} color={colors.successText} />
 							<AppText
 								variant="bodySmall"
-								style={{ color: accent, flex: 1, lineHeight: 17 }}
+								style={{ color: colors.successText, flex: 1, lineHeight: 17 }}
 							>
 								{benefit}
 							</AppText>

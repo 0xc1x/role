@@ -1,5 +1,5 @@
 import { expect, mock, test } from "bun:test";
-import { createElement, type ReactNode } from "react";
+import { createElement, type ComponentType, type ReactNode } from "react";
 // @ts-expect-error react-dom is installed without @types/react-dom in this workspace.
 import { renderToStaticMarkup } from "react-dom/server";
 // @ts-expect-error react-native-web does not ship declarations in this workspace.
@@ -8,14 +8,22 @@ import { light } from "@/src/core/theme/colors";
 import { strings } from "@/src/core/i18n/strings";
 import { spacing } from "@/src/core/theme/spacing";
 
-type Props = { children?: ReactNode; style?: unknown; className?: string };
+// The interop probes record the props the KPI row renders; these are the
+// fields the assertions read.
+type Props = {
+	children?: ReactNode;
+	style?: unknown;
+	className?: string;
+	accessibilityRole?: string;
+	onPress?: () => void;
+};
 const views: Props[] = [];
-const presses: any[] = [];
+const presses: Props[] = [];
 const push = mock(() => {});
 const wrapper = ({ children }: Props) =>
 	createElement(nativeWeb.View, null, children);
-let InteropView: any;
-let InteropPressable: any;
+let InteropView: ComponentType<Props>;
+let InteropPressable: ComponentType<Props>;
 let pressed = false;
 mock.module("react-native", () => ({
 	...nativeWeb,
@@ -34,7 +42,7 @@ InteropView = cssInterop(
 	{ className: "style" },
 );
 InteropPressable = cssInterop(
-	(props: any) => {
+	(props: Props) => {
 		presses.push(props);
 		return createElement(nativeWeb.Pressable, {
 			...props,
@@ -91,7 +99,7 @@ test("installed native interop drops Pressable callback styles", () => {
 		flexShrink: 1,
 	}));
 	renderToStaticMarkup(createElement(InteropPressable, { style: callback }));
-	expect(presses.at(-1).style).toEqual({});
+	expect(presses.at(-1)?.style).toEqual({});
 	expect(callback).not.toHaveBeenCalled();
 	presses.length = 0;
 	views.length = 0;
@@ -128,9 +136,9 @@ test("native interop retains two equal KPI columns and full-width review surface
 	}
 	const reviews = presses.find((props) => typeof props.children === "function");
 	expect(reviews).toBeDefined();
-	expect(reviews.style).toMatchObject({ width: "100%", flexGrow: 1 });
-	expect(reviews.accessibilityRole).toBe("button");
-	reviews.onPress();
+	expect(reviews?.style).toMatchObject({ width: "100%", flexGrow: 1 });
+	expect(reviews?.accessibilityRole).toBe("button");
+	reviews?.onPress?.();
 	expect(push).toHaveBeenCalledWith("/business/business-1/reviews");
 	views.length = 0;
 	pressed = true;

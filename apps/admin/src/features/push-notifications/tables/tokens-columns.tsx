@@ -1,7 +1,6 @@
 import type { PushTokenDto } from "@0xc1x/role-commons";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal } from "lucide-react";
-import { toast } from "sonner";
 import { ActiveCell } from "@/components/data-table/cells/active-cell";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +13,7 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { notifyMutationError } from "@/lib/api/notify";
 import { useUpdatePushToken } from "../queries/push.queries";
 
 const PLATFORM_VARIANTS: Record<string, "secondary" | "success" | "info"> = {
@@ -53,10 +53,7 @@ function TokenActions({ item }: { item: PushTokenDto }) {
 							update.mutate(
 								{ id: item.id, is_active: !item.is_active },
 								{
-									onError: (err) =>
-										toast.error(
-											err instanceof Error ? err.message : "Error inesperado",
-										),
+									onError: (err) => notifyMutationError(err),
 								},
 							)
 						}
@@ -138,10 +135,7 @@ function TokenActiveCell({ item }: { item: PushTokenDto }) {
 				update.mutate(
 					{ id: item.id, is_active: checked },
 					{
-						onError: (err) =>
-							toast.error(
-								err instanceof Error ? err.message : "Error inesperado",
-							),
+						onError: (err) => notifyMutationError(err),
 					},
 				)
 			}

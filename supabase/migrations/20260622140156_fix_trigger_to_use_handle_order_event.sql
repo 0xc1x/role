@@ -1,0 +1,50 @@
+-- Backfilled gap: documented no-op. Reconstruction, 2026-09-28.
+--
+-- NOT APPLIED TO PRODUCTION. NOT BYTE-IDENTICAL TO THE LEDGER ROW. This file
+-- executes no DDL and never did anything a replay needs.
+--
+-- WHAT THIS CLOSES
+--
+-- The ledger records `20260622140156` / `fix_trigger_to_use_handle_order_event`
+-- as applied. No file for it existed in this directory. Same hole as
+-- 20260616005903_update_order_event_push_to_notify_func, three weeks later, and
+-- filled the same way: with a slot that plays correctly rather than one that
+-- guesses.
+--
+-- WHY THIS IS A NO-OP, AND NOT A RECONSTRUCTION
+--
+-- The name says the trigger was pointed back at the `handle-order-event`
+-- handler — a repair of the payload the Edge Function receives. The corrected
+-- statement is not recoverable here. It rewrote
+-- `public.handle_order_event_push()`, which was then rewritten again by
+-- 20260821213650, 20260821213748, 20260925163235 and 20260925170147, and each
+-- `create or replace` discarded what came before. The version of the envelope
+-- that this migration was fixing is a version of a bug: the deployed
+-- `handle-order-event` function reads `type === 'INSERT'` and `record`, and
+-- silently skips anything else, so a payload flattened to { order_id, status }
+-- loses every order notification with no error surface in Postgres. Writing that
+-- payload into a file would be recording a regression as if it were the intent.
+--
+-- The end state this slot was responsible for is correct and is already
+-- established at 20260615210819_add_order_event_push_trigger, which creates the
+-- function and the trigger with the exact production body — the one carrying the
+-- correct type/table/schema/record envelope. A replay passes through this slot
+-- and arrives at the same state production is in, which is the only job a
+-- replay has. The historical text, for an audit, remains readable from the
+-- ledger directly:
+--
+--   select statements[1] from supabase_migrations.schema_migrations
+--    where version = '20260622140156';
+--
+-- Note that the text this migration used to hold is why 20260925163235 and
+-- 20260925175051 exist at all: the same edge of the code was repaired twice
+-- more in September, first to move the credential into Vault, then to move the
+-- HTTP header map out of pg_net's `params` argument where it was being sent as
+-- a query string instead of a header. Both fixes are forward migrations in this
+-- directory and are documented at length in their own files.
+--
+-- `select 1;` below is a valid statement so the slot is honest about having
+-- produced no effect — a file containing only comments would read as "not yet
+-- reconstructed" rather than "reconstructed, and the answer is nothing".
+
+select 1;

@@ -1,7 +1,4 @@
-import {
-	CONTACT_CITIES_FALLBACK,
-	getConfigStringArray,
-} from "@0xc1x/role-commons";
+import { getConfigStringArray } from "@0xc1x/role-commons";
 import { router } from "expo-router";
 import { useEffect } from "react";
 import { useMemo } from "react";
@@ -9,11 +6,7 @@ import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { toast } from "sonner-native";
 
-import {
-	Avatar,
-	AvatarFallback,
-	AvatarImage,
-} from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
 	Select,
 	SelectContent,
@@ -65,13 +58,10 @@ export default function EditProfileScreen() {
 	const [error, setError] = useState<string | null>(null);
 
 	// Ciudades habilitadas desde app_config; se conserva la ciudad actual
-	// del perfil si ya no está en la lista habilitada.
+	// del perfil si ya no está en la lista habilitada. Sin lista de respaldo
+	// en el código: la geografía de lanzamiento es dato de plataforma.
 	const cities = useMemo(() => {
-		const enabled = getConfigStringArray(
-			configMap,
-			"contact.cities",
-			CONTACT_CITIES_FALLBACK,
-		);
+		const enabled = getConfigStringArray(configMap, "contact.cities", []);
 		if (profile?.city && !enabled.includes(profile.city)) {
 			return [profile.city, ...enabled];
 		}
@@ -89,16 +79,25 @@ export default function EditProfileScreen() {
 	// no hay caché que invalidar; el store se sincroniza con fetchProfile.
 	// Hook antes del return condicional (profile puede ser null → args vacíos,
 	// la mutación solo se dispara por acción del usuario ya autenticado).
-	const saveProfile = useSaveProfileWithEmail(profile?.id ?? "", profile?.email ?? "");
+	const saveProfile = useSaveProfileWithEmail(
+		profile?.id ?? "",
+		profile?.email ?? "",
+	);
 
 	if (!initialized || !profile) {
 		return (
 			<Screen scroll>
 				<View style={styles.container}>
-					<ScreenHeader title={strings.profileEdit.title} fallback="/(consumer)/profile" />
+					<ScreenHeader
+						title={strings.profileEdit.title}
+						fallback="/(consumer)/profile"
+					/>
 					<Skeleton style={styles.skeletonAvatar} />
 					{[0, 1, 2, 3].map((i) => (
-						<Skeleton key={`profile-form-skeleton-${i}`} style={styles.skeletonField} />
+						<Skeleton
+							key={`profile-form-skeleton-${i}`}
+							style={styles.skeletonField}
+						/>
 					))}
 					<Skeleton style={styles.skeletonCta} />
 				</View>
@@ -140,9 +139,14 @@ export default function EditProfileScreen() {
 			},
 			{
 				onSuccess: ({ emailChanged }) => {
-					void authRepository.fetchProfile(profile.id).then((updated) => {
-						if (updated) setProfile(updated);
-					});
+					// El valor conocido se pasa como respaldo: si la lectura de
+					// `user_consents` falla, conservar el consentimiento del store
+					// es mejor que publicarlo como revocado.
+					void authRepository
+						.fetchProfile(profile.id, profile.analyticsConsentGranted)
+						.then((updated) => {
+							if (updated) setProfile(updated);
+						});
 					toast.success(
 						emailChanged
 							? strings.profileEdit.updatedWithEmailConfirmation
@@ -160,7 +164,10 @@ export default function EditProfileScreen() {
 	return (
 		<Screen scroll keyboardShouldPersistTaps="handled">
 			<View style={styles.container}>
-				<ScreenHeader title={strings.profileEdit.title} fallback="/(consumer)/profile" />
+				<ScreenHeader
+					title={strings.profileEdit.title}
+					fallback="/(consumer)/profile"
+				/>
 
 				<View style={styles.avatarWrap}>
 					<Avatar style={{ width: 96, height: 96 }} alt={initialsOf(profile)}>
@@ -179,11 +186,7 @@ export default function EditProfileScreen() {
 							</AppText>
 						</AvatarFallback>
 					</Avatar>
-					<Button
-						variant="ghost"
-						size="sm"
-						onPress={() => {}}
-					>
+					<Button variant="ghost" size="sm" onPress={() => {}}>
 						{strings.profileEdit.changeAvatar}
 					</Button>
 				</View>
@@ -246,7 +249,7 @@ export default function EditProfileScreen() {
 					/>
 				) : null}
 				<Button
-				    onPress={() => void handleSave()}
+					onPress={() => void handleSave()}
 					loading={save.isPending}
 					fullWidth
 					style={{ marginTop: spacing.md }}

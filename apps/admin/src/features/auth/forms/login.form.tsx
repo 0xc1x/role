@@ -3,6 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { clearAuth, useLogin } from "@/features/auth";
+import { isStoragePersistent } from "@/lib/api/client";
 
 // Límites del contrato (`LoginRequestSchema`); mensajes propios para la UX.
 const loginSchema = LoginRequestSchema.extend({
@@ -27,7 +29,35 @@ const loginSchema = LoginRequestSchema.extend({
 	password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
-export function LoginForm() {
+type LoginValues = { email: string; password: string };
+
+/**
+ * El botón se deshabilita cuando el form no es válido, pero el operador no tiene
+ * forma de saber QUÉ lo bloquea: el submit muere en silencio. Estos mensajes son
+ * los del propio schema, así que el aviso no puede desincronizarse de la regla.
+ */
+function blockingHints(values: LoginValues): string[] {
+	const hints: string[] = [];
+	const email = loginSchema.shape.email.safeParse(values.email);
+	if (!email.success)
+		hints.push(email.error.issues[0]?.message ?? "Email inválido");
+	const password = loginSchema.shape.password.safeParse(values.password);
+	if (!password.success) {
+		hints.push(
+			password.error.issues[0]?.message ??
+				"La contraseña debe tener al menos 6 caracteres",
+		);
+	}
+	return hints;
+}
+
+export function LoginForm({
+	sessionExpired = false,
+	returnTo,
+}: {
+	sessionExpired?: boolean;
+	returnTo?: string;
+}) {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const loginMutation = useLogin();
@@ -46,7 +76,22 @@ export function LoginForm() {
 						setRoleError(true);
 						return;
 					}
-					navigate({ to: "/home" });
+					// Si el navegador no deja guardar el token, el panel entra igual
+					// pero pierde la sesión en cada recarga. El aviso va en un toast y
+					// no en estado local porque la navegación de abajo desmonta el
+					// form: un toast es lo único que sobrevive al salto al panel.
+					if (!isStoragePersistent()) {
+						toast.warning(
+							"Tu navegador no permite guardar la sesión: tendrás que volver a entrar cada vez que recargues la página.",
+						);
+					}
+					// `returnTo` ya viene sanitizada por el `validateSearch` del
+					// login (ruta interna, sin protocolo). El cast es porque el
+					// router tipa `to` contra las rutas registradas en build.
+					void navigate({
+						to: (returnTo ?? "/home") as "/home",
+						replace: true,
+					});
 				},
 			});
 		},
@@ -67,6 +112,12 @@ export function LoginForm() {
 					}}
 					className="space-y-6"
 				>
+					{sessionExpired ? (
+						<output className="block rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+							Tu sesión expiró por seguridad. Vuelve a iniciar sesión para
+							continuar donde estabas.
+						</output>
+					) : null}
 					<FieldGroup>
 						<form.Field name="email">
 							{(field) => {
@@ -130,19 +181,31 @@ export function LoginForm() {
 					)}
 
 					<form.Subscribe
-						selector={(state) => [state.canSubmit, state.isSubmitting]}
+						selector={(state) => ({
+							canSubmit: state.canSubmit,
+							isSubmitting: state.isSubmitting,
+							values: state.values,
+						})}
 					>
-						{([canSubmit, isSubmitting]) => (
-							<Button
-								type="submit"
-								className="w-full"
-								disabled={!canSubmit || isSubmitting || loginMutation.isPending}
-							>
-								{isSubmitting || loginMutation.isPending
-									? "Iniciando sesión..."
-									: "Iniciar Sesión"}
-							</Button>
-						)}
+						{({ canSubmit, isSubmitting, values }) => {
+							const disabled =
+								!canSubmit || isSubmitting || loginMutation.isPending;
+							const hints = disabled ? blockingHints(values) : [];
+							return (
+								<div className="space-y-2">
+									{hints.length > 0 ? (
+										<output className="block text-sm text-destructive text-center">
+											Revisa: {hints.join(" · ")}
+										</output>
+									) : null}
+									<Button type="submit" className="w-full" disabled={disabled}>
+										{isSubmitting || loginMutation.isPending
+											? "Iniciando sesión..."
+											: "Iniciar Sesión"}
+									</Button>
+								</div>
+							);
+						}}
 					</form.Subscribe>
 				</form>
 			</CardContent>

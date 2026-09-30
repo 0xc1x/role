@@ -1,6 +1,5 @@
 import type { CommissionDto } from "@0xc1x/role-commons";
 import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
-import { commissionsKeys } from "@/features/commissions";
 import { CommissionForm } from "../forms/commission.form";
 
 export interface CommissionUpdateDrawerProps {
@@ -17,7 +16,6 @@ export function CommissionUpdateDrawer({
 	return (
 		<ResourceUpdateDrawer
 			formId="update-commission-drawer-form"
-			mutationKey={commissionsKeys.all}
 			title="Comisión"
 			description={`Actualiza la comisión de ${commission.name}`}
 			isOpen={isOpen}

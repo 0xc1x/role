@@ -131,11 +131,11 @@ export function ProductCard({
 											{ backgroundColor: colors.surfaceSuccess },
 										]}
 									>
-										<TrendingUp size={12} color={colors.success} />
+										<TrendingUp size={12} color={colors.successText} />
 										<AppText
 											variant="bodySmall"
 											weight="semiBold"
-											style={[styles.chipText, { color: colors.success }]}
+											style={[styles.chipText, { color: colors.successText }]}
 										>
 											{strings.business.soldCount.replace("{n}", String(sold))}
 										</AppText>

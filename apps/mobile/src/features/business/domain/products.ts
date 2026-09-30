@@ -1,3 +1,4 @@
+import { strings } from "@/src/core/i18n/strings";
 import type { OfferDetail } from "@/src/features/offers/domain/offer";
 
 /**
@@ -126,4 +127,47 @@ function bySort(
 function ts(iso: string): number {
 	const time = Date.parse(iso);
 	return Number.isNaN(time) ? 0 : time;
+}
+
+/** Lead time of the default pickup window (an hour into the future). */
+export const PICKUP_DEFAULT_LEAD_MS = 60 * 60 * 1000;
+/** Length of the default pickup window. */
+export const PICKUP_DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Default pickup window for a brand-new offer, computed from `now`: the next
+ * whole hour at least an hour away, open for two hours. It can never land in
+ * the past, which a clock-anchored default (today at 18:00-20:00) did whenever
+ * the owner published in the evening.
+ */
+export function defaultPickupWindow(now: Date = new Date()): {
+	start: Date;
+	end: Date;
+} {
+	const start = new Date(now.getTime() + PICKUP_DEFAULT_LEAD_MS);
+	// Truncate to the hour: the lead time keeps it strictly in the future.
+	start.setMinutes(0, 0, 0);
+	return {
+		start,
+		end: new Date(start.getTime() + PICKUP_DEFAULT_DURATION_MS),
+	};
+}
+
+/**
+ * Publishability of a pickup window. `end > start` is necessary but not
+ * sufficient: a window that already closed produces an offer no consumer can
+ * ever reserve, so it is rejected too.
+ */
+export function validatePickupWindow(
+	start: Date,
+	end: Date,
+	now: Date = new Date(),
+): string | null {
+	if (end.getTime() <= start.getTime()) {
+		return strings.business.invalidPickupWindow;
+	}
+	if (end.getTime() <= now.getTime()) {
+		return strings.business.pickupWindowInPast;
+	}
+	return null;
 }

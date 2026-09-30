@@ -1,6 +1,5 @@
 import { Pencil, Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Drawer,
@@ -14,6 +13,7 @@ import {
 	DrawerTrigger,
 } from "@/components/ui/drawer";
 import { Spinner } from "@/components/ui/spinner";
+import { notifyMutationError } from "@/lib/api/notify";
 
 /**
  * Drawer genérico crear/editar con estado local del formulario.
@@ -48,7 +48,7 @@ export function FormDrawer<TValues, TPayload, Row>(props: {
 			setOpen(false);
 			setValues(props.defaults(undefined));
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : "Error inesperado");
+			notifyMutationError(err);
 		}
 	};
 

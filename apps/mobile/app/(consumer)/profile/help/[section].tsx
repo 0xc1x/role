@@ -60,7 +60,11 @@ export default function HelpCategoryScreen() {
 				<ScreenHeader title={content.title} fallback="/profile/help" />
 				{content.sections.map((sectionData) => (
 					<Card key={sectionData.title} style={styles.card}>
-						<AppText variant="bodyMedium" weight="bold" style={styles.sectionTitle}>
+						<AppText
+							variant="bodyMedium"
+							weight="bold"
+							style={styles.sectionTitle}
+						>
 							{sectionData.title}
 						</AppText>
 						{sectionData.items.map((item) => (
@@ -80,15 +84,15 @@ export default function HelpCategoryScreen() {
 												</AppText>
 												<AppText
 													variant="bodySmall"
-													style={{ color: colors.mutedForeground, lineHeight: 21 }}
+													style={{
+														color: colors.mutedForeground,
+														lineHeight: 21,
+													}}
 												>
 													{item.description}
 												</AppText>
 											</View>
-											<ChevronRight
-												size={18}
-												color={colors.mutedForeground}
-											/>
+											<ChevronRight size={18} color={colors.mutedForeground} />
 										</Pressable>
 									</Link>
 								) : (

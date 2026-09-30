@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useEmailSegments } from "@/features/email/queries/emails.queries";
+import { notifyMutationError } from "@/lib/api/notify";
 import { pushApi } from "../api/push.api";
 import { pushKeys } from "./push.keys";
 
@@ -56,11 +57,6 @@ export function usePushTokens(q?: ListPushTokensQuery) {
 export { useEmailSegments };
 
 // ─── mutaciones de plantillas ──────────────────────────────────────────
-
-/** Error de mutación → toast. Pura y sin closure: vive a nivel módulo. */
-function notifyMutationError(err: Error) {
-	toast.error(err.message);
-}
 
 export function usePushTemplateMutations() {
 	const qc = useQueryClient();
@@ -116,14 +112,14 @@ export function usePushSend() {
 			}
 			invalidate();
 		},
-		onError: (err: Error) => toast.error(err.message),
+		onError: notifyMutationError,
 	});
 }
 
 export function usePushTest() {
 	return useMutation({
 		mutationFn: (b: Parameters<typeof pushApi.test>[0]) => pushApi.test(b),
-		onError: (err: Error) => toast.error(err.message),
+		onError: notifyMutationError,
 	});
 }
 
@@ -136,7 +132,7 @@ export function usePushTestTemplate() {
 			id: string;
 			body: Parameters<typeof pushApi.testTemplate>[1];
 		}) => pushApi.testTemplate(id, body),
-		onError: (err: Error) => toast.error(err.message),
+		onError: notifyMutationError,
 	});
 }
 
@@ -145,7 +141,7 @@ export function usePushAudience() {
 	return useMutation({
 		mutationFn: (b: Parameters<typeof pushApi.audience>[0]) =>
 			pushApi.audience(b),
-		onError: (err: Error) => toast.error(err.message),
+		onError: notifyMutationError,
 	});
 }
 
@@ -160,6 +156,6 @@ export function useUpdatePushToken() {
 			toast.success("Dispositivo actualizado");
 			void qc.invalidateQueries({ queryKey: pushKeys.lists() });
 		},
-		onError: (err: Error) => toast.error(err.message),
+		onError: notifyMutationError,
 	});
 }

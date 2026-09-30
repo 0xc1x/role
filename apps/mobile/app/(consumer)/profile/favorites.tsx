@@ -131,7 +131,9 @@ export default function FavoritesScreen() {
 						{favorites.length > 0 ? (
 							<Alert variant="success" icon={Heart}>
 								<AlertDescription>
-									<AppText style={[styles.bannerText, { color: colors.success }]}>
+									<AppText
+										style={[styles.bannerText, { color: colors.successText }]}
+									>
 										{strings.favorites.savingsBanner.replace(
 											"{saved}",
 											formatMoney(totalSaved),
@@ -144,12 +146,7 @@ export default function FavoritesScreen() {
 				}
 				ListEmptyComponent={
 					<EmptyState
-						icon={
-							<Heart
-								size={28}
-								color={colors.mutedForeground}
-							/>
-						}
+						icon={<Heart size={28} color={colors.mutedForeground} />}
 						title={strings.favorites.empty}
 						message={strings.favorites.emptyHint}
 						action={
@@ -163,13 +160,17 @@ export default function FavoritesScreen() {
 						}
 					/>
 				}
-			renderItem={renderItem}
-		/>
-	</Screen>
+				renderItem={renderItem}
+			/>
+		</Screen>
 	);
 }
 
-const FavoriteRow = memo(function FavoriteRow({ item }: { item: FavoriteOffer }) {
+const FavoriteRow = memo(function FavoriteRow({
+	item,
+}: {
+	item: FavoriteOffer;
+}) {
 	return <OfferCard offer={toOfferDetail(item)} />;
 });
 

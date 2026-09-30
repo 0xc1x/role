@@ -3,16 +3,18 @@ import {
 	BellRing,
 	ChartArea,
 	DollarSign,
-	Glasses,
 	Info,
 	LayoutList,
 	type LucideIcon,
 	Megaphone,
+	MessageSquare,
 	Projector,
+	Receipt,
 	Settings2,
+	ShoppingBag,
+	Star,
 	Store,
 	Ticket,
-	ToggleLeft,
 } from "lucide-react";
 
 interface NavSubItem {
@@ -27,12 +29,6 @@ interface NavMainItem {
 	items?: NavSubItem[];
 }
 
-interface NavProject {
-	name: string;
-	url: string;
-	icon: LucideIcon;
-}
-
 export const navMain: NavMainItem[] = [
 	{
 		title: "Admin",
@@ -43,6 +39,16 @@ export const navMain: NavMainItem[] = [
 		title: "Negocios",
 		url: "/negocios",
 		icon: Store,
+	},
+	{
+		title: "Órdenes",
+		url: "/ordenes",
+		icon: Receipt,
+	},
+	{
+		title: "Ofertas",
+		url: "/ofertas",
+		icon: ShoppingBag,
 	},
 	{
 		title: "Categorias",
@@ -73,6 +79,23 @@ export const navMain: NavMainItem[] = [
 		title: "Comisiones",
 		url: "/comisiones",
 		icon: BadgeDollarSign,
+	},
+	{
+		// Moderación de reseñas. Va junto a Contactos y no con los módulos de
+		// datos: las dos son superficies donde el operador lee lo que escribió la
+		// gente y decide qué hacer con eso.
+		title: "Reseñas",
+		url: "/resenas",
+		icon: Star,
+	},
+	{
+		// Bandeja de los mensajes del formulario público. Va después de
+		// Comisiones porque es la superficie que más se parece a "leer lo que
+		// nos escribieron": en un panel con seis módulos de datos, un ítem más
+		// arriba se confunde con un módulo más.
+		title: "Contactos",
+		url: "/contactos",
+		icon: MessageSquare,
 	},
 	{
 		title: "Campañas de Marketing",
@@ -106,34 +129,15 @@ export const navMain: NavMainItem[] = [
 				title: "Mail",
 				url: "/notificaciones/mails",
 			},
-			{
-				title: "Whatsapp",
-				url: "#",
-			},
+			// "Whatsapp" y "Soporte" se retiraron del menú: no existe ruta para
+			// ellos y `NavMain` renderizaba un <Link to="#"> que no lleva a
+			// ninguna parte. Vuelven cuando la ruta exista, no antes.
 		],
-	},
-	{
-		title: "Soporte",
-		url: "#",
-		icon: Glasses,
 	},
 	{
 		title: "Configuración",
 		url: "/configuracion",
 		icon: Settings2,
-	},
-];
-
-export const projects: NavProject[] = [
-	{
-		name: "Feature Flags",
-		url: "#",
-		icon: ToggleLeft,
-	},
-	{
-		name: "Anuncios",
-		url: "#",
-		icon: BadgeDollarSign,
 	},
 ];
 

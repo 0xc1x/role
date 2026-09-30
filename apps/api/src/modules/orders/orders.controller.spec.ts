@@ -1,6 +1,8 @@
 jest.mock('@0xc1x/role-commons', () => ({
   CreateOrderRequestSchema: {},
+  ListAdminOrdersQuerySchema: {},
   ListBusinessOrdersQuerySchema: {},
+  ListOrderEventsQuerySchema: {},
   ListOrdersQuerySchema: {},
   UpdateOrderStatusSchema: {},
   ValidatePickupCodeSchema: {},
@@ -26,7 +28,9 @@ describe('OrdersController', () => {
             create: jest.fn(),
             listMine: jest.fn(),
             listForBusiness: jest.fn(),
+            listForAdmin: jest.fn(),
             getById: jest.fn(),
+            listEvents: jest.fn(),
             updateStatus: jest.fn(),
             cancelOrder: jest.fn(),
             validatePickupCode: jest.fn(),
@@ -39,10 +43,30 @@ describe('OrdersController', () => {
     service = module.get(OrdersService);
   });
 
-  it('create delega con el usuario autenticado', () => {
+  it('create delega con el usuario autenticado', async () => {
     const body = { offer_id: 'of-1', quantity: 2 } as never;
-    controller.create(user, body);
+    const order = { id: 'order-1' } as never;
+    service.create.mockResolvedValue({ order, replayed: false });
+    const res = { status: jest.fn() } as never;
+
+    await controller.create(user, body, res);
+
     expect(service.create).toHaveBeenCalledWith(user, body);
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('create responde 200 y la MISMA orden cuando es un replay', async () => {
+    // The replay is the whole point of the key: the caller must get its
+    // original order back, and the only observable difference is the status.
+    const body = { offer_id: 'of-1', idempotency_key: 'k-1' } as never;
+    const order = { id: 'order-1' } as never;
+    service.create.mockResolvedValue({ order, replayed: true });
+    const res = { status: jest.fn() } as never;
+
+    const returned = await controller.create(user, body, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(returned).toBe(order);
   });
 
   it('listMine pasa el query', () => {
@@ -57,9 +81,26 @@ describe('OrdersController', () => {
     expect(service.listForBusiness).toHaveBeenCalledWith(user, query);
   });
 
+  it('listForAdmin pasa el query', () => {
+    const query = {
+      status: 'pending',
+      stuck: true,
+      page: 1,
+      limit: 10,
+    } as never;
+    controller.listForAdmin(query);
+    expect(service.listForAdmin).toHaveBeenCalledWith(query);
+  });
+
   it('getById delega por id', () => {
     controller.getById(user, 'ord-1');
     expect(service.getById).toHaveBeenCalledWith(user, 'ord-1');
+  });
+
+  it('listEvents pasa usuario, id y query', () => {
+    const query = { page: 1, limit: 20 } as never;
+    controller.listEvents(user, 'ord-1', query);
+    expect(service.listEvents).toHaveBeenCalledWith(user, 'ord-1', query);
   });
 
   it('updateStatus pasa usuario, id y body', () => {
@@ -75,6 +116,10 @@ describe('OrdersController', () => {
 
   it('validatePickup extrae el pickup_code del body', () => {
     controller.validatePickup(user, 'ord-1', { pickup_code: '4821' } as never);
-    expect(service.validatePickupCode).toHaveBeenCalledWith(user, 'ord-1', '4821');
+    expect(service.validatePickupCode).toHaveBeenCalledWith(
+      user,
+      'ord-1',
+      '4821',
+    );
   });
 });

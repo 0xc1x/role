@@ -41,7 +41,9 @@ export const DEFAULT_NOTIFICATION_PREFS: ConsumerNotificationPreferences = {
 
 /** User eco/savings stats derived from orders. */
 export interface UserStats {
-	total_saved_cents: number;
+	// Dollars, not cents: user_order_stats sums orders.original_price - orders.price,
+	// which this schema already stores in units. Do not scale by 100.
+	total_saved: number;
 	total_orders: number;
 	co2_saved_kg: number;
 }

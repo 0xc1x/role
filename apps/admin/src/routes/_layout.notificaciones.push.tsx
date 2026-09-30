@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageTabs } from "@/components/page-tabs";
+import { PageTabs, TabPanel } from "@/components/page-tabs";
 import { HistoryTab } from "@/features/push-notifications/components/history-tab";
 import { SendTab } from "@/features/push-notifications/components/send-tab";
 import { TemplatesTab } from "@/features/push-notifications/components/templates-tab";
@@ -42,11 +42,19 @@ function PushPage() {
 					onChange={setTab}
 				/>
 			</div>
-			<div className="mt-6">
-				{tab === "enviar" && <SendTab />}
-				{tab === "plantillas" && <TemplatesTab />}
-				{tab === "historial" && <HistoryTab />}
-				{tab === "dispositivos" && <TokensTab />}
+			<div className="mt-6 space-y-6">
+				<TabPanel tab="enviar" active={tab === "enviar"}>
+					<SendTab />
+				</TabPanel>
+				<TabPanel tab="plantillas" active={tab === "plantillas"}>
+					<TemplatesTab />
+				</TabPanel>
+				<TabPanel tab="historial" active={tab === "historial"}>
+					<HistoryTab />
+				</TabPanel>
+				<TabPanel tab="dispositivos" active={tab === "dispositivos"}>
+					<TokensTab />
+				</TabPanel>
 			</div>
 		</div>
 	);

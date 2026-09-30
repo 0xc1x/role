@@ -1,0 +1,12 @@
+{
+  "$comment": "Baseline for the coverage ratchet. Percentages are % of FUNCTIONS over filtered app source, per package, measured from the merged lcov (micro, sum/sum). Regenerate deliberately with `bun run coverage:ratchet --write` after reviewing the drift; never as a side effect of running the suite.",
+  "recordedAt": "2026-09-29",
+  "commit": "3eda121",
+  "packages": {
+    "packages/commons": 83.54,
+    "apps/api": 95.67,
+    "apps/admin": 54.14,
+    "apps/landing": 68.35,
+    "apps/mobile": 55.01
+  }
+}

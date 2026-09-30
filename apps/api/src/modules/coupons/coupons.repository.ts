@@ -16,6 +16,7 @@ import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import { escapeLike } from '../../common/utils/like';
 import { businesses, coupons } from '../../database/schema';
+import { couponScopeRank } from './coupon-resolution';
 
 /** Row as stored in Postgres (Date timestamps, numeric as string). */
 export type CouponRow = typeof coupons.$inferSelect;
@@ -113,6 +114,37 @@ export class CouponsRepository {
       .select()
       .from(coupons)
       .where(and(...filters))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
+   * The coupon a reservation would resolve for `code` at `businessId`, read
+   * WITHOUT a lock.
+   *
+   * Identical to `OrdersRepository.findCouponByCodeForUpdate` down to the ranking
+   * expression (`couponScopeRank`) and the absence of any validity narrowing, so
+   * both reads resolve the same row and `not_found` stays distinguishable from
+   * `inactive` / `expired` / `wrong_business`. That equivalence is the whole
+   * contract of this method; the specs assert it against the locking read.
+   *
+   * The one deliberate difference is `FOR UPDATE`, absent here. The reservation
+   * locks the row because it is about to increment `used_count`; this read
+   * reserves nothing, writes nothing, and runs on a checkout screen that
+   * several users can be on at once. Locking would park every one of them
+   * behind whoever is mid-checkout, for no correctness gain — `max_uses` is
+   * settled by the reservation, which is the only writer.
+   */
+  async findApplicableByCode(
+    businessId: string,
+    code: string,
+    executor: DbExecutor = this.db,
+  ): Promise<CouponRow | null> {
+    const [row] = await executor
+      .select()
+      .from(coupons)
+      .where(eq(coupons.code, code))
+      .orderBy(couponScopeRank(businessId))
       .limit(1);
     return row ?? null;
   }

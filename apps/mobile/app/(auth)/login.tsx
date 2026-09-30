@@ -12,7 +12,7 @@ import { withAlpha } from "@/src/core/theme/alpha";
 import { AppText, TextField } from "@/src/core/ui";
 import { Logo } from "@/src/core/ui/Logo";
 import { AuthScreenShell } from "@/src/features/auth/presentation/AuthScreenShell";
-import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
+// import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/src/features/auth/data/repository";
 import { validateLoginForm } from "@/src/features/auth/domain/validation";
 import { useAuthStore } from "@/src/features/auth/store";
@@ -149,16 +149,11 @@ export default function LoginScreen() {
 				</View>
 			) : null}
 
-			<Button
-				onPress={handleLogin}
-				size="default"
-				loading={loading}
-			>
+			<Button onPress={handleLogin} size="default" loading={loading}>
 				{strings.auth.login}
 			</Button>
 
-
-			<SocialAuthButtons label={strings.auth.orContinueWith} />
+			{/* <SocialAuthButtons label={strings.auth.orContinueWith} /> */}
 
 			<AppText
 				variant="bodyMedium"
@@ -196,7 +191,9 @@ function ForgotPasswordDialog({
 
 	const send = async () => {
 		const trimmed = email.trim();
-		if (!trimmed || !trimmed.includes("@")) {
+		// No separate empty-string guard: "".includes("@") is already false,
+		// so the empty input takes this same branch.
+		if (!trimmed.includes("@")) {
 			setError(strings.auth.invalidEmail);
 			return;
 		}
@@ -215,7 +212,12 @@ function ForgotPasswordDialog({
 
 	return (
 		<Modal transparent animationType="fade" visible onRequestClose={onClose}>
-			<View style={[styles.overlay, { backgroundColor: withAlpha(colors.scrim, 0.4) }]}>
+			<View
+				style={[
+					styles.overlay,
+					{ backgroundColor: withAlpha(colors.scrim, 0.4) },
+				]}
+			>
 				<View
 					style={[
 						styles.dialog,
@@ -231,9 +233,9 @@ function ForgotPasswordDialog({
 					>
 						{strings.auth.resetDescription}
 					</AppText>
-				<TextField
-					label={strings.auth.email}
-					icon={Mail}
+					<TextField
+						label={strings.auth.email}
+						icon={Mail}
 						value={email}
 						onChangeText={(t) => {
 							setEmail(t);
@@ -257,10 +259,7 @@ function ForgotPasswordDialog({
 							{strings.common.cancel}
 						</Button>
 
-						<Button
-							onPress={send}
-							style={styles.dialogButton}
-						>
+						<Button onPress={send} style={styles.dialogButton}>
 							{strings.auth.sendLink}
 						</Button>
 					</View>

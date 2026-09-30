@@ -89,7 +89,9 @@ describe("auth server logout", () => {
 		getCookieMock.mockReturnValue("refresh-token");
 		globalThis.fetch = jest
 			.fn()
-			.mockResolvedValue(response(500, { message: "revocation failed" }, false)) as unknown as typeof globalThis.fetch;
+			.mockResolvedValue(
+				response(500, { message: "revocation failed" }, false),
+			) as unknown as typeof globalThis.fetch;
 
 		await expect(logout()).rejects.toThrow("revocation failed");
 

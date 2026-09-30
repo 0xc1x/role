@@ -24,7 +24,9 @@ describe('CommissionsService (DB real)', () => {
     const list = await service.list({ page: 1, limit: 10 });
     expect(list.data.length).toBeGreaterThanOrEqual(1);
     expect(await service.getById(businessId)).toMatchObject({ id: businessId });
-    await expect(service.getById('00000000-0000-0000-0000-000000000000')).rejects.toThrow();
+    await expect(
+      service.getById('00000000-0000-0000-0000-000000000000'),
+    ).rejects.toThrow();
     // numeric(5,4) en BD: máximo 9.9999 (0.2 = 20%).
     const updated = await service.update(businessId, { commission_rate: 0.2 });
     expect(updated.commission_rate).toBe(0.2);

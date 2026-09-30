@@ -37,6 +37,7 @@ import {
 	usePreview,
 	useTestTemplate,
 } from "@/features/email/queries/emails.queries";
+import { notifyMutationError } from "@/lib/api/notify";
 
 /** Toggle inmutable de un id en una lista de selección. */
 function toggleId(ids: string[], id: string): string[] {
@@ -333,8 +334,7 @@ function useSendTabState() {
 	const selectTemplate = (id: string) => {
 		setTemplateId(id);
 		preview.mutate(id, {
-			onError: (err) =>
-				toast.error(err instanceof Error ? err.message : "Error inesperado"),
+			onError: (err) => notifyMutationError(err),
 		});
 	};
 
@@ -364,7 +364,7 @@ function useSendTabState() {
 			);
 			setConfirmOpen(false);
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : "Error inesperado");
+			notifyMutationError(err);
 		}
 	};
 

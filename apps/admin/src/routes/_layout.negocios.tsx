@@ -7,6 +7,7 @@ import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table/data-table";
+import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { Button } from "@/components/ui/button";
 import {
 	InputGroup,
@@ -22,7 +23,14 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBusinessesList } from "@/features/businesses";
-import { columns } from "@/features/businesses/tables/businesses.columns";
+import { businessesApi } from "@/features/businesses/api/businesses.api";
+import { BusinessesBulkActions } from "@/features/businesses/components/businesses-bulk-actions";
+import {
+	businessesCsvColumns,
+	columns,
+} from "@/features/businesses/tables/businesses.columns";
+import { fetchAllPages } from "@/lib/api/fetch-all-pages";
+import { formatApiError } from "@/lib/api/notify";
 
 // Igual que ListBusinessesQuerySchema pero con el page size de las tablas (10).
 const schema = ListBusinessesQuerySchema.extend({
@@ -37,7 +45,8 @@ export const Route = createFileRoute("/_layout/negocios")({
 function RouteComponent() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, isLoading, isError, error } = useBusinessesList(search);
+	const { data, isLoading, isError, error, refetch } =
+		useBusinessesList(search);
 	const [searchInput, setSearchInput] = useState(search.search ?? "");
 
 	useEffect(() => setSearchInput(search.search ?? ""), [search.search]);
@@ -65,15 +74,10 @@ function RouteComponent() {
 	if (isError) {
 		return (
 			<div className="px-6 py-4">
-				<p className="text-destructive">
-					{error instanceof Error ? error.message : "Error"}
-				</p>
-				<Button
-					variant="outline"
-					onClick={() =>
-						navigate({ search: { page: 1, limit: 10, search: undefined } })
-					}
-				>
+				<p className="text-destructive">{formatApiError(error, "Error")}</p>
+				{/* `navigate` con el mismo search lo deduplica y la query errored
+				    queda bajo la misma key: el botón de recuperación no hacía nada. */}
+				<Button variant="outline" onClick={() => void refetch()}>
 					Reintentar
 				</Button>
 			</div>
@@ -83,9 +87,15 @@ function RouteComponent() {
 	const meta = data?.meta;
 	return (
 		<div className="px-6 py-4">
-			<div className="flex items-center justify-between">
+			<div className="flex items-center justify-between gap-4">
 				<h1 className="font-bold text-xl">Negocios</h1>
 				<div className="flex items-center gap-2">
+					<ExportCsvButton
+						fileName="negocios"
+						columns={businessesCsvColumns}
+						total={meta?.total ?? 0}
+						loadRows={() => fetchAllPages(businessesApi.list, search)}
+					/>
 					<Select
 						value={search.verification_status ?? "all"}
 						onValueChange={(v) =>
@@ -130,6 +140,21 @@ function RouteComponent() {
 					onLimitChange={(limit) =>
 						navigate({ search: { ...search, page: 1, limit } })
 					}
+					selection={{
+						getRowId: (business) => business.id,
+						// Aprobar o rechazar solo tiene sentido sobre lo que está
+						// pendiente: un negocio ya aprobado no espera una acción y un
+						// recházado tampoco. La casilla de "todas" respeta esto, así
+						// que "marcar todo" nunca arrastra filas fuera de la cola.
+						enableRowSelection: (row) =>
+							row.original.verification_status === "pending",
+						toolbar: ({ selectedRows, clear }) => (
+							<BusinessesBulkActions
+								selectedRows={selectedRows}
+								onClear={clear}
+							/>
+						),
+					}}
 				/>
 			</div>
 		</div>

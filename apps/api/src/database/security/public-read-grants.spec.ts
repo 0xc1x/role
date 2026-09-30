@@ -81,9 +81,10 @@ function findStatement(predicate: (s: string) => boolean): string {
 /** Content of the first `grant select (...)` block for a table. */
 function grantBlock(table: string): string {
   const statement = findStatement((s) =>
-    new RegExp(`grant select \\([\\s\\S]*?on table public\\.${table} to `, 'i').test(
-      s,
-    ),
+    new RegExp(
+      `grant select \\([\\s\\S]*?on table public\\.${table} to `,
+      'i',
+    ).test(s),
   );
   const body = statement.match(/grant select \(([\s\S]*?)\) on table/);
   return body ? body[1] : '';
@@ -110,29 +111,40 @@ describe('client read/write boundary migration', () => {
     );
   });
 
-  test('businesses: public select is column-scoped away from platform fields', () => {
-    expect(
-      findStatement((s) =>
-        /revoke all on table public\.businesses from anon, authenticated/i.test(s),
+  test('businesses: table-level SELECT is required, and phase 3 must close what it exposes', () => {
+    // 20260925163235 replaced table-wide SELECT with per-column grants so anon
+    // could not read the platform columns. That is incompatible with PostgREST:
+    // offers, business_locations and orders hold foreign keys to businesses, and
+    // PostgREST needs table-level SELECT on a referenced table to resolve
+    // relationships, so every /rest/v1/offers read failed with 42501 - including
+    // select=id with no embed. The offers catalog is the product.
+    //
+    // The two are mutually exclusive: either the table is exposed, or the
+    // sensitive columns move off it. Phase 1 created the companion tables,
+    // phase 2 repointed the application at them, and phase 3 drops the columns.
+    // The restore below is not a regression to undo: without table-level SELECT
+    // the catalog does not load at all.
+    const restore = [
+      ...ALL_MIGRATIONS.matchAll(
+        /grant select on table public\.businesses to anon, authenticated;/gi,
       ),
-    ).toMatch(/businesses/);
+    ];
+    expect(
+      restore.length,
+      'no migration restores table-level SELECT on businesses',
+    ).toBeGreaterThan(0);
 
-    const anonGrant = grantBlock('businesses').toLowerCase();
-    for (const column of [
-      'owner_id',
-      'commission_rate',
-      'balance',
-      'verification_status',
-      'verified_at',
-      'verified_by',
-      'rejection_reason',
-    ]) {
-      expect(anonGrant).not.toContain(column);
-    }
-    // The public catalog fields stay readable, otherwise mobile breaks.
-    for (const column of ['id', 'name', 'slug', 'rating', 'is_active']) {
-      expect(anonGrant).toContain(column);
-    }
+    // While the columns are still on the table they ARE readable by anon. This
+    // assertion is the debt marker: it fails the day someone re-hides them with
+    // a column grant and breaks the offers catalog again, and it is removed only
+    // when phase 3 has actually been applied to the database.
+    expect(ALL_MIGRATIONS).toMatch(
+      /EXPOSED TO ANON[\s\S]*commission_rate[\s\S]*balance[\s\S]*verification_status/i,
+    );
+
+    // Row access stays bounded by RLS throughout: anon only reaches active
+    // businesses, so the exposure was never unbounded, only too wide.
+    expect(ALL_MIGRATIONS).toMatch(/Row access is still bounded by RLS/i);
   });
 
   test('offers: computed rating columns are excluded from client write grants', () => {
@@ -146,10 +158,14 @@ describe('client read/write boundary migration', () => {
     expect(revoke).toMatch(/truncate, trigger, references/i);
 
     const insertGrant = findStatement((s) =>
-      /grant insert \([\s\S]*?on table public\.offers to authenticated/i.test(s),
+      /grant insert \([\s\S]*?on table public\.offers to authenticated/i.test(
+        s,
+      ),
     );
     const updateGrant = findStatement((s) =>
-      /grant update \([\s\S]*?on table public\.offers to authenticated/i.test(s),
+      /grant update \([\s\S]*?on table public\.offers to authenticated/i.test(
+        s,
+      ),
     );
     for (const column of ['rating', 'review_count']) {
       expect(insertGrant).not.toContain(column);
@@ -157,7 +173,9 @@ describe('client read/write boundary migration', () => {
     }
     // Stock is moved by the reservation RPCs, never by an owner editing an offer.
     expect(updateGrant).not.toMatch(/\bstock\b/);
-    expect(MIGRATION).toMatch(/revoke update \(stock\) on table public\.offers/i);
+    expect(MIGRATION).toMatch(
+      /revoke update \(stock\) on table public\.offers/i,
+    );
   });
 
   test('offers: the missing FK index is added', () => {
@@ -165,7 +183,9 @@ describe('client read/write boundary migration', () => {
       findStatement((s) =>
         /create index if not exists idx_offers_location_business/i.test(s),
       ),
-    ).toMatch(/on public\.offers using btree \(business_location_id, business_id\)/i);
+    ).toMatch(
+      /on public\.offers using btree \(business_location_id, business_id\)/i,
+    );
   });
 
   test('get_platform_stats is definer with a fixed empty search_path and service_role only', () => {
@@ -327,7 +347,9 @@ describe('client read/write boundary migration', () => {
     // Section 0 returns early on a fresh env, so the sync needs its own block;
     // otherwise an operator-seeded secret would never reach the Edge functions.
     const blocks = MIGRATION.match(/do \$\$[\s\S]*?\$\$;/gi) ?? [];
-    const syncing = blocks.filter((b) => b.includes('supabase_functions_secret_'));
+    const syncing = blocks.filter((b) =>
+      b.includes('supabase_functions_secret_'),
+    );
     expect(syncing.length).toBeGreaterThanOrEqual(2);
     for (const b of syncing) {
       expect(b).toMatch(/internal_secret missing from Vault/i);
@@ -371,7 +393,8 @@ describe('client read/write boundary migration', () => {
       .match(
         /create or replace function public\.invoke_internal_edge_function\([\s\S]*?\$\$;/i,
       )?.[0];
-    const allowlist = fn?.match(/if path not in \(([\s\S]*?)\) then/i)?.[1] ?? '';
+    const allowlist =
+      fn?.match(/if path not in \(([\s\S]*?)\) then/i)?.[1] ?? '';
     for (const slug of [
       'handle-order-event',
       'handle-pickup-reminders',
@@ -433,9 +456,9 @@ describe('client read/write boundary migration', () => {
         ),
       )?.[0];
       expect(schedule).toBeDefined();
-      expect(
-        MIGRATION,
-      ).toMatch(new RegExp(`select cron\\.unschedule\\('${jobName}'\\)`, 'i'));
+      expect(MIGRATION).toMatch(
+        new RegExp(`select cron\\.unschedule\\('${jobName}'\\)`, 'i'),
+      );
     }
     // The migration uses the supported cron API and never edits cron.job directly.
     expect(MIGRATION).toMatch(/select cron\.unschedule\(/i);
@@ -528,14 +551,18 @@ describe('offers write grants match what the client actually writes', () => {
     // Indentation is whitespace-agnostic on purpose: the file is formatted by
     // biome, and a guard that hardcodes "two spaces" silently breaks the day
     // the tab convention is enforced.
-    const block = source.match(/const mutableColumns: Row = \{([\s\S]*?)\n[\t ]+\};/);
+    const block = source.match(
+      /const mutableColumns: Row = \{([\s\S]*?)\n[\t ]+\};/,
+    );
     if (!block?.[1]) {
       throw new Error(
         'saveOffer no longer declares a `mutableColumns: Row` object literal; update this guard to match the new shape.',
       );
     }
     const keys = columnList(
-      [...block[1].matchAll(/^\s*(\w+):/gm)].map((m) => m[1] as string).join(','),
+      [...block[1].matchAll(/^\s*(\w+):/gm)]
+        .map((m) => m[1] as string)
+        .join(','),
     );
     // The photo column is assigned imperatively, not in the literal.
     if (/mutableColumns\.image\s*=/.test(source)) keys.push('image');
@@ -555,9 +582,7 @@ describe('offers write grants match what the client actually writes', () => {
         'saveOffer no longer spreads mutableColumns inside .insert({...}); update this guard to match the new shape.',
       );
     }
-    return [...spread[1].matchAll(/^\s*(\w+):/gm)].map(
-      (m) => m[1] as string,
-    );
+    return [...spread[1].matchAll(/^\s*(\w+):/gm)].map((m) => m[1] as string);
   }
 
   test('every column the client writes on UPDATE is granted to authenticated', () => {
@@ -590,9 +615,10 @@ describe('offers write grants match what the client actually writes', () => {
   test('derived columns are never written by the client', () => {
     const written = [...clientMutableColumns(), ...clientInsertOnlyColumns()];
     for (const col of DERIVED_COLUMNS) {
-      expect(written, `client must not write derived column ${col}`).not.toContain(
-        col,
-      );
+      expect(
+        written,
+        `client must not write derived column ${col}`,
+      ).not.toContain(col);
     }
   });
 
@@ -613,5 +639,441 @@ describe('offers write grants match what the client actually writes', () => {
       ).not.toContain(col);
       expect(clientInsertOnlyColumns()).toContain(col);
     }
+  });
+});
+
+/**
+ * Phase 3 of the businesses column split.
+ *
+ * This is the closing half of finding P1-2. Phase 1 created the companion
+ * tables, phase 2 repointed the API and the mobile client at them, and phase 3
+ * drops the seven columns from `public.businesses`. Only after that is the
+ * table-level SELECT that PostgREST requires actually safe, because the table
+ * then holds nothing but public data.
+ *
+ * The migration is committed but NOT applied. It must not be applied until the
+ * phase-2 API is deployed, so these tests pin the migration source, not the
+ * live database. The debt assertion in the suite above is what still tracks
+ * the live state.
+ *
+ * Three things went wrong while building this and are worth guarding, because
+ * each one is invisible to a review that only reads the diff:
+ *
+ * 1. The scope was badly under-estimated twice. First "two functions", then
+ *    "thirteen". The truth is ten functions, twenty RLS policies, and two
+ *    triggers that had to move to another table. Seven of those policies live
+ *    on tables nobody was looking at. A guard that counts them keeps the
+ *    estimate honest.
+ *
+ * 2. `DROP COLUMN ... CASCADE` would have deleted seventeen security policies
+ *    without a word. Postgres refuses the drop without CASCADE, which is the
+ *    only reason this was caught at all.
+ *
+ * 3. The bootstrap trigger has to be AFTER INSERT. The companions have foreign
+ *    keys to businesses(id) and those are validated immediately, so a BEFORE
+ *    trigger fails with 23503. Nothing about reading the trigger suggests that;
+ *    only running the insert does.
+ */
+describe('businesses column split phase 3 closes the anon exposure', () => {
+  const MIGRATIONS_DIR = join(
+    import.meta.dir,
+    '..',
+    '..',
+    '..',
+    '..',
+    '..',
+    'supabase',
+    'migrations',
+  );
+  // Resolved by suffix, not by a hardcoded version. The Supabase server assigns
+  // the migration version, so the filename differs per environment: pinning
+  // `20260926000011_...` made this whole block fail with ENOENT the moment the
+  // migration was actually applied and renamed to its recorded version.
+  const PHASE3_FILE = readdirSync(MIGRATIONS_DIR).find((f) =>
+    f.endsWith('_businesses_drop_sensitive_columns.sql'),
+  );
+  if (!PHASE3_FILE) {
+    throw new Error(
+      'businesses_drop_sensitive_columns migration not found in supabase/migrations',
+    );
+  }
+  const PHASE3_PATH = join(MIGRATIONS_DIR, PHASE3_FILE);
+  const PHASE3: string = readFileSync(PHASE3_PATH, 'utf8');
+
+  const DRIZZLE_BUSINESSES = join(
+    import.meta.dir,
+    '..',
+    'schema',
+    'businesses.ts',
+  );
+
+  /**
+   * The migration with line comments stripped. Two assertions below would
+   * otherwise match the prose: the header explains at length why the DROP must
+   * not use CASCADE, and the rewrite helper carries the old predicates as the
+   * search strings it replaces.
+   */
+  function sql(): string {
+    return PHASE3.replace(/--[^\n]*/g, '');
+  }
+
+  /** Columns that must not survive on public.businesses. */
+  const MOVED_COLUMNS = [
+    'owner_id',
+    'balance',
+    'commission_rate',
+    'verification_status',
+    'verified_at',
+    'verified_by',
+    'rejection_reason',
+  ] as const;
+
+  test('the phase-3 migration drops every moved column and refuses CASCADE', () => {
+    const drop = sql().match(/alter table public\.businesses([\s\S]*?);/i)?.[1];
+    expect(drop, 'no ALTER TABLE ... DROP COLUMN on businesses').toBeDefined();
+
+    for (const column of MOVED_COLUMNS) {
+      expect(drop).toMatch(
+        new RegExp(`drop column if exists ${column}\\b`, 'i'),
+      );
+    }
+
+    // The single most important assertion in this file. CASCADE here would
+    // silently drop seventeen ownership policies across eleven tables, turning
+    // "Owners can update own offers" into a missing policy rather than an error.
+    expect(drop).not.toMatch(/cascade/i);
+    expect(sql()).not.toMatch(/alter table public\.businesses[\s\S]*?cascade/i);
+  });
+
+  test('the migration carries its own apply-order warning', () => {
+    // Applying this before the phase-2 API ships breaks order reservation, so
+    // the ordering constraint has to live in the file, not in someone's memory.
+    expect(PHASE3).toMatch(/APPLY ORDER WARNING/i);
+    expect(PHASE3).toMatch(/DO NOT RUN until the phase-2 API is deployed/i);
+  });
+
+  test('the ten functions are rewritten from their own definition, not retyped', () => {
+    // Retyping a body that moves money is how a migration changes behaviour
+    // nobody re-reads. The rewrite reads pg_get_functiondef and replaces one
+    // predicate, so every other line of an audited function is preserved byte
+    // for byte.
+    const rewritten = [
+      ...PHASE3.matchAll(/pg_temp\.apply_rewrite\('([a-z_]+)'/g),
+    ].map((m) => m[1] as string);
+    expect(rewritten).toEqual([
+      'set_order_status',
+      'cancel_order',
+      'validate_pickup_code',
+      'reserve_offer',
+      'accrue_order_earnings',
+      'generate_payouts',
+      'enforce_offer_business_availability',
+      'active_offers_near',
+      'get_platform_stats',
+      'get_platform_public_stats',
+    ]);
+    expect(PHASE3).toMatch(/pg_get_functiondef\(p\.oid\)/i);
+  });
+
+  test('a rewrite fails loudly instead of silently no-oping', () => {
+    // If someone edited one of those functions after this migration was
+    // written, a silent no-op would leave it reading a column that is gone.
+    expect(PHASE3).toMatch(/patron no encontrado en public\.%:\s*\[%\]/i);
+    expect(PHASE3).toMatch(/esperaba exactamente 1 overload de public\.%/i);
+  });
+
+  test('all twenty ownership policies resolve through business_ownership', () => {
+    // Seventeen of them are on tables other than businesses: offers (4),
+    // business_notification_preferences (3), offer_categories (2),
+    // business_hours, business_locations, coupons, payouts, orders,
+    // order_events, payment_intents and profiles. Counting them is the point.
+    const policies = [
+      ...PHASE3.matchAll(/create policy\s+"([^"]+)"\s+on\s+public\.(\w+)/gi),
+    ];
+    expect(policies.length, 'expected twenty recreated policies').toBe(20);
+
+    const viaOwnership = PHASE3.match(
+      /create policy[\s\S]*?business_ownership/g,
+    );
+    expect(viaOwnership).toBeDefined();
+
+    const tables = new Set(policies.map((m) => (m[2] as string).toLowerCase()));
+    for (const table of [
+      'offers',
+      'business_notification_preferences',
+      'offer_categories',
+      'business_hours',
+      'business_locations',
+      'coupons',
+      'payouts',
+      'orders',
+      'order_events',
+      'payment_intents',
+      'profiles',
+    ]) {
+      expect(tables, `${table} lost its ownership policy`).toContain(table);
+    }
+  });
+
+  test('no recreated policy still reaches for a moved column on businesses', () => {
+    // Scoped to the policies on purpose. The rewrite helper legitimately
+    // carries `b.owner_id = auth.uid()` as the search string it replaces, and
+    // `orders.commission_rate` is a real snapshot column that must survive.
+    const policySection = sql().split(/alter table public\.businesses/i)[0];
+    // The insert policy is the one deliberate exception: it cannot check
+    // ownership because the AFTER trigger has not written the row yet, and it
+    // does not need to, because the database assigns the owner.
+    const unowned = 'Authenticated can create businesses';
+    for (const [, name] of [
+      ...policySection.matchAll(/create policy\s+"([^"]+)"/gi),
+    ]) {
+      const body = policySection.match(
+        new RegExp(`create policy\\s+"${name}"[\\s\\S]*?;`, 'i'),
+      )?.[0];
+      expect(body, `policy ${name} not found`).toBeDefined();
+      expect(body).not.toMatch(/businesses\.owner_id/i);
+      if (name === unowned) {
+        expect(body).not.toMatch(/business_ownership/i);
+      } else {
+        expect(
+          body,
+          `${name} must resolve ownership via the companion`,
+        ).toMatch(/business_ownership/i);
+      }
+    }
+  });
+
+  test('the ownership bootstrap is AFTER INSERT, because the companions have FKs', () => {
+    // A BEFORE trigger runs before the parent row exists, so
+    // `insert into business_finance (business_id) values (new.id)` fails 23503.
+    // This was found by running the flow, not by reading the trigger.
+    const trigger = sql().match(
+      /create trigger trg_bootstrap_business_companions[\s\S]*?execute function public\.bootstrap_business_companions\(\);/i,
+    )?.[0];
+    expect(trigger).toBeDefined();
+    expect(trigger).toMatch(/after insert on public\.businesses/i);
+    expect(trigger).not.toMatch(/before insert/i);
+  });
+
+  test('the insert policy no longer demands an ownership row the trigger has not written yet', () => {
+    // A BEFORE trigger could satisfy this. An AFTER trigger cannot, so the
+    // policy gives up the check. That is not a weakening: the database assigns
+    // owner_id from auth.uid(), so ownership stops being something the caller
+    // expresses. The mobile client used to send owner_id in the insert body.
+    expect(sql()).toMatch(
+      /create policy\s+"Authenticated can create businesses"[\s\S]*?for insert[\s\S]*?with check \(true\)/i,
+    );
+    // The update policy keeps the check, because by then the ownership row exists.
+    expect(sql()).toMatch(
+      /create policy\s+"Owners can update own businesses"[\s\S]*?with check \(\s*exists/i,
+    );
+
+    const mobileRepository = readFileSync(
+      join(
+        import.meta.dir,
+        '..',
+        '..',
+        '..',
+        '..',
+        '..',
+        'apps',
+        'mobile',
+        'src',
+        'features',
+        'business',
+        'data',
+        'repository.ts',
+      ),
+      'utf8',
+    );
+    expect(mobileRepository).not.toMatch(/owner_id:\s*input\.ownerId/);
+  });
+
+  test('the drizzle schema declares no moved column on businesses', () => {
+    const schema = readFileSync(DRIZZLE_BUSINESSES, 'utf8');
+    for (const column of MOVED_COLUMNS) {
+      expect(schema, `businesses.ts still declares ${column}`).not.toMatch(
+        new RegExp(`^\\s*${column}\\s*:`, 'im'),
+      );
+    }
+  });
+
+  test('phase 3 removes the owner trigger that phase 4 introduced on owner_id', () => {
+    // businesses_client_write_grants adds a BEFORE INSERT trigger that fills
+    // owner_id from auth.uid(). A trigger referencing a dropped column does not
+    // fail at migration time; it fails on the next insert, in production, with 42703.
+    // bootstrap_business_companions already derives ownership, so the old
+    // trigger must be dropped here or it becomes a live landmine.
+    expect(sql()).toMatch(
+      /drop trigger if exists trg_set_business_owner_from_jwt on public\.businesses/i,
+    );
+    expect(ALL_MIGRATIONS).toMatch(
+      /create trigger trg_set_business_owner_from_jwt[\s\S]*?before insert on public\.businesses/i,
+    );
+  });
+});
+
+/**
+ * The client write path on public.businesses.
+ *
+ * 20260925163235 ran `revoke all on table public.businesses from anon,
+ * authenticated` and never gave the write grants back; only SELECT was
+ * restored. Supabase's default privileges grant `arwdDxtm` on every new table
+ * in `public`, so businesses was born fully writable and the revoke removed it
+ * silently. Nothing in the ledger ever stated an intent to remove business
+ * self-service — offers kept its grants because it was handled separately, and
+ * businesses was simply not in that pass.
+ *
+ * The symptom was every owner action in the mobile panel failing with
+ * `42501 permission denied for table businesses`, which reads like an RLS
+ * problem and is not one. RLS was correct throughout; the privileges under it
+ * were gone.
+ *
+ * These tests pin the grants against what the client actually writes, so the
+ * next boundary pass cannot quietly revoke them again.
+ */
+describe('businesses client write grants match what the client actually writes', () => {
+  // Resolved by name, not by version. Supabase assigns the version, so a
+  // hardcoded one breaks every time this migration is re-applied — and the
+  // resulting failure reads like a missing grant rather than a moved file.
+  const GRANTS_FILE = readdirSync(MIGRATIONS_DIR).find((file) =>
+    file.endsWith('_businesses_client_write_grants.sql'),
+  );
+  expect(GRANTS_FILE).toBeDefined();
+  const GRANTS: string = readFileSync(
+    join(MIGRATIONS_DIR, GRANTS_FILE as string),
+    'utf8',
+  );
+  const GRANTS_SQL = GRANTS.replace(/--[^\n]*/g, '');
+
+  const REPOSITORY_PATH = join(
+    import.meta.dir,
+    '..',
+    '..',
+    '..',
+    '..',
+    '..',
+    'apps',
+    'mobile',
+    'src',
+    'features',
+    'business',
+    'data',
+    'repository.ts',
+  );
+
+  function grantColumns(privilege: 'insert' | 'update'): string[] {
+    const block = GRANTS_SQL.match(
+      new RegExp(
+        `grant ${privilege}\\s*\\(([\\s\\S]*?)\\)\\s*on table public\\.businesses`,
+        'i',
+      ),
+    )?.[1];
+    if (!block) throw new Error(`no ${privilege} grant found on businesses`);
+    return block
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
+  }
+
+  test('the owner panel can read, create and edit its business', () => {
+    // The three calls that were failing. SELECT is table-level on purpose:
+    // PostgREST needs it on the referenced table to resolve the offers embed.
+    // It is granted by 20260925224820, not by this file.
+    expect(ALL_MIGRATIONS).toMatch(
+      /grant select on table public\.businesses to anon, authenticated/i,
+    );
+    expect(GRANTS_SQL).toMatch(
+      /grant insert \([\s\S]*?\) on table public\.businesses to authenticated/i,
+    );
+    expect(GRANTS_SQL).toMatch(
+      /grant update \([\s\S]*?\) on table public\.businesses to authenticated/i,
+    );
+  });
+
+  test('no write privilege reaches anon', () => {
+    expect(GRANTS_SQL).not.toMatch(
+      /grant (insert|update|delete)[\s\S]{0,200}?to (anon|public)\b/i,
+    );
+    expect(GRANTS_SQL).not.toMatch(
+      /grant all on table public\.businesses to (anon|authenticated)/i,
+    );
+  });
+
+  test('moderation, derived and platform-money columns stay ungranted', () => {
+    // is_active is the important one: it is how a business appears in the
+    // public catalog, so letting a client set it would be self-approval.
+    // rating and review_count are derived, and the money columns are the
+    // platform's, not the merchant's.
+    const granted = [...grantColumns('insert'), ...grantColumns('update')];
+    for (const column of [
+      'is_active',
+      'rating',
+      'review_count',
+      'balance',
+      'commission_rate',
+      'verification_status',
+      'verified_at',
+      'verified_by',
+      'rejection_reason',
+      'created_at',
+    ]) {
+      expect(granted, `${column} must not be client-writable`).not.toContain(
+        column,
+      );
+    }
+  });
+
+  test('every column the client writes is granted', () => {
+    // The mirror of the offers guard: a missing grant is exactly the 42501 the
+    // owner saw. The client is the source of truth for what it sends.
+    const source = readFileSync(REPOSITORY_PATH, 'utf8');
+
+    const insert = source.match(
+      /\.from\("businesses"\)[\s\S]{0,80}?\.insert\(\{([\s\S]*?)\n[\t ]+\}\)/,
+    )?.[1];
+    if (!insert) {
+      throw new Error(
+        'createBusiness no longer inserts a literal into businesses; update this guard.',
+      );
+    }
+    const insertKeys = [...insert.matchAll(/^\s*(\w+):/gm)].map(
+      (m) => m[1] as string,
+    );
+
+    const update = source.match(
+      /const businessUpdate: Record<string, unknown> = \{([\s\S]*?)\n[\t ]+\};/,
+    )?.[1];
+    if (!update) {
+      throw new Error(
+        'updateBusiness no longer declares a `businessUpdate` literal; update this guard.',
+      );
+    }
+    const updateKeys = [...update.matchAll(/businessUpdate\.(\w+)\s*=/g)].map(
+      (m) => m[1] as string,
+    );
+
+    const ungranted = [
+      ...insertKeys.filter((c) => !grantColumns('insert').includes(c)),
+      ...updateKeys.filter((c) => !grantColumns('update').includes(c)),
+    ];
+    expect(
+      ungranted,
+      `client writes these but the database does not grant them: ${ungranted.join(', ')}`,
+    ).toEqual([]);
+
+    // The client must not send owner_id. A BEFORE INSERT trigger fills it from
+    // auth.uid(), so ownership is assigned rather than claimed.
+    expect(insertKeys).not.toContain('owner_id');
+    expect(GRANTS_SQL).toMatch(
+      /create trigger trg_set_business_owner_from_jwt[\s\S]*?before insert on public\.businesses/i,
+    );
+  });
+
+  test('a new business cannot be born active or approved', () => {
+    expect(GRANTS_SQL).toMatch(
+      /create trigger trg_default_business_inactive[\s\S]*?before insert on public\.businesses/i,
+    );
+    expect(GRANTS_SQL).toMatch(/new\.is_active := false/i);
   });
 });

@@ -104,7 +104,13 @@ Deno.serve(async (req) => {
 			`Rescataste ${userOrders.length} ${userOrders.length === 1 ? "pedido" : "pedidos"} esta semana y ahorraste $${saved.toFixed(2)}.`,
 			{
 				type: "weekly_summary",
-				link: "/(consumer)/profile/orders",
+				// The consumer's order list, addressed the way the router
+				// addresses it. There is no `profile/orders`: the order history
+				// is a top-level tab (`app/(consumer)/orders.tsx`), and profile
+				// only holds settings. Naming the group is what makes the link
+				// reach the consumer panel rather than the business one, since
+				// both are the web path `/orders`.
+				link: "/(consumer)/orders",
 			},
 		);
 		notified++;

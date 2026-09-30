@@ -12,9 +12,11 @@ export function withAlpha(hex: string, alpha: number): string {
 	let g: string;
 	let b: string;
 	if (value.length === 3) {
-		r = value[0]! + value[0]!;
-		g = value[1]! + value[1]!;
-		b = value[2]! + value[2]!;
+		// charAt (not value[i]) returns a plain string, so the length check
+		// above is the only guard needed and no index assertion is required.
+		r = value.charAt(0) + value.charAt(0);
+		g = value.charAt(1) + value.charAt(1);
+		b = value.charAt(2) + value.charAt(2);
 	} else if (value.length >= 6) {
 		r = value.slice(0, 2);
 		g = value.slice(2, 4);

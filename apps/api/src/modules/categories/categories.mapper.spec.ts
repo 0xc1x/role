@@ -29,6 +29,37 @@ describe('toCategoryDto', () => {
     expect(dto.created_at).toBe('2025-01-01T00:00:00.000Z');
     expect(dto.deleted_at).toBeNull();
   });
+
+  test('active_count: número cuando la fila lo trae, ausente cuando no', () => {
+    // A LIST row carries it, and it arrives as the `bigint` string postgres.js
+    // produces. Emitting that verbatim would put `"active_count":"7"` on the
+    // wire, where the contract says number.
+    const withCount = toCategoryDto(
+      makeRow({ active_count: '7' }) as CategoryRow,
+    );
+    expect(withCount.active_count).toBe(7);
+    expect(typeof withCount.active_count).toBe('number');
+
+    // Already a number (if the driver ever stops stringifying int8) still works.
+    expect(
+      toCategoryDto(makeRow({ active_count: 3 }) as CategoryRow).active_count,
+    ).toBe(3);
+
+    // A category with no active offers is `0`, not missing: `coalesce` in SQL
+    // guarantees the value is present, and a chip rendering "0 deals" is correct.
+    expect(
+      toCategoryDto(makeRow({ active_count: '0' }) as CategoryRow).active_count,
+    ).toBe(0);
+
+    // A SINGLE-RESOURCE row does not run the aggregate, so the field is OMITTED
+    // rather than reported as 0 — "we did not count" must not look like "there
+    // is nothing". `undefined` is what makes `JSON.stringify` leave the key out.
+    const detail = toCategoryDto(makeRow());
+    expect('active_count' in detail).toBe(false);
+    expect(JSON.parse(JSON.stringify(detail))).not.toHaveProperty(
+      'active_count',
+    );
+  });
 });
 
 describe('toCategoryInsert', () => {

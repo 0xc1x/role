@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { RefreshControl, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import {
@@ -195,7 +195,7 @@ export function ProductDetail({
 						label={strings.business.unitsSold}
 						value={String(sold)}
 						icon={ShoppingBag}
-						color={colors.success}
+						color={colors.successText}
 						bg={colors.surfaceSuccess}
 					/>
 					<StatCard
@@ -209,7 +209,7 @@ export function ProductDetail({
 						label={strings.business.created}
 						value={String(offer.initial_stock ?? offer.stock)}
 						icon={Package}
-						color={colors.warning}
+						color={colors.warningText}
 						bg={colors.surfaceWarning}
 					/>
 				</View>
@@ -222,7 +222,7 @@ export function ProductDetail({
 							router.push(`/business/${businessId}/offer/${offer.id}/edit`)
 						}
 					>
-						1{strings.common.edit}
+						{strings.common.edit}
 					</Button>
 					<Button
 						variant="outline"
@@ -316,7 +316,7 @@ export function ProductDetail({
 						</AppText>
 						{splitList(offer.includes).map((item) => (
 							<View key={item} style={styles.listRow}>
-								<CircleCheck size={18} color={colors.success} />
+								<CircleCheck size={18} color={colors.successText} />
 								<AppText variant="bodyMedium" style={{ flex: 1 }}>
 									{item}
 								</AppText>

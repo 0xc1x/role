@@ -4,6 +4,7 @@ import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import {
+	EmptyState,
 	ErrorState,
 	goBackOr,
 	LoadingView,
@@ -11,7 +12,10 @@ import {
 	ScreenHeader,
 } from "@/src/core/ui";
 import { spacing } from "@/src/core/theme/spacing";
-import { useBusinessLocation, useUpsertLocation } from "@/src/features/business/hooks";
+import {
+	useBusinessLocation,
+	useUpsertLocation,
+} from "@/src/features/business/hooks";
 import {
 	LocationForm,
 	type LocationFormValues,
@@ -23,8 +27,13 @@ export default function BusinessLocationEditScreen() {
 		locationId: string;
 	}>();
 	const businessId = id ?? "";
-	const { data: location, isLoading, isError, error, refetch } =
-		useBusinessLocation(locationId ?? "");
+	const {
+		data: location,
+		isLoading,
+		isError,
+		error,
+		refetch,
+	} = useBusinessLocation(locationId ?? "");
 	const upsert = useUpsertLocation(businessId);
 	const [submitting, setSubmitting] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
@@ -32,7 +41,21 @@ export default function BusinessLocationEditScreen() {
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!location) return null;
+	// Resolvió sin datos: no hay formulario que editar. Decirlo con la acción
+	// de vuelta mantiene la pantalla usable en vez de dejar un `null`.
+	if (!location)
+		return (
+			<Screen>
+				<ScreenHeader
+					title={strings.business.locationNotFoundTitle}
+					fallback={`/business/${businessId}/locations`}
+				/>
+				<EmptyState
+					title={strings.business.locationNotFoundTitle}
+					message={strings.business.locationNotFoundBody}
+				/>
+			</Screen>
+		);
 
 	const save = (values: LocationFormValues) => {
 		setSubmitting(true);

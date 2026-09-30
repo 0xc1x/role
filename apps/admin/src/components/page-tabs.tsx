@@ -1,6 +1,48 @@
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Ids derived from the tab value: `PageTabs` and `TabPanel` must agree.
+ *
+ * Deliberately NOT exported. The contract they encode lives between the two
+ * components of this module, it is not an API: a public `tabId`/`panelId` would
+ * invite a third module to build ids with the same convention, with nothing
+ * guaranteeing it still matches after the next edit here.
+ */
+const tabId = (tab: string) => `tab-${tab}`;
+const panelId = (tab: string) => `panel-${tab}`;
+
+/**
+ * Panel de una pestaña. Los `aria-controls` de `PageTabs` apuntan aquí: sin el
+ * `id` y el `role` correspondientes, un lector de pantalla anuncia pestañas que
+ * no controlan nada. Las inactivas se ocultan (no se desmontan) para que el
+ * `aria-controls` de cada pestaña resuelva siempre a un panel real y para no
+ * perder lo que el operador ya escribió en otra pestaña.
+ */
+export function TabPanel<T extends string>({
+	tab,
+	active,
+	children,
+	className,
+}: {
+	tab: T;
+	active: boolean;
+	children: React.ReactNode;
+	className?: string;
+}) {
+	return (
+		<div
+			role="tabpanel"
+			id={panelId(tab)}
+			aria-labelledby={tabId(tab)}
+			hidden={!active}
+			className={className}
+		>
+			{children}
+		</div>
+	);
+}
+
 /** Grupo de pestañas con semántica tablist + navegación por flechas. */
 export function PageTabs<T extends string>(props: {
 	tabs: readonly T[];
@@ -46,14 +88,14 @@ export function PageTabs<T extends string>(props: {
 				return (
 					<Button
 						key={t}
-						id={`tab-${t}`}
+						id={tabId(t)}
 						ref={(el) => {
 							if (el) refs.current.set(t, el);
 							else refs.current.delete(t);
 						}}
 						role="tab"
 						aria-selected={selected}
-						aria-controls={`panel-${t}`}
+						aria-controls={panelId(t)}
 						tabIndex={selected ? 0 : -1}
 						variant={selected ? "default" : "ghost"}
 						size="sm"

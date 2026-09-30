@@ -1,11 +1,6 @@
 import { useRef } from "react";
 import { useLocalSearchParams } from "expo-router";
-import {
-	Animated,
-	ScrollView,
-	StyleSheet,
-	View,
-} from "react-native";
+import { Animated, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ErrorState } from "@/src/core/ui";
@@ -35,7 +30,13 @@ export default function BusinessProfileScreen() {
 	const insets = useSafeAreaInsets();
 	const { id } = useLocalSearchParams<{ id: string }>();
 	const businessId = id ?? "";
-	const { data: profile, isLoading, isError, error, refetch } = useBusinessProfile(businessId);
+	const {
+		data: profile,
+		isLoading,
+		isError,
+		error,
+		refetch,
+	} = useBusinessProfile(businessId);
 
 	const scrollYRef = useRef<Animated.Value | null>(null);
 	if (scrollYRef.current === null) {

@@ -36,23 +36,32 @@ import {
 } from "@/src/features/business/domain/products";
 import { NoBusinessPrompt } from "@/src/features/business/components/NoBusinessPrompt";
 import { BranchSelector } from "@/src/features/business/components/products/BranchSelector";
-import { BusinessStatsRow, BusinessStatsRowSkeleton } from "@/src/features/business/components/products/BusinessStatsRow";
+import {
+	BusinessStatsRow,
+	BusinessStatsRowSkeleton,
+} from "@/src/features/business/components/products/BusinessStatsRow";
 import { ProductsSortControl } from "@/src/features/business/components/products/ProductsSortControl";
 import { ProductFilters } from "@/src/features/business/components/products/ProductFilters";
-import { ProductCard, ProductCardSkeleton } from "@/src/features/business/components/products/ProductCard";
+import {
+	ProductCard,
+	ProductCardSkeleton,
+} from "@/src/features/business/components/products/ProductCard";
 import { useCategories } from "@/src/features/hooks";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { typography } from "@/src/core/theme/typography";
 import { useTheme } from "@/src/core/theme";
 import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
 
 export default function BusinessProductsScreen() {
 	const { colors } = useTheme();
 	const profile = useAuthStore((s) => s.profile);
-	const { data: businesses, isLoading: businessesLoading } = useBusinesses(
-		profile?.id ?? "",
-	);
+	const {
+		data: businesses,
+		isLoading: businessesLoading,
+		isError: businessesError,
+		error: businessesErrorValue,
+		refetch: refetchBusinesses,
+	} = useBusinesses(profile?.id ?? "");
 	const business = businesses?.[0];
 	const businessId = business?.id ?? "";
 
@@ -71,8 +80,7 @@ export default function BusinessProductsScreen() {
 		return () => clearTimeout(timer);
 	}, [searchInput]);
 
-	const search =
-		debouncedSearch.length > 0 ? debouncedSearch : undefined;
+	const search = debouncedSearch.length > 0 ? debouncedSearch : undefined;
 	const { orderBy, ascending } = productsSortToOrder(sort);
 
 	const {
@@ -107,6 +115,9 @@ export default function BusinessProductsScreen() {
 		refreshing: isFetching,
 	});
 
+	// `businessId` is a deliberate trigger, not a value read inside: the effect
+	// resets the filter state whenever the business changes.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: businessId is the trigger
 	useEffect(() => {
 		setBranchId(null);
 		setSearchInput("");
@@ -115,10 +126,7 @@ export default function BusinessProductsScreen() {
 		setSort("newest");
 	}, [businessId]);
 
-	const items = useMemo(
-		() => infiniteData?.pages.flat() ?? [],
-		[infiniteData],
-	);
+	const items = useMemo(() => infiniteData?.pages.flat() ?? [], [infiniteData]);
 	const filtered = useMemo(
 		() =>
 			filterAndSortProducts(items, {
@@ -154,6 +162,17 @@ export default function BusinessProductsScreen() {
 		() => <View style={styles.separator} />,
 		[],
 	);
+
+	// Un fallo al listar los negocios no es "no tienes negocio": el prompt de
+	// alta es solo para el caso vacío real.
+	if (businessesError) {
+		return (
+			<ErrorState
+				error={businessesErrorValue}
+				onRetry={() => void refetchBusinesses()}
+			/>
+		);
+	}
 
 	if (businessesLoading || !business) {
 		if (!businessesLoading && !business) {
@@ -194,9 +213,7 @@ export default function BusinessProductsScreen() {
 		);
 	}
 
-	const activeCategoryName = categories?.find(
-		(c) => c.id === categoryId,
-	)?.name;
+	const activeCategoryName = categories?.find((c) => c.id === categoryId)?.name;
 
 	const createRoute = () => router.push(`/business/${businessId}/offer/new`);
 
@@ -282,7 +299,10 @@ export default function BusinessProductsScreen() {
 							/>
 						</View>
 						<View style={styles.filterRow}>
-							<ProductFilters activeCategoryId={categoryId} onApply={setCategoryId} />
+							<ProductFilters
+								activeCategoryId={categoryId}
+								onApply={setCategoryId}
+							/>
 						</View>
 
 						{categoryId ? (
@@ -307,12 +327,7 @@ export default function BusinessProductsScreen() {
 
 						{!isLoading && !isError && totalCount === 0 ? (
 							<EmptyState
-								icon={
-<Package
-									size={28}
-									color={colors.mutedForeground}
-								/>
-								}
+								icon={<Package size={28} color={colors.mutedForeground} />}
 								title={strings.business.noProductsTitle}
 								message={strings.business.noProductsBody}
 								action={
@@ -322,7 +337,7 @@ export default function BusinessProductsScreen() {
 										fullWidth
 										size="lg"
 										style={styles.cta}
-										>
+									>
 										{strings.business.createFirstProduct}
 									</Button>
 								}

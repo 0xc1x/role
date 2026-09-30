@@ -27,9 +27,11 @@ import {
 	clearAuth,
 	getToken,
 	getTokenExpiresAt,
+	isStoragePersistent,
 	setToken,
 	setTokenExpiresAt,
 } from "./client";
+import { setSessionExpiredHandler } from "./session-expiry";
 
 const originalFetch = globalThis.fetch;
 
@@ -123,6 +125,77 @@ describe("storage helpers", () => {
 		clearAuth();
 		expect(getToken()).toBeNull();
 		expect(getTokenExpiresAt()).toBeNull();
+	});
+});
+
+/**
+ * Un `localStorage` que lanza (Safari privado, cuota, iOS ITP) dejaba el panel
+ * aparentando sesión guardada y la perdía en cada recarga, sin decir nada. El
+ * sonda convierte ese fallo silencioso en un aviso al operador.
+ */
+describe("sonda de almacenamiento", () => {
+	const originalStorage = (globalThis as unknown as { localStorage: Storage })
+		.localStorage;
+
+	// `Object.assign` y no el spread: los métodos de `Storage` viven en el
+	// prototipo, y un `{...new MemoryStorage()}` perdería `getItem`/`removeItem`
+	// (el sonda fallaría entonces por un motivo equivocado).
+	function stubStorage(overrides: Partial<Storage>) {
+		(globalThis as unknown as { localStorage: Storage }).localStorage =
+			Object.assign(new MemoryStorage(), overrides);
+	}
+
+	afterEach(() => {
+		(globalThis as unknown as { localStorage: Storage }).localStorage =
+			originalStorage;
+		ensureStorage();
+	});
+
+	it("confirma persistencia con un storage que escribe", () => {
+		expect(isStoragePersistent()).toBe(true);
+	});
+
+	it("reporta que no persiste cuando la escritura lanza", () => {
+		stubStorage({
+			setItem: () => {
+				throw new DOMException("QuotaExceededError");
+			},
+		});
+
+		expect(isStoragePersistent()).toBe(false);
+	});
+
+	it("reporta que no persiste cuando la escritura se pierde en silencio", () => {
+		// iOS ITP: `setItem` no lanza, pero el dato no sobrevive. Un sonda que
+		// solo comprueba que no lance daría "persiste" y el panel perdería la
+		// sesión igual: por eso el sonda relee.
+		stubStorage({ setItem: () => undefined });
+
+		expect(isStoragePersistent()).toBe(false);
+	});
+
+	it("no deja la clave del sonda en el storage", () => {
+		stubStorage({});
+		const storage = (globalThis as unknown as { localStorage: Storage })
+			.localStorage;
+
+		expect(isStoragePersistent()).toBe(true);
+		expect(storage.length).toBe(0);
+	});
+
+	it("no propaga el fallo: los helpers siguen siendo fail-safe", () => {
+		stubStorage({
+			setItem: () => {
+				throw new DOMException("QuotaExceededError");
+			},
+			removeItem: () => {
+				throw new DOMException("QuotaExceededError");
+			},
+		});
+
+		expect(() => setToken("t")).not.toThrow();
+		expect(() => clearAuth()).not.toThrow();
+		expect(getToken()).toBeNull();
 	});
 });
 
@@ -237,5 +310,60 @@ describe("api request", () => {
 		expect(res).toEqual({ data: "after-refresh" });
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(fetchMock.mock.calls[0]?.[0]).not.toContain("/auth/refresh");
+	});
+});
+
+/**
+ * A9: la sesión expirada se avisa al router (que navega a /login con `from`) en
+ * vez de recargar la página. El reload duro tiraba la tarea en curso —un motivo
+ * de rechazo a medio escribir— y dejaba un login sin explicación.
+ */
+describe("sesión expirada", () => {
+	beforeEach(() => {
+		ensureStorage();
+		window.localStorage.clear();
+		(globalThis as unknown as { localStorage: Storage }).localStorage.clear?.();
+		unstubFetch();
+		refreshFnMock.mockReset();
+	});
+
+	afterEach(() => {
+		setSessionExpiredHandler(null);
+	});
+
+	it("notifica al router en vez de recargar, y explica la caída en español", async () => {
+		const expired: string[] = [];
+		setSessionExpiredHandler(({ from }) => expired.push(from));
+
+		setToken("old");
+		setTokenExpiresAt(new Date(Date.now() - 10 * 60 * 1000).toISOString());
+		refreshFnMock.mockResolvedValue(null);
+
+		await expect(api.get("/categories")).rejects.toMatchObject({
+			status: 401,
+			message: "Tu sesión expiró. Inicia sesión de nuevo.",
+		});
+
+		// El router decide (navega a /login con `from`): el cliente ya no recarga.
+		expect(expired).toHaveLength(1);
+		expect(expired[0]).toBe("/home");
+		expect(getToken()).toBeNull();
+	});
+
+	it("el 401 tras un refresh fallido también pasa por el router", async () => {
+		const expired: string[] = [];
+		setSessionExpiredHandler(({ from }) => expired.push(from));
+
+		setToken("old");
+		const fetchMock = jest.fn();
+		fetchMock.mockResolvedValueOnce(
+			jsonResponse(401, { message: "Unauthorized" }, false),
+		);
+		stubFetch(fetchMock as unknown as typeof globalThis.fetch);
+		refreshFnMock.mockResolvedValue(null);
+
+		await expect(api.get("/categories")).rejects.toMatchObject({ status: 401 });
+
+		expect(expired).toHaveLength(1);
 	});
 });

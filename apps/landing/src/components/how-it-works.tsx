@@ -1,3 +1,4 @@
+import { DISCOUNT_SAVINGS_CLAIM } from "@0xc1x/role-commons";
 import { Eyebrow, Section } from "@/components/section";
 import { StepsGrid } from "@/components/steps-grid";
 
@@ -15,7 +16,7 @@ const STEPS = [
 	{
 		n: "03",
 		title: "Recoges el mismo día",
-		body: "Pasas por el local en la ventana acordada, muestras tu código y listo. Comida fresca a un tercio del precio.",
+		body: `Pasas por el local en la ventana acordada, muestras tu código y listo. Comida fresca ${DISCOUNT_SAVINGS_CLAIM}.`,
 	},
 ];
 

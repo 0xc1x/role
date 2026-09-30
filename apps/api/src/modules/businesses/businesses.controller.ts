@@ -17,6 +17,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -33,6 +34,7 @@ import {
   UpdateBusinessLocationSchema,
   ListBusinessLocationsQuerySchema,
   OnboardingBusinessRequestSchema,
+  UpdateBusinessNotificationPreferencesSchema,
 } from '@0xc1x/role-commons';
 import type {
   CreateBusinessDto,
@@ -42,6 +44,7 @@ import type {
   UpdateBusinessLocationDto,
   ListBusinessLocationsQuery,
   OnboardingBusinessRequest,
+  UpdateBusinessNotificationPreferencesDto,
 } from '@0xc1x/role-commons';
 
 @ApiTags('Businesses')
@@ -122,6 +125,19 @@ export class BusinessesController {
     return this.businessesService.remove(user, id);
   }
 
+  @Get(':id/email-sends')
+  @Roles('admin')
+  @ApiOperation({
+    summary: 'List transactional email deliveries for a business',
+  })
+  @ApiOkResponse({ description: 'Transactional email deliveries' })
+  listEmailSends(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.businessesService.listEmailSends(user, id);
+  }
+
   // Business Locations
   @Get(':businessId/locations')
   @Roles('business', 'admin')
@@ -190,5 +206,62 @@ export class BusinessesController {
     @Param('locationId', ParseUUIDPipe) locationId: string,
   ) {
     return this.businessesService.removeLocation(user, businessId, locationId);
+  }
+
+  // Notification preferences
+  //
+  // THE BUSINESS-SIDE COUNTERPART of `GET/PATCH /me/notification-preferences`,
+  // which already serves `consumer_notification_preferences` for the person.
+  // Same feature, other side of the marketplace, one row per owner — so this is
+  // a different TABLE and a different route, and it is emphatically not a second
+  // consumer route for the consumer table.
+  //
+  // The path segment is `:businessId`, as it is for `:businessId/locations`, and
+  // it is a CLAIM, not an identity: `BusinessesService` resolves it against
+  // `business_ownership` before the repository is reached. `@Roles('business',
+  // 'admin')` is the coarse pre-filter every per-business route here carries; the
+  // ownership check is the real gate and it lives in the service, where a role
+  // check alone would be trivially bypassed by any account that owns a business.
+
+  @Get(':businessId/notification-preferences')
+  @Roles('business', 'admin')
+  @ApiOperation({
+    summary: "The business's own notification preferences (merchant side)",
+  })
+  @ApiOkResponse({
+    description:
+      'The preferences row, or an explicit null when the business has none',
+  })
+  getNotificationPreferences(
+    @CurrentUser() user: AuthUser,
+    @Param('businessId', ParseUUIDPipe) businessId: string,
+  ) {
+    return this.businessesService.getNotificationPreferences(user, businessId);
+  }
+
+  @Patch(':businessId/notification-preferences')
+  @Roles('business', 'admin')
+  @ApiOperation({
+    summary:
+      "Edit the business's notification preferences. `updated_at` is written by the server; no trigger maintains it.",
+  })
+  @ApiOkResponse({ description: 'The preferences row in its new state' })
+  @ApiUnprocessableEntityResponse({
+    description: 'A half-configured quiet-hours window',
+  })
+  updateNotificationPreferences(
+    @CurrentUser() user: AuthUser,
+    // `business_id`, `created_at` and `updated_at` are not keys of this schema,
+    // so the pipe strips them: the business is the path, and the timestamps are
+    // the server's to write.
+    @Param('businessId', ParseUUIDPipe) businessId: string,
+    @Body(new ZodValidationPipe(UpdateBusinessNotificationPreferencesSchema))
+    body: UpdateBusinessNotificationPreferencesDto,
+  ) {
+    return this.businessesService.updateNotificationPreferences(
+      user,
+      businessId,
+      body,
+    );
   }
 }

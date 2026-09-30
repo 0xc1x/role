@@ -46,6 +46,22 @@ export const CategorySchema = CategoryBaseSchema.extend({
 	created_at: TimestamptzSchema,
 	updated_at: TimestamptzSchema.nullable(),
 	deleted_at: TimestamptzSchema.nullable(),
+	/**
+	 * Reservable offers in this category — the `active_offer_category_counts`
+	 * aggregate (ADR-0008).
+	 *
+	 * OPTIONAL, and the list is the only surface that fills it: it costs one
+	 * aggregate join, so the single-resource reads (`GET /categories/:id`, and
+	 * the create/update/soft-delete responses) do not run it and omit the field
+	 * rather than reporting a `0` they never measured. Optional is what makes
+	 * that honest, and it is also what keeps the field additive — a consumer
+	 * building a category by hand is not forced to invent a count.
+	 *
+	 * Never `null` when present. A category nobody has an active offer for is a
+	 * real answer (`0`), and a chip that renders "0 deals" is correct where one
+	 * that renders nothing because the number was missing is not.
+	 */
+	active_count: z.number().int().nonnegative().optional(),
 });
 
 /** Public-facing subset (no audit / soft-delete fields). */

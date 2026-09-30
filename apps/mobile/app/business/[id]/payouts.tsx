@@ -11,6 +11,7 @@ import {
 } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
+import { MONTHS_SHORT_ES } from "@/src/core/i18n/dates";
 import {
 	AppText,
 	EmptyState,
@@ -23,7 +24,10 @@ import {
 } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
-import { useBusinessPayouts, useBusinessPayoutTotals } from "@/src/features/business/hooks";
+import {
+	useBusinessPayouts,
+	useBusinessPayoutTotals,
+} from "@/src/features/business/hooks";
 import { PAYOUT_STATUS_LABELS } from "@/src/features/business/domain/business";
 import { formatMoney } from "@/src/core/utils/formatters";
 import type { Payout, PayoutStatus } from "@0xc1x/role-commons";
@@ -65,8 +69,20 @@ export default function BusinessPayoutsScreen() {
 	});
 	// Balance cards come from an unfiltered aggregate (exact under any
 	// filter); the list below stays status-filtered and paginated.
-	const { data: totals, refetch: refetchTotals } =
-		useBusinessPayoutTotals(businessId);
+	//
+	// Los estados de ESTA query se leen, y no es decorativo: las tarjetas
+	// se renderizan desde `totals?.paid ?? 0`, así que sin este gate una
+	// agregada que todavía no había respondido —o que falló— pintaba
+	// "$0" como si fuera el saldo. En una pantalla de dinero eso se lee
+	// como "no tienes nada": el dueño ve $0 cobrado y $0 por procesar
+	// encima de la lista, que sí le muestra sus transferencias reales.
+	const {
+		data: totals,
+		isLoading: totalsLoading,
+		isError: totalsError,
+		error: totalsErrorValue,
+		refetch: refetchTotals,
+	} = useBusinessPayoutTotals(businessId);
 	const pull = useWebPullToRefresh({
 		onRefresh: () => {
 			void refetch();
@@ -90,12 +106,23 @@ export default function BusinessPayoutsScreen() {
 		[businessId],
 	);
 
-	if (isLoading) return <LoadingView />;
+	// The balances ARE the headline of this screen, so the screen is not
+	// "ready" until they have an answer — and it must not answer with a
+	// fabricated zero when they do not.
+	if (isLoading || totalsLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
+	if (totalsError)
+		return (
+			<ErrorState
+				error={totalsErrorValue}
+				onRetry={() => void refetchTotals()}
+			/>
+		);
 
 	// Balance cards are exact (unfiltered aggregate); the list itself is
-	// server-filtered by status.
+	// server-filtered by status. Past the gate above, `totals` is a real
+	// answer — the `?? 0` is now only a type guard, not a silent lie.
 	const paid = totals?.paid ?? 0;
 	const paidCount = totals?.paidCount ?? 0;
 	const pending = totals?.pending ?? 0;
@@ -149,14 +176,21 @@ export default function BusinessPayoutsScreen() {
 								<AppText
 									variant="labelSmall"
 									weight="bold"
-									style={{ color: colors.successDark }}
+									style={{ color: colors.successText }}
 								>
 									{strings.business.totalCollected}
 								</AppText>
-								<AppText variant="h2" weight="bold" style={{ color: colors.successDark }}>
+								<AppText
+									variant="h2"
+									weight="bold"
+									style={{ color: colors.successText }}
+								>
 									{formatMoney(paid)}
 								</AppText>
-								<AppText variant="bodySmall" style={{ color: colors.successDark }}>
+								<AppText
+									variant="bodySmall"
+									style={{ color: colors.successText }}
+								>
 									{paidCount === 1
 										? strings.business.onePayout
 										: `${paidCount} ${strings.business.payoutsCount}`}
@@ -178,10 +212,17 @@ export default function BusinessPayoutsScreen() {
 								>
 									{strings.business.pendingProcessing}
 								</AppText>
-								<AppText variant="h2" weight="bold" style={{ color: colors.infoForeground }}>
+								<AppText
+									variant="h2"
+									weight="bold"
+									style={{ color: colors.infoForeground }}
+								>
 									{formatMoney(pending)}
 								</AppText>
-								<AppText variant="bodySmall" style={{ color: colors.infoForeground }}>
+								<AppText
+									variant="bodySmall"
+									style={{ color: colors.infoForeground }}
+								>
 									{strings.business.autoCutoff}
 								</AppText>
 							</View>
@@ -223,12 +264,7 @@ export default function BusinessPayoutsScreen() {
 				}
 				ListEmptyComponent={
 					<EmptyState
-						icon={
-							<Receipt
-								size={28}
-								color={colors.mutedForeground}
-							/>
-						}
+						icon={<Receipt size={28} color={colors.mutedForeground} />}
 						title={strings.business.noPayouts}
 						message={strings.business.noPayoutsBody}
 					/>
@@ -245,10 +281,7 @@ export default function BusinessPayoutsScreen() {
 								{ backgroundColor: colors.surfaceMuted },
 							]}
 						>
-							<Info
-								size={16}
-								color={colors.mutedForeground}
-							/>
+							<Info size={16} color={colors.mutedForeground} />
 							<AppText
 								variant="bodySmall"
 								style={{ color: colors.mutedForeground, flex: 1 }}
@@ -307,10 +340,7 @@ function PayoutCard({
 						{periodLabel(payout)}
 					</AppText>
 				</View>
-				<ChevronRight
-					size={16}
-					color={colors.mutedForeground}
-				/>
+				<ChevronRight size={16} color={colors.mutedForeground} />
 			</View>
 		</CardPressable>
 	);
@@ -322,11 +352,7 @@ function periodLabel(payout: Payout): string {
 	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
 		return `${payout.period_start} - ${payout.period_end}`;
 	}
-	const months = [
-		"ene", "feb", "mar", "abr", "may", "jun",
-		"jul", "ago", "sep", "oct", "nov", "dic",
-	];
-	return `${months[start.getMonth()]} ${start.getDate()} – ${end.getDate()}, ${start.getFullYear()}`;
+	return `${MONTHS_SHORT_ES[start.getMonth()]} ${start.getDate()} – ${end.getDate()}, ${start.getFullYear()}`;
 }
 
 const styles = StyleSheet.create({

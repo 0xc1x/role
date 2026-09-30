@@ -1,6 +1,5 @@
 import type { CouponDto } from "@0xc1x/role-commons";
 import { ResourceUpdateDrawer } from "@/components/resource/resource-drawer";
-import { couponsKeys } from "@/features/coupons";
 import { CouponForm } from "../forms/coupon.form";
 
 export interface CouponUpdateDrawerProps {
@@ -17,7 +16,6 @@ export function CouponUpdateDrawer({
 	return (
 		<ResourceUpdateDrawer
 			formId="update-coupon-drawer-form"
-			mutationKey={couponsKeys.all}
 			title="Cupón"
 			description="Actualiza un cupón existente"
 			isOpen={isOpen}

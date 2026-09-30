@@ -21,11 +21,14 @@ export function PriceBreakdownCard({
 	offer,
 	appliedCoupon,
 }: PriceBreakdownCardProps) {
-	const { colors, scheme } = useTheme();
+	const { colors } = useTheme();
 	const totals = checkoutTotals(offer, appliedCoupon);
 	const offerDiscount = totals.offerDiscount;
 	const coupon = totals.coupon;
 	const total = totals.total;
+	// `successText` is the text-safe green (4.58:1 on `card`, 4.57:1 on the
+	// Alert's `surfaceSuccess` in light; 6.13:1 on `card` in dark). Plain
+	// `success` stays the decorative hue.
 
 	return (
 		<Card>
@@ -44,10 +47,10 @@ export function PriceBreakdownCard({
 					</AppText>
 				</View>
 				<View style={styles.priceRow}>
-					<AppText style={[styles.label, { color: colors.success }]}>
+					<AppText style={[styles.label, { color: colors.successText }]}>
 						{strings.checkout.discount}
 					</AppText>
-					<AppText style={[styles.value, { color: colors.success }]}>
+					<AppText style={[styles.value, { color: colors.successText }]}>
 						-{formatMoney(offerDiscount)}
 					</AppText>
 				</View>
@@ -72,7 +75,7 @@ export function PriceBreakdownCard({
 				</View>
 				<Alert variant="success" icon={PiggyBank}>
 					<AlertDescription>
-						<AppText style={[styles.ecoText, { color: colors.success }]}>
+						<AppText style={[styles.ecoText, { color: colors.successText }]}>
 							{strings.orders.moneySaved.replace(
 								"{saved}",
 								formatMoneyPrecise(offerDiscount + coupon),

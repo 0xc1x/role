@@ -12,16 +12,22 @@ import {
 } from "@/components/ui/input-group";
 import { appConfigColumns } from "@/features/app-config";
 import { AppConfigCreateDrawer } from "@/features/app-config/components/app-config-create-drawer";
-import {
-	appConfigListOptions,
-	useAppConfigList,
-} from "@/features/app-config/queries/app-config.queries";
+import { useAppConfigList } from "@/features/app-config/queries/app-config.queries";
+import { formatApiError } from "@/lib/api/notify";
 
+/**
+ * SIN `loader` A PROPÓSITO — el mismo motivo documentado en `_layout.resenas.tsx`
+ * y `_layout.cupones.tsx`.
+ *
+ * Con `loader: ensureQueryData(...)` un fallo del API escapa al
+ * `errorComponent` de la ruta en vez de entrar a la rama `isError` de este
+ * componente, y ninguna ruta del panel define `errorComponent`: con
+ * `/app-config` en 500 el panel entero se sustituía por el "Something went
+ * wrong!" por defecto de TanStack Router, sin el mensaje de abajo y sin su
+ * "Reintentar". Medido, no supuesto.
+ */
 export const Route = createFileRoute("/_layout/configuracion")({
 	validateSearch: (raw) => ListAppConfigQuerySchema.parse(raw),
-	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(appConfigListOptions(deps)),
 	component: RouteComponent,
 	head: () => ({
 		meta: [
@@ -40,7 +46,7 @@ export const Route = createFileRoute("/_layout/configuracion")({
 function RouteComponent() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, isLoading, isError, error } = useAppConfigList(search);
+	const { data, isLoading, isError, error, refetch } = useAppConfigList(search);
 	const [searchInput, setSearchInput] = useState(search.search ?? "");
 
 	useEffect(() => {
@@ -80,24 +86,12 @@ function RouteComponent() {
 			<div className="px-6 py-4">
 				<div className="flex flex-col items-center gap-4">
 					<p className="text-destructive">
-						{error instanceof Error
-							? error.message
-							: "Error al cargar la configuración"}
+						{formatApiError(error, "Error al cargar la configuración")}
 					</p>
-					<Button
-						variant="outline"
-						onClick={() =>
-							navigate({
-								search: {
-									page: 1,
-									limit: 10,
-									search: undefined,
-									category: undefined,
-									active: undefined,
-								},
-							})
-						}
-					>
+					{/* Reintentar navegaba con un search limpio: eso cambiaba la key de
+					    la query y además borraba los filtros que el operador tenía
+					    puesta. Reintentar es refetchar la misma consulta. */}
+					<Button variant="outline" onClick={() => void refetch()}>
 						Reintentar
 					</Button>
 				</div>

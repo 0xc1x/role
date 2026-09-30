@@ -5,6 +5,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { isNavItemActive } from "@/lib/nav-active";
 import {
 	SidebarGroup,
 	SidebarGroupLabel,
@@ -29,14 +30,16 @@ type NavItem = {
 
 export function NavMain({ items }: { items: NavItem[] }) {
 	const location = useLocation();
-	// pathname + search serializado: los sub-items pueden diferir solo por ?tab=…
+	// `currentUrl` sigue siendo la URL completa y se usa para los ítems que
+	// declaran query; el pathname es lo que decide el resaltado de los que no.
 	const searchString =
 		typeof location.search === "string"
 			? location.search
 			: new URLSearchParams(
 					(location.search ?? {}) as Record<string, string>,
 				).toString();
-	const currentUrl = `${location.pathname}${searchString ? `?${searchString}` : ""}`;
+	const pathname = location.pathname;
+	const currentUrl = `${pathname}${searchString ? `?${searchString}` : ""}`;
 
 	return (
 		<SidebarGroup className="w-full min-w-0">
@@ -47,7 +50,9 @@ export function NavMain({ items }: { items: NavItem[] }) {
 					const hasSubItems = !!item.items?.length;
 					const isSubItemActive =
 						hasSubItems &&
-						item.items?.some((subItem) => currentUrl === subItem.url);
+						item.items?.some((subItem) =>
+							isNavItemActive(subItem.url, pathname, currentUrl),
+						);
 
 					return hasSubItems ? (
 						<Collapsible
@@ -77,7 +82,11 @@ export function NavMain({ items }: { items: NavItem[] }) {
 											<SidebarMenuSubButton
 												className="w-full"
 												render={<Link to={subItem.url} />}
-												isActive={currentUrl === subItem.url}
+												isActive={isNavItemActive(
+													subItem.url,
+													pathname,
+													currentUrl,
+												)}
 											>
 												<span>{subItem.title}</span>
 											</SidebarMenuSubButton>
@@ -92,7 +101,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
 								tooltip={item.title}
 								className="flex w-full min-w-0 items-center"
 								render={<Link to={item.url} />}
-								isActive={currentUrl === item.url}
+								isActive={isNavItemActive(item.url, pathname, currentUrl)}
 							>
 								{item.icon && <item.icon />}
 								<span className="min-w-0 flex-1 truncate">{item.title}</span>

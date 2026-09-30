@@ -16,8 +16,20 @@ services:
   # Postgres efímero para tests (repositories + e2e). Los specs crean
   # una DATABASE fresca por archivo; nunca se usa para desarrollo.
   # fsync off: solo test, el DDL se reaplica en cada archivo.
+  #
+  # postgis/postgis, not postgres: the generated `business_locations.geog` column
+  # and GET /offers' st_dwithin radius filter / st_distance projection live only
+  # in Supabase, and without PostGIS the harness can only assert the SHAPE of
+  # that SQL, never execute it. test/db.ts installs the extension.
+  #
+  # The tag is `16-3.4-alpine` and NOT `16-alpine`: the official PostGIS image is
+  # tagged `<pg>-<postgis>[-alpine]` and publishes no `16-alpine` at all
+  # (`docker pull postgis/postgis:16-alpine` -> "not found"). Of the PG16 alpine
+  # tags only 3.4 and 3.5 exist; 3.4 is the nearer of the two to the PostGIS
+  # 3.3.7 that Supabase runs, and st_dwithin / st_distance on geography are
+  # unchanged across that range.
   postgres-test:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.4-alpine
     container_name: role-postgres-test
     command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
     ports:

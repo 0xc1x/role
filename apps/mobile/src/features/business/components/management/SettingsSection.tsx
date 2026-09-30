@@ -1,6 +1,6 @@
 import { type Href, router } from "expo-router";
 import { Bell, ChevronRight, CircleHelp, Settings } from "lucide-react-native";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
 import { AppText } from "@/src/core/ui";

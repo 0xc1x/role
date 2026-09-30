@@ -55,7 +55,10 @@ function PaymentMethodRow({
 					style={styles.rowMain}
 				>
 					<View
-						style={[styles.iconCircle, { backgroundColor: colors.inputBackground }]}
+						style={[
+							styles.iconCircle,
+							{ backgroundColor: colors.inputBackground },
+						]}
 					>
 						<CreditCard size={20} color={colors.primary} />
 					</View>
@@ -65,7 +68,12 @@ function PaymentMethodRow({
 								•••• {method.last4}
 							</AppText>
 							{method.isDefault ? (
-								<View style={[styles.defaultBadge, { backgroundColor: withAlpha(colors.primary, 0.078) }]}>
+								<View
+									style={[
+										styles.defaultBadge,
+										{ backgroundColor: withAlpha(colors.primary, 0.078) },
+									]}
+								>
 									<AppText
 										variant="tiny"
 										weight="bold"
@@ -103,12 +111,7 @@ function PaymentMethodRow({
 					onPress={() => onDelete(method.id)}
 					accessibilityRole="button"
 					aria-label={strings.paymentMethods.delete}
-					icon={
-						<Trash2
-							size={20}
-							color={colors.destructiveVibrant}
-						/>
-					}
+					icon={<Trash2 size={20} color={colors.destructiveVibrant} />}
 				/>
 			</View>
 		</Card>
@@ -164,7 +167,10 @@ export default function PaymentMethodsScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
-				<ScreenHeader title={strings.profile.paymentMethods} fallback="/(consumer)/profile" />
+				<ScreenHeader
+					title={strings.profile.paymentMethods}
+					fallback="/(consumer)/profile"
+				/>
 
 				{isLoading ? (
 					<View style={{ marginTop: spacing.lg, gap: spacing.md }}>
@@ -197,7 +203,7 @@ export default function PaymentMethodsScreen() {
 							{strings.paymentMethods.comingSoon}
 						</AppText>
 						{/* La alta de tarjetas se habilitará con el SDK del gateway (tokenización PCI — nunca almacenamos el número de tarjeta). */}
-						<Button variant="outline" onPress={() => setShowForm(false)} >
+						<Button variant="outline" onPress={() => setShowForm(false)}>
 							{strings.common.cancel}
 						</Button>
 					</Card>
@@ -247,7 +253,12 @@ export default function PaymentMethodsScreen() {
 const styles = StyleSheet.create({
 	container: { padding: spacing.xl },
 	row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-	rowMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md },
+	rowMain: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.md,
+	},
 	iconCircle: {
 		width: 40,
 		height: 40,

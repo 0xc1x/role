@@ -3,8 +3,10 @@ import { useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
+import { MONTHS_FULL_CAP_ES, MONTHS_SHORT_ES } from "@/src/core/i18n/dates";
 import {
 	AppText,
+	EmptyState,
 	ErrorState,
 	LoadingView,
 	Screen,
@@ -35,13 +37,31 @@ export default function BusinessPayoutDetailScreen() {
 		id: string;
 		payoutId: string;
 	}>();
-	const { data: payout, isLoading, isError, error, refetch } =
-		useBusinessPayout(payoutId ?? "");
+	const {
+		data: payout,
+		isLoading,
+		isError,
+		error,
+		refetch,
+	} = useBusinessPayout(payoutId ?? "");
 
 	if (isLoading) return <LoadingView />;
 	if (isError)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
-	if (!payout) return null;
+	// Resolvió sin datos: la transferencia no existe para este negocio.
+	if (!payout)
+		return (
+			<Screen>
+				<ScreenHeader
+					title={strings.business.payoutNotFoundTitle}
+					fallback="/(business)/management"
+				/>
+				<EmptyState
+					title={strings.business.payoutNotFoundTitle}
+					message={strings.business.payoutNotFoundBody}
+				/>
+			</Screen>
+		);
 
 	const taxes = payout.gross_amount - payout.platform_fee - payout.net_amount;
 
@@ -83,7 +103,11 @@ export default function BusinessPayoutDetailScreen() {
 			</View>
 
 			<Card style={styles.card}>
-				<AppText variant="bodyMedium" weight="bold" style={{ marginBottom: spacing.md }}>
+				<AppText
+					variant="bodyMedium"
+					weight="bold"
+					style={{ marginBottom: spacing.md }}
+				>
 					{strings.business.accountingReconciliation}
 				</AppText>
 				<BreakdownRow
@@ -111,7 +135,7 @@ export default function BusinessPayoutDetailScreen() {
 					<AppText
 						variant="bodyMedium"
 						weight="bold"
-						style={{ color: colors.successDark }}
+						style={{ color: colors.successText }}
 					>
 						{formatMoney(payout.net_amount)}
 					</AppText>
@@ -119,7 +143,11 @@ export default function BusinessPayoutDetailScreen() {
 			</Card>
 
 			<Card style={styles.card}>
-				<AppText variant="bodyMedium" weight="bold" style={{ marginBottom: spacing.sm }}>
+				<AppText
+					variant="bodyMedium"
+					weight="bold"
+					style={{ marginBottom: spacing.sm }}
+				>
 					{strings.business.periodInfo}
 				</AppText>
 				<MetaRow label={strings.business.period} value={periodLabel(payout)} />
@@ -128,7 +156,7 @@ export default function BusinessPayoutDetailScreen() {
 
 			{/* Comprobante no disponible aún — se habilita con el gateway de pagos. */}
 			<Button
-			    style={{ marginTop: spacing.lg }}
+				style={{ marginTop: spacing.lg }}
 				variant="outline"
 				fullWidth
 				disabled
@@ -154,10 +182,7 @@ function BreakdownRow({
 	const { colors } = useTheme();
 	return (
 		<View style={styles.row}>
-			<AppText
-				variant="bodySmall"
-				style={{ color: colors.mutedForeground }}
-			>
+			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
 				{label}
 			</AppText>
 			<AppText
@@ -191,21 +216,13 @@ function periodLabel(payout: Payout): string {
 	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
 		return `${payout.period_start} – ${payout.period_end}`;
 	}
-	const months = [
-		"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-		"Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-	];
-	return `${months[start.getMonth()]} ${start.getDate()}-${end.getDate()}, ${start.getFullYear()}`;
+	return `${MONTHS_FULL_CAP_ES[start.getMonth()]} ${start.getDate()}-${end.getDate()}, ${start.getFullYear()}`;
 }
 
 function formatPaidAt(iso: string): string {
 	const date = new Date(iso);
 	if (Number.isNaN(date.getTime())) return "—";
-	const months = [
-		"ene", "feb", "mar", "abr", "may", "jun",
-		"jul", "ago", "sep", "oct", "nov", "dic",
-	];
-	return `${date.getDate()} de ${months[date.getMonth()]}. de ${date.getFullYear()}`;
+	return `${date.getDate()} de ${MONTHS_SHORT_ES[date.getMonth()]}. de ${date.getFullYear()}`;
 }
 
 const styles = StyleSheet.create({

@@ -43,13 +43,13 @@ export function CouponSection({
 			>
 				<CircleCheck
 					size={18}
-					color={colors.successDark}
-					fill={colors.successDark}
+					color={colors.successText}
+					fill={colors.successText}
 				/>
 				<AppText
 					variant="bodyMedium"
 					weight="semiBold"
-					style={{ color: colors.successDark, flex: 1 }}
+					style={{ color: colors.successText, flex: 1 }}
 				>
 					{strings.checkout.couponApplied} · {applied.code}
 				</AppText>
@@ -61,7 +61,7 @@ export function CouponSection({
 					accessibilityRole="button"
 					aria-label={strings.checkout.removeCoupon}
 					style={{ width: 32, height: 32 }}
-					icon={<X size={18} color={colors.successDark} />}
+					icon={<X size={18} color={colors.successText} />}
 				/>
 			</View>
 		);

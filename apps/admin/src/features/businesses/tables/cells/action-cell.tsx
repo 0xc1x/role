@@ -1,6 +1,6 @@
 import type { BusinessDto } from "@0xc1x/role-commons";
 import type { Row } from "@tanstack/react-table";
-import { Check, MoreHorizontal, Pen, X } from "lucide-react";
+import { Check, Eye, Mail, MoreHorizontal, Pen, X } from "lucide-react";
 import { useState } from "react";
 import {
 	AlertDialog,
@@ -24,12 +24,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { BusinessDetailDrawer } from "@/features/businesses/components/business-detail-drawer";
+import { BusinessEmailSendsDrawer } from "@/features/businesses/components/business-email-sends-drawer";
 import { BusinessUpdateDrawer } from "@/features/businesses/components/business-update-drawer";
 import { useVerifyBusiness } from "@/features/businesses/queries/businesses.queries";
 
 export function ActionCell({ row }: { row: Row<BusinessDto> }) {
 	const [editing, setEditing] = useState<BusinessDto | null>(null);
+	const [detail, setDetail] = useState<BusinessDto | null>(null);
 	const [rejecting, setRejecting] = useState<BusinessDto | null>(null);
+	const [notifications, setNotifications] = useState<BusinessDto | null>(null);
 	const [reason, setReason] = useState("");
 	const verifyMutation = useVerifyBusiness();
 
@@ -69,17 +73,28 @@ export function ActionCell({ row }: { row: Row<BusinessDto> }) {
 					</DropdownMenuGroup>
 					<DropdownMenuSeparator />
 					<DropdownMenuGroup>
+						{/* La ficha va primera: aprobar sin leer al solicitante es un sello. */}
+						<DropdownMenuItem onClick={() => setDetail(row.original)}>
+							<Eye /> Ver ficha
+						</DropdownMenuItem>
 						<DropdownMenuItem onClick={() => setEditing(row.original)}>
 							<Pen /> Editar
 						</DropdownMenuItem>
+						<DropdownMenuItem onClick={() => setNotifications(row.original)}>
+							<Mail /> Notificaciones
+						</DropdownMenuItem>
 						{row.original.verification_status !== "approved" && (
-							<DropdownMenuItem onClick={handleApprove}>
-								<Check /> Aprobar
+							<DropdownMenuItem
+								disabled={verifyMutation.isPending}
+								onClick={handleApprove}
+							>
+								{verifyMutation.isPending ? <Spinner /> : <Check />} Aprobar
 							</DropdownMenuItem>
 						)}
 						{row.original.verification_status !== "rejected" && (
 							<DropdownMenuItem
 								variant="destructive"
+								disabled={verifyMutation.isPending}
 								onClick={() => setRejecting(row.original)}
 							>
 								<X /> Rechazar
@@ -89,11 +104,27 @@ export function ActionCell({ row }: { row: Row<BusinessDto> }) {
 				</DropdownMenuContent>
 			</DropdownMenu>
 
+			{detail && (
+				<BusinessDetailDrawer
+					business={detail}
+					isOpen={true}
+					onClose={() => setDetail(null)}
+				/>
+			)}
+
 			{editing && (
 				<BusinessUpdateDrawer
 					business={editing}
 					isOpen={true}
 					onClose={() => setEditing(null)}
+				/>
+			)}
+
+			{notifications && (
+				<BusinessEmailSendsDrawer
+					business={notifications}
+					isOpen={true}
+					onClose={() => setNotifications(null)}
 				/>
 			)}
 

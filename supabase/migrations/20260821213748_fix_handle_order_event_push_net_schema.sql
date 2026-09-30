@@ -1,0 +1,55 @@
+-- Backfilled gap: documented no-op. Reconstruction, 2026-09-28.
+--
+-- NOT APPLIED TO PRODUCTION. NOT BYTE-IDENTICAL TO THE LEDGER ROW. This file
+-- executes no DDL.
+--
+-- WHAT THIS CLOSES
+--
+-- The ledger records `20260821213748` / `fix_handle_order_event_push_net_schema`
+-- as applied, 98 seconds after 20260821213650_move_pg_net_and_tighten_rpc. No
+-- file for it existed in this directory. It is the second half of the same pair
+-- and is filled the same way: a documented no-op rather than a guess.
+--
+-- WHY A NO-OP IS THE HONEST ANSWER
+--
+-- Same two reasons as its sibling, and they are worth separating because they
+-- are different failures:
+--
+--   1. The text is not recoverable. It carried the Supabase anon JWT as a
+--      literal; that credential was rotated out of the database by
+--      20260925163235 and now exists only as the Vault secret
+--      `supabase_anon_key`. See `supabase/migrations/README.md`, section "Six
+--      migrations are deliberately absent".
+--   2. Even with the text, the fix is not replayable as DDL. The name says the
+--      function's reference to pg_net was schema-qualified. The function body
+--      it rewrote is `public.handle_order_event_push()`, and the version of
+--      that body in production is the post-Vault one from 20260925163235, which
+--      reaches pg_net through `public.invoke_internal_edge_function` and its
+--      `net.http_post` call. Restoring a June/August body here would OVERWRITE
+--      the correct final body with a credential-bearing earlier one — on a
+--      replay, and on production, because `create or replace function` is
+--      unconditional. That is not a reconstruction, it is an active regression
+--      wearing a reconstruction's filename.
+--
+-- The schema qualification the migration was fixing is already correct in the
+-- state this directory produces, and it is correct for a reason that outlives
+-- the fix: 20260615210819_add_order_event_push_trigger.sql restores the function
+-- with `set search_path = ''` and a fully schema-qualified call to
+-- public.invoke_internal_edge_function, so there is no unqualified `http_post`
+-- to resolve. 20260925163235 recreates the same body. The `net` schema itself is
+-- provided by the pg_net extension, which the platform installs and which the
+-- replay harness stubs (apps/api/test/spike-rls.mjs, BOOTSTRAP) rather than
+-- creating — see the sibling file for why writing `create extension if not exists
+-- pg_net` here would be wrong.
+--
+-- For an audit of what actually ran, the ledger is authoritative:
+--
+--   select statements[1] from supabase_migrations.schema_migrations
+--    where version = '20260821213748';
+--
+-- And for the same failure mode one level up, the transport itself — pg_net's
+-- `params` argument being the query string rather than the header map, which made
+-- every dispatch 401 with no visible error — is documented in full in
+-- 20260925175051_fix_dispatch_http_headers.sql.
+
+select 1;

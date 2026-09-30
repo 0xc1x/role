@@ -46,23 +46,31 @@ export default function BusinessHelpSectionScreen() {
 	return (
 		<Screen scroll>
 			<View style={styles.container}>
-				<ScreenHeader
-					title={data.title}
-					fallback={`/business/${id}/help`}
-				/>
+				<ScreenHeader title={data.title} fallback={`/business/${id}/help`} />
 				{data.sections.map((sectionData) => (
 					<Card key={sectionData.title} style={styles.card}>
-						<AppText variant="bodyMedium" weight="bold" style={styles.sectionTitle}>
+						<AppText
+							variant="bodyMedium"
+							weight="bold"
+							style={styles.sectionTitle}
+						>
 							{sectionData.title}
 						</AppText>
 						{sectionData.items.map((item) => (
-							<View key={item.title} style={[styles.item, { borderTopColor: colors.borderSolid }]}>
+							<View
+								key={item.title}
+								style={[styles.item, { borderTopColor: colors.borderSolid }]}
+							>
 								<AppText variant="bodyMedium" weight="semiBold">
 									{item.title}
 								</AppText>
 								<AppText
 									variant="bodySmall"
-									style={{ color: colors.mutedForeground, lineHeight: 21, marginTop: spacing.xs }}
+									style={{
+										color: colors.mutedForeground,
+										lineHeight: 21,
+										marginTop: spacing.xs,
+									}}
 								>
 									{item.description}
 								</AppText>

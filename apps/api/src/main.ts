@@ -8,6 +8,7 @@ import { apiReference } from '@scalar/nestjs-api-reference';
 import type { Express, NextFunction, Request, Response } from 'express';
 import { json } from 'express';
 import { AppModule } from './app.module';
+import { buildBootstrapFailureLog } from './common/bootstrap-failure';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { parseCorsOrigins, type Env } from './config/env.schema';
 
@@ -110,4 +111,22 @@ async function bootstrap() {
   logger.log(`Health at http://localhost:${port}/api/v1/health`);
 }
 
-bootstrap();
+// Sin este catch, un fallo en `validateEnv` — que lanza nombrando la variable
+// culpable — moría como unhandled rejection con un stack inútil. En un deploy
+// eso se traduce en un contenedor que reinicia en bucle sin contexto. El evento
+// lleva la huella acotada (`errorType`/`errorCode`) y los NOMBRES de las
+// variables de entorno implicadas, porque un nombre no es un secreto; lo que no
+// viaja es el `message`, que sí puede contener el valor de la que falta.
+bootstrap().catch((err: unknown) => {
+  new Logger('Bootstrap').error(buildBootstrapFailureLog(err));
+  process.exitCode = 1;
+  // `exitCode` solo marca el código: si el pool de Postgres o el handle de
+  // Redis quedaron abiertos, el event loop sigue vivo y el contenedor NO
+  // termina — que es justo el reinicio en bucle que este catch evita. Este
+  // timer es la red de seguridad. Va `unref()` a propósito para que no sea él
+  // mismo lo que mantenga el proceso vivo: en un fallo limpio (sin handles
+  // colgados) el exitCode hace salir al proceso de inmediato, y el timer solo
+  // llega a dispararse cuando el loop está realmente atascado.
+  const forceExit = setTimeout(() => process.exit(1), 2000);
+  forceExit.unref();
+});

@@ -275,11 +275,14 @@ describe("offersRepository (RPC activo)", () => {
 		);
 	});
 
-	test("propaga el error del rpc", async () => {
+	// El errorLabel es-ES del repo es el copy que ve el usuario; el mensaje
+	// crudo del driver solo queda en context para logs.
+	test("propaga el error del rpc con copy es-ES", async () => {
 		rpcError();
-		await expect(offersRepository.getPopularOffers(point, 10)).rejects.toThrow(
-			"boom",
-		);
+		const attempt = offersRepository.getPopularOffers(point, 10);
+
+		await expect(attempt).rejects.toThrow("Error al cargar ofertas populares");
+		await expect(attempt).rejects.not.toThrow("boom");
 	});
 });
 

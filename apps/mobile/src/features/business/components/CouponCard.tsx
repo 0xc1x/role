@@ -28,7 +28,7 @@ import {
 	couponIsExhausted,
 	couponIsValid,
 } from "@/src/features/orders/domain/order";
-import { formatMoney } from "@/src/core/utils/formatters";
+import { formatMoney, formatShortDate } from "@/src/core/utils/formatters";
 import {
 	useDeleteCoupon,
 	useToggleCouponStatus,
@@ -147,7 +147,10 @@ export function CouponCard({
 					value={
 						coupon.type === "percentage"
 							? `${coupon.value}% OFF`
-							: `${formatMoney(coupon.value)} ${strings.business.couponOff}`
+							: strings.business.couponOff.replace(
+									"{value}",
+									formatMoney(coupon.value),
+								)
 					}
 				/>
 				<DetailItem
@@ -165,7 +168,10 @@ export function CouponCard({
 					value={
 						coupon.max_uses != null
 							? `${coupon.used_count} / ${coupon.max_uses}`
-							: `${coupon.used_count} ${strings.business.couponUses}`
+							: strings.business.couponUses.replace(
+									"{n}",
+									String(coupon.used_count),
+								)
 					}
 				/>
 				{coupon.min_order_amount != null && coupon.min_order_amount > 0 ? (
@@ -383,26 +389,6 @@ function DetailItem({
 			</View>
 		</View>
 	);
-}
-
-function formatShortDate(iso: string): string {
-	const date = new Date(iso);
-	if (Number.isNaN(date.getTime())) return iso;
-	const months = [
-		"ene",
-		"feb",
-		"mar",
-		"abr",
-		"may",
-		"jun",
-		"jul",
-		"ago",
-		"sep",
-		"oct",
-		"nov",
-		"dic",
-	];
-	return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 const styles = StyleSheet.create({

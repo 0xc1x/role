@@ -4,6 +4,7 @@ import EmojiPicker, { Theme } from "emoji-picker-react";
 import { useTheme } from "next-themes";
 import { z } from "zod";
 import { ImageField } from "@/components/media/image-field";
+import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { StatusSwitch } from "@/components/status-switch";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -42,6 +43,9 @@ export function CategoryForm({
 	const createMutation = useCreateCategory();
 	const updateMutation = useUpdateCategory();
 	const uploadMutation = useUploadImage();
+	useReportDrawerPending(
+		category ? updateMutation.isPending : createMutation.isPending,
+	);
 	const form = useForm({
 		defaultValues: {
 			name: category?.name ?? "",

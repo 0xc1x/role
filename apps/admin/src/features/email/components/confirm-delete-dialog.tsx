@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -10,6 +9,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { notifyMutationError } from "@/lib/api/notify";
 
 export function ConfirmDeleteDialog(props: {
 	open: boolean;
@@ -24,8 +24,8 @@ export function ConfirmDeleteDialog(props: {
 				<AlertDialogHeader>
 					<AlertDialogTitle>{props.title}</AlertDialogTitle>
 					<AlertDialogDescription>
-						Se ocultará de la lista pero se conservan sus métricas e
-						historial. Esta acción no se puede deshacer.
+						Se ocultará de la lista pero se conservan sus métricas e historial.
+						Esta acción no se puede deshacer.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>
@@ -36,9 +36,7 @@ export function ConfirmDeleteDialog(props: {
 								await props.onRemove();
 								props.onOpenChange(false);
 							} catch (err) {
-								toast.error(
-									err instanceof Error ? err.message : "Error inesperado",
-								);
+								notifyMutationError(err);
 							}
 						}}
 						disabled={props.busy}

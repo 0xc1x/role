@@ -56,9 +56,10 @@ describe('PayoutsGenerationJob', () => {
   it('salta el tick cuando ya hay una ejecución en curso', async () => {
     let release!: () => void;
     payoutsService.generate.mockImplementation(
-      () => new Promise((resolve) => {
-        release = () => resolve({ count: 0 });
-      }),
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ count: 0 });
+        }),
     );
 
     const first = job.handleGenerate();

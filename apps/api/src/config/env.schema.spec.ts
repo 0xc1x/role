@@ -1,4 +1,4 @@
-import { envSchema, validateEnv } from './env.schema';
+import { EnvironmentConfigError, envSchema, validateEnv } from './env.schema';
 
 const strongJwtSecret = 'role-prod-jwt-7Qm9!Kx2#Vz4@Lp8!Rk6';
 
@@ -110,5 +110,21 @@ describe('validateEnv fail-closed en producción', () => {
 
     expect(message).toMatch(/SUPABASE_JWT_SECRET/);
     expect(message).not.toContain(secret);
+  });
+
+  it('expone los nombres de las variables rechazadas en un canal aparte', () => {
+    // POR QUÉ un canal aparte: el log de arranque nombra la variable culpable
+    // (un nombre no es un secreto) sin poder tocar el `message`, que es el
+    // canal que `docs/operations.md` prohíbe. La lista de nombres solo puede
+    // venir de este tipo de error, así que el log no puede heredarla de otro.
+    let thrown: unknown;
+    try {
+      validateEnv({ ...productionEnv, REDIS_URL: '' });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(EnvironmentConfigError);
+    expect((thrown as EnvironmentConfigError).variables).toEqual(['REDIS_URL']);
   });
 });

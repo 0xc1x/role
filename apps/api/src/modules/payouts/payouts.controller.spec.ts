@@ -10,7 +10,9 @@ import { PayoutsService } from './payouts.service';
 
 describe('PayoutsController', () => {
   let controller: PayoutsController;
-  let service: jest.Mocked<Pick<PayoutsService, 'list' | 'getById' | 'generate' | 'markPaid'>>;
+  let service: jest.Mocked<
+    Pick<PayoutsService, 'list' | 'getById' | 'generate' | 'markPaid'>
+  >;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({

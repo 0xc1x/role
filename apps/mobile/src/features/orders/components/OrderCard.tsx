@@ -12,6 +12,7 @@ import { router } from "expo-router";
 
 import { strings } from "@/src/core/i18n/strings";
 import { AppText, type BadgeTone } from "@/src/core/ui";
+import { badgeToneColors } from "@/src/core/ui/badge-tone";
 import {
 	isActiveStatus,
 	orderStatusLabels,
@@ -24,8 +25,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { typography } from "@/src/core/theme/typography";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
-import type { ColorTokens } from "@/src/core/theme/colors";
-import { withAlpha } from "@/src/core/theme/alpha";
 
 /** Iconos del footer: check / bag / clock (mismos labels que OrderProgressHeader). */
 interface CardStep {
@@ -37,44 +36,10 @@ interface CardStep {
 const STEP_DELAY = 130;
 const STEP_DURATION = 250;
 
-/** Estación destacada según el estado: pendiente/confirmado → 0, listo/recogido → 1, completado → 2. */
-function activeStepIndex(status: OrderDetail["order"]["status"]): number {
-	switch (status) {
-		case "ready_for_pickup":
-		case "picked_up":
-			return 1;
-		case "completed":
-			return 2;
-		default:
-			return 0;
-	}
-}
-
-/** Mismo mapeo tono → colores que StatusBadge (tokens, dark-safe). */
-function toneColors(
-	colors: ColorTokens,
-	tone: BadgeTone,
-): { bg: string; fg: string } {
-	switch (tone) {
-		case "brand":
-			return { bg: colors.secondary, fg: colors.secondaryForeground };
-		case "success":
-			return { bg: colors.surfaceSuccess, fg: colors.success };
-		case "warning":
-			return { bg: colors.surfaceWarning, fg: colors.warning };
-		case "danger":
-			return { bg: colors.destructiveSurface, fg: colors.destructive };
-		case "info":
-			return { bg: colors.infoSurface, fg: colors.info };
-		default:
-			return { bg: colors.muted, fg: colors.mutedForeground };
-	}
-}
-
 /** Pill de estado con dot + label (sin handler: la card entera navega). */
 function StatusPill({ label, tone }: { label: string; tone: BadgeTone }) {
 	const { colors } = useTheme();
-	const t = toneColors(colors, tone);
+	const t = badgeToneColors(colors, tone);
 	return (
 		<View style={[styles.pill, { backgroundColor: t.bg }]}>
 			<View style={[styles.pillDot, { backgroundColor: t.fg }]} />
@@ -128,6 +93,9 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 	]);
 
 	// Llenado secuencial estación por estación al montar y al cambiar de fase.
+	// `order.status` is a deliberate trigger, not a value read inside: the
+	// progress fill replays when the order advances to a new phase.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: status is the trigger
 	useEffect(() => {
 		const ordered = [
 			stepAnims[0],
@@ -234,14 +202,21 @@ export function OrderCard({ item }: { item: OrderDetail }) {
 					{steps.map((step, index) => {
 						const isCurrent = index === firstPending;
 						const highlighted = step.done || isCurrent;
+						// A done station is a solid green that has to carry the 20px
+						// glyph inside it. `success` (#22C55E) under a light glyph
+						// measured 2.28:1 — under the 3:1 non-text floor — so the fill
+						// takes the green that can carry a foreground and the glyph its
+						// paired token. Dark is unchanged: 7.65:1.
 						const circleBackground = step.done
-							? colors.success
+							? colors.successAction
 							: isCurrent
 								? colors.primary
 								: colors.muted;
-						const iconColor = highlighted
-							? colors.primaryForeground
-							: colors.mutedForeground;
+						const iconColor = step.done
+							? colors.successActionForeground
+							: highlighted
+								? colors.primaryForeground
+								: colors.mutedForeground;
 						const anim = stepAnims[index];
 						const lineAnim = index > 0 ? lineAnims[index - 1] : null;
 						return (

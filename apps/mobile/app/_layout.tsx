@@ -1,5 +1,11 @@
 import * as Sentry from "@sentry/react-native";
-import { Stack, useRouter } from "expo-router";
+import {
+	Redirect,
+	Stack,
+	usePathname,
+	useRouter,
+	useSegments,
+} from "expo-router";
 import {
 	DefaultTheme,
 	ThemeProvider as NavigationThemeProvider,
@@ -27,18 +33,24 @@ import { Platform } from "react-native";
 // `logger.warn/error` find a `logFunction` (plain `{ level }` crashes with
 // "config.logFunction is not a function").
 if (Platform.OS === "web") {
-	// @ts-ignore - needed for Reanimated 3 web
+	// @ts-expect-error - needed for Reanimated 3 web
 	global.__reanimatedLoggerConfig = {
 		level: 1, // warn
 		strict: false,
-		logFunction: (data: { level: string; message: { content: string } }) => {
-			if (data.level === "warn") console.warn(data.message.content);
-			else console.error(data.message.content);
+		logFunction: (data: { level: string; message?: { content?: string } }) => {
+			// Reanimated's web build fires logFunction with no message; forwarding
+			// that prints `undefined` and buries the real warnings.
+			const content = data?.message?.content;
+			if (!content) return;
+			if (data.level === "warn") console.warn(content);
+			else console.error(content);
 		},
 	};
 }
 import "../global.css";
 import { ThemeProvider, useTheme } from "@/src/core/theme";
+import { LoadingView } from "@/src/core/ui";
+import { decideSharedRoute } from "@/src/core/routing/shared-routes";
 import { queryClient } from "@/src/core/query/client";
 import { analytics } from "@/src/core/analytics";
 import { appConfigQueryOptions } from "@/src/features/config";
@@ -47,6 +59,7 @@ import { syncAnalyticsConsent } from "@/src/features/auth/data/repository";
 import { pendingBusinessOnboardingRepository } from "@/src/features/business/data/onboarding";
 import {
 	initNotificationHandler,
+	pendingDeviceTokenRevocationRepository,
 	syncDeviceToken,
 } from "@/src/features/notifications";
 import { Toaster } from "sonner-native";
@@ -191,6 +204,19 @@ function RootLayout() {
 		});
 	}, [authStatus, authProfileId]);
 
+	// Revocación de token push que falló en un logout anterior: se reintenta
+	// aquí, el primer momento con sesión del mismo usuario. Es también el
+	// único válido: RLS solo permite borrar los tokens del usuario
+	// autenticado, y el logout que falló ya destruyó esa sesión.
+	useEffect(() => {
+		if (authStatus !== "authenticated" || !authProfileId) return;
+		void pendingDeviceTokenRevocationRepository
+			.drain(authProfileId)
+			.catch(() => {
+				// Se conserva el registro para el próximo arranque autenticado.
+			});
+	}, [authProfileId, authStatus]);
+
 	// Link de recovery aterrizó en cualquier ruta: mandar a actualizar
 	// contraseña antes de que el redirect por rol se lo lleve a home.
 	const pendingRecovery = useAuthStore((s) => s.pendingPasswordRecovery);
@@ -248,6 +274,37 @@ function ThemedRootStack() {
 		}),
 		[colors, scheme],
 	);
+
+	// ─── Desempate de las rutas que dos grupos reclaman ──────────────────────
+	//
+	// `/orders` la escriben `app/(consumer)/orders.tsx` y
+	// `app/(business)/orders.tsx`: los grupos de paréntesis no van en la URL, así
+	// que en web las dos hojas son la MISMA ruta y el router se queda con una.
+	// Ganaba el grupo `(business)`, de modo que el link de "mis pedidos" de un
+	// email — y el deep link de una orden — le caía a un consumer en el panel de
+	// negocio, cuyo guard de rol lo expulsaba a la home sin explicación.
+	//
+	// Aquí, y no en `app/(business)/_layout.tsx`, porque el layout del grupo se
+	// monta un commit TARDE que el router: para entonces su `<Tabs>` (sin ruta
+	// `index`) ya escribió `/management` en el history y `useSegments()` todavía
+	// no tiene hoja, así que el deep link original ya no se puede leer. La
+	// medición está en `src/core/routing/shared-routes.ts`.
+	//
+	// La política (qué rutas colisionan y a quién le tocan) vive en ese módulo,
+	// que es puro y tiene test; aquí sólo se aplica.
+	const sharedRoute = decideSharedRoute(usePathname(), useSegments(), {
+		role: useAuthStore((s) => s.profile?.role),
+		sessionResolved: useAuthStore((s) => s.initialized),
+	});
+
+	// Esperar por el rol SÓLO en una ruta compartida. Cualquier otro path se
+	// sirve en su primer render, como siempre. Sin esto habría que adivinar, y
+	// adivinar mal significa mandarle al panel de negocio.
+	if (sharedRoute.kind === "wait") return <LoadingView />;
+	if (sharedRoute.kind === "redirect") {
+		return <Redirect href={sharedRoute.href} />;
+	}
+
 	return (
 		<NavigationThemeProvider value={navigationTheme}>
 			<Stack

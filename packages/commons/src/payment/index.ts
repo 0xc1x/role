@@ -1,3 +1,4 @@
+export * from "./dtos/my-payment-method.dto";
 export * from "./dtos/payment-event.dto";
 export * from "./dtos/payment-intent.dto";
 export * from "./dtos/payment-method.dto";
@@ -9,6 +10,7 @@ export * from "./entities/payout";
 export * from "./enums/payment-gateway";
 export * from "./enums/payment-intent-status";
 export * from "./enums/payout-status";
+export * from "./schemas/my-payment-method.schema";
 export * from "./schemas/payment-event.schema";
 export * from "./schemas/payment-intent.schema";
 export * from "./schemas/payment-method.schema";

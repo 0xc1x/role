@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { AppConfigModule } from '../app-config/app-config.module';
 import { EmailMarketingPublicController } from './email-marketing-public.controller';
 import { EmailMarketingController } from './email-marketing.controller';
 import { EmailMarketingRepository } from './email-marketing.repository';
@@ -20,6 +21,7 @@ import { CampaignsCron } from './campaigns.cron';
         backoff: { type: 'exponential', delay: 5000 },
       },
     }),
+    AppConfigModule,
   ],
   controllers: [EmailMarketingController, EmailMarketingPublicController],
   providers: [

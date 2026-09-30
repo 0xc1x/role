@@ -1,6 +1,14 @@
-import type { OfferDto, OfferWithBusiness } from '@0xc1x/role-commons';
+import type {
+  OfferDto,
+  OfferWithBusiness,
+  PopularZoneDto,
+} from '@0xc1x/role-commons';
 import { toNumber, toNumberOrNull } from '../../common/utils/numeric';
-import type { OfferListRow, OfferRow } from './offers.repository';
+import type {
+  OfferListRow,
+  OfferRow,
+  PopularZoneRow,
+} from './offers.repository';
 
 /**
  * Maps offer persistence rows → API DTOs.
@@ -36,6 +44,10 @@ export class OfferMapper {
       review_count: row.review_count,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
+      // Already a `double precision` projection, so it crosses as a number. It
+      // is `null` — not omitted — whenever the read had no point to measure
+      // from, which is what `active_offers_near` returns in the same case.
+      distance_km: row.distance_km,
       business: {
         id: row.business_id,
         name: row.business_name,
@@ -79,5 +91,18 @@ export class OfferMapper {
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
     };
+  }
+
+  /**
+   * `listPopularZones` rows → the `GET /offers/zones` response.
+   *
+   * Unpaginated, because `popular_zones` is a top-N and returns no total. The
+   * real work here is the `deals` coercion: the SQL keeps the RPC's
+   * `count(*)::bigint` and postgres.js returns `int8` as a string, so without
+   * this the endpoint would answer `{"deals":"7"}` where the contract says
+   * `number` — a JSON string a chip cannot render without its own parser.
+   */
+  static toZonesResponse(rows: PopularZoneRow[]): PopularZoneDto[] {
+    return rows.map((row) => ({ zone: row.zone, deals: toNumber(row.deals) }));
   }
 }

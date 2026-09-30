@@ -13,6 +13,7 @@ import { useForm, useStore } from "@tanstack/react-form";
 import type { ComponentProps, FormEvent } from "react";
 import { z } from "zod";
 import { ImageField } from "@/components/media/image-field";
+import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { StatusSwitch } from "@/components/status-switch";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
@@ -186,6 +187,9 @@ function useSlideForm({
 	const createMutation = useCreateSlide();
 	const updateMutation = useUpdateSlide();
 	const uploadMutation = useUploadImage();
+	useReportDrawerPending(
+		slide ? updateMutation.isPending : createMutation.isPending,
+	);
 
 	const form = useForm({
 		defaultValues: slideDefaultValues(slide) satisfies SlideFormValues,
@@ -399,8 +403,8 @@ function RedirectUrlField({
 				aria-invalid={isInvalid}
 			/>
 			<p className="text-xs text-muted-foreground">
-				URL externa (https://...) o ruta interna de la app (ej. /explore). Si
-				se omite no se mostrará botón en mobile.
+				URL externa (https://...) o ruta interna de la app (ej. /explore). Si se
+				omite no se mostrará botón en mobile.
 			</p>
 			{isInvalid && <FieldError errors={errors} />}
 		</Field>

@@ -156,28 +156,43 @@ export default function Navbar({ fallbackTabName, ...props }: NavbarProps) {
 		>
 			<View style={styles.barInner}>
 				{/* Capa 1: iconos muted */}
-				{routes.map((route, index) => {
-					const options = props.descriptors[route.key]?.options;
-					const icon = options?.tabBarIcon;
+				<View accessibilityRole="tablist" style={styles.tabRow}>
+					{routes.map((route, index) => {
+						const options = props.descriptors[route.key]?.options;
+						const icon = options?.tabBarIcon;
+						const selected = index === currentIndex;
 
-					return (
-						<Pressable
-							key={route.key}
-							onPress={() => onTab(index)}
-							accessibilityRole="button"
-							accessibilityLabel={labelFor(options, route.name)}
-							style={styles.item}
-						>
-							{icon
-								? icon({
-										color: colors.mutedForeground,
-										size: 28,
-										focused: false,
-									})
-								: null}
-						</Pressable>
-					);
-				})}
+						return (
+							<Pressable
+								key={route.key}
+								onPress={() => onTab(index)}
+								accessibilityRole="tab"
+								accessibilityLabel={labelFor(options, route.name)}
+								accessibilityState={{ selected }}
+								/* `accessibilityState` SOLO no dice nada en la PWA.
+								 * react-native-web 0.21 reenvía los props `aria-*` pero
+								 * ya NO traduce `accessibilityState` (solo conserva
+								 * `disabled`/`busy`), así que el tab salía con
+								 * `role="tab"` y sin `aria-selected`: ARIA exige ese
+								 * atributo en cada tab, y un lector de pantalla
+								 * anunciaba tres destinos sin decir cuál era el
+								 * actual. Nativo sigue leyendo `accessibilityState`;
+								 * RN 0.71+ acepta `aria-selected` en ambas
+								 * plataformas, y es el mismo valor. */
+								aria-selected={selected}
+								style={styles.item}
+							>
+								{icon
+									? icon({
+											color: colors.mutedForeground,
+											size: 28,
+											focused: false,
+										})
+									: null}
+							</Pressable>
+						);
+					})}
+				</View>
 
 				{/* Capa 2 + 3: píldora + fila completa (efecto reveal) */}
 				<Animated.View
@@ -241,6 +256,10 @@ const styles = StyleSheet.create({
 		width: "100%",
 		maxWidth: MAX_WIDTH,
 		height: BAR_HEIGHT,
+		flexDirection: "row",
+	},
+	tabRow: {
+		flex: 1,
 		flexDirection: "row",
 	},
 	item: {

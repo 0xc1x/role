@@ -69,21 +69,25 @@ describe('PushAdminService', () => {
   it('send resuelve audiencia, envía con render y registra el historial', async () => {
     recipientsService.resolveUserIds.mockResolvedValue(['u1']);
     pushRepo.filterPushEnabled.mockResolvedValue(['u1']);
-    pushRepo.findProfileNames.mockResolvedValue([{ user_id: 'u1', full_name: 'Ana' }]);
+    pushRepo.findProfileNames.mockResolvedValue([
+      { user_id: 'u1', full_name: 'Ana' },
+    ]);
     notificationsService.sendWithReport.mockResolvedValue({
       targeted: 1,
       sent: 1,
       failed: 0,
     });
-    pushRepo.insertNotification.mockResolvedValue([
-      { id: 'n1' },
-    ] as never);
+    pushRepo.insertNotification.mockResolvedValue([{ id: 'n1' }] as never);
 
     const result = await service.send(sendInput, 'admin1');
 
     expect(notificationsService.sendWithReport).toHaveBeenCalledWith(
       ['u1'],
-      { title: 'Hola {{nombre}}', body: 'Cuerpo', data: { type: 'announcement' } },
+      {
+        title: 'Hola {{nombre}}',
+        body: 'Cuerpo',
+        data: { type: 'announcement' },
+      },
       expect.objectContaining({ render: expect.any(Function) }),
     );
     // El render sustituye {{nombre}} por el nombre del perfil.

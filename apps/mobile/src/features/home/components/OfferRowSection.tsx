@@ -4,7 +4,7 @@ import { MapPin } from "lucide-react-native";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/src/core/theme";
-import { AppText, SectionHeader } from "@/src/core/ui";
+import { AppText, ErrorState, SectionHeader } from "@/src/core/ui";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
 import { strings } from "@/src/core/i18n/strings";
@@ -99,6 +99,8 @@ function OfferRowView({
 	offers,
 	isLoading,
 	isError,
+	error,
+	onRetry,
 }: {
 	title: string;
 	icon?: React.ReactNode;
@@ -106,8 +108,9 @@ function OfferRowView({
 	offers?: OfferDetail[];
 	isLoading: boolean;
 	isError: boolean;
+	error?: unknown;
+	onRetry?: () => void;
 }) {
-	const { colors } = useTheme();
 	const renderSkeletonItem = useCallback(() => <SkeletonRowItem />, []);
 	const renderOfferItem = useCallback(
 		({ item }: { item: OfferDetail }) => <OfferRowItem item={item} />,
@@ -129,15 +132,9 @@ function OfferRowView({
 					renderItem={renderSkeletonItem}
 				/>
 			) : isError ? (
-				<AppText
-					variant="bodyMedium"
-					style={{
-						color: colors.mutedForeground,
-						paddingHorizontal: spacing.xl,
-					}}
-				>
-					{strings.home.noOffers}
-				</AppText>
+				// Un fallo de red o de RLS no es un marketplace vacío: nunca
+				// usar aquí el copy de "sin ofertas".
+				<ErrorState error={error} onRetry={onRetry} />
 			) : (
 				<FlatList
 					data={offers}
@@ -185,6 +182,8 @@ function PopularRow({
 			offers={q.data}
 			isLoading={q.isLoading}
 			isError={q.isError}
+			error={q.error}
+			onRetry={() => void q.refetch()}
 		/>
 	);
 }
@@ -199,6 +198,8 @@ function ExpiringRow({ title, icon, limit = 10, onSeeAll }: RowProps) {
 			offers={q.data}
 			isLoading={q.isLoading}
 			isError={q.isError}
+			error={q.error}
+			onRetry={() => void q.refetch()}
 		/>
 	);
 }
@@ -213,6 +214,8 @@ function RecentRow({ title, icon, limit = 10, onSeeAll }: RowProps) {
 			offers={q.data}
 			isLoading={q.isLoading}
 			isError={q.isError}
+			error={q.error}
+			onRetry={() => void q.refetch()}
 		/>
 	);
 }
@@ -233,6 +236,8 @@ function NearbyRow({
 			offers={q.data}
 			isLoading={q.isLoading}
 			isError={q.isError}
+			error={q.error}
+			onRetry={() => void q.refetch()}
 		/>
 	);
 }
@@ -254,6 +259,8 @@ export function OfferColumnSection({
 		data: offers,
 		isLoading,
 		isError,
+		error,
+		refetch,
 	} = useNearbyOffersHook(limit, category);
 
 	const hasLocation =
@@ -297,21 +304,15 @@ export function OfferColumnSection({
 			{isLoading ? (
 				<View style={styles.columnContent}>
 					{Array.from({ length: 3 }).map((_, i) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: fixed-count placeholders
 						<View key={`skeleton-${i}`} style={styles.columnItem}>
 							<OfferSkeleton fullWidth />
 						</View>
 					))}
 				</View>
 			) : isError ? (
-				<AppText
-					variant="bodyMedium"
-					style={{
-						color: colors.mutedForeground,
-						paddingHorizontal: spacing.xl,
-					}}
-				>
-					{strings.home.noOffers}
-				</AppText>
+				// Mismo criterio que OfferRowView: un fallo no es un vacío.
+				<ErrorState error={error} onRetry={() => void refetch()} />
 			) : (
 				<View style={styles.columnContent}>
 					{offers?.map((item) => (

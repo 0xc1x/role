@@ -12,7 +12,7 @@ export function QuickActionsGrid({ businessId }: { businessId: string }) {
 	const base = `/business/${businessId}`;
 
 	const large = {
-		icon: <TrendingUp size={18} color={colors.success} />,
+		icon: <TrendingUp size={18} color={colors.successText} />,
 		title: strings.business.quickStats,
 		subtitle: strings.business.quickStatsSub,
 		route: `${base}/stats`,

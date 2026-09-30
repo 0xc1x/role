@@ -10,7 +10,16 @@ import { spacing } from "@/src/core/theme/spacing";
 let top = 0;
 let isLoading = true;
 const views: Record<string, number>[] = [];
-const lists: any[] = [];
+// FlatList probe: the assertions below read the grid config and the
+// refresh control the catalog hands it.
+type FlatListProbeProps = {
+	numColumns?: number;
+	data?: unknown[];
+	scrollEnabled?: boolean;
+	refreshControl?: { props?: { refreshing?: boolean; onRefresh?: () => void } };
+};
+
+const lists: FlatListProbeProps[] = [];
 const refetch = mock(() => {});
 const query = () => ({
 	data: { pages: [[{ id: "item", offer: { id: "offer" } }]] },
@@ -25,7 +34,7 @@ mock.module("react-native", () => ({
 		views.push(nativeWeb.StyleSheet.flatten(style) ?? {});
 		return createElement(nativeWeb.View, { style }, children);
 	},
-	FlatList: (props: any) => {
+	FlatList: (props: FlatListProbeProps) => {
 		lists.push(props);
 		return null;
 	},
@@ -99,13 +108,13 @@ for (const Screen of [AllBusinessesScreen, AllOffersScreen]) {
 				expect(headers[0].paddingTop).toBe(spacing.xl + inset);
 				expect(views[0].paddingTop ?? 0).toBe(0);
 				expect(lists).toHaveLength(1);
-				expect(lists[0].numColumns).toBe(2);
+				expect(lists[0]?.numColumns).toBe(2);
 				if (loading) {
-					expect(lists[0].data).toHaveLength(6);
-					expect(lists[0].scrollEnabled).toBe(false);
+					expect(lists[0]?.data).toHaveLength(6);
+					expect(lists[0]?.scrollEnabled).toBe(false);
 				} else {
-					expect(lists[0].refreshControl.props.refreshing).toBe(false);
-					lists[0].refreshControl.props.onRefresh();
+					expect(lists[0]?.refreshControl?.props?.refreshing).toBe(false);
+					lists[0]?.refreshControl?.props?.onRefresh?.();
 					expect(refetch).toHaveBeenCalled();
 				}
 			});

@@ -43,6 +43,7 @@ import {
 	usePushTemplates,
 	usePushTest,
 } from "@/features/push-notifications/queries/push.queries";
+import { formatApiError } from "@/lib/api/notify";
 
 export function SendTab() {
 	const templates = usePushTemplates();
@@ -90,7 +91,10 @@ export function SendTab() {
 			setConfirmOpen(false);
 			setValues(sendDefaults());
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : "Payload inválido");
+			// Copy propio del call site: "Payload inválido" es lo que este panel
+			// promises cuando el fallo no trae mensaje. `formatApiError` lo conserva
+			// y le añade el `requestId`.
+			toast.error(formatApiError(err, "Payload inválido"));
 		}
 	};
 

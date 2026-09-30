@@ -11,6 +11,7 @@ import { validateEnv, type Env } from './config/env.schema';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { TipsModule } from './modules/tips/tips.module';
@@ -28,8 +29,13 @@ import { CommissionsModule } from './modules/commissions/commissions.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PushNotificationsModule } from './modules/push-notifications/push-notifications.module';
 import { ContactModule } from './modules/contact/contact.module';
+import { ContactInboxModule } from './modules/contact-inbox/contact-inbox.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { StoreModule } from './modules/store/store.module';
+import { FavoritesModule } from './modules/favorites/favorites.module';
+import { MeModule } from './modules/me/me.module';
+import { SavedAddressesModule } from './modules/saved-addresses/saved-addresses.module';
+import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
 
 @Module({
   imports: [
@@ -56,6 +62,7 @@ import { StoreModule } from './modules/store/store.module';
     DatabaseModule,
     SecurityModule,
     AuthModule,
+    UsersModule,
     HealthModule,
     CategoriesModule,
     CouponsModule,
@@ -72,10 +79,15 @@ import { StoreModule } from './modules/store/store.module';
     PayoutsModule,
     CommissionsModule,
     ReviewsModule,
+    FavoritesModule,
+    MeModule,
+    SavedAddressesModule,
+    PaymentMethodsModule,
     NotificationsModule,
     PushNotificationsModule,
     StoreModule,
     ContactModule,
+    ContactInboxModule,
   ],
   providers: [
     {

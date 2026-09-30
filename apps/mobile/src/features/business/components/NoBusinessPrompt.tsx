@@ -17,7 +17,6 @@ import { Text } from "@/components/ui/text";
 import { strings } from "@/src/core/i18n/strings";
 import { EmptyState, Screen } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
-import { useAuthStore } from "@/src/features/auth/store";
 import { performSignOut } from "@/src/features/auth/sign-out";
 import { Button } from "@/components/ui/button";
 

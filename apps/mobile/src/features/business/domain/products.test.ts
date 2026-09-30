@@ -1,10 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
+import { strings } from "@/src/core/i18n/strings";
 import type { OfferDetail } from "@/src/features/offers/domain/offer";
 import {
+	defaultPickupWindow,
 	filterAndSortProducts,
 	productStats,
 	productsSortToOrder,
+	validatePickupWindow,
 	type ProductListFilters,
 } from "@/src/features/business/domain/products";
 
@@ -129,7 +132,7 @@ describe("filterAndSortProducts", () => {
 			...baseFilters,
 			sort: "newest",
 		});
-		expect(result[0]!.offer.id).toBe("new");
+		expect(result[0]?.offer.id).toBe("new");
 	});
 
 	it("sorts by price low/high", () => {
@@ -225,5 +228,76 @@ describe("productStats", () => {
 	it("does not count negative sold when initial_stock is missing", () => {
 		const offers = [makeOffer({ id: "a", initial_stock: 0, stock: 3 })];
 		expect(productStats(offers).soldToday).toBe(0);
+	});
+});
+
+describe("defaultPickupWindow", () => {
+	// The old default was "today at 18:00-20:00" whatever the clock said, so
+	// publishing at 21:00 produced an offer whose window had already closed.
+	it("never lands in the past, whatever the hour of publication", () => {
+		for (const publishedAt of [
+			"2026-09-26T21:00:00",
+			"2026-09-26T23:30:00",
+			"2026-09-27T00:05:00",
+			"2026-09-27T17:59:00",
+		]) {
+			const now = new Date(publishedAt);
+			const { start, end } = defaultPickupWindow(now);
+
+			expect(start.getTime()).toBeGreaterThan(now.getTime());
+			expect(end.getTime()).toBeGreaterThan(start.getTime());
+			expect(validatePickupWindow(start, end, now)).toBeNull();
+		}
+	});
+
+	it("keeps the window on the publication day when there is room", () => {
+		const { start, end } = defaultPickupWindow(new Date("2026-09-26T10:00:00"));
+		expect(start.getHours()).toBe(11);
+		expect(end.getTime() - start.getTime()).toBe(2 * 60 * 60 * 1000);
+	});
+});
+
+describe("validatePickupWindow", () => {
+	const now = new Date("2026-09-26T12:00:00");
+
+	it("rejects a window that already closed", () => {
+		// end > start holds, yet no consumer could ever reserve it.
+		expect(
+			validatePickupWindow(
+				new Date("2026-09-26T08:00:00"),
+				new Date("2026-09-26T10:00:00"),
+				now,
+			),
+		).toBe(strings.business.pickupWindowInPast);
+	});
+
+	it("rejects a window that ends exactly now", () => {
+		expect(
+			validatePickupWindow(
+				new Date("2026-09-26T10:00:00"),
+				new Date("2026-09-26T12:00:00"),
+				now,
+			),
+		).toBe(strings.business.pickupWindowInPast);
+	});
+
+	it("rejects an inverted window", () => {
+		expect(
+			validatePickupWindow(
+				new Date("2026-09-26T20:00:00"),
+				new Date("2026-09-26T18:00:00"),
+				now,
+			),
+		).toBe(strings.business.invalidPickupWindow);
+	});
+
+	it("accepts a window that is already open but not over", () => {
+		expect(
+			validatePickupWindow(
+				new Date("2026-09-26T11:00:00"),
+				new Date("2026-09-26T20:00:00"),
+				now,
+			),
+		).toBeNull();
 	});
 });

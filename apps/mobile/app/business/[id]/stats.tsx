@@ -1,5 +1,18 @@
 import { useMemo, useState } from "react";
-import { Calendar, ChartColumn, ChevronLeft, ChevronRight, Clock, Package, ShoppingBag, Star, TrendingDown, TrendingUp, Wallet, type LucideIcon } from "lucide-react-native";
+import {
+	Calendar,
+	ChartColumn,
+	ChevronLeft,
+	ChevronRight,
+	Clock,
+	Package,
+	ShoppingBag,
+	Star,
+	TrendingDown,
+	TrendingUp,
+	Wallet,
+	type LucideIcon,
+} from "lucide-react-native";
 import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 
@@ -27,7 +40,7 @@ import { useTheme } from "@/src/core/theme";
 import { withAlpha } from "@/src/core/theme/alpha";
 import type { BusinessStats } from "@/src/features/business/domain/business";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export default function BusinessStatsScreen() {
 	const { colors } = useTheme();
@@ -55,19 +68,25 @@ export default function BusinessStatsScreen() {
 		return (
 			<Screen scroll>
 				<View style={styles.container}>
-				<ScreenHeader
-					title={strings.business.statistics}
-					fallback="/(business)/management"
-				/>
-				<Skeleton style={styles.skeletonSubtitle} />
-				<View style={styles.skeletonPeriodRow}>
-					{[0, 1, 2].map((i) => (
-						<Skeleton key={`stats-period-skeleton-${i}`} style={styles.skeletonPeriodChip} />
-					))}
-				</View>
-				<View style={styles.kpiGrid}>
+					<ScreenHeader
+						title={strings.business.statistics}
+						fallback="/(business)/management"
+					/>
+					<Skeleton style={styles.skeletonSubtitle} />
+					<View style={styles.skeletonPeriodRow}>
+						{[0, 1, 2].map((i) => (
+							<Skeleton
+								key={`stats-period-skeleton-${i}`}
+								style={styles.skeletonPeriodChip}
+							/>
+						))}
+					</View>
+					<View style={styles.kpiGrid}>
 						{[0, 1, 2, 3].map((i) => (
-							<Skeleton key={`stats-kpi-skeleton-${i}`} style={styles.skeletonKpi} />
+							<Skeleton
+								key={`stats-kpi-skeleton-${i}`}
+								style={styles.skeletonKpi}
+							/>
 						))}
 					</View>
 					<Skeleton style={styles.skeletonChart} />
@@ -89,9 +108,7 @@ export default function BusinessStatsScreen() {
 					<EmptyState
 						title={strings.business.noBusiness}
 						action={
-							<Button
-								onPress={() => router.push("/my-business/business-new")}
-							>
+							<Button onPress={() => router.push("/my-business/business-new")}>
 								{strings.business.createBusiness}
 							</Button>
 						}
@@ -111,10 +128,7 @@ export default function BusinessStatsScreen() {
 						title={strings.business.noSalesInPeriod}
 						message={strings.business.noSalesProducts}
 						action={
-							<Button
-								variant="outline"
-								onPress={() => void refetch()}
-							>
+							<Button variant="outline" onPress={() => void refetch()}>
 								{strings.common.retry}
 							</Button>
 						}
@@ -182,9 +196,7 @@ export default function BusinessStatsScreen() {
 							change={null}
 							icon={Star}
 							colorKey="info"
-							onPress={() =>
-								router.push(`/business/${business?.id}/reviews`)
-							}
+							onPress={() => router.push(`/business/${business?.id}/reviews`)}
 						/>
 					</View>
 				</View>
@@ -193,7 +205,7 @@ export default function BusinessStatsScreen() {
 
 				<TopProducts products={stats.topProducts} />
 
-					<PeriodSummary stats={stats} days={days} />
+				<PeriodSummary stats={stats} days={days} />
 			</View>
 		</Screen>
 	);
@@ -265,10 +277,7 @@ function PeriodSelector({
 					icon={<ChevronLeft size={22} color={colors.foreground} />}
 				/>
 				<View style={styles.rangeLabel}>
-					<Clock
-						size={14}
-						color={colors.mutedForeground}
-					/>
+					<Clock size={14} color={colors.mutedForeground} />
 					<AppText
 						variant="bodySmall"
 						weight="medium"
@@ -303,11 +312,11 @@ function PeriodSelector({
 function kpiColor(colors: ReturnType<typeof useTheme>["colors"], key: string) {
 	switch (key) {
 		case "success":
-			return colors.success;
+			return colors.successText;
 		case "warning":
-			return colors.warning;
+			return colors.warningText;
 		case "info":
-			return colors.info;
+			return colors.infoText;
 		default:
 			return colors.primary;
 	}
@@ -332,12 +341,18 @@ function KpiCard({
 	const color = kpiColor(colors, colorKey);
 	const positive = change != null && change >= 0;
 	const trendColor =
-		change == null ? colors.mutedForeground : positive ? colors.success : colors.destructive;
+		change == null
+			? colors.mutedForeground
+			: positive
+				? colors.successText
+				: colors.destructive;
 
 	const body = (pressed = false) => (
 		<Card style={[styles.kpiFill, pressed && { opacity: 0.9 }]}>
 			<CardHeader style={styles.kpiHeader}>
-				<View style={[styles.kpiIcon, { backgroundColor: withAlpha(color, 0.15) }]}>
+				<View
+					style={[styles.kpiIcon, { backgroundColor: withAlpha(color, 0.15) }]}
+				>
 					<Icon size={16} color={color} />
 				</View>
 				<AppText variant="bodySmall" numberOfLines={1} style={styles.flex1}>
@@ -349,7 +364,7 @@ function KpiCard({
 					{value}
 				</AppText>
 			</CardContent>
-			
+
 			{change != null ? (
 				<CardContent style={styles.trendRow}>
 					{positive ? (
@@ -387,14 +402,20 @@ function KpiCard({
 				>
 					{({ pressed }) => body(pressed)}
 				</Pressable>
-			) : body()}
+			) : (
+				body()
+			)}
 		</View>
 	);
 }
 
 // ─── Gráfico de ventas diarias ───────────────────────────────────────
 
-function DailyRevenueChart({ dailyStats }: { dailyStats: BusinessStats["dailyStats"] }) {
+function DailyRevenueChart({
+	dailyStats,
+}: {
+	dailyStats: BusinessStats["dailyStats"];
+}) {
 	const { colors } = useTheme();
 	const maxRevenue = Math.max(...dailyStats.map((d) => d.revenue), 0);
 
@@ -408,10 +429,7 @@ function DailyRevenueChart({ dailyStats }: { dailyStats: BusinessStats["dailySta
 			</CardHeader>
 			{dailyStats.length === 0 || maxRevenue === 0 ? (
 				<View style={styles.emptyState}>
-					<ChartColumn
-						size={36}
-						color={colors.mutedForeground}
-					/>
+					<ChartColumn size={36} color={colors.mutedForeground} />
 					<AppText
 						variant="bodySmall"
 						style={{
@@ -433,7 +451,7 @@ function DailyRevenueChart({ dailyStats }: { dailyStats: BusinessStats["dailySta
 								<AppText
 									variant="bodyMedium"
 									weight="bold"
-									style={{ color: colors.success }}
+									style={{ color: colors.successText }}
 								>
 									{formatMoney(stat.revenue)}
 								</AppText>
@@ -446,7 +464,10 @@ function DailyRevenueChart({ dailyStats }: { dailyStats: BusinessStats["dailySta
 							</View>
 						</View>
 						<View
-							style={[styles.chartTrack, { backgroundColor: colors.surfaceMuted }]}
+							style={[
+								styles.chartTrack,
+								{ backgroundColor: colors.surfaceMuted },
+							]}
 						>
 							<View
 								style={[
@@ -477,13 +498,10 @@ function TopProducts({ products }: { products: BusinessStats["topProducts"] }) {
 					{strings.business.topProducts}
 				</AppText>
 			</CardHeader>
-			
+
 			{products.length === 0 ? (
 				<View style={styles.emptyState}>
-					<Package
-						size={32}
-						color={colors.mutedForeground}
-					/>
+					<Package size={32} color={colors.mutedForeground} />
 					<AppText
 						variant="bodySmall"
 						style={{
@@ -498,7 +516,10 @@ function TopProducts({ products }: { products: BusinessStats["topProducts"] }) {
 				products.map((product, index) => (
 					<CardContent key={product.name} style={styles.productRow}>
 						<View
-							style={[styles.rankCircle, { backgroundColor: withAlpha(colors.primary, 0.102) }]}
+							style={[
+								styles.rankCircle,
+								{ backgroundColor: withAlpha(colors.primary, 0.102) },
+							]}
 						>
 							<AppText
 								variant="bodySmall"
@@ -522,7 +543,7 @@ function TopProducts({ products }: { products: BusinessStats["topProducts"] }) {
 						<AppText
 							variant="bodyMedium"
 							weight="bold"
-							style={{ color: colors.success }}
+							style={{ color: colors.successText }}
 						>
 							{formatMoney(product.revenue)}
 						</AppText>
@@ -548,7 +569,15 @@ function PeriodSummary({
 	const ticketAvg = vm.avgTicket;
 
 	return (
-		<View style={[styles.summary, { backgroundColor: colors.primary, boxShadow: `0px 4px 12px ${withAlpha(colors.primary, 0.302)}` }]}>
+		<View
+			style={[
+				styles.summary,
+				{
+					backgroundColor: colors.primary,
+					boxShadow: `0px 4px 12px ${withAlpha(colors.primary, 0.302)}`,
+				},
+			]}
+		>
 			<AppText
 				variant="bodyMedium"
 				weight="semiBold"
@@ -558,12 +587,19 @@ function PeriodSummary({
 			</AppText>
 			<AppText
 				variant="bodySmall"
-				style={{ color: withAlpha(colors.primaryForeground, 0.902), marginTop: spacing.sm }}
+				style={{
+					color: withAlpha(colors.primaryForeground, 0.902),
+					marginTop: spacing.sm,
+				}}
 			>
-				{`${(stats.revenueChange >= 0
-					? strings.business.statsGrowthUp
-					: strings.business.statsGrowthDown
-				).replace("{pct}", Math.abs(stats.revenueChange).toFixed(1))} ${strings.business.statsRescued.replace("{count}", String(stats.rescuedCount))}`}
+				{`${(
+					stats.revenueChange >= 0
+						? strings.business.statsGrowthUp
+						: strings.business.statsGrowthDown
+				).replace(
+					"{pct}",
+					Math.abs(stats.revenueChange).toFixed(1),
+				)} ${strings.business.statsRescued.replace("{count}", String(stats.rescuedCount))}`}
 			</AppText>
 			<View style={styles.summaryRow}>
 				<View style={styles.flex1}>
@@ -573,7 +609,11 @@ function PeriodSummary({
 					>
 						{strings.business.dailyAvg}
 					</AppText>
-					<AppText variant="h2" weight="bold" style={{ color: colors.primaryForeground }}>
+					<AppText
+						variant="h2"
+						weight="bold"
+						style={{ color: colors.primaryForeground }}
+					>
 						{formatMoney(dailyAvg)}
 					</AppText>
 				</View>
@@ -584,7 +624,11 @@ function PeriodSummary({
 					>
 						{strings.business.avgTicket}
 					</AppText>
-					<AppText variant="h2" weight="bold" style={{ color: colors.primaryForeground }}>
+					<AppText
+						variant="h2"
+						weight="bold"
+						style={{ color: colors.primaryForeground }}
+					>
 						{formatMoney(ticketAvg)}
 					</AppText>
 				</View>

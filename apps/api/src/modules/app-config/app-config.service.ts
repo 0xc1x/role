@@ -1,6 +1,8 @@
 import {
   ConflictException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -12,11 +14,14 @@ import {
   type PublicAppConfigDto,
   type UpdateAppConfigDto,
 } from '@0xc1x/role-commons';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import { AppConfigRepository } from './app-config.repository';
 import { AppConfigMapper } from './mappers/app-config.mapper';
 
 @Injectable()
 export class AppConfigService {
+  private readonly logger = new Logger(AppConfigService.name);
+
   constructor(private readonly appConfigRepository: AppConfigRepository) {}
 
   async create(body: CreateAppConfigDto): Promise<AppConfigDto> {
@@ -62,11 +67,17 @@ export class AppConfigService {
         { page: query.page, limit: query.limit },
         result.total,
       );
-    } catch {
-      return paginatedDataFromQuery(
-        [],
-        { page: query.page, limit: query.limit },
-        0,
+    } catch (err) {
+      // Antes esto devolvía una lista vacía: una caída de Postgres era
+      // indistinguible de "no hay configuraciones" en el admin, sin log ni
+      // requestId. Se registra la huella acotada y se propaga para que
+      // `AllExceptionsFilter` responda 500 con un `requestId` mostrable.
+      this.logger.error({
+        event: 'app_config_list_failed',
+        ...safeErrorFields(err),
+      });
+      throw new InternalServerErrorException(
+        'No se pudieron obtener las configuraciones',
       );
     }
   }

@@ -48,20 +48,17 @@ export default function BusinessDashboardScreen() {
 		<Screen>
 			<View style={styles.header}>
 				<AppText variant="h2" weight="bold">
-					{strings.business.title ?? "Panel de negocio"}
+					{strings.myBusiness.dashboardTitle}
 				</AppText>
-				<Button
-					size="sm"
-					onPress={() => router.push("/business-signup")}
-				>
-					"Nuevo negocio"
+				<Button size="sm" onPress={() => router.push("/business-signup")}>
+					{strings.myBusiness.newBusiness}
 				</Button>
 			</View>
 
 			{!businesses || businesses.length === 0 ? (
 				<EmptyState
-					title="Aún no tienes negocios"
-					message="Registra tu negocio para empezar a vender excedentes."
+					title={strings.myBusiness.emptyTitle}
+					message={strings.myBusiness.emptyBody}
 				/>
 			) : (
 				<FlatList
@@ -93,7 +90,9 @@ const BusinessCardRow = memo(function BusinessCardRow({
 			</AppText>
 			<View style={{ marginTop: spacing.sm }}>
 				<StatusBadge
-					label={item.is_active ? "Activo" : "Inactivo"}
+					label={
+						item.is_active ? strings.business.active : strings.business.inactive
+					}
 					tone={item.is_active ? "success" : "neutral"}
 				/>
 			</View>

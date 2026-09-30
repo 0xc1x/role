@@ -1,0 +1,41 @@
+-- Backfilled gap: documented no-op. Reconstruction, 2026-09-28.
+--
+-- NOT APPLIED TO PRODUCTION. NOT BYTE-IDENTICAL TO THE LEDGER ROW. This file
+-- executes no DDL and never did anything a replay needs.
+--
+-- WHAT THIS CLOSES
+--
+-- The ledger records `20260616005903` / `update_order_event_push_to_notify_func`
+-- as applied. No file for it existed in this directory, so the version sequence
+-- had a hole and `supabase db push` would have treated a production database as
+-- being behind by one migration forever. The hole is now filled with a version
+-- that plays correctly instead of one that pretends to know more than it does.
+--
+-- WHY THIS IS A NO-OP, AND NOT A RECONSTRUCTION
+--
+-- The name says what it did: repoint `handle_order_event_push` at a
+-- notification helper. The body it installed at that position is gone. Every
+-- later migration that rewrote the same function —
+-- 20260622140156, 20260821213650, 20260821213748, 20260925163235,
+-- 20260925170147 — replaced it wholesale, and `create or replace function`
+-- discards the previous body. The ledger stores each statement in its own row,
+-- so the June text is still in production's ledger, but it embeds a rotated anon
+-- JWT as a literal and this directory does not carry credentials (see
+-- `supabase/migrations/README.md`, and the header of
+-- 20260615210819_add_order_event_push_trigger for the full argument).
+--
+-- Reconstructing it anyway was considered and rejected. A guessed body that
+-- "probably called the notification helper" would be a migration file asserting
+-- a fact about June 2026 that nobody can verify, sitting in the one directory
+-- whose entire value is that every line in it is checkable. The state this
+-- migration was responsible for is already established at the neighbouring
+-- slot: 20260615210819 creates the function and the trigger, and the final,
+-- production-verified body is reinstated there and again by 20260925163235. A
+-- replay that runs 20260615210819 and then skips two slots arrives at exactly
+-- the state production is in, which is the only thing a replay is for.
+--
+-- `select 1;` below is a valid statement so the slot is honest about having
+-- produced no effect — a file containing only comments would read as "not yet
+-- reconstructed" rather than "reconstructed, and the answer is nothing".
+
+select 1;

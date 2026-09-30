@@ -39,11 +39,16 @@ interface Offer {
 	id: string;
 	business_id: string;
 	title: string;
-	category: string | null;
 	discounted_price: number;
 	original_price: number;
 	stock: number;
 	pickup_end: string;
+}
+
+/** One `offer_categories` junction row with its catalog category resolved. */
+interface OfferCategory {
+	offer_id: string;
+	categories: { name: string; active: boolean; deleted_at: string | null } | null;
 }
 
 interface UserPref {
@@ -93,7 +98,7 @@ Deno.serve(async (req) => {
 	const now = new Date().toISOString();
 	const { data: offers, error: offersError } = await supabase
 		.from("offers")
-		.select("id, business_id, title, category, discounted_price, original_price, stock, pickup_end")
+		.select("id, business_id, title, discounted_price, original_price, stock, pickup_end")
 		.eq("is_active", true)
 		.gt("stock", 0)
 		.lt("pickup_start", now)
@@ -110,6 +115,39 @@ Deno.serve(async (req) => {
 	}
 	if (!offers?.length) {
 		return json({ success: true, notified: 0 });
+	}
+
+	// Categories now live in the `categories` catalog through the
+	// `offer_categories` junction; the `offers.category` text column was dropped.
+	// Only the category name is needed, to match `user_preferences.favorite_categories`,
+	// which the normalize-category migration also left as Spanish display names.
+	const offerIds = (offers as Offer[]).map((o) => o.id);
+	const { data: offerCategoryRows, error: offerCategoriesError } = await supabase
+		.from("offer_categories")
+		.select("offer_id, categories!offer_categories_category_id_fkey(name, active, deleted_at)")
+		.in("offer_id", offerIds);
+
+	if (offerCategoriesError) {
+		console.error(
+			JSON.stringify({
+				event: "nearby_offer_categories_query_failed",
+				...safeErrorFields(offerCategoriesError),
+			}),
+		);
+		return json({ error: "DB_QUERY_FAILED" }, { status: 500 });
+	}
+
+	// Lowercased category names per offer. Inactive or soft-deleted categories are
+	// ignored, and an offer with no usable category gets no entry at all.
+	// `offer_categories` holds many-to-one rows, so PostgREST returns `categories`
+	// as a single object; the untyped client infers an array, hence the cast.
+	const offerCategoryNames = new Map<string, string[]>();
+	for (const row of (offerCategoryRows ?? []) as unknown as OfferCategory[]) {
+		const category = row.categories;
+		if (!category?.name || !category.active || category.deleted_at) continue;
+		const names = offerCategoryNames.get(row.offer_id) ?? [];
+		names.push(category.name.toLowerCase());
+		offerCategoryNames.set(row.offer_id, names);
 	}
 
 	const businessIds = [...new Set(offers.map((o: Offer) => o.business_id))];
@@ -211,10 +249,13 @@ Deno.serve(async (req) => {
 		const matchingOffers: Array<{ offer: Offer; business: Business; distance: number }> = [];
 
 		for (const offer of offers as Offer[]) {
+			// An offer with no usable category is never filtered out, which is how
+			// the dropped `offers.category` column behaved when it was null.
+			const offerCategories = offerCategoryNames.get(offer.id) ?? [];
 			if (
 				favCategories.size > 0 &&
-				offer.category &&
-				!favCategories.has(offer.category.toLowerCase())
+				offerCategories.length > 0 &&
+				!offerCategories.some((c) => favCategories.has(c))
 			) {
 				continue;
 			}

@@ -1,11 +1,17 @@
 import type { AppRole, OrderStatus } from '@0xc1x/role-commons';
 
-/** Statuses that still hold reserved stock (must restock on cancel/expire). */
-export const STOCK_HOLDING_STATUSES: readonly OrderStatus[] = [
-  'pending',
-  'confirmed',
-  'ready_for_pickup',
-] as const;
+/**
+ * El grafo de transiciones y su efecto sobre el stock viven en el contrato
+ * compartido: el panel de back office deriva de ahí las mismas opciones legales
+ * que la API exige, para que no puedan discrepar. Se reexportan aquí porque este
+ * módulo sigue siendo la puerta del dominio de órdenes.
+ */
+export {
+  isTransitionAllowed,
+  ORDER_TRANSITIONS,
+  shouldRestockOnTransition,
+  STOCK_HOLDING_STATUSES,
+} from '@0xc1x/role-commons';
 
 /** Active (non-terminal) order statuses — used for "one active order per offer/user". */
 export const ACTIVE_ORDER_STATUSES: readonly OrderStatus[] = [
@@ -14,17 +20,6 @@ export const ACTIVE_ORDER_STATUSES: readonly OrderStatus[] = [
   'ready_for_pickup',
   'picked_up',
 ] as const;
-
-/** Allowed next statuses from a given status. */
-export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  pending: ['confirmed', 'cancelled', 'expired'],
-  confirmed: ['ready_for_pickup', 'cancelled'],
-  ready_for_pickup: ['picked_up', 'cancelled', 'expired'],
-  picked_up: ['completed'],
-  completed: [],
-  cancelled: [],
-  expired: [],
-};
 
 /**
  * Who may perform a transition to the target status.
@@ -74,24 +69,6 @@ export function canActorTransition(
   }
 
   return false;
-}
-
-export function isTransitionAllowed(
-  from: OrderStatus,
-  to: OrderStatus,
-): boolean {
-  return (ORDER_TRANSITIONS[from] as readonly string[]).includes(to);
-}
-
-/** Whether transitioning to `to` should restore reserved stock. */
-export function shouldRestockOnTransition(
-  from: OrderStatus,
-  to: OrderStatus,
-): boolean {
-  return (
-    (to === 'cancelled' || to === 'expired') &&
-    (STOCK_HOLDING_STATUSES as readonly string[]).includes(from)
-  );
 }
 
 /**
