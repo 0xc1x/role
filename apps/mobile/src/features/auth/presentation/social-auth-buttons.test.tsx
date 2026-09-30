@@ -60,7 +60,7 @@ mock.module("expo-web-browser", () => ({
 let settle: (profile: { role: string } | null) => void;
 let reject: (error: Error) => void;
 const signIn = mock(
-	(_provider: string) =>
+	(_provider: string, _options?: { forceAccountPicker?: boolean }) =>
 		new Promise<{ role: string } | null>((resolve, fail) => {
 			settle = resolve;
 			reject = fail;
@@ -78,9 +78,18 @@ const byLabel = (label: string): ButtonCapture => {
 	return found;
 };
 
-const render = (label: string): string => {
+const render = (
+	label: string,
+	{ disabled = false, forceAccountPicker = false } = {},
+): string => {
 	renderedButtons.length = 0;
-	return renderToStaticMarkup(React.createElement(SocialAuthButtons, { label }));
+	return renderToStaticMarkup(
+		React.createElement(SocialAuthButtons, {
+			label,
+			disabled,
+			forceAccountPicker,
+		}),
+	);
 };
 
 test("renders two enabled provider buttons and no unavailable notice", () => {
@@ -103,6 +112,58 @@ test("renders two enabled provider buttons and no unavailable notice", () => {
 	expect(apple.icon?.props.name).toBe("logo-apple");
 });
 
+test("a disabled block never reaches the repository (signup terms gate)", async () => {
+	render(strings.auth.orSignupWith, { disabled: true });
+
+	const google = byLabel(strings.auth.google);
+	const apple = byLabel(strings.auth.apple);
+	expect(google.disabled).toBe(true);
+	expect(apple.disabled).toBe(true);
+
+	const pressGoogle = google.onPress;
+	if (!pressGoogle) throw new Error("google onPress missing");
+	const pressApple = apple.onPress;
+	if (!pressApple) throw new Error("apple onPress missing");
+
+	// The buttons read as disabled, and a press still cannot slip past the
+	// gate: no sign-in call, no profile write, no navigation.
+	const before = signIn.mock.calls.length;
+	await pressGoogle();
+	await pressApple();
+	expect(signIn.mock.calls.length).toBe(before);
+	expect(events.splice(0)).toEqual([]);
+});
+
+test("signup asks the provider which account to use; login does not", async () => {
+	// The auth sheet reuses the system cookie jar, so without `prompt` the
+	// provider silently re-authenticates the account already signed in and
+	// the chooser never appears.
+	render(strings.auth.orSignupWith, { forceAccountPicker: true });
+	const press = byLabel(strings.auth.google).onPress;
+	if (!press) throw new Error("google onPress missing");
+	const pending = press();
+	settle({ role: "user" });
+	await pending;
+	expect(signIn.mock.calls.at(-1)).toEqual([
+		"google",
+		{ forceAccountPicker: true },
+	]);
+	expect(events.splice(0)).toEqual(["profile", "/(consumer)"]);
+
+	render(strings.auth.orContinueWith);
+	const loginPress = byLabel(strings.auth.google).onPress;
+	if (!loginPress) throw new Error("google onPress missing");
+	const loginPending = loginPress();
+	settle({ role: "user" });
+	await loginPending;
+	expect(signIn.mock.calls.at(-1)).toEqual([
+		"google",
+		{ forceAccountPicker: false },
+	]);
+	// Drain: the next test asserts the navigation log from empty.
+	expect(events.splice(0)).toEqual(["profile", "/(consumer)"]);
+});
+
 test("success sets the profile and navigates by role", async () => {
 	render(strings.auth.orContinueWith);
 
@@ -111,7 +172,10 @@ test("success sets the profile and navigates by role", async () => {
 	const pendingGoogle = googlePress();
 	settle({ role: "user" });
 	await pendingGoogle;
-	expect(signIn.mock.calls.at(-1)).toEqual(["google"]);
+	expect(signIn.mock.calls.at(-1)).toEqual([
+		"google",
+		{ forceAccountPicker: false },
+	]);
 	expect(events.splice(0)).toEqual(["profile", "/(consumer)"]);
 
 	const applePress = byLabel(strings.auth.apple).onPress;
@@ -119,7 +183,10 @@ test("success sets the profile and navigates by role", async () => {
 	const pendingApple = applePress();
 	settle({ role: "business" });
 	await pendingApple;
-	expect(signIn.mock.calls.at(-1)).toEqual(["apple"]);
+	expect(signIn.mock.calls.at(-1)).toEqual([
+		"apple",
+		{ forceAccountPicker: false },
+	]);
 	expect(events.splice(0)).toEqual(["profile", "/(business)/products"]);
 });
 

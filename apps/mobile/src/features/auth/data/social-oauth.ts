@@ -8,10 +8,7 @@ import { strings } from "@/src/core/i18n/strings";
 
 import type { UserProfile } from "../domain/user";
 import { enrichProfile, mapAuthError, profileFromUser } from "./repository";
-import {
-	extractOAuthCode,
-	NATIVE_OAUTH_REDIRECT_URL,
-} from "./social-auth";
+import { extractOAuthCode, NATIVE_OAUTH_REDIRECT_URL } from "./social-auth";
 
 /**
  * Hosted social login, Flow A (one flow for PWA + native).
@@ -34,6 +31,7 @@ import {
  */
 export async function signInWithProvider(
 	provider: "google" | "apple",
+	options?: { forceAccountPicker?: boolean },
 ): Promise<UserProfile | null> {
 	// Web: Linking.createURL prefixes the current origin (verified in the
 	// installed expo-linking). Both URLs must be allowlisted in Supabase
@@ -44,7 +42,19 @@ export async function signInWithProvider(
 			: NATIVE_OAUTH_REDIRECT_URL;
 	const { data, error } = await supabase.auth.signInWithOAuth({
 		provider,
-		options: { redirectTo },
+		options: {
+			redirectTo,
+			// The auth sheet shares the system cookie jar, so Google/Apple see
+			// the account already signed in and re-authenticate it silently —
+			// the account chooser never appears, which reads as "the app just
+			// logged me back in". `prompt` makes the provider ask. Signup asks
+			// (choosing the identity is the point of registering); login does
+			// not (one tap for the single-account user). Both providers accept
+			// `select_account` on their authorize endpoint.
+			...(options?.forceAccountPicker
+				? { queryParams: { prompt: "select_account" } }
+				: {}),
+		},
 	});
 	if (error) throw mapAuthError(error);
 	if (!data.url) throw Errors.unknown(strings.auth.socialLoginFailed);

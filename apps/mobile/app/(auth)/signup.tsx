@@ -226,7 +226,11 @@ export default function SignupScreen() {
 				{strings.auth.createAccount}
 			</Button>
 
-			<SocialAuthButtons label={strings.auth.orSignupWith} />
+			<SocialAuthButtons
+				label={strings.auth.orSignupWith}
+				disabled={!acceptedTerms}
+				forceAccountPicker
+			/>
 
 			<AppText
 				variant="bodyMedium"

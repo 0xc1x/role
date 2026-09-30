@@ -23,7 +23,26 @@ type SocialProvider = "google" | "apple";
  * Divider "o … con" + Google/Apple buttons over the Supabase hosted OAuth
  * flow (Flow A: one flow for PWA + native, ADR-0012).
  */
-export function SocialAuthButtons({ label }: { label: string }) {
+export function SocialAuthButtons({
+	label,
+	disabled = false,
+	forceAccountPicker = false,
+}: {
+	label: string;
+	/**
+	 * Mirrors the gate signup.tsx applies to its own submit button. A social
+	 * sign-in creates the account just the same, so without this the provider
+	 * buttons were a way to register without accepting the terms — the one
+	 * thing that form is otherwise strict about.
+	 */
+	disabled?: boolean;
+	/**
+	 * Ask the provider which account to use instead of letting it silently
+	 * reuse the one already signed into the system browser. Signup wants
+	 * this; login does not.
+	 */
+	forceAccountPicker?: boolean;
+}) {
 	const { colors } = useTheme();
 	const [pending, setPending] = useState<SocialProvider | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -33,12 +52,14 @@ export function SocialAuthButtons({ label }: { label: string }) {
 	const busyRef = useRef(false);
 
 	const handlePress = async (provider: SocialProvider) => {
-		if (busyRef.current) return;
+		if (busyRef.current || disabled) return;
 		busyRef.current = true;
 		setError(null);
 		setPending(provider);
 		try {
-			const profile = await signInWithProvider(provider);
+			const profile = await signInWithProvider(provider, {
+				forceAccountPicker,
+			});
 			// Null = the user dismissed the sheet: silent no-op, same posture
 			// as Apple's ERR_REQUEST_CANCELED. Never an error message.
 			if (!profile) return;
@@ -111,6 +132,7 @@ export function SocialAuthButtons({ label }: { label: string }) {
 					}
 					label={strings.auth.google}
 					pending={pending}
+					disabled={disabled}
 					onPress={handlePress}
 				/>
 				<SocialProviderButton
@@ -120,6 +142,7 @@ export function SocialAuthButtons({ label }: { label: string }) {
 					}
 					label={strings.auth.apple}
 					pending={pending}
+					disabled={disabled}
 					onPress={handlePress}
 				/>
 			</View>
@@ -132,18 +155,20 @@ function SocialProviderButton({
 	icon,
 	label,
 	pending,
+	disabled,
 	onPress,
 }: {
 	provider: SocialProvider;
 	icon: React.ReactNode;
 	label: string;
 	pending: SocialProvider | null;
+	disabled: boolean;
 	onPress: (provider: SocialProvider) => void;
 }) {
 	return (
 		<Button
 			variant="outline"
-			disabled={pending !== null}
+			disabled={disabled || pending !== null}
 			loading={pending === provider}
 			accessibilityRole="button"
 			accessibilityLabel={label}
