@@ -86,6 +86,11 @@ export function MapPickerView({
 		);
 	}, [resolve]);
 
+	// Mount-once bootstrap: lee el valor inicial desde el ref para no
+	// re-dispararse cuando el padre reconstruye el objeto `initialLocation`.
+	// `resolve` y `requestMyLocation` son estables (useCallback con deps
+	// estables), así que [] es seguro y no re-dispara en re-renders.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-once bootstrap intencional
 	useEffect(() => {
 		const initial = initialLocationRef.current;
 		if (initial) {
@@ -93,9 +98,6 @@ export function MapPickerView({
 		} else {
 			void requestMyLocation();
 		}
-		// Mount-once bootstrap: lee el valor inicial desde el ref para no
-		// re-dispararse cuando el padre reconstruye el objeto `initialLocation`.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const handleRegionChange = (next: {
