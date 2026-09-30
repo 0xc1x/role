@@ -1,9 +1,6 @@
-import type { ColumnDef, Row, Table } from "@tanstack/react-table";
+import type { Row, Table } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-
-/** Id de la columna de selección que `DataTable` antepone cuando se opta por ella. */
-export const SELECT_COLUMN_ID = "_select";
 
 /** Lo que la barra de acciones en lote recibe de la tabla. */
 export interface DataTableSelectionState<TData> {
@@ -86,22 +83,4 @@ export function RowSelectCell<TData>({ row }: { row: Row<TData> }) {
 			aria-label="Seleccionar esta fila"
 		/>
 	);
-}
-
-/**
- * Columna de selección que `DataTable` antepone a las del dominio.
- *
- * Vive en `components/data-table` y no en cada `*.columns.tsx` a propósito: es la
- * pieza que hace imposible una tabla con selección sin casillas, que es
- * exactamente el estado muerto que se quitó de aquí.
- */
-export function selectColumn<TData>(): ColumnDef<TData, unknown> {
-	return {
-		id: SELECT_COLUMN_ID,
-		header: ({ table }) => <RowSelectAllCell table={table} />,
-		cell: ({ row }) => <RowSelectCell row={row} />,
-		enableHiding: false,
-		enableSorting: false,
-		enableGlobalFilter: false,
-	};
 }

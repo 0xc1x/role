@@ -2,23 +2,11 @@ import type { BusinessDto } from "@0xc1x/role-commons";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ActiveCell } from "@/components/data-table/cells/active-cell";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
-import { Badge } from "@/components/ui/badge";
 import { useUpdateBusiness } from "@/features/businesses/queries/businesses.queries";
 import { ActionCell } from "@/features/businesses/tables/cells/action-cell";
+import { VerificationBadge } from "@/features/businesses/tables/cells/verification-badge";
 import type { CsvColumn } from "@/lib/csv";
 import { businessVerificationLabel } from "@/lib/labels";
-
-export const VerificationBadge = ({ status }: { status: string }) => {
-	const variant =
-		status === "approved"
-			? "success"
-			: status === "pending"
-				? "warning"
-				: "destructive";
-	// El enum crudo (`approved`) obliga a traducir en la cabeza: en un panel de
-	// verificación un estado mal leído es una aprobación indebida.
-	return <Badge variant={variant}>{businessVerificationLabel(status)}</Badge>;
-};
 
 const ActiveCellWrapper = ({ row }: { row: { original: BusinessDto } }) => {
 	const updateMutation = useUpdateBusiness();

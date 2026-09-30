@@ -30,7 +30,7 @@ import {
 import type { CsvColumn } from "@/lib/csv";
 import { formatBusinessDate } from "@/lib/dates";
 
-export function OfferStateBadge({ isActive }: { isActive: boolean }) {
+function OfferStateBadge({ isActive }: { isActive: boolean }) {
 	return (
 		<Badge variant={isActive ? "success" : "secondary"}>
 			{isActive ? "Activa" : "Inactiva"}

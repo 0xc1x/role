@@ -1,22 +1,12 @@
-import {
-	ListPayoutsQuerySchema,
-	PAYOUT_STATUSES,
-	type PayoutStatus,
-} from "@0xc1x/role-commons";
+import { ListPayoutsQuerySchema, PAYOUT_STATUSES } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { BusinessFilter } from "@/components/business-filter";
 import { DataTable } from "@/components/data-table/data-table";
 import { ExportCsvButton } from "@/components/data-table/export-csv-button";
+import { StatusFilter } from "@/components/status-filter";
 import { Button } from "@/components/ui/button";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -104,30 +94,12 @@ function RouteComponent() {
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<h1 className="font-bold text-xl">Pagos a negocios</h1>
 				<div className="flex flex-wrap items-center gap-3">
-					<Select
-						value={search.status ?? "all"}
-						onValueChange={(v) =>
-							patch({ status: v === "all" ? undefined : (v as PayoutStatus) })
-						}
-					>
-						<SelectTrigger className="w-48" aria-label="Estado">
-							{/* Con children explícitos: sin ellos el trigger muestra el
-							    enum crudo (`processing`) en vez de la etiqueta. */}
-							<SelectValue>
-								{search.status
-									? payoutStatusLabel(search.status)
-									: "Todos los estados"}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="all">Todos los estados</SelectItem>
-							{PAYOUT_STATUSES.map((status) => (
-								<SelectItem key={status} value={status}>
-									{payoutStatusLabel(status)}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+					<StatusFilter
+						value={search.status}
+						statuses={PAYOUT_STATUSES}
+						label={payoutStatusLabel}
+						onChange={(status) => patch({ status })}
+					/>
 					<BusinessFilter
 						value={search.business_id}
 						onChange={(business_id) => patch({ business_id })}

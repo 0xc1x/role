@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/drawer";
 import { BusinessEmailSendsTable } from "@/features/businesses/components/business-email-sends-table";
 import { BusinessLocationsSection } from "@/features/businesses/components/business-locations-section";
-import { VerificationBadge } from "@/features/businesses/tables/businesses.columns";
+import { VerificationBadge } from "@/features/businesses/tables/cells/verification-badge";
 import { formatBusinessDate } from "@/lib/dates";
 
 /**

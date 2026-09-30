@@ -3,8 +3,8 @@ import {
 	CreateBusinessLocationSchema,
 	UpdateBusinessLocationSchema,
 } from "@0xc1x/role-commons";
-import { useForm } from "@tanstack/react-form";
-import { useMemo } from "react";
+import { useForm, type ValidationError } from "@tanstack/react-form";
+import { useMemo, type ChangeEvent } from "react";
 import { z } from "zod";
 import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -60,6 +60,100 @@ const locationFormSchema = z.object({
 });
 
 type LocationFormValues = z.input<typeof locationFormSchema>;
+
+/**
+ * `ValidationError` es `unknown` en el contrato de TanStack Form, y `FieldError`
+ * quiere `{ message?: string }`. El puente va AQUÍ, en el borde, y no con un
+ * `as`: un error que no traiga `message` se descarta en vez de romperse.
+ */
+function clientErrors(
+	errors: ValidationError[],
+): Array<{ message?: string } | undefined> {
+	return errors.filter(
+		(error): error is { message?: string } =>
+			typeof error === "object" &&
+			error !== null &&
+			typeof (error as { message?: unknown }).message === "string",
+	);
+}
+
+/**
+ * Un campo de texto del form, con su error de servidor y su error de validación.
+ *
+ * Los ocho campos del form se veían como ocho copias de este bloque, y cada copia
+ * tenía que acertar el mismo trío (error del servidor, `isInvalid`, cuándo
+ * mostrar `FieldError`). El campo tiene identidad propia —"el nombre", "la
+ * dirección"— y el trío es SU regla, no la del form: por eso vive aquí y no
+ * repetido ocho veces.
+ *
+ * `control` existe porque nombre/dirección usan `Textarea` y el resto `Input`.
+ */
+function TextField({
+	id,
+	name,
+	label,
+	placeholder,
+	value,
+	onChange,
+	onBlur,
+	isTouched,
+	isValid,
+	errors,
+	serverError,
+	control = "input",
+	inputMode,
+}: {
+	id: string;
+	name: string;
+	label: string;
+	placeholder: string;
+	value: string;
+	onChange: (value: string) => void;
+	onBlur: () => void;
+	isTouched: boolean;
+	isValid: boolean;
+	errors: ValidationError[];
+	serverError?: string;
+	control?: "input" | "textarea";
+	inputMode?: "decimal";
+}) {
+	const isInvalid = (isTouched && !isValid) || Boolean(serverError);
+
+	return (
+		<Field data-invalid={isInvalid}>
+			<FieldLabel htmlFor={id}>{label}</FieldLabel>
+			{control === "textarea" ? (
+				<Textarea
+					id={id}
+					name={name}
+					placeholder={placeholder}
+					value={value}
+					aria-invalid={isInvalid}
+					onBlur={onBlur}
+					onChange={(e) => onChange(e.target.value)}
+				/>
+			) : (
+				<Input
+					id={id}
+					name={name}
+					inputMode={inputMode}
+					placeholder={placeholder}
+					value={value}
+					aria-invalid={isInvalid}
+					onBlur={onBlur}
+					onChange={(e: ChangeEvent<HTMLInputElement>) =>
+						onChange(e.target.value)
+					}
+				/>
+			)}
+			{serverError ? (
+				<FieldError errors={[{ message: serverError }]} />
+			) : (
+				isTouched && !isValid && <FieldError errors={clientErrors(errors)} />
+			)}
+		</Field>
+	);
+}
 
 /** Campos del form: los `path` de `details[]` que se pueden asociar a un input. */
 const FORM_FIELDS = [
@@ -201,186 +295,117 @@ export function BusinessLocationForm({
 			) : null}
 
 			<form.Field name="name">
-				{(field) => {
-					const serverError = fieldErrors.name;
-					const isInvalid =
-						(field.state.meta.isTouched && !field.state.meta.isValid) ||
-						Boolean(serverError);
-					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={`${formId}-name`}>
-								Nombre del punto de retiro
-							</FieldLabel>
-							<Input
-								id={`${formId}-name`}
-								name={field.name}
-								placeholder="Sucursal del centro"
-								value={field.state.value}
-								aria-invalid={isInvalid}
-								onBlur={field.handleBlur}
-								onChange={(e) => field.handleChange(e.target.value)}
-							/>
-							{serverError ? (
-								<FieldError errors={[{ message: serverError }]} />
-							) : (
-								field.state.meta.isTouched &&
-								!field.state.meta.isValid && (
-									<FieldError errors={field.state.meta.errors} />
-								)
-							)}
-						</Field>
-					);
-				}}
+				{(field) => (
+					<TextField
+						id={`${formId}-name`}
+						name={field.name}
+						label="Nombre del punto de retiro"
+						placeholder="Sucursal del centro"
+						value={field.state.value}
+						onChange={field.handleChange}
+						onBlur={field.handleBlur}
+						isTouched={field.state.meta.isTouched}
+						isValid={field.state.meta.isValid}
+						errors={field.state.meta.errors}
+						serverError={fieldErrors.name}
+					/>
+				)}
 			</form.Field>
 
 			<form.Field name="address">
-				{(field) => {
-					const serverError = fieldErrors.address;
-					const isInvalid =
-						(field.state.meta.isTouched && !field.state.meta.isValid) ||
-						Boolean(serverError);
-					return (
-						<Field data-invalid={isInvalid}>
-							<FieldLabel htmlFor={`${formId}-address`}>Dirección</FieldLabel>
-							<Textarea
-								id={`${formId}-address`}
-								name={field.name}
-								placeholder="Av. principal 123, barrio centro"
-								value={field.state.value}
-								aria-invalid={isInvalid}
-								onBlur={field.handleBlur}
-								onChange={(e) => field.handleChange(e.target.value)}
-							/>
-							{serverError ? (
-								<FieldError errors={[{ message: serverError }]} />
-							) : (
-								field.state.meta.isTouched &&
-								!field.state.meta.isValid && (
-									<FieldError errors={field.state.meta.errors} />
-								)
-							)}
-						</Field>
-					);
-				}}
+				{(field) => (
+					<TextField
+						id={`${formId}-address`}
+						name={field.name}
+						label="Dirección"
+						placeholder="Av. principal 123, barrio centro"
+						value={field.state.value}
+						onChange={field.handleChange}
+						onBlur={field.handleBlur}
+						isTouched={field.state.meta.isTouched}
+						isValid={field.state.meta.isValid}
+						errors={field.state.meta.errors}
+						serverError={fieldErrors.address}
+						control="textarea"
+					/>
+				)}
 			</form.Field>
 
 			<div className="grid gap-4 sm:grid-cols-2">
 				<form.Field name="latitude">
-					{(field) => {
-						const serverError = fieldErrors.latitude;
-						const isInvalid =
-							(field.state.meta.isTouched && !field.state.meta.isValid) ||
-							Boolean(serverError);
-						return (
-							<Field data-invalid={isInvalid}>
-								<FieldLabel htmlFor={`${formId}-latitude`}>Latitud</FieldLabel>
-								<Input
-									id={`${formId}-latitude`}
-									name={field.name}
-									inputMode="decimal"
-									placeholder="-0.1807"
-									value={field.state.value}
-									aria-invalid={isInvalid}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{serverError ? (
-									<FieldError errors={[{ message: serverError }]} />
-								) : (
-									field.state.meta.isTouched &&
-									!field.state.meta.isValid && (
-										<FieldError errors={field.state.meta.errors} />
-									)
-								)}
-							</Field>
-						);
-					}}
+					{(field) => (
+						<TextField
+							id={`${formId}-latitude`}
+							name={field.name}
+							label="Latitud"
+							placeholder="-0.1807"
+							value={field.state.value}
+							onChange={field.handleChange}
+							onBlur={field.handleBlur}
+							isTouched={field.state.meta.isTouched}
+							isValid={field.state.meta.isValid}
+							errors={field.state.meta.errors}
+							serverError={fieldErrors.latitude}
+							inputMode="decimal"
+						/>
+					)}
 				</form.Field>
 
 				<form.Field name="longitude">
-					{(field) => {
-						const serverError = fieldErrors.longitude;
-						const isInvalid =
-							(field.state.meta.isTouched && !field.state.meta.isValid) ||
-							Boolean(serverError);
-						return (
-							<Field data-invalid={isInvalid}>
-								<FieldLabel htmlFor={`${formId}-longitude`}>
-									Longitud
-								</FieldLabel>
-								<Input
-									id={`${formId}-longitude`}
-									name={field.name}
-									inputMode="decimal"
-									placeholder="-78.4678"
-									value={field.state.value}
-									aria-invalid={isInvalid}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{serverError ? (
-									<FieldError errors={[{ message: serverError }]} />
-								) : (
-									field.state.meta.isTouched &&
-									!field.state.meta.isValid && (
-										<FieldError errors={field.state.meta.errors} />
-									)
-								)}
-							</Field>
-						);
-					}}
+					{(field) => (
+						<TextField
+							id={`${formId}-longitude`}
+							name={field.name}
+							label="Longitud"
+							placeholder="-78.4678"
+							value={field.state.value}
+							onChange={field.handleChange}
+							onBlur={field.handleBlur}
+							isTouched={field.state.meta.isTouched}
+							isValid={field.state.meta.isValid}
+							errors={field.state.meta.errors}
+							serverError={fieldErrors.longitude}
+							inputMode="decimal"
+						/>
+					)}
 				</form.Field>
 			</div>
 
 			<div className="grid gap-4 sm:grid-cols-2">
 				<form.Field name="phone">
-					{(field) => {
-						const serverError = fieldErrors.phone;
-						return (
-							<Field data-invalid={Boolean(serverError)}>
-								<FieldLabel htmlFor={`${formId}-phone`}>
-									Teléfono (opcional)
-								</FieldLabel>
-								<Input
-									id={`${formId}-phone`}
-									name={field.name}
-									placeholder="+593 99 123 4567"
-									value={field.state.value}
-									aria-invalid={Boolean(serverError)}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{serverError ? (
-									<FieldError errors={[{ message: serverError }]} />
-								) : null}
-							</Field>
-						);
-					}}
+					{(field) => (
+						<TextField
+							id={`${formId}-phone`}
+							name={field.name}
+							label="Teléfono (opcional)"
+							placeholder="+593 99 123 4567"
+							value={field.state.value}
+							onChange={field.handleChange}
+							onBlur={field.handleBlur}
+							isTouched={field.state.meta.isTouched}
+							isValid={field.state.meta.isValid}
+							errors={field.state.meta.errors}
+							serverError={fieldErrors.phone}
+						/>
+					)}
 				</form.Field>
 
 				<form.Field name="zone">
-					{(field) => {
-						const serverError = fieldErrors.zone;
-						return (
-							<Field data-invalid={Boolean(serverError)}>
-								<FieldLabel htmlFor={`${formId}-zone`}>
-									Zona (opcional)
-								</FieldLabel>
-								<Input
-									id={`${formId}-zone`}
-									name={field.name}
-									placeholder="Centro"
-									value={field.state.value}
-									aria-invalid={Boolean(serverError)}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{serverError ? (
-									<FieldError errors={[{ message: serverError }]} />
-								) : null}
-							</Field>
-						);
-					}}
+					{(field) => (
+						<TextField
+							id={`${formId}-zone`}
+							name={field.name}
+							label="Zona (opcional)"
+							placeholder="Centro"
+							value={field.state.value}
+							onChange={field.handleChange}
+							onBlur={field.handleBlur}
+							isTouched={field.state.meta.isTouched}
+							isValid={field.state.meta.isValid}
+							errors={field.state.meta.errors}
+							serverError={fieldErrors.zone}
+						/>
+					)}
 				</form.Field>
 			</div>
 

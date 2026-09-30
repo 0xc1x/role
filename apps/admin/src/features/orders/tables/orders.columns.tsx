@@ -17,22 +17,9 @@ import { OrderDetailDrawer } from "@/features/orders/components/order-detail-dra
 import { OrderStatusDialog } from "@/features/orders/components/order-status-dialog";
 import { orderStatusActions } from "@/features/orders/lib/order-status-actions";
 import { useTransitionOrderStatus } from "@/features/orders/queries/orders.queries";
+import { OrderStatusBadge } from "@/features/orders/tables/cells/order-status-badge";
 import type { CsvColumn } from "@/lib/csv";
 import { orderStatusLabel } from "@/lib/labels";
-
-export function OrderStatusBadge({ status }: { status: string }) {
-	// El enum crudo (`ready_for_pickup`) obliga a traducir en la cabeza, y en
-	// una pantalla de soporte un estado mal leído es un estado mal atendido.
-	const variant =
-		status === "completed"
-			? "success"
-			: status === "cancelled" || status === "expired"
-				? "destructive"
-				: status === "pending"
-					? "warning"
-					: "default";
-	return <Badge variant={variant}>{orderStatusLabel(status)}</Badge>;
-}
 
 const stampFmt = new Intl.DateTimeFormat("es-EC", {
 	dateStyle: "short",

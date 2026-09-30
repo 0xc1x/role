@@ -1,27 +1,8 @@
-import type {
-	ContactMessageListItemDto,
-	ContactMessageStatus,
-} from "@0xc1x/role-commons";
+import type { ContactMessageListItemDto } from "@0xc1x/role-commons";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
-import { Badge } from "@/components/ui/badge";
 import { ActionCell } from "@/features/contact-inbox/tables/cells/action-cell";
-import { contactMessageStatusLabel } from "@/lib/labels";
-
-const STATUS_VARIANTS: Record<
-	ContactMessageStatus,
-	"info" | "secondary" | "success" | "warning" | "destructive"
-> = {
-	PENDIENTE: "warning",
-	PROCESADO: "success",
-	ERROR: "destructive",
-};
-
-export const StatusBadge = ({ status }: { status: ContactMessageStatus }) => (
-	<Badge variant={STATUS_VARIANTS[status] ?? "secondary"}>
-		{contactMessageStatusLabel(status)}
-	</Badge>
-);
+import { StatusBadge } from "@/features/contact-inbox/tables/cells/status-badge";
 
 const Nombre = ({ fila }: { fila: ContactMessageListItemDto }) => {
 	if (!fila.readable) {

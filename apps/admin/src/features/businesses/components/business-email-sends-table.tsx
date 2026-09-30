@@ -9,7 +9,8 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { useBusinessEmailSends } from "@/features/businesses/queries/businesses.queries";
-import { StatusBadge } from "@/features/email-sends/tables/email-sends.columns";
+import { StatusBadge } from "@/features/email-sends/tables/cells/status-badge";
+import { formatBusinessDateTime } from "@/lib/dates";
 
 /**
  * Historial de avisos transaccionales de un negocio (read-only), con la query y
@@ -92,7 +93,7 @@ export function BusinessEmailSendsTable({
 								{send.error_message ?? "—"}
 							</TableCell>
 							<TableCell className="text-muted-foreground text-sm whitespace-nowrap">
-								{new Date(send.created_at).toLocaleString("es-EC")}
+								{formatBusinessDateTime(send.created_at)}
 							</TableCell>
 						</TableRow>
 					))}

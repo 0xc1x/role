@@ -1,7 +1,6 @@
 import {
 	ListAdminOrdersQuerySchema,
 	ORDER_STATUSES,
-	type OrderStatus,
 } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
@@ -10,14 +9,8 @@ import { BusinessFilter } from "@/components/business-filter";
 import { DataTable } from "@/components/data-table/data-table";
 import { ExportCsvButton } from "@/components/data-table/export-csv-button";
 import { Button } from "@/components/ui/button";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusFilter } from "@/components/status-filter";
 import { Switch } from "@/components/ui/switch";
 import { useOrdersList } from "@/features/orders";
 import { ordersApi } from "@/features/orders/api/orders.api";
@@ -91,32 +84,12 @@ function RouteComponent() {
 						/>
 						<span className="text-sm">Solo atascadas</span>
 					</div>
-					<Select
-						value={search.status ?? "all"}
-						onValueChange={(v) =>
-							patch({
-								status: v === "all" ? undefined : (v as OrderStatus),
-							})
-						}
-					>
-						<SelectTrigger className="w-48" aria-label="Estado">
-							{/* Con children explícitos: sin ellos el trigger muestra el
-							    enum crudo (`ready_for_pickup`) en vez de la etiqueta. */}
-							<SelectValue>
-								{search.status
-									? orderStatusLabel(search.status)
-									: "Todos los estados"}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="all">Todos los estados</SelectItem>
-							{ORDER_STATUSES.map((status) => (
-								<SelectItem key={status} value={status}>
-									{orderStatusLabel(status)}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+					<StatusFilter
+						value={search.status}
+						statuses={ORDER_STATUSES}
+						label={orderStatusLabel}
+						onChange={(status) => patch({ status })}
+					/>
 					<BusinessFilter
 						value={search.business_id}
 						onChange={(business_id) => patch({ business_id })}

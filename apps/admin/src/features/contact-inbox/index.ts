@@ -4,7 +4,5 @@ export { ContactMessageDrawer } from "./components/contact-message-drawer";
 export { MarkHandledDialog } from "./components/mark-handled-dialog";
 export * from "./queries/contact-inbox.keys";
 export * from "./queries/contact-inbox.queries";
-export {
-	createContactInboxColumns,
-	StatusBadge,
-} from "./tables/contact-inbox.columns";
+export { createContactInboxColumns } from "./tables/contact-inbox.columns";
+export { StatusBadge } from "./tables/cells/status-badge";

@@ -12,7 +12,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
  * un error de cálculo. Estos tests fijan que cada cara se muestra con SU cifra,
  * con SU rótulo, y que ninguna hereda el número de la otra.
  */
-const { MoneySection, defaultRevenuePeriod } = await import("../money-section");
+const { MoneySection } = await import("../money-section");
+const { defaultRevenuePeriod } = await import("../../lib/revenue-period");
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import(
 	"@/test-utils/dom"

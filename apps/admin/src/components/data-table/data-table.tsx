@@ -10,10 +10,8 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 import { DataTablePagination } from "@/components/data-table/pagination";
-import {
-	type DataTableSelectionState,
-	selectColumn,
-} from "@/components/data-table/selection";
+import { selectColumn } from "@/components/data-table/select-column";
+import type { DataTableSelectionState } from "@/components/data-table/selection";
 import { DataTableViewOptions } from "@/components/data-table/view-options";
 import {
 	Table,

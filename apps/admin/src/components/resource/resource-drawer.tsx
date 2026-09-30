@@ -4,6 +4,7 @@ import {
 	type ReactNode,
 	useContext,
 	useEffect,
+	useMemo,
 	useState,
 } from "react";
 import { Button } from "@/components/ui/button";
@@ -73,8 +74,12 @@ function DrawerSubmitButton({
 
 function DrawerPendingProvider({ children }: { children: ReactNode }) {
 	const [pending, setPending] = useState(false);
+	// The context value must keep its identity across renders: rebuilt inline it
+	// would redraw `DrawerSubmitButton` and every form reporting its mutation on
+	// every render of this provider, even when `pending` never changed.
+	const value = useMemo(() => ({ pending, setPending }), [pending]);
 	return (
-		<DrawerPendingContext.Provider value={{ pending, setPending }}>
+		<DrawerPendingContext.Provider value={value}>
 			{children}
 		</DrawerPendingContext.Provider>
 	);

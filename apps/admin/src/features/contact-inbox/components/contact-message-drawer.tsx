@@ -16,9 +16,9 @@ import {
 	useContactMessage,
 	useMarkContactMessageHandled,
 } from "@/features/contact-inbox/queries/contact-inbox.queries";
-import { StatusBadge } from "@/features/contact-inbox/tables/contact-inbox.columns";
+import { StatusBadge } from "@/features/contact-inbox/tables/cells/status-badge";
 import { formatApiError } from "@/lib/api/notify";
-import { formatBusinessDate } from "@/lib/dates";
+import { formatBusinessDate, formatBusinessDateTime } from "@/lib/dates";
 
 function DetailField({
 	label,
@@ -36,6 +36,68 @@ function DetailField({
 				<p className="text-muted-foreground text-sm">— sin informar —</p>
 			)}
 		</div>
+	);
+}
+
+/**
+ * Cuerpo de la ficha: lo que el mensaje dice y quién lo mandó.
+ *
+ * Su propio componente porque tiene identidad propia (la ficha del mensaje) y
+ * porque concentra el anidado: los `data.x ? … : null` de cada campo y el bloque
+ * de "no legible" vivían dentro del `return` del drawer, junto con el estado de
+ * carga y el pie con las acciones.Separados, cada uno se lee solo.
+ */
+function ContactMessageBody({
+	data,
+}: {
+	data: NonNullable<ReturnType<typeof useContactMessage>["data"]>;
+}) {
+	return (
+		<>
+			{data.readable ? null : (
+				<p className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive text-sm">
+					El contenido de este mensaje tiene un formato que el panel no puede
+					leer. Se puede marcar como atendido, pero no hay nada que mostrar.
+				</p>
+			)}
+
+			<section className="space-y-3" aria-label="Estado">
+				<div className="flex items-center gap-2">
+					<StatusBadge status={data.status} />
+					<span className="text-muted-foreground text-sm">
+						Recibido el {formatBusinessDate(data.created_at)}
+					</span>
+				</div>
+			</section>
+
+			<section className="space-y-3" aria-label="Datos de contacto">
+				<h3 className="font-medium text-sm">Contacto</h3>
+				<DetailField label="Nombre" value={data.name} />
+				<DetailField label="Correo" value={data.email} />
+				<DetailField label="Rol" value={data.role} />
+				<DetailField label="Ciudad" value={data.city} />
+				{data.city_raw === "Otra" ? (
+					<DetailField label="Ciudad informada" value={data.city_other} />
+				) : null}
+				{data.received_at ? (
+					<DetailField
+						label="Registrado"
+						value={formatBusinessDateTime(data.received_at)}
+					/>
+				) : null}
+				<DetailField label="IP de origen" value={data.ip} />
+			</section>
+
+			<section className="space-y-3" aria-label="Mensaje">
+				<h3 className="font-medium text-sm">Mensaje</h3>
+				<DetailField label="Texto" value={data.message} />
+			</section>
+
+			<section className="space-y-3" aria-label="Registro">
+				<h3 className="font-medium text-sm">Registro</h3>
+				<DetailField label="ID" value={data.id} />
+			</section>
+		</>
 	);
 }
 
@@ -89,55 +151,7 @@ export function ContactMessageDrawer({
 							{formatApiError(error, "No se pudo cargar el mensaje")}
 						</p>
 					) : data ? (
-						<>
-							{data.readable ? null : (
-								<p className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive text-sm">
-									El contenido de este mensaje tiene un formato que el panel no
-									puede leer. Se puede marcar como atendido, pero no hay nada
-									que mostrar.
-								</p>
-							)}
-
-							<section className="space-y-3" aria-label="Estado">
-								<div className="flex items-center gap-2">
-									<StatusBadge status={data.status} />
-									<span className="text-muted-foreground text-sm">
-										Recibido el {formatBusinessDate(data.created_at)}
-									</span>
-								</div>
-							</section>
-
-							<section className="space-y-3" aria-label="Datos de contacto">
-								<h3 className="font-medium text-sm">Contacto</h3>
-								<DetailField label="Nombre" value={data.name} />
-								<DetailField label="Correo" value={data.email} />
-								<DetailField label="Rol" value={data.role} />
-								<DetailField label="Ciudad" value={data.city} />
-								{data.city_raw === "Otra" ? (
-									<DetailField
-										label="Ciudad informada"
-										value={data.city_other}
-									/>
-								) : null}
-								{data.received_at ? (
-									<DetailField
-										label="Registrado"
-										value={new Date(data.received_at).toLocaleString("es-EC")}
-									/>
-								) : null}
-								<DetailField label="IP de origen" value={data.ip} />
-							</section>
-
-							<section className="space-y-3" aria-label="Mensaje">
-								<h3 className="font-medium text-sm">Mensaje</h3>
-								<DetailField label="Texto" value={data.message} />
-							</section>
-
-							<section className="space-y-3" aria-label="Registro">
-								<h3 className="font-medium text-sm">Registro</h3>
-								<DetailField label="ID" value={data.id} />
-							</section>
-						</>
+						<ContactMessageBody data={data} />
 					) : null}
 				</DrawerBody>
 

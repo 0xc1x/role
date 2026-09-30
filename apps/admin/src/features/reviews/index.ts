@@ -4,8 +4,8 @@ export { ReviewsModerationList } from "./components/reviews-moderation-list";
 export { UnhideReviewDialog } from "./components/unhide-review-dialog";
 export * from "./queries/reviews.keys";
 export * from "./queries/reviews.queries";
+export { createReviewModerationColumns } from "./tables/reviews.columns";
 export {
-	createReviewModerationColumns,
 	EstadoBadge,
 	MotivoBadge,
-} from "./tables/reviews.columns";
+} from "./tables/cells/moderation-badges";

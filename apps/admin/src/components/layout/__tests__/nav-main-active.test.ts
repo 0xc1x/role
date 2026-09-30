@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { navMain } from "@/config/navigation";
-import { isNavItemActive } from "../nav-main";
+import { isNavItemActive } from "@/lib/nav-active";
 
 /**
  * El resaltado del sidebar se decide sobre la RUTA, no sobre la URL completa.

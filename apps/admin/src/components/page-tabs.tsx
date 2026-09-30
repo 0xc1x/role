@@ -1,9 +1,16 @@
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 
-/** Ids derivados del valor de la pestaña: `PageTabs` y `TabPanel` deben coincidir. */
-export const tabId = (tab: string) => `tab-${tab}`;
-export const panelId = (tab: string) => `panel-${tab}`;
+/**
+ * Ids derived from the tab value: `PageTabs` and `TabPanel` must agree.
+ *
+ * Deliberately NOT exported. The contract they encode lives between the two
+ * components of this module, it is not an API: a public `tabId`/`panelId` would
+ * invite a third module to build ids with the same convention, with nothing
+ * guaranteeing it still matches after the next edit here.
+ */
+const tabId = (tab: string) => `tab-${tab}`;
+const panelId = (tab: string) => `panel-${tab}`;
 
 /**
  * Panel de una pestaña. Los `aria-controls` de `PageTabs` apuntan aquí: sin el

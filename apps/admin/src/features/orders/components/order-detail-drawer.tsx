@@ -10,7 +10,7 @@ import {
 	DrawerHeader,
 	DrawerTitle,
 } from "@/components/ui/drawer";
-import { OrderStatusBadge } from "@/features/orders/tables/orders.columns";
+import { OrderStatusBadge } from "@/features/orders/tables/cells/order-status-badge";
 import { formatBusinessDate } from "@/lib/dates";
 
 const stampFmt = new Intl.DateTimeFormat("es-EC", {
