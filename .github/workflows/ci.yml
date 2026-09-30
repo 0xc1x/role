@@ -82,6 +82,16 @@ jobs:
           # Dummies para el validador zod de apps/mobile (los tests usan mocks, sin red)
           EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
           EXPO_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          # Landing resuelve esto al importar y, desde que se quito el default
+          # silencioso, no tiene nada que devolver cuando falta. Los specs unitarios
+          # afirman que la base configurada vuelve, asi que necesitan una para
+          # afirmar sobre ella; nunca abren un socket, el dummy solo tiene que ser
+          # una URL.
+          #
+          # Deliberadamente NO va en el paso `Build`: el bundle de cliente toma el
+          # valor real de Vercel en el deploy, y atar el build a una variable que no
+          # usa lo dejaria esperando algo que no necesita.
+          VITE_API_URL: https://test.invalid/api/v1
 
       # Playwright's browser download is ~170 MB and is not part of the Bun
       # store cache, so it is installed once here and shared by every app e2e
@@ -113,6 +123,9 @@ jobs:
           # Dummies para el validador zod de apps/mobile (los tests usan mocks, sin red)
           EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
           EXPO_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          # Mismo motivo que en el paso Test: `bun run coverage` corre la suite para
+          # producir el lcov, asi que hereda su exigencia de una base configurada.
+          VITE_API_URL: https://test.invalid/api/v1
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
