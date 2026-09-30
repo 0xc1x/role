@@ -68,15 +68,45 @@ export default defineConfig({
 			// e2e that talks to that is testing the backend a second time with
 			// nobody watching. Overriding the environment leaves the developer's
 			// `.env` alone and cannot be committed by accident.
-			command: `VITE_API_URL=${STUB_API_URL} bunx vite dev --port ${PORT} --host 127.0.0.1`,
+			//
+			// WHY THE BUILD INSTEAD OF `vite dev` — the same lesson as
+			// `apps/mobile`, measured rather than assumed.
+			//
+			// The dev server serialises every SSR render through ONE Node process,
+			// so a test's cost grows with the number of workers hammering it. Same
+			// three-phase chain (`signIn` → `goto section` → `expect row`), one
+			// browser at a time vs eight, this box, Chromium:
+			//
+			//   | workers | vite dev | vite preview (prod build) |
+			//   |---------|----------|--------------------------|
+			//   |    1    |   7.7 s  |   3.9 s                  |
+			//   |    4    |  10.9 s  |   7.7 s                  |
+			//   |    8    |  19.8 s  |  14.4 s                  |
+			//
+			// (median per-test total). The dev numbers blow the 30 s test budget
+			// once three browser suites share a runner: the 8-worker median is
+			// already two thirds of it before landing and mobile take any of it.
+			// The build removes the transform work from the request path entirely,
+			// which is also why its number does not depend on a cache CI does not
+			// keep.
+			//
+			// It is additionally the artefact that actually ships. `vite dev`
+			// serves a DEV bundle; testing it means testing a different program
+			// from the one users get, exactly the argument that moved mobile off
+			// `expo start --web`.
+			//
+			// `reuseExistingServer` stays off: a preview left over from another
+			// branch would be a suite passing against code that is not under test.
+			command: `VITE_API_URL=${STUB_API_URL} bun run build && VITE_API_URL=${STUB_API_URL} bunx vite preview --port ${PORT} --host 127.0.0.1`,
 			url: BASE_URL,
-			// Vite is ready in well under a second, but the FIRST boot also pays
-			// for the dependency pre-bundle, which is the 10-15 s this budget is
-			// for. `reuseExistingServer` is deliberately off: a dev server left
-			// over from a previous run would have been booted with the developer's
-			// `VITE_API_URL`, i.e. pointed at the real API.
+			// A preview left over from another branch, or one booted against the
+			// developer's own `VITE_API_URL`, must never be reused: from the
+			// outside both look exactly like ours. Playwright's own default is
+			// `!process.env.CI`, which WOULD reuse one on a developer machine.
 			reuseExistingServer: false,
-			timeout: 120_000,
+			// The build is ~6 s warm on this box; the budget is for a cold CI
+			// runner where the first rolldown pass is slower, not for a hang.
+			timeout: 180_000,
 			stdout: "pipe",
 			stderr: "pipe",
 		},

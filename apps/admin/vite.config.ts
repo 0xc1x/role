@@ -52,6 +52,39 @@ const config = defineConfig(({ mode }) => {
 		optimizeDeps: {
 			include: ["@0xc1x/role-commons"],
 		},
+		build: {
+			rollupOptions: {
+				output: {
+					/**
+					 * WHY: Nitro's server build puts every `node_modules` module into
+					 * shared chunks named after ONE of their package names
+					 * (`codeSplitting.groups` in `nitro/dist/_build/rolldown.mjs` →
+					 * `libChunkName`). Rolldown was choosing `@tanstack/devtools` as that
+					 * name, so `clsx` was swept into the devtools chunk and re-exported
+					 * from it (`export { TanStackDevtoolsCore, clsx }`). `button.tsx`
+					 * imports `clsx` from `@/lib/utils`, so EVERY SSR request evaluated the
+					 * devtools bundle, which calls a client-only API at module scope.
+					 *
+					 * MEASURED, before this line: `vite build` + `vite preview` returned
+					 * HTTP 500 `Client-only API called on the server side` on every route
+					 * including `/login`, and `node .output/server/index.mjs` — the command
+					 * Nitro itself prints as the preview command — 500'd identically. The
+					 * production build of the admin panel did not boot at all.
+					 *
+					 * `manualChunks` does NOT work here: rolldown prints
+					 * `manualChunks option is ignored because the codeSplitting option is
+					 * specified.` `codeSplitting.groups` is matched in order, so claiming
+					 * `clsx` in a group BEFORE the catch-all node_modules group keeps it in
+					 * a chunk of its own and severs the edge.
+					 */
+					codeSplitting: {
+						groups: [
+							{ test: /node_modules[/\\]clsx[/\\]/, name: "_libs/clsx.mjs" },
+						],
+					},
+				},
+			},
+		},
 		plugins: [devtools(), nitro(), tailwindcss(), tanstackStart(), viteReact()],
 	};
 });
