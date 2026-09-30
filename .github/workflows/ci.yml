@@ -106,6 +106,21 @@ jobs:
         run: bun run test:e2e
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:6432/role_test
+          # Landing's SSR and mobile's env validator both read these at import
+          # time. Each e2e config also overrides them for its own server, but
+          # the value has to exist in the process either way.
+          EXPO_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          VITE_API_URL: https://test.invalid/api/v1
+          # The mobile e2e builds the PWA, and its pre-export step writes the
+          # Firebase config the web-push client reads at load. The script exits
+          # non-zero when any of the four is missing, so without them the
+          # webServer dies before a single spec runs. Dummies: the suite stubs
+          # the network at the browser edge, so no request ever reaches them.
+          EXPO_PUBLIC_FIREBASE_API_KEY: test-firebase-key
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: role-test
+          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          EXPO_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000000000"
 
       # Coverage is measured, never enforced. There is deliberately no
       # threshold: Bun's coverageThreshold is per FILE (stricter than the
