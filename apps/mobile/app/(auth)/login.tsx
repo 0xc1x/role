@@ -12,7 +12,7 @@ import { withAlpha } from "@/src/core/theme/alpha";
 import { AppText, TextField } from "@/src/core/ui";
 import { Logo } from "@/src/core/ui/Logo";
 import { AuthScreenShell } from "@/src/features/auth/presentation/AuthScreenShell";
-import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
+// import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/src/features/auth/data/repository";
 import { validateLoginForm } from "@/src/features/auth/domain/validation";
 import { useAuthStore } from "@/src/features/auth/store";
@@ -153,7 +153,7 @@ export default function LoginScreen() {
 				{strings.auth.login}
 			</Button>
 
-			<SocialAuthButtons label={strings.auth.orContinueWith} />
+			{/* <SocialAuthButtons label={strings.auth.orContinueWith} /> */}
 
 			<AppText
 				variant="bodyMedium"
