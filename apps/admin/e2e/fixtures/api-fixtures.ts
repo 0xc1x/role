@@ -378,7 +378,7 @@ const CONTACT_MESSAGE = {
 	// `PENDIENTE` is the delivery-of-the-NOTICE status, not "unread". The inbox
 	// prints a legend saying exactly that, so the fixture uses the state the
 	// legend warns about and the column label can be asserted against it.
-	status: "PENDIENTE",
+	delivery_status: "PENDIENTE",
 	created_at: "2026-01-06T00:00:00.000Z",
 	updated_at: "2026-01-06T00:00:00.000Z",
 	readable: true,

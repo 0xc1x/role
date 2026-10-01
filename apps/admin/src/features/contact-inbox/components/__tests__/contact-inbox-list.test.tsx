@@ -11,7 +11,7 @@ const previousFetch = globalThis.fetch;
 
 const legible: ContactMessageListItemDto = {
 	id: "11111111-1111-4111-8111-111111111111",
-	status: "PENDIENTE",
+	delivery_status: "PENDIENTE",
 	created_at: "2026-09-20T10:00:00.000Z",
 	updated_at: "2026-09-20T10:00:00.000Z",
 	readable: true,
@@ -65,7 +65,7 @@ function renderList(
 				page={1}
 				limit={20}
 				onPageChange={() => undefined}
-				onStatusChange={() => undefined}
+				onDeliveryStatusChange={() => undefined}
 				{...props}
 			/>
 		</QueryClientProvider>,
@@ -92,8 +92,8 @@ describe("listado de la bandeja", () => {
 		stubFetch([legible]);
 		renderList();
 
-		// "Pendiente" a secas haría leer la fila como "sin leer". El `status` de
-		// app_store habla de la entrega del correo de aviso.
+		// "Pendiente" a secas haría leer la fila como "sin leer". El
+		// `delivery_status` de app_store habla de la entrega del correo de aviso.
 		await waitFor(() =>
 			expect(screen.getByText("Entrega pendiente")).toBeDefined(),
 		);
@@ -130,20 +130,20 @@ describe("listado de la bandeja", () => {
 	});
 });
 
-describe("filtro por estado", () => {
-	test("sin filtro no manda status en la URL", async () => {
+describe("filtro por estado de entrega", () => {
+	test("sin filtro no manda delivery_status en la URL", async () => {
 		const urls = stubFetch([legible]);
 		renderList();
 
 		await waitFor(() => expect(urls.length).toBeGreaterThan(0));
-		expect(urls[0]).not.toContain("status=");
+		expect(urls[0]).not.toContain("delivery_status=");
 	});
 
 	test("con filtro pide solo ese estado a la API", async () => {
 		const urls = stubFetch([legible]);
-		renderList({ status: "PENDIENTE" });
+		renderList({ deliveryStatus: "PENDIENTE" });
 
 		await waitFor(() => expect(urls.length).toBeGreaterThan(0));
-		expect(urls[0]).toContain("status=PENDIENTE");
+		expect(urls[0]).toContain("delivery_status=PENDIENTE");
 	});
 });
