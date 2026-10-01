@@ -30,6 +30,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { PushNotificationsModule } from './modules/push-notifications/push-notifications.module';
 import { ContactModule } from './modules/contact/contact.module';
 import { ContactInboxModule } from './modules/contact-inbox/contact-inbox.module';
+import { BugReportInboxModule } from './modules/bug-report-inbox/bug-report-inbox.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { StoreModule } from './modules/store/store.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
@@ -88,6 +89,7 @@ import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.
     StoreModule,
     ContactModule,
     ContactInboxModule,
+    BugReportInboxModule,
   ],
   providers: [
     {

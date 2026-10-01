@@ -80,6 +80,7 @@ export class AppStoreRepository {
     namespace?: string;
     delivery_status?: string;
     state?: string;
+    origin?: NonNullable<StoreEntry['origin']>;
     page: number;
     limit: number;
   }): Promise<{ rows: StoreEntry[]; total: number }> {
@@ -91,6 +92,11 @@ export class AppStoreRepository {
         eq(appStore.delivery_status, filter.delivery_status as never),
       );
     if (filter.state) filters.push(eq(appStore.state, filter.state));
+    // `origin` se declara como la unión del enum y NO como `string`: así la
+    // comparación de abajo no necesita el `as never` que sí hace falta en
+    // `delivery_status`, y el compilador rechaza en la llamada si alguien
+    // inventa un canal que el enum de Postgres no tiene.
+    if (filter.origin) filters.push(eq(appStore.origin, filter.origin));
     const where = filters.length ? and(...filters) : undefined;
 
     const [totalRow] = await this.db
