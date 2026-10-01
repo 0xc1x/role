@@ -1,4 +1,4 @@
-import { WORDMARK_MONO_INNER, WORDMARK_INNER, WORDMARK_VIEWBOX } from "@0xc1x/role-commons";
+import { WORDMARK_MONO_SVG, WORDMARK_SVG } from "@0xc1x/role-commons";
 import { SvgXml } from "react-native-svg";
 
 import { useTheme } from "@/src/core/theme";
@@ -8,13 +8,11 @@ import { useTheme } from "@/src/core/theme";
  *
  * SINGLE SOURCE OF TRUTH: el artwork vive en
  * `packages/commons/src/brand/assets/wordmark.svg` y se compila a
- * `@0xc1x/role-commons` con `bun run brand:sync`. No edites el SVG aquí.
- *
- * La variante `mono` usa `WORDMARK_MONO_INNER` (fills en `currentColor`,
- * mismo patrón que `Wordmark` en landing) para superficies oscuras.
+ * `@0xc1x/role-commons` con `bun run brand:sync`. No edites el SVG aquí:
+ * este componente solo elige variante (`WORDMARK_SVG` morados por defecto,
+ * `WORDMARK_MONO_SVG` en `currentColor` para superficies oscuras, mismo
+ * patrón que `Wordmark` en landing).
  */
-const BRAND_XML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${WORDMARK_VIEWBOX}">${WORDMARK_INNER}</svg>`;
-const MONO_XML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${WORDMARK_VIEWBOX}">${WORDMARK_MONO_INNER}</svg>`;
 
 type LogoProps = {
 	width?: number;
@@ -30,7 +28,7 @@ export function Logo({ width, height, mono, color = "#FFFFFF" }: LogoProps) {
 	const isMono = mono ?? scheme === "dark";
 	return (
 		<SvgXml
-			xml={isMono ? MONO_XML : BRAND_XML}
+			xml={isMono ? WORDMARK_MONO_SVG : WORDMARK_SVG}
 			width={width}
 			height={height}
 			color={isMono ? color : undefined}
