@@ -412,7 +412,7 @@ further from the only proof of what ran. The file stays the reviewed version, th
 ledger stays the statement the server stored, and the gap is recorded here —
 the same treatment the `20260925*` files above already have.
 
-## Aplicada: `20260930234450_bug_reports_and_delivery_axis`
+## Applied: `20260930234450_bug_reports_and_delivery_axis`
 
 Aplicada por `apply_migration` el 2026-09-30. El `md5sum` del archivo es
 `3b302c90f0ae124e5697d5879cdd3263` y ese es también el `md5(statements[1])` del
