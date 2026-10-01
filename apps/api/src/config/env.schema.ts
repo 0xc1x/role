@@ -126,19 +126,19 @@ export const envSchema = z.object({
    * silently disagrees with the app's real storage layout fails closed on
    * business features and looks like a permissions problem.
    *
-   * `bug_report_images` está en el default porque esta allowlist es, en la
-   * práctica, el inventario de buckets que la API conoce, no solo de buckets
-   * donde escribe: el buzón de reportes FIRMA las capturas de ese bucket
-   * (`getById` devuelve URLs firmadas, no rutas) y no puede hacerlo si el
-   * bucket no está en la lista. Excluirlo no rompería con un error visible —
-   * el texto del reporte funcionaría y las capturas no, imágenes rotas en el
-   * panel—, que es el modo de fallo más difícil de diagnosticar de todos.
+   * DELIBERADAMENTE NO LLEVA `bug_report_images`, y es una decisión, no un
+   * olvido. Esa allowlist es de ESCRITURA: la usa `POST /upload/image`, que sube
+   * un archivo y devuelve un `getPublicUrl`. En un bucket `public = false` esa
+   * URL no resuelve, así que listar `bug_report_images` abriría de más un
+   * endpoint de escritura a cambio de nada: el buzón de reportes no sube nada
+   * ahí —el móvil lo sube con su propia sesión— y para FIRMAR las capturas usa
+   * la constante `BUG_REPORT_IMAGES_BUCKET`, que es del servidor y no necesita
+   * permiso de escritura. Agregarla también haría que `.env.example` narrara un
+   * bucket que el endpoint de upload no puede usar.
    */
   SUPABASE_ALLOWED_BUCKETS: z
     .string()
-    .default(
-      'images,business_images,categories_images,product_images,bug_report_images',
-    ),
+    .default('images,business_images,categories_images,product_images'),
   /** Comma-separated allowed folders (allowlist). Default: categories */
   SUPABASE_ALLOWED_FOLDERS: z.string().default('categories'),
   /**

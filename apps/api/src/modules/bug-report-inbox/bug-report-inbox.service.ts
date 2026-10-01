@@ -126,8 +126,7 @@ export class BugReportInboxService {
     const paths = BugReportInboxMapper.imagePathsOf(row);
     if (paths.length === 0) return detail;
 
-    const bucket = this.assertBucketAllowed();
-    if (!bucket) return detail;
+    const bucket = this.bucketDeCapturas();
     const storage = this.storageClient();
     const firmadas = await Promise.all(
       paths.map(async (path) => {
@@ -150,25 +149,20 @@ export class BugReportInboxService {
   }
 
   /**
-   * El bucket tiene que estar en la allowlist antes de firmar.
+   * El bucket de las capturas.
    *
-   * Falla en silencio a propósito —devuelve `[]`, que el `withSignedImages`
-   * traduce en "sin capturas"— y no con un 403 o un 500. La allowlist es
-   * configuración de despliegue, no un error del operador: si alguien la dejó
-   * afuera, el buzón tiene que seguir mostrando los reportes, porque el texto
-   * del reporte es lo importante y las capturas son lo accesorio. Un throw
-   * convertiría una variable mal puesta en un buzón entero caído.
+   * USA LA CONSTANTE DEL SERVIDOR, y no `SUPABASE_ALLOWED_BUCKETS`, a propósito.
+   * `BUG_REPORT_IMAGES_BUCKET` es del servidor y el bucket nunca viene de
+   * `value` ni de un parámetro, así que no hay nada que validar: un filtro de
+   * configuración sobre un valor constante solo puede fallar cerrado, y cuando
+   * falla deja el buzón sin capturas por una variable de despliegue que nadie
+   * pidió. Además esa allowlist es de ESCRITURA —la usa `POST /upload/image`,
+   * que sube y devuelve un `getPublicUrl`—, y `bug_report_images` es privado con
+   * el móvil subiendo por su cuenta: meterlo ahí abriría de más un endpoint de
+   * escritura para comprar nada.
    */
-  private assertBucketAllowed(): string | null {
-    const allowed = (
-      this.config.get('SUPABASE_ALLOWED_BUCKETS', { infer: true }) ?? ''
-    )
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    return allowed.includes(BUG_REPORT_IMAGES_BUCKET)
-      ? BUG_REPORT_IMAGES_BUCKET
-      : null;
+  private bucketDeCapturas(): string {
+    return BUG_REPORT_IMAGES_BUCKET;
   }
 
   /** El cliente de storage se construye una vez y se reusa. */

@@ -39,19 +39,42 @@ import { BUG_TRIAGE_STATES, ENTRY_ORIGINS } from "../enums/bug-report.enum";
  *    Vacío es un reporte malo; ilegible es un reporte invisible.
  *
  * `images` son RUTAS dentro del bucket privado `bug_report_images`, no URLs, y
- * eso es deliberado en las dos direcciones: el bucket es privado, así que una
- * ruta no sirve para descargar nada —descargarla es lo que hace el API firmando
- * una URL de corta duración— y una ruta sí filtra el layout interno del bucket
- * con el uid del reportante adentro. El móvil escribe las rutas porque es el
- * único que tiene la sesión del usuario para subirlas; el API es el único que
- * puede firmarlas. `value` no sale del API: se queda en la fila, que es
- * admin-only. Lo que SALE del API es `image_urls` (ver
+ * eso es deliberado: una ruta no descarga nada porque el bucket es privado, y
+ * descargar es lo que hace el API firmando una URL de corta duración. El móvil
+ * escribe las rutas porque es el único que tiene la sesión del usuario para
+ * subirlas; el API es el único que puede firmarlas. `value` no sale del API: se
+ * queda en la fila, que es admin-only. Lo que SALE del API es `image_urls` (ver
  * `BugReportDetailSchema`), y el nombre es la garantía.
  */
 export const BugReportValueSchema = z.object({
 	summary: z.string(),
 	description: z.string().nullish(),
-	images: z.array(z.string()).nullish(),
+	/**
+	 * RUTAS dentro del bucket privado `bug_report_images`, tal como las sube el
+	 * móvil. La firma vive en el API (design §8) y sale como `image_urls` en el
+	 * detalle; estas no salen nunca.
+	 *
+	 * EL `.max()` ES UNA REGLA DE LECTURA, no un capricho de forma, y por eso
+	 * este es el único `.max()` del schema. La policy de insert no mira `value` en
+	 * absoluto, así que un usuario autenticado puede guardar las rutas que quiera;
+	 * y `GET /:id` firma UNA POR UNA, así que un array sin tope convierte cada
+	 * apertura del detalle en N llamadas a Storage, con el service role, en bucle
+	 * hasta que un cliente heartbeat lo tumbe. El número sale de la
+	 * Constraint Global del proyecto: `file_size_limit` es 5 MB POR ARCHIVO
+	 * (5.242.880 bytes), y un reporte con capturas es un caso de una o dos —
+	 * un flujo de texto no depende de ninguna. El `.max()` NO descarta la fila:
+	 * una fila con más capturas sale con `readable: false`, y lo que se pierde es
+	 * el texto del reporte, que es lo importante. Por eso es un límite BAJO y no
+	 * uno generoso: el corte duele lo mismo en los dos casos, y el número que
+	 * hace daño de verdad es el que evita el vector.
+	 *
+	 * OJO con el contraste con el `summary`, que NO lleva `.min(1)` a propósito:
+	 * ahí el argumento era que el texto del usuario puede perderse y nunca debe
+	 * desaparecer un reporte malo. Aquí el recurso que se protege es el del
+	 * servidor, y perder el texto de una fila con 400 capturas es el precio
+	 * correcto.
+	 */
+	images: z.array(z.string()).max(5).nullish(),
 	reporter_id: z.string().nullish(),
 	at: z.string().nullish(),
 });
@@ -112,21 +135,22 @@ export const BugReportListItemSchema = z.object({
 export const BugReportDetailSchema = BugReportListItemSchema.extend({
 	description: z.string().nullable(),
 	/**
-	 * URLs FIRMADAS de corta duración, no las rutas del bucket. El nombre es la
-	 * garantía, no una contraceptive —
+	 * URLs FIRMADAS de corta duración, no las rutas del bucket.
 	 *
-	 * el design (§8) dice que "el panel nunca ve el bucket crudo", y eso tiene
-	 * dos mitades. La functional: el bucket es privado, así que una ruta suelta no
-	 * se descarga — la función de capturas del panel no funcionaría y el
-	 * operador vería imágenes rotas. La de seguridad: la ruta lleva el layout
-	 * interno del bucket y el uid del reportante adentro
-	 * (`<uid>/report/<uuid>.png`), y eso no tiene por qué viajar.
+	 * POR QUÉ EL NOMBRE ES LA GARANTÍA, y qué garantiza exactamente. El campo se
+	 * llama `image_urls` y no `images` para que quien lea el contrato vea en el
+	 * nombre que lo que sale del API es descargable de una vez y caduca solo. Un
+	 * `images` ambiguo invitaría a publicar la ruta, que no descarga nada.
 	 *
-	 * Por eso el campo se llama `image_urls` y no `images`: quien lea el
-	 * contrato tiene que ver en el nombre que lo que sale del API es
-	 * descargable de una vez y caduca solo. Un `images` ambiguo invitaría a
-	 * publicar la ruta, que es justo lo que no debe pasar. Las rutas crudas se
-	 * quedan en `value`, que es admin-only.
+	 * Lo que la firma protege es el ACCESO SIN TOKEN, y eso es lo único. La ruta
+	 * va en claro dentro del path de la URL firmada
+	 * (`/object/sign/<bucket>/<ruta>`), así que el panel ve el nombre del bucket
+	 * y el uid del reportante; no prometer que el panel "nunca ve el bucket crudo"
+	 * sería falso, y el uid no le agrega nada al panel porque este mismo detalle
+	 * expone `reporter_id`. Sin el token la URL no descarga nada, y al expirar
+	 * deja de descargar: eso es lo que dura cinco minutos.
+	 *
+	 * Las rutas crudas se quedan en `value`, que es admin-only.
 	 *
 	 * Las que no se pudieron firmar NO aparecen: el array sale más corto, nunca
 	 * con la ruta cruda en su lugar. Un reporte con una captura borrada tiene que

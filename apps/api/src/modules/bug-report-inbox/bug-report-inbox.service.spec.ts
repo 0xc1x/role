@@ -34,18 +34,19 @@ const seedReporte = (
   });
 
 /**
- * `ConfigService` mínimo. `SUPABASE_ALLOWED_BUCKETS` NO lleva
- * `bug_report_images` a propósito: este spec prueba el buzón contra la DB real, y
- * sin el bucket en la allowlist el service omite las firmas sin tocar la red, así
- * que ningún spec de este archivo depende de Supabase. La firma sí se prueba, con
- * el cliente falso, en `bug-report-inbox.images.spec.ts`.
+ * `ConfigService` mínimo, con la allowlist de ESCRITURA real (sin
+ * `bug_report_images`, que no pertenece ahí). El bucket del buzón sale de
+ * `BUG_REPORT_IMAGES_BUCKET`, no de esta lista, así que este archivo depende de
+ * Supabase solo en las filas con capturas —y la firma se prueba con el cliente
+ * falso en `bug-report-inbox.images.spec.ts`.
  */
 const config = {
   get: (key: string) =>
     ({
       SUPABASE_URL: 'https://proyecto.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-de-test',
-      SUPABASE_ALLOWED_BUCKETS: 'images,business_images',
+      SUPABASE_ALLOWED_BUCKETS:
+        'images,business_images,categories_images,product_images',
     })[key],
 } as unknown as ConfigService<Env, true>;
 
@@ -186,8 +187,12 @@ describe('triaje: escribe state y solo state', () => {
     expect(dto.readable).toBe(true);
     expect(dto.summary).toBe('No me deja pagar con la tarjeta que usé ayer');
     expect(dto.reporter_id).toBe(REPORTER);
-    // `image_urls` vacío porque el bucket no está en la allowlist de este
-    // config. Lo que importa acá es que la RUTA cruda no se coló en su lugar.
+    // La fila tiene capturas, así que acá se intentó firmar. Este spec no
+    // inyecta cliente de Supabase, así que la firma no llega a completarse y la
+    // captura se OMITE. Lo que importa en este archivo es que la ruta cruda no
+    // se coló en su lugar —una firma que falla no puede volverse "te devuelvo el
+    // path"— y que el detalle llegue igual. La firma que sí funciona se prueba
+    // en `bug-report-inbox.images.spec.ts`, con el cliente falso.
     expect(dto.image_urls).toEqual([]);
     expect(JSON.stringify(dto)).not.toContain('captura-1.png');
   });
@@ -295,6 +300,62 @@ describe('el listado no publica el reporter_id', () => {
 
     const detalle = await service.getById(reporte.id);
     expect(detalle.reporter_id).toBe(REPORTER);
+  });
+});
+
+describe('un value con demasiadas capturas sale ilegible, no se firma de a mil', () => {
+  /**
+   * La fila se LISTA —la escribió un usuario autenticado y la policy de insert
+   * no inspecciona `value`— pero su `value` no pasa el schema: sale
+   * `readable: false` y con `image_urls` vacío. Ese es el corte: el `.max(5)` en
+   * commons hace que la fila no sea legible, y una fila ilegible no tiene rutas
+   * que firmar. Sin el `.max`, este `GET` habría abierto seis llamadas a Storage
+   * con el service role.
+   */
+  test('6 capturas: el detalle responde sin firmar ninguna', async () => {
+    const reporte = await seedReporte({
+      summary: 'Se me froze la app',
+      images: Array.from(
+        { length: 6 },
+        (_, i) => `${REPORTER}/captura-${i}.png`,
+      ),
+    });
+
+    const dto = await service.getById(reporte.id);
+
+    expect(dto.readable).toBe(false);
+    expect(dto.image_urls).toEqual([]);
+    expect(JSON.stringify(dto)).not.toContain('captura-0.png');
+  });
+
+  test('400 capturas: tampoco se firman, y la fila sigue sin tumbar la bandeja', async () => {
+    const reporte = await seedReporte({
+      summary: 'Se me froze la app',
+      images: Array.from(
+        { length: 400 },
+        (_, i) => `${REPORTER}/captura-${i}.png`,
+      ),
+    });
+
+    const dto = await service.getById(reporte.id);
+
+    expect(dto.readable).toBe(false);
+    expect(dto.image_urls).toEqual([]);
+  });
+
+  test('5 capturas sí es un reporte legible', async () => {
+    const reporte = await seedReporte({
+      summary: 'Se me froze la app',
+      images: Array.from(
+        { length: 5 },
+        (_, i) => `${REPORTER}/captura-${i}.png`,
+      ),
+    });
+
+    const dto = await service.getById(reporte.id);
+
+    expect(dto.readable).toBe(true);
+    expect(dto.summary).toBe('Se me froze la app');
   });
 });
 

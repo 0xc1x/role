@@ -106,6 +106,40 @@ describe("BugReportValueSchema", () => {
 		expect(BugReportValueSchema.safeParse(null).success).toBe(false);
 	});
 
+	it("acepta hasta 5 capturas y rechaza el array sin tope", () => {
+		// La policy de insert NO mira `value`, así que un usuario autenticado
+		// puede guardar las rutas que quiera. Y `GET /:id` firma UNA POR UNA, así
+		// que un array sin tope convierte cada apertura del detalle en N llamadas a
+		// Storage con el service role. El `.max()` es la regla de lectura que
+		// cierra eso; 5 sale de la Constraint Global (`file_size_limit` de 5 MB
+		// POR ARCHIVO) y de que un reporte con capturas es un caso de una o dos.
+		const rutas = (n: number) =>
+			Array.from({ length: n }, (_, i) => `uid/report/captura-${i}.png`);
+
+		expect(BugReportValueSchema.safeParse({ ...valorValido }).success).toBe(
+			true,
+		);
+		for (const n of [0, 1, 2, 5]) {
+			const parsed = BugReportValueSchema.parse({
+				summary: "ok",
+				images: rutas(n),
+			});
+			expect(parsed.images).toHaveLength(n);
+		}
+
+		// 6 ya no es un reporte legible. Y el corte NO borra la fila: sale
+		// `readable: false` con todo en `null`, así que el operador ve que hay
+		// algo raro en vez de un reporte con 400 capturas y 400 firmas.
+		expect(
+			BugReportValueSchema.safeParse({ summary: "ok", images: rutas(6) })
+				.success,
+		).toBe(false);
+		expect(
+			BugReportValueSchema.safeParse({ summary: "ok", images: rutas(400) })
+				.success,
+		).toBe(false);
+	});
+
 	it("acepta un resumen más largo que cualquier límite de escritura", () => {
 		// El límite de longitud, si algún día existe, es regla de escritura. Una
 		// fila vieja que lo exceda no puede perder el texto que el usuario sí

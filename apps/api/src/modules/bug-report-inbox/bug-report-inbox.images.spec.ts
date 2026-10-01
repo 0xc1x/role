@@ -78,15 +78,6 @@ function instalarSupabaseFalso() {
  * tipo "la respuesta no contiene `report/`" tiene que poder pasar. Con un token
  * que repitiera la ruta, ese assert no distinguiría una fuga de una firma
  * legítima y el test mentiría en el sentido contrario.
- */
-/**
- * URL firmada con la FORMA que devuelve Supabase, y un token opaco.
- *
- * El token NO incluye la ruta a propósito. Es lo que lo hace creíble: una URL
- * firmada real no lleva el path en claro más de una vez, así que un assert del
- * tipo "la respuesta no contiene `report/`" tiene que poder pasar. Con un token
- * que repitiera la ruta, ese assert no distinguiría una fuga de una firma
- * legítima y el test mentiría en el sentido contrario.
  *
  * El nombre de la URL se cachea por ruta para que dos llamadas comparen igual:
  * el TTL se prueba sobre `pedidas`, no sobre el texto de la URL.
@@ -321,37 +312,78 @@ describe('un reporte sin capturas no toca la red', () => {
   });
 });
 
-describe('el bucket fuera de la allowlist degrada, no rompe', () => {
+describe('el bucket de las capturas no depende de la allowlist de escritura', () => {
   /**
-   * La allowlist es configuración de despliegue. Si alguien la dejó afuera, el
-   * buzón tiene que SEGUIR mostrando los reportes: el texto es lo importante y
-   * las capturas son lo accesorio. Un throw convertiría una variable mal puesta
-   * en un buzón entero caído.
+   * La firma usa la constante del servidor, NO `SUPABASE_ALLOWED_BUCKETS`, y
+   * este test es lo que fija esa decisión.
+   *
+   * Esa allowlist es de ESCRITURA: la usa `POST /upload/image`, que sube y
+   * devuelve un `getPublicUrl`, y en un bucket `public = false` esa URL no
+   * resuelve. Meter `bug_report_images` ahí abriría de más un endpoint de
+   * escritura para comprar nada: el móvil sube las capturas con su propia
+   * sesión, y el API solo necesita FIRMAR rutas de un bucket privado, que no
+   * requiere permiso de escritura.
+   *
+   * El config de este describe NO lista el bucket en ningún caso, y aun así
+   * firma. Si alguien reintrodujera el filtro por allowlist, este test falla.
    */
-  test('sin el bucket en la allowlist: detalle completo, sin capturas', async () => {
+  test('firma aunque SUPABASE_ALLOWED_BUCKETS no liste el bucket', async () => {
+    firmas.set(PATH_1, { url: FIRMADA(PATH_1) });
+    firmas.set(PATH_2, { url: FIRMADA(PATH_2) });
     const { BugReportInboxService: Svc } =
       await import('./bug-report-inbox.service');
     store.findById = async () => filaDe(REPORTE);
     const svc = new Svc(
       store as unknown as AppStoreRepository,
-      configDe('images,business_images'),
+      // Allowlist de escritura real, sin el bucket de reportes.
+      configDe('images,business_images,categories_images,product_images'),
     );
 
     const dto = await svc.getById(ID);
 
-    expect(dto.readable).toBe(true);
-    expect(dto.summary).toBe('No me deja pagar con la tarjeta que usé ayer');
-    expect(dto.image_urls).toEqual([]);
-    // Y no se sale ni la ruta cruda por el hueco.
-    expect(JSON.stringify(dto)).not.toContain('captura');
-    // Ni se intenta firmar de todas formas.
-    expect(pedidas).toEqual([]);
+    expect(dto.image_urls).toEqual([FIRMADA(PATH_1), FIRMADA(PATH_2)]);
+    expect(pedidas.map((p) => p.bucket)).toEqual([
+      BUG_REPORT_IMAGES_BUCKET,
+      BUG_REPORT_IMAGES_BUCKET,
+    ]);
   });
 
-  test('con el bucket listado entre otros, firma igual', async () => {
+  test('firma con la allowlist vacía: el bucket no sale de la configuración', async () => {
+    firmas.set(PATH_1, { url: FIRMADA(PATH_1) });
+    const { BugReportInboxService: Svc } =
+      await import('./bug-report-inbox.service');
+    store.findById = async () => filaDe({ ...REPORTE, images: [PATH_1] });
+    const svc = new Svc(store as unknown as AppStoreRepository, configDe(''));
+
+    const dto = await svc.getById(ID);
+
+    expect(dto.image_urls).toEqual([FIRMADA(PATH_1)]);
+  });
+
+  test('y el bucket sigue sin estar en la allowlist de escritura', async () => {
+    // La otra mitad de la decisión, sobre el default real del env: si alguien
+    // lo volviera a meter, el endpoint de upload volvería a aceptar un bucket
+    // cuya URL pública no resuelve.
+    const { envSchema } = await import('../../config/env.schema');
+    const parsed = envSchema.parse({
+      DATABASE_URL: 'postgres://x',
+      SUPABASE_URL: 'https://x.supabase.co',
+      SUPABASE_JWT_SECRET: 's',
+      SUPABASE_ANON_KEY: 'a',
+      SUPABASE_SERVICE_ROLE_KEY: 'k',
+    });
+
+    expect(parsed.SUPABASE_ALLOWED_BUCKETS.split(',')).not.toContain(
+      BUG_REPORT_IMAGES_BUCKET,
+    );
+  });
+
+  test('el buzón firma igual con la allowlist por defecto del env', async () => {
     firmas.set(PATH_1, { url: FIRMADA(PATH_1) });
     firmas.set(PATH_2, { url: FIRMADA(PATH_2) });
 
+    // El service de `beforeEach` ya corre con una allowlist sin el bucket, así
+    // que esto es el caso de producción, no un caso artificial.
     const dto = await service.getById(ID);
 
     expect(dto.image_urls).toHaveLength(2);

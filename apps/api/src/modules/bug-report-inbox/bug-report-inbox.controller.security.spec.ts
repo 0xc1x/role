@@ -80,17 +80,19 @@ async function seedRole(role: 'user' | 'business' | 'admin'): Promise<string> {
 beforeAll(async () => {
   ctx = await createTestDb();
 
-  // `SUPABASE_ALLOWED_BUCKETS` sin `bug_report_images` a propósito: el service
-  // omite las firmas sin tocar la red cuando el bucket no está en la allowlist,
-  // así que este archivo no necesita Supabase para probar la frontera HTTP. Que
-  // la omisión no deje pasar la ruta cruda también se comprueba acá, abajo.
+  // `SUPABASE_ALLOWED_BUCKETS` con la allowlist de ESCRITURA real, sin
+  // `bug_report_images`: el bucket de reportes no depende de esta lista para
+  // firmar, así que este archivo no necesita Supabase para probar la frontera
+  // HTTP. Que el detalle nunca deje pasar la ruta cruda también se comprueba
+  // acá, abajo.
   const config = {
     get: (key: string) =>
       ({
         SUPABASE_URL,
         SUPABASE_JWT_SECRET: JWT_SECRET,
         SUPABASE_SERVICE_ROLE_KEY: 'service-role-de-test',
-        SUPABASE_ALLOWED_BUCKETS: 'images,business_images',
+        SUPABASE_ALLOWED_BUCKETS:
+          'images,business_images,categories_images,product_images',
       })[key],
   } as unknown as ConfigService<Env, true>;
 
@@ -240,9 +242,24 @@ describe('GET /bug-report-inbox/:id (frontera de seguridad)', () => {
 
     // Ni la clave de la ruta cruda, ni la ruta como valor en ninguna parte.
     expect(comoObjeto).not.toHaveProperty('images');
-    expect(comoObjeto.image_urls).toEqual([]);
     expect(JSON.stringify(crudo)).not.toContain('captura-1.png');
-    expect(JSON.stringify(crudo)).not.toContain('/report/');
+
+    // Y `image_urls` no tiene ningún elemento que NO sea una URL firmada. La
+    // versión anterior de esta línea buscaba el substring `/report/`, que no
+    // puede fallar por dos razones a la vez: el valor sembrado en este archivo
+    // es `${REPORTER}/captura-1.png`, sin ese segmento, y aunque lo tuviera, una
+    // URL firmada legítima lo lleva en su path. Un assert que no puede detectar
+    // una fuga es peor que no tenerlo, en el test que existe para acabar con
+    // esos.
+    const urls = comoObjeto.image_urls;
+    expect(Array.isArray(urls)).toBe(true);
+    for (const url of urls as string[]) {
+      expect(url.startsWith('https://')).toBe(true);
+      expect(url).toContain('token=');
+    }
+    // En este config no hay bucket en la allowlist, así que no hay ninguna: el
+    // caso con firmas reales lo cubre `bug-report-inbox.images.spec.ts`.
+    expect(urls).toEqual([]);
 
     // Y el parseo queda solo para verificar la FORMA, que es lo que sí le
     // corresponde: que la respuesta sea un detalle válido del contrato.
