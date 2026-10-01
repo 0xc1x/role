@@ -120,11 +120,11 @@ export interface PayoutListParams {
 	offset?: number;
 }
 
-const REVIEW_SELECT = `id, order_id, product_rating, business_rating, comment, created_at,
+const REVIEW_SELECT = `id, user_id, order_id, product_rating, business_rating, comment, created_at,
 				profiles!reviews_user_id_fkey (full_name),
 				orders!reviews_order_id_fkey (offer_id, offers (title))`;
 
-const REVIEW_SELECT_BY_OFFER = `id, order_id, product_rating, business_rating, comment, created_at,
+const REVIEW_SELECT_BY_OFFER = `id, user_id, order_id, product_rating, business_rating, comment, created_at,
 				profiles!reviews_user_id_fkey (full_name),
 				orders!reviews_order_id_fkey!inner (offer_id, offers (title))`;
 
@@ -1260,6 +1260,7 @@ function toReviewViews(data: unknown): BusinessReviewView[] {
 		const offer = (order?.offers ?? null) as Row | null;
 		return {
 			id: String(row.id ?? ""),
+			authorId: String(row.user_id ?? ""),
 			userName: String(profile?.full_name ?? "Cliente"),
 			productRating: num(row.product_rating) ?? 0,
 			businessRating: num(row.business_rating) ?? 0,
