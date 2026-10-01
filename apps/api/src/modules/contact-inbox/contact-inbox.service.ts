@@ -20,7 +20,7 @@ export class ContactInboxService {
   ): Promise<ContactMessagePaginatedData> {
     const { rows, total } = await this.store.list({
       namespace: CONTACT_NAMESPACE,
-      status: query.status,
+      delivery_status: query.status,
       page: query.page,
       limit: query.limit,
     });
@@ -43,18 +43,19 @@ export class ContactInboxService {
    * el operador tendría que interpretar.
    *
    * LEE ANTES DE ESCRIBIR, y sobre todo por el namespace: una fila de otro
-   * namespace responde 404 y no se toca. Un `updateStatus` directo por id
-   * escribiría sobre `app_store` entero sin mirar qué fila es.
+   * namespace responde 404 y no se toca. Un `updateDeliveryStatus` directo por
+   * id escribiría sobre `app_store` entero sin mirar qué fila es.
    *
-   * LO QUE ESTE CAMBIO NO ES: una marca de "leído por un humano". `status` en
-   * `app_store` lo mueve el camino público de `POST /contact` cuando el correo
-   * de notificación se entrega, así que la fila llega en `PROCESADO` antes de
-   * que nadie la mire. Distinguir "atendido" de "notificado" necesita una
-   * columna propia, y eso es una migración: fuera de este work unit.
+   * LO QUE ESTE CAMBIO NO ES: una marca de "leído por un humano".
+   * `delivery_status` en `app_store` lo mueve el camino público de
+   * `POST /contact` cuando el correo de notificación se entrega, así que la
+   * fila llega en `PROCESADO` antes de que nadie la mire. Distinguir
+   * "atendido" de "notificado" necesita una columna propia, y eso es una
+   * migración: fuera de este work unit.
    */
   async markHandled(id: string): Promise<ContactMessageDetailDto> {
     await this.requireContactRow(id);
-    const updated = await this.store.updateStatus(id, 'PROCESADO');
+    const updated = await this.store.updateDeliveryStatus(id, 'PROCESADO');
     if (!updated) {
       throw new NotFoundException(`Contact message ${id} not found`);
     }

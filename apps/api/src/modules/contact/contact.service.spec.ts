@@ -34,7 +34,7 @@ describe('ContactService', () => {
   };
   const storeRepo = {
     insert: jest.fn(),
-    updateStatus: jest.fn(),
+    updateDeliveryStatus: jest.fn(),
   };
 
   const baseDto: CreateContactDto = {
@@ -83,9 +83,9 @@ describe('ContactService', () => {
     setContactCities(null);
     emailRepo.listTemplates.mockResolvedValue({ rows: [] });
     storeRepo.insert.mockResolvedValue({ id: 'entry-1' });
-    storeRepo.updateStatus.mockResolvedValue({
+    storeRepo.updateDeliveryStatus.mockResolvedValue({
       id: 'entry-1',
-      status: 'PROCESADO',
+      delivery_status: 'PROCESADO',
     });
   });
 
@@ -137,7 +137,10 @@ describe('ContactService', () => {
     const result = await service.handle(baseDto, '127.0.0.1');
 
     expect(result).toEqual({ ok: true, id: 'entry-1' });
-    expect(storeRepo.updateStatus).toHaveBeenCalledWith('entry-1', 'PROCESADO');
+    expect(storeRepo.updateDeliveryStatus).toHaveBeenCalledWith(
+      'entry-1',
+      'PROCESADO',
+    );
   });
 
   it('queda PENDIENTE y devuelve ok sin loggear el error bruto', async () => {
@@ -151,7 +154,7 @@ describe('ContactService', () => {
     expect(result).toEqual({ ok: true, id: 'entry-1' });
     // intenta resolver la plantilla para encolar el reintento
     expect(emailRepo.listTemplates).toHaveBeenCalled();
-    expect(storeRepo.updateStatus).toHaveBeenCalledWith(
+    expect(storeRepo.updateDeliveryStatus).toHaveBeenCalledWith(
       'entry-1',
       'PENDIENTE',
       expect.objectContaining({ error: 'Error' }),
