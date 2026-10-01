@@ -124,10 +124,13 @@ export const ListBugReportsQuerySchema = PaginationQuerySchema.extend({
 });
 
 /**
- * Cuerpo del PATCH de triaje. Deliberadamente SOLO `state`: la entrega la mueve
- * el camino de la API cuando el aviso se entrega, no el operador. Que el schema
- * descarte la clave en vez de aceptarla es lo que impide que el panel la use
- * para fingir una entrega.
+ * Cuerpo del PATCH de triaje. Deliberadamente SOLO `state`: en un reporte de
+ * errores NO hay quien mueva `delivery_status` — no hay camino de correo (D8) y
+ * el insert lo deja en `PENDIENTE`, así que el badge de entrega no significa
+ * "notificado" en esta bandeja. El porqué completo está en
+ * `BugReportListItemSchema`, que es donde ese campo se lee; aquí solo importa
+ * que el triaje no lo toque. Que el schema descarte la clave en vez de
+ * aceptarla es lo que impide que el panel la use para fingir una entrega.
  */
 export const SetBugReportStateSchema = z.object({
 	state: z.enum(BUG_TRIAGE_STATES),
