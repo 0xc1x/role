@@ -33,6 +33,116 @@ Cinco entradas que el spec implica pero que ningún test del spec cubre explíci
 
 ---
 
+### Task 0: La deuda preexistente que bloquea los gates
+
+Las tareas de este plan no tocan esta deuda, y sin ella `bun run typecheck` y
+`bun run test` de la raíz no pueden dar verde — lo que invalidaría el gate
+final (Task 10). Se ejecuta primero.
+
+**Files:**
+- Modify: `apps/admin/test-preload.ts`
+- Modify: `apps/admin/src/features/offers/tables/__tests__/offers.columns.test.tsx`
+
+**Interfaces:**
+- No produce interfaces.
+
+**El `TS2769` de `playwright.config.ts` no era deuda de código.** Dos versiones
+de `@playwright/test` coexistían: `apps/admin/node_modules/@playwright/test`
+era un symlink rancio a la 1.62.1, de un install anterior al bump a 1.63.0, y
+`bun.lock` no tiene ninguna entrada para esa versión. El spread `...base.use`
+cruzaba tipos entre dos copias distintas. **Resuelto borrando el symlink
+rancio; no requiere commit.**
+
+Los dos problemas que sí quedan:
+
+**1. `test-preload.ts` promete `storage` y no lo da.** Su comentario dice
+*"shims mínimos para specs que tocan `window` sin necesidad de jsdom (storage +
+redirect a /login)"*, y lo único que define es `window = globalThis` más un
+`location` falso. `globalThis` de bun no tiene `localStorage`, así que los dos
+tests de `auth.api.test.ts` mueren en `beforeEach` con `TypeError: undefined is
+not an object (evaluating 'window.localStorage.clear')`. El fix es que el
+preload haga lo que su comentario promete.
+
+**2. Los 4 tests de `offers.columns.test.tsx` no abren el menú — y NO es la
+secuencia de eventos.** El diagnóstico original de este plan (aplicar
+`pointerdown` + `pointerup` + `click` como en `hide-review-dialog.test.tsx`)
+era **incorrecto**, y la secuencia no los arregla: no hay item al que elegir
+porque el `click` nunca llega al `open`.
+
+La causa real está en el código publicado de `@base-ui/react` 1.7.0:
+`MenuRoot` llama a `useSyncedFloatingRootContext()` **sin** pasar
+`floatingRootContext: store.state.floatingRootContext`, así que el click llega
+al `FloatingRootStore` huérfano de `getEmptyRootContext()` (`syncOnly: false`,
+`onOpenChange: undefined`) en vez de al store del Root. La 1.8.0 agrega
+exactamente esa línea.
+
+Verificado en runtime por el implementador (instrumentando `useClick`), y
+`node_modules` comprobado byte a byte contra el tarball de npm.
+
+**El menú sí funciona en producción:** `e2e/sections.catalogue.spec.ts:254-255`
+abre el mismo `DropdownMenu` en Chromium real y ese e2e pasa. El problema es
+exclusivamente el DOM de happy-dom bajo bun.
+
+- [ ] **Step 1: El preload**
+
+Agregar a `test-preload.ts` un `localStorage` mínimo en el `window` que ya
+construye, con `getItem`/`setItem`/`removeItem`/`clear` sobre un `Map`. La
+firma de `getItem` devuelve `string | null`.
+
+- [ ] **Step 2: Ver que los 2 tests de logout pasan**
+
+Run: `cd apps/admin && bun test --isolate src/features/auth`
+Expected: PASS.
+
+- [ ] **Step 3: Subir `@base-ui/react` a `^1.8.0`**
+
+Decisión del humano, sobre el dato de que **no va a volver verdes los 4
+tests** (probado: 1.8.0 tampoco abre bajo happy-dom). El bump se hace igual
+porque el defecto de wiring es real y puede morder en otros contextos, y
+1.8.0 es el arreglo upstream.
+
+Es una dependencia transversal de todo el panel, así que la verificación es
+obligatoria y en este orden: typecheck, suite completa, y **e2e** — que es la
+única superficie que abre menús en un navegador real. Si el e2e se rompe, el
+bump se revierte: un `menuitem` que no abre en Chromium sí es una regresión.
+
+- [ ] **Step 4: Los 4 errores de `organizeImports`**
+
+`bun run --cwd apps/admin check` falla con 4 errores de
+`assist/source/organizeImports` en `nav-main.tsx`,
+`business-location.form.tsx`, `reviews/index.ts` y `_layout.ordenes.tsx`. Los
+cuatro son preexistentes y ninguno lo tocó este trabajo — el `AGENTS.md` de
+admin afirma que `check` pasa limpio, y eso es falso. Arreglo:
+`bun run --cwd apps/admin check --write`, revisando que no toque ningún archivo
+fuera de esos cuatro.
+
+- [ ] **Step 5: El test del toaster**
+
+`documento raíz del admin > monta el toaster, así que los toast.* no son
+no-ops` falla por contaminación de orden: `use-mobile.test.tsx` deja
+`matchMedia` en un estado que el test del toaster hereda. El spec tiene que
+establecer su propio `matchMedia` en vez de depender del que otro dejó.
+
+- [ ] **Step 6: Los gates de admin enteros**
+
+```sh
+bun run --cwd apps/admin typecheck
+bun run --cwd apps/admin check
+bun run --cwd apps/admin test
+```
+
+Expected: `typecheck` y `test` en verde. `check` seguirá en 1 por los 4 tests del menú: el bump no los arregla bajo happy-dom.
+del symlink rancio ya no está.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add apps/admin/test-preload.ts apps/admin/src/features/offers
+git commit -m "fix(admin): the storage shim the preload promises, and the pointer sequence Base UI opens on"
+```
+
+---
+
 ### Task 1: La migración
 
 El único artefacto que ninguna otra tarea puede adelantarse a escribir: define las columnas, el bucket, la policy y el trigger que todo lo demás consume.
