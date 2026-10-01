@@ -5,7 +5,6 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { isNavItemActive } from "@/lib/nav-active";
 import {
 	SidebarGroup,
 	SidebarGroupLabel,
@@ -16,6 +15,7 @@ import {
 	SidebarMenuSubButton,
 	SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
+import { isNavItemActive } from "@/lib/nav-active";
 
 type NavItem = {
 	title: string;
