@@ -25,12 +25,15 @@ export class AppStoreRepository {
     return (row as StoreEntry) ?? null;
   }
 
-  async updateStatus(
+  async updateDeliveryStatus(
     id: string,
-    status: StoreEntry['status'],
+    deliveryStatus: StoreEntry['delivery_status'],
     extraValue?: Record<string, unknown>,
   ): Promise<StoreEntry | null> {
-    const patch: Record<string, unknown> = { status, updated_at: new Date() };
+    const patch: Record<string, unknown> = {
+      delivery_status: deliveryStatus,
+      updated_at: new Date(),
+    };
     if (extraValue) {
       // merge error info into value jsonb in JS then set
       const current = await this.findById(id);
@@ -41,6 +44,24 @@ export class AppStoreRepository {
     const [row] = await this.db
       .update(appStore)
       .set(patch as never)
+      .where(and(eq(appStore.id, id), isNull(appStore.deleted_at)))
+      .returning();
+    return (row as StoreEntry) ?? null;
+  }
+
+  /**
+   * Mueve el eje de triaje (`state`), que es ortogonal al de entrega.
+   *
+   * No acepta `extraValue`: el merge de jsonb de `updateDeliveryStatus` existe
+   * para el `error` del proveedor de correo, y el triaje no reescribe `value`.
+   */
+  async updateState(
+    id: string,
+    state: NonNullable<StoreEntry['state']>,
+  ): Promise<StoreEntry | null> {
+    const [row] = await this.db
+      .update(appStore)
+      .set({ state, updated_at: new Date() })
       .where(and(eq(appStore.id, id), isNull(appStore.deleted_at)))
       .returning();
     return (row as StoreEntry) ?? null;
@@ -57,15 +78,19 @@ export class AppStoreRepository {
 
   async list(filter: {
     namespace?: string;
-    status?: string;
+    delivery_status?: string;
+    state?: string;
     page: number;
     limit: number;
   }): Promise<{ rows: StoreEntry[]; total: number }> {
     const filters: SQL[] = [isNull(appStore.deleted_at)];
     if (filter.namespace)
       filters.push(eq(appStore.namespace, filter.namespace));
-    if (filter.status)
-      filters.push(eq(appStore.status, filter.status as never));
+    if (filter.delivery_status)
+      filters.push(
+        eq(appStore.delivery_status, filter.delivery_status as never),
+      );
+    if (filter.state) filters.push(eq(appStore.state, filter.state));
     const where = filters.length ? and(...filters) : undefined;
 
     const [totalRow] = await this.db

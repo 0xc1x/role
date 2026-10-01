@@ -23,11 +23,16 @@ const valueCompleto = {
   from: 'notificaciones@role.ec',
 };
 
-const fila = (value: unknown, status: StoreEntry['status'] = 'PENDIENTE') =>
+const fila = (
+  value: unknown,
+  deliveryStatus: StoreEntry['delivery_status'] = 'PENDIENTE',
+) =>
   ({
     id: '11111111-1111-4111-8111-111111111111',
     namespace: 'contact',
-    status,
+    delivery_status: deliveryStatus,
+    state: null,
+    origin: null,
     value,
     ...FECHAS,
   }) as StoreEntry;
@@ -38,7 +43,7 @@ describe('ContactInboxMapper.toListItem', () => {
 
     expect(dto).toMatchObject({
       id: '11111111-1111-4111-8111-111111111111',
-      status: 'PENDIENTE',
+      delivery_status: 'PENDIENTE',
       readable: true,
       name: 'Ana',
       email: 'ana@example.com',

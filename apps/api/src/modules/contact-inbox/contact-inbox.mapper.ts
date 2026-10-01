@@ -42,7 +42,7 @@ export class ContactInboxMapper {
     const value = this.read(row);
     return {
       id: row.id,
-      status: row.status,
+      delivery_status: row.delivery_status,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
       readable: value !== null,

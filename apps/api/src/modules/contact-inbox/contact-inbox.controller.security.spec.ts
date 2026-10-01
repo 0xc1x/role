@@ -182,7 +182,7 @@ describe('PATCH /contact-inbox/:id/handled (frontera de seguridad)', () => {
       .expect(403);
 
     // Un 403 tiene que dejar la fila como estaba, no marcarla "atendida".
-    expect((await store.findById(fila.id))?.status).toBe('PENDIENTE');
+    expect((await store.findById(fila.id))?.delivery_status).toBe('PENDIENTE');
   });
 
   test('admin → 200 y la fila queda PROCESADO', async () => {
@@ -192,8 +192,11 @@ describe('PATCH /contact-inbox/:id/handled (frontera de seguridad)', () => {
       api().patch(`/contact-inbox/${fila.id}/handled`),
     ).expect(200);
 
-    expect(res.body.status).toBe('PROCESADO');
-    expect((await store.findById(fila.id))?.status).toBe('PROCESADO');
+    // La clave del body es la que emite el mapper. El DTO todavía la llama
+    // `status`: el rename del contrato es la Task 3, y con él vuelve a
+    // `res.body.status`.
+    expect(res.body.delivery_status).toBe('PROCESADO');
+    expect((await store.findById(fila.id))?.delivery_status).toBe('PROCESADO');
   });
 });
 
@@ -230,7 +233,7 @@ describe('el endpoint no es un app_store genérico', () => {
       404,
     );
 
-    expect((await store.findById(ajeno.id))?.status).toBe('PENDIENTE');
+    expect((await store.findById(ajeno.id))?.delivery_status).toBe('PENDIENTE');
   });
 });
 
