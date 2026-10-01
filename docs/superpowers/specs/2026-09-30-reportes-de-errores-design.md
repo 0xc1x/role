@@ -208,8 +208,15 @@ construida con el **mismo resource module** que ya usan las demás pantallas
   el orden de prioridad del AGENTS.
 - Filtros: `state` y `origin`.
 - Detalle: mensaje íntegro, **capturas**, y las acciones de triaje.
-- Las capturas se piden al API, que devuelve **URLs firmadas** de corta
-  duración. El panel nunca ve el bucket crudo.
+- Las capturas se piden al API, que devuelve **URLs firmadas de 5 minutos**
+  sobre el bucket privado. El panel **nunca recibe una ruta utilizable**: sin
+  el token, la URL no descarga nada.
+- Ojo con lo que eso **no** promete: la ruta va en claro dentro del path de la
+  URL firmada (`/object/sign/<bucket>/<ruta>`), así que el panel ve el nombre
+  del bucket y el uid del reportante. Supabase no ofrece proxear los bytes por
+  el API como alternativa, y el uid no le agrega nada al panel: el detalle ya
+  expone `reporter_id` explícitamente. Lo que la firma protege es el **acceso
+  sin token**, que es funcional, no una garantía de no-vocabulario-interno.
 
 ## 9. Móvil
 
