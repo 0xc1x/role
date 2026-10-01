@@ -203,9 +203,9 @@ construida con el **mismo resource module** que ya usan las demás pantallas
   `a793ebd chore(admin): register the router type in the generated route tree`).
 - Listado: resumen del mensaje, `origin`, `state`, fecha. **`reporter_id` NO
   aparece en el listado**: es PII y el listado es la superficie que se ve de un
-  vistazo. Va solo en el detalle, si el operador lo necesita. (Esta línea
-  contradecía antes a la §7; la §7 manda — seguridad primero, como el orden de
-  prioridad del AGENTS.)
+  vistazo. Va solo en el detalle, si el operador lo necesita. La §7 (mappers
+  lista blanca) manda sobre la tentación de mostrarlo: seguridad primero, como
+  el orden de prioridad del AGENTS.
 - Filtros: `state` y `origin`.
 - Detalle: mensaje íntegro, **capturas**, y las acciones de triaje.
 - Las capturas se piden al API, que devuelve **URLs firmadas** de corta
