@@ -4,7 +4,10 @@ import {
 	PaginationQuerySchema,
 } from "../../_common/schemas/api.schema";
 import { TimestamptzSchema, UuidSchema } from "../../_common/schemas/common";
-import { CONTACT_MESSAGE_STATUSES, CONTACT_ROLES } from "../enums/contact.enum";
+import {
+	CONTACT_DELIVERY_STATUSES,
+	CONTACT_ROLES,
+} from "../enums/contact.enum";
 
 /**
  * `value` de la fila de contacto: el jsonb que escribe `POST /contact` en
@@ -58,7 +61,7 @@ export const ContactMessageValueSchema = z.object({
  */
 export const ContactMessageListItemSchema = z.object({
 	id: UuidSchema,
-	status: z.enum(CONTACT_MESSAGE_STATUSES),
+	delivery_status: z.enum(CONTACT_DELIVERY_STATUSES),
 	created_at: TimestamptzSchema,
 	updated_at: TimestamptzSchema,
 	readable: z.boolean(),
@@ -87,7 +90,7 @@ export const ContactMessageDetailSchema = ContactMessageListItemSchema.extend({
  * `?namespace=otro` que llegue igual se descarta al parsear, no se obedece.
  */
 export const ListContactMessagesQuerySchema = PaginationQuerySchema.extend({
-	status: z.enum(CONTACT_MESSAGE_STATUSES).optional(),
+	delivery_status: z.enum(CONTACT_DELIVERY_STATUSES).optional(),
 });
 
 /** Cuerpo canónico del listado: `{ data: ContactMessageListItem[], meta }`. */

@@ -20,7 +20,7 @@ export class ContactInboxService {
   ): Promise<ContactMessagePaginatedData> {
     const { rows, total } = await this.store.list({
       namespace: CONTACT_NAMESPACE,
-      delivery_status: query.status,
+      delivery_status: query.delivery_status,
       page: query.page,
       limit: query.limit,
     });
@@ -38,7 +38,7 @@ export class ContactInboxService {
   /**
    * Marca el mensaje como atendido: `PENDIENTE` → `PROCESADO`.
    *
-   * Idempotente a propósito, sin `if (status !== 'PROCESADO')`: el panel
+   * Idempotente a propósito, sin `if (delivery_status !== 'PROCESADO')`: el panel
    * muestra la acción siempre y un doble click no puede terminar en un 409 que
    * el operador tendría que interpretar.
    *

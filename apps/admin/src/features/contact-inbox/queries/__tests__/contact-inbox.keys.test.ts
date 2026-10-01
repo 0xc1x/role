@@ -11,7 +11,7 @@ describe("contactInboxKeys", () => {
 	});
 
 	test("list with filters as params", () => {
-		const params = { page: 1, limit: 20, status: "PENDIENTE" };
+		const params = { page: 1, limit: 20, delivery_status: "PENDIENTE" };
 		expect(contactInboxKeys.list(params)).toEqual([
 			"contact-inbox",
 			"list",

@@ -2,7 +2,7 @@ import type { ContactMessageListItemDto } from "@0xc1x/role-commons";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { ActionCell } from "@/features/contact-inbox/tables/cells/action-cell";
-import { StatusBadge } from "@/features/contact-inbox/tables/cells/status-badge";
+import { DeliveryStatusBadge } from "@/features/contact-inbox/tables/cells/delivery-status-badge";
 
 const Nombre = ({ fila }: { fila: ContactMessageListItemDto }) => {
 	if (!fila.readable) {
@@ -77,11 +77,13 @@ export const createContactInboxColumns = (
 		),
 	},
 	{
-		accessorKey: "status",
+		accessorKey: "delivery_status",
 		header: ({ column }) => (
 			<DataTableColumnHeader column={column} title="Estado" />
 		),
-		cell: ({ row }) => <StatusBadge status={row.original.status} />,
+		cell: ({ row }) => (
+			<DeliveryStatusBadge deliveryStatus={row.original.delivery_status} />
+		),
 	},
 	{
 		accessorKey: "created_at",

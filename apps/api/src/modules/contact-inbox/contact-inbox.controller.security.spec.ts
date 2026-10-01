@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { SignJWT } from 'jose';
+import { ContactMessageDetailSchema } from '@0xc1x/role-commons';
 import request from 'supertest';
 import { AuthGuard } from '../../auth/auth.guard';
 import { SupabaseTokenVerifier } from '../../auth/supabase-token-verifier';
@@ -192,10 +193,19 @@ describe('PATCH /contact-inbox/:id/handled (frontera de seguridad)', () => {
       api().patch(`/contact-inbox/${fila.id}/handled`),
     ).expect(200);
 
-    // La clave del body es la que emite el mapper. El DTO todavía la llama
-    // `status`: el rename del contrato es la Task 3, y con él vuelve a
-    // `res.body.status`.
-    expect(res.body.delivery_status).toBe('PROCESADO');
+    // `res.body` es `any` en `@types/supertest`: leer
+    // `res.body.delivery_status` a secas no falla aunque el mapper emita otra
+    // cosa, y el test quedaría verde mintiendo. Parsearlo con el schema del
+    // contrato es lo que vuelve real la aserción — si el mapper se cruzara y
+    // volviera a emitir `status`, el parseo revienta acá y no más abajo.
+    // El costo: ata el spec a la forma COMPLETA del detalle, así que el día que
+    // el DTO gane un campo requerido, este test de frontera falla con un
+    // `ZodError` sin nombre en vez de un fallo que diga qué campo falta.
+    const cuerpo = ContactMessageDetailSchema.parse(res.body);
+    expect(cuerpo.delivery_status).toBe('PROCESADO');
+
+    // Y el aserto sobre el `StoreEntry` de la DB, que es el camino tipado: no
+    // pasa por ninguna capa que este test controle.
     expect((await store.findById(fila.id))?.delivery_status).toBe('PROCESADO');
   });
 });
@@ -217,8 +227,10 @@ describe('el endpoint no es un app_store genérico', () => {
     expect(ids).not.toContain(ajeno.id);
   });
 
-  test('GET con un status inválido → 400, no se filtra a lo bruto', async () => {
-    await comoAdmin(api().get('/contact-inbox?status=NUEVO')).expect(400);
+  test('GET con un delivery_status inválido → 400, no se filtra a lo bruto', async () => {
+    await comoAdmin(api().get('/contact-inbox?delivery_status=NUEVO')).expect(
+      400,
+    );
   });
 
   test('GET :id de una fila de otro namespace → 404', async () => {

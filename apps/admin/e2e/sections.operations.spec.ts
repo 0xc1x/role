@@ -235,7 +235,7 @@ test.describe("operations sections", () => {
 		// The column, on the fixture's own row, carrying the TRANSLATED label.
 		// `PENDIENTE` reaching the screen verbatim is the regression: the enum
 		// token says nothing about what is pending, and the whole point of
-		// `CONTACT_MESSAGE_STATUS_LABELS` is that the operator is told it is the
+		// `CONTACT_DELIVERY_STATUS_LABELS` is that the operator is told it is the
 		// notice email and not the message.
 		const row = page.getByRole("row").filter({ hasText: "Carla Contacto" });
 		await expect(row).toContainText("Entrega pendiente");

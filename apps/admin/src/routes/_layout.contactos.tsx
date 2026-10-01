@@ -53,13 +53,14 @@ function RouteComponent() {
 				<ContactInboxList
 					page={search.page}
 					limit={search.limit}
-					status={search.status}
+					deliveryStatus={search.delivery_status}
 					onPageChange={(page) => navigate({ search: { ...search, page } })}
-					onStatusChange={(status) =>
+					onDeliveryStatusChange={(deliveryStatus) =>
 						navigate({
 							search: {
 								...search,
-								status: status as typeof search.status,
+								delivery_status:
+									deliveryStatus as typeof search.delivery_status,
 								page: 1,
 							},
 						})

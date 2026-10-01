@@ -16,7 +16,7 @@ import {
 	useContactMessage,
 	useMarkContactMessageHandled,
 } from "@/features/contact-inbox/queries/contact-inbox.queries";
-import { StatusBadge } from "@/features/contact-inbox/tables/cells/status-badge";
+import { DeliveryStatusBadge } from "@/features/contact-inbox/tables/cells/delivery-status-badge";
 import { formatApiError } from "@/lib/api/notify";
 import { formatBusinessDate, formatBusinessDateTime } from "@/lib/dates";
 
@@ -63,7 +63,7 @@ function ContactMessageBody({
 
 			<section className="space-y-3" aria-label="Estado">
 				<div className="flex items-center gap-2">
-					<StatusBadge status={data.status} />
+					<DeliveryStatusBadge deliveryStatus={data.delivery_status} />
 					<span className="text-muted-foreground text-sm">
 						Recibido el {formatBusinessDate(data.created_at)}
 					</span>
@@ -123,7 +123,7 @@ export function ContactMessageDrawer({
 	const [confirmando, setConfirmando] = useState(false);
 
 	// El PATCH no lleva cuerpo: la transición de estado vive en el servidor.
-	const yaAtendido = data?.status === "PROCESADO";
+	const yaAtendido = data?.delivery_status === "PROCESADO";
 
 	return (
 		<Drawer
