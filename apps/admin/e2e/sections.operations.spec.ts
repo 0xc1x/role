@@ -92,6 +92,16 @@ const OPERATIONS: Section[] = [
 		detail: "Quito",
 	},
 	{
+		path: "/reportes",
+		heading: "Reportes",
+		row: "La app se cierra al confirmar el pago",
+		// "Abierto" is the TRIAGE label, and the assertion that matters is the one
+		// in the dedicated test below: the enum token `ABIERTO` must never reach
+		// the screen. Here the second value just proves the triage badge rendered
+		// the fixture's own `state`.
+		detail: "Abierto",
+	},
+	{
 		path: "/campanas/mails",
 		heading: "Campañas de Marketing",
 		// Channel is the discriminator between this page and the push one: both
@@ -241,6 +251,55 @@ test.describe("operations sections", () => {
 		await expect(row).toContainText("Entrega pendiente");
 		await expect(row).not.toContainText("PENDIENTE");
 	});
+
+	/**
+	 * The bug report inbox's only column is TRIAGE, and it is not the contact
+	 * inbox's column under a different name.
+	 *
+	 * `delivery_status` says "the notice email has not been delivered" in the
+	 * contact inbox, where a mail path exists to deliver it. A bug report has no
+	 * mail path at all, so nothing ever moves that field after the insert: a
+	 * borrowed badge would be a permanent "Entrega pendiente" that the operator
+	 * triages as outstanding work, forever, for every row. So the assertion here
+	 * is an ABSENCE, and it is the strongest one the fixture can carry: the
+	 * fixture sends `PENDIENTE` (the exact state the contact inbox's badge would
+	 * paint), so a panel that had copied the column would show it.
+	 */
+	test("the bug report inbox shows triage and no delivery status at all", async ({
+		page,
+	}) => {
+		await stubApi(page);
+		await signIn(page);
+		await page.goto("/reportes");
+
+		await expect(
+			page.getByText("La app se cierra al confirmar el pago"),
+		).toBeVisible({ timeout: 20_000 });
+
+		const row = page
+			.getByRole("row")
+			.filter({ hasText: "La app se cierra al confirmar el pago" });
+
+		// The triage badge, translated: `ABIERTO` verbatim would say nothing about
+		// what is open, and the whole point of the column is that the operator
+		// reads it without knowing the vocabulary.
+		await expect(row).toContainText("Abierto");
+		await expect(row).not.toContainText("ABIERTO");
+
+		// The origin, translated too. And no delivery badge, in any of its
+		// wordings: this is the assertion that would break first if someone
+		// "just reused the contact inbox column set".
+		await expect(row).toContainText("Android");
+		await expect(row).not.toContainText("Entrega pendiente");
+		await expect(row).not.toContainText("Notificado");
+		await expect(row).not.toContainText("PENDIENTE");
+
+		// And the page says why, in prose: a column that needs explaining needs
+		// the explanation on screen, not only in a commit message.
+		await expect(
+			page.getByText("no se manda ningún aviso", { exact: false }),
+		).toBeVisible();
+	});
 });
 
 /**
@@ -286,6 +345,15 @@ test.describe("empty lists", () => {
 			// because "nothing matches this filter" and "there is nothing" are
 			// different facts for a moderation surface.
 			emptyCopy: "No hay mensajes de contacto con este filtro.",
+		},
+		{
+			path: "/reportes",
+			heading: "Reportes",
+			endpoint: "/bug-report-inbox",
+			// Same short-circuit as the contact inbox, and for the same reason: a
+			// triage surface where "nothing matches this filter" and "there is
+			// nothing" are different facts.
+			emptyCopy: "No hay reportes de error con este filtro.",
 		},
 		{
 			path: "/campanas/mails",
@@ -378,6 +446,11 @@ test.describe("failed lists", () => {
 		},
 		{ path: "/consejos", endpoint: "/tips/admin", row: "bolsa de tela" },
 		{ path: "/contactos", endpoint: "/contact-inbox", row: "Carla Contacto" },
+		{
+			path: "/reportes",
+			endpoint: "/bug-report-inbox",
+			row: "La app se cierra al confirmar el pago",
+		},
 		{
 			path: "/campanas/mails",
 			endpoint: "/email-marketing/campaigns",

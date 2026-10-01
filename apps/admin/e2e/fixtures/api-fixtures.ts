@@ -389,6 +389,31 @@ const CONTACT_MESSAGE = {
 	excerpt: "Quisiera abrir una panadería en mi barrio.",
 };
 
+/**
+ * `BugReportListItemSchema`.
+ *
+ * `state: "ABIERTO"` is the discriminating choice: the inbox filters by
+ * `state`, so a fixture stuck in `null` could never tell a working filter from
+ * a broken one — the same reason `REVIEW` below is visible rather than hidden.
+ *
+ * `delivery_status: "PENDIENTE"` is NOT rendered anywhere in this section, and
+ * that is the point of pinning it: the delivery badge means "the notice email
+ * hasn't been delivered" in the contact inbox, and in the bug report inbox it
+ * means nothing at all (no email path), so a panel that borrowed the badge would
+ * be showing a permanent "Entrega pendiente" that means nothing.
+ */
+const BUG_REPORT = {
+	id: ID,
+	state: "ABIERTO",
+	delivery_status: "PENDIENTE",
+	origin: "android",
+	created_at: "2026-01-07T00:00:00.000Z",
+	updated_at: "2026-01-07T00:00:00.000Z",
+	readable: true,
+	summary: "La app se cierra al confirmar el pago",
+	excerpt: "La app se cierra al confirmar el pago",
+};
+
 /** `EmailTemplateDtoSchema`, narrowed to the fields the templates tab reads. */
 const EMAIL_TEMPLATE = {
 	id: TEMPLATE_ID,
@@ -564,6 +589,8 @@ export function respondTo(
 			return paginated([SLIDE]);
 		case path === "/contact-inbox":
 			return paginated([CONTACT_MESSAGE]);
+		case path === "/bug-report-inbox":
+			return paginated([BUG_REPORT]);
 		case path === "/reviews/moderation":
 			// The one fixture endpoint that FILTERS, because `visibility` is a
 			// server-side filter the panel's own test depends on. Measured against

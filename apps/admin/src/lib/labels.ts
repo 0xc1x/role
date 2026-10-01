@@ -1,7 +1,9 @@
 import type {
+	BugTriageState,
 	BusinessVerificationStatus,
 	ContactDeliveryStatus,
 	EmailSendStatus,
+	EntryOrigin,
 	OrderStatus,
 	PayoutStatus,
 	ReviewModerationReason,
@@ -90,6 +92,55 @@ const CONTACT_DELIVERY_STATUS_LABELS: Record<ContactDeliveryStatus, string> = {
 
 export const contactDeliveryStatusLabel = (status: string): string =>
 	CONTACT_DELIVERY_STATUS_LABELS[status as ContactDeliveryStatus] ?? status;
+
+/**
+ * Estado del TRIAGE de un reporte de error: qué hizo el equipo con el reporte.
+ *
+ * NO es el eje de entrega. `delivery_status` contesta "¿llegó el aviso al
+ * equipo?" y este contesta "¿qué hizo el equipo con el reporte?": un reporte
+ * `CORREGIDO` no dice nada sobre la entrega, y una entrega que nadie espera
+ * (D8: no hay camino de correo) no dice nada sobre el bug. Se etiquetan por
+ * separado y en columnas separadas justamente para que no se confundan.
+ *
+ * `?? state` y no "Sin triar" como fallback: el token crudo ES la información
+ * cuando el panel no lo conoce. `state` es `text` sin CHECK en Postgres, así
+ * que un `'REABIERTO'` escrito a mano o por un script llega al panel como lo
+ * que es — y el mapper de la API lo estrecha a `null` antes, así que en la
+ * práctica esta rama es la red que agarra un token nuevo antes de que se
+ * publique. Lo que NO puede hacer es tapar el dato con una etiqueta de relleno
+ * que el operador leería como un triaje real.
+ */
+const BUG_TRIAGE_STATE_LABELS: Record<BugTriageState, string> = {
+	ABIERTO: "Abierto",
+	EN_REPRODUCCION: "En reproducción",
+	CORREGIDO: "Corregido",
+	DUPLICADO: "Duplicado",
+	DESCARTADO: "Descartado",
+};
+
+export const bugTriageStateLabel = (state: string): string =>
+	BUG_TRIAGE_STATE_LABELS[state as BugTriageState] ?? state;
+
+/**
+ * Canal por el que llegó el reporte.
+ *
+ * Los tokens son platform names (`ios`, `android`, `pwa`, `web`) y no hay nada
+ * que traducir: "iOS" y "Android" se escriben igual en español que en inglés.
+ * Lo que sí cambia es la mayúscula inicial, que en el contrato va en minúsculas
+ * y en una columna del panel se leería como un valor sin terminar.
+ *
+ * `?? origin` por el mismo motivo que el resto del archivo: un token fuera del
+ * enum se muestra crudo en vez de inventarle un nombre.
+ */
+const ENTRY_ORIGIN_LABELS: Record<EntryOrigin, string> = {
+	ios: "iOS",
+	android: "Android",
+	pwa: "PWA",
+	web: "Web",
+};
+
+export const entryOriginLabel = (origin: string): string =>
+	ENTRY_ORIGIN_LABELS[origin as EntryOrigin] ?? origin;
 
 /**
  * Filtro de visibilidad de la bandeja de reseñas.

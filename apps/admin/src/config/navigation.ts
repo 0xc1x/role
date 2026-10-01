@@ -1,6 +1,7 @@
 import {
 	BadgeDollarSign,
 	BellRing,
+	Bug,
 	ChartArea,
 	DollarSign,
 	Info,
@@ -96,6 +97,17 @@ export const navMain: NavMainItem[] = [
 		title: "Contactos",
 		url: "/contactos",
 		icon: MessageSquare,
+	},
+	{
+		// Buzón de errores de la app. Va pegado a Contactos y por la misma razón:
+		// las dos son superficies donde el operador lee lo que escribió la gente
+		// desde fuera y decide qué hacer con eso. Lo que llega por un formulario en
+		// la web y lo que llega desde un móvil son el mismo trabajo de soporte con
+		// dos canales distintos, y separarlos por "de dónde vino" parte en dos la
+		// misma cola.
+		title: "Reportes",
+		url: "/reportes",
+		icon: Bug,
 	},
 	{
 		title: "Campañas de Marketing",
