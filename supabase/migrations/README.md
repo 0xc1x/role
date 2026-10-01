@@ -52,14 +52,13 @@ where version = '20260615210819';
 `rollback` statements are also stored per migration, so down-migrations are
 recoverable the same way.
 
-## The `20260925*` files are not byte-identical to what was applied
+## The `20260925*` files are byte-identical to what was applied (synced 2026-10-01)
 
-Eleven of the twelve `20260925*` hardening migrations in this directory differ
-from the `statements` value in the ledger. The files here are the reviewed,
-documented versions written before applying; the database received equivalent SQL
-sent through the Supabase MCP. Only `20260925165931_offer_stock_write_grant.sql`
-is byte-identical. (This section said "eight of the nine" when it was written;
-the block has grown by three files since, and the count was not revisited.)
+All twelve `20260925*` migrations in this directory are now byte-identical to
+the `statements[1]` value in the ledger (`md5sum` equals `md5(statements[1])`
+for each file, verified 2026-10-01, commit `8726f12`). The files were synced
+toward the ledger — the database was never rewritten. The sections below
+describe the pre-sync state and are kept as audit trail.
 
 **The practical consequence: the local versions have never been executed.** They
 are what `supabase db push` would replay on a fresh project, but equivalence was
@@ -148,6 +147,11 @@ policy resolving through `business_ownership`, and the two grant facts from
 bodies do not match. Closing that means reconstructing all eleven divergent files
 byte-for-byte from the ledger, which would discard the reviewed documentation in
 them. It is a deliberate, separate decision and it has not been taken.
+
+**Resuelto 2026-10-01:** the decision was taken — all eleven divergent files
+were reconstructed byte-for-byte from the ledger (commit `8726f12`), so the
+fidelity gap above no longer holds. The reviewed documentation that lived in
+the local versions is preserved in git history (`8726f12^`).
 
 ## The ledger does not describe the database: four `app_config` values
 

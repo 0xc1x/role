@@ -167,21 +167,15 @@ declaraba `owner_id` con `onDelete: 'no action'`, pero la FK real en la base es
 `ON DELETE CASCADE`. El schema Drizzle está desalineado de la base;
 `business_ownership` sigue la base, que es lo correcto. Corregir en la fase 3.
 
-## 2. Once de doce migraciones nunca se han ejecutado
+## 2. Doce de doce migraciones byte-idénticas al ledger (cerrado 2026-10-01)
 
-**Estado:** abierto. Reproducibilidad, noorrectitud.
+**Estado:** cerrado. Reproducibilidad, no correctitud.
 
-De las doce migraciones `20260925*`, once no son byte-idénticas a lo que la base
-recibió. Son las versiones revisadas y documentadas; la base recibió SQL
-equivalente enviado por MCP. Solo `20260925165931_offer_stock_write_grant.sql`
-coincide.
+Las doce migraciones `20260925*` son ahora byte-idénticas a lo que la base
+recibió (`md5sum` == `md5(statements[1])` por archivo, commit `8726f12`).
+Reconstruir un entorno desde `supabase/migrations/` reproduce la cadena aplicada.
 
-Las versiones del repo **nunca se han ejecutado**: son equivalentes por
-razonamiento, no por prueba. Antes de confiar en `supabase/migrations/` para
-reconstruir un entorno, reproducir la cadena en una rama desechable de Supabase
-y dejar que la base juzgue.
-
-Detalle en `supabase/migrations/README.md`.
+Detalle e historial de la divergencia en `supabase/migrations/README.md`.
 
 ## 3. Seis migraciones ausentes del repo
 
