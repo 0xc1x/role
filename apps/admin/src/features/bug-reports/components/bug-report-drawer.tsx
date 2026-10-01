@@ -42,6 +42,51 @@ function DetailField({
 }
 
 /**
+ * Una captura, con su estado de "ya no se puede ver".
+ *
+ * POR QUÉ EL `onError` Y NO DEJAR EL `<img>` ROMPERSE. Las URLs firmadas
+ * caducan a los cinco minutos, y el drawer se queda abierto mientras el
+ * operador triaje —que es lo que tarda más de cinco minutos— así que la
+ * vencimiento no es una hipótesis de laboratorio: es el caso normal de esta
+ * pantalla. Un icono roto es peor que nada, porque no distingue DOS hechos que
+ * el operador tiene que tratar distinto: "el usuario no mandó captura" (que no
+ * es un problema) y "la captura ya no existe en el bucket" (que sí lo es, y
+ * además es la señal de que hay que limpiar algo del lado del API).
+ *
+ * El texto dice "ya no se puede ver" y NO "no existe": el panel no sabe cuál de
+ * las dos cosas pasó —solo sabe que la descarga falló— y afirmar la razón
+ * sería inventarla. El operador tiene la información que necesita para decidir
+ * sin que el panel le dé una conclusión falsa.
+ *
+ * Un `<img>` es lo que corresponde acá y no el optimizador de imágenes del
+ * framework: la URL es de un bucket privado ajeno al dominio de la app, con un
+ * token en la query, y ninguna de las dos cosas se puede reescribir a una ruta
+ * local. La firma de Supabase es la que autoriza la descarga.
+ */
+function Capture({ url, numero }: { url: string; numero: number }) {
+	const [noSeVe, setNoSeVe] = useState(false);
+
+	if (noSeVe) {
+		return (
+			<p className="rounded-md border border-dashed px-2 py-1 text-muted-foreground text-xs">
+				Captura {numero}: ya no se puede ver
+			</p>
+		);
+	}
+
+	return (
+		<a href={url} target="_blank" rel="noreferrer">
+			<img
+				src={url}
+				alt={`Captura ${numero}`}
+				onError={() => setNoSeVe(true)}
+				className="h-28 w-auto rounded-md border object-cover"
+			/>
+		</a>
+	);
+}
+
+/**
  * Cuerpo de la ficha: el texto íntegro del reporte, sus capturas y quién lo
  * mandó.
  *
@@ -64,7 +109,13 @@ function BugReportBody({
 				</p>
 			)}
 
-			<section className="space-y-3" aria-label="Estado">
+			{/* "Triaje" y no "Estado": el nombre de la columna y el de esta región
+			    tienen que coincidir. Un lector de pantalla anunciaba "Estado, región"
+			    y lo único que encontraba adentro era el badge de triaje — con lo
+			    cual la ruta lo nombraba mal y el nombre era peor que ningún
+			    nombre. La desambiguación entre el eje de triaje y el de entrega que
+			    se hizo en la columna y en la ruta termina acá. */}
+			<section className="space-y-3" aria-label="Triaje">
 				<div className="flex flex-wrap items-center gap-2">
 					<TriageBadge state={data.state} />
 					{data.origin ? (
@@ -86,11 +137,10 @@ function BugReportBody({
 
 			{/* Lo que sale acá son URLs FIRMADAS que caducan a los cinco minutos: el
 			    bucket de las capturas es privado y una ruta sola no descarga nada. El
-			    panel las usa TAL CUAL — no reconstruye la ruta ni adivina el bucket—,
-			    y si una venció el `<img>` no carga mientras el texto de al lado sigue
-			    siendo el reporte. Por eso las capturas no bloquean el render:
-			    `image_urls` puede llegar VACÍO porque la captura ya no existe, y un
-			    reporte sin imagen tiene que llegar igual. */}
+			    panel las usa TAL CUAL — no reconstruye la ruta ni adivina el bucket—.
+			    Por eso las capturas NO bloquean el render: `image_urls` puede llegar
+			    VACÍO porque la captura ya no existe, y un reporte sin imagen tiene que
+			    llegar igual. */}
 			<section className="space-y-3" aria-label="Capturas">
 				<h3 className="font-medium text-sm">Capturas</h3>
 				{data.image_urls.length === 0 ? (
@@ -101,13 +151,7 @@ function BugReportBody({
 					<ul className="flex flex-wrap gap-2">
 						{data.image_urls.map((url, i) => (
 							<li key={url}>
-								<a href={url} target="_blank" rel="noreferrer">
-									<img
-										src={url}
-										alt={`Captura ${i + 1}`}
-										className="h-28 w-auto rounded-md border object-cover"
-									/>
-								</a>
+								<Capture url={url} numero={i + 1} />
 							</li>
 						))}
 					</ul>
@@ -149,6 +193,28 @@ function BugReportBody({
  * que sí guardó. Los cinco se deshabilitan mientras no haya dato cargado: sin
  * `id` no hay a qué escribírselo, y un botón habilitado que no hace nada es peor
  * que uno que visibly no está.
+ *
+ * SON TRES RAMAS Y NO DOS, y la tercera es la que casi se cuela. `state` es
+ * `BugTriageState | null | undefined`, y `null` y `undefined` NO son el mismo
+ * hecho:
+ *
+ *  - un string    → el reporte está en ese estado, y el panel lo sabe.
+ *  - `null`       → el API lo estrechó a `null` porque la fila no tiene triaje, o
+ *                   porque tenía un valor fuera del vocabulario. Las dos cosas son
+ *                   indistinguibles desde acá, y "Sin triar" es la lectura honesta
+ *                   para las dos.
+ *  - `undefined`  → NO HAY DATO. Todavía está cargando, o el API falló. Decir
+ *                   "Sin triar" acá es afirmar un hecho sobre la fila que el panel
+ *                   no tiene: la pantalla de arriba diría "Error interno del
+ *                   servidor · req-abc12345" y el pie aseguraría que el reporte
+ *                   está sin triagear. El operador leería un 500 como "este
+ *                   reporte no está triado" y lo mandaría al final de la cola por
+ *                   un fallo de red. "—" dice lo único cierto: que el panel no
+ *                   sabe.
+ *
+ * Es el mismo cuidado que el `state: null` de la tabla, en dirección contraria:
+ * allá "Sin triar" tapaba dos hechos y había que decirlo; acá un texto de
+ * relleno tapaba un tercero.
  */
 function TriageActions({
 	state,
@@ -162,7 +228,11 @@ function TriageActions({
 	return (
 		<div className="space-y-2">
 			<p className="text-muted-foreground text-xs">
-				{state ? `Ya está en ${bugTriageStateLabel(state)}` : "Sin triar"}
+				{state === undefined
+					? "—"
+					: state
+						? `Ya está en ${bugTriageStateLabel(state)}`
+						: "Sin triar"}
 			</p>
 			<div className="grid grid-cols-2 gap-2">
 				{BUG_TRIAGE_STATES.map((s) => (

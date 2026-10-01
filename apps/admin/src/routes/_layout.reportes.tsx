@@ -1,6 +1,57 @@
-import { ListBugReportsQuerySchema } from "@0xc1x/role-commons";
+import {
+	BUG_TRIAGE_STATES,
+	ENTRY_ORIGINS,
+	type ListBugReportsQuery,
+	ListBugReportsQuerySchema,
+} from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { BugReportsList } from "@/features/bug-reports";
+
+/**
+ * `state` y `origin` se limpian ANTES del parseo, y no con un `catch` sobre el
+ * schema entero.
+ *
+ * POR QUÉ ESTA RUTA Y NO LAS OTRAS TRECE. Un `?state=REABIERTO` revienta
+ * `validateSearch`, el router lo envuelve en `SearchParamError` y REEMPLAZA LA
+ * PÁGINA ENTERA por el "Something went wrong!" de TanStack Router: sin barra
+ * lateral, sin sección, sin el "Reintentar" del componente. El patrón de las
+ * otras trece rutas tiene ese mismo hueco, así que esto no es una regresión —
+ * pero en esta sección el token malo NO es una hipótesis, es un hecho que el
+ * propio contrato declara: `app_store.state` es `text` sin CHECK, el mapper lo
+ * estrecha a `null` sin lanzar, y el diseño dice que `null` significa "sin
+ * triar" *o* "estado desconocido". El siguiente triageo natural de un operador
+ * —"¿por qué esta fila dice Sin triar?"— lleva a copiar un token en la URL.
+ *
+ * `catch` sobre el schema entero habría sido peor que el problema: tragándose
+ * un `?page=0` o un `?limit=999` inválidos los convertiría en los defaults
+ * silenciosamente, que es un agujero distinto con la misma forma.
+ *
+ * `find` y no un `as`: es la misma disciplina del mapper de la API. Un token
+ * fuera del vocabulario se traduce en "sin ese filtro", que es la única lectura
+ * honesta — y no en un tipo mentiroso que el resto del panel acabaría creyendo.
+ *
+ * Y lo que NO se limpia: `page` y `limit` siguen tirando si vienen mal. Son
+ * filtros que el operador no escribe a mano y un error ahí sí vale la página
+ * en blanco, que es lo que hacen las otras trece rutas.
+ */
+function soloDelVocabulario<T extends string>(
+	valor: unknown,
+	vocabulario: readonly T[],
+): T | undefined {
+	return typeof valor === "string"
+		? vocabulario.find((conocido) => conocido === valor)
+		: undefined;
+}
+
+export function parseBugReportsSearch(
+	raw: Record<string, unknown>,
+): ListBugReportsQuery {
+	return ListBugReportsQuerySchema.parse({
+		...raw,
+		state: soloDelVocabulario(raw.state, BUG_TRIAGE_STATES),
+		origin: soloDelVocabulario(raw.origin, ENTRY_ORIGINS),
+	});
+}
 
 /**
  * Buzón de los reportes de error que envía la app móvil.
@@ -23,7 +74,7 @@ import { BugReportsList } from "@/features/bug-reports";
  * sin leyenda se puede leer mal igual.
  */
 export const Route = createFileRoute("/_layout/reportes")({
-	validateSearch: (raw) => ListBugReportsQuerySchema.parse(raw),
+	validateSearch: (raw) => parseBugReportsSearch(raw),
 	component: RouteComponent,
 	head: () => ({
 		meta: [
@@ -59,6 +110,12 @@ function RouteComponent() {
 					state={search.state}
 					origin={search.origin}
 					onPageChange={(page) => navigate({ search: { ...search, page } })}
+					// El `limit` entra en la URL y no se descarta. Sin esto, elegir
+					// "50 filas" solo saltaba a la página 1 con el mismo tamaño de
+					// página: el control funcionaba y no hacía nada.
+					onLimitChange={(limit) =>
+						navigate({ search: { ...search, limit, page: 1 } })
+					}
 					onFilterChange={(filtros) =>
 						navigate({
 							search: {

@@ -78,6 +78,7 @@ function renderList(props: Partial<Parameters<typeof BugReportsList>[0]> = {}) {
 				page={1}
 				limit={20}
 				onPageChange={() => undefined}
+				onLimitChange={() => undefined}
 				onFilterChange={() => undefined}
 				{...props}
 			/>
@@ -124,6 +125,34 @@ describe("listado de reportes", () => {
 		await waitFor(() =>
 			expect(screen.getByText("Sin datos legibles")).toBeDefined(),
 		);
+	});
+
+	test("la fecha de la fila no depende del huso del navegador", async () => {
+		// La fila y el drawer muestran el MISMO instante en la misma pantalla, así
+		// que un `toLocaleDateString` (zona del navegador) contra el
+		// `formatBusinessDate` del drawer (zona fija) se contradicen en cuanto el
+		// navegador no está en Ecuador. Se cambia `process.env.TZ` porque Bun lo lee
+		// en cada llamada: sin eso el test pasaría en esta caja y solo fallaría en
+		// la de otro.
+		//
+		// 02:00Z del día 20 es el día 19 en Guayaquil (UTC-5) y el día 20 en UTC.
+		// O sea que el assert distingue las dos implementaciones.
+		const tzPrevio = process.env.TZ;
+		process.env.TZ = "UTC";
+		try {
+			stubFetch([{ ...abierto, created_at: "2026-09-20T02:00:00.000Z" }]);
+			renderList();
+
+			await waitFor(() =>
+				expect(screen.getByText("La app se cierra al pagar")).toBeDefined(),
+			);
+			// La fila y la ficha tienen que decir lo mismo. El drawer ya usa el
+			// formatter fijo, así que la fila es la que estaba mal.
+			expect(screen.getByText("19/9/2026")).toBeDefined();
+			expect(screen.queryByText("20/9/2026")).toBeNull();
+		} finally {
+			process.env.TZ = tzPrevio;
+		}
 	});
 
 	test("no muestra el estado de entrega, que en esta bandeja no significa nada", async () => {

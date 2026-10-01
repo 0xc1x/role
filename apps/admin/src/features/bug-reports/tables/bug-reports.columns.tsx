@@ -3,6 +3,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { ActionCell } from "@/features/bug-reports/tables/cells/action-cell";
 import { TriageBadge } from "@/features/bug-reports/tables/cells/triage-badge";
+import { formatBusinessDate } from "@/lib/dates";
 import { entryOriginLabel } from "@/lib/labels";
 
 const Resumen = ({ fila }: { fila: BugReportListItemDto }) => {
@@ -57,9 +58,12 @@ export const createBugReportsColumns = (
 			<DataTableColumnHeader column={column} title="Origen" />
 		),
 		cell: ({ row }) => (
-			// `origin` es nullable: es una columna genérica de `app_store` y una
-			// fila escrita por otro camino puede no nombrarla. Se dice "sin informar"
-			// en vez de dejar la celda en blanco, que se lee como un dato vacío.
+			// `origin` es nullable: es una columna genérica de `app_store` y una fila
+			// escrita por otro camino puede no nombrarla. Se pone "—" y no se deja
+			// en blanco, que se lee como un dato vacío y no como un dato que no
+			// existe. "—" y no "sin informar" porque así lo hacen las demás columnas
+			// del panel, y una columna que se desvía del resto obliga al operador a
+			// releerla para saber si el guion significa algo distinto.
 			<span className="text-sm">
 				{row.original.origin ? entryOriginLabel(row.original.origin) : "—"}
 			</span>
@@ -78,8 +82,17 @@ export const createBugReportsColumns = (
 			<DataTableColumnHeader column={column} title="Recibido" />
 		),
 		cell: ({ row }) => (
+			// `formatBusinessDate` y no `toLocaleDateString("es-EC")` pelado. La
+			// diferencia no es de formato: el formatter pelado usa la zona del
+			// NAVEGADOR y el otro fija `America/Guayaquil` (ver `lib/dates.ts`). En
+			// una tabla sola eso es un detalle; acá NO, porque esta sección muestra
+			// el mismo instante en la fila y en el drawer, y el drawer usa el
+			// formatter fijo. Con el navegador en UTC, una fila con `created_at` a
+			// las 02:00Z se leía como el día 20 y la ficha decía 19 — el mismo
+			// reporte con dos fechas en la misma pantalla, que es la forma más
+			// rápida de que un operador dude de si opened dos filas o una.
 			<span className="text-muted-foreground text-sm">
-				{new Date(row.original.created_at).toLocaleDateString("es-EC")}
+				{formatBusinessDate(row.original.created_at)}
 			</span>
 		),
 	},

@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { BugReportDetailDto } from "@0xc1x/role-commons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { cleanup, fireEvent, render, screen, waitFor } from "@/test-utils/dom";
 import { BugReportDrawer } from "../bug-report-drawer";
 
@@ -82,6 +83,7 @@ const settle = () => new Promise((r) => setTimeout(r, 300));
 
 afterEach(() => {
 	cleanup();
+	mock.restore();
 	globalThis.fetch = previousFetch;
 });
 
@@ -114,6 +116,32 @@ describe("detalle del reporte", () => {
 		expect(imagen.getAttribute("src")).toContain(
 			"/object/sign/bug_report_images/",
 		);
+	});
+
+	test("una captura vencida lo dice, en vez de dejar un ícono roto", async () => {
+		stubOk();
+		renderDrawer();
+		await waitFor(() =>
+			expect(screen.getByRole("img", { name: "Captura 1" })).toBeDefined(),
+		);
+
+		// La firma caduca a los 5 minutos y el drawer se queda abierto mientras el
+		// operador triaje, así que esto es el caso NORMAL de la pantalla, no una
+		// rareza. Un ícono roto no distingue "el usuario no mandó captura" de "la
+		// captura ya no existe", y solo la segunda es un problema.
+		fireEvent.error(screen.getByRole("img", { name: "Captura 1" }));
+
+		await waitFor(() =>
+			expect(screen.getByText(/Captura 1: ya no se puede ver/)).toBeDefined(),
+		);
+		expect(screen.queryByRole("img", { name: "Captura 1" })).toBeNull();
+		// Y el texto del reporte sigue en pantalla: perder una captura no puede
+		// costingle al operador el reporte entero.
+		expect(
+			screen.getByText(
+				"Cierro la app en la pantalla de pago y vuelve al inicio. Me pasa desde ayer.",
+			),
+		).toBeDefined();
 	});
 
 	test("un reporte sin capturas llega igual, no se cae la vista", async () => {
@@ -165,11 +193,130 @@ describe("detalle del reporte", () => {
 	});
 });
 
+describe("el pie nunca afirma un triaje que no sabe", () => {
+	// LAS TRES RAMAS. `state` es `BugTriageState | null | undefined` y los tres
+	// casos son hechos distintos: hay un estado, hay un `null` porque el API
+	// estrechó a la fuerza un token fuera de vocabulario, o no hay dato porque la
+	// consulta está en vuelo o falló. El pie tiene que distinguirlos los tres, y
+	// no dos.
+	test("mientras carga, el pie no dice 'Sin triar'", async () => {
+		// Un fetch que NO resuelve: el drawer queda en el estado de carga para
+		// siempre, que es la forma de mirar esa rama sin depender de tiempos.
+		globalThis.fetch = (async () =>
+			new Promise(() => undefined)) as unknown as typeof fetch;
+		renderDrawer();
+
+		// "Sin triar" acá afirmaría un hecho sobre una fila que el panel todavía
+		// no tiene. El operador leería un spinner como "este reporte no está
+		// triado" y lo dejaría para el final de la cola.
+		await waitFor(() =>
+			expect(screen.getByText("Cargando reporte")).toBeDefined(),
+		);
+		expect(screen.queryByText("Sin triar")).toBeNull();
+		expect(screen.queryByText(/Ya está en/)).toBeNull();
+		expect(screen.getByText("—")).toBeDefined();
+	});
+
+	test("con la API en 500, el pie no dice 'Sin triar' tampoco", async () => {
+		globalThis.fetch = (async () =>
+			new Response(
+				JSON.stringify({
+					statusCode: 500,
+					message: "Internal server error",
+					requestId: "req-abc12345",
+				}),
+				{ status: 500, headers: { "Content-Type": "application/json" } },
+			)) as unknown as typeof fetch;
+		renderDrawer();
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Error interno del servidor · req-abc12345"),
+			).toBeDefined(),
+		);
+		// Esta es la que duele: la pantalla de arriba dice que no se pudo cargar y
+		// el pie afirma que el reporte está sin triagear. Un 500 se leería como un
+		// triageo pendiente, que es el error más caro de los tres.
+		expect(screen.queryByText("Sin triar")).toBeNull();
+		expect(screen.getByText("—")).toBeDefined();
+	});
+
+	test("con el dato cargado y sin triage, el pie sí dice 'Sin triar'", async () => {
+		// La tercera rama: acá el panel SABE que no hay triaje, y el texto es
+		// distinto del "—" porque el hecho es otro. Sin este test, arreglar las dos
+		// anteriores poniendo "—" en todas partes también lo habría pasado.
+		stubOk({ ...detalle, state: null });
+		renderDrawer();
+
+		// DOS elementos y no uno: el badge del cuerpo y la línea del pie. Que
+		// coincidan es la garantía —que los dos digan lo mismo del mismo hecho— y
+		// el conteo es lo que la verifica.
+		await waitFor(() =>
+			expect(screen.getAllByText("Sin triar")).toHaveLength(2),
+		);
+		expect(screen.queryByText("Ya está en Abierto")).toBeNull();
+		// Y el pie NO cayó en la rama de "no sé": el "—" suelto solo aparece
+		// cuando no hay dato, así que su ausencia es lo que distingue esta rama de
+		// las otras dos. (Los `— sin informar —` de la ficha no cuentan: son otro
+		// texto y viven en otro elemento.)
+		expect(screen.queryByText("—")).toBeNull();
+	});
+});
+
 describe("acciones de triaje", () => {
 	test("ofrece los cinco estados y marca el actual como el que ya está", async () => {
 		stubOk();
 		renderDrawer();
+		await waitFor(() =>
+			expect(screen.getByText("Ya está en Abierto")).toBeDefined(),
+		);
 
+		for (const etiqueta of [
+			"En reproducción",
+			"Corregido",
+			"Duplicado",
+			"Descartado",
+		]) {
+			expect(screen.getByRole("button", { name: etiqueta })).toBeDefined();
+		}
+	});
+
+	test("el estado vigente NO se puede volver a pulsar", async () => {
+		// El invariante que sostiene el test de "se aplica directo": si el botón
+		// del estado actual estuviera habilitado, ese test pasaría por un motivo
+		// equivocado (un clic inerte se parece a un PATCH que no se dispara).
+		// Y para el operador un "Abierto" pulsable sobre una fila ya abierta
+		// fingiría que hay un cambio pendiente.
+		stubOk();
+		renderDrawer();
+		await waitFor(() =>
+			expect(screen.getByText("Ya está en Abierto")).toBeDefined(),
+		);
+
+		const vigente = screen.getByRole("button", { name: "Abierto" });
+		expect((vigente as HTMLButtonElement).disabled).toBe(true);
+		// Y los otros cuatro sí, que es lo que hace que el cinco sea usable.
+		for (const etiqueta of [
+			"En reproducción",
+			"Corregido",
+			"Duplicado",
+			"Descartado",
+		]) {
+			const b = screen.getByRole("button", { name: etiqueta });
+			expect((b as HTMLButtonElement).disabled).toBe(false);
+		}
+	});
+
+	test("sin dato cargado los cinco están deshabilitados", async () => {
+		globalThis.fetch = (async () =>
+			new Promise(() => undefined)) as unknown as typeof fetch;
+		renderDrawer();
+
+		await waitFor(() =>
+			expect(screen.getByText("Cargando reporte")).toBeDefined(),
+		);
+		// Un botón habilitado que no hace nada es peor que uno que visiblemente no
+		// está: sin `id` no hay a qué escribirle el triaje.
 		for (const etiqueta of [
 			"Abierto",
 			"En reproducción",
@@ -177,14 +324,9 @@ describe("acciones de triaje", () => {
 			"Duplicado",
 			"Descartado",
 		]) {
-			await waitFor(() =>
-				expect(screen.getByRole("button", { name: etiqueta })).toBeDefined(),
-			);
+			const b = screen.getByRole("button", { name: etiqueta });
+			expect((b as HTMLButtonElement).disabled).toBe(true);
 		}
-		// El estado vigente se anuncia, no se ofrece como algo que se pueda volver
-		// a pulsar: un botón "Abierto" habilitado sobre una fila ya abierta
-		// fingiría que hay un cambio pendiente.
-		expect(screen.getByText("Ya está en Abierto")).toBeDefined();
 	});
 
 	test("DESCARTADO pide confirmación antes de escribir", async () => {
@@ -254,6 +396,108 @@ describe("acciones de triaje", () => {
 		expect(JSON.parse(patch?.body ?? "{}")).toEqual({
 			state: "EN_REPRODUCCION",
 		});
+	});
+});
+
+describe("el PATCH que falla", () => {
+	test("el toast lleva el requestId y el diálogo se queda a la vista", async () => {
+		// El comentario de `confirmar()` promete que el diálogo NO se cierra cuando
+		// el PATCH falla, "para que un fallo deje la confirmación a la vista con el
+		// motivo ya encima". Sin este test la promesa no la sostiene nadie: un
+		// `.then(() => setPorConfirmar(null))` sin `.catch` cerraría el diálogo y
+		// el operador vería su acción evaporarse sin ninguna pista.
+		const calls = stubFetchWithCalls(200, detalle);
+		const error = spyOn(toast, "error");
+		// El GET carga bien y el PATCH revienta: es el caso que el comentario
+		// describe, no un 500 de página entera.
+		calls.length = 0;
+		globalThis.fetch = (async (
+			_input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			calls.push({
+				url: String(_input),
+				method: init?.method ?? "GET",
+				body: typeof init?.body === "string" ? init.body : null,
+			});
+			if ((init?.method ?? "GET") === "PATCH") {
+				return new Response(
+					JSON.stringify({
+						statusCode: 500,
+						message: "Internal server error",
+						requestId: "req-abc12345",
+					}),
+					{ status: 500, headers: { "Content-Type": "application/json" } },
+				);
+			}
+			return new Response(JSON.stringify(detalle), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}) as unknown as typeof fetch;
+
+		renderDrawer();
+		await waitFor(() =>
+			expect(screen.getByText("Ya está en Abierto")).toBeDefined(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Descartado" }));
+		const dialogo = await screen.findByRole("alertdialog");
+		fireEvent.click(screen.getByRole("button", { name: "Descartado" }));
+
+		// El aviso con el `requestId`: es lo único que permite cruzar el fallo con
+		// el log del servidor, y sin él el toast no le da nada a soporte.
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith(
+				"Error interno del servidor · req-abc12345",
+			),
+		);
+
+		// Y el diálogo sigue ahí, con el motivo encima, para que el operador vea
+		// que su acción no se guardó y pueda reintentarla sin reescribirla.
+		await settle();
+		expect(screen.queryByRole("alertdialog")).not.toBeNull();
+		expect(dialogo.textContent).toContain("descartado");
+		// El pie tampoco pasó a "Descartado": la fila no se movió.
+		expect(screen.getByText("Ya está en Abierto")).toBeDefined();
+	});
+
+	test("un fallo no deja el pie en un estado que el API nunca confirmed", async () => {
+		const error = spyOn(toast, "error");
+		globalThis.fetch = (async (
+			_input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			if ((init?.method ?? "GET") === "PATCH") {
+				return new Response(
+					JSON.stringify({
+						statusCode: 500,
+						message: "Internal server error",
+						requestId: "req-abc12345",
+					}),
+					{ status: 500, headers: { "Content-Type": "application/json" } },
+				);
+			}
+			return new Response(JSON.stringify(detalle), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}) as unknown as typeof fetch;
+
+		renderDrawer();
+		await waitFor(() =>
+			expect(screen.getByText("Ya está en Abierto")).toBeDefined(),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Corregido" }));
+
+		await waitFor(() => expect(error).toHaveBeenCalled());
+		// `onSuccess` no corrió, así que el seed del detalle no ocurrió y el pie
+		// sigue diciendo la verdad. Si alguien "optimizara" poniendo el estado
+		// optimista antes del PATCH, este assert es lo que lo delata.
+		await settle();
+		expect(screen.getByText("Ya está en Abierto")).toBeDefined();
+		expect(screen.queryByText("Ya está en Corregido")).toBeNull();
 	});
 });
 

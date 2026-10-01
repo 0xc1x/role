@@ -44,6 +44,7 @@ export function BugReportsList({
 	state,
 	origin,
 	onPageChange,
+	onLimitChange,
 	onFilterChange,
 }: {
 	page?: number;
@@ -51,6 +52,7 @@ export function BugReportsList({
 	state?: BugTriageState;
 	origin?: EntryOrigin;
 	onPageChange: (page: number) => void;
+	onLimitChange: (limit: number) => void;
 	onFilterChange: (filtros: {
 		state?: BugTriageState;
 		origin?: EntryOrigin;
@@ -173,7 +175,12 @@ export function BugReportsList({
 					data={filas}
 					meta={data?.meta}
 					onPageChange={onPageChange}
-					onLimitChange={() => onPageChange(1)}
+					// El `limit` NUEVO, no un salto a la página 1. Descartarlo dejaba
+					// el selector de "filas por página" como un no-op: el operador
+					// elegía 50, la tabla seguía pidiendo 20 y la respuesta no
+					// cambiaba. La única señal de que el control no funciona es que no
+					// hace nada, que es la peor señal posible.
+					onLimitChange={onLimitChange}
 				/>
 			)}
 
