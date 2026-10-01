@@ -201,7 +201,11 @@ construida con el **mismo resource module** que ya usan las demás pantallas
 
 - Ruta registrada en el árbol de rutas generado (hay precedente: commit
   `a793ebd chore(admin): register the router type in the generated route tree`).
-- Listado: `reporter_id`, resumen del mensaje, `origin`, `state`, fecha.
+- Listado: resumen del mensaje, `origin`, `state`, fecha. **`reporter_id` NO
+  aparece en el listado**: es PII y el listado es la superficie que se ve de un
+  vistazo. Va solo en el detalle, si el operador lo necesita. (Esta línea
+  contradecía antes a la §7; la §7 manda — seguridad primero, como el orden de
+  prioridad del AGENTS.)
 - Filtros: `state` y `origin`.
 - Detalle: mensaje íntegro, **capturas**, y las acciones de triaje.
 - Las capturas se piden al API, que devuelve **URLs firmadas** de corta
