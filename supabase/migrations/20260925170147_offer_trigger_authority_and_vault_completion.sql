@@ -1,46 +1,16 @@
 -- Close the trigger-authority gap on offers, and finish the Vault migration.
 --
 -- Found by a destructive role-matrix probe (real mutations as anon /
--- authenticated / a non-owning user, each rolled back), not by static review:
---
--- 1. OFFER INSERT WAS BROKEN FOR EVERY BUSINESS OWNER.
---    enforce_offer_business_availability() is a BEFORE INSERT trigger that
---    reads public.businesses.verification_status, but it was SECURITY INVOKER.
---    After migration 20260925163235 narrowed the client column grant on
---    businesses, `authenticated` could no longer read that column, so the
---    trigger raised "permission denied for table businesses" and every offer
---    creation from the mobile business panel failed. The trigger enforces an
---    integrity rule; it must not inherit the caller's read privileges.
---
--- 2. handle_offer_created_push() STILL EMBEDDED THE ROTATED SECRET.
---    20260925163235 replaced handle_order_event_push() but missed this sibling
---    trigger, so the old shared secret and the anon JWT remained in prosrc and
---    the offer-created push was authenticating with a credential that had
---    already been rotated out. It is the only public function left containing
---    a secret literal.
---
--- 3. The Vault dispatcher allowlist did not include 'handle-offer-created', so
---    the trigger could not be moved onto the Vault path without extending it.
---
--- check_offer_expiry() and handle_updated_at() are deliberately left
--- SECURITY INVOKER: they only assign NEW fields and read no table, so they
--- need no elevated privilege. sync_business_verification() is likewise
--- SECURITY INVOKER by design: businesses is not client-writable, so the
--- trigger only ever runs for the service_role API path.
---
--- ROLLBACK: reverting (1) restores a state where no merchant can create an
--- offer. Reverting (2) reintroduces a credential that has already been rotated.
+-- authenticated / a non-owning user, each rolled back), not by static review.
 
 begin;
 
--- 1. Integrity triggers that read platform-only columns must not run with the
---    caller's privileges.
 create or replace function public.enforce_offer_business_availability()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $$
+as $fn$
 begin
   if not exists (
     select 1
@@ -53,12 +23,8 @@ begin
   end if;
   return new;
 end;
-$$;
+$fn$;
 
--- 2. Widen the dispatcher allowlist to the endpoint this trigger actually
---    calls. The path allowlist is the only thing standing between a
---    caller-controlled value and an outbound request, so the new entry is a
---    bare slug with no leading slash and no user input.
 create or replace function public.invoke_internal_edge_function(
   path text,
   body jsonb default '{}'::jsonb
@@ -67,7 +33,7 @@ returns bigint
 language plpgsql
 security definer
 set search_path = ''
-as $$
+as $fn$
 declare
   v_url text;
   v_anon text;
@@ -111,19 +77,18 @@ begin
 
   return v_request_id;
 end;
-$$;
+$fn$;
 
 revoke all on function public.invoke_internal_edge_function(text, jsonb) from public;
 revoke all on function public.invoke_internal_edge_function(text, jsonb) from anon;
 revoke all on function public.invoke_internal_edge_function(text, jsonb) from authenticated;
 
--- 3. Replace the trigger body with the Vault-backed dispatcher.
 create or replace function public.handle_offer_created_push()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $$
+as $fn$
 begin
   perform public.invoke_internal_edge_function(
     'handle-offer-created',
@@ -136,11 +101,9 @@ begin
   );
   return new;
 end;
-$$;
+$fn$;
 
--- 4. Sync the rotated secret to the offer-created function so the dispatcher
---    and the function agree. Idempotent, and the value is never returned.
-do $$
+do $fn$
 declare
   v_secret text;
   v_name text := 'supabase_functions_secret_handle-offer-created_INTERNAL_SECRET';
@@ -155,17 +118,16 @@ begin
   if exists (select 1 from vault.secrets where name = v_name) then
     perform vault.update_secret(
       (select id from vault.secrets where name = v_name),
-      v_secret,
-      v_name,
+      v_secret, v_name,
       'INTERNAL_SECRET for handle-offer-created, synced by migration.'
     );
   else
     perform vault.create_secret(
-      v_secret,
-      v_name,
+      v_secret, v_name,
       'INTERNAL_SECRET for handle-offer-created, synced by migration.'
     );
   end if;
-end $$;
+end
+$fn$;
 
 commit;
