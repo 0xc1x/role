@@ -392,5 +392,61 @@ const dark: ColorTokens = {
 	qrBackground: "#FFFFFF",
 };
 
+/**
+ * A review author's disc: the fill behind the glyph in the review list.
+ *
+ * A deterministic colour derived from `reviews.user_id` (see
+ * `authorPaletteIndex`). It is the identity signal for a review author,
+ * because the author NAME is usually not readable by the viewer: `profiles`
+ * has no policy that lets one consumer read another consumer's row, so the
+ * review feed falls back to "Cliente" for everyone. The colour is derived from
+ * data the feed already exposes (`author_id` is already public in
+ * `PublicReviewItemSchema`), so this widens no contract.
+ *
+ * A pair, not a bare colour: the glyph sits ON the fill, so the two have to be
+ * measured together, and a fill that carries no foreground cannot be audited
+ * with the same criteria. Both schemes are asserted by
+ * `author-palette.contrast.test.ts`: `on` over `fill` at the 4.5:1 text floor,
+ * and `fill` against the surfaces the disc is painted on at the 3:1 non-text
+ * floor.
+ *
+ * NOT `ColorTokens`: that interface is a flat record of one colour per job, and
+ * a palette is a set. `ColorTokens` is untouched, so the decorative-hue purity
+ * guards (`semantic-text.purity.test.ts`, `success-text.purity.test.ts`) do
+ * not apply here — these are deliberately saturated fills, not text-safe hues.
+ *
+ * Dark is not the light palette darkened: on a dark `card` those fills measure
+ * 2.0-2.8:1 and vanish, so dark carries lighter fills under the ink foreground.
+ */
+export interface AuthorPaletteEntry {
+	/** The disc. Also the disc's own separation from the surface behind it. */
+	fill: string;
+	/** The glyph on the disc: the text-safe foreground for this fill. */
+	on: string;
+}
+
+export const authorPalette: Record<ThemeScheme, AuthorPaletteEntry[]> = {
+	light: [
+		{ fill: "#6D28D9", on: "#FFFFFF" },
+		{ fill: "#0F766E", on: "#FFFFFF" },
+		{ fill: "#15803D", on: "#FFFFFF" },
+		{ fill: "#C2410C", on: "#FFFFFF" },
+		{ fill: "#BE123C", on: "#FFFFFF" },
+		{ fill: "#1D4ED8", on: "#FFFFFF" },
+		{ fill: "#A21CAF", on: "#FFFFFF" },
+		{ fill: "#B45309", on: "#FFFFFF" },
+	],
+	dark: [
+		{ fill: "#B582E4", on: "#1A1A18" },
+		{ fill: "#5EEAD4", on: "#1A1A18" },
+		{ fill: "#86EFAC", on: "#1A1A18" },
+		{ fill: "#FDBA74", on: "#1A1A18" },
+		{ fill: "#FDA4AF", on: "#1A1A18" },
+		{ fill: "#93C5FD", on: "#1A1A18" },
+		{ fill: "#F0ABFC", on: "#1A1A18" },
+		{ fill: "#FCD34D", on: "#1A1A18" },
+	],
+};
+
 export const colorTokens: Record<ThemeScheme, ColorTokens> = { light, dark };
 export { light, dark };

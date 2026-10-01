@@ -59,6 +59,15 @@ export interface HoursRange {
 /** Consumer-facing review (user name resolved from profiles). */
 export interface BusinessReviewView {
 	id: string;
+	/**
+	 * `reviews.user_id`, the seed for the author's palette entry. NOT NULL in
+	 * the schema and granted as a whole-table SELECT, so it is always present.
+	 * Public already — `PublicReviewItemSchema` ships the same value as
+	 * `author_id` — and it is the only identity the viewer can rely on, because
+	 * `profiles` exposes no policy for reading another consumer's row (so
+	 * `userName` is usually the "Cliente" fallback).
+	 */
+	authorId: string;
 	userName: string;
 	productRating: number;
 	businessRating: number;
