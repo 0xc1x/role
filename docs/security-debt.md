@@ -32,17 +32,13 @@ con `md5(statements[1])` del ledger. La regla que lo previene está en
 **El fallo no fue el SQL, fue escribir a la base por una vía que no deja
 rastro y luego confundir un commit con prueba de aplicación.**
 
-## 1. Columnas de negocio expuestas a `anon` (P1-2, revertido a propósito)
+## 1. Columnas de negocio expuestas a `anon` (P1-2, cerrada 2026-10-01)
 
-**Estado:** abierto, **verificado hoy**. Las ofertas vuelven a cargar, el precio
-es exposición de datos.
-
-Confirmado por SQL el 2026-09-25: `public.businesses` conserva las 7 columnas
-(`commission_rate`, `balance`, `verification_status`, `verified_at`,
-`verified_by`, `rejection_reason`, `owner_id`),
-`has_table_privilege('anon','public.businesses','SELECT')` es `true`, y la
-política de lectura es `is_active = true`. El filtro de filas no protege las
-columnas: `anon` lee `commission_rate` y `balance` de **todo negocio activo**.
+**Estado:** cerrado. La fase 3 se aplicó (`20260927025753`, ledger) y
+`public.businesses` contiene solo 16 columnas públicas — verificado por SQL el
+2026-10-01: sin `commission_rate`, `balance`, `verification_status`,
+`verified_at`, `verified_by`, `rejection_reason` ni `owner_id`. Las tablas
+acompañantes (16/16/16, sin huérfanos) no tienen grants a `anon`.
 
 `public.businesses` tiene 7 columnas que no deberían ser públicas:
 `commission_rate`, `balance`, `verification_status`, `verified_at`,
@@ -76,15 +72,13 @@ named"). Cuando las columnas se muevan, ese test se reemplaza por uno que
 pruebe que ya no están en la tabla. No lo borres sin hacer el follow-up: el test
 existe para que la deuda sea visible y no se olvide en silencio.
 
-## 1b. Fase 3 del split de `businesses`: verificada, pendiente de deploy
+## 1b. Fase 3 del split de `businesses`: aplicada 2026-10-01
 
-**Estado:** fases 1, 2 y 3 escritas. La 3 **NO aplicada** — confirmado en el
-ledger el 2026-09-25, whose última entrada es `20260926010336`. La base está en
-**fase 1**; el código (API y mobile) está en **fase 2**. Ese desfasaje es
-recuperable, y es la precondición de la 3: la 000011 dropea columnas que una API
-fase-1 lee en runtime, así que el orden obligatorio es **desplegar la API
-fase 2 → verificar en vivo → aplicar la 000011**. Al revés se rompe el negocio
-en producción.
+**Estado:** fases 1, 2 y 3 aplicadas. La 3 consta en el ledger como
+`20260927025753_businesses_drop_sensitive_columns.sql` (archivo byte-idéntico,
+md5 `31607cd0…`). La base está en **fase 3**; falta **desplegar la API fase 2**,
+cuyo código ya lee/escribe las acompañantes — hasta ese deploy, el servicio
+desplegado (fase 1) no puede operar contra la base. Desplegar cuanto antes.
 
 - **Fase 1 — hecha.** Las tres tablas acompañantes existen y están backfilled
   (16/16, 0 discrepancias). Aditiva: no cambió nada que la app use.
@@ -92,8 +86,9 @@ en producción.
   acompañantes. El DTO público no cambia. El cliente móvil ya no envía
   `owner_id`: la propiedad se deriva de `auth.uid()`, así que ya no puede
   escribirse.
-- **Fase 3 — escrita y verificada, NO aplicada.**
-  `supabase/migrations/20260927025753_businesses_drop_sensitive_columns.sql`.
+- **Fase 3 — aplicada 2026-10-01** (`20260927025753`, md5 verificado contra el
+  ledger). `reserve_offer` reescrito a `business_finance`, predicados de
+  ownership a `business_ownership` (verificado en `pg_get_functiondef`).
 
 ### Alcance real (tres estimaciones fallidas, en orden)
 
