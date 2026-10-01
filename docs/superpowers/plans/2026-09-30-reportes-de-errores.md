@@ -14,7 +14,8 @@
 
 - **Ninguna migración entra por `execute_sql` ni por el dashboard.** Solo `apply_migration`. Después: leer la versión que asignó el servidor, renombrar el archivo a `<version>_<name>.sql`, y probar `md5sum <archivo>` == `md5(statements[1])` del ledger. Procedimiento en `supabase/migrations/README.md` §"How to apply a migration".
 - **Nunca atribución de IA en commits** (`Co-Authored-By`, `Generated with`). Conventional commits.
-- **Los cuatro gates antes de declarar done:** `bun run typecheck`, `bun run test`, `bun run build`. Filtros: `bun run typecheck --filter=role-api...`.
+- **Ningún commit deja el árbol rojo.** `bun run typecheck` tiene que pasar en CADA commit, no solo al final. Si un cambio obliga a tocar otro paquete, ese paquete va en la MISMA tarea.
+- **Los tres gates antes de declarar done:** `bun run typecheck`, `bun run test`, `bun run build`. Filtros: `bun run --cwd apps/api typecheck`.
 - **El móvil no pasa por la API** para escribir el reporte (spec D6). Solo escribe el triaje.
 - **No tocar `app_store` desde un endpoint genérico.** Cada bandeja lleva su constante de namespace server-side, aplicada en las TRES operaciones (filtro del listado, verificación del detalle, verificación previa a la escritura).
 - **Mappers lista blanca:** nunca `...row.value` en un DTO. Una fila que no matchea el contrato sale con `readable: false`, nunca lanza.
@@ -25,11 +26,11 @@
 
 Cinco entradas que el spec implica pero que ningún test del spec cubre explícitamente. Cada una tiene su test en la tarea listada.
 
-1. **La captura falla después de que el usuario escribió el texto** (supera 5 MB, MIME no admitido, bucket ausente en el entorno). El texto no se pierde y el error se dice en español. → T9, T10
-2. **Un reporte sin ninguna imagen.** Es el caso común; el flujo de texto no puede depender del bucket. → T9
-3. **Reintento tras un fallo a medio camino** (imagenes subidas, insert rechazado). Hoy no hay idempotency key: el usuario puede terminar con dos filas. Al menos hay que fijar el comportamiento documentado, no dejarlo indefinido. → T10
-4. **Un usuario reporta desde el panel del negocio.** `origin` sigue siendo la plataforma, y `reporter_id` es la persona, nunca el negocio. → T9
-5. **Una fila que no es de `bug_report` en la bandeja de bugs, ni una de `bug_report` en la de contactos.** Es el riesgo que `CONTACT_NAMESPACE` ya documenta; la constante nueva lo repite. → T7
+1. **La captura falla después de que el usuario escribió el texto** (supera 5 MB, MIME no admitido, bucket ausente en el entorno). El texto no se pierde y el error se dice en español. → T7, T8
+2. **Un reporte sin ninguna imagen.** Es el caso común; el flujo de texto no puede depender del bucket. → T7
+3. **Reintento tras un fallo a medio camino** (imágenes subidas, insert rechazado). Hoy no hay idempotency key: el usuario puede terminar con dos filas. Al menos hay que fijar el comportamiento documentado, no dejarlo indefinido. → T8
+4. **Un usuario reporta desde el panel del negocio.** `origin` sigue siendo la plataforma, y `reporter_id` es la persona, nunca el negocio. → T7
+5. **Una fila que no es de `bug_report` en la bandeja de bugs, ni una de `bug_report` en la de contactos.** Es el riesgo que `CONTACT_NAMESPACE` ya documenta; la constante nueva lo repite. → T5
 
 ---
 
@@ -157,23 +158,20 @@ El único artefacto que ninguna otra tarea puede adelantarse a escribir: define 
   - `app_store.state text` nullable
   - `app_store.origin entry_origin` nullable, enum `('ios','android','pwa','web')`
   - bucket `bug_report_images`, `public = false`, `file_size_limit = 5242880`, `allowed_mime_types = ARRAY['image/jpeg','image/png','image/webp']`
-  - policies `storage.objects`: `"Reporters attach their own screenshots"` (insert) y `"Reporters read their own screenshots"` (select), ambas con `(storage.foldername(name))[1] = auth.uid()::text`
+  - policies `storage.objects`: `"Reporters attach their own screenshots"` (insert) y `"Reporters read their own screenshots"` (select)
   - policy `app_store` `"Users submit bug reports"`, `FOR INSERT TO authenticated`, con el `WITH CHECK` de la sección 4 del spec
   - trigger `on_bug_report_stamped` BEFORE INSERT, `WHEN (new.namespace = 'bug_report')`, que sella `value.reporter_id = auth.uid()::text`
   - `revoke select on public.app_store from anon, authenticated`
 
 - [ ] **Step 1: Escribir el archivo de migración**
 
-Volcar el SQL de la §4 del spec, con el bloque de cabecera que las migraciones de este repo ya usan (`-- <descripción>` + `-- SAFETY:` si aplica). El bloque de policies sobre `storage.objects` es nuevo en el repo: copiar el estilo de `20260925155445_privacy_storage_notifications_consent.sql` (líneas 56-74), que ya exige `bucket_id = ... and owner = auth.uid() and (storage.foldername(name))[1] = auth.uid()::text`.
+Volcar el SQL de la §4 del spec, con el bloque de cabecera que las migraciones de este repo ya usa (`-- <descripción>` + `-- SAFETY:` si aplica).
 
-Ojo: el `WITH CHECK` de `storage.objects` en el spec está abreviado respecto al patrón del repo. Mantener la forma completa que ya existe, con `bucket_id = 'bug_report_images'` sustituido.
+El bloque de policies sobre `storage.objects` es nuevo en el repo: copiar el estilo de `20260925155445_privacy_storage_notifications_consent.sql` (líneas 56-74), que ya exige `bucket_id = ... and owner = auth.uid() and (storage.foldername(name))[1] = auth.uid()::text`. El `WITH CHECK` del spec está abreviado respecto a ese patrón: mantener la forma completa, con `bucket_id = 'bug_report_images'` sustituido.
 
 - [ ] **Step 2: Aplicar por `apply_migration`**
 
 Nombre `bug_reports_and_delivery_axis`. Solo después de que el paso 3 confirme que el archivo está escrito.
-
-Run: llamada a `tools.supabase.apply_migration({ name: "bug_reports_and_delivery_axis", query: <contenido del archivo> })`
-Expected: devuelve la versión que asignó el servidor.
 
 - [ ] **Step 3: Leer la versión y renombrar el archivo**
 
@@ -199,25 +197,29 @@ git add supabase/migrations/ && git commit -m "feat(db): bug reports on app_stor
 
 ---
 
-### Task 2: Espejo Drizzle y repositorio
+### Task 2: Espejo Drizzle, repositorio y sus dos consumidores
+
+El renombre de `updateStatus` y de la columna `status` aparece en el mirror, en el repositorio, en `contact.service.ts` y en el mapper del inbox. Van juntos porque el typecheck tiene que quedar verde en este commit.
 
 **Files:**
 - Modify: `apps/api/src/database/schema/app-store.ts`
 - Modify: `apps/api/src/modules/store/app-store.repository.ts`
-- Test: `apps/api/src/modules/store/app-store.repository.spec.ts` (existe; extender)
+- Modify: `apps/api/src/modules/store/app-store.repository.spec.ts`
+- Modify: `apps/api/src/modules/contact/contact.service.ts` (líneas 80 y 121) y `contact.service.spec.ts` (líneas 88 y 140)
+- Modify: `apps/api/src/modules/contact-inbox/contact-inbox.mapper.ts` y `contact-inbox.mapper.spec.ts`
 
 **Interfaces:**
 - Consumes: columnas de la Task 1.
 - Produces:
   - `storeEntryStatusEnum` renombrado a `deliveryStatusEnum`, `pgEnum('delivery_status', [...])`
   - `appStore.delivery_status`, `appStore.state`, `appStore.origin`
-  - `AppStoreRepository.updateDeliveryStatus(id: string, deliveryStatus: 'PENDIENTE'|'PROCESADO'|'ERROR', extraValue?: Record<string, unknown>): Promise<StoreEntry | null>` (renombre de `updateStatus`)
-  - `AppStoreRepository.updateState(id: string, state: string): Promise<StoreEntry | null>` (nuevo)
-  - `AppStoreRepository.list(filter: { namespace?: string; delivery_status?: string; state?: string; page: number; limit: number })`
+  - `AppStoreRepository.updateDeliveryStatus(id, deliveryStatus, extraValue?): Promise<StoreEntry | null>` (renombre de `updateStatus`)
+  - `AppStoreRepository.updateState(id, state): Promise<StoreEntry | null>` (nuevo)
+  - `AppStoreRepository.list(filter: { namespace?, delivery_status?, state?, page, limit })`
 
 - [ ] **Step 1: Escribir el test que falla**
 
-En `app-store.repository.spec.ts`, contra `createTestDb()`: insertar una fila `namespace: 'bug_report'` y leerla; y `list({ namespace: 'bug_report', state: 'ABIERTO' })` devuelve solo las `ABIERTO`.
+En `app-store.repository.spec.ts`, contra `createTestDb()`:
 
 ```ts
 test('el filtro por state trae solo las filas en ese estado', async () => {
@@ -231,40 +233,118 @@ test('el filtro por state trae solo las filas en ese estado', async () => {
 - [ ] **Step 2: Correr y ver que falla**
 
 Run: `docker compose up -d postgres-test && cd apps/api && bunx drizzle-kit generate && bun test --isolate --timeout 60000 src/modules/store/app-store.repository.spec.ts`
-Expected: FAIL — `state` no existe en el espejo todavía.
+Expected: FAIL — `state` todavía no existe en el espejo.
 
 `drizzle-kit generate` es obligatorio antes: `test/db.ts` construye la base desde `apps/api/drizzle/`, que está gitignored y se genera localmente.
 
 - [ ] **Step 3: Actualizar el schema Drizzle**
 
-En `app-store.ts`: renombrar el `pgEnum` y su const, renombrar la columna `status:` a `delivery_status:`, y agregar `state: text('state')` y `origin: entryOriginEnum('origin')` con un `pgEnum('entry_origin', ['ios','android','pwa','web'])` y su const. El índice `app_store_status_idx` pasa a `app_store_delivery_status_idx`; agregar `app_store_state_idx` sobre `state`.
+En `app-store.ts`: renombrar el `pgEnum` y su const, renombrar `status:` a `delivery_status:`, y agregar `state: text('state')` y `origin: entryOriginEnum('origin')` con un `pgEnum('entry_origin', ['ios','android','pwa','web'])` y su const. `app_store_status_idx` pasa a `app_store_delivery_status_idx`; agregar `app_store_state_idx` sobre `state`.
 
 - [ ] **Step 4: Actualizar el repositorio**
 
 Renombrar `updateStatus` → `updateDeliveryStatus` (parámetro y cuerpo), agregar `updateState` con la misma forma de patch (`{ state, updated_at }`), y renombrar la clave `status` del filtro de `list()` a `delivery_status` con su predicado, agregando `state`.
 
-`updateState` no necesita `extraValue`: el merge de jsonb que hace `updateDeliveryStatus` es para el `error` del proveedor de correo, y el triaje no lo necesita.
+`updateState` no necesita `extraValue`: el merge de jsonb que hace `updateDeliveryStatus` existe para el `error` del proveedor de correo, y el triaje no lo necesita.
 
-- [ ] **Step 5: Regenerar el espejo y correr el test**
+- [ ] **Step 5: Regenerar el espejo y adaptar a los dos consumidores**
 
-Run: `cd apps/api && bunx drizzle-kit generate && bun test --isolate --timeout 60000 src/modules/store/app-store.repository.spec.ts`
-Expected: PASS.
+Run: `cd apps/api && bunx drizzle-kit generate`
 
-- [ ] **Step 6: Typecheck de la API (va a fallar, y está bien)**
+`contact.service.ts`: los dos `storeRepo.updateStatus(entry.id, ...)` → `updateDeliveryStatus`.
 
-Run: `bun run --cwd apps/api typecheck`
-Expected: errores solo en `contact.service.ts` y `contact-inbox.*` por el renombre de `updateStatus` / `status`. Es la Task 5 la que los resuelve; se anotan y se sigue.
+`contact-inbox.mapper.ts`: `status: row.status` → `delivery_status: row.delivery_status`, y el tipo del mapper en los specs. Ojo: el DTO todavía dice `status` (eso lo arregla la Task 3), así que el mapper compila contra el DTO viejo y solo se renombra la lectura de la fila. Si el typecheck protesta por el DTO, es lo esperado: **no** tocar el DTO en esta tarea, solo la lectura de la fila.
+
+- [ ] **Step 6: Correr los tests y el typecheck**
+
+Run: `cd apps/api && bunx drizzle-kit generate && bun test --isolate --timeout 60000 src/modules/store src/modules/contact-inbox src/modules/contact && bun run typecheck`
+Expected: PASS y exit 0.
+
+El typecheck puede quejarse de que el mapper devuelve `delivery_status` contra un DTO que pide `status`: eso es exactamente lo que la Task 3 resuelve, y **no** se arregla aquí.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/api/src/database/schema/app-store.ts apps/api/src/modules/store/
+git add apps/api/src/database/schema apps/api/src/modules/store apps/api/src/modules/contact
 git commit -m "refactor(api): the delivery axis gets its own name in the mirror"
 ```
 
 ---
 
-### Task 3: El contrato `bug-report` en commons
+### Task 3: El rename del eje de entrega, de punta a punta
+
+Un cambio mecánico, pero de punta a punta: `packages/commons` es el SSOT y cambiarlo rompe en el compilador de **todos** los consumidores. El AGENTS de la raíz dice que eso se resuelve en el mismo PR. Una sola tarea, un solo commit, typecheck verde al final.
+
+**Files:**
+- Modify: `packages/commons/src/contact/enums/contact.enum.ts`
+- Modify: `packages/commons/src/contact/schemas/contact-inbox.schema.ts` (líneas 61 y 90)
+- Modify: `packages/commons/src/contact/__tests__/contact-inbox.schema.test.ts`
+- Modify: `apps/api/src/modules/contact-inbox/contact-inbox.mapper.ts`, `contact-inbox.service.ts`, `contact-inbox.service.spec.ts`, `contact-inbox.controller.security.spec.ts`
+- Modify: `apps/admin/src/lib/labels.ts` (líneas 85-92) y `apps/admin/src/lib/__tests__/labels.test.ts`
+- Modify: `apps/admin/src/features/contact-inbox/` completo: `index.ts`, `tables/cells/status-badge.tsx` (→ `delivery-status-badge.tsx`), `tables/contact-inbox.columns.tsx`, `components/contact-inbox-list.tsx`, `components/contact-message-drawer.tsx`, y sus `__tests__/`
+- Modify: `apps/admin/e2e/sections.operations.spec.ts`
+
+**Interfaces:**
+- Consumes: `updateDeliveryStatus`, `row.delivery_status` (Task 2).
+- Produces: `ContactDeliveryStatus` (renombre de `ContactMessageStatus`, que desaparece), `delivery_status` en `ContactMessageListItemSchema` y `ListContactMessagesQuerySchema`, `contactDeliveryStatusLabel` (renombre de `contactMessageStatusLabel`), `DeliveryStatusBadge` (renombre de `StatusBadge`).
+
+- [ ] **Step 1: Cambiar los tests primero**
+
+`contact-inbox.schema.test.ts`: `status` → `delivery_status` y el tipo renombrado.
+`labels.test.ts`: `contactMessageStatusLabel` → `contactDeliveryStatusLabel`.
+Specs de la feature y del API: fixtures con `delivery_status`.
+
+- [ ] **Step 2: Correr y ver que falla**
+
+Run: `bun test --isolate packages/commons/src/contact && cd apps/admin && bun test --isolate src/lib/__tests__/labels.test.ts src/features/contact-inbox`
+Expected: FAIL en los tres.
+
+- [ ] **Step 3: Renombrar en commons**
+
+`contact.enum.ts`: el const y el tipo. Actualizar el doc-comment que hoy dice "esto NO es una bandeja de entrada" para que nombre el eje tal como quedó: entrega, no triaje.
+
+`contact-inbox.schema.ts`: `status:` → `delivery_status:` en ambos schemas.
+
+- [ ] **Step 4: Propagar a la API**
+
+`contact-inbox.mapper.ts`: la propiedad `delivery_status` del DTO.
+`contact-inbox.service.ts`: `list()` pasa `delivery_status: query.delivery_status`.
+Specs correspondientes.
+
+El controller no cambia de firma: el `ZodValidationPipe` ya valida con el schema renombrado.
+
+- [ ] **Step 5: Propagar al panel**
+
+`labels.ts`: `CONTACT_MESSAGE_DELIVERY_STATUS_LABELS` y `contactDeliveryStatusLabel`. Los tres textos no cambian — `"Entrega pendiente"`, `"Notificado"`, `"Error"` ya describían el eje de entrega.
+
+`status-badge.tsx` → `delivery-status-badge.tsx`, componente `DeliveryStatusBadge`, tipo `ContactDeliveryStatus`. Actualizar `index.ts` y el import en `columns.tsx:84`.
+
+El resto: leer `delivery_status` donde se leía `status`. El filtro del `Select` en `contact-inbox-list.tsx:90` conserva los mismos tres valores.
+
+`sections.operations.spec.ts`: la sección de la columna de estado.
+
+- [ ] **Step 6: Los tres gates, en el orden que los detecta**
+
+```sh
+bun test --isolate packages/commons
+cd apps/api && bun run typecheck
+cd apps/admin && bun test --isolate src && bun run typecheck
+```
+
+Expected: todos verdes. Si el typecheck de admin señala algo que el de commons no, es un consumidor que se pasó por alto: cazarlo aquí, no en la Task 10.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add packages/commons apps/api apps/admin
+git commit -m "feat(commons)!: rename the contact status axis to delivery_status"
+```
+
+El cuerpo del mensaje explica el breaking change y por qué va en un solo commit.
+
+---
+
+### Task 4: El contrato `bug-report` en commons
 
 **Files:**
 - Create: `packages/commons/src/bug-report/enums/bug-report.enum.ts`
@@ -275,11 +355,12 @@ git commit -m "refactor(api): the delivery axis gets its own name in the mirror"
 - Modify: `packages/commons/src/index.ts` (una línea `export * from "./bug-report";`)
 
 **Interfaces:**
+- Consumes: nada. Es la primera pieza nueva y no depende de nadie.
 - Produces:
   - `BUG_TRIAGE_STATES: readonly ["ABIERTO","EN_REPRODUCCION","CORREGIDO","DUPLICADO","DESCARTADO"]`, tipo `BugTriageState`
   - `ENTRY_ORIGINS: readonly ["ios","android","pwa","web"]`, tipo `EntryOrigin`
-  - `BugReportValueSchema` — el `value` jsonb: `summary: string` obligatorio, `description: string` nullish, `images: string[]` nullish, `reporter_id: string` nullish, `at: string` nullish
-  - `BugReportListItemSchema` — `id`, `state` enum nullable, `delivery_status` enum, `origin` enum nullable, `created_at`, `updated_at`, `readable`, `summary` nullable, `excerpt` nullable
+  - `BugReportValueSchema`: `summary: string` obligatorio, `description: string` nullish, `images: string[]` nullish, `reporter_id: string` nullish, `at: string` nullish
+  - `BugReportListItemSchema`: `id`, `state` enum nullable, `delivery_status` (tipo `ContactDeliveryStatus`), `origin` enum nullable, `created_at`, `updated_at`, `readable`, `summary` nullable, `excerpt` nullable
   - `BugReportDetailSchema` = list item + `description` nullable, `images: string[]`, `reporter_id: string | null`, `received_at: string | null`
   - `ListBugReportsQuerySchema` = `PaginationQuerySchema` + `state?` enum + `origin?` enum
   - `SetBugReportStateSchema` = `{ state: z.enum(BUG_TRIAGE_STATES) }`
@@ -290,11 +371,11 @@ git commit -m "refactor(api): the delivery axis gets its own name in the mirror"
 `__tests__/bug-report.schema.test.ts`, estilo `contact-inbox.schema.test.ts`:
 
 ```ts
-test('un value sin summary no es un reporte', ...)          // summary obligatorio
-test('un state desconocido se rechaza', ...)                 // SetBugReportStateSchema
-test('el listado trae state nullable porque contacto no usa el eje', ...)
-test('images ausente es nullish, no []', ...)
-test('una fila con clave desconocida sigue siendo legible', ...)  // no strict
+test('un value sin summary no es un reporte')            // summary obligatorio
+test('un state desconocido se rechaza')                   // SetBugReportStateSchema
+test('el listado trae state nullable porque contacto no usa el eje')
+test('images ausente es nullish, no []')
+test('una fila con clave desconocida sigue siendo legible')   // no strict
 ```
 
 El último caso tiene razón: el trigger agrega `reporter_id`, así que el schema no puede ser `strict`.
@@ -312,8 +393,8 @@ Modelar `bug-report.schema.ts` sobre `contact-inbox.schema.ts`: los mismos impor
 
 - [ ] **Step 4: Correr los tests**
 
-Run: `bun test --isolate packages/commons/src/bug-report`
-Expected: PASS.
+Run: `bun test --isolate packages/commons`
+Expected: PASS. commons es el SSOT: si algo aquí no cuadra, el error aparece ahora y no en cuatro paquetes más abajo.
 
 - [ ] **Step 5: Commit**
 
@@ -324,154 +405,7 @@ git commit -m "feat(commons): declare the bug report inbox contract"
 
 ---
 
-### Task 4: El rename del contrato público (breaking)
-
-**Files:**
-- Modify: `packages/commons/src/contact/enums/contact.enum.ts`
-- Modify: `packages/commons/src/contact/schemas/contact-inbox.schema.ts` (líneas 61 y 90)
-- Modify: `packages/commons/src/contact/__tests__/contact-inbox.schema.test.ts`
-
-**Interfaces:**
-- Produces: `ContactDeliveryStatus` (renombre de `ContactMessageStatus`), y `delivery_status` en `ContactMessageListItemSchema` y `ListContactMessagesQuerySchema`.
-
-- [ ] **Step 1: Actualizar los tests del contrato**
-
-En `contact-inbox.schema.test.ts`, renombrar las aserciones de `status` a `delivery_status` y del tipo a `ContactDeliveryStatus`.
-
-- [ ] **Step 2: Correr y ver que fallan**
-
-Run: `bun test --isolate packages/commons/src/contact`
-Expected: FAIL — el schema todavía expone `status`.
-
-- [ ] **Step 3: Aplicar el rename**
-
-En `contact.enum.ts` renombrar el const y el tipo, y actualizar el doc-comment que hoy dice "esto NO es una bandeja de entrada" para que nombre el eje tal como quedó: entrega, no triaje.
-
-En `contact-inbox.schema.ts` cambiar `status:` por `delivery_status:` en ambos schemas.
-
-- [ ] **Step 4: Correr los tests de commons enteros**
-
-Run: `bun test --isolate packages/commons`
-Expected: PASS. commons es el SSOT: si algo aquí no cuadra, el error aparece ahora y no en cuatro paquetes más abajo.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add packages/commons/
-git commit -m "feat(commons)!: rename the contact status axis to delivery_status"
-```
-
-Breaking change: el cuerpo del mensaje lo explica. La API y el panel se adaptan en las Tasks 5 y 6, mismo PR.
-
----
-
-### Task 5: La API se adapta al rename
-
-**Files:**
-- Modify: `apps/api/src/modules/contact/contact.service.ts` (líneas 80 y 121)
-- Modify: `apps/api/src/modules/contact/contact.service.spec.ts` (líneas 88 y 140)
-- Modify: `apps/api/src/modules/contact-inbox/contact-inbox.service.ts`
-- Modify: `apps/api/src/modules/contact-inbox/contact-inbox.mapper.ts`
-- Modify: `apps/api/src/modules/contact-inbox/contact-inbox.service.spec.ts`
-- Modify: `apps/api/src/modules/contact-inbox/contact-inbox.mapper.spec.ts`
-- Modify: `apps/api/src/modules/contact-inbox/contact-inbox.controller.ts`
-- Modify: `apps/api/src/modules/contact-inbox/contact-inbox.controller.security.spec.ts`
-
-**Interfaces:**
-- Consumes: `ContactDeliveryStatus`, `delivery_status` (Task 4); `updateDeliveryStatus` (Task 2).
-- Produces: `ContactInboxService.list(query: ListContactMessagesQuery)` leyendo `query.delivery_status`.
-
-- [ ] **Step 1: Cambiar los tests primero**
-
-En los cuatro specs: `status:` → `delivery_status:` en los fixtures, `updateStatus` → `updateDeliveryStatus`, y `query.status` → `query.delivery_status`.
-
-- [ ] **Step 2: Correr y ver que fallan**
-
-Run: `docker compose up -d postgres-test && cd apps/api && bun test --isolate --timeout 60000 src/modules/contact-inbox src/modules/contact`
-Expected: FAIL.
-
-- [ ] **Step 3: Adaptar el código**
-
-`contact.service.ts`: los dos `storeRepo.updateStatus(entry.id, ...)` pasan a `updateDeliveryStatus`.
-
-`contact-inbox.service.ts`: `list()` pasa `delivery_status: query.delivery_status`; `markHandled()` llama `updateDeliveryStatus(id, 'PROCESADO')`.
-
-`contact-inbox.mapper.ts`: `status: row.status` → `delivery_status: row.delivery_status`.
-
-`contact-inbox.controller.ts`: sin cambios de firma — el query ya lo valida el `ZodValidationPipe` con el schema renombrado.
-
-- [ ] **Step 4: Correr los tests de la API**
-
-Run: `cd apps/api && bun test --isolate --timeout 60000 src/modules/contact-inbox src/modules/contact`
-Expected: PASS.
-
-- [ ] **Step 5: Typecheck**
-
-Run: `bun run --cwd apps/api typecheck`
-Expected: exit 0. Este es el punto donde el rename se prueba contra el compilador: lo que aparezca aquí es lo que la Task 6 tiene que arreglar del lado del panel.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add apps/api/src/modules/contact apps/api/src/modules/contact-inbox
-git commit -m "refactor(api): follow the delivery_status rename"
-```
-
----
-
-### Task 6: El panel se adapta al rename
-
-**Files:**
-- Modify: `apps/admin/src/lib/labels.ts` (líneas 85-92)
-- Modify: `apps/admin/src/lib/__tests__/labels.test.ts` (líneas 47-55, 72)
-- Modify: `apps/admin/src/features/contact-inbox/tables/cells/status-badge.tsx`
-- Modify: `apps/admin/src/features/contact-inbox/tables/contact-inbox.columns.tsx` (línea 84)
-- Modify: `apps/admin/src/features/contact-inbox/components/contact-inbox-list.tsx` (líneas 44, 90)
-- Modify: `apps/admin/src/features/contact-inbox/components/contact-message-drawer.tsx` (líneas 66, 126)
-- Modify: `apps/admin/src/features/contact-inbox/index.ts`
-- Modify: los specs bajo `apps/admin/src/features/contact-inbox/**/__tests__/`
-- Modify: `apps/admin/e2e/sections.operations.spec.ts`
-
-**Interfaces:**
-- Consumes: `ContactDeliveryStatus`, `delivery_status` (Task 4).
-- Produces: `contactDeliveryStatusLabel(status: string): string` (renombre de `contactMessageStatusLabel`, que desaparece) y `DeliveryStatusBadge` (renombre de `StatusBadge`).
-
-- [ ] **Step 1: Cambiar los tests primero**
-
-`labels.test.ts`: `contactMessageStatusLabel` → `contactDeliveryStatusLabel`, y sus aserciones. Los specs de la feature: fixtures con `delivery_status`.
-
-- [ ] **Step 2: Correr y ver que fallan**
-
-Run: `cd apps/admin && bun test --isolate src/lib/__tests__/labels.test.ts src/features/contact-inbox`
-Expected: FAIL.
-
-- [ ] **Step 3: Adaptar el código**
-
-`labels.ts`: `CONTACT_MESSAGE_STATUS_LABELS` → `CONTACT_MESSAGE_DELIVERY_STATUS_LABELS` y la función exportada accordingly. Los tres textos no cambian: `"Entrega pendiente"`, `"Notificado"`, `"Error"` ya describían el eje de entrega.
-
-`status-badge.tsx` → archivo renombrado a `delivery-status-badge.tsx`, componente `DeliveryStatusBadge`. Su tipo pasa a `ContactDeliveryStatus`.
-
-El resto: leer `delivery_status` donde se leía `status`. El filtro del `Select` en `contact-inbox-list.tsx:90` sigue con los mismos tres valores.
-
-`index.ts`: actualizar el nombre exportado.
-
-`sections.operations.spec.ts`: la sección de la columna de estado lee la propiedad; actualizar.
-
-- [ ] **Step 4: Correr los tests del panel**
-
-Run: `cd apps/admin && bun test --isolate src`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add apps/admin/
-git commit -m "refactor(admin): the contact badge now names the delivery axis"
-```
-
----
-
-### Task 7: El módulo de lectura y triaje en la API
+### Task 5: El módulo de lectura y triaje en la API
 
 **Files:**
 - Create: `apps/api/src/modules/bug-report-inbox/bug-report-inbox.constants.ts`
@@ -485,7 +419,7 @@ git commit -m "refactor(admin): the contact badge now names the delivery axis"
 - Modify: `apps/api/src/app.module.ts` (import cerca de la línea 32, entrada cerca de la línea 90)
 
 **Interfaces:**
-- Consumes: los contratos de la Task 3; `AppStoreRepository` (Task 2).
+- Consumes: los contratos de la Task 4; `AppStoreRepository` con `updateState` (Task 2).
 - Produces:
   - `BUG_REPORT_NAMESPACE = 'bug_report'`
   - `BugReportInboxMapper.toListItem(row: StoreEntry): BugReportListItemDto`
@@ -500,7 +434,7 @@ git commit -m "refactor(admin): the contact badge now names the delivery axis"
 `bug-report-inbox.mapper.spec.ts`, calcado de `contact-inbox.mapper.spec.ts`:
 
 ```ts
-test('reporter_id nunca aparece en el listado')      // PII
+test('reporter_id nunca aparece en el listado')       // PII
 test('images solo aparece en el detalle')
 test('un value sin summary sale con readable: false y summary null')
 test('un value corrupto no tumba el mapeo')
@@ -539,7 +473,7 @@ Expected: FAIL.
 
 - [ ] **Step 6: Service, controller y módulo**
 
-`service.ts`: los tres métodos públicos. `setState` valida el estado **en el servicio** antes de escribir, y escribe solo `state`. `requireBugReportRow` devuelve 404 si la fila existe pero es de otro namespace.
+`service.ts`: los tres métodos públicos. `setState` valida el estado **en el servicio** antes de escribir, y escribe solo `state` vía `updateState`. `requireBugReportRow` devuelve 404 si la fila existe pero es de otro namespace.
 
 `controller.ts`: `@Controller('bug-report-inbox')`, `@Roles('admin')` en cada handler (los guards son globales; no se pone `@UseGuards`), `ZodValidationPipe` en el query, `ParseUUIDPipe` en el id, y el `PATCH` con `@Body()` porque aquí sí hay cuerpo (`SetBugReportStateSchema`).
 
@@ -563,7 +497,7 @@ git commit -m "feat(api): admin-only bug report inbox and triage"
 
 ---
 
-### Task 8: La sección de reportes en el panel
+### Task 6: La sección de reportes en el panel
 
 **Files:**
 - Create: `apps/admin/src/features/bug-reports/{index.ts, api/bug-reports.api.ts, queries/bug-reports.keys.ts, queries/bug-reports.queries.ts, components/bug-reports-list.tsx, components/bug-report-drawer.tsx, tables/bug-reports.columns.tsx, tables/cells/triage-badge.tsx, tables/cells/action-cell.tsx}`
@@ -571,13 +505,12 @@ git commit -m "feat(api): admin-only bug report inbox and triage"
 - Create: `apps/admin/src/routes/_layout.reportes.tsx`
 - Modify: `apps/admin/src/config/navigation.ts` (`navMain`)
 - Modify: `apps/admin/src/routeTree.gen.ts` (regenerado, no editado)
-- Modify: `apps/admin/src/lib/labels.ts` (etiquetas de `BUG_TRIAGE_STATES`)
-- Modify: `apps/admin/src/lib/__tests__/labels.test.ts`
+- Modify: `apps/admin/src/lib/labels.ts` y `apps/admin/src/lib/__tests__/labels.test.ts`
 - Modify: `apps/admin/e2e/fixtures/api-fixtures.ts`
 - Modify: `apps/admin/e2e/sections.operations.spec.ts`
 
 **Interfaces:**
-- Consumes: los contratos de la Task 3, las rutas de la Task 7.
+- Consumes: los contratos de la Task 4, las rutas de la Task 5.
 - Produces:
   - `bugReportKeys = { all, lists(), list(params), details(), detail(id) }`
   - `bugReportListOptions(params)`, `useBugReportList(params)`, `useBugReport(id)`, `useSetBugReportState()`
@@ -603,7 +536,7 @@ El del `requestId` no es decorativo: es el contrato que el panel ya fijó para t
 
 - [ ] **Step 3: Test del drawer y del badge de triaje**
 
-`components/__tests__/bug-report-drawer.test.tsx`: el detalle trae `description`, las imágenes y las acciones de triaje; un `state` desconocido no rompe el render (cae al valor crudo, como `bugTriageStateLabel`).
+`components/__tests__/bug-report-drawer.test.tsx`: el detalle trae `description`, las imágenes y las acciones de triaje; un `state` desconocido no rompe el render (cae al valor crudo, con la misma forma de fallback que `contactDeliveryStatusLabel`).
 
 - [ ] **Step 4: Correr y ver que fallan**
 
@@ -653,7 +586,7 @@ git commit -m "feat(admin): the bug report inbox"
 
 ---
 
-### Task 9: La capa de datos en el móvil
+### Task 7: La capa de datos en el móvil
 
 **Files:**
 - Create: `apps/mobile/src/features/bug-report/domain/bug-report.ts`
@@ -663,12 +596,12 @@ git commit -m "feat(admin): the bug report inbox"
 - Create: `apps/mobile/src/features/bug-report/index.ts`
 
 **Interfaces:**
-- Consumes: `BUG_TRIAGE_STATES` no hace falta aquí; el bucket y la policy de la Task 1.
+- Consumes: el bucket y la policy de la Task 1.
 - Produces:
   - `REPORT_BUCKET = 'bug_report_images'`, `MAX_REPORT_IMAGE_BYTES = 5_242_880`
   - `detectImageContentType(bytes: ArrayBuffer): 'image/jpeg' | 'image/png' | 'image/webp' | null`
-  - `submitBugReport(input: { summary: string; description?: string; images: LocalImage[] }): Promise<void>`
   - `LocalImage = { bytes: ArrayBuffer; contentType: 'image/jpeg' | 'image/png' | 'image/webp' }`
+  - `submitBugReport(input: { summary: string; description?: string; images: LocalImage[] }): Promise<void>`
 
 - [ ] **Step 1: Tests de dominio**
 
@@ -694,7 +627,7 @@ test('un reporte sin imágenes no toca el bucket')
 test('si el insert falla, propaga y no se traga el error')
 ```
 
-El tercero es el que fija D6 en el cliente: si el insert mandara `reporter_id`, el trigger lo sobrescribe, pero mandar el campo sugiere que es INPUT yeso es exactamente el error que el trigger previene.
+El tercero es el que fija D6 en el cliente: si el insert mandara `reporter_id`, el trigger lo sobrescribe, pero mandar el campo sugiere que es INPUT y eso es exactamente el error que el trigger previene.
 
 - [ ] **Step 3: Correr y ver que fallan**
 
@@ -723,22 +656,24 @@ git commit -m "feat(mobile): submit bug reports straight to the store"
 
 ---
 
-### Task 10: El sheet y las dos entradas
+### Task 8: El sheet y las dos entradas
 
 **Files:**
 - Create: `apps/mobile/src/features/bug-report/components/ReportProblemSheet.tsx`
 - Create: `apps/mobile/src/features/bug-report/components/ReportProblemSheet.test.tsx`
+- Create: `apps/mobile/app/report-problem.tsx`
+- Modify: `apps/mobile/app/_layout.tsx` (un `<Stack.Screen>` en el Stack raíz)
 - Modify: `apps/mobile/src/features/profile/components/ProfileSettingsTab.tsx` (`SETTINGS_GROUPS`, grupo "Ayuda")
 - Modify: `apps/mobile/src/features/business/components/management/SettingsSection.tsx` (`items`)
-- Create: `apps/mobile/app/(consumer)/profile/report-problem.tsx`
-- Modify: `apps/mobile/app/(consumer)/profile/_layout.tsx` (un `<Stack.Screen>`)
-- Modify: `apps/mobile/src/core/i18n/strings.ts` (bloques `profile:` y nuevo `bugReport:`)
+- Modify: `apps/mobile/src/core/i18n/strings.ts` (bloque nuevo `bugReport:`)
 
 **Interfaces:**
-- Consumes: `submitBugReport` (Task 9).
+- Consumes: `submitBugReport` (Task 7).
 - Produces:
   - `ReportProblemSheet({ visible: boolean; onClose: () => void })`
-  - ruta `/profile/report-problem`
+  - ruta `/report-problem`
+
+**Por qué la ruta vive en la raíz y no en `(consumer)/profile/`:** las dos entradas son de audiencias distintas y el grupo `(consumer)` tiene su propio `_layout.tsx` con guard de rol. Una pantalla que ambas audiencias tienen que alcanzar no debe vivir dentro de una de ellas. El precedentexiste: `app/onboarding.tsx`, `app/all-offers.tsx` y `app/all-businesses.tsx` son rutas de raíz para superficies compartidas.
 
 - [ ] **Step 1: Test del sheet**
 
@@ -764,15 +699,15 @@ Expected: FAIL.
 
 - [ ] **Step 4: La ruta y el registro**
 
-`report-problem.tsx`: el patrón de `about.tsx` — guard de invitado con `router.replace("/login")`, `Screen`, `ScreenHeader` con `fallback="/(consumer)/profile"`.
+`report-problem.tsx`: el patrón de `about.tsx` — guard de invitado con `router.replace("/login")`, `Screen`, `ScreenHeader`.
 
-`app/(consumer)/profile/_layout.tsx`: añadir `<Stack.Screen name="report-problem" />`. Ese layout declara sus pantallas explícitamente; omitirla rompe la resolución.
+`app/_layout.tsx`: añadir `<Stack.Screen name="report-problem" />` al Stack raíz, junto a `onboarding`.
 
 - [ ] **Step 5: Las dos entradas**
 
-`ProfileSettingsTab.tsx`: una fila más en el grupo `sectionHelp`, con `href: "/profile/report-problem"` y un icono `lucide-react-native`.
+`ProfileSettingsTab.tsx`: una fila más en el grupo `sectionHelp`, con `href: "/report-problem"` y un icono `lucide-react-native`.
 
-`SettingsSection.tsx`: un item más con `route: "/profile/report-problem"` — la ruta es del perfil, no del panel, así que un usuario de negocio que llega desde ahí aterriza en la misma pantalla y `reporter_id` sigue siendo la persona (Review Focus 4).
+`SettingsSection.tsx`: un item más con `route: "/report-problem"`. `reporter_id` sigue siendo la persona en ambos casos (Review Focus 4).
 
 - [ ] **Step 6: i18n**
 
@@ -792,7 +727,7 @@ git commit -m "feat(mobile): report a problem from the profile and the panel"
 
 ---
 
-### Task 11: El spec de seguridad
+### Task 9: El spec de seguridad
 
 El `WITH CHECK` es la frontera de D6. Un spec que no lo ejercite deja el modo de escritura sin probar.
 
@@ -829,12 +764,12 @@ test('origin web se rechaza en el insert')               // la policy solo admit
 test('un usuario no lee las capturas de otro')           // storage.foldername = uid
 ```
 
-- [ ] **Step 3: Correr y ver el resultado**
+- [ ] **Step 3: Correr**
 
 Run: `docker compose up -d postgres-test && cd apps/api && bun test --isolate --timeout 60000 src/database/security/bug-reports.rls.db.spec.ts`
 Expected: PASS en verde la primera vez si la Task 1 quedó bien. Si algo falla, el fallo es de la migración, no del test: corregir la migración (y volver a aplicar por `apply_migration`, con el rename y el `md5sum` de la Task 1).
 
-`upsert: true` en el upload del móvil combined con el prefijo de uid hace que reintentar una captura no duplique el archivo; la fila sí puede duplicarse porque no hay idempotency key. Anotarlo como deuda en el spec en vez de dejarlo indefinido.
+`upsert: true` en el upload del móvil combinado con el prefijo de uid hace que reintentar una captura no duplique el archivo; la fila sí puede duplicarse porque no hay idempotency key. Anotarlo como deuda en el spec en vez de dejarlo indefinido.
 
 - [ ] **Step 4: Commit**
 
@@ -845,7 +780,7 @@ git commit -m "test(api): the bug report write path is closed except through one
 
 ---
 
-### Task 12: Gates finales
+### Task 10: Gates finales
 
 **Files:**
 - Modify: `apps/api/openapi/openapi.json` (regenerado)
@@ -876,7 +811,7 @@ git commit -m "chore(api): openapi.json picks up the bug report inbox"
 
 ## Notas para quien ejecute
 
-- **El orden importa por el tipo, no por la lógica.** Task 4 rompe el contrato; Task 5 y Task 6 lo reparan. `bun run typecheck` de la raíz fallará entre la 4 y la 6, y eso es lo esperado.
 - **`drizzle-kit generate` va antes de cada corrida de specs de API que toque la base.** `test/db.ts` lee `apps/api/drizzle/`, que está gitignored.
 - **`postgres-test` tiene que estar arriba** para los specs `.db.spec.ts`: `docker compose up -d postgres-test`. No hay skip en el harness: si la base no está, el `beforeAll` lanza y fallan los specs de `database/security`.
 - **Task 1 es la única irreversible en producción.** Todo lo demás es código. Si algo va mal después, revertir la migración deja el código sin deploy; el rename y el `revoke` no conviene revertirlos porque dejarlos mantiene `app_store` cerrada.
+- **El rename de la Task 3 es de punta a punta a propósito.** `packages/commons` es el SSOT: partirlo en tres commits dejaría el typecheck rojo en el árbol entre ellos, y el AGENTS pide actualizar contrato y consumidores en el mismo PR.
