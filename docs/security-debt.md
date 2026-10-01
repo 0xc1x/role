@@ -93,7 +93,7 @@ en producción.
   `owner_id`: la propiedad se deriva de `auth.uid()`, así que ya no puede
   escribirse.
 - **Fase 3 — escrita y verificada, NO aplicada.**
-  `supabase/migrations/20260926000011_businesses_drop_sensitive_columns.sql`.
+  `supabase/migrations/20260927025753_businesses_drop_sensitive_columns.sql`.
 
 ### Alcance real (tres estimaciones fallidas, en orden)
 
@@ -157,7 +157,7 @@ existe.
 ### Orden de aplicación
 
 1. Desplegar la API de la fase 2. **El servicio actual lee columnas que caerán.**
-2. Aplicar `20260926000011`.
+2. Aplicar `20260927025753_businesses_drop_sensitive_columns.sql`.
 
 Ese orden está escrito en la cabecera de la migración, y hay un test que falla
 si alguien la borra.
@@ -167,11 +167,11 @@ declaraba `owner_id` con `onDelete: 'no action'`, pero la FK real en la base es
 `ON DELETE CASCADE`. El schema Drizzle está desalineado de la base;
 `business_ownership` sigue la base, que es lo correcto. Corregir en la fase 3.
 
-## 2. Ocho migraciones nunca se han ejecutado
+## 2. Once de doce migraciones nunca se han ejecutado
 
 **Estado:** abierto. Reproducibilidad, noorrectitud.
 
-De las nueve migraciones `20260925*`, ocho no son byte-idénticas a lo que la base
+De las doce migraciones `20260925*`, once no son byte-idénticas a lo que la base
 recibió. Son las versiones revisadas y documentadas; la base recibió SQL
 equivalente enviado por MCP. Solo `20260925165931_offer_stock_write_grant.sql`
 coincide.
@@ -195,12 +195,14 @@ ledger; el procedimiento está en `supabase/migrations/README.md`.
 
 ## 4. Lint sin cubrir en mobile y commons
 
-**Estado:** abierto, cosmético. Verificado el 2026-09-25.
+**Estado:** cerrado el 2026-10-01. Verificado el 2026-09-25, cubierto después.
 
-`bun run lint` corre en admin, landing y api. `apps/mobile` y `packages/commons`
-no tienen script de `lint`, así que ~30 hallazgos de biome no bloquean nada.
-La mayoría son mecánicos (`noUnusedImports`, `useImportType`, prefijo `node:`);
-`noNonNullAssertion` (7) cambia tipado y conviene revisar aparte.
+`bun run lint` corre en admin, landing y api, y ahora también en
+`apps/mobile` (`biome lint . --error-on-warnings`) y `packages/commons`
+(`biome lint .`). Verificado el 2026-10-01: ambos corren en limpio
+(`Checked 377 files` / `Checked 197 files`, sin hallazgos), así que los ~30
+hallazgos mecánicos originales (`noUnusedImports`, `useImportType`, prefijo
+`node:`, `noNonNullAssertion`) ya están resueltos o acotados donde viven.
 
 Lo que sí está cubierto desde `80698b2` es el **formateo** (`format:check` con
 biome, en turbo y en CI). Formateo no es lint: el formateador no reporta
@@ -219,17 +221,19 @@ Lo que sigue sin verificarse, y no se puede verificar leyendo código:
 
 - Recorrer en un dispositivo real el camino de **crear una oferta y editar una**.
   Sigue siendo el camino que nunca se recorrió.
-- Confirmación de correo: `businesses.service.ts:98` crea el usuario con
-  `email_confirm: false` vía `auth.admin.createUser`, que **no envía ningún
-  correo**, y el hook de email es un `// TODO` sin implementar
-  (`businesses.service.ts:208`). La pantalla de éxito promete "Recibirás un
-  email para confirmar tu cuenta" (`apps/landing/src/routes/business-signup.tsx:200`).
-  El resultado no es un comercio sin correo de bienvenida: es una **cuenta que
-  no puede activarse nunca**, porque el admin la aprueba y el login siempre
-  responde `Email not confirmed`. Hay que decidir entre enviar el correo de
-  confirmación o poner `email_confirm: true` **y** darle al admin una vista con
-  el email y el teléfono del solicitante antes de aprobar (hoy no la tiene: solo
-  ve nombre, tipo, estado, activo y fecha).
+- Confirmación de correo: **parcial.** `businesses.service.ts:117-122` crea
+  el usuario con `email_confirm: false` vía `auth.admin.createUser`, que
+  **no envía ningún correo**, pero `sendConfirmationEmail` ya existe
+  (`businesses.service.ts:202-277`): genera el enlace con
+  `auth.admin.generateLink({ type: 'signup' })` y lo entrega por Resend en modo
+  best-effort. Lo que falta es **verificar la entrega en staging** (el envío
+  depende de un dominio verificado en Resend y de `RESEND_API_KEY`). La
+  pantalla de registro promete "Recibirás un email para confirmar tu cuenta"
+  (`apps/landing/src/routes/business-signup.tsx:311-314`), y el admin sí
+  muestra el email y el teléfono del solicitante antes de aprobar
+  (`businesses.columns.tsx:40,51`). Si el correo no llega, la cuenta queda sin
+  poder activarse (`Email not confirmed` al login): no aprobar en prod hasta
+  ver un `business_confirmation_email_sent` real en los logs.
 - Contraste y dynamic type: los ratios de los hallazgos se calcularon a mano
   desde los hex de `colors.ts`, no contra píxeles renderizados.
 
