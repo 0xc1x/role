@@ -80,11 +80,17 @@ async function seedRole(role: 'user' | 'business' | 'admin'): Promise<string> {
 beforeAll(async () => {
   ctx = await createTestDb();
 
+  // `SUPABASE_ALLOWED_BUCKETS` sin `bug_report_images` a propósito: el service
+  // omite las firmas sin tocar la red cuando el bucket no está en la allowlist,
+  // así que este archivo no necesita Supabase para probar la frontera HTTP. Que
+  // la omisión no deje pasar la ruta cruda también se comprueba acá, abajo.
   const config = {
     get: (key: string) =>
       ({
         SUPABASE_URL,
         SUPABASE_JWT_SECRET: JWT_SECRET,
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role-de-test',
+        SUPABASE_ALLOWED_BUCKETS: 'images,business_images',
       })[key],
   } as unknown as ConfigService<Env, true>;
 
@@ -168,7 +174,8 @@ describe('GET /bug-report-inbox (frontera de seguridad)', () => {
     // `res.body` es `any` en `@types/supertest`: `res.body.data` a secas no
     // falla aunque el mapper emita otra forma, y el test quedaría verde
     // mintiendo. Parsear con el schema del contrato es lo que vuelve real la
-    // aserción.
+    // aserción. La FORMA sí se prueba con el parseo; la AUSENCIA de claves, no
+    // (ver "el listado no publica datos personales", donde está el porqué).
     const cuerpo = BugReportListResponseSchema.parse(res.body);
     const fila = cuerpo.data.find((f) => f.id === reporte.id);
 
@@ -201,7 +208,45 @@ describe('GET /bug-report-inbox/:id (frontera de seguridad)', () => {
 
     const cuerpo = BugReportDetailSchema.parse(res.body);
     expect(cuerpo.reporter_id).toBe(REPORTER);
-    expect(cuerpo.images).toHaveLength(1);
+  });
+
+  test('el detalle por HTTP nunca lleva la ruta cruda de una captura', async () => {
+    // Por HTTP, sobre el CUERPO CRUDO, no sobre el resultado de un parseo.
+    //
+    // La distinción importa, y es lo que hace este test distinto del mapper
+    // spec: `BugReportDetailSchema` es `z.object` no-`strict`, así que zod
+    // DESCARTA las claves desconocidas. Un assert como
+    // `expect(cuerpo).not.toHaveProperty('images')` operando sobre
+    // `BugReportDetailSchema.parse(res.body)` no puede fallar aunque el mapper
+    // empiece a filtrar `...row.value`: el parseo se comería la clave y el test
+    // quedaría verde mintiendo. Este repo ya pagó esa clase de error una vez.
+    //
+    // En este config el bucket NO está en la allowlist, así que la firma se
+    // omite y `image_urls` llega vacío: ese es el estado donde la ruta cruda
+    // tendría que aparecer si alguien la publicara como fallback. Con la firma
+    // funcionando la URL sí contiene el path (así la construye Storage), y eso
+    // se prueba en `bug-report-inbox.images.spec.ts`.
+    const reporte = await seedReporte();
+
+    const res = await comoAdmin(
+      api().get(`/bug-report-inbox/${reporte.id}`),
+    ).expect(200);
+
+    // El body CRUDO, tipado como `unknown` para que ningún assert pueda
+    // apoyarse en el `any` de `@types/supertest`.
+    const crudo: unknown = res.body;
+    expect(typeof crudo).toBe('object');
+    const comoObjeto = crudo as Record<string, unknown>;
+
+    // Ni la clave de la ruta cruda, ni la ruta como valor en ninguna parte.
+    expect(comoObjeto).not.toHaveProperty('images');
+    expect(comoObjeto.image_urls).toEqual([]);
+    expect(JSON.stringify(crudo)).not.toContain('captura-1.png');
+    expect(JSON.stringify(crudo)).not.toContain('/report/');
+
+    // Y el parseo queda solo para verificar la FORMA, que es lo que sí le
+    // corresponde: que la respuesta sea un detalle válido del contrato.
+    expect(BugReportDetailSchema.safeParse(crudo).success).toBe(true);
   });
 });
 
@@ -352,8 +397,18 @@ describe('el endpoint no es un app_store genérico', () => {
 
 describe('el listado no publica datos personales', () => {
   /**
-   * La versión HTTP de la comprobación fuerte del mapper spec: que la clave no
-   * exista en la respuesta real, y no solo en el objeto que devuelve el mapper.
+   * Aserta sobre el CUERPO CRUDO que devuelve la API, no sobre el resultado de
+   * un parseo.
+   *
+   * POR QUÉ, y es la parte no obvia: `BugReportListItemSchema` es `z.object`
+   * no-`strict`, y zod DESCARTA las claves desconocidas en vez de error. Un
+   * assert como `expect(fila).not.toHaveProperty('reporter_id')` montado sobre
+   * `BugReportListResponseSchema.parse(res.body)` NO PUEDE FALLAR aunque el
+   * mapper empiece a filtrar `...row.value`: el parseo se comería la clave y el
+   * test quedaría verde mintiendo. Este repo ya pagó esa clase de error.
+   *
+   * Por eso el `parse` queda para verificar la FORMA —que la respuesta sea un
+   * listado válido del contrato— y la AUSENCIA se comprueba sobre lo literal.
    */
   test('el listado no emite reporter_id ni las capturas', async () => {
     const reporte = await seedReporte();
@@ -362,16 +417,35 @@ describe('el listado no publica datos personales', () => {
       api().get('/bug-report-inbox?limit=100'),
     ).expect(200);
 
-    const cuerpo = BugReportListResponseSchema.parse(res.body);
-    const fila = cuerpo.data.find((f) => f.id === reporte.id);
+    const crudo: unknown = res.body;
+    const filas = (crudo as { data?: unknown }).data;
+    expect(Array.isArray(filas)).toBe(true);
 
-    expect(fila).toBeDefined();
-    expect(fila).not.toHaveProperty('reporter_id');
-    expect(fila).not.toHaveProperty('images');
-    expect(JSON.stringify(fila)).not.toContain(REPORTER);
-    expect(JSON.stringify(fila)).not.toContain('captura-1.png');
+    // La fila-cruda, tal cual la escribió la API.
+    const filaCruda = (filas as { id: string }[]).find(
+      (f) => f.id === reporte.id,
+    );
+    expect(filaCruda).toBeDefined();
 
-    // El detalle sí los lleva: el operador los necesita para seguir el reporte.
+    // Lo que NO puede estar en la respuesta: ni la PII ni las rutas, por clave
+    // ni por contenido.
+    expect(filaCruda).not.toHaveProperty('reporter_id');
+    expect(filaCruda).not.toHaveProperty('images');
+    expect(filaCruda).not.toHaveProperty('image_urls');
+    expect(JSON.stringify(filaCruda)).not.toContain(REPORTER);
+    expect(JSON.stringify(filaCruda)).not.toContain('captura-1.png');
+    // El listado ENTERO, no solo la fila del reporte: un `...row.value` en
+    // cualquier punto de la cadena filtraría todas las filas a la vez.
+    expect(JSON.stringify(crudo)).not.toContain(REPORTER);
+    expect(JSON.stringify(crudo)).not.toContain('captura-1.png');
+
+    // Y el parseo, solo para la forma. Sobre ESTE objeto ya no se puede probar
+    // la ausencia, y por eso va al final y no antes.
+    const cuerpo = BugReportListResponseSchema.parse(crudo);
+    expect(cuerpo.data.some((f) => f.id === reporte.id)).toBe(true);
+
+    // El detalle sí lleva el autor: el operador lo necesita para seguir el
+    // reporte.
     const detalle = await comoAdmin(
       api().get(`/bug-report-inbox/${reporte.id}`),
     ).expect(200);

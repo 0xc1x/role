@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
 import { createTestDb, type TestDbContext } from '../../../test/db';
+import type { Env } from '../../config/env.schema';
 import { AppStoreRepository } from '../store/app-store.repository';
 import { BugReportInboxService } from './bug-report-inbox.service';
 
@@ -31,10 +33,26 @@ const seedReporte = (
     ...(extra.origin ? { origin: extra.origin } : {}),
   });
 
+/**
+ * `ConfigService` mínimo. `SUPABASE_ALLOWED_BUCKETS` NO lleva
+ * `bug_report_images` a propósito: este spec prueba el buzón contra la DB real, y
+ * sin el bucket en la allowlist el service omite las firmas sin tocar la red, así
+ * que ningún spec de este archivo depende de Supabase. La firma sí se prueba, con
+ * el cliente falso, en `bug-report-inbox.images.spec.ts`.
+ */
+const config = {
+  get: (key: string) =>
+    ({
+      SUPABASE_URL: 'https://proyecto.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-de-test',
+      SUPABASE_ALLOWED_BUCKETS: 'images,business_images',
+    })[key],
+} as unknown as ConfigService<Env, true>;
+
 beforeAll(async () => {
   ctx = await createTestDb();
   store = new AppStoreRepository(ctx.db);
-  service = new BugReportInboxService(store);
+  service = new BugReportInboxService(store, config);
 });
 
 afterAll(async () => {
@@ -167,8 +185,11 @@ describe('triaje: escribe state y solo state', () => {
     expect(dto.id).toBe(reporte.id);
     expect(dto.readable).toBe(true);
     expect(dto.summary).toBe('No me deja pagar con la tarjeta que usé ayer');
-    expect(dto.images).toHaveLength(1);
     expect(dto.reporter_id).toBe(REPORTER);
+    // `image_urls` vacío porque el bucket no está en la allowlist de este
+    // config. Lo que importa acá es que la RUTA cruda no se coló en su lugar.
+    expect(dto.image_urls).toEqual([]);
+    expect(JSON.stringify(dto)).not.toContain('captura-1.png');
   });
 
   test('acepta cada estado del vocabulario', async () => {
@@ -296,7 +317,7 @@ describe('un value sin ancla no tira el buzón', () => {
 
     expect(dto.readable).toBe(false);
     expect(dto.summary).toBeNull();
-    expect(dto.images).toEqual([]);
+    expect(dto.image_urls).toEqual([]);
   });
 
   test('una fila ilegible igual se puede triar', async () => {

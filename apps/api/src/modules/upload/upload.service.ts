@@ -32,16 +32,32 @@ export class UploadService {
       },
     });
 
-    const rawBuckets =
-      this.config.get('SUPABASE_ALLOWED_BUCKETS', { infer: true }) ?? '';
-    this.allowedBuckets = rawBuckets
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    this.allowedBuckets = this.parseAllowlist(
+      this.config.get('SUPABASE_ALLOWED_BUCKETS', { infer: true }),
+    );
+    this.allowedFolders = this.parseAllowlist(
+      this.config.get('SUPABASE_ALLOWED_FOLDERS', { infer: true }),
+    );
+  }
 
-    const rawFolders =
-      this.config.get('SUPABASE_ALLOWED_FOLDERS', { infer: true }) ?? '';
-    this.allowedFolders = rawFolders
+  /**
+   * Allowlist de buckets a los que la API puede ESCRIBIR.
+   *
+   * `bug_report_images` está en el default a propósito: el bucket es privado y
+   * el móvil lo sube con su propia sesión, pero la allowlist es también el
+   * inventario de buckets que la API conoce, y el buzón de reportes tiene que
+   * poder firmar sus capturas. Excluirlo haría que el texto del reporte
+   * funcionara y las capturas no, que es el peor modo de fallo posible: no
+   * lanza, no se nota, y el panel muestra imágenes rotas.
+   */
+  assertBucketAllowed(bucket: string): void {
+    if (!this.allowedBuckets.includes(bucket)) {
+      throw new BadRequestException(`Bucket "${bucket}" no permitido`);
+    }
+  }
+
+  private parseAllowlist(raw: string | undefined): string[] {
+    return (raw ?? '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
@@ -57,9 +73,7 @@ export class UploadService {
       'images';
     const folder = options?.folder ?? 'categories';
 
-    if (!this.allowedBuckets.includes(bucket)) {
-      throw new BadRequestException(`Bucket "${bucket}" no permitido`);
-    }
+    this.assertBucketAllowed(bucket);
 
     if (!this.allowedFolders.includes(folder)) {
       throw new BadRequestException(`Carpeta "${folder}" no permitida`);

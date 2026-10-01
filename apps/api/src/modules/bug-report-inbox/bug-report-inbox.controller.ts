@@ -55,11 +55,17 @@ export class BugReportInboxController {
     return this.service.list(query);
   }
 
+  /**
+   * El detalle. `image_urls` son URLs FIRMADAS de corta duración, no las rutas
+   * del bucket: el bucket es privado y la ruta lleva el layout interno con el
+   * uid del reportante adentro. El nombre del campo del contrato es la
+   * garantía de eso, y por eso la firma vive en el service y no en el mapper.
+   */
   @Roles('admin')
   @Get(':id')
   @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Get a bug report (admin)' })
-  @ApiOkResponse({ description: 'Bug report detail' })
+  @ApiOkResponse({ description: 'Bug report detail, with signed image URLs' })
   getById(@Param('id', ParseUUIDPipe) id: string): Promise<BugReportDetailDto> {
     return this.service.getById(id);
   }

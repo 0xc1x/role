@@ -125,10 +125,20 @@ export const envSchema = z.object({
    * and the one holding the most objects by a wide margin. A default that
    * silently disagrees with the app's real storage layout fails closed on
    * business features and looks like a permissions problem.
+   *
+   * `bug_report_images` está en el default porque esta allowlist es, en la
+   * práctica, el inventario de buckets que la API conoce, no solo de buckets
+   * donde escribe: el buzón de reportes FIRMA las capturas de ese bucket
+   * (`getById` devuelve URLs firmadas, no rutas) y no puede hacerlo si el
+   * bucket no está en la lista. Excluirlo no rompería con un error visible —
+   * el texto del reporte funcionaría y las capturas no, imágenes rotas en el
+   * panel—, que es el modo de fallo más difícil de diagnosticar de todos.
    */
   SUPABASE_ALLOWED_BUCKETS: z
     .string()
-    .default('images,business_images,categories_images,product_images'),
+    .default(
+      'images,business_images,categories_images,product_images,bug_report_images',
+    ),
   /** Comma-separated allowed folders (allowlist). Default: categories */
   SUPABASE_ALLOWED_FOLDERS: z.string().default('categories'),
   /**

@@ -92,7 +92,8 @@ describe('BugReportInboxMapper.toListItem', () => {
   test('las capturas tampoco aparecen en el listado', () => {
     const dto = BugReportInboxMapper.toListItem(fila(valueCompleto));
 
-    // Son rutas de un bucket PRIVADO: el listado no publica ni la existence.
+    // Son rutas de un bucket PRIVADO: el listado no publica ni la existencia.
+    expect('image_urls' in dto).toBe(false);
     expect('images' in dto).toBe(false);
     expect(JSON.stringify(dto)).not.toContain('captura-1.png');
   });
@@ -120,16 +121,33 @@ describe('BugReportInboxMapper.toListItem', () => {
 });
 
 describe('BugReportInboxMapper.toDetail', () => {
-  test('agrega el cuerpo, las capturas y quién lo mandó', () => {
+  /**
+   * `toDetail` NO firma: es el paso 1 de 2 y deja `image_urls` vacío. Firmar
+   * necesita un cliente de Supabase, y el mapper es puro a propósito.
+   *
+   * Lo que importa es que la ruta cruda NO aparezca aquí. Si el mapper la
+   * publicara y el service solo la reemplazara cuando la firma saliera bien,
+   * una firma fallida dejaría el path en la respuesta: exactamente lo que el
+   * design §8 prohíbe.
+   */
+  test('agrega el cuerpo y el autor, y NUNCA la ruta cruda de las capturas', () => {
     const dto = BugReportInboxMapper.toDetail(fila(valueCompleto));
 
     expect(dto.summary).toBe('No me deja pagar con la tarjeta que usé ayer');
     expect(dto.description).toBe(
       'Sale un error 500 al confirmar.\n\nPasos:\n1. Abrir el checkout',
     );
-    expect(dto.images).toHaveLength(2);
-    expect(dto.images[0]).toBe(`${ID}/captura-1.png`);
-    // En el detalle SÍ va: el operador lo necesita para seguir el reporte.
+    // Vacío porque firmar es del service, no porque no haya capturas.
+    expect(dto.image_urls).toEqual([]);
+    expect(Object.keys(dto)).not.toContain('images');
+    // La ruta completa (`<id>/captura-1.png`), no un substring suelto: el `id`
+    // de la fila ES el `id` que el móvil usa como carpeta, así que buscar el id
+    // desnudo daría un falso positivo con el campo `id` de la respuesta.
+    expect(JSON.stringify(dto)).not.toContain('captura-1.png');
+    expect(JSON.stringify(dto)).not.toContain(`${ID}/`);
+
+    // En el detalle SÍ va el autor: el operador lo necesita para seguir el
+    // reporte.
     expect(dto.reporter_id).toBe('22222222-2222-4222-8222-222222222222');
     expect(dto.received_at).toBe('2026-09-20T10:00:00.000Z');
   });
@@ -145,7 +163,7 @@ describe('BugReportInboxMapper.toDetail', () => {
     );
 
     expect(dto.description).toBeNull();
-    expect(dto.images).toEqual([]);
+    expect(dto.image_urls).toEqual([]);
     expect(dto.reporter_id).toBeNull();
     expect(dto.received_at).toBeNull();
   });
@@ -156,6 +174,27 @@ describe('BugReportInboxMapper.toDetail', () => {
     expect(dto.readable).toBe(true);
     expect(Object.keys(dto)).not.toContain('to');
     expect(JSON.stringify(dto)).not.toContain('hola@role.ec');
+  });
+});
+
+describe('BugReportInboxMapper.imagePathsOf', () => {
+  test('devuelve las rutas crudas para que el service las firme', () => {
+    expect(BugReportInboxMapper.imagePathsOf(fila(valueCompleto))).toEqual([
+      `${ID}/captura-1.png`,
+      `${ID}/captura-2.png`,
+    ]);
+  });
+
+  test('una fila sin capturas o ilegible devuelve [], no lanza', () => {
+    expect(BugReportInboxMapper.imagePathsOf(fila({ summary: 'x' }))).toEqual(
+      [],
+    );
+    expect(
+      BugReportInboxMapper.imagePathsOf(fila({ lo_que_sea: true })),
+    ).toEqual([]);
+    expect(BugReportInboxMapper.imagePathsOf(fila('no soy un objeto'))).toEqual(
+      [],
+    );
   });
 });
 
@@ -190,7 +229,7 @@ describe('un value sin summary no sale como una fila legible', () => {
 
     expect(dto.readable).toBe(false);
     expect(dto.description).toBeNull();
-    expect(dto.images).toEqual([]);
+    expect(dto.image_urls).toEqual([]);
     expect(dto.reporter_id).toBeNull();
   });
 

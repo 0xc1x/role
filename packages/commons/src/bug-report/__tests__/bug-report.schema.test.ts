@@ -183,10 +183,10 @@ describe("el listado y el detalle del buzón", () => {
 		expect(ilegible.summary).toBeNull();
 	});
 
-	it("el listado NO publica reporter_id ni las rutas de las capturas", () => {
-		// `reporter_id` es dato personal y las rutas apuntan a un bucket privado:
-		// el listado es la pantalla que se puede ampliar en un monitor de
-		// soporte. Los DTO no repiten claves que el mapper no nombra.
+	it("el listado NO publica reporter_id ni las capturas", () => {
+		// `reporter_id` es dato personal y las capturas apuntan a un bucket
+		// privado: el listado es la pantalla que se puede ampliar en un monitor
+		// de soporte. Los DTO no repiten claves que el mapper no nombra.
 		const claves = Object.keys(BugReportListItemSchema.shape).sort();
 		expect(claves).toEqual([
 			"created_at",
@@ -204,7 +204,7 @@ describe("el listado y el detalle del buzón", () => {
 	it("el detalle agrega cuerpo, capturas y autor, ya con null en vez de undefined", () => {
 		const claves = Object.keys(BugReportDetailSchema.shape);
 		expect(claves).toContain("description");
-		expect(claves).toContain("images");
+		expect(claves).toContain("image_urls");
 		expect(claves).toContain("reporter_id");
 		expect(claves).toContain("received_at");
 
@@ -214,13 +214,35 @@ describe("el listado y el detalle del buzón", () => {
 		const detalle = BugReportDetailSchema.parse({
 			...fila,
 			description: null,
-			images: [],
+			image_urls: [],
 			reporter_id: null,
 			received_at: null,
 		});
 		expect(detalle.description).toBeNull();
-		expect(detalle.images).toEqual([]);
+		expect(detalle.image_urls).toEqual([]);
 		expect(detalle.reporter_id).toBeNull();
+	});
+
+	it("el detalle expone image_urls y NUNCA las rutas crudas del bucket", () => {
+		// El nombre del campo ES la garantía: lo que sale del API se descarga de
+		// una vez y caduca solo. Un campo `images` ambiguo invitaría a publicar la
+		// ruta, que lleva el layout del bucket y el uid del reportante adentro.
+		const claves = Object.keys(BugReportDetailSchema.shape);
+		expect(claves).toContain("image_urls");
+		expect(claves).not.toContain("images");
+
+		// Y una ruta cruda que se colara por un `...value` se pierde al parsear:
+		// el schema no la nombra, así que no puede viajar en la respuesta.
+		const conRutaFiltrada = BugReportDetailSchema.parse({
+			...fila,
+			description: "ok",
+			image_urls: ["https://x.supabase.co/object/sign/b/r?token=t"],
+			reporter_id: null,
+			received_at: null,
+			images: ["uid/report/mia.png"],
+		});
+		expect("images" in conRutaFiltrada).toBe(false);
+		expect(JSON.stringify(conRutaFiltrada)).not.toContain("mia.png");
 	});
 });
 

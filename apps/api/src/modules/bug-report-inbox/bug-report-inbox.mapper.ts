@@ -85,17 +85,40 @@ export class BugReportInboxMapper {
     };
   }
 
+  /**
+   * El detalle SIN firmar.
+   *
+   * `image_urls` sale SIEMPRE vacío aquí, y no por descuido: el mapper es puro,
+   * sin DI, y firmar necesita un cliente de Supabase. Lo firma
+   * `BugReportInboxService.getById`, que es donde vive el servicio role.
+   *
+   * El nombre del método lo dice para que nadie lo lea como el detalle que sale
+   * por HTTP: es el paso 1 de dos. El paso 2 rellena `image_urls`.
+   */
   static toDetail(row: StoreEntry): BugReportDetailDto {
     const value = this.read(row);
     return {
       ...this.toListItem(row),
       description: value?.description ?? null,
-      // `images` colapsa ausente en `[]`: el panel abre el detalle de cualquier
-      // reporte y no tiene que distinguir "sin capturas" de "sin clave".
-      images: value?.images ?? [],
+      // Las rutas crudas NO salen del API: el bucket es privado y la ruta lleva
+      // el layout interno y el uid del reportante adentro. Se quedan en `value`.
+      image_urls: [],
       // PII, y en el detalle es justo donde la necesita quien investiga.
       reporter_id: value?.reporter_id ?? null,
       received_at: value?.at ?? null,
     };
+  }
+
+  /**
+   * Las rutas crudas de `value.images`, para que el servicio las firme.
+   *
+   * Vive acá y no en el servicio para que el parseo del `value` siga teniendo un
+   * solo dueño: si el service lo parseara por su cuenta, habría dos lugares
+   * decidiendo qué es un `value` legible y un `readable: false` de un lado
+   * podría no ser del otro. Devuelve `[]` para una fila ilegible, que es lo
+   * mismo que no tener capturas.
+   */
+  static imagePathsOf(row: StoreEntry): string[] {
+    return this.read(row)?.images ?? [];
   }
 }

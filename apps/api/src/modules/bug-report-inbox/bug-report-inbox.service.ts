@@ -3,6 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createClient } from '@supabase/supabase-js';
 import {
   BUG_TRIAGE_STATES,
   paginatedDataFromQuery,
@@ -11,15 +13,32 @@ import {
   type BugTriageState,
   type ListBugReportsQuery,
 } from '@0xc1x/role-commons';
+import type { Env } from '../../config/env.schema';
 import type { StoreEntry } from '../store/app-store.repository';
 import { AppStoreRepository } from '../store/app-store.repository';
-import { BUG_REPORT_NAMESPACE } from './bug-report-inbox.constants';
+import {
+  BUG_REPORT_IMAGES_BUCKET,
+  BUG_REPORT_IMAGE_URL_TTL_SECONDS,
+  BUG_REPORT_NAMESPACE,
+} from './bug-report-inbox.constants';
 import { BugReportInboxMapper } from './bug-report-inbox.mapper';
 
 /** Bandeja de triaje de reportes de error. Admin-only (lo aplica `@Roles('admin')`). */
 @Injectable()
 export class BugReportInboxService {
-  constructor(private readonly store: AppStoreRepository) {}
+  /**
+   * Cliente de SUPABASE STORAGE con service role, como el de `upload.service` y
+   * `businesses.service`: es la única credencial que puede firmar una URL de un
+   * bucket privado. No va en el constructor porque el listado no lo necesita y
+   * un cliente por instancia es un cliente por buzón: se construye la primera
+   * vez que alguien abre un detalle con capturas.
+   */
+  private storage: ReturnType<typeof createClient>['storage'] | null = null;
+
+  constructor(
+    private readonly store: AppStoreRepository,
+    private readonly config: ConfigService<Env, true>,
+  ) {}
 
   async list(query: ListBugReportsQuery): Promise<BugReportPaginatedData> {
     const { rows, total } = await this.store.list({
@@ -36,8 +55,18 @@ export class BugReportInboxService {
     );
   }
 
+  /**
+   * El detalle, con las capturas firmadas.
+   *
+   * FIRMAR ACÁ Y NO EN EL MAPPER porque el mapper es puro y sin DI, y una firma
+   * es una llamada de red con una credencial: mezclarla ahí volvería al mapper
+   * imposible de probar sin Supabase ymeter en el medio. Además el bucket es una
+   * constante del servidor, así que la firma nunca usa un bucket que venga de
+   * `value`.
+   */
   async getById(id: string): Promise<BugReportDetailDto> {
-    return BugReportInboxMapper.toDetail(await this.requireBugReportRow(id));
+    const row = await this.requireBugReportRow(id);
+    return this.withSignedImages(row);
   }
 
   /**
@@ -74,7 +103,82 @@ export class BugReportInboxService {
     if (!updated) {
       throw new NotFoundException(`Bug report ${id} not found`);
     }
-    return BugReportInboxMapper.toDetail(updated);
+    // Firma acá también, y no solo en `getById`: el PATCH devuelve el detalle
+    // completo, así que el panel reemplaza el drawer con esta respuesta. Si
+    // volviera sin `image_urls`, cada triaje borraría las capturas de la vista
+    // que el operador está leyendo.
+    return this.withSignedImages(updated);
+  }
+
+  /**
+   * Mapea a detalle y le pone las URLs firmadas de las capturas.
+   *
+   * LO QUE ESTE MÉTODO NO HACE, y es la parte importante: no reemplaza una ruta
+   * que no se pudo firmar. La omite. Un reporte cuya captura fue borrada del
+   * bucket tiene que LLEGAR igual, legible, con un array más corto: si una firma
+   * fallara -&gt; 500, un reporte con una imagen pendiente de borrar desaparecería
+   * del buzón, que es justo cuando más falta hace verlo. Y el lugar de la captura
+   * caída no se llena con la ruta cruda, porque entonces la respuesta llevaría
+   * el path que este diseño existe para no publicar.
+   */
+  private async withSignedImages(row: StoreEntry): Promise<BugReportDetailDto> {
+    const detail = BugReportInboxMapper.toDetail(row);
+    const paths = BugReportInboxMapper.imagePathsOf(row);
+    if (paths.length === 0) return detail;
+
+    const bucket = this.assertBucketAllowed();
+    if (!bucket) return detail;
+    const storage = this.storageClient();
+    const firmadas = await Promise.all(
+      paths.map(async (path) => {
+        try {
+          const { data, error } = await storage
+            .from(bucket)
+            .createSignedUrl(path, BUG_REPORT_IMAGE_URL_TTL_SECONDS);
+          // Sin `error` pero sin `signedUrl` también es una firma fallida: se
+          // omite igual, por el mismo motivo que arriba.
+          return error || !data?.signedUrl ? null : data.signedUrl;
+        } catch {
+          // Un throw del cliente (red caída, DNS) es la misma clase de fallo que
+          // un `error`: la captura se omite y el detalle sigue.
+          return null;
+        }
+      }),
+    );
+
+    return { ...detail, image_urls: firmadas.filter((u) => u !== null) };
+  }
+
+  /**
+   * El bucket tiene que estar en la allowlist antes de firmar.
+   *
+   * Falla en silencio a propósito —devuelve `[]`, que el `withSignedImages`
+   * traduce en "sin capturas"— y no con un 403 o un 500. La allowlist es
+   * configuración de despliegue, no un error del operador: si alguien la dejó
+   * afuera, el buzón tiene que seguir mostrando los reportes, porque el texto
+   * del reporte es lo importante y las capturas son lo accesorio. Un throw
+   * convertiría una variable mal puesta en un buzón entero caído.
+   */
+  private assertBucketAllowed(): string | null {
+    const allowed = (
+      this.config.get('SUPABASE_ALLOWED_BUCKETS', { infer: true }) ?? ''
+    )
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return allowed.includes(BUG_REPORT_IMAGES_BUCKET)
+      ? BUG_REPORT_IMAGES_BUCKET
+      : null;
+  }
+
+  /** El cliente de storage se construye una vez y se reusa. */
+  private storageClient(): ReturnType<typeof createClient>['storage'] {
+    this.storage ??= createClient(
+      this.config.get('SUPABASE_URL', { infer: true }),
+      this.config.get('SUPABASE_SERVICE_ROLE_KEY', { infer: true }),
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    ).storage;
+    return this.storage;
   }
 
   /**

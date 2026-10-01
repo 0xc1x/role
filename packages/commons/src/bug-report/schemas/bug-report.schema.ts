@@ -38,9 +38,15 @@ import { BUG_TRIAGE_STATES, ENTRY_ORIGINS } from "../enums/bug-report.enum";
  *    y el operador vería una fila en blanco sin ninguna pista de qué pasó.
  *    Vacío es un reporte malo; ilegible es un reporte invisible.
  *
- * `images` son rutas dentro del bucket privado `bug_report_images`, no URLs: el
- * panel nunca ve el bucket crudo, el API las resuelve a URLs firmadas de corta
- * duración.
+ * `images` son RUTAS dentro del bucket privado `bug_report_images`, no URLs, y
+ * eso es deliberado en las dos direcciones: el bucket es privado, así que una
+ * ruta no sirve para descargar nada —descargarla es lo que hace el API firmando
+ * una URL de corta duración— y una ruta sí filtra el layout interno del bucket
+ * con el uid del reportante adentro. El móvil escribe las rutas porque es el
+ * único que tiene la sesión del usuario para subirlas; el API es el único que
+ * puede firmarlas. `value` no sale del API: se queda en la fila, que es
+ * admin-only. Lo que SALE del API es `image_urls` (ver
+ * `BugReportDetailSchema`), y el nombre es la garantía.
  */
 export const BugReportValueSchema = z.object({
 	summary: z.string(),
@@ -80,9 +86,9 @@ export const BugReportValueSchema = z.object({
  * obliga a que sea `PENDIENTE`—, así que un badge de entrega en este buzón no
  * significa "el equipo fue notificado" como en la bandeja de contactos.
  *
- * Deliberadamente AUSENTES: `reporter_id` (dato personal) e `images` (rutas de
- * un bucket privado). Los dos van en el detalle, no en la pantalla que se puede
- * ampliar en un monitor de soporte.
+ * Deliberadamente AUSENTES: `reporter_id` (dato personal) e `image_urls` (las
+ * capturas). Los dos van en el detalle, no en la pantalla que se puede ampliar
+ * en un monitor de soporte.
  */
 export const BugReportListItemSchema = z.object({
 	id: UuidSchema,
@@ -105,7 +111,28 @@ export const BugReportListItemSchema = z.object({
  */
 export const BugReportDetailSchema = BugReportListItemSchema.extend({
 	description: z.string().nullable(),
-	images: z.array(z.string()),
+	/**
+	 * URLs FIRMADAS de corta duración, no las rutas del bucket. El nombre es la
+	 * garantía, no una contraceptive —
+	 *
+	 * el design (§8) dice que "el panel nunca ve el bucket crudo", y eso tiene
+	 * dos mitades. La functional: el bucket es privado, así que una ruta suelta no
+	 * se descarga — la función de capturas del panel no funcionaría y el
+	 * operador vería imágenes rotas. La de seguridad: la ruta lleva el layout
+	 * interno del bucket y el uid del reportante adentro
+	 * (`<uid>/report/<uuid>.png`), y eso no tiene por qué viajar.
+	 *
+	 * Por eso el campo se llama `image_urls` y no `images`: quien lea el
+	 * contrato tiene que ver en el nombre que lo que sale del API es
+	 * descargable de una vez y caduca solo. Un `images` ambiguo invitaría a
+	 * publicar la ruta, que es justo lo que no debe pasar. Las rutas crudas se
+	 * quedan en `value`, que es admin-only.
+	 *
+	 * Las que no se pudieron firmar NO aparecen: el array sale más corto, nunca
+	 * con la ruta cruda en su lugar. Un reporte con una captura borrada tiene que
+	 * seguir siendo legible.
+	 */
+	image_urls: z.array(z.string()),
 	reporter_id: z.string().nullable(),
 	/** `value.at`: el momento exacto en que se escribió el reporte. */
 	received_at: z.string().nullable(),

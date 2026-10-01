@@ -94,8 +94,17 @@ export class AppStoreRepository {
     if (filter.state) filters.push(eq(appStore.state, filter.state));
     // `origin` se declara como la unión del enum y NO como `string`: así la
     // comparación de abajo no necesita el `as never` que sí hace falta en
-    // `delivery_status`, y el compilador rechaza en la llamada si alguien
-    // inventa un canal que el enum de Postgres no tiene.
+    // `delivery_status`.
+    //
+    // LO QUE EL COMPILADOR GARANTIZA, con precisión: en una llamada que arma el
+    // objeto literalmente —que es la forma de todos los llamadores de este repo—
+    // un canal que el enum de Postgres no tiene es un error de tipos. Lo que NO
+    // garantiza es nada para un filtro armado dinámicamente desde un `string`
+    // (un `list()` que reenvía un query, por ejemplo): ahí el `string` entra sin
+    // que el compilador mire el enum. Por eso el enum de Postgres no es la
+    // garantía: la del vocabulario cerrado la da el service, y el índice sobre
+    // `origin` es una decisión que todavía no está tomada (a este volumen el
+    // planner usa `app_store_namespace_idx` y filtra después).
     if (filter.origin) filters.push(eq(appStore.origin, filter.origin));
     const where = filters.length ? and(...filters) : undefined;
 
