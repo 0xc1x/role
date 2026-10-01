@@ -36,7 +36,7 @@ export const entryOriginEnum = pgEnum('entry_origin', [
  * `NULL` siempre; un reporte de error usa los dos.
  *
  * `state` es `text` y no un enum a propósito: un enum obliga a migrar cada vez
- * que aparece un namespace nuevo, que es exactamente la acoplamiento que un
+ * que aparece un namespace nuevo, que es exactamente el acoplamiento que un
  * store genérico tiene que evitar. El vocabulario vive fuera de la tabla.
  */
 export const appStore = pgTable(

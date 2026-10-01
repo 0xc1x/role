@@ -64,6 +64,15 @@ describe("BugReportValueSchema", () => {
 		}
 	});
 
+	it("un summary vacío sigue siendo legible: no hay min(1)", () => {
+		// La policy de insert no mira `value`, así que una fila con el resumen
+		// vacío LLEGA a existir. Si el schema la rechazara, saldría listada como
+		// `readable: false` y el operador vería una fila en blanco sin ninguna
+		// pista. Agregar un `.min(1)` "por robustez" convierte un reporte malo
+		// en un reporte invisible: es el error que este test existe para evitar.
+		expect(BugReportValueSchema.safeParse({ summary: "" }).success).toBe(true);
+	});
+
 	it("una fila con clave desconocida sigue siendo legible: el schema no es strict", () => {
 		// El trigger `stamp_bug_reporter` sella `value.reporter_id` con
 		// `auth.uid()` en un BEFORE INSERT, y `app_store` es un store genérico
@@ -130,10 +139,11 @@ describe("el listado y el detalle del buzón", () => {
 	});
 
 	it("state y origin son nullish: el contacto no usa esos ejes", () => {
-		// `state` y `origin` son columnas genéricas de `app_store`: el mensaje de
-		// contacto lleva `state` en NULL siempre y su origen es `web`. Compartir
-		// tabla no significa compartir vocabulario, y el DTO del buzón de
-		// reportes no puede exigir lo que la tabla deja opcional.
+		// `state` y `origin` son columnas genéricas de `app_store`, y el insert
+		// del formulario público de contacto no nombra ninguna de las dos: sus
+		// filas salen con `state` y `origin` en NULL. Compartir tabla no es
+		// compartir vocabulario, y el DTO del buzón de reportes no puede exigir lo
+		// que la tabla deja opcional.
 		const parsed = BugReportListItemSchema.parse({
 			...fila,
 			state: null,
@@ -213,10 +223,6 @@ describe("el listado y el detalle del buzón", () => {
 		expect(detalle.reporter_id).toBeNull();
 	});
 });
-
-function cladasSeguras(claves: string[]): string[] {
-	return claves;
-}
 
 describe("SetBugReportStateSchema", () => {
 	it("acepta los cinco estados del ciclo de vida", () => {

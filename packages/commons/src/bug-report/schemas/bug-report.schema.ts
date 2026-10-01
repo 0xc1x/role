@@ -31,7 +31,12 @@ import { BUG_TRIAGE_STATES, ENTRY_ORIGINS } from "../enums/bug-report.enum";
  *    conoce en vez de tirar la fila.
  *  - Se validan los TIPOS y nada más. El `.max()` del resumen, si algún día
  *    existe, es regla de escritura: una fila vieja que lo exceda no puede
- *    perder el texto que el usuario sí puede leer.
+ *    perder el texto que el usuario sí puede leer. Y por el mismo motivo no hay
+ *    `.min(1)`: `summary: ""` pasa el parseo a propósito. La policy de insert no
+ *    mira `value` en absoluto, así que una fila con el resumen vacío LLEGA a
+ *    existir; si este schema la rechazara, saldría listada como `readable: false`
+ *    y el operador vería una fila en blanco sin ninguna pista de qué pasó.
+ *    Vacío es un reporte malo; ilegible es un reporte invisible.
  *
  * `images` son rutas dentro del bucket privado `bug_report_images`, no URLs: el
  * panel nunca ve el bucket crudo, el API las resuelve a URLs firmadas de corta
@@ -51,8 +56,29 @@ export const BugReportValueSchema = z.object({
  * respuesta. Una sola fila con `value` corrupto no puede tumbar el buzón.
  *
  * `state` y `origin` son NULLABLE a propósito: son columnas genéricas de
- * `app_store` y el mensaje de contacto vive en la misma tabla con `state` en
- * NULL siempre. Compartir tabla no es compartir vocabulario.
+ * `app_store` y el insert del mensaje de contacto no nombra ninguna de las dos,
+ * así que sus filas salen con las dos en NULL. Compartir tabla no es compartir
+ * vocabulario.
+ *
+ * Y `state` nullable no es solo por eso: la columna es `text` sin CHECK, así
+ * que el vocabulario NO está garantizado en la base. El que lo estrecha es el
+ * mapper de la API, que compara `row.state` contra `BUG_TRIAGE_STATES` y cae a
+ * `null` sin lanzar — el mismo trato que el `value` corrupto. Ojo con lo que
+ * eso significa para el panel: una fila con `state` fuera de vocabulario sale
+ * `readable: true, state: null`, indistinguible de "sin triar". El triaje solo
+ * escribe contra `SetBugReportStateSchema`, y la API es la que valida antes de
+ * escribir; estrechar con un `as` en vez de comparar dejaría pasar un estado que
+ * el panel no sabe pintar, y por eso el `as` aquí es el error a evitar.
+ *
+ * `origin` no tiene ese problema: es un enum de Postgres, así que el tipo que
+ * devuelve la fila ya es la unión y este schema no puede mentir sobre él.
+ *
+ * `delivery_status` es NOT NULL y comparte columna con el contacto, pero NO
+ * quien lo mueve: ahí lo mueve `contact.service` cuando se entrega el correo de
+ * aviso, y un reporte de errores no tiene camino de correo (D8: sin
+ * notificación por ahora). Hoy nadie lo mueve después del insert —que la policy
+ * obliga a que sea `PENDIENTE`—, así que un badge de entrega en este buzón no
+ * significa "el equipo fue notificado" como en la bandeja de contactos.
  *
  * Deliberadamente AUSENTES: `reporter_id` (dato personal) e `images` (rutas de
  * un bucket privado). Los dos van en el detalle, no en la pantalla que se puede
