@@ -316,7 +316,7 @@ describe("acciones de triaje", () => {
 			expect(screen.getByText("Cargando reporte")).toBeDefined(),
 		);
 		// Un botón habilitado que no hace nada es peor que uno que visiblemente no
-		// está: sin `id` no hay a qué escribirle el triaje.
+		// está: sin dato cargado no hay a qué escribirle el triaje.
 		for (const etiqueta of [
 			"Abierto",
 			"En reproducción",
@@ -462,7 +462,7 @@ describe("el PATCH que falla", () => {
 		expect(screen.getByText("Ya está en Abierto")).toBeDefined();
 	});
 
-	test("un fallo no deja el pie en un estado que el API nunca confirmed", async () => {
+	test("un fallo no deja el pie en un estado que el API nunca confirmó", async () => {
 		const error = spyOn(toast, "error");
 		globalThis.fetch = (async (
 			_input: RequestInfo | URL,

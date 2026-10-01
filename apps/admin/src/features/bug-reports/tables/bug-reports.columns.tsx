@@ -90,7 +90,7 @@ export const createBugReportsColumns = (
 			// formatter fijo. Con el navegador en UTC, una fila con `created_at` a
 			// las 02:00Z se leía como el día 20 y la ficha decía 19 — el mismo
 			// reporte con dos fechas en la misma pantalla, que es la forma más
-			// rápida de que un operador dude de si opened dos filas o una.
+			// rápida de que un operador dude de si abrió dos filas o una.
 			<span className="text-muted-foreground text-sm">
 				{formatBusinessDate(row.original.created_at)}
 			</span>

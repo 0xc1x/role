@@ -1,5 +1,48 @@
-import { describe, expect, test } from "bun:test";
-import { parseBugReportsSearch } from "../_layout.reportes";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+
+/**
+ * El `mock.module` es OBLIGATORIO acá, y no por comodidad.
+ *
+ * `mock.module` de bun es GLOBAL al proceso y `bun test src` corre los specs sin
+ * `--isolate`, así que si otro spec mockea `@tanstack/react-router` antes que
+ * este, su `createFileRoute` —que devuelve las options en el PRIMER nivel en vez
+ * de en `Route.options`— es el que construye la ruta. Medido: sin este mock, el
+ * orden de los specs decidía el resultado y, en el orden de la suite completa,
+ * el archivo entero tiraba `TypeError: undefined is not an object (evaluating
+ * 'Route.options.validateSearch')` — y bun reportaba la corrida como VERDE, con
+ * el "Unhandled error between tests" en otro lado de la salida. Un test que
+ * depende del orden y falla en silencio es peor que no tener test.
+ *
+ * El mock reexporta el módulo real porque bun comparte el registro entre specs y
+ * un mock que esconde exports rompe a los hermanos. Es el mismo bloque que
+ * `_layout.home` y `list-route-retry.test.tsx` ya usan; la diferencia es que
+ * aquellos leen `route.component` del primer nivel y este lee
+ * `route.validateSearch`, que es lo que quiere fijar.
+ */
+const actualRouter = await import("@tanstack/react-router");
+mock.module("@tanstack/react-router", () => ({
+	...actualRouter,
+	createFileRoute: () => (options: Record<string, unknown>) => ({
+		...options,
+		useSearch: () => ({}),
+		useNavigate: () => () => undefined,
+	}),
+	useNavigate: () => () => undefined,
+	redirect: () => undefined,
+}));
+
+const { parseBugReportsSearch, Route } = await import("../_layout.reportes");
+
+afterEach(() => {
+	mock.restore();
+});
+
+/** El `validateSearch` que la RUTA declara, no el helper suelto. */
+const validateSearch = (
+	Route as unknown as {
+		validateSearch: (raw: Record<string, unknown>) => unknown;
+	}
+).validateSearch;
 
 /**
  * El search de `/reportes` NO es `ListBugReportsQuerySchema.parse` pelado.
@@ -60,5 +103,34 @@ describe("el search de /reportes no reemplaza la página por un token desconocid
 		// default silencioso. Es el límite explícito de esta corrección.
 		expect(() => parseBugReportsSearch({ page: "0" })).toThrow();
 		expect(() => parseBugReportsSearch({ limit: "200" })).toThrow();
+	});
+});
+
+/**
+ * El CABLEADO, que es lo que el bloque de arriba no ata.
+ *
+ * Con solo los tests del helper, revertir la línea
+ * `validateSearch: (raw) => parseBugReportsSearch(raw)` a
+ * `ListBugReportsQuerySchema.parse(raw)` —el bug exacto que la corrección
+ * arregla— dejaba la suite en verde. El helper podía estar perfecto y nadie lo
+ * estar usando, que es un test del helper, no del comportamiento.
+ */
+describe("la ruta USA el saneador, no el parse pelado", () => {
+	test("el validateSearch de la ruta es el que tolera un token desconocido", () => {
+		// Y no se cumple "sin tirar" por casualidad: se cumple porque se ejecuta
+		// la función que la ruta declara, no una copia del helper.
+		expect(() => validateSearch({ state: "REABIERTO" })).not.toThrow();
+		expect(validateSearch({ state: "REABIERTO" })).toMatchObject({
+			state: undefined,
+		});
+	});
+
+	test("se comporta como el helper, y no como el parse pelado", () => {
+		// `toBe` sobre la función sería demasiado fuerte: la ruta podría
+		// envolverla legítimamente. Lo que importa es que se comporten igual, y
+		// esto lo prueba con un input donde las dos implementaciones difieren.
+		expect(validateSearch({ origin: "web_legacy", page: "2" })).toEqual(
+			parseBugReportsSearch({ origin: "web_legacy", page: "2" }),
+		);
 	});
 });

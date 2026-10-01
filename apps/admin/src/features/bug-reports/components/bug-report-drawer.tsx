@@ -192,7 +192,7 @@ function BugReportBody({
  * pendiente, y el operador no tiene forma de distinguir un clic inerte de uno
  * que sí guardó. Los cinco se deshabilitan mientras no haya dato cargado: sin
  * `id` no hay a qué escribírselo, y un botón habilitado que no hace nada es peor
- * que uno que visibly no está.
+ * que uno que visiblemente no está.
  *
  * SON TRES RAMAS Y NO DOS, y la tercera es la que casi se cuela. `state` es
  * `BugTriageState | null | undefined`, y `null` y `undefined` NO son el mismo

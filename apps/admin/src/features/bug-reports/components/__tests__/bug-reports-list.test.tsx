@@ -4,7 +4,7 @@ import type {
 	BugReportPaginatedData,
 } from "@0xc1x/role-commons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@/test-utils/dom";
+import { cleanup, fireEvent, render, screen, waitFor } from "@/test-utils/dom";
 import { BugReportsList } from "../bug-reports-list";
 
 const previousFetch = globalThis.fetch;
@@ -231,6 +231,50 @@ describe("filtros del listado", () => {
 		await waitFor(() => expect(urls.length).toBeGreaterThan(0));
 		expect(urls[0]).toContain("state=CORREGIDO");
 		expect(urls[0]).toContain("origin=pwa");
+	});
+});
+
+describe("el selector de filas por página", () => {
+	test("entrega el limit NUEVO, no un salto a la página 1", async () => {
+		// El defecto era `onLimitChange={() => onPageChange(1)}`: el `DataTable`
+		// entrega el número que el operador eligió y el componente lo tiraba, así
+		// que elegir 50 solo movía la página. El síntoma —"funciona y no hace
+		// nada"— es invisible por construcción: ningún render cambia y ninguna URL
+		// cambia. Por eso el assert tiene que mirar el ARGUMENTO que recibe el
+		// callback, que es lo único que distingue las dos implementaciones.
+		stubFetch([abierto]);
+		const limites: number[] = [];
+		const paginas: number[] = [];
+		renderList({
+			onLimitChange: (limit) => limites.push(limit),
+			onPageChange: (page) => paginas.push(page),
+		});
+
+		await waitFor(() =>
+			expect(screen.getByText("La app se cierra al pagar")).toBeDefined(),
+		);
+
+		// Por TECLADO, no con un click. Medido en este repo: base-ui Select ignora
+		// `fireEvent.click` y `fireEvent.pointerDown` sobre la `<option>` — el
+		// `onValueChange` no se dispara con ninguno de los dos— mientras que
+		// `ArrowDown` sobre el combobox enfoca la primera opción y `Enter` la
+		// selecciona. Ningún test del panel elegía una opción (solo comprobaba que
+		// existieran), así que no había un camino já establecido al que copiarme.
+		//
+		// El recorrido es el de un operador que navega con el teclado: el selector
+		// arranca en 20, `ArrowDown` abre y enfoca el valor VIGENTE (20), y un
+		// segundo `ArrowDown` lo lleva a 50. `Enter` elige.
+		const combo = screen.getByRole("combobox", { name: /Mostrar/ });
+		fireEvent.keyDown(combo, { key: "ArrowDown" });
+		await waitFor(() => expect(document.activeElement?.textContent).toBe("20"));
+		fireEvent.keyDown(document.activeElement as Element, { key: "ArrowDown" });
+		await waitFor(() => expect(document.activeElement?.textContent).toBe("50"));
+		fireEvent.keyDown(document.activeElement as Element, { key: "Enter" });
+
+		await waitFor(() => expect(limites).toEqual([50]));
+		// Y NO lo cuela como un cambio de página: son dos ejes distintos, y era
+		// justamente esa la implementación defectuosa.
+		expect(paginas).toEqual([]);
 	});
 });
 
