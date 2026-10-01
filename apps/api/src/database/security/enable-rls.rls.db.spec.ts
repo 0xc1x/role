@@ -191,7 +191,9 @@ describe('no client role can read any of the three, and they deny for different 
    *     survive a stray GRANT — and that is not a new claim, it is the property
    *     the previous version of the second test in this block proved by
    *     accident, when it put a row in as the owner and watched `anon` read
-   *     zero of them with the grant wide open.
+   *     zero of them with the grant wide open. The command is asserted by name
+   *     in the test below rather than left to the count, because a count cannot
+   *     tell an added policy from a substituted one.
    *
    * `has_table_privilege` is the live-session form of the question and the
    * grantor-specific form of the answer: it is evaluated for the named role, so
@@ -202,6 +204,7 @@ describe('no client role can read any of the three, and they deny for different 
       {
         relname: string;
         policies: number;
+        commands: string;
         anon_select: boolean;
         authenticated_select: boolean;
       }[]
@@ -211,6 +214,10 @@ describe('no client role can read any of the three, and they deny for different 
                  from pg_policies p
                 where p.schemaname = 'public'
                   and p.tablename = t.relname)::int as policies,
+              coalesce((select string_agg(p.cmd, ',' order by p.cmd)
+                 from pg_policies p
+                where p.schemaname = 'public'
+                  and p.tablename = t.relname), '') as commands,
               has_table_privilege('anon', t.oid, 'SELECT')            as anon_select,
               has_table_privilege('authenticated', t.oid, 'SELECT') as authenticated_select
          from pg_class t
@@ -229,24 +236,36 @@ describe('no client role can read any of the three, and they deny for different 
     // false on both SELECT grants. The count is asserted rather than dropped so
     // that a SECOND policy arriving here is a visible diff, and so a reader who
     // has not seen the migration can see that this table is no longer a no-policy
-    // table. What makes it safe is not the number but the command, and the
-    // command is asserted by the test below rather than by this one.
+    // table.
+    //
+    // `commands` is the column that carries the name of this test, and it is here
+    // because a count does not. Drop "Users submit bug reports" and create a
+    // permissive SELECT policy in its place and the count is still 1,
+    // `has_table_privilege` is still false, and BOTH tests in this block stay
+    // green while the contact inbox — and the `reporter_id` values inside a bug
+    // report — is one query away from anyone holding the anon key. The count
+    // catches an ADDED policy and never a SUBSTITUTED one, so the commands are
+    // aggregated and spelled out beside it. `''` is the value for a table with no
+    // policies at all, which is the shape the other two rows must keep.
     expect(plainRows(shape)).toEqual([
       {
         relname: 'app_store',
         policies: 1,
+        commands: 'INSERT',
         anon_select: false,
         authenticated_select: false,
       },
       {
         relname: 'business_finance',
         policies: 0,
+        commands: '',
         anon_select: false,
         authenticated_select: false,
       },
       {
         relname: 'business_moderation',
         policies: 0,
+        commands: '',
         anon_select: false,
         authenticated_select: false,
       },

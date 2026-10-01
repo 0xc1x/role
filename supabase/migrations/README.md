@@ -412,60 +412,61 @@ further from the only proof of what ran. The file stays the reviewed version, th
 ledger stays the statement the server stored, and the gap is recorded here —
 the same treatment the `20260925*` files above already have.
 
-## Applied: `20260930234450_bug_reports_and_delivery_axis`
+## Aplicada: `20260930234450_bug_reports_and_delivery_axis`
 
-Applied through `apply_migration` on 2026-09-30. `md5sum` of the file is
-`3b302c90f0ae124e5697d5879cdd3263` and that is also the ledger's
-`md5(statements[1])`, so the file and the database agree byte for byte — unlike
-the two entries above it. Nothing was deleted and no backfill ran: the
-migration is additive plus one rename, and no `bug_report` row exists in
-production yet.
+Aplicada por `apply_migration` el 2026-09-30. El `md5sum` del archivo es
+`3b302c90f0ae124e5697d5879cdd3263` y ese es también el `md5(statements[1])` del
+ledger, así que el archivo y la base coinciden byte a byte — a diferencia de
+las dos entradas de arriba. No se borró nada y no corrió ningún backfill: la
+migración es aditiva más un rename, y todavía no existe ninguna fila
+`bug_report` en producción.
 
-Three things in it are not obvious from reading the DDL:
+Tres cosas de las que no se ven leyendo el DDL:
 
-**The rename is of three objects, not one.** `public.app_store.status` became
-`delivery_status`, the type `public.store_entry_status` became
-`public.delivery_status`, and the index `app_store_status_idx` became
-`app_store_delivery_status_idx`. Postgres does not undo a `rename`, so §13 of
-the design treats this as one-way on purpose: the alternative is keeping a
-column called `status` that means one specific thing. The label the admin panel
-already used (`PROCESADO: "Notificado"`) was what the column should have been
-called all along. The two new axes — `state text` and
-`origin public.entry_origin` — are orthogonal, not variants: `delivery_status`
-answers "did the notice reach the team?" and `state` answers "is the bug
-fixed?". Contact messages use only the first and always carry `state = NULL`.
+**El rename es de tres objetos, no de uno.** `public.app_store.status` pasó a
+`delivery_status`, el tipo `public.store_entry_status` pasó a
+`public.delivery_status`, y el índice `app_store_status_idx` pasó a
+`app_store_delivery_status_idx`. Postgres no deshace un `rename`, así que la §13
+del diseño trata esto como de ida a propósito: la alternativa es conservar una
+columna llamada `status` que significa una sola cosa. La etiqueta que el panel
+ya usaba (`PROCESADO: "Notificado"`) es lo que la columna debería haberse
+llamado desde el principio. Los dos ejes nuevos — `state text` y
+`origin public.entry_origin` — son ortogonales, no variantes: `delivery_status`
+contesta "¿llegó el aviso al equipo?" y `state` contesta "¿el bug está
+resuelto?". Los mensajes de contacto usan solo el primero y siempre con
+`state = NULL`.
 
-**The bucket is private and that is the point.** `bug_report_images` is
-created with `public = false`, 5 MB and three MIME types, unlike the five
-existing buckets, which are all publicly readable. A bug screenshot can carry
-order contents, addresses and phone numbers, and a public bucket exposes it to
-anyone holding the URL. The two policies on `storage.objects` copy the full form
-of `20260925155445` (lines 66-74) rather than the abbreviated one in §4 of the
-design: `bucket_id`, plus `owner = (select auth.uid())`, plus the first folder
-segment equal to the caller's uid. That is why the admin panel has to ask the
-API for short-lived signed URLs instead of reading the bucket.
+**El bucket es privado, y de eso se trata.** `bug_report_images` se crea con
+`public = false`, 5 MB y tres MIME types, a diferencia de los cinco buckets que
+ya existen, todos de lectura pública. Una captura de un bug puede llevar
+pedidos, direcciones y teléfonos, y un bucket público la deja al alcance de
+cualquiera que tenga la URL. Las dos policies de `storage.objects` copian la
+forma completa de `20260925155445` (líneas 66-74) y no la abreviada de la §4
+del diseño: `bucket_id`, más `owner = (select auth.uid())`, más el primer
+segmento de la carpeta igual al uid de quien llama. Por eso el panel le pide
+URLs firmadas de corta duración al API en vez de leer el bucket.
 
-**`revoke select on public.app_store from anon, authenticated` travels with
-this migration on purpose.** `20260928184943` revoked only `truncate`,
-`trigger` and `references` from that table, so `SELECT`, `INSERT`, `UPDATE`
-and `DELETE` were all still in the client roles' hands and the only thing
-holding them back was zero policies. The table therefore hung on an
-accident: one GRANT, or one permissive SELECT policy written later for
-convenience, would have made the whole table — the contact inbox included —
-readable to anyone with the anon key, which ships inside the mobile bundle.
-`anon` and `authenticated` no longer hold `SELECT` on `app_store`; `postgres`
-and `service_role` do. The API reads the table over a `postgres` connection
-built from `DATABASE_URL`, not as a client role
-(`apps/api/src/database/database.module.ts:22-25`), and the Edge Functions use
-the service key — the same two facts `20260928181714` rests on, and the reason
-this revoke does not touch them.
+**El `revoke select on public.app_store from anon, authenticated` viaja en esta
+migración a propósito.** `20260928184943` revocó de esa tabla solo `truncate`,
+`trigger` y `references`, así que `SELECT`, `INSERT`, `UPDATE` y `DELETE`
+seguían todos en manos de los roles cliente, y lo único que los frenaba eran
+cero policies. La tabla colgaba, entonces, de un accidente: un GRANT, o una
+policy de SELECT permisiva escrita después por comodidad, habría hecho legible
+la tabla entera — la bandeja de contactos incluida — para cualquiera con la
+anon key, que viaja dentro del bundle móvil. `anon` y `authenticated` ya no
+tienen `SELECT` sobre `app_store`; `postgres` y `service_role` sí. El API lee
+la tabla por una conexión `postgres` construida desde `DATABASE_URL`, no como
+un rol cliente (`apps/api/src/database/database.module.ts:22-25`), y las Edge
+Functions usan la service key — los mismos dos hechos en los que se apoya
+`20260928181714`, y la razón por la que este revoke no los toca.
 
-The client write path this leaves behind is exactly one INSERT policy,
-"Users submit bug reports", whose `WITH CHECK` pins `namespace`,
-`delivery_status = 'PENDIENTE'`, `state = 'ABIERTO'` and an origin in
-`('ios','android','pwa')`. There is no UPDATE or DELETE policy, so those stay
-denied by RLS: a user can report, never self-triage. Authorship is stamped
-server-side by the `on_bug_report_stamped` BEFORE INSERT trigger
-(`security definer`, `search_path = public`), so `value.reporter_id` is
-whatever `auth.uid()` says and not whatever the client sent.
+El camino de escritura que esto deja para el cliente es exactamente una policy
+de INSERT, "Users submit bug reports", cuyo `WITH CHECK` fija `namespace`,
+`delivery_status = 'PENDIENTE'`, `state = 'ABIERTO'` y un `origin` en
+`('ios','android','pwa')`. No hay policy de UPDATE ni de DELETE, así que esos
+dos los sigue negando RLS: un usuario puede reportar, nunca auto-atenderse. La
+autoría la sella en el servidor el trigger BEFORE INSERT
+`on_bug_report_stamped` (`security definer`, `search_path = public`), de modo
+que `value.reporter_id` es lo que diga `auth.uid()` y no lo que mande el
+cliente.
 
