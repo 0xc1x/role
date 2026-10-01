@@ -3909,6 +3909,84 @@
           "Contact Inbox"
         ]
       }
+    },
+    "/api/v1/bug-report-inbox": {
+      "get": {
+        "operationId": "BugReportInboxController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated bug report inbox"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List bug reports (admin)",
+        "tags": [
+          "Bug Report Inbox"
+        ]
+      }
+    },
+    "/api/v1/bug-report-inbox/{id}": {
+      "get": {
+        "operationId": "BugReportInboxController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bug report detail, with signed image URLs"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a bug report (admin)",
+        "tags": [
+          "Bug Report Inbox"
+        ]
+      }
+    },
+    "/api/v1/bug-report-inbox/{id}/state": {
+      "patch": {
+        "operationId": "BugReportInboxController_setState",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bug report with the new triage state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Set the triage state of a bug report (admin)",
+        "tags": [
+          "Bug Report Inbox"
+        ]
+      }
     }
   },
   "info": {
