@@ -14,7 +14,18 @@ const { Route } = await import("../__root");
 
 const w = globalThis.window as unknown as Record<string, unknown>;
 // next-themes (ThemeProvider) consulta matchMedia al montar; happy-dom no lo trae.
-w.matchMedia ??= () => ({
+//
+// POR QUÉ ASIGNA Y NO `??=`: el shim tiene que ser RESPONSABLE DE ESTE SPEC, no
+// el que otro spec dejó. `src/hooks/__tests__/use-mobile.test.tsx` instala un
+// `matchMedia` cuyo `mql` no trae `addListener`, porque a `useIsMobile` no le
+// hace falta: con un `??=` este archivo heredaba ese `mql` y next-themes moría
+// con `TypeError: o.addListener is not a function` al montar el ThemeProvider.
+// El fallo solo aparecía en la suite completa (los specs comparten proceso y el
+// orden decide quién pisa a quién) y en `bun test` de este archivo aislado
+// pasaba: un test cuyo resultado depende del orden de los archivos no es un test,
+// es una ruleta. La asignación sin condición hace que el shim sea el de este
+// spec pase lo que pase antes.
+w.matchMedia = () => ({
 	matches: false,
 	media: "",
 	onchange: null,
