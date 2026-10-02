@@ -638,7 +638,17 @@ Expected: FAIL.
 
 `submitBugReport`: valida summary y cada imagen; sube cada imagen a `${user.id}/report/<uuid>.<ext>` en `REPORT_BUCKET`; y solo después inserta en `app_store` con `{ namespace: 'bug_report', value: { summary, description, images, at }, delivery_status: 'PENDIENTE', state: 'ABIERTO', origin: <plataforma actual> }`.
 
-`origin` sale de `Platform.OS` mapeado a ios/android/web (PWA es `web`). No se le pregunta al usuario ni se acepta desde fuera: es un dato de plataforma.
+`origin` sale de `Platform.OS` mapeado a `ios`/`android`/**`pwa`** — el
+navegador es `pwa`, no `web`. No se le pregunta al usuario ni se acepta desde
+fuera: es un dato de plataforma.
+
+**El navegador mapea a `pwa`, no a `web`, y no es una coartada.** La policy de
+INSERT acepta `origin in ('ios','android','pwa')`; `web` **no está**, así que
+mandarlo hace que *toda* la inserción falle por violación de policy — no un
+reporte raro, ninguno. Y la tabla del §3 del design ya asignaba `web` al
+**formulario de contacto** y `pwa` al **reporte de error**; este texto del plan
+contradecía a su propio design. El enum de commons lo anticipaba: `web` queda
+reservado "para que la landing quepa después", sin otra migración.
 
 El fetching de los bytes: nativo `new File(uri).arrayBuffer()`, web `fetch(uri).arrayBuffer()` — idéntico a `uploadImage` en `business/data/repository.ts:955`, porque ahí está el prequirido para el caso `blob:`/`data:` que devuelve el picker en web.
 
