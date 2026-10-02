@@ -60,14 +60,25 @@ export default defineConfig({
 	webServer: {
 		// `expo export` is the artifact; the static server is how Vercel
 		// serves it. Chained so Playwright's readiness probe owns both.
-		command: `bun run export:web && node e2e/static-server.mjs ${PORT} dist`,
+		command: `bun run export:web:e2e && node e2e/static-server.mjs ${PORT} dist`,
 		url: BASE_URL,
-		// `export:web` always runs with `--clear` (Metro ignores EXPO_PUBLIC_*
-		// changes otherwise and a test-env export would poison later prod
-		// bundles, or vice versa). Cold export on this machine is ~48 s;
-		// 180 s leaves room for a first run on a cold CI runner
-		// without turning a genuine hang into a silent pass.
-		timeout: 180_000,
+		// `export:web:e2e` NO lleva `--clear`, a diferencia de `export:web` y de
+		// `build:vercel`. Medido acá: el export frío tarda 190 s y el caliente 125 s,
+		// con el bundling solo pasando de 118 s a 48 s.
+		//
+		// POR QUÉ ES SEGURO SEPARADO DEL DEPLOY, y por qué no es "lo mismo con otro
+		// nombre": Metro inlinea los valores `EXPO_PUBLIC_*` al transformar pero NO
+		// los mete en el hash del módulo — verificado en
+		// `@expo/metro-config/build/babel-transformer.js`, cuyo `getCacheKey` hashea
+		// solo los archivos de config de Babel. O sea que un bundle cacheado puede
+		// volver a salir con el env de otro lado: el envenenamiento que `--clear`
+		// previene, y es real — el valor queda dentro del JS servido.
+		//
+		// El deploy (`build:vercel`) conserva `--clear` por eso: ahí el bundle es el
+		// que se publica y no compensa arriesgarlo. El e2e corre con el env fijo del
+		// workflow, y su caché se invalida cuando ese env cambia porque la key de CI
+		// hashea el propio `.github/workflows/ci.yml`.
+		timeout: 300_000,
 		stdout: "pipe",
 		stderr: "pipe",
 		// Never reuse a developer's dev server: a stale `dist/` from another

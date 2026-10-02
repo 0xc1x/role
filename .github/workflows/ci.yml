@@ -119,6 +119,35 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
+      # La caché de Metro. Sin esto, el export web de mobile transforma ~4600
+      # módulos desde cero en cada corrida: MEDIDO, 118 s de bundling en frío
+      # contra 48 s con la caché.
+      #
+      # La ruta la elige `apps/mobile/metro.config.js`; el tmp por defecto del
+      # runner es un directorio nuevo cada vez, así que sin esto el cache nunca
+      # sobrevive.
+      #
+      # LA KEY INCLUYE ESTE MISMO ARCHIVO, y no por simetría. Metro inlinea los
+      # `EXPO_PUBLIC_*` al transformar pero no los mete en el hash del módulo
+      # (verificado en `@expo/metro-config/build/babel-transformer.js`), así que
+      # un bundle cacheado puede volver con el env de otro lado. Cambiar una
+      # variable de este workflow cambia el archivo, cambia la key, y el cache
+      # deja de servir. El env del e2e vive acá, así que el archivo del env y el
+      # archivo de la key son el mismo.
+      #
+      # `restore-keys` con el prefijo solo hace que un PR que no toque ni el
+      # lockfile ni la config ni este workflow reaproveche lo que hay, que es el
+      # caso normal. No es una caché de artefactos: Metro direcciona por
+      # contenido, así que una entrada con hash viejo o no matchea y recalcula, o
+      # matchea y el resultado es el correcto.
+      - name: Cache Metro bundler
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/metro
+          key: metro-${{ runner.os }}-${{ hashFiles('bun.lock', 'apps/mobile/metro.config.js', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            metro-${{ runner.os }}-
+
       - name: E2E marketplace
         run: bun run test:e2e
         env:
