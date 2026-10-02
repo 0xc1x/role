@@ -40,8 +40,10 @@
  * El build va AQUÍ, y no en el `command` del config con `&&`, por dos razones
  * concretas: `sh -c` no existe en Windows (donde se desarrolla este repo), y
  * un `&&` en una cadena también escondería el código de salida del build
- * detrás del del preview. Acá el build es un paso con su propio exit code: si
- * falla, este proceso sale con ese código y el runner lo reporta con el log.
+ * detrás del del preview. Acá el build es un paso con su propio exit code, y
+ * `shutdown()` propaga el código del hijo que murió: un build rojo, un stub que
+ * no pudo levantar el puerto o un preview que colapsa salen todos con SU
+ * código, nunca con un 0 que el runner lea como "target sano que no despertó".
  *
  * ─── Reglas que este script no puede romper ────────────────────────────────
  *
@@ -90,7 +92,22 @@ function spawn(name: string, cmd: string[], env: Record<string, string>) {
 		console.error(
 			`[e2e target] ${name} terminó (code=${code} signal=${child.signalCode}); bajando el otro proceso`,
 		);
-		shutdown();
+		// El código del hijo se propaga, y NO se aplana a 0. Un hijo de larga
+		// vida que se muere es el target fallando, y el runner necesita el
+		// código para decir POR QUÉ.
+		//
+		// MEDIDO, con 4110 ocupado por un proceso ajeno (el experimento del
+		// review): el stub moría con `code=1` y `EADDRINUSE`, pero como este
+		// handler llamaba a `shutdown()` —que hace `process.exit(0)`— el runner
+		// recibía 0 y reportaba
+		//     `target "admin" command exited with code 0 before becoming ready`
+		// que manda a leer el readiness de un target sano. La causa real
+		// (`Failed to start server. Is port 4110 in use?`) quedaba solo en el
+		// log, debajo de un titular que señalaba otra cosa. Y 4110 NO tiene la
+		// pre-verificación que sí tiene 3110: el runner solo sondea `readyUrl`
+		// (managed-process.js:141-147), así que una colisión en el stub es
+		// precisamente el caso que este código tiene que reportar bien.
+		shutdown(code ?? 1);
 	});
 	return child;
 }
@@ -113,9 +130,16 @@ function spawn(name: string, cmd: string[], env: Record<string, string>) {
  * propia de Windows para esto es `taskkill /T`, donde `/T` es justamente
  * "terminate this process AND the processes it started" — el equivalente
  * nativo de `kill(-pid)`. `/F` fuerza el cierre, sin el cual Vite ignora el
- * primer pedido y el puerto sigue ocupado. Este repo se desarrolla en Windows,
- * así que la rama de win32 no es decorativa: es la plataforma donde la suite
- * nació y donde este bug se sintió primero.
+ * primer pedido y el puerto sigue ocupado.
+ *
+ * Esta rama se EJERCTA en win32 por dos entradas que sí corren sin depender de
+ * que un handler de JS alcance a despacharse: un hijo que se muere solo
+ * (`child.exited`) y un build rojo. Lo que NO se afirma es que sea alcanzable
+ * desde la parada ordenada del runner en win32 — ahí `TerminateProcess` mata el
+ * proceso antes de que corra cualquier handler. El detalle está en el bloque
+ * de `process.on("SIGINT"/"SIGTERM")` de más abajo; lo importante acá es no
+ * presentar la rama como verificada en Windows, porque no lo está: esta caja es
+ * Linux y no hay forma de ejecutarla.
  */
 function killTree(child: Bun.Subprocess): void {
 	const pid = child.pid;
@@ -153,20 +177,69 @@ function killAll() {
 	for (const child of children) killTree(child);
 }
 
+/**
+ * Cierra el target y SALE con `code`.
+ *
+ * `code` es un parámetro y no una constante porque las tres rutas de salida
+ * necesitan decir cosas distintas, y aplanarlas todas a 0 es lo que hace que un
+ * fallo se reporte como un target sano:
+ *
+ *   | ruta                          | code                         |
+ *   |-------------------------------|------------------------------|
+ *   | SIGINT / SIGTERM del runner   | 0 — parada ordenada, no falla |
+ *   | hijo de larga vida muerto     | el del hijo (`code ?? 1`)     |
+ *   | `vite build` rojo             | el del build                 |
+ *
+ * `code ?? 1` y no `code ?? 0`: un hijo muerto por señal resuelve `code=null`,
+ * y `null` no es un motivo para reportar una salida exitosa.
+ */
 let closing = false;
-function shutdown() {
+function shutdown(code = 0) {
 	if (closing) return;
 	closing = true;
 	killAll();
-	process.exit(0);
+	process.exit(code);
 }
 
 // El runner signala el grupo del PROPIO serve.ts (`detached` en
 // managed-process.js:171), que en win32 es solo este proceso. Estos handlers
 // son la capa que mata a los nietos: sin ellos, en Windows el shutdown depende
 // únicamente de la rama de arriba.
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+//
+// ─── ALCANCE REAL DE ESTOS HANDLERS, POR PLATAFORMA ────────────────────────
+//
+// Son la RED DE SEGURIDAD, y no la vía principal. En POSIX corren de verdad:
+// el runner manda SIGTERM al grupo, el handler dispara `killAll()`, y los
+// nietos (`bunx` → `node vite`) mueren. Verificado en esta máquina.
+//
+// En win32 CORREN, pero solo si el proceso alcanza a despacharlos antes de
+// morir, y ahí está el problema: `managed-process.js:41-45` degrada
+// `signalProcessGroup` a `child.kill(signal)`, y en Node/Bun sobre Windows
+// `child.kill("SIGTERM")` es un `TerminateProcess` — una Terminación
+// INMEDIATA, sin cola de señales, sin handlers de JS. Un `TerminateProcess`
+// tampoco dispara el handler de `exit`.
+//
+// Consecuencia honesta, y no hay forma de evitarlo desde adentro del proceso
+// que está siendo terminado: cuando la parada la inicia el runner en win32,
+// estos handlers probablemente NO llegan a correr, y con ellos se cae la única
+// cosa que dispara `taskkill /T /F`. O sea: la rama de win32 de `killTree` es
+// alcanzable, pero por las OTRAS dos entradas — un hijo que se muere solo, o
+// un build rojo — y no por la parada ordenada del runner.
+//
+// Lo que NO se claims: que la rama de win32 esté verificada. No lo está, y no
+// se puede verificar desde esta caja (Linux). Verificarlo requiere una corrida
+// real en Windows mirando el árbol de procesos antes y después. Lo que sí se
+// afirma acá es algo más chico y comprobable: el handler existe, la
+// distribución del código es correcta, y las dos entradas que sí corren en
+// win32 (crash de un hijo, build rojo) pasan por `killTree` y por lo tanto
+// EJERCITAN la rama de `taskkill`.
+//
+// El cleanup de la parada ordenada en win32 no depende de código de acá: es
+// trabajo de `playwright.config.ts`/`e2e` del runner, fuera del alcance de este
+// archivo. Lo que sí se puede es no perder el árbol cuando el proceso muere por
+// una vía que sí dispara handlers, que es lo de arriba.
+process.on("SIGINT", () => shutdown(0));
+process.on("SIGTERM", () => shutdown(0));
 
 // Última línea de defensa: si el runner mata el proceso sin que corra el
 // handler (SIGKILL, o una muerte abrupta del grupo), `exit` todavía se dispara
@@ -238,15 +311,12 @@ async function build(): Promise<void> {
 		console.error(
 			`[e2e target] vite build falló (code=${code}); no se arranca vite preview`,
 		);
-		// NO `shutdown()`: ese helper hace `process.exit(0)`, y llamarlo acá
-		// convertiría un build rojo en un target que "terminó bien" — el
-		// `process.exit(code)` de abajo quedaba muerto, inalcanzable. El runner
-		// lee 0 y reporta `exited (code 0) before becoming ready`, que manda a
-		// leer un target sano cuando el problema era el bundle. Un build roto
-		// tiene que salir con el código del build para que el mensaje diga eso.
-		closing = true;
-		killAll();
-		process.exit(code ?? 1);
+		// `shutdown(code)`, NO `shutdown()`: el build rojo tiene que salir con el
+		// código del build. Con el 0 por default, el runner reportaba
+		// `exited with code 0 before becoming ready` y mandaba a leer el
+		// readiness de un target sano cuando el problema era el bundle. Un
+		// build roto tiene que ser un target rojo y ruidoso.
+		shutdown(code ?? 1);
 	}
 	console.error("[e2e target] build ok; arrancando vite preview");
 }
@@ -261,6 +331,10 @@ await build();
 // `VITE_API_URL=http://127.0.0.1:4110/api/v1` ya sustituido dentro, así que el
 // env del proceso se repite solo por simetría con `dev` y para que el log del
 // target diga de dónde salió el destino.
-spawn("vite-preview", ["bunx", "vite", "preview", "--port", UI_PORT, "--host", "127.0.0.1"], {
-	VITE_API_URL: STUB_API_URL,
-});
+spawn(
+	"vite-preview",
+	["bunx", "vite", "preview", "--port", UI_PORT, "--host", "127.0.0.1"],
+	{
+		VITE_API_URL: STUB_API_URL,
+	},
+);

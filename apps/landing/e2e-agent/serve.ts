@@ -61,7 +61,21 @@ function spawn(name: string, cmd: string[], env: Record<string, string>) {
 		console.error(
 			`[e2e target] ${name} terminó (code=${code} signal=${child.signalCode}); bajando el otro proceso`,
 		);
-		shutdown();
+		// El código del hijo se propaga, y NO se aplana a 0. Un hijo de larga
+		// vida que se muere es el target fallando, y el runner necesita el
+		// código para decir POR QUÉ.
+		//
+		// MEDIDO en el par de admin (`apps/admin/e2e-agent/serve.ts`), con 3999
+		// equivalente ocupado por un proceso ajeno: el hijo moría con `code=1` y
+		// `EADDRINUSE`, pero como este handler llamaba a `shutdown()` —que hace
+		// `process.exit(0)`— el runner recibía 0 y reportaba
+		//     `target "landing" command exited with code 0 before becoming ready`
+		// que manda a leer el readiness de un target sano, con la causa real
+		// abajo solo en el log. Y el puerto del stub NO tiene la pre-verificación
+		// que sí tiene el de la UI: el runner solo sondea `readyUrl`
+		// (managed-process.js:141-147), así que una colisión ahí es
+		// precisamente el caso que este código tiene que reportar bien.
+		shutdown(code ?? 1);
 	});
 	return child;
 }
@@ -117,20 +131,61 @@ function killTree(child: Bun.Subprocess): void {
 	}
 }
 
+/**
+ * Cierra el target y SALE con `code`.
+ *
+ * `code` es un parámetro y no una constante porque las rutas de salida necesitan
+ * decir cosas distintas, y aplanarlas todas a 0 es lo que hace que un fallo se
+ * reporte como un target sano:
+ *
+ *   | ruta                        | code                       |
+ *   |-----------------------------|----------------------------|
+ *   | SIGINT / SIGTERM del runner | 0 — parada ordenada        |
+ *   | hijo de larga vida muerto   | el del hijo (`code ?? 1`)  |
+ *
+ * `code ?? 1` y no `code ?? 0`: un hijo muerto por señal resuelve `code=null`,
+ * y `null` no es un motivo para reportar una salida exitosa.
+ */
 let closing = false;
-function shutdown() {
+function shutdown(code = 0) {
 	if (closing) return;
 	closing = true;
 	for (const child of children) killTree(child);
-	process.exit(0);
+	process.exit(code);
 }
 
 // El runner signala el grupo del PROPIO serve.ts (`detached` en
 // managed-process.js:171), que en win32 es solo este proceso. Estos handlers
 // son la capa que mata a los nietos: sin ellos, en Windows el shutdown depende
 // únicamente de la rama de arriba.
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+//
+// ─── ALCANCE REAL DE ESTOS HANDLERS, POR PLATAFORMA ────────────────────────
+//
+// Son la RED DE SEGURIDAD, y no la vía principal. En POSIX corren de verdad: el
+// runner manda SIGTERM al grupo, el handler dispara el `killTree` de cada hijo,
+// y los nietos (`bunx` → `node vite`) mueren. Verificado en esta máquina.
+//
+// En win32 CORREN, pero solo si el proceso alcanza a despacharlos antes de morir,
+// y ahí está el problema: `managed-process.js:41-45` degrada
+// `signalProcessGroup` a `child.kill(signal)`, y en Node/Bun sobre Windows
+// `child.kill("SIGTERM")` es un `TerminateProcess` — una Terminación INMEDIATA,
+// sin cola de señales, sin handlers de JS. Un `TerminateProcess` tampoco
+// dispara el handler de `exit`.
+//
+// Consecuencia honesta, que no se puede evitar desde adentro del proceso que
+// está siendo terminado: cuando la parada la inicia el runner en win32, estos
+// handlers probablemente NO llegan a correr, y con ellos se cae la única cosa
+// que dispara `taskkill /T /F`. La rama de win32 de `killTree` sigue siendo
+// alcanzable, pero por las OTRAS dos entradas — un hijo que se muere solo, que
+// es el caso MEDIDO en el par de admin — y no por la parada ordenada.
+//
+// Lo que NO se claims: que la rama de win32 esté verificada. No lo está, y no
+// se puede verificar desde una caja Linux. Verificarlo requiere una corrida real
+// en Windows mirando el árbol de procesos antes y después. Mismo alcance, mismo
+// límite y mismo texto que en `apps/admin/e2e-agent/serve.ts`: los dos archivos
+// son un par espejado y no tiene sentido que uno afirme más que el otro.
+process.on("SIGINT", () => shutdown(0));
+process.on("SIGTERM", () => shutdown(0));
 
 // Última línea de defensa: si el runner mata el proceso sin que corra el
 // handler (SIGKILL, o una muerte abrupta del grupo), `exit` todavía se dispara
