@@ -7,6 +7,7 @@ import * as nativeWeb from "react-native-web";
 
 import { light } from "@/src/core/theme/colors";
 import { strings } from "@/src/core/i18n/strings";
+import { Errors } from "@/src/core/error/app-error";
 import { mockNativeUi } from "@/src/test-utils/native-mocks";
 
 // El buzón de reportes de errores: la pantalla donde el usuario escribe, elige
@@ -46,13 +47,54 @@ type SheetProps = {
 const TEXTO = "no me carga el checkout";
 const DETALLE = "abro el carrito, elijo una oferta y queda cargando";
 
+type ViewProps = {
+	accessibilityRole?: string;
+	accessibilityLiveRegion?: string;
+	accessibilityLabel?: string;
+	style?: unknown;
+	children?: ReactNode;
+};
+type ThumbProps = {
+	source?: { uri?: string };
+	accessibilityLabel?: string;
+};
+
 let fields: FieldProps[] = [];
 let buttons: ButtonProps[] = [];
+let views: ViewProps[] = [];
+let thumbnails: ThumbProps[] = [];
 let sheetProps: SheetProps | null = null;
 let html = "";
 const closed: string[] = [];
 
-mockNativeUi({ Platform: { OS: "ios" } });
+/**
+ * Los nodos con `accessibilityRole="alert"`. El `ErrorNote` se justifica con
+ * ese rol y con `accessibilityLiveRegion`, así que el spec mira los dos: sin
+ * ellos el texto se pinta y el lector de pantalla no lo anuncia.
+ */
+const alerts = (): ViewProps[] =>
+	views.filter((v) => v.accessibilityRole === "alert");
+
+const ProbeView = (props: ViewProps) => {
+	views.push(props);
+	return createElement(nativeWeb.View, null, props.children);
+};
+
+/**
+ * Los botones de quitar de las miniaturas son `Pressable` de react-native, no
+ * el `Button` de la app, así que caen en la misma lista `buttons` y se buscan
+ * por su label con el índice ya resuelto.
+ */
+const ProbePressable = (props: ButtonProps) => {
+	buttons.push(props);
+	return createElement(nativeWeb.View, null, props.children);
+};
+
+mockNativeUi({
+	Platform: { OS: "ios" },
+	View: ProbeView,
+	Pressable: ProbePressable,
+});
 
 const launchImageLibraryAsync = mock(
 	async (
@@ -67,6 +109,16 @@ mock.module("expo-image-picker", () => ({ launchImageLibraryAsync }));
 const pickWebImage = mock(async (): Promise<string | null> => null);
 mock.module("@/src/features/business/utils/pick-image", () => ({
 	pickWebImage,
+}));
+
+// `expo-image` no se puede dejar real: su grafo nativo no parsea en bun. La
+// sonda guarda lo que la pantalla le pasa, que es justo lo que hay que
+// afirmar: que la URI de cada captura llega a la miniatura.
+mock.module("expo-image", () => ({
+	Image: (props: ThumbProps) => {
+		thumbnails.push(props);
+		return createElement(nativeWeb.Text, null, props.accessibilityLabel);
+	},
 }));
 
 const readLocalImage = mock(async (_uri: string) => ({
@@ -160,6 +212,8 @@ function render(visible = true): void {
 	hookCursor = 0;
 	fields = [];
 	buttons = [];
+	views = [];
+	thumbnails = [];
 	sheetProps = null;
 	html = renderToStaticMarkup(
 		createElement(ReportProblemSheet, {
@@ -180,6 +234,18 @@ const button = (label: string): ButtonProps => {
 		(b) => b.accessibilityLabel === label || b["aria-label"] === label,
 	);
 	if (!found) throw new Error(`botón no renderizado: ${label}`);
+	return found;
+};
+
+/**
+ * El botón de quitar de la miniatura N. Se busca por el número porque hay
+ * varios idénticos en pantalla: el índice es lo que los distingue, y el spec
+ * lo comprueba mirando el copy con `{n}` resuelto.
+ */
+const removeButton = (n: number): ButtonProps => {
+	const label = strings.bugReport.removeImage.replace("{n}", String(n));
+	const found = buttons.find((b) => b.accessibilityLabel === label);
+	if (!found) throw new Error(`botón de quitar no renderizado: ${label}`);
 	return found;
 };
 
@@ -354,9 +420,9 @@ test("con los cinco lugares llenos el picker no abre", async () => {
 	expect(html).toContain(strings.bugReport.errorTooManyImages);
 	expect(html).toContain(TEXTO);
 
-	// Quitarla libera un lugar: el contador es el que le dice al usuario que
+	// Quitar una libera un lugar: el contador es el que le dice al usuario que
 	// puede volver a agregar.
-	button(strings.bugReport.removeImage).onPress?.();
+	removeButton(1).onPress?.();
 	render();
 	button(strings.bugReport.addImage).onPress?.();
 	await flush();
@@ -401,6 +467,136 @@ test("el picker que devuelve más de lo que sobraba no rompe el envío", async (
 	expect(sent.summary).toBe(TEXTO);
 	expect(sent.images).toHaveLength(MAX_REPORT_IMAGES);
 	expect(closed).toEqual(["close"]);
+});
+
+test("dos toques con el picker abierto no dejan pasar de cinco", async () => {
+	render();
+	typeSummary(TEXTO);
+
+	launchImageLibraryAsync.mockImplementation(async () => ({
+		canceled: false,
+		assets: [{ uri: "file:///una.png" }],
+	}));
+
+	// El picker nativo deja el botón vivo durante SEGUNDOS, y `slots` se calcula
+	// antes del `await`. Los dos toques corren concurrentes sobre la misma
+	// puerta y los dos recortan contra el mismo margen: sin `pickingRef` ni el
+	// corte adentro del updater, el contador sube de cinco.
+	const press = button(strings.bugReport.addImage).onPress;
+	if (!press) throw new Error("el botón de agregar no tiene onPress");
+	press();
+	press();
+	await flush();
+	render();
+
+	expect(launchImageLibraryAsync).toHaveBeenCalledTimes(1);
+	expect(html).toContain(`1 de ${MAX_REPORT_IMAGES}`);
+	expect(thumbnails).toHaveLength(1);
+
+	button(strings.bugReport.submit).onPress?.();
+	await flush();
+	const sent = submitBugReport.mock.calls.at(-1)?.[0] as {
+		images: unknown[];
+	};
+	expect(sent.images).toHaveLength(1);
+});
+
+test("la miniatura muestra la URI de su captura y se quita la elegida", async () => {
+	render();
+	typeSummary(TEXTO);
+
+	launchImageLibraryAsync.mockImplementationOnce(async () => ({
+		canceled: false,
+		assets: [{ uri: "file:///primera.png" }, { uri: "file:///segunda.png" }],
+	}));
+	button(strings.bugReport.addImage).onPress?.();
+	await flush();
+	render();
+
+	// La `uri` de `Capture` existe para esto: sin miniatura el usuario adjunta
+	// dos archivos y no ve ninguno, y no puede saber cuál quitó.
+	expect(thumbnails.map((t) => t.source?.uri)).toEqual([
+		"file:///primera.png",
+		"file:///segunda.png",
+	]);
+	// El alt y el botón de quitar llevan el número: hay dos controles iguales
+	// y sin índice el lector de pantalla los anuncia idénticos.
+	expect(thumbnails[0]?.accessibilityLabel).toBe(
+		strings.bugReport.captureAlt.replace("{n}", "1"),
+	);
+	expect(removeButton(2).accessibilityLabel).toBe(
+		strings.bugReport.removeImage.replace("{n}", "2"),
+	);
+
+	// Se quita la PRIMERA de dos y queda la segunda. Un "quitar la última" a
+	// ciegas dejaría la primera, así que este caso distingue los dos.
+	removeButton(1).onPress?.();
+	render();
+
+	expect(html).toContain(`1 de ${MAX_REPORT_IMAGES}`);
+	expect(thumbnails.map((t) => t.source?.uri)).toEqual(["file:///segunda.png"]);
+});
+
+test("el error de subida se anuncia como alerta viva", async () => {
+	render();
+	typeSummary(TEXTO);
+
+	submitBugReport.mockImplementationOnce(async () => {
+		throw new Error("bucket no existe");
+	});
+	button(strings.bugReport.submit).onPress?.();
+	await flush();
+	render();
+
+	// El `ErrorNote` se justifica con estos dos atributos: sin ellos el texto
+	// se pinta y el lector de pantalla no anuncia el motivo.
+	const notes = alerts();
+	expect(notes).toHaveLength(1);
+	expect(notes[0]?.accessibilityLiveRegion).toBe("polite");
+});
+
+test("el envío que falla con copy propio muestra ese copy, no el genérico", async () => {
+	render();
+	typeSummary(TEXTO);
+
+	// El `AppError` viaja entero: `toAppError` lo devuelve tal cual y el
+	// `fallback` solo cubre lo que no es un `AppError`. El usuario real ve el
+	// mensaje del dominio.
+	submitBugReport.mockImplementationOnce(async () => {
+		throw Errors.validation(strings.bugReport.errorSummaryRequired);
+	});
+	button(strings.bugReport.submit).onPress?.();
+	await flush();
+	render();
+
+	expect(html).toContain(strings.bugReport.errorSummaryRequired);
+	expect(html).not.toContain(strings.bugReport.errorSubmitFailed);
+	// El texto se conserva igual: el copy del error no lo borra.
+	expect(html).toContain(TEXTO);
+});
+
+test("el motivo de una captura ilegible es el del dominio, no el genérico", async () => {
+	render();
+	typeSummary(TEXTO);
+
+	// El camino INFORMATIVO: el repositorio envuelve el fallo de Storage en un
+	// `AppError` con copy propio, así que lo que el usuario real ve es
+	// "No pudimos adjuntar la imagen." y no el mensaje de envío.
+	launchImageLibraryAsync.mockImplementationOnce(async () => ({
+		canceled: false,
+		assets: [{ uri: "file:///pesada.png" }],
+	}));
+	readLocalImage.mockImplementationOnce(async () => {
+		throw Errors.validation(strings.bugReport.errorImageUploadFailed);
+	});
+	button(strings.bugReport.addImage).onPress?.();
+	await flush();
+	render();
+
+	expect(html).toContain(strings.bugReport.errorImageUploadFailed);
+	expect(html).not.toContain(strings.bugReport.errorImageNotSupported);
+	expect(html).not.toContain(strings.bugReport.errorSubmitFailed);
+	expect(alerts()).toHaveLength(1);
 });
 
 test("un envío exitoso se cierra y no vuelve a enviar con doble toque", async () => {

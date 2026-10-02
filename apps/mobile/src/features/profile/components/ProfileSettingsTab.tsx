@@ -69,8 +69,9 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
 		items: [
 			{ icon: CircleHelp, label: strings.profile.help, href: "/profile/help" },
 			// El buzón de reportes es de las dos audiencias, pero se ofrece
-			// desde acá porque el consumidor no tiene otra pantalla de ayuda
-			// donde encontrarlo.
+			// desde acá porque el consumidor no tiene panel de negocio donde
+			// hacerlo. Va en el grupo de Ayuda y no en el de preferencias:
+			// reportar un problema no es una preferencia del usuario.
 			{
 				icon: Bug,
 				label: strings.bugReport.title,

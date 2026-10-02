@@ -1977,7 +1977,11 @@ export const strings = {
 		descriptionLabel: "Detalles (opcional)",
 		descriptionHint: "Pasos para reproducirlo y qué esperabas que pasara.",
 		addImage: "Agregar captura",
-		removeImage: "Quitar la última captura",
+		// El `{n}` lo pone la miniatura con su índice de uno. Hay varios botones
+		// iguales en pantalla, y sin el número el lector de pantalla anuncia
+		// "Quitar captura" cinco veces sin que el usuario sepa cuál quita.
+		removeImage: "Quitar la captura {n}",
+		captureAlt: "Captura {n} adjunta al reporte",
 		// El `{max}` lo reemplaza la pantalla con `MAX_REPORT_IMAGES` y el
 		// `{n}` con lo que ya se adjuntó. Es el contador que hace accionable al
 		// `errorTooManyImages`: sin él el usuario no sabe cuánto le falta.
@@ -1990,9 +1994,18 @@ export const strings = {
 		errorImageTooLarge:
 			"Esa imagen es demasiado grande. Prueba con una captura más liviana.",
 		errorImageUploadFailed: "No pudimos adjuntar la imagen.",
-		// El 5 sale de `MAX_REPORT_IMAGES`, igual que el `.max(5)` de lectura del
-		// schema. Va escrito porque el usuario necesita el número para actuar: sin
-		// él, quitar capturas al azar es la única reacción posible.
+		// El 5 va ESCRITO y no como `{max}`, aunque `imageCount` dos líneas más
+		// arriba sí use `{max}`. La razón es que este texto no es solo de la
+		// pantalla: lo lanza `assertReportImageCount`, en el dominio, y ese
+		// mensaje viaja como `AppError` a cualquier consumidor futuro. Un
+		// `{max}` sin resolver ahí saldría crudo al usuario ("Adjuntá hasta
+		// {max} capturas."), porque el dominio no tiene a esta pantalla para
+		// resolverlo. Y el número es justo lo que el usuario necesita para
+		// actuar: sin él, quitar capturas al azar es la única reacción posible.
+		//
+		// La corrección de fondo —que el dominio resuelva el `{max}` en el punto
+		// donde lanza el error— es de `domain/bug-report.ts`, no de la pantalla,
+		// y por eso no se hace acá.
 		errorTooManyImages: "Adjuntá hasta 5 capturas.",
 		errorNotSignedIn: "Inicia sesión para enviar un reporte.",
 		errorSubmitFailed: "No pudimos enviar tu reporte.",
