@@ -90,11 +90,15 @@ export class BugReportInboxService {
    * LEE ANTES DE ESCRIBIR, y sobre todo por el namespace: una fila de otro
    * namespace responde 404 y no se toca. Un `updateState` directo por id
    * escribiría sobre `app_store` entero sin mirar qué fila es.
+   *
+   * `state` SE DECLARA `string` y no `BugTriageState`, a propósito. Declararlo
+   * como el union haría que el guard de abajo fuera inalcanzable para el
+   * compilador —la rama negativa narrowea a `never`— y el chequeo se volvería
+   * decorativo: el tipo ya estaría prometiendo que el valor es válido, que es
+   * justo lo que este método existe para no prometer. `eslint` lo cantaba como
+   * `restrict-template-expressions` sobre un `never`.
    */
-  async setState(
-    id: string,
-    state: BugTriageState,
-  ): Promise<BugReportDetailDto> {
+  async setState(id: string, state: string): Promise<BugReportDetailDto> {
     if (!this.esEstadoValido(state)) {
       throw new BadRequestException(`Unknown bug triage state: ${state}`);
     }
