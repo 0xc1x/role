@@ -182,6 +182,44 @@ export function localImageFromBytes(bytes: ArrayBuffer): LocalImage {
  * `submitBugReport` — un cliente que puede declarar su propio origen es un
  * cliente que puede escribir en otro canal.
  */
+/**
+ * Tope de capturas por reporte, en ESCRITURA.
+ *
+ * EL NÚMERO ESTÁ REPETIDO A PROPÓSITO, y es el mismo que el `.max(5)` de
+ * `BugReportValueSchema` (lectura). No es una coincidencia ni una constante
+ * compartida a futuro: hoy los dos tienen que decir 5.
+ *
+ * POR QUÉ HAY UN TOPE DE ESCRITURA CUANDO EL DE LECTURA NO DEBERÍA SER UNO.
+ * El de lectura existe para proteger el recurso del servidor —el API firma una
+ * URL por imagen y N capturas son N llamadas a Storage con service role— y por
+ * eso el schema acepta que la fila se marque ilegible: es el precio de no
+ * dejar crecer ese vector. El de escritura protege el TEXTO DEL USUARIO, que es otra
+ * cosa: sin este tope, un usuario que adjunta 6 capturas obtiene una fila que
+ * SÍ entra a la base y que el operador ve como `readable: false`. Perdía el
+ * resumen y la descripción sin que nadie le dijera por qué. El reporte malo
+ * tiene que seguir existiendo; el reporte invisible no puede ser el precio de
+ * un contador.
+ *
+ * Y por eso el rechazo es `validation` con un mensaje que dice el número: el
+ * usuario puede quitar una captura y reintentar. El picker de la pantalla
+ * (Task 8) puede y debe avisar antes, pero no es la única puerta: esta función
+ * es la frontera, y una frontera sin tope deja pasar la fila ilegible.
+ */
+export const MAX_REPORT_IMAGES = 5;
+
+/**
+ * Rechaza el exceso de capturas ANTES de subir la primera.
+ *
+ * El orden es el que da valor a la función: subir y después contar deja cinco
+ * objetos huérfanos en el bucket y ninguna fila, que es el peor de los dos
+ * mundos. Por eso valida el largo de una vez y no dentro del loop de subida.
+ */
+export function assertReportImageCount(count: number): void {
+	if (count > MAX_REPORT_IMAGES) {
+		throw Errors.validation(strings.bugReport.errorTooManyImages);
+	}
+}
+
 export function reportOriginFor(os: string): "ios" | "android" | "pwa" {
 	if (os === "ios") return "ios";
 	if (os === "android") return "android";

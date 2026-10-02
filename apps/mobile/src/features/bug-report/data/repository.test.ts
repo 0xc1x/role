@@ -39,9 +39,8 @@ const { supabase } = await import("@/src/core/supabase/client");
 const { submitBugReport } = await import(
 	"@/src/features/bug-report/data/repository"
 );
-const { MAX_REPORT_IMAGE_BYTES, REPORT_BUCKET } = await import(
-	"@/src/features/bug-report/domain/bug-report"
-);
+const { MAX_REPORT_IMAGE_BYTES, MAX_REPORT_IMAGES, REPORT_BUCKET } =
+	await import("@/src/features/bug-report/domain/bug-report");
 
 const USER_ID = "user-abc-123";
 const fromMock = supabase.from as unknown as jest.Mock;
@@ -287,6 +286,101 @@ describe("si el insert falla, propaga y no se traga el error", () => {
 		// Insertar la fila sin las capturas produciría un reporte sin evidencia:
 		// el operador vería el texto y ninguna imagen.
 		expect(calls).not.toContain("insert");
+	});
+});
+
+describe("el tope de capturas se aplica al ESCRIBIR, no sólo al leer", () => {
+	test("el límite es el mismo número que el .max(5) de lectura", async () => {
+		// Si estos dos números se separan, el cliente acepta una fila que el
+		// schema de lectura va a marcar `readable: false`, y lo que se pierde es
+		// el texto del reporte. Mismo número, dos capas.
+		expect(MAX_REPORT_IMAGES).toBe(5);
+	});
+
+	test("seis capturas se rechazan ANTES de subir ninguna", async () => {
+		setup();
+
+		await expect(
+			submitBugReport({
+				summary: "Falla al reservar",
+				images: Array.from({ length: 6 }, () => ({
+					bytes: jpeg(64),
+					contentType: "image/jpeg" as const,
+				})),
+			}),
+		).rejects.toThrow();
+
+		// Lo que hace el daño: subir las 5 primeras y recién ahí fallar deja
+		// objetos huérfanos en el bucket Y la fila sin escribir.
+		expect(storageFromMock).not.toHaveBeenCalled();
+		expect(fromMock).not.toHaveBeenCalled();
+	});
+
+	test("el rechazo es de validación y dice cuántas caben", async () => {
+		setup();
+
+		let caught: { kind?: string; message?: string } = {};
+		try {
+			await submitBugReport({
+				summary: "Falla al reservar",
+				images: Array.from({ length: 6 }, () => ({
+					bytes: jpeg(64),
+					contentType: "image/jpeg" as const,
+				})),
+			});
+		} catch (error) {
+			caught = error as { kind?: string; message?: string };
+		}
+		expect(caught.kind).toBe("validation");
+		// Un "algo salió mal" genérico deja al usuario sin forma de saber que
+		// el problema es la cantidad de capturas.
+		expect(caught.message).toMatch(/5/);
+	});
+
+	test("cinco capturas sí pasan y las cinco suben", async () => {
+		setup();
+
+		await submitBugReport({
+			summary: "Falla al reservar",
+			images: Array.from({ length: 5 }, () => ({
+				bytes: jpeg(64),
+				contentType: "image/jpeg" as const,
+			})),
+		});
+
+		expect(calls.filter((c) => c.startsWith("upload:"))).toHaveLength(5);
+		const row = insertRow as { value: { images: string[] } };
+		expect(row.value.images).toHaveLength(5);
+	});
+});
+
+describe("el id de captura no depende de que crypto exista", () => {
+	test("sin crypto.randomUUID igual se arma un path y se sube", async () => {
+		// Hermes no garantiza `globalThis.crypto`. `orders/data/repository.ts`
+		// accede directo y trunca; acá se usa la forma segura de
+		// `profile/data/repository.ts`.
+		const original = globalThis.crypto;
+		try {
+			Object.defineProperty(globalThis, "crypto", {
+				value: undefined,
+				configurable: true,
+			});
+			setup();
+
+			await submitBugReport({
+				summary: "Falla al reservar",
+				images: [{ bytes: jpeg(64), contentType: "image/jpeg" }],
+			});
+
+			const uploaded = calls.find((c) => c.startsWith("upload:"));
+			expect(uploaded?.startsWith(`upload:${USER_ID}/report/`)).toBe(true);
+			expect(uploaded?.endsWith(".jpg")).toBe(true);
+		} finally {
+			Object.defineProperty(globalThis, "crypto", {
+				value: original,
+				configurable: true,
+			});
+		}
 	});
 });
 

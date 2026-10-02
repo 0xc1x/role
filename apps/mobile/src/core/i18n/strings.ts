@@ -1975,6 +1975,10 @@ export const strings = {
 		errorImageTooLarge:
 			"Esa imagen es demasiado grande. Prueba con una captura más liviana.",
 		errorImageUploadFailed: "No pudimos adjuntar la imagen.",
+		// El 5 sale de `MAX_REPORT_IMAGES`, igual que el `.max(5)` de lectura del
+		// schema.Va escrito porque el usuario necesita el número para actuar: sin
+		// él, quitar capturas al azar es la única reacción posible.
+		errorTooManyImages: "Adjuntá hasta 5 capturas.",
 		errorNotSignedIn: "Inicia sesión para enviar un reporte.",
 		errorSubmitFailed: "No pudimos enviar tu reporte.",
 	},

@@ -7,6 +7,7 @@ import { strings } from "@/src/core/i18n/strings";
 import { supabase } from "@/src/core/supabase/client";
 
 import {
+	assertReportImageCount,
 	extensionFor,
 	localImageFromBytes,
 	normalizeDescription,
@@ -44,8 +45,14 @@ export interface SubmitBugReportInput {
  * de verdad es el folder scopeado al uid.
  */
 function captureId(): string {
-	const webCrypto = globalThis.crypto as { randomUUID?: () => string };
-	if (webCrypto.randomUUID) return webCrypto.randomUUID();
+	// `?.` y no acceso directo: Hermes NO garantiza `globalThis.crypto`, y
+	// `orders/data/repository.ts:133` accede directo y trunca cuando falta. La
+	// forma segura es la de `profile/data/repository.ts:269`.
+	const webCrypto = globalThis.crypto as
+		| { randomUUID?: () => string }
+		| undefined;
+	if (typeof webCrypto?.randomUUID === "function")
+		return webCrypto.randomUUID();
 	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
@@ -57,6 +64,15 @@ function captureId(): string {
  * protocolo: en web `expo-image-picker` devuelve URIs `blob:`/`data:` que
  * `File` no puede abrir, así que hay que `fetch`earlas. En nativo la URI es un
  * archivo de disco y `File` la abre directo.
+ *
+ * LA ASIMETRÍA DEL `!response.ok` ES ACEPTABLE, y a propósito. Solo la rama web
+ * tiene estado HTTP que mirar: `fetch` resuelve con 404 y cuerpo de error, así
+ * que sin ese chequeo una URI muerta produciría bytes que no son una imagen y el
+ * fallo aparecería como "formato no soportado", que manda al usuario a retocar
+ * una captura que en realidad no existe. En nativo no hay equivalente que
+ * revisar: `File` lanza o devuelve el archivo, no hay respuesta que inspeccionar,
+ * y su error ya es un `Error` que `toAppError` mapea a la taxonomía. Una guarda
+ * simétrica en nativo sería código que nunca cambia de rama.
  */
 export async function readLocalImage(uri: string): Promise<LocalImage> {
 	let bytes: ArrayBuffer;
@@ -87,8 +103,10 @@ async function uploadCapture(
 	ownerId: string,
 	image: LocalImage,
 ): Promise<string> {
-	// Se revalida acá y no solo en el dominio: esta función es alcanzable desde
-	// fuera del módulo y el objeto que llega ya viene tipado como `LocalImage`.
+	// Defensa en profundidad: `submitBugReport` es la única puerta y ya recibe
+	// `LocalImage` validados por tipo, pero el límite de tamaño y el sniffing se
+	// vuelven a correr acá porque son una regla de escritura que no depende del
+	// que compiló la llamada.
 	const validated = localImageFromBytes(image.bytes);
 	const path = `${ownerId}/report/${captureId()}.${extensionFor(validated.contentType)}`;
 
@@ -133,6 +151,11 @@ export async function submitBugReport(
 ): Promise<void> {
 	const summary = normalizeSummary(input.summary);
 	const description = normalizeDescription(input.description);
+	// El tope de capturas va AQUÍ y no solo en el picker de la pantalla: el picker
+	// es una puerta, esta función es la frontera, y una frontera sin tope escribe
+	// filas que el schema de lectura va a marcar ilegibles — con el texto del
+	// usuario dentro de una fila que el operador nunca ve.
+	assertReportImageCount(input.images.length);
 
 	const {
 		data: { user },
