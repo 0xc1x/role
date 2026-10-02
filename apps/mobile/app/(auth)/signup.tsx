@@ -17,7 +17,7 @@ import { radii, spacing } from "@/src/core/theme/spacing";
 import { AppText, TextField } from "@/src/core/ui";
 import { Logo } from "@/src/core/ui/Logo";
 import { AuthScreenShell } from "@/src/features/auth/presentation/AuthScreenShell";
-// import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
+import { SocialAuthButtons } from "@/src/features/auth/presentation/SocialAuthButtons";
 import { authRepository } from "@/src/features/auth/data/repository";
 import { validateSignupForm } from "@/src/features/auth/domain/validation";
 import { useAuthStore } from "@/src/features/auth/store";
@@ -226,7 +226,11 @@ export default function SignupScreen() {
 				{strings.auth.createAccount}
 			</Button>
 
-			{/* <SocialAuthButtons label={strings.auth.orSignupWith} /> */}
+			<SocialAuthButtons
+				label={strings.auth.orSignupWith}
+				disabled={!acceptedTerms}
+				forceAccountPicker
+			/>
 
 			<AppText
 				variant="bodyMedium"

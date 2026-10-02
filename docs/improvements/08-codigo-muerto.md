@@ -23,7 +23,7 @@
 
 | Elemento original | Decisión |
 | --- | --- |
-| Login social (Google/Apple) | Diferido: auth por email/password + reset existe; social requiere credenciales de proveedor |
+| Login social (Google/Apple) | En implementación (Flow A: OAuth hospedado PWA+nativo, ADR-0012; reemplaza el plan de SDKs nativos de ADR-0009). Requiere credenciales de proveedor en dashboards |
 | Push de Supabase (Realtime) para órdenes | El móvil usa polling de Query + notificaciones locales; Realtime requiere config de Supabase Realtime — no activo en el entorno actual |
 | Pantalla de "lugares guardados" con mapa | Se portó CRUD de direcciones sin mapa (react-native-maps instalado, mapa diferido a cuando haya geocoding real) |
 | i18n multi-idioma | es-MX monolingüe hoy (ver [04-i18n.md](./04-i18n.md)) |

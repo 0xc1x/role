@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ScrollView,
 	StyleSheet,
 	View,
 	useWindowDimensions,
+	type LayoutChangeEvent,
 	type NativeScrollEvent,
 	type NativeSyntheticEvent,
 } from "react-native";
@@ -33,7 +34,9 @@ import { useAuthStore } from "@/src/features/auth/store";
 import {
 	BUSINESS_ONBOARDING_STEPS,
 	CONSUMER_ONBOARDING_STEPS,
+	clampPage,
 	onboardingAudience,
+	pageFromOffset,
 	useMarkOnboardingSeen,
 	type OnboardingStep,
 } from "@/src/features/onboarding";
@@ -292,15 +295,21 @@ function StepContent({
 
 export default function OnboardingScreen() {
 	const { colors } = useTheme();
-	const { width: pageWidth } = useWindowDimensions();
+	const { width: windowWidth } = useWindowDimensions();
 	const scrollRef = useRef<ScrollView>(null);
 	const [page, setPage] = useState(0);
-	// Altura real del pager. Un content container de scroll HORIZONTAL no
-	// hereda altura ni con minHeight:"100%" (el % no resuelve dentro del
-	// content container en RN), así que las pages medían su contenido y el
-	// justifyContent no tenía nada que centrar. Se mide el viewport y se le
-	// da altura explícita a cada page: funciona igual en nativo y en web.
-	const [pagerHeight, setPagerHeight] = useState(0);
+	// Caja real del pager, medida con onLayout. Un content container de scroll
+	// HORIZONTAL no hereda altura ni con minHeight:"100%" (el % no resuelve
+	// dentro del content container en RN), así que las pages medían su
+	// contenido y el justifyContent no tenía nada que centrar. Se mide el
+	// viewport y se le da altura explícita a cada page: funciona igual en
+	// nativo y en web. El ancho medido es además la autoridad del snap: con
+	// `useWindowDimensions` las pages podían no medir lo que el viewport
+	// (scrollbar de escritorio en web), y entonces pagingEnabled y
+	// snapToInterval enganchaban en puntos distintos.
+	const [viewport, setViewport] = useState({ width: 0, height: 0 });
+	const pageWidth = viewport.width || windowWidth;
+	const pagerHeight = viewport.height;
 	const markSeen = useMarkOnboardingSeen();
 	const role = useAuthStore((s) => s.profile?.role ?? null);
 	const business = onboardingAudience(role) === "business";
@@ -321,23 +330,58 @@ export default function OnboardingScreen() {
 			});
 	}, [markSeen, business]);
 
-	const goToPage = useCallback(
-		(index: number) => {
-			setPage(index);
-			scrollRef.current?.scrollTo({ x: index * pageWidth, animated: true });
-		},
-		[pageWidth],
-	);
+	const handleLayout = useCallback((e: LayoutChangeEvent) => {
+		const { width, height } = e.nativeEvent.layout;
+		// Guarda antes de escribir: onLayout dispara en cada medición y sin
+		// esto el estado (y con él la caja del pager) se re-setearía en loop.
+		setViewport((prev) =>
+			prev.width === width && prev.height === height ? prev : { width, height },
+		);
+	}, []);
 
-	// El índice se sync desde el momentum (swipe); programático (Siguiente)
-	// llama a setPage vía goToPage porque en web no siempre dispara momentum.
-	const handleMomentumEnd = useCallback(
+	/**
+	 * El índice se deriva de `onScroll`, no de `onMomentumScrollEnd`.
+	 * react-native-web no emite los eventos de momentum/drag del ScrollView
+	 * (los handlers existen en su módulo pero nada en web los invoca), así que
+	 * avanzar deslizando —swipe del dedo en nativo, arrastre/trackpad en web— no
+	 * actualizaba los puntos ni la etiqueta del botón: el progreso solo se
+	 * movía con "Siguiente", que fija el estado por su cuenta. `onScroll` sí
+	 * llega en ambas plataformas y además hace que el progreso siga al dedo en
+	 * lugar de esperar al asentamiento. Momentum/drag-end quedan como
+	 * confirmación idempotente del punto de reposo.
+	 */
+	const handleScroll = useCallback(
 		(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-			const next = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
-			setPage(Math.min(Math.max(next, 0), totalPages - 1));
+			const next = pageFromOffset(
+				e.nativeEvent.contentOffset.x,
+				pageWidth,
+				totalPages,
+			);
+			// Un commit solo cuando el paso redondeado cambia: onScroll dispara
+			// por frame y un setPage por frame repinta el pager entero.
+			setPage((prev) => (prev === next ? prev : next));
 		},
 		[pageWidth, totalPages],
 	);
+
+	const goToPage = useCallback(
+		(index: number) => {
+			const next = clampPage(index, totalPages);
+			setPage(next);
+			scrollRef.current?.scrollTo({ x: next * pageWidth, animated: true });
+		},
+		[pageWidth, totalPages],
+	);
+
+	// Cambio de ancho (resize en web, rotación): el offset vive en px y las
+	// pages ya miden con el ancho nuevo, así que hay que realinear la página
+	// actual o el dots y el contenido quedan en páginas distintas.
+	const lastPageWidth = useRef(pageWidth);
+	useEffect(() => {
+		if (lastPageWidth.current === pageWidth) return;
+		lastPageWidth.current = pageWidth;
+		scrollRef.current?.scrollTo({ x: page * pageWidth, animated: false });
+	}, [pageWidth, page]);
 
 	return (
 		<Screen>
@@ -361,8 +405,11 @@ export default function OnboardingScreen() {
 				snapToAlignment="start"
 				decelerationRate="fast"
 				showsHorizontalScrollIndicator={false}
-				onMomentumScrollEnd={handleMomentumEnd}
-				onLayout={(e) => setPagerHeight(e.nativeEvent.layout.height)}
+				scrollEventThrottle={16}
+				onScroll={handleScroll}
+				onMomentumScrollEnd={handleScroll}
+				onScrollEndDrag={handleScroll}
+				onLayout={handleLayout}
 				style={styles.pager}
 				contentContainerStyle={styles.pagerContent}
 			>
