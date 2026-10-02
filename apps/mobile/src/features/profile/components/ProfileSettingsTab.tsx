@@ -2,6 +2,7 @@ import { Link, type Href } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import {
 	Bell,
+	Bug,
 	ChevronRight,
 	CircleHelp,
 	Heart,
@@ -67,6 +68,14 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
 		title: strings.profile.sectionHelp,
 		items: [
 			{ icon: CircleHelp, label: strings.profile.help, href: "/profile/help" },
+			// El buzón de reportes es de las dos audiencias, pero se ofrece
+			// desde acá porque el consumidor no tiene otra pantalla de ayuda
+			// donde encontrarlo.
+			{
+				icon: Bug,
+				label: strings.bugReport.title,
+				href: "/report-problem",
+			},
 		],
 	},
 ];

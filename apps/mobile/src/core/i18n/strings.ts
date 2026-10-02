@@ -1957,9 +1957,8 @@ export const strings = {
 			panelTitle: "Tu negocio en tres pestañas",
 		},
 	},
-	// Copy del BUZÓN DE REPORTES DE ERRORES (features/bug-report). Acá vive solo
-	// lo que la CAPA DE DATOS necesita; el formulario y el bottom sheet de la
-	// Task 8 agregan su copy en esta misma sección.
+	// Copy del BUZÓN DE REPORTES DE ERRORES (features/bug-report): lo que la
+	// capa de datos necesita y el copy de la pantalla, en la misma sección.
 	//
 	// Los tres mensajes de imagen son de RECHAZO EN CLIENTE y por eso son
 	// distintos entre sí: "no la pudimos leer" y "es demasiado grande" piden
@@ -1968,6 +1967,22 @@ export const strings = {
 	// El copy no dice "5 MB" porque el número está en `MAX_REPORT_IMAGE_BYTES` y
 	// en el bucket: dos fuentes de la verdad para el mismo límite divergen.
 	bugReport: {
+		// Copy de la PANTALLA (Task 8). El mismo string es título del sheet,
+		// encabezado de la ruta y texto de las dos entradas —perfil y panel—:
+		// son tres superficies de la misma acción y el usuario tiene que
+		// reconocerlas como la misma.
+		title: "Reportar un problema",
+		summaryLabel: "Resumen",
+		summaryHint: "Una línea: qué estabas haciendo y qué pasó.",
+		descriptionLabel: "Detalles (opcional)",
+		descriptionHint: "Pasos para reproducirlo y qué esperabas que pasara.",
+		addImage: "Agregar captura",
+		removeImage: "Quitar la última captura",
+		// El `{max}` lo reemplaza la pantalla con `MAX_REPORT_IMAGES` y el
+		// `{n}` con lo que ya se adjuntó. Es el contador que hace accionable al
+		// `errorTooManyImages`: sin él el usuario no sabe cuánto le falta.
+		imageCount: "{n} de {max} capturas adjuntas",
+		submit: "Enviar reporte",
 		errorSummaryRequired:
 			"Escribe un resumen para que podamos entender qué pasó.",
 		errorImageNotSupported:
