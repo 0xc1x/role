@@ -10,9 +10,7 @@ export interface OperatorIdentityInput {
  * Con `ruc === ""` (RUC no publicado) se muestra la identidad genérica
  * pendiente y nunca se emite el fragmento "RUC " vacío.
  */
-export function buildControllerIdentity(
-	input: OperatorIdentityInput,
-): string {
+export function buildControllerIdentity(input: OperatorIdentityInput): string {
 	if (input.ruc) {
 		return `${input.companyName}, RUC ${input.ruc}, ${input.address}`;
 	}

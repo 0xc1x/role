@@ -31,9 +31,9 @@ test("the glyph is text-safe on every disc in both schemes", () => {
 	for (const scheme of ["light", "dark"] as const) {
 		for (const [index, entry] of authorPalette[scheme].entries()) {
 			const ratio = contrast(entry.fill, entry.on);
-			expect(
-				ratio >= TEXT_FLOOR ? ratio : TEXT_FLOOR,
-			).toBeGreaterThanOrEqual(TEXT_FLOOR);
+			expect(ratio >= TEXT_FLOOR ? ratio : TEXT_FLOOR).toBeGreaterThanOrEqual(
+				TEXT_FLOOR,
+			);
 			// Named so a failure says WHICH disc broke, not just that one did.
 			if (ratio < TEXT_FLOOR) {
 				throw new Error(
