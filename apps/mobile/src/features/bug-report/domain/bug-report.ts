@@ -27,7 +27,7 @@ export const REPORT_BUCKET = "bug_report_images";
  *
  * POR QUÉ SE VALIDA ACÁ Y NO SOLO EN EL SERVIDOR, cuando
  * `business/data/repository.ts::uploadImage` NO valida tamaño y se apoya en que
- * Storage rechace: ahí una fotoRejected no cuesta nada, el usuario ya está en la
+ * Storage rechace: ahí una foto rechazada no cuesta nada, el usuario ya está en la
  * pantalla de publicación y puede reintentarlo. Acá el usuario ya escribió el
  * resumen y la descripción, y un rechazo del servidor llega DESPUÉS de haber
  * subido bytes: perder la pantalla por un byte de más es un costo que el cliente
@@ -182,6 +182,15 @@ export function localImageFromBytes(bytes: ArrayBuffer): LocalImage {
  * `submitBugReport` — un cliente que puede declarar su propio origen es un
  * cliente que puede escribir en otro canal.
  */
+export function reportOriginFor(os: string): "ios" | "android" | "pwa" {
+	if (os === "ios") return "ios";
+	if (os === "android") return "android";
+	// Web, PWA y cualquier plataforma futura: el único valor no-nativo que la
+	// policy admite. Un escritorio que reportara quedaría como `pwa`, que es
+	// mentiroso pero es la única forma honesta de que la fila exista.
+	return "pwa";
+}
+
 /**
  * Tope de capturas por reporte, en ESCRITURA.
  *
@@ -218,13 +227,4 @@ export function assertReportImageCount(count: number): void {
 	if (count > MAX_REPORT_IMAGES) {
 		throw Errors.validation(strings.bugReport.errorTooManyImages);
 	}
-}
-
-export function reportOriginFor(os: string): "ios" | "android" | "pwa" {
-	if (os === "ios") return "ios";
-	if (os === "android") return "android";
-	// Web, PWA y cualquier plataforma futura: el único valor no-nativo que la
-	// policy admite. Un escritorio que reportara quedaría como `pwa`, que es
-	// mentiroso pero es la única forma honesta de que la fila exista.
-	return "pwa";
 }

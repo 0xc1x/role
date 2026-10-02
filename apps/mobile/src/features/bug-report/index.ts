@@ -9,8 +9,8 @@
  *
  *  - `REPORT_BUCKET` y `MAX_REPORT_IMAGE_BYTES` SÍ se exportan, y no para que
  *    quien llame construya paths. Se exportan para que el picker de la pantalla
- *    pueda discouraging capturas grandes ANTES de leerlas a bytes, que es
- *    cheaper que descubrir el exceso después de bajarlas del disco. Los usa de
+ *    pueda descartar capturas grandes ANTES de leerlas a bytes, que es más
+ *    barato que descubrir el exceso después de bajarlas del disco. Los usa de
  *    lectura, no de escritura: el path lo arma `submitBugReport`, que es el
  *    único que sabe el uid y el nombre del folder.
  *  - `namespace` NO se exporta. Es `'bug_report'` y está fijo en el

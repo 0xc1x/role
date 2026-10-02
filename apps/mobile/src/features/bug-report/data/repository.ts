@@ -20,7 +20,7 @@ import {
 /**
  * Namespace del buzón. Viaja constante y no entra en la firma de
  * `submitBugReport`: es el ÚNICO `namespace` que el cliente puede escribir, y
- * sacarlo del alcance del llamador es lo que impide que un cliente directedo a
+ * sacarlo del alcance del llamador es lo que impide que un cliente se dirija a
  * la bandeja de contactos.
  */
 const BUG_REPORT_NAMESPACE = "bug_report";
@@ -131,7 +131,7 @@ async function uploadCapture(
  * y es la que este código cumple. Un bug reportado tiene que llegar aunque el
  * API esté caído, que es exactamente cuando más se reporta.
  *
- * EL ORDEN ES LOAD-BEARING: primero el bucket, después la fila. Al revés la
+ * EL ORDEN ES LO QUE SOSTIENE TODO: primero el bucket, después la fila. Al revés la
  * fila apuntaría a capturas que todavía no existen, y el operador abriría un
  * reporte sin evidencia. Y si una captura falla, no se inserta nada: es
  * preferible un reporte que el usuario reintenta a uno que llega incompleto.
