@@ -412,3 +412,93 @@ further from the only proof of what ran. The file stays the reviewed version, th
 ledger stays the statement the server stored, and the gap is recorded here —
 the same treatment the `20260925*` files above already have.
 
+## Applied: `20261002041038_bug_report_inbox_filter_index`
+
+Aplicada por `apply_migration` el 2026-10-02. El `md5sum` del archivo es
+`2ceb034da1d5ea4ea96b841bc4890867` y ese es también el `md5(statements[1])` del
+ledger: archivo y base coinciden byte a byte. Una sola sentencia, un índice
+compuesto y parcial sobre `(namespace, origin, created_at desc)`. No se borró
+nada.
+
+**El `md5` volvió a ser el único que detectó una palabra en inglés.** Es la
+segunda vez que este repo sufre la misma sustitución (la otra está en
+`20260927*_reviews_moderation_soft_hide`, arriba). Los dos casos son el mismo:
+
+| | archivo | ledger |
+| --- | --- | --- |
+| `reviews_moderation` | `businesses/oferts` | `businesses/offers` |
+| este | `recognizable` | `reconocible` |
+
+En los dos, la sustitución tiene **exactamente la misma longitud** que la
+palabra correcta, así que un conteo de bytes no la ve: solo el md5 la cazó. En
+ambos casos estaba dentro de un comentario `--`, o sea que **ningún DDL estaba
+en juego** y ningún `tsc`, `biome` o suite de tests la habría visto.
+
+Y acá el sentido es el contrario al de `reviews_moderation`: allá el **ledger**
+tenía el typo y el archivo el español correcto, así que el archivo se dejó como
+estaba y la diferencia quedó registrada acá. Acá el **ledger** tenía el español
+correcto, así que alinear el archivo lo reparó en vez de importar un error.
+
+**El comentario en español es la especificación, pero el md5 es el que la
+verifica.**
+Ninguna herramienta lee comentarios; por eso el sello tiene que seguir siendo el
+md5 y no "el archivo parece correcto".
+
+## Applied: `20260930234450_bug_reports_and_delivery_axis`
+
+Aplicada por `apply_migration` el 2026-09-30. El `md5sum` del archivo es
+`3b302c90f0ae124e5697d5879cdd3263` y ese es también el `md5(statements[1])` del
+ledger, así que el archivo y la base coinciden byte a byte — a diferencia de
+las dos entradas de arriba. No se borró nada y no corrió ningún backfill: la
+migración es aditiva más un rename, y todavía no existe ninguna fila
+`bug_report` en producción.
+
+Tres cosas de las que no se ven leyendo el DDL:
+
+**El rename es de tres objetos, no de uno.** `public.app_store.status` pasó a
+`delivery_status`, el tipo `public.store_entry_status` pasó a
+`public.delivery_status`, y el índice `app_store_status_idx` pasó a
+`app_store_delivery_status_idx`. Postgres no deshace un `rename`, así que la §13
+del diseño trata esto como de ida a propósito: la alternativa es conservar una
+columna llamada `status` que significa una sola cosa. La etiqueta que el panel
+ya usaba (`PROCESADO: "Notificado"`) es lo que la columna debería haberse
+llamado desde el principio. Los dos ejes nuevos — `state text` y
+`origin public.entry_origin` — son ortogonales, no variantes: `delivery_status`
+contesta "¿llegó el aviso al equipo?" y `state` contesta "¿el bug está
+resuelto?". Los mensajes de contacto usan solo el primero y siempre con
+`state = NULL`.
+
+**El bucket es privado, y de eso se trata.** `bug_report_images` se crea con
+`public = false`, 5 MB y tres MIME types, a diferencia de los cinco buckets que
+ya existen, todos de lectura pública. Una captura de un bug puede llevar
+pedidos, direcciones y teléfonos, y un bucket público la deja al alcance de
+cualquiera que tenga la URL. Las dos policies de `storage.objects` copian la
+forma completa de `20260925155445` (líneas 66-74) y no la abreviada de la §4
+del diseño: `bucket_id`, más `owner = (select auth.uid())`, más el primer
+segmento de la carpeta igual al uid de quien llama. Por eso el panel le pide
+URLs firmadas de corta duración al API en vez de leer el bucket.
+
+**El `revoke select on public.app_store from anon, authenticated` viaja en esta
+migración a propósito.** `20260928184943` revocó de esa tabla solo `truncate`,
+`trigger` y `references`, así que `SELECT`, `INSERT`, `UPDATE` y `DELETE`
+seguían todos en manos de los roles cliente, y lo único que los frenaba eran
+cero policies. La tabla colgaba, entonces, de un accidente: un GRANT, o una
+policy de SELECT permisiva escrita después por comodidad, habría hecho legible
+la tabla entera — la bandeja de contactos incluida — para cualquiera con la
+anon key, que viaja dentro del bundle móvil. `anon` y `authenticated` ya no
+tienen `SELECT` sobre `app_store`; `postgres` y `service_role` sí. El API lee
+la tabla por una conexión `postgres` construida desde `DATABASE_URL`, no como
+un rol cliente (`apps/api/src/database/database.module.ts:22-25`), y las Edge
+Functions usan la service key — los mismos dos hechos en los que se apoya
+`20260928181714`, y la razón por la que este revoke no los toca.
+
+El camino de escritura que esto deja para el cliente es exactamente una policy
+de INSERT, "Users submit bug reports", cuyo `WITH CHECK` fija `namespace`,
+`delivery_status = 'PENDIENTE'`, `state = 'ABIERTO'` y un `origin` en
+`('ios','android','pwa')`. No hay policy de UPDATE ni de DELETE, así que esos
+dos los sigue negando RLS: un usuario puede reportar, nunca auto-atenderse. La
+autoría la sella en el servidor el trigger BEFORE INSERT
+`on_bug_report_stamped` (`security definer`, `search_path = public`), de modo
+que `value.reporter_id` es lo que diga `auth.uid()` y no lo que mande el
+cliente.
+

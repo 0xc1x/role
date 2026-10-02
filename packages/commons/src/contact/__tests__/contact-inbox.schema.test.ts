@@ -115,13 +115,13 @@ describe("los DTO de la bandeja no exponen el routing interno", () => {
 		expect(claves).toEqual([
 			"city",
 			"created_at",
+			"delivery_status",
 			"email",
 			"excerpt",
 			"id",
 			"name",
 			"readable",
 			"role",
-			"status",
 			"updated_at",
 		]);
 	});
@@ -139,7 +139,7 @@ describe("una fila ilegible se representa sin lanzar", () => {
 	it("el listado acepta readable:false con todo en null", () => {
 		const fila = ContactMessageListItemSchema.parse({
 			id: "11111111-1111-4111-8111-111111111111",
-			status: "PENDIENTE",
+			delivery_status: "PENDIENTE",
 			created_at: "2026-09-20T10:00:00.000Z",
 			updated_at: "2026-09-20T10:00:00.000Z",
 			readable: false,
@@ -160,17 +160,24 @@ describe("ListContactMessagesQuerySchema", () => {
 		expect(parsed).toEqual({ page: 1, limit: 20 });
 	});
 
-	it("acepta los tres estados del store", () => {
-		for (const status of ["PENDIENTE", "PROCESADO", "ERROR"] as const) {
-			expect(ListContactMessagesQuerySchema.parse({ status }).status).toBe(
-				status,
-			);
+	it("acepta los tres estados de entrega", () => {
+		for (const delivery_status of [
+			"PENDIENTE",
+			"PROCESADO",
+			"ERROR",
+		] as const) {
+			expect(
+				ListContactMessagesQuerySchema.parse({ delivery_status })
+					.delivery_status,
+			).toBe(delivery_status);
 		}
 	});
 
-	it("rechaza un estado que no existe en el enum", () => {
+	it("rechaza un estado de entrega que no existe en el enum", () => {
 		expect(
-			ListContactMessagesQuerySchema.safeParse({ status: "NUEVO" }).success,
+			ListContactMessagesQuerySchema.safeParse({
+				delivery_status: "NUEVO",
+			}).success,
 		).toBe(false);
 	});
 

@@ -32,16 +32,16 @@ export class UploadService {
       },
     });
 
-    const rawBuckets =
-      this.config.get('SUPABASE_ALLOWED_BUCKETS', { infer: true }) ?? '';
-    this.allowedBuckets = rawBuckets
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    this.allowedBuckets = this.parseAllowlist(
+      this.config.get('SUPABASE_ALLOWED_BUCKETS', { infer: true }),
+    );
+    this.allowedFolders = this.parseAllowlist(
+      this.config.get('SUPABASE_ALLOWED_FOLDERS', { infer: true }),
+    );
+  }
 
-    const rawFolders =
-      this.config.get('SUPABASE_ALLOWED_FOLDERS', { infer: true }) ?? '';
-    this.allowedFolders = rawFolders
+  private parseAllowlist(raw: string | undefined): string[] {
+    return (raw ?? '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
@@ -57,6 +57,10 @@ export class UploadService {
       'images';
     const folder = options?.folder ?? 'categories';
 
+    // Allowlist de ESCRITURA: el bucket tiene que estar entre los que el
+    // endpoint de upload puede usar. `bug_report_images` no está y no debe
+    // estarlo —el móvil lo sube con su sesión y el API solo firma sus rutas—
+    // y el buzón de reportes usa su propia constante, no esta lista.
     if (!this.allowedBuckets.includes(bucket)) {
       throw new BadRequestException(`Bucket "${bucket}" no permitido`);
     }

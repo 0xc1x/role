@@ -285,7 +285,9 @@ test.describe("commerce catalogue", () => {
 		// short-circuits before the table when the list is empty, so asserting the
 		// table's string here would be asserting a branch the component does not
 		// have.
-		await expect(page.getByText("No hay reseñas con este filtro.")).toBeVisible();
+		await expect(
+			page.getByText("No hay reseñas con este filtro."),
+		).toBeVisible();
 	});
 });
 

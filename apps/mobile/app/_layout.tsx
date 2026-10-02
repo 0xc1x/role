@@ -323,6 +323,10 @@ function ThemedRootStack() {
 				<Stack.Screen name="(business)" />
 				<Stack.Screen name="landing" />
 				<Stack.Screen name="onboarding" />
+				{/* Buzón de reportes de errores. Ruta de raíz y no de un grupo:
+				    la abren el perfil del consumidor y el panel del negocio, y
+				    cada grupo tiene su propio guard de rol. */}
+				<Stack.Screen name="report-problem" />
 			</Stack>
 		</NavigationThemeProvider>
 	);

@@ -8,7 +8,7 @@ const previousFetch = globalThis.fetch;
 
 const detalle: ContactMessageDetailDto = {
 	id: "11111111-1111-4111-8111-111111111111",
-	status: "PENDIENTE",
+	delivery_status: "PENDIENTE",
 	created_at: "2026-09-20T10:00:00.000Z",
 	updated_at: "2026-09-20T10:00:00.000Z",
 	readable: true,

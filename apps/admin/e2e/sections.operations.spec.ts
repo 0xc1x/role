@@ -92,6 +92,16 @@ const OPERATIONS: Section[] = [
 		detail: "Quito",
 	},
 	{
+		path: "/reportes",
+		heading: "Reportes",
+		row: "La app se cierra al confirmar el pago",
+		// "Abierto" is the TRIAGE label, and the assertion that matters is the one
+		// in the dedicated test below: the enum token `ABIERTO` must never reach
+		// the screen. Here the second value just proves the triage badge rendered
+		// the fixture's own `state`.
+		detail: "Abierto",
+	},
+	{
 		path: "/campanas/mails",
 		heading: "Campañas de Marketing",
 		// Channel is the discriminator between this page and the push one: both
@@ -151,9 +161,7 @@ test.describe("operations sections", () => {
 			// by a different row of the same table. Cards get the same treatment
 			// through the card container, since they are not `<tr>`s.
 			const row = section.isCard
-				? page
-						.locator("div.rounded-lg.border")
-						.filter({ hasText: section.row })
+				? page.locator("div.rounded-lg.border").filter({ hasText: section.row })
 				: page.getByRole("row").filter({ hasText: section.row });
 			if (!section.detailIsAccessibleName) {
 				await expect(row).toContainText(section.detail);
@@ -196,13 +204,13 @@ test.describe("operations sections", () => {
 		});
 
 		// Draft: sending and editing are on offer.
-		await expect(page.getByRole("button", { name: "Enviar" }).first()).toBeVisible();
+		await expect(
+			page.getByRole("button", { name: "Enviar" }).first(),
+		).toBeVisible();
 
 		// Sent-only. A card that offered it for a draft would let an operator
 		// double-send a campaign that has never left the building.
-		await expect(
-			page.getByRole("button", { name: "Reenviar" }),
-		).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "Reenviar" })).toHaveCount(0);
 	});
 
 	/**
@@ -235,11 +243,60 @@ test.describe("operations sections", () => {
 		// The column, on the fixture's own row, carrying the TRANSLATED label.
 		// `PENDIENTE` reaching the screen verbatim is the regression: the enum
 		// token says nothing about what is pending, and the whole point of
-		// `CONTACT_MESSAGE_STATUS_LABELS` is that the operator is told it is the
+		// `CONTACT_DELIVERY_STATUS_LABELS` is that the operator is told it is the
 		// notice email and not the message.
 		const row = page.getByRole("row").filter({ hasText: "Carla Contacto" });
 		await expect(row).toContainText("Entrega pendiente");
 		await expect(row).not.toContainText("PENDIENTE");
+	});
+
+	/**
+	 * The bug report inbox's only column is TRIAGE, and it is not the contact
+	 * inbox's column under a different name.
+	 *
+	 * `delivery_status` says "the notice email has not been delivered" in the
+	 * contact inbox, where a mail path exists to deliver it. A bug report has no
+	 * mail path at all, so nothing ever moves that field after the insert: a
+	 * borrowed badge would be a permanent "Entrega pendiente" that the operator
+	 * triages as outstanding work, forever, for every row. So the assertion here
+	 * is an ABSENCE, and it is the strongest one the fixture can carry: the
+	 * fixture sends `PENDIENTE` (the exact state the contact inbox's badge would
+	 * paint), so a panel that had copied the column would show it.
+	 */
+	test("the bug report inbox shows triage and no delivery status at all", async ({
+		page,
+	}) => {
+		await stubApi(page);
+		await signIn(page);
+		await page.goto("/reportes");
+
+		await expect(
+			page.getByText("La app se cierra al confirmar el pago"),
+		).toBeVisible({ timeout: 20_000 });
+
+		const row = page
+			.getByRole("row")
+			.filter({ hasText: "La app se cierra al confirmar el pago" });
+
+		// The triage badge, translated: `ABIERTO` verbatim would say nothing about
+		// what is open, and the whole point of the column is that the operator
+		// reads it without knowing the vocabulary.
+		await expect(row).toContainText("Abierto");
+		await expect(row).not.toContainText("ABIERTO");
+
+		// The origin, translated too. And no delivery badge, in any of its
+		// wordings: this is the assertion that would break first if someone
+		// "just reused the contact inbox column set".
+		await expect(row).toContainText("Android");
+		await expect(row).not.toContainText("Entrega pendiente");
+		await expect(row).not.toContainText("Notificado");
+		await expect(row).not.toContainText("PENDIENTE");
+
+		// And the page says why, in prose: a column that needs explaining needs
+		// the explanation on screen, not only in a commit message.
+		await expect(
+			page.getByText("no se manda ningún aviso", { exact: false }),
+		).toBeVisible();
 	});
 });
 
@@ -288,6 +345,15 @@ test.describe("empty lists", () => {
 			emptyCopy: "No hay mensajes de contacto con este filtro.",
 		},
 		{
+			path: "/reportes",
+			heading: "Reportes",
+			endpoint: "/bug-report-inbox",
+			// Same short-circuit as the contact inbox, and for the same reason: a
+			// triage surface where "nothing matches this filter" and "there is
+			// nothing" are different facts.
+			emptyCopy: "No hay reportes de error con este filtro.",
+		},
+		{
 			path: "/campanas/mails",
 			heading: "Campañas de Marketing",
 			endpoint: "/email-marketing/campaigns",
@@ -326,13 +392,10 @@ test.describe("empty lists", () => {
 			};
 			await stubApi(page, {
 				[section.endpoint]: { status: 200, body: emptyBody },
-				...(section.alsoEmpty ?? []).reduce<ApiOverride>(
-					(acc, endpoint) => {
-						acc[endpoint] = { status: 200, body: emptyBody };
-						return acc;
-					},
-					{},
-				),
+				...(section.alsoEmpty ?? []).reduce<ApiOverride>((acc, endpoint) => {
+					acc[endpoint] = { status: 200, body: emptyBody };
+					return acc;
+				}, {}),
 			});
 			await signIn(page);
 			await page.goto(section.path);
@@ -379,6 +442,11 @@ test.describe("failed lists", () => {
 		{ path: "/consejos", endpoint: "/tips/admin", row: "bolsa de tela" },
 		{ path: "/contactos", endpoint: "/contact-inbox", row: "Carla Contacto" },
 		{
+			path: "/reportes",
+			endpoint: "/bug-report-inbox",
+			row: "La app se cierra al confirmar el pago",
+		},
+		{
 			path: "/campanas/mails",
 			endpoint: "/email-marketing/campaigns",
 			row: "Campaña email E2E",
@@ -402,13 +470,10 @@ test.describe("failed lists", () => {
 			const failure = { status: 500, body: { message: "Boom" } };
 			await stubApi(page, {
 				[section.endpoint]: failure,
-				...(section.alsoFail ?? []).reduce<ApiOverride>(
-					(acc, endpoint) => {
-						acc[endpoint] = failure;
-						return acc;
-					},
-					{},
-				),
+				...(section.alsoFail ?? []).reduce<ApiOverride>((acc, endpoint) => {
+					acc[endpoint] = failure;
+					return acc;
+				}, {}),
 			});
 			await signIn(page);
 			await page.goto(section.path);

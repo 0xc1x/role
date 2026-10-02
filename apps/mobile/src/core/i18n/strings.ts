@@ -1957,6 +1957,64 @@ export const strings = {
 			panelTitle: "Tu negocio en tres pestañas",
 		},
 	},
+	// Copy del BUZÓN DE REPORTES DE ERRORES (features/bug-report): lo que la
+	// capa de datos necesita y el copy de la pantalla, en la misma sección.
+	//
+	// Los tres mensajes de imagen son de RECHAZO EN CLIENTE y por eso son
+	// distintos entre sí: "no la pudimos leer" y "es demasiado grande" piden
+	// acciones distintas —una re-toma o un archivo distinto, y una captura más
+	// liviana— y un único "imagen inválida" haría que el usuario pruebe al azar.
+	// El copy no dice "5 MB" porque el número está en `MAX_REPORT_IMAGE_BYTES` y
+	// en el bucket: dos fuentes de la verdad para el mismo límite divergen.
+	bugReport: {
+		// Copy de la PANTALLA (Task 8). El mismo string es título del sheet,
+		// encabezado de la ruta y texto de las dos entradas —perfil y panel—:
+		// son tres superficies de la misma acción y el usuario tiene que
+		// reconocerlas como la misma.
+		title: "Reportar un problema",
+		summaryLabel: "Resumen",
+		summaryHint: "Una línea: qué estabas haciendo y qué pasó.",
+		descriptionLabel: "Detalles (opcional)",
+		descriptionHint: "Pasos para reproducirlo y qué esperabas que pasara.",
+		addImage: "Agregar captura",
+		// El `{n}` lo pone la miniatura con su índice de uno. Hay varios botones
+		// iguales en pantalla, y sin el número el lector de pantalla anuncia
+		// "Quitar captura" cinco veces sin que el usuario sepa cuál quita.
+		removeImage: "Quitar la captura {n}",
+		captureAlt: "Captura {n} adjunta al reporte",
+		// El `{max}` lo reemplaza la pantalla con `MAX_REPORT_IMAGES` y el
+		// `{n}` con lo que ya se adjuntó. Es el contador que hace accionable al
+		// `errorTooManyImages`: sin él el usuario no sabe cuánto le falta.
+		imageCount: "{n} de {max} capturas adjuntas",
+		submit: "Enviar reporte",
+		errorSummaryRequired:
+			"Escribe un resumen para que podamos entender qué pasó.",
+		// El `{max}` lo resuelve el DOMINIO, que es quien tiene la constante
+		// (`conMax` en `domain/bug-report.ts`), y no esta pantalla: estos tres
+		// mensajes los lanza la frontera, no un componente, así que no hay nadie
+		// aguas arriba que pueda resolver el placeholder y se leería crudo al
+		// usuario. El número es lo que hace accionable el rechazo: sin él, la
+		// única reacción posible es borrar el texto entero y empezar de cero.
+		errorSummaryTooLong:
+			"El resumen es demasiado largo. Cuéntalo en {max} caracteres o menos.",
+		errorDescriptionTooLong:
+			"La descripción es demasiado larga. Cuéntala en {max} caracteres o menos.",
+		errorImageNotSupported:
+			"No pudimos leer esa imagen. Vuelve a tomarla o elige un archivo.",
+		errorImageTooLarge:
+			"Esa imagen es demasiado grande. Prueba con una captura más liviana.",
+		errorImageUploadFailed: "No pudimos adjuntar la imagen.",
+		// El 5 va como `{max}` y lo resuelve el DOMINIO, en el punto donde lanza el
+		// error. Antes iba escrito a mano, y el comentario que acompañaba a esta
+		// línea señalaba la corrección de fondo como pendiente: este texto no es
+		// solo de la pantalla, lo lanza `assertReportImageCount` y ese mensaje
+		// viaja como `AppError` a cualquier consumidor futuro, así que un `{max}`
+		// sin resolver salía crudo al usuario. Ahora hay un solo número y vive
+		// junto a la constante que lo define.
+		errorTooManyImages: "Adjuntá hasta {max} capturas.",
+		errorNotSignedIn: "Inicia sesión para enviar un reporte.",
+		errorSubmitFailed: "No pudimos enviar tu reporte.",
+	},
 	// ── Sonda de diagnóstico de Google Maps (src/dev/) ────────────
 	// No es una ruta: vive fuera de `app/` para que no entre en el router.
 	// Su copy vive aquí igual para respetar el contrato de i18n.

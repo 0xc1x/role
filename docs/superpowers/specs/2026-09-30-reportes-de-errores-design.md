@@ -29,7 +29,7 @@ exactamente esto.
 | D1 | Reutilizar `app_store` con `namespace = 'bug_report'` | La tabla es genérica y multi-escritora por diseño. Cero tablas nuevas. |
 | D2 | **No** agregar una columna `type` | `namespace` ya cumple ese papel. Una segunda columna discriminante puede discrepar de la primera y nada en el schema lo impide. El repo ya resolvió esto: `contact-inbox.constants.ts` bloquea el namespace en el servidor precisamente para que un cliente no alcance filas de otro tipo. |
 | D3 | Renombrar `status` → `delivery_status` | `status` era un nombre genérico para un eje concreto. El panel ya lo llamaba por lo que es (`lib/labels.ts:87` → `PROCESADO: "Notificado"`); el rename pone el código en paz con la etiqueta. |
-| D4 | Agregar `state text` (no enum) | Un enum obliga a migrar cada vez que aparece un namespace nuevo, que es la acoplamiento que se quiere evitar. El vocabulario se declara fuera de la tabla. |
+| D4 | Agregar `state text` (no enum) | Un enum obliga a migrar cada vez que aparece un namespace nuevo, que es el acoplamiento que se quiere evitar. El vocabulario se declara fuera de la tabla. |
 | D5 | Agregar `origin entry_origin` | Canal de origen. No es derivable de `namespace` y sí se necesita. |
 | D6 | **Móvil → Supabase directo**, no vía API | El AGENTS de la raíz establece que la API es BFF de admin/landing y que el móvil consume Supabase directo con RLS como frontera. |
 | D7 | Bucket de imágenes **privado** | Los buckets existentes (`images`, `product_images`, `buisness_images`, `business_images`, `categories_images`) son de lectura pública. Una captura de bug puede contener pedidos, direcciones y teléfonos: no puede quedar accesible con solo la URL. |
@@ -201,11 +201,22 @@ construida con el **mismo resource module** que ya usan las demás pantallas
 
 - Ruta registrada en el árbol de rutas generado (hay precedente: commit
   `a793ebd chore(admin): register the router type in the generated route tree`).
-- Listado: `reporter_id`, resumen del mensaje, `origin`, `state`, fecha.
+- Listado: resumen del mensaje, `origin`, `state`, fecha. **`reporter_id` NO
+  aparece en el listado**: es PII y el listado es la superficie que se ve de un
+  vistazo. Va solo en el detalle, si el operador lo necesita. La §7 (mappers
+  lista blanca) manda sobre la tentación de mostrarlo: seguridad primero, como
+  el orden de prioridad del AGENTS.
 - Filtros: `state` y `origin`.
 - Detalle: mensaje íntegro, **capturas**, y las acciones de triaje.
-- Las capturas se piden al API, que devuelve **URLs firmadas** de corta
-  duración. El panel nunca ve el bucket crudo.
+- Las capturas se piden al API, que devuelve **URLs firmadas de 5 minutos**
+  sobre el bucket privado. El panel **nunca recibe una ruta utilizable**: sin
+  el token, la URL no descarga nada.
+- Ojo con lo que eso **no** promete: la ruta va en claro dentro del path de la
+  URL firmada (`/object/sign/<bucket>/<ruta>`), así que el panel ve el nombre
+  del bucket y el uid del reportante. Supabase no ofrece proxear los bytes por
+  el API como alternativa, y el uid no le agrega nada al panel: el detalle ya
+  expone `reporter_id` explícitamente. Lo que la firma protege es el **acceso
+  sin token**, que es funcional, no una garantía de no-vocabulario-interno.
 
 ## 9. Móvil
 

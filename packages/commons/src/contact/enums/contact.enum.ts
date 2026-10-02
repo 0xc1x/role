@@ -6,7 +6,7 @@ export type ContactRole = (typeof CONTACT_ROLES)[number];
 // un segundo SSOT que nadie actualiza al abrir una ciudad nueva.
 
 /**
- * Espejo del enum de Postgres `store_entry_status`, que es donde caen los
+ * Espejo del enum de Postgres `delivery_status`, que es donde caen los
  * mensajes del formulario público de contacto. Vive en commons para que el
  * panel pueda filtrar por estado sin conocer el schema de la API.
  *
@@ -17,10 +17,14 @@ export type ContactRole = (typeof CONTACT_ROLES)[number];
  * `PENDIENTE` significa "el aviso por correo todavía no se entregó", no
  * "nadie ha leído el mensaje". `PROCESADO` es la fila mayoritaria: casi todo
  * mensaje entregado ya está en `PROCESADO` antes de que un humano lo abra.
+ *
+ * Por eso el eje se llama `delivery_status` y no `status`: la columna registra
+ * la ENTREGA del correo de aviso, no el triaje de la bandeja. Un `status`
+ * invita a leerlo como "sin leer", que es justo lo que no es.
  */
-export const CONTACT_MESSAGE_STATUSES = [
+export const CONTACT_DELIVERY_STATUSES = [
 	"PENDIENTE",
 	"PROCESADO",
 	"ERROR",
 ] as const;
-export type ContactMessageStatus = (typeof CONTACT_MESSAGE_STATUSES)[number];
+export type ContactDeliveryStatus = (typeof CONTACT_DELIVERY_STATUSES)[number];

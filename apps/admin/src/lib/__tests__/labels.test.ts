@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+	bugTriageStateLabel,
 	businessVerificationLabel,
-	contactMessageStatusLabel,
+	contactDeliveryStatusLabel,
 	emailSendStatusLabel,
+	entryOriginLabel,
 	orderStatusLabel,
 	payoutStatusLabel,
 	reviewModerationReasonLabel,
@@ -44,14 +46,44 @@ describe("etiquetas de estado", () => {
 		expect(orderStatusLabel("expired")).toBe("Vencida");
 	});
 
-	test("estado de un mensaje de contacto", () => {
+	test("estado de entrega de un mensaje de contacto", () => {
 		// Estos valores ya vienen en español, pero se renombran igual: el
-		// `status` de `app_store` lo mueve el camino público cuando se ENTREGA
-		// el correo de aviso, no cuando alguien lee el mensaje. "Pendiente" a
-		// secas haría leer la fila como "sin leer".
-		expect(contactMessageStatusLabel("PENDIENTE")).toBe("Entrega pendiente");
-		expect(contactMessageStatusLabel("PROCESADO")).toBe("Notificado");
-		expect(contactMessageStatusLabel("ERROR")).toBe("Error");
+		// `delivery_status` de `app_store` lo mueve el camino público cuando se
+		// ENTREGA el correo de aviso, no cuando alguien lee el mensaje.
+		// "Pendiente" a secas haría leer la fila como "sin leer".
+		expect(contactDeliveryStatusLabel("PENDIENTE")).toBe("Entrega pendiente");
+		expect(contactDeliveryStatusLabel("PROCESADO")).toBe("Notificado");
+		expect(contactDeliveryStatusLabel("ERROR")).toBe("Error");
+	});
+
+	// El triaje es un eje DISTINTO al de entrega: este contesta "qué hizo el
+	// equipo con el reporte", no "llegó el aviso". Etiquetar los dos con el mismo
+	// mapa sería el error.
+	test("estado de triaje de un reporte de error", () => {
+		expect(bugTriageStateLabel("ABIERTO")).toBe("Abierto");
+		expect(bugTriageStateLabel("EN_REPRODUCCION")).toBe("En reproducción");
+		expect(bugTriageStateLabel("CORREGIDO")).toBe("Corregido");
+		expect(bugTriageStateLabel("DUPLICADO")).toBe("Duplicado");
+		expect(bugTriageStateLabel("DESCARTADO")).toBe("Descartado");
+	});
+
+	// `state` es `text` sin CHECK en Postgres, así que un token fuera del
+	// vocabulario es un hecho real, no una hipótesis de test.
+	test("un estado de triaje desconocido se devuelve crudo, no como 'Sin triar'", () => {
+		// "Sin triar" sería un mentiroso acá: el panel lo usa para `null`, que sí
+		// significa "nadie lo tocó". Pintar un token desconocido con esa misma
+		// palabra haría creer que el reporte está abierto y esperando.
+		expect(bugTriageStateLabel("REABIERTO")).toBe("REABIERTO");
+	});
+
+	test("origen del reporte", () => {
+		// No hay traducción posible para unos platform names; lo que cambia es la
+		// mayúscula inicial que en el contrato va en minúsculas.
+		expect(entryOriginLabel("ios")).toBe("iOS");
+		expect(entryOriginLabel("android")).toBe("Android");
+		expect(entryOriginLabel("pwa")).toBe("PWA");
+		expect(entryOriginLabel("web")).toBe("Web");
+		expect(entryOriginLabel("web_legacy")).toBe("web_legacy");
 	});
 
 	test("motivo de moderación", () => {
@@ -69,7 +101,7 @@ describe("etiquetas de estado", () => {
 		expect(businessVerificationLabel("archived")).toBe("archived");
 		expect(payoutStatusLabel("on_hold")).toBe("on_hold");
 		expect(orderStatusLabel("refunded")).toBe("refunded");
-		expect(contactMessageStatusLabel("NUEVO")).toBe("NUEVO");
+		expect(contactDeliveryStatusLabel("NUEVO")).toBe("NUEVO");
 		// Un motivo retirado del contrato con reseñas ya moderadas es un caso
 		// real, y "Desconocido" escondería que la fila dice algo que el panel ya
 		// no sabe nombrar.

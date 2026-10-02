@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-import { stubApi, waitForGuardDecision, waitForLoginForm } from "./support/admin";
+import {
+	stubApi,
+	waitForGuardDecision,
+	waitForLoginForm,
+} from "./support/admin";
 
 /**
  * The authentication gate of the whole panel.

@@ -1,5 +1,11 @@
 import { type Href, router } from "expo-router";
-import { Bell, ChevronRight, CircleHelp, Settings } from "lucide-react-native";
+import {
+	Bell,
+	Bug,
+	ChevronRight,
+	CircleHelp,
+	Settings,
+} from "lucide-react-native";
 import { StyleSheet, View } from "react-native";
 
 import { strings } from "@/src/core/i18n/strings";
@@ -32,6 +38,14 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 			icon: <CircleHelp size={20} color={colors.mutedForeground} />,
 			label: strings.business.helpCenter,
 			route: `${base}/help` as Href,
+		},
+		// Mismo destino que desde el perfil del consumidor: el reporte lo
+		// manda la persona, no el negocio. El buzón vive en la ruta raíz
+		// justamente para no atar esta fila a `/business/${businessId}`.
+		{
+			icon: <Bug size={20} color={colors.mutedForeground} />,
+			label: strings.bugReport.title,
+			route: "/report-problem" as Href,
 		},
 	];
 	return (

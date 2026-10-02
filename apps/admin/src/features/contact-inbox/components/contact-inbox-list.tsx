@@ -14,34 +14,35 @@ import { ContactMessageDrawer } from "@/features/contact-inbox/components/contac
 import { useContactInboxList } from "@/features/contact-inbox/queries/contact-inbox.queries";
 import { createContactInboxColumns } from "@/features/contact-inbox/tables/contact-inbox.columns";
 import { formatApiError } from "@/lib/api/notify";
-import { contactMessageStatusLabel } from "@/lib/labels";
+import { contactDeliveryStatusLabel } from "@/lib/labels";
 
 /**
- * Listado de la bandeja con filtro por estado.
+ * Listado de la bandeja con filtro por estado de entrega.
  *
  * La columna se llama "Estado" y sus valores son "Entrega pendiente" /
- * "Notificado" / "Error" a propósito. El `status` de `app_store` lo mueve el
- * camino público cuando se entrega el correo de aviso, no cuando alguien lee el
- * mensaje: etiquetarlo "Pendiente" / "Procesado" haría que el operador lo
- * leyera como "sin leer" y construyera sobre eso una urgencia que no existe.
+ * "Notificado" / "Error" a propósito. El `delivery_status` de `app_store` lo
+ * mueve el camino público cuando se entrega el correo de aviso, no cuando
+ * alguien lee el mensaje: etiquetarlo "Pendiente" / "Procesado" haría que el
+ * operador lo leyera como "sin leer" y construyera sobre eso una urgencia que
+ * no existe.
  */
 export function ContactInboxList({
 	page = 1,
 	limit = 20,
-	status,
+	deliveryStatus,
 	onPageChange,
-	onStatusChange,
+	onDeliveryStatusChange,
 }: {
 	page?: number;
 	limit?: number;
-	status?: string;
+	deliveryStatus?: string;
 	onPageChange: (page: number) => void;
-	onStatusChange: (status?: string) => void;
+	onDeliveryStatusChange: (deliveryStatus?: string) => void;
 }) {
 	const { data, isLoading, isError, error } = useContactInboxList({
 		page,
 		limit,
-		status: status as never,
+		delivery_status: deliveryStatus as never,
 	});
 	const [abierto, setAbierto] = useState<ContactMessageListItemDto | null>(
 		null,
@@ -77,9 +78,9 @@ export function ContactInboxList({
 		<div className="space-y-4">
 			<div className="flex items-center justify-end">
 				<Select
-					value={status ?? "all"}
+					value={deliveryStatus ?? "all"}
 					onValueChange={(v) =>
-						onStatusChange(!v || v === "all" ? undefined : v)
+						onDeliveryStatusChange(!v || v === "all" ? undefined : v)
 					}
 				>
 					<SelectTrigger className="w-52">
@@ -89,7 +90,7 @@ export function ContactInboxList({
 						<SelectItem value="all">Todos los estados</SelectItem>
 						{["PENDIENTE", "PROCESADO", "ERROR"].map((s) => (
 							<SelectItem key={s} value={s}>
-								{contactMessageStatusLabel(s)}
+								{contactDeliveryStatusLabel(s)}
 							</SelectItem>
 						))}
 					</SelectContent>

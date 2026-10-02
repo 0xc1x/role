@@ -1,0 +1,56 @@
+-- Índice compuesto para el filtro de la bandeja de reportes.
+--
+-- Aplica con `apply_migration` (NO `execute_sql`, NO el dashboard). El ledger
+-- `supabase_migrations.schema_migrations` es la única prueba de lo que corrió; un
+-- DDL aplicado por la puerta de atrás deja un entorno que `supabase db push`
+-- reproduce distinto de lo que pasó. Tras aplicar, renombrar este archivo a la
+-- versión que asignó el servidor y confirmar que
+-- `md5sum <archivo> == md5(statements[1])` de la fila del ledger.
+-- Procedimiento: supabase/migrations/README.md.
+--
+-- ─── QUÉ CAMBIA ───────────────────────────────────────────────────────────
+--
+-- Un índice sobre `origin`, y por qué NO es uno de una sola columna.
+--
+-- El filtro del listado (AppStoreRepository.list) arma:
+--
+--   where deleted_at is null
+--     and namespace = 'bug_report'      -- siempre
+--     [and origin = $x]                -- solo si el operador filtró
+--   order by created_at desc limit 20
+--
+-- Un índice de una columna sobre `origin` no sirve casi para nada acá, por dos
+-- razones que se pueden medir: `origin` es un enum de CUATRO valores
+-- (`entry_origin`), así que su btree tiene casi la selectividad de la tabla
+-- entera, y el planner no puede usarlo sin cruzarlo con `namespace`. Sería un
+-- índice que ocupa disco y costo de escritura para que nadie lo lea.
+--
+-- El compuesto cubre los DOS caminos con un solo índice:
+--
+--   - Filtrado por origen: el prefijo `(namespace, origin)` resuelve la
+--     igualdad, y `created_at desc` ya está en orden.
+--   - Sin filtro de origen (el caso común): el prefijo `(namespace)` resuelve
+--     la igualdad y `created_at desc` entrega el orden, así que el planner
+--     recorre el índice en vez de ordenar el conjunto filtrado. Antes depended
+--     de `app_store_namespace_idx` + un sort.
+--
+-- Es PARCIAL por `deleted_at is null` porque el borrado es lógico y la query
+-- siempre lo trae: el índice no tiene por qué guardar filas que nadie lee.
+-- Para que el planner lo pueda usar, la predicación tiene que ser
+-- reconocible — y `isNull(appStore.deleted_at)` compila exactamente a
+-- `deleted_at is null`, así que lo es.
+--
+-- ─── LO QUE ESTE CAMBIO NO HACE, A PROPÓSITO ──────────────────────────────
+--
+-- `app_store_namespace_idx` queda. El compuesto lo vuelve redundante para
+-- cualquier consulta por `namespace` (el `namespace` es su columna líder), así
+-- que podría caerse — pero lo creó una migración ya verificada contra el
+-- ledger y borrarlo acá mezclaría dos responsabilidades en un solo archivo.
+-- Que caiga es otra migración, con su propia verificación.
+--
+-- Esto NO protege el `origin` de un cliente: eso lo hace el `WITH CHECK` de la
+-- policy de INSERT (`origin in ('ios','android','pwa')`), y ese no se toca.
+
+create index app_store_namespace_origin_created_at_idx
+  on public.app_store (namespace, origin, created_at desc)
+  where deleted_at is null;

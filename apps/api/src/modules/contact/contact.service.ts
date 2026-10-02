@@ -63,7 +63,7 @@ export class ContactService {
         to,
         from,
       },
-      status: 'PENDIENTE',
+      delivery_status: 'PENDIENTE',
     });
 
     // 4. renderizar plantilla marketing (o fallback inline si no existe)
@@ -77,7 +77,7 @@ export class ContactService {
     // 5. enviar email — no bloqueante: si Resend falla (ej. role.ec no verificado) se encola y el contacto queda PENDIENTE para reintento
     try {
       await this.deliver(to, rendered.subject, rendered.html, dto.email, from);
-      await this.storeRepo.updateStatus(entry.id, 'PROCESADO');
+      await this.storeRepo.updateDeliveryStatus(entry.id, 'PROCESADO');
     } catch (err) {
       const errorSummary = safeErrorSummary(err);
       this.logger.warn({
@@ -118,7 +118,7 @@ export class ContactService {
           ...safeErrorFields(enqueueErr),
         });
       }
-      await this.storeRepo.updateStatus(entry.id, 'PENDIENTE', {
+      await this.storeRepo.updateDeliveryStatus(entry.id, 'PENDIENTE', {
         error: errorSummary,
       });
       // No throw — el lead no se pierde aunque el correo falle

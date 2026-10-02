@@ -86,7 +86,10 @@ export function failureSentinelFor(
 	path: string,
 	params: URLSearchParams,
 ): { param: string; value: string } | undefined {
-	if (path === "/payouts" && params.get("business_id") === PAYOUTS_FAILURE_FILTER) {
+	if (
+		path === "/payouts" &&
+		params.get("business_id") === PAYOUTS_FAILURE_FILTER
+	) {
 		return { param: "business_id", value: PAYOUTS_FAILURE_FILTER };
 	}
 	if (
@@ -378,7 +381,7 @@ const CONTACT_MESSAGE = {
 	// `PENDIENTE` is the delivery-of-the-NOTICE status, not "unread". The inbox
 	// prints a legend saying exactly that, so the fixture uses the state the
 	// legend warns about and the column label can be asserted against it.
-	status: "PENDIENTE",
+	delivery_status: "PENDIENTE",
 	created_at: "2026-01-06T00:00:00.000Z",
 	updated_at: "2026-01-06T00:00:00.000Z",
 	readable: true,
@@ -387,6 +390,31 @@ const CONTACT_MESSAGE = {
 	role: "persona",
 	city: "Quito",
 	excerpt: "Quisiera abrir una panadería en mi barrio.",
+};
+
+/**
+ * `BugReportListItemSchema`.
+ *
+ * `state: "ABIERTO"` is the discriminating choice: the inbox filters by
+ * `state`, so a fixture stuck in `null` could never tell a working filter from
+ * a broken one — the same reason `REVIEW` below is visible rather than hidden.
+ *
+ * `delivery_status: "PENDIENTE"` is NOT rendered anywhere in this section, and
+ * that is the point of pinning it: the delivery badge means "the notice email
+ * hasn't been delivered" in the contact inbox, and in the bug report inbox it
+ * means nothing at all (no email path), so a panel that borrowed the badge would
+ * be showing a permanent "Entrega pendiente" that means nothing.
+ */
+const BUG_REPORT = {
+	id: ID,
+	state: "ABIERTO",
+	delivery_status: "PENDIENTE",
+	origin: "android",
+	created_at: "2026-01-07T00:00:00.000Z",
+	updated_at: "2026-01-07T00:00:00.000Z",
+	readable: true,
+	summary: "La app se cierra al confirmar el pago",
+	excerpt: "La app se cierra al confirmar el pago",
 };
 
 /** `EmailTemplateDtoSchema`, narrowed to the fields the templates tab reads. */
@@ -564,6 +592,8 @@ export function respondTo(
 			return paginated([SLIDE]);
 		case path === "/contact-inbox":
 			return paginated([CONTACT_MESSAGE]);
+		case path === "/bug-report-inbox":
+			return paginated([BUG_REPORT]);
 		case path === "/reviews/moderation":
 			// The one fixture endpoint that FILTERS, because `visibility` is a
 			// server-side filter the panel's own test depends on. Measured against
@@ -572,9 +602,7 @@ export function respondTo(
 			// A table that ignored the param would answer the same row to every
 			// visibility, and a test asserting "the filter empties the table" would
 			// then be testing the STUB rather than the panel.
-			return paginated(
-				params.get("visibility") === "hidden" ? [] : [REVIEW],
-			);
+			return paginated(params.get("visibility") === "hidden" ? [] : [REVIEW]);
 		case path === "/email-marketing/templates":
 			return paginated([EMAIL_TEMPLATE]);
 		case path === "/push-notifications/templates":

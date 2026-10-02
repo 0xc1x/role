@@ -698,8 +698,19 @@ describe('no client role holds a privilege on the two companion tables', () => {
   test('the companions are deny-all under RLS with no policies, which is the second layer', () => {
     // Either layer alone leaves a hole: a grant that lands on a table whose RLS
     // was never recorded opens it. 20260928184943 is the ALTER the ledger was
-    // missing for these two, and it states the asymmetry in its own header —
-    // the companions are closed twice, `app_store` only once.
+    // missing for these two, and its header states the asymmetry as it stood
+    // when that migration ran: the companions closed twice, `app_store` once.
+    //
+    // That asymmetry no longer exists. 20260930234450 revoked SELECT on
+    // `app_store` from both client roles and added the single policy "Users
+    // submit bug reports", which is FOR INSERT, so `app_store` is closed twice
+    // as well — at the table ACL, and by having no SELECT policy. The header of
+    // 20260928184943 is not wrong, it is dated: it describes the state its own
+    // migration produced, and that file is sealed by the ledger, so this is
+    // where the correction belongs. The current shape is pinned in
+    // enable-rls.rls.db.spec.ts, which asserts the COMMAND of `app_store`'s one
+    // policy rather than only counting it — a count would not notice a
+    // permissive SELECT policy substituted in place of the INSERT one.
     const sql = sqlOf(RLS_ON_UNRECORDED_MIGRATION);
     for (const table of GATED_TABLES) {
       expect(sql).toMatch(

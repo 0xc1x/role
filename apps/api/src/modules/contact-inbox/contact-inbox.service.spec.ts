@@ -25,9 +25,13 @@ const MENSAJE = {
 /** Fila de contacto con un `value` válido, como la escribe `POST /contact`. */
 const seedContacto = (
   value: unknown = MENSAJE,
-  status?: 'PENDIENTE' | 'PROCESADO',
+  deliveryStatus?: 'PENDIENTE' | 'PROCESADO',
 ) =>
-  store.insert({ namespace: 'contact', value, ...(status ? { status } : {}) });
+  store.insert({
+    namespace: 'contact',
+    value,
+    ...(deliveryStatus ? { delivery_status: deliveryStatus } : {}),
+  });
 
 beforeAll(async () => {
   ctx = await createTestDb();
@@ -69,7 +73,7 @@ describe('la bandeja está atada al namespace contact', () => {
       NotFoundException,
     );
     // La fila intacta: el 404 tiene que ocurrir ANTES de escribir, no después.
-    expect((await store.findById(ajeno.id))?.status).toBe('PENDIENTE');
+    expect((await store.findById(ajeno.id))?.delivery_status).toBe('PENDIENTE');
   });
 
   test('una fila borrada (soft delete) tampoco se ve', async () => {
@@ -84,7 +88,7 @@ describe('la bandeja está atada al namespace contact', () => {
   });
 });
 
-describe('filtro por estado', () => {
+describe('filtro por estado de entrega', () => {
   test('filtra solo las filas del estado pedido', async () => {
     const pendiente = await seedContacto(MENSAJE, 'PENDIENTE');
     const procesado = await seedContacto(MENSAJE, 'PROCESADO');
@@ -92,7 +96,7 @@ describe('filtro por estado', () => {
     const { data } = await service.list({
       page: 1,
       limit: 100,
-      status: 'PENDIENTE',
+      delivery_status: 'PENDIENTE',
     });
 
     expect(data.map((f) => f.id)).toContain(pendiente.id);
@@ -104,7 +108,7 @@ describe('filtro por estado', () => {
     await seedContacto(MENSAJE, 'PROCESADO');
 
     const { data } = await service.list({ page: 1, limit: 100 });
-    const estados = new Set(data.map((f) => f.status));
+    const estados = new Set(data.map((f) => f.delivery_status));
     expect(estados.has('PENDIENTE')).toBe(true);
     expect(estados.has('PROCESADO')).toBe(true);
   });
@@ -124,15 +128,15 @@ describe('marcar como atendido', () => {
 
     const dto = await service.markHandled(fila.id);
 
-    expect(dto.status).toBe('PROCESADO');
-    expect((await store.findById(fila.id))?.status).toBe('PROCESADO');
+    expect(dto.delivery_status).toBe('PROCESADO');
+    expect((await store.findById(fila.id))?.delivery_status).toBe('PROCESADO');
   });
 
   test('es idempotente: marcar dos veces no falla', async () => {
     const fila = await seedContacto(MENSAJE, 'PENDIENTE');
     await service.markHandled(fila.id);
     const segunda = await service.markHandled(fila.id);
-    expect(segunda.status).toBe('PROCESADO');
+    expect(segunda.delivery_status).toBe('PROCESADO');
   });
 
   test('no toca el value del mensaje al cambiar el estado', async () => {

@@ -23,6 +23,7 @@ import { Route as LayoutNegociosRouteImport } from './routes/_layout.negocios'
 import { Route as LayoutOfertasRouteImport } from './routes/_layout.ofertas'
 import { Route as LayoutOrdenesRouteImport } from './routes/_layout.ordenes'
 import { Route as LayoutPagosRouteImport } from './routes/_layout.pagos'
+import { Route as LayoutReportesRouteImport } from './routes/_layout.reportes'
 import { Route as LayoutResenasRouteImport } from './routes/_layout.resenas'
 import { Route as LayoutSlidesRouteImport } from './routes/_layout.slides'
 import { Route as LayoutCampanasMailsRouteImport } from './routes/_layout.campanas.mails'
@@ -100,6 +101,11 @@ const LayoutPagosRoute = LayoutPagosRouteImport.update({
   path: '/pagos',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutReportesRoute = LayoutReportesRouteImport.update({
+  id: '/reportes',
+  path: '/reportes',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutResenasRoute = LayoutResenasRouteImport.update({
   id: '/resenas',
   path: '/resenas',
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/ofertas': typeof LayoutOfertasRoute
   '/ordenes': typeof LayoutOrdenesRoute
   '/pagos': typeof LayoutPagosRoute
+  '/reportes': typeof LayoutReportesRoute
   '/resenas': typeof LayoutResenasRoute
   '/slides': typeof LayoutSlidesRoute
   '/campanas/mails': typeof LayoutCampanasMailsRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/ofertas': typeof LayoutOfertasRoute
   '/ordenes': typeof LayoutOrdenesRoute
   '/pagos': typeof LayoutPagosRoute
+  '/reportes': typeof LayoutReportesRoute
   '/resenas': typeof LayoutResenasRoute
   '/slides': typeof LayoutSlidesRoute
   '/campanas/mails': typeof LayoutCampanasMailsRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/_layout/ofertas': typeof LayoutOfertasRoute
   '/_layout/ordenes': typeof LayoutOrdenesRoute
   '/_layout/pagos': typeof LayoutPagosRoute
+  '/_layout/reportes': typeof LayoutReportesRoute
   '/_layout/resenas': typeof LayoutResenasRoute
   '/_layout/slides': typeof LayoutSlidesRoute
   '/_layout/campanas/mails': typeof LayoutCampanasMailsRoute
@@ -222,6 +231,7 @@ export interface FileRouteTypes {
     | '/ofertas'
     | '/ordenes'
     | '/pagos'
+    | '/reportes'
     | '/resenas'
     | '/slides'
     | '/campanas/mails'
@@ -244,6 +254,7 @@ export interface FileRouteTypes {
     | '/ofertas'
     | '/ordenes'
     | '/pagos'
+    | '/reportes'
     | '/resenas'
     | '/slides'
     | '/campanas/mails'
@@ -267,6 +278,7 @@ export interface FileRouteTypes {
     | '/_layout/ofertas'
     | '/_layout/ordenes'
     | '/_layout/pagos'
+    | '/_layout/reportes'
     | '/_layout/resenas'
     | '/_layout/slides'
     | '/_layout/campanas/mails'
@@ -382,6 +394,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutPagosRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/reportes': {
+      id: '/_layout/reportes'
+      path: '/reportes'
+      fullPath: '/reportes'
+      preLoaderRoute: typeof LayoutReportesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/resenas': {
       id: '/_layout/resenas'
       path: '/resenas'
@@ -446,6 +465,7 @@ interface LayoutRouteChildren {
   LayoutOfertasRoute: typeof LayoutOfertasRoute
   LayoutOrdenesRoute: typeof LayoutOrdenesRoute
   LayoutPagosRoute: typeof LayoutPagosRoute
+  LayoutReportesRoute: typeof LayoutReportesRoute
   LayoutResenasRoute: typeof LayoutResenasRoute
   LayoutSlidesRoute: typeof LayoutSlidesRoute
   LayoutCampanasMailsRoute: typeof LayoutCampanasMailsRoute
@@ -467,6 +487,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutOfertasRoute: LayoutOfertasRoute,
   LayoutOrdenesRoute: LayoutOrdenesRoute,
   LayoutPagosRoute: LayoutPagosRoute,
+  LayoutReportesRoute: LayoutReportesRoute,
   LayoutResenasRoute: LayoutResenasRoute,
   LayoutSlidesRoute: LayoutSlidesRoute,
   LayoutCampanasMailsRoute: LayoutCampanasMailsRoute,

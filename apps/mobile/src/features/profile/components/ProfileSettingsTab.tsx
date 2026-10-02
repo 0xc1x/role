@@ -2,6 +2,7 @@ import { Link, type Href } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import {
 	Bell,
+	Bug,
 	ChevronRight,
 	CircleHelp,
 	Heart,
@@ -67,6 +68,15 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
 		title: strings.profile.sectionHelp,
 		items: [
 			{ icon: CircleHelp, label: strings.profile.help, href: "/profile/help" },
+			// El buzón de reportes es de las dos audiencias, pero se ofrece
+			// desde acá porque el consumidor no tiene panel de negocio donde
+			// hacerlo. Va en el grupo de Ayuda y no en el de preferencias:
+			// reportar un problema no es una preferencia del usuario.
+			{
+				icon: Bug,
+				label: strings.bugReport.title,
+				href: "/report-problem",
+			},
 		],
 	},
 ];
