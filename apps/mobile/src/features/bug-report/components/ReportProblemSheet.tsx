@@ -167,6 +167,7 @@ export function ReportProblemSheet({
 					}
 					read.push({
 						uri: asset.uri,
+						// react-doctor-disable-next-line react-doctor/async-await-in-loop -- SECUENCIAL A PROPÓSITO: esto lee los BYTES del archivo a memoria, así que awaitearlos juntos tendría todas las capturas en memoria al mismo tiempo, que en un teléfono de gama baja es el OOM que el loop de arriba existe para evitar. El costo —una captura por vez— es deliberado; un Promise.all pasaría el gate y empeoraría el comportamiento en el dispositivo real
 						image: await readLocalImage(asset.uri),
 					});
 				} catch (e) {
