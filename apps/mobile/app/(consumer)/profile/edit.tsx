@@ -186,9 +186,6 @@ export default function EditProfileScreen() {
 							</AppText>
 						</AvatarFallback>
 					</Avatar>
-					<Button variant="ghost" size="sm" onPress={() => {}}>
-						{strings.profileEdit.changeAvatar}
-					</Button>
 				</View>
 
 				{error ? (

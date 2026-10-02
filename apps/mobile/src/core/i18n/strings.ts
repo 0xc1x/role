@@ -542,8 +542,6 @@ export const strings = {
 		cityOtherLabel: "¿Qué ciudad?",
 		cityOtherPlaceholder: "Escribe tu ciudad",
 		cityOtherRequired: "Indica la ciudad.",
-		avatar: "Foto de perfil",
-		changeAvatar: "Cambiar foto",
 		required: "Requerido",
 		invalidEmail: "Correo inválido",
 		updated: "Perfil actualizado",
@@ -1268,51 +1266,52 @@ export const strings = {
 			payments: {
 				title: "Pagos y facturación",
 				sections: [
-					{
-						title: "Cobros",
-						items: [
-							{
-								title: "Procesamiento de pagos",
-								description:
-									"Los pagos de tus clientes se procesan automáticamente a través de nuestra pasarela segura. Recibes el monto total de cada venta, menos la comisión acordada.",
-							},
-							{
-								title: "Comisiones",
-								description:
-									"La comisión por transacción se descuenta automáticamente de cada pago. Puedes consultar el desglose en tu sección de Pagos y Cobros.",
-							},
-						],
-					},
-					{
-						title: "Pagos",
-						items: [
-							{
-								title: "Calendario de pagos",
-								description:
-									"Los pagos se procesan dos veces al mes (días 5 y 20). El dinero se transfiere a tu cuenta bancaria registrada en un plazo de 2-3 días hábiles.",
-							},
-							{
-								title: "Consulta de pagos",
-								description:
-									'En la sección "Balance y Cobros" puedes ver el historial completo de transacciones, pagos procesados y próximos pagos.',
-							},
-						],
-					},
-					{
-						title: "Facturación",
-						items: [
-							{
-								title: "Facturas",
-								description:
-									"Puedes descargar facturas de cada período de pago desde la sección de Pagos. Las facturas incluyen el desglose de ventas, comisiones y montos transferidos.",
-							},
-							{
-								title: "Datos fiscales",
-								description:
-									"Asegúrate de mantener actualizados tus datos fiscales y cuenta bancaria en la configuración de tu perfil para evitar retrasos en los pagos.",
-							},
-						],
-					},
+					// Oculta hasta habilitar la pasarela de pagos
+					// {
+					// 	title: "Cobros",
+					// 	items: [
+					// 		{
+					// 			title: "Procesamiento de pagos",
+					// 			description:
+					// 				"Los pagos de tus clientes se procesan automáticamente a través de nuestra pasarela segura. Recibes el monto total de cada venta, menos la comisión acordada.",
+					// 		},
+					// 		{
+					// 			title: "Comisiones",
+					// 			description:
+					// 				"La comisión por transacción se descuenta automáticamente de cada pago. Puedes consultar el desglose en tu sección de Pagos y Cobros.",
+					// 		},
+					// 	],
+					// },
+					// {
+					// 	title: "Pagos",
+					// 	items: [
+					// 		{
+					// 			title: "Calendario de pagos",
+					// 			description:
+					// 				"Los pagos se procesan dos veces al mes (días 5 y 20). El dinero se transfiere a tu cuenta bancaria registrada en un plazo de 2-3 días hábiles.",
+					// 		},
+					// 		{
+					// 			title: "Consulta de pagos",
+					// 			description:
+					// 				'En la sección "Balance y Cobros" puedes ver el historial completo de transacciones, pagos procesados y próximos pagos.',
+					// 		},
+					// 	],
+					// },
+					// {
+					// 	title: "Facturación",
+					// 	items: [
+					// 		{
+					// 			title: "Facturas",
+					// 			description:
+					// 				"Puedes descargar facturas de cada período de pago desde la sección de Pagos. Las facturas incluyen el desglose de ventas, comisiones y montos transferidos.",
+					// 		},
+					// 		{
+					// 			title: "Datos fiscales",
+					// 			description:
+					// 				"Asegúrate de mantener actualizados tus datos fiscales y cuenta bancaria en la configuración de tu perfil para evitar retrasos en los pagos.",
+					// 		},
+					// 	],
+					// },
 				],
 			},
 			guides: {
@@ -1506,8 +1505,9 @@ export const strings = {
 		helpSubtitle: "Soporte y recursos",
 		helpFaqTitle: "Preguntas frecuentes",
 		helpFaqPayments: "Pagos y facturación",
+		// Oculta hasta habilitar la pasarela de pagos
 		helpFaqPaymentsAnswer:
-			"Los pagos se procesan dos veces al mes (días 5 y 20) y se depositan en tu cuenta en 2-3 días hábiles.",
+			"En esta fase el pago se hace directamente en el comercio al recoger (pickup-only); la app no procesa pagos en línea.",
 		helpFaqOrders: "Pedidos y recogidas",
 		helpFaqOrdersAnswer:
 			"Valida el código de recogida del cliente desde el detalle del pedido antes de entregarlo.",
@@ -1535,7 +1535,7 @@ export const strings = {
 		call: "Llamar",
 		comingSoon: "Próximamente disponible",
 		supportEmail: "soporte@role.app",
-		supportPhone: "+52 55 1234 5678",
+		supportPhone: "+593 99 000 0000",
 		mailSubject: "Contacto - Centro de ayuda",
 		mailError: "No se pudo abrir el cliente de correo",
 		callError: "No se pudo abrir el marcador telefónico",
@@ -1748,11 +1748,12 @@ export const strings = {
 	termsScreen: {
 		title: "Términos y condiciones",
 		updatedAt: "Última actualización: 19 de abril de 2026",
+		contactEmail: "legal@role.app",
 		sections: [
 			{
 				title: "1. Aceptación y objeto",
 				content:
-					"Estos Términos regulan el uso de Rolé (app y web) operado por 0xC1X S.A.S., RUC 1799999999001, Quito, Ecuador. Al crear cuenta o usar el servicio aceptas estos términos. Si no estás de acuerdo, no uses la plataforma.",
+					"Estos Términos regulan el uso de Rolé (app y web) operado por {controllerIdentity}. Al crear cuenta o usar el servicio aceptas estos términos. Si no estás de acuerdo, no uses la plataforma.",
 			},
 			{
 				title: "2. El servicio e intermediación",
@@ -1792,18 +1793,19 @@ export const strings = {
 			{
 				title: "9. Cambios, ley y contacto",
 				content:
-					"Podemos actualizar estos términos y notificar cambios relevantes en la app/web. Se rigen por leyes de la República del Ecuador, jurisdicción tribunales de Quito. Contacto legal: legal@role.app.",
+					"Podemos actualizar estos términos y notificar cambios relevantes en la app/web. Se rigen por leyes de la República del Ecuador, jurisdicción tribunales de Quito. Contacto legal: {contactEmail}.",
 			},
 		],
 	},
 	privacyScreen: {
 		title: "Política de privacidad",
 		updatedAt: "Última actualización: 19 de abril de 2026",
+		contactEmail: "privacidad@role.app",
 		sections: [
 			{
 				title: "1. Responsable del tratamiento",
 				content:
-					"Rolé (0xC1X S.A.S., RUC 1799999999001, Quito, Ecuador) es responsable del tratamiento. Contacto de privacidad: privacidad@role.app. Este aviso se rige por la LOPDP (RO 459, 26-may-2021) y su Reglamento.",
+					"{controllerIdentity} es responsable del tratamiento. Contacto de privacidad: {contactEmail}. Este aviso se rige por la LOPDP (RO 459, 26-may-2021) y su Reglamento.",
 			},
 			{
 				title: "2. Normativa aplicable",
@@ -1838,7 +1840,7 @@ export const strings = {
 			{
 				title: "8. Tus derechos",
 				content:
-					"Acceso, rectificación, supresión, oposición, portabilidad, limitación y a no ser objeto de decisiones automatizadas. Ejerce en privacidad@role.app con cédula, derecho y medio de respuesta. Respondemos en máximo 15 días (Art. 26 Reglamento LOPDP); puedes reclamar ante la SPDP.",
+					"Acceso, rectificación, supresión, oposición, portabilidad, limitación y a no ser objeto de decisiones automatizadas. Ejerce en {contactEmail} con cédula, derecho y medio de respuesta. Respondemos en máximo 15 días (Art. 26 Reglamento LOPDP); puedes reclamar ante la SPDP.",
 			},
 			{
 				title: "9. Seguridad",
@@ -1853,7 +1855,7 @@ export const strings = {
 			{
 				title: "11. Cambios y contacto",
 				content:
-					"Podemos actualizar esta política y publicaremos la nueva versión aquí con fecha de vigencia. Contacto: privacidad@role.app. Jurisdicción: tribunales de Quito.",
+					"Podemos actualizar esta política y publicaremos la nueva versión aquí con fecha de vigencia. Contacto: {contactEmail}. Jurisdicción: tribunales de Quito.",
 			},
 		],
 	},

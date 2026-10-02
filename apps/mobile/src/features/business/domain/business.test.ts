@@ -10,6 +10,7 @@ import {
 function review(partial: Partial<BusinessReviewView>): BusinessReviewView {
 	return {
 		id: partial.id ?? "r",
+		authorId: partial.authorId ?? "a-1",
 		userName: partial.userName ?? "Cliente",
 		productRating: partial.productRating ?? 0,
 		businessRating: partial.businessRating ?? 0,
