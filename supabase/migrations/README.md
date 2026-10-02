@@ -412,6 +412,45 @@ further from the only proof of what ran. The file stays the reviewed version, th
 ledger stays the statement the server stored, and the gap is recorded here —
 the same treatment the `20260925*` files above already have.
 
+## Applied: `20261002174845_boundary_sync_seeded_secret`
+
+Aplicada por `apply_migration` el 2026-10-02. El `md5sum` del archivo es
+`0b80d017e13a7ed737e1f29a2755b928` y ese es también el `md5(statements[1])` del
+ledger.
+
+Cierra un hueco que **no** es de formato sino de comportamiento, y que solo se
+vio al comparar las migraciones del directorio contra el ledger byte a byte:
+once de los doce archivos `20260925*` de `main` no coincidían con lo que la base
+ejecutó, y el spec de grants estaba escrito contra esa copia. Al sincronizar,
+un fallo que parecía test viejo resultó ser real.
+
+El bloque de sincronización de `20260925163235` arranca con
+`if legacy_src is null then … return; end if`, donde `legacy_src` es el cuerpo de
+`handle_order_event_push`. En un entorno **nuevo** ese cuerpo no existe —que es
+justo el caso que el propio `raise` de al lado pide resolver sembrando Vault a
+mano—, así que el bloque validaba los secretos y salía **antes** de sincronizar.
+Un operador que sembraba `internal_secret` y replayeaba las migraciones quedaba
+con las cinco Edge functions sin su secreto; como son `verify_jwt:false`, el
+gateway reenvía igual y cada dispatch falla 401. Se lee como "el secreto no se
+inyectó" y manda a investigar al subsistema equivocado, el mismo modo de fallo del
+dispatcher que arregló `20260925175051`.
+
+Esta migración repite el sync sin mirar `legacy_src`. Es idempotente
+(`update_secret` si la entrada existe, `create_secret` si no), toma el valor de
+`vault.decrypted_secrets` y no de una constante, y falla ruidoso si el secreto no
+está: preferible una migración que para a cinco funciones que devuelven 401 sin
+explicación.
+
+Antes de sincronizar, valida que los cinco slugs sigan siendo los que la
+allowlist de `invoke_internal_edge_function` acepta, leyendo la propia función
+con `pg_get_functiondef`. Si alguien cambia la allowlist y no esta migración, el
+error sale en el `raise` en vez de quedar como cinco funciones sincronizadas que
+nadie puede despachar.
+
+**Por qué una migración nueva y no editar `20260925163235`:** ya corrió, y su md5
+es la única prueba de lo que pasó. Editarla haría que `supabase db push`
+reprodujese un archivo que la base nunca ejecutó.
+
 ## Applied: `20261002041038_bug_report_inbox_filter_index`
 
 Aplicada por `apply_migration` el 2026-10-02. El `md5sum` del archivo es
