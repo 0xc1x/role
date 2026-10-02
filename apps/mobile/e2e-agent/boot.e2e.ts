@@ -10,12 +10,24 @@ import { strings } from "../src/core/i18n/strings";
  * sobre el artefacto exportado (ver task-3-report.md), ese test no puede existir
  * tal como está escrito, por dos razones que son del PRODUCTO y no del runner:
  *
- * 1. **No hay ningún `role="heading"` en la PWA.** `SectionHeader` renderiza el
- *    título con `AppText variant="h3"`, y `AppText` (`src/core/ui/AppText.tsx`)
- *    no pasa `accessibilityRole`: en react-native-web eso es un `<div dir="auto">`
- *    sin rol. MEDIDO: `document.querySelectorAll('[role="heading"]')` devuelve
- *    `[]` tanto en el pager de primera visita como en el feed. Un
+ * 1. **Ninguna pantalla alcanzable de la PWA expone un `role="heading"`.**
+ *    MEDIDO con `document.querySelectorAll('[role="heading"]')` sobre el
+ *    artefacto exportado: `[]` en el pager de primera visita y `[]` en el feed
+ *    (y también `[]` para `h1`-`h6`). La causa en las pantallas que importan:
+ *    `SectionHeader` renderiza el título con `AppText variant="h3"`, y
+ *    `AppText` (`src/core/ui/AppText.tsx`) no pasa `accessibilityRole` — en
+ *    react-native-web eso es un `<div dir="auto">` sin rol. Un
  *    `getByRole("heading", …)` no falla "por poco": no tiene nada que encontrar.
+ *
+ *    El alcance de la afirmación es DELIMITADO a propósito, porque el kit SÍ
+ *    sabe emitir el rol: `components/ui/text.tsx:57-61` mapea las variantes
+ *    `h1`-`h4` a `role="heading"` y `components/ui/card.tsx:54` hace lo mismo en
+ *    `CardTitle`. Lo que pasa es que nadie los usa hoy — verificado: cero
+ *    `<Text variant="h[1-4]">` y cero `<CardTitle>` fuera de un mock de test— y
+ *    las pantallas titulan con `AppText`. O sea que la regla es "acá no hay rol,
+ *    y se sabe por qué", no "este kit no puede dar roles". El día que alguien use
+ *    el `Text` de shadcn, un locator por `getByRole("heading")` vuelve a ser
+ *    válido y este comentario queda desactualizado a propósito de ser viejo.
  *
  * 2. **`/` no muestra el feed a un invitado nuevo.** `app/index.tsx` es el único
  *    dueño de "a dónde va este viewer", y con el flag de onboarding sin marcar
@@ -40,7 +52,7 @@ const STATIC_ORIGIN = "127.0.0.1:8085";
 
 /**
  * El origen de la dummy de Supabase. Es un segundo destino PERMITIDO, y por un
- * motivo que no esohlvidado: el móvil consume Supabase directo (ADR-0002), así que
+ * motivo que no es olvidado: el móvil consume Supabase directo (ADR-0002), así que
  * en una corrida sin backend la PWA intenta hablar con él y falla. Y esa
  *dummy tiene que ser inaccesible de verdad — MEDIDO: `getent hosts
  * test.supabase.co` no resuelve y `curl` sale con código 000— porque una
@@ -125,77 +137,168 @@ test("la PWA arranca y el invitado de primera visita llega al feed de ofertas", 
 	// 34 entradas, 21 de ellas las de `test.supabase.co` que NO resolvieron.
 	// Una request que muere por DNS igual deja su entrada, que es justo lo que
 	// hace posible cazar el escape: no hay que esperar a que algo tenga éxito.
+	//
+	// Y lo que protege contra un `EXPO_PUBLIC_SUPABASE_URL` real heredado del
+	// shell del dev no es este archivo: es el allowlist de env del runner
+	// (`managed-process.js:9,155-159`), que le entrega al target solo
+	// `PATH`/`HOME`/`TMPDIR`/`TMP`/`TEMP`/`SystemRoot`/`COMSPEC` más
+	// `command.env`. Está razonado en `e2e-agent/serve.ts` porque el que decide
+	// qué se pasa es ese archivo; el mismo argumento para el mismo peligro está
+	// en `apps/landing/e2e-agent/business-signup.e2e.ts:93-101`.
 	const resourceUrls = () =>
 		browser.evaluate(() =>
 			performance.getEntriesByType("resource").map((entry) => entry.name),
 		);
 
-	const offLoopback = async () =>
-		(await resourceUrls()).filter(
+	/**
+	 * UN poll, no tres.
+	 *
+	 * La versión anterior eran tres `expect.poll` secuenciales —(a) "hay entradas
+	 * del server estático", (b) "ninguna fuera del allowlist", (c) "la dummy se
+	 * usó"— y el review tenía razón en las tres objeciones, porque se derivan
+	 * todas de una misma propiedad del matcher: **`poll` resuelve en la PRIMERA
+	 * lectura que cumple**, así que cada aserción congelaba el estado en un
+	 * instante arbitrario en vez de afirmar un invariante.
+	 *
+	 * Los tres consecuencias, que son los tres bugs:
+	 *
+	 * 1. (b) se muestreaba antes de que existiera el tráfico que filtra. (a)
+	 *    cumplía con los chunks de JS/CSS, que llegan ~70 ms después de que se
+	 *    pinta el feed y NO son el tráfico que (b) filtra. O sea que (b) podía
+	 *    pasar en verde con `[]` porque todavía no había nada que filtrar.
+	 * 2. (c) corría DESPUÉS de (b), así que una fuga real —que por definición
+	 *    vacía el allowlist de la dummy— hacía fallar (c) con "la app nunca
+	 *    intentó consultar Supabase". El mensaje describía lo OPUESTO de lo que
+	 *    había pasado: la app había intentado hablar con un host que no es la
+	 *    dummy. Un mensaje que culpa a la app de algo que no hizo.
+	 * 3. El resultado era que "no hay fugas" era una afirmación sobre un
+	 *    instante, no sobre la corrida.
+	 *
+	 * La forma que corrige las tres: que el valor sondeado SEA el diagnóstico.
+	 * `poll` resuelve cuando el valor cumple, así que se le pide un valor que
+	 * solo pueda cumplir cuando TODO lo que esta suite quiere afirmar es cierto
+	 * a la vez, y que además lleve en la carga útil la evidencia del fallo.
+	 *
+	 * El resultado tiene DOS salidas y no tres, porque "no hay tráfico de
+	 * backend todavía" y "no hay tráfico de backend nunca" son el MISMO valor
+	 * —se resuelve por espera, no por diagnóstico— y confundirlos sería
+	 * justamente el error que se está corrigiendo. Lo que sí se distingue es el
+	 * caso degenerado de (a): un buffer sin una sola entrada del server estático
+	 * no es "todavía no", es "el bundle no se sirvió", y se reporta aparte
+	 * porque es un fallo del ARTIFACTO, no de la aserción de destino.
+	 */
+	const audit = async () => {
+		const urls = await resourceUrls();
+		const staticEntries = urls.filter((url) => url.includes(STATIC_ORIGIN));
+		const dummyEntries = urls.filter((url) => url.includes(DUMMY_ORIGIN));
+		const offAllowlist = urls.filter(
 			(url) => !url.includes(STATIC_ORIGIN) && !url.includes(DUMMY_ORIGIN),
 		);
+		return { staticEntries, dummyEntries, offAllowlist };
+	};
 
-	// (a) NO VACUA por omisión: el buffer tiene que tener entradas, y tiene que
-	// tener entradas del server estático. Sin esta línea, "nada fuera de
-	// loopback" pasaría en verde con CERO requests —un verde que no probó nada—
-	// y también pasaría en verde con un buffer lleno de nada.
+	// (a) El buffer tiene que tener contenido del server estático. Va PRIMERO y
+	// aparte porque es lo único que distingue "la aserción de destino no vio nada
+	// porque todavía no había tráfico" de "la aserción de destino no vio nada
+	// porque no hay página". MEDIDO en verde: 34 entradas, 13 del server.
+	//
+	// Además sube el PISO del resto: recién con esto confirmado tiene sentido que
+	// "no hay nada fuera del allowlist" signifique algo.
 	await expect
-		.poll(
-			async () =>
-				(await resourceUrls()).filter((url) => url.includes(STATIC_ORIGIN))
-					.length,
-			{
-				timeout: 60_000,
-				message:
-					"la página no cargó NADA del server estático de loopback: o el bundle no se sirvió, o el buffer de Resource Timing está vacío y la aserción de destino de abajo no probaría nada",
-			},
-		)
+		.poll(async () => (await audit()).staticEntries.length, {
+			timeout: 60_000,
+			message:
+				"la página no cargó NADA del server estático de loopback: o el bundle no se sirvió, o el buffer de Resource Timing está vacío — y entonces la aserción de destino de abajo no probaría nada",
+		})
 		.toBeGreaterThan(0);
 
-	// (b) Y que TODAS sean del server estático o de la dummy. El fallo lista la
-	// URL culpable, que es justo lo que hay que leer para entender qué se rompió.
+	// (b)+(c) UNA sola aserción para las dos, y es donde estaba el hole.
+	//
+	// El valor sondeado es un VEREDICTO, no una lista. Eso es lo que hace que el
+	// mensaje sea cierto: el objeto lleva la evidencia que el matcher imprime en
+	// el fallo, así que el fallo nombra la condición sin que un `message` estático
+	// tenga que adivinarla.
+	//
+	//   | veredicto                                | significado                        |
+	//   |-------------------------------------------|------------------------------------|
+	//   | `{ verdict: "ok", … }`                   | tráfico de backend Y sin fuga      |
+	//   | `{ verdict: "pending", … }`              | todavía no hay tráfico de backend  |
+	//   | `{ verdict: "leak", … }`                 | hay tráfico permitido y una fuga   |
+	//   | `{ verdict: "leaked-elsewhere", … }`     | TODO el tráfico se fue a otro lado |
+	//
+	// La tercera fila es exactamente el caso que antes se reportaba como "la app
+	// nunca intentó consultar Supabase" — el mensaje que describía lo OPUESTO de
+	// lo que había pasado. Ahora la misma lectura dice "se fue a otro lado", con
+	// las URLs encima.
+	//
+	// LA SEGUNDA FILA ES LA QUE CIERRA EL HOLE DEL PUNTO 1, y es la parte de la
+	// forma que no es obvia: `"ok"` NO es "no vi nada fuera del allowlist", es
+	// "vi tráfico de la dummy Y nada fuera del allowlist". Si el veredicto fuera
+	// solo la segunda mitad, la línea seguiría resolviendo en el instante en que
+	// el buffer está todavía vacío —que es exactamente el bug— porque un
+	// allowlist vacío y un buffer vacío dan el mismo `[]`. Con la mitad del
+	// tráfico adentro, un buffer todavía vacío da `"pending"` y la línea ESPERA.
+	// Recién cuando el backend habló y no hubo fuga, resuelve.
+	//
+	// Ese es el cambio de fondo: la condición de resolución pasó a ser "se
+	// cumple lo que se quiere afirmar, en el mismo instante", y no "se cumple
+	// una mitad y la otra se cumple en algún momento".
 	//
 	// NO VACUA, y medido por mutación en las DOS direcciones, porque una sola no
 	// alcanza para separar "esta línea lee URLs de verdad" de "esta línea lee una
 	// lista que siempre está vacía":
 	//
-	//   | mutación                                  | dónde cae           |
-	//   |--------------------------------------------|---------------------|
-	//   | `serve.ts` con el server en 8086           | (a), `expected 0`   |
-	//   | `serve.ts` con SUPABASE_URL filtrada a un  | (b), las 21 URLs    |
-	//   | host ajeno                                | listadas            |
+	//   | mutación                                  | resultado               |
+	//   |--------------------------------------------|-------------------------|
+	//   | `serve.ts` con el server en 8086           | cae en (a)              |
+	//   | `serve.ts` con SUPABASE_URL a un host ajeno | cae en (b), fila 3      |
 	//
-	// La primera mueve el ORIGEN PERMITIDO, así que (a) —que exige al menos una
-	// entrada del server declarado— se apaga antes de llegar acá: sirve para
-	// probar que (a) muerde. La segunda deja el server estático donde estaba y
+	// La primera mueve el ORIGEN PERMITIDO y (a) se apaga antes de llegar acá:
+	// prueba que (a) muerde. La segunda deja el server estático donde estaba y
 	// mueve el DESTINO del backend, que es el accidente que esta suite existe
 	// para cazar: la app arrancó, saltó el pager y mostró el feed (verde hasta
 	// acá) para caer JUSTO en esta línea con las 21 peticiones a
-	// `leaked-prod-backend.invalid` listadas en el mensaje. Sin (b), esa
-	// corrida habría pasado en verde.
-	await expect
-		.poll(offLoopback, {
-			timeout: 10_000,
-			message:
-				"la PWA abrió un recurso fuera del server estático y de la dummy de Supabase (la lista del fallo la muestra): este test está leyendo/escribiendo un backend real",
-		})
-		.toEqual([]);
-
-	// (c) Y que la entrada de la dummy en el allowlist de (b) NO sea código
-	// muerto. Si la app nunca hubiera intentado hablar con Supabase, (b) habría
-	// pasado sin necesitar el permiso, y la línea de arriba estaría admitiendo un
-	// destino que nadie usó. Esta aserción dice que el permiso se usó, que es lo
-	// que vuelve verdadera la forma de (b).
+	// `leaked-prod-backend.invalid` en la carga útil del fallo.
 	await expect
 		.poll(
-			async () =>
-				(await resourceUrls()).filter((url) => url.includes(DUMMY_ORIGIN))
-					.length,
+			async () => {
+				const { dummyEntries, offAllowlist } = await audit();
+				// El orden de las dos preguntas importa y es el que hace la
+				// aserción no vacua:
+				//
+				//   1. ¿Hubo tráfico de la dummy? Si no → "pending". Esta línea NO
+				//      resuelve, sigue esperando. Es el cierre del hole: un
+				//      buffer todavía vacío no puede pasar por "ok".
+				//   2. ¿Algo se fue del allowlist? Si sí → fuga, y el nombre
+				//      depende de si también hubo tráfico de la dummy (permiso
+				//      usado) o no (todo se fue afuera).
+				//   3. Ambas palabras → "ok".
+				//
+				// O sea que "ok" NO significa "no vi nada raro": significa "vi
+				// tráfico Y no vi nada raro", en el mismo instante. Cualquier
+				// otro diseño deja una de las dos mitades sin afirmar.
+				const verdict =
+					offAllowlist.length > 0
+						? dummyEntries.length > 0
+							? "leak"
+							: "leaked-elsewhere"
+						: dummyEntries.length > 0
+							? "ok"
+							: "pending";
+				return { verdict, dummy: dummyEntries.length, offAllowlist };
+			},
 			{
 				timeout: 30_000,
 				message:
-					"la app nunca intentó consultar Supabase: el permiso de la dummy en la aserción (b) no se está usando, o el bundle dejó de arrancar sus queries",
+					"la PWA abrió tráfico fuera del server estático y de la dummy de Supabase (las URLs están en `offAllowlist`, abajo): este test está leyendo/escribiendo un backend real. Si `dummy` es 0 y `offAllowlist` no lo está, el tráfico entero se fue a un host ajeno — eso también es una fuga, no una app que no consultó",
 			},
 		)
-		.toBeGreaterThan(0);
+		// `toMatchObject` y no `toEqual` por el campo `dummy`: lo que se afirma es
+		// el veredicto y que la lista de fugas esté vacía. `dummy` viaja en el
+		// valor justamente para NO afirmarlo —es la evidencia de que hubo tráfico,
+		// y por eso tiene que estar en la carga útil que el fallo imprime— y
+		// `toMatchObject` tolera las propiedades extra del valor. Con `toEqual`
+		// habría que fijar el número exacto de peticiones, que no es lo que esta
+		// suite quiere afirmar y sería tan frágil como inútil.
+		.toMatchObject({ verdict: "ok", offAllowlist: [] });
 });

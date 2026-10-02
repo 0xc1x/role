@@ -54,7 +54,10 @@ const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
  * arrancar y tira en la primera clave faltante. Sin `SUPABASE_URL` y
  * `SUPABASE_ANON_KEY` la app no monta nunca, cada locator expira, y el fallo se
  * lee como "el test está roto" cuando lo que falta es una variable de entorno.
- * Mismo argumento que `apps/mobile/playwright.config.ts:76-91`.
+ * Mismo argumento que `apps/mobile/playwright.config.ts:76-91`, aunque ese
+ * archivo omite las cuatro de Firebase que el pre-export exige — un defecto
+ * pre-existente de esa suite, documentado en el reporte de esta tarea y
+ * deliberadamente NO tocado acá.
  *
  * Las cuatro de Firebase no las valida el schema: las exige el paso de
  * pre-export. `bun run export:web` dispara `preexport:web`
@@ -70,6 +73,27 @@ const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
  * cada consulta falla y la app pinta su estado de error — que es lo honesto para
  * una suite sin backend. Un valor real acá no sería una variable de test: sería
  * la suite leyendo y escribiendo el proyecto de otra persona.
+ *
+ * ─── POR QUÉ ESTO SÍ SELLA EL DESTINO, Y NO ES SOLO ESTE ARCHIVO ─────────────
+ *
+ * Que las dummies se pasen por acá es necesario pero NO suficiente: si el runner
+ * le deliverara al target el `process.env` entero del shell del dev, un
+ * `EXPO_PUBLIC_SUPABASE_URL` real de `apps/mobile/.env` ganaría por precedencia
+ * y la suite apuntaría a producción. Lo que lo impide es el runner, y conviene
+ * saberlo porque es la mitad de la garantía:
+ *
+ *   | capa                                        | qué aporta                    |
+ *   |---------------------------------------------|-------------------------------|
+ *   | este archivo (`EXPO_DUMMIES` al export)     | el valor correcto, explícito  |
+ *   | `managed-process.js:9,155-159`              | el allowlist: solo `PATH`,    |
+ *   |                                             | `HOME`, `TMPDIR`, `TMP`,      |
+ *   |                                             | `TEMP`, `SystemRoot`,         |
+ *   |                                             | `COMSPEC` + `command.env`     |
+ *
+ * O sea que la hermeticidad es una propiedad del RUNNER, y esto la usa. El mismo
+ * argumento está escrito para el mismo peligro en
+ * `apps/landing/e2e-agent/business-signup.e2e.ts:93-101`, y por eso está acá y
+ * no solo en el test: el que decide qué se pasa es este archivo.
  */
 const EXPO_DUMMIES: Record<string, string> = {
 	EXPO_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
@@ -312,16 +336,110 @@ async function exportWeb(): Promise<void> {
 		);
 		// `shutdown(code)`, NO `shutdown()`: el export rojo tiene que salir con el
 		// código del export. Un bundle roto tiene que ser un target rojo y ruidoso.
-		shutdown(code ?? 1);
+		//
+		// Sin `?? 1` a propósito, y a diferencia de los otros dos `serve.ts`: acá
+		// la rama está guardada por `code !== 0` (arriba), así que `code` es un
+		// número distinto de cero y el fallback sería código muerto. Un hijo
+		// muerto por señal resuelve `null`, y esa es la única forma de `null`
+		// que el resto del archivo maneja — en `spawn()`, no acá.
+		shutdown(code);
 	}
 	console.error("[e2e target] export ok; arrancando el server estático");
 }
 
+/**
+ * Falla rápido, ANTES del export, si el puerto que esta suite necesita ya está
+ * ocupado.
+ *
+ * POR QUÉ hace falta, y por qué no alcanza con `reuseExisting: false`. Ese flag
+ * gobierna lo que el RUNNER hace con un target ya arrancado: no reusa uno vivo.
+ * No es una pre-verificación de que el puerto esté libre, y el runner solo sondea
+ * `readyUrl` una vez que arranca el comando (managed-process.js:141-147). O sea
+ * que sin esta función, un 8085 tomado significa: se exportan 4-5 minutos de
+ * bundle al vacío para recién descubrir que el server no puede escuchar.
+ *
+ * El costo de hacerlo bien es el de una conexión TCP. En mobile la asimetría es
+ * brutal comparada con landing y admin: el paso caro es `expo export` (una
+ * lectura completa del grafo de módulos y un bundle de 8.1 MB), y un chequeo lo
+ * evita entero. En los otros dos el paso caro es `vite build`, así que el mismo
+ * chequeo vale menos — pero el patrón se aplica igual por simetría del trío.
+ *
+ * Además esta máquina tiene una segunda worktree (`/mnt/c/Users/leonardo/
+ * role-bugreports`, branch `feat/bug-reports-b`) cuya suite de Playwright levanta
+ * SU static server en el mismo 8085 (`MOBILE_E2E_PORT` tiene el mismo default).
+ * Las dos suites son indistinguibles desde afuera, así que el
+ * mensaje dice explícitamente que puede ser la otra y que no hay que matar nada
+ * ajeno.
+ *
+ * Por qué NO se re-lanza el server ajeno ni se lo mata: no es de esta corrida, y
+ * un `kill` a ciegas de otro árbol de procesos es la clase de bug que borra el
+ * trabajo de otra persona.
+ */
+async function assertPortFree(): Promise<void> {
+	const port = Number(STATIC_PORT);
+	// `Bun.connect` tira en el connect si nadie escucha, así que el try/catch ES
+	// la sonda: no hay que abrir un socket a mano y cerrarlo. El tipo es el de Bun
+	// y no el de `node:net` a propósito: ambos se llaman `Socket` y no son
+	// intercambiables (el de Bun no tiene `destroySoon`/`setEncoding`/etc.), así
+	// que importar el equivocado rompe el typecheck en vez de dejarlo pasar.
+	let socket: Awaited<ReturnType<typeof Bun.connect>> | null = null;
+	try {
+		socket = await Bun.connect({
+			hostname: "127.0.0.1",
+			port,
+			// Se cierra en cuanto abre: la prueba es que el TCP handshake
+			// completó, no leer nada. Sin esto el peer ve una conexión abierta
+			// que no termina.
+			socket: {
+				data() {},
+				open(s) {
+					s.end();
+				},
+			},
+		});
+	} catch {
+		// ECONNREFUSED (o EADDRNOTAVAIL): nadie escucha. Es el caso bueno.
+		console.error(
+			`[e2e target] puerto ${port} libre; arrancando el export de la PWA`,
+		);
+		return;
+	}
+	socket.end();
+	console.error(
+		[
+			`[e2e target] el puerto ${port} YA ESTÁ OCUPADO.`,
+			"",
+			"AbORTANDO antes de exportar: el export de la PWA tarda 4-5 minutos y",
+			"después el server estático no podría escuchar igual, así que esperar",
+			"sería gastar la corrida entera para fallar en el mismo lugar.",
+			"",
+			"Causas probables:",
+			"  - la suite de Playwright de esta misma app (comparten el puerto 8085),",
+			"  - la worktree /mnt/c/Users/leonardo/role-bugreports, que también",
+			"    levanta un server en 8085,",
+			"  - un `e2e/static-server.mjs` de una corrida anterior.",
+			"",
+			`Liberalo y volvé a correr. Para ver quién lo tiene: lsof -i :${port}`,
+			"",
+			"No se mata al proceso ajeno: no es de esta corrida.",
+		].join("\n"),
+	);
+	// Código propio y DISTINTO del de un export rojo, para que el log del runner
+	// diga de una que el problema fue el puerto y no el bundle.
+	shutdown(2);
+}
+
+// El pre-flight va PRIMERO y por una razón que no es estética: si el puerto
+// está tomado, el export no tiene a quién servirle. Correrlo después del export
+// sería un chequeo que llega tarde por construcción.
+await assertPortFree();
 await exportWeb();
 
 // El server sirve el `dist/` que el export acaba de escribir con las dummies
-// `EXPO_PUBLIC_*` ya INLINEADAS en los bytes. El env se repite acá solo para que
-// el log del target diga de dónde salió el destino; el server no lee ninguna.
+// `EXPO_PUBLIC_*` ya INLINEADAS en los bytes. No se le pasa env: no lee ninguna
+// (las variables se sustituyen en el bundle, no en el proceso que lo sirve), y
+// pasarlas sería sugerir una dependencia que no existe. Lo que las hace
+// airtight es el ENV DEL EXPORT: ver el comentario de `EXPO_DUMMIES`.
 spawn(
 	"static-server",
 	["bun", "e2e/static-server.mjs", STATIC_PORT, "dist"],
