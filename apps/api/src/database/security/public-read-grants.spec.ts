@@ -91,6 +91,33 @@ function grantBlock(table: string): string {
 }
 
 describe('client read/write boundary migration', () => {
+  /**
+   * ─────────────────────────────────────────────────────────────────────────
+   * CUATRO TESTS DE ESTE BLOQUE ESTÁN EN ROJO, Y NO ES POR TEST VIEJO.
+   *
+   * Sincronizar las migraciones con el ledger dejó de pins contra una copia
+   * prettificada que ningún entorno ejecuta, y eso destapó cuatro huecos que
+   * la copia "arreglaba" sin que nada los aplicara. Son reales: cada uno se
+   * verificó leyendo el SQL del ledger o la base.
+   *
+   * 1. `a count-only public aggregate replaces the client stats call` — la
+   *    sentencia `grant execute on function public.get_platform_public_stats()
+   *    to anon, authenticated` NO ESTÁ en ninguna migración del directorio.
+   * 2. `the fresh-environment path still syncs the seeded secret` — el único
+   *    bloque `do $$` que sincroniza empieza con `if legacy_src is null then
+   *    … return; end if`. En un entorno nuevo sin el `handle_order_event_push`
+   *    legacy, eso sale antes del sync: un secreto sembrado a mano por un
+   *    operador nunca llega a las Edge functions. El test exigía un segundo
+   *    bloque por exactamente eso.
+   * 3. `the vault helper fails closed` y
+   * 4. `the internal secret is rotated` — este último assertaba la frase
+   *    "NOT parsed for a secret value", que no existe en el ledger.
+   *
+   * NO SE RELAJAN. Cada uno necesita una migración NUEVA: una migración ya
+   * aplicada no se edita, porque su md5 es la única prueba de lo que corrió y
+   * cambiarlo rompe esa prueba. Arreglarlos "para que pase" sería tapar el
+   * hallazgo, que es justo lo que la regla del md5 existe para impedir.
+   */
   test('order_events: client writes are revoked and insert policies dropped', () => {
     const revoke = findStatement((s) =>
       /revoke insert, update, delete, truncate on table public\.order_events from anon, authenticated/i.test(
