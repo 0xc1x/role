@@ -105,9 +105,12 @@ test("un negocio nuevo se registra desde el formulario público", async ({
 	// mismo orden que `waitForRequestTo(...)` seguido del click en el spec de
 	// Playwright. Se espera DESPUÉS de las aserciones de destino de abajo, y por
 	// eso queda al final a propósito — ver el comentario de ese bloque.
-	const onboarding = browser.waitForResponse(/\/api\/v1\/businesses\/onboarding/, {
-		timeout: 30_000,
-	});
+	const onboarding = browser.waitForResponse(
+		/\/api\/v1\/businesses\/onboarding/,
+		{
+			timeout: 30_000,
+		},
+	);
 	await screen.getByRole("button", { name: "Registrar negocio" }).click();
 
 	// ── ¿A DÓNDE fue? (Resource Timing, que NO depende de la respuesta) ───────
@@ -145,7 +148,8 @@ test("un negocio nuevo se registra desde el formulario público", async ({
 	// justo lo que hay que leer para entender qué se rompió.
 	await expect
 		.poll(
-			async () => (await onboardingUrls()).filter((url) => !url.includes(LOOPBACK)),
+			async () =>
+				(await onboardingUrls()).filter((url) => !url.includes(LOOPBACK)),
 			{
 				timeout: 10_000,
 				message:
@@ -159,10 +163,13 @@ test("un negocio nuevo se registra desde el formulario público", async ({
 	// (e2e/stub-api.ts:124-129). Un 201 prueba que el payload se trató como
 	// contrato y no solo que "algo respondió".
 	const posted = await onboarding;
-	await expect(posted.status, "el stub no devolvió 201 al onboarding").toBe(201);
-	await expect(posted.url, "la respuesta de onboarding no vino del stub").toContain(
-		LOOPBACK,
+	await expect(posted.status, "el stub no devolvió 201 al onboarding").toBe(
+		201,
 	);
+	await expect(
+		posted.url,
+		"la respuesta de onboarding no vino del stub",
+	).toContain(LOOPBACK);
 
 	// El alert `role="alert"` solo se renderiza cuando hay `error`, y el stub
 	// responde 201: la ruta entra al camino de éxito y muestra este heading.

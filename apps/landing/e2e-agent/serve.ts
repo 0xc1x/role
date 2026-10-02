@@ -197,6 +197,10 @@ process.on("exit", () => {
 });
 
 spawn("stub-api", ["bun", "e2e/stub-api.ts"], { STUB_API_PORT });
-spawn("vite", ["bunx", "vite", "dev", "--port", UI_PORT, "--host", "127.0.0.1"], {
-	VITE_API_URL: `http://127.0.0.1:${STUB_API_PORT}/api/v1`,
-});
+spawn(
+	"vite",
+	["bunx", "vite", "dev", "--port", UI_PORT, "--host", "127.0.0.1"],
+	{
+		VITE_API_URL: `http://127.0.0.1:${STUB_API_PORT}/api/v1`,
+	},
+);

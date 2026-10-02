@@ -11,6 +11,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test && bun test supabase",
     "test:e2e": "turbo run test:e2e",
+    "test:e2e:agent": "turbo run test:e2e:agent",
     "coverage:unit": "bun run --cwd packages/commons test:cov && bun run --cwd apps/admin test:cov && bun run --cwd apps/landing test:cov && bun run --cwd apps/mobile test:cov && bun run --cwd apps/api test:cov && bun test supabase --coverage --coverage-reporter=lcov --coverage-dir=coverage/supabase",
     "coverage:e2e": "bun run --cwd apps/api test:e2e:cov",
     "coverage:merge": "bun scripts/merge-coverage.mjs",
