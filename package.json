@@ -11,6 +11,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test && bun test supabase",
     "test:e2e": "turbo run test:e2e",
+    "test:e2e:agent": "turbo run test:e2e:agent --concurrency=1",
     "coverage:unit": "bun run --cwd packages/commons test:cov && bun run --cwd apps/admin test:cov && bun run --cwd apps/landing test:cov && bun run --cwd apps/mobile test:cov && bun run --cwd apps/api test:cov && bun test supabase --coverage --coverage-reporter=lcov --coverage-dir=coverage/supabase",
     "coverage:e2e": "bun run --cwd apps/api test:e2e:cov",
     "coverage:merge": "bun scripts/merge-coverage.mjs",
@@ -31,7 +32,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
+    "@e2e-dev/web": "^0.11.1",
     "@playwright/test": "^1.63.0",
+    "e2e": "^0.15.1",
     "nitro": "npm:nitro-nightly@3.0.1-20260817-141030-4bfb35a7",
     "turbo": "^2.10.12"
   }

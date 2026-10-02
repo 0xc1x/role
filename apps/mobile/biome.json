@@ -13,6 +13,8 @@
 			"**/lib/**/*",
 			"**/src/**/*",
 			"**/e2e/**/*",
+			"**/e2e-agent/**/*",
+			"**/e2e.config.ts",
 			"!**/routeTree.gen.ts"
 		]
 	},

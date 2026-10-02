@@ -19,6 +19,7 @@
     "test": "bun test src",
     "test:cov": "bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/unit src",
     "test:e2e": "playwright test --config playwright.config.ts",
+    "test:e2e:agent": "E2E_TELEMETRY_DISABLED=1 e2e run",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write",
     "lint": "biome lint",

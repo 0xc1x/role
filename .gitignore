@@ -36,3 +36,9 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# Output of the `e2e` runner (tester.army) suite. It is resolved relative to
+# each app's PROJECT ROOT — the directory holding that app's e2e.config.ts — so
+# it lands in apps/<app>/.e2e, never at the monorepo root. Traces, failure
+# screenshots, the server log and report.json are regenerated on every run.
+apps/*/.e2e/

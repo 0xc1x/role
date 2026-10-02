@@ -30,6 +30,11 @@
         "EXPO_PUBLIC_FIREBASE_APP_ID"
       ]
     },
+    "test:e2e:agent": {
+      "dependsOn": ["^build"],
+      "env": ["VITE_API_URL"],
+      "cache": false
+    },
     "lint": {},
     "format:check": {}
   }
