@@ -5,7 +5,7 @@ import {
 	ListBugReportsQuerySchema,
 } from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
-import { BugReportsList } from "@/features/bug-reports";
+import { BugReportsList, ReportesError } from "@/features/bug-reports";
 
 /**
  * `state` y `origin` se limpian ANTES del parseo, y no con un `catch` sobre el
@@ -43,6 +43,9 @@ function soloDelVocabulario<T extends string>(
 		: undefined;
 }
 
+// Exportado para que el spec de la ruta pueda probarlo sin montar el router, que
+// necesita un contexto completo. No es parte de la superficie de la sección:
+// quien consume la UI importa desde `@/features/bug-reports`.
 export function parseBugReportsSearch(
 	raw: Record<string, unknown>,
 ): ListBugReportsQuery {
@@ -59,11 +62,16 @@ export function parseBugReportsSearch(
  * SIN `loader: ensureQueryData(...)` A PROPÓSITO, por el mismo motivo
  * documentado en `_layout.contactos.tsx` y `_layout.resenas.tsx`: un `loader`
  * corre antes de que el componente renderice, así que si la consulta falla el
- * error se escapa al `errorComponent` de la ruta —que ninguna del panel define—
- * en vez de entrar a la rama `isError` de `BugReportsList`. Medido en el hermano
- * de contactos: con `/contact-inbox` en 500, el panel entero quedaba sustituido
- * por el "Something went wrong!" de TanStack Router, sin barra lateral y sin el
+ * error se escapa al `errorComponent` de la ruta en vez de entrar a la rama
+ * `isError` de `BugReportsList`. Medido en el hermano de contactos: con
+ * `/contact-inbox` en 500, el panel entero quedaba sustituido por el
+ * "Something went wrong!" de TanStack Router, sin barra lateral y sin el
  * "Reintentar" del componente.
+ *
+ * Esta ruta SÍ define `errorComponent`, y es la primera: ver `ReportesError`, que
+ * es la primera vez que el panel acota un error de RENDER en vez de uno de red.
+ * La razón de que las otras trece no lo hagan es que su único error posible era
+ * de red, y ese entra por el componente.
  *
  * La columna se llama "Triaje" y el listado NO trae la de entrega. `state` dice
  * qué hizo el equipo con el reporte; `delivery_status` lo mueve el camino
@@ -76,6 +84,7 @@ export function parseBugReportsSearch(
 export const Route = createFileRoute("/_layout/reportes")({
 	validateSearch: (raw) => parseBugReportsSearch(raw),
 	component: RouteComponent,
+	errorComponent: ReportesError,
 	head: () => ({
 		meta: [
 			{ title: "Reportes | Rolé" },

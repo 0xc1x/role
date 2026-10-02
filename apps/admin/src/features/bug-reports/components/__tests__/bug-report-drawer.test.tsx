@@ -88,6 +88,39 @@ afterEach(() => {
 });
 
 describe("detalle del reporte", () => {
+	test("el resumen llega íntegro, aunque la lista lo recorte", async () => {
+		// La mitad de I2: el listado elige qué se ve de un vistazo y el detalle
+		// conserva el texto entero. Si esta mitad no existiera, truncar en la
+		// celda sería perder el texto del usuario — que es exactamente lo que
+		// commons argumenta al no truncar en lectura.
+		const largo = "C".repeat(400);
+		stubOk({ ...detalle, summary: largo, excerpt: `${largo.slice(0, 157)}…` });
+		renderDrawer();
+
+		await waitFor(() => expect(screen.getByText(largo)).toBeDefined());
+		expect(screen.queryByText(`${largo.slice(0, 157)}…`)).toBeNull();
+	});
+
+	test("un `at` que no es una fecha no revienta el panel", async () => {
+		// La cadena del I1 completa, del lado del componente: el mapper copia
+		// `value.at` verbatim porque el contrato lo declara `z.string().nullable()`
+		// —o sea `z.string().min(1)`, sin validar formato— y la policy de insert no
+		// mira `value`. Sin la guarda de `lib/dates.ts`, este `formatBusinessDateTime`
+		// lanzaba `RangeError` y en el árbol real eso se llevaba el panel entero
+		// con su barra lateral.
+		stubOk({ ...detalle, received_at: "ayer" });
+		renderDrawer();
+
+		await waitFor(() => expect(screen.getByText("ayer")).toBeDefined());
+		// Y el resto de la ficha sigue en pantalla: un `at` corrupto no puede
+		// costarle al operador el reporte.
+		expect(
+			screen.getByText(
+				"Cierro la app en la pantalla de pago y vuelve al inicio. Me pasa desde ayer.",
+			),
+		).toBeDefined();
+	});
+
 	test("muestra la descripción íntegra, no el extracto", async () => {
 		stubOk();
 		renderDrawer();

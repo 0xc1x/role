@@ -109,6 +109,63 @@ export function detectImageContentType(
 }
 
 /**
+ * Tope de caracteres del RESUMEN, en escritura.
+ *
+ * POR QUÉ HACE FALTA, y por qué es denegación de servicio y no legibilidad.
+ * `app_store.value` es un `jsonb` sin ninguna restricción de tamaño, y el
+ * `WITH CHECK` de la única policy de insert NO mira `value`: el cliente escribe
+ * el tamaño que quiere. El resumen se copia verbatim al listado del panel, así
+ * que un cliente que mande 5 MB produce una respuesta de 5 MB por fila × 20
+ * filas. No es que el texto se vea feo: es que el buzón deja de responder, y
+ * el texto no se pierde — eso es lo que lo distingue de truncar en lectura.
+ *
+ * POR QUÉ AQUÍ Y NO EN EL SCHEMA DE LECTURA. commons decidió deliberadamente no
+ * truncar al leer, y ese invariante SIGUE VIGENTE: este es un tope de
+ * ESCRITURA, que no pierde texto sino que lo rechaza con un mensaje que el
+ * usuario puede actuar —acortar y reintentar—. Un `.max()` de lectura dejaría
+ * sin resumen a las filas viejas que ya pasaron, que es justo lo que commons
+ * quiere evitar. Son dos reglas distintas y no se contradicen: una limita lo que
+ * entra, la otra se niega a romper lo que ya está.
+ *
+ * EL NÚMERO. 300 caracteres es unas tres líneas de un resumen de una línea
+ * ("qué estabas haciendo y qué pasó"), con holgura para el peor caso real de un
+ * usuario que no edita. Con el tope, una página del buzón pesa como mucho
+ * ~20 × (300 + 4.000) caracteres, que es nada contra los 5 MB que admits hoy.
+ */
+export const MAX_REPORT_SUMMARY_CHARS = 300;
+
+/**
+ * Resuelve el `{max}` de un mensaje del dominio.
+ *
+ * ESTO ES LA CORRECCIÓN DE FONDO que `strings.ts::errorTooManyImages` documenta
+ * como pendiente: los mensajes de este dominio los lanza la frontera, no una
+ * pantalla, así que no hay nadie aguas arriba que resuelva el placeholder. Sin
+ * esto el usuario leería "Cuéntalo en {max} caracteres" en crudo.
+ *
+ * Y el costo de no hacerlo es real y ya está medido en el copy de
+ * `errorTooManyImages`: el número es lo que hace accionable el rechazo. Un
+ * "es demasiado largo" sin número deja como única reacción borrar el texto y
+ * empezar de cero.
+ */
+function conMax(copy: string, max: number): string {
+	return copy.replace("{max}", String(max));
+}
+
+/**
+ * Tope de caracteres de la DESCRIPCIÓN, en escritura.
+ *
+ * El mismo motivo que el del resumen, con un número mayor porque acá el
+ * usuario legitimately escribe pasos para reproducir: 4.000 caracteres son
+ * varias pantallas de pasos y es donde está el valor de un buen reporte. Un
+ * reporte de bug no es una carta, así que un número mucho mayor que este solo
+ * compraría denegación de servicio.
+ *
+ * Es opcional, y opcional no significa sin tope: `null` es "no informar", no
+ * "ilimitado".
+ */
+export const MAX_REPORT_DESCRIPTION_CHARS = 4_000;
+
+/**
  * Valida el resumen y devuelve el texto recortado.
  *
  * El recorte no es cosmetía: lo que se inserta en `value.summary` es lo que sale
@@ -116,13 +173,24 @@ export function detectImageContentType(
  * hasta el listado. Y sin el corte a vacío, una fila con `"   "` llegaría al
  * buzón del operador como un reporte sin texto.
  *
- * NO hay `.max()` de longitud, y es deliberado: el schema de lectura en commons
- * no lo tiene y no puede perder texto que el usuario sí puede leer. El tope de
- * caracteres, si algún día hace falta, es regla de escritura y vive acá.
+ * EL ORDEN DE LAS DOS VALIDACIONES es el que da valor a la función: primero la
+ * vacuidad, porque un texto en blanco no es un resumen largo y su mensaje es
+ * distinto; después el largo. Al revés, un resumen de 5 MB de espacios daría
+ * "es muy largo" en vez de "escribe algo", que manda al usuario a lo contrario
+ * de lo que necesita.
+ *
+ * EL TOPE DE LARGO es de escritura y vive acá, como anticipaba la versión
+ * anterior de este comentario. Ver `MAX_REPORT_SUMMARY_CHARS` para por qué no
+ * contradice el "no truncar en lectura" de commons.
  */
 export function normalizeSummary(summary: string): string {
 	const trimmed = summary.trim();
 	if (!trimmed) throw Errors.validation(strings.bugReport.errorSummaryRequired);
+	if (trimmed.length > MAX_REPORT_SUMMARY_CHARS) {
+		throw Errors.validation(
+			conMax(strings.bugReport.errorSummaryTooLong, MAX_REPORT_SUMMARY_CHARS),
+		);
+	}
 	return trimmed;
 }
 
@@ -131,12 +199,26 @@ export function normalizeSummary(summary: string): string {
  * `""`. El schema de commons la declara `nullish` y el panel la pinta como
  * columna: una cadena vacía se vería como una descripción que el usuario escribió
  * y no escribió.
+ *
+ * El tope de largo va en la rama que la tiene, y no antes de la comprobación de
+ * vacío: si se midiera el `description` crudo, un campo de 10.000 espacios —
+ * que se normaliza a `null` y no se escribe— dispararía un rechazo de tamaño
+ * sobre un reporte que sí era válido.
  */
 export function normalizeDescription(
 	description: string | undefined,
 ): string | null {
 	const trimmed = description?.trim();
-	return trimmed ? trimmed : null;
+	if (!trimmed) return null;
+	if (trimmed.length > MAX_REPORT_DESCRIPTION_CHARS) {
+		throw Errors.validation(
+			conMax(
+				strings.bugReport.errorDescriptionTooLong,
+				MAX_REPORT_DESCRIPTION_CHARS,
+			),
+		);
+	}
+	return trimmed;
 }
 
 /**
@@ -225,6 +307,8 @@ export const MAX_REPORT_IMAGES = 5;
  */
 export function assertReportImageCount(count: number): void {
 	if (count > MAX_REPORT_IMAGES) {
-		throw Errors.validation(strings.bugReport.errorTooManyImages);
+		throw Errors.validation(
+			conMax(strings.bugReport.errorTooManyImages, MAX_REPORT_IMAGES),
+		);
 	}
 }

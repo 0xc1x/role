@@ -147,9 +147,9 @@ test.describe("mails workspace", () => {
 		await signIn(page);
 		await page.goto("/notificaciones/mails");
 
-		await expect(
-			page.getByRole("heading", { name: "Mails" }),
-		).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByRole("heading", { name: "Mails" })).toBeVisible({
+			timeout: 20_000,
+		});
 
 		await page.getByRole("tab", { name: "Plantillas" }).click();
 		await expect(page).toHaveURL(/tab=plantillas/);
@@ -235,12 +235,8 @@ test.describe("failed tabs", () => {
 			// error branch stayed inside its own tab. Asserting the sidebar alone
 			// would pass even if the tabs had gone with it.
 			await expect(page.getByText("admin@role.test")).toBeVisible();
-			await expect(
-				page.getByRole("tab", { name: "Enviar" }),
-			).toBeVisible();
-			await expect(
-				page.getByRole("tab", { name: "Plantillas" }),
-			).toBeVisible();
+			await expect(page.getByRole("tab", { name: "Enviar" })).toBeVisible();
+			await expect(page.getByRole("tab", { name: "Plantillas" })).toBeVisible();
 
 			// And no row, so the failure is never dressed as an empty result. On
 			// the list tabs that is a fixture value; on the filters tab it is the
@@ -248,9 +244,7 @@ test.describe("failed tabs", () => {
 			// so its absence is what proves the error branch was taken rather than
 			// skipped.
 			if (tab.row) {
-				await expect(page.getByText(tab.row, { exact: false })).toHaveCount(
-					0,
-				);
+				await expect(page.getByText(tab.row, { exact: false })).toHaveCount(0);
 			} else {
 				await expect(
 					page.getByPlaceholder(tab.control, { exact: true }),

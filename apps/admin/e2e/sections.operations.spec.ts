@@ -161,9 +161,7 @@ test.describe("operations sections", () => {
 			// by a different row of the same table. Cards get the same treatment
 			// through the card container, since they are not `<tr>`s.
 			const row = section.isCard
-				? page
-						.locator("div.rounded-lg.border")
-						.filter({ hasText: section.row })
+				? page.locator("div.rounded-lg.border").filter({ hasText: section.row })
 				: page.getByRole("row").filter({ hasText: section.row });
 			if (!section.detailIsAccessibleName) {
 				await expect(row).toContainText(section.detail);
@@ -206,13 +204,13 @@ test.describe("operations sections", () => {
 		});
 
 		// Draft: sending and editing are on offer.
-		await expect(page.getByRole("button", { name: "Enviar" }).first()).toBeVisible();
+		await expect(
+			page.getByRole("button", { name: "Enviar" }).first(),
+		).toBeVisible();
 
 		// Sent-only. A card that offered it for a draft would let an operator
 		// double-send a campaign that has never left the building.
-		await expect(
-			page.getByRole("button", { name: "Reenviar" }),
-		).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "Reenviar" })).toHaveCount(0);
 	});
 
 	/**
@@ -394,13 +392,10 @@ test.describe("empty lists", () => {
 			};
 			await stubApi(page, {
 				[section.endpoint]: { status: 200, body: emptyBody },
-				...(section.alsoEmpty ?? []).reduce<ApiOverride>(
-					(acc, endpoint) => {
-						acc[endpoint] = { status: 200, body: emptyBody };
-						return acc;
-					},
-					{},
-				),
+				...(section.alsoEmpty ?? []).reduce<ApiOverride>((acc, endpoint) => {
+					acc[endpoint] = { status: 200, body: emptyBody };
+					return acc;
+				}, {}),
 			});
 			await signIn(page);
 			await page.goto(section.path);
@@ -475,13 +470,10 @@ test.describe("failed lists", () => {
 			const failure = { status: 500, body: { message: "Boom" } };
 			await stubApi(page, {
 				[section.endpoint]: failure,
-				...(section.alsoFail ?? []).reduce<ApiOverride>(
-					(acc, endpoint) => {
-						acc[endpoint] = failure;
-						return acc;
-					},
-					{},
-				),
+				...(section.alsoFail ?? []).reduce<ApiOverride>((acc, endpoint) => {
+					acc[endpoint] = failure;
+					return acc;
+				}, {}),
 			});
 			await signIn(page);
 			await page.goto(section.path);

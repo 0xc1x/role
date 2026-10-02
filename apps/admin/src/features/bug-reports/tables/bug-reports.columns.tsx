@@ -15,9 +15,26 @@ const Resumen = ({ fila }: { fila: BugReportListItemDto }) => {
 			<span className="text-muted-foreground text-xs">Sin datos legibles</span>
 		);
 	}
+	// `excerpt` Y NO `summary`, y esta es la diferencia entre el comentario y lo
+	// que hacía el código.
+	//
+	// El contrato dice literalmente "Extracto para la tabla" y el mapper lo
+	// calcula a 160 caracteres; el listado lo leía completo y sin `line-clamp`, así
+	// que una fila podía levantar la altura de la tabla con 400 caracteres y el
+	// operador tenía que scrollear para llegar a la fila siguiente. Medido con el
+	// componente real: `full_summary_rendered: true`,
+	// `excerpt_ellipsis_rendered: false`.
+	//
+	// Y POR QUÉ ESTO NO CONTRADICE el criterio de commons de no truncar en
+	// lectura. Ese argumento es sobre el TEXTO DEL USUARIO no perderse, y en la
+	// celda no se pierde nada: el detalle muestra `summary` íntegro, que es donde
+	// se lee. Las dos superficies tienen que pensarse por separado, porque si se
+	// mezclan el comentario va a mentir en alguna de las dos: si la celda
+	// truncara el texto y el detalle no, el operador leería un resumen cortado
+	// como si el usuario hubiera escrito eso.
 	return (
-		<span className="font-medium text-sm break-words">
-			{fila.summary || "Sin resumen"}
+		<span className="line-clamp-2 font-medium text-sm break-words">
+			{fila.excerpt || "Sin resumen"}
 		</span>
 	);
 };

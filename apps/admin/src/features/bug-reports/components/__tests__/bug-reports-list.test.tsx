@@ -170,6 +170,26 @@ describe("listado de reportes", () => {
 		expect(screen.queryByText("Notificado")).toBeNull();
 	});
 
+	test("la celda muestra el extracto, no el resumen completo", async () => {
+		// El contrato declara `excerpt` como "Extracto para la tabla" y el mapper
+		// lo calcula a 160 caracteres. La celda leía `summary` completo y sin
+		// `line-clamp`, así que una fila de 400 caracteres levantaba la altura de
+		// la tabla. Acá los dos valores son DISTINTOS a propósito: si la celda
+		// leyera `summary`, el texto largo aparecería y este assert lo cazaría.
+		const largo = "A".repeat(400);
+		stubFetch([
+			{ ...abierto, summary: largo, excerpt: `${largo.slice(0, 157)}…` },
+		]);
+		renderList();
+
+		await waitFor(() =>
+			expect(screen.getByText(`${largo.slice(0, 157)}…`)).toBeDefined(),
+		);
+		// El resumen entero NO aparece en la lista. El detalle lo tiene íntegro:
+		// acá no se pierde texto, se elige qué se ve de un vistazo.
+		expect(screen.queryByText(largo)).toBeNull();
+	});
+
 	test("no muestra el reporter_id aunque la respuesta lo traiga", async () => {
 		// La garantía es que el listado no publica PII, y la lista no parsea: lo
 		// que llega crudo llega crudo al objeto de la fila. Por eso el aserto es
@@ -231,6 +251,36 @@ describe("filtros del listado", () => {
 		await waitFor(() => expect(urls.length).toBeGreaterThan(0));
 		expect(urls[0]).toContain("state=CORREGIDO");
 		expect(urls[0]).toContain("origin=pwa");
+	});
+});
+
+describe("el filtro de origen no ofrece canales que la base rechaza", () => {
+	test("no ofrece 'Web', que la policy de insert no puede aceptar", async () => {
+		stubFetch([abierto]);
+		renderList();
+
+		await waitFor(() =>
+			expect(screen.getByText("La app se cierra al pagar")).toBeDefined(),
+		);
+		// Por teclado, porque `click` sobre un `Select` de base-ui no abre el
+		// popup bajo bun:test (medido: `ArrowDown` sí).
+		fireEvent.keyDown(screen.getByRole("combobox", { name: "Origen" }), {
+			key: "ArrowDown",
+		});
+		await waitFor(() => expect(screen.getAllByRole("option").length).toBe(4));
+
+		const opciones = screen.getAllByRole("option").map((o) => o.textContent);
+		expect(opciones).toContain("iOS");
+		expect(opciones).toContain("Android");
+		expect(opciones).toContain("PWA");
+		// `web` está en `ENTRY_ORIGINS` a propósito —para que la landing quepa
+		// después— pero la única policy de insert sobre `app_store` admite
+		// ('ios','android','pwa'), así que una fila con `origin = 'web'` no puede
+		// existir. Ofrecerlo y devolver "no hay reportes" le dice al operador que
+		// el filtro funciona y que no hay web al mismo tiempo.
+		expect(opciones).not.toContain("Web");
+		// Cuatro opciones: "Todos los orígenes" + los tres escribibles.
+		expect(opciones).toHaveLength(4);
 	});
 });
 

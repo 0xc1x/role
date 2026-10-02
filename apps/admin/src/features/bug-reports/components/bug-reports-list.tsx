@@ -24,6 +24,25 @@ import { formatApiError } from "@/lib/api/notify";
 import { bugTriageStateLabel, entryOriginLabel } from "@/lib/labels";
 
 /**
+ * Los canales que la ÚNICA policy de insert sobre `app_store` admite:
+ * `('ios','android','pwa')`.
+ *
+ * NO es una lista local arbitraria ni un recorte del enum: es el conjunto que la
+ * base acepta hoy, y por eso el selector no ofrece `web` aunque `ENTRY_ORIGINS` lo
+ * contenga. `web` está en el enum a propósito para que la landing quepa después
+ * sin otra migración, y ese día la policy se migra y esta lista se actualiza con
+ * ella. Lo que no puede pasar es ofrecer un canal que la base rechaza, porque el
+ * filtro devolvería siempre vacío sin poder distinguir "no hay" de "el filtro no
+ * existe".
+ *
+ * El móvil llega al mismo conjunto por otro camino, y con la misma constante de
+ * la policy: `reportOriginFor` en `apps/mobile/.../domain/bug-report.ts`.
+ */
+const WRITABLE_ENTRY_ORIGINS: readonly EntryOrigin[] = ENTRY_ORIGINS.filter(
+	(o) => o !== "web",
+);
+
+/**
  * Buzón de reportes de error con filtro por triaje y por origen.
  *
  * La columna se llama "Triaje" y no "Estado" a propósito. En la bandeja de
@@ -134,16 +153,16 @@ export function BugReportsList({
 					</SelectContent>
 				</Select>
 
-				{/* El origen lo fija la policy de insert de la base (`ios`,
-				    `android`, `pwa`), no el cliente: la lista sale del enum del
-				    contrato y el panel no la puede inventar. */}
+				{/* El origen lo fija la policy de insert de la base, no el cliente:
+				    el panel no lo puede inventar ni ofrecer un canal que la base
+				    rechaza. Ver `WRITABLE_ENTRY_ORIGINS`. */}
 				<Select
 					value={origin ?? "all"}
 					// Igual que arriba: `find` y no cast.
 					onValueChange={(v) =>
 						onFilterChange({
 							state,
-							origin: ENTRY_ORIGINS.find((o) => o === v),
+							origin: WRITABLE_ENTRY_ORIGINS.find((o) => o === v),
 						})
 					}
 				>
@@ -152,11 +171,25 @@ export function BugReportsList({
 					</SelectTrigger>
 					<SelectContent>
 						<SelectItem value="all">Todos los orígenes</SelectItem>
-						{/* Del enum del contrato, no de una lista local: `web` está
-						    aunque hoy ningún escritor pueda asignarlo (la policy de
-						    insert solo admite ios/android/pwa), y la lista del selector
-						    tiene que ser la del contrato y no la de lo que existe hoy. */}
-						{ENTRY_ORIGINS.map((o) => (
+						{/* SOLO los canales que la policy de insert ADMITE, y no
+						    todo `ENTRY_ORIGINS`. El enum trae `web` a propósito —
+						    "para que la landing quepa después sin otra migración"—, así
+						    que el VALOR se queda en commons y lo que se decide acá es
+						    qué ofrece el selector.
+
+						    La diferencia no es cosmética: la única policy de insert
+						    sobre `app_store` acepta `('ios','android','pwa')`, así que
+						    una fila con `origin = 'web'` no puede existir. Ofrecer "Web"
+						    y devolver "No hay reportes de error con este filtro" le
+						    dice al operador dos cosas incompatibles —que el filtro
+						    funciona y que no hay web— y no puede distinguir "no hay"
+						    de "el filtro no existe". Es el mismo rigor que la rama le
+						    puso a `state: null`: un valor que el panel sabe que no
+						    puede ocurrir no se presenta como una opción.
+
+						    Cuando la landing migre la policy, esta lista se actualiza
+						    con ella; no es un tope, es el estado de la base hoy. */}
+						{WRITABLE_ENTRY_ORIGINS.map((o) => (
 							<SelectItem key={o} value={o}>
 								{entryOriginLabel(o)}
 							</SelectItem>

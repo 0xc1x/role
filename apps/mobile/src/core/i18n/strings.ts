@@ -1989,24 +1989,29 @@ export const strings = {
 		submit: "Enviar reporte",
 		errorSummaryRequired:
 			"Escribe un resumen para que podamos entender qué pasó.",
+		// El `{max}` lo resuelve el DOMINIO, que es quien tiene la constante
+		// (`conMax` en `domain/bug-report.ts`), y no esta pantalla: estos tres
+		// mensajes los lanza la frontera, no un componente, así que no hay nadie
+		// aguas arriba que pueda resolver el placeholder y se leería crudo al
+		// usuario. El número es lo que hace accionable el rechazo: sin él, la
+		// única reacción posible es borrar el texto entero y empezar de cero.
+		errorSummaryTooLong:
+			"El resumen es demasiado largo. Cuéntalo en {max} caracteres o menos.",
+		errorDescriptionTooLong:
+			"La descripción es demasiado larga. Cuéntala en {max} caracteres o menos.",
 		errorImageNotSupported:
 			"No pudimos leer esa imagen. Vuelve a tomarla o elige un archivo.",
 		errorImageTooLarge:
 			"Esa imagen es demasiado grande. Prueba con una captura más liviana.",
 		errorImageUploadFailed: "No pudimos adjuntar la imagen.",
-		// El 5 va ESCRITO y no como `{max}`, aunque `imageCount` dos líneas más
-		// arriba sí use `{max}`. La razón es que este texto no es solo de la
-		// pantalla: lo lanza `assertReportImageCount`, en el dominio, y ese
-		// mensaje viaja como `AppError` a cualquier consumidor futuro. Un
-		// `{max}` sin resolver ahí saldría crudo al usuario ("Adjuntá hasta
-		// {max} capturas."), porque el dominio no tiene a esta pantalla para
-		// resolverlo. Y el número es justo lo que el usuario necesita para
-		// actuar: sin él, quitar capturas al azar es la única reacción posible.
-		//
-		// La corrección de fondo —que el dominio resuelva el `{max}` en el punto
-		// donde lanza el error— es de `domain/bug-report.ts`, no de la pantalla,
-		// y por eso no se hace acá.
-		errorTooManyImages: "Adjuntá hasta 5 capturas.",
+		// El 5 va como `{max}` y lo resuelve el DOMINIO, en el punto donde lanza el
+		// error. Antes iba escrito a mano, y el comentario que acompañaba a esta
+		// línea señalaba la corrección de fondo como pendiente: este texto no es
+		// solo de la pantalla, lo lanza `assertReportImageCount` y ese mensaje
+		// viaja como `AppError` a cualquier consumidor futuro, así que un `{max}`
+		// sin resolver salía crudo al usuario. Ahora hay un solo número y vive
+		// junto a la constante que lo define.
+		errorTooManyImages: "Adjuntá hasta {max} capturas.",
 		errorNotSignedIn: "Inicia sesión para enviar un reporte.",
 		errorSubmitFailed: "No pudimos enviar tu reporte.",
 	},

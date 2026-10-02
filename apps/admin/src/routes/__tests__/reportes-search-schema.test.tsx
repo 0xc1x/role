@@ -29,11 +29,29 @@ mock.module("@tanstack/react-router", () => ({
 	}),
 	useNavigate: () => () => undefined,
 	redirect: () => undefined,
+	// `Link` del router real exige un `RouterProvider`; el `errorComponent` lo usa
+	// para la salida "Ir al inicio". El mismo stub que `_layout.home` ya usa.
+	Link: ({
+		children,
+		...props
+	}: { children: React.ReactNode } & Record<string, unknown>) => (
+		<a href="/home" {...props}>
+			{children}
+		</a>
+	),
 }));
 
 const { parseBugReportsSearch, Route } = await import("../_layout.reportes");
+// `ReportesError` se importa del FEATURE y no de la ruta a propósito: `export`
+// desde un archivo de ruta rompe el code-splitting de esa ruta, y el build lo
+// avisa ("will not be code-split and will increase your bundle size"). El test
+// del componente tiene que vivir donde el componente vive.
+const { ReportesError } = await import("@/features/bug-reports");
+
+const { cleanup, fireEvent, render, screen } = await import("@/test-utils/dom");
 
 afterEach(() => {
+	cleanup();
 	mock.restore();
 });
 
@@ -115,6 +133,74 @@ describe("el search de /reportes no reemplaza la página por un token desconocid
  * arregla— dejaba la suite en verde. El helper podía estar perfecto y nadie lo
  * estar usando, que es un test del helper, no del comportamiento.
  */
+describe("la ruta tiene su propio errorComponent", () => {
+	test("está declarado en la ruta", () => {
+		// Ninguna ruta del panel lo declaraba. Esa era la estrategia correcta
+		// mientras el único error posible fuera de red, que entra por la rama
+		// `isError` del componente; dejó de alcanzar cuando un `value` de la fila
+		// —que el panel no controla— se renderiza y puede hacer throw en render.
+		const route = Route as unknown as { errorComponent?: unknown };
+		expect(typeof route.errorComponent).toBe("function");
+	});
+
+	test("muestra el error y ofrece dos salidas, sin quedarse a medias", () => {
+		// Lo que se verifica no es que exista el componente sino qué garantiza: un
+		// throw de render de ESTA sección no sube al `CatchBoundary` del root, que
+		// es el que reemplaza el documento entero y se lleva la barra lateral.
+		let reseteos = 0;
+		render(
+			<ReportesError
+				error={new Error("Invalid time value")}
+				reset={() => reseteos++}
+			/>,
+		);
+
+		// `getByText` es de coincidencia EXACTA sobre el texto normalizado, así que
+		// la aserción lleva la frase completa y no una parte: es el copy entero el
+		// que asegura que el operador sepa que el resto del panel sigue vivo, y
+		// una aserción sobre un fragmento pasaría con cualquier reescritura.
+		expect(
+			screen.getByText(
+				"No se pudo mostrar el buzón de reportes. El resto del panel sigue funcionando.",
+			),
+		).toBeDefined();
+		// El mensaje del error llega: es lo que el operador le pasa a soporte, y
+		// sin él el aviso es "algo falló" sin nada que correlacionar.
+		expect(screen.getByText("Invalid time value")).toBeDefined();
+		expect(screen.getByRole("button", { name: "Reintentar" })).toBeDefined();
+		// `Button render={<Link/>}` —el patrón que ya usa `nav-main.tsx`— deja el
+		// `role="button"` de Base UI sobre el `<a>`, así que la salida se busca por
+		// rol de botón y no de link. Lo que se verifica es que la salida EXISTE y
+		// lleva a otra sección, no la semántica que le pone la librería.
+		const salida = screen.getByRole("button", { name: "Ir al inicio" });
+		expect(salida.getAttribute("href")).toBe("/home");
+	});
+
+	test("'Reintentar' vuelve a montar, que es lo que un error de render pide", () => {
+		// No es un `navigate`: un error de render se resuelve volviendo a intentar
+		// el render, no cambiando de sección.
+		let reseteos = 0;
+		render(
+			<ReportesError error={new Error("boom")} reset={() => reseteos++} />,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+		expect(reseteos).toBe(1);
+	});
+
+	test("un error sin mensaje no rompe ni deja un hueco", () => {
+		// Un `catch` que reventara por leer un `message` vacío sería el mismo bug
+		// que vino a tapar, y es un caso real: muchos `throw` de libraries no
+		// traen mensaje.
+		render(<ReportesError error={new Error("   ")} reset={() => undefined} />);
+		expect(
+			screen.getByText(
+				"No se pudo mostrar el buzón de reportes. El resto del panel sigue funcionando.",
+			),
+		).toBeDefined();
+		expect(screen.queryByText("   ")).toBeNull();
+	});
+});
+
 describe("la ruta USA el saneador, no el parse pelado", () => {
 	test("el validateSearch de la ruta es el que tolera un token desconocido", () => {
 		// Y no se cumple "sin tirar" por casualidad: se cumple porque se ejecuta

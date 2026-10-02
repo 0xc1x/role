@@ -86,7 +86,10 @@ export function failureSentinelFor(
 	path: string,
 	params: URLSearchParams,
 ): { param: string; value: string } | undefined {
-	if (path === "/payouts" && params.get("business_id") === PAYOUTS_FAILURE_FILTER) {
+	if (
+		path === "/payouts" &&
+		params.get("business_id") === PAYOUTS_FAILURE_FILTER
+	) {
 		return { param: "business_id", value: PAYOUTS_FAILURE_FILTER };
 	}
 	if (
@@ -599,9 +602,7 @@ export function respondTo(
 			// A table that ignored the param would answer the same row to every
 			// visibility, and a test asserting "the filter empties the table" would
 			// then be testing the STUB rather than the panel.
-			return paginated(
-				params.get("visibility") === "hidden" ? [] : [REVIEW],
-			);
+			return paginated(params.get("visibility") === "hidden" ? [] : [REVIEW]);
 		case path === "/email-marketing/templates":
 			return paginated([EMAIL_TEMPLATE]);
 		case path === "/push-notifications/templates":

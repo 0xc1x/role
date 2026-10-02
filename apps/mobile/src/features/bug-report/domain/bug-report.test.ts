@@ -1,9 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import { strings } from "@/src/core/i18n/strings";
+
 import {
+	assertReportImageCount,
 	detectImageContentType,
 	localImageFromBytes,
+	MAX_REPORT_DESCRIPTION_CHARS,
 	MAX_REPORT_IMAGE_BYTES,
+	MAX_REPORT_IMAGES,
+	MAX_REPORT_SUMMARY_CHARS,
 	normalizeDescription,
 	normalizeSummary,
 	reportOriginFor,
@@ -75,6 +81,99 @@ describe("la descripción se recorta pero es opcional", () => {
 		expect(normalizeDescription("  pasa al pulsar reservar ")).toBe(
 			"pasa al pulsar reservar",
 		);
+	});
+});
+
+/**
+ * Topes de ESCRITURA del texto.
+ *
+ * No es legibilidad: `app_store.value` es un `jsonb` sin restricción de tamaño
+ * y el `WITH CHECK` de la única policy de insert no mira `value`, así que el
+ * cliente elige el tamaño. El resumen se copia verbatim a la columna del
+ * listado, y un cliente que mande 5 MB produce 5 MB por fila × 20 filas. El
+ * buzón deja de responder.
+ *
+ * Y NO es truncar en lectura, que es lo que commonsaretteó no hacer: acá el
+ * texto se RECHAZA con un mensaje accionable en vez de perderse en silencio.
+ */
+describe("el texto del usuario tiene tope de escritura", () => {
+	test("los topes son los que el dominio declara", () => {
+		expect(MAX_REPORT_SUMMARY_CHARS).toBe(300);
+		expect(MAX_REPORT_DESCRIPTION_CHARS).toBe(4_000);
+	});
+
+	test("un resumen de más se rechaza, con el número en el mensaje", () => {
+		// El `{max}` lo resuelve el dominio: sin eso el usuario leería "{max}" en
+		// crudo y el rechazo deja de ser accionable.
+		let caught: unknown;
+		try {
+			normalizeSummary("A".repeat(MAX_REPORT_SUMMARY_CHARS + 1));
+		} catch (error) {
+			caught = error;
+		}
+		expect(caught).toBeInstanceOf(Error);
+		expect((caught as { kind?: string }).kind).toBe("validation");
+		const mensaje = (caught as Error).message;
+		expect(mensaje).toContain(String(MAX_REPORT_SUMMARY_CHARS));
+		expect(mensaje).not.toContain("{max}");
+	});
+
+	test("justo en el tope entra", () => {
+		// El límite es "> tope", no ">= tope": un texto de exactamente 300
+		// caracteres es un resumen legítimo y rechazarlo sería un tope de 299
+		// disfrazado.
+		expect(normalizeSummary("A".repeat(MAX_REPORT_SUMMARY_CHARS))).toBe(
+			"A".repeat(MAX_REPORT_SUMMARY_CHARS),
+		);
+	});
+
+	test("una descripción de más se rechaza, con el número en el mensaje", () => {
+		let caught: unknown;
+		try {
+			normalizeDescription("B".repeat(MAX_REPORT_DESCRIPTION_CHARS + 1));
+		} catch (error) {
+			caught = error;
+		}
+		expect(caught).toBeInstanceOf(Error);
+		const mensaje = (caught as Error).message;
+		expect(mensaje).toContain(String(MAX_REPORT_DESCRIPTION_CHARS));
+		expect(mensaje).not.toContain("{max}");
+	});
+
+	test("la vacuidad se comprueba ANTES que el largo", () => {
+		// Un resumen de 5 MB de espacios no es "demasiado largo": es un resumen
+		// vacío. Con el orden invertido el usuario recibe "es muy largo" y su
+		// reacción —borrarlo— lo deja igual, en un bucle.
+		let caught: unknown;
+		try {
+			normalizeSummary(" ".repeat(MAX_REPORT_SUMMARY_CHARS + 1));
+		} catch (error) {
+			caught = error;
+		}
+		expect((caught as Error).message).toBe(
+			strings.bugReport.errorSummaryRequired,
+		);
+	});
+
+	test("una descripción de 10.000 espacios NO es un rechazo de tamaño", () => {
+		// El largo se mide sobre el texto YA recortado, no sobre el crudo: un
+		// campo de 10.000 espacios se normaliza a `null` y no se escribe, así que
+		// rechazarlo sería un falso positivo sobre un reporte que sí era válido.
+		expect(normalizeDescription(" ".repeat(10_000))).toBeNull();
+	});
+
+	test("el rechazo de capturas también resuelve su {max}", () => {
+		// `errorTooManyImages` llevaba el 5 escrito a mano y su comentario
+		// señalaba la corrección de fondo como pendiente. Ahora el número sale de
+		// `MAX_REPORT_IMAGES`, que es donde vive el valor.
+		let caught: unknown;
+		try {
+			assertReportImageCount(MAX_REPORT_IMAGES + 1);
+		} catch (error) {
+			caught = error;
+		}
+		expect((caught as Error).message).toContain(String(MAX_REPORT_IMAGES));
+		expect((caught as Error).message).not.toContain("{max}");
 	});
 });
 
