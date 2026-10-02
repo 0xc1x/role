@@ -54,16 +54,59 @@ export default defineConfig({
 			stderr: "pipe",
 		},
 		{
-			command: `VITE_API_URL=http://127.0.0.1:${STUB_API_PORT}/api/v1 bunx vite dev --port ${PORT} --host 127.0.0.1`,
+			// ── WHY THE BUILD AND NOT `vite dev` ──────────────────────────────
+			//
+			// This was the last app still serving a dev server in its e2e: admin
+			// already used `build && vite preview`, and mobile
+			// `export:web` + a static server. Both moved for the same reason, and
+			// the reason is measured in `apps/admin/playwright.config.ts:80-84`
+			// over this same chain (`signIn` → `goto section` → `expect row`),
+			// one browser at a time vs several:
+			//
+			//   | workers | vite dev | vite preview (prod build) |
+			//   |---------|----------|--------------------------|
+			//   |    1    |   7.7 s  |   3.9 s                  |
+			//   |    4    |  10.9 s  |   7.7 s                  |
+			//   |    8    |  19.8 s  |  14.4 s                  |
+			//
+			// The dev server serialises every SSR render through ONE Node
+			// process, so a test's cost grows with the number of workers hitting
+			// it: 7.7 s → 19.8 s. The build takes that transform work off the
+			// request path entirely, and its number does not depend on a cache
+			// CI does not keep.
+			//
+			// Landing is the most SSR-heavy of the three — SEVEN public routes,
+			// and `production-isolation.spec.ts` walks all of them inside one
+			// test — so it was the app paying the most for a dev server. And the
+			// first sign that something was off was exactly there: that test
+			// timed out on budget, with 25.9 s of real work against a 30 s limit.
+			//
+			// It is also the artefact that actually ships. `vite dev` serves a
+			// DEV bundle, so testing it means testing a different program from
+			// the one users get — the same argument that moved mobile off
+			// `expo start --web`.
+			//
+			// MEASURED on this branch, over all 40 tests of the suite: 267 s with
+			// `vite dev` → 128 s with the build, i.e. 2.09x. And it is not only
+			// time: under the dev server 2 of those 40 failed on budget, and
+			// with the build all 40 pass.
+			command: `VITE_API_URL=http://127.0.0.1:${STUB_API_PORT}/api/v1 bun run build && VITE_API_URL=http://127.0.0.1:${STUB_API_PORT}/api/v1 bunx vite preview --port ${PORT} --host 127.0.0.1`,
 			port: PORT,
-			// The dev server must boot fresh. A reused one would have been
-			// started with whatever `VITE_API_URL` the shell had, which is the
-			// production URL by default — reusing it would silently reintroduce
-			// the exact traffic this suite exists to rule out.
+			// The preview must boot fresh. A reused one — from another branch,
+			// or booted with the shell's `VITE_API_URL`, which defaults to the
+			// production URL — would silently reintroduce the exact traffic this
+			// suite exists to rule out.
 			reuseExistingServer: false,
 			stdout: "pipe",
 			stderr: "pipe",
-			timeout: 180_000,
+			// The budget is NOT for a server hang: it is for the BUILD that
+			// precedes it, which lives inside the same command. Measured 75-84 s
+			// on this box, and admin's is 99 s — the "~6 s" in admin's own
+			// comment has gone stale. With `turbo` running all four e2e suites
+			// at once, this build competes with admin's and with mobile's
+			// `export:web` on a 2-core runner, so 180 s was thin for a cold
+			// start. 300 s is room for that, not slack.
+			timeout: 300_000,
 		},
 	],
 });

@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test";
 
-import {
-	extractOAuthCode,
-	NATIVE_OAUTH_REDIRECT_URL,
-} from "./social-auth";
+import { extractOAuthCode, NATIVE_OAUTH_REDIRECT_URL } from "./social-auth";
 
 test("extracts the PKCE code from native and web return URLs", () => {
 	expect(extractOAuthCode(`${NATIVE_OAUTH_REDIRECT_URL}?code=abc123`)).toBe(

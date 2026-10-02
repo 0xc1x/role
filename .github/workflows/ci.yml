@@ -99,6 +99,23 @@ jobs:
       # mobile). `--with-deps` pulls the runner's system libraries; without this
       # step every browser suite below fails at launch with a missing shared
       # object rather than at an assertion.
+      # Los navegadores son ~170 MB y Playwright no los cachea solo. El paso
+      # anterior tardaba 29 s en cada corrida, siempre igual, y el contenido
+      # cambia recién cuando cambia la versión de Playwright — que la trae
+      # `bun.lock`, igual que la key del caché de Bun de más arriba.
+      #
+      # La key incluye el lockfile para que subir Playwright no sirva un binario
+      # viejo: es exactamente el motivo por el que el paso de instalación
+      # existe. `restore-keys` usa el prefijo solo, así que un cambio de lock que
+      # NO toque Playwright reaprovecha el caché y no vuelve a descargar 170 MB.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
