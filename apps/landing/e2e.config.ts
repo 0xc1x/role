@@ -6,6 +6,17 @@ export default {
 	tests: "e2e-agent/**/*.e2e.ts",
 	// Sin modelo en esta fase, el replay cache no tiene nada que guardar.
 	cache: "off",
+	// Un worker, y no el default (la mitad de los cores fuera de CI). El dev
+	// server y el stub son UN proceso cada uno, arrancados una vez por corrida y
+	// compartidos por todos los workers: en paralelo, dos tests conducirían el
+	// mismo stub a la vez y el conteo de tráfico de cualquiera de los dos sería
+	// indescifrable. Con tres tests en toda la suite, el paralelismo no compra
+	// nada y sí compra una carrera.
+	//
+	// Mismo argumento y mismo número que en apps/landing/playwright.config.ts:36
+	// (`workers: 1`, `fullyParallel: false`). Playwright acota por archivo;
+	// acá el límite es por proceso compartido, que es más estricto.
+	workers: 1,
 	targets: [
 		{
 			// UN target, no dos. `app.command` es un proceso por target y el
