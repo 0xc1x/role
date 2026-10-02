@@ -487,6 +487,23 @@ beforeAll(async () => {
    * El `state` de la fila de contacto es NULL y no `ABIERTO`, que es lo que el
    * schema documenta al llamar `state` nullable: el mensaje de contacto comparte
    * la columna, no el vocabulario.
+   *
+   * ─── LA FILA DE REPORTE TIENE `reporter_id` EN NULL, Y NO ES UN ERROR ──────
+   *
+   * El `value` de abajo pone `"reporter_id": "${REPORTER}"` y el resultado en la
+   * fila es `null`. No es que el seed falle: el trigger `on_bug_report_stamped`
+   * se dispara igual, escribe su `reporter_id: auth.uid()` sobre lo que le
+   * mandamos, y este seed corre como el dueño de la tabla SIN `sub` en el claim.
+   * O sea que `auth.uid()` es NULL y el operando derecho del `||` —que es el
+   * que pisa— deja `{"reporter_id": null}`.
+   *
+   * Está anotado porque es una trampa para quien agregue una aserción contra
+   * `BUG_ID` después: leería `reporter_id` esperando el `REPORTER` del seed y la
+   * aserción fallaría sin que haya ningún bug, porque el trigger se está portando
+   * exactamente como debe. Es el mismo hecho que mide el bloque "sin sub en el
+   * claim el sello queda null", alcanzado por el camino del dueño. Para una fila
+   * con `reporter_id` real hay que escribirla con `as()`, que es lo que hacen
+   * los tests del camino de allow.
    */
   await ctx.sql.unsafe(`
     insert into public.app_store (id, namespace, value, delivery_status, state, origin)
@@ -1058,7 +1075,7 @@ describe('cada término del WITH CHECK sostiene algo, no decora', () => {
      * pasándole el `WITH CHECK` COMPLETO, que es el del ledger: con él, las
      * cinco escrituras prohibidas tienen que seguir rechazándose. Si se
      * rechazan, el `inserted: true` del test anterior viene de que el término
-     * faltante era el que las frenaba, y no de que la sonda corrieraa como el
+     * faltante era el que las frenaba, y no de que la sonda corriera como el
      * dueño.
      */
     for (const sql of [
@@ -1162,43 +1179,70 @@ describe('el camino de allow, y qué escribe el cliente de verdad', () => {
    * contra la policy y no contra el enum.
    */
   test('ios, android y pwa entran; web no, aunque el enum lo admita', async () => {
-    const admitidos: Record<string, boolean> = {};
-    for (const origin of ['ios', 'android', 'pwa', 'web']) {
-      admitidos[origin] = (await denied(insertBug({ origin }))) === null;
-    }
-    expect(admitidos).toEqual({
-      ios: true,
-      android: true,
-      pwa: true,
-      web: false,
+    /**
+     * Todo el bucle dentro de `probe()`, y el conteo FUERA.
+     *
+     * La primera versión de este test limpiaba a mano, con un `delete` después
+     * del último `expect` y sin `finally`. Eso convierte cualquier aserción
+     * intermedia que falle en una fuga: las tres filas que entraron quedan en la
+     * base, el `delete` nunca corre, y el `expect(n).toBe(2)` de abajo falla
+     * con un mensaje sobre filas que el lector no relaciona con el `expect` que
+     * realmente falló. Es el peor orden posible —el síntoma se parece a otro
+     * test— y `probe()` lo resuelve porque su borrado va en un `finally`.
+     *
+     * El conteo queda después de `probe()` a propósito: si estuviera adentro,
+     * contaría la tabla ya limpiada y no probaría nada.
+     */
+    await probe(async () => {
+      const admitidos: Record<string, boolean> = {};
+      for (const origin of ['ios', 'android', 'pwa', 'web']) {
+        admitidos[origin] = (await denied(insertBug({ origin }))) === null;
+      }
+      expect(admitidos).toEqual({
+        ios: true,
+        android: true,
+        pwa: true,
+        web: false,
+      });
+
+      const enumValues = await ctx.sql.unsafe<{ enumlabel: string }[]>(
+        `select e.enumlabel
+           from pg_enum e
+           join pg_type t on t.oid = e.enumtypid
+           join pg_namespace n on n.oid = t.typnamespace
+          where n.nspname = 'public' and t.typname = 'entry_origin'
+          order by e.enumsortorder`,
+      );
+      expect(plainRows(enumValues).map((e) => e.enumlabel)).toEqual([
+        'ios',
+        'android',
+        'pwa',
+        'web',
+      ]);
+
+      // `deniedAs` devuelve `null` en el camino de éxito Y COMMITEA, así que las
+      // tres filas que entraron están en la base mientras este test corre. Las
+      // borra el `finally` de `probe()`, no esta línea.
+      const durante = await ctx.sql.unsafe<{ n: number }[]>(
+        `select count(*)::int as n from public.app_store
+          where key like '${PROBE_KEY_PREFIX}%'`,
+      );
+      expect(
+        plainRows(durante)[0]?.n,
+        'los tres orígenes admitidos no dejaron su fila, o el `deniedAs` está ' +
+          'midiendo el camino equivocado.',
+      ).toBe(3);
     });
 
-    const enumValues = await ctx.sql.unsafe<{ enumlabel: string }[]>(
-      `select e.enumlabel
-         from pg_enum e
-         join pg_type t on t.oid = e.enumtypid
-         join pg_namespace n on n.oid = t.typnamespace
-        where n.nspname = 'public' and t.typname = 'entry_origin'
-        order by e.enumsortorder`,
-    );
-    expect(plainRows(enumValues).map((e) => e.enumlabel)).toEqual([
-      'ios',
-      'android',
-      'pwa',
-      'web',
-    ]);
-
-    // `deniedAs` devuelve `null` en el camino de éxito Y COMMITEA, así que las
-    // tres filas que entraron están en la base y hubo que borrarlas.
-    await ctx.sql
-      .unsafe(
-        `delete from public.app_store where key like '${PROBE_KEY_PREFIX}%'`,
-      )
-      .catch(() => {});
     const rows = await ctx.sql.unsafe<{ n: number }[]>(
       `select count(*)::int as n from public.app_store`,
     );
-    expect(plainRows(rows)[0]?.n, 'las sondas de origen dejaron filas').toBe(2);
+    expect(
+      plainRows(rows)[0]?.n,
+      'las sondas de origen dejaron filas. El `finally` de `probe()` corre antes ' +
+        'de que una aserción lance, así que si quedan filas el borrado falló y no ' +
+        'fue una aserción la que cortó el test.',
+    ).toBe(2);
   });
 
   /**
@@ -1336,14 +1380,27 @@ describe('UPDATE y DELETE no son caminos, y el SELECT tampoco', () => {
    * `WHERE`, abajo, importa más que este.
    */
   test('SELECT, UPDATE, DELETE y TRUNCATE se rechazan para los dos roles cliente', async () => {
+    /**
+     * Las cuatro sentencias, con `;` al final.
+     *
+     * El `;` no hace nada acá y por eso está: cada una viaja en su propia
+     * llamada a `tx.unsafe`, así que el driver no tiene nada que partir. Pero
+     * sin él estas cuatro son las únicas del archivo que no son SQL válido por
+     * sí solas, y un string de test sin `;` se copia mal —a un `unsafe` con
+     * varias sentencias, a un archivo `.sql`, a un `psql`— y el error que
+     * aparece ahí no tiene nada que ver con RLS.
+     */
     const statements: readonly [string, string][] = [
-      ['SELECT', `select id from public.app_store`],
+      ['SELECT', `select id from public.app_store;`],
       [
         'UPDATE',
-        `update public.app_store set state = 'CORREGIDO' where namespace = 'bug_report'`,
+        `update public.app_store set state = 'CORREGIDO' where namespace = 'bug_report';`,
       ],
-      ['DELETE', `delete from public.app_store where namespace = 'bug_report'`],
-      ['TRUNCATE', `truncate public.app_store`],
+      [
+        'DELETE',
+        `delete from public.app_store where namespace = 'bug_report';`,
+      ],
+      ['TRUNCATE', `truncate public.app_store;`],
     ];
 
     for (const role of ['anon', 'authenticated'] as const) {
@@ -1392,7 +1449,7 @@ describe('UPDATE y DELETE no son caminos, y el SELECT tampoco', () => {
    * hay error, y `deniedAs` devuelve `null` exactamente cuando la sentencia
    * corrió. Es el uso legible de la función; el otro está en todos lados.
    */
-  test('UPDATE y DELETE sin WHERE corren, no affected nada, y no hay error', async () => {
+  test('UPDATE y DELETE sin WHERE corren, no tocan nada, y no hay error', async () => {
     const snapshot = async () => {
       const rows = await ctx.sql.unsafe<{ n: number; estados: string }[]>(
         `select (select count(*)::int from public.app_store) as n,
@@ -1824,7 +1881,7 @@ describe('las capturas: bucket privado y carpeta con el prefijo del uid', () => 
    * `20260925155445`— con el `owner` Y el folder: el `owner` solo ya no basta,
    * porque el folder es lo que separa los reportes de una misma persona, y el
    * `owner` solo lo que evita que alguien escriba en la carpeta de otra. Ningún
-   * termino es decorativo y por eso el texto se asserta completo.
+   * término es decorativo y por eso el texto se asserta completo.
    *
    * No hay policy de UPDATE ni de DELETE sobre este bucket. Un reporte con su
    * evidencia es de solo lectura para el cliente: puede adjuntar capturas
