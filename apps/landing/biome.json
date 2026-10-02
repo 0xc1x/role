@@ -11,6 +11,8 @@
 			"**/src/**/*",
 			"**/index.html",
 			"**/vite.config.ts",
+			"**/e2e-agent/**/*",
+			"**/e2e.config.ts",
 			"!**/src/routeTree.gen.ts",
 			"!**/src/styles.css"
 		]

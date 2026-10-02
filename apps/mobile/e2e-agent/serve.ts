@@ -362,14 +362,16 @@ async function exportWeb(): Promise<void> {
  * brutal comparada con landing y admin: el paso caro es `expo export` (una
  * lectura completa del grafo de módulos y un bundle de 8.1 MB), y un chequeo lo
  * evita entero. En los otros dos el paso caro es `vite build`, así que el mismo
- * chequeo vale menos — pero el patrón se aplica igual por simetría del trío.
+ * chequeo vale menos — y ninguno de los dos lo trae: `assertPortFree` es de
+ * ESTE archivo únicamente, no del trío. Ver
+ * `apps/{landing,admin}/e2e-agent/serve.ts`, donde los dos puertos ocupados se
+ * reportan por la vía del código de salida del hijo en vez de por un pre-flight.
  *
- * Además esta máquina tiene una segunda worktree (`/mnt/c/Users/leonardo/
- * role-bugreports`, branch `feat/bug-reports-b`) cuya suite de Playwright levanta
- * SU static server en el mismo 8085 (`MOBILE_E2E_PORT` tiene el mismo default).
- * Las dos suites son indistinguibles desde afuera, así que el
- * mensaje dice explícitamente que puede ser la otra y que no hay que matar nada
- * ajeno.
+ * Además, este puerto 8085 es el default de `MOBILE_E2E_PORT`, así que cualquier
+ * otra suite de Playwright de esta misma app —o la de otra worktree de este
+ * repo, corriendo en otra branch— levanta SU static server en el mismo puerto.
+ * Las dos son indistinguibles desde afuera, así que el mensaje dice explícitamente
+ * que puede ser la otra y que no hay que matar nada ajeno.
  *
  * Por qué NO se re-lanza el server ajeno ni se lo mata: no es de esta corrida, y
  * un `kill` a ciegas de otro árbol de procesos es la clase de bug que borra el
@@ -415,8 +417,8 @@ async function assertPortFree(): Promise<void> {
 			"",
 			"Causas probables:",
 			"  - la suite de Playwright de esta misma app (comparten el puerto 8085),",
-			"  - la worktree /mnt/c/Users/leonardo/role-bugreports, que también",
-			"    levanta un server en 8085,",
+			"  - la suite de Playwright de otra worktree de este repo (mismo",
+			"    default de MOBILE_E2E_PORT, mismo puerto),",
 			"  - un `e2e/static-server.mjs` de una corrida anterior.",
 			"",
 			`Liberalo y volvé a correr. Para ver quién lo tiene: lsof -i :${port}`,

@@ -32,7 +32,8 @@
     },
     "test:e2e:agent": {
       "dependsOn": ["^build"],
-      "env": ["VITE_API_URL"]
+      "env": ["VITE_API_URL"],
+      "cache": false
     },
     "lint": {},
     "format:check": {}

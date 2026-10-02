@@ -54,6 +54,20 @@ export default {
 				// `app.url` queda intacto: es la base de `app.open()` y la que
 				// los tests asertan.
 				readyUrl: "http://127.0.0.1:3110/favicon.ico",
+				// ── ESTA SUITE Y `playwright.config.ts` COMPARTEN PUERTOS ───────
+				//
+				// 3110 y 4110 son los MISMOS que usa
+				// `apps/admin/playwright.config.ts:13-14`, con los mismos defaults
+				// (`ADMIN_E2E_PORT` / `ADMIN_E2E_STUB_PORT`) y sin variable de
+				// entorno que los separe. Las dos suites no pueden correr a la vez
+				// en esta app, y una corrida desde otra worktree se ve igual que
+				// un proceso zombi de una corrida anterior (`APP_ALREADY_RUNNING`,
+				// `EADDRINUSE`).
+				//
+				// Es una limitación CONOCIDA y documentada a propósito, no un
+				// descuido pendiente: separar los puertos de esta suite de los de
+				// Playwright está parked en el ledger del branch. Consecuencia
+				// operativa: una suite por app, y nunca las dos en paralelo.
 				command: {
 					executable: "bun",
 					args: ["e2e-agent/serve.ts"],

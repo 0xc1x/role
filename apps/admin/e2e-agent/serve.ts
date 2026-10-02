@@ -103,10 +103,13 @@ function spawn(name: string, cmd: string[], env: Record<string, string>) {
 		//     `target "admin" command exited with code 0 before becoming ready`
 		// que manda a leer el readiness de un target sano. La causa real
 		// (`Failed to start server. Is port 4110 in use?`) quedaba solo en el
-		// log, debajo de un titular que señalaba otra cosa. Y 4110 NO tiene la
-		// pre-verificación que sí tiene 3110: el runner solo sondea `readyUrl`
-		// (managed-process.js:141-147), así que una colisión en el stub es
-		// precisamente el caso que este código tiene que reportar bien.
+		// log, debajo de un titular que señalaba otra cosa. Y acá NO hay ninguna
+		// pre-verificación de puerto: ni 4110 ni 3110. El runner solo sondea
+		// `readyUrl` (managed-process.js:141-147) una vez que arrancó el comando,
+		// así que una colisión —en cualquiera de los dos puertos— solo es visible
+		// por este código de salida. Por eso la propagación es el único mecanismo
+		// de reporte que tiene esta app: el pre-flight de puerto de
+		// `apps/mobile/e2e-agent/serve.ts` es de ese archivo y no del trío.
 		shutdown(code ?? 1);
 	});
 	return child;

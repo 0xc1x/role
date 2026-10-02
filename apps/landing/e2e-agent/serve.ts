@@ -71,10 +71,13 @@ function spawn(name: string, cmd: string[], env: Record<string, string>) {
 		// `process.exit(0)`— el runner recibía 0 y reportaba
 		//     `target "landing" command exited with code 0 before becoming ready`
 		// que manda a leer el readiness de un target sano, con la causa real
-		// abajo solo en el log. Y el puerto del stub NO tiene la pre-verificación
-		// que sí tiene el de la UI: el runner solo sondea `readyUrl`
-		// (managed-process.js:141-147), así que una colisión ahí es
-		// precisamente el caso que este código tiene que reportar bien.
+		// abajo solo en el log. Y acá NO hay ninguna pre-verificación de puerto:
+		// ni el del stub (3999) ni el de la UI (3101). El runner solo sondea
+		// `readyUrl` (managed-process.js:141-147) una vez que arrancó el
+		// comando, así que una colisión —en cualquiera de los dos puertos— solo
+		// es visible por este código de salida. Por eso la propagación es el
+		// único mecanismo de reporte que tiene esta app: el pre-flight de puerto
+		// de `apps/mobile/e2e-agent/serve.ts` es de ese archivo y no del trío.
 		shutdown(code ?? 1);
 	});
 	return child;
