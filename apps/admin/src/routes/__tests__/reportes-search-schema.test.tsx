@@ -41,11 +41,23 @@ mock.module("@tanstack/react-router", () => ({
 	),
 }));
 
-const { parseBugReportsSearch, Route } = await import("../_layout.reportes");
-// `ReportesError` se importa del FEATURE y no de la ruta a propósito: `export`
-// desde un archivo de ruta rompe el code-splitting de esa ruta, y el build lo
-// avisa ("will not be code-split and will increase your bundle size"). El test
-// del componente tiene que vivir donde el componente vive.
+// `parseBugReportsSearch` vive en el FEATURE y no en la ruta, por dos razones que
+// este spec es el primero que va a sufrir si vuelve atrás. La primera es que
+// `export` desde un archivo de ruta rompe el code-splitting de esa ruta, y el
+// build lo avisa ("will not be code-split and will increase your bundle size").
+// La segunda es que `react-doctor` marca `only-export-components`: la ruta es un
+// componente, y un helper de parseo exportado desde ahí no lo es.
+//
+// Importarlo por el MÓDULO y no por la ruta es lo que hace que el test siga
+// probando lo que dice: este archivo monta la ruta para el `errorComponent` y
+// llama al helper directo, sin router.
+const { parseBugReportsSearch } = await import(
+	"@/features/bug-reports/queries/bug-reports.search"
+);
+const { Route } = await import("../_layout.reportes");
+// `ReportesError` se importa del FEATURE y no de la ruta a propósito: mismo
+// motivo de code-splitting, y el test del componente tiene que vivir donde el
+// componente vive.
 const { ReportesError } = await import("@/features/bug-reports");
 
 const { cleanup, fireEvent, render, screen } = await import("@/test-utils/dom");

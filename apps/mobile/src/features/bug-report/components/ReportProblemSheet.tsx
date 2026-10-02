@@ -148,6 +148,7 @@ export function ReportProblemSheet({
 
 			const read: Capture[] = [];
 			let firstFailure: string | null = null;
+			// react-doctor-disable-next-line react-doctor/async-await-in-loop -- sequential on purpose: this reads each file's BYTES into memory, so awaiting them together would hold every picked image at once, which on a low-end phone is the OOM this loop exists to avoid
 			for (const asset of picked) {
 				try {
 					// El descarte por tamaño declarado es la razón de que

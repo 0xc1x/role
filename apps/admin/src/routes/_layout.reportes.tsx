@@ -1,60 +1,17 @@
-import {
-	BUG_TRIAGE_STATES,
-	ENTRY_ORIGINS,
-	type ListBugReportsQuery,
-	ListBugReportsQuerySchema,
-} from "@0xc1x/role-commons";
 import { createFileRoute } from "@tanstack/react-router";
 import { BugReportsList, ReportesError } from "@/features/bug-reports";
+import { parseBugReportsSearch } from "@/features/bug-reports/queries/bug-reports.search";
 
 /**
- * `state` y `origin` se limpian ANTES del parseo, y no con un `catch` sobre el
- * schema entero.
- *
- * POR QUÉ ESTA RUTA Y NO LAS OTRAS TRECE. Un `?state=REABIERTO` revienta
- * `validateSearch`, el router lo envuelve en `SearchParamError` y REEMPLAZA LA
- * PÁGINA ENTERA por el "Something went wrong!" de TanStack Router: sin barra
- * lateral, sin sección, sin el "Reintentar" del componente. El patrón de las
- * otras trece rutas tiene ese mismo hueco, así que esto no es una regresión —
- * pero en esta sección el token malo NO es una hipótesis, es un hecho que el
- * propio contrato declara: `app_store.state` es `text` sin CHECK, el mapper lo
- * estrecha a `null` sin lanzar, y el diseño dice que `null` significa "sin
- * triar" *o* "estado desconocido". El siguiente triageo natural de un operador
- * —"¿por qué esta fila dice Sin triar?"— lleva a copiar un token en la URL.
- *
- * `catch` sobre el schema entero habría sido peor que el problema: tragándose
- * un `?page=0` o un `?limit=999` inválidos los convertiría en los defaults
- * silenciosamente, que es un agujero distinto con la misma forma.
- *
- * `find` y no un `as`: es la misma disciplina del mapper de la API. Un token
- * fuera del vocabulario se traduce en "sin ese filtro", que es la única lectura
- * honesta — y no en un tipo mentiroso que el resto del panel acabaría creyendo.
- *
- * Y lo que NO se limpia: `page` y `limit` siguen tirando si vienen mal. Son
- * filtros que el operador no escribe a mano y un error ahí sí vale la página
- * en blanco, que es lo que hacen las otras trece rutas.
+ * Por qué esta ruta sanea los search params y las otras trece no: el razonamiento
+ * completo —y por qué `catch` sobre el schema entero habría sido peor— está en
+ * `features/bug-reports/queries/bug-reports.search.ts`, que es donde vive el
+ * helper. Acá queda la resumen: un `?state=REABIERTO` revienta `validateSearch`,
+ * el router lo envuelve en `SearchParamError` y REEMPLAZA LA PÁGINA ENTERA por el
+ * "Something went wrong!" de TanStack Router. En esta sección el token malo no es
+ * una hipótesis: el propio contrato declara que `state` se estrecha a `null` sin
+ * lanzar, y `null` significa "sin triar" *o* "estado desconocido".
  */
-function soloDelVocabulario<T extends string>(
-	valor: unknown,
-	vocabulario: readonly T[],
-): T | undefined {
-	return typeof valor === "string"
-		? vocabulario.find((conocido) => conocido === valor)
-		: undefined;
-}
-
-// Exportado para que el spec de la ruta pueda probarlo sin montar el router, que
-// necesita un contexto completo. No es parte de la superficie de la sección:
-// quien consume la UI importa desde `@/features/bug-reports`.
-export function parseBugReportsSearch(
-	raw: Record<string, unknown>,
-): ListBugReportsQuery {
-	return ListBugReportsQuerySchema.parse({
-		...raw,
-		state: soloDelVocabulario(raw.state, BUG_TRIAGE_STATES),
-		origin: soloDelVocabulario(raw.origin, ENTRY_ORIGINS),
-	});
-}
 
 /**
  * Buzón de los reportes de error que envía la app móvil.
