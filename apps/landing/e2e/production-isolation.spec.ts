@@ -53,6 +53,31 @@ test.describe("production isolation", () => {
 		page,
 		network,
 	}) => {
+		// ── POR QUÉ ESTE TEST NECESITA MÁS PRESUPUESTO ──────────────────────
+		//
+		// Es la ÚNICA prueba de la app que recorre las siete rutas dentro de un
+		// mismo test, y el presupuesto por defecto de Playwright son 30 s PARA EL
+		// TEST ENTERO, no por ruta.
+		//
+		// MEDIDO, replicando la secuencia exacta de `gotoHydrated` (goto, `load`,
+		// la clase `js`, el request del cliente, y el heading): con el dev server
+		// ya caliente el bucle completo tarda 25,9 s. O sea que el test pasaba por
+		// cuatro segundos, y en CI eso no alcanza: el server arranca frío, la
+		// primera visita a `/` paga el compilado de Vite, y turbo corre las cuatro
+		// suites de Playwright a la vez sobre un runner de 2 nucleos. Con esos
+		// tres costos encima, el bucle pasa de 30 s y el test se corta solo.
+		//
+		// EL SÍNTOMA PARECÍA OTRO. El timeout caía en `gotoHydrated` esperando la
+		// clase `js` del root, que se lee como "esta ruta no hidrata". No lo es:
+		// las siete hidratan, y la más lenta tarda 4,3 s con el server caliente.
+		//
+		// `test.slow()` triplica el presupuesto (30 s → 90 s), o sea 3,5x sobre la
+		// medición en caliente. NO se sube el timeout global: las otras 33
+		// pruebas de esta app se resuelven en segundos y solo esta recorre siete
+		// rutas — `navigation.spec.ts` visita dos, `content-pages.spec.ts` dos y
+		// `business-signup.spec.ts` una.
+		test.slow();
+
 		for (const path of PUBLIC_ROUTES) {
 			await gotoHydrated(page, path);
 			// The SSR pass has already resolved by the time goto returns, and
