@@ -1957,6 +1957,27 @@ export const strings = {
 			panelTitle: "Tu negocio en tres pestañas",
 		},
 	},
+	// Copy del BUZÓN DE REPORTES DE ERRORES (features/bug-report). Acá vive solo
+	// lo que la CAPA DE DATOS necesita; el formulario y el bottom sheet de la
+	// Task 8 agregan su copy en esta misma sección.
+	//
+	// Los tres mensajes de imagen son de RECHAZO EN CLIENTE y por eso son
+	// distintos entre sí: "no la pudimos leer" y "es demasiado grande" piden
+	// acciones distintas —una re-toma o un archivo distinto, y una captura más
+	// liviana— y un único "imagen inválida" haría que el usuario pruebe al azar.
+	// El copy no dice "5 MB" porque el número está en `MAX_REPORT_IMAGE_BYTES` y
+	// en el bucket: dos fuentes de la verdad para el mismo límite divergen.
+	bugReport: {
+		errorSummaryRequired:
+			"Escribe un resumen para que podamos entender qué pasó.",
+		errorImageNotSupported:
+			"No pudimos leer esa imagen. Vuelve a tomarla o elige un archivo.",
+		errorImageTooLarge:
+			"Esa imagen es demasiado grande. Prueba con una captura más liviana.",
+		errorImageUploadFailed: "No pudimos adjuntar la imagen.",
+		errorNotSignedIn: "Inicia sesión para enviar un reporte.",
+		errorSubmitFailed: "No pudimos enviar tu reporte.",
+	},
 	// ── Sonda de diagnóstico de Google Maps (src/dev/) ────────────
 	// No es una ruta: vive fuera de `app/` para que no entre en el router.
 	// Su copy vive aquí igual para respetar el contrato de i18n.
