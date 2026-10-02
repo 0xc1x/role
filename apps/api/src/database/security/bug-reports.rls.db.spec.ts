@@ -668,7 +668,7 @@ describe('la policy de insert es UNA, y es de INSERT', () => {
   });
 
   /**
-   * RLS habilitado y NO forzado, los cinco índices, y las diez columnas.
+   * RLS habilitado y NO forzado, los seis índices, y las diez columnas.
    *
    * `relforcerowsecurity = false` es la configuración de producción y es lo que
    * hace que la impersonación de `as()` sea lo que decide: RLS aplica a todos
@@ -676,7 +676,10 @@ describe('la policy de insert es UNA, y es de INSERT', () => {
    * harness conecta. Forzarlo acá sería medir una base que producción no tiene.
    *
    * `app_store_status_idx` pasó a llamarse `app_store_delivery_status_idx` con
-   * el rename del eje, y `app_store_state_idx` es la columna nueva. Se assertan
+   * el rename del eje, y `app_store_state_idx` es la columna nueva.
+   * `app_store_namespace_origin_created_at_idx` es el compuesto parcial que
+   * cubren el filtro por `origin` Y el orden de `created_at desc` (`20261002041038`).
+   * Se assertan
    * porque el `WHERE` del listado del panel es `namespace = 'bug_report' and
    * state = …`, y un índice que falta es un buzón que se degrada en silencio a
    * medida que crecen los reportes.
@@ -685,7 +688,7 @@ describe('la policy de insert es UNA, y es de INSERT', () => {
    * perímetro de la policy son CINCO columnas de DIEZ. La diferencia es lo que
    * dice que el cliente escribe más de lo que la policy controla.
    */
-  test('RLS habilitado y no forzado, cinco índices, y las diez columnas de app_store', async () => {
+  test('RLS habilitado y no forzado, seis índices, y las diez columnas de app_store', async () => {
     const flags = await ctx.sql.unsafe<
       {
         relrowsecurity: boolean;
@@ -711,6 +714,7 @@ describe('la policy de insert es UNA, y es de INSERT', () => {
       'app_store_created_at_idx',
       'app_store_delivery_status_idx',
       'app_store_namespace_idx',
+      'app_store_namespace_origin_created_at_idx',
       'app_store_pkey',
       'app_store_state_idx',
     ]);

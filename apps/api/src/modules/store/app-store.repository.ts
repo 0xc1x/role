@@ -102,9 +102,14 @@ export class AppStoreRepository {
     // garantiza es nada para un filtro armado dinámicamente desde un `string`
     // (un `list()` que reenvía un query, por ejemplo): ahí el `string` entra sin
     // que el compilador mire el enum. Por eso el enum de Postgres no es la
-    // garantía: la del vocabulario cerrado la da el service, y el índice sobre
-    // `origin` es una decisión que todavía no está tomada (a este volumen el
-    // planner usa `app_store_namespace_idx` y filtra después).
+    // garantía: la del vocabulario cerrado la da el service.
+    //
+    // El índice sobre `origin` ya no es una decisión pendiente: es
+    // `app_store_namespace_origin_created_at_idx`, un compuesto PARCIAL
+    // (`20261002041038`). No es uno de una sola columna porque `origin` es un
+    // enum de cuatro valores y solo casi no tiene selectividad; el compuesto
+    // además entrega el orden de `created_at desc`, así que el caso sin filtro
+    // de origen tampoco paga un sort.
     if (filter.origin) filters.push(eq(appStore.origin, filter.origin));
     const where = filters.length ? and(...filters) : undefined;
 

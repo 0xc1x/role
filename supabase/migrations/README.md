@@ -412,6 +412,38 @@ further from the only proof of what ran. The file stays the reviewed version, th
 ledger stays the statement the server stored, and the gap is recorded here —
 the same treatment the `20260925*` files above already have.
 
+## Applied: `20261002041038_bug_report_inbox_filter_index`
+
+Aplicada por `apply_migration` el 2026-10-02. El `md5sum` del archivo es
+`2ceb034da1d5ea4ea96b841bc4890867` y ese es también el `md5(statements[1])` del
+ledger: archivo y base coinciden byte a byte. Una sola sentencia, un índice
+compuesto y parcial sobre `(namespace, origin, created_at desc)`. No se borró
+nada.
+
+**El `md5` volvió a ser el único que detectó una palabra en inglés.** Es la
+segunda vez que este repo sufre la misma sustitución (la otra está en
+`20260927*_reviews_moderation_soft_hide`, arriba). Los dos casos son el mismo:
+
+| | archivo | ledger |
+| --- | --- | --- |
+| `reviews_moderation` | `businesses/oferts` | `businesses/offers` |
+| este | `recognizable` | `reconocible` |
+
+En los dos, la sustitución tiene **exactamente la misma longitud** que la
+palabra correcta, así que un conteo de bytes no la ve: solo el md5 la cazó. En
+ambos casos estaba dentro de un comentario `--`, o sea que **ningún DDL estaba
+en juego** y ningún `tsc`, `biome` o suite de tests la habría visto.
+
+Y acá el sentido es el contrario al de `reviews_moderation`: allá el **ledger**
+tenía el typo y el archivo el español correcto, así que el archivo se dejó como
+estaba y la diferencia quedó registrada acá. Acá el **ledger** tenía el español
+correcto, así que alinear el archivo lo reparó en vez de importar un error.
+
+**El comentario en español es la especificación, pero el md5 es el que la
+verifica.**
+Ninguna herramienta lee comentarios; por eso el sello tiene que seguir siendo el
+md5 y no "el archivo parece correcto".
+
 ## Applied: `20260930234450_bug_reports_and_delivery_axis`
 
 Aplicada por `apply_migration` el 2026-09-30. El `md5sum` del archivo es
