@@ -144,7 +144,22 @@ describe('client read/write boundary migration', () => {
 
     // Row access stays bounded by RLS throughout: anon only reaches active
     // businesses, so the exposure was never unbounded, only too wide.
-    expect(ALL_MIGRATIONS).toMatch(/Row access is still bounded by RLS/i);
+    //
+    // ESTO ASSERTABA UNA FRASE DE COMENTARIO ("Row access is still bounded by
+    // RLS"), que solo existe en una versión divergente de estas migraciones:
+    // los archivos byte-idénticos al ledger no la traen. Assertar prosa es
+    // assertar que alguien escribió una frase, no que el SQL haga algo. Ahora
+    // afirma lo que el comentario pretendía — la policy de SELECT para anon
+    // sobre `businesses` está acotada por `is_active`, y más adelante también
+    // por `business_is_approved`.
+    //
+    // Verificado contra la base real: `businesses` tiene RLS activo con cinco
+    // policies, y la que alcanza a anon es "Anyone can view active businesses"
+    // con `USING (is_active = true)`.
+    expect(ALL_MIGRATIONS).toMatch(/using\s*\(\s*is_active\s*=\s*true\s*\)/i);
+    expect(ALL_MIGRATIONS).toMatch(
+      /using\s*\(\s*is_active\s*=\s*true\s+and\s+public\.business_is_approved/i,
+    );
   });
 
   test('offers: computed rating columns are excluded from client write grants', () => {
@@ -184,7 +199,7 @@ describe('client read/write boundary migration', () => {
         /create index if not exists idx_offers_location_business/i.test(s),
       ),
     ).toMatch(
-      /on public\.offers using btree \(business_location_id, business_id\)/i,
+      /on public\.offers using btree \(business_location_id,\s*business_id\)/i,
     );
   });
 
@@ -192,10 +207,10 @@ describe('client read/write boundary migration', () => {
     const fn = statements()
       .join(';\n')
       .match(
-        /create or replace function public\.get_platform_stats\(\)[\s\S]*?\$\$;/i,
+        /create or replace function public\.get_platform_stats\(\)[\s\S]*?\$\w*\$;/i,
       )?.[0];
     expect(fn).toMatch(/security definer/i);
-    expect(fn).toMatch(/set search_path = ''/i);
+    expect(fn).toMatch(/set search_path\s*=\s*''/i);
     // Every client role is revoked individually.
     for (const role of ['public', 'anon', 'authenticated']) {
       expect(
@@ -220,10 +235,10 @@ describe('client read/write boundary migration', () => {
     const fn = statements()
       .join(';\n')
       .match(
-        /create or replace function public\.get_platform_public_stats\(\)[\s\S]*?\$\$;/i,
+        /create or replace function public\.get_platform_public_stats\(\)[\s\S]*?\$\w*\$;/i,
       )?.[0];
     expect(fn).toMatch(/security definer/i);
-    expect(fn).toMatch(/set search_path = ''/i);
+    expect(fn).toMatch(/set search_path\s*=\s*''/i);
     expect(
       findStatement((s) =>
         /grant execute on function public\.get_platform_public_stats\(\) to anon, authenticated/i.test(
@@ -243,7 +258,7 @@ describe('client read/write boundary migration', () => {
     );
     // Rotation is generated, not copied from the legacy source.
     expect(MIGRATION).toMatch(
-      /encode\(extensions\.gen_random_bytes\(32\), 'hex'\)/,
+      /encode\(extensions\.gen_random_bytes\(32\),\s*'hex'\)/,
     );
   });
 
@@ -251,7 +266,7 @@ describe('client read/write boundary migration', () => {
     const fn = statements()
       .join(';\n')
       .match(
-        /create or replace function public\.invoke_internal_edge_function\([\s\S]*?\$\$;/i,
+        /create or replace function public\.invoke_internal_edge_function\([\s\S]*?\$\w*\$;/i,
       )?.[0];
     expect(fn).toMatch(/vault\.decrypted_secrets/);
     expect(fn).toMatch(/raise exception/i);
@@ -287,7 +302,7 @@ describe('client read/write boundary migration', () => {
     // asserting against the first match would pin the outage in place.
     const definitions = [
       ...ALL_MIGRATIONS.matchAll(
-        /create or replace function public\.invoke_internal_edge_function\([\s\S]*?\$\$;/gi,
+        /create or replace function public\.invoke_internal_edge_function\([\s\S]*?\$\w*\$;/gi,
       ),
     ];
     const fn = definitions[definitions.length - 1]?.[0];
@@ -308,7 +323,7 @@ describe('client read/write boundary migration', () => {
     // exposing it to anon/authenticated would turn it into an oracle for
     // guessing the secret by repetition.
     const rpc = ALL_MIGRATIONS.match(
-      /create or replace function public\.internal_dispatch_secret_matches\([\s\S]*?\$\$;/i,
+      /create or replace function public\.internal_dispatch_secret_matches\([\s\S]*?\$\w*\$;/i,
     )?.[0];
     expect(rpc).toBeDefined();
     expect(rpc).toMatch(/security definer/i);
@@ -337,7 +352,7 @@ describe('client read/write boundary migration', () => {
   test('a fresh environment fails closed instead of deploying a broken dispatcher', () => {
     const block = statements()
       .join(';\n')
-      .match(/do \$\$[\s\S]*?\$\$;/i)?.[0];
+      .match(/do \$\$[\s\S]*?\$\w*\$;/i)?.[0];
     expect(block).toMatch(/legacy_src is null/i);
     expect(block).toMatch(/vault\.decrypted_secrets/);
     expect(block).toMatch(/raise exception/i);
@@ -346,7 +361,7 @@ describe('client read/write boundary migration', () => {
   test('the fresh-environment path still syncs the seeded secret to the functions', () => {
     // Section 0 returns early on a fresh env, so the sync needs its own block;
     // otherwise an operator-seeded secret would never reach the Edge functions.
-    const blocks = MIGRATION.match(/do \$\$[\s\S]*?\$\$;/gi) ?? [];
+    const blocks = MIGRATION.match(/do \$\$[\s\S]*?\$\w*\$;/gi) ?? [];
     const syncing = blocks.filter((b) =>
       b.includes('supabase_functions_secret_'),
     );
@@ -361,11 +376,11 @@ describe('client read/write boundary migration', () => {
     const fn = statements()
       .join(';\n')
       .match(
-        /create or replace function public\.handle_order_event_push\(\)[\s\S]*?\$\$;/i,
+        /create or replace function public\.handle_order_event_push\(\)[\s\S]*?\$\w*\$;/i,
       )?.[0];
     expect(fn).toBeDefined();
     expect(fn).toMatch(/invoke_internal_edge_function/);
-    expect(fn).toMatch(/set search_path = ''/i);
+    expect(fn).toMatch(/set search_path\s*=\s*''/i);
     expect(fn).not.toMatch(/x-internal-secret/);
   });
 
@@ -373,7 +388,7 @@ describe('client read/write boundary migration', () => {
     const fn = statements()
       .join(';\n')
       .match(
-        /create or replace function public\.handle_order_event_push\(\)[\s\S]*?\$\$;/i,
+        /create or replace function public\.handle_order_event_push\(\)[\s\S]*?\$\w*\$;/i,
       )?.[0];
     expect(fn).toBeDefined();
     // The deployed handle-order-event returns { success, skipped: true } unless
@@ -391,7 +406,7 @@ describe('client read/write boundary migration', () => {
     const fn = statements()
       .join(';\n')
       .match(
-        /create or replace function public\.invoke_internal_edge_function\([\s\S]*?\$\$;/i,
+        /create or replace function public\.invoke_internal_edge_function\([\s\S]*?\$\w*\$;/i,
       )?.[0];
     const allowlist =
       fn?.match(/if path not in \(([\s\S]*?)\) then/i)?.[1] ?? '';
@@ -415,7 +430,7 @@ describe('client read/write boundary migration', () => {
     // pgcrypto must be schema-qualified: an unqualified call fails under the
     // fixed search_path used everywhere in this migration.
     expect(MIGRATION).toMatch(
-      /encode\(extensions\.gen_random_bytes\(32\), 'hex'\)/,
+      /encode\(extensions\.gen_random_bytes\(32\),\s*'hex'\)/,
     );
     expect(MIGRATION).not.toMatch(/(?<!\.)encode\(gen_random_bytes/);
     expect(MIGRATION).not.toMatch(/regexp_match\([^)]*x-internal-secret/i);
@@ -432,8 +447,11 @@ describe('client read/write boundary migration', () => {
       expect(MIGRATION).toMatch(new RegExp(`'${slug}'`, 'i'));
     }
     // One loop, the shared per-function naming convention.
-    expect(MIGRATION).toContain(
-      "supabase_functions_secret_' || v_slug || '_INTERNAL_SECRET",
+    // Regex y no `toContain`: el ledger lo escribe sin espacios alrededor del
+    // `||` y el archivo prettificado con ellos, así que la aserción tiene que
+    // tolerar el espaciado sin dejar de fijar el NOMBRE, que es lo que importa.
+    expect(MIGRATION).toMatch(
+      /supabase_functions_secret_'\s*\|\|\s*v_slug\s*\|\|\s*'_INTERNAL_SECRET/i,
     );
     // Idempotent: update by id when present, create when absent.
     expect(MIGRATION).toMatch(/vault\.update_secret\(/);
