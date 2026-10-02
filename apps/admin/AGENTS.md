@@ -69,3 +69,28 @@ Notas de mantenimiento:
   actualizas un primitivo, conserva los overrides.
 - Los forms usan render-prop JSX (`<form.Field name="x">{(field) => …}</form.Field>`);
   no uses el prop `children={…}` (lo marca `noChildrenProp`).
+- **El `includes` de `biome.json` es `["**", "!**/*.json", …]` y el `!**/*.json`
+  no es cosmético.** Sin él, ampliar el gate de `**/src/**/*` a todo el paquete
+  arrastra 279 líneas de reformateo en cinco JSON que escapan de dos clases con
+  la misma consecuencia:
+  - **Los que escribe una herramienta**: `.cta.json` (create-t3-app),
+    `components.json` (shadcn), `tsr.config.json` (TanStack Router). Es el mismo
+    motivo por el que `routeTree.gen.ts` está excluido: no es "porque es
+    generado", es "porque reescribirlo es churn que un generador deshace".
+  - **Los que son configuración cuyo espacio es irrelevante**: `package.json`,
+    `tsconfig.json`, `biome.json` y `.vscode/settings.json`. No los lee ni un
+    humano ni una herramienta como código, y reformatearlos a tabuladores no
+    cambia nada salvo el diff.
+
+  Lo que se pierde con la exclusión es SOLO el formato: `biome lint` sobre un
+  JSON pasa igual, y un JSON **malformado** sigue rompiendo a quien lo consume
+  —con `tsconfig.json` roto, `bun run typecheck` sale con 2—. O sea que el
+  gate de formato solo detectaba ruido ahí.
+
+  Si algún día un JSON pasa a ser código que uno escribe, **no saques la
+  exclusión**: agregá una excepción puntual con `!` sobre ese path. Medido:
+  `["**"]` con los JSON en su estado previo da 6 errores de `format`; con la
+  exclusión, 400 archivos y verde. Lo que `**` sí trae y hay que mantener es
+  `e2e/` (10 archivos), `test-preload.ts`, `playwright.config.ts` y `public/`
+  — los primeros dos estaban fuera de todo gate y por eso el formatter no
+  veía ni las comillas simples de `test-preload.ts` ni los specs de e2e.
