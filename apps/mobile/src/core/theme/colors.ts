@@ -407,8 +407,19 @@ const dark: ColorTokens = {
  * measured together, and a fill that carries no foreground cannot be audited
  * with the same criteria. Both schemes are asserted by
  * `author-palette.contrast.test.ts`: `on` over `fill` at the 4.5:1 text floor,
- * and `fill` against the surfaces the disc is painted on at the 3:1 non-text
- * floor.
+ * `fill` against the surfaces the disc is painted on at the 3:1 non-text floor,
+ * AND a CIELAB separation floor between every pair of fills — contrast alone
+ * does not catch two discs that pass every ratio and still look like the same
+ * colour, which is the whole point of the palette.
+ *
+ * The 16 were picked by search, not by hand: a grid over CIELAB lightness,
+ * chroma and hue, filtered to colours that clear the contrast floors, then
+ * farthest-point
+ * selection maximising the minimum pairwise ΔE. Chroma is floored at 34 so the
+ * result stays vivid — without that floor the search maximises separation by
+ * drifting toward grey. Achieved minimum ΔE: 27.4 light, 27.9 dark, against a
+ * floor of 25. Roughly, ΔE below ~10 is invisible and ~25 is an obvious
+ * difference at a glance, so every pair here is meant to be tellable apart.
  *
  * NOT `ColorTokens`: that interface is a flat record of one colour per job, and
  * a palette is a set. `ColorTokens` is untouched, so the decorative-hue purity
@@ -417,6 +428,10 @@ const dark: ColorTokens = {
  *
  * Dark is not the light palette darkened: on a dark `card` those fills measure
  * 2.0-2.8:1 and vanish, so dark carries lighter fills under the ink foreground.
+ *
+ * CHANGING EITHER LIST RECOLOURS AUTHORS. The slot is `hash % length`, so the
+ * length is part of the contract, not a detail. 8 -> 16 moves roughly half of
+ * them.
  */
 export interface AuthorPaletteEntry {
 	/** The disc. Also the disc's own separation from the surface behind it. */
@@ -425,26 +440,53 @@ export interface AuthorPaletteEntry {
 	on: string;
 }
 
-export const authorPalette: Record<ThemeScheme, AuthorPaletteEntry[]> = {
+/**
+ * A palette with at least one entry, encoded in the type.
+ *
+ * `authorDisc` falls back to the first slot, so "never empty" is an invariant
+ * the palette has to carry — as a type, not as a comment next to a `!`.
+ */
+export type AuthorPalette = readonly [
+	AuthorPaletteEntry,
+	...AuthorPaletteEntry[],
+];
+
+export const authorPalette: Record<ThemeScheme, AuthorPalette> = {
 	light: [
-		{ fill: "#6D28D9", on: "#FFFFFF" },
-		{ fill: "#0F766E", on: "#FFFFFF" },
-		{ fill: "#15803D", on: "#FFFFFF" },
-		{ fill: "#C2410C", on: "#FFFFFF" },
-		{ fill: "#BE123C", on: "#FFFFFF" },
-		{ fill: "#1D4ED8", on: "#FFFFFF" },
-		{ fill: "#A21CAF", on: "#FFFFFF" },
-		{ fill: "#B45309", on: "#FFFFFF" },
+		{ fill: "#831E1E", on: "#FFFFFF" },
+		{ fill: "#2D6BF4", on: "#FFFFFF" },
+		{ fill: "#088804", on: "#FFFFFF" },
+		{ fill: "#057F9C", on: "#FFFFFF" },
+		{ fill: "#D320A4", on: "#FFFFFF" },
+		{ fill: "#38154D", on: "#FFFFFF" },
+		{ fill: "#0C2C01", on: "#FFFFFF" },
+		{ fill: "#8E7106", on: "#FFFFFF" },
+		{ fill: "#E5045D", on: "#FFFFFF" },
+		{ fill: "#AC5984", on: "#FFFFFF" },
+		{ fill: "#D14403", on: "#FFFFFF" },
+		{ fill: "#028560", on: "#FFFFFF" },
+		{ fill: "#640897", on: "#FFFFFF" },
+		{ fill: "#676FB6", on: "#FFFFFF" },
+		{ fill: "#583A13", on: "#FFFFFF" },
+		{ fill: "#416000", on: "#FFFFFF" },
 	],
 	dark: [
-		{ fill: "#B582E4", on: "#1A1A18" },
-		{ fill: "#5EEAD4", on: "#1A1A18" },
-		{ fill: "#86EFAC", on: "#1A1A18" },
-		{ fill: "#FDBA74", on: "#1A1A18" },
-		{ fill: "#FDA4AF", on: "#1A1A18" },
-		{ fill: "#93C5FD", on: "#1A1A18" },
-		{ fill: "#F0ABFC", on: "#1A1A18" },
-		{ fill: "#FCD34D", on: "#1A1A18" },
+		{ fill: "#C06C63", on: "#1A1A18" },
+		{ fill: "#517AFF", on: "#1A1A18" },
+		{ fill: "#8EFF74", on: "#1A1A18" },
+		{ fill: "#82DBFA", on: "#1A1A18" },
+		{ fill: "#FE54CB", on: "#1A1A18" },
+		{ fill: "#E7B8FD", on: "#1A1A18" },
+		{ fill: "#648F57", on: "#1A1A18" },
+		{ fill: "#ECBE08", on: "#1A1A18" },
+		{ fill: "#FB256B", on: "#1A1A18" },
+		{ fill: "#D36BA1", on: "#1A1A18" },
+		{ fill: "#FE6A2D", on: "#1A1A18" },
+		{ fill: "#7AFDC9", on: "#1A1A18" },
+		{ fill: "#C46CF7", on: "#1A1A18" },
+		{ fill: "#757ECA", on: "#1A1A18" },
+		{ fill: "#FED2A4", on: "#1A1A18" },
+		{ fill: "#71A205", on: "#1A1A18" },
 	],
 };
 

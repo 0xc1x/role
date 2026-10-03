@@ -5,8 +5,7 @@ import { strings } from "@/src/core/i18n/strings";
 import { AppText } from "@/src/core/ui";
 import { radii, spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
-import { authorPalette } from "@/src/core/theme/colors";
-import { authorPaletteIndex } from "@/src/core/utils/author-palette";
+import { authorDisc } from "@/src/core/utils/author-palette";
 import type { BusinessReviewView } from "@/src/features/business/domain/business";
 
 export function ReviewItem({ review }: { review: BusinessReviewView }) {
@@ -14,8 +13,7 @@ export function ReviewItem({ review }: { review: BusinessReviewView }) {
 	// El color ES la identidad del autor: `profiles` no tiene policy que deje
 	// leer el perfil de otro consumidor, así que `userName` cae a "Cliente"
 	// para casi todos y el nombre no distingue a nadie.
-	const palette = authorPalette[scheme];
-	const disc = palette[authorPaletteIndex(review.authorId, palette.length)];
+	const disc = authorDisc(scheme, review.authorId);
 	const date = new Date(review.date);
 	const dateLabel = Number.isNaN(date.getTime())
 		? ""

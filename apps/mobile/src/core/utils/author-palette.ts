@@ -1,3 +1,9 @@
+import {
+	authorPalette,
+	type AuthorPaletteEntry,
+	type ThemeScheme,
+} from "@/src/core/theme/colors";
+
 /**
  * Which palette entry a review author gets.
  *
@@ -35,4 +41,28 @@ function fnv1a(value: string): number {
 export function authorPaletteIndex(seed: string, size: number): number {
 	if (size <= 0) return 0;
 	return fnv1a(seed) % size;
+}
+
+/**
+ * The `{ fill, on }` pair for `seed` under `scheme`.
+ *
+ * One call so the three surfaces that paint an author disc — the review list,
+ * the profile header and the edit-profile form — cannot drift apart in how they
+ * resolve the palette or in which foreground they pair with the fill. `Review`
+ * passes the author's id and the others pass the profile's, which are the same
+ * UUID: a person's colour is the same wherever they appear.
+ *
+ * The pair is what callers paint; pairing `on` with `fill` is the whole reason
+ * the palette stores them together, and it is what
+ * `author-palette.contrast.test.ts` measures.
+ */
+export function authorDisc(
+	scheme: ThemeScheme,
+	seed: string,
+): AuthorPaletteEntry {
+	const palette = authorPalette[scheme];
+	// Unreachable by construction: `authorPaletteIndex` returns a value in
+	// `[0, size)` and every palette has at least one entry by the type, so the
+	// fallback is here to satisfy `noUncheckedIndexedAccess` and nothing else.
+	return palette[authorPaletteIndex(seed, palette.length)] ?? palette[0];
 }

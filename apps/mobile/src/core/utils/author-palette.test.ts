@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { authorPaletteIndex } from "./author-palette";
+import { authorDisc, authorPaletteIndex } from "./author-palette";
 import { authorPalette } from "@/src/core/theme/colors";
 
 const SIZES = [authorPalette.light.length, authorPalette.dark.length];
@@ -75,5 +75,24 @@ test("no slot repeats a fill within a scheme", () => {
 	for (const scheme of ["light", "dark"] as const) {
 		const fills = authorPalette[scheme].map((entry) => entry.fill);
 		expect(new Set(fills).size).toBe(fills.length);
+	}
+});
+
+test("authorDisc agrees with authorPaletteIndex on every seed", () => {
+	for (const seed of seeds(100)) {
+		for (const scheme of ["light", "dark"] as const) {
+			const palette = authorPalette[scheme];
+			const expected = palette[authorPaletteIndex(seed, palette.length)];
+			expect(authorDisc(scheme, seed)).toEqual(expected);
+		}
+	}
+});
+
+test("authorDisc never returns undefined, whatever the seed", () => {
+	for (const seed of [...seeds(50), "", "   "]) {
+		for (const scheme of ["light", "dark"] as const) {
+			expect(authorDisc(scheme, seed)).toBeDefined();
+			expect(authorDisc(scheme, seed).fill).toMatch(/^#[0-9A-F]{6}$/);
+		}
 	}
 });

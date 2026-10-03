@@ -8,6 +8,7 @@ import { useTheme } from "@/src/core/theme";
 import { typography } from "@/src/core/theme/typography";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { formatCount, formatMoney } from "@/src/core/utils/formatters";
+import { authorDisc } from "@/src/core/utils/author-palette";
 import type { UserProfile } from "@/src/features/auth/domain/user";
 import { useProfileStats } from "@/src/features/profile/hooks";
 
@@ -22,23 +23,29 @@ function initialsOf(profile: UserProfile): string {
 }
 
 export function ProfileAvatar({ profile }: { profile: UserProfile }) {
-	const { colors } = useTheme();
+	const { scheme } = useTheme();
+	// El color solo se ve cuando no hay foto: con `avatarUrl` la imagen se
+	// pinta encima y el fill queda debajo. `profile.id` es el mismo UUID que
+	// `reviews.user_id`, así que el color coincide con el de las reseñas de esa
+	// persona.
+	const disc = authorDisc(scheme, profile.id);
 	return (
 		<Avatar style={{ width: 80, height: 80 }} alt={initialsOf(profile)}>
 			{profile.avatarUrl ? (
 				<AvatarImage source={{ uri: profile.avatarUrl }} />
-			) : null}
-			<AvatarFallback className="bg-primary">
-				<AppText
-					style={{
-						fontSize: 28,
-						fontWeight: "700",
-						color: colors.primaryForeground,
-					}}
-				>
-					{initialsOf(profile)}
-				</AppText>
-			</AvatarFallback>
+			) : (
+				<AvatarFallback style={{ backgroundColor: disc.fill }}>
+					<AppText
+						style={{
+							fontSize: 28,
+							fontWeight: "700",
+							color: disc.on,
+						}}
+					>
+						{initialsOf(profile)}
+					</AppText>
+				</AvatarFallback>
+			)}
 		</Avatar>
 	);
 }

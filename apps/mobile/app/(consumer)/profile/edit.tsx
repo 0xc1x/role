@@ -27,6 +27,7 @@ import {
 import { useAuthStore } from "@/src/features/auth/store";
 import { useAppConfig } from "@/src/features/config";
 import { useSaveProfileWithEmail } from "@/src/features/profile/hooks";
+import { authorDisc } from "@/src/core/utils/author-palette";
 import { authRepository } from "@/src/features/auth/data/repository";
 import { toAppError } from "@/src/core/error/mapper";
 import { spacing, radii } from "@/src/core/theme/spacing";
@@ -47,7 +48,7 @@ function initialsOf(profile: UserProfile): string {
 const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export default function EditProfileScreen() {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const { profile, status, initialized, setProfile } = useAuthStore();
 	const { data: configMap } = useAppConfig();
 	const [name, setName] = useState(profile?.fullName ?? "");
@@ -105,6 +106,9 @@ export default function EditProfileScreen() {
 		);
 	}
 	if (status === "guest") return null;
+
+	// `profile` es non-null desde el guard de arriba, así que el seed es real.
+	const disc = authorDisc(scheme, profile.id);
 
 	const save = {
 		get isPending() {
@@ -174,12 +178,15 @@ export default function EditProfileScreen() {
 						{profile.avatarUrl ? (
 							<AvatarImage source={{ uri: profile.avatarUrl }} />
 						) : null}
-						<AvatarFallback className="bg-secondary">
+						{/* El color solo se ve sin foto: con `avatarUrl` la imagen se
+						    pinta encima. Mismo UUID que `reviews.user_id`, así que el
+						    color coincide con el de las reseñas de esta persona. */}
+						<AvatarFallback style={{ backgroundColor: disc.fill }}>
 							<AppText
 								style={{
 									fontSize: 32,
 									fontWeight: "700",
-									color: colors.primary,
+									color: disc.on,
 								}}
 							>
 								{initialsOf(profile)}
