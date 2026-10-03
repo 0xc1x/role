@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { ImagePlus, X } from "lucide-react-native";
+import { toast } from "sonner-native";
 
 import { Button } from "@/components/ui/button";
 import { strings } from "@/src/core/i18n/strings";
@@ -232,6 +233,10 @@ export function ReportProblemSheet({
 			// El éxito cierra y nada más: si limpiara los campos acá, un
 			// reintento posterior del mismo usuario arrancaría con un formulario
 			// vacío y sin explicación de por qué.
+			// El toast va ANTES del cierre porque `onClose` desmonta el sheet, y
+			// el `Toaster` está en el layout raíz: si se disparara después, el
+			// componente que lo dispara ya no estaría montado.
+			toast.success(strings.bugReport.submitted);
 			onClose();
 		} catch (e) {
 			// acá no se toca `summary` ni `description`: el texto se queda. Es

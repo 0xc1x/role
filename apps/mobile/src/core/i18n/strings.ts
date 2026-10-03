@@ -1989,6 +1989,11 @@ export const strings = {
 		// `errorTooManyImages`: sin él el usuario no sabe cuánto le falta.
 		imageCount: "{n} de {max} capturas adjuntas",
 		submit: "Enviar reporte",
+		// El toast cierra el ciclo: sin él el sheet desaparecía y el reporte se
+		// iba sin confirmación, y la primera hipótesis del usuario es que no
+		// salió. Va como toast y no como estado del sheet porque el sheet ya se
+		// cerró para entonces.
+		submitted: "Enviamos tu reporte. Gracias por avisarnos.",
 		errorSummaryRequired:
 			"Escribe un resumen para que podamos entender qué pasó.",
 		// El `{max}` lo resuelve el DOMINIO, que es quien tiene la constante
