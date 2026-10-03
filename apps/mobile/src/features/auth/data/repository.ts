@@ -157,13 +157,24 @@ export const authRepository = {
 
 	async setAnalyticsConsent(userId: string, granted: boolean): Promise<void> {
 		const now = new Date().toISOString();
-		const { error } = await supabase.from("user_consents").upsert({
-			user_id: userId,
-			consent_type: "analytics",
-			granted,
-			granted_at: granted ? now : null,
-			revoked_at: granted ? null : now,
-		});
+		const { error } = await supabase.from("user_consents").upsert(
+			{
+				user_id: userId,
+				consent_type: "analytics",
+				granted,
+				granted_at: granted ? now : null,
+				revoked_at: granted ? null : now,
+			},
+			// POR QUÉ ESTE `onConflict` Y NO EL DE POR DEFECTO: la PK de
+			// `user_consents` es `id` (surrogate) y la UNIQUE es
+			// `(user_id, consent_type)`. supabase-js manda `ON CONFLICT` sobre
+			// la PRIMARY KEY cuando no se le pasa nada, así que sin esto
+			// Postgres insertaba una fila nueva —el payload no trae `id`— y
+			// chocaba contra la UNIQUE con 23505. El primer alta de cada
+			// usuario pasaba; el segundo write (el switch de analytics, y el
+			// `syncAnalyticsConsent` de cada arranque) fallaba siempre.
+			{ onConflict: "user_id,consent_type" },
+		);
 		if (error) throw error;
 	},
 

@@ -15,6 +15,16 @@ type Result = { data: unknown; error: unknown };
 const results: Record<string, Result> = {};
 
 /**
+ * Última escritura que pasó por el mock, para poder afirmar sobre la segunda
+ * argumento de `upsert` —que es donde vive el `onConflict`.
+ */
+let ultimaEscritura: {
+	tabla: string;
+	payload: Record<string, unknown>;
+	options: Record<string, unknown> | undefined;
+} | null = null;
+
+/**
  * Cadena de PostgREST encadenable: `profiles` filtra con un `eq` y
  * `user_consents` con dos, así que el mock devuelve el mismo objeto en cada
  * llamada en vez de una forma fija.
@@ -24,6 +34,13 @@ function builderFor(table: string) {
 	chain.select = () => chain;
 	chain.eq = () => chain;
 	chain.maybeSingle = async () => results[table] ?? { data: null, error: null };
+	chain.upsert = async (
+		payload: Record<string, unknown>,
+		options?: Record<string, unknown>,
+	) => {
+		ultimaEscritura = { tabla: table, payload, options };
+		return { data: null, error: null };
+	};
 	return chain;
 }
 
@@ -35,6 +52,36 @@ mock.module("@/src/core/supabase/client", () => ({
 
 const { authRepository, enrichProfile } = await import("./repository");
 import type { UserProfile } from "../domain/user";
+
+describe("setAnalyticsConsent: el conflicto tiene que ser sobre la UNIQUE, no la PK", () => {
+	test("el upsert declara onConflict sobre (user_id, consent_type)", async () => {
+		await authRepository.setAnalyticsConsent("user-1", true);
+
+		expect(ultimaEscritura?.tabla).toBe("user_consents");
+		expect(ultimaEscritura?.options).toEqual({
+			onConflict: "user_id,consent_type",
+		});
+	});
+
+	test("el payload no manda id, que es lo que hacía fallar el segundo write", async () => {
+		await authRepository.setAnalyticsConsent("user-1", false);
+
+		expect(ultimaEscritura?.payload).not.toHaveProperty("id");
+		expect(ultimaEscritura?.payload.consent_type).toBe("analytics");
+	});
+
+	test("revocar pone revoked_at y concede lo deja en null", async () => {
+		await authRepository.setAnalyticsConsent("user-1", true);
+		expect(ultimaEscritura?.payload.granted).toBe(true);
+		expect(ultimaEscritura?.payload.granted_at).not.toBeNull();
+		expect(ultimaEscritura?.payload.revoked_at).toBeNull();
+
+		await authRepository.setAnalyticsConsent("user-1", false);
+		expect(ultimaEscritura?.payload.granted).toBe(false);
+		expect(ultimaEscritura?.payload.granted_at).toBeNull();
+		expect(ultimaEscritura?.payload.revoked_at).not.toBeNull();
+	});
+});
 
 const PROFILE_ROW = {
 	id: "user-1",
