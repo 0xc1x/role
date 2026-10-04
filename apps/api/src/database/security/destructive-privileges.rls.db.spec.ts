@@ -62,7 +62,8 @@ import {
  *
  * ─── THE HARNESS AND PRODUCTION AGREE ON EVERY RLS TABLE ────────────────────
  *
- * Production and this replay agree: RLS on every table. This replay
+ * As of `20261004022647`, production has 41 tables in `public` and RLS
+ * enabled on all 41. This replay
  * used to have 39 tables and RLS enabled on 34 — `business_finance`,
  * `business_moderation`, `app_store`, `offer_categories` and `slides` all landed
  * without it, because no statement in `supabase/migrations/` ever enabled RLS on

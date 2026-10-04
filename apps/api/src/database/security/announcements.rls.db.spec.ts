@@ -47,6 +47,30 @@ import {
  * UPDATE, ni de DELETE sobre `announcements`. El operador publica por la API y
  * el cliente no escribe.
  *
+ * ─── UN ANÓNIMO VE `consumers`, Y NO ES UNA FRONTERA DE PRIVACIDAD ───────────
+ *
+ * El predicado de la rama `consumers` es `auth_helpers.my_role() = 'user'`, y
+ * `my_role()` devuelve `'user'` por el `UNION ALL` de su fallback cuando no hay
+ * fila de perfil. Un visitante del landing no tiene fila de perfil —no tiene
+ * sesión— así que su `my_role()` es `'user'` y **`anon` entra por la rama de
+ * consumidora**. Medido, no inferido: `anon` ve `all` y `consumers`, la
+ * consumidora ve `all`, `consumers`, su `required` y su `specific`, y la dueña
+ * ve `all`, `businesses` y los `required`.
+ *
+ * Es aceptable y es una decisión, no un descuido: el banner de consumidora del
+ * landing tiene que existir FUERA de la app y no hay sesión que lo habilite, así
+ * que un `consumers` que no llegara al anónimo sería un banner que solo existe
+ * para quien ya se registró — que es la audience que no necesita persuasive.
+ * Decirlo acá evita las dos lecturas equivocadas: `consumers` NO es "usuarios con
+ * sesión", y tampoco es una fuga, porque el contenido del aviso no cambia por
+ * quién lo lee.
+ *
+ * Lo que el anónimo NO alcanza queda igual de cerrado: `businesses` exige
+ * `my_role() = 'business'` y `specific` exige `user_ids @> array[auth.uid()]`,
+ * que con `auth.uid()` nulo es falso. Y ninguna policy de escritura existe, así
+ * que leer `consumers` no compra nada: el mismo `anon` no puede publicar.
+ * `un info sí se entrega a un anónimo` fija las cuatro cosas de una vez.
+ *
  * ─── POR QUÉ `auth_helpers.my_role()` Y NO UN SUBQUERY A `profiles` ──────────
  *
  * `my_role()` es `SECURITY DEFINER` y estable: saltea el RLS de `profiles` a
@@ -99,13 +123,16 @@ import {
  *
  * ─── LO QUE ESTE ARCHIVO NO PUEDE MEDIR, Y POR QUÉ ──────────────────────────
  *
- * El índice parcial `(active, priority desc, created_at desc) where active` se
- * midió con `EXPLAIN (analyze)` sobre la consulta de la app contra la base de
- * producción y en el replay de este harness; el resultado está en el commit y en
- * la entrada del `README` de migraciones. Lo que este archivo afirma es que el
- * índice EXISTE con esa forma, no que el planner lo elija — y esa diferencia es
- * deliberada: el plan depende del volumen, y un `EXPLAIN` sobre una tabla de
- * doce filas no dice nada sobre una de cien mil.
+ * La FORMA del índice parcial `(active, priority desc, created_at desc) where
+ * active` está aserida arriba: el nombre, en el conjunto completo de los cinco
+ * que hay en las dos tablas. La ELECCIÓN del planner no está medida, y este
+ * archivo no la afirma en ninguna parte: no corrió ningún `EXPLAIN`, ni contra
+ * producción ni contra el replay de este harness, y su resultado no está en
+ * ningún commit ni en el `README`. Es la misma decisión que escribe la cabecera
+ * de la migración —la forma se aserde, el plan no— y por el mismo motivo: el
+ * plan depende del volumen, así que un `EXPLAIN` sobre una tabla de once filas
+ * no dice nada sobre una de cien mil. Peor: dice algo con más seguridad de la
+ * que tiene, y eso se lee como una garantía que nadie midió.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -602,23 +629,84 @@ describe('la ventana y la audiencia, con la elegibilidad entera en la policy', (
   });
 
   /**
-   * El `info` SÍ se entrega a un anónimo, y tiene que.
+   * Un anónimo ve `all` Y `consumers`, y no alcanza `businesses` ni `specific`.
    *
-   * Es el control del anterior, y sin él el `not.toContain` de arriba probaría
-   * que la policy no deja pasar nada a `anon` —lo que sería un producto roto:
-   * el banner del landing vive de acá, y el visitante no tiene sesión ni la va a
-   * tener.
+   * El `info` tiene que llegarle, y sin esta aserción el `not.toContain` del
+   * required de arriba probaría que la policy no deja pasar NADA a `anon` —lo que
+   * sería un producto roto: el banner del landing vive de acá, y el visitante no
+   * tiene sesión ni la va a tener. El aviso de mantenimiento tiene que poder ser
+   * `all` por esa razón, que es lo que el diseño §5 dice del landing.
    *
-   * El aviso de mantenimiento tiene que poder ser `all` por esta razón, que es
-   * lo que el diseño §5 dice del landing.
+   * Y `consumers` también, que es la parte que sorprende: `my_role()` de un
+   * anónimo es `'user'` por el fallback del `UNION ALL`, así que entra por la
+   * rama de consumidora. Es aceptable —el banner de consumidora tiene que existir
+   * fuera de la app, y no hay sesión que lo habilite— y está escrito acá para que
+   * nadie lo lea después como una fuga ni como un override. Ver la sección del
+   * docblock que dice por qué.
+   *
+   * Las dos ramas que el anónimo NO tiene que alcanzar van en el mismo test y no
+   * en uno aparte: `businesses` exige `my_role() = 'business'` y `specific`
+   * exige `user_ids @> array[auth.uid()]`, que con `auth.uid()` nulo es falso.
+   * Juntas son lo que separa "el anónimo lee un poco más" de "el anónimo lee
+   * todo".
    */
-  test('un info sí se entrega a un anónimo', async () => {
+  test('un anónimo ve all y consumers, y no alcanza businesses ni specific', async () => {
     const anon = await visibleTo('anon', null);
 
     expect(anon).toContain(ACTIVE);
     expect(anon).toContain(WINDOW);
     expect(anon).not.toContain(FUTURE);
     expect(anon).not.toContain(EXPIRED);
+
+    // El caso del hallazgo: `anon` ve `consumers`. No es una excepción tolerada
+    // acá, es el comportamiento fijo, y por eso tiene aserción y no una nota.
+    expect(
+      anon,
+      'un anónimo dejó de ver el audience de consumidora. Es lo esperado al ' +
+        'revés: my_role() de un anónimo es "user" por el fallback del UNION ' +
+        'ALL, así que entra por esa rama, y el banner del landing tiene que ' +
+        'existir fuera de la app. Si este test falla por una policy nueva que ' +
+        'lo cierre, eso es una regresión de producto, no una mejora de ' +
+        'seguridad.',
+    ).toContain(CONSUMERS_ONLY);
+
+    // Las dos ramas que sí tienen que quedar cerradas.
+    expect(
+      anon,
+      'un anónimo alcanzó el audience de negocios. Exige my_role() = ' +
+        '"business" y no hay sesión, así que esto sería una policy nueva o un ' +
+        'fallback de my_role() que cambió.',
+    ).not.toContain(BUSINESSES_ONLY);
+    expect(
+      anon,
+      'un anónimo alcanzó un specific. user_ids @> array[auth.uid()] es falso ' +
+        'con auth.uid() nulo, así que alcanzarlo significa que el targeting por ' +
+        'usuario dejó de ser una frontera.',
+    ).not.toContain(SPECIFIC_MINE);
+
+    // El control de la rama positiva: la fila es lo que dice ser. Sin esto, el
+    // `toContain` de arriba pasa igual en una base donde nadie la sembró.
+    const sembrada = await ctx.sql.unsafe<
+      { audience_kind: string; severity: string; active: boolean }[]
+    >(
+      `select audience_kind, severity, active
+         from public.announcements
+        where id = '${CONSUMERS_ONLY}'`,
+    );
+    expect(plainRows(sembrada)[0]).toEqual({
+      audience_kind: 'consumers',
+      severity: 'info',
+      active: true,
+    });
+
+    // Y el conjunto exacto, que es lo que cierra la puerta de la fila NUEVA: un
+    // `toContain` no nota una fila que se sembró después y que `anon` sí puede
+    // ver. Los tres son los que le corresponden y ninguno más.
+    expect(
+      [...anon].sort(),
+      'el anónimo ve un conjunto distinto de {ACTIVE, WINDOW, CONSUMERS_ONLY}. ' +
+        'Si creció una fila nueva, el conjunto la delata; si falta una, también.',
+    ).toEqual([ACTIVE, WINDOW, CONSUMERS_ONLY].sort());
   });
 
   /**
@@ -702,16 +790,46 @@ describe('lo que un cliente NO puede escribir', () => {
     expect(conClaim?.message).toContain('row-level security policy');
 
     const policies = await ctx.sql.unsafe<
-      { policyname: string; cmd: string }[]
+      {
+        policyname: string;
+        cmd: string;
+        permissive: string;
+        roles: string[];
+        qual: string | null;
+        with_check: string | null;
+      }[]
     >(
-      `select policyname, cmd from pg_policies
+      `select policyname, cmd, permissive, roles, qual, with_check
+         from pg_policies
         where schemaname = 'public' and tablename = 'announcements'
         order by cmd, policyname`,
     );
+    // La forma COMPLETA, no `policyname` y `cmd`. `roles` es la mitad de este
+    // aserto: sin él, una policy `TO public` —que este repo ya tiene como
+    // contraejemplo en `reviews`— pasaría con el mismo nombre y el mismo comando,
+    // y el nombre es lo único que un revisor lee. `qual` es la otra mitad, y
+    // completa: los cinco términos del `USING` están ahí, escritos, así que
+    // ningún término puede desaparecer en silencio —los tests de ventanas y de
+    // audiencia los miden por efecto, pero un término que nadie nota no falla
+    // hasta que el producto lo nota—. Mismo criterio que
+    // `bug-reports.rls.db.spec.ts:551`.
     expect(plainRows(policies)).toEqual([
       {
         policyname: 'Anyone reads the announcements they are eligible for',
         cmd: 'SELECT',
+        permissive: 'PERMISSIVE',
+        roles: ['anon', 'authenticated'],
+        qual:
+          `(active AND ((start_at IS NULL) OR (now() >= start_at)) AND ` +
+          `((end_at IS NULL) OR (now() < end_at)) AND ` +
+          `((severity = 'info'::text) OR (auth.uid() IS NOT NULL)) AND ` +
+          `((audience_kind = 'all'::text) OR ` +
+          `((audience_kind = 'consumers'::text) AND ` +
+          `(auth_helpers.my_role() = 'user'::app_role)) OR ` +
+          `((audience_kind = 'businesses'::text) AND ` +
+          `(auth_helpers.my_role() = 'business'::app_role)) OR ` +
+          `(user_ids @> ARRAY[auth.uid()])))`,
+        with_check: null,
       },
     ]);
 
@@ -820,11 +938,23 @@ describe('lo que un cliente NO puede escribir', () => {
     ).toEqual({ n: 11, priority: 10, active: true });
 
     // El por qué, nombrado: si alguien abre la escritura por acá, esta lista
-    // deja de estar vacía y el test cae antes de que importe el conteo.
+    // deja de estar vacía y el test cae antes de que importe el conteo. Las
+    // columnas son las mismas que las del inventario de arriba y por el mismo
+    // motivo: una policy de escritura `TO public` es el contraejemplo de
+    // `reviews`, y acá una lista vacía no distingue "no hay policy" de "la
+    // policy es la que no quería".
     const policies = await ctx.sql.unsafe<
-      { policyname: string; cmd: string }[]
+      {
+        policyname: string;
+        cmd: string;
+        permissive: string;
+        roles: string[];
+        qual: string | null;
+        with_check: string | null;
+      }[]
     >(
-      `select policyname, cmd from pg_policies
+      `select policyname, cmd, permissive, roles, qual, with_check
+         from pg_policies
         where schemaname = 'public' and tablename = 'announcements'
           and cmd in ('INSERT', 'UPDATE', 'DELETE')
         order by cmd, policyname`,
@@ -890,10 +1020,25 @@ describe('el acknowledgement es de uno, y no se deshace', () => {
       { announcement_id: ACTIVE, user_id: OTHER_USER },
     ]);
 
+    // El inventario completo de las dos tablas, con la forma y no solo el
+    // nombre. `roles` es lo que dice que el `anon` no entra: `TO authenticated`
+    // es la diferencia entre "el visitante no puede acknowledge" y "el visitante
+    // puede", y sin la columna esa diferencia está solo en el DDL. `qual` y
+    // `with_check` son los dos lados del `user_id = auth.uid()`: el `USING` de la
+    // lectura y el `WITH CHECK` de la escritura, que son el mismo predicado
+    // llegando por dos caminos distintos.
     const policies = await ctx.sql.unsafe<
-      { policyname: string; cmd: string }[]
+      {
+        policyname: string;
+        cmd: string;
+        permissive: string;
+        roles: string[];
+        qual: string | null;
+        with_check: string | null;
+      }[]
     >(
-      `select policyname, cmd from pg_policies
+      `select policyname, cmd, permissive, roles, qual, with_check
+         from pg_policies
         where schemaname = 'public' and tablename = 'announcement_acknowledgements'
         order by cmd, policyname`,
     );
@@ -901,10 +1046,18 @@ describe('el acknowledgement es de uno, y no se deshace', () => {
       {
         policyname: 'Users acknowledge for themselves',
         cmd: 'INSERT',
+        permissive: 'PERMISSIVE',
+        roles: ['authenticated'],
+        qual: null,
+        with_check: '(user_id = auth.uid())',
       },
       {
         policyname: 'Users read their own acknowledgements',
         cmd: 'SELECT',
+        permissive: 'PERMISSIVE',
+        roles: ['authenticated'],
+        qual: '(user_id = auth.uid())',
+        with_check: null,
       },
     ]);
   });
