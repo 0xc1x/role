@@ -1,4 +1,10 @@
-import { expect, getServedHtml, test } from "./fixtures";
+import {
+	ANNOUNCEMENTS_DEFAULT_MODE,
+	expect,
+	getServedHtml,
+	setAnnouncementsMode,
+	test,
+} from "./fixtures";
 
 /**
  * ─── Why this file exists ───────────────────────────────────────────────────
@@ -78,5 +84,151 @@ test.describe("server-rendered landing", () => {
 			expect(status, `${path} must not 500 in SSR`).toBe(200);
 			expect(html, `${path} must serve an <h1>`).toContain("<h1");
 		}
+	});
+});
+
+/**
+ * ─── The operator's announcement, as the SERVER sends it ────────────────────
+ *
+ * The operator types the announcement's `title` and `body` into a form. On the
+ * phone that string is inert by construction — React Native's `Text` interprets
+ * nothing. This landing is a browser, where `<script>` pasted into a `body` runs.
+ * So the question is not "does the copy show up" but "what did the server send",
+ * and only the SERVED answer counts: `getServedHtml` reads the raw body with no
+ * hydration in between, so a `dangerouslySetInnerHTML` that only the client would
+ * have made visible still fails here.
+ *
+ * Why it lives in this file and not next to the component's unit spec: the unit
+ * spec proves the component does not interpret the body. This proves the whole
+ * chain — stub, loader SSR, hydration payload, markup — still does not, which is
+ * the only claim that would survive someone adding a sanitiser, a markdown pass
+ * or a `v-html` in a template between the query and the bytes.
+ */
+test.describe("the announcement the operator wrote", () => {
+	// The stub's mode is process state, so it is restored after every test here.
+	// The default it returns to is the FAILING one: a spec that forgets leaves the
+	// suite in the state where a missing announcement costs nothing.
+	test.afterEach(async ({ request }) => {
+		await setAnnouncementsMode(request, ANNOUNCEMENTS_DEFAULT_MODE);
+	});
+
+	/**
+	 * The band, out of the served HTML, as a string.
+	 *
+	 * Scoped on purpose. `<section aria-label="Avisos de Rolé">` has no nested
+	 * `<section>`, so the first `</section>` closes it — and every assertion below
+	 * is a claim about THE BAND, not about the whole page, which carries React's
+	 * own `<script type="module">` tags that have nothing to do with the operator.
+	 */
+	function bandOf(html: string): string {
+		const start = html.indexOf('<section aria-label="Avisos de Rolé"');
+		if (start < 0) return "";
+		const end = html.indexOf("</section>", start);
+		return end < 0 ? "" : html.slice(start, end + "</section>".length);
+	}
+
+	/** Opening tag names, in order — the element inventory of a fragment. */
+	function tagsOf(fragment: string): Record<string, number> {
+		const counts: Record<string, number> = {};
+		for (const match of fragment.matchAll(/<([a-z][a-z0-9]*)\b/gi)) {
+			const tag = match[1]?.toLowerCase() ?? "";
+			counts[tag] = (counts[tag] ?? 0) + 1;
+		}
+		return counts;
+	}
+
+	test("is served as inert text: escaped in the bytes, and with no element of its own", async ({
+		request,
+	}) => {
+		await setAnnouncementsMode(request, "hostil");
+		const { status, html } = await getServedHtml(request, "/");
+
+		expect(status).toBe(200);
+		const band = bandOf(html);
+		expect(band, "the announcement band must be in the served HTML").not.toBe("");
+
+		// ── The text is there, ESCAPED. These are the operator's characters. ────
+		expect(band).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+		expect(band).toContain("&lt;b&gt;negrita&lt;/b&gt;");
+		expect(band).toContain("&lt;img src=x onerror=&quot;alert(2)&quot;&gt;");
+		expect(band).toContain("&lt;b&gt;esta noche&lt;/b&gt;");
+
+		// ── And nothing of it became an element. ───────────────────────────────
+		// Asserted on the FORMS, not on the substrings. `javascript:` and
+		// `onerror=` DO appear inside the band — as text, escaped, which is exactly
+		// what a correct render looks like. The dangerous forms are the ones where
+		// the parser saw an attribute or a tag: `<a href="javascript:` and
+		// `onerror="`. Asserting the bare substring instead would either be a lie or
+		// a false positive that reads like a security finding.
+		expect(band).not.toContain("<script");
+		expect(band).not.toContain("<b>");
+		expect(band).not.toContain("<img");
+		expect(band).not.toContain("<a ");
+		expect(band).not.toContain('<a href="javascript:');
+		expect(band).not.toContain('onerror="');
+		expect(band).not.toContain('onload="');
+		expect(band).not.toContain("<iframe");
+		expect(band).not.toContain("<style");
+	});
+
+	test("builds no element at all: the inventory matches a benign announcement", async ({
+		request,
+	}) => {
+		// The form that survives `<svg onload>`.
+		//
+		// "There is no <svg> in the band" is not an available assertion: the
+		// component's own `Megaphone` icon IS an `<svg>`, so that check fails on a
+		// healthy render and looks like a security finding when it does. A DIFF
+		// against the same announcement with harmless text is the version that
+		// discriminates: whatever the operator wrote added zero elements, and the
+		// icon is present on both sides so it cannot interfere.
+		await setAnnouncementsMode(request, "hostil");
+		const hostil = bandOf((await getServedHtml(request, "/")).html);
+
+		await setAnnouncementsMode(request, "benigno");
+		const benigno = bandOf((await getServedHtml(request, "/")).html);
+
+		expect(hostil).not.toBe("");
+		expect(benigno).not.toBe("");
+		expect(tagsOf(hostil)).toEqual(tagsOf(benigno));
+		// Spelled out, so a new icon or wrapper has to be a decision and not a
+		// silent addition to the baseline.
+		expect(tagsOf(benigno)).toEqual({
+			section: 1,
+			div: 1,
+			span: 1,
+			svg: 1,
+			path: 3,
+			ul: 1,
+			li: 1,
+			p: 2,
+		});
+	});
+
+	test("a failing announcements API is served as `failed`, not as `loading`", async ({
+		request,
+	}) => {
+		// The observable contract of the degradation, on the bytes.
+		//
+		// This attribute exists because the API service refuses to answer `[]` on
+		// failure *so that the landing cannot hide the incident*. That promise is
+		// only kept if the served HTML says `failed` — and it did not, for a while:
+		// the page recomputed the value from its own observer, and an observer in
+		// SSR returns the OPTIMISTIC result, which is `pending` whenever there is
+		// no data. A crawler read `loading`, which means "slow", for an API that
+		// was down. A client-side `waitFor` never caught it: by the time the
+		// browser's own fetch resolves, the observer does say `failed`.
+		//
+		// So this asserts the served bytes, with the stub in its default state
+		// (`caido`), which is what every other spec in this suite runs against.
+		const { status, html } = await getServedHtml(request, "/");
+
+		expect(status).toBe(200);
+		expect(html).toContain('data-announcements-source="failed"');
+		expect(html).not.toContain('data-announcements-source="loading"');
+		// And the degradation costs the visitor nothing: no band, but the page —
+		// including the subscription CTA this site exists for — is fully served.
+		expect(bandOf(html)).toBe("");
+		expect(html).toContain("Únete a Rolé");
 	});
 });

@@ -26,6 +26,7 @@
  * that returned a wrong shape would make the suite pass while testing nothing.
  */
 import {
+	AnnouncementSchema,
 	OnboardingBusinessRequestSchema,
 	OnboardingBusinessResponseSchema,
 	PlatformStatsSchema,
@@ -85,6 +86,85 @@ const APP_CONFIG = [
 	},
 ].map((entry) => PublicAppConfigSchema.parse(entry));
 
+/**
+ * ─── `/announcements`: lo que el operador escribió, y en qué estado falla ────
+ *
+ * `ANNOUNCEMENTS_MODE` decide qué contesta esta ruta, y lo decide el SPEC, por
+ * `POST /__stub/announcements`. Tres modos, y los tres existen por una razón
+ * cada uno:
+ *
+ *  - `caido` es el DEFAULT, y devuelve el 503 que devuelve el service real
+ *    ("No se pudieron obtener los anuncios"). Que el default sea el fallo no es
+ *    una comodidad: deja a las CUARENTA pruebas de esta suite corriendo contra
+ *    una API de anuncios caída, o sea que "un 500 de /announcements no tumba la
+ *    landing" queda probado en cada una de ellas, gratis. Con el default sano,
+ *    el único test que lo probaría sería el que lo pide —y ese test se puede
+ *    borrar, o dejar de correr, sin que nada lo note.
+ *  - `hostil` sirve el `body` y el `title` de un operador con `<script>`,
+ *    `<b>`, `<img onerror>` y `javascript:`. Es el único modo donde la banda se
+ *    pinta, así que es el que mide la frontera de seguridad sobre el HTML
+ *    servido de verdad.
+ *  - `benigno` sirve el mismo aviso con texto trivial. Existe para el DIFF de
+ *    inventario de etiquetas: sirve de línea base contra la que se afirma que
+ *    el cuerpo del operador no construyó ningún elemento.
+ *
+ * Las dos filas pasan por `AnnouncementSchema.parse` antes de servirse, por la
+ * razón de arriba del archivo: un stub que devolviera una forma que el contrato
+ * no acepta haría que la suite pasara probando nada.
+ */
+type AnnouncementsMode = "caido" | "hostil" | "benigno";
+
+const ANNOUNCEMENTS: Record<
+	AnnouncementsMode,
+	{ status: number; body: unknown }
+> = {
+	caido: {
+		status: 503,
+		body: { message: "No se pudieron obtener los anuncios" },
+	},
+	hostil: {
+		status: 200,
+		body: [
+			AnnouncementSchema.parse({
+				id: "a0000000-0000-4000-8000-0000000000e1",
+				title: "Mantenimiento <b>esta noche</b>",
+				body: '<script>alert(1)</script> y <b>negrita</b> con <img src=x onerror="alert(2)"> y <a href="javascript:alert(3)">enlace</a>',
+				severity: "info",
+				audience_kind: "all",
+				priority: 5,
+				active: true,
+				start_at: null,
+				end_at: null,
+				created_at: "2026-01-01T00:00:00.000Z",
+				updated_at: "2026-01-01T00:00:00.000Z",
+			}),
+		],
+	},
+	benigno: {
+		status: 200,
+		body: [
+			AnnouncementSchema.parse({
+				id: "a0000000-0000-4000-8000-0000000000e1",
+				title: "Mantenimiento esta noche",
+				body: "El servicio vuelve a las 23:00.",
+				severity: "info",
+				audience_kind: "all",
+				priority: 5,
+				active: true,
+				start_at: null,
+				end_at: null,
+				created_at: "2026-01-01T00:00:00.000Z",
+				updated_at: "2026-01-01T00:00:00.000Z",
+			}),
+		],
+	},
+};
+
+/** Variable del proceso, no un argumento: el stub se levanta una vez por suite. */
+let announcementsMode: AnnouncementsMode =
+	(process.env.STUB_ANNOUNCEMENTS_MODE as AnnouncementsMode | undefined) ??
+	"caido";
+
 function json(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
 		status,
@@ -108,6 +188,28 @@ Bun.serve({
 		const url = new URL(req.url);
 		if (req.method === "OPTIONS") return json(null, 204);
 
+		// ── El control del stub, y por qué NO es una ruta de la API ─────────────
+		// Vive FUERA de `/api/v1` a propósito, y solo en loopback: cambia qué
+		// contesta este stub, no escribe nada y nunca reenvía. Un test la usa para
+		// poner los avisos en el estado que necesita y después la devuelve al
+		// default — el default es `caido`, así que cualquier spec que se olvide
+		// de restaurar deja la suite en el estado que ya era seguro.
+		if (url.pathname === "/__stub/announcements" && req.method === "POST") {
+			const raw: unknown = await req.json().catch(() => null);
+			const modo =
+				typeof raw === "object" && raw !== null && "mode" in raw
+					? (raw as { mode?: unknown }).mode
+					: undefined;
+			if (modo !== "caido" && modo !== "hostil" && modo !== "benigno") {
+				return json({ message: `stub: mode inválido ${String(modo)}` }, 400);
+			}
+			announcementsMode = modo;
+			return json({ mode: announcementsMode });
+		}
+		if (url.pathname === "/__stub/announcements") {
+			return json({ mode: announcementsMode });
+		}
+
 		// ── Reads the SSR loaders depend on ──────────────────────────────────
 		if (url.pathname === "/api/v1/stats/platform") return json(STATS);
 		if (url.pathname === "/api/v1/app-config/public") return json(APP_CONFIG);
@@ -115,6 +217,12 @@ Bun.serve({
 		// has a designed fallback for it, so this exercises the real empty path
 		// instead of a fabricated offer that would need a 40-field stub.
 		if (url.pathname === "/api/v1/offers/random") return json(null);
+		// El único read que devuelve algo que el operador escribió, y su 503 es el
+		// que el loader SSR tiene que absorber sin romper la página.
+		if (url.pathname === "/api/v1/announcements") {
+			const { status, body } = ANNOUNCEMENTS[announcementsMode];
+			return json(body, status);
+		}
 
 		// ── The only WRITE endpoint the landing has ───────────────────────────
 		// Reached in practice from the browser, which `page.route()` stubs per
