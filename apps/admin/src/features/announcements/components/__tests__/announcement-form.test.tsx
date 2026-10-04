@@ -11,11 +11,12 @@ import { AnnouncementForm } from "../../forms/announcement-form";
  *  - `audience_kind = 'specific'` con las dos listas vacías lo frena la API (400,
  *    `SPECIFIC_WITHOUT_TARGET`). Que lo frene el servidor NO alcanza: el operador
  *    igual pierde el trabajo si no ve por qué.
- *  - `specific` con SOLO `business_ids` pasa el filtro de la API y no lo ve
- *    NADIE: la policy de select solo mira `user_ids @> array[auth.uid()]`. La
- *    migración sellada lo dice textualmente y difiere la salida a propósito
- *    (rechazar con 400, o resolver negocios → `user_ids`), así que acá no se
- *    decide nada: se hace visible la consecuencia.
+ *  - `specific` con `business_ids` YA NO es un caso invisible: al publicar, la API
+ *    resuelve cada negocio a su `owner_id` y lo suma a `user_ids`
+ *    (`ac74273`). El aviso llega a los dueños, así que no hay nada que avisar
+ *    antes de publicar. Lo que queda es un negocio SIN DUEÑO, que el servidor
+ *    rechaza con un 400 que lo nombra —y ese error tiene que mostrarse diciendo
+ *    cuál negocio, no tragado como un párrafo genérico.
  *  - publicar un `required` encima de otro `required` activo apila modales
  *    obligatorios (D10). Es el costo asumido de esa decisión y lo tiene que ver
  *    quien publica, no solo el que lee.
@@ -88,6 +89,20 @@ function stubApi(
 			email: string;
 		}>;
 		negocios?: Array<{ id: string; name: string }>;
+		/**
+		 * La página del directorio CUANDO el operador está buscando. Sin esto el
+		 * stub devuelve lo mismo para cualquier búsqueda, y no se puede probar el
+		 * caso real en el que un negocio se eligió buscando y no está en la página
+		 * que consulta el form.
+		 */
+		negociosBuscados?: Array<{ id: string; name: string }>;
+		/**
+		 * Lo que contesta la escritura cuando el test quiere que FALLE. El 400 del
+		 * negocio sin dueño es la razón de existir de esta opción: es un error
+		 * real del servidor, y un test que lo pinta necesita que el servidor lo
+		 * mande de verdad.
+		 */
+		escritura?: { status: number; body: unknown };
 	} = {},
 ) {
 	const calls: Recorded[] = [];
@@ -101,19 +116,27 @@ function stubApi(
 			url,
 			body: init?.body ? JSON.parse(String(init.body)) : undefined,
 		});
-		const json = (data: unknown) =>
+		const json = (data: unknown, status = 200) =>
 			new Response(JSON.stringify(data), {
-				status: 200,
+				status,
 				headers: { "Content-Type": "application/json" },
 			});
 
-		if (method === "POST" || method === "PATCH") return json(anuncio);
+		if (method === "POST" || method === "PATCH") {
+			const escritura = opciones.escritura;
+			return escritura ? json(escritura.body, escritura.status) : json(anuncio);
+		}
 		if (url.includes("/announcements/admin"))
 			return json({ data: opciones.obligatorios ?? [], meta });
 		if (url.includes("/profiles"))
 			return json({ data: opciones.consumidoras ?? [], meta: META });
 		if (url.includes("/businesses"))
-			return json({ data: opciones.negocios ?? [], meta: META });
+			return json({
+				data: url.includes("search=")
+					? (opciones.negociosBuscados ?? opciones.negocios ?? [])
+					: (opciones.negocios ?? []),
+				meta: META,
+			});
 		return json({ data: [], meta: META });
 	}) as unknown as typeof fetch;
 
@@ -224,10 +247,20 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 		);
 	});
 
-	// El caso que la API NO frena: pasa el filtro y de los negocios elegidos no
-	// lee nadie. En el ALTA la fila es nueva, así que el aviso efectivamente no lo
-	// ve nadie —y el texto puede decirlo sin mentir—.
-	test("en el alta, elegir solo negocios avisa que el aviso no llega y frena la publicación", async () => {
+	/*
+	 * LA CASILLA QUE SE RETIRÓ, Y EL TEST QUE LA MUERDE.
+	 *
+	 * Con la resolución de dueños en el servidor (`ac74273`), un `specific` con
+	 * solo negocios SÍ llega: cada negocio se resuelve a su `owner_id` y se suma a
+	 * `user_ids`. La advertencia que decía que no lo iban a ver era una falsedad,
+	 * y la casilla que había que marcar para publicar era además un gate que
+	 * frenaba publicaciones correctas.
+	 *
+	 * Este test afirma las DOS mitades: no aparece el aviso retirado, no hay
+	 * casilla de confirmación, y el aviso se publica. Si alguien vuelve a poner
+	 * la casilla, este test cae por la casilla y por el POST que no sale.
+	 */
+	test("en el alta, elegir solo negocios publica sin pedir ninguna confirmación", async () => {
 		const calls = stubApi({
 			negocios: [{ id: NEGOCIO_ID, name: "Panadería Sur" }],
 		});
@@ -239,60 +272,145 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 			await screen.findByRole("checkbox", { name: "Panadería Sur" }),
 		);
 
-		expect(
-			await screen.findByText("Los negocios que elegiste no lo van a ver"),
-		).toBeDefined();
-		expect(texto()).toContain(
-			"sin mostrarse en ninguna app: es una limitación conocida y sin resolver",
-		);
+		noAparece("Los negocios que elegiste no lo van a ver");
+		// Elegir negocios no abre NINGÚN aviso: ya hay a quién llegar, y lo que
+		// puede salir mal —un negocio sin dueño— es un error del servidor, no algo
+		// que se pueda avisar antes de intentarlo.
+		await waitFor(() => noAparece("Este aviso no tiene a quién llegar"));
+		// El único checkbox de la pantalla es el del `IdPicker` con el negocio
+		// elegido. La cantidad, y no el texto, es lo que afirma que no hay una
+		// casilla de confirmación: si alguien la vuelve a poner —con el copy que
+		// sea— acá aparece una de más y esto cae.
+		expect(screen.getAllByRole("checkbox")).toHaveLength(1);
 
 		submit();
-		await waitFor(() =>
-			expect(texto()).toContain("Confirmá que sabés a quién no le va a llegar"),
-		);
-		expect(posts(calls)).toHaveLength(0);
-
-		// Minor 7: marcar la casilla borra el error ahí mismo. Antes solo se
-		// limpiaba cuando cambiaba la audiencia o en el submit siguiente, y
-		// quedaba un `FieldError` rojo al lado de una casilla ya marcada.
-		fireEvent.click(
-			screen.getByRole("checkbox", {
-				name: /Entiendo que los negocios de esta lista no van a ver este aviso/,
-			}),
-		);
-		await waitFor(() =>
-			expect(texto()).not.toContain(
-				"Confirmá que sabés a quién no le va a llegar",
-			),
-		);
-		submit();
-
 		await waitFor(() => expect(posts(calls)).toHaveLength(1));
 		expect(posts(calls)[0]?.body).toMatchObject({
 			audience_kind: "specific",
 			business_ids: [NEGOCIO_ID],
 		});
 		// `user_ids: []` también se omite: una lista vacía explícita en el alta es
-		// indistinguible de la que pidió el operador.
+		// indistinguible de la que pidió el operador. Los dueños los suma el
+		// servidor, no el panel.
 		expect(posts(calls)[0]?.body).not.toHaveProperty("user_ids");
 	});
 
+	// EL CASO QUE QUEDÓ REAL Y QUE NO ES EL DE LA ADVERTENCIA RETIRADA: un
+	// negocio sin dueño. La API lo rechaza con un 400 que lo nombra, y el panel
+	// tiene que decirlo acá, junto a la lista de negocios: el nombre cuando el
+	// directorio lo conoce y el id siempre — sin el nombre es menos accionable,
+	// pero nunca deja al operador sin saber a quién hay que darle dueño. Un
+	// párrafo de error genérico arriba del form no dice ninguna de las dos cosas.
+	//
+	// Con la resolución, un aviso dirigido a negocios que se publica es un aviso
+	// que llega: no puede haber un "se publicó y no lo ve nadie", y por eso este
+	// error es el ÚNICO lugar donde el panel puede dar la razón exacta.
+	test("un negocio sin dueño vuelve como un error que nombra el negocio", async () => {
+		const otroNegocio = {
+			id: "66666666-6666-4666-8666-666666666666",
+			name: "Bodega La Esquina",
+		};
+		const calls = stubApi({
+			negocios: [{ id: NEGOCIO_ID, name: "Panadería Sur" }, otroNegocio],
+			escritura: {
+				status: 400,
+				body: {
+					statusCode: 400,
+					error: "Bad Request",
+					message: `No se puede publicar: estos negocios no tienen dueño asignado y el aviso no llegaría a nadie: ${NEGOCIO_ID}`,
+					requestId: "req-sin-dueno-1",
+				},
+			},
+		});
+		renderForm();
+		completar();
+
+		await elegir("Audiencia", "Personas específicas");
+		fireEvent.click(
+			await screen.findByRole("checkbox", { name: "Panadería Sur" }),
+		);
+
+		// El POST salió: la confirmación que se retiró ya no frena la publicación.
+		submit();
+		await waitFor(() => expect(posts(calls)).toHaveLength(1));
+
+		// Lo accionable: el nombre del negocio que el servidor culpó, junto a su id.
+		expect(
+			await screen.findByText(`Panadería Sur · ${NEGOCIO_ID}`),
+		).toBeDefined();
+		expect(texto()).toContain("hay negocios sin dueño asignado");
+		// Y qué hacer con eso, que es la mitad de "accionable".
+		expect(texto()).toContain("Asignale un dueño a cada uno en su ficha");
+		// El negocio que NO está en el 400 no se acusa: nombrar al que sí tiene
+		// dueño sería darle un motivo falso.
+		noAparece("Bodega La Esquina · ");
+		// El mensaje del servidor no se traga: sigue arriba, con su requestId, que
+		// es lo único que lo correlaciona con el log `announcements_business_*`.
+		expect(texto()).toContain("no tienen dueño asignado");
+		expect(texto()).toContain("req-sin-dueno-1");
+	});
+
+	// El nombre sale del directorio, no del mensaje del servidor: la API nombra
+	// ids porque `business_ownership` no tiene el nombre del negocio. Cuando el
+	// directorio no conoce el id —porque el operador lo encontró buscando y no
+	// está en la página sin búsqueda, o porque el negocio está inactivo— el id se
+	// muestra solo: es menos cómodo, pero nunca deja al operador sin saber a quién
+	// hay que darle dueño.
+	test("si el directorio no conoce el negocio, el error lo nombra con el id", async () => {
+		const kiosco = {
+			id: "77777777-7777-4777-8777-777777777777",
+			name: "Kiosco Cerrado",
+		};
+		const calls = stubApi({
+			// La página sin búsqueda —la que consulta el form— viene vacía, y el
+			// kiosco aparece solo cuando el operador lo busca. Es exactamente como
+			// pasa en la app, y es el caso real del fallback.
+			negocios: [],
+			negociosBuscados: [kiosco],
+			escritura: {
+				status: 400,
+				body: {
+					statusCode: 400,
+					error: "Bad Request",
+					message: `No se puede publicar: estos negocios no tienen dueño asignado y el aviso no llegaría a nadie: ${kiosco.id}`,
+				},
+			},
+		});
+		renderForm();
+		completar();
+
+		await elegir("Audiencia", "Personas específicas");
+		fireEvent.change(screen.getByLabelText("Buscar negocios"), {
+			target: { value: "kiosco" },
+		});
+		fireEvent.click(
+			await screen.findByRole("checkbox", { name: "Kiosco Cerrado" }),
+		);
+		submit();
+		await waitFor(() => expect(posts(calls)).toHaveLength(1));
+
+		// El id a secas, sin inventar un nombre que el panel no tiene: el mensaje
+		// del servidor ya lo nombró y con eso se puede ir a buscar el negocio.
+		expect(await screen.findByText(kiosco.id)).toBeDefined();
+		noAparece(`Kiosco Cerrado · ${kiosco.id}`);
+	});
+
 	/*
-	 * EL CASO QUE HACÍA MENTIR AL PANEL.
+	 * EL CASO QUE HACÍA MENTIR AL PANEL, ahora en su versión correcta.
 	 *
 	 * El service hace MERGE de la audiencia, no reemplazo:
 	 * `body.user_ids ?? existing.user_ids` (`announcements.service.ts`). Elegir
 	 * negocios encima de una fila que ya tenía consumidoras NO las borra, y el
 	 * mapper solo escribe la lista que viene definida. Publicás un `specific` para
 	 * Ana, días después abrís el aviso para corregir una errata y elegís dos
-	 * negocios creyendo que agregás audiencia: el aviso tenía que decir que Ana
-	 * lo sigue recibiendo, no que "nadie va a ver este aviso".
+	 * negocios: lo que hay que avisar es que a Ana no se la toca, no que "nadie lo
+	 * va a ver".
 	 *
-	 * Y el payload es lo que hace que eso sea cierto: al no viajar `user_ids`, la
-	 * lista guardada sobrevive. Si este test pasara con `user_ids: []` en el
-	 * body, el aviso de arriba sería la mitad de la historia.
+	 * Y lo que el panel NO puede mostrar es la lista guardada, así que el aviso que
+	 * corresponde es el de la audiencia oculta. El que decía que de los negocios
+	 * no lee nadie se retiró con la casilla.
 	 */
-	test("al editar, elegir negocios dice que las personas guardadas lo siguen recibiendo", async () => {
+	test("al editar, elegir negocios avisa que la audiencia guardada no se puede mostrar", async () => {
 		stubApi({ negocios: [{ id: NEGOCIO_ID, name: "Panadería Sur" }] });
 		// La fila viene con `specific`: el panel no puede mostrar su audiencia
 		// (no viene en la lectura), así que a los ojos del test no tiene personas.
@@ -304,12 +422,13 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 		);
 
 		expect(
-			await screen.findByText("Los negocios que elegiste no lo van a ver"),
+			await screen.findByText("La audiencia de este aviso no se puede mostrar"),
 		).toBeDefined();
-		expect(texto()).toContain("SEGUEN RECIBIÉNDOLO");
-		// Y NO dice que no lo ve nadie, que es lo que mentía.
-		noAparece("Nadie va a ver este aviso");
-		expect(texto()).toContain("no la borra al guardar");
+		// Lo que se afirma es que las personas guardadas SIGUEN, nunca que no lo ve
+		// nadie: eso era falso en el caso más común.
+		expect(texto()).toContain("se AGREGAN a la lista guardada");
+		expect(texto()).not.toContain("se reemplazan");
+		noAparece("Los negocios que elegiste no lo van a ver");
 	});
 
 	test("al editar con negocios, el PATCH no manda user_ids: la lista guardada sobrevive", async () => {
@@ -322,11 +441,6 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 		fireEvent.click(
 			await screen.findByRole("checkbox", { name: "Panadería Sur" }),
 		);
-		fireEvent.click(
-			await screen.findByRole("checkbox", {
-				name: /Entiendo que los negocios que agregué no lo van a ver/,
-			}),
-		);
 		submit();
 
 		await waitFor(() => expect(patches(calls)).toHaveLength(1));
@@ -335,7 +449,8 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 			business_ids: [NEGOCIO_ID],
 		});
 		// El punto del test: al omitir la lista, el `??` del service cae a la
-		// guardada y las personas que ya lo recibían lo siguen recibiendo.
+		// guardada y las personas que ya lo recibían lo siguen recibiendo. Y sale
+		// sin tocar ninguna casilla: la que se retiró frenaba esto.
 		expect(patches(calls)[0]?.body).not.toHaveProperty("user_ids");
 	});
 
@@ -414,11 +529,23 @@ async function rolDelAviso(titulo: string): Promise<string | null> {
 	return encontrado.parentElement?.getAttribute("role") ?? null;
 }
 
-// Minor 5: solo la audiencia que no llega interrumpe (asertivo). Las otras dos
-// son `status`. Si las tres volvieran a `alert`, el operador se habitúa a ignorar
-// los avisos del drawer —y el único que decide qué hace se pierde con ellos.
-describe("la asertividad de los tres avisos", () => {
-	test("el de negocios es alert; los otros dos son status", async () => {
+/** Los `role="alert"` que hay DENTRO del form, que es lo que este describe. */
+function alertsDelForm(): Element[] {
+	const form = document.getElementById("announcement-form");
+	return form ? Array.from(form.querySelectorAll('[role="alert"]')) : [];
+}
+
+/**
+ * Los avisos que quedan son los dos que informan y no cambian lo que el operador
+ * publica, así que son `status`. NO hay ningún `role="alert"` mientras compone: el
+ * único que lo era era el de los negocios que no llegaban, que además frenaba la
+ * publicación con una casilla, y con la resolución de dueños ese caso no existe.
+ *
+ * Interrumpir la lectura de pantalla con un aviso que no cambia nada solo lo
+ * habitúa a ignorar los que sí lo cambian.
+ */
+describe("la asertividad de los avisos del formulario", () => {
+	test("los dos avisos que quedan son status y no hay ninguno alert", async () => {
 		const calls = stubApi({
 			obligatorios: [obligatorioActivo],
 			negocios: [{ id: NEGOCIO_ID, name: "Panadería Sur" }],
@@ -439,14 +566,44 @@ describe("la asertividad de los tres avisos", () => {
 			"status",
 		);
 
-		// Con negocios: frena la publicación, y por eso interrumpe.
+		// Elegir negocios ya no abre ningún aviso —no hay nada que avisar— y, sobre
+		// todo, no deja nada asertivo: el único `alert` del form es el error del
+		// servidor cuando ocurre. El aviso de "sin destino" se va con el primer
+		// negocio, porque el aviso ya tiene a quién llegar.
 		fireEvent.click(
 			await screen.findByRole("checkbox", { name: "Panadería Sur" }),
 		);
-		expect(await rolDelAviso("Los negocios que elegiste no lo van a ver")).toBe(
-			"alert",
-		);
+		await waitFor(() => noAparece("Este aviso no tiene a quién llegar"));
+		expect(alertsDelForm()).toHaveLength(0);
 		expect(calls.every((c) => c.method === "GET")).toBe(true);
+	});
+
+	// La asertividad no se perdió con la casilla: se mudó al primitivo que ya la
+	// tenía. El 400 del negocio sin dueño interrumpa, porque el operador acaba de
+	// publicar y lo que necesita es enterarse YA.
+	test("el 400 del negocio sin dueño es alert: es un fallo, no un aviso", async () => {
+		stubApi({
+			negocios: [{ id: NEGOCIO_ID, name: "Panadería Sur" }],
+			escritura: {
+				status: 400,
+				body: {
+					statusCode: 400,
+					error: "Bad Request",
+					message: `No se puede publicar: estos negocios no tienen dueño asignado y el aviso no llegaría a nadie: ${NEGOCIO_ID}`,
+				},
+			},
+		});
+		renderForm();
+		completar();
+
+		await elegir("Audiencia", "Personas específicas");
+		fireEvent.click(
+			await screen.findByRole("checkbox", { name: "Panadería Sur" }),
+		);
+		submit();
+
+		await screen.findByText(`Panadería Sur · ${NEGOCIO_ID}`);
+		expect(alertsDelForm()).toHaveLength(1);
 	});
 });
 

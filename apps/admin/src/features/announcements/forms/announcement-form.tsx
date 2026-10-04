@@ -4,12 +4,12 @@ import {
 	CreateAnnouncementSchema,
 } from "@0xc1x/role-commons";
 import { useForm, useStore } from "@tanstack/react-form";
-import { type ReactNode, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
 import { useReportDrawerPending } from "@/components/resource/resource-drawer";
 import { StatusSwitch } from "@/components/status-switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
 	Field,
@@ -26,8 +26,10 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { directoryBusinessesOptions } from "@/features/directory";
 import { IdPicker } from "@/features/email/components/id-picker";
 import { formatApiError } from "@/lib/api/notify";
+import { negociosSinDueño } from "../api/announcements.errors";
 import {
 	useActiveRequiredAnnouncements,
 	useCreateAnnouncement,
@@ -41,9 +43,12 @@ import {
  *  1. Un `specific` con las dos listas vacías lo rechaza la API (400). El panel
  *     lo avisa y deja que el servidor conteste: la regla es del service, y
  *     duplicarla acá haría que un borrador a medio pensar no se pueda guardar.
- *  2. Un `specific` con SOLO negocios la API lo acepta y NO LO VE NADIE: la
- *     policy de select solo mira `user_ids`. La migración sellada difiere la
- *     salida a propósito. Acá no se decide —se hace visible—.
+ *  2. Un `specific` que elige negocios SÍ llega: al publicar, la API resuelve
+ *     cada `business_id` a su `owner_id` y suma los dueños a `user_ids`
+ *     (`announcements.service.ts`, `resolverDueñosDeNegocios`). No hay nada que
+ *     avisar antes de publicar. Lo único que puede salir mal —un negocio sin
+ *     dueño— lo rechaza el servidor con un 400 que lo nombra, y ese error sale
+ *     accionable junto a la lista de negocios (`negociosSinDueño`).
  *  3. Publicar un `required` encima de otro `required` activo apila modales
  *     obligatorios (D10). Avisa; no impide.
  *
@@ -68,41 +73,6 @@ const AVISO_SIN_DESTINO = "Este aviso no tiene a quién llegar";
 const AVISO_SIN_DESTINO_DETALLE =
 	"Un aviso para audiencia específica necesita al menos una consumidora o un negocio. El servidor rechaza la publicación con las dos listas vacías.";
 
-/**
- * EL NEGOCIO DE LA LISTA NO LLEGA, Y LAS PERSONAS GUARDADAS SIGUEN.
- *
- * La redacción dice exactamente eso, y no "nadie va a ver este aviso", porque
- * sería FALSO en el caso más común. El service hace MERGE de la audiencia, no
- * reemplazo: `body.user_ids ?? existing.user_ids` (`announcements.service.ts`),
- * y el mapper solo escribe la lista que viene definida. Elegir negocios encima
- * de una fila que ya tenía consumidoras NO las borra: sigue llegándoles.
- *
- * El escenario que obliga a esta redacción: se publica un `specific` para Ana,
- * días después se abre para corregir una errata y se eligen dos negocios
- * creyendo que se agrega audiencia; con la redacción anterior el panel
- * obligaba a acknowledgear que nadie lo vería, y Ana lo seguía viendo. Un aviso
- * cuyo trabajo es que el operador no publique algo que no llega no puede
- * afirmar que algo no llega cuando sí.
- *
- * Y el aviso se especifica por lista, no por fila: la policy de select solo mira
- * `user_ids @> array[auth.uid()]`, así que de los negocios elegidos no lee
- * nadie. Esa parte sigue sin resolverse —la migración sellada difiere la
- * salida a propósito— y por eso el aviso sigue ahí, diciendo la verdad.
- */
-const AVISO_NEGOCIOS_NO_ENTREGAN = "Los negocios que elegiste no lo van a ver";
-const AVISO_NEGOCIOS_NO_ENTREGAN_ALTA =
-	"La regla de entrega solo reconoce a las personas de la lista de consumidoras. Elegir únicamente negocios deja el aviso publicado y sin mostrarse en ninguna app: es una limitación conocida y sin resolver.";
-const AVISO_NEGOCIOS_NO_ENTREGAN_AL_EDITAR =
-	"La regla de entrega solo reconoce a las personas de la lista de consumidoras, así que de los negocios que agregaste no lee nadie. Si este aviso ya tenía consumidoras apuntadas, SEGUEN RECIBIÉNDOLO: el panel no puede mostrarte esa lista, pero no la borra al guardar.";
-
-/** Lo que se acknowledgea: el alcance del aviso, no un "nadie lo ve". */
-const CONFIRMAR_NEGOCIOS =
-	"Entiendo que los negocios de esta lista no van a ver este aviso";
-const CONFIRMAR_NEGOCIOS_AL_EDITAR =
-	"Entiendo que los negocios que agregué no lo van a ver, y que las personas que ya estaban apuntadas lo siguen recibiendo";
-const ERROR_CONFIRMAR_NEGOCIOS =
-	"Confirmá que sabés a quién no le va a llegar este aviso antes de publicarlo.";
-
 const AVISO_AUDIENCIA_OCULTA = "La audiencia de este aviso no se puede mostrar";
 const AVISO_AUDIENCIA_OCULTA_DETALLE =
 	"La lista de consumidoras y la de negocios no vienen en la lectura, a propósito. Si elegís a alguien se AGREGAN a la lista guardada —no la reemplazan—; si guardás sin elegir a nadie, se conserva la que ya estaba.";
@@ -117,25 +87,48 @@ interface AnnouncementFormProps {
 }
 
 /**
- * Qué dice el panel sobre la audiencia elegida. No es una validación: la
- * `requiereConfirmacion` solo aparece en el caso que la API deja pasar y que
- * produce un aviso invisible.
+ * Qué dice el panel sobre la audiencia elegida. No es validación y NO frena
+ * nada: los dos casos que quedan son información que el operador lee mientras
+ * compone. El único motivo real por el que un aviso dirigido no llega —un
+ * negocio sin dueño— no se decide acá, y por eso no vive en este tipo: es un
+ * error del servidor, y se pinta con el error de la mutación.
  */
 interface AvisoDeAudiencia {
 	titulo: string | null;
 	detalle: string;
-	/** El texto de la casilla que hay que marcar antes de publicar. */
-	confirmacion: string;
-	requiereConfirmacion: boolean;
 }
 
 const SIN_AVISO_DE_AUDIENCIA: AvisoDeAudiencia = {
 	titulo: null,
 	detalle: "",
-	confirmacion: "",
-	requiereConfirmacion: false,
 };
 
+/*
+ * LO QUE SE RETIRÓ DE ACÁ, Y POR QUÉ — no reintroducirlo sin leer esto.
+ *
+ * Para un `specific` con SOLO negocios, este form tenía una advertencia que decía
+ * que esos negocios no lo iban a ver, y una casilla de confirmación que OBLIGABA
+ * a marcar antes de publicar ("Entiendo que este aviso se publica y no lo va a
+ * ver nadie"). Existía porque la policy de select solo mira
+ * `user_ids @> array[auth.uid()]` y el panel no resolvía los negocios a sus
+ * dueños: un aviso dirigido a negocios se publicaba y no lo veía nadie, así que
+ * el panel frenaba la publicación para que el operador no publicara eso.
+ *
+ * La API ya resuelve: al publicar, cada `business_id` se resuelve a su `owner_id`
+ * y se suma a `user_ids` (`announcements.service.ts`, `resolverDueñosDeNegocios`,
+ * commit `ac74273`). El aviso dirigido a negocios LLEGA, así que la advertencia
+ * era una falsedad y la casilla era un gate que frenaba publicaciones correctas:
+ * el operador tenía que acknowledgear que nadie lo iba a ver para publicar un
+ * aviso que sí veían sus dueños.
+ *
+ * Lo que la reemplazó no es otra advertencia previa sino el error REAL, que es
+ * del servidor y solo existe cuando existe: un negocio sin dueño se rechaza con
+ * un 400 que lo nombra, y el form lo muestra con el negocio nombrado junto a la
+ * lista de negocios (`negociosSinDueño`). Antes de esta resolución, una
+ * advertencia previa era el ÚNICO momento en que el panel podía avisar algo; hoy
+ * no, porque no hay nada que avisar: o llega, o el servidor lo rechaza diciendo por
+ * qué.
+ */
 function avisoDeAudiencia(
 	audienceKind: AudienceKind,
 	userIds: readonly string[],
@@ -145,27 +138,16 @@ function avisoDeAudiencia(
 	if (audienceKind !== "specific") return SIN_AVISO_DE_AUDIENCIA;
 	if (userIds.length > 0) return SIN_AVISO_DE_AUDIENCIA;
 
-	if (businessIds.length > 0) {
-		return {
-			titulo: AVISO_NEGOCIOS_NO_ENTREGAN,
-			// El texto cambia con el alta y la edición porque el hecho es distinto:
-			// en el alta la lista guardada está vacía y el aviso no lo ve nadie;
-			// en la edición puede haber personas que lo siguen recibiendo.
-			detalle: isNew
-				? AVISO_NEGOCIOS_NO_ENTREGAN_ALTA
-				: AVISO_NEGOCIOS_NO_ENTREGAN_AL_EDITAR,
-			confirmacion: isNew ? CONFIRMAR_NEGOCIOS : CONFIRMAR_NEGOCIOS_AL_EDITAR,
-			requiereConfirmacion: true,
-		};
-	}
+	// En el ALTA, elegir negocios le DA destino al aviso: cada uno se resuelve a
+	// sus dueños al publicar. Este era el caso que abría la advertencia y la
+	// casilla, y hoy no hay nada que avisar (ver el bloque de arriba).
+	if (isNew && businessIds.length > 0) return SIN_AVISO_DE_AUDIENCIA;
 
 	// Sin ninguna de las dos, el aviso depende de lo que YA esté guardado, y eso
 	// el panel no lo sabe: la fila publicada no trae la audiencia.
 	return {
 		titulo: isNew ? AVISO_SIN_DESTINO : AVISO_AUDIENCIA_OCULTA,
 		detalle: isNew ? AVISO_SIN_DESTINO_DETALLE : AVISO_AUDIENCIA_OCULTA_DETALLE,
-		confirmacion: "",
-		requiereConfirmacion: false,
 	};
 }
 
@@ -186,35 +168,20 @@ function avisoDeApilado(otros: number): string {
 /**
  * Las tres son cosas que el operador tiene que ver ANTES de publicar, y un aviso
  * que aparece por debajo del pliegue del drawer no se lee — por eso las tres son
- * live regions. Lo que cambia con `alerta` es la ASERTIVIDAD, no el estilo:
+ * live regions `role="status"` (polite: espera su turno).
  *
- *  - `role="alert"` (asertivo, interrumpe) solo para la audiencia que no llega.
- *    Es la única que cambia lo que el operador va a hacer: sin confirmar, no se
- *    publica.
- *  - `role="status"` (polite, espera su turno) para las otras dos. El aviso de
- *    que falta audiencia y el de `required` apilado son información que se lee
- *    cuando se llega; interrumpir la lectura de pantalla con ellos por el solo
- *    hecho de abrir el drawer es hacer que el operador se habitúe a ignorar los
- *    avisos, que es justo lo que vuelve inútil el único que importa.
+ * NO hay ningún aviso asertivo (`role="alert"`) en este form, y es deliberado. El
+ * único que lo era era el de los negocios que no llegaban, que además frenaba la
+ * publicación con una casilla de confirmación; con la resolución de dueños en el
+ * servidor ese caso no existe (ver el bloque de `avisoDeAudiencia`). Lo que sí
+ * hay que interrumpir —un error de la mutación— se pinta con el `FieldError` del
+ * panel, que ya es `role="alert"`: la asertividad no se pierde, pasa del
+ * primitivo que ya la tenía en vez de inventar una segunda.
  */
-function Notice({
-	titulo,
-	children,
-	alerta = false,
-}: {
-	titulo: string;
-	children: ReactNode;
-	alerta?: boolean;
-}) {
+function Notice({ titulo, children }: { titulo: string; children: ReactNode }) {
 	return (
-		<div
-			role={alerta ? "alert" : "status"}
-			className={
-				alerta
-					? "rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"
-					: "rounded-md border bg-muted/40 p-3 text-sm"
-			}
-		>
+		// biome-ignore lint/a11y/useSemanticElements: `<output>` es el resultado de un cálculo del formulario y además es contenido de frase, así que no podría llevar los dos `<p>` que estructuran el aviso. El `role` va explícito para que se lea en el JSX.
+		<div role="status" className="rounded-md border bg-muted/40 p-3 text-sm">
 			<p className="font-medium">{titulo}</p>
 			<p className="mt-1 text-muted-foreground">{children}</p>
 		</div>
@@ -306,12 +273,6 @@ export function AnnouncementForm({
 		announcement ? updateMutation.isPending : createMutation.isPending,
 	);
 
-	// El aviso de audiencia invisible se confirma una vez por composición: si la
-	// selección cambia, la confirmación anterior deja de ser la que el operador
-	// está aceptando.
-	const [confirmado, setConfirmado] = useState(false);
-	const [errorDeAudiencia, setErrorDeAudiencia] = useState<string | null>(null);
-
 	// El aviso del formulario se cuenta a sí mismo en el total del servidor, así
 	// que editar el único `required` vigente no se anuncia como un apilamiento.
 	const cuentaPropia =
@@ -325,26 +286,22 @@ export function AnnouncementForm({
 		defaultValues: announcementDefaults(announcement),
 		validators: { onSubmit: CreateAnnouncementSchema },
 		onSubmit: async ({ value }) => {
-			const aviso = avisoDeAudiencia(
-				value.audience_kind,
-				value.user_ids ?? [],
-				value.business_ids ?? [],
-				!announcement,
-			);
-			if (aviso.requiereConfirmacion && !confirmado) {
-				setErrorDeAudiencia(ERROR_CONFIRMAR_NEGOCIOS);
-				return;
-			}
-			setErrorDeAudiencia(null);
-
 			const payload = toAnnouncementPayload(value);
-			if (announcement) {
-				await updateMutation.mutateAsync({
-					id: announcement.id,
-					body: payload,
-				});
-			} else {
-				await createMutation.mutateAsync(payload);
+			try {
+				if (announcement) {
+					await updateMutation.mutateAsync({
+						id: announcement.id,
+						body: payload,
+					});
+				} else {
+					await createMutation.mutateAsync(payload);
+				}
+			} catch {
+				// El error se pinta arriba del form y, si es el del negocio sin
+				// dueño, junto a la lista de negocios. Dejarlo propagar sería un
+				// rejection sin nada que mostrar (mismo criterio que
+				// `business.form.tsx`).
+				return;
 			}
 
 			// El aviso de apilado se ve mientras se compone, pero el drawer se
@@ -378,13 +335,32 @@ export function AnnouncementForm({
 	);
 	const apila = severity === "required" && active && otrosObligatorios > 0;
 
-	useEffect(() => {
-		if (aviso.requiereConfirmacion) return;
-		setConfirmado(false);
-		setErrorDeAudiencia(null);
-	}, [aviso.requiereConfirmacion]);
-
 	const formError = createMutation.error ?? updateMutation.error;
+	// Los negocios sin dueño que nombró el servidor en su 400. Es el error que
+	// reemplaza la casilla que se retiró: no una advertencia previa, sino el
+	// motivo real, con los negocios en la pantalla.
+	const sinDueño = negociosSinDueño(formError);
+
+	// El directorio de negocios que el `IdPicker` de abajo ya está trayendo: es la
+	// MISMA clave de query, así que no es una request extra. Solo se pide con
+	// audiencia dirigida, que es cuando el picker existe y cuando hay ids que
+	// nombrar; en cualquier otro caso sería un request inútil.
+	const directorio = useQuery({
+		...directoryBusinessesOptions(""),
+		enabled: audienceKind === "specific",
+	});
+
+	/**
+	 * El nombre del negocio para un id del 400, o el id solo cuando el directorio
+	 * no lo conoce. El id nunca se oculta: es lo que el servidor nombró a
+	 * propósito —`business_ownership` no tiene el nombre del negocio— y alcanza
+	 * para ir a buscarlo, así que un nombre de menos no deja al operador sin
+	 * salida.
+	 */
+	const nombreDeNegocio = (id: string): string => {
+		const nombre = directorio.data?.data.find((b) => b.id === id)?.name;
+		return nombre ? `${nombre} · ${id}` : id;
+	};
 
 	return (
 		<form
@@ -552,9 +528,7 @@ export function AnnouncementForm({
 			{audienceKind === "specific" ? (
 				<section className="space-y-3">
 					{aviso.titulo ? (
-						<Notice titulo={aviso.titulo} alerta={aviso.requiereConfirmacion}>
-							{aviso.detalle}
-						</Notice>
+						<Notice titulo={aviso.titulo}>{aviso.detalle}</Notice>
 					) : null}
 
 					<form.Field name="user_ids">
@@ -593,31 +567,33 @@ export function AnnouncementForm({
 						)}
 					</form.Field>
 
-					{aviso.requiereConfirmacion ? (
-						// `div` y no `label` envolvente: el control de un `<label>`
-						// labelable recibe un click ADICIONAL al del label, y el
-						// checkbox se desmarcaba solo. Es el mismo criterio que los
-						// `IdPicker` y las listas de segmentos de campaigns.
-						<div className="flex items-start gap-2 text-sm">
-							<Checkbox
-								checked={confirmado}
-								onCheckedChange={(checked) => {
-									setConfirmado(checked === true);
-									// El error de "falta confirmar" se borra al marcar, no
-									// cuando cambia la audiencia: si no, queda un `FieldError`
-									// rojo al lado de una casilla ya marcada, y el operador
-									// ve que la confirmación "no took".
-									if (checked === true) setErrorDeAudiencia(null);
-								}}
-								aria-label={aviso.confirmacion}
-								className="mt-0.5"
-							/>
-							<span>{aviso.confirmacion}</span>
-						</div>
-					) : null}
-
-					{errorDeAudiencia ? (
-						<FieldError>{errorDeAudiencia}</FieldError>
+					{sinDueño.length > 0 ? (
+						/*
+						 * El 400 del negocio sin dueño, con los negocios NOMBRADOS. Es
+						 * lo que reemplaza la casilla que se retiró: no una advertencia
+						 * previa —la resolución del servidor volvió innecesaria— sino el
+						 * error real, cuando ocurre, diciendo a quién hay que darle
+						 * dueño.
+						 *
+						 * Va acá y no solo en el párrafo de arriba porque la respuesta del
+						 * operador es sobre ESTA lista, y porque el `FieldError` del panel
+						 * ya es `role="alert"`: un fallo de la mutación hay que
+						 * interrumpirlo, a diferencia de los avisos que aparecen al
+						 * componer. El párrafo de arriba no se saca —es el mensaje del
+						 * servidor con su `requestId`, que es lo único que lo correlaciona
+						 * con el log `announcements_business_without_owner`—, así que las
+						 * frases se repiten: el de arriba es el parte del servidor y este la
+						 * guía de qué corregir.
+						 */
+						<FieldError
+							errors={[
+								{
+									message:
+										"No se puede publicar: hay negocios sin dueño asignado y el aviso no le llegaría a nadie. Asignale un dueño a cada uno en su ficha, o sacalos de la lista y volvé a publicar:",
+								},
+								...sinDueño.map((id) => ({ message: nombreDeNegocio(id) })),
+							]}
+						/>
 					) : null}
 				</section>
 			) : null}
