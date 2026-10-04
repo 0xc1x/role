@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import { PaginatedAnnouncementsSchema } from "../dtos/announcement.dto";
 import {
 	AnnouncementListQuerySchema,
 	AnnouncementSchema,
 	CreateAnnouncementSchema,
+	PatchAnnouncementSchema,
 	UpdateAnnouncementSchema,
 } from "../schemas/announcement.schema";
 
@@ -27,6 +29,17 @@ const fullRow = {
 	end_at: null,
 	created_at: "2026-10-03T12:00:00+00:00",
 	updated_at: "2026-10-03T12:00:00+00:00",
+};
+
+/**
+ * La fila menos un campo. Cada campo por separado y en su propio test: si se
+ * sacan los tres juntos, alcanza con que uno solo sea obligatorio para que el
+ * test siga verde, y que `id` o `created_at` salgan del read path no lo
+ * detectaría nadie.
+ */
+const rowWithout = (field: "id" | "created_at" | "updated_at") => {
+	const { [field]: _omitido, ...resto } = fullRow;
+	return resto;
 };
 
 const title = (length: number) => "a".repeat(length);
@@ -159,10 +172,26 @@ describe("AnnouncementSchema · el vocabulario que los CHECK acotan", () => {
 });
 
 describe("AnnouncementSchema · la forma de la fila", () => {
-	it("exige id, created_at y updated_at", () => {
-		const { id, created_at, updated_at, ...sinTimestamps } = fullRow;
-		expect(AnnouncementSchema.safeParse(sinTimestamps).success).toBe(false);
+	// Los tres campos que el read path tiene que garantir van en tres tests: en
+	// uno solo, con que uno de los tres sea obligatorio el test pasa, y `AnnouncementSchema`
+	// es lo que parsean las cinco capas siguientes.
+	it("exige id", () => {
 		expect(AnnouncementSchema.safeParse(fullRow).success).toBe(true);
+		expect(AnnouncementSchema.safeParse(rowWithout("id")).success).toBe(false);
+	});
+
+	it("exige created_at", () => {
+		expect(AnnouncementSchema.safeParse(fullRow).success).toBe(true);
+		expect(AnnouncementSchema.safeParse(rowWithout("created_at")).success).toBe(
+			false,
+		);
+	});
+
+	it("exige updated_at", () => {
+		expect(AnnouncementSchema.safeParse(fullRow).success).toBe(true);
+		expect(AnnouncementSchema.safeParse(rowWithout("updated_at")).success).toBe(
+			false,
+		);
 	});
 
 	it("no admite updated_at en null: la columna es NOT NULL", () => {
@@ -310,12 +339,54 @@ describe("UpdateAnnouncementSchema", () => {
 		expect(parsed.success && parsed.data).not.toHaveProperty("id");
 	});
 
-	it("no acota priority, porque la base tampoco lo acota", () => {
+	it("no acota el rango de negocio de priority, porque la tabla no le pone CHECK", () => {
 		// Un `min(0)` acá rechazaría en el panel una fila que Postgres guarda: la
-		// tabla no tiene CHECK en priority, solo lo ordena.
+		// tabla no tiene CHECK en priority, solo lo ordena. El rango que sí se
+		// acota es el del tipo de la columna, dos tests más abajo.
 		expect(UpdateAnnouncementSchema.safeParse({ priority: -1 }).success).toBe(
 			true,
 		);
+	});
+
+	it("acepta priority hasta el tope de un integer de Postgres", () => {
+		// int4: el contrato tiene que aceptar todo lo que la columna acepta.
+		expect(
+			UpdateAnnouncementSchema.safeParse({ priority: 2147483647 }).success,
+		).toBe(true);
+		expect(
+			UpdateAnnouncementSchema.safeParse({ priority: -2147483648 }).success,
+		).toBe(true);
+	});
+
+	it("rechaza un priority que se sale del integer de Postgres", () => {
+		// Un paso más allá, la base responde "integer out of range": un 500 con
+		// mensaje de base de datos donde debería haber un 400 con mensaje de
+		// validación. `z.number().int()` solo llega a safeint, así que sin este
+		// borde el contrato lo dejaría pasar.
+		expect(
+			UpdateAnnouncementSchema.safeParse({ priority: 2147483648 }).success,
+		).toBe(false);
+		expect(
+			UpdateAnnouncementSchema.safeParse({ priority: -2147483649 }).success,
+		).toBe(false);
+		expect(
+			UpdateAnnouncementSchema.safeParse({ priority: 9999999999 }).success,
+		).toBe(false);
+	});
+
+	it("aplica el rango de priority también al crear", () => {
+		expect(
+			CreateAnnouncementSchema.safeParse({
+				...minimalCreate,
+				priority: 2147483647,
+			}).success,
+		).toBe(true);
+		expect(
+			CreateAnnouncementSchema.safeParse({
+				...minimalCreate,
+				priority: 2147483648,
+			}).success,
+		).toBe(false);
 	});
 
 	it("rechaza un priority decimal", () => {
@@ -393,5 +464,53 @@ describe("AnnouncementListQuerySchema", () => {
 		const parsed = AnnouncementListQuerySchema.safeParse({});
 		expect(parsed.success && parsed.data.page).toBe(1);
 		expect(parsed.success && parsed.data.limit).toBe(20);
+	});
+
+	it("lleva el search del panel a la salida, y no acepta uno vacío", () => {
+		const parsed = AnnouncementListQuerySchema.safeParse({
+			search: "mantenimiento",
+		});
+		expect(parsed.success).toBe(true);
+		expect(parsed.success && parsed.data.search).toBe("mantenimiento");
+		expect(AnnouncementListQuerySchema.safeParse({ search: "" }).success).toBe(
+			false,
+		);
+	});
+});
+
+describe("PatchAnnouncementSchema", () => {
+	it("arrastra los dos refine de Update, no es un partial desnudo", () => {
+		// El alias existe porque el panel y la API se atan a este nombre. Si se
+		// escribiera como `AnnouncementBaseSchema.partial()` en vez de una
+		// referencia a UpdateAnnouncementSchema, los dos refine se irían sin que
+		// nada se entere: es lo único que los ata.
+		expect(
+			PatchAnnouncementSchema.safeParse({
+				start_at: "2026-10-05T00:00:00+00:00",
+				end_at: "2026-10-04T00:00:00+00:00",
+			}).success,
+		).toBe(false);
+		expect(PatchAnnouncementSchema.safeParse({}).success).toBe(false);
+	});
+});
+
+describe("PaginatedAnnouncementsSchema", () => {
+	const meta = { page: 1, limit: 20, total: 1, total_pages: 1 };
+
+	it("envuelve la fila y la paginación del panel", () => {
+		const parsed = PaginatedAnnouncementsSchema.safeParse({
+			data: [fullRow],
+			meta,
+		});
+		expect(parsed.success).toBe(true);
+		expect(parsed.success && parsed.data.data[0]).toEqual(fullRow);
+		expect(parsed.success && parsed.data.meta).toEqual(meta);
+	});
+
+	it("rechaza una fila que no es una announcement", () => {
+		expect(
+			PaginatedAnnouncementsSchema.safeParse({ data: [{ id: UUID }], meta })
+				.success,
+		).toBe(false);
 	});
 });

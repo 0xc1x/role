@@ -10,12 +10,22 @@ import {
 } from "../entities/announcement";
 
 /**
- * La prioridad solo ordena (`priority DESC, created_at DESC`) y la tabla no le
- * pone CHECK: un `.min(0)` o un `.max(10)` acá rechazaría en el panel una fila
- * que Postgres guarda sin problema. El rango, si algún día se quiere, se
- * agrega primero como CHECK.
+ * El rango sale del TIPO de la columna, no de una regla de negocio: `priority`
+ * es un `integer` de Postgres — int4 — y `z.number().int()` es safeint, hasta
+ * 9.007e15. Sin estos dos bordes el contrato acepta un `priority` de 2147483648
+ * y la base lo rechaza con "integer out of range": un 500 con mensaje de base
+ * de datos donde debería haber un 400 con mensaje de validación.
+ *
+ * Lo que NO se acota es el rango de negocio (0-10, como el de slides): la tabla
+ * no le pone CHECK, así que un tope de negocio acá rechazaría una fila que
+ * Postgres guarda sin problema. Ese, si algún día se quiere, se agrega primero
+ * como CHECK.
  */
-const prioritySchema = z.number().int("La prioridad debe ser un número entero");
+const prioritySchema = z
+	.number()
+	.int("La prioridad debe ser un número entero")
+	.min(-2147483648, "La prioridad no puede ser menor a -2147483648")
+	.max(2147483647, "La prioridad no puede ser mayor a 2147483647");
 
 /** `uuid[]` del lado del cliente: el operador elige a quién le llega el aviso. */
 const audienceIdsSchema = z.array(UuidSchema);
