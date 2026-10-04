@@ -69,7 +69,8 @@ import {
  * `my_role() = 'business'` y `specific` exige `user_ids @> array[auth.uid()]`,
  * que con `auth.uid()` nulo es falso. Y ninguna policy de escritura existe, así
  * que leer `consumers` no compra nada: el mismo `anon` no puede publicar.
- * `un info sí se entrega a un anónimo` fija las cuatro cosas de una vez.
+ * `un anónimo ve all y consumers, y no alcanza businesses ni specific` fija las
+ * cuatro cosas de una vez.
  *
  * ─── POR QUÉ `auth_helpers.my_role()` Y NO UN SUBQUERY A `profiles` ──────────
  *

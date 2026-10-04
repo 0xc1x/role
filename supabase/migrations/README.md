@@ -547,9 +547,11 @@ Aplicada por `apply_migration` el 2026-10-04. El `md5sum` del archivo es
 `7f17bb5d5712246a4d17c70e1b167eb1` y ese es también el `md5(statements[1])` del
 ledger: archivo y base coinciden byte a byte. Crea `public.announcements` y
 `public.announcement_acknowledgements`, más tres índices: uno parcial sobre
-`(active, priority desc, created_at desc) where active`, que es el que usa la
-consulta de la app, y dos GIN, uno por cada arreglo de audiencia. No borra nada
-y no corre ningún backfill.
+`(active, priority desc, created_at desc) where active` y dos GIN, uno por cada
+arreglo de audiencia. Del índice parcial está aserida la FORMA —el nombre, en el
+conjunto de los cinco de las dos tablas—, no que el planner lo elija: no corrió
+ningún `EXPLAIN` ni contra producción ni contra el replay del harness, y el plan
+depende del volumen. No borra nada y no corre ningún backfill.
 
 **La elegibilidad entera vive en la policy de select, no en el cliente.** El
 móvil y el landing leen Supabase directo, así que la consulta no pasa por la
@@ -653,14 +655,19 @@ modelo de permisos. Ninguna de las cuatro se toma desde un DDL, y por eso la
 columna de la derecha dice quién decide en vez de decir qué hace el SQL.
 
 La segunda es un índice que falta, y es la más barata de las dos. La PK de
-`announcement_acknowledgements` es `(announcement_id, user_id)`, así que su lado
-izquierdo es `announcement_id` y **no sirve** para
-`using (user_id = auth.uid())`, que es la policy de lectura de esa tabla, ni para
-la consulta caliente de la app —el `not in (select announcement_id … where
-user_id = auth.uid())` que descarta lo entendido—. Hoy son tablas de doce filas y
-no lo nota nadie; el día que un usuario acumule cientos de anuncios, cada
-arranque va a recorrer su lista de acknowledgements completa. Un índice sobre
-`(user_id)` lo resuelve. No se agrega acá porque **esta migración ya está
-aplicada y sellada con su md5**: sería una migración nueva, y una que se aplica
-por un índice que hoy no urge es la clase de cambio que entra junto con el
-próximo que sí lo urge.
+`announcement_acknowledgements` es `(announcement_id, user_id)`, así que su
+lado izquierdo es `announcement_id` y **no sirve** para
+`using (user_id = auth.uid())`, que es la policy de lectura de esa tabla, ni
+para la consulta caliente de la app —el `not in (select announcement_id … where
+user_id = auth.uid())` que descarta lo entendido—. Hoy el costo es cero y no
+porque el índice esté, sino porque no hay volumen: el spec siembra once anuncios
+—`toBe(11)`, "las once filas sembradas"— y tres acknowledgements, así que
+ninguna de las dos tablas tiene tamaño que dé trabajo. El día que las tablas
+crezcan, esa ausencia se paga así: sin índice sobre `user_id`, tanto el `select`
+de la policy como el `not in` de la app **recorren la tabla entera** y evalúan
+el predicado fila por fila, para cada persona y en cada arranque — no "la lista
+de esa persona", que es lo que sugiere leerlo al revés: sin índice no hay lista
+de nadie, hay tabla completa. Un índice sobre `(user_id)` lo resuelve. No se
+agrega acá porque **esta migración ya está aplicada y sellada con su md5**:
+sería una migración nueva, y una que se aplica por un índice que hoy no urge es
+la clase de cambio que entra junto con el próximo que sí lo urge.
