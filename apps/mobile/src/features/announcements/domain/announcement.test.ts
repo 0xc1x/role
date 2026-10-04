@@ -26,22 +26,39 @@ const ID = {
 
 const FECHA = "2026-10-01T00:00:00.000Z";
 
-/** Aviso de `announcements` con los campos que el dominio lee. */
+/**
+ * Aviso de `announcements` con los campos que el dominio lee.
+ *
+ * `audience_kind`, `active` y la ventana son PARÁMETROS y no constantes, y no
+ * por completitud del type: los tres son dimensiones que el agrupado declara no
+ * tocar porque son de la policy, y una constante fija haría que ningún test
+ * variara esa dimensión —la afirmación "no filtra por audiencia" sería entonces
+ * indecible, porque todos los fixtures serían de una sola audiencia—. Cada
+ * `test(...)` que afirme que un campo NO se filtra tiene que traer un fixture
+ * donde ese campo diga lo contrario.
+ */
 function aviso(
 	id: string,
 	severity: AnnouncementSeverity,
-	extra?: { priority?: number; created_at?: string },
+	extra?: {
+		priority?: number;
+		created_at?: string;
+		audience_kind?: Announcement["audience_kind"];
+		active?: boolean;
+		start_at?: string | null;
+		end_at?: string | null;
+	},
 ): Announcement {
 	return {
 		id,
 		title: `Aviso ${id.slice(-1)}`,
 		body: "Cuerpo del aviso",
 		severity,
-		audience_kind: "all",
+		audience_kind: extra?.audience_kind ?? "all",
 		priority: extra?.priority ?? 0,
-		active: true,
-		start_at: null,
-		end_at: null,
+		active: extra?.active ?? true,
+		start_at: extra?.start_at ?? null,
+		end_at: extra?.end_at ?? null,
 		created_at: extra?.created_at ?? FECHA,
 		updated_at: FECHA,
 	};
@@ -272,6 +289,63 @@ describe("cada set se consulta por severidad", () => {
 		);
 
 		expect(idsOf(modals)).toEqual([[ID.primero]]);
+	});
+});
+
+describe("la elegibilidad es de la policy, no del agrupado", () => {
+	test("no filtra por audiencia: la policy ya decidió", () => {
+		// El `specific` llega solo si `user_ids @> array[auth.uid()]`, así que si
+		// está en la lista es para esta persona. Volver a preguntarlo acá —" ¿y si
+		// es de negocios?"— sería una segunda copia del `USING`, y de dos copias
+		// solo se corrige la que nadie mira. Peor: el `specific` es el único valor
+		// que la policy resuelve mirando una columna que el cliente ni pide, así
+		// que un filtro acá descartaría avisos que la base sí habilitó.
+		const modals = buildModalSequence(
+			[
+				aviso(ID.primero, "info", { audience_kind: "all" }),
+				aviso(ID.segundo, "info", { audience_kind: "specific" }),
+				aviso(ID.tercero, "info", { audience_kind: "consumers" }),
+			],
+			NADA,
+			NADA,
+		);
+
+		expect(idsOf(modals)).toEqual([[ID.primero, ID.segundo, ID.tercero]]);
+	});
+
+	test("no filtra por active: los cinco términos son de la policy", () => {
+		// Una fila con `active = false` no llega: el `USING` la saca. Pero si
+		// llegara, mostrarla es lo correcto para esta función, que no tiene nada
+		// que aportar acá —y el día que la fila vuelva a `active = true` tiene
+		// que volver a aparecer sin que nada más cambie.
+		const modals = buildModalSequence(
+			[aviso(ID.primero, "info"), aviso(ID.segundo, "info", { active: false })],
+			NADA,
+			NADA,
+		);
+
+		expect(idsOf(modals)).toEqual([[ID.primero, ID.segundo]]);
+	});
+
+	test("no filtra por ventana temporal: el reloj es del servidor", () => {
+		// El `now()` del USING es el del servidor. Un reloj de cliente puede
+		// discrepar por zona horaria o por reloj desfasado, y un `info` que la base
+		// habilitó podría quedar afuera de la ventana —o al revés— por una
+		// diferencia de minutos que la persona nunca va a poder explicar.
+		const modals = buildModalSequence(
+			[
+				aviso(ID.primero, "info", { start_at: "2020-01-01T00:00:00.000Z" }),
+				aviso(ID.segundo, "info", { end_at: "2020-01-01T00:00:00.000Z" }),
+				aviso(ID.tercero, "info", {
+					start_at: "2099-01-01T00:00:00.000Z",
+					end_at: "2099-12-31T00:00:00.000Z",
+				}),
+			],
+			NADA,
+			NADA,
+		);
+
+		expect(idsOf(modals)).toEqual([[ID.primero, ID.segundo, ID.tercero]]);
 	});
 });
 

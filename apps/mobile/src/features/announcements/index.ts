@@ -1,48 +1,59 @@
 /**
  * Los avisos del operador en el móvil: qué se ve, en qué orden y cuándo se va.
  *
- * Este es el índice del feature y su comentario ES la frontera. Lo que se
- * exporta es lo que la pantalla necesita para hacer su trabajo y nada que le
- * permita saltarse una regla:
+ * Este es el índice del feature y su comentario ES la frontera. Lo que sale de
+ * acá es lo que la pantalla necesita para hacer su trabajo y nada que le
+ * permita saltarse una regla. La lista es completa: seis símbolos —cinco
+ * funciones y un tipo— y lo que se quitó está en "NO se exporta", con su
+ * motivo.
  *
- *  - `useAnnouncementModals` y el tipo `AnnouncementModal`: es lo único que la
- *    Task 6 consume. `AnnouncementModal` es el TIPO, no el componente —el
- *    componente que lo renderiza se llama `AnnouncementDialog`—, y con dos
- *    símbolos homónimos en el mismo feature uno de los dos tendría que
- *    renombrarse en el import.
- *  - `buildModalSequence` sale porque es la regla del producto —D9 y D10— y
- *    una regla que solo se puede ejercitar a través de un hook no se puede
- *    revisar de un vistazo. Es pura: recibe la lista y los dos sets, devuelve la
- *    secuencia, y no toca red ni disco.
- *  - `announcementQueryKey` y `announcementModalSequenceOptions` salen para que
- *    quien monte el modal lea o invalide la misma entrada del caché sin
- *    reconstruir la forma de la clave —que es como dos personas terminan con
- *    claves distintas para lo mismo— y para que `retry: false` siga siendo
- *    comprobable sin montar React.
+ * EXPORTA:
  *
- * NO se exporta:
+ *  - `useAnnouncementModals` y el tipo `AnnouncementModal`: es lo que consume
+ *    la Task 6. `AnnouncementModal` es el TIPO, no el componente —el componente
+ *    que lo renderiza se llama `AnnouncementDialog`—, y con dos símbolos
+ *    homónimos en el mismo feature uno de los dos tendría que renombrarse en el
+ *    import.
+ *  - `buildModalSequence`: la regla del producto —D9 y D10— que decide qué ve la
+ *    persona. Sale porque una regla que solo se puede ejercitar a través de un
+ *    hook no se puede revisar de un vistazo, y es pura: recibe la lista y los
+ *    dos sets, devuelve la secuencia, no toca red ni disco y no decide a quién
+ *    le toca nada.
+ *  - `announcementQueryKey` y el tipo `AnnouncementAudience`: para que quien
+ *    monte el modal lea o invalide la misma entrada del caché sin reconstruir la
+ *    forma de la clave, que es como dos personas terminan con claves distintas
+ *    para lo mismo. El tipo se exporta porque es el parámetro de esa función:
+ *    declararlo sin nombrarlo obligaría al llamador a inferirlo, y lo que
+ *    queda al alcance de una pantalla es la audiencia que le pasa al hook.
+ *  - `announcementModalSequenceOptions` y `fetchAnnouncementModalSequence`: los
+ *    dos existen para que D7 sea comprobable sin montar React. `retry: false` y
+ *    la ausencia de `throwOnError` son valores dentro de un `useQuery({...})`
+ *    que un test no puede leer, y la función que arma la secuencia solo se
+ *    ejercita a través del ciclo de vida de la consulta.
+ *
+ * NO se exporta, y el motivo de cada uno:
  *
  *  - `acknowledgeAnnouncement` y `dismissAnnouncementsLocally`. Que el
  *    acknowledgement escriba con el `user_id` de la sesión es lo que sostiene el
  *    invariante "solo acknowledge para vos" junto a la policy; si el componente
  *    pudiera pasar un usuario, el invariante pasa a ser una línea de código. El
  *    descarte local, por lo mismo: su clave de audiencia se deriva de la sesión
- *    y no se declara.
- *  - `localDismissalKey` y `announcementAudience`. Son la manera en que el
- *    descarte se ata a una audiencia, y una pantalla no tiene por qué elegir
- *    una.
+ *    y no se declara. Por eso la pantalla no los tiene: los usa el hook.
+ *  - `announcementAudience` y `localDismissalKey`. Son la manera en que el
+ *    descarte se ata a una audiencia. Que no salgan de acá es lo que hace cierto
+ *    el argumento de "la audiencia se deriva, no se declara" a nivel de módulo, y
+ *    no solo dentro del repositorio: no hay forma de que una pantalla o un
+ *    componente importen la clave y declaren a quién se le descarta.
+ *  - `applyLocalDismissal` y `applyAcknowledgement`. Son la mecánica interna de
+ *    la actualización de caché del hook; la pantalla no arma secuencias ni las
+ *    edita, las recibe.
+ *  - `MAX_LOCAL_DISMISSALS`. Es un tope de almacenamiento, no un parámetro de
+ *    presentación.
  *  - `fetchPendingAnnouncements`, `fetchAcknowledgedIds` y
  *    `fetchDismissedIdsLocally`: leer por fuera de la consulta saltearía el
  *    agrupado, que es justamente donde están D9 y D10.
  */
-export {
-	announcementAudience,
-	applyAcknowledgement,
-	applyLocalDismissal,
-	buildModalSequence,
-	localDismissalKey,
-	MAX_LOCAL_DISMISSALS,
-} from "./domain/announcement";
+export { buildModalSequence } from "./domain/announcement";
 export type {
 	AnnouncementAudience,
 	AnnouncementModal,

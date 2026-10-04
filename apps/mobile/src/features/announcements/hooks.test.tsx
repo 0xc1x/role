@@ -33,15 +33,25 @@ mock.module("@/src/features/announcements/data/repository", () => ({
 	currentAudience: () => "user",
 }));
 
+/**
+ * Estado de la sesión que el store falseo devuelve. `PERFIL` tiene `id` porque
+ * el `queryKey` lo necesita: sin persona en la clave, una sesión cerrada en el
+ * mismo dispositivo dejaría la cola de la anterior viva en el caché.
+ */
+interface SesionFalsa {
+	initialized: boolean;
+	profile: { id: string; role: "user" | "business" } | null;
+}
+
 let initialized = true;
-let rol: "user" | "business" = "user";
+let sesion: SesionFalsa["profile"] = {
+	id: "b0000000-0000-4000-8000-000000000001",
+	role: "user",
+};
+
 mock.module("@/src/features/auth/store", () => ({
-	useAuthStore: (
-		selector: (state: {
-			initialized: boolean;
-			profile: { role: "user" | "business" } | null;
-		}) => unknown,
-	) => selector({ initialized, profile: rol === null ? null : { role: rol } }),
+	useAuthStore: (selector: (state: SesionFalsa) => unknown) =>
+		selector({ initialized, profile: sesion }),
 }));
 
 const {
@@ -80,16 +90,28 @@ interface Api {
 	dismissInfo: (ids: string[]) => void;
 }
 
+const PERSONA = "b0000000-0000-4000-8000-000000000001";
+const CLAVE = () => announcementQueryKey("user", PERSONA);
+
 /**
  * Monta el hook en un QueryClient real y devuelve lo que expone más el cliente,
  * para poder observar el caché. `renderToStaticMarkup` ejecuta el cuerpo del
  * componente una vez: alcanza para leer lo que el hook devuelve y para disparar
  * sus callbacks, que es todo lo que se afirma acá.
+ *
+ * `sembrar` se aplica ANTES de montar, y no después a propósito: el hook lee
+ * `query.data` durante ese único render, así que una siembra posterior solo
+ * llegaría al caché y nunca a `api.modals`. Los casos que necesitan una cola
+ * punya la sembrar antes por esa razón, y no por comodidad.
  */
-function monta(): { api: Api; client: QueryClient } {
+function monta(sembrar?: (client: QueryClient) => void): {
+	api: Api;
+	client: QueryClient;
+} {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
+	sembrar?.(client);
 	const holder: { api: Api | null } = { api: null };
 	function Probe() {
 		holder.api = useAnnouncementModals();
@@ -102,29 +124,31 @@ function monta(): { api: Api; client: QueryClient } {
 	return { api: holder.api, client };
 }
 
-/** Deja la secuencia en el caché y devuelve la API del hook. */
+/**
+ * Monta el hook con la secuencia YA en el caché.
+ *
+ * El orden importa y es la mitad de lo que se verifica: la siembra va antes del
+ * render, así que `api.modals` y `leer()` miran lo mismo. Con la siembra después,
+ * `api.modals` seguiría reflejando el estado previo y cualquier aserción sobre
+ * la salida del hook sería un test que no puede fallar.
+ */
 function conCola(
 	anuncios: Announcement[],
 	acknowledged: string[] = [],
 	dismissed: string[] = [],
 ): { api: Api; client: QueryClient; leer: () => Secuencia | undefined } {
-	const { api, client } = monta();
 	const secuencia = buildModalSequence(
 		anuncios,
 		new Set(acknowledged),
 		new Set(dismissed),
 	);
-	client.setQueryData(announcementQueryKey("user"), secuencia);
-	return {
-		api,
-		client,
-		leer: () => client.getQueryData(announcementQueryKey("user")),
-	};
+	const { api, client } = monta((c) => c.setQueryData(CLAVE(), secuencia));
+	return { api, client, leer: () => client.getQueryData(CLAVE()) };
 }
 
 beforeEach(() => {
 	initialized = true;
-	rol = "user";
+	sesion = { id: PERSONA, role: "user" };
 	// `mockReset` y no `mockClear`: el comportamiento por defecto se restituye
 	// también, así que una implementación que dejó un caso fallando no se
 	// arrastra al siguiente y un test que no puede fallar.
@@ -157,20 +181,64 @@ describe("D7: la apertura de la app no depende de la consulta", () => {
 	});
 
 	test("la clave del caché lleva la audiencia de la sesión", () => {
-		rol = "business";
+		sesion = { id: PERSONA, role: "business" };
 		const { client } = monta();
 
-		// Con `role` en el `queryKey`, cambiar de rol en el mismo dispositivo es un
+		// Con el rol en el `queryKey`, cambiar de rol en el mismo dispositivo es un
 		// caché distinto: el consumidor no hereda la cola que el mismo teléfono
 		// descartó siendo de negocio, ni al revés.
-		expect(announcementQueryKey("business").includes("business")).toBe(true);
+		const claveNegocio = announcementQueryKey("business", PERSONA);
+		expect(claveNegocio).toContain("business");
+		expect(client.getQueryData(claveNegocio)).toBeUndefined();
+	});
+
+	test("la clave del caché lleva la persona, no solo la audiencia", () => {
+		// La falla que esto tapa: `announcement_acknowledgements` es por
+		// `(announcement_id, user_id)`, así que la cola de una persona NO es la de
+		// otra aunque compartan rol y dispositivo. Con una sesión cerrada sin
+		// logout —revocada desde otro lado, refresh token invalidado— el `store.ts`
+		// limpia el store y NO el query client, así que la entrada sobrevive los
+		// `gcTime` y la siguiente persona en hereda. Un `required` que ella nunca
+		// registró le quedaría invisible: la falla inversa exacta a la que la
+		// migración prohíbe ("un required tiene que volver en cada apertura hasta
+		// que la persona lo entienda").
+		expect(announcementQueryKey("user", "ana-1")).not.toEqual(
+			announcementQueryKey("user", "beto-2"),
+		);
+	});
+
+	test("dos personas con el mismo rol no comparten la cola en el caché", () => {
+		const B = "b0000000-0000-4000-8000-000000000002";
+		const colaDeAna = buildModalSequence([REQUIRED], new Set(), new Set());
+		const claveAna = announcementQueryKey("user", PERSONA);
+
+		// Ana dejó su `required` registrado en el servidor; Beto abre la app en el
+		// mismo teléfono, con el mismo rol. La entrada de Ana está viva en el caché
+		// —y lo va a estar `gcTime`— así que la de Beto tiene que ser OTRA
+		// entrada: si no, el modal de Beto no le muestra un aviso que él nunca
+		// entendió, y ese `required` ya no vuelve nunca porque la fila de Ana lo
+		// sacó de la cola de él también.
+		const { client } = monta((c) => c.setQueryData(claveAna, colaDeAna));
+
+		expect(client.getQueryData<Secuencia>(claveAna)).toEqual(colaDeAna);
 		expect(
-			client.getQueryData(announcementQueryKey("business")),
+			client.getQueryData<Secuencia>(announcementQueryKey("user", B)),
 		).toBeUndefined();
 	});
 
+	test("sin sesión la persona es `anon`, no un id vacío", () => {
+		// Una clave con `""` o `undefined` como id sería igual de válida para React
+		// Query y mucho más difícil de leer en un log de caché.
+		expect(announcementQueryKey("anon", null)).toEqual(
+			announcementQueryKey("anon", "anon"),
+		);
+		expect(announcementQueryKey("anon", null)).not.toEqual(
+			announcementQueryKey("anon", PERSONA),
+		);
+	});
+
 	test("D7 vive en las opciones: sin retry y sin throwOnError", () => {
-		const opciones = announcementModalSequenceOptions("user", true);
+		const opciones = announcementModalSequenceOptions("user", PERSONA, true);
 
 		// El default global reintenta una vez. Si este `false` se va, un `required`
 		// que falló se reintenta diferido y aparece solo, sin que la persona haya
@@ -187,7 +255,37 @@ describe("D7: la apertura de la app no depende de la consulta", () => {
 		// No alcanza con que el hook no dispare nada: si la consulta quedara
 		// habilitada y sólo no se disparara hoy, un `refetch` desde otro lado
 		// arrancaría con el anon key y traería avisos de otra audiencia.
-		expect(announcementModalSequenceOptions("user", false).enabled).toBe(false);
+		expect(
+			announcementModalSequenceOptions("user", PERSONA, false).enabled,
+		).toBe(false);
+	});
+});
+
+describe("modals es lo que el hook devuelve, no solo lo que hay en el caché", () => {
+	test("modals es la secuencia agrupada que arma buildModalSequence", () => {
+		// LA COSTURA. `buildModalSequence` tiene su propio archivo de tests y
+		// `fetchAnnouncementModalSequence` tiene los suyos, cada uno mirando su
+		// mitad: la función llega al caché y el caché llega al hook. Nadie miraba
+		// `modals`, que es el valor público, así que una línea que lo transformara
+		// —`.slice(1)`, un `filter` por kind— no rompía nada. Con la siembra antes
+		// del render, `api.modals` y el caché dicen lo mismo y el hueco se cierra.
+		const { api } = monta((c) =>
+			c.setQueryData(
+				CLAVE(),
+				buildModalSequence([REQUIRED, INFO], new Set(), new Set()),
+			),
+		);
+
+		expect(api.modals.map((m) => m.kind)).toEqual(["required", "info"]);
+		// Y con la forma exacta, no solo los kinds: el `required` va suelto y el
+		// lote de `info` con su aviso adentro.
+		expect(
+			api.modals[0]?.kind === "required" && api.modals[0].announcement.id,
+		).toBe(REQUIRED.id);
+		expect(
+			api.modals[1]?.kind === "info" &&
+				api.modals[1].announcements.map((a) => a.id),
+		).toEqual([INFO.id]);
 	});
 });
 

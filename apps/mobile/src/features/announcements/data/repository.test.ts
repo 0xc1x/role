@@ -239,6 +239,29 @@ describe("la lectura de los avisos deja la elegibilidad a la policy", () => {
 		await expect(fetchPendingAnnouncements()).rejects.toThrow();
 	});
 
+	test("el fallo de contrato llega a Sentry con el campo que falló", async () => {
+		responde({
+			data: [{ ...AVISO, priority: "cinco" }],
+			error: null,
+		});
+
+		// El `kind` `unknown` es lo que hace que el QueryCache lo reporte, así que
+		// el evento llega —pero un ZodError desnudo dice "algo falló" y no dice
+		// dónde. Los `issues` en el `context` son lo que lo hace accionable sin
+		// reproducir: sin ellos, triage empieza por adivinar la columna.
+		let caught: { kind?: string; code?: string; context?: unknown } = {};
+		try {
+			await fetchPendingAnnouncements();
+		} catch (error) {
+			caught = error as { kind?: string; code?: string; context?: unknown };
+		}
+		expect(caught.kind).toBe("unknown");
+		expect(caught.code).toBe("ANNOUNCEMENT_INVALID_ROW");
+		const contexto = caught.context as { issues?: unknown } | undefined;
+		expect(Array.isArray(contexto?.issues)).toBe(true);
+		expect(JSON.stringify(contexto?.issues)).toContain("priority");
+	});
+
 	test("un error de la base se propaga ya tipado", async () => {
 		responde({
 			data: null,

@@ -23,20 +23,41 @@ import {
 } from "./data/repository";
 
 /**
- * La clave del caché de los avisos, POR AUDIENCIA.
+ * La clave del caché de los avisos: POR AUDIENCIA y POR PERSONA.
  *
- * Va la audiencia adentro porque la secuencia de una audiencia no es la de
- * otra: el descarte local está guardado por audiencia y el acknowledgement vive
- * en el servidor, de la persona. Cambiar de rol tiene que ser un `queryKey`
- * nuevo, o el modal de un consumidor abriría con la cola que el mismo
- * dispositivo descartó siendo de negocio.
+ * Son dos dimensiones distintas y hacen falta las dos.
  *
- * Se exporta para que quien monte el modal pueda leer o invalidar la misma
- * entrada: reconstruir la forma de la clave a mano es la forma más común de que
- * dos personas queden con claves distintas para lo mismo.
+ * LA AUDIENCIA porque la secuencia de una audiencia no es la de otra: el
+ * descarte local está guardado por audiencia —`role.announcements.dismissed.v1`
+ * lleva el rol—, así que cambiar de rol tiene que ser un `queryKey` nuevo o el
+ * modal de un consumidor abriría con la cola que el mismo dispositivo descartó
+ * siendo de negocio.
+ *
+ * LA PERSONA porque `announcement_acknowledgements` es por `(announcement_id,
+ * user_id)` y el estado que resuelve los `required` vive ahí, no en el
+ * dispositivo. Sin el `userId` en la clave, un cierre de sesión INVOLUNTARIO —
+ * una sesión revocada desde otro lado, un refresh token invalidado— deja la
+ * entrada viva durante los `gcTime` (30 min) y la próxima persona que use ese
+ * dispositivo la hereda: un `required` que ella nunca registró le queda
+ * invisible. Es la falla inversa a la que la migración prohíbe explícitamente:
+ * "un `required` tiene que volver en cada apertura hasta que la persona lo
+ * entienda".
+ *
+ * El logout VOLUNTARIO ya limpia el caché (`sign-out.ts` → `queryClient.clear()`),
+ * pero la store también se limpia sola cuando la sesión expira (`store.ts`,
+ * `clear()` desde `onAuthStateChange`) y ahí no pasa por ese `clear()`. La
+ * convención del repo es que toda consulta con estado de usuario lleve el
+ * `profileId` —`["favorites","list",profileId]`, `["orders",profileId,…]`— y esto
+ * no es la excepción: es la misma regla.
+ *
+ * `null` se ancla a `"anon"` para que la clave sea siempre un arreglo de
+ * strings y no haya dos formas de la misma clave según si hay sesión.
  */
-export function announcementQueryKey(audience: AnnouncementAudience) {
-	return ["announcements", "modals", audience] as const;
+export function announcementQueryKey(
+	audience: AnnouncementAudience,
+	userId: string | null,
+) {
+	return ["announcements", "modals", audience, userId ?? "anon"] as const;
 }
 
 /**
@@ -72,16 +93,18 @@ export async function fetchAnnouncementModalSequence(): Promise<
  * React. Como exportados, un test los mira, y el día que alguien los saque de acá
  * para confiar en el default global se pone rojo.
  *
- * `enabled` entra como parámetro y NO se calcula acá: la audiencia y la sesión
- * las lee el store dentro del hook, y una función pura que las recibe no puede
- * mentir sobre lo que decide.
+ * `enabled` y las dos dimensiones de la clave entran como parámetro y NO se
+ * calculan acá: la audiencia, la persona y el estado de la sesión los lee el
+ * store dentro del hook, y una función pura que los recibe no puede mentir
+ * sobre lo que decide.
  */
 export function announcementModalSequenceOptions(
 	audience: AnnouncementAudience,
+	userId: string | null,
 	sessionResolved: boolean,
 ): UseQueryOptions<AnnouncementModal[], Error> {
 	return {
-		queryKey: announcementQueryKey(audience),
+		queryKey: announcementQueryKey(audience, userId),
 		queryFn: fetchAnnouncementModalSequence,
 		// Sin sesión resuelta no hay audiencia que valga: leer con el anon key y
 		// repetir en cuanto llegue la sesión es leer dos veces para no saber nada
@@ -115,13 +138,17 @@ export function announcementModalSequenceOptions(
  */
 export function useAnnouncementModals() {
 	const initialized = useAuthStore((s) => s.initialized);
-	const role = useAuthStore((s) => s.profile?.role);
+	const profile = useAuthStore((s) => s.profile);
 	const queryClient = useQueryClient();
-	const audience = announcementAudience(role);
-	const queryKey = announcementQueryKey(audience);
+	const audience = announcementAudience(profile?.role);
+	const queryKey = announcementQueryKey(audience, profile?.id ?? null);
 
 	const query = useQuery(
-		announcementModalSequenceOptions(audience, initialized),
+		announcementModalSequenceOptions(
+			audience,
+			profile?.id ?? null,
+			initialized,
+		),
 	);
 
 	/**

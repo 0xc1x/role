@@ -6,7 +6,7 @@ import {
 } from "@0c1x/role-commons";
 import { z } from "zod";
 
-import { Errors } from "@/src/core/error/app-error";
+import { AppError, Errors } from "@/src/core/error/app-error";
 import { toAppError } from "@/src/core/error/mapper";
 import { supabase } from "@/src/core/supabase/client";
 import { useAuthStore } from "@/src/features/auth/store";
@@ -49,13 +49,28 @@ const acknowledgementRow = z.object({ announcement_id: UuidSchema });
  * es lo que impide que una fila cruda llegue a la UI, y su error se mapea a la
  * taxonomía de la app en vez de subir un `ZodError` que ninguna pantalla sabe
  * mostrar.
+ *
+ * EL `context` NO ES COSMÉTICO. `toAppError` cae en `Errors.unknown()`, que sí
+ * llega a Sentry (kind `unknown`), pero un `ZodError` desnudo no dice qué fila
+ * ni qué campo: el evento dice "algo falló" y no dice dónde. Con los `issues` en
+ * el `context` —`path`, `expected`, `received`— el triage puede leer el campo sin
+ * reproducir. Es el mismo criterio que `withDiagnostics` en el mapper, que
+ * conserva el copy y le re-ataja el crudo del driver.
  */
 function valida<S extends z.ZodType>(schema: S, data: unknown): z.output<S> {
-	try {
-		return schema.parse(data);
-	} catch (error) {
-		throw toAppError(error);
-	}
+	const parsed = schema.safeParse(data);
+	if (parsed.success) return parsed.data;
+	throw new AppError(
+		"unknown",
+		"La respuesta no coincide con el contrato",
+		"ANNOUNCEMENT_INVALID_ROW",
+		{
+			issues: parsed.error.issues,
+			// El `message` del ZodError es el JSON de los issues, que ya va arriba;
+			// esto es para cuando el shape de `data` difiere entero y no hay issues.
+			rows: Array.isArray(data) ? data.length : null,
+		},
+	);
 }
 
 /**
