@@ -17,6 +17,7 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
 import {
@@ -51,6 +52,15 @@ export class AnnouncementsController {
    */
   @Public()
   @Get()
+  // El token es OPCIONAL pero se lee: sin él la request llega a Supabase como
+  // `anon` y con él como el usuario que es, y la policy decide distinto en los
+  // dos casos. El documento tiene que decirlo en las dos direcciones:
+  // `@ApiBearerAuth` solo —que es lo que traen las rutas de admin— publicaría
+  // `security: [{bearer: []}]`, que en OpenAPI significa "exige credencial", y
+  // sería mentira en una ruta que el landing consume sin sesión. El `{}` de
+  // `@ApiSecurity` es el modo que tiene OpenAPI para "bearer o anónimo".
+  @ApiBearerAuth('bearer')
+  @ApiSecurity({})
   @ApiOperation({
     summary: 'List the announcements the caller is eligible for',
   })

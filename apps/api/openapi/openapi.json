@@ -1538,6 +1538,130 @@
         ]
       }
     },
+    "/api/v1/announcements": {
+      "get": {
+        "operationId": "AnnouncementsController_list",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eligible announcement list"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the announcements the caller is eligible for",
+        "tags": [
+          "Announcements"
+        ]
+      },
+      "post": {
+        "operationId": "AnnouncementsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Announcement created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create an announcement (admin)",
+        "tags": [
+          "Announcements"
+        ]
+      }
+    },
+    "/api/v1/announcements/admin": {
+      "get": {
+        "operationId": "AnnouncementsController_listAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated announcement list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List announcements (admin)",
+        "tags": [
+          "Announcements"
+        ]
+      }
+    },
+    "/api/v1/announcements/{id}": {
+      "patch": {
+        "operationId": "AnnouncementsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Announcement updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update an announcement (admin)",
+        "tags": [
+          "Announcements"
+        ]
+      },
+      "delete": {
+        "operationId": "AnnouncementsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Announcement deactivated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft-delete an announcement (admin)",
+        "tags": [
+          "Announcements"
+        ]
+      }
+    },
     "/api/v1/offers": {
       "get": {
         "operationId": "OffersController_list",
