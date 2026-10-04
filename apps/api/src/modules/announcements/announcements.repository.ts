@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
+import type { AnnouncementListQuery } from '@0c1x/role-commons';
 import { and, count, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
 import { escapeLike } from '../../common/utils/like';
 import type { Env } from '../../config/env.schema';
@@ -36,13 +37,15 @@ export type AnnouncementUpdate = Partial<
   >
 >;
 
-export type ListAnnouncementsFilter = {
-  page: number;
-  limit: number;
-  search?: string;
-  severity?: 'info' | 'required';
-  active?: boolean;
-};
+/**
+ * El filtro del listado es el contrato, no una copia. Escribir `severity?:
+ * 'info' | 'required'` acá sería la CUARTA copia de ese vocabulario —la
+ * migración con su CHECK, el schema de drizzle, commons y esta— y las cuatro
+ * pueden divergir sin que nada se entere: el síntoma sería un 500 por un valor
+ * que el panel mandó y la base no acepta. El patrón es el de
+ * `offers.repository.ts`, que toma `ListOffersQuery` tal cual.
+ */
+export type ListAnnouncementsFilter = AnnouncementListQuery;
 
 export type ListAnnouncementsResult = {
   rows: AnnouncementRow[];
