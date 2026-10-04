@@ -3,8 +3,8 @@
  *
  * Este es el índice del feature y su comentario ES la frontera. Lo que sale de
  * acá es lo que la pantalla necesita para hacer su trabajo y nada que le
- * permita saltarse una regla. La lista es completa: seis símbolos —cinco
- * funciones y un tipo— y lo que se quitó está en "NO se exporta", con su
+ * permita saltarse una regla. La lista es completa: once símbolos —nueve de
+ * runtime y dos tipos— y lo que se quitó está en "NO se exporta", con su
  * motivo.
  *
  * EXPORTA:
@@ -14,19 +14,24 @@
  *    que lo renderiza se llama `AnnouncementDialog`—, y con dos símbolos
  *    homónimos en el mismo feature uno de los dos tendría que renombrarse en el
  *    import.
- *  - `AnnouncementDialog`: lo monta el layout raíz, que es el único lugar desde
- *    donde tiene que abrir. Sus dos callbacks (`onAcknowledge` y
- *    `onDismissInfo`) salen del hook y son los mismos nombres: quien lo monta
- *    no tiene forma de resolver un `required` por su cuenta.
+ *  - `AnnouncementDialog`: lo pinta `AnnouncementModals`, y sus dos callbacks
+ *    (`onAcknowledge` y `onDismissInfo`) salen del hook con los mismos nombres:
+ *    quien lo monta no tiene forma de resolver un `required` por su cuenta.
+ *  - `AnnouncementModals`: lo monta el layout raíz, que es el único lugar desde
+ *    donde tiene que abrir. Es módulo propio y no JSX en el layout para que sus
+ *    decisiones se prueben EJECUTANDO el componente: mounted en el layout raíz,
+ *    probarlo significa levantar Expo Router, Sentry y las fuentes.
  *  - `buildModalSequence`: la regla del producto —D9 y D10— que decide qué ve la
  *    persona. Sale porque una regla que solo se puede ejercitar a través de un
  *    hook no se puede revisar de un vistazo, y es pura: recibe la lista y los
  *    dos sets, devuelve la secuencia, no toca red ni disco y no decide a quién
  *    le toca nada.
- *  - `firstPendingModal` y `modalIdentity`: las dos decisiones del MONTAJE, que
- *    son de lectura de la cola y no de presentación. Inline en el layout solo se
- *    podrían ejercitar levantando Expo Router, y la segunda —la `key`— es la que
- *    decide si el estado interno de un modal sobrevive o no al aviso siguiente.
+ *  - `firstPendingModal` y `modalIdentity`: las dos decisiones de LECTURA de la
+ *    cola que usa `AnnouncementModals`. La segunda —la `key`— decide si el
+ *    estado interno de un modal sobrevive al aviso siguiente, y como la `key`
+ *    travela con la identidad, es también lo que hace que un `required` cerrado
+ *    con el gesto de atrás vuelva a verse cuando la cabeza de la cola cambia de
+ *    identidad, sin esperar al próximo arranque.
  *  - `announcementQueryKey` y el tipo `AnnouncementAudience`: para que quien
  *    monte el modal lea o invalide la misma entrada del caché sin reconstruir la
  *    forma de la clave, que es como dos personas terminan con claves distintas
@@ -71,6 +76,7 @@ export type {
 	AnnouncementModal,
 } from "./domain/announcement";
 export { AnnouncementDialog } from "./components/AnnouncementDialog";
+export { AnnouncementModals } from "./components/AnnouncementModals";
 export {
 	announcementModalSequenceOptions,
 	announcementQueryKey,

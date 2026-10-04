@@ -29,9 +29,11 @@ import type { Announcement, AppRole } from "@0c1x/role-commons";
  * nunca comparte modal con nada, y por eso lleva el aviso suelto en vez de una
  * lista de un elemento.
  *
- * OJO con el `conMax` del dominio cuando esto se renderice: cuenta MODALES
- * abiertos, no avisos. Un lote de cinco `info` es un modal; tres `required`
- * pendientes son tres.
+ * LO QUE ESTO YA ACUENTA: el tipo dice MODALES, no avisos. Un lote de cinco
+ * `info` es un modal y tres `required` pendientes son tres, así que la
+ * invariante se sostiene por construcción y no por una regla de presentación:
+ * `buildModalSequence` mete un modal por `required` y UNO solo para todo el lote
+ * de `info`, y el layout pinta únicamente el primero de la cola.
  */
 export type AnnouncementModal =
 	| { kind: "required"; announcement: Announcement }

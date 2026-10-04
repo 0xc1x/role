@@ -28,13 +28,17 @@ import type { AnnouncementModal } from "../domain/announcement";
  * que la migración prohíbe: "un `required` tiene que volver en cada apertura
  * hasta que la persona lo entienda".
  *
- * Por eso los dos gestos son props DISTINTAS y con nombre explícito:
- * `onAcknowledge` es el único callback que resuelve un `required`, y su tipo
- * devuelve `Promise<void>` justamente para que no sea intercambiable con
- * `onDismissInfo`, que es síncrono y no tiene nada que esperar. Y que
- * `onDismissInfo` reciba una lista y no un id no es un detalle del llamador: es
- * lo que impide descartar uno del lote y devolver los otros en la próxima
- * apertura.
+ * Por eso los dos gestos son props DISTINTAS y con PARÁMETRO distinto: `id` en
+ * una, `ids` en la otra. Eso es lo que impide el cruce, y lo impide el
+ * compilador: `(ids: string[]) => void` no acepta `(id: string) => …` ni al
+ * revés, así que un cableado cruzado no llega a compilar. Que `onDismissInfo`
+ * reciba una lista y no un id no es un detalle del llamador: es lo que impide
+ * descartar uno del lote y devolver los otros en la próxima apertura.
+ *
+ * El `Promise<void>` de `onAcknowledge` NO juega ese papel —`Promise<void>` es
+ * asignable a `void` sin error, así que el tipo de retorno no protege nada—.
+ * Está porque el modal distingue "se guardó" de "no se guardó": sin eso, un fallo
+ * de red se vería como un aviso entendido y el modal no podría reintentar.
  */
 export function AnnouncementDialog({
 	modal,
@@ -43,10 +47,11 @@ export function AnnouncementDialog({
 }: {
 	modal: AnnouncementModal;
 	/**
-	 * Registra el `required` como entendido. Devuelve la promesa porque el modal
-	 * necesita distinguir "se guardó" de "no se guardó": sacar el aviso de la
-	 * cola sin confirmación convertiría un fallo de red en un aviso entendido
-	 * para siempre.
+	 * Registra el `required` como entendido. La promesa no es para distinguir los
+	 * callbacks entre sí —eso lo da el `id` contra el `ids`— sino porque el modal
+	 * necesita saber si la escritura se confirmó: sacar el aviso de la cola sin
+	 * confirmación convertiría un fallo de red en un aviso entendido para
+	 * siempre.
 	 */
 	onAcknowledge: (id: string) => Promise<void>;
 	/** Descarta el LOTE de `info` entero, en un gesto y una sola escritura. */
@@ -79,7 +84,12 @@ export function AnnouncementDialog({
 	const index = total > 0 ? Math.min(page, total - 1) : 0;
 	const aviso: Announcement =
 		modal.kind === "required" ? modal.announcement : lote[index];
-	const ultimaPagina = index >= total - 1;
+	// El `total > 0` no es decorativo: con `kind: "required"` el lote es `[]`, así
+	// que sin él `0 >= -1` daría `true` y un `required` quedaría etiquetado como
+	// última página del lote. Hoy es inofensivo porque tanto el handler como la
+	// etiqueta cortan antes por `kind`, pero es una bomba: reordenar esos
+	// ternarios y el `required` se cierra con la etiqueta del lote.
+	const ultimaPagina = total > 0 && index >= total - 1;
 
 	/**
 	 * El gesto de atrás del sistema —el botón físico de Android y el `Escape`
@@ -91,6 +101,14 @@ export function AnnouncementDialog({
 	 * tampoco se pierde. Un `info` se descarta entero, porque descartar un
 	 * informativo no deja nada que recordar y el gesto no puede ser el descarte
 	 * de media parte del lote.
+	 *
+	 * "Vuelve" no significa solo en el próximo arranque. `hidden` es estado de
+	 * ESTA instancia: si la cabeza de la cola cambia de identidad —otro `required`
+	 * de mayor prioridad aparece, o el que estaba primero se entiende— el host
+	 * monta el modal con otra `key`, la instancia anterior se descarta con su
+	 * `hidden`, y cuando el mismo aviso vuelva a ser cabeza de la cola se monta
+	 * de nuevo y se ve. La ventana real es "hasta que vuelva a ser cabeza de la
+	 * cola, o hasta el próximo arranque", que es más corta que la que parecía.
 	 */
 	const handleRequestClose = () => {
 		if (modal.kind === "required") {
