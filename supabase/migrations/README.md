@@ -541,3 +541,73 @@ autoría la sella en el servidor el trigger BEFORE INSERT
 que `value.reporter_id` es lo que diga `auth.uid()` y no lo que mande el
 cliente.
 
+## Applied: `20261004022647_announcements`
+
+Aplicada por `apply_migration` el 2026-10-04. El `md5sum` del archivo es
+`7f17bb5d5712246a4d17c70e1b167eb1` y ese es también el `md5(statements[1])` del
+ledger: archivo y base coinciden byte a byte. Crea `public.announcements` y
+`public.announcement_acknowledgements`, más tres índices: uno parcial sobre
+`(active, priority desc, created_at desc) where active`, que es el que usa la
+consulta de la app, y dos GIN, uno por cada arreglo de audiencia. No borra nada
+y no corre ningún backfill.
+
+**La elegibilidad entera vive en la policy de select, no en el cliente.** El
+móvil y el landing leen Supabase directo, así que la consulta no pasa por la
+API: con el `USING` de esta migración la fila que no le corresponde a alguien no
+llega a su dispositivo. Los cinco términos son `active`, la ventana
+`start_at`/`end_at`, `severity = 'info' or auth.uid() is not null` —sin lo cual
+un `required` llega a un anónimo que no puede acknowledge y vuelve en cada
+apertura, para siempre—, y la audiencia: `all`, `consumers` contra
+`auth_helpers.my_role() = 'user'`, `businesses` contra `= 'business'`, y
+`specific` por `user_ids @> array[auth.uid()]`. Es `my_role()` y no un subquery
+a `profiles` porque es `security definer` y estable: la policy no depende de que
+el lector tenga permiso sobre `profiles`.
+
+**Las ausencias son la decisión, y hay que contarlas como ausencias.** En
+`announcements` no hay policy de INSERT, de UPDATE ni de DELETE: publicar es
+del operador y va por la API, y lo único que frena al cliente es la ausencia
+de policy, que es justo lo que RLS sabe hacer. En
+`announcement_acknowledgements` no hay UPDATE ni DELETE: no existe forma de
+des-acknowledgear, y un `required` entendido no vuelve a aparecer nunca, ni
+aunque el operador lo edite para corregir una errata. Por eso el ack es de la
+fila y no de su contenido. Ninguna de las dos usa `force row level security`: el
+rol dueño es con el que la API escribe, y forzado le pagaría el `USING` en cada
+fila. Y ninguna policy dice `TO public`: el rol decide, no el `sub` presente.
+Todo eso está medido en
+`apps/api/src/database/security/announcements.rls.db.spec.ts` (14 tests), no
+inferido del DDL.
+
+**El `revoke truncate, trigger, references` viaja en esta migración a
+propósito, y el motivo es el orden de las versiones.** La migración
+`20260928181714` —`revoke_client_destructive_privileges`— itera `pg_class`
+filtrado por `relrowsecurity`: una migración que resuelve un conjunto lo
+resuelve el día que corre, y la suya es anterior a esta, así que no vio estas
+dos tablas. Truncate y trigger no los gobierna ninguna policy —no hay `USING`
+que los filtre, y trigger además le deja al rol colgar su propio trigger a una
+tabla que no es suya—, así que el revoke por tabla es la parte del contrato que
+no depende de quién creó la tabla. Es el mismo hueco que `20260928184943`
+cerró para cinco tablas y que `20260930234450` volvió a cerrar para `app_store`.
+
+Vale la pena precisar qué parte de ese hueco cierra, porque la segunda mitad de
+`20260928181714` **también** revocó las tres de los default privileges de
+`postgres`: toda tabla de este directorio nace por una migración, o sea que por
+ahí ya sale limpia. Lo que ese revoke por defecto no alcanza es el ACL por
+defecto de `supabase_admin`, que `apply_migration` no puede alterar —corre
+como `postgres`, y un rol solo altera los default privileges que le
+pertenecen—, así que allá el revoke de aquella migración falló con `42501` y
+quedó sin cubrir. Si alguien quiere afirmar si este revoke explícito es o no
+redundante **hoy en producción**, la pregunta es de `pg_default_acl` en la base
+viva, no de este archivo: la segunda mitad de `20260928181714` ya dejó medido
+ese reparto y esta entrada no lo vuelve a medir.
+
+**La obligación es por migración, no por esquema.** Ninguna migración que
+resolvió un conjunto vuelve a correr: `20260928181714` no verá las tablas de
+mañana, y `public.rls_auto_enable()` —que existe en producción— no habilita
+RLS sola porque no está conectada a ningún event trigger, como fija
+`enable-rls.rls.db.spec.ts`. Así que cada `create table` en `public` trae su
+propio `alter table … enable row level security` y su propio revoke, y el
+precio de olvidarlo es invisible en el archivo equivocado: se descubre
+leyendo el spec, no la migración. Por eso el conteo de tablas está fijado en
+41 en los dos specs que miden el conjunto, y sube de a uno con cada tabla
+nueva —39 antes de esta migración—: esos pines son los que convierten la
+obligación en algo que falla ruidosamente en vez de algo que nadie nota.
