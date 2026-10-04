@@ -16,5 +16,6 @@ export * from "./stats";
 export * from "./email";
 export * from "./contact";
 export * from "./push";
+export * from "./announcements";
 export * from "./upload";
 export * from "./brand";
