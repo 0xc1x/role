@@ -14,6 +14,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
+import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { TipsModule } from './modules/tips/tips.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { OrdersModule } from './modules/orders/orders.module';
@@ -68,6 +69,7 @@ import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.
     CategoriesModule,
     CouponsModule,
     TipsModule,
+    AnnouncementsModule,
     OffersModule,
     OrdersModule,
     UploadModule,
