@@ -137,6 +137,7 @@ USING (
   active
   AND (start_at IS NULL OR now() >= start_at)
   AND (end_at   IS NULL OR now() <  end_at)
+  AND (severity = 'info' OR auth.uid() IS NOT NULL)
   AND (
         audience_kind = 'all'
      OR (audience_kind = 'consumers' AND auth_helpers.my_role() = 'user')
@@ -145,6 +146,10 @@ USING (
   )
 )
 ```
+
+El fragmento `severity = 'info' OR auth.uid() IS NOT NULL` es lo que impide que un
+`required` le llegue a un anónimo: sin él, el aviso que no se puede acknowledge
+—porque no hay `auth.uid()` que poner— vuelve en cada apertura, para siempre.
 
 `auth_helpers.my_role()` es `SECURITY DEFINER` y estable, y ya lo usan las políticas de
 `profiles` y de `orders`. Es lo correcto acá y no un subquery a `profiles`: el helper
@@ -204,8 +209,21 @@ secundarias. Un solo componente, dos presentaciones.
 ### admin/api
 
 Módulo NestJS `announcements` siguiendo `modules/tips` y `modules/slides`:
-`controller` / `service` / `module` / `mappers`. Endpoints CRUD. El de lectura pública
-acepta `?audience=` y devuelve solo lo elegible para quien pregunta.
+`controller` / `service` / `module` / `mappers`. Endpoints CRUD para el operador.
+
+El de lectura pública **no recibe parámetros de audiencia y no filtra nada**: pide
+filas y devuelve las que le llegan. La audiencia la decide `auth.uid()` dentro de la
+policy, que es donde vive toda la elegibilidad de este feature; un `?audience=` en el
+endpoint sería una segunda copia de esa regla, y de las dos copias solo se corrige la
+que nadie mira. Para que la lectura ocurra *como* quien pregunta, el endpoint la
+delega a Supabase con su token en vez de leer por la conexión de la API —que es
+`service_role` y tiene `BYPASSRLS`, y vería los avisos dirigidos a otra persona.
+
+**El acknowledgement no pasa por la API.** El cliente escribe
+`announcement_acknowledgements` directo a Supabase y la policy lo ata con
+`with check (user_id = auth.uid())`, así que "solo podés acknowledgear por vos" es
+una restricción de la base y no una línea de código. Una vía por la API habría tenido
+que sostenerlo el service, que escribe con `BYPASSRLS`.
 
 Sección admin `features/announcements/` con el mismo esqueleto que `features/tips/`
 (`api/ components/ forms/ queries/ tables/`), incluida la lista de sidebar.
