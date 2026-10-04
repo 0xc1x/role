@@ -563,6 +563,18 @@ apertura, para siempre—, y la audiencia: `all`, `consumers` contra
 a `profiles` porque es `security definer` y estable: la policy no depende de que
 el lector tenga permiso sobre `profiles`.
 
+**Y un anónimo entra por la rama de consumidora.** `my_role()` devuelve `'user'`
+por el `UNION ALL` de su fallback cuando no hay fila de perfil, y el visitante
+del landing no tiene perfil porque no tiene sesión: así que `anon` matchea
+`consumers`, y ve `all` y `consumers`. Es una decisión y no un descuido —el
+banner de consumidora tiene que existir fuera de la app, y no hay sesión que lo
+habilite—, pero conviene que quede escrito porque `consumers` no significa
+"usuarios con sesión". Lo que el anónimo no alcanza es lo demás: `businesses`
+exige `my_role() = 'business'` y `specific` exige `user_ids @>
+array[auth.uid()]`, que con `auth.uid()` nulo es falso. Y ninguna policy de
+escritura existe, así que leer `consumers` no compra nada. Está fijado y medido
+en el spec.
+
 **Las ausencias son la decisión, y hay que contarlas como ausencias.** En
 `announcements` no hay policy de INSERT, de UPDATE ni de DELETE: publicar es
 del operador y va por la API, y lo único que frena al cliente es la ausencia
@@ -574,8 +586,11 @@ fila y no de su contenido. Ninguna de las dos usa `force row level security`: el
 rol dueño es con el que la API escribe, y forzado le pagaría el `USING` en cada
 fila. Y ninguna policy dice `TO public`: el rol decide, no el `sub` presente.
 Todo eso está medido en
-`apps/api/src/database/security/announcements.rls.db.spec.ts` (14 tests), no
-inferido del DDL.
+`apps/api/src/database/security/announcements.rls.db.spec.ts` (14 tests), y la
+forma de cada policy también —los tres inventarios del spec asertan `roles`,
+`qual` y `with_check` completos, no el nombre—, así que el
+`TO anon, authenticated` y el `TO authenticated` son un hecho medido y no una
+lectura del DDL.
 
 **El `revoke truncate, trigger, references` viaja en esta migración a
 propósito, y el motivo es el orden de las versiones.** La migración
@@ -611,3 +626,41 @@ leyendo el spec, no la migración. Por eso el conteo de tablas está fijado en
 41 en los dos specs que miden el conjunto, y sube de a uno con cada tabla
 nueva —39 antes de esta migración—: esos pines son los que convierten la
 obligación en algo que falla ruidosamente en vez de algo que nadie nota.
+
+**Dos cosas que esta migración deja abiertas. Son follow-ups, no notas.**
+
+La primera es el hueco de `business_ids`, y conviene decirlo con precisión
+porque la validación que lo rodea se lee al revés de lo que es. El endpoint de
+publicación exige que un `specific` traiga al menos un id en `user_ids` **o** en
+`business_ids`, y eso **no cierra el hueco: lo deja alcanzable**. Un `specific`
+cargado solo con `business_ids` pasa esa validación, y con el `USING` de esta
+migración es **invisible para todos**: no matchea `all`, ni `consumers`, ni
+`businesses`, y `user_ids @> array[auth.uid()]` es falso porque el arreglo viene
+vacío. El índice GIN de `business_ids` está creado igual, que es lo correcto: es
+el que va a necesitar cualquiera de las salidas. Hasta que se elija una, un
+anuncio publicado puede no verlo nadie, y el operador no tiene forma de saberlo
+desde el panel.
+
+| salida | qué cambia | quién tiene que decidirla |
+| --- | --- | --- |
+| (a) un `CHECK` de frontera | el DDL rechaza el `specific` sin `user_ids` | una migración nueva, y es la más barata |
+| (b) la API resuelve `business_ids` → `user_ids` al publicar | la fila llega con los `user_ids` resueltos | el endpoint, y el diseño |
+| (c) el endpoint rechaza el `specific` solo con `business_ids` | el error es explícito y el panel puede avisarlo | el endpoint, y el diseño |
+
+La segunda salida que nombra la cabecera de la migración —que la policy mire
+`business_ownership`— es más invasiva y está aparte: tocaría el spec de RLS y el
+modelo de permisos. Ninguna de las cuatro se toma desde un DDL, y por eso la
+columna de la derecha dice quién decide en vez de decir qué hace el SQL.
+
+La segunda es un índice que falta, y es la más barata de las dos. La PK de
+`announcement_acknowledgements` es `(announcement_id, user_id)`, así que su lado
+izquierdo es `announcement_id` y **no sirve** para
+`using (user_id = auth.uid())`, que es la policy de lectura de esa tabla, ni para
+la consulta caliente de la app —el `not in (select announcement_id … where
+user_id = auth.uid())` que descarta lo entendido—. Hoy son tablas de doce filas y
+no lo nota nadie; el día que un usuario acumule cientos de anuncios, cada
+arranque va a recorrer su lista de acknowledgements completa. Un índice sobre
+`(user_id)` lo resuelve. No se agrega acá porque **esta migración ya está
+aplicada y sellada con su md5**: sería una migración nueva, y una que se aplica
+por un índice que hoy no urge es la clase de cambio que entra junto con el
+próximo que sí lo urge.
