@@ -77,14 +77,14 @@ const AVISO_SIN_DESTINO_DETALLE =
  * y el mapper solo escribe la lista que viene definida. Elegir negocios encima
  * de una fila que ya tenía consumidoras NO las borra: sigue llegándoles.
  *
- * El escenario que obliga a的这 redacción: se publica un `specific` para Ana,
+ * El escenario que obliga a esta redacción: se publica un `specific` para Ana,
  * días después se abre para corregir una errata y se eligen dos negocios
  * creyendo que se agrega audiencia; con la redacción anterior el panel
  * obligaba a acknowledgear que nadie lo vería, y Ana lo seguía viendo. Un aviso
  * cuyo trabajo es que el operador no publique algo que no llega no puede
  * afirmar que algo no llega cuando sí.
  *
- * Y el aviso se 特特FICA por lista, no por fila: la policy de select solo mira
+ * Y el aviso se especifica por lista, no por fila: la policy de select solo mira
  * `user_ids @> array[auth.uid()]`, así que de los negocios elegidos no lee
  * nadie. Esa parte sigue sin resolverse —la migración sellada difiere la
  * salida a propósito— y por eso el aviso sigue ahí, diciendo la verdad.
