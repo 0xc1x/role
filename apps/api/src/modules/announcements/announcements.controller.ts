@@ -15,7 +15,6 @@ import {
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
-  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -109,31 +108,5 @@ export class AnnouncementsController {
   @ApiOkResponse({ description: 'Announcement deactivated' })
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.announcementsService.remove(id);
-  }
-
-  /**
-   * Marca un aviso obligatorio como entendido.
-   *
-   * `@Public` porque el cliente puede no tener sesión —el landing no la tiene—,
-   * pero el service exige un token verificado: público es que se pueda LLEGAR,
-   * no que se pueda escribir sin probar quién es. El `user_id` no viene del body
-   * por eso: sale del token, o el acknowledgement sería de cualquiera.
-   */
-  @Public()
-  @Post('acknowledgements')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Acknowledge an announcement' })
-  @ApiNoContentResponse()
-  acknowledge(
-    // El id va en el body, no en la ruta: el recurso que se crea es la fila de
-    // `announcement_acknowledgements`, cuya clave es compuesta con el usuario y
-    // por eso no tiene un id propio que poner en el path.
-    @Body('announcement_id', ParseUUIDPipe) announcementId: string,
-    @Headers('authorization') authorization?: string,
-  ): Promise<void> {
-    return this.announcementsService.acknowledge(
-      announcementId,
-      authorization ?? '',
-    );
   }
 }

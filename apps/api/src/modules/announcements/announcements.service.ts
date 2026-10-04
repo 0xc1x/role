@@ -4,20 +4,17 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import {
   paginatedDataFromQuery,
   safeErrorFields,
   AnnouncementSchema,
-  UuidSchema,
   type AnnouncementDto,
   type AnnouncementListQuery,
   type CreateAnnouncementDto,
   type PaginatedAnnouncements,
   type UpdateAnnouncementDto,
 } from '@0xc1x/role-commons';
-import { SupabaseTokenVerifier } from '../../auth/supabase-token-verifier';
 import {
   AnnouncementsRepository,
   type AnnouncementRow,
@@ -43,10 +40,7 @@ const SPECIFIC_WITHOUT_TARGET =
 export class AnnouncementsService {
   private readonly logger = new Logger(AnnouncementsService.name);
 
-  constructor(
-    private readonly repository: AnnouncementsRepository,
-    private readonly tokenVerifier: SupabaseTokenVerifier,
-  ) {}
+  constructor(private readonly repository: AnnouncementsRepository) {}
 
   /**
    * Los avisos que le tocan a quien pregunta.
@@ -190,36 +184,25 @@ export class AnnouncementsService {
     }
   }
 
-  /**
-   * Registra que un usuario entendió un aviso obligatorio.
+  /*
+   * NO hay acknowledge acá, y su ausencia es una decisión.
    *
-   * La identidad sale del TOKEN, nunca del body: el acknowledgement es de la
-   * fila y por fila, así que aceptar un `user_id` del payload sería dejar que
-   * cualquiera marque como entendido el aviso de otro.
+   * El acknowledgement de un aviso obligatorio lo escribe el cliente DIRECTO a
+   * Supabase, que es la arquitectura del feature: el móvil lee y escribe
+   * `announcement_acknowledgements` por PostgREST con su propia sesión, y la
+   * policy lo ata al usuario con `with check (user_id = auth.uid())`. Ese
+   * invariante —"solo podés acknowledgear por vos"— lo sostiene la base.
    *
-   * El token se verifica acá aunque el endpoint sea `@Public`: público quiere
-   * decir que no hace falta sesión para *llegar*, no que el que llega pueda
-   * escribir sin probar quién es.
+   * Una versión por la API lo habría tenido que sostener el código: la
+   * conexión de la API es `service_role`, que tiene BYPASSRLS, así que
+   * `auth.uid()` no participa y la fila se escribiría con el `sub` de un
+   * token que verificó el service. Es la misma garantía en el papel, pero es
+   * código y no una restricción — y una superficie de escritura que solo el
+   * código protege no es una superficie que valga la pena tener.
+   *
+   * Además no la usaba nadie: el móvil escribe por la vía directa y el landing
+   * es anónimo, así que nunca ve un `required`.
    */
-  async acknowledge(announcementId: string, token: string): Promise<void> {
-    const parsedId = UuidSchema.safeParse(announcementId);
-    if (!parsedId.success) {
-      throw new BadRequestException('El aviso no tiene un id válido');
-    }
-    if (!token) {
-      // 401 y no 400: al que llega sin token no le falta un campo, le falta
-      // demostrar quién es. Y el motivo importa para el cliente: reintentar con
-      // el mismo body no lo arregla.
-      throw new UnauthorizedException('Hace falta una sesión para acknowledge');
-    }
-
-    const { sub } = await this.tokenVerifier.verify(token);
-
-    await this.repository.acknowledge({
-      announcement_id: parsedId.data,
-      user_id: sub,
-    });
-  }
 
   /**
    * El predicado que cierra el agujero del `specific`. Va textual acá y no en el

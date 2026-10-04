@@ -29,7 +29,6 @@ describe('AnnouncementsController', () => {
             create: jest.fn(),
             update: jest.fn(),
             remove: jest.fn(),
-            acknowledge: jest.fn(),
           },
         },
       ],
@@ -83,33 +82,15 @@ describe('AnnouncementsController', () => {
     });
   });
 
-  describe('acknowledge', () => {
-    it('manda el id del body y el token al service', async () => {
-      service.acknowledge.mockResolvedValue(undefined);
-
-      await controller.acknowledge(ID, 'Bearer un-jwt');
-
-      expect(service.acknowledge).toHaveBeenCalledWith(ID, 'Bearer un-jwt');
-    });
-
-    it('sin cabecera manda cadena vacía, y el service la rechaza', async () => {
-      service.acknowledge.mockResolvedValue(undefined);
-
-      await controller.acknowledge(ID, undefined);
-
-      // Vacía y no `undefined`: el service compara contra `''`, y una de las dos
-      // formas lo dejaría pasar al verificador de tokens.
-      expect(service.acknowledge).toHaveBeenCalledWith(ID, '');
-    });
-  });
-
   describe('authorization', () => {
     // La metadata es lo único que separa "el operador publica" de "cualquiera
     // publica". Un `@Public()` de más en un POST es una escritura abierta, y un
     // `@Roles('admin')` de menos en el listado es la tabla entera del panel.
-    it('la lectura pública y el acknowledge son públicos', () => {
+    it('la lectura pública es pública', () => {
+      // El landing no tiene sesión: sin esto su banner no se renderiza. Y es la
+      // ÚNICA lectura sin sesión — la de admin no, porque hay que ser admin para
+      // ver los avisos que ya no están activos.
       expect(reflector.get(IS_PUBLIC_KEY, controller.list)).toBe(true);
-      expect(reflector.get(IS_PUBLIC_KEY, controller.acknowledge)).toBe(true);
     });
 
     it('el listado del panel y las escrituras exigen rol admin', () => {
@@ -128,8 +109,6 @@ describe('AnnouncementsController', () => {
       ]) {
         expect(reflector.get(IS_PUBLIC_KEY, handler)).toBeUndefined();
       }
-      // Y el acknowledge no pide un rol: es de cada usuario, no del operador.
-      expect(reflector.get(ROLES_KEY, controller.acknowledge)).toBeUndefined();
     });
   });
 

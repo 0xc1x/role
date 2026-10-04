@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -11,7 +7,6 @@ import type {
   CreateAnnouncementDto,
   UpdateAnnouncementDto,
 } from '@0xc1x/role-commons';
-import { SupabaseTokenVerifier } from '../../auth/supabase-token-verifier';
 import type { Database } from '../../database/database.module';
 import {
   AnnouncementsRepository,
@@ -92,7 +87,6 @@ const asPostgrest = (row: AnnouncementRow): EligibleAnnouncementRow => ({
 describe('AnnouncementsService', () => {
   let service: AnnouncementsService;
   let repository: jest.Mocked<AnnouncementsRepository>;
-  let verifier: jest.Mocked<SupabaseTokenVerifier>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -107,14 +101,7 @@ describe('AnnouncementsService', () => {
             list: jest.fn(),
             update: jest.fn(),
             deactivate: jest.fn(),
-            acknowledge: jest.fn(),
             listEligible: jest.fn(),
-          },
-        },
-        {
-          provide: SupabaseTokenVerifier,
-          useValue: {
-            verify: jest.fn(async () => ({ sub: CONSUMER, email: null })),
           },
         },
       ],
@@ -122,15 +109,10 @@ describe('AnnouncementsService', () => {
 
     service = module.get(AnnouncementsService);
     repository = module.get(AnnouncementsRepository);
-    verifier = module.get(SupabaseTokenVerifier);
 
     jest.resetAllMocks();
 
     repository.transaction.mockImplementation(async (fn) => fn(dbQueNoSeUsa));
-    verifier.verify.mockImplementation(async () => ({
-      sub: CONSUMER,
-      email: null,
-    }));
   });
 
   // ─── listForAudience: la elegibilidad es de RLS, no del service ─────────────
@@ -525,68 +507,6 @@ describe('AnnouncementsService', () => {
       await expect(service.remove(ANNOUNCEMENT_ID)).rejects.toThrow(
         NotFoundException,
       );
-    });
-  });
-
-  // ─── acknowledge: la identidad sale del token, nunca del payload ───────────
-  describe('acknowledge', () => {
-    it('escribe con el id del token verificado', async () => {
-      await expect(
-        service.acknowledge(ANNOUNCEMENT_ID, 'un-jwt'),
-      ).resolves.toBeUndefined();
-
-      expect(verifier.verify).toHaveBeenCalledWith('un-jwt');
-      expect(repository.acknowledge).toHaveBeenCalledWith({
-        announcement_id: ANNOUNCEMENT_ID,
-        user_id: CONSUMER,
-      });
-    });
-
-    it('no escribe sin token', async () => {
-      // El endpoint es `@Public` porque el cliente puede no tener sesión; lo que
-      // no puede es el acknowledgement, que es de la fila y por fila. Sin token
-      // verificado no hay `auth.uid()` que poner, así que no se inventa uno.
-      await expect(service.acknowledge(ANNOUNCEMENT_ID, '')).rejects.toThrow(
-        UnauthorizedException,
-      );
-      expect(repository.acknowledge).not.toHaveBeenCalled();
-    });
-
-    it('rechaza un id que no es uuid antes de tocar nada', async () => {
-      // El `ParseUUIDPipe` del controller ya lo frena, pero el service es la
-      // frontera que otros call sites pueden no pasar por alto: un id que no es
-      // uuid no es un 404 de "no existe", es un 400 de "no lo mandaste bien".
-      await expect(
-        service.acknowledge('no-soy-un-uuid', 'un-jwt'),
-      ).rejects.toThrow(BadRequestException);
-      expect(verifier.verify).not.toHaveBeenCalled();
-      expect(repository.acknowledge).not.toHaveBeenCalled();
-    });
-
-    it('no escribe si el token no verifica', async () => {
-      verifier.verify.mockImplementation(async () => {
-        throw new Error('Unauthorized');
-      });
-
-      await expect(
-        service.acknowledge(ANNOUNCEMENT_ID, 'falso'),
-      ).rejects.toThrow('Unauthorized');
-      expect(repository.acknowledge).not.toHaveBeenCalled();
-    });
-
-    it('repetir no lee nada antes de escribir', async () => {
-      // El idempotente lo da el `ON CONFLICT DO NOTHING` del repositorio, no un
-      // read-then-write: ese último es el que duplica filas cuando dos intentos
-      // llegan juntos, y además necesitaría un UPDATE que la policy no tiene.
-      await service.acknowledge(ANNOUNCEMENT_ID, 'un-jwt');
-      await service.acknowledge(ANNOUNCEMENT_ID, 'un-jwt');
-
-      expect(repository.acknowledge).toHaveBeenCalledTimes(2);
-      expect(repository.acknowledge).toHaveBeenLastCalledWith({
-        announcement_id: ANNOUNCEMENT_ID,
-        user_id: CONSUMER,
-      });
-      expect(repository.findById).not.toHaveBeenCalled();
     });
   });
 });

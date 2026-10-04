@@ -6,10 +6,7 @@ import { escapeLike } from '../../common/utils/like';
 import type { Env } from '../../config/env.schema';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
-import {
-  announcementAcknowledgements,
-  announcements,
-} from '../../database/schema';
+import { announcements } from '../../database/schema';
 
 /** Fila tal como está en Postgres (los timestamps son `Date`). */
 export type AnnouncementRow = typeof announcements.$inferSelect;
@@ -255,22 +252,17 @@ export class AnnouncementsRepository {
     return row ?? null;
   }
 
-  /**
-   * Registra que un usuario entendió un aviso.
+  /*
+   * NO hay método de acknowledge acá, y es a propósito.
    *
-   * Idempotente por construcción: `ON CONFLICT DO NOTHING` sobre la PK
-   * compuesta. Es la única forma de reintentar sin duplicar, y también la única
-   * que se puede permitir acá: un `ON CONFLICT DO UPDATE` necesitaría una policy
-   * de UPDATE sobre los acks, y no la hay —no hay forma de des-acknowledgear—.
-   * Por eso esto es un INSERT que ignora el conflicto, y no un upsert que pisa.
+   * La tabla `announcement_acknowledgements` se escribe desde el cliente, por
+   * PostgREST y con la sesión de quien entendió el aviso, y la policy lo ata con
+   * `with check (user_id = auth.uid())`. La API no publica avisos con esa vía
+   * justamente porque su conexión tiene BYPASSRLS: un insert acá sacaría el ack
+   * de la base y lo dejaría en el código.
+   *
+   * El espejo de la tabla vive en `database/schema/announcements.ts` igual, porque
+   * el espejo tiene que parecerse a la base —de eso vive `mirror-fidelity`— y la
+   * tabla existe, con sus dos FKs, para que los specs puedan correr contra ella.
    */
-  async acknowledge(values: {
-    announcement_id: string;
-    user_id: string;
-  }): Promise<void> {
-    await this.db
-      .insert(announcementAcknowledgements)
-      .values(values)
-      .onConflictDoNothing();
-  }
 }
