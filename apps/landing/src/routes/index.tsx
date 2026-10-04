@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { AnnouncementBanner } from "@/components/announcement-banner";
 import { Contact } from "@/components/contact";
 import { Cta } from "@/components/cta";
 import { Faq } from "@/components/faq";
@@ -12,6 +13,7 @@ import { Testimonials } from "@/components/testimonials";
 import { FAQ_ITEMS } from "@/lib/faq";
 import { appConfigQueryOptions, randomOfferQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
+import { ensureAnnouncements, useAnnouncements } from "@/lib/use-announcements";
 import { ensurePlatformStats } from "@/lib/use-config";
 
 const FAQ_JSON_LD = {
@@ -29,9 +31,16 @@ export const Route = createFileRoute("/")({
 	// SSR: config + stats reales se resuelven en el server para SEO. Ningún
 	// fallo rompe el render; el loader solo deja constancia de si las stats
 	// salieron de la API (`source`) para que el markup lo exponga.
+	//
+	// Los avisos entran por `ensureAnnouncements` y NO por un `ensureQueryData`
+	// pelado: es la misma degradación a `failed` que las stats, y es lo que
+	// impide que un 500 de la API de anuncios se convierta en el error de la
+	// landing entera. Un aviso que falta es una molestia; una página que no se
+	// pinta es el final del negocio que esta página existe para conseguir.
 	loader: ({ context }) =>
 		Promise.all([
 			ensurePlatformStats(context.queryClient),
+			ensureAnnouncements(context.queryClient),
 			context.queryClient
 				.ensureQueryData(appConfigQueryOptions)
 				.catch(() => undefined),
@@ -52,10 +61,22 @@ export const Route = createFileRoute("/")({
 });
 
 function LandingPage() {
+	const avisos = useAnnouncements();
+
 	return (
 		<div className="min-h-screen">
 			<Navbar />
-			<main id="main">
+			{/*
+			  `data-announcements-source` = "api" | "loading" | "failed": avisos
+			  reales, petición en curso, o API caída. Va en el `<main>` y no en la
+			  banda porque la banda NO se pinta cuando no hay nada que decir, y sin
+			  el atributo "no hay avisos" y "la API de anuncios está caída" serían
+			  la misma página — indistinguibles para el que esté de guardia, que es
+			  exactamente el incidente que el servicio de la API evita tapar
+			  devolviendo `[]`.
+			*/}
+			<main id="main" data-announcements-source={avisos.source}>
+				<AnnouncementBanner announcements={avisos.data ?? []} />
 				<Hero />
 				<Features />
 				<HowItWorks />
