@@ -234,8 +234,13 @@ ya llama a `/profiles?search=` y `/businesses?search=`.
 ### landing — banner
 
 Server-render. Lee lo mismo vía el endpoint público de la API y pinta un banner
-**dentro del flujo, sin overlay**. No requiere sesión, así que solo le alcanzan los
-`audience_kind = 'all'` — por eso el aviso de mantenimiento tiene que ser `all`.
+**dentro del flujo, sin overlay**. No requiere sesión, así que lee con `auth.uid()`
+nulo: `auth_helpers.my_role()` resuelve a `'user'` cuando no hay fila de perfil, y por
+eso le alcanzan los `audience_kind = 'all'` **y** `'consumers'` (verificado contra la
+base, §4). Nunca ve `'businesses'`, ni `'specific'`, ni un `required` —este último
+porque el fragmento `severity = 'info' OR auth.uid() IS NOT NULL` lo saca—. El aviso de
+mantenimiento, que es el que el landing tiene que mostrar, tiene que ser `all` o
+`consumers`.
 
 ## 6. Selección y orden
 
