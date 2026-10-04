@@ -83,6 +83,51 @@ export type EligibleAnnouncementRow = {
 };
 
 /**
+ * Una fila de `public.business_ownership` como la devuelve PostgREST.
+ *
+ * La tabla tiene `PRIMARY KEY (business_id)` —un dueño por negocio—, y el tipo
+ * NO declara esa cardinalidad: la resolución suma todos los `owner_id` que
+ * vuelven, así que el día que la co-propiedad cambie la clave, el código ya
+ * hace lo correcto sin que haya que tocarlo.
+ */
+export type BusinessOwnershipRow = {
+  business_id: string;
+  owner_id: string;
+};
+
+/**
+ * Columnas de la resolución de dueños: los dos ids y nada más. `owner_id` es
+ * la columna que salió de `businesses` justamente para esto —está en
+ * `business_ownership` y no en la tabla pública porque `anon` puede leer el
+ * catálogo—, así que la lectura se hace por esta tabla y no por un join.
+ */
+const OWNERSHIP_COLUMNS = 'business_id, owner_id';
+
+/** Un objeto cualquiera, para poder mirar sus claves sin castear. */
+function esObjeto(valor: unknown): valor is Record<string, unknown> {
+  return typeof valor === 'object' && valor !== null;
+}
+
+/**
+ * Una fila de `business_ownership` con los dos ids en string.
+ *
+ * Existe porque el cliente de Supabase va sin tipo genérico de `Database` y la
+ * cadena `from().select()` devuelve `any`. Acá `any` no pasa: una fila a la que
+ * le falte cualquiera de los dos ids se descarta, y el resultado es que el
+ * negocio se ve SIN DUEÑO —que es exactamente lo que es— y el service rechaza
+ * la publicación nombrándolo. Es preferible a creerse un `any`: un `owner_id`
+ * inventado mete a una persona en la audiencia de un aviso, y una audiencia con
+ * un id de más es una fuga.
+ */
+function esFilaDeOwnership(fila: unknown): fila is BusinessOwnershipRow {
+  return (
+    esObjeto(fila) &&
+    typeof fila.business_id === 'string' &&
+    typeof fila.owner_id === 'string'
+  );
+}
+
+/**
  * Columnas del read path público. Explícitas y sin las dos listas de audiencia:
  * que no se PIDAN es la garantía de que no salen. La validación del contrato
  * también las descartaría si aparecieran, pero depender de eso es pedirle al
@@ -129,19 +174,11 @@ export class AnnouncementsRepository {
    * existencia— y el paginado no viene: el read path público devuelve la lista
    * entera, que son las filas que RLS ya dejó pasar.
    *
-   * El cliente se arma por llamada porque la cabecera `Authorization` cambia con
-   * el token: un cliente compartido con la sesión del primero que preguntó sería
-   * la peor de las dos formas de equivocarse acá.
+   * El cliente se arma por llamada —ver `supabaseDe`— porque la cabecera
+   * `Authorization` cambia con el token.
    */
   async listEligible(token: string | null): Promise<EligibleAnnouncementRow[]> {
-    const supabase = createClient(this.supabaseUrl, this.supabaseAnonKey, {
-      // Sin token no hay `auth.uid()` y la policy resuelve a anónimo, que ve
-      // los `all` y los `consumers` de `info`: lo que el landing, que no tiene
-      // sesión, necesita. `required` no llega porque el fragmento
-      // `severity = 'info' or auth.uid() is not null` lo saca.
-      global: token ? { headers: { Authorization: token } } : {},
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabase = this.supabaseDe(token);
 
     const { data, error } = await supabase
       .from('announcements')
@@ -157,6 +194,73 @@ export class AnnouncementsRepository {
     }
 
     return data ?? [];
+  }
+
+  /**
+   * Los dueños de los negocios indicados, LEÍDOS COMO QUIEN PUBLICA.
+   *
+   * Es la consulta que resuelve `business_ids` a `user_ids` al publicar. Va por
+   * PostgREST y con el token del operador, y no por drizzle, por la misma razón
+   * que `listEligible`: la conexión de la API es `service_role` —BYPASSRLS— y
+   * resolvería los dueños sin que ninguna policy opinara. Con la sesión del
+   * operador, `business_ownership` decide, y la lectura queda registrada como lo
+   * que ese operador puede ver.
+   *
+   * No choca con ninguna policy: `authenticated` tiene SELECT sobre la tabla y
+   * `Admins can view all business ownership` —`my_role() = 'admin'`— deja pasar
+   * las filas que el guard de `@Roles('admin')` ya le garantiza a esta request.
+   * `anon` no tiene ni grant ni policy, y por eso el token acá no es opcional:
+   * resolver por `anon` no puede devolver nada.
+   *
+   * Devuelve FILAS y no un `Map` de negocio → dueño: la resolución suma todos
+   * los `owner_id` que vuelven, así que un negocio con más de un dueño los
+   * agrega a todos en vez de pisar uno. Además devuelve el `business_id`, que es
+   * lo que permite notar el negocio al que no se le encontró dueño.
+   */
+  async ownerIdsForBusinesses(
+    token: string,
+    businessIds: readonly string[],
+  ): Promise<BusinessOwnershipRow[]> {
+    const supabase = this.supabaseDe(token);
+
+    const { data, error } = await supabase
+      .from('business_ownership')
+      .select(OWNERSHIP_COLUMNS)
+      .in('business_id', businessIds);
+
+    if (error) {
+      // Se propaga, igual que en `listEligible`: acá además el service NO puede
+      // seguir sin la respuesta, porque sin las filas todo negocio parece sin
+      // dueño y el operador recibiría un rechazo que no es su culpa.
+      throw new Error(
+        `No se pudieron leer los dueños de los negocios: ${error.message}`,
+      );
+    }
+
+    return (data ?? []).filter(esFilaDeOwnership);
+  }
+
+  /**
+   * El cliente de PostgREST, ARMADO POR LLAMADA.
+   *
+   * La cabecera `Authorization` cambia con el token, así que un cliente
+   * compartido con la sesión del primero que preguntó sería la peor de las dos
+   * formas de equivocarse acá: el segundo pediría los anuncios del primero.
+   *
+   * La clave es SIEMPRE la anon y el token viaja en el header. Es lo que
+   * convierte la request en `authenticated` para PostgREST y lo que hace que
+   * sea la policy la que decida, en vez del código. Al revés —el token como
+   * key— la identidad sería la del cliente fijo y no la de quien pergunta.
+   */
+  private supabaseDe(token: string | null) {
+    return createClient(this.supabaseUrl, this.supabaseAnonKey, {
+      // Sin token no hay `auth.uid()` y la policy resuelve a anónimo, que ve
+      // los `all` y los `consumers` de `info`: lo que el landing, que no tiene
+      // sesión, necesita. `required` no llega porque el fragmento
+      // `severity = 'info' or auth.uid() is not null` lo saca.
+      global: token ? { headers: { Authorization: token } } : {},
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
   }
 
   async list(

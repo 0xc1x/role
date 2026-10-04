@@ -138,17 +138,46 @@ describe('AnnouncementsController', () => {
       };
       service.create.mockResolvedValue(dto);
 
-      await controller.create(body);
+      await controller.create(body, 'Bearer un-jwt');
 
-      expect(service.create).toHaveBeenCalledWith(body);
+      expect(service.create).toHaveBeenCalledWith(body, 'Bearer un-jwt');
     });
 
-    it('update delega id y body', async () => {
+    it('create sin cabecera pasa null y no una cadena vacía', async () => {
+      // `null` es lo que el service distingue de "hay sesión": resolver los
+      // dueños sin token saldría como `anon`, que no tiene grant sobre
+      // `business_ownership`, y todos los negocios parecerían sin dueño.
+      service.create.mockResolvedValue(dto);
+
+      await controller.create({ ...dto });
+
+      expect(service.create).toHaveBeenCalledWith(expect.anything(), null);
+    });
+
+    it('update delega id, body y la cabecera de la sesión', async () => {
+      // La cabecera viaja por la misma razón que en `create`: un PATCH que cambia
+      // la audiencia dirigida resuelve los negocios con la sesión de quien edita.
+      service.update.mockResolvedValue(dto);
+
+      await controller.update(ID, { title: 'Otro título' }, 'Bearer un-jwt');
+
+      expect(service.update).toHaveBeenCalledWith(
+        ID,
+        { title: 'Otro título' },
+        'Bearer un-jwt',
+      );
+    });
+
+    it('update sin cabecera pasa null', async () => {
       service.update.mockResolvedValue(dto);
 
       await controller.update(ID, { title: 'Otro título' });
 
-      expect(service.update).toHaveBeenCalledWith(ID, { title: 'Otro título' });
+      expect(service.update).toHaveBeenCalledWith(
+        ID,
+        { title: 'Otro título' },
+        null,
+      );
     });
 
     it('remove delega el id y no devuelve nada', async () => {

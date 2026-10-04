@@ -302,3 +302,141 @@ describe('listEligible · lo que devuelve y lo que lanza', () => {
     expect(String(fallo)).not.toContain(TOKEN);
   });
 });
+
+/**
+ * POR QUÉ ESTA RESOLUCIÓN VA POR POSTGREST Y NO POR DRIZZLE
+ *
+ * Es la consulta que convierte `business_ids` en `user_ids` al publicar, y tiene
+ * la misma exigencia que `listEligible`: si fuera por la conexión de la API —
+ * `service_role`, BYPASSRLS— resolvería los dueños sin que ninguna policy
+ * opinara, y la lectura no quedaría registrada como lo que el operador puede ver.
+ * `authenticated` tiene SELECT sobre `business_ownership` y
+ * `Admins can view all business ownership` la deja pasar, así que la sesión del
+ * operador alcanza.
+ */
+describe('ownerIdsForBusinesses · la sesión con la que se resuelve', () => {
+  const NEGOCIO = '9a8b7c6d-5e4f-4a3b-b2c1-d0e9f8a7b6c5';
+  const OTRO = '8e7d6c5b-4a3f-4291-8877-665544332211';
+  const DUENO = '2b8c1d0e-7a3f-4b6c-8d5e-1a2b3c4d5e6f';
+
+  test('manda el Authorization crudo al cliente, para que sea la policy la que decida', async () => {
+    await repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]);
+
+    expect(opciones).toHaveLength(1);
+    expect(opciones[0]?.key).toBe(ANON_KEY);
+    expect(opciones[0]?.global).toEqual({ headers: { Authorization: TOKEN } });
+  });
+
+  test('consulta business_ownership, no businesses', async () => {
+    // `businesses` no tiene columna de dueño: la relación vive en su tabla
+    // companion, y por eso esta consulta existe.
+    await repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]);
+
+    expect(llamadaDe(llamadas, 'from')?.argumentos).toEqual([
+      'business_ownership',
+    ]);
+  });
+
+  test('pide solo los dos ids, y escribe el filtro por los negocios elegidos', async () => {
+    await repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO, OTRO]);
+
+    expect(llamadaDe(llamadas, 'select')?.argumentos).toEqual([
+      'business_id, owner_id',
+    ]);
+    expect(llamadaDe(llamadas, 'in')?.argumentos).toEqual([
+      'business_id',
+      [NEGOCIO, OTRO],
+    ]);
+  });
+
+  test('no pide created_at ni updated_at, ni ninguna otra cosa', async () => {
+    await repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]);
+
+    const pedidas = String(llamadaDe(llamadas, 'select')?.argumentos[0]);
+    expect(pedidas).not.toContain('created_at');
+    expect(pedidas).not.toContain('updated_at');
+  });
+
+  test('devuelve las filas tal como llegaron, con el negocio y el dueño', async () => {
+    respuesta = {
+      data: [{ business_id: NEGOCIO, owner_id: DUENO }],
+      error: null,
+    };
+
+    await expect(
+      repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]),
+    ).resolves.toEqual([{ business_id: NEGOCIO, owner_id: DUENO }]);
+  });
+
+  test('devuelve una fila por dueño, sin reindexar ni quedarse con la última', async () => {
+    // La resolución suma lo que volvió; acá está la mitad de eso. Hoy
+    // `business_ownership_pkey` es PRIMARY KEY (business_id) y no puede haber dos
+    // filas del mismo negocio, pero la consulta no proyecta esa cardinalidad y el
+    // repositorio no la impone: la co-propiedad no tendría que pasar por acá.
+    respuesta = {
+      data: [
+        { business_id: NEGOCIO, owner_id: DUENO },
+        { business_id: NEGOCIO, owner_id: OTRO },
+      ],
+      error: null,
+    };
+
+    const filas = await repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]);
+
+    expect(filas).toEqual([
+      { business_id: NEGOCIO, owner_id: DUENO },
+      { business_id: NEGOCIO, owner_id: OTRO },
+    ]);
+  });
+
+  test('descarta la fila a la que le falta un id', async () => {
+    // El cliente de Supabase va sin tipo genérico, así que la respuesta es `any`.
+    // Creerse un id inexistente mete a una persona en la audiencia de un aviso, y
+    // una audiencia con un id de más es una fuga: lo que no tiene los dos ids no
+    // es una fila de `business_ownership`, y el negocio se ve sin dueño —que es
+    // exactamente lo que es— para que el service lo rechace nombrándolo.
+    respuesta = {
+      data: [
+        { business_id: NEGOCIO, owner_id: DUENO },
+        { business_id: OTRO },
+        { business_id: OTRO, owner_id: null },
+        null,
+      ],
+      error: null,
+    };
+
+    await expect(
+      repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO, OTRO]),
+    ).resolves.toEqual([{ business_id: NEGOCIO, owner_id: DUENO }]);
+  });
+
+  test('una lista vacía es una lista vacía, no un error', async () => {
+    respuesta = { data: [], error: null };
+
+    await expect(
+      repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]),
+    ).resolves.toEqual([]);
+  });
+
+  test('un error de PostgREST lanza en vez de devolver []', async () => {
+    // Devolver `[]` haría que TODO negocio pareciera sin dueño: el service
+    // rechazaría publicaciones con un motivo falso, sobre negocios que sí tienen
+    // dueño.
+    respuesta = { data: null, error: { message: 'PGRST301: sin permiso' } };
+
+    await expect(
+      repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]),
+    ).rejects.toThrow('No se pudieron leer los dueños de los negocios');
+  });
+
+  test('el mensaje del error dice qué pasó, sin volcar el token', async () => {
+    respuesta = { data: null, error: { message: 'PGRST301: sin permiso' } };
+
+    const fallo = await repository
+      .ownerIdsForBusinesses(TOKEN, [NEGOCIO])
+      .catch((e: unknown) => e);
+
+    expect(String(fallo)).toContain('PGRST301');
+    expect(String(fallo)).not.toContain(TOKEN);
+  });
+});

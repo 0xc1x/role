@@ -83,6 +83,13 @@ export class AnnouncementsController {
     return this.announcementsService.listAdmin(query);
   }
 
+  /**
+   * Publica un aviso. La cabecera `Authorization` también se lee acá, y no es un
+   * detalle: la resolución de `business_ids` a `user_ids` lee `business_ownership`
+   * por PostgREST con la sesión del operador, así que la identidad de la escritura
+   * es la que decide si esa lectura tiene filas. Es el mismo motivo por el que
+   * `list` la reenvía.
+   */
   @Roles('admin')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -92,10 +99,16 @@ export class AnnouncementsController {
   create(
     @Body(new ZodValidationPipe(CreateAnnouncementSchema))
     body: CreateAnnouncementDto,
+    @Headers('authorization') authorization?: string,
   ): Promise<AnnouncementDto> {
-    return this.announcementsService.create(body);
+    return this.announcementsService.create(body, authorization ?? null);
   }
 
+  /**
+   * Edita un aviso. La cabecera se lee por la misma razón que en `create`: un
+   * PATCH que cambia la audiencia dirigida tiene que resolver los negocios con la
+   * sesión de quien edita.
+   */
   @Roles('admin')
   @Patch(':id')
   @ApiBearerAuth('bearer')
@@ -105,8 +118,9 @@ export class AnnouncementsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(UpdateAnnouncementSchema))
     body: UpdateAnnouncementDto,
+    @Headers('authorization') authorization?: string,
   ): Promise<AnnouncementDto> {
-    return this.announcementsService.update(id, body);
+    return this.announcementsService.update(id, body, authorization ?? null);
   }
 
   /** Soft delete: `active = false`. No hay borrado físico. */
