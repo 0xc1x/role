@@ -1,4 +1,5 @@
 import type {
+	AudienceKind,
 	BugTriageState,
 	BusinessVerificationStatus,
 	ContactDeliveryStatus,
@@ -157,6 +158,24 @@ const REVIEW_VISIBILITY_LABELS: Record<ReviewVisibility, string> = {
 
 export const reviewVisibilityLabel = (visibility: string): string =>
 	REVIEW_VISIBILITY_LABELS[visibility as ReviewVisibility] ?? visibility;
+
+/**
+ * A quién le toca el aviso. El token crudo no sirve en la columna: `specific` y
+ * `businesses` son dos cosas que el operador tiene que distinguir de un vistazo,
+ * y son exactamente las dos que se pueden equivocar al publicar (una dirigida a
+ * negocios sola no la ve nadie —ver `announcement-form.tsx`—).
+ *
+ * `?? audienceKind` por el mismo motivo que el resto del archivo.
+ */
+const ANNOUNCEMENT_AUDIENCE_LABELS: Record<AudienceKind, string> = {
+	all: "Todo el mundo",
+	consumers: "Consumidoras",
+	businesses: "Negocios",
+	specific: "Personas específicas",
+};
+
+export const announcementAudienceLabel = (audienceKind: string): string =>
+	ANNOUNCEMENT_AUDIENCE_LABELS[audienceKind as AudienceKind] ?? audienceKind;
 
 /**
  * Etiqueta en español del motivo de moderación.

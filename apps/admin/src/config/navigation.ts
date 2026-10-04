@@ -110,6 +110,16 @@ export const navMain: NavMainItem[] = [
 		icon: Bug,
 	},
 	{
+		// Lo que el operador le dice a la app. Va después de Reportes porque es la
+		// cuarta de las superficies donde la gente habla con la plataforma —Reseñas,
+		// Contactos y Reportes son las otras tres— y queda antes de los grupos de
+		// Campañas y Notificaciones, que son superficies de una sola operación
+		// técnica.
+		title: "Anuncios",
+		url: "/anuncios",
+		icon: Megaphone,
+	},
+	{
 		title: "Campañas de Marketing",
 		url: "#",
 		icon: Megaphone,
