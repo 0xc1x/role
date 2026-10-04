@@ -3,9 +3,11 @@ import type {
 	AnnouncementSeverity,
 } from "@0xc1x/role-commons";
 import type { ColumnDef } from "@tanstack/react-table";
+import { ActiveCell } from "@/components/data-table/cells/active-cell";
 import { DataTableColumnHeader } from "@/components/data-table/column-header";
 import { Badge } from "@/components/ui/badge";
 import { announcementAudienceLabel } from "@/lib/labels";
+import { useUpdateAnnouncement } from "../queries/announcements.queries";
 import { ActionCell } from "./cells/action-cell";
 
 const SEVERITY_LABELS: Record<AnnouncementSeverity, string> = {
@@ -19,6 +21,27 @@ const SEVERITY_LABELS: Record<AnnouncementSeverity, string> = {
  * el panel no puede contarlas. Escribir un "3 destinatarios" sería inventar el
  * dato, y por eso esta columna no tiene número.
  */
+/**
+ * El switch de estado. Su propio componente porque necesita la mutación: cada
+ * celda es un `useUpdateAnnouncement` propio, igual que en `tips.columns.tsx`.
+ */
+const ActivoCell = ({ row }: { row: { original: AnnouncementDto } }) => {
+	const updateMutation = useUpdateAnnouncement();
+	return (
+		<ActiveCell
+			active={row.original.active}
+			onToggle={(checked) =>
+				updateMutation.mutate({
+					id: row.original.id,
+					body: { active: checked },
+				})
+			}
+			isPending={updateMutation.isPending}
+			label="Aviso"
+		/>
+	);
+};
+
 function Ventana({
 	start_at,
 	end_at,
@@ -86,17 +109,17 @@ export const columns: ColumnDef<AnnouncementDto>[] = [
 	{
 		accessorKey: "active",
 		header: "Estado",
-		// Badge y NO el `ActiveCell` con switch que usan tips o coupons: ese
-		// control hace un PATCH de un solo campo, y el PATCH de un `specific` sin
-		// destino lo rechaza el service con un 400 —el predicado lee las listas
-		// guardadas, que es justamente lo que está vacío—. Con el switch, la fila
-		// no cambiaría y el operador no vería nada. Se baja desde el drawer de
-		// edición, que muestra el error, o con la acción de desactivar.
-		cell: ({ row }) => (
-			<Badge variant={row.original.active ? "success" : "destructive"}>
-				{row.original.active ? "Vigente" : "Inactivo"}
-			</Badge>
-		),
+		// El switch en línea, como en `tips.columns.tsx`: la baja de un aviso es la
+		// operación de rutina de esta pantalla y pedir un drawer para hacerla sería
+		// un costo por cada aviso que seWant apagar.
+		//
+		// Un PATCH de un campo NO choca con el predicado de audiencia del service:
+		// `assertAudienceHasTargets` lee `body.user_ids ?? existing.user_ids`, así
+		// que un `{ active: false }` cae a las listas GUARDADAS y pasa siempre que
+		// la fila sea alcanzable por la API —y una fila `specific` con las dos
+		// listas vacías no lo es: `create` la rechaza y un PATCH no puede
+		// vaciarlas, porque `[] ?? existing` es `[]` y la suma da 0 → 400.
+		cell: ({ row }) => <ActivoCell row={row} />,
 	},
 	{
 		accessorKey: "start_at",

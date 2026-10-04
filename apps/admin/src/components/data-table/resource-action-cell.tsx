@@ -38,12 +38,24 @@ export function ResourceActionCell<TRow extends { id: string }>(props: {
 	editLabel: string;
 	deleteTitle: string;
 	deleteDescription: (name: string) => React.ReactNode;
+	/**
+	 * El verbo de la acción destructiva. Por defecto "Eliminar".
+	 *
+	 * Lo necesitan las entidades con soft delete: un `DELETE` que pone
+	 * `active = false` no borra nada, y ofrecerlo como "Eliminar xxx" en rojo
+	 * destructivo hace que el operador tema perder una fila que puede volver a
+	 * activar —o que no se atreva a usarla—. Los dos textos van juntos: el del
+	 * menú y el del botón de confirmación, porque el del menú es el primero que
+	 * se lee y el que fija la expectativa.
+	 */
+	deleteVerb?: string;
 	useDelete: () => DeleteMutation;
 	renderEditor: (row: TRow | null, onClose: () => void) => React.ReactNode;
 }) {
 	const [editing, setEditing] = useState<TRow | null>(null);
 	const [deleting, setDeleting] = useState<TRow | null>(null);
 	const deleteMutation = props.useDelete();
+	const deleteVerb = props.deleteVerb ?? "Eliminar";
 
 	return (
 		<>
@@ -73,7 +85,7 @@ export function ResourceActionCell<TRow extends { id: string }>(props: {
 							variant="destructive"
 							onClick={() => setDeleting(props.row.original)}
 						>
-							<Trash2 /> Eliminar {props.entityName}
+							<Trash2 /> {deleteVerb} {props.entityName}
 						</DropdownMenuItem>
 					</DropdownMenuGroup>
 				</DropdownMenuContent>
@@ -122,7 +134,7 @@ export function ResourceActionCell<TRow extends { id: string }>(props: {
 									Eliminando...
 								</>
 							) : (
-								`Eliminar ${props.entityName}`
+								`${deleteVerb} ${props.entityName}`
 							)}
 						</AlertDialogAction>
 					</AlertDialogFooter>

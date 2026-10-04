@@ -148,15 +148,9 @@ function submit() {
 const texto = () => document.body.textContent ?? "";
 
 /**
- * Las ausencias se miden con `queryAllByText(...)` + `toHaveLength(0)` y NO con
- * `expect(queryByText(...)).toBeNull()`.
- *
- * MEDIDO en este repo con bun 1.4.2: dentro de este archivo,
- * `expect(elements[0]).toBeNull()` NO falla aunque el elemento exista —el mismo
- * matcher sí falla en un archivo de prueba mínimo con el mismo DOM—, así que esa
- * forma daría verde con el texto en pantalla. `queryAllByText` más la longitud
- * del arreglo falla en los dos casos, y de paso obliga a que la ausencia sea
- * exacta y no "algún elemento que matchea".
+ * Las ausencias se miden con `queryAllByText(...)` + `toHaveLength(0)`: la
+ * longitud del arreglo obliga a que la ausencia sea exacta y no "algún elemento
+ * que matchea".
  */
 const noAparece = (texto: string) =>
 	expect(screen.queryAllByText(texto)).toHaveLength(0);
@@ -230,8 +224,10 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 		);
 	});
 
-	// El caso que la API NO frena: pasa el filtro y no lo ve nadie.
-	test("elegir solo negocios avisa que nadie lo va a ver y frena la publicación", async () => {
+	// El caso que la API NO frena: pasa el filtro y de los negocios elegidos no
+	// lee nadie. En el ALTA la fila es nueva, así que el aviso efectivamente no lo
+	// ve nadie —y el texto puede decirlo sin mentir—.
+	test("en el alta, elegir solo negocios avisa que el aviso no llega y frena la publicación", async () => {
 		const calls = stubApi({
 			negocios: [{ id: NEGOCIO_ID, name: "Panadería Sur" }],
 		});
@@ -243,23 +239,31 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 			await screen.findByRole("checkbox", { name: "Panadería Sur" }),
 		);
 
-		expect(await screen.findByText("Nadie va a ver este aviso")).toBeDefined();
+		expect(
+			await screen.findByText("Los negocios que elegiste no lo van a ver"),
+		).toBeDefined();
 		expect(texto()).toContain(
-			"elegir únicamente negocios deja el aviso publicado y sin mostrarse",
+			"sin mostrarse en ninguna app: es una limitación conocida y sin resolver",
 		);
 
 		submit();
 		await waitFor(() =>
-			expect(texto()).toContain(
-				"Confirmá que sabés que este aviso no lo va a ver nadie",
-			),
+			expect(texto()).toContain("Confirmá que sabés a quién no le va a llegar"),
 		);
 		expect(posts(calls)).toHaveLength(0);
 
+		// Minor 7: marcar la casilla borra el error ahí mismo. Antes solo se
+		// limpiaba cuando cambiaba la audiencia o en el submit siguiente, y
+		// quedaba un `FieldError` rojo al lado de una casilla ya marcada.
 		fireEvent.click(
 			screen.getByRole("checkbox", {
-				name: /Entiendo que este aviso se publica y no lo va a ver nadie/,
+				name: /Entiendo que los negocios de esta lista no van a ver este aviso/,
 			}),
+		);
+		await waitFor(() =>
+			expect(texto()).not.toContain(
+				"Confirmá que sabés a quién no le va a llegar",
+			),
 		);
 		submit();
 
@@ -273,7 +277,69 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 		expect(posts(calls)[0]?.body).not.toHaveProperty("user_ids");
 	});
 
-	test("con una consumidora elegida no avisa que nadie lo va a ver", async () => {
+	/*
+	 * EL CASO QUE HACÍA MENTIR AL PANEL.
+	 *
+	 * El service hace MERGE de la audiencia, no reemplazo:
+	 * `body.user_ids ?? existing.user_ids` (`announcements.service.ts`). Elegir
+	 * negocios encima de una fila que ya tenía consumidoras NO las borra, y el
+	 * mapper solo escribe la lista que viene definida. Publicás un `specific` para
+	 * Ana, días después abrís el aviso para corregir una errata y elegís dos
+	 * negocios creyendo que agregás audiencia: el aviso tenía que decir que Ana
+	 * lo sigue recibiendo, no que "nadie va a ver este aviso".
+	 *
+	 * Y el payload es lo que hace que eso sea cierto: al no viajar `user_ids`, la
+	 * lista guardada sobrevive. Si este test pasara con `user_ids: []` en el
+	 * body, el aviso de arriba sería la mitad de la historia.
+	 */
+	test("al editar, elegir negocios dice que las personas guardadas lo siguen recibiendo", async () => {
+		stubApi({ negocios: [{ id: NEGOCIO_ID, name: "Panadería Sur" }] });
+		// La fila viene con `specific`: el panel no puede mostrar su audiencia
+		// (no viene en la lectura), así que a los ojos del test no tiene personas.
+		renderForm({ ...anuncio, audience_kind: "specific" });
+
+		await elegir("Audiencia", "Personas específicas");
+		fireEvent.click(
+			await screen.findByRole("checkbox", { name: "Panadería Sur" }),
+		);
+
+		expect(
+			await screen.findByText("Los negocios que elegiste no lo van a ver"),
+		).toBeDefined();
+		expect(texto()).toContain("SEGUEN RECIBIÉNDOLO");
+		// Y NO dice que no lo ve nadie, que es lo que mentía.
+		noAparece("Nadie va a ver este aviso");
+		expect(texto()).toContain("no la borra al guardar");
+	});
+
+	test("al editar con negocios, el PATCH no manda user_ids: la lista guardada sobrevive", async () => {
+		const calls = stubApi({
+			negocios: [{ id: NEGOCIO_ID, name: "Panadería Sur" }],
+		});
+		renderForm({ ...anuncio, audience_kind: "specific" });
+
+		await elegir("Audiencia", "Personas específicas");
+		fireEvent.click(
+			await screen.findByRole("checkbox", { name: "Panadería Sur" }),
+		);
+		fireEvent.click(
+			await screen.findByRole("checkbox", {
+				name: /Entiendo que los negocios que agregué no lo van a ver/,
+			}),
+		);
+		submit();
+
+		await waitFor(() => expect(patches(calls)).toHaveLength(1));
+		expect(patches(calls)[0]?.body).toMatchObject({
+			audience_kind: "specific",
+			business_ids: [NEGOCIO_ID],
+		});
+		// El punto del test: al omitir la lista, el `??` del service cae a la
+		// guardada y las personas que ya lo recibían lo siguen recibiendo.
+		expect(patches(calls)[0]?.body).not.toHaveProperty("user_ids");
+	});
+
+	test("con una consumidora elegida no avisa que los negocios no lo van a ver", async () => {
 		const calls = stubApi({
 			consumidoras: [
 				{ id: CONSUMIDORA_ID, full_name: "Ana", email: "ana@correo.ec" },
@@ -287,7 +353,7 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 			await screen.findByRole("checkbox", { name: "Ana · ana@correo.ec" }),
 		);
 
-		await waitFor(() => noAparece("Nadie va a ver este aviso"));
+		await waitFor(() => noAparece("Los negocios que elegiste no lo van a ver"));
 		submit();
 
 		await waitFor(() => expect(posts(calls)).toHaveLength(1));
@@ -296,7 +362,8 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 
 	// La fila publicada NO trae la audiencia, así que el panel no puede decir qué
 	// tiene guardado. Mandar `[]` sería borrar el destinatario de un aviso que
-	// alguien puede estar leyendo: el PATCH omite las listas vacías.
+	// alguien puede estar leyendo: el PATCH omite las listas vacías. Y la palabra
+	// es "conserva", no "reemplaza": el service hace merge.
 	test("editar un aviso específico sin elegir a nadie conserva su audiencia", async () => {
 		const calls = stubApi();
 		renderForm({ ...anuncio, audience_kind: "specific" });
@@ -304,6 +371,12 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 		expect(
 			await screen.findByText("La audiencia de este aviso no se puede mostrar"),
 		).toBeDefined();
+		// "AGREGAN", no "reemplazan": el service hace merge
+		// (`body.user_ids ?? existing.user_ids`) y el mapper solo escribe la lista
+		// que viene. Decir "reemplaza" haría creer al operador que elegir a alguien
+		// borra a los demás, que es el otro sentido del mismo mentira.
+		expect(texto()).toContain("se AGREGAN a la lista guardada");
+		expect(texto()).not.toContain("se reemplazan");
 		submit();
 
 		await waitFor(() => expect(patches(calls)).toHaveLength(1));
@@ -332,6 +405,48 @@ describe("la audiencia dirigida avisa antes de que salga un aviso sin destino", 
 		submit();
 		await waitFor(() => expect(posts(calls)).toHaveLength(1));
 		expect(posts(calls)[0]?.body).not.toHaveProperty("user_ids");
+	});
+});
+
+/** El `role` del recuadro que contiene un aviso, por su título. */
+async function rolDelAviso(titulo: string): Promise<string | null> {
+	const encontrado = await screen.findByText(titulo);
+	return encontrado.parentElement?.getAttribute("role") ?? null;
+}
+
+// Minor 5: solo la audiencia que no llega interrumpe (asertivo). Las otras dos
+// son `status`. Si las tres volvieran a `alert`, el operador se habitúa a ignorar
+// los avisos del drawer —y el único que decide qué hace se pierde con ellos.
+describe("la asertividad de los tres avisos", () => {
+	test("el de negocios es alert; los otros dos son status", async () => {
+		const calls = stubApi({
+			obligatorios: [obligatorioActivo],
+			negocios: [{ id: NEGOCIO_ID, name: "Panadería Sur" }],
+		});
+		renderForm();
+		completar();
+
+		// `required` con otro activo: este aviso NO cambia lo que el operador
+		// publica, así que no interrumpe.
+		await elegir("Severidad", "Obligatorio");
+		expect(await rolDelAviso("Este aviso se apila con otro obligatorio")).toBe(
+			"status",
+		);
+
+		// Sin audiencia: informa, no interrumpe.
+		await elegir("Audiencia", "Personas específicas");
+		expect(await rolDelAviso("Este aviso no tiene a quién llegar")).toBe(
+			"status",
+		);
+
+		// Con negocios: frena la publicación, y por eso interrumpe.
+		fireEvent.click(
+			await screen.findByRole("checkbox", { name: "Panadería Sur" }),
+		);
+		expect(await rolDelAviso("Los negocios que elegiste no lo van a ver")).toBe(
+			"alert",
+		);
+		expect(calls.every((c) => c.method === "GET")).toBe(true);
 	});
 });
 

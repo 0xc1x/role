@@ -21,6 +21,10 @@ export function ActionCell({ row }: { row: Row<AnnouncementDto> }) {
 			displayName={(a) => a.title}
 			editLabel="Editar aviso"
 			deleteTitle="¿Desactivar este aviso?"
+			// El `DELETE` de announcements es un soft delete (`active = false`), así
+			// que el verbo del menú —que venía hardcodeado como "Eliminar", en rojo
+			// destructivo— decía una cosa y el diálogo otra.
+			deleteVerb="Desactivar"
 			deleteDescription={(name) => (
 				<>
 					<span className="font-medium text-foreground">{name}</span> deja de

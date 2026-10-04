@@ -67,19 +67,46 @@ const AUDIENCE_OPTIONS = [
 const AVISO_SIN_DESTINO = "Este aviso no tiene a quién llegar";
 const AVISO_SIN_DESTINO_DETALLE =
 	"Un aviso para audiencia específica necesita al menos una consumidora o un negocio. El servidor rechaza la publicación con las dos listas vacías.";
-const AVISO_INVISIBLE = "Nadie va a ver este aviso";
-const AVISO_INVISIBLE_DETALLE =
-	"La regla de entrega solo reconoce a las personas de la lista de consumidoras: elegir únicamente negocios deja el aviso publicado y sin mostrarse en ninguna app. Es una limitación conocida y sin resolver.";
-const AVISO_INVISIBLE_AL_EDITAR =
-	"Si este aviso ya tenía consumidoras apuntadas, se conservan y sigue llegándoles: el panel no puede mostrarte esa lista.";
+
+/**
+ * EL NEGOCIO DE LA LISTA NO LLEGA, Y LAS PERSONAS GUARDADAS SIGUEN.
+ *
+ * La redacción dice exactamente eso, y no "nadie va a ver este aviso", porque
+ * sería FALSO en el caso más común. El service hace MERGE de la audiencia, no
+ * reemplazo: `body.user_ids ?? existing.user_ids` (`announcements.service.ts`),
+ * y el mapper solo escribe la lista que viene definida. Elegir negocios encima
+ * de una fila que ya tenía consumidoras NO las borra: sigue llegándoles.
+ *
+ * El escenario que obliga a的这 redacción: se publica un `specific` para Ana,
+ * días después se abre para corregir una errata y se eligen dos negocios
+ * creyendo que se agrega audiencia; con la redacción anterior el panel
+ * obligaba a acknowledgear que nadie lo vería, y Ana lo seguía viendo. Un aviso
+ * cuyo trabajo es que el operador no publique algo que no llega no puede
+ * afirmar que algo no llega cuando sí.
+ *
+ * Y el aviso se 特特FICA por lista, no por fila: la policy de select solo mira
+ * `user_ids @> array[auth.uid()]`, así que de los negocios elegidos no lee
+ * nadie. Esa parte sigue sin resolverse —la migración sellada difiere la
+ * salida a propósito— y por eso el aviso sigue ahí, diciendo la verdad.
+ */
+const AVISO_NEGOCIOS_NO_ENTREGAN = "Los negocios que elegiste no lo van a ver";
+const AVISO_NEGOCIOS_NO_ENTREGAN_ALTA =
+	"La regla de entrega solo reconoce a las personas de la lista de consumidoras. Elegir únicamente negocios deja el aviso publicado y sin mostrarse en ninguna app: es una limitación conocida y sin resolver.";
+const AVISO_NEGOCIOS_NO_ENTREGAN_AL_EDITAR =
+	"La regla de entrega solo reconoce a las personas de la lista de consumidoras, así que de los negocios que agregaste no lee nadie. Si este aviso ya tenía consumidoras apuntadas, SEGUEN RECIBIÉNDOLO: el panel no puede mostrarte esa lista, pero no la borra al guardar.";
+
+/** Lo que se acknowledgea: el alcance del aviso, no un "nadie lo ve". */
+const CONFIRMAR_NEGOCIOS =
+	"Entiendo que los negocios de esta lista no van a ver este aviso";
+const CONFIRMAR_NEGOCIOS_AL_EDITAR =
+	"Entiendo que los negocios que agregué no lo van a ver, y que las personas que ya estaban apuntadas lo siguen recibiendo";
+const ERROR_CONFIRMAR_NEGOCIOS =
+	"Confirmá que sabés a quién no le va a llegar este aviso antes de publicarlo.";
+
 const AVISO_AUDIENCIA_OCULTA = "La audiencia de este aviso no se puede mostrar";
 const AVISO_AUDIENCIA_OCULTA_DETALLE =
-	"La lista de consumidoras y la de negocios no vienen en la lectura, a propósito. Si elegís a alguien, se reemplaza la lista guardada; si guardás sin elegir a nadie, se conserva.";
+	"La lista de consumidoras y la de negocios no vienen en la lectura, a propósito. Si elegís a alguien se AGREGAN a la lista guardada —no la reemplazan—; si guardás sin elegir a nadie, se conserva la que ya estaba.";
 const AVISO_APILADO = "Este aviso se apila con otro obligatorio";
-const CONFIRMAR_INVISIBLE =
-	"Entiendo que este aviso se publica y no lo va a ver nadie";
-const ERROR_CONFIRMAR_INVISIBLE =
-	"Confirmá que sabés que este aviso no lo va a ver nadie antes de publicarlo.";
 
 type AnnouncementFormValues = z.input<typeof CreateAnnouncementSchema>;
 
@@ -97,12 +124,15 @@ interface AnnouncementFormProps {
 interface AvisoDeAudiencia {
 	titulo: string | null;
 	detalle: string;
+	/** El texto de la casilla que hay que marcar antes de publicar. */
+	confirmacion: string;
 	requiereConfirmacion: boolean;
 }
 
 const SIN_AVISO_DE_AUDIENCIA: AvisoDeAudiencia = {
 	titulo: null,
 	detalle: "",
+	confirmacion: "",
 	requiereConfirmacion: false,
 };
 
@@ -117,10 +147,14 @@ function avisoDeAudiencia(
 
 	if (businessIds.length > 0) {
 		return {
-			titulo: AVISO_INVISIBLE,
+			titulo: AVISO_NEGOCIOS_NO_ENTREGAN,
+			// El texto cambia con el alta y la edición porque el hecho es distinto:
+			// en el alta la lista guardada está vacía y el aviso no lo ve nadie;
+			// en la edición puede haber personas que lo siguen recibiendo.
 			detalle: isNew
-				? AVISO_INVISIBLE_DETALLE
-				: `${AVISO_INVISIBLE_DETALLE} ${AVISO_INVISIBLE_AL_EDITAR}`,
+				? AVISO_NEGOCIOS_NO_ENTREGAN_ALTA
+				: AVISO_NEGOCIOS_NO_ENTREGAN_AL_EDITAR,
+			confirmacion: isNew ? CONFIRMAR_NEGOCIOS : CONFIRMAR_NEGOCIOS_AL_EDITAR,
 			requiereConfirmacion: true,
 		};
 	}
@@ -130,6 +164,7 @@ function avisoDeAudiencia(
 	return {
 		titulo: isNew ? AVISO_SIN_DESTINO : AVISO_AUDIENCIA_OCULTA,
 		detalle: isNew ? AVISO_SIN_DESTINO_DETALLE : AVISO_AUDIENCIA_OCULTA_DETALLE,
+		confirmacion: "",
 		requiereConfirmacion: false,
 	};
 }
@@ -149,9 +184,18 @@ function avisoDeApilado(otros: number): string {
 }
 
 /**
- * `role="alert"` en los tres: son las tres cosas que el operador tiene que ver
- * ANTES de publicar, y un aviso que aparece por debajo del pliegue del drawer no
- * se lee.
+ * Las tres son cosas que el operador tiene que ver ANTES de publicar, y un aviso
+ * que aparece por debajo del pliegue del drawer no se lee — por eso las tres son
+ * live regions. Lo que cambia con `alerta` es la ASERTIVIDAD, no el estilo:
+ *
+ *  - `role="alert"` (asertivo, interrumpe) solo para la audiencia que no llega.
+ *    Es la única que cambia lo que el operador va a hacer: sin confirmar, no se
+ *    publica.
+ *  - `role="status"` (polite, espera su turno) para las otras dos. El aviso de
+ *    que falta audiencia y el de `required` apilado son información que se lee
+ *    cuando se llega; interrumpir la lectura de pantalla con ellos por el solo
+ *    hecho de abrir el drawer es hacer que el operador se habitúe a ignorar los
+ *    avisos, que es justo lo que vuelve inútil el único que importa.
  */
 function Notice({
 	titulo,
@@ -164,7 +208,7 @@ function Notice({
 }) {
 	return (
 		<div
-			role="alert"
+			role={alerta ? "alert" : "status"}
 			className={
 				alerta
 					? "rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"
@@ -288,7 +332,7 @@ export function AnnouncementForm({
 				!announcement,
 			);
 			if (aviso.requiereConfirmacion && !confirmado) {
-				setErrorDeAudiencia(ERROR_CONFIRMAR_INVISIBLE);
+				setErrorDeAudiencia(ERROR_CONFIRMAR_NEGOCIOS);
 				return;
 			}
 			setErrorDeAudiencia(null);
@@ -557,11 +601,18 @@ export function AnnouncementForm({
 						<div className="flex items-start gap-2 text-sm">
 							<Checkbox
 								checked={confirmado}
-								onCheckedChange={(checked) => setConfirmado(checked === true)}
-								aria-label={CONFIRMAR_INVISIBLE}
+								onCheckedChange={(checked) => {
+									setConfirmado(checked === true);
+									// El error de "falta confirmar" se borra al marcar, no
+									// cuando cambia la audiencia: si no, queda un `FieldError`
+									// rojo al lado de una casilla ya marcada, y el operador
+									// ve que la confirmación "no took".
+									if (checked === true) setErrorDeAudiencia(null);
+								}}
+								aria-label={aviso.confirmacion}
 								className="mt-0.5"
 							/>
-							<span>{CONFIRMAR_INVISIBLE}</span>
+							<span>{aviso.confirmacion}</span>
 						</div>
 					) : null}
 
