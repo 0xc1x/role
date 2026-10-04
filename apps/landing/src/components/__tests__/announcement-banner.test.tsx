@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import type { Announcement } from "@0xc1x/role-commons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
-import { useAnnouncements } from "@/lib/use-announcements";
+import {
+	type AnnouncementsResult,
+	ensureAnnouncements,
+	useAnnouncements,
+} from "@/lib/use-announcements";
 import { cleanup, render, screen, waitFor } from "@/test-utils/dom";
 import { AnnouncementBanner } from "../announcement-banner";
 
@@ -39,10 +43,35 @@ function aviso(over: Partial<Announcement> = {}): Announcement {
 /**
  * El cuerpo que rompe: `<script>`, una etiqueta de formato, un `img` con
  * `onerror` y un `javascript:`. Los cuatro juntos, porque cada uno falla por su
- * cuenta: `marked()` interprets los dos últimos y no el primero.
+ * cuenta: `marked()` interpreta los dos últimos y deja el primero como texto.
  */
 const CUERPO_HOSTIL =
 	'<script>alert(1)</script> y <b>negrita</b> con <img src=x onerror="alert(2)"> y <a href="javascript:alert(3)">enlace</a>';
+
+/**
+ * El mismo aviso con `body` y `title` triviales.
+ *
+ * Sirve para dos cosas, y las dos son comparaciones: el inventario de etiquetas
+ * de la banda no puede cambiar por lo que el operador escribió, y el texto que
+ * se ve tiene que ser el suyo.
+ */
+const CUERPO_BENIGNO = "El servicio vuelve a las 23:00.";
+
+/** Las etiquetas que abre la banda, en el orden en que las abre. */
+function inventarioDeEtiquetas(html: string): string[] {
+	return [...html.matchAll(/<([a-z][a-z0-9]*)\b/gi)].map(
+		(m) => m[1]?.toLowerCase() ?? "",
+	);
+}
+
+/** Cuántas veces aparece `html`, en orden de aparición, para un diff estable. */
+function conteoDeEtiquetas(html: string): Record<string, number> {
+	const conteo: Record<string, number> = {};
+	for (const tag of inventarioDeEtiquetas(html)) {
+		conteo[tag] = (conteo[tag] ?? 0) + 1;
+	}
+	return conteo;
+}
 
 function banda(announcements: readonly Announcement[]): string {
 	return renderToStaticMarkup(
@@ -50,12 +79,30 @@ function banda(announcements: readonly Announcement[]): string {
 	);
 }
 
+/**
+ * Lo mismo que `LandingPage` de `routes/index.tsx`, sin el router: el hook con
+ * el `delServidor` del loader, el atributo en el `<main>` y la banda adentro.
+ *
+ * Vive a nivel de archivo y no dentro de un `describe` porque lo usan dos
+ * bloques con renderizadores distintos: el del cliente, que monta con `render` y
+ * espera, y el de SSR, que va con `renderToStaticMarkup` y no espera nada.
+ */
+function Main({ delServidor }: { delServidor: AnnouncementsResult }) {
+	const avisos = useAnnouncements(delServidor);
+	return (
+		<main id="main" data-announcements-source={avisos.source}>
+			<AnnouncementBanner announcements={avisos.data ?? []} />
+			<p>Únete a Rolé hoy mismo</p>
+		</main>
+	);
+}
+
 // Un `cleanup()` por test, a nivel de archivo, y no por `describe`: varias de
-// estas aserciones affirmedan AUSENCIA sobre `document` entero —"no hay ningún
+// estas aserciones afirman AUSENCIA sobre el documento entero —"no hay ningún
 // `<dialog>`", "no hay ninguna región"— y un render del test anterior que quedó
 // en el documento las volvería rojas por un motivo que no es del código bajo
 // prueba. Con `bun test --isolate` el proceso se renueva por archivo y el
-// forgets; en la suite completa no, y por eso el cleanup es explícito.
+// olvido no se nota; en la suite completa no, y por eso el cleanup es explícito.
 afterEach(() => {
 	cleanup();
 });
@@ -126,8 +173,47 @@ describe("el body del operador es TEXTO, no HTML", () => {
 		const cuerpo = screen.getByText(cuerpoMaximo, { exact: true });
 		expect(cuerpo.textContent).toBe(cuerpoMaximo);
 		expect(cuerpo.children.length).toBe(0);
-		expect(document.querySelector("b")).toBeNull();
-		expect(document.querySelector("script")).toBeNull();
+
+		// Acotado a la banda, no a `document`: el cuerpo más largo del contrato
+		// tampoco puede haber construido un elemento, y lo que se afirma es sobre
+		// lo que este render pintó.
+		const painted = cuerpo.closest("section");
+		expect(painted?.querySelector("b")).toBeNull();
+		expect(painted?.querySelector("script")).toBeNull();
+	});
+
+	test("el inventario de etiquetas de la banda no depende de lo que escribió el operador", () => {
+		// LA FORMA QUE SOBREVIVE A `<svg onload>`.
+		//
+		// La forma obvia —`querySelector("svg") === null`— es un falso positivo
+		// garantizado: el icono `Megaphone` del propio componente ES un `<svg>`, así
+		// que esa aserción solo puede fallar, y cuando falló parece un hallazgo de
+		// seguridad en vez de un error del test.
+		//
+		// Lo que sí discrimina es un DIFF contra un render benigno: si lo que el
+		// operador escribió construyera elementos, el inventario cambiaría. Y el
+		// `<svg>` legitimo está en los dos lados, así que no interfiere. La lista
+		// explícita es la segunda mitad: dice qué elementos son los de la banda,
+		// para que un icono nuevo no se cuele sin que alguien lo decida.
+		const hostil = banda([
+			aviso({ body: CUERPO_HOSTIL, title: "<i>título</i>" }),
+		]);
+		const benigno = banda([aviso({ body: CUERPO_BENIGNO })]);
+
+		expect(conteoDeEtiquetas(hostil)).toEqual(conteoDeEtiquetas(benigno));
+		expect(inventarioDeEtiquetas(benigno)).toEqual([
+			"section",
+			"div",
+			"span",
+			"svg",
+			"path",
+			"path",
+			"path",
+			"ul",
+			"li",
+			"p",
+			"p",
+		]);
 	});
 });
 
@@ -136,17 +222,20 @@ describe("la banda va en el flujo, y el banner no decide", () => {
 		render(<AnnouncementBanner announcements={[aviso()]} />);
 
 		const region = screen.getByRole("region", { name: "Avisos de Rolé" });
-
 		// Un `fixed`/`absolute` con `z-[60]` es la forma del banner de cookies, y
 		// es exactamente la que taparía el CTA de suscripción. Por eso se mira la
 		// clase y no "se ve bien".
 		expect(region.className).not.toMatch(/\b(fixed|absolute|sticky)\b/);
 		expect(region.className).not.toContain("z-[");
 
-		expect(document.querySelector("[role='dialog']")).toBeNull();
-		expect(document.querySelector("dialog")).toBeNull();
-		expect(document.querySelector("button")).toBeNull();
-		expect(document.querySelector("form")).toBeNull();
+		// Acotado a la banda: un `dialog` o un `<button>` de otro render no
+		// convierten ESTA banda en un overlay. `document` entero daría la
+		// respuesta más débil de las dos, porque el fuerte es "no hay control
+		// dentro de la banda".
+		expect(region.querySelector("[role='dialog']")).toBeNull();
+		expect(region.querySelector("dialog")).toBeNull();
+		expect(region.querySelector("button")).toBeNull();
+		expect(region.querySelector("form")).toBeNull();
 	});
 
 	test("sin avisos no hay banda: ni una franja en blanco arriba de todo", () => {
@@ -154,6 +243,8 @@ describe("la banda va en el flujo, y el banner no decide", () => {
 
 		render(<AnnouncementBanner announcements={[]} />);
 		expect(screen.queryByRole("region")).toBeNull();
+		// El `body` entero acá sí es el alcance correcto: el componente tiene que
+		// no haber pintado NADA, y el único render vivo es este.
 		expect(document.body.innerHTML).not.toContain("Avisos de Rolé");
 	});
 
@@ -219,24 +310,17 @@ describe("una API caída no se come la página", () => {
 		}) as unknown as typeof fetch;
 	}
 
-	/** Lo mismo que `LandingPage` de `routes/index.tsx`, sin el router. */
-	function Main() {
-		const avisos = useAnnouncements();
-		return (
-			<main id="main" data-announcements-source={avisos.source}>
-				<AnnouncementBanner announcements={avisos.data ?? []} />
-				<p>Únete a Rolé hoy mismo</p>
-			</main>
-		);
-	}
-
-	function montar(): HTMLElement {
+	/**
+	 * Lo mismo que `LandingPage` de `routes/index.tsx`, sin el router: el hook
+	 * con el `delServidor` del loader y el atributo en el `<main>`.
+	 */
+	function montar(delServidor: AnnouncementsResult): HTMLElement {
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { retry: false } },
 		});
 		const { container } = render(
 			<QueryClientProvider client={queryClient}>
-				<Main />
+				<Main delServidor={delServidor} />
 			</QueryClientProvider>,
 		);
 		return container;
@@ -245,7 +329,7 @@ describe("una API caída no se come la página", () => {
 	test("la API responde y el aviso se pinta, con la fuente auditada", async () => {
 		stubFetch(200, [aviso()]);
 
-		const container = montar();
+		const container = montar({ data: undefined, source: "failed" });
 
 		await waitFor(() =>
 			expect(container.querySelector("main")?.dataset.announcementsSource).toBe(
@@ -258,7 +342,7 @@ describe("una API caída no se come la página", () => {
 	test("un 500 deja la página en pie, sin banda y con el fallo declarado", async () => {
 		stubFetch(503, { message: "No se pudieron obtener los anuncios" });
 
-		const container = montar();
+		const container = montar({ data: undefined, source: "failed" });
 
 		// El fallo se DECLARA: sin `failed` en el markup, "no hay avisos" y "la
 		// API está caída" serían la misma página y el incidente no se vería.
@@ -279,7 +363,7 @@ describe("una API caída no se come la página", () => {
 		// es un fallo declarado, que es lo que un dato que no coincide merece.
 		stubFetch(200, [{ ...BASE, severity: "urgente" }]);
 
-		const container = montar();
+		const container = montar({ data: undefined, source: "failed" });
 
 		await waitFor(() =>
 			expect(container.querySelector("main")?.dataset.announcementsSource).toBe(
@@ -287,6 +371,115 @@ describe("una API caída no se come la página", () => {
 			),
 		);
 		expect(screen.queryByRole("region")).toBeNull();
+	});
+
+	test("mientras el observer carga, se conserva el aviso del loader, sin parpadeo", async () => {
+		// El caso sano: el loader resolvió con avisos y el observer todavía no
+		// tiene nada. El aviso del HTML servido no puede desaparecer un frame
+		// mientras la propia consulta del navegador responde.
+		const servidos = [aviso()];
+		let liberar: () => void = () => {};
+		globalThis.fetch = (async (input: unknown) => {
+			if (String(input).includes("/announcements")) {
+				await new Promise<void>((resolve) => {
+					liberar = resolve;
+				});
+			}
+			return new Response("[]", {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}) as unknown as typeof fetch;
+
+		const container = montar({ data: servidos, source: "api" });
+
+		expect(container.querySelector("main")?.dataset.announcementsSource).toBe(
+			"api",
+		);
+		expect(container.textContent).toContain("Mantenimiento esta noche");
+		liberar();
+	});
+});
+
+describe("el source que se PUBLICA es el del loader, no el del observer", () => {
+	// ─── POR QUÉ ESTE CASO VIVE AQUÍ Y NO EN EL DE ARRIBA ───────────────────────
+	//
+	// Los tests de arriba assertan con `waitFor`: corren en el CLIENTE, donde la
+	// petición resuelve y el observer termina diciendo la verdad. El HTML que ve
+	// un crawler es otro render —el del servidor— y ahí el observer NO tiene
+	// tiempo de resolver.
+	//
+	// `renderToStaticMarkup` es exactamente ese render: no corre effects, así que
+	// el observer devuelve su resultado OPTIMISTA, que es lo que sale del server.
+	// Por eso estos tests no esperan nada.
+	//
+	// Lo que se mide acá es el hallazgo de la review: con la query en error, el
+	// observer decía `loading` y el atributo publicaba `loading`, mientras la
+	// caché decía `error`. La caché sigue diciendo `error`; lo que cambió es de
+	// dónde sale el valor publicado.
+	const previousFetch = globalThis.fetch;
+
+	afterEach(() => {
+		globalThis.fetch = previousFetch;
+	});
+
+	/** Prende el error en la caché, como lo deja `ensureAnnouncements`. */
+	async function cacheConError(): Promise<QueryClient> {
+		globalThis.fetch = (async () => {
+			throw new Error("sin red");
+		}) as unknown as typeof fetch;
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		await ensureAnnouncements(queryClient);
+		return queryClient;
+	}
+
+	/** Un fetch que no resuelve nunca: el observer queda en su resultado optimista. */
+	function fetchColgado() {
+		globalThis.fetch = (async () =>
+			await new Promise<Response>(() => {})) as unknown as typeof fetch;
+	}
+
+	function served(queryClient: QueryClient, delServidor: AnnouncementsResult) {
+		return renderToStaticMarkup(
+			<QueryClientProvider client={queryClient}>
+				<Main delServidor={delServidor} />
+			</QueryClientProvider>,
+		);
+	}
+
+	test("con la API caída el HTML servido declara `failed`, nunca `loading`", async () => {
+		const queryClient = await cacheConError();
+		fetchColgado();
+
+		const html = served(queryClient, { data: undefined, source: "failed" });
+
+		// Lo que la review midió en el servidor real con un 503.
+		expect(html).toContain('data-announcements-source="failed"');
+		expect(html).not.toContain('data-announcements-source="loading"');
+		// Y la landing entera sigue ahí: esto es un sitio de marketing.
+		expect(html).toContain("Únete a Rolé hoy mismo");
+		expect(html).not.toContain("Avisos de Rolé");
+	});
+
+	test("con la API sana el HTML servido sale del loader y lleva el aviso escapado", async () => {
+		// La ruta por la que un CRAWLER recibe el aviso: render de servidor, caché
+		// del observer vacía, valor del loader. El atributo tiene que decir `api` y
+		// el body del operador tiene que salir como texto.
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		fetchColgado();
+
+		const html = served(queryClient, {
+			data: [aviso({ body: CUERPO_HOSTIL })],
+			source: "api",
+		});
+
+		expect(html).toContain('data-announcements-source="api"');
+		expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+		expect(html).not.toContain("<script>alert");
 	});
 });
 
@@ -316,6 +509,25 @@ describe("el montaje en la landing", () => {
 		// pelado sí, y un 500 de la API de avisos se convertiría en el error de
 		// la landing entera.
 		expect(cuerpoLoader).toContain("ensureAnnouncements(context.queryClient)");
+		expect(cuerpoLoader).toContain("return { announcements }");
 		expect(ruta).toContain("data-announcements-source={avisos.source}");
+	});
+
+	test("el `source` publicado sale del LOADER, no de un observer recalculado", () => {
+		// El hallazgo de la review: `LandingPage` recalculaba el `source` con un
+		// `useQuery` propio, así que el render del servidor publicaba siempre
+		// `loading` — el resultado optimista de `@tanstack/query-core` pone
+		// `pending` siempre que no haya `data`, aunque la caché esté en `error`.
+		// Con la API en 503 el HTML servido decía `loading` y el incidente quedaba
+		// indistinguible de "la API está lenta".
+		//
+		// Esta aserción es de cableado, y el comportamiento está en el `describe` de
+		// arriba, que renderiza el hook con `renderToStaticMarkup`. Acá se fija que
+		// la ruta pase el resultado del loader al hook: sin eso, el hook puede estar
+		// perfecto y el valor no llegar al markup.
+		expect(ruta).toContain(
+			"useAnnouncements(Route.useLoaderData().announcements)",
+		);
+		expect(ruta).not.toMatch(/useAnnouncements\(\s*\)/);
 	});
 });

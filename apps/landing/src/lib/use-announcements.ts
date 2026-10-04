@@ -3,10 +3,12 @@
  *
  * Vive en su propio archivo y no en `use-config.ts` a propósito: ese ya mezcla
  * configuración y métricas, y un tercer dato sin relación con ninguno de los dos
- * lo vuelve un cajón de sastre. El patrón que se sigue —el loader que degrada a
- * `failed` en vez de romper el render, y el hook con tres estados— sí es el de
- * `use-config.ts`, y está copiado de ahí a propósito, para que las dos lecturas
- * se reconozcan.
+ * lo vuelve un cajón de sastre. La FORMA se sigue de ahí —el loader que degrada
+ * a `failed` en vez de romper el render, y el mismo vocabulario de `source`—
+ * porque dos lecturas que se parecen se mantienen solas. Lo que NO se copia es
+ * el sitio donde se lee el valor: `usePlatformStats` recalcula su `source` en
+ * un observer y por eso el HTML servido de la landing nunca puede llevar
+ * `failed`; acá el del loader viaja hasta el markup. Ver `useAnnouncements`.
  *
  * NO se decide acá a quién le toca un aviso, ni si está vigente, ni si es
  * `required`. Eso es la policy de Supabase, entera, y este archivo no puede
@@ -32,9 +34,10 @@ import { announcementsQueryOptions } from "./queries";
  * "no hay ningún aviso publicado" y "la API de anuncios está caída" se pintan
  * exactamente igual, que es **no pintar nada**. El servicio de la API lo dice
  * explícitamente —no devuelve `[]` en el fallo *porque el banner del landing se
- * come el incidente*—, así que del lado del cliente el `source` es lo que
- * devuelve esa distinción. Viaja al markup como `data-announcements-source` en
- * el `<main>` de la landing.
+ * come el incidente*—, así que el `source` es lo que devuelve esa distinción.
+ * Viaja al markup como `data-announcements-source` en el `<main>` de la landing,
+ * y sale de los dos lados: del loader en el render del servidor, del observer en
+ * el del cliente.
  *
  * Los tres NOMBRES son los mismos que usa `PlatformStatsSource`, a propósito:
  * son un vocabulario de la casa y una lectura nueva no debería tener que
@@ -62,9 +65,11 @@ export interface AnnouncementsResult {
  * que haría una lista vacía, y el `<main>` las publica para que el incidente se
  * pueda auditar desde el HTML servido.
  *
- * No distingue `loading` porque para un loader ese estado no existe: `await`
- * resuelve o lanza, nunca "todavía no". Esa es también la garantía de que el
- * HTML servido nunca lleva `loading`.
+ * Lo que este valor NO puede es omitirse: `loading` no existe acá, porque
+ * `await` resuelve o lanza, nunca "todavía no". Y esa mitad —"el loader nunca
+ * dice `loading`"— es lo único que este archivo sabe del estado servido. Ver
+ * `useAnnouncements` para por qué el hook no alcanza y por qué se le pasa este
+ * resultado.
  */
 export async function ensureAnnouncements(
 	queryClient: QueryClient,
@@ -73,24 +78,77 @@ export async function ensureAnnouncements(
 		const data = await queryClient.ensureQueryData(announcementsQueryOptions);
 		return { data, source: "api" };
 	} catch {
-		// MUTACION: degradar a lista vacia en vez de declarar el fallo.
 		return { data: undefined, source: "failed" };
 	}
 }
 
 /**
- * Los mismos avisos y el mismo discriminador, del lado del cliente.
+ * Los avisos y su procedencia, para el render.
  *
- * El valor sale de la caché que el loader primedó, así que el atributo coincide
- * con el del HTML servido y se corrige solo cuando una reconsulta posterior sí
- * trae avisos.
+ * `delServidor` es el resultado de `ensureAnnouncements` en el loader de la
+ * ruta, y es OBLIGATORIO. No por firma: porque el hook solo, con un
+ * `useQuery(announcementsQueryOptions)`, **no puede** decir `"failed"` en el
+ * render del server, y esa es la mitad del atributo que se publica.
+ *
+ * ─── POR QUÉ EL OBSERVER NO ALCANZA EN SSR, MEDIDO ─────────────────────────────
+ *
+ * Medido contra el servidor real, con `/announcements` en 503 y una sonda
+ * temporal en el markup:
+ *
+ *     [PROBE] source=loading  data=undefined
+ *     caché: { status: "error", fetchStatus: "idle", errorUpdateCount: 1 }
+ *
+ * La caché dice `error` y el hook dice `loading`. No es un artefacto de `retry`
+ * (con `retry: false` da idéntico) ni del `staleTime`. La causa está en
+ * `@tanstack/query-core`, `QueryObserver#createResult`: cuando las opciones
+ * llevan `_optimisticResults`, que es lo que `useBaseQuery` arma al montar un
+ * observer, la rama optimista corre
+ *
+ *     newState = { ...newState, ...fetchState(state.data, query.options) }
+ *
+ * si `shouldFetchOnMount` dice que hay que traer datos — y dice que sí siempre
+ * que `data === undefined`, incluso con la query en error. `fetchState` pone
+ * `status: "pending"` y `fetchStatus: "fetching"`. En SSR los effects no corren,
+ * así que ese resultado optimista es el único que sale, y con `data` en
+ * `undefined` la regla de tres estados no tiene de dónde sacar otra cosa.
+ *
+ * ─── QUÉ HACE ESTE HOOK CON ESA MITAD ─────────────────────────────────────────
+ *
+ * "El loader dice una cosa y el observer la recalcula" es exactamente el
+ * patrón que `use-config.ts` tiene y que quedó pendiente de arreglar para las
+ * stats (`data-stats-source`); acá se hace bien y no se copia el defecto.
+ *
+ * La regla es una sola: mientras el observer no tenga respuesta, contesta el
+ * loader; en cuanto la tenga, contesta el observer. Los cuatro casos, medidos
+ * contra el mismo servidor:
+ *
+ *   | server        | observer      | publicado |
+ *   |---------------|---------------|-----------|
+ *   | `api`         | `api`         | `api`     |
+ *   | `failed`      | `loading`     | `failed`  | ← el que se estaba perdiendo
+ *   | `api`, cliente reintenta y falla | `failed` | `failed`  |
+ *   | `api`, cliente reintenta y funciona | `api` | `api`  |
+ *
+ * El tercero importa: si el fallo del cliente se tapara con el valor del loader,
+ * un incidente de red posterior al render nunca se publicaría.
+ *
+ * Y el caso sano no parpadea: en el cliente la caché arranca VACÍA —el SSR no
+ * se deshidrata en el payload, `fixtures.ts` lo verificó—, así que el primer
+ * render del navegador también está en `loading` y devuelve el `data` del
+ * loader. El aviso que estaba en el HTML servido sigue en pantalla hasta que la
+ * consulta del propio cliente responde, en vez de desaparecer un frame.
  */
-export function useAnnouncements(): AnnouncementsResult {
+export function useAnnouncements(
+	delServidor: AnnouncementsResult,
+): AnnouncementsResult {
 	const { data, status } = useQuery(announcementsQueryOptions);
 	// `data` primero: una query que ya trae avisos y está revalidando sigue siendo
 	// `api`. Sin datos, el estado de la query es lo que separa "todavía no" de "no
 	// va a venir".
-	const source: AnnouncementsSource =
-		data !== undefined ? "api" : status === "pending" ? "loading" : "failed";
-	return { data, source };
+	const delCliente: AnnouncementsResult = {
+		data,
+		source:
+			data !== undefined ? "api" : status === "pending" ? "loading" : "failed",
+	};
+	return delCliente.source === "loading" ? delServidor : delCliente;
 }

@@ -37,8 +37,16 @@ export const Route = createFileRoute("/")({
 	// impide que un 500 de la API de anuncios se convierta en el error de la
 	// landing entera. Un aviso que falta es una molestia; una página que no se
 	// pinta es el final del negocio que esta página existe para conseguir.
-	loader: ({ context }) =>
-		Promise.all([
+	//
+	// El loader devuelve el resultado de los avisos CON NOMBRE, y no la tupla del
+	// `Promise.all`: `LandingPage` lo necesita leer, y leerlo por posición —la
+	// segunda de cuatro— es un acoplamiento que un `Promise.all` reordenado rompe
+	// en silencio. El de las stats se sigue descartando: `usePlatformStats` lo
+	// recalcula en su observer, así que devolverlo no cambiaría el HTML servido.
+	// Es el mismo patrón que `usePlatformStats` tiene y que quedó pendiente para
+	// `data-stats-source`; ver `use-announcements.ts`.
+	loader: async ({ context }) => {
+		const [, announcements] = await Promise.all([
 			ensurePlatformStats(context.queryClient),
 			ensureAnnouncements(context.queryClient),
 			context.queryClient
@@ -47,7 +55,9 @@ export const Route = createFileRoute("/")({
 			context.queryClient
 				.ensureQueryData(randomOfferQueryOptions)
 				.catch(() => undefined),
-		]),
+		]);
+		return { announcements };
+	},
 	head: () => ({
 		...pageHead(
 			"/",
@@ -61,7 +71,14 @@ export const Route = createFileRoute("/")({
 });
 
 function LandingPage() {
-	const avisos = useAnnouncements();
+	// El `source` se PUBLICA con el del loader mientras el observer no tenga
+	// respuesta propia, y no al revés. La versión anterior —recalcularlo acá—
+	// servía `loading` en el render del servidor, siempre: el resultado
+	// optimista de `@tanstack/query-core` pone `pending` siempre que no haya
+	// `data`, aunque la caché esté en `error`. Medido con `/announcements` en
+	// 503: la caché decía `error` y el atributo decía `loading`. Ver
+	// `use-announcements.ts` para el mecanismo y la tabla de los cuatro casos.
+	const avisos = useAnnouncements(Route.useLoaderData().announcements);
 
 	return (
 		<div className="min-h-screen">
