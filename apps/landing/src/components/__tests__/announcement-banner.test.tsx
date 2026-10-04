@@ -73,12 +73,16 @@ describe("el body del operador es TEXTO, no HTML", () => {
 		expect(cuerpo.textContent).toBe(CUERPO_HOSTIL);
 
 		// Y la ausencia, que es la garantía real: no hay NINGÚN elemento.
-		const painted = cuerpo.closest("[role='region']") ?? document.body;
-		expect(painted.querySelector("script")).toBeNull();
-		expect(painted.querySelector("b")).toBeNull();
-		expect(painted.querySelector("img")).toBeNull();
-		expect(painted.querySelector("a")).toBeNull();
-		expect(painted.innerHTML).not.toContain("<script");
+		// `section`, el elemento del componente. La búsqueda se acota a la banda
+		// y no a `document`: si el `body` tuviera algo de otro render, la ausencia
+		// que se afirma sería de otra cosa.
+		const painted = cuerpo.closest("section");
+		expect(painted).not.toBeNull();
+		expect(painted?.querySelector("script")).toBeNull();
+		expect(painted?.querySelector("b")).toBeNull();
+		expect(painted?.querySelector("img")).toBeNull();
+		expect(painted?.querySelector("a")).toBeNull();
+		expect(painted?.innerHTML).not.toContain("<script");
 	});
 
 	test("el HTML servido lleva el cuerpo escapado, no el elemento", () => {
