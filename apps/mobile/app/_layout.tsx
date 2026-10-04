@@ -56,6 +56,12 @@ import { analytics } from "@/src/core/analytics";
 import { appConfigQueryOptions } from "@/src/features/config";
 import { useAuthStore, watchAuthState } from "@/src/features/auth/store";
 import { syncAnalyticsConsent } from "@/src/features/auth/data/repository";
+import {
+	AnnouncementDialog,
+	firstPendingModal,
+	modalIdentity,
+	useAnnouncementModals,
+} from "@/src/features/announcements";
 import { pendingBusinessOnboardingRepository } from "@/src/features/business/data/onboarding";
 import {
 	initNotificationHandler,
@@ -236,12 +242,56 @@ function RootLayout() {
 				<ThemeProvider onHydrated={() => setThemeReady(true)}>
 					<QueryClientProvider client={queryClient}>
 						<ThemedRootStack />
+						<AnnouncementModals />
 						<Toaster />
 					</QueryClientProvider>
 					<PortalHost />
 				</ThemeProvider>
 			</GestureHandlerRootView>
 		</Sentry.ErrorBoundary>
+	);
+}
+
+// ─── Avisos del operador ─────────────────────────────────────────────────────
+//
+// POR QUÉ ESTÁ ACÁ Y NO EN UNA RUTA: una pila de avisos no es "una pantalla".
+// Montarlo en el layout es lo que garantiza que el aviso se vea desde la
+// PRIMERA pantalla, sin importar a cuál entre la persona: si fuera una ruta, el
+// gesto de atrás del sistema cerraría algo que no está en el stack de
+// navegación, y además habría que esperar a que el router resolviera cuál es la
+// ruta inicial para poder mostrar el primer aviso —que es justamente el momento
+// en que la persona está mirando.
+//
+// UNA CONSULTA POR ARRANQUE, no por pantalla: el hook lo resuelve con su
+// `initialized` y su `staleTime`, y el layout es lo que hace que se monte una
+// sola vez. Montarlo en cada pantalla sería una lectura por navegación, y una
+// lectura por navegación es la forma de que un `required` aparezca a mitad de un
+// checkout.
+//
+// Solo se pinta el PRIMER modal de la cola. Los `required` van de a uno y
+// primero, y el lote de `info` va al final, así que el orden de la cola ES el
+// orden en que la persona los atraviesa: cada acknowledgement saca el suyo y el
+// siguiente aparece solo, sin un índice que este componente pueda desincronizar
+// de la cola. Un modal de `info` con paginación interna sigue siendo UN modal, no
+// uno por aviso.
+function AnnouncementModals() {
+	const { modals, acknowledge, dismissInfo } = useAnnouncementModals();
+	// El primero de la cola, y no un índice que este componente avance: el
+	// acknowledgement saca el suyo y el siguiente aparece solo, así que no hay
+	// puntero que pueda desincronizarse de la cola y saltearse un `required`.
+	const modal = firstPendingModal(modals);
+	if (!modal) return null;
+	return (
+		<AnnouncementDialog
+			// La `key` es la identidad del modal, no su posición: el dialog tiene
+			// estado interno —la página del lote y el "escondido sin resolver" del
+			// `required`—, y con la key por índice, sacar el primer aviso de la cola
+			// reutilizaría el nodo del anterior con el estado del anterior.
+			key={modalIdentity(modal)}
+			modal={modal}
+			onAcknowledge={acknowledge}
+			onDismissInfo={dismissInfo}
+		/>
 	);
 }
 

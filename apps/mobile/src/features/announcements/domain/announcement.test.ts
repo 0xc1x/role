@@ -5,6 +5,9 @@ import {
 	applyAcknowledgement,
 	applyLocalDismissal,
 	buildModalSequence,
+	firstPendingModal,
+	modalIdentity,
+	type AnnouncementModal,
 } from "./announcement";
 
 // El agrupado decide qué avisos ve la persona, en qué orden y cuántos modales
@@ -421,5 +424,107 @@ describe("applyAcknowledgement: el required registrado sale de la secuencia", ()
 		const modals = applyAcknowledgement(secuencia, ID.tercero);
 
 		expect(idsOf(modals)).toEqual([ID.primero, [ID.segundo]]);
+	});
+});
+
+// El montaje: qué modal se abre y con qué identidad se monta. Son las dos
+// decisiones que el layout toma de la cola, y las dos tienen una forma de
+// fallar que `buildModalSequence` no puede ver.
+describe("el modal que se abre es el primero de la cola", () => {
+	const TRES = buildModalSequence(
+		[
+			aviso(ID.primero, "required"),
+			aviso(ID.segundo, "required"),
+			aviso(ID.tercero, "info"),
+		],
+		NADA,
+		NADA,
+	);
+
+	test("sin cola no hay modal", () => {
+		// La primera consulta de la app pasa por acá: el layout monta el
+		// componente antes de que la consulta haya dicho nada, y sin este `null`
+		// se abriría un modal vacío en cada arranque.
+		expect(firstPendingModal([])).toBeNull();
+	});
+
+	test("abre el required que va primero, no el lote", () => {
+		// El orden ya está decidido en la secuencia; recorrerla es respetarlo, no
+		// recalcularlo. Un `max` por priority acá abriría el lote de `info` primero
+		// si el `info` tuviera priority más alta.
+		const modal = firstPendingModal(TRES);
+
+		expect(modal?.kind).toBe("required");
+		expect(modal?.kind === "required" && modal.announcement.id).toBe(
+			ID.primero,
+		);
+	});
+
+	test("el lote de info se abre cuando ya no queda ningun required", () => {
+		// Es el último de la secuencia, y solo aparece si los dos `required` se
+		// entendieron. La cola nunca queda "a medias".
+		const cola = buildModalSequence(
+			[aviso(ID.primero, "required"), aviso(ID.tercero, "info")],
+			new Set([ID.primero]),
+			NADA,
+		);
+
+		expect(firstPendingModal(cola)?.kind).toBe("info");
+	});
+
+	test("entender el primero hace que el segundo sea el que se abre", () => {
+		// Sin un índice que se advanced a mano: la cola es la que avanza, y por eso
+		// no hay forma de saltarse el segundo. Si el layout llevara un puntero, acá
+		// seguiría mostrando el primero.
+		const modal = firstPendingModal(applyAcknowledgement(TRES, ID.primero));
+
+		expect(modal?.kind === "required" && modal.announcement.id).toBe(
+			ID.segundo,
+		);
+	});
+});
+
+describe("la identidad del modal es la del aviso, no la posicion", () => {
+	const REQ: AnnouncementModal = {
+		kind: "required",
+		announcement: aviso(ID.primero, "required"),
+	};
+	const REQ_2: AnnouncementModal = {
+		kind: "required",
+		announcement: aviso(ID.segundo, "required"),
+	};
+	const LOTE: AnnouncementModal = {
+		kind: "info",
+		announcements: [aviso(ID.tercero, "info"), aviso(ID.cuarto, "info")],
+	};
+
+	test("dos required distintos son dos identidades", () => {
+		// La `key` es lo que hace morir el estado interno del modal anterior. Con
+		// el índice —o con un id constante— React reutilizaría el nodo y el
+		// `required` que se cerró sin entender dejaría escondido al siguiente.
+		expect(modalIdentity(REQ)).not.toBe(modalIdentity(REQ_2));
+	});
+
+	test("un required y un lote nunca comparten identidad", () => {
+		expect(modalIdentity(REQ)).not.toBe(modalIdentity(LOTE));
+	});
+
+	test("la identidad del lote es la del primer aviso", () => {
+		// El caso que separa esto de una concatenación: si el lote se reordena por
+		// priority y el primero cambia, la identidad cambia y el modal vuelve a
+		// la página 1. Con la concatenación, dos lotes distintos casi nunca
+		// coincidirían en su primer aviso y el estado sobreviviría de más.
+		const reordenado: AnnouncementModal = {
+			kind: "info",
+			announcements: [aviso(ID.quinto, "info"), ...LOTE.announcements],
+		};
+
+		expect(modalIdentity(reordenado)).not.toBe(modalIdentity(LOTE));
+	});
+
+	test("un lote vacío tiene identidad, no `undefined`", () => {
+		// El tipo lo permite aunque el dominio no lo arme: como key de React,
+		// `undefined` es un warning y no un comportamiento.
+		expect(modalIdentity({ kind: "info", announcements: [] })).toBe("info:");
 	});
 });

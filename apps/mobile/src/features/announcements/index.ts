@@ -14,11 +14,19 @@
  *    que lo renderiza se llama `AnnouncementDialog`—, y con dos símbolos
  *    homónimos en el mismo feature uno de los dos tendría que renombrarse en el
  *    import.
+ *  - `AnnouncementDialog`: lo monta el layout raíz, que es el único lugar desde
+ *    donde tiene que abrir. Sus dos callbacks (`onAcknowledge` y
+ *    `onDismissInfo`) salen del hook y son los mismos nombres: quien lo monta
+ *    no tiene forma de resolver un `required` por su cuenta.
  *  - `buildModalSequence`: la regla del producto —D9 y D10— que decide qué ve la
  *    persona. Sale porque una regla que solo se puede ejercitar a través de un
  *    hook no se puede revisar de un vistazo, y es pura: recibe la lista y los
  *    dos sets, devuelve la secuencia, no toca red ni disco y no decide a quién
  *    le toca nada.
+ *  - `firstPendingModal` y `modalIdentity`: las dos decisiones del MONTAJE, que
+ *    son de lectura de la cola y no de presentación. Inline en el layout solo se
+ *    podrían ejercitar levantando Expo Router, y la segunda —la `key`— es la que
+ *    decide si el estado interno de un modal sobrevive o no al aviso siguiente.
  *  - `announcementQueryKey` y el tipo `AnnouncementAudience`: para que quien
  *    monte el modal lea o invalide la misma entrada del caché sin reconstruir la
  *    forma de la clave, que es como dos personas terminan con claves distintas
@@ -53,11 +61,16 @@
  *    `fetchDismissedIdsLocally`: leer por fuera de la consulta saltearía el
  *    agrupado, que es justamente donde están D9 y D10.
  */
-export { buildModalSequence } from "./domain/announcement";
+export {
+	buildModalSequence,
+	firstPendingModal,
+	modalIdentity,
+} from "./domain/announcement";
 export type {
 	AnnouncementAudience,
 	AnnouncementModal,
 } from "./domain/announcement";
+export { AnnouncementDialog } from "./components/AnnouncementDialog";
 export {
 	announcementModalSequenceOptions,
 	announcementQueryKey,

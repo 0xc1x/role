@@ -2017,6 +2017,40 @@ export const strings = {
 		errorNotSignedIn: "Inicia sesión para enviar un reporte.",
 		errorSubmitFailed: "No pudimos enviar tu reporte.",
 	},
+	// ── Avisos del operador (features/announcements) ────────────────
+	//
+	// Las etiquetas de los botones viven acá y no en `common.*` a propósito:
+	// distinguir "cerrar" de "entendido" ES la regla del producto —un `required`
+	// solo sale de la cola con el acknowledgement— y dos etiquetas parecidas
+	// escondidas en un catálogo genérico son el terreno donde alguien las
+	// termina cruzando. Que `dismissBatch` diga hoy lo mismo que `common.close`
+	// no es un ahorro: si mañana cambia a «Entendido», el diff tiene que mostrar
+	// que cambió para el modal y para el resto de la app por separado.
+	announcements: {
+		// Los dos rótulos son la mitad del producto: sin ellos, un `required` y
+		// un `info` se ven igual y la persona no sabe si tiene que hacer algo.
+		requiredBadge: "Obligatorio",
+		infoBadge: "Novedad",
+		// "Entendido" y no "Cerrar": el botón no cierra, REGISTRA que la persona
+		// lo leyó. Es el gesto que no se puede deshacer.
+		acknowledge: "Entendido",
+		// Un solo botón para el lote, y su etiqueta dice si avanza o descarta:
+		// en la última página descarta el LOTE entero, no el aviso de la página.
+		nextPage: "Siguiente",
+		dismissBatch: "Cerrar",
+		// El `{n}` y el `{total}` los compone el modal. Con un solo aviso no se
+		// pinta: "1 de 1" no informa nada y hace creer que hay más detrás.
+		pageCount: "{n} de {total}",
+		// Por qué se puede ir sin entenderlo. Sin esta línea, cerrar el modal y
+		// que el aviso vuelva en la próxima apertura se lee como una falla.
+		requiredHint:
+			"Podés seguir usando la app. Este aviso te va a volver a aparecer hasta que lo marques como entendido.",
+		// Fallback del acknowledgement: lo muestra el modal, y solo si la
+		// escritura falla. El mensaje crudo del driver nunca llega acá —la
+		// taxonomía del mapper lo conserva para Sentry y lo cambia por esto—.
+		acknowledgeFailed:
+			"No pudimos guardar que lo viste. Revisá tu conexión y probá otra vez.",
+	},
 	// ── Sonda de diagnóstico de Google Maps (src/dev/) ────────────
 	// No es una ruta: vive fuera de `app/` para que no entre en el router.
 	// Su copy vive aquí igual para respetar el contrato de i18n.

@@ -135,6 +135,56 @@ export function buildModalSequence(
 }
 
 /**
+ * El modal que el layout tiene que abrir ahora: el primero de la cola, o
+ * `null` si no hay nada.
+ *
+ * Sale de acá y no inline en el layout por una razón comprobable: la decisión
+ * de "cuál de los varios se muestra" es la que sostiene en pantalla el orden de
+ * D9 y D10, y leerla del JSX del layout significa que solo se puede ejercitar
+ * montando React con el router de Expo encima. Con una función, el caso se lee.
+ *
+ * POR QUÉ "EL PRIMERO" Y NO "EL MÁS IMPORTANTE": el orden de la cola YA está
+ * decidido —los `required` de a uno y primero, el lote de `info` al final—, así
+ * que recorrerla en orden es exactamente respetar esa decisión sin duplicarla.
+ * Un `max` por prioridad acá sería una tercera copia de la regla, y de las tres
+ * copias solo se corrige la que nadie mira.
+ *
+ * Y POR QUÉ NO HAY UN ÍNDICE QUE SE ADVANCE A MANO: el acknowledgement saca su
+ * modal de la cola, así que el siguiente aparece solo. Un puntero externo capaz
+ * de desincronizarse de la cola es una clase entera de fallas —se saltea un
+ * `required`, o se queda mostrando uno ya entendido— y ninguna se comprueba
+ * hasta que alguien la ve en la app.
+ */
+export function firstPendingModal(
+	modals: AnnouncementModal[],
+): AnnouncementModal | null {
+	return modals[0] ?? null;
+}
+
+/**
+ * La identidad estable de un modal, para usarlo de `key` al montarlo.
+ *
+ * ES LA `key` Y NO EL ÍNDICE, y la razón es que el modal tiene estado interno: la
+ * página del lote de `info` y el "escondido sin resolver" del `required`. Con la
+ * key por índice, sacar el primer aviso de la cola reutiliza el nodo del
+ * anterior con el estado del anterior, y un `info` de tres páginas que se
+ * reordena por prioridad dejaría mostrando la página 3 de una lista nueva.
+ *
+ * La del lote es el id de su PRIMER aviso, y no la concatenación de todos: dos
+ * lotes distintos casi nunca coinciden en su primer aviso, y la concatenación le
+ * pagaría a React una comparación de todos los ids en cada reordenada.
+ */
+export function modalIdentity(modal: AnnouncementModal): string {
+	if (modal.kind === "required") return `required:${modal.announcement.id}`;
+	const primero = modal.announcements[0]?.id;
+	// Un lote vacío es un valor que el TIPO permite y que el dominio no arma. Su
+	// identidad no la define ningún aviso, así que se le da una constante: la
+	// `key` tiene que ser un string, y `undefined` como key de React es un
+	// warning en vez de un comportamiento.
+	return primero ? `info:${primero}` : "info:";
+}
+
+/**
  * Saca de una secuencia los `info` que se acaba de descartar en el dispositivo.
  *
  * Es la mitad optimista del descarte: la persona apretó "cerrar" y el modal
