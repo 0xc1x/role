@@ -1,0 +1,46 @@
+{
+	// Por qué estos cuatro y no también `[json]`/`[css]`/`[html]`: el
+	// `files.includes` de `biome.json` solo cubre `app/`, `components/`, `lib/`,
+	// `src/`, `e2e/` y `e2e.config.ts`, y dentro de ese alcance no hay ni un
+	// `.json` ni un `.css`. Ponerle un formatter a esos lenguajes no haría que
+	// el editor use el formatter del proyecto: haría que el editor aplique uno
+	// que el proyecto no usa, que es justo la deriva que se vino a reportar.
+	//
+	// El caso de `[html]` es el que quemó `public/index.html`: quedó con 350
+	// líneas de diff porque el formatter de HTML que trae VSCode lo reescribió
+	// al guardar, y ni el biome del paquete ni ningún otro paso del proyecto lo
+	// vuelve a normalizar después — Biome 2.5.14 abre el archivo pero no
+	// formatea HTML. Sin esta línea, el archivo se separa otra vez en el
+	// próximo save.
+	"[javascript]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[javascriptreact]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[typescript]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[typescriptreact]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[html]": {
+		"editor.defaultFormatter": null
+	},
+	"[json]": {
+		"editor.defaultFormatter": null
+	},
+	"[jsonc]": {
+		"editor.defaultFormatter": null
+	},
+	"[css]": {
+		"editor.defaultFormatter": null
+	},
+	// Mismo par que usa `apps/admin/.vscode/settings.json`. `formatOnSave` solo
+	// aplica si hay formatter, así que los lenguajes de arriba sin formatter
+	// quedan intactos en vez de reformatearse con el que venga por defecto.
+	"editor.formatOnSave": true,
+	"editor.codeActionsOnSave": {
+		"source.fixAll.biome": "explicit"
+	}
+}

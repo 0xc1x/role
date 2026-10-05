@@ -36,6 +36,7 @@
       "cache": false
     },
     "lint": {},
+    "format": {},
     "format:check": {}
   }
 }
