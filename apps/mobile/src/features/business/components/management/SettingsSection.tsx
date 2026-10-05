@@ -1,4 +1,5 @@
 import { type Href, router } from "expo-router";
+import type { ReactNode } from "react";
 import {
 	Bell,
 	Bug,
@@ -13,11 +14,24 @@ import { AppText } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { Button } from "@/components/ui/button";
+import { useReportProblemSheet } from "@/src/features/bug-report/use-report-problem-sheet";
+
+/**
+ * Una fila del menú: o navega, o abre la hoja del buzón en esta misma pantalla.
+ *
+ * Unión y no dos campos opcionales porque las dos ramas se tocan distinto: la
+ * que navega delega en `router.push` y la que abre la hoja no sale de la
+ * pantalla. Igual que en el perfil del consumidor, y por la misma razón.
+ */
+type SettingsRow =
+	| { icon: ReactNode; label: string; route: Href }
+	| { icon: ReactNode; label: string; onPress: () => void };
 
 export function SettingsSection({ businessId }: { businessId: string }) {
 	const { colors } = useTheme();
+	const { openReportProblem, reportProblemSheet } = useReportProblemSheet();
 	const base = `/business/${businessId}`;
-	const items = [
+	const items: SettingsRow[] = [
 		{
 			icon: <Settings size={20} color={colors.mutedForeground} />,
 			label: strings.business.generalSettings,
@@ -40,12 +54,19 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 			route: `${base}/help` as Href,
 		},
 		// Mismo destino que desde el perfil del consumidor: el reporte lo
-		// manda la persona, no el negocio. El buzón vive en la ruta raíz
-		// justamente para no atar esta fila a `/business/${businessId}`.
+		// manda la persona, no el negocio, y por eso esta fila no queda atada
+		// a `/business/${businessId}`.
+		//
+		// Abre la hoja EN ESTA PANTALLA y no navega: el `Drawer` se portaliza a
+		// un host que vive adentro del layout de tabs, así que tiene que
+		// montarla la pantalla que la ofrece. Antes emparejaba a
+		// `/report-problem`, y esa ruta de raíz no tiene host por encima: la
+		// hoja se portalizaba a la pantalla de tabs ya tapada y el usuario veía
+		// una página vacía con el título del buzón.
 		{
 			icon: <Bug size={20} color={colors.mutedForeground} />,
 			label: strings.bugReport.title,
-			route: "/report-problem" as Href,
+			onPress: openReportProblem,
 		},
 	];
 	return (
@@ -63,7 +84,9 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 				<View key={item.label}>
 					<Button
 						variant="ghost"
-						onPress={() => router.push(item.route)}
+						onPress={() =>
+							"route" in item ? router.push(item.route) : item.onPress()
+						}
 						style={({ pressed }) => [
 							styles.settingsItem,
 							pressed && styles.pressed,
@@ -86,6 +109,10 @@ export function SettingsSection({ businessId }: { businessId: string }) {
 					) : null}
 				</View>
 			))}
+			{/* La hoja va en el árbol de ESTA pantalla, que es la que tiene el host
+			    del portal montado y visible. Montada en una ruta de raíz no
+	            aparecería nunca. */}
+			{reportProblemSheet}
 		</View>
 	);
 }

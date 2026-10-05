@@ -53,9 +53,9 @@
  * NO se exporta, y el motivo de cada uno:
  *
  *  - `AnnouncementList`. No por secreto sino por COSTE DE STUBS: el componente se
- *    monta desde la ruta y el import de la ruta lo hace por ruta directa —como
- *    `app/report-problem.tsx` con su sheet—, mientras que el layout, que no es
- *    una ruta, importa `AnnouncementModals` por acá. Reexportarlo obligaría a que
+ *    monta desde la ruta y el import de la ruta lo hace por ruta directa,
+ *    mientras que el layout, que no es una ruta, importa `AnnouncementModals` por
+ *    acá. Reexportarlo obligaría a que
  *    todo `mock.module("@/src/core/ui", …)` parcial que carga este módulo
  *    declarara `EmptyState`, `LoadingView`, `Screen`, `ScreenHeader` y
  *    `StatusBadge` aunque no renderice una fila, y la falla que eso produce

@@ -16,7 +16,10 @@ import { useAuthStore } from "@/src/features/auth/store";
  * expulsaría a la otra sin explicación—. La alternativa que se evita es
  * duplicarla en los dos grupos: dos copias de la misma lista que divergen en el
  * primer cambio de copy, y de las dos la que nadie mira es la que se rompe.
- * Precedente: `app/report-problem.tsx`, el otro buzón de las dos audiencias.
+ * Precedente: el buzón de reportes, que también es de las dos audiencias pero
+ * NO tiene ruta: lo monta cada menú en su propia pantalla. Una ruta de raíz no
+ * puede alojar una hoja, porque el `Drawer` se portaliza a un host que vive
+ * adentro de los layouts de tabs.
  *
  * Y POR QUÉ NO LA MONTA EL LAYOUT, como sí hace el modal de los avisos: el
  * layout monta `AnnouncementModals` porque un modal tiene que SOBREVIVIR a la
