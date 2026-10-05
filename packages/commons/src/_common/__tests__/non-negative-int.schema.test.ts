@@ -31,15 +31,15 @@ describe("NonNegativeIntSchema contra el rango de un integer de Postgres", () =>
 		const r = NonNegativeIntSchema.safeParse(2147483648);
 		expect(r.success).toBe(false);
 		if (r.success) throw new Error("la guarda no se ejecutó");
-		expect(r.error.issues[0]?.message).toBe(
-			"No puede ser mayor a 2147483647",
-		);
+		expect(r.error.issues[0]?.message).toBe("No puede ser mayor a 2147483647");
 	});
 
 	it("rechaza los enteros seguros que safeint sí admite, y que int4 no", () => {
 		// El caso que hace el defecto invisible en una revisión: 2^53−1 es un
 		// "entero" para Zod y un desbordamiento para la columna.
-		expect(NonNegativeIntSchema.safeParse(9007199254740991).success).toBe(false);
+		expect(NonNegativeIntSchema.safeParse(9007199254740991).success).toBe(
+			false,
+		);
 	});
 
 	it("mantiene el piso en cero y no lo sube por el efecto del tope", () => {
