@@ -1,5 +1,5 @@
 import { Link, useMatchRoute, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Wordmark } from "@/components/brand";
 import { Button } from "@/components/ui/button";

@@ -29,8 +29,8 @@ import {
 	createRouter,
 	RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@/test-utils/dom";
 import { createAppQueryClient } from "@/lib/query-client";
+import { cleanup, render, waitFor } from "@/test-utils/dom";
 
 // The only thing stubbed is Vite's `?url` CSS import, which is a build-time
 // concern with no bearing on the wiring under test. The component, the

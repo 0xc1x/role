@@ -1,5 +1,5 @@
 import { getConfigValue, type PlatformStats } from "@0xc1x/role-commons";
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 
 import { appConfigQueryOptions, platformStatsQueryOptions } from "./queries";
 

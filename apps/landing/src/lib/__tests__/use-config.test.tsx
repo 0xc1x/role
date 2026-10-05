@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@/test-utils/dom";
 import {
-	useConfig,
 	ensurePlatformStats,
+	useConfig,
 	usePlatformStats,
 } from "../use-config";
 
