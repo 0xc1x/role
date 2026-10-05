@@ -85,9 +85,11 @@
  *    exportar el agrupado sería darle la regla a la capa que la recibe.
  *  - `MAX_LOCAL_DISMISSALS`. Es un tope de almacenamiento, no un parámetro de
  *    presentación.
- *  - `fetchPendingAnnouncements`, `fetchAcknowledgedIds` y
- *    `fetchDismissedIdsLocally`: leer por fuera de la consulta saltearía el
- *    agrupado, que es justamente donde están D9 y D10.
+ *  - `fetchPendingAnnouncements`, `fetchAcknowledgedIds`,
+ *    `fetchDismissedIdsLocally` y `fetchDismissedRequiredIdsLocally`: leer por
+ *    fuera de la consulta saltearía el agrupado, que es justamente donde están D9
+ *    y D10. Los dos almacenes de descarte local también: juntarlos por comodidad
+ *    produciría estados que el dominio no sabe generar.
  */
 export {
 	buildModalSequence,

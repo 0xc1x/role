@@ -93,31 +93,51 @@ export const MAX_LOCAL_DISMISSALS = 200;
  * persona ya resolvió, y devuelve la secuencia de modales: los `required` de a
  * uno y primero, el lote de `info` al final (D9 y D10).
  *
- * Cada set se consulta SOLO para su severidad: los `acknowledgedIds` son el
- * acknowledgement en servidor y existen para los `required`; los `dismissedIds`
- * son el descarte local y existe para los `info`. Un `required` no se busca en
- * el set local porque un descarte de dispositivo no puede marcar un obligatorio
- * como entendido —eso lo hace la fila—, y un `info` no se busca en el de
- * servidor porque no tiene acknowledgement.
+ * CADA SET SE CONSULTA SOLO PARA SU SEVERIDAD, y esa es la regla que sostiene
+ * que haya TRES almacenes y no uno. Un `required` se busca en los dos que son
+ * suyos —el acknowledgement del servidor y el silencio local— porque los dos
+ * resuelven el modal para esta persona: entenderlo y esconderlo son dos salidas
+ * legítimas de un obligatorio, y las dos tienen que sacarlo de la cola. Un `info`
+ * se busca SOLO en el descarte local, porque no tiene los otros dos: no se
+ * registra y no se silencia.
  *
- * Si un `required` llega con el id en el set local, aparece: el operador
- * degradó un `info` a `required` y volver a mostrárselo hasta que lo registre
- * es lo único que evita el loop eterno de un obligatorio que nadie puede
- * entender.
+ * Y POR QUÉ NO SE MEZCLAN LOS DOS ALMACENES LOCALES, que es la razón de que la
+ * separación exista. Un id en el almacén de los `info` significa "lo descarté
+ * cuando era informativo", y eso NO dice nada de un `required`: el operador
+ * degrada un aviso de `info` a `required` todo el tiempo, y si el descarte viejo
+ * contara, el obligatorio desaparecería sin que nadie lo haya entendido ni
+ * silenciado —el loop eterno de un aviso que nadie puede entender, porque
+ * tampoco hay forma de entenderlo—. Por eso el `required` solo se busca en su
+ * almacén, que guarda silencios explícitos. Y en el otro sentido: un `info` no
+ * se busca en el almacén de los `required` porque a ese almacén no lo escribe
+ * nadie para un `info` —el botón de silencio es solo de `required`—, así que
+ * consultarlo produciría estados que el dominio no sabe generar.
+ *
+ * Cuando los dos caminos resuelven el mismo `required`, gana el entendido: la fila
+ * de acknowledgement no tiene policy de UPDATE ni de DELETE, así que un id puede
+ * haber quedado en el almacén local y registrado también, y en ese caso la
+ * persona lo entendió de verdad.
  */
 export function buildModalSequence(
 	announcements: Announcement[],
 	acknowledgedIds: ReadonlySet<string>,
 	dismissedIds: ReadonlySet<string>,
+	dismissedRequiredIds: ReadonlySet<string>,
 ): AnnouncementModal[] {
 	const required: Announcement[] = [];
 	const info: Announcement[] = [];
 
 	for (const announcement of announcements) {
 		if (announcement.severity === "required") {
-			// Sin condición, se cuela el `required` ya entendido y vuelve a
-			// ocupar un modal en cada apertura.
-			if (acknowledgedIds.has(announcement.id)) continue;
+			// Sin condición, se cuela el `required` ya entendido o ya silenciado y
+			// vuelve a ocupar un modal en cada apertura. El silenciado va por acá y
+			// no por el descarte de los `info`: es otro almacén porque el descarte
+			// de un informativo no es un silencio de obligatorio (ver el docblock).
+			if (
+				acknowledgedIds.has(announcement.id) ||
+				dismissedRequiredIds.has(announcement.id)
+			)
+				continue;
 			required.push(announcement);
 			continue;
 		}
@@ -266,6 +286,11 @@ export function localRequiredDismissalKey(
  * la key es de un dispositivo y no de una persona, y un almacén sin techo crece
  * hasta que algo se rompe sin aviso. Con mil entradas nadie va a notar el
  * desalojo, y cuando lo note el aviso que se pierde es de los más antiguos.
+ *
+ * Y el silencio TIENE QUE TENER EFECTO: `buildModalSequence` saca de la cola todo
+ * `required` cuyo id esté en este almacén, además de los que ya están registrados
+ * en el servidor. Sin esa lectura, escribir acá no cambiaría nada de lo que ve la
+ * persona y "silenciar" sería un gesto sin consecuencia.
  */
 export const MAX_LOCAL_REQUIRED_DISMISSALS = 1000;
 

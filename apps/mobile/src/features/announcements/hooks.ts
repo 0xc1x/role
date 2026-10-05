@@ -73,9 +73,16 @@ export function announcementQueryKey(
  * necesita un render para ver su resultado es una prueba que no se va a
  * escribir.
  *
- * Los tres se leen juntos y en paralelo porque son de tres sitios distintos —
- * la base para lo pendiente, el servidor para lo entendido, el dispositivo para
- * lo descartado— y ninguno depende del otro.
+ * Los CUATRO se leen juntos y en paralelo porque son de sitios distintos —la
+ * base para lo pendiente, el servidor para lo entendido, el dispositivo para lo
+ * descartado y el dispositivo otra vez para lo silenciado— y ninguno depende del
+ * otro.
+ *
+ * Y EL CUARTO NO ES OPCIONAL: sin él, un `required` que la persona silenció
+ * vuelve a salir como modal en cada apertura y la función que silencia no
+ * silencia nada. Es la razón por la que hay dos almacenes de descarte local, y
+ * esta consulta tiene que leer los dos: cada set se pasa a `buildModalSequence`
+ * para su severidad, sin mezclarlos.
  *
  * El agrupado es en memoria y a propósito: el tope de esta lectura no es un
  * `limit` del contrato sino cuántos avisos `active` tiene publicados el
@@ -89,12 +96,19 @@ export function announcementQueryKey(
 export async function fetchAnnouncementModalSequence(): Promise<
 	AnnouncementModal[]
 > {
-	const [announcements, acknowledgedIds, dismissedIds] = await Promise.all([
-		fetchPendingAnnouncements(),
-		fetchAcknowledgedIds(),
-		fetchDismissedIdsLocally(),
-	]);
-	return buildModalSequence(announcements, acknowledgedIds, dismissedIds);
+	const [announcements, acknowledgedIds, dismissedIds, dismissedRequiredIds] =
+		await Promise.all([
+			fetchPendingAnnouncements(),
+			fetchAcknowledgedIds(),
+			fetchDismissedIdsLocally(),
+			fetchDismissedRequiredIdsLocally(),
+		]);
+	return buildModalSequence(
+		announcements,
+		acknowledgedIds,
+		dismissedIds,
+		dismissedRequiredIds,
+	);
 }
 
 /**
@@ -231,12 +245,12 @@ export function announcementListQueryKey(
 /**
  * Los TRES insumos de la lista, y por qué los tres.
  *
- * El modal consulta el almacén de descartes SOLO para el `info` y el de
- * acknowledgements SOLO para el `required`: cada set sirve a su severidad y
- * mezclarlos no aporta nada. Esta pantalla muestra las dos y el estado de cada
- * una, así que necesita los tres. Con dos de ellos, un `required` silenciado en
- * el teléfono sale `pending` — que es exactamente el motivo por el que existe el
- * estado `dismissed` — y el gesto de silenciarlo parece no haber hecho nada.
+ * El modal lee los TRES, cada set para su severidad: el acknowledgement y el
+ * silencio local son del `required`, el descarte local es del `info`. Esta
+ * pantalla muestra los dos estados de `required` y el descarte de los `info`, así
+ * que lee los tres. Con dos de ellos, un `required` silenciado en el teléfono sale
+ * `pending` — que es exactamente el motivo por el que existe el estado
+ * `dismissed` — y el gesto de silenciarlo parece no haber hecho nada.
  *
  * Se exporta y no queda inline en el `queryFn` por la misma razón que
  * `fetchAnnouncementModalSequence`: es la función que decide qué ve la persona
@@ -383,10 +397,12 @@ export function useAnnouncementList() {
 	 * silencio, que vuelve a la próxima apertura — y eso es preferible a esperar a
 	 * la persona por un gesto que ya no necesita red.
 	 *
-	 * La cola de modales NO se toca acá, y no por descuido: `buildModalSequence`
-	 * no consulta el almacén de los `required` —solo el de los `info`—, así que
-	 * no hay nada cierto que escribirle acá. Invalidarla además sería peor: haría
-	 * volver a leer y el aviso volvería a la cola igual.
+	 * La cola de modales NO se toca acá, y no por descuido: la entrada del layout
+	 * se armó con `dismissedRequiredIds` leídos del disco, así que el aviso ya
+	 * debería haber salido de esa cola —si no salió, la cola es de una generación
+	 * anterior a este gesto y se resuelve sola en la próxima lectura—. Invalidarla
+	 * además sería peor: haría volver a leer por un gesto que ya está en el disco,
+	 * y eso convierte un gesto local sin red en un viaje.
 	 */
 	const silence = (id: string): void => {
 		queryClient.setQueryData<AnnouncementListItem[]>(listKey, (items) =>

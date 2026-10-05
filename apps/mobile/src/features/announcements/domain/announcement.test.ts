@@ -91,6 +91,7 @@ describe("los avisos ya resueltos se descartan", () => {
 			[aviso(ID.primero, "info"), aviso(ID.segundo, "info")],
 			NADA,
 			new Set([ID.primero]),
+			NADA,
 		);
 
 		expect(modals).toHaveLength(1);
@@ -101,6 +102,7 @@ describe("los avisos ya resueltos se descartan", () => {
 		const modals = buildModalSequence(
 			[aviso(ID.primero, "required"), aviso(ID.segundo, "required")],
 			new Set([ID.primero]),
+			NADA,
 			NADA,
 		);
 
@@ -117,6 +119,7 @@ describe("los avisos ya resueltos se descartan", () => {
 				[aviso(ID.primero, "info")],
 				NADA,
 				new Set([ID.primero]),
+				NADA,
 			),
 		).toEqual([]);
 	});
@@ -130,6 +133,7 @@ describe("D9: los info se acumulan, los required no", () => {
 				aviso(ID.segundo, "info"),
 				aviso(ID.tercero, "info"),
 			],
+			NADA,
 			NADA,
 			NADA,
 		);
@@ -146,6 +150,7 @@ describe("D9: los info se acumulan, los required no", () => {
 				aviso(ID.segundo, "required"),
 				aviso(ID.tercero, "required"),
 			],
+			NADA,
 			NADA,
 			NADA,
 		);
@@ -165,6 +170,7 @@ describe("D10: el required va antes que el lote de info", () => {
 			],
 			NADA,
 			NADA,
+			NADA,
 		);
 
 		// El `info` de mayor `priority` entra PRIMERO en la lista, como lo entrega
@@ -182,6 +188,7 @@ describe("D10: el required va antes que el lote de info", () => {
 				aviso(ID.cuarto, "required"),
 				aviso(ID.quinto, "required"),
 			],
+			NADA,
 			NADA,
 			NADA,
 		);
@@ -229,6 +236,7 @@ describe("el orden es el de la consulta: priority desc, created_at desc", () => 
 			],
 			NADA,
 			NADA,
+			NADA,
 		);
 
 		expect(idsOf(modals)).toEqual([
@@ -254,6 +262,7 @@ describe("el orden es el de la consulta: priority desc, created_at desc", () => 
 			],
 			NADA,
 			NADA,
+			NADA,
 		);
 
 		expect(idsOf(modals)).toEqual([
@@ -275,6 +284,7 @@ describe("cada set se consulta por severidad", () => {
 			[aviso(ID.primero, "required")],
 			NADA,
 			new Set([ID.primero]),
+			NADA,
 		);
 
 		expect(idsOf(modals)).toEqual([ID.primero]);
@@ -289,6 +299,77 @@ describe("cada set se consulta por severidad", () => {
 			[aviso(ID.primero, "info")],
 			new Set([ID.primero]),
 			NADA,
+			NADA,
+		);
+
+		expect(idsOf(modals)).toEqual([[ID.primero]]);
+	});
+});
+
+// El silencio de un `required` es una resolución de VERSE, no de entender: la
+// persona apretó «esconder sin leer» y el aviso no tiene que volver. Si esta
+// función no lo saca de la cola, la función que silencia no silencia nada y el
+// gesto se lee como que no pasó nada —que es exactamente el bug que el almacén
+// de `required` vino a eliminar.
+describe("el required silenciado no vuelve a salir como modal", () => {
+	test("descarta el required cuyo id está en el almacén de los required", () => {
+		// EL CASO QUE IMPORTA. Sin esta línea, `dismissRequiredAnnouncementLocally`
+		// escribe en AsyncStorage y el modal de la próxima apertura lo muestra igual:
+		// la función silencia y nada se silencia.
+		const modals = buildModalSequence(
+			[aviso(ID.primero, "required"), aviso(ID.segundo, "info")],
+			NADA,
+			NADA,
+			new Set([ID.primero]),
+		);
+
+		expect(idsOf(modals)).toEqual([[ID.segundo]]);
+	});
+
+	test("un required en el almacén de los info sí aparece: es la degradación", () => {
+		// El caso que separa los dos almacenes. El descarte de un `info` NO es un
+		// silencio de `required`: el operador degradó un aviso y la persona lo
+		// descartó cuando era informativo, así que volver a mostrárselo es lo
+		// único que evita el loop eterno de un obligatorio que nadie puede
+		// entender. Juntar los dos almacenes en un set rompe esto.
+		const modals = buildModalSequence(
+			[aviso(ID.primero, "required")],
+			NADA,
+			new Set([ID.primero]),
+			NADA,
+		);
+
+		expect(idsOf(modals)).toEqual([ID.primero]);
+	});
+
+	test("entendido y silenciado a la vez no aparece, y el entendido le gana", () => {
+		// Puede pasar: el almacén local no tiene forma de borrar una fila que el
+		// servidor ya registró, y no la necesita —la fila de acknowledgement no
+		// tiene policy de UPDATE ni de DELETE—. Los dos caminos resuelven el
+		// aviso por motivos distintos y en ese caso la persona lo entendió.
+		const modals = buildModalSequence(
+			[aviso(ID.primero, "required")],
+			new Set([ID.primero]),
+			NADA,
+			new Set([ID.primero]),
+		);
+
+		expect(modals).toEqual([]);
+	});
+
+	test("un info en el almacén de los required sí aparece", () => {
+		// El simétrico del caso anterior, y el otro error fácil: si el `info` se
+		// buscara también en el almacén de los `required`, un informativo
+		// desaparecería del lote sin que nadie lo haya descartado. No es un
+		// estado imposible por casualidad: el botón de silencio es solo de
+		// `required`, así que a ese almacén no lo escribe nadie con un id de
+		// `info`, y mirarlo solo puede sacar avisos que la persona sí tiene
+		// pendientes.
+		const modals = buildModalSequence(
+			[aviso(ID.primero, "info")],
+			NADA,
+			NADA,
+			new Set([ID.primero]),
 		);
 
 		expect(idsOf(modals)).toEqual([[ID.primero]]);
@@ -311,6 +392,7 @@ describe("la elegibilidad es de la policy, no del agrupado", () => {
 			],
 			NADA,
 			NADA,
+			NADA,
 		);
 
 		expect(idsOf(modals)).toEqual([[ID.primero, ID.segundo, ID.tercero]]);
@@ -323,6 +405,7 @@ describe("la elegibilidad es de la policy, no del agrupado", () => {
 		// que volver a aparecer sin que nada más cambie.
 		const modals = buildModalSequence(
 			[aviso(ID.primero, "info"), aviso(ID.segundo, "info", { active: false })],
+			NADA,
 			NADA,
 			NADA,
 		);
@@ -346,6 +429,7 @@ describe("la elegibilidad es de la policy, no del agrupado", () => {
 			],
 			NADA,
 			NADA,
+			NADA,
 		);
 
 		expect(idsOf(modals)).toEqual([[ID.primero, ID.segundo, ID.tercero]]);
@@ -354,7 +438,7 @@ describe("la elegibilidad es de la policy, no del agrupado", () => {
 
 describe("una lista vacía devuelve una secuencia vacía", () => {
 	test("sin avisos no hay modales que contar", () => {
-		expect(buildModalSequence([], NADA, NADA)).toEqual([]);
+		expect(buildModalSequence([], NADA, NADA, NADA)).toEqual([]);
 	});
 });
 
@@ -365,6 +449,7 @@ describe("applyLocalDismissal: lo ya descartado sale de la secuencia", () => {
 			aviso(ID.segundo, "info"),
 			aviso(ID.tercero, "info"),
 		],
+		NADA,
 		NADA,
 		NADA,
 	);
@@ -398,6 +483,7 @@ describe("applyAcknowledgement: el required registrado sale de la secuencia", ()
 			aviso(ID.segundo, "info"),
 			aviso(ID.tercero, "required"),
 		],
+		NADA,
 		NADA,
 		NADA,
 	);
@@ -439,6 +525,7 @@ describe("el modal que se abre es el primero de la cola", () => {
 		],
 		NADA,
 		NADA,
+		NADA,
 	);
 
 	test("sin cola no hay modal", () => {
@@ -466,6 +553,7 @@ describe("el modal que se abre es el primero de la cola", () => {
 		const cola = buildModalSequence(
 			[aviso(ID.primero, "required"), aviso(ID.tercero, "info")],
 			new Set([ID.primero]),
+			NADA,
 			NADA,
 		);
 

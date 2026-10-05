@@ -116,6 +116,8 @@ interface ApiLista {
 
 const PERSONA = "b0000000-0000-4000-8000-000000000001";
 const CLAVE = () => announcementQueryKey("user", PERSONA);
+/** Un almacén de descarte vacío, para los tres argumentos que no se están probando. */
+const NADA = new Set<string>();
 
 /**
  * Monta el hook en un QueryClient real y devuelve lo que expone más el cliente,
@@ -165,6 +167,7 @@ function conCola(
 		anuncios,
 		new Set(acknowledged),
 		new Set(dismissed),
+		NADA,
 	);
 	const { api, client } = monta((c) => c.setQueryData(CLAVE(), secuencia));
 	return { api, client, leer: () => client.getQueryData(CLAVE()) };
@@ -248,6 +251,7 @@ describe("D7: la apertura de la app no depende de la consulta", () => {
 		expect(fetchPendingAnnouncements).not.toHaveBeenCalled();
 		expect(fetchAcknowledgedIds).not.toHaveBeenCalled();
 		expect(fetchDismissedIdsLocally).not.toHaveBeenCalled();
+		expect(fetchDismissedRequiredIdsLocally).not.toHaveBeenCalled();
 	});
 
 	test("la clave del caché lleva la audiencia de la sesión", () => {
@@ -279,7 +283,12 @@ describe("D7: la apertura de la app no depende de la consulta", () => {
 
 	test("dos personas con el mismo rol no comparten la cola en el caché", () => {
 		const B = "b0000000-0000-4000-8000-000000000002";
-		const colaDeAna = buildModalSequence([REQUIRED], new Set(), new Set());
+		const colaDeAna = buildModalSequence(
+			[REQUIRED],
+			new Set(),
+			new Set(),
+			NADA,
+		);
 		const claveAna = announcementQueryKey("user", PERSONA);
 
 		// Ana dejó su `required` registrado en el servidor; Beto abre la app en el
@@ -342,7 +351,7 @@ describe("modals es lo que el hook devuelve, no solo lo que hay en el caché", (
 		const { api } = monta((c) =>
 			c.setQueryData(
 				CLAVE(),
-				buildModalSequence([REQUIRED, INFO], new Set(), new Set()),
+				buildModalSequence([REQUIRED, INFO], new Set(), new Set(), NADA),
 			),
 		);
 
@@ -359,11 +368,12 @@ describe("modals es lo que el hook devuelve, no solo lo que hay en el caché", (
 	});
 });
 
-describe("los tres insumos se leen juntos y se agrupan", () => {
+describe("los cuatro insumos se leen juntos y se agrupan", () => {
 	test("la secuencia sale de lo que la base, el servidor y el disco trajeron", async () => {
 		fetchPendingAnnouncements.mockResolvedValue([REQUIRED, INFO]);
 		fetchAcknowledgedIds.mockResolvedValue(new Set());
 		fetchDismissedIdsLocally.mockResolvedValue(new Set());
+		fetchDismissedRequiredIdsLocally.mockResolvedValue(new Set());
 
 		const modales = await fetchAnnouncementModalSequence();
 
@@ -383,7 +393,21 @@ describe("los tres insumos se leen juntos y se agrupan", () => {
 		expect(await fetchAnnouncementModalSequence()).toEqual([]);
 	});
 
-	test("un fallo de uno de los tres falla la consulta entera", async () => {
+	test("el required silenciado en el dispositivo no llega a la cola", async () => {
+		// LEYENDO EL ALMACÉN, no esperando que la función lo filtre. La falla era el
+		// hook sin traer ese set: un test que solo le pasara el id a
+		// `buildModalSequence` se pondría en verde con el bug vivo, porque el hook
+		// seguía sin preguntar al disco.
+		fetchPendingAnnouncements.mockResolvedValue([REQUIRED, INFO]);
+		fetchDismissedRequiredIdsLocally.mockResolvedValue(new Set([REQUIRED.id]));
+
+		const modales = await fetchAnnouncementModalSequence();
+
+		expect(modales.map((m) => m.kind)).toEqual(["info"]);
+		expect(fetchDismissedRequiredIdsLocally).toHaveBeenCalledTimes(1);
+	});
+
+	test("un fallo de uno de los cuatro falla la consulta entera", async () => {
 		// Un fallo parcial produciría una secuencia con los `required` pero sin los
 		// `info` descartados —o al revés— y eso se vería como "ya los leí" para un
 		// lote que la persona nunca abrió. Es mejor no mostrar nada (D7) que
@@ -538,7 +562,7 @@ describe("entender un required desde la lista", () => {
 		const { api, client, leer } = conLista([REQUIRED, INFO]);
 		client.setQueryData(
 			CLAVE(),
-			buildModalSequence([REQUIRED], new Set(), new Set()),
+			buildModalSequence([REQUIRED], new Set(), new Set(), NADA),
 		);
 
 		const pendiente = api.acknowledge(REQUIRED.id);
@@ -565,7 +589,7 @@ describe("entender un required desde la lista", () => {
 		const { api, client } = conLista([REQUIRED]);
 		client.setQueryData(
 			CLAVE(),
-			buildModalSequence([REQUIRED], new Set(), new Set()),
+			buildModalSequence([REQUIRED], new Set(), new Set(), NADA),
 		);
 
 		await api.acknowledge(REQUIRED.id);
