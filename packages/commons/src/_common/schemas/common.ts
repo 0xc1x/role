@@ -38,8 +38,26 @@ export const AddressTypeSchema = z.enum(ADDRESS_TYPES);
 /** Positive number (Postgres check `> 0`) */
 export const PositiveNumberSchema = z.number().positive();
 
-/** Non-negative integer */
-export const NonNegativeIntSchema = z.number().int().nonnegative();
+/**
+ * Non-negative integer, acotado al rango de un `integer` de Postgres.
+ *
+ * El `.max` no es una decisión de estilo: `z.number().int()` de Zod 4 significa
+ * "entero seguro" —hasta 2^53−1—, no "int4". Y todo lo que este schema valida
+ * sale de un int4: `offers.stock` e `initial_stock` son columnas `integer`, y
+ * los agregados de estadísticas se castean a `int` en el propio SQL
+ * (`count(*)::int`). Sin la cota el contrato acepta 2^31, la columna no, y el
+ * dato cruza la frontera para descubrirlo en la base: un 500 donde el mismo
+ * valor en el borde debería haber producido un 400.
+ *
+ * Va aquí y no en el punto de uso porque la invariante es de la columna, no del
+ * schema que la lee: cualquier consumidor nuevo que use este nombre hereda el
+ * rango correcto en vez de tener que acordarse de acotarlo.
+ */
+export const NonNegativeIntSchema = z
+	.number()
+	.int()
+	.nonnegative()
+	.max(2147483647, "No puede ser mayor a 2147483647");
 
 /** Rating 1–5 */
 export const RatingSchema = z.number().int().min(1).max(5);
