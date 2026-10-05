@@ -31,6 +31,8 @@ import { authRepository } from "@/src/features/auth/data/repository";
 import { toAppError } from "@/src/core/error/mapper";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
+import { authorPalette } from "@/src/core/theme/colors";
+import { authorPaletteIndex } from "@/src/core/utils/author-palette";
 import type { UserProfile } from "@/src/features/auth/domain/user";
 import { Button } from "@/components/ui/button";
 
@@ -47,7 +49,7 @@ function initialsOf(profile: UserProfile): string {
 const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export default function EditProfileScreen() {
-	const { colors } = useTheme();
+	const { colors, scheme } = useTheme();
 	const { profile, status, initialized, setProfile } = useAuthStore();
 	const { data: configMap } = useAppConfig();
 	const [name, setName] = useState(profile?.fullName ?? "");
@@ -105,6 +107,13 @@ export default function EditProfileScreen() {
 		);
 	}
 	if (status === "guest") return null;
+
+	// El disco sale de `profile.id`, el mismo seed que el perfil y que las
+	// reseñas: el objetivo es que sea ESTABLE, no que siga a la foto. Este form
+	// no sube imágenes —`avatarUrl` viene de los metadatos de auth—, así que el
+	// fallback es lo que se ve mientras no la haya.
+	const palette = authorPalette[scheme];
+	const disc = palette[authorPaletteIndex(profile.id, palette.length)];
 
 	const save = {
 		get isPending() {
@@ -174,12 +183,12 @@ export default function EditProfileScreen() {
 						{profile.avatarUrl ? (
 							<AvatarImage source={{ uri: profile.avatarUrl }} />
 						) : null}
-						<AvatarFallback className="bg-secondary">
+						<AvatarFallback style={{ backgroundColor: disc.fill }}>
 							<AppText
 								style={{
 									fontSize: 32,
 									fontWeight: "700",
-									color: colors.primary,
+									color: disc.on,
 								}}
 							>
 								{initialsOf(profile)}

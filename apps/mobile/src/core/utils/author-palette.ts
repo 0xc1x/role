@@ -1,11 +1,12 @@
 /**
- * Which palette entry a review author gets.
+ * Which palette entry a person gets.
  *
- * The seed is the author's `user_id`, so the same author is the same colour on
- * every review, on every device, forever — with nothing stored. That matters
- * because it is the ONLY stable identity a viewer has: `profiles` has no policy
- * letting one consumer read another consumer's row, so the review feed renders
- * "Cliente" for nearly every author.
+ * The seed is the person's `user_id`, so the same person is the same colour
+ * everywhere — every review, their profile, the profile edit form — on every
+ * device, forever, with nothing stored. That matters because it is the ONLY
+ * stable identity a viewer has: `profiles` has no policy letting one consumer
+ * read another consumer's row, so the review feed renders "Cliente" for nearly
+ * every author.
  *
  * `user_id` is public already — `PublicReviewItemSchema` ships `author_id`
  * with the same value — so this reads data the product has already published

@@ -5,8 +5,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/src/core/i18n/strings";
 import { AppText } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
+import { authorPalette } from "@/src/core/theme/colors";
 import { typography } from "@/src/core/theme/typography";
 import { spacing, radii } from "@/src/core/theme/spacing";
+import { authorPaletteIndex } from "@/src/core/utils/author-palette";
 import { formatCount, formatMoney } from "@/src/core/utils/formatters";
 import type { UserProfile } from "@/src/features/auth/domain/user";
 import { useProfileStats } from "@/src/features/profile/hooks";
@@ -22,18 +24,25 @@ function initialsOf(profile: UserProfile): string {
 }
 
 export function ProfileAvatar({ profile }: { profile: UserProfile }) {
-	const { colors } = useTheme();
+	const { scheme } = useTheme();
+	// Mismo disco y mismo seed que el autor de una reseña: el `user_id`. Aquí el
+	// nombre SÍ está (es el perfil propio), pero sin foto el fallback era un
+	// círculo neutro que no decía de quién era, y el color le da la identidad
+	// que la foto no aporta. Se pinta como `style` y no como clase porque la
+	// paleta son hexes de `colors.ts`, no utilidades de Tailwind.
+	const palette = authorPalette[scheme];
+	const disc = palette[authorPaletteIndex(profile.id, palette.length)];
 	return (
 		<Avatar style={{ width: 80, height: 80 }} alt={initialsOf(profile)}>
 			{profile.avatarUrl ? (
 				<AvatarImage source={{ uri: profile.avatarUrl }} />
 			) : null}
-			<AvatarFallback className="bg-primary">
+			<AvatarFallback style={{ backgroundColor: disc.fill }}>
 				<AppText
 					style={{
 						fontSize: 28,
 						fontWeight: "700",
-						color: colors.primaryForeground,
+						color: disc.on,
 					}}
 				>
 					{initialsOf(profile)}

@@ -3,24 +3,31 @@ import { authorPalette, light, dark } from "@/src/core/theme/colors";
 import { contrast } from "@/src/test-utils/contrast";
 
 /**
- * The review-author disc: the fill, and the glyph painted on it.
+ * The person disc: the fill, and the initials or glyph painted on it.
  *
  * Two measured floors, and the reason the palette stores a `{ fill, on }` pair
  * instead of a bare colour:
  *
  * - `on` over `fill` at the 4.5:1 text floor. The glyph is a `User` icon and,
- *   when real initials land, text — either way it is not decorative, and it
- *   carries no adjacent label to compensate for it.
+ *   on the profile and its edit form, real initials — either way it is not
+ *   decorative, and it carries no adjacent label to compensate for it.
  * - `fill` against the surfaces the disc is painted on at the 3:1 non-text
- *   floor. A 36px disc with no border must separate from what is behind it, or
- *   the boundary that makes it a disc disappears.
+ *   floor. A disc with no border must separate from what is behind it, or the
+ *   boundary that makes it a disc disappears.
  *
  * Every number is asserted at real precision, and a value short of a floor is
  * asserted AT the floor it misses rather than rounded up into a pass. Fixing a
  * failure means changing the hex in `colors.ts` — not this file.
  */
 
-/** Surfaces a review row is painted on, per call site (`ReviewItem`). */
+/**
+ * Surfaces a disc is painted on, per call site.
+ *
+ * `ReviewItem` renders inside a `card`; `ProfileAvatar` and the profile edit
+ * form render inside `<Screen>`, whose background is `background`. `background`
+ * is in both lists, so the profile call sites are covered by the same numbers
+ * rather than by an assumption — that is why it is listed for both schemes.
+ */
 const LIGHT_SURFACES = ["card", "background", "muted", "surfaceMuted"] as const;
 const DARK_SURFACES = ["card", "background", "muted", "popover"] as const;
 

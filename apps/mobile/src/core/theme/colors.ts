@@ -393,15 +393,22 @@ const dark: ColorTokens = {
 };
 
 /**
- * A review author's disc: the fill behind the glyph in the review list.
+ * A person's disc: the fill behind the initials or glyph that stands for them.
  *
- * A deterministic colour derived from `reviews.user_id` (see
- * `authorPaletteIndex`). It is the identity signal for a review author,
- * because the author NAME is usually not readable by the viewer: `profiles`
- * has no policy that lets one consumer read another consumer's row, so the
- * review feed falls back to "Cliente" for everyone. The colour is derived from
- * data the feed already exposes (`author_id` is already public in
- * `PublicReviewItemSchema`), so this widens no contract.
+ * A deterministic colour derived from a `user_id` (see `authorPaletteIndex`).
+ * It is the identity signal for the person, because the NAME is usually not
+ * readable by the viewer: `profiles` has no policy that lets one consumer read
+ * another consumer's row, so the review feed falls back to "Cliente" for
+ * everyone. The colour comes from data the product already publishes
+ * (`author_id` in `PublicReviewItemSchema`, and your own `profile.id`), so it
+ * widens no contract.
+ *
+ * Three call sites, one derivation: a review author (`ReviewItem`), your own
+ * profile (`ProfileAvatar`) and the profile edit form. The profile and the form
+ * MUST agree — the form is reached from the profile, and a different disc there
+ * reads as "this is somebody else's account". The seed stays the `user_id` and
+ * never the avatar URL, so the colour is stable instead of changing when a
+ * picture is uploaded.
  *
  * A pair, not a bare colour: the glyph sits ON the fill, so the two have to be
  * measured together, and a fill that carries no foreground cannot be audited
@@ -417,11 +424,14 @@ const dark: ColorTokens = {
  *
  * Dark is not the light palette darkened: on a dark `card` those fills measure
  * 2.0-2.8:1 and vanish, so dark carries lighter fills under the ink foreground.
+ *
+ * Its length is part of the contract: the index is `hash % length`, so adding
+ * or reordering an entry repaints every person already on screen.
  */
 export interface AuthorPaletteEntry {
 	/** The disc. Also the disc's own separation from the surface behind it. */
 	fill: string;
-	/** The glyph on the disc: the text-safe foreground for this fill. */
+	/** The initials or glyph on the disc: the text-safe foreground for this fill. */
 	on: string;
 }
 
