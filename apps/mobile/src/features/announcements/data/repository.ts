@@ -14,7 +14,9 @@ import { useAuthStore } from "@/src/features/auth/store";
 import {
 	announcementAudience,
 	localDismissalKey,
+	localRequiredDismissalKey,
 	MAX_LOCAL_DISMISSALS,
+	MAX_LOCAL_REQUIRED_DISMISSALS,
 	type AnnouncementAudience,
 } from "../domain/announcement";
 
@@ -202,6 +204,73 @@ export async function fetchDismissedIdsLocally(): Promise<ReadonlySet<string>> {
 		);
 	} catch {
 		return new Set();
+	}
+}
+
+/**
+ * Los `required` silenciados en este dispositivo, POR AUDIENCIA.
+ *
+ * Un almacén aparte del de los `info`, y la razón está en el docblock de
+ * `MAX_LOCAL_REQUIRED_DISMISSALS`: compartir tope con avisos que nadie silenció a
+ * propósito hace que un descarte se desaloje solo.
+ *
+ * Tampoco lanza: si el storage está caído, el vacío es la respuesta honesta y el
+ * modal sigue mostrando el aviso, que es el peor caso posible y el correcto.
+ */
+export async function fetchDismissedRequiredIdsLocally(): Promise<
+	ReadonlySet<string>
+> {
+	try {
+		return new Set(
+			parseDismissals(
+				await AsyncStorage.getItem(
+					localRequiredDismissalKey(currentAudience()),
+				),
+			) ?? [],
+		);
+	} catch {
+		return new Set();
+	}
+}
+
+/**
+ * Silencia un `required` en este dispositivo, SIN escribir la fila de
+ * acknowledgement.
+ *
+ * Y esto es lo que cambia de la regla del feature, así que conviene que se lea:
+ * `announcement_acknowledgements` no tiene policy de UPDATE ni de DELETE, así que
+ * la fila no se puede borrar ni corregir. Escribirla acá haría que un obligatorio
+ * que nadie leyó quedara para siempre registrado como entendido, que es un dato
+ * falso y además el que impide que el aviso vuelva. Por eso el silencio es
+ * local: no deja rastro en el servidor, y el servidor sigue sin saber que la
+ * persona lo silenció.
+ *
+ * El costo de esa honestidad es que la tabla pasa a significar "entendió" y no
+ * "vio". Cualquier métrica futura sobre obligatorios tiene que saber eso.
+ *
+ * Tampoco lanza, como el descarte de los `info`: el modal se actualiza por caché
+ * y si el storage falla el aviso vuelve a salir en la próxima apertura, que es
+ * preferible a romper el arranque.
+ */
+export async function dismissRequiredAnnouncementLocally(
+	id: string,
+): Promise<void> {
+	const key = localRequiredDismissalKey(currentAudience());
+
+	let previous: string[] = [];
+	try {
+		previous = parseDismissals(await AsyncStorage.getItem(key)) ?? [];
+	} catch {
+		// Storage caído: se escribe igual, partiendo de cero.
+	}
+
+	const merged = [...new Set([...previous, id])].slice(
+		-MAX_LOCAL_REQUIRED_DISMISSALS,
+	);
+	try {
+		await AsyncStorage.setItem(key, JSON.stringify(merged));
+	} catch {
+		// Ver la nota del lector: el descarte se pierde, el modal ya salió.
 	}
 }
 

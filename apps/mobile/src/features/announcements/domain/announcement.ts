@@ -164,6 +164,112 @@ export function firstPendingModal(
 }
 
 /**
+ * El estado de un aviso en la pantalla de "ver todos".
+ *
+ * Son cuatro y no tres porque `dismissed` sobre un `required` es una cosa que no
+ * existía: hasta ahora el descarte local era solo de `info`, y el `required` se
+ * resolvía con una sola acción, entenderlo. Ahora se puede **silenciar un
+ * obligatorio sin entenderlo**, y ese estado tiene que ser visible y distinto —
+ * si se viera como `pending` volvería a salir en el modal, y si se viera como
+ * `acknowledged` estaría mintiendo: la fila en el servidor no existe.
+ */
+export type AnnouncementListState = "pending" | "acknowledged" | "dismissed";
+
+/** Una fila de la lista: el aviso entero y cómo está para esta persona. */
+export type AnnouncementListItem = {
+	announcement: Announcement;
+	state: AnnouncementListState;
+	/** Solo un `required` pendiente ofrece las dos acciones; el resto, ninguna. */
+	canAcknowledge: boolean;
+	canDismiss: boolean;
+};
+
+/**
+ * Los avisos para la pantalla de "ver todos": TODOS los elegibles, con su estado.
+ *
+ * Y TODOS es la diferencia con `buildModalSequence`: esa saca lo que la persona ya
+ * resolvió, que es exactamente lo que una lista de historial tiene que mostrar. Por
+ * eso es otra función y no un parámetro de la otra — una lista que se proudiera de
+ * esconder lo resuelto no sería un historial— y por eso recibe los mismos tres
+ * insumos en el mismo orden: la lista ya filtrada por la policy, ya ordenada.
+ *
+ * NO decide a quién le toca ningún aviso, no filtra por audiencia, no filtra por
+ * `active` y no reordena. La policy es la única que decide eso, y una lista que
+ * reordenara por severidad sería una tercera copia de D9/D10: el modal pone los
+ * `required` primero y esta los muestra como vinieron, porque el orden que la
+ * persona ya vio al abrir la app es el orden que espera encontrar después.
+ */
+export function buildAnnouncementList(
+	announcements: Announcement[],
+	acknowledgedIds: ReadonlySet<string>,
+	dismissedRequiredIds: ReadonlySet<string>,
+): AnnouncementListItem[] {
+	return announcements.map((announcement) => {
+		const required = announcement.severity === "required";
+		// El acknowledgement es de `required` solamente, y esto no es una sutileza:
+		// un `info` no tiene fila, así que un id suyo en el set no significaría
+		// "entendido" sino un dato que no debería existir. `buildModalSequence`
+		// aplica el mismo criterio por severidad, y las dos funciones consultan los
+		// sets distinto a propósito.
+		const acknowledged = required && acknowledgedIds.has(announcement.id);
+		const dismissed = required && dismissedRequiredIds.has(announcement.id);
+		// El entendido le gana al descartado: la fila de acknowledgement no tiene
+		// policy de UPDATE ni de DELETE, así que un id puede haber quedado en el
+		// almacén local y entendido también, y en ese caso la persona lo entendió.
+		const state: AnnouncementListState = acknowledged
+			? "acknowledged"
+			: dismissed
+				? "dismissed"
+				: "pending";
+		const pendiente = state === "pending";
+		return {
+			announcement,
+			state,
+			// Solo el `required` pendiente ofrece las dos acciones. Un `info` se
+			// descarta en el modal, que es donde está su gesto, y un resuelto no
+			// ofrece nada porque las dos acciones no tienen a qué aplicarse.
+			canAcknowledge: pendiente && required,
+			canDismiss: pendiente && required,
+		};
+	});
+}
+
+/**
+ * Clave del descarte de un `required`, y su propio almacén.
+ *
+ * SEPARADA de la del `info` a propósito, y no por prolijidad. `MAX_LOCAL_DISMISSALS`
+ * es 200 con desalojo del más viejo, y su docblock explica que eso no molesta
+ * porque un `info` viejo ya no está `active` y la policy ni lo devuelve. Un
+ * `required` viejo que la persona silenció a propósito SÍ puede estar `active`, y si
+ * compartiera almacén su descarte sería desalojado por avisos que ella no silenció,
+ * con lo que el obligatorio reaparece solo y sin que nadie haya hecho nada. Es la
+ * falla que esta pantalla viene a eliminar, frase por frase.
+ *
+ * Por audiencia y no por persona, como la del `info`: en un dispositivo compartido
+ * el silencio de una persona alcanza a la siguiente del mismo rol. Para un `info`
+ * eso es un parked menor; para un obligatorio pesa más, y aun así no se keyea por
+ * persona porque el anónimo no tiene a quién keyear —un `required` no le llega, la
+ * policy se lo saca— y una key con `null`inside haría que todos los anónimos
+ * compartieran un almacén que no existe.
+ */
+export function localRequiredDismissalKey(
+	audience: AnnouncementAudience,
+): string {
+	return `role.announcements.dismissed.required.v1:${audience}`;
+}
+
+/**
+ * Tope del almacén de `required` silenciados, holgado a propósito.
+ *
+ * Un `required` es raro por definición —si fuera común, el operador dejaría de
+ * usarlo— así que doscientos no estorban. El techo existe por otra razón:
+ * la key es de un dispositivo y no de una persona, y un almacén sin techo crece
+ * hasta que algo se rompe sin aviso. Con mil entradas nadie va a notar el
+ * desalojo, y cuando lo note el aviso que se pierde es de los más antiguos.
+ */
+export const MAX_LOCAL_REQUIRED_DISMISSALS = 1000;
+
+/**
  * La identidad estable de un modal, para usarlo de `key` al montarlo.
  *
  * ES LA `key` Y NO EL ÍNDICE, y la razón es que el modal tiene estado interno: la

@@ -58,13 +58,14 @@ const {
 	acknowledgeAnnouncement,
 	currentAudience,
 	dismissAnnouncementsLocally,
+	dismissRequiredAnnouncementLocally,
 	fetchAcknowledgedIds,
 	fetchDismissedIdsLocally,
+	fetchDismissedRequiredIdsLocally,
 	fetchPendingAnnouncements,
 } = await import("@/src/features/announcements/data/repository");
-const { localDismissalKey, MAX_LOCAL_DISMISSALS } = await import(
-	"@/src/features/announcements/domain/announcement"
-);
+const { localDismissalKey, localRequiredDismissalKey, MAX_LOCAL_DISMISSALS } =
+	await import("@/src/features/announcements/domain/announcement");
 
 const USER_ID = "b0000000-0000-4000-8000-00000000000f";
 const AVISO = {
@@ -479,5 +480,59 @@ describe("el descarte local de los info es POR AUDIENCIA", () => {
 		await dismissAnnouncementsLocally([]);
 
 		expect(storage.size).toBe(0);
+	});
+});
+
+describe("silenciar un required NO escribe la fila de acknowledgement", () => {
+	test("no toca Supabase en absoluto", async () => {
+		await dismissRequiredAnnouncementLocally(AVISO.id);
+
+		// Esta es la invariante de toda la función, y no hay forma de derivarla del
+		// código: la tabla `announcement_acknowledgements` no tiene policy de UPDATE
+		// ni de DELETE, así que una fila escrita acá no se puede corregir nunca. Un
+		// obligatorio que nadie leyó quedaría registrado para siempre como
+		// entendido, que es un dato falso y además impide que el aviso vuelva.
+		expect(llamadas()).toHaveLength(0);
+	});
+
+	test("queda en el almacén local, con la clave de los required", async () => {
+		await dismissRequiredAnnouncementLocally(AVISO.id);
+
+		// Clave aparte de la del `info`, y por audiencia. Compartirla haría que el
+		// `MAX_LOCAL_DISMISSALS` de los informativos —200 con desalojo del más
+		// viejo— se cumpliera con silencios deliberados, y el aviso reaparecería
+		// solo.
+		expect(storage.get(localRequiredDismissalKey("user"))).toBe(
+			JSON.stringify([AVISO.id]),
+		);
+	});
+
+	test("se lee después de escribirlo", async () => {
+		await dismissRequiredAnnouncementLocally(AVISO.id);
+
+		// La lista lo muestra como descartado sin pedirle nada a la red: el estado
+		// sale del mismo almacén que lo escribió.
+		expect(await fetchDismissedRequiredIdsLocally()).toEqual(
+			new Set([AVISO.id]),
+		);
+	});
+
+	test("acumula sobre lo que ya había, sin pisarlo", async () => {
+		storage.set(localRequiredDismissalKey("user"), JSON.stringify(["previo"]));
+		await dismissRequiredAnnouncementLocally(AVISO.id);
+
+		expect(await fetchDismissedRequiredIdsLocally()).toEqual(
+			new Set(["previo", AVISO.id]),
+		);
+	});
+
+	test("no toca el almacén de los info", async () => {
+		storage.set(localDismissalKey("user"), JSON.stringify(["info-previo"]));
+		await dismissRequiredAnnouncementLocally(AVISO.id);
+
+		expect(await fetchDismissedIdsLocally()).toEqual(new Set(["info-previo"]));
+		expect(await fetchDismissedRequiredIdsLocally()).toEqual(
+			new Set([AVISO.id]),
+		);
 	});
 });
