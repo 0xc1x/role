@@ -218,6 +218,16 @@ const ANNOUNCEMENT_INDEXES: readonly string[] = [
   'announcements_business_ids_idx',
   'announcements_pkey',
   'announcements_user_ids_idx',
+  // El indice por user_id llega en la migracion 20261005020520 y esta en esta
+  // lista por el mismo motivo que los otros: el set es exacto a proposito, para
+  // que un indice que se cuelgue sin querer —o que falte y no se note— salga
+  // aqui y no en produccion.
+  //
+  // Y el ORDEN tambien es parte del contrato: la consulta viene con
+  // `order by indexname`, y esta lista se compara contra ella. Por eso este va
+  // ultimo y no donde lo pondria el ojo: 'idx_' ordena despues de 'announce…',
+  // no antes.
+  'idx_announcement_acknowledgements_user',
 ];
 
 let ctx: SupabaseTestDb;
