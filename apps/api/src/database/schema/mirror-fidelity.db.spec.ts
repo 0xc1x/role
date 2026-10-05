@@ -95,6 +95,18 @@ const EXPECTED: ReadonlyArray<readonly [string, string, string]> = [
   ['segment_users', 'user_id', 'CASCADE'],
   ['user_consents', 'user_id', 'CASCADE'],
   ['user_preferences', 'user_id', 'CASCADE'],
+  // La baja de un aviso se lleva sus acks: `announcement_acknowledgements`
+  // declara `on delete cascade` sobre el aviso, igual que en Supabase. Sin
+  // esto el aviso podría desaparecer dejando acknowledgements de una fila que ya
+  // no existe.
+  ['announcement_acknowledgements', 'announcement_id', 'CASCADE'],
+  // Misma divergencia declarada que `marketing_preferences` y
+  // `payment_methods`, y por el mismo motivo: Supabase apunta a `auth.users`, y el
+  // espejo puede nombrar lo más parecido sin inventar un schema que el harness no
+  // crea. Observable —la cascada sigue a un borrado de perfil acá y a uno de
+  // usuario de auth en producción— y sin consecuencia en este módulo, que
+  // nunca borra en hard: la baja de una cuenta anonimiza.
+  ['announcement_acknowledgements', 'user_id', 'CASCADE'],
   // `payment_intents.order_id` and `payment_events.payment_intent_id` exist in
   // Supabase and are deliberately NOT listed: the API declares no pgTable for
   // either table, so the harness never creates them and there is nothing to

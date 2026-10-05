@@ -19,6 +19,35 @@ export const PRODUCTION_API_HOST = "role-0hjz.onrender.com";
 /** Where the suite's own stub lives; every allowed API call must target this. */
 export const STUB_API_ORIGIN = "http://127.0.0.1:3999";
 
+/**
+ * The stub's own control plane, OUTSIDE `/api/v1`.
+ *
+ * It changes what the loopback stub answers for `/announcements` and nothing
+ * else: no write, no forward, and unreachable from anything but loopback. The
+ * `announcements` mode is stateful — the stub process outlives a single test —
+ * so the default below is the safe one and the specs restore it.
+ */
+export const STUB_CONTROL_PATH = "/__stub/announcements";
+
+export type AnnouncementsMode = "caido" | "hostil" | "benigno";
+
+/** The mode the suite leaves behind: the failing API, which is the safe one. */
+export const ANNOUNCEMENTS_DEFAULT_MODE: AnnouncementsMode = "caido";
+
+export async function setAnnouncementsMode(
+	request: APIRequestContext,
+	mode: AnnouncementsMode,
+): Promise<void> {
+	const response = await request.post(`${STUB_API_ORIGIN}${STUB_CONTROL_PATH}`, {
+		data: { mode },
+	});
+	if (!response.ok()) {
+		throw new Error(
+			`el stub no aceptó el modo ${mode}: ${response.status()} ${await response.text()}`,
+		);
+	}
+}
+
 /** The landing's only write endpoint. */
 export const ONBOARDING_PATH = "/businesses/onboarding";
 

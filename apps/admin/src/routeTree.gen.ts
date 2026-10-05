@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LayoutAnunciosRouteImport } from './routes/_layout.anuncios'
 import { Route as LayoutCategoriasRouteImport } from './routes/_layout.categorias'
 import { Route as LayoutComisionesRouteImport } from './routes/_layout.comisiones'
 import { Route as LayoutConfiguracionRouteImport } from './routes/_layout.configuracion'
@@ -45,6 +46,11 @@ const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
+} as any)
+const LayoutAnunciosRoute = LayoutAnunciosRouteImport.update({
+  id: '/anuncios',
+  path: '/anuncios',
+  getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutCategoriasRoute = LayoutCategoriasRouteImport.update({
   id: '/categorias',
@@ -147,6 +153,7 @@ const LayoutNotificacionesPushRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/anuncios': typeof LayoutAnunciosRoute
   '/categorias': typeof LayoutCategoriasRoute
   '/comisiones': typeof LayoutComisionesRoute
   '/configuracion': typeof LayoutConfiguracionRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/anuncios': typeof LayoutAnunciosRoute
   '/categorias': typeof LayoutCategoriasRoute
   '/comisiones': typeof LayoutComisionesRoute
   '/configuracion': typeof LayoutConfiguracionRoute
@@ -195,6 +203,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_layout': typeof LayoutRouteWithChildren
   '/login': typeof LoginRoute
+  '/_layout/anuncios': typeof LayoutAnunciosRoute
   '/_layout/categorias': typeof LayoutCategoriasRoute
   '/_layout/comisiones': typeof LayoutComisionesRoute
   '/_layout/configuracion': typeof LayoutConfiguracionRoute
@@ -220,6 +229,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/anuncios'
     | '/categorias'
     | '/comisiones'
     | '/configuracion'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/anuncios'
     | '/categorias'
     | '/comisiones'
     | '/configuracion'
@@ -267,6 +278,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_layout'
     | '/login'
+    | '/_layout/anuncios'
     | '/_layout/categorias'
     | '/_layout/comisiones'
     | '/_layout/configuracion'
@@ -316,6 +328,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_layout/anuncios': {
+      id: '/_layout/anuncios'
+      path: '/anuncios'
+      fullPath: '/anuncios'
+      preLoaderRoute: typeof LayoutAnunciosRouteImport
+      parentRoute: typeof LayoutRoute
     }
     '/_layout/categorias': {
       id: '/_layout/categorias'
@@ -454,6 +473,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface LayoutRouteChildren {
+  LayoutAnunciosRoute: typeof LayoutAnunciosRoute
   LayoutCategoriasRoute: typeof LayoutCategoriasRoute
   LayoutComisionesRoute: typeof LayoutComisionesRoute
   LayoutConfiguracionRoute: typeof LayoutConfiguracionRoute
@@ -476,6 +496,7 @@ interface LayoutRouteChildren {
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutAnunciosRoute: LayoutAnunciosRoute,
   LayoutCategoriasRoute: LayoutCategoriasRoute,
   LayoutComisionesRoute: LayoutComisionesRoute,
   LayoutConfiguracionRoute: LayoutConfiguracionRoute,

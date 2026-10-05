@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { AnnouncementBanner } from "@/components/announcement-banner";
 import { Contact } from "@/components/contact";
 import { Cta } from "@/components/cta";
 import { Faq } from "@/components/faq";
@@ -12,6 +13,7 @@ import { Testimonials } from "@/components/testimonials";
 import { FAQ_ITEMS } from "@/lib/faq";
 import { appConfigQueryOptions, randomOfferQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
+import { ensureAnnouncements, useAnnouncements } from "@/lib/use-announcements";
 import { ensurePlatformStats } from "@/lib/use-config";
 
 const FAQ_JSON_LD = {
@@ -29,16 +31,33 @@ export const Route = createFileRoute("/")({
 	// SSR: config + stats reales se resuelven en el server para SEO. Ningún
 	// fallo rompe el render; el loader solo deja constancia de si las stats
 	// salieron de la API (`source`) para que el markup lo exponga.
-	loader: ({ context }) =>
-		Promise.all([
+	//
+	// Los avisos entran por `ensureAnnouncements` y NO por un `ensureQueryData`
+	// pelado: es la misma degradación a `failed` que las stats, y es lo que
+	// impide que un 500 de la API de anuncios se convierta en el error de la
+	// landing entera. Un aviso que falta es una molestia; una página que no se
+	// pinta es el final del negocio que esta página existe para conseguir.
+	//
+	// El loader devuelve el resultado de los avisos CON NOMBRE, y no la tupla del
+	// `Promise.all`: `LandingPage` lo necesita leer, y leerlo por posición —la
+	// segunda de cuatro— es un acoplamiento que un `Promise.all` reordenado rompe
+	// en silencio. El de las stats se sigue descartando: `usePlatformStats` lo
+	// recalcula en su observer, así que devolverlo no cambiaría el HTML servido.
+	// Es el mismo patrón que `usePlatformStats` tiene y que quedó pendiente para
+	// `data-stats-source`; ver `use-announcements.ts`.
+	loader: async ({ context }) => {
+		const [, announcements] = await Promise.all([
 			ensurePlatformStats(context.queryClient),
+			ensureAnnouncements(context.queryClient),
 			context.queryClient
 				.ensureQueryData(appConfigQueryOptions)
 				.catch(() => undefined),
 			context.queryClient
 				.ensureQueryData(randomOfferQueryOptions)
 				.catch(() => undefined),
-		]),
+		]);
+		return { announcements };
+	},
 	head: () => ({
 		...pageHead(
 			"/",
@@ -52,10 +71,29 @@ export const Route = createFileRoute("/")({
 });
 
 function LandingPage() {
+	// El `source` se PUBLICA con el del loader mientras el observer no tenga
+	// respuesta propia, y no al revés. La versión anterior —recalcularlo acá—
+	// servía `loading` en el render del servidor, siempre: el resultado
+	// optimista de `@tanstack/query-core` pone `pending` siempre que no haya
+	// `data`, aunque la caché esté en `error`. Medido con `/announcements` en
+	// 503: la caché decía `error` y el atributo decía `loading`. Ver
+	// `use-announcements.ts` para el mecanismo y la tabla de los cuatro casos.
+	const avisos = useAnnouncements(Route.useLoaderData().announcements);
+
 	return (
 		<div className="min-h-screen">
 			<Navbar />
-			<main id="main">
+			{/*
+			  `data-announcements-source` = "api" | "loading" | "failed": avisos
+			  reales, petición en curso, o API caída. Va en el `<main>` y no en la
+			  banda porque la banda NO se pinta cuando no hay nada que decir, y sin
+			  el atributo "no hay avisos" y "la API de anuncios está caída" serían
+			  la misma página — indistinguibles para el que esté de guardia, que es
+			  exactamente el incidente que el servicio de la API evita tapar
+			  devolviendo `[]`.
+			*/}
+			<main id="main" data-announcements-source={avisos.source}>
+				<AnnouncementBanner announcements={avisos.data ?? []} />
 				<Hero />
 				<Features />
 				<HowItWorks />

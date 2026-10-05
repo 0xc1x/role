@@ -1,4 +1,5 @@
 import type {
+	AudienceKind,
 	BugTriageState,
 	BusinessVerificationStatus,
 	ContactDeliveryStatus,
@@ -157,6 +158,38 @@ const REVIEW_VISIBILITY_LABELS: Record<ReviewVisibility, string> = {
 
 export const reviewVisibilityLabel = (visibility: string): string =>
 	REVIEW_VISIBILITY_LABELS[visibility as ReviewVisibility] ?? visibility;
+
+/**
+ * A quién le toca el aviso. El token crudo no sirve en la columna: `specific` y
+ * `businesses` son dos cosas que el operador tiene que distinguir de un vistazo,
+ * y son las dos que una etiqueta igual esconde. La diferencia que tiene que ver el
+ * operador es de a quién le toca, no de cuántas personas son.
+ *
+ * Lo que esta columna no puede decir es la cantidad, y no es una falta del mapa:
+ * las dos listas de un `specific` están fuera del read path a propósito, así
+ * que el panel no tiene de dónde contarlas, y un "3 destinatarios" sería
+ * inventar el dato. Ver el bloque de `announcements.columns.tsx` que explica por
+ * qué esta columna no lleva número.
+ *
+ * Y ninguna de las dos se publica en el vacío, que es lo que este bloque daba
+ * por sentado y es falso: un aviso `businesses` llega por ROL —la policy lo
+ * concede con `my_role() = 'business'`, sin mirar `user_ids`— y un `specific`
+ * que nombra negocios llega porque al publicar la API resuelve cada
+ * `business_id` a su `owner_id` y lo suma a `user_ids`
+ * (`announcements.service.ts`, `resolverDuenosDeNegocios`). El bloque de
+ * `announcement-form.tsx` sobre lo que se retiró cuenta la historia completa.
+ *
+ * `?? audienceKind` por el mismo motivo que el resto del archivo.
+ */
+const ANNOUNCEMENT_AUDIENCE_LABELS: Record<AudienceKind, string> = {
+	all: "Todo el mundo",
+	consumers: "Consumidoras",
+	businesses: "Negocios",
+	specific: "Personas específicas",
+};
+
+export const announcementAudienceLabel = (audienceKind: string): string =>
+	ANNOUNCEMENT_AUDIENCE_LABELS[audienceKind as AudienceKind] ?? audienceKind;
 
 /**
  * Etiqueta en español del motivo de moderación.

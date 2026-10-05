@@ -31,7 +31,7 @@ import {
  * ─── WHY THE COUNT IS PINNED AND NOT DERIVED ────────────────────────────────
  *
  * `expect(noRlsTables).toEqual([])` is the shape that fails when a table loses
- * RLS. The count of 39 alongside it is the shape that fails when the harness
+ * RLS. The count pinned alongside it is the shape that fails when the harness
  * stops reproducing production at all: a `[]` is also what a database where the
  * replay quietly collapsed would return, so the empty set alone is ambiguous
  * between "fully covered" and "barely built". Both are asserted, and the count
@@ -119,7 +119,7 @@ describe('no table in public is left without RLS', () => {
       'public holds no ordinary tables, so "none is without RLS" is true for a ' +
         'reason that has nothing to do with RLS. This file would be asserting ' +
         'against an empty schema.',
-    ).toBe(39);
+    ).toBe(41);
 
     expect(
       plainRows(withoutRls).map((r) => r.relname),
@@ -141,7 +141,7 @@ describe('no table in public is left without RLS', () => {
    * that migration was proven over 34 tables in this harness while running over
    * 39 in production.
    */
-  test('the harness reproduces production coverage: 39 of 39', async () => {
+  test('the harness reproduces production coverage: 41 of 41', async () => {
     const counts = await ctx.sql.unsafe<{ total: number; with_rls: number }[]>(
       `select count(*)::int as total,
               count(*) filter (where c.relrowsecurity)::int as with_rls
@@ -152,7 +152,7 @@ describe('no table in public is left without RLS', () => {
           and c.relname <> '_harness_fingerprint'`,
     );
 
-    expect(plainRows(counts)[0]).toEqual({ total: 39, with_rls: 39 });
+    expect(plainRows(counts)[0]).toEqual({ total: 41, with_rls: 41 });
   });
 });
 

@@ -17,6 +17,7 @@ export * from './device-tokens';
 export * from './favorites';
 export * from './saved-addresses';
 export * from './categories';
+export * from './announcements';
 export * from './slides';
 export * from './tips';
 export * from './app-configs';
@@ -40,6 +41,7 @@ import {
 import { businessNotificationPreferences } from './business-notification-preferences';
 import { profiles } from './profiles';
 import { categories } from './categories';
+import { announcements, announcementAcknowledgements } from './announcements';
 import { slides } from './slides';
 import { tips } from './tips';
 import { appConfig } from './app-configs';
@@ -91,6 +93,8 @@ export const schema = {
   categories,
   slides,
   tips,
+  announcements,
+  announcementAcknowledgements,
   deviceTokens,
   favorites,
   savedAddresses,

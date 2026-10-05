@@ -541,3 +541,133 @@ autoría la sella en el servidor el trigger BEFORE INSERT
 que `value.reporter_id` es lo que diga `auth.uid()` y no lo que mande el
 cliente.
 
+## Applied: `20261004022647_announcements`
+
+Aplicada por `apply_migration` el 2026-10-04. El `md5sum` del archivo es
+`7f17bb5d5712246a4d17c70e1b167eb1` y ese es también el `md5(statements[1])` del
+ledger: archivo y base coinciden byte a byte. Crea `public.announcements` y
+`public.announcement_acknowledgements`, más tres índices: uno parcial sobre
+`(active, priority desc, created_at desc) where active` y dos GIN, uno por cada
+arreglo de audiencia. Del índice parcial está aserida la FORMA —el nombre, en el
+conjunto de los cinco de las dos tablas—, no que el planner lo elija: no corrió
+ningún `EXPLAIN` ni contra producción ni contra el replay del harness, y el plan
+depende del volumen. No borra nada y no corre ningún backfill.
+
+**La elegibilidad entera vive en la policy de select, no en el cliente.** El
+móvil y el landing leen Supabase directo, así que la consulta no pasa por la
+API: con el `USING` de esta migración la fila que no le corresponde a alguien no
+llega a su dispositivo. Los cinco términos son `active`, la ventana
+`start_at`/`end_at`, `severity = 'info' or auth.uid() is not null` —sin lo cual
+un `required` llega a un anónimo que no puede acknowledge y vuelve en cada
+apertura, para siempre—, y la audiencia: `all`, `consumers` contra
+`auth_helpers.my_role() = 'user'`, `businesses` contra `= 'business'`, y
+`specific` por `user_ids @> array[auth.uid()]`. Es `my_role()` y no un subquery
+a `profiles` porque es `security definer` y estable: la policy no depende de que
+el lector tenga permiso sobre `profiles`.
+
+**Y un anónimo entra por la rama de consumidora.** `my_role()` devuelve `'user'`
+por el `UNION ALL` de su fallback cuando no hay fila de perfil, y el visitante
+del landing no tiene perfil porque no tiene sesión: así que `anon` matchea
+`consumers`, y ve `all` y `consumers`. Es una decisión y no un descuido —el
+banner de consumidora tiene que existir fuera de la app, y no hay sesión que lo
+habilite—, pero conviene que quede escrito porque `consumers` no significa
+"usuarios con sesión". Lo que el anónimo no alcanza es lo demás: `businesses`
+exige `my_role() = 'business'` y `specific` exige `user_ids @>
+array[auth.uid()]`, que con `auth.uid()` nulo es falso. Y ninguna policy de
+escritura existe, así que leer `consumers` no compra nada. Está fijado y medido
+en el spec.
+
+**Las ausencias son la decisión, y hay que contarlas como ausencias.** En
+`announcements` no hay policy de INSERT, de UPDATE ni de DELETE: publicar es
+del operador y va por la API, y lo único que frena al cliente es la ausencia
+de policy, que es justo lo que RLS sabe hacer. En
+`announcement_acknowledgements` no hay UPDATE ni DELETE: no existe forma de
+des-acknowledgear, y un `required` entendido no vuelve a aparecer nunca, ni
+aunque el operador lo edite para corregir una errata. Por eso el ack es de la
+fila y no de su contenido. Ninguna de las dos usa `force row level security`: el
+rol dueño es con el que la API escribe, y forzado le pagaría el `USING` en cada
+fila. Y ninguna policy dice `TO public`: el rol decide, no el `sub` presente.
+Todo eso está medido en
+`apps/api/src/database/security/announcements.rls.db.spec.ts` (14 tests), y la
+forma de cada policy también —los tres inventarios del spec asertan `roles`,
+`qual` y `with_check` completos, no el nombre—, así que el
+`TO anon, authenticated` y el `TO authenticated` son un hecho medido y no una
+lectura del DDL.
+
+**El `revoke truncate, trigger, references` viaja en esta migración a
+propósito, y el motivo es el orden de las versiones.** La migración
+`20260928181714` —`revoke_client_destructive_privileges`— itera `pg_class`
+filtrado por `relrowsecurity`: una migración que resuelve un conjunto lo
+resuelve el día que corre, y la suya es anterior a esta, así que no vio estas
+dos tablas. Truncate y trigger no los gobierna ninguna policy —no hay `USING`
+que los filtre, y trigger además le deja al rol colgar su propio trigger a una
+tabla que no es suya—, así que el revoke por tabla es la parte del contrato que
+no depende de quién creó la tabla. Es el mismo hueco que `20260928184943`
+cerró para cinco tablas y que `20260930234450` volvió a cerrar para `app_store`.
+
+Vale la pena precisar qué parte de ese hueco cierra, porque la segunda mitad de
+`20260928181714` **también** revocó las tres de los default privileges de
+`postgres`: toda tabla de este directorio nace por una migración, o sea que por
+ahí ya sale limpia. Lo que ese revoke por defecto no alcanza es el ACL por
+defecto de `supabase_admin`, que `apply_migration` no puede alterar —corre
+como `postgres`, y un rol solo altera los default privileges que le
+pertenecen—, así que allá el revoke de aquella migración falló con `42501` y
+quedó sin cubrir. Si alguien quiere afirmar si este revoke explícito es o no
+redundante **hoy en producción**, la pregunta es de `pg_default_acl` en la base
+viva, no de este archivo: la segunda mitad de `20260928181714` ya dejó medido
+ese reparto y esta entrada no lo vuelve a medir.
+
+**La obligación es por migración, no por esquema.** Ninguna migración que
+resolvió un conjunto vuelve a correr: `20260928181714` no verá las tablas de
+mañana, y `public.rls_auto_enable()` —que existe en producción— no habilita
+RLS sola porque no está conectada a ningún event trigger, como fija
+`enable-rls.rls.db.spec.ts`. Así que cada `create table` en `public` trae su
+propio `alter table … enable row level security` y su propio revoke, y el
+precio de olvidarlo es invisible en el archivo equivocado: se descubre
+leyendo el spec, no la migración. Por eso el conteo de tablas está fijado en
+41 en los dos specs que miden el conjunto, y sube de a uno con cada tabla
+nueva —39 antes de esta migración—: esos pines son los que convierten la
+obligación en algo que falla ruidosamente en vez de algo que nadie nota.
+
+**Dos cosas que esta migración deja abiertas. Son follow-ups, no notas.**
+
+La primera es el hueco de `business_ids`, y conviene decirlo con precisión
+porque la validación que lo rodea se lee al revés de lo que es. El endpoint de
+publicación exige que un `specific` traiga al menos un id en `user_ids` **o** en
+`business_ids`, y eso **no cierra el hueco: lo deja alcanzable**. Un `specific`
+cargado solo con `business_ids` pasa esa validación, y con el `USING` de esta
+migración es **invisible para todos**: no matchea `all`, ni `consumers`, ni
+`businesses`, y `user_ids @> array[auth.uid()]` es falso porque el arreglo viene
+vacío. El índice GIN de `business_ids` está creado igual, que es lo correcto: es
+el que va a necesitar cualquiera de las salidas. Hasta que se elija una, un
+anuncio publicado puede no verlo nadie, y el operador no tiene forma de saberlo
+desde el panel.
+
+| salida | qué cambia | quién tiene que decidirla |
+| --- | --- | --- |
+| (a) un `CHECK` de frontera | el DDL rechaza el `specific` sin `user_ids` | una migración nueva, y es la más barata |
+| (b) la API resuelve `business_ids` → `user_ids` al publicar | la fila llega con los `user_ids` resueltos | el endpoint, y el diseño |
+| (c) el endpoint rechaza el `specific` solo con `business_ids` | el error es explícito y el panel puede avisarlo | el endpoint, y el diseño |
+
+La segunda salida que nombra la cabecera de la migración —que la policy mire
+`business_ownership`— es más invasiva y está aparte: tocaría el spec de RLS y el
+modelo de permisos. Ninguna de las cuatro se toma desde un DDL, y por eso la
+columna de la derecha dice quién decide en vez de decir qué hace el SQL.
+
+La segunda es un índice que falta, y es la más barata de las dos. La PK de
+`announcement_acknowledgements` es `(announcement_id, user_id)`, así que su
+lado izquierdo es `announcement_id` y **no sirve** para
+`using (user_id = auth.uid())`, que es la policy de lectura de esa tabla, ni
+para la consulta caliente de la app —el `not in (select announcement_id … where
+user_id = auth.uid())` que descarta lo entendido—. Hoy el costo es cero y no
+porque el índice esté, sino porque no hay volumen: el spec siembra once anuncios
+—`toBe(11)`, "las once filas sembradas"— y tres acknowledgements, así que
+ninguna de las dos tablas tiene tamaño que dé trabajo. El día que las tablas
+crezcan, esa ausencia se paga así: sin índice sobre `user_id`, tanto el `select`
+de la policy como el `not in` de la app **recorren la tabla entera** y evalúan
+el predicado fila por fila, para cada persona y en cada arranque — no "la lista
+de esa persona", que es lo que sugiere leerlo al revés: sin índice no hay lista
+de nadie, hay tabla completa. Un índice sobre `(user_id)` lo resuelve. No se
+agrega acá porque **esta migración ya está aplicada y sellada con su md5**:
+sería una migración nueva, y una que se aplica por un índice que hoy no urge es
+la clase de cambio que entra junto con el próximo que sí lo urge.

@@ -56,6 +56,7 @@ import { analytics } from "@/src/core/analytics";
 import { appConfigQueryOptions } from "@/src/features/config";
 import { useAuthStore, watchAuthState } from "@/src/features/auth/store";
 import { syncAnalyticsConsent } from "@/src/features/auth/data/repository";
+import { AnnouncementModals } from "@/src/features/announcements";
 import { pendingBusinessOnboardingRepository } from "@/src/features/business/data/onboarding";
 import {
 	initNotificationHandler,
@@ -236,6 +237,7 @@ function RootLayout() {
 				<ThemeProvider onHydrated={() => setThemeReady(true)}>
 					<QueryClientProvider client={queryClient}>
 						<ThemedRootStack />
+						<AnnouncementModals />
 						<Toaster />
 					</QueryClientProvider>
 					<PortalHost />
@@ -244,6 +246,23 @@ function RootLayout() {
 		</Sentry.ErrorBoundary>
 	);
 }
+
+// ─── Avisos del operador ─────────────────────────────────────────────────────
+//
+// POR QUÉ ESTÁ ACÁ Y NO EN UNA RUTA: una pila de avisos no es "una pantalla".
+// Lo que el layout garantiza —y una ruta no— es que el aviso no se PSLVE al
+// navegar, porque el layout no se desmonta. Dentro del `<Stack>` el router lo
+// desmonta al cambiar de pantalla, y eso es una lectura por navegación: un
+// `required` que aparece a mitad de un checkout, sin que nadie lo haya pedido.
+//
+// Nota sobre el timing: esto se monta con la app, detrás del mismo
+// `if (!fontsLoaded || !configReady) return null` que el resto y de la
+// hidratación del tema. El aviso aparece cuando aparece la app, no antes.
+//
+// Lo que decide la cola —qué modal se abre, con qué `key`, y a qué callback va
+// cada gesto— vive en `AnnouncementModals`, no acá: su JSX es el que tiene que
+// quedar FUERA del `<Stack>`, y desde el dominio se prueba con comportamiento
+// en vez de con un regex sobre este archivo.
 
 // Stack raíz con contentStyle temático: va en componente hijo porque
 // useTheme() solo existe bajo ThemeProvider (que además no pinta hijos
