@@ -74,19 +74,36 @@ export function AnnouncementBanner({
 	// `<section aria-label>` y no `<div role="region">`: el elemento semántico ES
 	// la región, y con nombre accesible es un landmark — lo mismo que anuncia el
 	// banner de cookies, sin el `role` escrito a mano.
+	//
+	// Los dos modos de color salen de `group-data-[solid=true]:` y no de una prop.
+	// Esta banda vive DENTRO del `<header>` de la navbar (ver `Navbar`), y lo que
+	// decide su color es si la navbar está todavía sobre el hero oscuro o ya
+	// pasó a vidrio blanco. Ese estado es de la navbar: lo publica en
+	// `data-solid` y esta lo lee del DOM. Así que no hay contrato nuevo entre las
+	// dos ni una prop que alguien pueda pasar con el valor equivocado.
+	//
+	// Transparente: sin fondo propio, para que el `backdrop-blur` del header sea lo
+	// que se ve detrás, y texto blanco —el hero es oscuro—. Sólida: fondo de
+	// superficie y texto de primer plano, igual que el resto del header.
+	//
+	// El `border-t` y no un `border-b`: es la única separación entre la barra y la
+	// banda, porque el `border-b` del header queda por debajo de ambas.
 	return (
 		<section
 			aria-label="Avisos de Rolé"
-			className="border-b border-role-border bg-role-surface-muted"
+			className="border-t border-white/10 transition-colors duration-500 group-data-[solid=true]:border-role-border/40 group-data-[solid=true]:bg-role-surface-muted"
 		>
-			<div className="mx-auto flex w-full max-w-6xl items-start gap-3 px-5 py-3 md:px-8">
-				<span aria-hidden="true" className="mt-0.5 shrink-0 text-role-primary">
+			<div className="mx-auto flex w-full max-w-6xl items-start gap-3 px-4 py-2.5 md:px-5">
+				<span
+					aria-hidden="true"
+					className="mt-0.5 shrink-0 text-white/80 transition-colors duration-500 group-data-[solid=true]:text-role-primary"
+				>
 					<Megaphone className="h-4 w-4" />
 				</span>
-				<ul className="min-w-0 flex-1 space-y-2">
+				<ul className="min-w-0 flex-1 space-y-1.5">
 					{announcements.map((announcement) => (
 						<li key={announcement.id}>
-							<p className="font-heading text-sm font-bold text-role-foreground">
+							<p className="font-heading text-sm font-bold text-white transition-colors duration-500 group-data-[solid=true]:text-role-foreground">
 								{announcement.title}
 							</p>
 							{/*
@@ -97,7 +114,7 @@ export function AnnouncementBanner({
 							  nada: el navegador sigue viendo el `<b>` del operador
 							  como los caracteres `<b>`.
 							*/}
-							<p className="mt-0.5 whitespace-pre-line text-sm leading-relaxed text-role-muted-foreground">
+							<p className="mt-0.5 whitespace-pre-line text-sm leading-relaxed text-white/80 transition-colors duration-500 group-data-[solid=true]:text-role-muted-foreground">
 								{announcement.body}
 							</p>
 						</li>

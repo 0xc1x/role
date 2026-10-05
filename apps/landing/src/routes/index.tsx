@@ -80,20 +80,31 @@ function LandingPage() {
 	// `use-announcements.ts` para el mecanismo y la tabla de los cuatro casos.
 	const avisos = useAnnouncements(Route.useLoaderData().announcements);
 
+	// El aviso va DENTRO de la navbar, no antes del `<main>`.
+	//
+	// La navbar es `fixed`, así que el primer hijo de `<main>` queda dibujado
+	// debajo de ella: la banda se veía translúcida bajo el `backdrop-blur` y, al
+	// scrollear, la navbar se ponía sólida encima. La primera versión intentó
+	// arreglarlo con un `pt` en `<main>`, y era un error de partida: el padding no
+	// despeja nada, abre un hueco — y además empujaba el hero, que es
+	// `min-h-[100vh] flex items-center` y está hecho para quedar bajo la navbar
+	// transparente. Adentro del `<header>` no hay nada que reservar: la navbar
+	// crece con el aviso y comparte su mismo cambio de color.
 	return (
 		<div className="min-h-screen">
-			<Navbar />
+			<Navbar>
+				<AnnouncementBanner announcements={avisos.data ?? []} />
+			</Navbar>
 			{/*
 			  `data-announcements-source` = "api" | "loading" | "failed": avisos
-			  reales, petición en curso, o API caída. Va en el `<main>` y no en la
-			  banda porque la banda NO se pinta cuando no hay nada que decir, y sin
-			  el atributo "no hay avisos" y "la API de anuncios está caída" serían
-			  la misma página — indistinguibles para el que esté de guardia, que es
-			  exactamente el incidente que el servicio de la API evita tapar
-			  devolviendo `[]`.
+			  reales, petición en curso, o API caída. Va en el `<main>` y NO en la
+			  banda, que ahora vive en la navbar, por el mismo motivo de siempre: la
+			  banda no se pinta cuando no hay nada que decir. Sin este atributo, "no
+			  hay avisos" y "la API de anuncios está caída" serían la misma página —
+			  indistinguibles para el que esté de guardia, que es exactamente el
+			  incidente que el servicio de la API evita tapar devolviendo `[]`.
 			*/}
 			<main id="main" data-announcements-source={avisos.source}>
-				<AnnouncementBanner announcements={avisos.data ?? []} />
 				<Hero />
 				<Features />
 				<HowItWorks />

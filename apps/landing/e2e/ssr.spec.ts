@@ -137,6 +137,62 @@ test.describe("the announcement the operator wrote", () => {
 		return counts;
 	}
 
+	/**
+	 * The band is part of the navbar, not of the page.
+	 *
+	 * The `<header>` is `fixed`, so the first child of `<main>` renders UNDERNEATH
+	 * it: the band served as a translucent strip behind a `backdrop-blur` header —
+	 * the navbar read as a white bar, and the operator's announcement was invisible
+	 * until you scrolled, at which point the navbar turned solid and covered its
+	 * own strip. Reserving height with a `pt` on `<main>` was the wrong fix, twice
+	 * over: padding clears nothing, it opens a hole, and it pushed a `Hero` that is
+	 * `min-h-[100vh] flex items-center` off the screen.
+	 *
+	 * So the assertion is a POSITION claim, and it is structural rather than
+	 * cosmetic: the band must be inside the `<header>`, which is the only place
+	 * where there is nothing left to overlap. A band back in `<main>` — where it
+	 * used to be, and where it would pass every other test in this file — fails
+	 * here.
+	 *
+	 * The `data-solid` half is what makes the band follow the navbar's colour
+	 * change instead of keeping a background of its own that disagrees with the
+	 * header. It is asserted as a `false` on purpose: on the server the navbar has
+	 * not measured anything yet, so the band must not claim to be solid while the
+	 * dark hero is still behind it.
+	 */
+	test("serves the band inside the fixed header, and never with its own solid look", async ({
+		request,
+	}) => {
+		await setAnnouncementsMode(request, "hostil");
+		const { status, html } = await getServedHtml(request, "/");
+		expect(status).toBe(200);
+
+		const headerStart = html.indexOf("<header");
+		const headerEnd = html.indexOf("</header>");
+		const bandStart = html.indexOf('<section aria-label="Avisos de Rolé"');
+
+		expect(bandStart, "the band must be in the served HTML").toBeGreaterThan(-1);
+		expect(headerStart).toBeGreaterThan(-1);
+		expect(headerEnd).toBeGreaterThan(headerStart);
+		expect(
+			bandStart,
+			"the band must be INSIDE the header — the header is fixed, so anything in <main> renders under it",
+		).toBeGreaterThan(headerStart);
+		expect(bandStart).toBeLessThan(headerEnd);
+
+		// The state the band styles itself against, published by the navbar.
+		const headerTag = html.slice(headerStart, html.indexOf(">", headerStart));
+		expect(headerTag).toContain("group");
+		expect(headerTag).toMatch(/data-solid="(true|false)"/);
+		// Unmeasured on the server: false, never true.
+		expect(headerTag).toContain('data-solid="false"');
+
+		// And no page-level offset was reintroduced to compensate.
+		const mainTag = html.match(/<main\b[^>]*>/)?.[0] ?? "";
+		expect(mainTag, "the <main> must be in the served HTML").not.toBe("");
+		expect(mainTag).not.toContain("pt-14");
+	});
+
 	test("is served as inert text: escaped in the bytes, and with no element of its own", async ({
 		request,
 	}) => {

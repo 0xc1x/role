@@ -1,5 +1,5 @@
 import { Link, useMatchRoute, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Wordmark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
@@ -28,10 +28,28 @@ const DARK_HERO_ROUTES = new Set([
 	"/terms",
 ]);
 
-export function Navbar() {
+/**
+ * `children` se renderiza DENTRO del `<header>`, debajo de la barra.
+ *
+ * Es lo que permite que un aviso del operador forme parte de la navbar en vez de
+ * empujar el contenido. La alternativa —una banda en el flujo de `<main>`— choca
+ * con que el `<header>` es `fixed`: el primer hijo de `<main>` queda dibujado
+ * debajo de él, así que la banda se veía translúcida bajo el `backdrop-blur` y
+ * había que abrirle un hueco con un `pt`, que no es despejar la navbar sino
+ * abrir un agujero en la página. Adentro no hay nada que reservar: la navbar crece,
+ * y crece con el mismo comportamiento de color que el resto.
+ *
+ * El hijo se estila contra `group-data-[solid=true]:`, no contra una prop. El
+ * estado de "sólida o transparente" es de la navbar y ella lo publica en el DOM;
+ * quien se monte adentro lo lee de ahí y no hay drilling ni contrato nuevo entre
+ * los dos.
+ */
+export function Navbar({ children }: { children?: ReactNode }) {
 	const [open, setOpen] = useState(false);
 	const [pastHero, setPastHero] = useState(false);
 	const [heroBottom, setHeroBottom] = useState(0);
+	const [headerHeight, setHeaderHeight] = useState(64);
+	const headerRef = useRef<HTMLElement | null>(null);
 	const matchRoute = useMatchRoute();
 	const storeLink = useStoreLink();
 	const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -55,12 +73,32 @@ export function Navbar() {
 		};
 	}, []);
 
+	// Su PROPIA altura, y no un 64 cableado.
+	//
+	// El umbral del scroll usa la altura del header entero, y el header ya no es
+	// una barra de 56/64px: si lleva un aviso adentro, es más alto. Con el 64 fijo
+	// la navbar se volvía sólida 56px tarde y el aviso ya había pasado a texto
+	// oscuro sobre el hero oscuro — texto sobre fondo del mismo color, que es peor
+	// que el hueco que esto viene a arreglar. Un `ResizeObserver` además cubre lo
+	// que el `setTimeout(600)` de arriba no: que el aviso llegue DESPUÉS del
+	// primer render.
 	useEffect(() => {
-		const handleScroll = () => setPastHero(window.scrollY > heroBottom - 64);
+		const header = headerRef.current;
+		if (!header) return;
+		const read = () => setHeaderHeight(header.offsetHeight);
+		read();
+		const observer = new ResizeObserver(read);
+		observer.observe(header);
+		return () => observer.disconnect();
+	}, []);
+
+	useEffect(() => {
+		const handleScroll = () =>
+			setPastHero(window.scrollY > heroBottom - headerHeight);
 		handleScroll();
 		window.addEventListener("scroll", handleScroll, { passive: true });
 		return () => window.removeEventListener("scroll", handleScroll);
-	}, [heroBottom]);
+	}, [heroBottom, headerHeight]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: cierra el menú al navegar
 	useEffect(() => {
@@ -74,7 +112,13 @@ export function Navbar() {
 	return (
 		<>
 			<header
-				className={`fixed inset-x-0 top-0 z-50 border-b ${open ? "transition-none" : "transition-all duration-500"} ${
+				ref={headerRef}
+				// `data-solid` es el estado publicado para lo que se monte en
+				// `children`: el aviso lee `group-data-[solid=true]:` y no necesita
+				// que le pasen el color por prop. El `group` va acá, en el `<header>`,
+				// para que el estado de la navbar alcance a toda su descendencia.
+				data-solid={headerSolid}
+				className={`group fixed inset-x-0 top-0 z-50 border-b ${open ? "transition-none" : "transition-all duration-500"} ${
 					headerSolid
 						? "border-role-border/40 bg-white shadow-soft"
 						: "border-white/10 bg-transparent backdrop-blur-[15px]"
@@ -170,6 +214,13 @@ export function Navbar() {
 						</div>
 					</div>
 				</div>
+				{/*
+				 * El aviso va acá, adentro del `<header>` y DEBAJO de la barra de
+				 * `max-w-6xl`: así el `backdrop-blur` y el fondo de la navbar lo
+				 * cubren a él también, y no hay una segunda superficie que pueda
+				 * quedar de un color distinto del header.
+				 */}
+				{children}
 			</header>
 
 			<Drawer
