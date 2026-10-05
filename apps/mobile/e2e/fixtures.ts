@@ -725,6 +725,73 @@ export function businessLocationFixture(
 }
 
 /**
+ * One `announcements` row, in the shape `COLUMNAS` selects.
+ *
+ * The column list is COPIED from the repository on purpose, and that list is
+ * itself derived: `COLUMNAS = Object.keys(AnnouncementSchema.shape).join(", ")`.
+ * So the two absences that matter here are the contract's, not this file's —
+ * `user_ids` and `business_ids` are the WRITE path and no read needs them, and
+ * adding them to a fixture would typecheck, render, and hide the fact that the
+ * app cannot ask for the list of everyone else an announcement locates.
+ *
+ * The return type names the four fields a spec asserts on, the same reason
+ * `businessFixture` spells its own out: a spec should read `title` and
+ * `severity` off the row without a cast, and adding a column to the fixture
+ * should be visible at the call site instead of arriving as a silent `unknown`.
+ *
+ * `priority` is 5 and `created_at` is fixed rather than derived from the clock,
+ * because two specs depend on the ORDER the server serves: the query asks for
+ * `priority DESC, created_at DESC` and this stub answers with the array as-is,
+ * so the array order IS the served order. A fixture that invented timestamps
+ * per call would make "which one arrives first" a property of the machine.
+ *
+ * AND THE ID IS A REAL `z.uuid()`. `UuidSchema` is `z.uuid()`, which checks the
+ * RFC 4122 version and variant nibbles, and `fetchPendingAnnouncements`
+ * validates the whole list against the contract before the app renders anything.
+ * A made-up id like `c0c0c0c0-1d1d-…` parses as a plausible-looking string and
+ * is REJECTED as a uuid, so the row never reaches the screen and every modal
+ * assertion in the spec fails at once with "no dialog" — nine red tests whose
+ * message points at the DOM instead of at the fixture. Same reason the sibling
+ * fixtures in this file use `…-4000-8000-…`: those two groups are the version
+ * and the variant, not decoration.
+ */
+export function announcementFixture(
+	overrides: Record<string, unknown> = {},
+): Record<string, unknown> & {
+	id: string;
+	title: string;
+	severity: "info" | "required";
+	priority: number;
+} {
+	return {
+		id: "d0a00000-0000-4000-8000-00000000004a",
+		title: "Mantenimiento programado",
+		body: "Esta noche no vas a poder pedir entre las 23:00 y la 01:00.",
+		severity: "info",
+		audience_kind: "all",
+		priority: 5,
+		active: true,
+		start_at: null,
+		end_at: null,
+		created_at: "2026-10-01T12:00:00.000Z",
+		updated_at: "2026-10-01T12:00:00.000Z",
+		...overrides,
+	};
+}
+
+/**
+ * One `announcement_acknowledgements` row, in the shape the repository selects.
+ *
+ * It is the only piece of state that lives on the SERVER, and it is why a
+ * `required` behaves differently from an `info`: dismissing an informative is an
+ * id in AsyncStorage and nothing else, so a stub that answered this endpoint
+ * with a row would be claiming a write that no code in the app made.
+ */
+export function acknowledgementFixture(announcementId: string) {
+	return { announcement_id: announcementId };
+}
+
+/**
  * One row of the business orders list, in the shape `ORDER_SELECT` returns.
  *
  * The embedded `offers` / `businesses` / `profiles` objects are what
