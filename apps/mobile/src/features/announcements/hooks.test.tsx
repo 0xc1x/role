@@ -19,8 +19,17 @@ const fetchAcknowledgedIds = jest.fn(
 const fetchDismissedIdsLocally = jest.fn(
 	(): Promise<ReadonlySet<string>> => Promise.resolve(new Set()),
 );
+// Los dos del `required` que la lista lee y el modal no. El doble del módulo
+// tiene que declararlos porque `hooks.ts` los importa: bun valida los imports
+// contra el módulo reemplazado, así que sin ellos el archivo entero no carga.
+const fetchDismissedRequiredIdsLocally = jest.fn(
+	(): Promise<ReadonlySet<string>> => Promise.resolve(new Set()),
+);
 const acknowledgeAnnouncement = jest.fn((): Promise<void> => Promise.resolve());
 const dismissAnnouncementsLocally = jest.fn(
+	(): Promise<void> => Promise.resolve(),
+);
+const dismissRequiredAnnouncementLocally = jest.fn(
 	(): Promise<void> => Promise.resolve(),
 );
 
@@ -28,8 +37,10 @@ mock.module("@/src/features/announcements/data/repository", () => ({
 	fetchPendingAnnouncements,
 	fetchAcknowledgedIds,
 	fetchDismissedIdsLocally,
+	fetchDismissedRequiredIdsLocally,
 	acknowledgeAnnouncement,
 	dismissAnnouncementsLocally,
+	dismissRequiredAnnouncementLocally,
 	currentAudience: () => "user",
 }));
 
@@ -55,12 +66,18 @@ mock.module("@/src/features/auth/store", () => ({
 }));
 
 const {
+	announcementListOptions,
+	announcementListQueryKey,
 	announcementModalSequenceOptions,
 	announcementQueryKey,
+	fetchAnnouncementList,
 	fetchAnnouncementModalSequence,
+	useAnnouncementList,
 	useAnnouncementModals,
 } = await import("./hooks");
-const { buildModalSequence } = await import("./domain/announcement");
+const { buildAnnouncementList, buildModalSequence } = await import(
+	"./domain/announcement"
+);
 
 const REQUIRED: Announcement = {
 	id: "a0000000-0000-4000-8000-000000000001",
@@ -83,11 +100,18 @@ const INFO: Announcement = {
 };
 
 type Secuencia = ReturnType<typeof buildModalSequence>;
+type Fila = ReturnType<typeof buildAnnouncementList>[number];
 
 interface Api {
 	modals: Secuencia;
 	acknowledge: (id: string) => Promise<void>;
 	dismissInfo: (ids: string[]) => void;
+}
+
+interface ApiLista {
+	items: Fila[];
+	acknowledge: (id: string) => Promise<void>;
+	silence: (id: string) => void;
 }
 
 const PERSONA = "b0000000-0000-4000-8000-000000000001";
@@ -146,6 +170,50 @@ function conCola(
 	return { api, client, leer: () => client.getQueryData(CLAVE()) };
 }
 
+/** La clave de la lista, que es OTRA entrada y no la de los modales. */
+const CLAVE_LISTA = () => announcementListQueryKey("user", PERSONA);
+
+/**
+ * Monta el hook de la lista, con la lista YA en el caché.
+ *
+ * Es el mismo arnés que `conCola` y por la misma razón: la siembra va antes del
+ * render, así que `api.items` y `leer()` miran lo mismo y una aserción sobre la
+ * actualización del caché no puede pasar por casualidad.
+ */
+function conLista(
+	anuncios: Announcement[],
+	acknowledged: string[] = [],
+	dismissedRequired: string[] = [],
+): {
+	api: ApiLista;
+	client: QueryClient;
+	leer: () => Fila[] | undefined;
+} {
+	const filas = buildAnnouncementList(
+		anuncios,
+		new Set(acknowledged),
+		new Set(dismissedRequired),
+	);
+	const client = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	});
+	client.setQueryData(CLAVE_LISTA(), filas);
+	const holder: { api: ApiLista | null } = { api: null };
+	function Probe() {
+		holder.api = useAnnouncementList();
+		return null;
+	}
+	renderToStaticMarkup(
+		createElement(QueryClientProvider, { client }, createElement(Probe)),
+	);
+	if (!holder.api) throw new Error("el hook no llegó a montarse");
+	return {
+		api: holder.api,
+		client,
+		leer: () => client.getQueryData(CLAVE_LISTA()),
+	};
+}
+
 beforeEach(() => {
 	initialized = true;
 	sesion = { id: PERSONA, role: "user" };
@@ -155,8 +223,10 @@ beforeEach(() => {
 	fetchPendingAnnouncements.mockReset().mockResolvedValue([]);
 	fetchAcknowledgedIds.mockReset().mockResolvedValue(new Set());
 	fetchDismissedIdsLocally.mockReset().mockResolvedValue(new Set());
+	fetchDismissedRequiredIdsLocally.mockReset().mockResolvedValue(new Set());
 	acknowledgeAnnouncement.mockReset().mockResolvedValue(undefined);
 	dismissAnnouncementsLocally.mockReset().mockResolvedValue(undefined);
+	dismissRequiredAnnouncementLocally.mockReset().mockResolvedValue(undefined);
 });
 
 describe("D7: la apertura de la app no depende de la consulta", () => {
@@ -397,5 +467,140 @@ describe("descartar el lote de info es local y no espera a la red", () => {
 		// Un id que no está en la secuencia no inventa ni borra modales: el
 		// descarte llega desde el propio lote que se mostró.
 		expect(leer()?.map((m) => m.kind)).toEqual(["required"]);
+	});
+});
+
+describe("la lista lee los tres insumos, y el tercero la distingue", () => {
+	test("trae el descarte de los required, que el modal no lee", async () => {
+		fetchPendingAnnouncements.mockResolvedValue([REQUIRED]);
+		fetchAcknowledgedIds.mockResolvedValue(new Set());
+		fetchDismissedRequiredIdsLocally.mockResolvedValue(new Set([REQUIRED.id]));
+
+		const items = await fetchAnnouncementList();
+
+		// LA DIFERENCIA CON EL MODAL. El modal consulta el almacén de descartes solo
+		// para el `info`; esta pantalla necesita el de los `required`. Con los otros
+		// dos, el aviso silenciado salía `pending` y el gesto de silenciarlo parecía
+		// no haber hecho nada.
+		expect(items.map((item) => item.state)).toEqual(["dismissed"]);
+		expect(fetchDismissedRequiredIdsLocally).toHaveBeenCalledTimes(1);
+		// Y los otros dos, una vez cada uno: la lista muestra las dos severidades y
+		// el estado de cada una.
+		expect(fetchPendingAnnouncements).toHaveBeenCalledTimes(1);
+		expect(fetchAcknowledgedIds).toHaveBeenCalledTimes(1);
+	});
+
+	test("la lista conserva lo resuelto y el aviso pendiente", async () => {
+		fetchPendingAnnouncements.mockResolvedValue([REQUIRED, INFO]);
+		fetchAcknowledgedIds.mockResolvedValue(new Set([REQUIRED.id]));
+		fetchDismissedRequiredIdsLocally.mockResolvedValue(new Set());
+
+		const items = await fetchAnnouncementList();
+
+		// Al revés que el modal: una lista de historial esconde lo pendiente y
+		// MUESTRA lo resuelto, que es justo lo que el modal saca.
+		expect(items.map((item) => item.state)).toEqual([
+			"acknowledged",
+			"pending",
+		]);
+	});
+
+	test("su entrada de caché no es la de los modales", () => {
+		// Dos formas distintas —filas contra secuencia de modales— en una sola
+		// entrada: el `setQueryData` de una escribiría su lista donde la otra espera
+		// modales, y la lectura siguiente de cualquiera hallaría datos ajenos.
+		expect(CLAVE_LISTA()).not.toEqual(CLAVE());
+		expect(CLAVE_LISTA()).toContain("list");
+	});
+
+	test("un intento, sin throwOnError y sin sesión resuelta no se consulta", () => {
+		const opciones = announcementListOptions("user", PERSONA, true);
+
+		// Sin reintento automático porque hay un «Reintentar» en la pantalla: uno
+		// diferido cambiaría el mensaje de una pantalla que la persona ya está
+		// leyendo. Sin `throwOnError` porque la pantalla dibuja su propio error.
+		expect(opciones.retry).toBe(false);
+		expect(opciones.throwOnError).toBeUndefined();
+		expect(opciones.queryFn).toBe(fetchAnnouncementList);
+		expect(announcementListOptions("user", PERSONA, false).enabled).toBe(false);
+	});
+});
+
+describe("entender un required desde la lista", () => {
+	test("escribe primero y recién ahí actualiza las dos entradas", async () => {
+		let liberar: () => void = () => {};
+		acknowledgeAnnouncement.mockImplementation(
+			() =>
+				new Promise<void>((resolve) => {
+					liberar = resolve;
+				}),
+		);
+		const { api, client, leer } = conLista([REQUIRED, INFO]);
+		client.setQueryData(
+			CLAVE(),
+			buildModalSequence([REQUIRED], new Set(), new Set()),
+		);
+
+		const pendiente = api.acknowledge(REQUIRED.id);
+		// Antes de que el servidor confirme, la fila sigue pendiente: si saliera al
+		// instante y la escritura fallara, la persona cerraría un aviso que nunca
+		// quedó registrado — y como la fila no se puede corregir, no volvería.
+		expect(leer()?.[0]?.state).toBe("pending");
+
+		liberar();
+		await pendiente;
+
+		expect(acknowledgeAnnouncement).toHaveBeenCalledWith(REQUIRED.id);
+		const fila = leer()?.[0];
+		expect(fila?.state).toBe("acknowledged");
+		// Y las dos acciones se apagan: un aviso resuelto no tiene a qué
+		// aplicárselas, y dejarlas ofrecería un gesto que ya no hace nada.
+		expect(fila?.canAcknowledge).toBe(false);
+		expect(fila?.canDismiss).toBe(false);
+		// La fila de `info` queda como estaba: el acknowledgement es de `required`.
+		expect(leer()?.[1]?.state).toBe("pending");
+	});
+
+	test("saca también el aviso de la cola que el layout tiene montada", async () => {
+		const { api, client } = conLista([REQUIRED]);
+		client.setQueryData(
+			CLAVE(),
+			buildModalSequence([REQUIRED], new Set(), new Set()),
+		);
+
+		await api.acknowledge(REQUIRED.id);
+
+		// Sin esto, entender el aviso desde la lista lo sacaría de la pantalla y lo
+		// dejaría apareciendo como modal detrás: la cola del layout sigue montada
+		// y tenía el mismo aviso guardado.
+		expect(client.getQueryData<Secuencia>(CLAVE())).toEqual([]);
+	});
+
+	test("si la escritura falla, la fila sigue pendiente", async () => {
+		acknowledgeAnnouncement.mockRejectedValue(new Error("sin red"));
+		const { api, leer } = conLista([REQUIRED]);
+
+		await expect(api.acknowledge(REQUIRED.id)).rejects.toThrow();
+
+		expect(leer()?.[0]?.state).toBe("pending");
+	});
+});
+
+describe("silenciar un required desde la lista es local", () => {
+	test("la fila cambia al instante y el descarte va detrás", () => {
+		const { api, leer } = conLista([REQUIRED, INFO]);
+
+		api.silence(REQUIRED.id);
+
+		// Sin `await` y sin rollback: `dismissRequiredAnnouncementLocally` no pega
+		// contra la red —es un id en AsyncStorage— y nunca lanza, así que la fila
+		// cambia antes que el disco o el gesto se lee como que no pasó nada.
+		expect(leer()?.[0]?.state).toBe("dismissed");
+		expect(leer()?.[0]?.canDismiss).toBe(false);
+		expect(dismissRequiredAnnouncementLocally).toHaveBeenCalledWith(
+			REQUIRED.id,
+		);
+		// El `info` no se toca: su descarte vive en el modal.
+		expect(leer()?.[1]?.state).toBe("pending");
 	});
 });

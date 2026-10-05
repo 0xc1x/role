@@ -3,9 +3,8 @@
  *
  * Este es el índice del feature y su comentario ES la frontera. Lo que sale de
  * acá es lo que la pantalla necesita para hacer su trabajo y nada que le
- * permita saltarse una regla. La lista es completa: once símbolos —nueve de
- * runtime y dos tipos— y lo que se quitó está en "NO se exporta", con su
- * motivo.
+ * permita saltarse una regla. La lista es completa —runtime y tipos— y lo que se
+ * quitó está en "NO se exporta", con su motivo.
  *
  * EXPORTA:
  *
@@ -43,15 +42,35 @@
  *    la ausencia de `throwOnError` son valores dentro de un `useQuery({...})`
  *    que un test no puede leer, y la función que arma la secuencia solo se
  *    ejercita a través del ciclo de vida de la consulta.
+ *  - `useAnnouncementList`, `announcementListOptions`,
+ *    `fetchAnnouncementList` y `announcementListQueryKey`: lo que la pantalla de
+ *    «ver todos» necesita del hook. `announcementListQueryKey` sale por la misma
+ *    razón que `announcementQueryKey` —quien monte la lista tiene que poder leer
+ *    o invalidar su entrada sin reconstruir la forma de la clave—, y además porque
+ *    las dos claves se parecen a propósito y confundirlas escribiría filas donde
+ *    hay modales.
  *
  * NO se exporta, y el motivo de cada uno:
  *
+ *  - `AnnouncementList`. No por secreto sino por COSTE DE STUBS: el componente se
+ *    monta desde la ruta y el import de la ruta lo hace por ruta directa —como
+ *    `app/report-problem.tsx` con su sheet—, mientras que el layout, que no es
+ *    una ruta, importa `AnnouncementModals` por acá. Reexportarlo obligaría a que
+ *    todo `mock.module("@/src/core/ui", …)` parcial que carga este módulo
+ *    declarara `EmptyState`, `LoadingView`, `Screen`, `ScreenHeader` y
+ *    `StatusBadge` aunque no renderice una fila, y la falla que eso produce
+ *    apunta al test y no al export que la causó.
  *  - `acknowledgeAnnouncement` y `dismissAnnouncementsLocally`. Que el
  *    acknowledgement escriba con el `user_id` de la sesión es lo que sostiene el
  *    invariante "solo acknowledge para vos" junto a la policy; si el componente
  *    pudiera pasar un usuario, el invariante pasa a ser una línea de código. El
  *    descarte local, por lo mismo: su clave de audiencia se deriva de la sesión
  *    y no se declara. Por eso la pantalla no los tiene: los usa el hook.
+ *  - `dismissRequiredAnnouncementLocally`. Por la misma razón, y con un motivo
+ *    más: silenciar un `required` NO escribe la fila de acknowledgement —esa
+ *    tabla no tiene policy de UPDATE ni de DELETE—, y que el botón que lo dispara
+ *    fuera del módulo obligaría a que alguien entendiera por qué esa fila no
+ *    existe. Lo usa el hook de la lista.
  *  - `announcementAudience` y `localDismissalKey`. Son la manera en que el
  *    descarte se ata a una audiencia. Que no salgan de acá es lo que hace cierto
  *    el argumento de "la audiencia se deriva, no se declara" a nivel de módulo, y
@@ -60,6 +79,10 @@
  *  - `applyLocalDismissal` y `applyAcknowledgement`. Son la mecánica interna de
  *    la actualización de caché del hook; la pantalla no arma secuencias ni las
  *    edita, las recibe.
+ *  - `buildAnnouncementList` y los tipos `AnnouncementListItem` /
+ *    `AnnouncementListState`. La lista los recibe ya armados: el componente no
+ *    sabe qué es un `severity` ni qué estado corresponde a qué conjunto, y
+ *    exportar el agrupado sería darle la regla a la capa que la recibe.
  *  - `MAX_LOCAL_DISMISSALS`. Es un tope de almacenamiento, no un parámetro de
  *    presentación.
  *  - `fetchPendingAnnouncements`, `fetchAcknowledgedIds` y
@@ -78,8 +101,12 @@ export type {
 export { AnnouncementDialog } from "./components/AnnouncementDialog";
 export { AnnouncementModals } from "./components/AnnouncementModals";
 export {
+	announcementListOptions,
+	announcementListQueryKey,
 	announcementModalSequenceOptions,
 	announcementQueryKey,
+	fetchAnnouncementList,
 	fetchAnnouncementModalSequence,
+	useAnnouncementList,
 	useAnnouncementModals,
 } from "./hooks";

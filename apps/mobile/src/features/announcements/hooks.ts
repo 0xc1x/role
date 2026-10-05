@@ -10,15 +10,20 @@ import {
 	announcementAudience,
 	applyAcknowledgement,
 	applyLocalDismissal,
+	buildAnnouncementList,
 	buildModalSequence,
 	type AnnouncementAudience,
+	type AnnouncementListItem,
+	type AnnouncementListState,
 	type AnnouncementModal,
 } from "./domain/announcement";
 import {
 	acknowledgeAnnouncement,
 	dismissAnnouncementsLocally,
+	dismissRequiredAnnouncementLocally,
 	fetchAcknowledgedIds,
 	fetchDismissedIdsLocally,
+	fetchDismissedRequiredIdsLocally,
 	fetchPendingAnnouncements,
 } from "./data/repository";
 
@@ -199,5 +204,203 @@ export function useAnnouncementModals() {
 		modals: query.data ?? [],
 		acknowledge,
 		dismissInfo,
+	};
+}
+
+/**
+ * La clave del caché de la LISTA, y por qué no es la clave de los modales.
+ *
+ * Las dos dimensiones son las mismas —la audiencia porque el descarte local se
+ * keyea por ella, la persona porque el acknowledgement es por `(announcement_id,
+ * user_id)`— y por eso se derivan igual. Lo que cambia es la ENTRADA: lo que se
+ * guarda acá es un `AnnouncementListItem[]` y lo de allá un
+ * `AnnouncementModal[]`, y dos formas distintas no pueden compartir una clave.
+ *
+ * Compartirla no sería "usar el mismo caché": sería que el `setQueryData` de una
+ * pantalla escribiera su lista de filas donde la otra espera una secuencia de
+ * modales, y la siguiente lectura de cualquiera de las dos encontraría datos que
+ * no son suyos. Dos entradas, tres expectativas.
+ */
+export function announcementListQueryKey(
+	audience: AnnouncementAudience,
+	userId: string | null,
+) {
+	return ["announcements", "list", audience, userId ?? "anon"] as const;
+}
+
+/**
+ * Los TRES insumos de la lista, y por qué los tres.
+ *
+ * El modal consulta el almacén de descartes SOLO para el `info` y el de
+ * acknowledgements SOLO para el `required`: cada set sirve a su severidad y
+ * mezclarlos no aporta nada. Esta pantalla muestra las dos y el estado de cada
+ * una, así que necesita los tres. Con dos de ellos, un `required` silenciado en
+ * el teléfono sale `pending` — que es exactamente el motivo por el que existe el
+ * estado `dismissed` — y el gesto de silenciarlo parece no haber hecho nada.
+ *
+ * Se exporta y no queda inline en el `queryFn` por la misma razón que
+ * `fetchAnnouncementModalSequence`: es la función que decide qué ve la persona
+ * en esta pantalla, y una decisión que solo se puede leer a través del ciclo de
+ * vida de una consulta es una decisión que no se llega a probar.
+ *
+ * Los tres van en paralelo porque son de tres sitios distintos —la base para lo
+ * elegible, el servidor para lo entendido, el dispositivo para lo silenciado— y
+ * ninguno depende del otro.
+ */
+export async function fetchAnnouncementList(): Promise<AnnouncementListItem[]> {
+	const [announcements, acknowledgedIds, dismissedRequiredIds] =
+		await Promise.all([
+			fetchPendingAnnouncements(),
+			fetchAcknowledgedIds(),
+			fetchDismissedRequiredIdsLocally(),
+		]);
+	return buildAnnouncementList(
+		announcements,
+		acknowledgedIds,
+		dismissedRequiredIds,
+	);
+}
+
+/**
+ * Las opciones de la consulta de la lista, en una función y no inline en el
+ * hook, por el mismo motivo que las del modal: `retry` y la ausencia de
+ * `throwOnError` son dos valores que, adentro de un `useQuery({...})`, no se
+ * pueden leer sin montar React. Afuera sí, y un test los mira.
+ *
+ * `staleTime` y `gcTime` son los mismos que los de la cola, y no por simetría:
+ * las dos entradas leen las MISMAS tres fuentes, así que ventanas distintas las
+ * dejarían mostrando generaciones distintas de la misma lista —el modal con el
+ * `required` que la pantalla ya no tiene—.
+ */
+export function announcementListOptions(
+	audience: AnnouncementAudience,
+	userId: string | null,
+	sessionResolved: boolean,
+): UseQueryOptions<AnnouncementListItem[], Error> {
+	return {
+		queryKey: announcementListQueryKey(audience, userId),
+		queryFn: fetchAnnouncementList,
+		enabled: sessionResolved,
+		staleTime: 5 * 60_000,
+		gcTime: 30 * 60_000,
+		// Sin `throwOnError`: la pantalla dibuja su propio estado de error con un
+		// botón de reintentar, y con él el fallo se llevaría la ruta entera en vez
+		// de dejar un motivo y una acción.
+		//
+		// Y sin reintento automático, como el modal. La diferencia con un modal que
+		// aparece solo es que acá hay un «Reintentar» a la vista: un reintento
+		// diferido cambiaría el mensaje de una pantalla que la persona ya está
+		// leyendo, sin que nadie lo haya pedido.
+		retry: false,
+	};
+}
+
+/**
+ * Pasa UNA fila al estado que la escritura recién confirmó y le apaga las dos
+ * acciones, porque un aviso resuelto no tiene a qué aplicárselas.
+ *
+ * ES LA CACHÉ Y NO EL DOMINIO, y esa es toda su autoridad: `buildAnnouncementList`
+ * sigue siendo la que decide el estado de cada fila leyendo los tres insumos, y
+ * esto solo evita el viaje que volvería a pintar lo mismo un instante después.
+ *
+ * Por eso se niega a tocar lo que no corresponde. Una fila que no sea la del id
+ * no se inventa —un id que no está en la lista no agrega nada—, y una fila que
+ * no sea `required` no se toca: el silencio vive en el almacén de los `required`
+ * y el acknowledgement en una tabla que solo ellos llenan, así que aplicarlos a
+ * un `info` dejaría el caché diciendo «entendido» de algo que el dominio nunca
+ * va a confirmar en la próxima lectura.
+ */
+function conEstadoResuelto(
+	items: AnnouncementListItem[],
+	id: string,
+	estado: Exclude<AnnouncementListState, "pending">,
+): AnnouncementListItem[] {
+	return items.map((item) =>
+		item.announcement.id === id && item.announcement.severity === "required"
+			? { ...item, state: estado, canAcknowledge: false, canDismiss: false }
+			: item,
+	);
+}
+
+/**
+ * La pantalla de «ver todos»: qué avisos le llegan a esta persona, en el orden en
+ * que llegaron, y en qué estado está cada uno para ella.
+ *
+ * Es el segundo consumidor de los mismos tres insumos que la cola de modales, y
+ * por eso comparte con ella la FORMA de la clave sin compartir la entrada.
+ *
+ * `acknowledge` y `silence` escriben y solo ENTONCES actualizan el caché, por el
+ * motivo que está escrito en `useAnnouncementModals`: si la escritura falla, el
+ * `required` tiene que seguir en la cola y verse pendiente. Un descarte
+ * optimista lo cerraría como entendido sin estarlo, y como la fila de
+ * acknowledgement no se puede corregir, no volvería nunca.
+ *
+ * `silence` es la excepción y por diseño: `dismissRequiredAnnouncementLocally` no
+ * pega contra la red —es un id en AsyncStorage— y nunca lanza. No hay a qué
+ * volver atrás y la caché se actualiza antes que el disco, porque la fila tiene
+ * que cambiar en el acto o el gesto se lee como que no pasó nada.
+ */
+export function useAnnouncementList() {
+	const initialized = useAuthStore((s) => s.initialized);
+	const profile = useAuthStore((s) => s.profile);
+	const queryClient = useQueryClient();
+	const audience = announcementAudience(profile?.role);
+	const userId = profile?.id ?? null;
+	const listKey = announcementListQueryKey(audience, userId);
+	// La cola del layout sigue montada mientras esta pantalla está abierta: si
+	// entender un aviso acá no la actualizara, el modal lo volvería a abrir al
+	// instante, con el mismo aviso que la persona acaba de registrar.
+	const modalKey = announcementQueryKey(audience, userId);
+
+	const query = useQuery(
+		announcementListOptions(audience, userId, initialized),
+	);
+
+	/**
+	 * Registra el `required` como entendido y lo marca entendido en las dos
+	 * entradas.
+	 *
+	 * Las dos, y no solo la de la lista, porque la fila que se acaba de escribir
+	 * existe en el servidor para todas las lecturas: la cola del layout tiene el
+	 * mismo aviso guardado y, sin tocarla, entenderlo desde acá lo sacaría de esta
+	 * pantalla y lo dejaría apareciendo como modal detrás.
+	 */
+	const acknowledge = async (id: string): Promise<void> => {
+		await acknowledgeAnnouncement(id);
+		queryClient.setQueryData<AnnouncementListItem[]>(listKey, (items) =>
+			items ? conEstadoResuelto(items, id, "acknowledged") : items,
+		);
+		queryClient.setQueryData<AnnouncementModal[]>(modalKey, (modales) =>
+			modales ? applyAcknowledgement(modales, id) : modales,
+		);
+	};
+
+	/**
+	 * Silencia el `required` en el dispositivo y lo marca silenciado.
+	 *
+	 * NO es un descarte optimista con vuelta atrás: no hay red contra la que
+	 * fallar y el repositorio no lanza, así que lo único que puede perderse es el
+	 * silencio, que vuelve a la próxima apertura — y eso es preferible a esperar a
+	 * la persona por un gesto que ya no necesita red.
+	 *
+	 * La cola de modales NO se toca acá, y no por descuido: `buildModalSequence`
+	 * no consulta el almacén de los `required` —solo el de los `info`—, así que
+	 * no hay nada cierto que escribirle acá. Invalidarla además sería peor: haría
+	 * volver a leer y el aviso volvería a la cola igual.
+	 */
+	const silence = (id: string): void => {
+		queryClient.setQueryData<AnnouncementListItem[]>(listKey, (items) =>
+			items ? conEstadoResuelto(items, id, "dismissed") : items,
+		);
+		void dismissRequiredAnnouncementLocally(id);
+	};
+
+	return {
+		items: query.data ?? [],
+		acknowledge,
+		silence,
+		isLoading: query.isLoading,
+		isError: query.isError,
+		refetch: query.refetch,
 	};
 }

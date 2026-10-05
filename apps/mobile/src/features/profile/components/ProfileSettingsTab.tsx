@@ -7,6 +7,7 @@ import {
 	CircleHelp,
 	Heart,
 	MapPin,
+	Megaphone,
 	Settings,
 	Star,
 	User,
@@ -68,6 +69,17 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
 		title: strings.profile.sectionHelp,
 		items: [
 			{ icon: CircleHelp, label: strings.profile.help, href: "/profile/help" },
+			// Los avisos del operador, en el mismo grupo que el buzón de reportes y
+			// por la misma razón: los dos son mensajes que llegan de la plataforma, no
+			// ajustes que haga la persona, así que ninguno de los dos es una
+			// preferencia. La lista vive en una ruta de raíz —y no acá adentro— porque
+			// el dueño de un negocio también la necesita y el guard de rol de este
+			// grupo la expulsaría.
+			{
+				icon: Megaphone,
+				label: strings.announcements.listTitle,
+				href: "/announcements",
+			},
 			// El buzón de reportes es de las dos audiencias, pero se ofrece
 			// desde acá porque el consumidor no tiene panel de negocio donde
 			// hacerlo. Va en el grupo de Ayuda y no en el de preferencias:

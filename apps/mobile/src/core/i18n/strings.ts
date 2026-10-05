@@ -2050,6 +2050,36 @@ export const strings = {
 		// taxonomía del mapper lo conserva para Sentry y lo cambia por esto—.
 		acknowledgeFailed:
 			"No pudimos guardar que lo viste. Revisá tu conexión y probá otra vez.",
+		// ── La pantalla de "ver todos" ────────────────────────────────
+		//
+		// El rótulo de la lista vive acá y no en `profile.*` aunque la fila del
+		// menú y el título de la pantalla sean la misma puerta: dos textos para la
+		// misma pantalla es la forma de que uno de los dos quede viejo sin que el
+		// otro avise.
+		listTitle: "Avisos",
+		// Los tres estados tienen que distinguirse de un vistazo. "Cerrado" no
+		// serviría para ninguno de los dos últimos: un aviso entendido dejó fila
+		// en el servidor y uno silenciado NO —no registró que se lo haya leído—,
+		// así que llamarlos igual sería mentirle sobre lo que pasó.
+		statePending: "Pendiente",
+		stateAcknowledged: "Entendido",
+		stateDismissed: "Silenciado",
+		// El gesto hermano del «Entendido», y por eso otra etiqueta y no un
+		// «Cerrar»: silenciar esconde el aviso, entenderlo lo registra.
+		silence: "Silenciar",
+		// Para qué existe el botón y qué NO hace. Sin esta línea, «Silenciar» se
+		// lee como «quedarme con esto» y el obligatorio vuelve a salir sin que la
+		// persona entienda que no hizo nada con él.
+		silenceHint:
+			"Silenciarlo lo esconde en este teléfono y no registra que lo viste, así que puede volver a aparecer.",
+		// Una lista sin avisos es el estado normal de una app que todavía no
+		// publicó nada: dice qué pasa después para que no se lea como una falla.
+		listEmptyTitle: "Todavía no hay avisos",
+		listEmptyMessage:
+			"Cuando Rolé publique un aviso para vos, lo vas a ver acá.",
+		// El motivo de una lectura que falló. El mensaje crudo del driver no
+		// llega a la pantalla por la misma razón que en `acknowledgeFailed`.
+		listFailed: "No pudimos cargar los avisos.",
 	},
 	// ── Sonda de diagnóstico de Google Maps (src/dev/) ────────────
 	// No es una ruta: vive fuera de `app/` para que no entre en el router.
