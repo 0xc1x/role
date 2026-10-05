@@ -45,7 +45,7 @@ import {
  *     duplicarla acá haría que un borrador a medio pensar no se pueda guardar.
  *  2. Un `specific` que elige negocios SÍ llega: al publicar, la API resuelve
  *     cada `business_id` a su `owner_id` y suma los dueños a `user_ids`
- *     (`announcements.service.ts`, `resolverDueñosDeNegocios`). No hay nada que
+ *     (`announcements.service.ts`, `resolverDuenosDeNegocios`). No hay nada que
  *     avisar antes de publicar. Lo único que puede salir mal —un negocio sin
  *     dueño— lo rechaza el servidor con un 400 que lo nombra, y ese error sale
  *     accionable junto a la lista de negocios (`negociosSinDueño`).
@@ -115,7 +115,7 @@ const SIN_AVISO_DE_AUDIENCIA: AvisoDeAudiencia = {
  * el panel frenaba la publicación para que el operador no publicara eso.
  *
  * La API ya resuelve: al publicar, cada `business_id` se resuelve a su `owner_id`
- * y se suma a `user_ids` (`announcements.service.ts`, `resolverDueñosDeNegocios`,
+ * y se suma a `user_ids` (`announcements.service.ts`, `resolverDuenosDeNegocios`,
  * commit `ac74273`). El aviso dirigido a negocios LLEGA, así que la advertencia
  * era una falsedad y la casilla era un gate que frenaba publicaciones correctas:
  * el operador tenía que acknowledgear que nadie lo iba a ver para publicar un

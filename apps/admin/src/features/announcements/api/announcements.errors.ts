@@ -5,7 +5,7 @@ import { ApiClientError } from "@/lib/api/errors";
  *
  * Publicar un aviso dirigido a negocios ya no puede salir invisible: la API
  * resuelve cada `business_id` a su `owner_id` al publicar
- * (`announcements.service.ts`, `resolverDueñosDeNegocios`), y los dueños se
+ * (`announcements.service.ts`, `resolverDuenosDeNegocios`), y los dueños se
  * suman a `user_ids`, que es lo único que mira la policy de select. Un aviso
  * dirigido a negocios LLEGA a sus dueños.
  *

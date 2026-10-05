@@ -56,8 +56,12 @@ describe("el host se monta FUERA del Stack, que es el invariante", () => {
 
 	test("y se monta antes de que el stack se defina", () => {
 		// El orden en el archivo es el orden en el árbol: el host es hermano del
-		// stack, no un hijo suyo. Con el host declarado después de
-		// `ThemedRootStack`, el JSX quedaría dentro.
+		// stack, no un hijo suyo. Y tiene que estar antes de la DECLARACIÓN de
+		// `ThemedRootStack`, que en el archivo va DESPUÉS de `RootLayout`: puesto
+		// después de esa función el JSX no caería "dentro del Stack" —caería fuera
+		// de `RootLayout` entero, que ni compila—. O sea que lo que este test
+		// afirma es el ORDEN, no el anidamiento; el anidamiento lo mira el de
+		// arriba.
 		expect(source.indexOf("<AnnouncementModals />")).toBeLessThan(
 			source.indexOf("function ThemedRootStack()"),
 		);

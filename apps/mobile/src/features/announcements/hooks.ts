@@ -70,8 +70,16 @@ export function announcementQueryKey(
  *
  * Los tres se leen juntos y en paralelo porque son de tres sitios distintos —
  * la base para lo pendiente, el servidor para lo entendido, el dispositivo para
- * lo descartado— y ninguno depende del otro. Los avisos son pocos: el teto son
- * los `limit` del contrato y no llegan ni a una pantalla.
+ * lo descartado— y ninguno depende del otro.
+ *
+ * El agrupado es en memoria y a propósito: el tope de esta lectura no es un
+ * `limit` del contrato sino cuántos avisos `active` tiene publicados el
+ * operador, que es un HECHO DE OPERACIÓN —cuántas cosas escribe una persona— y
+ * no un invariante técnico. Por eso `listForAudience` devuelve la lista entera
+ * y acá no hay `.limit()` en el read path; el `limit` que sí existe en el
+ * contrato es el del listado del panel, que no pasa por esta lectura. Agregar
+ * uno no sería corregirla sino cambiar la decisión, y quien lo agregue tiene que
+ * decidir qué se descarta de una lista que RLS ya declaró elegible.
  */
 export async function fetchAnnouncementModalSequence(): Promise<
 	AnnouncementModal[]

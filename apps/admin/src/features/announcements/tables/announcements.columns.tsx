@@ -111,14 +111,16 @@ export const columns: ColumnDef<AnnouncementDto>[] = [
 		header: "Estado",
 		// El switch en línea, como en `tips.columns.tsx`: la baja de un aviso es la
 		// operación de rutina de esta pantalla y pedir un drawer para hacerla sería
-		// un costo por cada aviso que seWant apagar.
+		// un costo por cada aviso que se quiera apagar.
 		//
 		// Un PATCH de un campo NO choca con el predicado de audiencia del service:
-		// `assertAudienceHasTargets` lee `body.user_ids ?? existing.user_ids`, así
-		// que un `{ active: false }` cae a las listas GUARDADAS y pasa siempre que
-		// la fila sea alcanzable por la API —y una fila `specific` con las dos
-		// listas vacías no lo es: `create` la rechaza y un PATCH no puede
-		// vaciarlas, porque `[] ?? existing` es `[]` y la suma da 0 → 400.
+		// `assertAudienceHasTargets` lee `body.user_ids ?? existing.user_ids`, y en
+		// un `{ active: false }` ese `body.user_ids` es `undefined`, así que el `??`
+		// cae a las listas GUARDADAS y el PATCH pasa siempre que la fila sea
+		// alcanzable por la API. Y una fila `specific` con las dos listas vacías no
+		// lo es: `create` la rechaza, y un PATCH no la puede vaciar sin 400, porque
+		// mandar las dos listas explícitamente vacías NO cae al `??` —`[]` no es
+		// nullish: `[] ?? existing` da `[]` igual— y la suma da 0 → 400.
 		cell: ({ row }) => <ActivoCell row={row} />,
 	},
 	{
