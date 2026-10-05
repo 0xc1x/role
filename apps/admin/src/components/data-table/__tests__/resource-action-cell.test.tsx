@@ -52,7 +52,13 @@ function renderCelda(props: Partial<PropsCelda>) {
 				displayName={(e) => e.titulo}
 				editLabel="Editar aviso"
 				deleteTitle="¿Desactivar este aviso?"
-				deleteDescription={(name) => <p>desactivar {name}</p>}
+				// Fragment y no `<p>`: `AlertDialogDescription` es el
+				// `Dialog.Description` de Base UI, que renderiza un `<p>`, así que
+				// un `<p>` aquí produce `<p><p>` — HTML inválido que React reporta
+				// como error de hidratación. Los cuatro features reales (tips,
+				// coupons, announcements, categories) ya pasan fragmento o `<span>`;
+				// este fixture era el único que usaba un bloque.
+				deleteDescription={(name) => <>desactivar {name}</>}
 				useDelete={sinBorrar}
 				renderEditor={() => null}
 				{...props}

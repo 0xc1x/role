@@ -15,6 +15,13 @@ g.Event ??= happy.Event;
 g.CustomEvent ??= happy.CustomEvent;
 g.getComputedStyle ??= happy.getComputedStyle.bind(happy);
 g.MutationObserver ??= happy.MutationObserver;
+// `HTMLIFrameElement` en el global, no en el window: el `window` global lo puso
+// `test-preload.ts` (es `globalThis`, para que los specs que leen `window.x`
+// como el panel.findan el shim de storage). React lo lee del global en
+// `getActiveElementDeep`, así que con el shim tal cual, montar sobre `document`
+// —lo que necesita un componente que renderiza `<html>`— moría con
+// `TypeError: Right hand side of instanceof is not an object`.
+g.HTMLIFrameElement ??= happy.HTMLIFrameElement;
 // Base UI usa requestAnimationFrame para transiciones (happy-dom no lo define).
 if (typeof g.requestAnimationFrame !== "function") {
 	g.requestAnimationFrame = ((cb: FrameRequestCallback) =>
