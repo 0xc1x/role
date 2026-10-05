@@ -1,4 +1,4 @@
-import { describe, expect, jest, mock, test } from "bun:test";
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 
 // El consentimiento de analytics NO vive en `profiles`: la fila autoritativa es
 // `user_consents`. Un `fetchProfile` que devolvía `false` fijo revocaba el
@@ -14,6 +14,9 @@ type Result = { data: unknown; error: unknown };
 
 const results: Record<string, Result> = {};
 
+/** Cada llamada a `.upsert()`, con su fila y sus opciones, para poder auditarlas. */
+const upsertCalls: { row: Record<string, unknown>; options: unknown }[] = [];
+
 /**
  * Cadena de PostgREST encadenable: `profiles` filtra con un `eq` y
  * `user_consents` con dos, así que el mock devuelve el mismo objeto en cada
@@ -24,6 +27,10 @@ function builderFor(table: string) {
 	chain.select = () => chain;
 	chain.eq = () => chain;
 	chain.maybeSingle = async () => results[table] ?? { data: null, error: null };
+	chain.upsert = (row: Record<string, unknown>, options?: unknown) => {
+		upsertCalls.push({ row, options });
+		return Promise.resolve({ data: null, error: null });
+	};
 	return chain;
 }
 
@@ -129,5 +136,54 @@ describe("fetchProfile y el consentimiento de analytics", () => {
 		const profile = await authRepository.fetchProfile("user-1", true);
 
 		expect(profile?.analyticsConsentGranted).toBe(false);
+	});
+});
+
+/**
+ * El `onConflict` del upsert de `user_consents`, que sin él devuelve 409.
+ *
+ * La fila de analytics la deja el trigger `create_default_consents` al crear el
+ * perfil, así que SIEMPRE existe: un upsert sin target choca con la UNIQUE
+ * (user_id, consent_type) en cada llamada. Como el objeto no manda `id` —lo
+ * genera el default `gen_random_uuid()`—, sin target explícito PostgREST solo
+ * puede arbitrar por la PK y la sentencia degrada a INSERT plano.
+ */
+describe("setAnalyticsConsent y el arbitraje del conflicto", () => {
+	beforeEach(() => {
+		upsertCalls.length = 0;
+	});
+
+	test("el upsert declara el target de la UNIQUE (user_id, consent_type)", async () => {
+		await authRepository.setAnalyticsConsent("user-1", true);
+
+		expect(upsertCalls).toHaveLength(1);
+		expect(upsertCalls[0]?.options).toEqual({
+			onConflict: "user_id,consent_type",
+		});
+	});
+
+	test("no manda `id`: es la PK, y el conflicto no es sobre ella", async () => {
+		await authRepository.setAnalyticsConsent("user-1", true);
+
+		// Mandarlo convertiría el upsert en un update por PK y crearía una fila
+		// nueva por cada toggle en vez de actualizar la existente.
+		expect(upsertCalls[0]?.row).not.toHaveProperty("id");
+		expect(upsertCalls[0]?.row).toMatchObject({
+			user_id: "user-1",
+			consent_type: "analytics",
+			granted: true,
+		});
+	});
+
+	test("revocar limpia `granted_at` y escribe `revoked_at`", async () => {
+		// El efecto que se pierde sin target: la fila existente no se toca y su
+		// `revoked_at` queda sin escribir, así que el toggle "no" no revoca.
+		await authRepository.setAnalyticsConsent("user-1", false);
+
+		expect(upsertCalls[0]?.row).toMatchObject({
+			granted: false,
+			granted_at: null,
+		});
+		expect(upsertCalls[0]?.row.revoked_at).toBeString();
 	});
 });

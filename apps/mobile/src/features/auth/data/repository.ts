@@ -157,13 +157,30 @@ export const authRepository = {
 
 	async setAnalyticsConsent(userId: string, granted: boolean): Promise<void> {
 		const now = new Date().toISOString();
-		const { error } = await supabase.from("user_consents").upsert({
-			user_id: userId,
-			consent_type: "analytics",
-			granted,
-			granted_at: granted ? now : null,
-			revoked_at: granted ? null : now,
-		});
+		// El `onConflict` NO es opcional. Sin él, PostgREST no tiene contra qué
+		// arbitrar y solo puede usar la PRIMARY KEY (`id`) —que el objeto no
+		// manda, porque la genera el default `gen_random_uuid()`—, así que la
+		// sentencia degrada a un INSERT plano y la fila que el trigger
+		// `create_default_consents` ya dejó para este usuario revienta la
+		// UNIQUE (user_id, consent_type) con 23505, que PostgREST devuelve 409.
+		//
+		// Sin esto el toggle de `profile/settings.tsx` falla en cada toque (la fila
+		// de analytics existe para toda cuenta creada por el trigger) y el `catch`
+		// que revierte el estado lo tapa: el switch se vuelve a apagar sin error.
+		//
+		// Y el target explícito además hace la escritura CORRECTA: con la PK como
+		// arbitro, un "revocar" no tocaría la fila existente y su `revoked_at`
+		// quedaría sin escribir.
+		const { error } = await supabase.from("user_consents").upsert(
+			{
+				user_id: userId,
+				consent_type: "analytics",
+				granted,
+				granted_at: granted ? now : null,
+				revoked_at: granted ? null : now,
+			},
+			{ onConflict: "user_id,consent_type" },
+		);
 		if (error) throw error;
 	},
 

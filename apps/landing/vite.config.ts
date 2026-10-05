@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
@@ -88,7 +89,42 @@ function assertApiUrlConfigured(
 	if (error) throw error;
 }
 
+/**
+ * Vercel inyecta las variables del dashboard SOLO en el entorno del proceso que
+ * corre el build y del runtime. Como acá el build corre en el runner (no en
+ * Vercel — `vercel build` no resuelve `workspace:*`), el valor real hay que
+ * sacado de `vercel pull`, que escribe `.vercel/.env.<target>.local`.
+ *
+ * POR QUÉ HAY QUE COPIARLO A `process.env` Y NO CONFIAR EN QUE VITE LO LEA:
+ * Vite solo mira `.env*` en la raíz del proyecto, nunca `.vercel/`. Y Bun
+ * auto-carga `.env` local a `process.env` ANTES de que corra este config, con
+ * precedencia máxima sobre cualquier archivo `.env`. Sin este paso, un `.env`
+ * local (localhost) gana al valor de producción.
+ *
+ * Solo en `build`: en `serve` el destino correcto es el `.env` del developer.
+ * Pisar el archivo con el valor de deploy sería peor que el bug actual.
+ */
+function applyVercelEnv(mode: string): void {
+	const target = mode === "production" ? "production" : "preview";
+	const file = path.resolve(".vercel", `.env.${target}.local`);
+	if (!existsSync(file)) {
+		console.warn(
+			`[env] no existe ${path.relative(process.cwd(), file)}: el build usará el .env local. Corré \`vercel pull --environment=${target}\` antes de buildear para un deploy.`,
+		);
+		return;
+	}
+	for (const line of readFileSync(file, "utf-8").split("\n")) {
+		const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
+		if (!match) continue;
+		const [, key, rawValue] = match;
+		// Sin esto, Bun ya habría metido el valor de `.env` local y Vite le
+		// daria precedencia sobre el archivo.
+		process.env[key] = rawValue.replace(/^(['"])(.*)\1$/, "$2");
+	}
+}
+
 const config = defineConfig(({ command, mode }) => {
+	if (command === "build") applyVercelEnv(mode);
 	assertApiUrlConfigured(command, process.cwd(), mode);
 
 	return {
