@@ -3,7 +3,7 @@ import {
 	AnnouncementSchema,
 	UuidSchema,
 	type Announcement,
-} from "@0c1x/role-commons";
+} from "@0xc1x/role-commons";
 import { z } from "zod";
 
 import { AppError, Errors } from "@/src/core/error/app-error";

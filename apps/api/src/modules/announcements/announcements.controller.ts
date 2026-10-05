@@ -24,14 +24,14 @@ import {
   AnnouncementListQuerySchema,
   CreateAnnouncementSchema,
   UpdateAnnouncementSchema,
-} from '@0c1x/role-commons';
+} from '@0xc1x/role-commons';
 import type {
   AnnouncementDto,
   AnnouncementListQuery,
   CreateAnnouncementDto,
   PaginatedAnnouncements,
   UpdateAnnouncementDto,
-} from '@0c1x/role-commons';
+} from '@0xc1x/role-commons';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';

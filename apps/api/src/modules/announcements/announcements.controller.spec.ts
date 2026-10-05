@@ -4,7 +4,7 @@ import type {
   AnnouncementDto,
   AnnouncementListQuery,
   CreateAnnouncementDto,
-} from '@0c1x/role-commons';
+} from '@0xc1x/role-commons';
 import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { AnnouncementsController } from './announcements.controller';

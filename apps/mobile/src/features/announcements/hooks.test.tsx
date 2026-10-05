@@ -3,7 +3,7 @@ import { createElement } from "react";
 // @ts-expect-error react-dom is installed without declarations in this workspace.
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Announcement } from "@0c1x/role-commons";
+import type { Announcement } from "@0xc1x/role-commons";
 
 // El hook es lo que convierte la secuencia agrupada en "qué ve la persona, en
 // qué orden y cuándo se va". Estos casos fijan las tres decisiones: D7 (la

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, ScrollView, StyleSheet, View } from "react-native";
-import type { Announcement } from "@0c1x/role-commons";
+import type { Announcement } from "@0xc1x/role-commons";
 
 import { Button } from "@/components/ui/button";
 import { toAppError } from "@/src/core/error/mapper";

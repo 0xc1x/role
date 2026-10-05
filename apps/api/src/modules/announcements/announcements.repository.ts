@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
-import type { AnnouncementListQuery } from '@0c1x/role-commons';
+import type { AnnouncementListQuery } from '@0xc1x/role-commons';
 import { and, count, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
 import { escapeLike } from '../../common/utils/like';
 import type { Env } from '../../config/env.schema';

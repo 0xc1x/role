@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Announcement, AnnouncementSeverity } from "@0c1x/role-commons";
+import type { Announcement, AnnouncementSeverity } from "@0xc1x/role-commons";
 
 import {
 	applyAcknowledgement,

@@ -1,4 +1,4 @@
-import type { Announcement, AppRole } from "@0c1x/role-commons";
+import type { Announcement, AppRole } from "@0xc1x/role-commons";
 
 /**
  * El agrupado de los avisos del operador. Es la función que decide qué ve la

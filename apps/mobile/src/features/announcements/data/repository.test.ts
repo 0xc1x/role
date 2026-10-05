@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
-import { AnnouncementSchema } from "@0c1x/role-commons";
+import { AnnouncementSchema } from "@0xc1x/role-commons";
 
 // El módulo real de supabase arranca timers que tocan window.localStorage.
 const memstore = new Map<string, string>();

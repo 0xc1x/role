@@ -4,7 +4,7 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 // @ts-expect-error react-native-web does not ship declarations in this workspace.
 import * as nativeWeb from "react-native-web";
-import type { Announcement } from "@0c1x/role-commons";
+import type { Announcement } from "@0xc1x/role-commons";
 
 import { strings } from "@/src/core/i18n/strings";
 import { light } from "@/src/core/theme/colors";
