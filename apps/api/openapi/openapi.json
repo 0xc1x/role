@@ -1569,7 +1569,16 @@
       },
       "post": {
         "operationId": "AnnouncementsController_create",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": "Announcement created"
@@ -1614,6 +1623,14 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
             "schema": {
               "type": "string"
             }
