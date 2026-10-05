@@ -60,6 +60,19 @@ const announcementWindowRefinement = {
  * points, igual que `char_length`: si divergieran, el 400 llegaría desde la
  * base y no desde acá.
  */
+/**
+ * La ventana de vigencia, en lo que el operador escribe.
+ *
+ * Mismo motivo y mismo compromiso que la ventana de pickup de las ofertas: laxo
+ * en lectura (`TimestamptzSchema` lo es a propósito, PostgREST devuelve `+00:00`),
+ * validado en escritura para que `start_at: "hola"` no llegue al `.refine` de la
+ * ventana con `NaN >= NaN` y un 400 culpando a `end_at`.
+ *
+ * `local: true` porque el valor viene de `DateTimePicker`, cuyo
+ * `DATE_TIME_FORMAT` es `yyyy-MM-dd'T'HH:mm`: sin offset y sin segundos.
+ */
+const AnnouncementInstantSchema = z.iso.datetime({ offset: true, local: true });
+
 const AnnouncementBaseSchema = z.object({
 	title: z
 		.string()
@@ -73,8 +86,8 @@ const AnnouncementBaseSchema = z.object({
 	audience_kind: AudienceKindSchema,
 	priority: prioritySchema,
 	active: z.boolean(),
-	start_at: TimestamptzSchema.nullable(),
-	end_at: TimestamptzSchema.nullable(),
+	start_at: AnnouncementInstantSchema.nullable(),
+	end_at: AnnouncementInstantSchema.nullable(),
 });
 
 /**

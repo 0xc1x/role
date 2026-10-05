@@ -53,6 +53,25 @@ export const ViewOfferSchema = OfferSchema.pick({
 	review_count: true,
 });
 
+/**
+ * La ventana de pickup, en ENTRADA, y por eso con un schema distinto al laxo.
+ *
+ * `TimestamptzSchema` es `z.string().min(1)` a propósito —PostgREST devuelve
+ * `+00:00` y nadie quiere un 500 en una lectura— así que `pickup_start: "hola"`
+ * pasaba el schema y llegaba al `.refine` de la ventana. Ahí `new Date("hola")` es
+ * `Invalid Date`, la comparación es `NaN > NaN` —`false`—, y el 400 le decía
+ * "pickup_end must be after pickup_start": el mensaje culpaba al campo equivocado y
+ * mandaba al operador a corregir algo que estaba bien.
+ *
+ * `local: true` además de `offset: true` porque este valor NO viene de PostgREST
+ * sino de `DateTimePicker`, cuyo `DATE_TIME_FORMAT` es `yyyy-MM-dd'T'HH:mm` —sin
+ * offset y sin segundos. El schema estricto del repo (`business-stats.schema.ts:111`,
+ * `z.iso.datetime({ offset: true })`) rechaza ese valor: copiar el patrón de stats
+ * tal cual rompe el formulario de publicaciones. Con `local` se aceptan las dos
+ * formas reales, la que manda el panel y la que devuelve la base.
+ */
+const PickupInstantSchema = z.iso.datetime({ offset: true, local: true });
+
 const CreateOfferFieldsSchema = z.object({
 	business_id: UuidSchema,
 	business_location_id: UuidSchema,
@@ -64,8 +83,8 @@ const CreateOfferFieldsSchema = z.object({
 	discounted_price: PositiveNumberSchema,
 	stock: NonNegativeIntSchema.optional(),
 	initial_stock: NonNegativeIntSchema.optional(),
-	pickup_start: TimestamptzSchema,
-	pickup_end: TimestamptzSchema,
+	pickup_start: PickupInstantSchema,
+	pickup_end: PickupInstantSchema,
 	is_active: z.boolean().optional(),
 	includes: z.string().nullable().optional(),
 	allergens: z.string().nullable().optional(),
