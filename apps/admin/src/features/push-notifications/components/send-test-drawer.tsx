@@ -99,8 +99,8 @@ function SendTestDrawer(props: {
 						>
 							{props.test.isPending ? <Spinner /> : null} Enviar prueba
 						</Button>
-						<DrawerClose>
-							<Button variant="ghost">Cerrar</Button>
+						<DrawerClose render={<Button variant="ghost" />}>
+							Cerrar
 						</DrawerClose>
 					</div>
 				</DrawerFooter>

@@ -145,10 +145,10 @@ export function ResourceCreateDrawer({
 							pendingLabel={creatingLabel}
 							submitLabel={submitLabel}
 						/>
-						<DrawerClose>
-							<Button variant="outline" className="w-full">
-								Cancelar
-							</Button>
+						<DrawerClose
+							render={<Button variant="outline" className="w-full" />}
+						>
+							Cancelar
 						</DrawerClose>
 					</DrawerFooter>
 				</DrawerPendingProvider>
@@ -197,10 +197,10 @@ export function ResourceUpdateDrawer({
 							pendingLabel={updatingLabel}
 							submitLabel={submitLabel}
 						/>
-						<DrawerClose>
-							<Button variant="outline" className="w-full">
-								Cancelar
-							</Button>
+						<DrawerClose
+							render={<Button variant="outline" className="w-full" />}
+						>
+							Cancelar
 						</DrawerClose>
 					</DrawerFooter>
 				</DrawerPendingProvider>

@@ -81,10 +81,8 @@ export function PushTestDrawer(props: {
 					>
 						{test.isPending ? <Spinner /> : null} Enviar prueba
 					</Button>
-					<DrawerClose>
-						<Button variant="outline" className="w-full">
-							Cancelar
-						</Button>
+					<DrawerClose render={<Button variant="outline" className="w-full" />}>
+						Cancelar
 					</DrawerClose>
 				</DrawerFooter>
 			</DrawerContent>

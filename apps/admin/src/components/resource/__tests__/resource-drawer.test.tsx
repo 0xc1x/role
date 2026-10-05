@@ -90,3 +90,29 @@ describe("submit del drawer", () => {
 		expect((guardar as HTMLButtonElement).disabled).toBe(false);
 	});
 });
+
+describe("HTML válido", () => {
+	/**
+	 * `DrawerClose` es `Dialog.Close` de Base UI, que ya renderiza un `<button>`.
+	 * Envolverlo con `<Button>` (en vez de usar el prop `render`) produce
+	 * `<button><button></button></button>`: HTML inválido que React reporta como
+	 * error de hidratación en el cliente, y que rompe teclado y lector de
+	 * pantalla aunque los tests sigan verdes.
+	 *
+	 * El mismo chequeo sobre `document` y no sobre un solo botón: el nesting
+	 * puede aparecer en cualquier slot del footer, y este archivo cubre create y
+	 * update.
+	 */
+	test("ningún botón del drawer contiene otro botón", () => {
+		renderDrawer(false);
+
+		// `document.body` y no el container del render: Base UI monta el popup en
+		// un portal fuera del árbol del componente, así que el container vacío
+		// haría pasar la aserción sin comprobar nada.
+		const anidados = Array.from(
+			document.body.querySelectorAll("button button"),
+		).map((inner) => inner.textContent?.trim());
+
+		expect(anidados).toEqual([]);
+	});
+});

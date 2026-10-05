@@ -205,8 +205,8 @@ export function CampaignRowCard(props: {
 								>
 									{props.busy ? <Spinner /> : null} Guardar cambios
 								</Button>
-								<DrawerClose>
-									<Button variant="outline">Cancelar</Button>
+								<DrawerClose render={<Button variant="outline" />}>
+									Cancelar
 								</DrawerClose>
 							</div>
 						</div>

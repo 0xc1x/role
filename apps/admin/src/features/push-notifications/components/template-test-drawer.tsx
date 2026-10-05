@@ -89,8 +89,8 @@ export function TemplateTestDrawer(props: {
 						>
 							{props.test.isPending ? <Spinner /> : null} Enviar prueba
 						</Button>
-						<DrawerClose>
-							<Button variant="outline">Cerrar</Button>
+						<DrawerClose render={<Button variant="outline" />}>
+							Cerrar
 						</DrawerClose>
 					</div>
 				</DrawerFooter>

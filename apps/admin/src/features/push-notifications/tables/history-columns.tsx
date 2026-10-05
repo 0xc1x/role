@@ -96,10 +96,8 @@ function DetailDrawer(props: {
 					</p>
 				</div>
 				<DrawerFooter>
-					<DrawerClose>
-						<Button variant="outline" className="w-full">
-							Cerrar
-						</Button>
+					<DrawerClose render={<Button variant="outline" className="w-full" />}>
+						Cerrar
 					</DrawerClose>
 				</DrawerFooter>
 			</DrawerContent>

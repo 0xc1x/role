@@ -78,10 +78,8 @@ export function PushCampaignEditDrawer(props: {
 							{props.mutations.update.isPending ? <Spinner /> : null} Guardar
 						</Button>
 					</div>
-					<DrawerClose>
-						<Button variant="outline" className="w-full">
-							Cancelar
-						</Button>
+					<DrawerClose render={<Button variant="outline" className="w-full" />}>
+						Cancelar
 					</DrawerClose>
 				</DrawerFooter>
 			</DrawerContent>
