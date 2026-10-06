@@ -11,14 +11,9 @@ import {
 	Screen,
 	ScreenHeader,
 } from "@/src/core/ui";
-import {
-	formatMoney,
-	formatRelativeDay,
-	formatTime,
-} from "@/src/core/utils/formatters";
+import { formatMoney } from "@/src/core/utils/formatters";
 import { spacing } from "@/src/core/theme/spacing";
 import { useTheme } from "@/src/core/theme";
-import { useConfigValue } from "@/src/features/config";
 import {
 	createReservationIdempotencyKey,
 	useApplyCoupon,
@@ -76,16 +71,6 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 		idempotencyKey: string;
 	} | null>(null);
 
-	// Reglas de cancelación: viven en `app_config` (plataforma), no en el
-	// copy. Los defaults son los del seed 20260821205638 y solo aplican si la
-	// config aún no cargó; la pantalla nunca queda sin copy por una config caída.
-	const cancellationWindowMinutes = useConfigValue(
-		"cancellation.window_minutes",
-		10,
-	);
-	const cancellationMax7d = useConfigValue("cancellation.max_per_7d", 3);
-	const cancellationMax30d = useConfigValue("cancellation.max_per_30d", 10);
-
 	if (isLoading) return <LoadingView />;
 	if (isError || !offerDetail)
 		return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -93,18 +78,6 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 	const { offer, business, location } = offerDetail;
 	const isAvailable = isOfferAvailable(offerDetail);
 	const unavailableReason = unavailableCopy(offerDetail);
-	const pickupWindow = strings.checkout.pickupWindow
-		.replace("{day}", formatRelativeDay(offer.pickup_start))
-		.replace("{start}", formatTime(offer.pickup_start))
-		.replace("{end}", formatTime(offer.pickup_end));
-	const termsRules = strings.checkout.termsRules.map((rule) =>
-		rule
-			.replace("{minutes}", String(cancellationWindowMinutes))
-			.replace("{max7d}", String(cancellationMax7d))
-			.replace("{max30d}", String(cancellationMax30d))
-			.replace("{window}", pickupWindow),
-	);
-
 	const confirmReservation = () => {
 		const scope = `${offer.id}:${appliedCoupon?.id ?? "none"}`;
 		if (reservationAttempt.current?.scope !== scope) {
@@ -220,8 +193,14 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 						: strings.checkout.confirmUnavailable}
 				</Button>
 
-				{/* M16: la línea ya no afirma "términos aplicados" — dice qué
-				    pasa al reservar y enlaza a la ruta legal real. */}
+				{/* Solo la aceptación y el enlace. Antes esto.listaba las reglas
+				    acá, y dos de las cuatro no las aplica la app: `cancel_order`
+				    no mira ventana de 10 minutos ni cupo de cancelaciones, solo
+				    dueño y estado. Los términos (#4 pagos y #5 cancelaciones) sí
+				    describen el pago al recoger, la ventana y la liberación de lo
+				    no recogido, así que el enlace alcanza. Copiar reglas acá solo
+				    convertía defaults de `app_config` en promesas que nadie
+				    cumple. */}
 				<View style={styles.terms}>
 					<AppText variant="caption" style={{ color: colors.mutedForeground }}>
 						{strings.checkout.termsPrefix}{" "}
@@ -238,22 +217,6 @@ function CheckoutBody({ offerId }: { offerId: string }) {
 							</AppText>
 						</Pressable>
 					</AppText>
-					<AppText
-						variant="caption"
-						weight="semiBold"
-						style={[styles.termsTitle, { color: colors.mutedForeground }]}
-					>
-						{strings.checkout.termsRulesTitle}
-					</AppText>
-					{termsRules.map((rule) => (
-						<AppText
-							key={rule}
-							variant="caption"
-							style={{ color: colors.mutedForeground }}
-						>
-							{`· ${rule}`}
-						</AppText>
-					))}
 				</View>
 			</View>
 		</Screen>
@@ -294,5 +257,4 @@ const styles = StyleSheet.create({
 	unavailable: { textAlign: "center" },
 	terms: { gap: 2, marginTop: spacing.xs },
 	termsLink: { fontWeight: "700" },
-	termsTitle: { marginTop: spacing.xs },
 });

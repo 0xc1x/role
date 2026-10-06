@@ -373,20 +373,20 @@ export const strings = {
 		pickupDetailsTitle: "Detalles de recogida",
 		pickupAddressLabel: "Dirección del local",
 		pickupWindow: "{day} de {start} a {end}",
-		// ── Reglas del commitment (M16) ───────────────────────────────
-		// La línea de 11px que decía "términos aplicados" sin términos deja de
-		// ser una afirmación legal que la app no puede cumplir: pasa a un
-		// resumen accionable + enlace a la ruta legal real. Los números que
-		// viven en `app_config` se interpolan; ninguno está en el copy.
+		// ── Aceptación de términos ─────────────────────────────────────
+		// Quedan solo el prefijo y el enlace: el resumen de reglas se fue
+		// porque anunciaba dos límites que nadie aplica. `cancel_order` no
+		// mira ni la ventana de 10 minutos ni el cupo de cancelaciones —solo
+		// dueño y estado—, y `cancellation.*` de `app_config` no lo lee ninguna
+		// función, policy ni trigger. Repetir esos números acá convertía un
+		// default de plataforma en una promesa que la app no cumple.
+		//
+		// El pago al recoger, la ventana de recogida y la liberación de lo no
+		// recogido ya están descritos en `termsScreen` (#4 y #5), que es donde
+		// un usuario va a buscarlos. `pickupWindow` sigue viva: la usa
+		// `PickupDetailsCard`, que es el bloque que sí informa de la hora.
 		termsPrefix: "Al reservar aceptas nuestros",
 		termsLink: "términos y condiciones",
-		termsRulesTitle: "Antes de reservar, ten en cuenta:",
-		termsRules: [
-			"Puedes cancelar sin costo hasta {minutes} minutos después de reservar.",
-			"Cancelas gratis hasta {max7d} veces en 7 días y {max30d} veces en 30 días.",
-			"Recoge dentro de la ventana indicada ({window}). Pasada la ventana, la reserva se libera.",
-			"El pago se realiza en el local al recoger; la app no cobra.",
-		],
 		reservationError: "No pudimos confirmar tu reserva. Inténtalo de nuevo.",
 		reservationSuccessTitle: "¡Reserva Confirmada!",
 		reservationSuccessMessage: "Tu comida ha sido salvada con éxito",

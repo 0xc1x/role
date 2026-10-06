@@ -7,7 +7,6 @@ import * as nativeWeb from "react-native-web";
 
 import { strings } from "@/src/core/i18n/strings";
 import { light } from "@/src/core/theme/colors";
-import { formatRelativeDay, formatTime } from "@/src/core/utils/formatters";
 
 /**
  * M15/M16: el momento del compromiso.
@@ -224,7 +223,7 @@ test("a paused offer says the business paused it", () => {
 	expect(html).toContain(strings.checkout.reasonPaused);
 });
 
-test("the terms line links to the legal route and quotes the real rules", () => {
+test("the terms line links to the legal route and promises no limit it cannot keep", () => {
 	offerState = "available";
 	const html = renderCheckout();
 
@@ -236,31 +235,40 @@ test("the terms line links to the legal route and quotes the real rules", () => 
 	linkPresses[0]?.();
 	expect(pushed).toEqual(["/(consumer)/profile/terms"]);
 
-	// Rules come from app_config, so the numbers are the configured ones.
-	const [cancelRule, limitRule, pickupRule, paymentRule] =
-		strings.checkout.termsRules;
-	const { offer } = offerDetail();
-	const window = strings.checkout.pickupWindow
-		.replace("{day}", formatRelativeDay(offer.pickup_start))
-		.replace("{start}", formatTime(offer.pickup_start))
-		.replace("{end}", formatTime(offer.pickup_end));
+	// Lo que queda es la aceptación y el enlace. Las reglas no están en los
+	// términos como copy de esta pantalla: la pantalla no anuncia ningún
+	// límite. Dos de las que anunciaba no los aplicaba nadie —`cancel_order`
+	// no mira la ventana de 10 minutos ni el cupo, solo dueño y estado— así
+	// que mantenerlas acá era una promesa falsa, no un resumen.
+	expect(html).toContain(strings.checkout.termsPrefix);
+	expect(html).not.toContain("minutos después de reservar");
+	expect(html).not.toContain("veces en 7 días");
+	expect(html).not.toContain("Antes de reservar");
+});
 
-	expect(cancelRule.replace("{minutes}", "10")).toContain("10 minutos");
-	expect(limitRule.replace("{max7d}", "3").replace("{max30d}", "10")).toContain(
-		"3 veces en 7 días",
-	);
-	expect(pickupRule.replace("{window}", window)).toBe(
-		`Recoge dentro de la ventana indicada (${window}). Pasada la ventana, la reserva se libera.`,
-	);
-	expect(paymentRule).toContain("el local");
+test("the terms screen still carries the rules the checkout no longer repeats", () => {
+	// La otra mitad del test anterior. La pantalla ya no las repite, pero no
+	// por eso desaparecieron del producto: `#4` describe el pago al recoger y
+	// `#5` la cancelación y la liberación de lo no recogido. Si alguien saca o
+	// reescribe esas secciones, el enlace del checkout queda apuntando a un
+	// documento que ya no dice nada, y esto lo dice.
+	//
+	// Las aserciones van por título, no sobre el texto entero: un `toContain`
+	// sobre la unión de las secciones lo daría por bueno `#5` cuando lo que
+	// se rompió es `#4`, que es justo la mitad que se quiere vigilar.
+	const byTitle = (n: string) => {
+		const section = strings.termsScreen.sections.find((s) =>
+			s.title.startsWith(`${n}.`),
+		);
+		if (!section) throw new Error(`termsScreen perdió la sección ${n}`);
+		return section.content;
+	};
 
-	for (const rendered of [
-		strings.checkout.termsRulesTitle,
-		`· ${cancelRule.replace("{minutes}", "10")}`,
-		`· ${limitRule.replace("{max7d}", "3").replace("{max30d}", "10")}`,
-		`· ${pickupRule.replace("{window}", window)}`,
-		`· ${paymentRule}`,
-	]) {
-		expect(html).toContain(rendered);
-	}
+	const pagos = byTitle("4");
+	expect(pagos).toContain("al recoger");
+	expect(pagos).toContain("No cobramos en la app");
+
+	const cancelaciones = byTitle("5");
+	expect(cancelaciones).toContain("antes del cierre de la ventana de recogida");
+	expect(cancelaciones).toContain("no recogidas se liberan");
 });
