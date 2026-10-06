@@ -92,13 +92,20 @@ function ListFooter({
 export default function AllOffersScreen() {
 	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
-	const params = useLocalSearchParams<{ category?: string }>();
+	const params = useLocalSearchParams<{
+		category?: string;
+		business?: string;
+	}>();
 
 	const [search, setSearch] = useState("");
 	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const [filters, setFilters] = useState<OfferFilterState>(() =>
-		params.category
-			? { ...emptyOfferFilters, category: params.category }
+		params.category || params.business
+			? {
+					...emptyOfferFilters,
+					category: params.category ?? null,
+					businessId: params.business ?? null,
+				}
 			: emptyOfferFilters,
 	);
 	const [sheetVisible, setSheetVisible] = useState(false);
@@ -123,6 +130,7 @@ export default function AllOffersScreen() {
 		isFetching,
 	} = useFilteredOffersInfinite({
 		category: filters.category,
+		businessId: filters.businessId,
 		maxPrice: filters.maxPrice,
 		maxDistanceKm: effectiveMaxDistanceKm,
 		lat: selectedAddress?.latitude ?? undefined,
@@ -144,6 +152,7 @@ export default function AllOffersScreen() {
 	// If navigated with a category param (e.g. home "ver todo"), reflect it.
 	const hasActiveFilters =
 		filters.category != null ||
+		filters.businessId != null ||
 		filters.maxPrice != null ||
 		filters.maxDistanceKm != null ||
 		debouncedSearch.length > 0;
@@ -155,6 +164,18 @@ export default function AllOffersScreen() {
 			filters.category
 		);
 	}, [categories, filters.category]);
+
+	/**
+	 * El nombre del negocio del chip sale del primer resultado y no de una
+	 * consulta aparte: `active_offers_near` ya embebe el negocio en cada fila, y
+	 * con el filtro puesto todas son del mismo. Pedir el nombre por su cuenta
+	 * sería una segunda vuelta por algo que ya está en pantalla. Sin resultados
+	 * no hay fila de la que sacarlo, y ahí va el copy genérico en vez de un id.
+	 */
+	const businessName = useMemo(() => {
+		if (!filters.businessId) return null;
+		return data[0]?.business.name ?? strings.allOffers.filterByBusiness;
+	}, [data, filters.businessId]);
 
 	const clearFilter = useCallback((key: keyof OfferFilterState | "search") => {
 		if (key === "search") {
@@ -227,6 +248,12 @@ export default function AllOffersScreen() {
 			{hasActiveFilters ? (
 				<View style={styles.activeFilters}>
 					<View style={styles.activeChips}>
+						{businessName ? (
+							<FilterChip
+								label={businessName}
+								onClear={() => clearFilter("businessId")}
+							/>
+						) : null}
 						{catName ? (
 							<FilterChip
 								label={catName}

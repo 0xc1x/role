@@ -52,6 +52,8 @@ mock.module("@/src/features/hooks", () => ({
 	useExpiringSoonOffers: () => popular,
 	useRecentOffers: () => popular,
 	useNearbyOffersHook: () => nearby,
+	// El mismo trato que las otras cuatro: una fila es un error, no un vacío.
+	useBusinessOffersRow: () => popular,
 	useSelectedAddress: () => ({ latitude: 1, longitude: 2 }),
 }));
 
@@ -121,4 +123,39 @@ test("a genuinely empty section still collapses instead of showing an error", ()
 
 	expect(html).toBe("");
 	expect(errorStates).toHaveLength(0);
+});
+
+test("the business row keeps the same rule: a failure is an error, an empty is nothing", () => {
+	// La fila del perfil de un negocio usa el mismo `OfferRowView` que las otras
+	// cuatro, y por lo tanto hereda la regla. Se afirma acá porque es la fila que
+	// más la necesita: un RLS denegado con el businessId puesto se leería como
+	// "este local no tiene ofertas", que es la lectura equivocada.
+	popular = {
+		data: undefined,
+		isLoading: false,
+		isError: true,
+		error: new Error("permission denied for function active_offers_near"),
+		refetch,
+	};
+
+	const failed = renderToStaticMarkup(
+		createElement(OfferRowSection, {
+			type: "business",
+			title: strings.businessProfile.offersTitle,
+			businessId: "business-1",
+		}),
+	);
+	expect(failed).toContain("ERROR_STATE");
+	expect(failed).not.toContain("permission denied");
+
+	popular = { data: [], isLoading: false, isError: false, refetch };
+	expect(
+		renderToStaticMarkup(
+			createElement(OfferRowSection, {
+				type: "business",
+				title: strings.businessProfile.offersTitle,
+				businessId: "business-1",
+			}),
+		),
+	).toBe("");
 });

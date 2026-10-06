@@ -58,6 +58,10 @@ export default function ExploreScreen() {
 	const activeFilters: OfferFilterState = useMemo(
 		() => ({
 			category: filters.category,
+			// El recorte por negocio no es un filtro de Explorar: se pide desde
+			// el perfil del local. Va explícito en `null` para que este objeto
+			// siga siendo el estado real de los filtros y no un recorte del tipo.
+			businessId: null,
 			maxPrice: filters.maxPrice,
 			maxDistanceKm: filters.maxDistanceKm,
 		}),

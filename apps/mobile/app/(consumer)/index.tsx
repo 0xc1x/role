@@ -24,7 +24,7 @@ import { EcoBanner } from "@/src/features/home/components/EcoBanner";
 import {
 	OfferRowSection,
 	OfferColumnSection,
-} from "@/src/features/home/components/OfferRowSection";
+} from "@/src/features/offers/components/OfferRowSection";
 import { BusinessRowSection } from "@/src/features/home/components/BusinessRowSection";
 
 const isWeb = Platform.OS === "web";

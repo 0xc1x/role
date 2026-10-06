@@ -71,6 +71,29 @@ export const offersRepository = {
 		});
 	},
 
+	/**
+	 * Las ofertas de UN negocio, para la sección del perfil público.
+	 *
+	 * Pasa por el mismo RPC que el resto y no por un select directo porque la
+	 * definición de "oferta activa" —negocio activo, `business_is_approved`,
+	 * stock y `pickup_end`— vive en el servidor y `business_moderation` no le es
+	 * legible al cliente. Un select directo traería las ofertas de un negocio
+	 * pendientes de moderación, que es justo lo que el resto de la app esconde.
+	 *
+	 * El `limit` lo elige la pantalla y llega uno más que las que muestra: el
+	 * slider enseña cinco y con el sexto sabe si tiene que ofrecer "ver todas".
+	 */
+	async getBusinessOffers(
+		businessId: string,
+		limit: number,
+	): Promise<OfferDetail[]> {
+		return fetchOffersNear({
+			businessId,
+			limit,
+			errorLabel: "Error al cargar las ofertas del negocio",
+		});
+	},
+
 	async getNearbyOffers(params: {
 		lat: number;
 		lng: number;
@@ -92,6 +115,7 @@ export const offersRepository = {
 		lat?: number;
 		lng?: number;
 		category?: string | null;
+		businessId?: string | null;
 		maxPrice?: number | null;
 		maxDistanceKm?: number | null;
 		searchQuery?: string | null;
@@ -100,6 +124,7 @@ export const offersRepository = {
 	}): Promise<OfferDetail[]> {
 		const {
 			category = null,
+			businessId = null,
 			maxPrice = null,
 			maxDistanceKm = null,
 			searchQuery = null,
@@ -114,6 +139,7 @@ export const offersRepository = {
 		return fetchOffersNear({
 			radiusParams,
 			category,
+			businessId,
 			maxPrice,
 			search:
 				searchQuery != null && searchQuery.length > 0 ? searchQuery : null,
@@ -239,6 +265,7 @@ export const offersRepository = {
 async function fetchOffersNear(options: {
 	radiusParams?: RadiusParams;
 	category?: string | null;
+	businessId?: string | null;
 	sort?: "created_at" | "distance" | "pickup_end";
 	expiringWithinHours?: number;
 	maxPrice?: number | null;
@@ -250,6 +277,7 @@ async function fetchOffersNear(options: {
 	const {
 		radiusParams,
 		category = null,
+		businessId = null,
 		sort = "created_at",
 		expiringWithinHours = null,
 		maxPrice = null,
@@ -263,6 +291,7 @@ async function fetchOffersNear(options: {
 		p_lng: radiusParams?.lng ?? null,
 		p_radius_km: radiusParams?.radiusKm ?? null,
 		p_category_id: category,
+		p_business_id: businessId,
 		p_sort: sort,
 		p_expiring_within_hours: expiringWithinHours,
 		p_max_price: maxPrice,

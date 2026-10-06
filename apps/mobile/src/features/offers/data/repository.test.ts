@@ -128,6 +128,7 @@ describe("offersRepository (RPC activo)", () => {
 			p_lng: point.lng,
 			p_radius_km: point.radiusKm,
 			p_category_id: null,
+			p_business_id: null,
 			p_sort: "created_at",
 			p_expiring_within_hours: null,
 			p_max_price: null,
@@ -150,6 +151,7 @@ describe("offersRepository (RPC activo)", () => {
 			p_lng: null,
 			p_radius_km: null,
 			p_category_id: null,
+			p_business_id: null,
 			p_sort: "created_at",
 			p_expiring_within_hours: null,
 			p_max_price: null,
@@ -202,6 +204,10 @@ describe("offersRepository (RPC activo)", () => {
 			p_lng: 2,
 			p_radius_km: 3,
 			p_category_id: "cat-9",
+			// Sin negocio pedido, el recorte viaja en null y no como undefined: el
+			// RPC tiene default null, y mandar la clave sin valor haría que
+			// PostgREST la omita y el resto de la aserción contara otra cosa.
+			p_business_id: null,
 			p_sort: "created_at",
 			p_expiring_within_hours: null,
 			p_max_price: 50,
@@ -209,6 +215,22 @@ describe("offersRepository (RPC activo)", () => {
 			p_limit: 20,
 			p_offset: 40,
 		});
+	});
+
+	test("getFilteredOffers recorta por negocio cuando se lo piden", async () => {
+		rpcOk([]);
+		await offersRepository.getFilteredOffers({
+			businessId: "business-7",
+			limit: 20,
+		});
+		expect(rpcMock).toHaveBeenCalledWith(
+			"active_offers_near",
+			expect.objectContaining({
+				p_business_id: "business-7",
+				p_lat: null,
+				p_radius_km: null,
+			}),
+		);
 	});
 
 	test("getFilteredOffers sin distancia no manda radio", async () => {

@@ -18,10 +18,8 @@ import {
 	ContactInfoCard,
 	HoursCard,
 } from "@/src/features/business/components/profile/ProfileContact";
-import {
-	LocationCard,
-	ReviewsCard,
-} from "@/src/features/business/components/profile/ProfileSocial";
+import { ReviewsCard } from "@/src/features/business/components/profile/ProfileSocial";
+import { BusinessOffersSection } from "@/src/features/business/components/profile/BusinessOffersSection";
 
 const HERO_HEIGHT = 240;
 
@@ -80,7 +78,7 @@ export default function BusinessProfileScreen() {
 						<View style={{ height: spacing.lg }} />
 						<ReviewsCardSkeleton />
 						<View style={{ height: spacing.lg }} />
-						<LocationCardSkeleton />
+						<BusinessOffersSkeleton />
 					</View>
 				</ScrollView>
 			</View>
@@ -141,7 +139,7 @@ export default function BusinessProfileScreen() {
 					<ReviewsCard profile={profile} />
 
 					<View style={{ height: spacing.lg }} />
-					<LocationCard profile={profile} />
+					<BusinessOffersSection businessId={profile.business.id} />
 				</View>
 			</ScrollView>
 
@@ -158,7 +156,8 @@ export default function BusinessProfileScreen() {
 /**
  * Loading placeholders mirroring each final block of the profile screen.
  * Heights and internal geometry are derived from the real components'
- * styles (ProfileHero, ProfileHeader, ProfileContact, ProfileSocial).
+ * styles (ProfileHero, ProfileHeader, ProfileContact, ProfileSocial,
+ * BusinessOffersSection).
  */
 
 function BusinessHeaderSkeleton() {
@@ -234,6 +233,11 @@ function ContactInfoSkeleton() {
 			<InfoRowSkeleton />
 			<View style={{ height: spacing.md }} />
 			<InfoRowSkeleton />
+			{/* El mapa es de esta card desde que bajó de la que estaba al pie:
+			    sin esta fila, la pantalla carga con el hueco del mapa reservado
+			    más abajo y el salto al aparecer la tarjeta real. */}
+			<View style={{ height: spacing.lg }} />
+			<Skeleton style={styles.mapSkeleton} />
 		</View>
 	);
 }
@@ -301,15 +305,24 @@ function ReviewsCardSkeleton() {
 	);
 }
 
-function LocationCardSkeleton() {
+/**
+ * El slider de ofertas al pie.
+ *
+ * No es una card sino una fila horizontal: el título y las tarjetas de 260×270
+ * que usa `OfferRowSection`. Se espeja con menos tarjetas que las cinco reales
+ * porque el bloque necesita comunidad en el ancho de la pantalla, no el
+ * conteo exacto — y el mismo razonamiento que las tres filas de reseñas.
+ */
+function BusinessOffersSkeleton() {
 	return (
-		<View style={styles.cardSkeleton}>
-			<Skeleton style={styles.cardTitleSkeleton} />
-			<Skeleton style={styles.addressSkeleton} />
-			<View style={{ height: spacing.lg }} />
-			<Skeleton style={styles.mapSkeleton} />
+		<View>
+			<Skeleton style={styles.sectionTitleSkeleton} />
 			<View style={{ height: spacing.md }} />
-			<Skeleton style={styles.routeButtonSkeleton} />
+			<View style={styles.offersRowSkeleton}>
+				<Skeleton style={styles.offerCardSkeleton} />
+				<Skeleton style={styles.offerCardSkeleton} />
+				<Skeleton style={styles.offerCardSkeleton} />
+			</View>
 		</View>
 	);
 }
@@ -458,13 +471,25 @@ const styles = StyleSheet.create({
 		marginTop: spacing.sm,
 		alignSelf: "center",
 	},
-	// LocationCard block: title + address + map preview (180) + route button.
-	addressSkeleton: {
-		width: "80%",
-		height: 14,
-		borderRadius: radii.xs,
-		marginTop: spacing.xs,
-	},
+	// El mapa vive dentro de ContactInfoCard, así que su skeleton va con esa
+	// card. `addressSkeleton` y `routeButtonSkeleton` se fueron con la card
+	// LocationCard: la dirección ya la dibuja la fila de contacto y el botón
+	// repetía la acción de esa fila.
 	mapSkeleton: { height: 180, borderRadius: radii.lg },
-	routeButtonSkeleton: { height: 44, borderRadius: radii.md },
+	// OfferRowSection block: el título de `SectionHeader` y las tarjetas de
+	// 260×270 que usa `OfferRowSection`. Mismo ancho que las ofertas reales.
+	sectionTitleSkeleton: {
+		width: "45%",
+		height: 18,
+		borderRadius: radii.sm,
+	},
+	offersRowSkeleton: {
+		flexDirection: "row",
+		gap: spacing.md,
+	},
+	offerCardSkeleton: {
+		width: 260,
+		height: 270,
+		borderRadius: radii.xl,
+	},
 });

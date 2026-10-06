@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { View, StyleSheet, FlatList } from "react-native";
 import { MapPin } from "lucide-react-native";
 
@@ -14,19 +14,42 @@ import {
 	useRecentOffers,
 	useNearbyOffersHook,
 	useSelectedAddress,
+	useBusinessOffersRow,
 } from "@/src/features/hooks";
 import { OfferCard } from "@/src/features/offers/components/OfferCard";
 import type { OfferDetail } from "@/src/features/offers/domain/offer";
 import { Card } from "@/components/ui/card";
 
-type SectionType = "popular" | "expiring" | "recent" | "nearby";
+/**
+ * Vive en `features/offers` y no en `features/home` porque ya no es de la home:
+ * lo usan las cuatro secciones del inicio y también el perfil público de un
+ * negocio. Un componente de offerings que `business` tiene que importar desde
+ * `home` ata los dos features en la dirección equivocada.
+ */
+type SectionType = "popular" | "expiring" | "recent" | "nearby" | "business";
 
 interface OfferRowSectionProps {
 	type: SectionType;
 	title: string;
 	icon?: React.ReactNode;
 	limit?: number;
+	/**
+	 * Cuántas se MUESTRAN cuando `limit` trae más. Es lo que habilita el "ver
+	 * todas" solo cuando de verdad hay algo más: se piden `limit`, se enseñan
+	 * `maxVisible` y el link aparece únicamente si hubo algo que cortar.
+	 *
+	 * Sin esto el link se ofrece siempre, y ofrecer "ver todas" sobre un
+	 * listado de cinco es un callejón sin salida. No se resuelve en la pantalla
+	 * que monta la fila porque ésa no ve los datos: la decisión es de la fila.
+	 */
+	maxVisible?: number;
 	category?: string | null;
+	/**
+	 * Solo para `type="business"`. Va en las props y no se deduce del contexto
+	 * porque cada fila llama a SU hook: los hooks nunca van dentro de ramas
+	 * condicionales del switch.
+	 */
+	businessId?: string;
 	onSeeAll?: () => void;
 }
 
@@ -97,6 +120,7 @@ function OfferRowView({
 	icon,
 	onSeeAll,
 	offers,
+	maxVisible,
 	isLoading,
 	isError,
 	error,
@@ -106,6 +130,7 @@ function OfferRowView({
 	icon?: React.ReactNode;
 	onSeeAll?: () => void;
 	offers?: OfferDetail[];
+	maxVisible?: number;
 	isLoading: boolean;
 	isError: boolean;
 	error?: unknown;
@@ -117,11 +142,33 @@ function OfferRowView({
 		[],
 	);
 
+	// El corte y el link se resuelven juntos y en un solo lugar: si se ofrece
+	// algo que no se muestra, hay más y el link corresponde; si no, el link
+	// desaparece con lo que sobra.
+	//
+	// SOLO `maxVisible` puede apagarlo. Las cuatro secciones de la home piden el
+	// link siempre y no filtran nada, así que sin `maxVisible` el `onSeeAll` se
+	// respeta tal cual: tratarlo como "no hay más" les borraría el "Ver todo" de
+	// la home a cambio de arreglar el perfil de un negocio.
+	const visible = useMemo(() => {
+		if (!offers || maxVisible === undefined) return offers;
+		return offers.length > maxVisible ? offers.slice(0, maxVisible) : offers;
+	}, [offers, maxVisible]);
+	const hasMore =
+		maxVisible === undefined ||
+		(visible !== undefined && offers !== undefined
+			? visible.length < offers.length
+			: false);
+
 	if (!isLoading && !isError && offers && offers.length === 0) return null;
 
 	return (
 		<View style={styles.container}>
-			<SectionHeader title={title} icon={icon} onSeeAll={onSeeAll} />
+			<SectionHeader
+				title={title}
+				icon={icon}
+				onSeeAll={hasMore ? onSeeAll : undefined}
+			/>
 			{isLoading ? (
 				<FlatList
 					data={SKELETON_ROWS}
@@ -137,7 +184,7 @@ function OfferRowView({
 				<ErrorState error={error} onRetry={onRetry} />
 			) : (
 				<FlatList
-					data={offers}
+					data={visible ?? offers}
 					keyExtractor={offerKeyExtractor}
 					horizontal
 					showsHorizontalScrollIndicator={false}
@@ -161,6 +208,8 @@ export function OfferRowSection(props: OfferRowSectionProps) {
 			return <RecentRow {...props} />;
 		case "nearby":
 			return <NearbyRow {...props} />;
+		case "business":
+			return <BusinessRow {...props} />;
 	}
 }
 
@@ -233,6 +282,38 @@ function NearbyRow({
 			title={title}
 			icon={icon}
 			onSeeAll={onSeeAll}
+			offers={q.data}
+			isLoading={q.isLoading}
+			isError={q.isError}
+			error={q.error}
+			onRetry={() => void q.refetch()}
+		/>
+	);
+}
+
+/**
+ * Las ofertas de un negocio, para su perfil público.
+ *
+ * La fila se queda con `onSeeAll` del llamador y no lo decide sola: el slider
+ * enseña `limit` ofertas y el "ver todas" tiene que vivir solo cuando hay una
+ * más, que es una decisión de la pantalla que lo monta y no de esta fila —
+ *OfferRowView solo sabe mostrar lo que le dieron.
+ */
+function BusinessRow({
+	title,
+	icon,
+	limit = 10,
+	maxVisible,
+	businessId,
+	onSeeAll,
+}: RowProps) {
+	const q = useBusinessOffersRow(businessId ?? "", limit);
+	return (
+		<OfferRowView
+			title={title}
+			icon={icon}
+			onSeeAll={onSeeAll}
+			maxVisible={maxVisible}
 			offers={q.data}
 			isLoading={q.isLoading}
 			isError={q.isError}

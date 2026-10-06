@@ -135,6 +135,7 @@ const PAGE_SIZE = 20;
 
 export function useFilteredOffersInfinite(filters: {
 	category?: string | null;
+	businessId?: string | null;
 	maxPrice?: number | null;
 	maxDistanceKm?: number | null;
 	lat?: number;
@@ -209,6 +210,27 @@ export function useRecentOffers(limit = 5) {
 	return useQuery({
 		queryKey: ["offers", "recent", limit, lat, lng, radiusKm],
 		queryFn: () => offersRepository.getRecentOffers(params, limit),
+	});
+}
+
+/**
+ * Las ofertas de un negocio para la sección de su perfil público.
+ *
+ * El `businessId` va en el `queryKey` porque es lo que define el resultado: dos
+ * negocios con el mismo `limit` son dos consultas distintas y sin la clave
+ * React Query las serviría la misma.
+ *
+ * NO lleva `enabled` por sesión, a diferencia de `useFilteredOffersInfinite`:
+ * el perfil de un negocio es público y el RPC es legible por `anon`, así que
+ * encerrarlo detrás de la sesión dejaría el slider vacío justo en la visita que
+ * más lo necesita —alguien que todavía no tiene cuenta mirando qué hay para
+ * rescatar—.
+ */
+export function useBusinessOffersRow(businessId: string, limit: number) {
+	return useQuery({
+		queryKey: ["offers", "by-business", businessId, limit],
+		queryFn: () => offersRepository.getBusinessOffers(businessId, limit),
+		enabled: businessId.length > 0,
 	});
 }
 

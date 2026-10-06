@@ -7,6 +7,11 @@ export interface ExploreFilterState extends OfferFilterState {
 
 export const emptyExploreFilters: ExploreFilterState = {
 	category: null,
+	// Explorar no tiene filtro por negocio: el recorte a un local se pide
+	// desde su perfil y vive en `/all-offers`. Va declarado en `null` y no
+	// opcional para que el tipo siga diciendo la verdad sobre lo que esta
+	// pantalla puede filtrar.
+	businessId: null,
 	maxPrice: null,
 	maxDistanceKm: null,
 	searchQuery: "",

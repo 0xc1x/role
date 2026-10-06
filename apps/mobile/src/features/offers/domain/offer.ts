@@ -82,12 +82,21 @@ export interface AreaStat {
 /** Filter state for the offers sheet (owned by domain; UI imports it). */
 export interface OfferFilterState {
 	category: string | null;
+	/**
+	 * Recorta a un negocio. NO lo edita el sheet de filtros: entra por la URL
+	 * (`/all-offers?business=`) desde el perfil del negocio, y por eso está acá
+	 * y no solo en el estado de la pantalla — si viviera en la pantalla, limpiar
+	 * el chip se comería el filtro y el "ver todas" dejaría de ser el mismo
+	 * listado.
+	 */
+	businessId: string | null;
 	maxPrice: number | null;
 	maxDistanceKm: number | null;
 }
 
 export const emptyOfferFilters: OfferFilterState = {
 	category: null,
+	businessId: null,
 	maxPrice: null,
 	maxDistanceKm: null,
 };
