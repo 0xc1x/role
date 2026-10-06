@@ -122,7 +122,48 @@ that proof — which is why `20260906125927` was left alone when it failed, and 
 its failure was closed in the harness instead. These two files were already
 divergent; moving them toward the ledger cannot lose evidence.
 
+> **Actualizado el 2026-10-05: el párrafo anterior quedó viejo.** Los dos
+> archivos se corrigieron después **hasta** el ledger, no solo hacia él. Hoy
+> `md5sum` da `6ff3cb80b9331a6c1d06384d42bd68f2` para `20260925155433` y
+> `a98a9fc7e71a62850dc30fd5bc2a05ea` para `20260925163235`, que es exactamente lo
+> que devuelve `md5(statements[1])` del ledger para ambas. Es decir: los dos
+> archivos coinciden byte a byte con lo que production corrió, y el resto del
+> reformateo ya no está.
+>
+> Se verificó las 24 migraciones de la ventana `20260925155153`–`20260927164628`
+> con `md5sum -c` contra el ledger: **24 de 24 coinciden**. La deuda de
+> reproducibilidad que este README describía para esa ventana está cerrada. Ver
+> `docs/security-debt.md` §2.
+
 ### The divergence is semantic, and the next fidelity gap
+
+> **Actualizado el 2026-10-05: esta tabla comparaba cosas distintas y la
+> diferencia no era una brecha.** La columna "replay" era el hash del cuerpo que
+> `20260925155433` creaba; la columna "production" es el hash del cuerpo que hay
+> **hoy** en la base. Y el cuerpo de hoy ya no es el de esa migración:
+> `20260927025753_businesses_drop_sensitive_columns` (fase 3 del split de
+> `businesses`) reescribe `reserve_offer` para leer `commission_rate` de
+> `business_finance`. Verificado en la base el 2026-10-05:
+>
+> ```sql
+> select p.proname,
+-- Esperado: true solo para reserve_offer, que es la que la fase 3 reescribio.
+>   (p.prosrc like '%public.business_finance%') as lee_finance
+>   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+>  where n.nspname = 'public'
+>    and p.proname in ('reserve_offer', 'notify_business_pending');
+> --  reserve_offer           | t
+> --  notify_business_pending | f
+> ```
+>
+> Es decir: comparar el archivo de `20260925155433` contra la base de hoy mide la
+> diferencia entre "lo que esa migración creó" y "lo que una migración posterior
+> reemplazó", que es lo esperado, no una infidelityidad del archivo. Como el
+> md5 del archivo coincide con `md5(statements[1])` del ledger, el replay de esa
+> migración produce exactamente lo que production recibió en su momento.
+>
+> La tabla y los dos párrafos que la siguen se conservan tal cual estaban, como
+> registro del hallazgo original.
 
 Whitespace is not the whole story, and it is worth not pretending otherwise.
 Comparing the replayed function bodies against the live database with **all**

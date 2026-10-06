@@ -1,241 +1,382 @@
-# Deuda de seguridad abierta antes de recibir clientes
+# Deuda de seguridad
 
-Fecha: 2026-09-25. Ordenada por lo que bloquea el lanzamiento.
-Revisado contra la base de datos el 2026-09-25 (SQL directo, no inferencia).
+Fecha de la última revisión: **2026-10-05**. Verificada contra la base de datos
+y el código el 2026-10-05 (SQL directo y lectura de código; nada inferido).
 
-> **Cómo se verificó esta revisión.** Cada afirmación de estado de abajo se
-> comprobó con `has_column_privilege` / `information_schema` /
-> `supabase_migrations.schema_migrations` sobre la base real. `has_table_privilege`
-> **no sirve** para concluir que falta un privilegio: este esquema usa grants
-> **por columna** a propósito, así que a nivel de tabla devuelve `false`
-> aunque la escritura exista columna por columna. Y `has_column_privilege`
-> necesita **4** argumentos (`user, tabla, columna, privilegio`); con 3 Postgres
-> interpreta el rol como nombre de tabla y responde `42P01`.
+> **Qué cambió desde la revisión del 2026-09-25.** De los siete ítems que había,
+> **cuatro están cerrados y uno estaba mal descrito**: la fase 3 del split de
+> `businesses` sí se aplicó, y con ella el ítem §1, que era el P1 de la lista.
+> Un agente que leyera la versión anterior habría tratado como abierta la
+> exposición de columnas que ya no existe, y podía volver a aplicar una migración
+> destructiva. Ese era el riesgo concreto de este documento.
+>
+> **Cómo se verificó.** `information_schema`, `pg_policies`, `pg_proc` y
+> `supabase_migrations.schema_migrations` sobre la base real; `md5sum` de los
+> archivos contra `md5(statements[1])` del ledger; lectura del código para lo que
+> no es base de datos.
+>
+> Dos trampas de Postgres que este repo ya se encontró, y que conviene no
+> repetir: `has_table_privilege` **no sirve** para concluir que falta un
+> privilegio, porque este esquema usa grants **por columna** a propósito y a
+> nivel de tabla devuelve `false` aunque la escritura exista columna por columna.
+> Y `has_column_privilege` necesita **4** argumentos
+> (`user, tabla, columna, privilegio`); con 3, Postgres interpreta el rol como
+> nombre de tabla y responde `42P01`.
 
-## 0. Una migración aplicada sin pasar por el ledger (corregido)
+## Estado de los ítems
 
-**Estado:** cerrado el 2026-09-25.
+| # | Ítem | Estado 2026-09-25 | Estado 2026-10-05 |
+| --- | --- | --- | --- |
+| 0 | Migración fuera del ledger | cerrado | cerrado |
+| 1 | Columnas de negocio expuestas a `anon` | **abierto (P1)** | **cerrado** — fase 3 aplicada |
+| 1b | Split de `businesses`, fase 3 | "escrita, NO aplicada" | **aplicada** el 2026-09-27 |
+| 2 | Ocho migraciones nunca ejecutadas | abierto | **cerrado** — 24/24 coinciden |
+| 3 | Seis migraciones ausentes del repo | deliberado | deliberado (sin cambio) |
+| 4 | Lint sin cubrir en mobile y commons | abierto | **cerrado** |
+| 5 | Verificación no posible desde el código | abierto | parcial: correo de activación **cerrado** |
+| 6 | Acciones de configuración externas | abierto | abierto (reducido) |
+| 7 | Teléfono de soporte placeholder | — | **abierto, nuevo** |
+| 8 | `app_config` con `role.ec` fuera del ledger | — | **abierto, nuevo** |
+
+Lo único que queda abierto y bloquea el lanzamiento es **§6**. **§8** es el más
+grave de los nuevos: el repo no puede reproducir la configuración de soporte de
+producción, y una reparación sale de §7 y de §8 a la vez.
+
+---
+
+## 0. Una migración aplicada sin pasar por el ledger (cerrado)
+
+**Estado:** cerrado el 2026-09-25. Sin cambio en esta revisión.
 
 `businesses_client_write_grants` restauraba los grants de escritura que
 `20260925163235` había quitado con `revoke all`. El SQL se ejecutó directo: los
-efectos están en la base (los grants por columna y los triggers
-`trg_set_business_owner_from_jwt` y `trg_default_business_inactive`), pero el
-ledger no tenía la fila, así que el directorio de migraciones no describía la
-base y `supabase db push` la habría reproducido contra un proyecto vivo como si
-nunca hubiera corrido.
+efectos están en la base, pero el ledger no tenía la fila, así que el directorio
+de migraciones no describía la base y `supabase db push` la habría reproducido
+contra un proyecto vivo como si nunca hubiera corrido.
 
 Re-aplicada por `apply_migration` (idempotente) y registrada como
 `20260926010336_businesses_client_write_grants`; el `md5sum` del archivo coincide
 con `md5(statements[1])` del ledger. La regla que lo previene está en
 `AGENTS.md` y en `supabase/migrations/README.md`.
 
-**El fallo no fue el SQL, fue escribir a la base por una vía que no deja
-rastro y luego confundir un commit con prueba de aplicación.**
+**El fallo no fue el SQL, fue escribir a la base por una vía que no deja rastro y
+luego confundir un commit con prueba de aplicación.**
 
-## 1. Columnas de negocio expuestas a `anon` (P1-2, revertido a propósito)
+## 1. Columnas de negocio expuestas a `anon` (cerrado el 2026-09-27)
 
-**Estado:** abierto, **verificado hoy**. Las ofertas vuelven a cargar, el precio
-es exposición de datos.
+**Estado:** cerrado. **La versión anterior de este documento decía "abierto" y
+eso era incorrecto.**
 
-Confirmado por SQL el 2026-09-25: `public.businesses` conserva las 7 columnas
-(`commission_rate`, `balance`, `verification_status`, `verified_at`,
-`verified_by`, `rejection_reason`, `owner_id`),
-`has_table_privilege('anon','public.businesses','SELECT')` es `true`, y la
-política de lectura es `is_active = true`. El filtro de filas no protege las
-columnas: `anon` lee `commission_rate` y `balance` de **todo negocio activo**.
+Era el P1 de la lista: `anon` podía leer `commission_rate`, `balance`,
+`verification_status`, `verified_at`, `verified_by`, `rejection_reason` y
+`owner_id` de **todo negocio activo**, porque restaurar el SELECT de tabla en
+`businesses` era condición para que PostgREST resolviera las relaciones de
+`offers`, `business_locations` y `orders`. Los grants por columna y las
+relaciones de PostgREST son mutuamente excluyentes: la única salida era mover
+las columnas fuera de la tabla.
 
-`public.businesses` tiene 7 columnas que no deberían ser públicas:
-`commission_rate`, `balance`, `verification_status`, `verified_at`,
-`verified_by`, `rejection_reason`, `owner_id`.
+Eso es lo que hizo el split en tres fases (`business_finance`,
+`business_moderation`). **La fase 3 sí se aplicó**, con el nombre de ledger
+`businesses_drop_sensitive_columns`.
 
-El 2026-09-25 se intentó ocultarlas reemplazando el SELECT de tabla con grants
-por columna. **Es incompatible con PostgREST**: `offers`, `business_locations` y
-`orders` tienen FK a `businesses`, y PostgREST necesita SELECT a nivel de tabla
-sobre una tabla referenciada para resolver relaciones. Toda lectura por
-`/rest/v1/offers` fallaba con `42501 permission denied for table businesses`,
-incluido `select=id` sin embed. El catálogo de ofertas, que es el producto, no
-cargaba.
+> La versión anterior decía que la fase 3 estaba "escrita y verificada, NO
+> aplicada", y que la última entrada del ledger era `20260926010336`. El motivo
+> del error: la migración se llama `20260926000011_*` en el repo pero
+> **`apply_migration` asigna la versión del servidor**, y el servidor le dio
+> `20260927025753`. Buscar el número del nombre de archivo en el ledger no la
+> encuentra. Toda migración aplicada tiene que buscarse **por `name`**, nunca por
+> la versión del nombre de archivo.
 
-Los grants por columna y las relaciones de PostgREST son mutuamente excluyentes.
-Solo hay dos salidas: exponer la tabla, o mover las columnas fuera de ella.
+### Verificado en la base el 2026-10-05
 
-**Follow-up requerido:** mover esas columnas a tablas acompañantes
-(`business_finance`, `business_moderation`) para que `businesses` solo contenga
-datos públicos y el SELECT de tabla vuelva a ser seguro. Alcance: schema
-Drizzle, repositorio y mappers de negocios en la API, queries de admin, triggers
-`enforce_offer_business_availability` y `sync_business_verification`,
-`reserve_offer`, generación de payouts y sus tests.
+| Comprobación | Resultado |
+| --- | --- |
+| `businesses_drop_sensitive_columns` en el ledger | sí, `20260927025753` |
+| Las 7 columnas sensibles en `businesses` | **0** |
+| Columnas totales en `businesses` | 16, todas públicas |
+| Tablas acompañantes | 2, `business_finance` y `business_moderation` |
 
-El RLS sigue acotando filas: `anon` solo ve negocios activos. Lo que se expone
-son columnas de un negocio activo, no filas inactivas.
+Lista completa de `businesses` ahora: `id`, `name`, `type`, `slug`, `image`,
+`cover_image`, `rating`, `review_count`, `description`, `phone`, `email`,
+`website`, `is_active`, `created_at`, `updated_at`, `currency`.
 
-**La exposición está fijada por un test** a propósito, en
-`apps/api/src/database/security/public-read-grants.spec.ts`
-("businesses: table-level SELECT is restored, and the exposure it buys is
-named"). Cuando las columnas se muevan, ese test se reemplaza por uno que
-pruebe que ya no están en la tabla. No lo borres sin hacer el follow-up: el test
-existe para que la deuda sea visible y no se olvide en silencio.
+El SELECT de tabla para `anon` sigue siendo necesario para las relaciones de
+PostgREST, y ya no compra exposición: lo que hay en la tabla es lo que el
+catálogo público puede mostrar.
 
-## 1b. Fase 3 del split de `businesses`: verificada, pendiente de deploy
+### Acción pendiente que salió de este cierre
 
-**Estado:** fases 1, 2 y 3 escritas. La 3 **NO aplicada** — confirmado en el
-ledger el 2026-09-25, whose última entrada es `20260926010336`. La base está en
-**fase 1**; el código (API y mobile) está en **fase 2**. Ese desfasaje es
-recuperable, y es la precondición de la 3: la 000011 dropea columnas que una API
-fase-1 lee en runtime, así que el orden obligatorio es **desplegar la API
-fase 2 → verificar en vivo → aplicar la 000011**. Al revés se rompe el negocio
-en producción.
+**El test que marcaba la deuda quedó viejo.** En
+`apps/api/src/database/security/public-read-grants.spec.ts`, el caso
+`businesses: table-level SELECT is required, and phase 3 must close what it
+exposes` sigue afirmando que las columnas "are readable by anon" y dice en
+comentario que esa aserción *"se quita solo cuando la fase 3 se haya aplicado de
+verdad"*. Ya se aplicaron. El marcador está sonando por una puerta cerrada: el
+test sigue verde porque las migraciones históricas del repo siguen en el
+archivo, y va a seguirlo mientras estén.
 
-- **Fase 1 — hecha.** Las tres tablas acompañantes existen y están backfilled
-  (16/16, 0 discrepancias). Aditiva: no cambió nada que la app use.
-- **Fase 2 — hecha, sin desplegar.** API y mobile leen y escriben las tablas
-  acompañantes. El DTO público no cambia. El cliente móvil ya no envía
-  `owner_id`: la propiedad se deriva de `auth.uid()`, así que ya no puede
-  escribirse.
-- **Fase 3 — escrita y verificada, NO aplicada.**
-  `supabase/migrations/20260926000011_businesses_drop_sensitive_columns.sql`.
+Este documento lo pedía explícitamente: *"Cuando las columnas se muevan, ese test
+se reemplaza por uno que pruebe que ya no están en la tabla."* **No lo
+reemplazamos en esta revisión** porque es un cambio de código y no de
+documentación, y porque borrar el marcador sin escribir el reemplazo quitaría la
+trazabilidad de por qué el SELECT de tabla existe. Queda como el pendiente
+concreo de este ítem.
 
-### Alcance real (tres estimaciones fallidas, en orden)
+## 1b. Split de `businesses`: qué se aplicó y qué queda
 
-| Estimación | Realidad | Cómo se descubrió |
-| --- | --- | --- |
-| 2 funciones | 10 funciones | escaneo de `pg_proc.prosrc` |
-| 3 políticas | **20 políticas** | `drop column` las listó todas |
-| — | 2 triggers a mudarse de tabla | lectura de `pg_get_triggerdef` |
+**Estado:** las tres fases aplicadas. Este ítem ya no describe deuda abierta;
+se conserva porque el porqué de `20260927025753` es difícil de reconstruir.
 
-**17 de esas 20 políticas viven en otras 11 tablas**: `offers` (4),
-`business_notification_preferences` (3), `offer_categories` (2),
-`business_hours`, `business_locations`, `coupons`, `payouts`, `orders`,
-`order_events`, `payment_intents` y `profiles`.
+- **Fase 1 — aplicada.** `business_finance` y `business_moderation` creadas y
+  backfilled (16/16, 0 discrepancias). Aditiva.
+- **Fase 2 — aplicada.** API y mobile leen y escriben las acompañantes. El DTO
+  público no cambió. El móvil ya no envía `owner_id`: la propiedad se deriva de
+  `auth.uid()`.
+- **Fase 3 — aplicada el 2026-09-27** (`20260927025753`). Dropea las 7
+  columnas, reescribe 10 funciones sustituyendo **una** predicada cada una
+  (tomando `pg_get_functiondef` y preservando el resto byte a byte, para que si
+  alguien editó la función después la migración falle en vez de hacer un no-op
+  silencioso), y recrea 20 políticas.
 
-Esto no es un dato menor. `DROP COLUMN ... CASCADE` — que es lo que escribe
-cualquiera con prisa — habría **borrado 17 políticas de seguridad en silencio**
-a través de 11 tablas. Una política tipo "Owners can update own offers" que
-desaparece no es un aviso, es una puerta abierta. Postgres rechaza el `drop`
-sin `CASCADE`, y esa es la única razón por la que se detectó.
-
-### Cómo se verificó
-
-Contra la base de desarrollo, dentro de una transacción que se autoboca
-(`RAISE EXCEPTION` al final): 10 funciones reescritas, 20 políticas recreadas,
-las 7 columnas dropeadas **sin `CASCADE`**, un negocio creado por el bootstrap,
-aprobado, rechazado, y el trigger de disponibilidad de ofertas ejercitado. El
-ciclo de vida completo de un pedido (reserva → confirmación → lista → código de
-recogida → completada → payout) se corrió por separado contra las mismas
-reescrituras: fee 0.40, net 3.60, `business_finance.balance` 3.60 mientras
-`businesses.balance` quedaba intacto, y payout a 0.00 tras el recálculo.
-
-El archivo del disco se aplicó además con `psql` + `rollback` contra la base
-real: **exit 0**. Cero residuo verificado después (17 políticas de nuevo,
-`owner_id` presente, 0 funciones reescritas, 36 pedidos, stock 4).
-
-### Tres cosas que la lectura del diff no avisa
+### Lo que la lectura del diff no avisa, y sigue vigente
 
 1. **El trigger bootstrap tiene que ser AFTER INSERT.** Las acompañantes tienen
-   FK a `businesses(id)` y se validan en el acto, así que un trigger BEFORE
-   falla 23503. Solo aparece al ejecutar el insert.
+   FK a `businesses(id)` y se validan en el acto, así que BEFORE falla 23503.
 2. **El coste de AFTER es que la política de inserción ya no puede exigir la fila
    de propiedad.** Eso no debilita nada: la base asigna `owner_id` desde
-   `auth.uid()`, así que "solo creas negocios que te pertenecen" deja de ser una
-   cláusula que el cliente cumple y pasa a ser algo que no puede expresar.
+   `auth.uid()`, así que "solo creas negocios que te pertenecen" pasa de ser una
+   cláusula que cumple el cliente a algo que no puede expresar.
 3. **`sync_business_verification` se parte en dos.** BEFORE fija `verified_at`
    (un AFTER no puede modificar `NEW`); AFTER propaga `is_active` a
-   `businesses`, que es otra tabla. Y `notify_business_pending` se queda
-   deliberadamente en `businesses`: si se mudara a la acompañante, dispararía
-   desde dentro del bootstrap, cuando la fila del negocio aún no es legible.
+   `businesses`. Y `notify_business_pending` se queda en `businesses` a
+   propósito: si se mudara, dispararía desde dentro del bootstrap, cuando la fila
+   del negocio aún no es legible.
 
-### Por qué las funciones se reescriben y no se reescriben a mano
+### El drift que se detectó aquí, cerrado
 
-`reserve_offer`, `generate_payouts`, `set_order_status`, `cancel_order`,
-`validate_pickup_code` y `active_offers_near` mueven plata y órdenes. La
-migración no pega su cuerpo: toma `pg_get_functiondef(oid)` y sustituye **una
-predicada**. Así cada línea no auditada de una función auditada se preserva byte
-a byte, y si alguien editó esa función después, la migración **falla** en vez
-de hacer un no-op silencioso que deje una función leyendo una columna que ya no
-existe.
+La versión anterior decía que `apps/api/src/database/schema/businesses.ts`
+declaraba `owner_id` con `onDelete: 'no action'` mientras la FK real es
+`ON DELETE CASCADE`, y que se corrigiera en la fase 3. **Está cerrado por
+eliminación:** la columna ya no existe y el archivo ya no declara ningún
+`onDelete`. Verificado el 2026-10-05.
 
-### Orden de aplicación
+## 2. Ocho migraciones nunca se han ejecutado (cerrado)
 
-1. Desplegar la API de la fase 2. **El servicio actual lee columnas que caerán.**
-2. Aplicar `20260926000011`.
+**Estado:** cerrado. **La versión anterior decía "abierto" y ya no es cierto.**
 
-Ese orden está escrito en la cabecera de la migración, y hay un test que falla
-si alguien la borra.
+Decía que de las nueve migraciones `20260925*`, ocho no eran byte-idénticas a lo
+que la base recibió. Reconstruido el procedimiento del README y ejecutado el
+2026-10-05: se extrajo `md5(statements[1])` del ledger para las **24**
+migraciones de la ventana `20260925155153`–`20260927164628` y se comparó contra
+`md5sum` de cada archivo del repo.
 
-**Drift adicional detectado:** `apps/api/src/database/schema/businesses.ts`
-declaraba `owner_id` con `onDelete: 'no action'`, pero la FK real en la base es
-`ON DELETE CASCADE`. El schema Drizzle está desalineado de la base;
-`business_ownership` sigue la base, que es lo correcto. Corregir en la fase 3.
+**24 de 24 coinciden.** Ninguna falla. Los archivos del repo se llaman con la
+versión que asignó el servidor, que es el procedimiento correcto y ya no la
+deuda que se describía.
 
-## 2. Ocho migraciones nunca se han ejecutado
+Lo único que queda anotado: el README registra dos diferencias **deliberadas** entre
+el archivo y una versión divergente del SQL — reformateo de one-liners en
+`20260925155433` y espaciado de `verification_status = 'approved'` en
+`20260925163235`. Ninguna cambia comportamiento y ninguna rompe el md5.
 
-**Estado:** abierto. Reproducibilidad, noorrectitud.
+`bun run brand:check` falla hoy en `packages/commons/src/brand/icon.ts`, y
+fallaba antes de esta revisión (verificado con `git stash`). No es de esta
+documentación y no se tocó.
 
-De las nueve migraciones `20260925*`, ocho no son byte-idénticas a lo que la base
-recibió. Son las versiones revisadas y documentadas; la base recibió SQL
-equivalente enviado por MCP. Solo `20260925165931_offer_stock_write_grant.sql`
-coincide.
+## 3. Seis migraciones ausentes del repo (deliberado, sin cambio)
 
-Las versiones del repo **nunca se han ejecutado**: son equivalentes por
-razonamiento, no por prueba. Antes de confiar en `supabase/migrations/` para
-reconstruir un entorno, reproducir la cadena en una rama desechable de Supabase
-y dejar que la base juzgue.
+Cinco contienen el JWT de la anon key y una contiene hashes bcrypt de usuarios
+seed. El repositorio es público, así que commitearlas publicaría la credencial
+de forma permanente e irreversible.
 
-Detalle en `supabase/migrations/README.md`.
+El JWT ya rotó fuera de la base durante el hardening de `20260925163235` y vive
+solo en Vault, así que publicar esos archivos republicaría una credencial que ya
+está muerta. Los hashes de las contraseñas seed son permanentes más allá de la
+rotación.
 
-## 3. Seis migraciones ausentes del repo
+La tabla con las seis, version por version, está en
+`supabase/migrations/README.md`, junto con el procedimiento de restauración
+segura. Para una auditoría, leerlas del ledger.
 
-**Estado:** deliberado, documentado.
+## 4. Lint sin cubierto en mobile y commons (cerrado)
 
-Cinco migraciones contienen el JWT real de la anon key y una contiene hashes
-bcrypt de usuarios seed. El repositorio es público, así que commitearlas
-publicaría la credencial de forma permanente. Sus sustitutos actuales están en
-las migraciones `20260925163235` en adelante. Para una auditoría, leerlas del
-ledger; el procedimiento está en `supabase/migrations/README.md`.
+**Estado:** cerrado. Verificado el 2026-10-05.
 
-## 4. Lint sin cubrir en mobile y commons
+Decía que `apps/mobile` y `packages/commons` no tenían script de `lint`, así que
+~30 hallazgos de biome no bloqueaban nada. Hoy los cinco paquetes tienen script:
 
-**Estado:** abierto, cosmético. Verificado el 2026-09-25.
+| Paquete | `lint` |
+| --- | --- |
+| `apps/mobile` | `biome lint . --error-on-warnings` |
+| `packages/commons` | `biome lint .` |
+| `apps/api` | `eslint ... --fix` |
+| `apps/admin` | `biome lint` |
+| `apps/landing` | `biome lint` |
 
-`bun run lint` corre en admin, landing y api. `apps/mobile` y `packages/commons`
-no tienen script de `lint`, así que ~30 hallazgos de biome no bloquean nada.
-La mayoría son mecánicos (`noUnusedImports`, `useImportType`, prefijo `node:`);
-`noNonNullAssertion` (7) cambia tipado y conviene revisar aparte.
+La raíz corre `turbo run lint`, y CI tiene un paso `Lint` **y** un paso `Format
+check` separados, antes de los tests.
 
-Lo que sí está cubierto desde `80698b2` es el **formateo** (`format:check` con
-biome, en turbo y en CI). Formateo no es lint: el formateador no reporta
-`noUnusedImports` ni `useImportType`. Los dos scripts son independientes.
+## 5. Verificación que no se puede hacer desde el código (parcial)
 
-## 5. Verificación que no se puede hacer desde el código
+**Estado:** la mitad cerrada, el resto sigue siendo lo que es.
 
-**Estado:** abierto, pero menos vacío que antes.
+### Cerrado: el correo de activación
 
-Toda la evidencia de la remediación de seguridad es de capa Postgres: matriz
-de roles con mutaciones reales y round-trips por PostgREST. Sobre la capa de UI
-hay ahora una **auditoría estática de 63 hallazgos** (31 en mobile, 32 en
-landing + admin) que Camilla no encontró, no recorrió ni midió.
+La versión anterior decía que `auth.admin.createUser` con `email_confirm: false`
+no enviaba ningún correo, que el hook era un `// TODO`, y que el resultado era
+una **cuenta que nunca podía activarse** con la pantalla de éxito prometiendo un
+correo que no existía.
 
-Lo que sigue sin verificarse, y no se puede verificar leyendo código:
+**Escrito y verificado el 2026-10-05.** `businesses.service.ts` tiene ahora
+`sendConfirmationEmail`, que genera el enlace con
+`auth.admin.generateLink({ type: 'signup' })` y lo entrega por Resend —mismo
+cableado que `CampaignsService` y `ContactService`, no la cola de marketing— con
+plantilla propia. `email_confirm: false` sigue en el `createUser`, pero ya no es
+un bloqueo: es el estado correcto para un enlace de confirmación que se envía a
+mano.
 
-- Recorrer en un dispositivo real el camino de **crear una oferta y editar una**.
-  Sigue siendo el camino que nunca se recorrió.
-- Confirmación de correo: `businesses.service.ts:98` crea el usuario con
-  `email_confirm: false` vía `auth.admin.createUser`, que **no envía ningún
-  correo**, y el hook de email es un `// TODO` sin implementar
-  (`businesses.service.ts:208`). La pantalla de éxito promete "Recibirás un
-  email para confirmar tu cuenta" (`apps/landing/src/routes/business-signup.tsx:200`).
-  El resultado no es un comercio sin correo de bienvenida: es una **cuenta que
-  no puede activarse nunca**, porque el admin la aprueba y el login siempre
-  responde `Email not confirmed`. Hay que decidir entre enviar el correo de
-  confirmación o poner `email_confirm: true` **y** darle al admin una vista con
-  el email y el teléfono del solicitante antes de aprobar (hoy no la tiene: solo
-  ve nombre, tipo, estado, activo y fecha).
-- Contraste y dynamic type: los ratios de los hallazgos se calcularon a mano
-  desde los hex de `colors.ts`, no contra píxeles renderizados.
+Es best-effort a propósito, y el comentario explica por qué: el usuario de auth
+y la fila del negocio ya existen cuando se envía, así que un fallo de envío no
+puede fallar el request. Lanzar convertiría una caída transitoria de correo en
+un negocio bloqueado para siempre —el dueño reintenta, choca con "Email is
+already registered" y nunca recibe el enlace—.
 
-## 6. Acciones de configuración externas
+La segunda mitad de ese punto también está cerrada: el admin **sí** ve el email
+y el teléfono del solicitante. `businesses` tiene `email` y `phone` como columnas
+públicas desde el split, y el mapper de la API los expone.
 
-Identidad legal y RUC, bundle ID final, `VITE_SITE_URL`, GitHub production
-environment, secrets de Render/Vercel (`REDIS_URL`, `APP_VERSION`,
-`RENDER_GIT_COMMIT`), protección de contraseñas filtradas en Supabase, y
-Turnstile cuando exista frontend y verificación server-side.
+Sin API key de Resend (dev y tests) el envío se omite y el onboarding continúa.
+
+### Sigue abierto
+
+- **Recorrer en un dispositivo real el camino de crear una oferta y editarla.**
+  Sigue siendo el camino que nunca se recorrió, y no se puede recorrer leyendo
+  código.
+- **Contraste y dynamic type.** La auditoría estática de 63 hallazgos (31 en
+  mobile, 32 en landing + admin) **no está en el repo** — no aparece en
+  `docs/improvements/` ni en ningún otro documento, así que no se puede auditar
+  ni reproducir. Sus ratios se calcularon a mano desde los hex de `colors.ts`,
+  no contra píxeles renderizados. Conviene archivarla junto a los hallazgos que
+  se cierren, o dejar de citarla.
+- **La API de fase 2 nunca llegó a desplegarse por separado.** La base aplicó la
+  fase 3 el 2026-09-27; no hay registro de en qué momento estaba desplegada la
+  versión de la API que leía las acompañantes. Si ese orden se respetó, bien; si
+  no, hubo una ventana en la que la API leía columnas que ya no existían. No se
+  puede verificar desde el repo.
+
+## 6. Acciones de configuración externas (abierto, lo que bloquea el lanzamiento)
+
+**Estado:** abierto. Verificado el 2026-10-05 contra `app_config`.
+
+Identidad legal del operador, que es lo que aparece en términos y privacidad, y
+sigue con placeholders en la base:
+
+| Clave | Valor en la base |
+| --- | --- |
+| `legal.company_name` | `Operador de Rolé (pendiente)` |
+| `legal.controller_identity` | `el operador de Rolé (identidad legal pendiente de publicación)` |
+| `legal.address` | `Quito, Ecuador (pendiente de confirmación)` |
+| `legal.ruc` | vacío — mobile lo oculta, así que el footer queda sin RUC |
+
+Es texto legal que se publica. Los tres placeholders salen literalmente en la
+pantalla de términos y en la de privacidad, en mobile y en landing.
+
+Fuera de la base, y sin forma de verificar desde el repo: bundle ID final,
+`VITE_SITE_URL`, GitHub production environment, secrets de Render/Vercel
+(`REDIS_URL`, `APP_VERSION`, `RENDER_GIT_COMMIT`), protección de contraseñas
+filtradas en Supabase, y Turnstile cuando exista frontend y verificación
+server-side.
+
+## 7. Teléfono de soporte: placeholder que se marca (abierto, nuevo)
+
+**Estado:** abierto. Agregado por esta revisión el 2026-10-05.
+
+El centro de ayuda de mobile tiene un botón **Llamar** que abre
+`tel:+593 99 000 0000`. Ese número **no existe**: es un placeholder de ejemplo
+con el prefijo de Ecuador correcto y los dígitos locales en cero.
+
+Está en dos lugares, y los dos son el número falso:
+
+- `app_config.support.phone` = `+593 99 000 0000`. La propia descripción de la
+  clave dice *"(placeholder EC, editable)"*.
+- El fallback `strings.helpCenter.supportPhone` = el mismo string.
+
+Como el centro de ayuda lee `useConfigValue("support.phone", ...)`, el valor de
+la base gana: **el botón marca un número que nadie atiende**. No es un default
+invisible, es la fila "Llamar" del centro de ayuda de los dos lados de la app
+(`profile/help.tsx` y `business/[id]/help.tsx`).
+
+Los emails de la misma pantalla **no** tienen el problema, pero tienen una
+deuda chica: los fallbacks de `strings.ts` siguen en `@role.app` mientras la base
+ya está en `@role.ec`
+(`support.email` = `soporte@role.ec`, `contact.hola_email` = `hola@role.ec`,
+`contact.negocios_email` = `negocios@role.ec`). No se ve mal mientras la config
+cargue —gana la base—, pero un fallback desalineado es una bomba de reloj para
+quien lea el string y asuma que es lo que ve el usuario.
+
+Hay un test que fija el placeholder:
+`src/core/i18n/operator-identity.test.ts:27` afirma que
+`strings.helpCenter.supportPhone` es `+593 99 000 0000`. Cualquier cambio al
+número lo rompe, así que también hay que tocarlo.
+
+Un detalle que hace esto más raro de lo que parece: en la misma fila de tres
+chips, "Chat" **sí** avisa "Próximamente disponible" con un toast, y "Llamar"
+marca. El componente ya tiene el comportamiento honesto para un canal que no
+existe; el teléfono simplemente no lo usa.
+
+**Lo que hay que hacer es una decisión de negocio, no de código:** el número real
+de soporte. No se puede inventar. Mientras no exista, las opciones son publicarlo
+por `app_config`, ocultar el botón "Llamar", o poner un número que de verdad
+atienda.
+
+## 8. `app_config` con `role.ec` que ningún archivo del ledger escribe (abierto, nuevo)
+
+**Estado:** abierto. Agregado por esta revisión el 2026-10-05. **Es la misma
+clase de hueco que §0**, y en la dirección contraria: §0 fue una migración
+aplicada sin registrar; este son valores aplicados sin registrar.
+
+Producción corre en el dominio `role.ec`, pero el repo no lo describe:
+
+| Clave | Valor en producción | ¿Alguna fila del ledger lo escribe? |
+| --- | --- | --- |
+| `support.email` | `soporte@role.ec` | **no** |
+| `contact.hola_email` | `hola@role.ec` | **no** |
+| `legal.contact_email` | `legal@role.ec` | **no** |
+| `contact.negocios_email` | `negocios@role.ec` | no (aparece en plantillas, no en un write de `app_config`) |
+
+Verificado con `count(*) ... where statements[1] like '%soporte@role.ec%'` y sus
+equivalentes: **0, 0, 0**. El directorio siembra esos valores en `role.app`
+(`20260821205638`). Los cuatro se cambiaron en el proyecto vivo por una vía que
+no dejó fila en el ledger.
+
+### Por qué esto no es cosmético: rompe el replay
+
+`20260927053728_normalize_role_domain.sql` termina en un bloque `do $verify$`
+que hace `raise exception 'non-social app_config still references role.app'` si
+algún valor no social todavía dice `role.app`.
+
+En producción **pasó**, porque producción ya estaba en `role.ec`. En un replay
+desde el repo, donde el seed dice `role.app`, **esa aserción falla y la
+migración hace rollback**. El arnés de tests del API ya lo documenta en
+`apps/api/test/supabase-platform.ts`: marca `20260927053728` y
+`20260927141336` como no replicables, y lo califica de *"la misma clase de hueco
+que el drop de aridad-2 de `cancel_order`"*.
+
+O sea: **`supabase db push` a un entorno nuevo se rompe en `20260927053728`.**
+
+### Por qué la migración de arreglo no se escribió
+
+El mismo archivo de tests dice que el arreglo es *"una migración de datos
+registrada en el ledger"* y que **no** se escribió, por una razón que este
+documento tiene que respaldar: el directorio de migraciones no puede ganar un
+archivo que reclame ser historia que no ocurrió, y la tarea no podía aplicar a
+producción. Correcto en su momento. Hoy es la deuda abierta.
+
+### Lo que hay que hacer
+
+Una migración de datos que normalice a `role.ec` las cuatro claves (y que siga
+siendo idempotente, que es lo que le faltaba a la original), aplicada por
+`apply_migration` y verificada con `md5sum` como manda `AGENTS.md`. Con eso se
+resuelve también el dominio de los fallbacks de `strings.ts` —que hoy están en
+`@role.app`— y el placeholder del teléfono de §7 puede publicarse en la misma
+migración.
