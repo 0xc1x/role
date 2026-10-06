@@ -35,6 +35,16 @@ import {
  * hacía exactamente lo mismo— se fue con ella: dos controles que abren el mapa
  * en la misma pantalla es una decisión que le toca a quien lee, no una que se
  * ofrezca dos veces.
+ *
+ * CONTRAÍBLE PERO ABIERTA, que no es lo mismo que las otras dos. Horarios y
+ * reseñas arrancan cerrados porque son consulta: casi nadie que abre un perfil
+ * está ahí para leer el horario de los domingos. Acá es al revés —la dirección
+ * es lo que se viene a buscar, y con el mapa adentro la card ocupa más que
+ * ninguna—, pero quien ya leyó lo que necesitaba vuelve a esperar al slider de
+ * ofertas de abajo y el pliegue le sirve igual. Se pliega con el mismo gesto que
+ * los otros dos para que el pulgar no tenga que aprender dos patrones.
+ *
+ * El chevron lo pone `AccordionTrigger`; no se agrega a mano.
  */
 export function ContactInfoCard({
 	profile,
@@ -51,89 +61,103 @@ export function ContactInfoCard({
 	};
 	return (
 		<Card style={[styles.card, { boxShadow: `0px 4px 12px ${colors.shadow}` }]}>
-			<CardHeader>
-				<AppText variant="labelMedium" weight="bold">
-					{strings.businessProfile.contactInfo}
-				</AppText>
-			</CardHeader>
+			<Accordion type="single" collapsible defaultValue="business-contact">
+				<AccordionItem value="business-contact" className="border-b-0">
+					<CardHeader>
+						<AccordionTrigger
+							className="py-0"
+							accessibilityLabel={strings.businessProfile.contactInfo}
+						>
+							<AppText variant="labelMedium" weight="bold">
+								{strings.businessProfile.contactInfo}
+							</AppText>
+						</AccordionTrigger>
+					</CardHeader>
+					<AccordionContent className="p-0">
+						<CardContent>
+							<InfoRow
+								icon={MapPin}
+								label={strings.businessProfile.address}
+								text={profile.address ?? strings.businessProfile.notAvailable}
+								trailing={
+									hasCoords ? (
+										<Pressable onPress={openInMaps}>
+											<AppText weight="bold" style={{ color: colors.primary }}>
+												{strings.businessProfile.directions}
+											</AppText>
+										</Pressable>
+									) : null
+								}
+							/>
 
-			<CardContent>
-				<InfoRow
-					icon={MapPin}
-					label={strings.businessProfile.address}
-					text={profile.address ?? strings.businessProfile.notAvailable}
-					trailing={
-						hasCoords ? (
-							<Pressable onPress={openInMaps}>
-								<AppText weight="bold" style={{ color: colors.primary }}>
-									{strings.businessProfile.directions}
-								</AppText>
-							</Pressable>
-						) : null
-					}
-				/>
+							{business.phone?.length ? (
+								<>
+									<View style={{ height: spacing.md }} />
+									<InfoRow
+										icon={Phone}
+										label={strings.businessProfile.phone}
+										text={business.phone}
+										onPress={() => void openUrl(`tel:${business.phone}`)}
+										isLink
+									/>
+								</>
+							) : null}
 
-				{business.phone?.length ? (
-					<>
-						<View style={{ height: spacing.md }} />
-						<InfoRow
-							icon={Phone}
-							label={strings.businessProfile.phone}
-							text={business.phone}
-							onPress={() => void openUrl(`tel:${business.phone}`)}
-							isLink
-						/>
-					</>
-				) : null}
+							{business.email?.length ? (
+								<>
+									<View style={{ height: spacing.md }} />
+									<InfoRow
+										icon={Mail}
+										label={strings.businessProfile.email}
+										text={business.email}
+										onPress={() => void openUrl(`mailto:${business.email}`)}
+										isLink
+									/>
+								</>
+							) : null}
 
-				{business.email?.length ? (
-					<>
-						<View style={{ height: spacing.md }} />
-						<InfoRow
-							icon={Mail}
-							label={strings.businessProfile.email}
-							text={business.email}
-							onPress={() => void openUrl(`mailto:${business.email}`)}
-							isLink
-						/>
-					</>
-				) : null}
+							{business.website?.length ? (
+								<>
+									<View style={{ height: spacing.md }} />
+									<InfoRow
+										icon={Globe}
+										label={strings.businessProfile.website}
+										text={business.website}
+										onPress={() => {
+											const site = business.website;
+											if (!site) return;
+											const url = site.startsWith("http")
+												? site
+												: `https://${site}`;
+											void openUrl(url);
+										}}
+										isLink
+									/>
+								</>
+							) : null}
 
-				{business.website?.length ? (
-					<>
-						<View style={{ height: spacing.md }} />
-						<InfoRow
-							icon={Globe}
-							label={strings.businessProfile.website}
-							text={business.website}
-							onPress={() => {
-								const site = business.website;
-								if (!site) return;
-								const url = site.startsWith("http") ? site : `https://${site}`;
-								void openUrl(url);
-							}}
-							isLink
-						/>
-					</>
-				) : null}
-
-				{/* El mapa es la última cosa de la card porque es la que contesta
+							{/* El mapa es la última cosa de la card porque es la que contesta
 				    "cómo llego", que es lo que se viene a buscar después de leer
 				    la dirección. Sin coordenadas no se dibuja: un mapa en blanco
 				    con el negocio en el medio del océano es peor que nada.
 				    El `&&` con el null-check está repetido a propósito: es lo que
 				    narrowea el tipo hasta `number` sin un `as`. */}
-				{hasCoords && profile.latitude != null && profile.longitude != null ? (
-					<>
-						<View style={{ height: spacing.lg }} />
-						<BusinessLocationMap
-							latitude={profile.latitude}
-							longitude={profile.longitude}
-							onPress={openInMaps}
-						/>
-					</>
-				) : null}
-			</CardContent>
+							{hasCoords &&
+							profile.latitude != null &&
+							profile.longitude != null ? (
+								<>
+									<View style={{ height: spacing.lg }} />
+									<BusinessLocationMap
+										latitude={profile.latitude}
+										longitude={profile.longitude}
+										onPress={openInMaps}
+									/>
+								</>
+							) : null}
+						</CardContent>
+					</AccordionContent>
+				</AccordionItem>
+			</Accordion>
 		</Card>
 	);
 }
