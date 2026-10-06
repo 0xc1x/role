@@ -519,7 +519,7 @@ export const strings = {
 		viewAllCount: "Ver todo ({n})",
 		sectionAccount: "Cuenta",
 		sectionPreferences: "Preferencias",
-		sectionHelp: "Ayuda",
+		sectionSupport: "Soporte",
 		editProfile: "Editar perfil",
 		paymentMethods: "Medios de pago",
 		savedAddresses: "Direcciones guardadas",
