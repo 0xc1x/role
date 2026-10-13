@@ -26,6 +26,17 @@ function wrapper() {
 	);
 }
 
+/**
+ * Lo que el loader entrega cuando todavía no resolvió nada.
+ *
+ * `usePlatformStats` lo recibe porque la caché del cliente arranca vacía —el
+ * SSR no deshidrata su estado en el payload—: sin ese argumento, el primer
+ * render del navegador no tiene cifras y React regenera el subárbol por
+ * mismatch de hidratación. La tabla de los cuatro casos está en `use-config.ts`
+ * y el caso de primer paint, en `stats-first-paint.test.tsx`.
+ */
+const SIN_RESOLVER = { data: undefined, source: "loading" } as const;
+
 describe("useConfig", () => {
 	test("lee valor con fallback", async () => {
 		stubFetch({
@@ -48,7 +59,7 @@ describe("usePlatformStats", () => {
 		stubFetch({
 			"/stats/platform": { users: 10, businesses: 2, meals_saved: 5 },
 		});
-		const { result } = renderHook(() => usePlatformStats(), {
+		const { result } = renderHook(() => usePlatformStats(SIN_RESOLVER), {
 			wrapper: wrapper(),
 		});
 		await waitFor(() =>
@@ -77,7 +88,7 @@ describe("usePlatformStats", () => {
 				{ status: 200, headers: { "Content-Type": "application/json" } },
 			);
 		}) as unknown as typeof fetch;
-		const { result } = renderHook(() => usePlatformStats(), {
+		const { result } = renderHook(() => usePlatformStats(SIN_RESOLVER), {
 			wrapper: wrapper(),
 		});
 
@@ -90,11 +101,39 @@ describe("usePlatformStats", () => {
 		globalThis.fetch = (async () => {
 			throw new Error("sin red");
 		}) as unknown as typeof fetch;
-		const { result } = renderHook(() => usePlatformStats(), {
+		const { result } = renderHook(() => usePlatformStats(SIN_RESOLVER), {
 			wrapper: wrapper(),
 		});
 		await waitFor(() => expect(result.current.source).toBe("failed"));
 		expect(result.current.data).toBeUndefined();
+	});
+
+	test("con el loader en failed, una query sana no degrada a loading", () => {
+		// La fila que se estaba perdiendo en la tabla de los cuatro casos: la
+		// caché vacía pone `loading`, y con eso el `failed` real del servidor se
+		// tapaba hasta que la query resolviera.
+		const { result } = renderHook(
+			() => usePlatformStats({ data: undefined, source: "failed" }),
+			{ wrapper: wrapper() },
+		);
+
+		expect(result.current.source).toBe("failed");
+	});
+
+	test("con cifras del loader, el primer render ya las publica", () => {
+		// El caso de primer paint. Sin esto, el primer render del navegador
+		// devuelve `—` y React descarta el subárbol por mismatch de hidratación.
+		const { result } = renderHook(
+			() =>
+				usePlatformStats({
+					data: { users: 20, businesses: 14, meals_saved: 8 },
+					source: "api",
+				}),
+			{ wrapper: wrapper() },
+		);
+
+		expect(result.current.data?.users).toBe(20);
+		expect(result.current.source).toBe("api");
 	});
 });
 

@@ -509,7 +509,7 @@ describe("el montaje en la landing", () => {
 		// pelado sí, y un 500 de la API de avisos se convertiría en el error de
 		// la landing entera.
 		expect(cuerpoLoader).toContain("ensureAnnouncements(context.queryClient)");
-		expect(cuerpoLoader).toContain("return { announcements }");
+		expect(cuerpoLoader).toContain("announcements, stats");
 		expect(ruta).toContain("data-announcements-source={avisos.source}");
 	});
 
@@ -525,9 +525,18 @@ describe("el montaje en la landing", () => {
 		// arriba, que renderiza el hook con `renderToStaticMarkup`. Acá se fija que
 		// la ruta pase el resultado del loader al hook: sin eso, el hook puede estar
 		// perfecto y el valor no llegar al markup.
-		expect(ruta).toContain(
-			"useAnnouncements(Route.useLoaderData().announcements)",
+		//
+		// `loaderData` es un local —la ruta lee los dos resultados del loader de una
+		// vez— así que la aserción busca el hook recibiendo SU campo, no la forma
+		// literal de la llamada.
+		expect(ruta).toMatch(
+			/useAnnouncements\(\s*loaderData\.announcements\s*\)/,
 		);
 		expect(ruta).not.toMatch(/useAnnouncements\(\s*\)/);
+		// Las stats siguen el mismo contrato que los avisos: el loader las
+		// devuelve y el Hero las recibe, por el mismo motivo que está documentado
+		// en `use-config.ts`.
+		expect(ruta).toMatch(/<Hero\s+statsDelServidor=\{loaderData\.stats\}/);
+		expect(ruta).not.toMatch(/usePlatformStats\(\s*\)/);
 	});
 });

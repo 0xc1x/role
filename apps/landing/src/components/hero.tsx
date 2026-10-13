@@ -8,15 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { randomOfferQueryOptions } from "@/lib/queries";
+import { formatStat, numberFormat } from "@/lib/stats-format";
 import { useStoreLink } from "@/lib/store-links";
-import { usePlatformStats } from "@/lib/use-config";
-
-const numberFormat = new Intl.NumberFormat("es-EC");
-
-function formatStat(value: number | undefined): string {
-	if (value === undefined) return "—";
-	return `${numberFormat.format(value)}+`;
-}
+import { useCountUp } from "@/lib/use-count-up";
+import { usePlatformStats, type PlatformStatsResult } from "@/lib/use-config";
 
 function formatPrice(value: number): string {
 	return `$${numberFormat.format(Math.round(value))}`;
@@ -29,15 +24,44 @@ function formatTime(iso?: string | null): string {
 	return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-export function Hero() {
-	const stats = usePlatformStats();
+/**
+ * Cuando no hay resultado del servidor —el Hero renderizado suelto, como en los
+ * tests de componente— el hook arranca en `loading`, que es exactamente lo que
+ * ocurre hoy sin loader. No es un `api` inventado: `loading` es el estado real de
+ * "todavía no hay respuesta".
+ */
+const EMPTY_STATS: PlatformStatsResult = { data: undefined, source: "loading" };
+
+export function Hero({ statsDelServidor }: { statsDelServidor?: PlatformStatsResult }) {
+	const stats = usePlatformStats(statsDelServidor ?? EMPTY_STATS);
 	const storeLink = useStoreLink();
 	const { data: offer } = useQuery(randomOfferQueryOptions);
 
+	// El conteo corre en el cliente, pero el HTML SERVIDO lleva el valor final:
+	// `useCountUp` arranca en el final y solo después anima, así que el primer
+	// render del cliente coincide con lo que el crawler leyó. Si el SSR pintara
+	// el arranque, Google leería "10+" donde la página dice "20+".
+	//
+	// `final` es el dato crudo de la API y `value` el que se muestra. Se
+	// necesitan los dos porque el `aria-label` tiene que anunciar el FINAL: si
+	// anunciara el valor animado, el lector de pantalla oiría "catorce" y se
+	// quedaría ahí.
 	const STATS = [
-		{ value: formatStat(stats.data?.users), label: "usuarios rescatando" },
-		{ value: formatStat(stats.data?.businesses), label: "comercios aliados" },
-		{ value: formatStat(stats.data?.meals_saved), label: "comidas salvadas" },
+		{
+			final: stats.data?.users,
+			value: useCountUp(stats.data?.users),
+			label: "usuarios rescatando",
+		},
+		{
+			final: stats.data?.businesses,
+			value: useCountUp(stats.data?.businesses),
+			label: "comercios aliados",
+		},
+		{
+			final: stats.data?.meals_saved,
+			value: useCountUp(stats.data?.meals_saved),
+			label: "comidas salvadas",
+		},
 	];
 
 	const originalPrice = offer?.original_price ?? 120;
@@ -180,20 +204,45 @@ export function Hero() {
 					    reales, petición en curso, o fallo de la API. Sin ese
 					    discriminador, el "—" de una API caída es indistinguible
 					    de un dato ausente y la página publica un cero que nadie
-					    puede auditar. */}
+					    puede auditar.
+
+					    SIN `reveal`, y a propósito. Este bloque competía con el
+					    conteo: `reveal-delay-4` son 400 ms de retardo más 800 ms de
+					    transition contra los 1400 ms de `useCountUp`. Medido en
+					    navegador real, el reveal tenía el bloque en opacity 0.43 a
+					    los 960 ms mientras el número ya iba por `10+ → 13+`, así que
+					    la animación no se veía: el ojo la capturaba cuando ya había
+					    terminado. Las cifras son contenido, no decoración, y no
+					    deben depender de una animación para poder leerse. */}
 					<dl
 						data-stats-source={stats.source}
-						className="flex items-stretch reveal reveal-delay-4"
+						className="flex items-stretch"
 					>
 						{STATS.map((s, idx) => (
 							<div key={s.label} className="flex items-stretch">
 								<div
 									className={`px-5 ${idx === 0 ? "pl-0" : ""} ${idx === STATS.length - 1 ? "pr-0" : ""}`}
 								>
-									<dt className="sr-only">{s.label}</dt>
+									<dt className="sr-only">
+										{s.final === undefined
+											? `${s.label}: sin datos de la plataforma`
+											: `${formatStat(s.final)} ${s.label}`}
+									</dt>
 									<dd>
-										<p className="font-heading text-2xl font-bold tabular-nums md:text-3xl">
-											{s.value}
+										{/*
+											El número visible va `aria-hidden` y el valor REAL lo
+											anuncia el `<dt>`. No al revés: `aria-label` sobre un
+											`<p>` no es ARIA válido —el rol de un `<p>` no lo
+											acepta— y el lector de pantalla no lo habría leído, así
+											que el `sr-only` de al lado es el que de verdad nombra el
+											dato. Con el número escondido, nadie oye un dígito a
+											medio conteo.
+										*/}
+										<p
+											className="font-heading text-2xl font-bold tabular-nums md:text-3xl"
+											aria-hidden="true"
+										>
+											{formatStat(s.value)}
 										</p>
 										<p className="mt-1 text-sm text-white/70">{s.label}</p>
 									</dd>

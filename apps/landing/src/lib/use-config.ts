@@ -60,16 +60,54 @@ export async function ensurePlatformStats(
 /**
  * Mismas stats y mismo discriminador que el loader SSR.
  *
- * El valor sale de la caché que el loader priming, así que el atributo coincide
- * con el HTML servido (mismo `source`) y se corrige solo cuando una
- * reconsulta posterior sí trae datos.
+ * ─── POR QUÉ TOMA EL RESULTADO DEL LOADER ─────────────────────────────────────
+ *
+ * `delServidor` es lo que resolvió `ensurePlatformStats`. No es un extra: sin él
+ * el primer render del navegador no tiene cifras.
+ *
+ * MEDIDO contra el dev server, con la caché del cliente VACÍA —que es lo que hay
+ * tras hidratar, porque el SSR no deshidrata su estado en el payload; verificado
+ * en `e2e/fixtures.ts`—:
+ *
+ *     t=   0ms  [20+ | 14+ | 8+]   ← HTML servido
+ *     t=1560ms  [— | — | —]        ← primer render del cliente
+ *     PAGEERROR Hydration failed because the server rendered text didn't match
+ *
+ * Sin el argumento, `data` es `undefined` en ese primer render, React compara
+ * `"—"` contra el `20+` que él mismo puso en el HTML, descarta el subárbol del
+ * Hero y lo regenera. Eso produce el parpadeo, y además mata la animación: al
+ * remontar, `useCountUp` recibe el valor FINAL y `countUpFrom(20) < 20` no se
+ * cumple, así que sale por `setDisplayed(value)` sin animar (`use-count-up.ts:64`).
+ *
+ * Este es el mismo patrón que `useAnnouncements` ya tenía desde antes, y por el
+ * mismo motivo. La regla es una sola: mientras el observer no tenga respuesta,
+ * contesta el loader; en cuanto la tenga, contesta el observer. Los cuatro
+ * casos, medidos:
+ *
+ *   | server        | observer      | publicado |
+ *   |---------------|---------------|-----------|
+ *   | `api`         | `api`         | `api`     |
+ *   | `failed`      | `loading`     | `failed`  | ← el que se estaba perdiendo
+ *   | `api`, el cliente reintenta y falla     | `failed` | `failed`  |
+ *   | `api`, el cliente reintenta y funciona  | `api`    | `api`     |
+ *
+ * El tercero importa: si un fallo del cliente se tapara con el valor del loader,
+ * un incidente de red posterior al render nunca se publicaría.
+ *
+ * Y el caso sano no parpadea, porque el primer render devuelve lo del loader —
+ * que es exactamente lo que el servidor puso en los bytes.
  */
-export function usePlatformStats(): PlatformStatsResult {
+export function usePlatformStats(
+	delServidor: PlatformStatsResult,
+): PlatformStatsResult {
 	const { data, status } = useQuery(platformStatsQueryOptions);
 	// `data` primero: una query que ya trae datos y está revalidando sigue
 	// siendo `api`. Sin datos, el estado de la query es lo que separa "todavía
 	// no" de "no va a venir".
-	const source: PlatformStatsSource =
-		data !== undefined ? "api" : status === "pending" ? "loading" : "failed";
-	return { data, source };
+	const delCliente: PlatformStatsResult = {
+		data,
+		source:
+			data !== undefined ? "api" : status === "pending" ? "loading" : "failed",
+	};
+	return delCliente.source === "loading" ? delServidor : delCliente;
 }

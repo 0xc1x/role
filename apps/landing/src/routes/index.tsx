@@ -15,6 +15,7 @@ import { appConfigQueryOptions, randomOfferQueryOptions } from "@/lib/queries";
 import { pageHead } from "@/lib/seo";
 import { ensureAnnouncements, useAnnouncements } from "@/lib/use-announcements";
 import { ensurePlatformStats } from "@/lib/use-config";
+import { useRevealOnScroll } from "@/lib/use-reveal-on-scroll";
 
 const FAQ_JSON_LD = {
 	"@context": "https://schema.org",
@@ -41,12 +42,18 @@ export const Route = createFileRoute("/")({
 	// El loader devuelve el resultado de los avisos CON NOMBRE, y no la tupla del
 	// `Promise.all`: `LandingPage` lo necesita leer, y leerlo por posición —la
 	// segunda de cuatro— es un acoplamiento que un `Promise.all` reordenado rompe
-	// en silencio. El de las stats se sigue descartando: `usePlatformStats` lo
-	// recalcula en su observer, así que devolverlo no cambiaría el HTML servido.
-	// Es el mismo patrón que `usePlatformStats` tiene y que quedó pendiente para
-	// `data-stats-source`; ver `use-announcements.ts`.
+	// en silencio.
+	//
+	// Las stats se devuelven también, y antes NO se devolvían con el argumento de
+	// que "el observer lo recalcula". Eso era falso: un observer no puede
+	// recalcular lo que no tiene. En el cliente la caché arranca vacía, el primer
+	// render veía `undefined` y React regeneraba el Hero por mismatch de
+	// hidratación —medido, con el `—` reemplazando al `20+` del HTML servido.
+	// Los loaders existen para SEO: sus datos tienen que llegar a los bytes, y el
+	// primer render del cliente tiene que ser el mismo que el crawler leyó.
+	// Ver la tabla de los cuatro casos en `use-config.ts`.
 	loader: async ({ context }) => {
-		const [, announcements] = await Promise.all([
+		const [stats, announcements] = await Promise.all([
 			ensurePlatformStats(context.queryClient),
 			ensureAnnouncements(context.queryClient),
 			context.queryClient
@@ -56,7 +63,7 @@ export const Route = createFileRoute("/")({
 				.ensureQueryData(randomOfferQueryOptions)
 				.catch(() => undefined),
 		]);
-		return { announcements };
+		return { announcements, stats };
 	},
 	head: () => ({
 		...pageHead(
@@ -71,6 +78,8 @@ export const Route = createFileRoute("/")({
 });
 
 function LandingPage() {
+	useRevealOnScroll();
+
 	// El `source` se PUBLICA con el del loader mientras el observer no tenga
 	// respuesta propia, y no al revés. La versión anterior —recalcularlo acá—
 	// servía `loading` en el render del servidor, siempre: el resultado
@@ -78,7 +87,8 @@ function LandingPage() {
 	// `data`, aunque la caché esté en `error`. Medido con `/announcements` en
 	// 503: la caché decía `error` y el atributo decía `loading`. Ver
 	// `use-announcements.ts` para el mecanismo y la tabla de los cuatro casos.
-	const avisos = useAnnouncements(Route.useLoaderData().announcements);
+	const loaderData = Route.useLoaderData();
+	const avisos = useAnnouncements(loaderData.announcements);
 
 	// El aviso va DENTRO de la navbar, no antes del `<main>`.
 	//
@@ -90,6 +100,13 @@ function LandingPage() {
 	// `min-h-[100vh] flex items-center` y está hecho para quedar bajo la navbar
 	// transparente. Adentro del `<header>` no hay nada que reservar: la navbar
 	// crece con el aviso y comparte su mismo cambio de color.
+	// Las stats NO se leen acá: el Hero ya llama a `usePlatformStats` y es el que
+	// pinta el bloque. Lo que se le pasa es el resultado del LOADER — lo que el
+	// servidor resolvió — y dos observers para la misma query darían dos `source`
+	// distintos, que es el mismatch que esto viene a arreglar.
+	//
+	// El `source` de los avisos se publica en `<main>`; el de las stats lo publica
+	// el propio Hero, en su `<dl>`.
 	return (
 		<div className="min-h-screen">
 			<Navbar>
@@ -105,7 +122,7 @@ function LandingPage() {
 			  incidente que el servicio de la API evita tapar devolviendo `[]`.
 			*/}
 			<main id="main" data-announcements-source={avisos.source}>
-				<Hero />
+				<Hero statsDelServidor={loaderData.stats} />
 				<Features />
 				<HowItWorks />
 				<Testimonials />
