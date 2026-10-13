@@ -11,22 +11,20 @@ import {
 } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { CookieBanner } from "@/components/cookie-banner";
-import { absoluteUrl } from "@/lib/seo";
+import { absoluteUrl, organizationJsonLd } from "@/lib/seo";
 import appCss from "../styles.css?url";
 
 export interface RouterContext {
 	queryClient: QC;
 }
 
-const ORGANIZATION_JSON_LD = {
-	"@context": "https://schema.org",
-	"@type": "Organization",
-	name: "Rolé",
-	url: absoluteUrl("/"),
-	logo: absoluteUrl("/icon.svg"),
-	description:
-		"Marketplace de comida excedente: rescata comida de comercios locales a mejor precio y reduce el desperdicio.",
-};
+// `organizationJsonLd()` se llama DENTRO de `head()`, y no al importarlo como
+// constante de módulo. Resolver el origen significa leer la env: hacerlo al
+// importar convertía "importar la ruta raíz" en "tener el dominio configurado",
+// y `root-query-client.test.tsx` —que importa este módulo y no tiene nada que
+// ver con SEO— tiraba el error de arranque de `env.ts` antes de llegar a su
+// propia aserción. Como función, el valor además es por request y no queda
+// congelado con el entorno del primer import.
 
 export const Route = createRootRouteWithContext<RouterContext>()({
 	head: () => {
@@ -82,7 +80,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			scripts: [
 				{
 					type: "application/ld+json",
-					children: JSON.stringify(ORGANIZATION_JSON_LD),
+					children: JSON.stringify(organizationJsonLd()),
 				},
 			],
 		};
@@ -132,38 +130,20 @@ function RootComponent() {
 	// en el reporte), así que no hay caché que se filtre entre usuarios.
 	const { queryClient } = useRouter().options.context;
 
-	// react-doctor-disable-next-line react-doctor/effect-needs-cleanup -- cleanup below disconnects both IntersectionObserver and MutationObserver
+	// La clase `js` abre el estado oculto del reveal (`html.js .reveal`), y por
+	// eso tiene que estar en la raíz: si esperara a la ruta, el hueco sería
+	// "todo invisible y sin observer". Este effect corre con `<html>` ya
+	// reclamado —el root route no es lazy, se hidrata primero—, y por eso la
+	// escritura no aparece en el diff de hidratación.
+	//
+	// El observer que escribe `data-revealed` en los hijos NO puede vivir acá:
+	// las rutas de archivo van detrás de `lazyRouteComponent`, así que el
+	// subárbol de la ruta todavía no está reclamado cuando este effect corre, y
+	// React encuentra después un atributo que él no puso. Está en
+	// `useRevealOnScroll`, que se llama DENTRO de cada ruta. Las medidas están
+	// en el docblock de ese archivo; este comentario es el resumen.
 	useEffect(() => {
 		document.documentElement.classList.add("js");
-		const observer = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					if (entry.isIntersecting) {
-						(entry.target as HTMLElement).dataset.revealed = "true";
-						observer.unobserve(entry.target);
-					}
-				}
-			},
-			{ threshold: 0.1, rootMargin: "0px 0px -50px 0px" },
-		);
-
-		const observeAll = () => {
-			document
-				.querySelectorAll(".reveal:not([data-revealed='true'])")
-				.forEach((el) => {
-					observer.observe(el);
-				});
-		};
-
-		observeAll();
-
-		const mutation = new MutationObserver(observeAll);
-		mutation.observe(document.body, { childList: true, subtree: true });
-
-		return () => {
-			observer.disconnect();
-			mutation.disconnect();
-		};
 	}, []);
 
 	return (

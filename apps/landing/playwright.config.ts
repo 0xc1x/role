@@ -90,7 +90,13 @@ export default defineConfig({
 			// `vite dev` → 128 s with the build, i.e. 2.09x. And it is not only
 			// time: under the dev server 2 of those 40 failed on budget, and
 			// with the build all 40 pass.
-			command: `VITE_API_URL=http://127.0.0.1:${STUB_API_PORT}/api/v1 bun run build && VITE_API_URL=http://127.0.0.1:${STUB_API_PORT}/api/v1 bunx vite preview --port ${PORT} --host 127.0.0.1`,
+			// `VITE_SITE_URL` es tan obligatoria como `VITE_API_URL` desde que
+			// `env.ts` valida el dominio al arrancar: sin ella el server tira y
+			// esta suite no levanta. Se le da el loopback —NO `https://role.app`—
+			// porque `e2e/seo.spec.ts` afirma que el canonical servido es
+			// exactamente este origen, y la aserción solo vale si el entorno bajo
+			// prueba no es el de producción.
+			command: `VITE_API_URL=http://127.0.0.1:${STUB_API_PORT}/api/v1 VITE_SITE_URL=http://127.0.0.1:${PORT} bun run build && VITE_API_URL=http://127.0.0.1:${STUB_API_PORT}/api/v1 VITE_SITE_URL=http://127.0.0.1:${PORT} bunx vite preview --port ${PORT} --host 127.0.0.1`,
 			port: PORT,
 			// The preview must boot fresh. A reused one — from another branch,
 			// or booted with the shell's `VITE_API_URL`, which defaults to the

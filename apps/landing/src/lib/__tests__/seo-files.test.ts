@@ -11,15 +11,45 @@ import { readFileSync } from "node:fs";
 import {
 	buildRobotsTxt,
 	buildSitemapXml,
-	FALLBACK_SITE_URL,
 	INDEXABLE_ROUTES,
-	resolveSeoSiteUrl,
 } from "../seo-files";
+import { FALLBACK_SITE_URL, resolveSeoSiteUrl } from "../site-url";
 
 const PREVIEW = "https://role-git-main-acme.vercel.app";
 const STAGING = "https://staging.role.ec";
 
-describe("resolveSeoSiteUrl", () => {
+describe("el sitemap y el canonical no pueden anunciar sitios distintos", () => {
+	// `seo-files.ts` no normaliza el dominio: usa el MISMO normalizador que
+	// `seo.ts` (ver `site-url.ts`). Antes cada módulo tenía el suyo y no
+	// coincidían — `seo.ts` descartaba el path con `.origin` y `seo-files.ts` lo
+	// conservaba—, así que con `VITE_SITE_URL=https://role.app/es` el sitemap era
+	// `https://role.app/es/about` mientras el canonical de esa misma página era
+	// `https://role.app/about`. Estos dos tests son la afirmación de ese
+	// invariante; el normalizador en sí está en `site-url.test.ts`.
+	test("un path en la configuración no sobrevive en el sitemap", () => {
+		const site = resolveSeoSiteUrl("https://role.app/es");
+		expect(site).toBe("https://role.app");
+		const sitemap = buildSitemapXml(site);
+		for (const route of INDEXABLE_ROUTES) {
+			expect(sitemap).toContain(`<loc>https://role.app${route}</loc>`);
+		}
+		expect(sitemap).not.toContain("https://role.app/es");
+	});
+
+	test("con puerto y loopback, sitemap y canonical coinciden", () => {
+		// La suite e2e sirve en `127.0.0.1:3101`. Antes el regex de `seo.ts`
+		// rechazaba el puerto y caía al origen de producción, así que la página
+		// bajo prueba anunciaba `https://role.app` como su propia identidad.
+		const site = resolveSeoSiteUrl("localhost:3101");
+		expect(site).toBe("http://localhost:3101");
+		expect(buildRobotsTxt(site)).toContain(`Sitemap: ${site}/sitemap.xml`);
+		expect(buildSitemapXml(site)).toContain(
+			`<loc>http://localhost:3101/</loc>`,
+		);
+	});
+});
+
+describe("resolveSeoSiteUrl (re-exportada desde site-url)", () => {
 	test("usa el dominio configurado", () => {
 		expect(resolveSeoSiteUrl(PREVIEW)).toBe(PREVIEW);
 		expect(resolveSeoSiteUrl(STAGING)).toBe(STAGING);

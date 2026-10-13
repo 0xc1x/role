@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { API_URL_REQUIRED_MESSAGE } from "./api-url";
+import { apiUrlStartupError } from "./api-url";
+import { siteUrlStartupError } from "./site-url";
 
 /**
  * Env pública de la landing, validada una vez al importar el cliente API.
@@ -21,6 +22,21 @@ import { API_URL_REQUIRED_MESSAGE } from "./api-url";
  * arma con la env de Vercel; atar el build a una var rompería ambos. Lo que se
  * rompe es el arranque de quien va a hacer peticiones, que es donde el destino
  * se usaba en silencio.
+ *
+ * ─── Y por qué `VITE_SITE_URL` se valida con el MISMO trato ──────────────────
+ *
+ * Porque es el mismo defecto y más caro. `VITE_API_URL` ausente daba una
+ * landing sin datos; `VITE_SITE_URL` ausente daba una landing que canonicaliza,
+ * og:url y sitemap por el dominio equivocado —medido: el server arrancaba sin
+ * ruido, `[seo] falta VITE_SITE_URL` pasaba en el log y a continuación cada
+ * página servía `https://role.app` como su propia identidad. Eso no se ve
+ * mirando la página: se ve tres meses después en Search Console. Un default
+ * silencioso acá es un sitio desindexado con la etiqueta de "funciona".
+ *
+ * Los candidatos van en ORDEN y todos, no el primero: el bundle SSR no ve lo
+ * que Vite horneó en el de cliente, así que en el servidor el dominio puede
+ * llegar solo por `process.env`. Guardar `env.VITE_SITE_URL` sin más mataría un
+ * deploy correctamente configurado.
  */
 const EnvSchema = z.object({
 	// El esquema de la URL vive en `api-url.ts` para poder validarlo también
@@ -39,6 +55,16 @@ export const env = EnvSchema.parse({
 // `true` en el bundle SSR y `false` en el de cliente, así que esta línea no
 // afecta al navegador; y bajo `bun test` vale `undefined`, que es exactamente
 // por lo que la suite no depende de que exista un `.env` local (CI no lo tiene).
-if (import.meta.env.SSR && !env.VITE_API_URL) {
-	throw new Error(API_URL_REQUIRED_MESSAGE);
+if (import.meta.env.SSR) {
+	const apiError = apiUrlStartupError(env.VITE_API_URL);
+	if (apiError) throw apiError;
+
+	const siteUrlError = siteUrlStartupError(
+		env.VITE_SITE_URL,
+		typeof process === "undefined"
+			? undefined
+			: (process.env?.VITE_SITE_URL ??
+					process.env?.VERCEL_PROJECT_PRODUCTION_URL),
+	);
+	if (siteUrlError) throw siteUrlError;
 }

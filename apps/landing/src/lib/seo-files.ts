@@ -11,6 +11,16 @@
  * La lógica pura vive acá, y no en el closure del plugin de Vite, para que sea
  * verificable: `bun test src` no puede importar `vite.config.ts` sin arrastrar
  * nitro, Tailwind y TanStack Start.
+ *
+ * EL DOMINIO NO SE NORMALIZA ACÁ. `buildRobotsTxt` y `buildSitemapXml` reciben
+ * un origen ya resuelto y lo interpolan tal cual; resolverlo es trabajo de
+ * `site-url.ts`, el mismo módulo que usa `seo.ts` para el canonical. Antes cada
+ * uno tenía su normalizador y no coincidían —este conservaba el path
+ * configurado, `seo.ts` lo descartaba con `.origin`—, así que con
+ * `VITE_SITE_URL=https://role.app/es` el sitemap anunciaba
+ * `https://role.app/es/about` y el canonical de esa misma página
+ * `https://role.app/about`: dos orígenes para el mismo contenido. La
+ * normalización vive en un lugar porque no puede haber dos respuestas.
  */
 
 /**
@@ -28,20 +38,6 @@ export const INDEXABLE_ROUTES = [
 	"/privacy",
 	"/terms",
 ] as const;
-
-/** Origen de respaldo cuando no hay dominio configurado. */
-export const FALLBACK_SITE_URL = "https://role.app";
-
-/**
- * Normaliza el dominio de build a un origen absoluto sin barra final.
- * Acepta con o sin esquema: Vercel inyecta `VERCEL_PROJECT_PRODUCTION_URL`
- * como host pelado y `VITE_SITE_URL` normalmente trae `https://`.
- */
-export function resolveSeoSiteUrl(raw: string | undefined): string {
-	const trimmed = raw?.trim().replace(/\/+$/, "");
-	if (!trimmed) return FALLBACK_SITE_URL;
-	return /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
 
 export function buildRobotsTxt(site: string): string {
 	return ["User-agent: *", "Allow: /", `Sitemap: ${site}/sitemap.xml`, ""].join(
