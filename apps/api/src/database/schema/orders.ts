@@ -29,6 +29,12 @@ export const orders = pgTable('orders', {
     .references(() => businesses.id, {
       onDelete: 'cascade',
     }),
+  // Derived, never written by hand: `trg_set_order_business_location` fills it
+  // from the offer on every INSERT. The key is snake_case because every other
+  // column in this mirror is, and because the repositories read it as
+  // `orders.business_id` — a lone camelCase key here would split the vocabulary
+  // of the file it lives in.
+  business_location_id: uuid('business_location_id').notNull(),
   order_number: text('order_number').notNull().unique(),
   idempotency_key: text('idempotency_key'),
   status: orderStatusEnum('status').notNull().default('pending'),

@@ -1886,3 +1886,116 @@ describe('orders are born inside a function, not from a table grant', () => {
     expect(events[0]?.count).toBe(1);
   });
 });
+
+describe('orders lleva la sucursal de la oferta que reservó', () => {
+  /**
+   * The order carries the branch of its offer, and nothing in the INSERT names
+   * the column.
+   *
+   * That is the whole claim. `public.orders.business_location_id` is derived by
+   * `trg_set_order_business_location`, a BEFORE INSERT trigger, so it cannot be
+   * forged by a writer and it cannot drift from the offer: an order whose offer
+   * moved branch moves with it, because every write path goes through the same
+   * derivation. `reserve_offer` gets it for free, which is the reason the
+   * column lives in a trigger and not in the RPC — see the design note.
+   *
+   * ─── WHY IT RUNS LAST IN THIS FILE ────────────────────────────────────────
+   *
+   * This test COMMITS an order and an offer that no other test knows about, and
+   * the assertions above are exact-set: `each persona reads exactly the orders
+   * the policies describe` holds `['RLS-A', 'RLS-C']`, the reservation test
+   * holds four rows before its call, and `event visibility equals order
+   * visibility` compares the two sets for seven personas. An extra `MEMBER`
+   * order at the active business would break every one of them, and it would
+   * break them by ORDER rather than by shape, which is the worst way for a spec
+   * to fail. So the row is written where no later assertion can see it.
+   *
+   * `pickup_start` and `pickup_end` are named on the offer INSERT because both
+   * are `NOT NULL` with no default on `public.offers` — measured on the live
+   * database, not inferred from the schema files. An offer row cannot be
+   * written without a pickup window at all, so the assertion below is only
+   * reachable once that is stated.
+   *
+   * `service_role` is the role the API writes as, and it is the one the ledger
+   * permits. The claim is about the trigger, not about a role: a BEFORE INSERT
+   * trigger fires for the writer's statement regardless of who the writer is.
+   *
+   * The last assertion below is the one that pins the reason this column lives
+   * in a trigger rather than in `reserve_offer`. `reserve_offer` is a hardened
+   * `SECURITY DEFINER` that three separate migrations rewrite by matching
+   * literal text, so adding a line to it would mean reproducing its current
+   * body byte for byte. A trigger gets `reserve_offer` the same column for
+   * free, and "for free" is only worth claiming if something measures it.
+   */
+  test('el pedido hereda la sucursal de su oferta', async () => {
+    const offers = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(`
+        insert into public.offers (
+          business_id, business_location_id, title, original_price,
+          discounted_price, pickup_start, pickup_end
+        ) values (
+          '${BIZ_ACTIVE}', '${LOC_ACTIVE}', 'oferta', 10, 5,
+          now(), now() + interval '3 hours'
+        )
+        returning id`),
+    );
+
+    await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(`
+        insert into public.orders (
+          user_id, offer_id, business_id, order_number, price, original_price,
+          pickup_code, status
+        ) values (
+          '${MEMBER}', '${offers[0]?.id}', '${BIZ_ACTIVE}', 'TEST-1',
+          5, 10, 'ABC123', 'confirmed'
+        )`),
+    );
+
+    const read = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ business_location_id: string }[]>(`
+        select business_location_id
+           from public.orders
+          where order_number = 'TEST-1'`),
+    );
+
+    expect(read[0]?.business_location_id).toBe(LOC_ACTIVE);
+
+    // And the column is not nullable by hand either: the derivation writes it,
+    // and a row that reached the table without one would be a 23502 rather than
+    // a silent null. Asserted from the catalog because that is where the
+    // constraint lives, not in any single INSERT.
+    const shape = await ctx.sql.unsafe<{ is_nullable: string }[]>(
+      `select is_nullable from information_schema.columns
+        where table_schema = 'public' and table_name = 'orders'
+          and column_name = 'business_location_id'`,
+    );
+    expect(shape[0]?.is_nullable).toBe('NO');
+
+    // The path the product actually uses. Both reservations above went through
+    // `reserve_offer`, which names no branch at all, so a trigger that only
+    // fired for hand-written INSERTs would leave these two rows short of a
+    // column the table now declares NOT NULL — and they cannot be short of it,
+    // which is what makes this assertion a check of the trigger and not a restate
+    // of the constraint.
+    //
+    // `OFFER.RPC` and `OFFER.RPC2` both sit in `LOC_ACTIVE`, and the orders
+    // come back paired with the branch of the offer they reserved, not with the
+    // order's own `business_id` — which for the first one is the same business,
+    // so reading the right column is the whole difference.
+    const reserved = await ctx.sql.unsafe<
+      { idempotency_key: string; business_location_id: string }[]
+    >(
+      `select idempotency_key, business_location_id::text
+         from public.orders
+        where idempotency_key in ('rls-orders-key-1', 'rls-orders-key-2')
+        order by idempotency_key`,
+    );
+    expect(
+      plainRows(reserved),
+      'reserve_offer did not go through the branch derivation',
+    ).toEqual([
+      { idempotency_key: 'rls-orders-key-1', business_location_id: LOC_ACTIVE },
+      { idempotency_key: 'rls-orders-key-2', business_location_id: LOC_ACTIVE },
+    ]);
+  });
+});

@@ -242,6 +242,13 @@ export class OrdersService {
         user_id: user.id,
         offer_id: offer.id,
         business_id: offer.business_id,
+        // The branch comes from the offer being reserved, never from the
+        // request. `public.orders.business_location_id` is NOT NULL, and
+        // `trg_set_order_business_location` would derive the same value on the
+        // way in — this line exists because the Drizzle mirror cannot model a
+        // trigger, and an order whose branch disagreed with its offer's is the
+        // exact bug the column exists to prevent.
+        business_location_id: offer.business_location_id,
         order_number: orderNumber,
         // Written, not just checked: the key is what makes the NEXT attempt a
         // replay instead of a second reservation. The partial unique index
