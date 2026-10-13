@@ -16,15 +16,21 @@ export class CampaignsCron {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async tick(): Promise<void> {
+    const startedAt = Date.now();
     try {
       const { processed } = await this.campaignsService.processTick();
       if (processed > 0) {
-        this.logger.log(`processTick procesó ${processed} envíos`);
+        this.logger.log({
+          event: 'campaign_cron_tick_completed',
+          processed,
+          durationMs: Date.now() - startedAt,
+        });
       }
     } catch (err) {
       this.logger.error({
         event: 'campaign_cron_tick_failed',
         ...safeErrorFields(err),
+        durationMs: Date.now() - startedAt,
       });
     }
   }

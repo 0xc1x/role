@@ -23,19 +23,25 @@ export class PayoutsGenerationJob {
   async handleGenerate(): Promise<void> {
     if (!this.config.get('ENABLE_API_MIRROR_PAYOUTS', { infer: true })) return;
     if (this.running) {
-      this.logger.debug('Payout job already running; skipping tick');
+      this.logger.debug({ event: 'payout_generation_overlap_skipped' });
       return;
     }
     this.running = true;
+    const startedAt = Date.now();
     try {
       const { count } = await this.payoutsService.generate();
       if (count > 0) {
-        this.logger.log(`Generated ${count} payout(s)`);
+        this.logger.log({
+          event: 'payout_generation_completed',
+          generated: count,
+          durationMs: Date.now() - startedAt,
+        });
       }
     } catch (err) {
       this.logger.error({
         event: 'payout_generation_failed',
         ...safeErrorFields(err),
+        durationMs: Date.now() - startedAt,
       });
     } finally {
       this.running = false;

@@ -65,6 +65,7 @@ describe('OrdersExpirationJob', () => {
       event: 'orders_expiration_failed',
       errorType: 'DatabaseError',
       errorCode: '08006',
+      durationMs: expect.any(Number),
     });
     expect(JSON.stringify(logError.mock.calls)).not.toContain('secret');
     logError.mockRestore();

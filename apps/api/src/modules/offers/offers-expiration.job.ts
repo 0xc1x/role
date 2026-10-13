@@ -23,19 +23,25 @@ export class OffersExpirationJob {
   async handleExpireStale(): Promise<void> {
     if (!this.config.get('ENABLE_API_MIRROR_OFFERS', { infer: true })) return;
     if (this.running) {
-      this.logger.debug('Offer expiry job already running; skipping tick');
+      this.logger.debug({ event: 'offer_expiration_overlap_skipped' });
       return;
     }
     this.running = true;
+    const startedAt = Date.now();
     try {
       const { expired } = await this.offersService.expireStale();
       if (expired > 0) {
-        this.logger.log(`Deactivated ${expired} stale offer(s)`);
+        this.logger.log({
+          event: 'offer_expiration_completed',
+          expired,
+          durationMs: Date.now() - startedAt,
+        });
       }
     } catch (err) {
       this.logger.error({
         event: 'offer_expiration_failed',
         ...safeErrorFields(err),
+        durationMs: Date.now() - startedAt,
       });
     } finally {
       this.running = false;

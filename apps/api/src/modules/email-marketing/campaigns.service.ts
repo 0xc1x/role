@@ -72,7 +72,10 @@ export class CampaignsService {
   /** Registro de dispatcher de canal (lo llama el módulo dueño del canal). */
   registerChannelDispatcher(dispatcher: CampaignChannelDispatcher): void {
     this.channelDispatchers.set(dispatcher.channel, dispatcher);
-    this.logger.log(`Canal de campañas registrado: ${dispatcher.channel}`);
+    this.logger.log({
+      event: 'campaign_dispatcher_registered',
+      channel: dispatcher.channel,
+    });
   }
 
   private channelDispatcher(channel: string): CampaignChannelDispatcher | null {

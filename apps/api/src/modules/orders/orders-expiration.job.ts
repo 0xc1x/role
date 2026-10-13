@@ -37,13 +37,19 @@ export class OrdersExpirationJob {
       return;
     }
     this.running = true;
+    const startedAt = Date.now();
     try {
       const { expired } = await this.ordersService.expireStaleOrders();
-      this.logger.log({ event: 'orders_expiration_completed', expired });
+      this.logger.log({
+        event: 'orders_expiration_completed',
+        expired,
+        durationMs: Date.now() - startedAt,
+      });
     } catch (err) {
       this.logger.error({
         event: 'orders_expiration_failed',
         ...safeErrorFields(err),
+        durationMs: Date.now() - startedAt,
       });
     } finally {
       this.running = false;
