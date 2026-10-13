@@ -8,6 +8,7 @@ import { formatLegalDate } from "@/lib/dates";
 import { PRIVACY_SECTIONS } from "@/lib/legal/privacy-content";
 import { pageHead } from "@/lib/seo";
 import { useConfig } from "@/lib/use-config";
+import { useRevealOnScroll } from "@/lib/use-reveal-on-scroll";
 
 export const Route = createFileRoute("/privacy")({
 	head: () =>
@@ -20,6 +21,8 @@ export const Route = createFileRoute("/privacy")({
 });
 
 function PrivacyPage() {
+	useRevealOnScroll();
+
 	const contactEmail = useConfig(
 		"privacy.contact_email",
 		"correo de privacidad pendiente de configuración",

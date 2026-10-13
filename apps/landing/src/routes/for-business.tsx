@@ -18,6 +18,7 @@ import {
 	useConfig,
 	usePlatformStats,
 } from "@/lib/use-config";
+import { useRevealOnScroll } from "@/lib/use-reveal-on-scroll";
 
 export const Route = createFileRoute("/for-business")({
 	component: ForBusinessPage,
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/for-business")({
 	head: () =>
 		pageHead(
 			"/for-business",
-			"Rolé para negocios",
+			"Rolé para negocios | Vende tu comida excedente",
 			"Recupera ingresos por tu comida excedente, atrae nuevos clientes y reduce tu desperdicio con Rolé.",
 		),
 });
@@ -76,7 +77,12 @@ const PROCESS = [
 ];
 
 function ForBusinessPage() {
-	const statsData = usePlatformStats();
+	useRevealOnScroll();
+
+	// El resultado del loader se pasa al hook: en el cliente la caché arranca vacía,
+	// y sin esto el primer render publicaría el "—" de un dato que el servidor sí
+	// resolvió. Ver la tabla de los cuatro casos en `use-config.ts`.
+	const statsData = usePlatformStats(Route.useLoaderData());
 	const salesEmail = useConfig("contact.negocios_email", "negocios@role.app");
 	const stats = [
 		{ value: "12%", label: "ingresos extra en promedio" },

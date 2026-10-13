@@ -19,12 +19,13 @@ import {
 } from "@/components/ui/accordion";
 import { pageHead } from "@/lib/seo";
 import { useStoreLink } from "@/lib/store-links";
+import { useRevealOnScroll } from "@/lib/use-reveal-on-scroll";
 
 export const Route = createFileRoute("/how-it-works")({
 	head: () => ({
 		...pageHead(
 			"/how-it-works",
-			"Cómo funciona Rolé",
+			"Cómo funciona Rolé | App de comida excedente",
 			"Reserva en la app, recoge en el negocio y salva comida: así de simple funciona Rolé.",
 		),
 		scripts: [
@@ -102,6 +103,8 @@ const FAQ_JSON_LD = {
 };
 
 function HowItWorksPage() {
+	useRevealOnScroll();
+
 	const storeLink = useStoreLink();
 	return (
 		<div className="min-h-screen">

@@ -9,6 +9,7 @@ import { formatLegalDate } from "@/lib/dates";
 import { TERMS_SECTIONS } from "@/lib/legal/terms-content";
 import { pageHead } from "@/lib/seo";
 import { useConfig } from "@/lib/use-config";
+import { useRevealOnScroll } from "@/lib/use-reveal-on-scroll";
 
 export const Route = createFileRoute("/terms")({
 	head: () =>
@@ -21,6 +22,8 @@ export const Route = createFileRoute("/terms")({
 });
 
 function TermsPage() {
+	useRevealOnScroll();
+
 	const contactEmail = useConfig(
 		"legal.contact_email",
 		"correo legal pendiente de configuración",

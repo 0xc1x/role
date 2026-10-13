@@ -18,12 +18,13 @@ import {
 } from "@/components/ui/accordion";
 import { pageHead } from "@/lib/seo";
 import { useConfig } from "@/lib/use-config";
+import { useRevealOnScroll } from "@/lib/use-reveal-on-scroll";
 
 export const Route = createFileRoute("/help-center")({
 	head: () => ({
 		...pageHead(
 			"/help-center",
-			"Centro de ayuda | Rolé",
+			"Centro de ayuda | App de comida excedente",
 			"Respuestas sobre reservas, recogidas, pagos y tu cuenta en Rolé.",
 		),
 		scripts: [
@@ -127,6 +128,8 @@ function useContactOptions() {
 }
 
 function HelpCenterPage() {
+	useRevealOnScroll();
+
 	const contactOptions = useContactOptions();
 	const slaHours = useConfig("support.sla_hours", "24");
 	return (

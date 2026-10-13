@@ -8,6 +8,7 @@ import { Eyebrow } from "@/components/section";
 import { pageHead } from "@/lib/seo";
 import { useStoreLink } from "@/lib/store-links";
 import { ensurePlatformStats, usePlatformStats } from "@/lib/use-config";
+import { useRevealOnScroll } from "@/lib/use-reveal-on-scroll";
 
 export const Route = createFileRoute("/about")({
 	component: AboutPage,
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/about")({
 	head: () =>
 		pageHead(
 			"/about",
-			"Sobre Rolé",
+			"Sobre Rolé | Marketplace de comida excedente",
 			"Nuestra misión: que la comida excedente llegue a gente que la valora, no al contenedor.",
 		),
 });
@@ -53,7 +54,12 @@ const VALUES = [
 ];
 
 function AboutPage() {
-	const stats = usePlatformStats();
+	useRevealOnScroll();
+
+	// El resultado del loader se pasa al hook: en el cliente la caché arranca vacía,
+	// y sin esto el primer render publicaría el "—" de un dato que el servidor sí
+	// resolved. Ver la tabla de los cuatro casos en `use-config.ts`.
+	const stats = usePlatformStats(Route.useLoaderData());
 	const storeLink = useStoreLink();
 	const IMPACT = [
 		{ value: formatStat(stats.data?.users), label: "usuarios activos" },
