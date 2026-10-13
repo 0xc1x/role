@@ -93,6 +93,31 @@ export const envSchema = z.object({
     .enum(['development', 'production', 'test'])
     .default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
+  /**
+   * Nivel mínimo del log estructurado (JsonLoggerService).
+   *
+   * Por defecto `info`: los eventos de negocio y de error salen siempre, y
+   * `debug` (FCM mock, ticks omitidos, /health) queda disponible para diagnóstico
+   * sin ensuciar producción. `warn` o `error` suben el umbral si el ruido en
+   * Render llega a tapar lo importante.
+   *
+   * Acepta `log` como alias de `info` (vocabulario de Nest).
+   */
+  LOG_LEVEL: z
+    .enum(['error', 'warn', 'info', 'log', 'debug', 'verbose'])
+    .default('info'),
+  /**
+   * Frames de stack en los logs de error: `off` (default) o `full`.
+   *
+   * `full` escribe archivo y línea de cada frame, NUNCA el `message` del error:
+   * la línea 0 de un stack de V8 es el message, que es el canal por el que sale
+   * PII. Fail-closed por defecto — una variable no seteada no filtra. Con esto
+   * se puede preparar un incidente subiendo la variable sin esperar un deploy.
+   *
+   * No hay opción "stack completo": ese canal está cerrado por diseño, no por
+   * configuración (ver `docs/operations.md` §Formato y correlación de logs).
+   */
+  ERROR_STACK: z.enum(['off', 'full']).default('off'),
   /** Deployment version exposed by the health endpoint. */
   APP_VERSION: z.string().default(''),
   /** Render injects the immutable deployed commit SHA. */

@@ -21,13 +21,14 @@ BFF de **admin/landing**: posee las reglas de negocio (stock, ciclo de órdenes,
 src/
 ├── modules/<dominio>/   # controllers / services / mappers
 ├── database/schema/     # schema drizzle
-├── common/              # pipes, filters, decorators
+├── common/              # pipes, filters, interceptors, decorators, logging
 ├── auth/ + modules/auth # guards por rol
 ```
 
 ## Convenciones
 
 - **Mappers por módulo** (dominio ↔ DTO): nunca expongas filas de DB crudas por la API.
+- **Logging**: una línea JSON por evento, con `event` con nombre estable — nunca un template string. Usa `new Logger(MiClase.name)` y `logger.log({ event: '...', ...campos })`; no pases el `requestId` a mano, `requestContextMiddleware` lo inyecta en todas las líneas vía `AsyncLocalStorage`. `LOG_LEVEL` gobierna el ruido; `ERROR_STACK` solo añade frames (nunca el `message`). Contrato y runbook: `docs/operations.md` §"Formato y correlación de logs".
 - **Guards por rol** en rutas protegidas; validación con zod en fronteras.
 - **Alinear drizzle schema ↔ schemas zod de commons**: `bun run typecheck` en la raíz es el guard principal.
 - **OpenAPI**: `bun run openapi:export` regenera `openapi/` (consumido por Scalar).

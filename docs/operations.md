@@ -15,7 +15,38 @@ Esta runbook cubre los controles que no pueden demostrarse solo con el código. 
 | `rateLimit.backend` | `redis` en producción |
 | `jobs.ordersExpiration.enabled` | Debe ser `true` en producción |
 
-La API registra eventos estructurados con nombre, tipo y código de error. No registra mensajes/stacks/causes crudos, query strings ni tokens de dispositivos.
+### Formato y correlación de logs
+
+La API escribe **una línea JSON por evento** (`JsonLoggerService`), a `stdout` salvo `error`/`fatal`, que van a `stderr`. Cada línea lleva `time`, `level`, `context` y, en eventos de negocio, un `event` con nombre estable — busca siempre por ese campo, no por el texto.
+
+`LOG_LEVEL` fija el umbral: `error`, `warn`, `info` (por defecto), `log` (alias de `info`), `debug`, `verbose`. Por debajo de `info` quedan los ticks omitidos, el mock de FCM y el probe de `/health`, que a nivel `log` desplazaría el resto del archivo.
+
+`ERROR_STACK` gobierna los frames de stack: `off` (default, también en producción) o `full`. Con `full`, los eventos `error` llevan un campo `stack` con los frames (`at fn (archivo:línea:col)`) y el `message` del error **nunca** se escribe — la línea 0 de un stack de V8 es el message, que es el canal por el que sale PII. Los frames se validan uno a uno: el que no cumple la gramática se descarta y el resto sobrevive.
+
+Esto **no** es "debugging en producción": con `off`, un incidente se opera con `errorType`/`errorCode` + `requestId` + ventana temporal. `full` sirve para preparar un incidente, no para diagnosticar uno en curso — súbelo desde el dashboard cuando una ruta concreta justifique localizar la línea exacta.
+
+No existe un modo "stack completo": ese canal está cerrado por diseño, no por configuración. Los paths que verás son de `dist/*.js`, no de `src/*.ts` — el build emite source maps pero `source-map-support` no se carga en el entrypoint, así que las líneas apuntan al JS compilado.
+
+Correlación: el `x-request-id` de la respuesta es el MISMO que aparece en todas las líneas de esa petición — el logger lo inyecta automáticamente desde el contexto de petición, sin que los servicios lo pasen por parámetro. Para debuggear una queja del usuario:
+
+```sh
+# 1. el usuario te da el requestId del 500
+# 2. con ese id:
+grep '"requestId":"req-000042"' <logs> | jq -c '{time,level,event,msg,route,durationMs}'
+```
+
+Qué cubre y qué no:
+
+| Evento | Nivel | Cuándo |
+| --- | --- | --- |
+| `http_request` | `info` (`debug` si es `/health`) | Petición que termina sin excepción: método, ruta, status, duración, actor |
+| `http_exception` | `warn` (<500) / `error` (≥500) | Cualquier excepción, con fingerprint acotado |
+| `*_completed` / `*_failed` | `info` / `error` | Jobs y operaciones de servicio, con `durationMs` |
+| `*_overlap_skipped` | `debug` / `warn` | Tick omitido por solapamiento |
+
+Un 4xx produce **una** línea, no dos: el `AccessLogInterceptor` omite lo que terminó en ≥400 porque ya lo registró el filtro. Los 401/403 de los guards nunca llegan al interceptor (los guards corren antes), y por eso los loguea el filtro.
+
+Siguen sin registrarse: **messages**, causes crudos, query strings, tokens de dispositivos. La redacción es de dos capas — los call sites usan `safeErrorFields`, y el logger descarta el `message` incluso si alguien loguea un `Error` crudo, y descarta cualquier campo `stack` que venga del call site salvo que `ERROR_STACK=full` esté activo. Lo único que sale son los frames, y solo con esa variable.
 
 ### Frontends y PWA
 
@@ -36,7 +67,7 @@ Invariantes:
 - el servicio usa transacción para expirar y restaurar stock;
 - más de una instancia Render puede ejecutar ticks, pero la operación de base de datos debe seguir siendo idempotente.
 
-Si el job falla, busca el evento `orders_expiration_failed` por `errorType`/`errorCode` y usa `requestId` o una ventana temporal. No copies payloads ni credenciales a un ticket.
+Si el job falla, busca el evento `orders_expiration_failed` por `errorType`/`errorCode` y acotálo con `durationMs` o una ventana temporal — un job que falla rápido y uno que se cuelga dejan huellas distintas. No copies payloads ni credenciales a un ticket.
 
 ## Rate limiting y abuso
 

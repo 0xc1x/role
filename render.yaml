@@ -20,6 +20,17 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Umbral del log estructurado. `info` es el default del schema; se fija
+      # aquí para que subirlo (a `debug` durante un incidente) sea un cambio de
+      # deploy explícito y no una edición en el dashboard. Ver
+      # docs/operations.md §Formato y correlación de logs.
+      - key: LOG_LEVEL
+        value: info
+      # Frames de stack en errores, sin el message (que es el canal de PII).
+      # `off` en producción: fail-closed. Súbelo a `full` desde el dashboard
+      # durante un incidente — es un cambio de env, no un deploy.
+      - key: ERROR_STACK
+        value: "off"
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL

@@ -5,8 +5,13 @@ import {
   HttpStatus,
   InternalServerErrorException,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AllExceptionsFilter } from './http-exception.filter';
+import {
+  runWithRequestContext,
+  setRequestContextUser,
+} from '../logging/request-context';
 
 function mockHost(headers: Record<string, string> = {}) {
   const response = {
@@ -34,6 +39,19 @@ function makeFilter() {
 }
 
 describe('AllExceptionsFilter', () => {
+  let logError: jest.SpyInstance;
+  let logWarn: jest.SpyInstance;
+
+  beforeEach(() => {
+    logError = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    logWarn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+  });
+
+  afterEach(() => {
+    logError.mockRestore();
+    logWarn.mockRestore();
+  });
+
   it('mapea HttpException con cuerpo string (mensaje literal)', () => {
     const filter = makeFilter();
     const { host, response } = mockHost();
@@ -112,6 +130,79 @@ describe('AllExceptionsFilter', () => {
     );
   });
 
+  it('el requestId de la respuesta es el mismo que pone el middleware', () => {
+    // El defecto que se corrigió: el middleware solo escribía la cabecera de
+    // RESPUESTA, así que el filtro leía `req.headers[...]`, encontraba
+    // `undefined` y generaba un segundo UUID distinto al que veía el cliente.
+    const filter = makeFilter();
+    const { host, response } = mockHost();
+    const middlewareId = 'req-from-middleware';
+
+    runWithRequestContext(
+      {
+        requestId: middlewareId,
+        method: 'POST',
+        startedAt: Date.now(),
+      },
+      () => {
+        filter.catch(new BadRequestException('x'), host);
+      },
+    );
+
+    const logged = logWarn.mock.calls[0]?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    const body = response.json.mock.calls[0]?.[0] as
+      | Record<string, unknown>
+      | undefined;
+
+    expect(body?.requestId).toBe(middlewareId);
+    expect(logged?.requestId).toBe(middlewareId);
+  });
+
+  it('loguea los 4xx a warn: antes un 401/403/429 no dejaba rastro', () => {
+    const filter = makeFilter();
+    const { host } = mockHost({ 'x-request-id': 'req-000042' });
+
+    filter.catch(new UnauthorizedException('Missing access token'), host);
+
+    expect(logError).not.toHaveBeenCalled();
+    expect(logWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'http_exception',
+        status: 401,
+        route: '/api/v1/businesses',
+        requestId: 'req-000042',
+      }),
+    );
+  });
+
+  it('incluye la duración y el actor cuando hay contexto de petición', () => {
+    const filter = makeFilter();
+    const { host } = mockHost({ 'x-request-id': 'req-000042' });
+
+    runWithRequestContext(
+      {
+        requestId: 'req-000042',
+        method: 'POST',
+        startedAt: Date.now() - 30,
+      },
+      () => {
+        setRequestContextUser('user-7', 'admin');
+        filter.catch(new InternalServerErrorException('db down'), host);
+      },
+    );
+
+    expect(logError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'http_exception',
+        status: 500,
+        userId: 'user-7',
+        durationMs: expect.any(Number),
+      }),
+    );
+  });
+
   it('en producción enmascara errores no-HTTP con mensaje genérico', () => {
     const filter = makeFilter();
     const { host, response } = mockHost();
@@ -148,7 +239,6 @@ describe('AllExceptionsFilter', () => {
   });
 
   it('redacts exception messages, stacks, causes, and request query data from logs', () => {
-    const logError = jest.spyOn(Logger.prototype, 'error').mockImplementation();
     const filter = makeFilter();
     const { host } = mockHost({ 'x-request-id': 'req-000042' });
     const error = Object.assign(new Error('password=secret'), {
@@ -159,18 +249,20 @@ describe('AllExceptionsFilter', () => {
 
     filter.catch(error, host);
 
-    expect(logError).toHaveBeenCalledWith({
-      event: 'unhandled_exception',
-      errorType: 'DatabaseError',
-      errorCode: '08006',
-      requestId: 'req-000042',
-      route: '/api/v1/businesses',
-      method: 'POST',
-    });
+    expect(logError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'unhandled_exception',
+        errorType: 'DatabaseError',
+        errorCode: '08006',
+        requestId: 'req-000042',
+        route: '/api/v1/businesses',
+        method: 'POST',
+        status: 500,
+      }),
+    );
     const logged = JSON.stringify(logError.mock.calls);
     expect(logged).not.toContain('secret');
     expect(logged).not.toContain('private@example.com');
-    logError.mockRestore();
   });
 
   it('masks internal HttpException messages in every environment', () => {
