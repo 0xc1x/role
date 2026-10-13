@@ -43,15 +43,22 @@ El dueño crea el acceso; el sistema crea un `auth.users` real con `email_confir
 (cero correos enviados) y un perfil con `role = 'business'`.
 
 ```
-centro@panaderia-familia.staff.role.app
+centro@panaderia-familia.role.ec
 └────┬───┘ └──────┬──────┘ └────┬───┘ └─────┬────┘
  código   slug del negocio  dominio de Rolé   código del dueño, legible
 ```
 
-- **El dominio del alias es de Rolé, nunca del negocio.** Un alias sobre el dominio real
-  del negocio rebota en cualquier flujo de correo de GoTrue y daña la reputación de
-  envío de un dominio que el negocio puede usar después para email legítimo.
-- El slug ya es `UNIQUE` en `businesses`, así que el alias es único globalmente.
+- **El alias por defecto cuelga de `role.ec`, nunca del dominio real del negocio.** Un
+  alias sobre el dominio ajeno rebota en cualquier flujo de correo de GoTrue y daña la
+  reputación de envío de un dominio que el negocio puede usar después para email legítimo.
+- **El dominio es editable por el dueño** (§9.4): hay negocios que manejan correo bajo su
+  propio dominio y una dirección como `caja.centro@panaderialafamilia.ec` es lo que el
+  empleado ya tiene en la cabeza. Cuando se edita a un dominio ajeno, el alta deja de usar
+  `email_confirm: true` automático y la UI advierte que ese dominio sí puede recibir
+  correo, para que no se confíe en "se lo mandamos por WhatsApp" sin confirmar.
+- El slug ya es `UNIQUE` en `businesses`, así que el alias por defecto es único globalmente
+  sin depender del dominio. Con dominio editable la unicidad pasa al índice único de
+  `business_members.alias`.
 - El identificador es un email válido: entra por el **login que ya existe**, sin una
   segunda puerta ni un switch. `validateEmailField` solo exige `includes("@")` y el login
   valida la contraseña con `minLength 1` (`apps/mobile/src/features/auth/domain/validation.ts:6-34`),
@@ -59,6 +66,10 @@ centro@panaderia-familia.staff.role.app
 - `public.handle_new_user()` lee `role` desde `raw_user_meta_data` y solo admite
   `user` | `business`, así que el alta con `user_metadata: { role: 'business' }` produce el
   perfil correcto sin modificar el trigger.
+- La condición que detecta "esto es una cuenta de negocio" para cambiar textos de la UI es
+  **sufijo `.role.ec`**, no el formato del alias. Si el dueño editó el dominio, la UI sigue
+  funcionando en español neutro y solo cae al texto específico de "pide a tu dueño que
+  rote tu PIN" cuando reconoce el dominio de Rolé.
 
 Descartadas: OTP por teléfono (cuesta un mensaje por alta, requiere proveedor cableado; el
 proyecto tiene 0 usuarios con teléfono) e invitación por código de reclamo (obliga a
@@ -96,29 +107,42 @@ sigue siendo necesaria y sigue siendo el 80% del trabajo, idéntico con alias o 
 
 ### 4.1 `business_members`
 
+Todas las tablas nuevas siguen la convención de soft-delete que ya usa el repo
+(`slides`, `tips`, `categories`, email-marketing): `deleted_at timestamptz` nullable e
+índices parciales `where deleted_at is null`. No hay trigger automático de `updated_at` en
+las tablas de negocio del proyecto, así que `updated_at` se mantiene explícito, igual que
+en el resto.
+
 ```sql
 create table public.business_members (
-  id                   uuid primary key default gen_random_uuid(),
-  business_id          uuid not null references public.businesses (id) on delete cascade,
-  user_id              uuid not null references public.profiles (id) on delete cascade,
-  role                 public.business_member_role not null default 'staff',
-  label                text not null,
-  alias                text not null,          -- lo que se teclea; espejo de auth.users.email
-  status               public.business_member_status not null default 'active',
-  session_ttl_hours    integer not null default 24 check (session_ttl_hours >= 0),
+  id                    uuid primary key default gen_random_uuid(),
+  business_id           uuid not null references public.businesses (id) on delete cascade,
+  user_id               uuid not null references public.profiles (id) on delete cascade,
+  role                  public.business_member_role not null default 'staff',
+  label                 text not null,
+  alias                 text not null,          -- lo que se teclea; espejo de auth.users.email
+  status                public.business_member_status not null default 'active',
+  session_ttl_hours     integer not null default 24 check (session_ttl_hours >= 0),
   last_authenticated_at timestamptz,
-  created_at           timestamptz not null default now(),
-  updated_at           timestamptz not null default now(),
-  unique (business_id, user_id)
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now(),
+  deleted_at            timestamptz
 );
-create index business_members_business on public.business_members (business_id);
+create index business_members_business on public.business_members (business_id)
+  where deleted_at is null;
+create index business_members_user on public.business_members (user_id)
+  where deleted_at is null;
 create unique index business_members_alias_key on public.business_members (lower(alias));
 ```
 
 - `session_ttl_hours = 0` significa sesión sin expiración (modo "equipo propio").
-- `status`: `active` | `disabled`. `disabled` es el estado de revocación.
-- `alias` se espeja desde `auth.users.email` para poder listar accesos sin privilege de
+- `status`: `active` | `disabled`. `disabled` es revocación (conserva la fila); el borrado
+  real es `deleted_at`, que además borra el `auth.users`.
+- `alias` se espeja desde `auth.users.email` para poder listar accesos sin privilegio de
   lectura sobre `auth`.
+- `business_members_alias_key` es único **globalmente e incluye las filas borradas**: un
+  alias dado de baja no se recicla por accidente, porque el mismo `auth.users` podría
+  quedar vivo.
 
 ### 4.2 `business_member_locations`
 
@@ -126,6 +150,9 @@ create unique index business_members_alias_key on public.business_members (lower
 create table public.business_member_locations (
   member_id   uuid not null references public.business_members (id) on delete cascade,
   location_id uuid not null references public.business_locations (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  deleted_at  timestamptz,
   primary key (member_id, location_id)
 );
 ```
@@ -139,7 +166,9 @@ sucursales es **un** miembro con **dos** filas de alcance, no dos miembros.
 create table public.business_plans_state (
   business_id uuid primary key references public.businesses (id) on delete cascade,
   plan_code   public.business_plan_code not null default 'free',
-  updated_at  timestamptz not null default now()
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  deleted_at  timestamptz
 );
 ```
 
@@ -164,8 +193,8 @@ qué necesita.
 ```ts
 // packages/commons/src/business/enums/business-plan.ts
 export const BUSINESS_PLAN_LIMITS = {
-  free:     { locations: 1,   members: null },
-  pro:      { locations: 5,   members: 20  },
+  free:     { locations: 1, members: 2 },
+  pro:      { locations: 5, members: 20 },
   pro_plus: { locations: null, members: null },
 } satisfies Record<BusinessPlanCode, { locations: number | null; members: number | null }>;
 
@@ -179,6 +208,12 @@ export const BUSINESS_PLAN_FEATURES = {
 Interpretación de los límites: **ambos topes son acumulativos**. Un plan `pro` admite
 hasta 5 sucursales **y** hasta 20 miembros; exceder cualquiera de los dos bloquea el
 crecimiento.
+
+**El dueño nunca cuenta como miembro.** El tope `members` cuenta solo filas con
+`role <> 'owner'`: un negocio `free` tiene dueño + 2 empleados, y el dueño no es un
+"miembro" que consuma cupo. El trigger de límite filtra por `role <> 'owner'` y las
+restricciones de la API cuentan igual, para que el número que ve el dueño en su panel sea
+el mismo que aplica el motor.
 
 ## 5. Permisos
 
@@ -299,6 +334,11 @@ de una sesión normal. El cliente solo lee (y solo lo que su propia fila de alca
 - El trigger de límite sobre `business_members` es defensa en profundidad (nadie escribe
   desde el cliente). El que de verdad importa es el de `business_locations`, porque el
   panel **sí** inserta sucursales directo a Supabase.
+- **Toda lectura de membresías filtra `deleted_at is null`**: los helpers
+  `business_member_role` y `can_manage_location`, las policies de `business_members` y
+  `business_member_locations`, el conteo del trigger de límites y el listado de la API.
+  Una fila con `deleted_at` no concede acceso por ningún camino, ni siquiera si su
+  `auth.users` siguiera vivo.
 
 ## 7. Contratos (`packages/commons`)
 
@@ -324,13 +364,14 @@ Módulo nuevo `staff`, con el patrón de resource que ya usan los demás módulo
 
 | Ruta | Quién | Qué hace |
 |---|---|---|
-| `GET /businesses/:id/staff` | owner, manager (acotado) | Lista los accesos del negocio |
+| `GET /businesses/:id/staff` | owner, manager (acotado) | Lista los accesos del negocio (`deleted_at is null`) |
 | `POST /businesses/:id/staff` | owner, manager (acotado) | Crea el `auth.users` + la membresía; devuelve la tarjeta de entrega con el PIN **una sola vez** |
 | `PATCH /businesses/:id/staff/:memberId` | owner, manager (acotado) | Rol, sucursales, `session_ttl_hours` |
+| `PATCH /businesses/:id/staff/:memberId/alias` | owner, manager (acotado) | Cambia el alias y actualiza `auth.users.email` |
 | `POST /businesses/:id/staff/:memberId/rotate` | owner, manager (acotado) | Genera PIN nuevo y devuelve la tarjeta |
 | `POST /businesses/:id/staff/:memberId/disable` | owner, manager (acotado) | `status='disabled'` + `ban_duration` |
 | `POST /businesses/:id/staff/:memberId/enable` | owner, manager (acotado) | Quita el ban |
-| `DELETE /businesses/:id/staff/:memberId` | owner | Borra membresía + usuario de Auth |
+| `DELETE /businesses/:id/staff/:memberId` | owner | Soft-delete (`deleted_at`) + ban del `auth.users` |
 | `POST /staff/session` | cualquier miembro | Sella `last_authenticated_at` |
 
 Reglas de la capa de servicio:
@@ -348,12 +389,23 @@ Reglas de la capa de servicio:
 - Desactivar se implementa con `admin.updateUserById(id, { ban_duration: '876000h' })` y
   reactivar con `ban_duration: 'none'`. **Desactivar, no borrar**: el historial de quién
   operó en el negocio vale cuando alguien se va.
+- **Eliminar es soft-delete.** Marca `deleted_at` en `business_members` y en sus filas de
+  `business_member_locations`, y banea el `auth.users`. La fila queda: el alias no se
+  recicla, el conteo de "gente que estuvo aquí" sigue siendo posible y el borrado físico
+  queda como operación separada, no expuesta en la v1.
+- **Editar el alias** actualiza `business_members.alias` y `auth.users.email` en la misma
+  operación, validando formato y unicidad. Si el nuevo dominio no termina en `.role.ec`, la
+  respuesta incluye un aviso de que ese dominio puede recibir correo de verdad, para que el
+  dueño sepa que el empleado podría activar la recuperación por email con esa dirección.
+  Tras cambiar el alias, el PIN **no** cambia: son dos datos independientes y el dueño
+  puede rotar el PIN aparte si quiere.
 - El alta es una transacción con compensación: si la inserción de la membresía falla, se
   borra el `auth.users` creado — mismo patrón que el onboarding de negocios
   (`businesses.service.ts:114-157`).
-- `change-email` y `forgot-password` **rechazan** identificadores del dominio de staff: el
+- `change-email` y `forgot-password` **rechazan** identificadores bajo `.role.ec`: el
   correo se iría a una bandeja inexistente y rebotaría. Se comprueba en ambos sentidos (UI
-  y endpoint).
+  y endpoint). Los alias de dominio propio (§9.4) pasan el flujo normal, porque su
+  destinatario es real.
 - Se **consolida** la copia triplicada del predicado de propietario
   (`BusinessesRepository.isOwner`, `OffersRepository.isBusinessOwner`,
   `OrdersRepository.isBusinessOwner`) en un solo `StaffAccessService` / helper. El smell ya
@@ -382,8 +434,9 @@ reglas de negocio en dos runtimes y la API no las conocería.
    entró (almacenados localmente). **El PIN nunca se guarda.** Resuelve la memoria del
    alias largo a partir del segundo ingreso.
 2. **"¿Olvidaste tu contraseña?" condicional**: si el identificador termina en
-   `*.staff.role.app`, el diálogo dice que las cuentas de negocio no usan correo y pide al
-   dueño que rote el PIN, y **no envía nada**.
+   `.role.ec`, el diálogo dice que las cuentas de negocio no usan correo y pide al dueño
+   que rote el PIN, y **no envía nada**. Con un alias de dominio propio (§9.4) el flujo
+   normal sigue disponible, porque ahí el correo sí llega a una bandeja real.
 3. **Escanear la tarjeta** que llena el identificador y enfoca el PIN. Reutiliza
    `PickupScannerSheet` / `features/business/components/orders/qr.ts`, que ya existen: no
    se agrega cámara ni librería.
@@ -406,7 +459,7 @@ accesos**, que sigue el patrón `features/` del repo:
 - **Tarjeta de entrega**: alias + PIN + QR, con el aviso de que el PIN no se puede
   recuperar, solo rotar, y botones de copiar / compartir.
 - **Acciones**: rotar PIN (con confirmación que dice que las sesiones abiertas siguen
-  vivas), cambiar sucursales, cambiar rol, pausar, reactivar, eliminar.
+  vivas), cambiar sucursales, cambiar rol, **editar alias**, pausar, reactivar, eliminar.
 - **Corte de emergencia**: "cortar todos los accesos" arriba del todo, con confirmación
   explícita.
 
@@ -414,7 +467,36 @@ Alta por turnos (24 h) vs. equipo propio (sin expiración) es una decisión del 
 acceso. El modo persistente solo se ofrece a `owner` y `manager`: un `staff` no debería
 poder dejar un tablet abierto para siempre.
 
-### 9.3 Cambios de datos en el panel
+### 9.3 La configuración se oculta según el rol
+
+Un `staff` **no ve** las opciones de configuración del negocio: sucursales, datos del
+negocio, payouts, métricas, coupons y la propia sección Equipo. Hoy esa sección
+(`SettingsSection.tsx` / `GestionContent.tsx`) se renderiza completa sin mirar quién entró,
+porque solo existe un tipo de usuario con acceso al panel.
+
+El filtrado es de **UI**, no de seguridad: RLS ya impide que un `staff` escriba en
+`business_locations` o lea `payouts`, así que ocultar controles no agrega una frontera,
+solo deja de ofrecer botones que van a fallar. El origen del rol es
+`public.business_member_session_state()`, que la sesión ya consulta en §5.2 — el panel
+pregunta por su rol en lugar de deducirlo de `profiles.role`, que solo dice "de negocio".
+
+Cada opción de configuración se declara con un rol mínimo
+(`minRole: 'owner' | 'manager' | 'staff'`) y la sección filtra por ese campo. La
+correspondiente en la API es el guard que ya devuelve 403: la UI se adelanta al servidor
+para que el empleado no descubra los límites fallando.
+
+### 9.4 Alias editable
+
+En el formulario de alta y en la ficha de cada acceso, el alias es un campo editable. El
+sistema propone `{código}@{slug}.role.ec` y el dueño puede escribir cualquier dominio
+válido, para negocios que manejan correo bajo su propio. Al guardar fuera de `.role.ec`, la
+UI muestra un aviso: *"Este dominio puede recibir correos. El empleado podría activar la
+recuperación de contraseña con esta dirección."*
+
+El cambio de alias **no** cambia el PIN ni reinicia la sesión, y el que se editó puede
+seguir entrando con el PIN viejo hasta que se lo comunique al empleado.
+
+### 9.5 Cambios de datos en el panel
 
 - `getBusinessesByOwnerId` (`features/business/data/repository.ts:352-376`) deja de leer
   `business_ownership` y pasa a leer `business_members` con `role = 'owner'`.
@@ -461,6 +543,8 @@ Migraciones solo por `apply_migration`, con la verificación de `md5sum` contra
 ## 12. Fuera de alcance
 
 - Transferencia de propiedad del negocio.
+- Borrado físico de membresías (`deleted_at` los deja para siempre; la limpieza no se expone
+  en la v1).
 - Confirmación por teléfono del empleado (el campo `phone` queda listo).
 - Alias sobre el dominio real del negocio.
 - Facturación, suscripciones recurrentes, descuentos y tiers por tamaño.
@@ -474,6 +558,7 @@ Migraciones solo por `apply_migration`, con la verificación de `md5sum` contra
 | Reescribir ~20 policies + 3 RPCs + `business_ownership` en un solo cambio | Orden de migración en 6.2: lo nuevo se crea y se verifica antes de que caiga lo viejo |
 | Un `staff` ve datos de otra sucursal | Helper único; tests de matriz `(rol, sucursal)` sobre las 4 tablas |
 | Rate limit de GoTrue con tablet compartido por IP | PIN de 6+ caracteres; el API tiene throttler propio en las rutas de gestión |
-| Rebote de correo en flujos de Auth | Alias bajo dominio de Rolé + bloqueo explícito de `forgot-password` / `change-email` |
+| Rebote de correo en flujos de Auth | Alias por defecto bajo `.role.ec` + bloqueo de `forgot-password` / `change-email` solo para ese dominio. Un alias de dominio propio puede rebotar y la UI lo advierte al guardarlo |
+| Un `staff` ve botones de configuración que va a perder por 403 | Cada opción declara su rol mínimo y la sección filtra; la seguridad real sigue siendo RLS |
 | Coste de MAU de Supabase por accesos de staff | Es la unidad de cobro del tier; hay que confirmar el plan del proyecto antes del primer lanzamiento real |
 | Que el dueño crea que rotar PIN corta acceso | La UI lo dice en la confirmación y `disable` es una acción separada y obvia |
