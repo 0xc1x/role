@@ -411,7 +411,7 @@ export const strings = {
 		historyThisWeek: "Esta semana",
 		emptyActive: "No tienes pedidos activos",
 		emptyPast: "No tienes pedidos pasados",
-		emptySearchHint: "Vuelve más tarde o realiza una búsqueda diferente",
+		emptySearchHint: "Pide algo y tu pedido aparecerá aquí",
 		orderNumber: "Pedido #{n}",
 		cardPickupAt: "{date} · {time} hs",
 		detailTitle: "Detalle del pedido",
