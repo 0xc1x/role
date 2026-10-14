@@ -71,10 +71,15 @@ export const businessFeatureEnum = pgEnum('business_feature', [
  *
  * `alias` espeja `auth.users.email` para poder listar accesos sin privilegio de
  * lectura sobre `auth`, y `business_members_alias_key` lo hace único sobre
- * `lower(alias)` SIN `where deleted_at is null`. Esa ausencia es la garantía: un
- * índice único parcial devolvería el alias a la bolsa en cuanto la fila se da de
- * baja, y el `auth.users` de esa fila puede seguir vivo. Alias dado de baja,
- * alias quemado.
+ * `(business_id, lower(alias))` SIN `where deleted_at is null`. Esa ausencia es la
+ * garantía: un índice único parcial devolvería el alias a la bolsa en cuanto la fila
+ * se da de baja, y el `auth.users` de esa fila puede seguir vivo. Alias dado de
+ * baja, alias quemado.
+ *
+ * El `business_id` está en el índice porque el alias identifica un ACCESO y no a
+ * una persona: el mismo dueño que dirige seis negocios es seis filas con el mismo
+ * alias, y un índice global afirmaría que una persona no puede estar en dos
+ * negocios. En producción `admin@fudi.app` dirige 6 de los 16.
  */
 export const businessMembers = pgTable(
   'business_members',
@@ -121,10 +126,16 @@ export const businessMembers = pgTable(
       .on(table.user_id)
       .where(sql`${table.deleted_at} is null`),
     // `uniqueIndex` y no `index(...).unique()`: el builder de un índice normal no
-    // tiene `.unique()`. Lo que hace la garantía es UNIQUE sobre una EXPRESIÓN —
-    // que `Caja@Panaderia.ec` y `caja@panaderia.ec` sean el mismo alias— y no
-    // tener predicado, para que el alias no vuelva a la bolsa.
-    uniqueIndex('business_members_alias_key').on(sql`lower(${table.alias})`),
+    // tiene `.unique()`. Lo que hace la garantía es ser UNIQUE sobre una
+    // EXPRESIÓN —que `Caja@Panaderia.ec` y `caja@panaderia.ec` sean el mismo
+    // alias DENTRO de un negocio— y no tener predicado, para que el alias no
+    // vuelva a la bolsa. El `business_id` va primero: es el que hace la unicidad
+    // por negocio, y sin él el índice affirmaría que una persona no puede dirigir
+    // dos negocios.
+    uniqueIndex('business_members_alias_key').on(
+      table.business_id,
+      sql`lower(${table.alias})`,
+    ),
   ],
 );
 
@@ -132,8 +143,8 @@ export const businessMembers = pgTable(
  * El alcance por sucursal de un miembro: qué filas tiene acceso a cuáles.
  *
  * Tabla aparte y no una columna `location_id` porque un `manager` de dos
- * sucursales es UN miembro con DOS filas de alcance, no dos miembros: duplicar
- * la fila duplicaría también el alias, y el alias es único globalmente.
+ * sucursales es UN miembro con DOS filas de alcance, no dos miembros: duplicar la
+ * fila no cambia quién es ni qué puede hacer.
  *
  * La PK compuesta hace que reintentar el alta de una fila no crezca.
  */
