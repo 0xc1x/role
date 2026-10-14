@@ -98,16 +98,21 @@ function plainRows<T>(result: readonly T[]): T[] {
 
 // ─── EL FIXTURE DEL BACKFILL ────────────────────────────────────────────────
 //
-// Dos negocios con dos dueños distintos, sembrados por el camino real de la
-// plataforma —`auth.users`, y el trigger `on_auth_user_created` escribe el
-// `profiles` que `business_ownership.owner_id` exige— y una fila de
-// `business_ownership` por negocio.
+// TRES negocios y DOS dueños, sembrados por el camino real de la plataforma
+// —`auth.users`, y el trigger `on_auth_user_created` escribe el `profiles` que
+// `business_ownership.owner_id` exige— y una fila de `business_ownership` por
+// negocio.
 //
-// Dos y no uno porque "exactamente una fila" necesita un denominador mayor de
+// Tres y no uno porque "exactamente una fila" necesita un denominador mayor de
 // uno: con un solo dueño, un backfill que duplicara y otro que borrara darían el
-// mismo conteo que el correcto. Y dos dueños DISTINTOS a propósito: el `alias`
-// es único globalmente, así que sembrar un solo dueño en dos negocios haría
-// chocar el índice.
+// mismo conteo que el correcto.
+//
+// Y DOS dueños, con `OWNERS[0]` al frente de DOS negocios, porque esa es la
+// forma de producción que rompe: `admin@fudi.app` es dueño de 6 de los 16. Con el
+// índice global de alias, sembrar un solo dueño en dos negocios revienta con
+// `23505` y el fixture entero se cae —que es la falla que motivó
+// `20261014004804_business_members_alias_key_per_business`—, así que este archivo
+// no la puede seguir teniendo por accidente.
 
 const OWNERS: readonly { id: string; email: string }[] = [
   {
@@ -120,16 +125,29 @@ const OWNERS: readonly { id: string; email: string }[] = [
   },
 ];
 
-const BUSINESSES: readonly { id: string; name: string; slug: string }[] = [
+const BUSINESSES: readonly {
+  id: string;
+  name: string;
+  slug: string;
+  owner: number;
+}[] = [
   {
     id: 'e1000000-0000-4000-8000-000000000001',
     name: 'RLS business members A',
     slug: 'rls-business-members-a',
+    owner: 0,
   },
   {
     id: 'e1000000-0000-4000-8000-000000000002',
     name: 'RLS business members B',
     slug: 'rls-business-members-b',
+    owner: 1,
+  },
+  {
+    id: 'e1000000-0000-4000-8000-000000000003',
+    name: 'RLS business members C',
+    slug: 'rls-business-members-c',
+    owner: 0,
   },
 ];
 
@@ -226,8 +244,8 @@ beforeAll(async () => {
     // (`trg_set_business_owner_from_jwt`) guarda con `(select auth.uid()) is not
     // null`, y esta transacción es la dueña del esquema sin JWT. Medido, no
     // supuesto: es lo mismo que hace `businesses.rls.db.spec.ts`.
-    for (const [index, business] of BUSINESSES.entries()) {
-      const owner = OWNERS[index] as (typeof OWNERS)[number];
+    for (const business of BUSINESSES) {
+      const owner = OWNERS[business.owner] as (typeof OWNERS)[number];
       await tx.unsafe(
         `insert into public.business_ownership (business_id, owner_id)
          values ('${business.id}', '${owner.id}')
@@ -293,7 +311,7 @@ describe('las tres tablas de staff nacen cerradas', () => {
     ).toEqual([]);
   });
 
-  test('el índice único de alias no recicla filas borradas', async () => {
+  test('el índice único de alias es por negocio y no recicla filas borradas', async () => {
     const idx = await as(ctx.sql, 'service_role', null, (tx) =>
       tx
         .unsafe<{ indexdef: string }[]>(
@@ -421,7 +439,7 @@ describe('el backfill de dueños', () => {
       plainRows(owners)[0]?.n,
       'el fixture de dueños no está en la base, así que "todo dueño es miembro" ' +
         'es cierto porque no hay dueños.',
-    ).toBe(2);
+    ).toBe(BUSINESSES.length);
     expect(
       await seededMemberRows(),
       'el backfill ya corrió sobre este fixture antes de tiempo: el test que ' +
@@ -450,18 +468,25 @@ describe('el backfill de dueños', () => {
     expect(
       await seededMemberRows(),
       'el backfill produjo más de una fila de miembro por dueño, o menos de una. ' +
-        'El conteo tiene que ser exactamente el de los dueños sembrados.',
-    ).toBe(2);
+        'El conteo tiene que ser exactamente el de los dueños sembrados, y son ' +
+        `${BUSINESSES.length} negocios y no ${OWNERS.length} dueños: el dueño ` +
+        'repetido tiene que producir una fila por negocio.',
+    ).toBe(BUSINESSES.length);
   });
 
   test('el miembro owner lleva el alias del correo y el label del negocio', async () => {
     await applyBackfill();
 
-    // El `alias` es UNIQUE global (`lower(alias)`, sin `where deleted_at is
-    // null`) y es con lo que la persona entra: un backfill que lo dejara vacío o
-    // duplicado no rompe una constraint visible, rompe el acceso. Y el `label`
-    // del dueño es el NOMBRE DEL NEGOCIO, no el de una persona: en la UI esa fila
-    // representa al dueño, no a un humano con nombre.
+    // El `alias` es lo que la persona teclea y espeja `auth.users.email`: un
+    // backfill que lo dejara vacío o duplicado no rompe una constraint visible,
+    // rompe el acceso. Y el `label` del dueño es el NOMBRE DEL NEGOCIO, no el de
+    // una persona: en la UI esa fila representa al dueño, no a un humano con
+    // nombre.
+    //
+    // Y el dueño repetido aparece DOS veces con el MISMO alias, que es lo
+    // correcto y no una excepción: el alias único es por negocio, así que un
+    // dueño en dos negocios son dos accesos. Contra el índice global esto no
+    // llegaba ni a la aserción.
     const rows = await as(ctx.sql, 'service_role', null, (tx) =>
       tx
         .unsafe<
@@ -484,11 +509,11 @@ describe('el backfill de dueños', () => {
         alias: m.alias,
       })),
     ).toEqual(
-      BUSINESSES.map((business, index) => ({
+      BUSINESSES.map((business) => ({
         business_id: business.id,
         role: 'owner',
         label: business.name,
-        alias: (OWNERS[index] as (typeof OWNERS)[number]).email,
+        alias: (OWNERS[business.owner] as (typeof OWNERS)[number]).email,
       })),
     );
   });
@@ -501,6 +526,6 @@ describe('el backfill de dueños', () => {
     // esta migración corre una vez por máquina, pero el archivo se replayea en
     // cada `db push` a un entorno que ya lo corrió, y una migración de datos que
     // no es re-ejecutable convierte cada replay en un error de unicidad.
-    expect(await seededMemberRows()).toBe(2);
+    expect(await seededMemberRows()).toBe(BUSINESSES.length);
   });
 });
