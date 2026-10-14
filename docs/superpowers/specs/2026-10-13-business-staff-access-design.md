@@ -132,7 +132,8 @@ create index business_members_business on public.business_members (business_id)
   where deleted_at is null;
 create index business_members_user on public.business_members (user_id)
   where deleted_at is null;
-create unique index business_members_alias_key on public.business_members (lower(alias));
+create unique index business_members_alias_key
+  on public.business_members (business_id, lower(alias));
 ```
 
 - `session_ttl_hours = 0` significa sesión sin expiración (modo "equipo propio").
@@ -140,9 +141,22 @@ create unique index business_members_alias_key on public.business_members (lower
   real es `deleted_at`, que además borra el `auth.users`.
 - `alias` se espeja desde `auth.users.email` para poder listar accesos sin privilegio de
   lectura sobre `auth`.
-- `business_members_alias_key` es único **globalmente e incluye las filas borradas**: un
-  alias dado de baja no se recicla por accidente, porque el mismo `auth.users` podría
-  quedar vivo.
+- `business_members_alias_key` es único **por negocio, sobre `lower(alias)`, e incluye las
+  filas borradas**: un alias dado de baja no se recicla por accidente dentro de su negocio,
+  porque el mismo `auth.users` podría quedar vivo.
+
+  **La unicidad es por negocio y no global, porque un dueño real tiene varios negocios.**
+  Medido en producción el 2026-10-14: `business_ownership` tiene 16 filas y **11 dueños
+  distintos**, y uno de ellos es dueño de 6 negocios. Como `alias` espeja
+  `auth.users.email` —y Auth garantiza que un email identifica a un solo usuario—, seis
+  negocios del mismo dueño son seis membresías con el mismo alias, no seis accesos
+  distintos. Un índice global sobre `lower(alias)` haría fallar el backfill con `23505` y
+  además afirmaría algo falso: no es que dos personas puedan compartir alias, es que una
+  persona aparece en varios negocios.
+
+  El login sigue siendo inequívoco sin el índice global. El alias completo resuelve a un
+  único `auth.users` porque Auth lo garantiza, así que "escribir alias + PIN" basta sin
+  pedir el negocio por delante —que era el requisito del flujo.
 
 ### 4.2 `business_member_locations`
 
