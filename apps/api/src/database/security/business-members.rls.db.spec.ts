@@ -96,6 +96,55 @@ function plainRows<T>(result: readonly T[]): T[] {
   return [...result];
 }
 
+/** The sentinel that forces `rolledBack` to discard its transaction. */
+const ROLLED_BACK = 'business-members.spec: rollback on purpose';
+
+/**
+ * Run `fn` in one transaction and hand back the SQLSTATE of the first statement
+ * it refused with, or `null` if `fn` ran to the end — ALWAYS leaving nothing
+ * behind.
+ *
+ * ─── Por qué no `deniedAs()` ────────────────────────────────────────────────
+ *
+ * Porque `deniedAs()` tiene una asimetría, y esta es justo la prueba donde esa
+ * asimetría muerde: solo revierte la transacción cuando la sentencia es
+ * RECHAZADA, así que en el camino de éxito commitea lo que escribió. El camino de
+ * éxito de este test es la falla que el test existe para detectar —la constraint
+ * ausente, con lo que el duplicado entra— y una fila commiteada ahí envenena los
+ * tests de abajo, que cuentan filas de `business_members` sobre el mismo fixture.
+ * Una prueba cuyo modo de falla deja basura convierte una línea roja en tres.
+ *
+ * ─── Por qué el `throw` es incondicional ────────────────────────────────────
+ *
+ * Porque una transacción que resuelve COMMITEA. La única forma de garantizar que
+ * no sobreviva nada es no dejarla resolver nunca, así que el `throw` va después
+ * del `try` y no dentro: tanto si algo falló como si no, la transacción se
+ * descarta y lo que el test necesita —el código del error— ya quedó copiado
+ * fuera.
+ */
+async function rolledBack(
+  sql: Parameters<typeof as>[0],
+  fn: (tx: Parameters<typeof as>[0]) => Promise<void>,
+): Promise<string | null> {
+  let refusal: string | null = null;
+  try {
+    await sql.begin(async (tx) => {
+      try {
+        await fn(tx as unknown as Parameters<typeof as>[0]);
+      } catch (error) {
+        refusal = (error as { code?: string }).code ?? '????';
+      }
+      throw new Error(ROLLED_BACK);
+    });
+  } catch (error) {
+    // Anything else is a broken connection and has to surface: tragarse ese error
+    // dejaría `refusal` en null y la aserción de abajo culparía a la constraint de
+    // algo que no fue la constraint.
+    if ((error as Error).message !== ROLLED_BACK) throw error;
+  }
+  return refusal;
+}
+
 // ─── EL FIXTURE DEL BACKFILL ────────────────────────────────────────────────
 //
 // TRES negocios y DOS dueños, sembrados por el camino real de la plataforma
@@ -347,9 +396,71 @@ describe('las tres tablas de staff nacen cerradas', () => {
     expect(
       idx[0].indexdef,
       'el índice de alias lleva un predicado. Un índice único sobre ' +
-        '`lower(alias) where deleted_at is null` deja reciclar el alias de una ' +
-        'fila dada de baja, que es justo lo que §4.1 dice que no puede pasar.',
+        '`(business_id, lower(alias)) where deleted_at is null` deja reciclar el ' +
+        'alias de una fila dada de baja, que es justo lo que §4.1 dice que no ' +
+        'puede pasar.',
     ).not.toContain('WHERE');
+  });
+
+  test('una persona es UN miembro por negocio', async () => {
+    const uniq = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx
+        .unsafe<{ conname: string; def: string }[]>(
+          `
+          select conname, pg_get_constraintdef(oid) as def
+          from pg_constraint
+          where conrelid = 'public.business_members'::regclass
+            and contype = 'u'
+          order by conname`,
+        )
+        .then((rows) => plainRows(rows)),
+    );
+
+    // La DEFINICIÓN, no el conteo. `toEqual` sobre la lista entera dice las tres
+    // cosas a la vez: que hay exactamente una, que se llama como dice el ledger, y
+    // que es sobre esas dos columnas en ese orden. Un `expect(uniq).toHaveLength(1)`
+    // pasaría contra una unique sobre `(user_id, business_id)`, que forbids las
+    // mismas parejas pero no dice qué garantiza, y contra una unique sobre
+    // `(business_id, role)`, que forbids algo que nadie decidió.
+    expect(
+      uniq.map((u) => ({ conname: u.conname, def: u.def })),
+      'una persona es UN miembro por negocio con UN rol. Sin esta unicidad el ' +
+        'API puede dar de alta dos membresías de la misma persona en el mismo ' +
+        'negocio con roles distintos, y business_member_role() tendría que elegir ' +
+        'una al azar. El alcance sobre varias sucursales son varias filas en ' +
+        'business_member_locations, no varias membresías.',
+    ).toEqual([
+      {
+        conname: 'business_members_business_id_user_id_key',
+        def: 'UNIQUE (business_id, user_id)',
+      },
+    ]);
+
+    // Y que la constraint MUERDA, que es distinto de que exista: una fila en el
+    // catálogo que no impide nada es la mitad de la garantía.
+    //
+    // DOS inserts del MISMO par `(business_id, user_id)` con alias DISTINTOS. El
+    // alias tiene que ser distinto a propósito: si fuera el mismo, el rechazo
+    // podría venir del índice de alias y la prueba afirmaría algo que no midió.
+    // Con alias distintos lo único que puede rechazar el segundo es la unicidad de
+    // la pareja. Y son dos inserts y no un duplicado de una fila que ya existe
+    // porque la tabla está vacía cuando corre este bloque: el backfill del
+    // `describe` de abajo todavía no pasó, y una prueba atada a ese orden deja de
+    // probar lo que dice en cuanto alguien reordena los bloques.
+    const first = BUSINESSES[0] as (typeof BUSINESSES)[number];
+    const owner = OWNERS[0] as (typeof OWNERS)[number];
+    const membership = (alias: string) => `
+      insert into public.business_members (business_id, user_id, role, label, alias)
+      values ('${first.id}', '${owner.id}', 'staff', 'duplicado', '${alias}')`;
+    const denial = await rolledBack(ctx.sql, async (tx) => {
+      await tx.unsafe(membership('dup-a@rls-business-members.test'));
+      await tx.unsafe(membership('dup-b@rls-business-members.test'));
+    });
+    expect(
+      denial,
+      'una segunda membresía del mismo dueño en el mismo negocio pasó. La ' +
+        'constraint existe en el catálogo pero no impide nada.',
+    ).toBe('23505');
   });
 
   test('business_members y business_member_locations no tienen policy de escritura', async () => {

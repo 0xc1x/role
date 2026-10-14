@@ -8,6 +8,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -80,6 +81,10 @@ export const businessFeatureEnum = pgEnum('business_feature', [
  * una persona: el mismo dueño que dirige seis negocios es seis filas con el mismo
  * alias, y un índice global afirmaría que una persona no puede estar en dos
  * negocios. En producción `admin@fudi.app` dirige 6 de los 16.
+ *
+ * Y por eso hay DOS unicidades y no una: `(business_id, lower(alias))` es el acceso
+ * —una fila por negocio—, y `(business_id, user_id)` es la persona —una fila por
+ * persona y negocio—. Son cosas distintas y se rompen distinto.
  */
 export const businessMembers = pgTable(
   'business_members',
@@ -115,6 +120,18 @@ export const businessMembers = pgTable(
     check(
       'business_members_session_ttl_hours_check',
       sql`${table.session_ttl_hours} >= 0`,
+    ),
+    // Una persona es UN miembro por negocio con UN rol; su alcance sobre varias
+    // sucursales son varias filas en `business_member_locations`, no varias
+    // membresías. Sin esto el API puede dar de alta la misma persona dos veces en
+    // el mismo negocio con roles distintos, y `business_member_role()` tendría que
+    // elegir una al azar. Es `unique()` y no `uniqueIndex()` porque en la base
+    // viva es una CONSTRAINT con nombre —`20261014005756_business_members_business_user_unique`—,
+    // y el espejo nombra las constraints como las nombra Postgres, igual que
+    // `business_hours_business_id_day_key` y `business_locations_id_business_id_key`.
+    unique('business_members_business_id_user_id_key').on(
+      table.business_id,
+      table.user_id,
     ),
     // Los dos de lectura llevan el parcial porque toda lectura de membresías
     // filtra `deleted_at is null`: una fila dada de baja no concede acceso por
