@@ -126,7 +126,8 @@ create table public.business_members (
   last_authenticated_at timestamptz,
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
-  deleted_at            timestamptz
+  deleted_at            timestamptz,
+  unique (business_id, user_id)
 );
 create index business_members_business on public.business_members (business_id)
   where deleted_at is null;
