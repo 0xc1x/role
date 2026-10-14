@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   jsonb,
   numeric,
   pgTable,
@@ -6,6 +7,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { businessLocations } from './business-locations';
 import { businesses } from './businesses';
 import { coupons } from './coupons';
 import { orderStatusEnum } from './enums';
@@ -67,7 +69,26 @@ export const orders = pgTable('orders', {
   updated_at: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+},
+(table) => [
+  // The composite FK, not a single-column reference, and it is the same reason
+  // `offers` carries `offers_location_business_fkey`: a branch belongs to a
+  // business, so an order that names both has to name a branch OF ITS OWN
+  // business. A single-column `references(businessLocations.id)` would accept an
+  // order whose location belongs to somebody else's business, which is the
+  // cross-tenant row this whole feature exists to make impossible.
+  //
+  // Declared because `mirror-fidelity.db.spec.ts` reports an unlisted foreign
+  // key as drift — and, before this, could not see this one: that spec reads the
+  // TEST database, which `test/db.ts` builds from the mirror with inline
+  // REFERENCES stripped, so a constraint missing from the mirror is
+  // structurally invisible to the check that exists to catch exactly that.
+  foreignKey({
+    columns: [table.business_location_id, table.business_id],
+    foreignColumns: [businessLocations.id, businessLocations.business_id],
+    name: 'orders_location_business_fkey',
+  }).onDelete('restrict'),
+]);
 
 export const orderEvents = pgTable('order_events', {
   id: uuid('id').primaryKey().defaultRandom(),

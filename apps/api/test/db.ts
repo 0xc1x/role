@@ -444,6 +444,61 @@ export async function createTestDb(): Promise<TestDbContext> {
       for each row
       execute function public.record_order_event();
 
+    -- The branch derivation. Statement for statement this is the body
+    -- 20261013230029_orders_business_location.sql creates; only the header is
+    -- reflowed, to the local style every install in this block uses, and the
+    -- dollar-quote tag with it.
+    --
+    -- No backticks anywhere in this comment: the whole install list is ONE JS
+    -- template literal and this comment sits inside it, so a backtick here
+    -- closes the string and the harness fails to parse.
+    --
+    -- This is the one hand-installed trigger that is not a missing BEHAVIOUR but
+    -- a missing DERIVATION, and the failure it causes is the mirror's worst
+    -- shape: the mirror DECLARES orders.business_location_id as NOT NULL
+    -- because Drizzle read that constraint off the live database, and nothing in
+    -- the mirror FILLS it, because Drizzle cannot express a trigger. So every
+    -- fixture that seeds an order without naming the column -- which is most of
+    -- them, and correctly so, because no application is supposed to name it --
+    -- died with
+    --
+    --     23502 null value in column "business_location_id" of relation "orders"
+    --     violates not-null constraint
+    --
+    -- in me.user-order-stats, business-owner-stats and revenue-stats.repository.
+    -- A harness that was merely missing a trigger fails loudly; this one failed
+    -- with an error that names the column and points at the schema instead of at
+    -- the harness.
+    --
+    -- Installed here for the same reason record_order_event sits two statements
+    -- above: the mirror carries the shape and not the behaviour, and the
+    -- behaviour is what the fixtures exist to exercise.
+    --
+    -- Copied rather than paraphrased so that a change to the migration shows up
+    -- as a diff against this block instead of as a rewrite of it. The raise
+    -- travels with it because the raise is part of the contract: an order whose
+    -- offer does not exist must not land with a NULL branch.
+    create or replace function public.set_order_business_location()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $location_fn$
+    begin
+      select f.business_location_id into new.business_location_id
+      from public.offers f where f.id = new.offer_id;
+      if new.business_location_id is null then
+        raise exception 'la oferta % no existe, no se puede derivar la sucursal', new.offer_id;
+      end if;
+      return new;
+    end;
+    $location_fn$;
+
+    create trigger trg_set_order_business_location
+      before insert on public.orders
+      for each row
+      execute function public.set_order_business_location();
+
     -- Rating triggers, verbatim from the live database. Added because
     -- DELETE /api/v1/auth/account deletes the caller's reviews and relies on
     -- these to rewrite the averages: without them the harness proves the rows
