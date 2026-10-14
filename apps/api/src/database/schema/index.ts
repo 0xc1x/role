@@ -2,6 +2,7 @@ export * from './enums';
 export * from './profiles';
 export * from './businesses';
 export * from './business-companions';
+export * from './business-members';
 export * from './business-locations';
 export * from './business-hours';
 export * from './offers';
@@ -70,6 +71,11 @@ import {
   businessModeration,
   businessOwnership,
 } from './business-companions';
+import {
+  businessMemberLocations,
+  businessMembers,
+  businessPlansState,
+} from './business-members';
 import { defineRelations } from 'drizzle-orm';
 
 /** Schema map passed to drizzle() for typed queries. */
@@ -113,6 +119,9 @@ export const schema = {
   businessOwnership,
   businessFinance,
   businessModeration,
+  businessMembers,
+  businessMemberLocations,
+  businessPlansState,
 };
 
 export type DatabaseSchema = typeof schema;
@@ -123,6 +132,12 @@ export type DatabaseSchema = typeof schema;
  * the query (a business is read together with its three companions). The
  * repositories still join explicitly, so this is the RQB view of the same
  * shape.
+ *
+ * The three staff tables are declared the same way and for the same reason: each
+ * row points at its parent, and that link is the one thing a query cannot infer.
+ * `businesses.members` is deliberately NOT declared — a business is not read
+ * together with its staff anywhere yet, and the member list arrives already
+ * scoped by role and branch, which is not the aggregate this file describes.
  */
 export const relations = defineRelations(schema, (helpers) => ({
   businesses: {
@@ -145,6 +160,30 @@ export const relations = defineRelations(schema, (helpers) => ({
   businessModeration: {
     business: helpers.one.businesses({
       from: helpers.businessModeration.business_id,
+      to: helpers.businesses.id,
+    }),
+  },
+  businessMembers: {
+    business: helpers.one.businesses({
+      from: helpers.businessMembers.business_id,
+      to: helpers.businesses.id,
+    }),
+  },
+  // The scope table has TWO parents and no `business_id` of its own, so it
+  // declares both: a member of two branches is one member with two rows here.
+  businessMemberLocations: {
+    member: helpers.one.businessMembers({
+      from: helpers.businessMemberLocations.member_id,
+      to: helpers.businessMembers.id,
+    }),
+    location: helpers.one.businessLocations({
+      from: helpers.businessMemberLocations.location_id,
+      to: helpers.businessLocations.id,
+    }),
+  },
+  businessPlansState: {
+    business: helpers.one.businesses({
+      from: helpers.businessPlansState.business_id,
       to: helpers.businesses.id,
     }),
   },

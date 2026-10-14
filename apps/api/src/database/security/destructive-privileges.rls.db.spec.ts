@@ -62,8 +62,8 @@ import {
  *
  * ─── THE HARNESS AND PRODUCTION AGREE ON EVERY RLS TABLE ────────────────────
  *
- * As of `20261004022647`, production has 41 tables in `public` and RLS
- * enabled on all 41. This replay
+ * As of `20261014002328_business_members_and_plans`, production has 44 tables in
+ * `public` and RLS enabled on all 44. This replay
  * used to have 39 tables and RLS enabled on 34 — `business_finance`,
  * `business_moderation`, `app_store`, `offer_categories` and `slides` all landed
  * without it, because no statement in `supabase/migrations/` ever enabled RLS on
@@ -108,7 +108,9 @@ function plainRows<T>(result: unknown): T[] {
  * The number itself is never written here: the two `expect(tables).toBe(...)`
  * assertions below pin it, and that pin moved from 39 to 41 when
  * `20261004022647_announcements.sql` added `public.announcements` and
- * `public.announcement_acknowledgements`. A constant in this comment would have
+ * `public.announcement_acknowledgements`, and from 41 to 44 when
+ * `20261014002328_business_members_and_plans.sql` added the three staff tables.
+ * A constant in this comment would have
  * been a lie the first time a table was added, which is the reason the count is
  * pinned in a test and described here by reference. The count is still read from
  * the catalog rather than returned as a literal, because the assertions above
@@ -175,7 +177,7 @@ describe('no client role holds a privilege RLS cannot govern', () => {
     ).toBeGreaterThan(30);
     // And the exact number, so a schema that lost RLS wholesale fails HERE with
     // a count in the message rather than three tests later as an empty set.
-    expect(tables).toBe(41);
+    expect(tables).toBe(44);
 
     const residue = await ctx.sql.unsafe<
       { grantee: string; table_name: string; privilege_type: string }[]
@@ -267,7 +269,8 @@ describe('no client role holds a privilege RLS cannot govern', () => {
    * the three privileges on must have RLS — so nothing escapes the filter — AND
    * the RLS table count must be exactly the number production holds, which the
    * `expect(tables).toBe(...)` below pins rather than this comment: the count
-   * went from 39 to 41 with `20261004022647_announcements.sql`, and a constant
+   * went from 39 to 41 with `20261004022647_announcements.sql` and from 41 to 44
+   * with `20261014002328_business_members_and_plans.sql`, and a constant
    * written here would be wrong again by the next table. The count is what makes
    * the first half mean something: "no residue" is trivially true in a database
    * where almost nothing has RLS, and that pin is what rules that out.
@@ -315,13 +318,13 @@ describe('no client role holds a privilege RLS cannot govern', () => {
     // a new table arrived without the ledger row that would enable it — both are
     // the exact class of gap `20260928184943` exists to close, arriving again.
     // The count is written as a relation and not as literals because it moves
-    // with the schema: 41 today, 39 before `20261004022647`.
+    // with the schema: 44 today, 41 before `20261014002328`.
     expect(
       await rlsTableCount(),
       "the harness no longer reproduces production's RLS coverage. This file " +
         'can only claim the migration covers every RLS table in public if every ' +
         'table in public has RLS.',
-    ).toBe(41);
+    ).toBe(44);
   });
 });
 
