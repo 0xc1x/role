@@ -1893,10 +1893,24 @@ describe('orders lleva la sucursal de la oferta que reservó', () => {
    * the column.
    *
    * That is the whole claim. `public.orders.business_location_id` is derived by
-   * `trg_set_order_business_location`, a BEFORE INSERT trigger, so a writer
-   * cannot forge it: the trigger overwrites `new.business_location_id` from the
-   * offer on every insert, whatever the statement put there, and there is no
-   * path into `public.orders` that does not cross it.
+   * `trg_set_order_business_location`, a BEFORE INSERT trigger, which
+   * overwrites `new.business_location_id` from the offer on every insert,
+   * whatever the statement put there. For a CLIENT role that is a closed door
+   * rather than a courtesy: `authenticated` holds SELECT and nothing else on
+   * `orders` (`20260925155153_harden_client_write_boundaries.sql`, revoked
+   * outright at `20260925163235`), so there is no client INSERT to try and no
+   * client UPDATE to rewrite the column with afterwards. `anon` holds nothing at
+   * all.
+   *
+   * ─── SCOPED TO CLIENT ROLES ON PURPOSE ────────────────────────────────────
+   *
+   * "Cannot be forged" is a statement about who the writer is, not about the
+   * table. `service_role` holds all seven privileges here — this file's own
+   * header says so at :49 — and could set the column to any uuid in the schema
+   * with a single UPDATE, because the trigger is BEFORE INSERT and has no UPDATE
+   * arm. The one test below that writes as `service_role` is asserting what the
+   * trigger DERIVES, not what the table FORBIDS; nothing here claims the table
+   * forbids it.
    *
    * ─── WHAT IT DOES NOT BUY, because the opposite reads well ────────────────
    *
@@ -1912,8 +1926,9 @@ describe('orders lleva la sucursal de la oferta que reservó', () => {
    * Closing that gap is an `AFTER UPDATE OF business_location_id ON offers`
    * trigger, which is another migration and another decision, and is not this
    * one. What the column guarantees is agreement AT INSERT TIME. Nothing in
-   * this file claims agreement forever, and the sentence that used to claim it
-   * was wrong rather than optimistic.
+   * this file claims agreement forever, and the two sentences that used to
+   * claim it — this one and the one about who may forge the column — were wrong
+   * rather than optimistic.
    *
    * ─── WHY IT RUNS LAST IN THIS FILE ────────────────────────────────────────
    *
