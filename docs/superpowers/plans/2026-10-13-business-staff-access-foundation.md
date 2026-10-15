@@ -332,11 +332,11 @@ public.business_member_session_state(p_business_id uuid default null) -> jsonb
 ```
 
 `business_member_session_state` devuelve `{ role, location_ids, expires_at, reason, business_ids }`
-y **no recibe argumentos**: lee `auth.uid()`, que es lo que lo hace utilizable desde el cliente
-para pintar la UI. El argumento es opcional a propósito —sin él la función solo es honesta
-cuando la persona tiene un negocio, y un dueño real tiene varios—, y el brief de esta tarea
-lo llama sin argumento, que es el caso de un empleado con un solo negocio. La semántica de
-cada llamada está en el spec §5.2.
+y **se puede llamar sin argumentos**: lee `auth.uid()`, que es lo que lo hace utilizable desde
+el cliente para pintar la UI. El argumento es opcional a propósito —sin él la función solo es
+honesta cuando la persona tiene un negocio, y un dueño real tiene varios—, y el brief de esta
+tarea lo llama sin argumento, que es el caso de un empleado con un solo negocio. La semántica
+de cada llamada está en el spec §5.2.
 
 - [ ] **Step 1: Escribir la matriz de pruebas que falla**
 

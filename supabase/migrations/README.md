@@ -381,6 +381,69 @@ function`, `drop trigger if exists`, `grant`) and recorded as
 that leaves no evidence, and then trusting a commit as proof of application.
 When a fix seems not to work, read the ledger before re-writing the fix.
 
+## Applied: `20261015001857_staff_permission_helpers`
+
+Applied via `apply_migration` on 2026-10-15. The file's `md5sum` is
+`61d0c80d952178d21f013dba03d6f252` and that is also the ledger's
+`md5(statements[1])`: byte for byte. It creates the four permission functions of
+spec §5.1 — `business_member_role`, `can_manage_location`, `business_has_feature`
+and `business_member_session_state` — all `stable security definer` with
+`search_path` pinned to `''`, all `revoke all … from public, anon`, bodies fully
+qualified because the search path is empty.
+
+**Two of the three migrations that finish this work are supersessions of this one,
+and that is on purpose.** `20261015003929_business_member_permission_hardening`
+and `20261015012253_business_member_session_disabled_reason` re-create all four
+functions with `create or replace`. A superseded body is not an accident to be
+tidied: each of those two migrations fixed a finding that a review measured
+against the live database, and the sealed file that shows what was applied *at
+that moment* is the only proof of which body was in effect when. Three files, one
+final state.
+
+**The ledger has one row for this work that this directory does not have.** See
+the section immediately below.
+
+## The ledger has a `staff_permission_helpers` row with no file: `20261014011033`
+
+The ledger contains three rows from the development of the helpers above:
+
+| version | name | file here? |
+| --- | --- | --- |
+| `20261014011030` | `staff_permission_helpers_probe` | yes — its content is exactly `select 1` |
+| `20261014011033` | `staff_permission_helpers` | **no** |
+| `20261015001857` | `staff_permission_helpers` | yes |
+
+`20261014011030` was a probe applied while checking the `apply_migration` path,
+before the real migration was written. Its file is here and its md5
+(`95adb6e77a0884d9e50232cb8c5c969d`) matches the ledger, so the directory mirrors
+that row completely.
+
+`20261014011033` was an earlier, never-committed version of the helpers applied
+during the same session. **It has no file here and none should be written.** Two
+reasons, and the second is the one that matters:
+
+1. Its content is unreviewed and superseded. It defined `business_has_feature(uuid,
+   text)` where the shipped one takes the `business_feature` enum, and a
+   `can_manage_location` with different semantics. Reconstructing it would put
+   SQL that never passed review into this directory's history, where a later
+   reader would reasonably assume it had.
+2. A reconstructed file would be *approximately* right and would therefore be
+   worse than an absent one: it would look like the mirror of the ledger and fail
+   the md5 check this README tells you to run, and an unverifiable file in this
+   directory is the failure mode the whole document exists to prevent.
+
+**Nothing survives from it in the database.** Both `20261014011033` and
+`20261015001857` define the same four function names, and `create or replace`
+means the later one wins outright. Verified: `pg_proc` holds exactly those four
+functions with no leftover overload of the `text` signature, and every one carries
+`proconfig = {"search_path=""}` and an ACL of `postgres`, `service_role`,
+`authenticated` — never `anon`, never PUBLIC. So a from-scratch replay of this
+directory reaches the same schema as production, and the gap is bookkeeping rather
+than state.
+
+The asymmetry is deliberate: one orphan row is mirrored because it can be mirrored
+exactly, the other is documented because it cannot.
+
 ## Applied: `20260926212729_email_sends_redact_legacy_error_message`
 
 A destructive backfill. It rewrote all 15 historical `email_sends.error_message`
