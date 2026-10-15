@@ -2520,22 +2520,59 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     });
     expect(await statusOf(ORDER.M)).toBe('completed');
 
-    // UNA sola fila de `order_events`, y esto es una afirmación de verdad y no un
-    // detalle: la versión que este RPC tenía antes escribía la fila a mano
-    // DESPUÉS del `update`, y el `update` ya dispara el trigger
-    // `on_order_status_change`, que inserta lo suyo. O sea que la versión vieja
-    // dejaba DOS eventos de "completado" por cada recogida validada, uno con
-    // `metadata = {"method":"pickup_code"}` y otro con `{"source":"database"}`.
-    // La que la recreate ya no inserta a mano, y el trigger queda siendo el único
-    // que escribe. Fijar el conteo es lo que impide que un día vuelvan a ser dos.
+    // ─── EL REGISTRO DE ESTA RECOGIDA, Y LAS DOS COSAS QUE TIENE QUE DECIR ────
+    //
+    // Lo que sigue afirma DOS propiedades distintas sobre el mismo evento, y las
+    // dos importan: que no haya vuelto el duplicado, y que la frase que el
+    // duplicado cargaba no se haya perdido con él.
+    //
+    // `20261015015012` quitó de este RPC un `insert` manual en `order_events`. El
+    // `update` de arriba dispara `on_order_status_change`, que escribe el evento
+    // por su cuenta, así que la versión vieja dejaba DOS filas de "completado" por
+    // cada recogida validada. Quitar el `insert` arregló el número, pero ese
+    // `insert` además cargaba `metadata = {"method": "pickup_code"}`, que el
+    // trigger no puede saber: no fue él quien validó el código. Ese `method` no
+    // está en ninguna otra parte de la base, y sin él "cuántos pedidos se
+    // completaron por código y cuántos los completó el negocio" deja de ser
+    // respondible desde la tabla de auditoría, sin dejar rastro de que lo fuera.
+    //
+    // `20261015022233` lo restituye anotando la fila que el trigger ya escribió.
+    // Queda un solo evento, y dice las dos cosas.
+
+    // ── (1) LA SUPUESTA QUE SOSTIENE EL CONTEO, HECHA EXPLÍCITA ──────────────
+    //
+    // "un solo evento" solo quiere decir algo si el trigger dispara UNA vez por
+    // fila y el UPDATE de arriba toca UNA fila. La primera es un hecho del
+    // catálogo, no un paso de este archivo, así que se afirma: si alguien pasa el
+    // trigger a nivel de sentencia, o lo duplica, esta prueba lo dice en vez de
+    // seguir dando verde por casualidad.
+    const triggerShape = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ row_level: boolean; total: number }[]>(`
+        select (t.tgtype & 1) = 1 as row_level, count(*)::int as total
+        from pg_trigger t
+        join pg_class c on c.oid = t.tgrelid
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relname = 'orders'
+          and not t.tgisinternal and t.tgname = 'on_order_status_change'
+        group by 1`),
+    );
+    expect(
+      plainRows(triggerShape),
+      '`on_order_status_change` dejó de ser UN trigger FOR EACH ROW sobre orders. ' +
+        'Si pasa a ser de sentencia, o si hay más de uno con ese nombre, cada ' +
+        'cambio de estado puede escribir más de un evento y el conteo de abajo ' +
+        'deja de significar "uno".',
+    ).toEqual([{ row_level: true, total: 1 }]);
+
+    // ── (2) EL CONTEO: NI UNA FILA DE MÁS ────────────────────────────────────
     const events = await ctx.sql.unsafe<{ status: string; n: number }[]>(
       `select status::text as status, count(*)::int as n
          from public.order_events where order_id = '${ORDER.M}'
         group by status order by status`,
     );
     // La fila `ready_for_pickup` es la del INSERT del fixture, que dispara el
-    // mismo trigger; no forma parte de lo que se está midiendo. Lo que se mide es
-    // que el paso a `completed` produces UN evento y no dos.
+    // mismo trigger; no forma parte de lo que se mide. Lo que se mide es que el
+    // paso a `completed` produzca UN evento y no dos.
     expect(
       plainRows(events),
       'la recogida no dejó exactamente un evento de "completado". El INSERT ' +
@@ -2547,6 +2584,44 @@ describe('las policies y los RPCs resuelven por membresía', () => {
       { status: 'ready_for_pickup', n: 1 },
     ]);
 
+    // ── (3) LA FRASE: LA FILA SIGUE DICIENDO QUE FUE POR CÓDIGO ──────────────
+    //
+    // Se afirma el `metadata` ENTERO y no `metadata->>'method'` suelto, porque la
+    // regla es que se fusiona: `source` y `method` son dos hechos distintos del
+    // mismo evento, y una implementación que reemplazara el objeto entero
+    // perdería `source` —el mismo error que se le atribuye al duplicado, del
+    // otro lado—. Las dos claves tienen que estar.
+    const marked = await ctx.sql.unsafe<
+      { metadata: Record<string, unknown> }[]
+    >(`select metadata from public.order_events
+        where order_id = '${ORDER.M}' and status = 'completed'`);
+    expect(
+      plainRows(marked).map((e) => e.metadata),
+      'el evento de la recogida perdió el `method: "pickup_code"`, o dejó de ' +
+        'decir `source: "database"`. El `method` responde "esta recogida se ' +
+        'validó por código y no por confirmación del negocio", y no está en ' +
+        'ninguna otra parte de la base: si se pierde aquí, se pierde para siempre.',
+    ).toEqual([{ source: 'database', method: 'pickup_code' }]);
+
+    // ── (4) Y QUE LA ANOTACIÓN NO SE DERAME A LOS OTROS EVENTOS ──────────────
+    //
+    // La corrección de `20261015022233` es un `update` sobre `order_events`, y un
+    // `update` sin alcance es el peor de los dos lados posibles. Este evento lo
+    // escribió el INSERT del fixture y no lo validó ningún código, así que no
+    // lleva `method`: es la fila de más sobre la que el `where` tiene que
+    // aparecer `status = 'completed'` para no agarrarla.
+    const others = await ctx.sql.unsafe<{ status: string; method: unknown }[]>(
+      `select status::text as status, metadata->>'method' as method
+         from public.order_events
+        where order_id = '${ORDER.M}' and status <> 'completed'
+        order by status`,
+    );
+    expect(
+      plainRows(others),
+      'la frase "pickup_code" se coló en un evento que no viene de una recogida ' +
+        'validada por código. El `update` que la escribe tiene que quedar acotado ' +
+        'al evento de este paso a completed.',
+    ).toEqual([{ status: 'ready_for_pickup', method: null }]);
     // El código equivocado se dice antes que el estado.
     const wrongCode = await callRpc(
       POL_MANAGER,

@@ -432,6 +432,46 @@ replayed one. `20260906125927_harden_rpc_grants` removed it and the ledger says 
 for those functions: `create or replace` preserves the ACL on its own, and a
 `drop` + `create` would have handed them back to `PUBLIC`.
 
+### That migration did one more thing than its own header says
+
+**Its header claims the only change was who may call the function. That is not the
+whole change, and a reader of the sealed file years from now would otherwise be
+misled.** Recreating `validate_pickup_code` also deleted a manual
+`insert into public.order_events`, and that insert was carrying information.
+
+The deleted line ran *after* the function's `update` on the order. That `update`
+fires `on_order_status_change`, which is `AFTER INSERT OR UPDATE ... FOR EACH ROW`
+and inserts an event of its own, and `order_events` has no unique constraint beyond
+its primary key. So every validated pickup was writing **two** `completed` events.
+This was a genuine double-write bug, not intended behaviour — nobody designed the
+duplication, and it is the reason the manual insert had to go.
+
+What made it more than a duplicate is that the two rows were not identical:
+
+| | manual insert (removed) | `on_order_status_change` (kept) |
+| --- | --- | --- |
+| `metadata` | `{"method": "pickup_code"}` | `{"source": "database"}` |
+| `previous_status` | `v_order.status` | authoritative, from the row |
+| `changed_by` | `auth.uid()` | `auth.uid()` with a GUC fallback |
+
+Only `metadata` differed, and `method` existed nowhere else in the database. Removing
+the insert fixed the row count and, silently, removed the audit trail's only record
+of *how* an order was completed. Nothing reads `metadata->>'method'` today — the
+mobile app uses the `pickup_code` column on `orders` — which is exactly why it could
+go missing without anything failing: "nobody reads it" is how audit data disappears.
+A question like "how many orders were completed by code versus by the business?"
+becomes unanswerable from the audit table, with no sign it ever was.
+
+**`20261015022233_validate_pickup_code_event_marker` restores the marker.** It
+recreates the same function with a second, tightly scoped `update` that merges
+`{"method": "pickup_code"}` into the metadata of the event the trigger already
+wrote — merged, not replaced, because `source` and `method` are two facts about the
+same event and overwriting one with the other loses the first. The scope
+(`order_id`, `status = 'completed'`, `metadata->>'source' = 'database'`, and not
+already carrying a `method`) and the reasoning for why it cannot reach anyone else's
+row are in the migration file. There is still exactly one event per pickup, and it
+now says both things. `business-members.rls.db.spec.ts` pins both halves.
+
 ## The ledger has a `staff_permission_helpers` row with no file: `20261014011033`
 
 The ledger contains three rows from the development of the helpers above:
