@@ -245,8 +245,21 @@ el mismo que aplica el motor.
 Se apoya en dos helpers más pequeños, todos `STABLE SECURITY DEFINER` con
 `search_path` pineado (patrón ya establecido por `public.business_is_approved`):
 
-- `public.business_member_role(p_business_id uuid) → text` — rol activo del `auth.uid()`.
-- `public.business_has_feature(p_business_id uuid, p_feature text) → boolean` — feature del plan.
+- `public.business_member_role(p_business_id uuid) → public.business_member_role` — rol activo del `auth.uid()`.
+- `public.business_has_feature(p_business_id uuid, p_feature public.business_feature) → boolean` — feature del plan.
+
+**`can_manage_location` además verifica que la sucursal sea del negocio.** La fila de
+alcance en `business_member_locations` dice qué sucursales cubre un miembro, pero no dice
+de qué negocio son: `location_id` no lleva ninguna restricción que lo ate al
+`business_id` del miembro, así que la fila malformada es representable. Sin este chequeo,
+un `staff` de A con una fila de alcance apuntando a una sucursal de B recibiría `true`
+para `(A, sucursal_de_B)` — y la API escribe con `service_role`, o sea que el permiso es
+la última frontera y no un detalle. La fila de alcance es un alcance dentro de un negocio,
+no un alcance a secas.
+
+Los tres helpers son ejecutables por `authenticated`, no solo los dos que consume el
+cliente: `business_has_feature` lo consulta la API antes de cada alta y
+`business_member_role` lo invocan las policies de la §6.2.
 
 ### 5.2 Validez de sesión, en el mismo lugar
 
@@ -258,9 +271,37 @@ regla.
 - `last_authenticated_at` lo sella un endpoint que el panel llama una vez, después del login
   (`POST /staff/session`). Un solo round-trip extra.
 - Si el TTL venció, RLS deniega y el panel necesita distinguir "venció" de "no autorizado":
-  se expone `public.business_member_session_state() → jsonb` con
-  `{ role, location_ids, expires_at, reason }` para que la app pueda explicar la salida en
-  vez de mostrar un error genérico.
+  se expone `public.business_member_session_state(p_business_id uuid default null) → jsonb` con
+  `{ role, location_ids, expires_at, reason, business_ids }` para que la app pueda explicar
+  la salida en vez de mostrar un error genérico.
+
+**El TTL es de todos los roles, sin excepción para dueño ni gerente.** El §9.2 les ofrece
+a esos dos el modo "equipo propio" con `session_ttl_hours = 0`, o sea que se espera que
+tengan TTL vencenibles; si el TTL solo corriera para `staff`, un dueño con la sesión de
+hace tres días tendría el panel diciéndole "venció tu sesión" mientras RLS le sigue
+concediendo todo. Las dos funciones tienen que contar la misma historia: la que autoriza y
+la que explica.
+
+**`business_member_session_state` sin argumentos solo es honesta cuando la persona tiene
+un negocio.** El dueño real tiene varios —en producción, seis—, y elegir la fila más
+antigua devuelve el negocio equivocado sin avisar. Por eso el argumento es opcional y su
+uso es explícito:
+
+| llamada | qué devuelve |
+| --- | --- |
+| `session_state(negocio)` | el estado de esa membresía |
+| `session_state()` con exactamente una membresía activa | el estado de esa |
+| `session_state()` con varias membresías activas | `reason: 'multiple_businesses'`, `role: null`, y `business_ids` con la lista para que la app pregunte |
+| `session_state()` sin membresías | `reason: 'no_membership'` |
+
+La selección mira `status = 'active'` y `deleted_at is null`. Sin `status` en el predicado,
+una membresía deshabilitada más antigua tapa la activa y el panel muestra el negocio
+equivocado — el mismo bug por otro camino.
+
+Y `expires_at` solo se puede calcular si hubo sello: una membresía cuyo
+`last_authenticated_at` es nulo **nunca** tuvo sesión que expirar, y eso no es lo mismo.
+`reason: 'session_never_stamped'` le dice al panel que pida iniciar sesión otra vez, y
+`session_expired` llega con la fecha en que de verdad venció.
 
 **Distinción honesta:** el TTL es un control de responsabilidad y UX, no una frontera de
 seguridad. La frontera es la revocación. Un empleado con sesión abierta y TTL vencido pierde
