@@ -652,6 +652,8 @@ describe('los helpers de permiso', () => {
   const MEMBER_STALE = 'aaaaaaaa-0000-4000-8000-00000000000a';
   const BIZ_A = 'aaaaaaaa-0000-4000-8000-000000000001';
   const BIZ_B = 'aaaaaaaa-0000-4000-8000-000000000002';
+  const BIZ_C = 'aaaaaaaa-0000-4000-8000-000000000003';
+  const BIZ_D = 'aaaaaaaa-0000-4000-8000-000000000004';
   const LOC_A = 'bbbbbbbb-0000-4000-8000-000000000001';
   const LOC_B = 'bbbbbbbb-0000-4000-8000-000000000002';
   const LOC_BZ = 'cccccccc-0000-4000-8000-000000000001';
@@ -662,6 +664,22 @@ describe('los helpers de permiso', () => {
   const M_DISABLED = 'd0000000-0000-4000-8000-000000000004';
   const M_DELETED = 'd0000000-0000-4000-8000-000000000005';
   const M_STALE = 'd0000000-0000-4000-8000-000000000006';
+  const M_STALE_OWNER = 'd0000000-0000-4000-8000-000000000007';
+  const M_ETERNAL = 'd0000000-0000-4000-8000-000000000008';
+  const M_UNSTAMPED = 'd0000000-0000-4000-8000-000000000009';
+  const M_CROSS = 'd0000000-0000-4000-8000-00000000000a';
+  const M_MULTI_A = 'd0000000-0000-4000-8000-00000000000b';
+  const M_MULTI_B = 'd0000000-0000-4000-8000-00000000000c';
+  const M_SHADOW_A = 'd0000000-0000-4000-8000-00000000000d';
+  const M_SHADOW_B = 'd0000000-0000-4000-8000-00000000000e';
+
+  const MEMBER_STALE_OWNER = 'aaaaaaaa-0000-4000-8000-00000000000b';
+  const MEMBER_ETERNAL = 'aaaaaaaa-0000-4000-8000-00000000000c';
+  const MEMBER_UNSTAMPED = 'aaaaaaaa-0000-4000-8000-00000000000d';
+  const MEMBER_CROSS = 'aaaaaaaa-0000-4000-8000-00000000000e';
+  const MEMBER_MULTI = 'aaaaaaaa-0000-4000-8000-00000000000f';
+  const MEMBER_SHADOW = 'aaaaaaaa-0000-4000-8000-000000000010';
+  const MEMBER_NOBODY = 'aaaaaaaa-0000-4000-8000-000000000011';
 
   beforeAll(async () => {
     ctx = await createSupabaseTestDb();
@@ -674,6 +692,13 @@ describe('los helpers de permiso', () => {
         MEMBER_DISABLED,
         MEMBER_DELETED,
         MEMBER_STALE,
+        MEMBER_STALE_OWNER,
+        MEMBER_ETERNAL,
+        MEMBER_UNSTAMPED,
+        MEMBER_CROSS,
+        MEMBER_MULTI,
+        MEMBER_SHADOW,
+        MEMBER_NOBODY,
       ]) {
         await tx.unsafe(
           `insert into auth.users (id, email, raw_user_meta_data)
@@ -685,7 +710,20 @@ describe('los helpers de permiso', () => {
       await tx.unsafe(
         `insert into public.businesses (id, name, type, slug)
          values ('${BIZ_A}', 'Helper Biz A', 'restaurant', 'helper-biz-a'),
-                ('${BIZ_B}', 'Helper Biz B', 'restaurant', 'helper-biz-b')`,
+                ('${BIZ_B}', 'Helper Biz B', 'restaurant', 'helper-biz-b'),
+                ('${BIZ_C}', 'Helper Biz C', 'restaurant', 'helper-biz-c'),
+                ('${BIZ_D}', 'Helper Biz D', 'restaurant', 'helper-biz-d')`,
+      );
+
+      // El catálogo de planes se mide sobre cuatro negocios y no sobre uno
+      // mutado entre aserciones: BIZ_A es `pro`, BIZ_B es `pro_plus`, BIZ_C NO
+      // tiene fila (ausente = `free`) y BIZ_D tiene una fila `pro` con
+      // `deleted_at`, que también tiene que leerse como `free`.
+      await tx.unsafe(
+        `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+         values ('${BIZ_A}', 'pro', null),
+                ('${BIZ_B}', 'pro_plus', null),
+                ('${BIZ_D}', 'pro', now())`,
       );
 
       await tx.unsafe(
@@ -702,14 +740,22 @@ describe('los helpers de permiso', () => {
 
       await tx.unsafe(
         `insert into public.business_members
-           (id, business_id, user_id, role, label, alias, status, session_ttl_hours, last_authenticated_at, deleted_at)
+           (id, business_id, user_id, role, label, alias, status, session_ttl_hours, last_authenticated_at, created_at, deleted_at)
          values
-           ('${M_OWNER}', '${BIZ_A}', '${OWNER_A}', 'owner', 'Owner', 'helper-owner@test', 'active', 24, now(), null),
-           ('${M_STAFF}', '${BIZ_A}', '${MEMBER_STAFF_A}', 'staff', 'Staff', 'helper-staff@test', 'active', 24, now(), null),
-           ('${M_MANAGER}', '${BIZ_A}', '${MEMBER_MANAGER}', 'manager', 'Manager', 'helper-manager@test', 'active', 24, now(), null),
-           ('${M_DISABLED}', '${BIZ_A}', '${MEMBER_DISABLED}', 'staff', 'Disabled', 'helper-disabled@test', 'disabled', 24, now(), null),
-           ('${M_DELETED}', '${BIZ_A}', '${MEMBER_DELETED}', 'staff', 'Deleted', 'helper-deleted@test', 'active', 24, now(), now()),
-           ('${M_STALE}', '${BIZ_A}', '${MEMBER_STALE}', 'staff', 'Stale', 'helper-stale@test', 'active', 24, now() - interval '26 hours', null)`,
+           ('${M_OWNER}', '${BIZ_A}', '${OWNER_A}', 'owner', 'Owner', 'helper-owner@test', 'active', 24, now(), now(), null),
+           ('${M_STAFF}', '${BIZ_A}', '${MEMBER_STAFF_A}', 'staff', 'Staff', 'helper-staff@test', 'active', 24, now(), now(), null),
+           ('${M_MANAGER}', '${BIZ_A}', '${MEMBER_MANAGER}', 'manager', 'Manager', 'helper-manager@test', 'active', 24, now(), now(), null),
+           ('${M_DISABLED}', '${BIZ_A}', '${MEMBER_DISABLED}', 'staff', 'Disabled', 'helper-disabled@test', 'disabled', 24, now(), now(), null),
+           ('${M_DELETED}', '${BIZ_A}', '${MEMBER_DELETED}', 'staff', 'Deleted', 'helper-deleted@test', 'active', 24, now(), now(), now()),
+           ('${M_STALE}', '${BIZ_A}', '${MEMBER_STALE}', 'staff', 'Stale', 'helper-stale@test', 'active', 24, now() - interval '26 hours', now(), null),
+           ('${M_STALE_OWNER}', '${BIZ_A}', '${MEMBER_STALE_OWNER}', 'owner', 'Owner vencido', 'helper-owner-vencido@test', 'active', 24, now() - interval '3 days', now(), null),
+           ('${M_ETERNAL}', '${BIZ_A}', '${MEMBER_ETERNAL}', 'staff', 'Equipo propio', 'helper-eterno@test', 'active', 0, now() - interval '10 years', now(), null),
+           ('${M_UNSTAMPED}', '${BIZ_A}', '${MEMBER_UNSTAMPED}', 'staff', 'Sin sello', 'helper-sin-sello@test', 'active', 24, null, now(), null),
+           ('${M_CROSS}', '${BIZ_A}', '${MEMBER_CROSS}', 'staff', 'Alcance cruzado', 'helper-cruzado@test', 'active', 24, now(), now(), null),
+           ('${M_MULTI_A}', '${BIZ_A}', '${MEMBER_MULTI}', 'staff', 'Dos negocios A', 'helper-dos-a@test', 'active', 24, now(), now(), null),
+           ('${M_MULTI_B}', '${BIZ_B}', '${MEMBER_MULTI}', 'staff', 'Dos negocios B', 'helper-dos-b@test', 'active', 24, now(), now(), null),
+           ('${M_SHADOW_A}', '${BIZ_A}', '${MEMBER_SHADOW}', 'staff', 'Sombra activa', 'helper-sombra-a@test', 'active', 24, now(), now(), null),
+           ('${M_SHADOW_B}', '${BIZ_B}', '${MEMBER_SHADOW}', 'staff', 'Sombra vieja', 'helper-sombra-b@test', 'disabled', 24, now(), now() - interval '2 days', null)`,
       );
 
       await tx.unsafe(
@@ -720,7 +766,14 @@ describe('los helpers de permiso', () => {
            ('${M_MANAGER}', '${LOC_B}', null),
            ('${M_DISABLED}', '${LOC_A}', null),
            ('${M_DELETED}', '${LOC_A}', null),
-           ('${M_STALE}', '${LOC_A}', null)`,
+           ('${M_STALE}', '${LOC_A}', null),
+           ('${M_ETERNAL}', '${LOC_A}', null),
+           ('${M_UNSTAMPED}', '${LOC_A}', null),
+           ('${M_CROSS}', '${LOC_BZ}', null),
+           ('${M_MULTI_A}', '${LOC_A}', null),
+           ('${M_MULTI_B}', '${LOC_BZ}', null),
+           ('${M_SHADOW_A}', '${LOC_A}', null),
+           ('${M_SHADOW_B}', '${LOC_BZ}', null)`,
       );
     });
   });
@@ -740,6 +793,68 @@ describe('los helpers de permiso', () => {
       ),
     );
     return r[0].ok;
+  }
+
+  /**
+   * The whole session-state object, as the client sees it.
+   *
+   * `businessId` null is the zero-arg call of the brief: it is only honest when
+   * the person has exactly one active membership, and §5.2 spells out what the
+   * other two cases return.
+   */
+  async function sessionState(
+    userId: string,
+    businessId: string | null = null,
+  ) {
+    const call = businessId
+      ? `public.business_member_session_state('${businessId}')`
+      : `public.business_member_session_state()`;
+    const r = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ state: Record<string, unknown> }[]>(
+        `select ${call} as state`,
+      ),
+    );
+    return r[0].state;
+  }
+
+  /**
+   * The caller's own role, read as `authenticated` so the grant is exercised.
+   *
+   * The `::uuid` on the argument is load bearing and not decoration: the
+   * function is called `business_member_role`, which is ALSO the name of the
+   * enum, and `name('literal')` is the generic type-cast production of the
+   * grammar. With an untyped string literal Postgres does not look for a
+   * function at all — it tries `business_member_role('aaaa…'::business_member_role)`
+   * and answers `22P02 invalid input value for enum`. A uuid column or an
+   * explicit cast resolves to the function, which is why the policies of the
+   * §6.2 work and why a PostgREST `rpc/business_member_role` with a JSON string
+   * does not.
+   */
+  async function memberRole(userId: string, businessId: string) {
+    const r = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ role: string | null }[]>(
+        `select public.business_member_role('${businessId}'::uuid)::text as role`,
+      ),
+    );
+    return r[0].role;
+  }
+
+  /**
+   * Every feature of the enum, resolved for one business.
+   *
+   * The keys come from `enum_range`, NOT from a hand-written list, so adding a
+   * fourth `business_feature` shows up here as an extra key and the `toEqual`
+   * below fails until someone says what it costs in each plan. A hand-written
+   * list would quietly stop covering the new value.
+   */
+  async function featuresOf(userId: string, businessId: string) {
+    const r = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ feature: string; ok: boolean }[]>(`
+        select f.feature, public.business_has_feature('${businessId}', f.feature) as ok
+        from unnest(enum_range(null::public.business_feature)) as f(feature)
+        order by f.feature`),
+    );
+    return Object.fromEntries(plainRows(r).map((row) => [row.feature, row.ok]));
   }
 
   test('un staff solo administra las sucursales de su alcance', async () => {
@@ -763,12 +878,281 @@ describe('los helpers de permiso', () => {
   });
 
   test('la sesión vencida se distingue de la no autorizada', async () => {
-    const state = await as(ctx.sql, 'authenticated', MEMBER_STALE, (tx) =>
-      tx.unsafe<{ reason: string; role: string }[]>(`
-        select public.business_member_session_state() ->> 'reason' as reason,
-               public.business_member_session_state() ->> 'role'  as role`),
+    const state = await sessionState(MEMBER_STALE);
+    expect(state.reason).toBe('session_expired');
+    // El rol sigue siendo staff: lo que venció es la sesión, no el derecho.
+    expect(state.role).toBe('staff');
+  });
+
+  // ─── LA SUCURSAL TIENE QUE SER DEL NEGOCIO ─────────────────────────────────
+  //
+  // `business_member_locations.location_id` no lleva ninguna restricción que lo
+  // ate al `business_id` del miembro, así que la fila malformada es
+  // representable y el permiso tiene que comprobar el negocio de la sucursal por
+  // su cuenta. Y la comprobación es para TODOS los roles: `owner` y `manager`
+  // reciben el negocio entero, y el negocio entero no incluye las sucursales
+  // del vecino.
+
+  test('una fila de alcance que apunta a la sucursal de otro negocio no concede nada', async () => {
+    // Anti-vacuity primero: la fila malformada EXISTE. Sin esto, el `false` de
+    // abajo podría ser cierto porque el fixture no se sembró, que es el modo de
+    // falla más probable de un `insert` con una columna equivocada.
+    const scope = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ location_id: string; business_id: string }[]>(`
+          select l.location_id, bl.business_id
+          from public.business_member_locations l
+          join public.business_locations bl on bl.id = l.location_id
+          where l.member_id = '${M_CROSS}' and l.deleted_at is null`),
     );
-    expect(state[0].reason).toBe('session_expired');
-    expect(state[0].role).toBe('staff');
+    expect(
+      plainRows(scope),
+      'la fila de alcance cruzada no se sembró, así que el false de abajo no ' +
+        'demuestra que la función la rechace: demuestra que no hay nada que rechazar.',
+    ).toEqual([{ location_id: LOC_BZ, business_id: BIZ_B }]);
+
+    expect(await canManage(MEMBER_CROSS, BIZ_A, LOC_BZ)).toBe(false);
+    // Y los dos roles que reciben el negocio entero también la rechazan.
+    expect(await canManage(OWNER_A, BIZ_A, LOC_BZ)).toBe(false);
+    expect(await canManage(MEMBER_MANAGER, BIZ_A, LOC_BZ)).toBe(false);
+  });
+
+  test('una sucursal del propio negocio sigue valiendo para los tres roles', async () => {
+    expect(await canManage(MEMBER_STAFF_A, BIZ_A, LOC_A)).toBe(true);
+    expect(await canManage(MEMBER_MANAGER, BIZ_A, LOC_A)).toBe(true);
+    expect(await canManage(OWNER_A, BIZ_A, LOC_A)).toBe(true);
+  });
+
+  // ─── EL TTL ES DE TODOS LOS ROLES ──────────────────────────────────────────
+  //
+  // El §5.2 no abre excepción para dueño ni gerente, y el §9.2 les ofrece el
+  // modo equipo con `session_ttl_hours = 0`: se espera que su TTL venza. Un
+  // dueño con la sesión de hace tres días no puede ver el panel diciendo
+  // "venció tu sesión" mientras RLS le concede todo.
+
+  test('el TTL vence para todos los roles y no inventa una expiración sin sello', async () => {
+    expect(await canManage(MEMBER_STALE, BIZ_A, LOC_A)).toBe(false);
+    expect(await canManage(MEMBER_STALE_OWNER, BIZ_A, LOC_A)).toBe(false);
+
+    // `session_ttl_hours = 0` se salta la comprobación PARA TODOS, y el sello
+    // puede tener diez años.
+    expect(await canManage(MEMBER_ETERNAL, BIZ_A, LOC_A)).toBe(true);
+    const eternal = await sessionState(MEMBER_ETERNAL);
+    expect(eternal.reason).toBe('ok');
+    expect(eternal.expires_at).toBeNull();
+
+    // Una membresía sin sello NUNCA tuvo sesión que expirar. Decir `expired` con
+    // `expires_at: null` le dice al panel que busque una fecha que no existe.
+    expect(await canManage(MEMBER_UNSTAMPED, BIZ_A, LOC_A)).toBe(false);
+    const unstamped = await sessionState(MEMBER_UNSTAMPED);
+    expect(unstamped.reason).toBe('session_never_stamped');
+    expect(unstamped.expires_at).toBeNull();
+
+    // Y `session_expired` llega con la fecha en que de verdad venció.
+    const expired = await sessionState(MEMBER_STALE);
+    expect(expired.reason).toBe('session_expired');
+    expect(expired.expires_at).not.toBeNull();
+  });
+
+  // ─── LA QUE AUTORIZA Y LA QUE EXPLICA CUENTAN LA MISMA HISTORIA ─────────────
+  //
+  // No basta con medir las dos por separado: la mitad del defecto que se está
+  // corrigiendo es justamente que cada una por su cuenta parecía correcta. Esta
+  // matriz ata las dos en cada persona, y por eso falla si el TTL se acorta a
+  // `staff`, si se invierte el `> 0`, o si una de las dos se queda con la copia
+  // vieja de la regla.
+
+  test('la que autoriza y la que explica nunca se contradicen', async () => {
+    const personas: readonly { id: string; label: string }[] = [
+      { id: OWNER_A, label: 'owner con sesión al día' },
+      { id: MEMBER_STAFF_A, label: 'staff con sesión al día' },
+      { id: MEMBER_MANAGER, label: 'manager con sesión al día' },
+      { id: MEMBER_ETERNAL, label: 'staff sin TTL' },
+      { id: MEMBER_STALE, label: 'staff con sesión vencida' },
+      { id: MEMBER_STALE_OWNER, label: 'owner con sesión vencida' },
+      { id: MEMBER_UNSTAMPED, label: 'staff sin sello' },
+    ];
+    for (const persona of personas) {
+      const state = await sessionState(persona.id);
+      const granted = await canManage(persona.id, BIZ_A, LOC_A);
+      expect(
+        granted,
+        `${persona.label}: can_manage_location dijo ${granted} sobre LOC_A y ` +
+          `session_state dijo "${state.reason}". Una de las dos está contando ` +
+          'una historia que la otra no cuenta.',
+      ).toBe(state.reason === 'ok');
+    }
+  });
+
+  // ─── LA MEMBRESÍA QUE RESPONDE SE ELIGE ENTRE LAS ACTIVAS ───────────────────
+
+  test('sin argumento la membresía se elige entre las activas, y se avisa cuando hay varias', async () => {
+    const multi = await sessionState(MEMBER_MULTI);
+    expect(multi.reason).toBe('multiple_businesses');
+    expect(multi.role).toBeNull();
+    expect(multi.location_ids).toEqual([]);
+    expect(multi.business_ids).toEqual([BIZ_A, BIZ_B]);
+
+    // Con el negocio explícito sí responde, y la lista es la de ESE negocio.
+    const scoped = await sessionState(MEMBER_MULTI, BIZ_A);
+    expect(scoped.reason).toBe('ok');
+    expect(scoped.role).toBe('staff');
+    expect(scoped.location_ids).toEqual([LOC_A]);
+    expect(scoped.business_ids).toEqual([BIZ_A]);
+
+    // La fila deshabilitada es MÁS VIEJA y no puede tapar la activa. Es el mismo
+    // bug por otro camino: `order by created_at limit 1` sin `status` en el
+    // predicado devuelve el negocio equivocado.
+    const shadow = await sessionState(MEMBER_SHADOW);
+    expect(shadow.role).toBe('staff');
+    expect(shadow.reason).toBe('ok');
+    expect(shadow.business_ids).toEqual([BIZ_A]);
+
+    const nobody = await sessionState(MEMBER_NOBODY);
+    expect(nobody.reason).toBe('no_membership');
+    expect(nobody.role).toBeNull();
+    expect(nobody.business_ids).toEqual([]);
+  });
+
+  // ─── EL ROL, Y QUIÉN LO PUEDE PREGUNTAR ────────────────────────────────────
+
+  test('el rol se devuelve para el que pregunta, y solo para el', async () => {
+    expect(await memberRole(MEMBER_STAFF_A, BIZ_A)).toBe('staff');
+    expect(await memberRole(MEMBER_MANAGER, BIZ_A)).toBe('manager');
+    expect(await memberRole(OWNER_A, BIZ_A)).toBe('owner');
+
+    // La sesión vencida NO le quita el rol a nadie: lo que venció es la sesión.
+    expect(await memberRole(MEMBER_STALE, BIZ_A)).toBe('staff');
+    expect(await memberRole(MEMBER_STALE_OWNER, BIZ_A)).toBe('owner');
+
+    // La revocación y el borrado sí: no hay rol porque no hay acceso.
+    expect(await memberRole(MEMBER_DISABLED, BIZ_A)).toBeNull();
+    expect(await memberRole(MEMBER_DELETED, BIZ_A)).toBeNull();
+
+    // Y de un negocio en el que no es miembro no hay rol.
+    expect(await memberRole(MEMBER_STAFF_A, BIZ_B)).toBeNull();
+    expect(await memberRole(MEMBER_NOBODY, BIZ_A)).toBeNull();
+  });
+
+  test('las policies de la §6.2 necesitan poder llamar a business_member_role', async () => {
+    const acl = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          fn: string;
+          args: string;
+          authenticated: boolean;
+          anon: boolean;
+        }[]
+      >(`
+          select p.proname as fn,
+                 pg_get_function_identity_arguments(p.oid) as args,
+                 has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
+                 has_function_privilege('anon', p.oid, 'execute') as anon
+          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in ('business_member_role', 'can_manage_location',
+                              'business_has_feature', 'business_member_session_state')
+          order by p.proname`),
+    );
+
+    // Las CUATRO, con su firma exacta. Una quinta fila sería una sobrecarga
+    // vieja sin revocar: `session_state()` sin argumento y
+    // `session_state(p_business_id uuid default null)` se vuelven ambiguas en
+    // la llamada de cero argumentos, que es exactamente la del brief.
+    expect(
+      plainRows(acl).map((r) => ({
+        fn: r.fn,
+        args: r.args,
+        authenticated: r.authenticated,
+        anon: r.anon,
+      })),
+      'las policies de la §6.2 se escriben como ' +
+        "`public.business_member_role(business_id) in ('owner','manager')` y las " +
+        'evalúa el motor como `authenticated`. Sin este grant, un SELECT de ' +
+        'lectura revienta con 42501 permission denied en tiempo de consulta.',
+    ).toEqual([
+      {
+        fn: 'business_has_feature',
+        args: 'p_business_id uuid, p_feature business_feature',
+        authenticated: true,
+        anon: false,
+      },
+      {
+        fn: 'business_member_role',
+        args: 'p_business_id uuid',
+        authenticated: true,
+        anon: false,
+      },
+      {
+        fn: 'business_member_session_state',
+        args: 'p_business_id uuid',
+        authenticated: true,
+        anon: false,
+      },
+      {
+        fn: 'can_manage_location',
+        args: 'p_business_id uuid, p_location_id uuid',
+        authenticated: true,
+        anon: false,
+      },
+    ]);
+  });
+
+  // ─── EL CATÁLOGO DE PLANES ─────────────────────────────────────────────────
+  //
+  // `business_has_feature` es ejecutable por el cliente, gobierna los dos
+  // triggers de límites de la §5.3 y lleva el catálogo a mano dentro de SQL. La
+  // celda equivocada no rompe nada visible: solo le cobra de más a un plan o le
+  // regala una feature de otro.
+
+  test('el catálogo plan → feature es el del §4.5, celda por celda', async () => {
+    const expected: readonly {
+      label: string;
+      business: string;
+      features: Record<string, boolean>;
+    }[] = [
+      {
+        label: 'free por ausencia de fila',
+        business: BIZ_C,
+        features: {
+          staff_access: true,
+          payments: false,
+          visibility_plus: false,
+        },
+      },
+      {
+        label: 'free por fila borrada',
+        business: BIZ_D,
+        features: {
+          staff_access: true,
+          payments: false,
+          visibility_plus: false,
+        },
+      },
+      {
+        label: 'pro',
+        business: BIZ_A,
+        features: {
+          staff_access: true,
+          payments: true,
+          visibility_plus: false,
+        },
+      },
+      {
+        label: 'pro_plus',
+        business: BIZ_B,
+        features: {
+          staff_access: true,
+          payments: true,
+          visibility_plus: true,
+        },
+      },
+    ];
+
+    for (const row of expected) {
+      expect(
+        await featuresOf(MEMBER_STAFF_A, row.business),
+        `el plan ${row.label} no resuelve igual que BUSINESS_PLAN_FEATURES.`,
+      ).toEqual(row.features);
+    }
   });
 });
