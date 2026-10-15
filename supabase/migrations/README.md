@@ -10,6 +10,18 @@ were reconstructed byte-for-byte from it. Every one of the 78 files below the
 the database. None of them has been reformatted, and no trailing newline was
 added to any file that did not already have one.
 
+> **Do not "fix" the missing final newline.** Several files in this directory —
+> including `20261015031154_shared_ttl_expiry_accounting.sql` and the four
+> migrations applied alongside it — end on their last character with **no trailing
+> newline**. That is deliberate and load-bearing, not an oversight: it is exactly
+> what makes `md5sum <file>` equal `md5(statements[1])` in the ledger. A formatter
+> run, an editor with "insert final newline", or a well-meaning cleanup commit will
+> desync the file from the ledger by one byte, and the environment stops being
+> reproducible — `supabase db push` would then reproduce a history that did not
+> happen. If you touch one of these files, re-check
+> `md5sum <file>` against `md5(statements[1])` before committing, and re-add the
+> newline only if the file was *not* applied through `apply_migration`.
+
 ## Six migrations are deliberately absent
 
 This repository is public. These six embed a live credential in their SQL, and
@@ -620,7 +632,7 @@ the inline arithmetic back into `can_manage_location`, which turns the guard red
 *while the behavioural matrix in the same test still passes* — which is precisely the
 gap the matrix alone leaves open.
 
-### Applied: `20261015031154_shared_ttl_expiry_accounting`
+## Applied: `20261015031154_shared_ttl_expiry_accounting`
 
 Applied via `apply_migration` on 2026-10-15. The file's `md5sum` is
 `46291d4ebb6126f51c750797dd4b8c6d`, equal to the ledger's `md5(statements[1])`.

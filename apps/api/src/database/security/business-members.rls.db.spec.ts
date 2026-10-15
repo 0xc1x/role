@@ -126,11 +126,32 @@ const ROLLED_BACK = 'business-members.spec: rollback on purpose';
 async function rolledBack(
   sql: Parameters<typeof as>[0],
   fn: (tx: Parameters<typeof as>[0]) => Promise<void>,
+  impersonation?: { role: string; userId: string | null },
 ): Promise<string | null> {
   let refusal: string | null = null;
   try {
     await sql.begin(async (tx) => {
       try {
+        // Las MISMAS dos sentencias que pone `as()`, y no una copia improvisada
+        // de ellas: esta función existe justamente para que el INSERT que se
+        // probea lo niegue el MISMO RLS que lo negaría en producción. Si las
+        // reclamaciones se fixeran distinto acá, el test mediría una sesión que
+        // no existe. Copiar el `set local role` de otra parte del archivo sería
+        // una segunda cuenta del mismo cálculo, que es lo que esta ronda
+        // acaba de eliminar de otro sitio.
+        if (impersonation !== undefined) {
+          await tx.unsafe(`set local role ${impersonation.role}`);
+          if (impersonation.userId !== null) {
+            await tx.unsafe(
+              `select set_config('request.jwt.claim.sub', '${impersonation.userId}', true), ` +
+                `set_config('request.jwt.claim.role', '${impersonation.role}', true), ` +
+                `set_config('request.jwt.claims', '${JSON.stringify({
+                  sub: impersonation.userId,
+                  role: impersonation.role,
+                })}', true)`,
+            );
+          }
+        }
         await fn(tx as unknown as Parameters<typeof as>[0]);
       } catch (error) {
         refusal = (error as { code?: string }).code ?? '????';
@@ -2643,36 +2664,57 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     // Y el id es de ESTE test y no el que la prueba anterior dejó usar: aquella
     // borra `POL_LOC_NEW` al final, así que si esa aserción suya se rompiera
     // sola, acá el INSERT revienta por duplicado —con `23505`— y esta prueba se
-    // pondría verde por el motivo equivocado. El id se limpia al final, así que
-    // las dos pueden correr en cualquier orden.
+    // pondría verde por el motivo equivocado.
+    //
+    // ─── POR QUÉ `rolledBack` Y NO `deniedAs` ─────────────────────────────────
+    //
+    // Porque `deniedAs` commitea en el camino de éxito, y el camino de éxito acá
+    // ES la falla que el test existe para detectar. Con `deniedAs`, el día que RLS
+    // deje de negar, el INSERT se commitea, la aserción del código tira, y el
+    // cinturón de más abajo —que comprueba que la fila no quedó— no llega a
+    // ejecutarse nunca: se cae justo en el único caso para el que existe. El
+    // cinturón que nunca corre es peor que no tenerlo, porque parece una
+    // garantía.
+    //
+    // `rolledBack` descarta la transacción SIEMPRE, así que la fila no puede
+    // filtrarse pase lo que pase, y el cinturón se vuelve alcanzable.
     const staleLocation = 'f2000000-0000-4000-8000-000000000006';
-    const staleInsert = await deniedAs(
+    const staleInsert = await rolledBack(
       ctx.sql,
-      'authenticated',
-      POL_STALE_OWNER,
-      (tx) =>
-        tx.unsafe(
+      async (tx) => {
+        await tx.unsafe(
           `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
            values ('${staleLocation}', '${POL_BIZ}', 'C', 'Street C', 40.41680000, -3.70380000)`,
-        ),
+        );
+      },
+      { role: 'authenticated', userId: POL_STALE_OWNER },
     );
-    expect(
-      staleInsert?.code,
-      'una sesión vencida creó una sucursal, o el INSERT no se denegó por RLS. ' +
-        'El INSERT por rol no miraba la sesión. Si esto es `23505` en vez de ' +
-        '`42501`, la fila ya existía y la aserción está probando una llave, no un ' +
-        'permiso.',
-    ).toBe('42501');
-    // Y la fila no quedó, porque `deniedAs` corre en una transacción que el
-    // error revierte: sin esto, un `42501` de otra cosa dejaría el rastro.
+
+    // El cinturón va PRIMERO, y el orden no es decorativo: es la única forma de
+    // que sea alcanzable cuando el INSERT se cuela. Va antes porque después de
+    // la aserción del código ya no se llega, y ese es precisamente el caso que
+    // el cinturón tiene que cubrir.
+    //
+    // Y dice dos cosas a la vez: que la fila no quedó, y que la sonda no dejó
+    // nada atrás. Si alguien cambia `rolledBack` por un helper que commitea,
+    // esta es la aserción que lo nota.
     expect(
       await ctx.sql
         .unsafe<{ n: number }[]>(
           `select count(*)::int as n from public.business_locations where id = '${staleLocation}'`,
         )
         .then((rows) => plainRows(rows)[0]?.n),
-      'el INSERT denegado dejó una sucursal detrás.',
+      'el INSERT del dueño con la sesión vencida dejó una sucursal detrás, o la ' +
+        'sonda se cambió por un helper que commitea en vez de descartar.',
     ).toBe(0);
+
+    expect(
+      staleInsert,
+      'una sesión vencida creó una sucursal, o el INSERT no se denegó por RLS. ' +
+        'El INSERT por rol no miraba la sesión. Si esto es `23505` en vez de ' +
+        '`42501`, la fila ya existía y la aserción está probando una llave, no un ' +
+        'permiso; si es `null`, el INSERT pasó y la sesión vencida no se respetó.',
+    ).toBe('42501');
 
     // Y BORRAR la sucursal, que además es de dueño: las dos condiciones.
     // Filtra a cero filas en vez de levantar, como todo DELETE bajo RLS.
