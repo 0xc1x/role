@@ -640,3 +640,135 @@ describe('el backfill de dueños', () => {
     expect(await seededMemberRows()).toBe(BUSINESSES.length);
   });
 });
+
+describe('los helpers de permiso', () => {
+  let ctx: SupabaseTestDb;
+
+  const OWNER_A = '44444444-4444-4444-4444-444444444444';
+  const MEMBER_STAFF_A = '66666666-6666-6666-6666-666666666666';
+  const MEMBER_MANAGER = '77777777-7777-7777-7777-777777777777';
+  const MEMBER_DISABLED = '88888888-8888-8888-8888-888888888888';
+  const MEMBER_DELETED = '99999999-9999-9999-9999-999999999999';
+  const MEMBER_STALE = 'aaaaaaaa-0000-4000-8000-00000000000a';
+  const BIZ_A = 'aaaaaaaa-0000-4000-8000-000000000001';
+  const BIZ_B = 'aaaaaaaa-0000-4000-8000-000000000002';
+  const LOC_A = 'bbbbbbbb-0000-4000-8000-000000000001';
+  const LOC_B = 'bbbbbbbb-0000-4000-8000-000000000002';
+  const LOC_BZ = 'cccccccc-0000-4000-8000-000000000001';
+
+  const M_OWNER = 'd0000000-0000-4000-8000-000000000001';
+  const M_STAFF = 'd0000000-0000-4000-8000-000000000002';
+  const M_MANAGER = 'd0000000-0000-4000-8000-000000000003';
+  const M_DISABLED = 'd0000000-0000-4000-8000-000000000004';
+  const M_DELETED = 'd0000000-0000-4000-8000-000000000005';
+  const M_STALE = 'd0000000-0000-4000-8000-000000000006';
+
+  beforeAll(async () => {
+    ctx = await createSupabaseTestDb();
+
+    await ctx.sql.begin(async (tx) => {
+      for (const id of [
+        OWNER_A,
+        MEMBER_STAFF_A,
+        MEMBER_MANAGER,
+        MEMBER_DISABLED,
+        MEMBER_DELETED,
+        MEMBER_STALE,
+      ]) {
+        await tx.unsafe(
+          `insert into auth.users (id, email, raw_user_meta_data)
+           values ('${id}', 'helper-${id}@test', '{"role":"business"}'::jsonb)
+           on conflict (id) do nothing`,
+        );
+      }
+
+      await tx.unsafe(
+        `insert into public.businesses (id, name, type, slug)
+         values ('${BIZ_A}', 'Helper Biz A', 'restaurant', 'helper-biz-a'),
+                ('${BIZ_B}', 'Helper Biz B', 'restaurant', 'helper-biz-b')`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_ownership (business_id, owner_id)
+         values ('${BIZ_A}', '${OWNER_A}')`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
+         values ('${LOC_A}', '${BIZ_A}', 'A main', 'Street', 40.41680000, -3.70380000),
+                ('${LOC_B}', '${BIZ_A}', 'A second', 'Street2', 40.41680000, -3.70380000),
+                ('${LOC_BZ}', '${BIZ_B}', 'B main', 'Street', 40.41680000, -3.70380000)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_members
+           (id, business_id, user_id, role, label, alias, status, session_ttl_hours, last_authenticated_at, deleted_at)
+         values
+           ('${M_OWNER}', '${BIZ_A}', '${OWNER_A}', 'owner', 'Owner', 'helper-owner@test', 'active', 24, now(), null),
+           ('${M_STAFF}', '${BIZ_A}', '${MEMBER_STAFF_A}', 'staff', 'Staff', 'helper-staff@test', 'active', 24, now(), null),
+           ('${M_MANAGER}', '${BIZ_A}', '${MEMBER_MANAGER}', 'manager', 'Manager', 'helper-manager@test', 'active', 24, now(), null),
+           ('${M_DISABLED}', '${BIZ_A}', '${MEMBER_DISABLED}', 'staff', 'Disabled', 'helper-disabled@test', 'disabled', 24, now(), null),
+           ('${M_DELETED}', '${BIZ_A}', '${MEMBER_DELETED}', 'staff', 'Deleted', 'helper-deleted@test', 'active', 24, now(), now()),
+           ('${M_STALE}', '${BIZ_A}', '${MEMBER_STALE}', 'staff', 'Stale', 'helper-stale@test', 'active', 24, now() - interval '26 hours', null)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_member_locations (member_id, location_id, deleted_at)
+         values
+           ('${M_STAFF}', '${LOC_A}', null),
+           ('${M_MANAGER}', '${LOC_A}', null),
+           ('${M_MANAGER}', '${LOC_B}', null),
+           ('${M_DISABLED}', '${LOC_A}', null),
+           ('${M_DELETED}', '${LOC_A}', null),
+           ('${M_STALE}', '${LOC_A}', null)`,
+      );
+    });
+  });
+
+  afterAll(async () => {
+    await ctx.stop();
+  });
+
+  async function canManage(
+    userId: string,
+    businessId: string,
+    locationId: string,
+  ) {
+    const r = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ ok: boolean }[]>(
+        `select public.can_manage_location('${businessId}', '${locationId}') as ok`,
+      ),
+    );
+    return r[0].ok;
+  }
+
+  test('un staff solo administra las sucursales de su alcance', async () => {
+    expect(await canManage(MEMBER_STAFF_A, BIZ_A, LOC_A)).toBe(true);
+    expect(await canManage(MEMBER_STAFF_A, BIZ_A, LOC_B)).toBe(false);
+    expect(await canManage(MEMBER_STAFF_A, BIZ_B, LOC_A)).toBe(false);
+  });
+
+  test('el owner administra todo el negocio y el manager también', async () => {
+    expect(await canManage(OWNER_A, BIZ_A, LOC_A)).toBe(true);
+    expect(await canManage(OWNER_A, BIZ_A, LOC_B)).toBe(true);
+    expect(await canManage(MEMBER_MANAGER, BIZ_A, LOC_B)).toBe(true);
+  });
+
+  test('un acceso deshabilitado no administra nada', async () => {
+    expect(await canManage(MEMBER_DISABLED, BIZ_A, LOC_A)).toBe(false);
+  });
+
+  test('un miembro borrado no administra nada', async () => {
+    expect(await canManage(MEMBER_DELETED, BIZ_A, LOC_A)).toBe(false);
+  });
+
+  test('la sesión vencida se distingue de la no autorizada', async () => {
+    const state = await as(ctx.sql, 'authenticated', MEMBER_STALE, (tx) =>
+      tx.unsafe<{ reason: string; role: string }[]>(`
+        select public.business_member_session_state() ->> 'reason' as reason,
+               public.business_member_session_state() ->> 'role'  as role`),
+    );
+    expect(state[0].reason).toBe('session_expired');
+    expect(state[0].role).toBe('staff');
+  });
+});
