@@ -564,12 +564,13 @@ business" with the same membership predicates (`deleted_at is null`,
 `status = 'active'`), the same `session_ttl_hours = 0` skip and the same expiry
 arithmetic, and the eleven policies now call it **in addition to** their role check.
 
-The expiry arithmetic itself lives in one place,
-`business_member_session_expires_at(session_ttl_hours, last_authenticated_at)`, so a
-second TTL implementation cannot drift from `can_manage_location` and
-`business_member_session_state`. A test pins the agreement the same way Task 4 pinned
-"la que autoriza y la que explica nunca se contradicen", and another asserts the
-arithmetic stays *out* of the new helper.
+The expiry arithmetic was meant to live in one place,
+`business_member_session_expires_at(session_ttl_hours, last_authenticated_at)`, with
+`can_manage_location` and `business_member_session_state` calling it. At the moment this
+migration was sealed that was **not** the case, and both of those functions were still
+computing it inline — see the correction below. The eleven policies call
+`business_member_session_valid` **in addition to** their role check, and that part did
+hold.
 
 **`deleted_at is null` on the two membership reads**, which §6.3 names explicitly and
 neither of which applied it to the row being listed:
@@ -590,6 +591,47 @@ policy it replaced was owner-only — and
 `business_member_locations_location_id_fkey` is `ON DELETE CASCADE`, so a manager
 deleting a branch silently strips every staff scope row pointing at it. After the
 `drop` of `business_ownership` this is the only branch-delete path in the system.
+
+### ⚠ `20261015024825`'s own header overstates this, and it is sealed
+
+`20261015024825:46-52` says `business_member_session_expires_at` "es la única cuenta",
+and the paragraph above said the same. **That was false when it was written**, and the
+re-reviewer was right to close the finding: measured live, the arithmetic existed in
+**three** places. Only `business_member_session_valid` called the new function;
+`can_manage_location` and `business_member_session_state` still carried
+`last_authenticated_at + (session_ttl_hours * interval '1 hour')` inline. The shared
+function shared with nobody, and the only thing preventing drift was a behavioural
+test matrix — which catches a divergence when someone trips over it, not when someone
+reintroduces the duplicate.
+
+The sealed header cannot be edited, so it will keep making that claim. Read it as what
+it is: a statement of intent that was not true on the day it was sealed.
+
+**`20261015031154_shared_ttl_expiry_accounting` makes it true.** Both functions now
+call `business_member_session_expires_at` instead of computing the expiry inline — one
+line each, with the semantics unchanged, no signature/volatility/`security definer`/
+`search_path` touched and no `grant`/`revoke`. There is now exactly one copy of the
+arithmetic, and all three consumers read it.
+
+The claim is also now **enforced**, not just made: a catalog guard asserts that
+exactly one of the four bodies may contain `interval '1 hour'` and that the other
+three must reference `business_member_session_expires_at`. It was verified by putting
+the inline arithmetic back into `can_manage_location`, which turns the guard red
+*while the behavioural matrix in the same test still passes* — which is precisely the
+gap the matrix alone leaves open.
+
+### Applied: `20261015031154_shared_ttl_expiry_accounting`
+
+Applied via `apply_migration` on 2026-10-15. The file's `md5sum` is
+`46291d4ebb6126f51c750797dd4b8c6d`, equal to the ledger's `md5(statements[1])`.
+
+Recreates `can_manage_location` and `business_member_session_state` so both read the
+expiry from `business_member_session_expires_at` instead of computing it. In
+`can_manage_location` the "expired" branch becomes the two halves asked of the shared
+value — stamped and past, or unstamped with a TTL set — which is exactly what the
+inline expression meant. In `business_member_session_state` the assignment becomes a
+call, and the `reason` logic below it, which already read from `v_expires_at`, is
+untouched. No error code, message or returned `jsonb` shape changes.
 
 ## The ledger has a `staff_permission_helpers` row with no file: `20261014011033`
 

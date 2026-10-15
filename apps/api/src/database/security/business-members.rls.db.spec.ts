@@ -1074,25 +1074,95 @@ describe('los helpers de permiso', () => {
       ).toBe(state.reason === 'ok');
     }
 
-    // Y la aritmética sale de UN SITIO. Si esta función volviera a tener la
-    // cuenta escrita dentro, el helper dejaría de ser la fuente única y las
-    // dos podrían apartarse sin que ninguna prueba lo note.
+    // ─── LA CUENTA ESTÁ EN UN SITIO, Y ESO SE AFIRMA SOBRE EL CATÁLOGO ─────────
+    //
+    // tres cuentan la misma historia. Es una línea
+    // de defensa de último recurso: si dos copias de la aritmética se apartan,
+    // la matriz falla cuando alguien tropieza con el caso, no cuando alguien
+    // reintroduce el duplicado. Lo que hace falta es que la redundancia no exista.
+    //
+    // Por eso esto mira el CUERPO de las cuatro funciones y no su respuesta:
+    // exactamente una puede tener escrita la cuenta, y las otras tres tienen que
+    // llamarla.
+    //
+    // Y se afirma la SUSTANCIA —`security definer`, `search_path = ''`, la lista
+    // de argumentos, la volatilidad— y no el texto entero del `functiondef`. Un
+    // cuerpo pegado con sus saltos de línea y sus espacios falla el test con un
+    // reformateo que no cambia una sola cosa del comportamiento, y un test que se
+    // rompe por eso enseña a ignorar los que importan.
+    const ttlShapes = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          fn: string;
+          args: string;
+          secdef: boolean;
+          volatile: string;
+          search_path: string | null;
+          computes_inline: boolean;
+          calls_shared: boolean;
+        }[]
+      >(`
+        select p.proname as fn,
+               pg_get_function_identity_arguments(p.oid) as args,
+               p.prosecdef as secdef,
+               p.provolatile as volatile,
+               p.proconfig::text as search_path,
+               pg_get_functiondef(p.oid) like '%interval ''1 hour''%' as computes_inline,
+               pg_get_functiondef(p.oid) like '%business_member_session_expires_at%'
+                 as calls_shared
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('business_member_session_expires_at',
+                            'business_member_session_valid',
+                            'can_manage_location',
+                            'business_member_session_state')
+        order by p.proname`),
+    );
     expect(
-      await as(ctx.sql, 'service_role', null, (tx) =>
-        tx.unsafe<{ body: string }[]>(`
-          select pg_get_functiondef(p.oid) as body
-          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-          where n.nspname = 'public'
-            and p.proname = 'business_member_session_valid'`),
-      ).then((rows) => plainRows(rows).map((r) => r.body)),
-      'la cuenta de la expiración volvió a estar escrita dentro de ' +
-        '`business_member_session_valid`. Tiene que salir de ' +
-        '`business_member_session_expires_at`, que es el único sitio donde se ' +
-        'escribe, y ese es el mismo acuerdo que se mide arriba.',
+      plainRows(ttlShapes),
+      'la cuenta de la expiración volvió a estar copiada, o dejó de estar ' +
+        'compartida. Exactamente UNA función puede tener escrita la aritmética ' +
+        '—`business_member_session_expires_at`— y las otras tres tienen que ' +
+        'llamarla. Con dos copias, la que autoriza y la que explica pueden dejar ' +
+        'de contar la misma historia, y el §5.2 dice que no pueden.',
     ).toEqual([
-      expect.stringContaining(
-        'public.business_member_session_expires_at(\n             mm.session_ttl_hours, mm.last_authenticated_at\n           )',
-      ),
+      {
+        fn: 'business_member_session_expires_at',
+        args: 'p_session_ttl_hours integer, p_last_authenticated_at timestamp with time zone',
+        secdef: false,
+        volatile: 'i',
+        search_path: '{"search_path=\\"\\""}',
+        computes_inline: true,
+        calls_shared: true,
+      },
+      {
+        fn: 'business_member_session_state',
+        args: 'p_business_id uuid',
+        secdef: true,
+        volatile: 's',
+        search_path: '{"search_path=\\"\\""}',
+        computes_inline: false,
+        calls_shared: true,
+      },
+      {
+        fn: 'business_member_session_valid',
+        args: 'p_business_id uuid',
+        secdef: true,
+        volatile: 's',
+        search_path: '{"search_path=\\"\\""}',
+        computes_inline: false,
+        calls_shared: true,
+      },
+      {
+        fn: 'can_manage_location',
+        args: 'p_business_id uuid, p_location_id uuid',
+        secdef: true,
+        volatile: 's',
+        search_path: '{"search_path=\\"\\""}',
+        computes_inline: false,
+        calls_shared: true,
+      },
     ]);
 
     // Y la cuenta compartida dice lo mismo que la de `can_manage_location` para
@@ -2564,6 +2634,18 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     }
 
     // Y crear sucursales, que es la puerta de INSERT por rol.
+    //
+    // El CÓDIGO se afirma, no sólo que hubo un error: `not.toBeNull()` lo
+    // satisface cualquier cosa, y esta aserción tiene que poder decir QUÉ
+    // frontera está probando. Un `42501` es RLS negando el INSERT; un `23505`
+    // sería una llave repetida y no probaría nada de permisos.
+    //
+    // Y el id es de ESTE test y no el que la prueba anterior dejó usar: aquella
+    // borra `POL_LOC_NEW` al final, así que si esa aserción suya se rompiera
+    // sola, acá el INSERT revienta por duplicado —con `23505`— y esta prueba se
+    // pondría verde por el motivo equivocado. El id se limpia al final, así que
+    // las dos pueden correr en cualquier orden.
+    const staleLocation = 'f2000000-0000-4000-8000-000000000006';
     const staleInsert = await deniedAs(
       ctx.sql,
       'authenticated',
@@ -2571,13 +2653,26 @@ describe('las policies y los RPCs resuelven por membresía', () => {
       (tx) =>
         tx.unsafe(
           `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
-           values ('${POL_LOC_NEW}', '${POL_BIZ}', 'C', 'Street C', 40.41680000, -3.70380000)`,
+           values ('${staleLocation}', '${POL_BIZ}', 'C', 'Street C', 40.41680000, -3.70380000)`,
         ),
     );
     expect(
-      staleInsert,
-      'una sesión vencida creó una sucursal. El INSERT por rol no miraba la sesión.',
-    ).not.toBeNull();
+      staleInsert?.code,
+      'una sesión vencida creó una sucursal, o el INSERT no se denegó por RLS. ' +
+        'El INSERT por rol no miraba la sesión. Si esto es `23505` en vez de ' +
+        '`42501`, la fila ya existía y la aserción está probando una llave, no un ' +
+        'permiso.',
+    ).toBe('42501');
+    // Y la fila no quedó, porque `deniedAs` corre en una transacción que el
+    // error revierte: sin esto, un `42501` de otra cosa dejaría el rastro.
+    expect(
+      await ctx.sql
+        .unsafe<{ n: number }[]>(
+          `select count(*)::int as n from public.business_locations where id = '${staleLocation}'`,
+        )
+        .then((rows) => plainRows(rows)[0]?.n),
+      'el INSERT denegado dejó una sucursal detrás.',
+    ).toBe(0);
 
     // Y BORRAR la sucursal, que además es de dueño: las dos condiciones.
     // Filtra a cero filas en vez de levantar, como todo DELETE bajo RLS.
