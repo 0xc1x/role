@@ -420,15 +420,22 @@ policies that still resolve ownership through `business_ownership` are in place 
 unchanged, and the table itself is untouched. The §6.2 order is new-first,
 old-second, and the retirement — `drop table public.business_ownership` — is a
 separate migration that has not been written. `business-members.rls.db.spec.ts`
-pins the residue by name, so the drop is a one-line diff when it lands and a
-two-line diff if anyone writes a policy by hand in the meantime.
+pins the residue by name, so the drop surfaces as a **19-element array** failing in
+three spec files — `business-members`, `businesses` and `orders` — plus the write
+and read assertions that quote those policy names, not as a one-line diff. That is
+deliberate: a count would pass with three policies moved somewhere else, and the
+whole value of pinning them by name is that the diff shows *which* one changed. A
+hand-written policy in the meantime shows up in the same place.
 
 **The grants on the three recreated functions are unchanged, and that was measured
 rather than assumed.** The brief for this task stated that `anon` holds EXECUTE on
 `cancel_order` and `reserve_offer`; it does not, in the live database or in the
 replayed one. `20260906125927_harden_rpc_grants` removed it and the ledger says so
-— the only roles that can execute the four order RPCs are `authenticated` and
-`service_role`. The migration therefore carries **not one** `grant` or `revoke`
+— the roles that can execute the four order RPCs are `postgres`, `authenticated`
+and `service_role`. The first is there only because it owns the functions, and it is
+not an HTTP role. What matters is the negative: **`anon` holds nothing on any of the
+four**, and the ACL is an explicit grant list rather than the implicit `PUBLIC`
+default. The migration therefore carries **not one** `grant` or `revoke`
 for those functions: `create or replace` preserves the ACL on its own, and a
 `drop` + `create` would have handed them back to `PUBLIC`.
 
@@ -462,15 +469,127 @@ go missing without anything failing: "nobody reads it" is how audit data disappe
 A question like "how many orders were completed by code versus by the business?"
 becomes unanswerable from the audit table, with no sign it ever was.
 
-**`20261015022233_validate_pickup_code_event_marker` restores the marker.** It
-recreates the same function with a second, tightly scoped `update` that merges
-`{"method": "pickup_code"}` into the metadata of the event the trigger already
+**`20261015022233_validate_pickup_code_event_marker` restores the marker going
+forward.** It recreates the same function with a second, tightly scoped `update` that
+merges `{"method": "pickup_code"}` into the metadata of the event the trigger already
 wrote — merged, not replaced, because `source` and `method` are two facts about the
 same event and overwriting one with the other loses the first. The scope
 (`order_id`, `status = 'completed'`, `metadata->>'source' = 'database'`, and not
 already carrying a `method`) and the reasoning for why it cannot reach anyone else's
-row are in the migration file. There is still exactly one event per pickup, and it
-now says both things. `business-members.rls.db.spec.ts` pins both halves.
+row are in the migration file. There is still exactly one event per pickup, and from
+that migration on it says both things. `business-members.rls.db.spec.ts` pins both
+halves.
+
+**It restores it forward only, and the history it leaves behind is already a coin
+flip.** Of the `completed`-from-`ready_for_pickup` events that exist in production, 3
+carry `{"method": "pickup_code"}` and 2 carry `{}`. The reason is
+`20260925155433`, which collapsed each duplicate pair with `order by created_at, id`
+— and both rows of a pair were written in the same transaction, so `created_at`
+tied and the uuid decided which one survived. There is no rule behind which. That
+history is unrepairable: the row that lost was deleted, and nothing else in the
+database records what its metadata said.
+
+So do not read "the marker is restored" as "every completed event says how it was
+completed". Any analytics over `order_events` written before `20261015022233` has to
+treat the marker as absent-or-present at random, and only events written after it are
+reliable. The fix makes the data *correct going forward*; it does not and cannot make
+the past so.
+
+## Applied: `20261015022233_validate_pickup_code_event_marker`
+
+Applied via `apply_migration` on 2026-10-15. The file's `md5sum` is
+`15cd20bb5359edd4f6c9bb690aea0ed2` and that is also the ledger's
+`md5(statements[1])`.
+
+It recreates `validate_pickup_code` and changes one thing: after the order update
+that `on_order_status_change` already answers with an `order_events` row, a second
+scoped `update` merges `{"method": "pickup_code"}` into that row's metadata. The
+dedup itself belongs to the previous migration and is described in its section above;
+this one puts back the marker that dedup took with it. No `grant` and no `revoke`,
+for the same reason as everywhere else: `create or replace` preserves the ACL.
+
+The event count stays at one per pickup and the metadata now carries both `source`
+and `method`. `business-members.rls.db.spec.ts` pins both halves, including that the
+marker does not spill onto events no code validated.
+
+## Applied: `20261015024824_validate_pickup_code_null_code`
+
+Applied via `apply_migration` on 2026-10-15. The file's `md5sum` is
+`ceb9c6adb679472c7e7d8f3598c9bd76`, equal to the ledger's `md5(statements[1])`.
+
+One character of behaviour, and it is a security fix: `pickup_code <> p_pickup_code`
+became `is distinct from`. `pickup_code` is NOT NULL but the argument is
+caller-supplied and PostgREST passes a JSON `null` through, and `'ABC123' <> null` is
+NULL, which an `IF` treats as false — so the function fell through to
+`update … set status = 'completed'`. Any caller could complete a ready order without
+knowing any code.
+
+The hole is old (`20260615195645`); what changed is the population that can reach it.
+The permission used to be `businesses.owner_id = auth.uid()`, owner only, and an
+owner could complete an order with or without the code at no cost to themselves.
+It is now `can_manage_location`, which admits managers and branch-scoped staff — so a
+cashier could complete any ready order in their branch with no code, accrue the
+revenue, and bypass the invariant `set_order_status` enforces a few lines above it
+("Transición reservada al sistema": a business may never move its own order to
+`completed`).
+
+## Applied: `20261015024825_business_policy_tightening`
+
+Applied via `apply_migration` on 2026-10-15. The file's `md5sum` is
+`2274a8f0a437523d7a1d36d819991ce1`, equal to the ledger's `md5(statements[1])`.
+
+Three tightenings that all rewrite the same group of policies, done in one migration
+so each policy is defined exactly once and none is left in its old shape:
+
+**The TTL now reaches the policies that resolve by role.** `20261015015012`'s header
+claims the session check applies to every role, owner and manager included. That was
+true for the seven tables routed through `can_manage_location` and false for the
+eleven routed through `business_member_role`, whose body has no expiry branch at
+all: an expired owner or manager could still write `business_hours` and `coupons`
+(both `FOR ALL`), update the `businesses` row, write notification preferences, read
+`payouts`, create branches, and list the team with its aliases.
+
+The fix is **not** to add the TTL to `business_member_role`. Task 4 left it TTL-free
+on purpose so `business_member_session_state` can report `role: 'staff'` alongside
+`reason: 'session_expired'` — the panel needs the role precisely so it can explain the
+exit. So a companion helper was added instead:
+
+```
+business_member_session_valid(p_business_id uuid) → boolean
+```
+
+`stable security definer set search_path = ''`, revoked from `public` and `anon`,
+granted to `authenticated`. It answers "is this caller's session live for this
+business" with the same membership predicates (`deleted_at is null`,
+`status = 'active'`), the same `session_ttl_hours = 0` skip and the same expiry
+arithmetic, and the eleven policies now call it **in addition to** their role check.
+
+The expiry arithmetic itself lives in one place,
+`business_member_session_expires_at(session_ttl_hours, last_authenticated_at)`, so a
+second TTL implementation cannot drift from `can_manage_location` and
+`business_member_session_state`. A test pins the agreement the same way Task 4 pinned
+"la que autoriza y la que explica nunca se contradicen", and another asserts the
+arithmetic stays *out* of the new helper.
+
+**`deleted_at is null` on the two membership reads**, which §6.3 names explicitly and
+neither of which applied it to the row being listed:
+`Owners and managers view business members` filtered nothing, and
+`Owners and managers view member scope` filtered the foreign row inside its `exists`
+and nothing on the `business_member_locations` row itself. This came from the brief,
+whose SQL was followed verbatim and whose gap was flagged in `20261015015012`'s own
+header; it is closed here. The cost was disclosure, not access: a soft-deleted row
+grants nothing by any path, but `business_members.alias` mirrors `auth.users.email`,
+so a departed employee's login address stayed in the team list.
+
+**Branch deletion is owner-only.** `Members can delete business locations` used
+`can_manage_location`, which returns true for managers, while §5.1 defines the
+helper's contract as `manager → todo el negocio, excepto borrar sucursales`. It is
+now `business_member_role(business_id) = 'owner' and can_manage_location(business_id,
+id)`. This is a restoration rather than a regression — the `business_ownership`
+policy it replaced was owner-only — and
+`business_member_locations_location_id_fkey` is `ON DELETE CASCADE`, so a manager
+deleting a branch silently strips every staff scope row pointing at it. After the
+`drop` of `business_ownership` this is the only branch-delete path in the system.
 
 ## The ledger has a `staff_permission_helpers` row with no file: `20261014011033`
 

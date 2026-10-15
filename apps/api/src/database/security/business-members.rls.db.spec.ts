@@ -847,6 +847,22 @@ describe('los helpers de permiso', () => {
   }
 
   /**
+   * "¿esta sesión está viva para este negocio?", as the policies ask it.
+   *
+   * The `::uuid` matters for the same reason it does in `canManage`: the
+   * argument is a bare string literal and Postgres would read the bare name as
+   * the enum type of the same name rather than as a function call.
+   */
+  async function sessionValid(userId: string, businessId: string) {
+    const r = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ ok: boolean }[]>(
+        `select public.business_member_session_valid('${businessId}'::uuid) as ok`,
+      ),
+    );
+    return r[0].ok;
+  }
+
+  /**
    * The caller's own role, read as `authenticated` so the grant is exercised.
    *
    * The `::uuid` on the argument is load bearing and not decoration: the
@@ -1021,6 +1037,100 @@ describe('los helpers de permiso', () => {
     }
   });
 
+  // ─── EL TERCER HELPERS DE SESIÓN, Y QUE NO SE SEPARE DEL QUE EXPLICA ───────
+  //
+  // `business_member_session_valid` es el helper que `20261015024825` colgó de
+  // las policies que resuelven POR ROL, que hasta entonces no tenían TTL: una
+  // sesión vencida entraba igual a `business_hours`, a `coupons`, a la fila del
+  // negocio y a la lista del equipo.
+  //
+  // El riesgo de un segundo que cuenta la expiración es que se aparte del
+  // primero. Si esta cuenta dijera "viva" donde la otra dice "vencida", el
+  // panel le explicaría al usuario una salida que las policies no le negaron, y
+  // nadie se enteraría: no hay error, hay una sesión que dura de más.
+  //
+  // Esta matriz es la del §5.2 entera y ata las dos por persona, así que falla
+  // si alguien acorta el TTL a `staff`, si invierte el `> 0`, o si una de las
+  // dos se queda con una cuenta vieja.
+
+  test('la que autoriza por rol y la que explica nunca se contradicen', async () => {
+    const personas: readonly { id: string; label: string }[] = [
+      { id: OWNER_A, label: 'owner con sesión al día' },
+      { id: MEMBER_MANAGER, label: 'manager con sesión al día' },
+      { id: MEMBER_STAFF_A, label: 'staff con sesión al día' },
+      { id: MEMBER_ETERNAL, label: 'staff sin TTL' },
+      { id: MEMBER_STALE, label: 'staff con sesión vencida' },
+      { id: MEMBER_STALE_OWNER, label: 'owner con sesión vencida' },
+      { id: MEMBER_UNSTAMPED, label: 'staff sin sello' },
+    ];
+    for (const persona of personas) {
+      const state = await sessionState(persona.id);
+      const valid = await sessionValid(persona.id, BIZ_A);
+      expect(
+        valid,
+        `${persona.label}: session_valid dijo ${valid} y session_state dijo ` +
+          `"${state.reason}". Una de las dos está contando una historia que la ` +
+          'otra no cuenta, y la que va a equivocar es la que concede.',
+      ).toBe(state.reason === 'ok');
+    }
+
+    // Y la aritmética sale de UN SITIO. Si esta función volviera a tener la
+    // cuenta escrita dentro, el helper dejaría de ser la fuente única y las
+    // dos podrían apartarse sin que ninguna prueba lo note.
+    expect(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ body: string }[]>(`
+          select pg_get_functiondef(p.oid) as body
+          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname = 'business_member_session_valid'`),
+      ).then((rows) => plainRows(rows).map((r) => r.body)),
+      'la cuenta de la expiración volvió a estar escrita dentro de ' +
+        '`business_member_session_valid`. Tiene que salir de ' +
+        '`business_member_session_expires_at`, que es el único sitio donde se ' +
+        'escribe, y ese es el mismo acuerdo que se mide arriba.',
+    ).toEqual([
+      expect.stringContaining(
+        'public.business_member_session_expires_at(\n             mm.session_ttl_hours, mm.last_authenticated_at\n           )',
+      ),
+    ]);
+
+    // Y la cuenta compartida dice lo mismo que la de `can_manage_location` para
+    // los mismos tres casos raros: sin TTL, sin sello y vencida. Es la misma
+    // pregunta con tres respuestas y un solo lugar donde está escrita.
+    //
+    // Se pregunta como `authenticated`, que es el rol con el grant y el mismo
+    // con el que el motor evalúa las policies. Como `service_role` daría el
+    // mismo resultado, y así también se comprueba que el grant está donde tiene
+    // que estar y no sólo en una base que tiene privileges de fábrica.
+    const expires = await as(ctx.sql, 'authenticated', OWNER_A, (tx) =>
+      tx.unsafe<{ ttl: number; hours_ago: number | null; expires: boolean }[]>(`
+        select ttl,
+               hours_ago,
+               public.business_member_session_expires_at(
+                 ttl,
+                 case when hours_ago is null then null
+                      else now() - (hours_ago * interval '1 hour') end
+               ) is not null as expires
+        from (values (0, 500::int), (24, 500::int), (24, 1::int), (24, null::int))
+             as t(ttl, hours_ago)`),
+    );
+    expect(
+      plainRows(expires).map((r) => ({
+        ttl: r.ttl,
+        hours_ago: r.hours_ago,
+        expires: r.expires,
+      })),
+      'la cuenta compartida de la expiración no distingue los tres casos raros: ' +
+        'sin TTL no hay fecha, vencida la hay, y sin sello tampoco.',
+    ).toEqual([
+      { ttl: 0, hours_ago: 500, expires: false },
+      { ttl: 24, hours_ago: 500, expires: true },
+      { ttl: 24, hours_ago: 1, expires: true },
+      { ttl: 24, hours_ago: null, expires: false },
+    ]);
+  });
+
   // ─── LA MEMBRESÍA QUE RESPONDE SE ELIGE ENTRE LAS ACTIVAS ───────────────────
 
   test('sin argumento la membresía se elige entre las activas, y se avisa cuando hay varias', async () => {
@@ -1150,11 +1260,12 @@ describe('los helpers de permiso', () => {
           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
           where n.nspname = 'public'
             and p.proname in ('business_member_role', 'can_manage_location',
-                              'business_has_feature', 'business_member_session_state')
+                              'business_has_feature', 'business_member_session_state',
+                              'business_member_session_valid')
           order by p.proname`),
     );
 
-    // Las CUATRO, con su firma exacta. Una quinta fila sería una sobrecarga
+    // Las CINCO, con su firma exacta. Una sexta fila sería una sobrecarga
     // vieja sin revocar: `session_state()` sin argumento y
     // `session_state(p_business_id uuid default null)` se vuelven ambiguas en
     // la llamada de cero argumentos, que es exactamente la del brief.
@@ -1184,6 +1295,15 @@ describe('los helpers de permiso', () => {
       },
       {
         fn: 'business_member_session_state',
+        args: 'p_business_id uuid',
+        authenticated: true,
+        anon: false,
+      },
+      {
+        // El quinto: `20261015024825` lo colgó de las once policies que
+        // resuelven por rol, así que sin su grant esas once revientan con 42501
+        // en tiempo de consulta, igual que las otras cuatro.
+        fn: 'business_member_session_valid',
         args: 'p_business_id uuid',
         authenticated: true,
         anon: false,
@@ -1307,6 +1427,18 @@ describe('las policies y los RPCs resuelven por membresía', () => {
   const POL_CONSUMER2 = 'f0000000-0000-4000-8000-000000000006';
   const POL_DELETED = 'f0000000-0000-4000-8000-000000000007';
   const POL_PAUSED = 'f0000000-0000-4000-8000-000000000008';
+  /**
+   * Un dueño con la sesión VENCIDA.
+   *
+   * Existe para el TTL de las policies que resuelven por ROL, que hasta
+   * `20261015024825` no lo tenían en ninguna parte: `business_member_role` no
+   * tiene rama de expiración, así que esta persona entraba igual a
+   * `business_hours`, a `coupons`, a la fila del negocio y a la lista del
+   * equipo. Se usa dueño y no cajero a propósito, porque dueño y gerente son los
+   * que reciben el negocio entero y son los que más se habrían servido de la
+   * puerta.
+   */
+  const POL_STALE_OWNER = 'f0000000-0000-4000-8000-000000000009';
 
   const POL_BIZ = 'f1000000-0000-4000-8000-000000000001';
   const POL_OTHER_BIZ = 'f1000000-0000-4000-8000-000000000002';
@@ -1330,6 +1462,7 @@ describe('las policies y los RPCs resuelven por membresía', () => {
   const M_OUTSIDER = 'f3000000-0000-4000-8000-000000000004';
   const M_DELETED = 'f3000000-0000-4000-8000-000000000005';
   const M_PAUSED = 'f3000000-0000-4000-8000-000000000006';
+  const M_STALE_OWNER = 'f3000000-0000-4000-8000-000000000007';
 
   const OFFER_A = 'f4000000-0000-4000-8000-000000000001';
   const OFFER_B = 'f4000000-0000-4000-8000-000000000002';
@@ -1457,6 +1590,7 @@ describe('las policies y los RPCs resuelven por membresía', () => {
         ['consumer2', POL_CONSUMER2],
         ['deleted', POL_DELETED],
         ['paused', POL_PAUSED],
+        ['stale-owner', POL_STALE_OWNER],
       ] as const) {
         await tx.unsafe(
           `insert into auth.users (id, email) values ('${id}', '${name}@rls-membership.test')
@@ -1499,7 +1633,11 @@ describe('las policies y los RPCs resuelven por membresía', () => {
           ('${M_STAFF}',   '${POL_BIZ}',       '${POL_STAFF}',   'staff',   'Cajero',   'membership-staff@test',   'active',   24, now(), now(), null),
           ('${M_OUTSIDER}','${POL_OTHER_BIZ}', '${POL_OUTSIDER}','owner',   'Dueño',    'membership-outsider@test','active',   24, now(), now(), null),
           ('${M_DELETED}', '${POL_BIZ}',       '${POL_DELETED}', 'staff',   'Dado de baja', 'membership-baja@test', 'active',   24, now(), now(), now()),
-          ('${M_PAUSED}',  '${POL_BIZ}',       '${POL_PAUSED}',  'staff',   'Pausado',  'membership-pausado@test', 'disabled', 24, now(), now(), null);
+          ('${M_PAUSED}',  '${POL_BIZ}',       '${POL_PAUSED}',  'staff',   'Pausado',  'membership-pausado@test', 'disabled', 24, now(), now(), null),
+          -- Vencida: TTL de 24 horas con el sello de hace dos días. Es una
+          -- membresía activa y es 'owner', así que lo único que la separa de un
+          -- dueño que entra por todas partes es la sesión.
+          ('${M_STALE_OWNER}', '${POL_BIZ}',   '${POL_STALE_OWNER}', 'owner', 'Dueño vencido', 'membership-vencido@test', 'active', 24, now() - interval '48 hours', now(), null);
 
         -- El staff solo de A. El gerente de las dos, porque owner y manager
         -- reciben el negocio entero y can_manage_location lo dice así; la
@@ -1512,6 +1650,12 @@ describe('las policies y los RPCs resuelven por membresía', () => {
           ('${M_MANAGER}', '${POL_LOC_B}',     null),
           ('${M_DELETED}', '${POL_LOC_A}',     null),
           ('${M_PAUSED}',  '${POL_LOC_A}',     null),
+          -- Una fila de alcance BORRADA de una membresía VIVA. Es la que mide el
+          -- 'deleted_at is null' de 20261015024825 puesto sobre la fila que se
+          -- está LEYENDO: la de M_DELETED de más arriba la escondía el exists
+          -- sobre la fila ajena, que es otro filtro y ya estaba. Acá la membresía
+          -- está activa, así que sin el filtro de la fila propia esta se vería.
+          ('${M_PAUSED}',  '${POL_LOC_B}',     now()),
           ('${M_OUTSIDER}','${POL_LOC_OTHER}', null);
       `);
 
@@ -2117,6 +2261,84 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     expect(await idsSeenBy(POL_MANAGER, seeLocations)).toEqual(
       [...active, POL_LOC_CLOSED, POL_LOC_NEW].sort(),
     );
+
+    // ─── BORRAR SUCURSAL: DE DUEÑO, NO DE GERENTE ───────────────────────────
+    //
+    // El §5.1 dice `manager → todo el negocio, EXCEPTO borrar sucursales`, y
+    // `20261015015012` le dio esa policy con `can_manage_location`, que devuelve
+    // true para el gerente. `20261015024825` la aprieta a `owner`.
+    //
+    // Y no es una regresión: la policy que ésta reemplaza —la de
+    // `business_ownership`— era de dueño solamente, así que un gerente que
+    // borraba una sucursal antes tampoco podía.
+    //
+    // Y el costo de dejarlo pasar era de los que no se ven en un log:
+    // `business_member_locations_location_id_fkey` es `ON DELETE CASCADE`, así
+    // que el gerente que borraba una sucursal se llevaba por delante la fila de
+    // alcance de cada cajero que apuntaba a ella. Después del drop de
+    // `business_ownership` esta es la única puerta a DELETE que tiene el
+    // sistema, y es de dueño.
+
+    // La fila descartable es la que el gerente acaba de crear más arriba
+    // (`POL_LOC_NEW`): existe, es de este negocio y no tiene cascadas que
+    // matar, así que es la que se usa para medir el borrado.
+
+    // El cajero no.
+    const staffDelete = await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `delete from public.business_locations where id = '${POL_LOC_NEW}' returning id::text`,
+      ),
+    );
+    expect(
+      plainRows(staffDelete).map((r) => r.id),
+      'un cajero borró una sucursal.',
+    ).toEqual([]);
+
+    // El gerente tampoco, y aquí la forma de la denegación NO es la del INSERT de
+    // arriba: un DELETE denied por RLS no levanta 42501, filtra la fila y
+    // devuelve cero. Por eso se mide por el conteo de filas que volvió y no con
+    // `deniedAs`, que mide el error.
+    const managerDelete = await as(
+      ctx.sql,
+      'authenticated',
+      POL_MANAGER,
+      (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `delete from public.business_locations where id = '${POL_LOC_NEW}' returning id::text`,
+        ),
+    );
+    expect(
+      plainRows(managerDelete).map((r) => r.id),
+      'un gerente borró una sucursal. El §5.1 le da todo el negocio EXCEPTO ' +
+        'esto, y `business_member_locations` va en cascada: cada fila de ' +
+        'alcance de cada cajero de esa sucursal desaparece con ella.',
+    ).toEqual([]);
+
+    // Y la fila sigue ahí, que es lo que hace la aserción anterior válida: un
+    // `deniedAs` que negara por un motivo raro, como un error de sintaxis,
+    // dejaría la misma fila y pasaría igual.
+    expect(
+      await ctx.sql
+        .unsafe<{ n: number }[]>(
+          `select count(*)::int as n from public.business_locations where id = '${POL_LOC_NEW}'`,
+        )
+        .then((rows) => plainRows(rows)[0]?.n),
+      'la sucursal que el gerente no podía borrar no llegó a crearse, así que ' +
+        'el rechazo de arriba no midió lo que dice medir.',
+    ).toBe(1);
+
+    // El dueño sí, y sigue teniendo el negocio entero para hacerlo.
+    const ownerDelete = await as(ctx.sql, 'authenticated', POL_OWNER, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `delete from public.business_locations where id = '${POL_LOC_NEW}' returning id::text`,
+      ),
+    );
+    expect(
+      plainRows(ownerDelete).map((r) => r.id),
+      'el dueño no pudo borrar una sucursal de su negocio. El §5.1 le da el ' +
+        'negocio entero, y borrar sucursales es la única operación de esa lista.',
+    ).toEqual([POL_LOC_NEW]);
+
     await ctx.sql.unsafe(
       `delete from public.business_locations where id = '${POL_LOC_NEW}'`,
     );
@@ -2270,6 +2492,131 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     ).toEqual([OFFER_B]);
   });
 
+  // ─── LA SESIÓN VENCIDA NO ENTA POR NINGUNA POLICY QUE RESUELVA POR ROL ─────
+  //
+  // El encabezado de `20261015015012` decía que la comprobación de sesión
+  // aplicaba a todos los roles, dueño y gerente incluidos. Para las siete tablas
+  // que pasan por `can_manage_location` era verdad, porque ese helper tiene el
+  // TTL. Para las que resuelven por `business_member_role` era falso: esa
+  // función es `where business_id = … and user_id = auth.uid() and deleted_at is
+  // null and status = 'active' limit 1` y no tiene una sola mención al TTL.
+  //
+  // Esta persona es dueña, su membresía está activa y su sesión venció hace dos
+  // días. Debe entrar por cero de las once.
+
+  test('una sesión vencida no entra por ninguna de las policies que resuelven por rol', async () => {
+    // Las que la lectura SÍ prueba, porque no tienen policy pública: `payouts` y
+    // la lista del equipo con sus alias.
+    const seePayouts = `select id::text as id from public.payouts order by id`;
+    const seeTeam = `select id::text as id from public.business_members order by id`;
+
+    // Anti-vacuity: el dueño AL DIA entra por las dos. Sin esto, un `[]` de
+    // arriba podría ser cierto porque el fixture no se sembró.
+    expect(await idsSeenBy(POL_OWNER, seePayouts)).toEqual([PAYOUT]);
+    expect(await idsSeenBy(POL_OWNER, seeTeam)).toContain(M_STALE_OWNER);
+
+    // Y el dueño vencido no entra en ninguna de las dos. En la lista del
+    // equipo ve UNA fila, la suya propia, y esa es la policy
+    // `Members can view own membership`, que es `user_id = auth.uid()` y no
+    // concede nada sobre el negocio: `20261015024825` no le puso TTL a propósito,
+    // porque un panel al que le acaba de vencer la sesión tiene que poder leer
+    // su propia fila para poder explicar la salida. Lo que se afirma es que no
+    // ve a NADIE MÁS.
+    expect(
+      await idsSeenBy(POL_STALE_OWNER, seePayouts),
+      'una sesión vencida leyó `payouts`. Su policy resuelve por rol y el rol ' +
+        'no lleva el TTL; `20261015024825` le colgó `business_member_session_valid`.',
+    ).toEqual([]);
+    expect(
+      await idsSeenBy(POL_STALE_OWNER, seeTeam),
+      'una sesión vencida listó el equipo, con los alias que son correos de ' +
+        'auth.users. Es el mismo TTL faltante, del otro lado.',
+    ).toEqual([M_STALE_OWNER]);
+
+    // Y las que hay que probar ESCRIBIENDO, porque `business_hours` y `coupons`
+    // ya eran públicas de lectura y un `select` no distinguiría nada.
+    const writes: readonly { name: string; sql: string }[] = [
+      {
+        name: 'business_hours',
+        sql: `update public.business_hours set open_time = '07:00' where id = '${HOUR}' returning id::text`,
+      },
+      {
+        name: 'coupons',
+        sql: `update public.coupons set name = 'vencido' where id = '${COUPON}' returning id::text`,
+      },
+      {
+        name: 'businesses',
+        sql: `update public.businesses set name = 'vencido' where id = '${POL_BIZ}' returning id::text`,
+      },
+      {
+        name: 'business_notification_preferences',
+        sql: `update public.business_notification_preferences set push_enabled = false where business_id = '${POL_BIZ}' returning business_id::text`,
+      },
+    ];
+    for (const write of writes) {
+      expect(
+        await as(ctx.sql, 'authenticated', POL_STALE_OWNER, (tx) =>
+          tx.unsafe<{ id: string }[]>(write.sql),
+        ).then((rows) => plainRows(rows).map((r) => r.id)),
+        `${write.name}: una sesión vencida lo modificó. Es una de las policies ` +
+          'que resuelven por rol, y el rol no mira la sesión.',
+      ).toEqual([]);
+    }
+
+    // Y crear sucursales, que es la puerta de INSERT por rol.
+    const staleInsert = await deniedAs(
+      ctx.sql,
+      'authenticated',
+      POL_STALE_OWNER,
+      (tx) =>
+        tx.unsafe(
+          `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
+           values ('${POL_LOC_NEW}', '${POL_BIZ}', 'C', 'Street C', 40.41680000, -3.70380000)`,
+        ),
+    );
+    expect(
+      staleInsert,
+      'una sesión vencida creó una sucursal. El INSERT por rol no miraba la sesión.',
+    ).not.toBeNull();
+
+    // Y BORRAR la sucursal, que además es de dueño: las dos condiciones.
+    // Filtra a cero filas en vez de levantar, como todo DELETE bajo RLS.
+    const staleDelete = await as(
+      ctx.sql,
+      'authenticated',
+      POL_STALE_OWNER,
+      (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `delete from public.business_locations where id = '${POL_LOC_B}' returning id::text`,
+        ),
+    );
+    expect(
+      plainRows(staleDelete).map((r) => r.id),
+      'una sesión vencida borró una sucursal. Esta policy pide owner Y sesión, ' +
+        'y el `can_manage_location` de en medio ya cubría la segunda; lo que se ' +
+        'comprueba acá es que el owner de la sesión vencida no la esquive.',
+    ).toEqual([]);
+
+    // Y el dueño al día sigue entrando por todo lo anterior. Sin esta mitad, las
+    // aserciones de arriba se podrían cumplir con una policy rota.
+    expect(await idsSeenBy(POL_OWNER, seePayouts)).toEqual([PAYOUT]);
+    const ownerStillWrites = await as(
+      ctx.sql,
+      'authenticated',
+      POL_OWNER,
+      (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `update public.business_hours set open_time = '08:00' where id = '${HOUR}' returning id::text`,
+        ),
+    );
+    expect(
+      plainRows(ownerStillWrites).map((r) => r.id),
+      'el dueño con la sesión al día dejó de administrar el negocio. ' +
+        '`business_member_session_valid` tiene que estar dejando pasar a quien ' +
+        'está en regla.',
+    ).toEqual([HOUR]);
+  });
+
   // ─── LAS TRES POLICIES DE LECTURA DE LAS TABLAS DE ACCESO ─────────────────
   //
   // Del §6.3: el cliente solo lee. Lo que frena la escritura es la AUSENCIA de
@@ -2285,16 +2632,24 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     // borrada: no es suya, y aunque lo fuera, `deleted_at is null` la esconde.
     expect(await idsSeenBy(POL_STAFF, allMembers)).toEqual([M_STAFF]);
 
-    // El gerente ve el negocio entero, y ahí hay una fila borrada y una pausada
-    // que la policy de lectura NO filtra: la que las esconde es la del helper, y
-    // esa lista es lo que un panel usa para pintar "equipo". La fila borrada se
-    // sigue viendo en la lista y NO concede nada por ningún camino —esto ya lo
-    // miden los helpers—, así que lo que se ve acá no es un acceso.
+    // El gerente ve el negocio entero, y ahí hay una fila PAUSADA que la
+    // policy de lectura deja pasar y una BORRADA que ya no. La diferencia entre
+    // las dos es deliberada y es el §6.3: `deleted_at is null` se filtra sobre
+    // la fila que se está listando, y `status` no, porque una membresía pausada
+    // sigue siendo una membresía y el panel la tiene que poder pintar para
+    // explicar por qué ese cajero no entra.
+    //
+    // La fila borrada se va de la lista porque su `alias` espeja el correo de
+    // `auth.users`, y una persona que se fue del equipo no tiene por qué seguir
+    // dejando su correo de acceso en la lista que el panel dibuja. Antes de
+    // `20261015024825` seguía ahí: el `deleted_at is null` que pedía el §6.3
+    // estaba escrito, pero aplicado a la fila AJENA del `exists`, no a la que se
+    // estaba leyendo. Venía del SQL del brief, y era un hueco del brief.
     expect(await idsSeenBy(POL_MANAGER, allMembers)).toEqual(
-      [M_OWNER, M_MANAGER, M_STAFF, M_DELETED, M_PAUSED].sort(),
+      [M_OWNER, M_MANAGER, M_STAFF, M_PAUSED, M_STALE_OWNER].sort(),
     );
     expect(await idsSeenBy(POL_OWNER, allMembers)).toEqual(
-      [M_OWNER, M_MANAGER, M_STAFF, M_DELETED, M_PAUSED].sort(),
+      [M_OWNER, M_MANAGER, M_STAFF, M_PAUSED, M_STALE_OWNER].sort(),
     );
 
     // El de fuera ve su negocio y no éste.
@@ -2302,9 +2657,12 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     // Y un consumidor sin membresía no ve nada.
     expect(await idsSeenBy(POL_CONSUMER, allMembers)).toEqual([]);
 
-    // El alcance, en cambio, sí se acota a dueño y gerente, y la fila borrada
-    // desaparece de él: el `exists` exige `m.deleted_at is null` sobre la fila
-    // AJENA, que es la que se está leyendo.
+    // El alcance, en cambio, se acota a dueño y gerente, y las filas
+    // borradas desaparecen de él por DOS filtros distintos que esta lista mide
+    // los dos: el `exists` pide `m.deleted_at is null` sobre la fila AJENA (la
+    // de M_DELETED, cuya membresía está dada de baja) y el `20261015024825` puso
+    // además `deleted_at is null` sobre la fila PROPIA (la de M_PAUSED en
+    // LOC_B, cuya membresía está viva y solo su alcance está borrado).
     expect(await idsSeenBy(POL_MANAGER, ownScope)).toEqual(
       [
         `${M_STAFF}:${POL_LOC_A}`,
@@ -2645,7 +3003,68 @@ describe('las policies y los RPCs resuelven por membresía', () => {
       message: 'El pedido no está listo para recoger',
     });
 
-    // El negocio del vecino: nada de eso, ni siquiera con el código correcto.
+    // ── EL CÓDIGO ES OBLIGATORIO, Y `null` NO ES UN CÓDIGO ───────────────────
+    //
+    // `pickup_code` es NOT NULL, pero `p_pickup_code` lo elige quien llama y
+    // PostgREST le pasa un `null` de JSON tal cual. Con `<>`, `'ABC123' <> null`
+    // da NULL, y en un `if` NULL es lo mismo que FALSE: la rama no se tomaba y
+    // el pedido se completaba sin código. El defecto es de `20260615195645`, pero
+    // mientras la puerta era del dueño no cambiaba nada observable; ahora la
+    // puerta es `can_manage_location` y la abre el cajero de la sucursal, que
+    // además accruea ingresos al hacerlo.
+    //
+    // Se mide como el exploit que es: el CAJERO, no el gerente, porque el
+    // gerente ya podía completar el pedido con el código o sin él y no le
+    // costaba nada. Y se mide sobre el pedido de SU MISMA sucursal, porque si
+    // fuera de otra el `UNAUTHORIZED` de permiso taparía el agujero y la prueba
+    // pasaría por la razón equivocada.
+    //
+    // Se usa ORDER.N, que es el mismo pedido que mide el "código equivocado" de
+    // más abajo, y está vivo después de estas dos: las dos lo niegan, así que
+    // no lo mueven. El camino bueno ya lo mide el happy path de ORDER.M, arriba,
+    // con el código correcto y el gerente.
+    const nullCode = await callRpc(
+      POL_STAFF,
+      `public.validate_pickup_code('${ORDER.N}', null)`,
+    );
+    expect(
+      nullCode,
+      'un cajero completó un pedido de su sucursal pasando `null` como código. ' +
+        'Con `<>`, `pickup_code <> null` da NULL y el IF no se toma, así que la ' +
+        'función caía al update. Tiene que ser `is distinct from`.',
+    ).toEqual({
+      success: false,
+      error: 'INVALID_CODE',
+      message: 'Código de recogida inválido',
+    });
+
+    // El estado de verdad, no el jsonb que devolvió la función: una función
+    // puede devolver un error Y haber escrito.
+    expect(
+      await statusOf(ORDER.N),
+      'el pedido se completó con `null` de código. Esta aserción mira el estado ' +
+        'de verdad, no la respuesta.',
+    ).toBe('ready_for_pickup');
+
+    // Y el mismo caso con un código equivocado de verdad, porque
+    // `is distinct from` tiene que manejar los dos: no basta con que el nulo
+    // salte, tiene que seguir saltando el que no es igual.
+    const wrongNonNull = await callRpc(
+      POL_STAFF,
+      `public.validate_pickup_code('${ORDER.N}', 'no-es-el-codigo')`,
+    );
+    expect(
+      wrongNonNull,
+      'un código no nulo y equivocado dejó de dar INVALID_CODE al cambiar el ' +
+        'comparador por `is distinct from`.',
+    ).toEqual({
+      success: false,
+      error: 'INVALID_CODE',
+      message: 'Código de recogida inválido',
+    });
+    expect(await statusOf(ORDER.N)).toBe('ready_for_pickup');
+
+    // Y el negocio del vecino: nada de eso, ni siquiera con el código bueno.
     const neighbour = await callRpc(
       POL_MANAGER,
       `public.validate_pickup_code('${ORDER.P}', 'PICKUP-P')`,
