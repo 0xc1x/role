@@ -672,6 +672,10 @@ describe('los helpers de permiso', () => {
   const M_MULTI_B = 'd0000000-0000-4000-8000-00000000000c';
   const M_SHADOW_A = 'd0000000-0000-4000-8000-00000000000d';
   const M_SHADOW_B = 'd0000000-0000-4000-8000-00000000000e';
+  const M_PAUSED = 'd0000000-0000-4000-8000-00000000000f';
+  const M_SIDE_A = 'd0000000-0000-4000-8000-000000000010';
+  const M_SIDE_B = 'd0000000-0000-4000-8000-000000000011';
+  const M_PAUSED_DELETED = 'd0000000-0000-4000-8000-000000000012';
 
   const MEMBER_STALE_OWNER = 'aaaaaaaa-0000-4000-8000-00000000000b';
   const MEMBER_ETERNAL = 'aaaaaaaa-0000-4000-8000-00000000000c';
@@ -680,6 +684,9 @@ describe('los helpers de permiso', () => {
   const MEMBER_MULTI = 'aaaaaaaa-0000-4000-8000-00000000000f';
   const MEMBER_SHADOW = 'aaaaaaaa-0000-4000-8000-000000000010';
   const MEMBER_NOBODY = 'aaaaaaaa-0000-4000-8000-000000000011';
+  const MEMBER_PAUSED = 'aaaaaaaa-0000-4000-8000-000000000012';
+  const MEMBER_PAUSED_SIDE = 'aaaaaaaa-0000-4000-8000-000000000013';
+  const MEMBER_PAUSED_DELETED = 'aaaaaaaa-0000-4000-8000-000000000014';
 
   beforeAll(async () => {
     ctx = await createSupabaseTestDb();
@@ -699,6 +706,9 @@ describe('los helpers de permiso', () => {
         MEMBER_MULTI,
         MEMBER_SHADOW,
         MEMBER_NOBODY,
+        MEMBER_PAUSED,
+        MEMBER_PAUSED_SIDE,
+        MEMBER_PAUSED_DELETED,
       ]) {
         await tx.unsafe(
           `insert into auth.users (id, email, raw_user_meta_data)
@@ -755,7 +765,11 @@ describe('los helpers de permiso', () => {
            ('${M_MULTI_A}', '${BIZ_A}', '${MEMBER_MULTI}', 'staff', 'Dos negocios A', 'helper-dos-a@test', 'active', 24, now(), now(), null),
            ('${M_MULTI_B}', '${BIZ_B}', '${MEMBER_MULTI}', 'staff', 'Dos negocios B', 'helper-dos-b@test', 'active', 24, now(), now(), null),
            ('${M_SHADOW_A}', '${BIZ_A}', '${MEMBER_SHADOW}', 'staff', 'Sombra activa', 'helper-sombra-a@test', 'active', 24, now(), now(), null),
-           ('${M_SHADOW_B}', '${BIZ_B}', '${MEMBER_SHADOW}', 'staff', 'Sombra vieja', 'helper-sombra-b@test', 'disabled', 24, now(), now() - interval '2 days', null)`,
+           ('${M_SHADOW_B}', '${BIZ_B}', '${MEMBER_SHADOW}', 'staff', 'Sombra vieja', 'helper-sombra-b@test', 'disabled', 24, now(), now() - interval '2 days', null),
+           ('${M_PAUSED}', '${BIZ_A}', '${MEMBER_PAUSED}', 'staff', 'Pausado', 'helper-pausado@test', 'disabled', 24, now(), now(), null),
+           ('${M_SIDE_A}', '${BIZ_A}', '${MEMBER_PAUSED_SIDE}', 'staff', 'Activo con un negocio pausado', 'helper-pausado-lado-a@test', 'active', 24, now(), now(), null),
+           ('${M_SIDE_B}', '${BIZ_B}', '${MEMBER_PAUSED_SIDE}', 'staff', 'Pausado en el otro', 'helper-pausado-lado-b@test', 'disabled', 24, now(), now(), null),
+           ('${M_PAUSED_DELETED}', '${BIZ_A}', '${MEMBER_PAUSED_DELETED}', 'staff', 'Pausado y borrado', 'helper-pausado-borrado@test', 'disabled', 24, now(), now(), now())`,
       );
 
       await tx.unsafe(
@@ -773,7 +787,11 @@ describe('los helpers de permiso', () => {
            ('${M_MULTI_A}', '${LOC_A}', null),
            ('${M_MULTI_B}', '${LOC_BZ}', null),
            ('${M_SHADOW_A}', '${LOC_A}', null),
-           ('${M_SHADOW_B}', '${LOC_BZ}', null)`,
+           ('${M_SHADOW_B}', '${LOC_BZ}', null),
+           ('${M_PAUSED}', '${LOC_A}', null),
+           ('${M_SIDE_A}', '${LOC_A}', null),
+           ('${M_SIDE_B}', '${LOC_BZ}', null),
+           ('${M_PAUSED_DELETED}', '${LOC_A}', null)`,
       );
     });
   });
@@ -960,6 +978,15 @@ describe('los helpers de permiso', () => {
   // matriz ata las dos en cada persona, y por eso falla si el TTL se acorta a
   // `staff`, si se invierte el `> 0`, o si una de las dos se queda con la copia
   // vieja de la regla.
+  //
+  // OJO CON EL ALCANCE DE ESTA MATRIZ. `granted === (reason === 'ok')` es la
+  // invariante para quien tiene UNA membresía activa, que es toda la lista de
+  // acá. `multiple_businesses`, `no_membership` y `disabled` son razones de
+  // SELECCIÓN, no de autorización: un dueño de dos negocios no es `ok` en la
+  // llamada sin argumento y aun así administra BIZ_A, y un pausado no administra
+  // nada pero tampoco es un desconocido. Meter a esas personas en esta matriz las
+  // haría fallar por la razón equivocada, y el próximo que lo lea va a ir a
+  // buscar un bug de permisos donde solo hay una razón de selección.
 
   test('la que autoriza y la que explica nunca se contradicen', async () => {
     const personas: readonly { id: string; label: string }[] = [
@@ -1011,6 +1038,68 @@ describe('los helpers de permiso', () => {
     expect(nobody.reason).toBe('no_membership');
     expect(nobody.role).toBeNull();
     expect(nobody.business_ids).toEqual([]);
+  });
+
+  // ─── PAUSAR NO ES NO CONOCER ───────────────────────────────────────────────
+  //
+  // La razón de existir de esta función es que el panel explique la salida en
+  // vez de mostrar un error genérico, y `no_membership` ES el error genérico: el
+  // vocabulario del panel ya distingue **pausar** de **dar de baja**, y
+  // "disabled corta acceso de inmediato" es requisito de verificación.
+
+  test('una membresía pausada se explica como pausa, no como desconocido', async () => {
+    const paused = await sessionState(MEMBER_PAUSED);
+    expect(paused.reason).toBe('disabled');
+    // `role: null` y sin ubicaciones: la versión anterior devolvía el rol y las
+    // sucursales de una membresía a la que ya le revocaron el acceso, y eso es
+    // más información de la que necesita un mensaje de "te pausaron".
+    expect(paused.role).toBeNull();
+    expect(paused.location_ids).toEqual([]);
+    expect(paused.expires_at).toBeNull();
+    // El negocio pausado no es un negocio en el que se pueda actuar.
+    expect(paused.business_ids).toEqual([]);
+
+    // La pausa no abre ningún otro camino: el permiso sigue en false.
+    expect(await canManage(MEMBER_PAUSED, BIZ_A, LOC_A)).toBe(false);
+    // Y con el negocio explícito la respuesta es la misma.
+    expect((await sessionState(MEMBER_PAUSED, BIZ_A)).reason).toBe('disabled');
+  });
+
+  test('pausado en un negocio no tapa la membresía activa de otro', async () => {
+    // Esta es la combinación que decide dónde va la fila pausada: si se
+    // consultara antes de la selección por `status`, esta persona recibiría
+    // `disabled` y nunca llegaría al `ok` que BIZ_A le debe.
+    const side = await sessionState(MEMBER_PAUSED_SIDE);
+    expect(side.reason).toBe('ok');
+    expect(side.role).toBe('staff');
+    expect(side.location_ids).toEqual([LOC_A]);
+    // `business_ids` es la lista de negocios en los que se puede actuar, y una
+    // fila pausada no entra en ella.
+    expect(side.business_ids).toEqual([BIZ_A]);
+    expect(await canManage(MEMBER_PAUSED_SIDE, BIZ_A, LOC_A)).toBe(true);
+
+    // Y el negocio pausado, preguntado de uno en uno, sí responde "disabled".
+    const pausedSide = await sessionState(MEMBER_PAUSED_SIDE, BIZ_B);
+    expect(pausedSide.reason).toBe('disabled');
+    expect(pausedSide.role).toBeNull();
+    expect(pausedSide.business_ids).toEqual([]);
+    expect(await canManage(MEMBER_PAUSED_SIDE, BIZ_B, LOC_BZ)).toBe(false);
+  });
+
+  test('una fila borrada no es una pausa: es nada', async () => {
+    // Pausada Y borrada. El sondeo de la fila pausada exige `deleted_at is null`
+    // porque una fila borrada no concede nada por ningún camino, pero tampoco es
+    // "te pausaron".
+    const deleted = await sessionState(MEMBER_PAUSED_DELETED);
+    expect(deleted.reason).toBe('no_membership');
+    expect(deleted.role).toBeNull();
+    expect(deleted.business_ids).toEqual([]);
+
+    // Y la de `MEMBER_DELETED`, que está activa y borrada, tampoco se confunde
+    // con una pausa.
+    const softDeleted = await sessionState(MEMBER_DELETED);
+    expect(softDeleted.reason).toBe('no_membership');
+    expect(softDeleted.business_ids).toEqual([]);
   });
 
   // ─── EL ROL, Y QUIÉN LO PUEDE PREGUNTAR ────────────────────────────────────
