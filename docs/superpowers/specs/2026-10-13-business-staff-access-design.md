@@ -293,6 +293,21 @@ uso es explícito:
 | `session_state()` con exactamente una membresía activa | el estado de esa |
 | `session_state()` con varias membresías activas | `reason: 'multiple_businesses'`, `role: null`, y `business_ids` con la lista para que la app pregunte |
 | `session_state()` sin membresías | `reason: 'no_membership'` |
+| `session_state()` sin membresía **activa**, pero con una pausada | `reason: 'disabled'` |
+
+**`disabled` es una salida distinta de "nunca fue miembro", y por eso tiene fila propia.** La
+razón de existir de esta función es que el panel explique la salida en vez de mostrar un error
+genérico, y a quien le revocaron el acceso hay que explicarle lo que le pasó. El vocabulario
+del panel ya distingue **pausar** de **dar de baja**, y "disabled corta acceso de inmediato" es
+un requisito de verificación, no una nota: las dos cosas suponen que la app sepa decir
+"te pausaron" y no "no te conozco".
+
+**El orden importa, y es el que decide si esto es una salida o un error.** La membresía
+pausada se consulta **después** de que la selección por `status = 'active'` no encuentre nada,
+nunca antes: alguien activo en A y pausado en B sigue siendo `ok` en A. La fila pausada
+tampoco entra en `business_ids`, que es la lista de negocios en los que se puede actuar, y
+exige `deleted_at is null` como el resto — una fila borrada no concede nada por ningún camino,
+pero tampoco es "te pausaron": es nada.
 
 La selección mira `status = 'active'` y `deleted_at is null`. Sin `status` en el predicado,
 una membresía deshabilitada más antigua tapa la activa y el panel muestra el negocio
@@ -533,8 +548,14 @@ porque solo existe un tipo de usuario con acceso al panel.
 El filtrado es de **UI**, no de seguridad: RLS ya impide que un `staff` escriba en
 `business_locations` o lea `payouts`, así que ocultar controles no agrega una frontera,
 solo deja de ofrecer botones que van a fallar. El origen del rol es
-`public.business_member_session_state()`, que la sesión ya consulta en §5.2 — el panel
+`public.business_member_session_state(negocio)`, que la sesión ya consulta en §5.2 — el panel
 pregunta por su rol en lugar de deducirlo de `profiles.role`, que solo dice "de negocio".
+
+**El argumento es explícito acá a propósito, y el filtro por `minRole` lo necesita.** La
+llamada sin argumento devuelve `role: null` con `reason: 'multiple_businesses'` para quien
+tiene más de un negocio —el dueño real, que en producción tiene seis—, y un `role: null`
+sobre el que filtrar por rol mínimo no dice nada: todo pasa o nada pasa. El panel ya eligió
+negocio para poder pintar sus controles, así que el rol que necesita es el de ese negocio.
 
 Cada opción de configuración se declara con un rol mínimo
 (`minRole: 'owner' | 'manager' | 'staff'`) y la sección filtra por ese campo. La

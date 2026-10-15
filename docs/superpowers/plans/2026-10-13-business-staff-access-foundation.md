@@ -328,10 +328,15 @@ git commit -am "feat(db): el dueño deja de ser una fila aparte y pasa a ser un 
 public.business_member_role(p_business_id uuid) -> public.business_member_role
 public.can_manage_location(p_business_id uuid, p_location_id uuid) -> boolean
 public.business_has_feature(p_business_id uuid, p_feature public.business_feature) -> boolean
-public.business_member_session_state() -> jsonb
+public.business_member_session_state(p_business_id uuid default null) -> jsonb
 ```
 
-`business_member_session_state()` devuelve `{ role, location_ids, expires_at, reason }` y **no recibe argumentos**: lee `auth.uid()`, que es lo que lo hace utilizable desde el cliente para pintar la UI.
+`business_member_session_state` devuelve `{ role, location_ids, expires_at, reason, business_ids }`
+y **no recibe argumentos**: lee `auth.uid()`, que es lo que lo hace utilizable desde el cliente
+para pintar la UI. El argumento es opcional a propósito —sin él la función solo es honesta
+cuando la persona tiene un negocio, y un dueño real tiene varios—, y el brief de esta tarea
+lo llama sin argumento, que es el caso de un empleado con un solo negocio. La semántica de
+cada llamada está en el spec §5.2.
 
 - [ ] **Step 1: Escribir la matriz de pruebas que falla**
 
