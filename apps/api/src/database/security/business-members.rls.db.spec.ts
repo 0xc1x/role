@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   as,
   createSupabaseTestDb,
+  deniedAs,
   splitStatements,
   type SupabaseTestDb,
 } from '../../../test/supabase-platform';
@@ -485,6 +486,15 @@ describe('las tres tablas de staff nacen cerradas', () => {
         'la razón equivocada: no hay nada que abrir.',
     ).toEqual(['business_member_locations', 'business_members']);
 
+    // SOLO las policies de ESCRITURA. La aserción se escribió cuando las dos
+    // tablas no tenían NINGUNA policy, y el filtro `cmd <> 'SELECT'` es lo que la
+    // mantiene diciendo lo que su nombre dice desde que existen las tres de
+    // lectura del §6.2: un conjunto de policies enteramente vacío seguiría
+    // dando verde, y en una base donde las dos tablas no tienen ni una sola policy
+    // ese `toEqual([])` es cierto por la razón equivocada — no hay nada que abrir.
+    // El predicado escrito es el que sobrevive a las policies de lectura, y la
+    // contraparte positiva — que existen EXACTAMENTE las tres del §6.2 y ninguna
+    // más — está en el bloque de la §6.2 de este archivo.
     const policies = await as(ctx.sql, 'service_role', null, (tx) =>
       tx
         .unsafe<{ tablename: string; cmd: string }[]>(
@@ -493,6 +503,7 @@ describe('las tres tablas de staff nacen cerradas', () => {
           from pg_policies
           where schemaname = 'public'
             and tablename in ('business_members','business_member_locations')
+            and cmd <> 'SELECT'
           order by tablename, cmd`,
         )
         .then((rows) => plainRows(rows)),
@@ -1243,5 +1254,1452 @@ describe('los helpers de permiso', () => {
         `el plan ${row.label} no resuelve igual que BUSINESS_PLAN_FEATURES.`,
       ).toEqual(row.features);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * LAS POLICIES DE LA §6.2, Y LOS TRES RPCs QUE RESOLVÍAN AL DUEÑO A MANO.
+ *
+ * ─── POR QUÉ ESTE BLOQUE, Y POR QUÉ NO ES EL DE ARRIBA ──────────────────────
+ *
+ * El bloque de los helpers probó que las funciones DICEN la verdad. Este bloque
+ * prueba que algo las CONSUME: que las policies de negocio —offers, pedidos,
+ * sucursales, y las que no tienen columna de sucursal— y los tres RPCs que
+ * aceptan al dueño resuelven por membresía, y no por una fila que el plan 1 va a
+ * borrar.
+ *
+ * ─── EL ORDEN, Y POR QUÉ LAS DOS MITADES ESTÁN AFIRMADAS ─────────────────────
+ *
+ * El §6.2 pone el orden como invariante: primero las policies nuevas, después se
+ * retiran las viejas. Un orden al revés deja al dueño sin panel. Así que la
+ * mitad nueva y la mitad vieja conviven, y CONVIVIR es lo que hay que medir: este
+ * bloque afirma el conjunto nuevo completo por nombre, y afirma que el conjunto
+ * viejo que resuelve por `business_ownership` sigue siendo exactamente el que
+ * había antes —19 policies en 12 tablas, medido, no estimado—.
+ *
+ * El residuo viejo NO es deuda que este bloque perdona: es la fila del ledger que
+ * se recoge en la migración siguiente, que es la que hace `drop table`. Afirmar
+ * el número exacto es lo que convierte ese `drop` en un diff de una línea: si
+ * cambia sin esa migración, alguien escribió una policy a mano.
+ *
+ * ─── QUIÉN ES QUIÉN EN ESTE FIXTURE ──────────────────────────────────────────
+ *
+ * `business_ownership` tiene UNA fila: la del dueño de POL_BIZ. No hay fila para
+ * el gerente ni para el staff, y esa ausencia es el experimento: las policies
+ * viejas no les dicen nada, así que todo lo que vean aquí lo ven por las
+ * nuevas. Si el gerente viera algo sin haber fila de dueño, el único camino
+ * posible sería la policy nueva.
+ *
+ * El dueño, en cambio, tiene los dos caminos. Es la mitad de la paridad que este
+ * bloque mide: el dueño conserva el acceso que ya tenía (una regresión aquí sería
+ * un panel vacío) y encima gana el camino nuevo.
+ */
+describe('las policies y los RPCs resuelven por membresía', () => {
+  let ctx: SupabaseTestDb;
+
+  const POL_OWNER = 'f0000000-0000-4000-8000-000000000001';
+  const POL_MANAGER = 'f0000000-0000-4000-8000-000000000002';
+  const POL_STAFF = 'f0000000-0000-4000-8000-000000000003';
+  const POL_OUTSIDER = 'f0000000-0000-4000-8000-000000000004';
+  const POL_CONSUMER = 'f0000000-0000-4000-8000-000000000005';
+  const POL_CONSUMER2 = 'f0000000-0000-4000-8000-000000000006';
+  const POL_DELETED = 'f0000000-0000-4000-8000-000000000007';
+  const POL_PAUSED = 'f0000000-0000-4000-8000-000000000008';
+
+  const POL_BIZ = 'f1000000-0000-4000-8000-000000000001';
+  const POL_OTHER_BIZ = 'f1000000-0000-4000-8000-000000000002';
+  const POL_LOC_A = 'f2000000-0000-4000-8000-000000000001';
+  const POL_LOC_B = 'f2000000-0000-4000-8000-000000000002';
+  const POL_LOC_OTHER = 'f2000000-0000-4000-8000-000000000003';
+  const POL_LOC_NEW = 'f2000000-0000-4000-8000-000000000004';
+  /**
+   * Una sucursal del propio negocio, cerrada.
+   *
+   * Existe por un motivo de medición: "Anyone can view active business locations"
+   * deja ver TODA sucursal activa de la base, así que un `select` no distingue
+   * entre la policy vieja y la nueva. Con una cerrada, la diferencia se ve: el
+   * catálogo público no la enseña y la policy por ubicación sí.
+   */
+  const POL_LOC_CLOSED = 'f2000000-0000-4000-8000-000000000005';
+
+  const M_OWNER = 'f3000000-0000-4000-8000-000000000001';
+  const M_MANAGER = 'f3000000-0000-4000-8000-000000000002';
+  const M_STAFF = 'f3000000-0000-4000-8000-000000000003';
+  const M_OUTSIDER = 'f3000000-0000-4000-8000-000000000004';
+  const M_DELETED = 'f3000000-0000-4000-8000-000000000005';
+  const M_PAUSED = 'f3000000-0000-4000-8000-000000000006';
+
+  const OFFER_A = 'f4000000-0000-4000-8000-000000000001';
+  const OFFER_B = 'f4000000-0000-4000-8000-000000000002';
+  const OFFER_OTHER = 'f4000000-0000-4000-8000-000000000003';
+  /**
+   * Una oferta CERRADA de la otra sucursal.
+   *
+   * Mismo motivo que `POL_LOC_CLOSED`: "Anyone can view active offers" deja ver
+   * toda oferta activa de la base, así que un `select` no distingue la policy
+   * nueva de la vieja. Con una cerrada, la diferencia se ve, y la respuesta
+   * correcta es que el cajero de A no la vea y el gerente sí: la sucursal no es
+   * suya, aunque la oferta exista.
+   */
+  const OFFER_CLOSED = 'f4000000-0000-4000-8000-000000000004';
+  const CATEGORY = 'f4000000-0000-4000-8000-00000000000a';
+  /**
+   * Una segunda categoría, que existe solo para el test de `offer_categories`.
+   *
+   * `offer_categories` es una tabla puente de dos columnas y su clave primaria es
+   * `(offer_id, category_id)`, así que no hay una fila "suelta" que insertar o
+   * borrar sin tocar una que ya existe. Con dos categorías, cada aserción mueve
+   * una fila propia y el fixture de las demás pruebas queda intacto.
+   */
+  const CATEGORY_2 = 'f4000000-0000-4000-8000-000000000014';
+  const HOUR = 'f4000000-0000-4000-8000-00000000000b';
+  const COUPON = 'f4000000-0000-4000-8000-00000000000c';
+  const PAYOUT = 'f4000000-0000-4000-8000-00000000000d';
+  const PAYMENT_INTENT = 'f4000000-0000-4000-8000-00000000000e';
+  const PAYMENT_INTENT_OTHER = 'f4000000-0000-4000-8000-00000000000f';
+  const NO_SUCH_ORDER = 'f9000000-0000-4000-8000-000000000000';
+
+  /**
+   * Los pedidos, por letra. El estado de cada uno es el que su prueba necesita,
+   * y NINGUNA prueba comparte un pedido con otra que lo muta: `cancel_order` y
+   * `set_order_status` escriben de verdad, y un test que dependiera del orden de
+   * ejecución estaría midiendo el orden en vez de la política.
+   *
+   *   A   LOC_A  pending            el staff cancela el de su sucursal
+   *   B   LOC_B  pending            el staff NO toca el de la otra sucursal
+   *   C   LOC_A  confirmed          el consumidor cancela el suyo
+   *   D   LOC_A  confirmed          el consumidor NO cancela el de otro
+   *   E   LOC_A  completed          un pedido recogido no se cancela
+   *   F   LOC_A  pending            el gerente avanza a confirmed
+   *   G   LOC_A  ready_for_pickup   `picked_up` está reservada al sistema
+   *   H   LOC_A  completed          un pedido completado no retrocede
+   *   I   LOC_B  pending            la sucursal ajena no se toca
+   *   J   OTHER  confirmed          el negocio ajeno no se toca
+   *   K   LOC_A  pending            el mismo estado no es una transición
+   *   L   LOC_A  pending            un estado que no existe se rechaza antes
+   *   M   LOC_A  ready_for_pickup   el código bueno cierra el pedido
+   *   N   LOC_A  ready_for_pickup   el código malo no
+   *   O   LOC_A  pending            el pedido no está listo para recoger
+   *   P   OTHER  ready_for_pickup   la sucursal del vecino, código incluido
+   */
+  const ORDER: Record<string, string> = {
+    A: 'f5000000-0000-4000-8000-000000000001',
+    B: 'f5000000-0000-4000-8000-000000000002',
+    C: 'f5000000-0000-4000-8000-000000000003',
+    D: 'f5000000-0000-4000-8000-000000000004',
+    E: 'f5000000-0000-4000-8000-000000000005',
+    F: 'f5000000-0000-4000-8000-000000000006',
+    G: 'f5000000-0000-4000-8000-000000000007',
+    H: 'f5000000-0000-4000-8000-000000000008',
+    I: 'f5000000-0000-4000-8000-000000000009',
+    J: 'f5000000-0000-4000-8000-00000000000a',
+    K: 'f5000000-0000-4000-8000-00000000000b',
+    L: 'f5000000-0000-4000-8000-00000000000c',
+    M: 'f5000000-0000-4000-8000-00000000000d',
+    N: 'f5000000-0000-4000-8000-00000000000e',
+    O: 'f5000000-0000-4000-8000-00000000000f',
+    P: 'f5000000-0000-4000-8000-000000000010',
+  };
+  /**
+   * Los pedidos de cada sucursal, por letra.
+   *
+   * Tres grupos y no dieciséis filas a mano: casi todas las aserciones de este
+   * bloque son "ve las de A y no las de B", y el reparto por sucursal es la
+   * variable que se está midiendo.
+   */
+  const AT_A: readonly string[] = [
+    'A',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'K',
+    'L',
+    'M',
+    'N',
+    'O',
+  ];
+  const AT_B: readonly string[] = ['B', 'I'];
+  const AT_OTHER: readonly string[] = ['J', 'P'];
+  const orderIds = (keys: readonly string[]): string[] =>
+    keys.map((key) => ORDER[key] as string).sort();
+
+  beforeAll(async () => {
+    ctx = await createSupabaseTestDb();
+
+    await ctx.sql.begin(async (tx) => {
+      // Las tres mismas claves de Vault que `orders.rls.db.spec.ts` siembra, y por
+      // la misma razón: `trg_offer_created_push` y `trg_order_event_push` son
+      // AFTER INSERT y `invoke_internal_edge_function` levanta `P0001` sin
+      // ellas. Sin las tres no se inserta ni una oferta ni un pedido, y este
+      // bloque no tiene qué medir.
+      for (const [name, value] of [
+        ['supabase_url', 'https://dispatch-stub.invalid'],
+        ['supabase_anon_key', 'rls-membership-stub-anon-key'],
+        ['internal_secret', 'rls-membership-internal-secret'],
+      ] as const) {
+        await tx.unsafe(
+          `insert into vault.secrets (name, secret) values ('${name}', '${value}')
+           on conflict (name) do update set secret = excluded.secret`,
+        );
+      }
+
+      for (const [name, id] of [
+        ['owner', POL_OWNER],
+        ['manager', POL_MANAGER],
+        ['staff', POL_STAFF],
+        ['outsider', POL_OUTSIDER],
+        ['consumer', POL_CONSUMER],
+        ['consumer2', POL_CONSUMER2],
+        ['deleted', POL_DELETED],
+        ['paused', POL_PAUSED],
+      ] as const) {
+        await tx.unsafe(
+          `insert into auth.users (id, email) values ('${id}', '${name}@rls-membership.test')
+           on conflict (id) do nothing`,
+        );
+      }
+
+      await tx.unsafe(`
+        insert into public.businesses (id, name, type, slug)
+        values ('${POL_BIZ}',       'RLS membership biz',   'restaurant', 'rls-membership-biz'),
+               ('${POL_OTHER_BIZ}', 'RLS membership other', 'restaurant', 'rls-membership-other');
+
+        -- UNA fila de dueño, y solo una. Es el experimento: el gerente y el
+        -- staff no son dueños de nada, así que cualquier fila que vean vino de
+        -- una policy nueva.
+        insert into public.business_ownership (business_id, owner_id)
+        values ('${POL_BIZ}', '${POL_OWNER}');
+
+        -- Aprobados y activos porque enforce_offer_business_availability baja
+        -- is_active a false de una oferta de un negocio que no lo esté. La
+        -- business_finance que usa accrue_order_earnings la escribe el trigger
+        -- de bootstrap; no hay que sembrarla.
+        update public.business_moderation
+           set verification_status = 'approved'
+         where business_id in ('${POL_BIZ}', '${POL_OTHER_BIZ}');
+
+        insert into public.business_locations (id, business_id, name, address, latitude, longitude, is_active)
+        values ('${POL_LOC_A}',     '${POL_BIZ}',       'A',     'Street A', 40.41680000, -3.70380000, true),
+               ('${POL_LOC_B}',     '${POL_BIZ}',       'B',     'Street B', 40.41680000, -3.70380000, true),
+               ('${POL_LOC_OTHER}', '${POL_OTHER_BIZ}', 'Other', 'Street O', 40.41680000, -3.70380000, true),
+               ('${POL_LOC_CLOSED}','${POL_BIZ}',       'Closed','Street X', 40.41680000, -3.70380000, false);
+      `);
+
+      await tx.unsafe(`
+        insert into public.business_members
+          (id, business_id, user_id, role, label, alias, status, session_ttl_hours, last_authenticated_at, created_at, deleted_at)
+        values
+          ('${M_OWNER}',   '${POL_BIZ}',       '${POL_OWNER}',   'owner',   'Dueño',    'membership-owner@test',   'active',   24, now(), now(), null),
+          ('${M_MANAGER}', '${POL_BIZ}',       '${POL_MANAGER}', 'manager', 'Gerente',  'membership-manager@test', 'active',   24, now(), now(), null),
+          ('${M_STAFF}',   '${POL_BIZ}',       '${POL_STAFF}',   'staff',   'Cajero',   'membership-staff@test',   'active',   24, now(), now(), null),
+          ('${M_OUTSIDER}','${POL_OTHER_BIZ}', '${POL_OUTSIDER}','owner',   'Dueño',    'membership-outsider@test','active',   24, now(), now(), null),
+          ('${M_DELETED}', '${POL_BIZ}',       '${POL_DELETED}', 'staff',   'Dado de baja', 'membership-baja@test', 'active',   24, now(), now(), now()),
+          ('${M_PAUSED}',  '${POL_BIZ}',       '${POL_PAUSED}',  'staff',   'Pausado',  'membership-pausado@test', 'disabled', 24, now(), now(), null);
+
+        -- El staff solo de A. El gerente de las dos, porque owner y manager
+        -- reciben el negocio entero y can_manage_location lo dice así; la
+        -- pregunta de "otra sucursal" se responde contra POL_LOC_OTHER, que es de
+        -- OTRO negocio, y contra el staff, que sí está acotado.
+        insert into public.business_member_locations (member_id, location_id, deleted_at)
+        values
+          ('${M_STAFF}',   '${POL_LOC_A}',     null),
+          ('${M_MANAGER}', '${POL_LOC_A}',     null),
+          ('${M_MANAGER}', '${POL_LOC_B}',     null),
+          ('${M_DELETED}', '${POL_LOC_A}',     null),
+          ('${M_PAUSED}',  '${POL_LOC_A}',     null),
+          ('${M_OUTSIDER}','${POL_LOC_OTHER}', null);
+      `);
+
+      await tx.unsafe(`
+        insert into public.categories (id, name, slug, active)
+        values ('${CATEGORY}', 'RLS membership category', 'rls-membership-category', true),
+               ('${CATEGORY_2}', 'RLS membership category 2', 'rls-membership-category-2', true);
+
+        insert into public.offers
+          (id, business_id, business_location_id, title, original_price, discounted_price,
+           stock, initial_stock, pickup_start, pickup_end, is_active)
+        values ('${OFFER_A}',     '${POL_BIZ}',       '${POL_LOC_A}',     'RLS offer A',     10.00, 4.00, 5, 5, now(), now() + interval '3 hours', true),
+               ('${OFFER_B}',     '${POL_BIZ}',       '${POL_LOC_B}',     'RLS offer B',     10.00, 4.00, 5, 5, now(), now() + interval '3 hours', true),
+               ('${OFFER_OTHER}', '${POL_OTHER_BIZ}', '${POL_LOC_OTHER}', 'RLS offer other', 10.00, 4.00, 5, 5, now(), now() + interval '3 hours', true),
+               ('${OFFER_CLOSED}','${POL_BIZ}',       '${POL_LOC_B}',     'RLS offer closed',10.00, 4.00, 5, 5, now(), now() + interval '3 hours', false);
+
+        insert into public.offer_categories (offer_id, category_id)
+        values ('${OFFER_A}', '${CATEGORY}'),
+               ('${OFFER_OTHER}', '${CATEGORY}');
+      `);
+
+      for (const [key, userId, businessId, locationId, offerId, status] of [
+        ['A', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'pending'],
+        ['B', POL_CONSUMER2, POL_BIZ, POL_LOC_B, OFFER_B, 'pending'],
+        ['C', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'confirmed'],
+        ['D', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'confirmed'],
+        ['E', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'completed'],
+        ['F', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'pending'],
+        ['G', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'ready_for_pickup'],
+        ['H', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'completed'],
+        ['I', POL_CONSUMER2, POL_BIZ, POL_LOC_B, OFFER_B, 'pending'],
+        [
+          'J',
+          POL_CONSUMER2,
+          POL_OTHER_BIZ,
+          POL_LOC_OTHER,
+          OFFER_OTHER,
+          'confirmed',
+        ],
+        ['K', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'pending'],
+        ['L', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'pending'],
+        ['M', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'ready_for_pickup'],
+        ['N', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'ready_for_pickup'],
+        ['O', POL_CONSUMER, POL_BIZ, POL_LOC_A, OFFER_A, 'pending'],
+        [
+          'P',
+          POL_CONSUMER2,
+          POL_OTHER_BIZ,
+          POL_LOC_OTHER,
+          OFFER_OTHER,
+          'ready_for_pickup',
+        ],
+      ] as const) {
+        // La columna `business_location_id` no se escribe: la deriva
+        // `trg_set_order_business_location` de la oferta, que es lo que hace
+        // `reserve_offer` también. Compartir oferta entre pedidos de la misma
+        // sucursal es representable (solo `reserve_offer` lo rechaza) y deja el
+        // reordenamiento de stock de la cancelación medido en una sola fila.
+        await tx.unsafe(`
+          insert into public.orders
+            (id, user_id, offer_id, business_id, order_number, status, price,
+             original_price, pickup_code, commission_rate, platform_fee, net_amount)
+          values ('${ORDER[key]}', '${userId}', '${offerId}', '${businessId}',
+                  'POL-${key}', '${status}', 4.00, 10.00, 'PICKUP-${key}',
+                  0.4000, 0.4000, 3.2000);
+        `);
+      }
+
+      await tx.unsafe(`
+        insert into public.payment_intents (id, order_id, gateway, amount, currency, status, idempotency_key)
+        values ('${PAYMENT_INTENT}',       '${ORDER.A}', 'stripe', 4.00, 'USD', 'approved', 'f7000000-0000-4000-8000-000000000001'),
+               ('${PAYMENT_INTENT_OTHER}', '${ORDER.B}', 'stripe', 4.00, 'USD', 'approved', 'f7000000-0000-4000-8000-000000000002');
+
+        insert into public.business_hours (id, business_id, day, open_time, close_time, is_closed)
+        values ('${HOUR}',  '${POL_BIZ}', 'monday', '08:00', '20:00', false);
+
+        insert into public.coupons (id, business_id, code, name, type, value)
+        values ('${COUPON}', '${POL_BIZ}', 'RLSPOL', 'RLS membership coupon', 'percentage', 10.00);
+
+        insert into public.payouts (id, business_id, period_start, period_end, gross_amount, platform_fee, net_amount, status)
+        values ('${PAYOUT}', '${POL_BIZ}', current_date - 30, current_date - 1, 100.00, 40.00, 60.00, 'pending');
+      `);
+      // `business_notification_preferences` no se siembra: la escribe
+      // `trg_create_business_notification_preferences` al insertar el negocio, y
+      // sembrarla a mano sería un fixture que en producción no puede existir.
+    });
+  });
+
+  afterAll(async () => {
+    await ctx.stop();
+  });
+
+  /** The ids a session can see through one table, sorted. */
+  async function idsSeenBy(userId: string | null, query: string) {
+    const rows = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ id: string }[]>(query),
+    );
+    return plainRows(rows)
+      .map((r) => r.id)
+      .sort();
+  }
+
+  /** One RPC call as a signed-in user, returned whole. */
+  async function callRpc(userId: string, call: string) {
+    const rows = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ result: Record<string, unknown> }[]>(
+        `select ${call} as result`,
+      ),
+    );
+    return (plainRows(rows)[0]?.result ?? {}) as Record<string, unknown>;
+  }
+
+  /** The status column of an order, read as the schema owner. */
+  async function statusOf(orderId: string): Promise<string | undefined> {
+    const rows = await ctx.sql.unsafe<{ status: string }[]>(
+      `select status from public.orders where id = '${orderId}'`,
+    );
+    return plainRows(rows)[0]?.status;
+  }
+
+  // ─── LA PARIDAD: LAS NUEVAS ESTÁN, LAS VIEJAS SIGUEN AL LADO ─────────────────
+  //
+  // El conjunto nuevo se afirma COMPLETO y por nombre, no por conteo: un conteo
+  // pasaría con tres policies cambiada de sitio, y el nombre es lo que un
+  // revisor lee. El conjunto viejo se afirma por lo MISMO, porque su valor está
+  // en que sea exactamente el de antes: ese es el invariante del §6.2.
+
+  test('ninguna policy de negocio resuelve por business_ownership, y las viejas siguen exactamente las 19 que había', async () => {
+    const membership = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ tablename: string; policyname: string; cmd: string }[]>(
+        `
+        select tablename, policyname, cmd from pg_policies
+        where schemaname = 'public'
+          and (qual like '%can_manage_location%'
+            or with_check like '%can_manage_location%'
+            or qual like '%business_member_role%'
+            or with_check like '%business_member_role%')
+        order by tablename, policyname`,
+      ),
+    );
+
+    expect(
+      plainRows(membership)
+        .map((p) => `${p.tablename}:${p.policyname}:${p.cmd}`)
+        .sort(),
+      'una policy de negocio resuelve el acceso por un helper que no es de ' +
+        'pertenencia, o falta la que debería estar. La lista completa está en ' +
+        'el §6.2 y las veinte y pico entradas son lo que este bloque mide.',
+    ).toEqual([
+      'business_hours:Members can manage business hours:ALL',
+      'business_locations:Members can delete business locations:DELETE',
+      'business_locations:Members can insert business locations:INSERT',
+      'business_locations:Members can update business locations:UPDATE',
+      'business_locations:Members can view business locations:SELECT',
+      'business_member_locations:Owners and managers view member scope:SELECT',
+      'business_members:Owners and managers view business members:SELECT',
+      'business_notification_preferences:Members can insert own notification preferences:INSERT',
+      'business_notification_preferences:Members can update own notification preferences:UPDATE',
+      'business_notification_preferences:Members can view own notification preferences:SELECT',
+      'businesses:Members can update business:UPDATE',
+      'businesses:Members can view business:SELECT',
+      'coupons:Members can manage coupons:ALL',
+      'offer_categories:Members can delete offer categories:DELETE',
+      'offer_categories:Members can insert offer categories:INSERT',
+      'offers:Members can delete own offers:DELETE',
+      'offers:Members can insert own offers:INSERT',
+      'offers:Members can update own offers:UPDATE',
+      'offers:Members can view own offers:SELECT',
+      'order_events:Members can view own order events:SELECT',
+      'orders:Members can view own orders:SELECT',
+      'payment_intents:Members can view own payment intents:SELECT',
+      'payouts:Members can view own payouts:SELECT',
+      'profiles:Members can view their order customers:SELECT',
+    ]);
+
+    // Y el residuo viejo, que es lo que la migración siguiente retira con el
+    // `drop table`. MEDIDO: 19, en 12 tablas. El brief decía "unas 20"; lo que
+    // hay en la base son diecinueve, y el número va escrito porque es el que
+    // hace que el `drop` sea un diff de una línea.
+    const legacy = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx
+        .unsafe<{ tablename: string; policyname: string; cmd: string }[]>(
+          `
+          select tablename, policyname, cmd from pg_policies
+          where schemaname = 'public'
+            and (qual like '%business_ownership%' or with_check like '%business_ownership%')
+          order by tablename, policyname`,
+        )
+        .then((rows) => plainRows(rows)),
+    );
+
+    expect(
+      legacy.map((p) => `${p.tablename}:${p.policyname}:${p.cmd}`),
+      'el conjunto de policies que resuelve por business_ownership cambió sin ' +
+        'que nadie lo decidiera. Su número solo baja cuando la migración que ' +
+        'hace `drop table public.business_ownership` corre; si baja antes, ' +
+        'alguien dejó al dueño sin panel, y si sube, alguien escribió una policy ' +
+        'a mano.',
+    ).toEqual([
+      'business_hours:Owners can manage own business hours:ALL',
+      'business_locations:Owners can manage own business locations:ALL',
+      'business_notification_preferences:Business owners insert own notification preferences:INSERT',
+      'business_notification_preferences:Business owners update own notification preferences:UPDATE',
+      'business_notification_preferences:Business owners view own notification preferences:SELECT',
+      'businesses:Owners can update own businesses:UPDATE',
+      'businesses:Owners can view own businesses:SELECT',
+      'coupons:Owners can manage own coupons:ALL',
+      'offer_categories:Owners can delete offer categories:DELETE',
+      'offer_categories:Owners can insert offer categories:INSERT',
+      'offers:Owners can delete own offers:DELETE',
+      'offers:Owners can insert own offers:INSERT',
+      'offers:Owners can update own offers:UPDATE',
+      'offers:Owners can view own offers:SELECT',
+      'order_events:Business can view own order events:SELECT',
+      'orders:Business can view own orders:SELECT',
+      'payment_intents:Business can view own payment intents:SELECT',
+      'payouts:Business can view own payouts:SELECT',
+      'profiles:Businesses can view their order customers:SELECT',
+    ]);
+  });
+
+  // ─── LA FORMA DEL PREDICADO, Y A QUIÉN LE HABLA ─────────────────────────────
+  //
+  // `TO authenticated` y no `TO public` como las viejas. No es una diferencia de
+  // permisos: una sesión anónima no tiene fila en `business_members` —su
+  // `user_id` no puede ser el `auth.uid()` de una sesión sin JWT—, así que el
+  // predicado nunca le concede nada. Lo que cambia es a quién leen estas dos
+  // capas cuando alguien lee el catálogo.
+
+  test('las policies nuevas son para authenticated y no nombran business_ownership', async () => {
+    const rows = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          tablename: string;
+          policyname: string;
+          roles: string[];
+          permissive: string;
+          qual: string | null;
+          with_check: string | null;
+        }[]
+      >(
+        `
+        select tablename, policyname, roles, permissive, qual, with_check
+        from pg_policies
+        where schemaname = 'public'
+          and policyname like 'Members can%'
+        order by tablename, policyname`,
+      ),
+    );
+
+    const all = plainRows(rows);
+    expect(
+      all.length,
+      'no hay 23 policies "Members can…" donde el §6.2 dice que las hay.',
+    ).toBe(23);
+
+    for (const policy of all) {
+      expect(
+        policy.roles,
+        `${policy.tablename}:${policy.policyname} habla con alguien que no es ` +
+          'una sesión de panel.',
+      ).toEqual(['authenticated']);
+      expect(
+        policy.permissive,
+        `${policy.tablename}:${policy.policyname} es RESTRICTIVE. Las policies ` +
+          'permissivas se unen con OR, que es lo que hace posible que las viejas ' +
+          'y las nuevas den lo mismo durante la convivencia del §6.2; una ' +
+          'restrictiva se aplica al final y anularía a las dos.',
+      ).toBe('PERMISSIVE');
+
+      const body = `${policy.qual ?? ''}\n${policy.with_check ?? ''}`;
+      expect(
+        body.includes('business_ownership'),
+        `${policy.tablename}:${policy.policyname} todavía resuelve el dueño por ` +
+          'la tabla que la migración siguiente borra.',
+      ).toBe(false);
+    }
+  });
+
+  // ─── LA LECTURA DE LAS TABLAS DE NEGOCIO, POR SUCURSAL ─────────────────────
+
+  test('el staff ve su sucursal y no la otra, en cada tabla que se resuelve por ubicación', async () => {
+    // `profiles` sale del mismo predicado que `orders` —el cliente de un pedido—,
+    // más la policy de "mi propio perfil", así que el conjunto del cajero es su
+    // cliente de A y su propia fila. Y `POL_CONSUMER2` NO está: su único pedido en
+    // LOC_B es de la otra sucursal, y el de LOC_OTHER es de otro negocio.
+    const expectations: readonly {
+      table: string;
+      sql: string;
+      staff: string[];
+      manager: string[];
+      outsider: string[];
+    }[] = [
+      {
+        table: 'offers',
+        sql: `select id::text as id from public.offers order by id`,
+        // Las tres activas se ven por catálogo público, para todo el mundo. La que
+        // mide es la cerrada de la otra sucursal: el gerente entra por su policy y
+        // el cajero de A no.
+        staff: [OFFER_A, OFFER_B, OFFER_OTHER],
+        manager: [OFFER_A, OFFER_B, OFFER_OTHER, OFFER_CLOSED],
+        outsider: [OFFER_A, OFFER_B, OFFER_OTHER],
+      },
+      {
+        table: 'orders',
+        sql: `select id::text as id from public.orders order by id`,
+        staff: orderIds(AT_A),
+        manager: orderIds([...AT_A, ...AT_B]),
+        outsider: orderIds(AT_OTHER),
+      },
+      {
+        table: 'payment_intents',
+        sql: `select id::text as id from public.payment_intents order by id`,
+        staff: [PAYMENT_INTENT],
+        manager: [PAYMENT_INTENT, PAYMENT_INTENT_OTHER],
+        outsider: [],
+      },
+      {
+        table: 'profiles',
+        sql: `select id::text as id from public.profiles order by id`,
+        staff: [POL_CONSUMER, POL_STAFF],
+        manager: [POL_CONSUMER, POL_CONSUMER2, POL_MANAGER],
+        outsider: [POL_CONSUMER2, POL_OUTSIDER],
+      },
+    ];
+
+    for (const { table, sql, staff, manager, outsider } of expectations) {
+      expect(
+        await idsSeenBy(POL_STAFF, sql),
+        `${table}: el cajero de LOC_A no ve exactamente lo de su sucursal.`,
+      ).toEqual([...staff].sort());
+      // Owner y manager reciben el negocio entero: es lo que dice
+      // `can_manage_location`, y lo que el bloque de helpers ya midió.
+      expect(
+        await idsSeenBy(POL_MANAGER, sql),
+        `${table}: el gerente tiene el negocio entero y nada del vecino.`,
+      ).toEqual([...manager].sort());
+      expect(
+        await idsSeenBy(POL_OUTSIDER, sql),
+        `${table}: el de fuera.`,
+      ).toEqual([...outsider].sort());
+    }
+
+    // `order_events` se mide aparte porque los ids los genera el trigger: se
+    // pregunta por los pedidos cuyos eventos ve cada quien, no por el id del
+    // evento, que no es de este archivo para poder predecirlo.
+    const eventsOf = (viewer: string, keys: readonly string[]) =>
+      idsSeenBy(
+        viewer,
+        `select order_id::text as id from public.order_events
+          where order_id in (${orderIds(keys)
+            .map((id) => `'${id}'`)
+            .join(', ')})`,
+      );
+    expect(
+      await eventsOf(POL_STAFF, AT_B),
+      'el cajero de LOC_A lee los eventos de los pedidos de LOC_B.',
+    ).toEqual([]);
+    expect(await eventsOf(POL_STAFF, AT_A)).toEqual(orderIds(AT_A));
+    // Y el gerente, que tiene el negocio entero, tampoco cruza al vecino.
+    expect(
+      await eventsOf(POL_MANAGER, AT_OTHER),
+      'el gerente lee los eventos de los pedidos del negocio vecino.',
+    ).toEqual([]);
+  });
+
+  // ─── LAS TABLAS SIN COLUMNA DE SUCURSAL: EL ROL, Y SOLO EL ROL ─────────────
+  //
+  // No hay ubicación que acotar, así que el predicado es de negocio. Y es de
+  // ROL, no "cualquier miembro": un cajero no abre ni los horarios ni los cupones
+  // de un negocio que no administra.
+  //
+  // CON UNA ADVERTENCIA QUE ESTE ARCHIVO MIDE Y NO ESCRIBE: dos de estas cuatro
+  // tablas ya eran públicas de lectura antes de esta migración —
+  // "Anyone can view business hours" es `using (true)` y "Anyone can view active
+  // coupons" filtra por `is_active`—, así que un `select` NO demuestra que la
+  // policy nueva conceda nada ahí. Donde la lectura sí es el dato es en `payouts`
+  // y en las preferencias, que no tienen policy pública; en las otras dos lo que
+  // cambia es la ESCRITURA, y por eso se afirma con un `update`.
+
+  test('owner y gerente administran las tablas del negocio, y el staff no', async () => {
+    const publicReads: readonly { name: string; sql: string; row: string }[] = [
+      {
+        name: 'business_hours',
+        sql: `select id::text as id from public.business_hours order by id`,
+        row: HOUR,
+      },
+      {
+        name: 'coupons',
+        sql: `select id::text as id from public.coupons order by id`,
+        row: COUPON,
+      },
+    ];
+    const privateReads: readonly { name: string; sql: string; row: string }[] =
+      [
+        {
+          name: 'payouts',
+          sql: `select id::text as id from public.payouts order by id`,
+          row: PAYOUT,
+        },
+        {
+          name: 'business_notification_preferences',
+          sql: `select business_id::text as id from public.business_notification_preferences order by business_id`,
+          row: POL_BIZ,
+        },
+      ];
+
+    // Las que el catálogo no publica: aquí la lectura ES la policy nueva.
+    for (const table of privateReads) {
+      expect(
+        await idsSeenBy(POL_OWNER, table.sql),
+        `${table.name}: el dueño perdió el acceso que ya tenía. Esta migración es ` +
+          'aditiva y no puede quitárselo a nadie.',
+      ).toEqual([table.row]);
+      expect(
+        await idsSeenBy(POL_MANAGER, table.sql),
+        `${table.name}: el gerente no entra. Es un miembro activo del negocio, y ` +
+          'esta tabla no tiene sucursal que acotar: su predicado es el rol.',
+      ).toEqual([table.row]);
+      expect(
+        await idsSeenBy(POL_STAFF, table.sql),
+        `${table.name}: un cajero leyó una tabla que se resuelve por rol.`,
+      ).toEqual([]);
+    }
+
+    // Las que ya eran públicas: la lectura no dice nada, y la escritura sí.
+    for (const table of publicReads) {
+      expect(
+        await idsSeenBy(POL_OWNER, table.sql),
+        `${table.name}: el dueño perdió una lectura que tenía.`,
+      ).toEqual([table.row]);
+      expect(
+        await idsSeenBy(POL_STAFF, table.sql),
+        `${table.name}: dejó de ser pública de lectura. Esta migración es ` +
+          'aditiva y no quita políticas viejas.',
+      ).toEqual([table.row]);
+    }
+
+    const writes: readonly { name: string; sql: string }[] = [
+      {
+        name: 'business_hours',
+        sql: `update public.business_hours set open_time = '09:00' where id = '${HOUR}' returning id::text`,
+      },
+      {
+        name: 'coupons',
+        sql: `update public.coupons set name = 'RLS membership coupon (gerente)' where id = '${COUPON}' returning id::text`,
+      },
+      {
+        name: 'business_notification_preferences',
+        sql: `update public.business_notification_preferences set push_enabled = false where business_id = '${POL_BIZ}' returning business_id::text`,
+      },
+      // `payouts` NO está en esta lista a propósito: su policy vieja era de solo
+      // lectura y esta migración no la ensancha. Las liquidaciones las escribe
+      // generate_payouts con service_role, y abrirle la escritura al panel sería
+      // ensanchar el perímetro sin que nadie lo pidiera.
+    ];
+
+    for (const write of writes) {
+      expect(
+        await as(ctx.sql, 'authenticated', POL_MANAGER, (tx) =>
+          tx.unsafe<{ id: string }[]>(write.sql),
+        ).then((rows) => plainRows(rows).map((r) => r.id)),
+        `${write.name}: el gerente no administra la tabla del negocio.`,
+      ).toHaveLength(1);
+      expect(
+        await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+          tx.unsafe<{ id: string }[]>(write.sql),
+        ).then((rows) => plainRows(rows).map((r) => r.id)),
+        `${write.name}: un cajero la modificó. La tabla se resuelve por rol y el ` +
+          'cajero no tiene ninguno de esos dos.',
+      ).toEqual([]);
+    }
+
+    // Y borrar, que es la otra mitad de "administrar".
+    expect(
+      await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `delete from public.coupons where id = '${COUPON}' returning id::text`,
+        ),
+      ).then((rows) => plainRows(rows)),
+      'un cajero borró un cupón.',
+    ).toEqual([]);
+  });
+
+  test('la fila del negocio se actualiza por rol, y la policy de dueño sigue ahí', async () => {
+    // La fila de `businesses` no tiene sucursal, así que su predicado es el rol.
+    // Y el dueño la conserva por los DOS caminos: la policy vieja y la nueva.
+    // Perder el viejo sería el modo de falla del §6.2, y por eso el dueño se
+    // prueba contra una escritura —que la policy vieja sí concede— y no contra
+    // una lectura, que el catálogo público ya le daba.
+    const updated = await as(ctx.sql, 'authenticated', POL_MANAGER, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.businesses set name = 'RLS membership biz (gerente)'
+          where id = '${POL_BIZ}' returning id::text`,
+      ),
+    );
+    expect(plainRows(updated).map((r) => r.id)).toEqual([POL_BIZ]);
+
+    const staff = await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.businesses set name = 'RLS membership biz (cajero)'
+          where id = '${POL_BIZ}' returning id::text`,
+      ),
+    );
+    expect(
+      plainRows(staff),
+      'un cajero renombró el negocio. Su alcance es una sucursal, no el negocio.',
+    ).toEqual([]);
+
+    // El dueño, por la policy vieja, que es la que sigue en pie.
+    const owner = await as(ctx.sql, 'authenticated', POL_OWNER, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.businesses set name = 'RLS membership biz'
+          where id = '${POL_BIZ}' returning id::text`,
+      ),
+    );
+    expect(
+      plainRows(owner).map((r) => r.id),
+      'el dueño perdió la fila de su negocio. La convivencia del §6.2 significa ' +
+        'que las dos policies conceden, no que la nueva reemplaza a la vieja.',
+    ).toEqual([POL_BIZ]);
+  });
+
+  // ─── LAS SUCURSALES: LEER ES POR UBICACIÓN, CREAR ES POR ROL ───────────────
+  //
+  // El lugar donde un `FOR ALL` con `can_manage_location(business_id, id)` se
+  // rompe: la fila que se está insertando todavía no existe, así que el helper
+  // responde que no y el panel se queda sin poder crear una sucursal. Por eso
+  // INSERT es una policy aparte y por rol.
+  test('leer y modificar sucursales es por ubicación; crearlas, por rol', async () => {
+    const seeLocations = `select id::text as id from public.business_locations order by id`;
+
+    // La cerrada es la que mide. El catálogo público enseña toda sucursal
+    // activa, así que lo que diferencia la policy nueva es la que NO aparece ahí:
+    // el gerente entra por la suya, el cajero no porque su alcance es LOC_A, y el
+    // de fuera tampoco porque no es de su negocio.
+    const active = [POL_LOC_A, POL_LOC_B, POL_LOC_OTHER].sort();
+    expect(await idsSeenBy(POL_STAFF, seeLocations)).toEqual(active);
+    expect(await idsSeenBy(POL_OUTSIDER, seeLocations)).toEqual(active);
+    expect(await idsSeenBy(POL_MANAGER, seeLocations)).toEqual(
+      [...active, POL_LOC_CLOSED].sort(),
+    );
+    expect(await idsSeenBy(POL_OWNER, seeLocations)).toEqual(
+      [...active, POL_LOC_CLOSED].sort(),
+    );
+
+    // Modificar: el de su sucursal sí, el de la otra no. Cero filas, no un error:
+    // una policy de UPDATE que no casa filtra la fila y no dice nada.
+    const renamed = await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_locations set name = 'A (cajero)'
+          where id = '${POL_LOC_A}' returning id::text`,
+      ),
+    );
+    expect(plainRows(renamed).map((r) => r.id)).toEqual([POL_LOC_A]);
+    const other = await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_locations set name = 'B (cajero)'
+          where id = '${POL_LOC_B}' returning id::text`,
+      ),
+    );
+    expect(plainRows(other)).toEqual([]);
+    await ctx.sql.unsafe(
+      `update public.business_locations set name = 'A' where id = '${POL_LOC_A}'`,
+    );
+
+    // Crear: el cajero no, el gerente sí. Y esta es la prueba de que la
+    // separación de policies no cerró por accidente la puerta que el panel usa.
+    const staffInsert = await deniedAs(
+      ctx.sql,
+      'authenticated',
+      POL_STAFF,
+      (tx) =>
+        tx.unsafe(
+          `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
+         values ('${POL_LOC_NEW}', '${POL_BIZ}', 'C', 'Street C', 40.41680000, -3.70380000)`,
+        ),
+    );
+    expect(
+      staffInsert,
+      'un cajero creó una sucursal. Crear sucursales es de dueño y gerente.',
+    ).not.toBeNull();
+
+    const managerInsert = await as(
+      ctx.sql,
+      'authenticated',
+      POL_MANAGER,
+      (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
+         values ('${POL_LOC_NEW}', '${POL_BIZ}', 'C', 'Street C', 40.41680000, -3.70380000)
+         returning id::text`,
+        ),
+    );
+    expect(
+      plainRows(managerInsert).map((r) => r.id),
+      'el gerente no pudo crear una sucursal. `can_manage_location` se llama con ' +
+        'el id de una fila que todavía no existe, así que el INSERT NO puede ' +
+        'usarlo: por eso es una policy aparte y por rol.',
+    ).toEqual([POL_LOC_NEW]);
+
+    // Y la fila nueva entra en el perímetro del gerente sin tocar nada más.
+    expect(await idsSeenBy(POL_MANAGER, seeLocations)).toEqual(
+      [...active, POL_LOC_CLOSED, POL_LOC_NEW].sort(),
+    );
+    await ctx.sql.unsafe(
+      `delete from public.business_locations where id = '${POL_LOC_NEW}'`,
+    );
+  });
+
+  // ─── LA CATEGORÍA DE UNA OFERTA SE ADMINISTRA CON LA OFERTA ──────────────────
+  //
+  // `offer_categories` es la tabla puente y su predicado no mira la fila que se
+  // escribe sino la OFERTA que hay detrás. Es el único caso del §6.2 donde la
+  // tabla no lleva `business_id`, y por eso su policy es la que más se parece a
+  // "esto se concede por otra tabla".
+  //
+  // Sin este bloque la pareja de policies de esta tabla se afirmaba solo por su
+  // nombre en el catálogo, y eso NO alcanza: un `using (true)` con el nombre
+  // correcto pasa la aserción de forma y abre la tabla entera. Lo que lo mide es
+  // que el cajero de A escriba en la oferta de A y no en la de B —el mismo
+  // negocio, otra sucursal—, porque esa es la fila que distingue
+  // `can_manage_location(business, location)` de un `business_id` a secas.
+  //
+  // La lectura no se mide aquí porque "Anyone can view offer categories" es
+  // `using (true)`: el catálogo público ya la concedía y una lectura no
+  // distinguiría la policy nueva de nada. Lo nuevo de esta tabla es la escritura.
+
+  test('una categoría se enlaza y se desvincula por la sucursal de su oferta', async () => {
+    const link = (offerId: string) =>
+      `insert into public.offer_categories (offer_id, category_id)
+       values ('${offerId}', '${CATEGORY_2}') returning offer_id::text`;
+
+    // El cajero de LOC_A enlaza la categoría de la oferta de SU sucursal.
+    const own = await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+      tx.unsafe<{ offer_id: string }[]>(link(OFFER_A)),
+    );
+    expect(
+      plainRows(own).map((r) => r.offer_id),
+      'el cajero no pudo clasificar una oferta de su propia sucursal. El §6.2 da ' +
+        'esta escritura por membresía, y el panel la usa.',
+    ).toEqual([OFFER_A]);
+
+    // Y no la de la OTRA sucursal del MISMO negocio: mismo `business_id`, distinto
+    // `business_location_id`. Esta es la fila que separa el helper de un
+    // `business_id` a secas, y la que no habría detectado un predicado holgado.
+    const sameBusiness = await deniedAs(
+      ctx.sql,
+      'authenticated',
+      POL_STAFF,
+      (tx) => tx.unsafe(link(OFFER_B)),
+    );
+    expect(
+      sameBusiness,
+      'el cajero de LOC_A clasificó una oferta de LOC_B. Las dos sucursales son ' +
+        'del mismo negocio, así que esta aserción solo se sostiene si el predicado ' +
+        'mira la ubicación de la oferta y no el negocio de la oferta.',
+    ).not.toBeNull();
+
+    // Ni la del negocio vecino, que es el caso que sí habría atrapado un
+    // predicado por negocio.
+    const otherBusiness = await deniedAs(
+      ctx.sql,
+      'authenticated',
+      POL_STAFF,
+      (tx) => tx.unsafe(link(OFFER_OTHER)),
+    );
+    expect(
+      otherBusiness,
+      'el cajero de LOC_A clasificó una oferta de otro negocio.',
+    ).not.toBeNull();
+
+    // El gerente administra el negocio entero, así que las dos sucursales son suyas.
+    const managerLink = await as(ctx.sql, 'authenticated', POL_MANAGER, (tx) =>
+      tx.unsafe<{ offer_id: string }[]>(link(OFFER_B)),
+    );
+    expect(
+      plainRows(managerLink).map((r) => r.offer_id),
+      'el gerente no pudo clasificar una oferta de su negocio.',
+    ).toEqual([OFFER_B]);
+
+    // Y el dueño también, por los DOS caminos: su alcance es el negocio entero,
+    // como para el resto de las tablas sin ubicación. Se mide sobre un DELETE de
+    // una fila del fixture en vez de un INSERT porque `(OFFER_A, CATEGORY)` ya
+    // existe —la clave primaria es `(offer_id, category_id)`— y volver a
+    // insertarla daría 23505 por unicidad, que probaría el índice y no la policy.
+    const ownerUnlink = await as(ctx.sql, 'authenticated', POL_OWNER, (tx) =>
+      tx.unsafe<{ offer_id: string }[]>(
+        `delete from public.offer_categories
+          where offer_id = '${OFFER_A}' and category_id = '${CATEGORY}'
+          returning offer_id::text`,
+      ),
+    );
+    expect(
+      plainRows(ownerUnlink).map((r) => r.offer_id),
+      'el dueño perdió el acceso que ya tenía. Esta migración es aditiva: la ' +
+        'policy vieja por `business_ownership` sigue concediéndosela.',
+    ).toEqual([OFFER_A]);
+    // Se restituye, para no dejar el fixture por debajo de lo que el resto del
+    // archivo espera encontrar.
+    await ctx.sql.unsafe(
+      `insert into public.offer_categories (offer_id, category_id)
+       values ('${OFFER_A}', '${CATEGORY}')`,
+    );
+
+    // Desvincular es la otra mitad del permiso, y se comporta distinto del
+    // INSERT: un DELETE que no casa el predicado FILTRA la fila y devuelve cero,
+    // en vez de levantar 42501. Son dos maneras de denegar y se miden por separado.
+    const unlinked = await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+      tx.unsafe<{ offer_id: string }[]>(
+        `delete from public.offer_categories
+          where offer_id = '${OFFER_A}' and category_id = '${CATEGORY_2}'
+          returning offer_id::text`,
+      ),
+    );
+    expect(
+      plainRows(unlinked).map((r) => r.offer_id),
+      'el cajero no pudo quitar la categoría de una oferta de su sucursal.',
+    ).toEqual([OFFER_A]);
+
+    const otherBranch = await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+      tx.unsafe<{ offer_id: string }[]>(
+        `delete from public.offer_categories
+          where offer_id = '${OFFER_B}' returning offer_id::text`,
+      ),
+    );
+    expect(
+      plainRows(otherBranch),
+      'el cajero desvinculó la categoría de una oferta de la OTRA sucursal del ' +
+        'mismo negocio. El predicado mira la ubicación de la oferta.',
+    ).toEqual([]);
+
+    const otherBiz = await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+      tx.unsafe<{ offer_id: string }[]>(
+        `delete from public.offer_categories
+          where offer_id = '${OFFER_OTHER}' returning offer_id::text`,
+      ),
+    );
+    expect(
+      plainRows(otherBiz),
+      'el cajero desvinculó la categoría de una oferta de otro negocio.',
+    ).toEqual([]);
+
+    // El estado que queda dice las dos cosas a la vez: los INSERT concedidos
+    // escribieron y los denegados no dejaron rastro. Si uno de los `deniedAs`
+    // negara por el motivo equivocado, esta lista no sería la que se afirma.
+    // Queda solo la fila del gerente: la del cajero la borró la aserción de arriba.
+    const rows = await ctx.sql.unsafe<{ offer_id: string }[]>(
+      `select offer_id::text from public.offer_categories
+        where category_id = '${CATEGORY_2}' order by offer_id`,
+    );
+    expect(
+      plainRows(rows).map((r) => r.offer_id),
+      'las filas de offer_categories no son las que el fixture y estas ' +
+        'aserciones dicen que hay.',
+    ).toEqual([OFFER_B]);
+  });
+
+  // ─── LAS TRES POLICIES DE LECTURA DE LAS TABLAS DE ACCESO ─────────────────
+  //
+  // Del §6.3: el cliente solo lee. Lo que frena la escritura es la AUSENCIA de
+  // policy, y esa ausencia se mide en el bloque de arriba; lo que se mide acá es
+  // a QUIÉN leen las tres de lectura.
+
+  test('las membresías se leen por rol, la propia fila por su dueño, y la borrada no se ve', async () => {
+    const allMembers = `select id::text as id from public.business_members order by id`;
+    const ownScope = `select member_id::text || ':' || location_id::text as id
+                        from public.business_member_locations order by 1`;
+
+    // El cajero ve su propia fila y nada más. Y "nada más" incluye la fila
+    // borrada: no es suya, y aunque lo fuera, `deleted_at is null` la esconde.
+    expect(await idsSeenBy(POL_STAFF, allMembers)).toEqual([M_STAFF]);
+
+    // El gerente ve el negocio entero, y ahí hay una fila borrada y una pausada
+    // que la policy de lectura NO filtra: la que las esconde es la del helper, y
+    // esa lista es lo que un panel usa para pintar "equipo". La fila borrada se
+    // sigue viendo en la lista y NO concede nada por ningún camino —esto ya lo
+    // miden los helpers—, así que lo que se ve acá no es un acceso.
+    expect(await idsSeenBy(POL_MANAGER, allMembers)).toEqual(
+      [M_OWNER, M_MANAGER, M_STAFF, M_DELETED, M_PAUSED].sort(),
+    );
+    expect(await idsSeenBy(POL_OWNER, allMembers)).toEqual(
+      [M_OWNER, M_MANAGER, M_STAFF, M_DELETED, M_PAUSED].sort(),
+    );
+
+    // El de fuera ve su negocio y no éste.
+    expect(await idsSeenBy(POL_OUTSIDER, allMembers)).toEqual([M_OUTSIDER]);
+    // Y un consumidor sin membresía no ve nada.
+    expect(await idsSeenBy(POL_CONSUMER, allMembers)).toEqual([]);
+
+    // El alcance, en cambio, sí se acota a dueño y gerente, y la fila borrada
+    // desaparece de él: el `exists` exige `m.deleted_at is null` sobre la fila
+    // AJENA, que es la que se está leyendo.
+    expect(await idsSeenBy(POL_MANAGER, ownScope)).toEqual(
+      [
+        `${M_STAFF}:${POL_LOC_A}`,
+        `${M_MANAGER}:${POL_LOC_A}`,
+        `${M_MANAGER}:${POL_LOC_B}`,
+        `${M_PAUSED}:${POL_LOC_A}`,
+      ].sort(),
+    );
+    // El cajero no ve ni su propio alcance por esta policy: lo pide con
+    // `business_member_session_state()`, que es la función que el panel ya llama.
+    expect(await idsSeenBy(POL_STAFF, ownScope)).toEqual([]);
+
+    // Y ni una palabra de las dos tablas para un desconocido.
+    expect(await idsSeenBy(POL_CONSUMER, ownScope)).toEqual([]);
+  });
+
+  test('las dos tablas de acceso no se escriben desde el cliente, ni por un dueño', async () => {
+    // La policy de lectura es de dueño y gerente, y aun así la escritura falla:
+    // el permiso de escribir no viene de una policy de lectura. Sin policy de
+    // INSERT, RLS no tiene nada que conceder y Postgres lo dice con 42501.
+    const asManager = await deniedAs(
+      ctx.sql,
+      'authenticated',
+      POL_MANAGER,
+      (tx) =>
+        tx.unsafe(
+          `insert into public.business_members (business_id, user_id, role, label, alias)
+           values ('${POL_BIZ}', '${POL_CONSUMER}', 'staff', 'Alta desde el panel', 'alta@test')`,
+        ),
+    );
+    expect(
+      asManager,
+      'un gerente dio de alta un acceso. El alta requiere service_role, que no ' +
+        'existe en una sesión de panel.',
+    ).not.toBeNull();
+
+    const scope = await deniedAs(ctx.sql, 'authenticated', POL_MANAGER, (tx) =>
+      tx.unsafe(
+        `insert into public.business_member_locations (member_id, location_id)
+         values ('${M_STAFF}', '${POL_LOC_B}')`,
+      ),
+    );
+    expect(
+      scope,
+      'un gerente amplió el alcance de un cajero. Ampliar el alcance de alguien ' +
+        'es escribir la tabla que le dice a `can_manage_location` qué puede ver.',
+    ).not.toBeNull();
+  });
+
+  // ─── LOS TRES RPCs ─────────────────────────────────────────────────────────
+  //
+  // Los tres aceptan hoy al dueño con un `exists` escrito a mano sobre
+  // `business_ownership`, y los tres los recrea esta migración con el helper.
+  // Lo que no cambia es TODO lo demás: la matriz de estados, los códigos de error
+  // y los grants EXECUTE. Un código de error distinto es una outage de otra
+  // feature, no un detalle de estilo.
+
+  test('cancel_order: la sucursal manda, y la matriz de estados sigue siendo la misma', async () => {
+    // El cajero cancela el pedido de SU sucursal y repone el stock.
+    const cancelled = await callRpc(
+      POL_STAFF,
+      `public.cancel_order(null, '${ORDER.A}', '${POL_BIZ}')`,
+    );
+    expect(cancelled).toEqual({
+      success: true,
+      order_id: ORDER.A,
+      status: 'cancelled',
+    });
+    expect(await statusOf(ORDER.A)).toBe('cancelled');
+    const stock = await ctx.sql.unsafe<{ stock: number }[]>(
+      `select stock from public.offers where id = '${OFFER_A}'`,
+    );
+    expect(
+      plainRows(stock)[0]?.stock,
+      'cancelar no repuso el stock. La semántica de la matriz no es lo que esta ' +
+        'migración toca, y tocarla sería cambiar algo que nadie pidió.',
+    ).toBe(6);
+
+    // El mismo cajero, el pedido de la otra sucursal: se le dice que no.
+    const refused = await callRpc(
+      POL_STAFF,
+      `public.cancel_order(null, '${ORDER.B}', '${POL_BIZ}')`,
+    );
+    expect(refused.error).toBe('NOT_ORDER_OWNER');
+    expect(await statusOf(ORDER.B)).toBe('pending');
+
+    // Y el pedido de un negocio que ni es el suyo.
+    const stranger = await callRpc(
+      POL_STAFF,
+      `public.cancel_order(null, '${ORDER.J}', '${POL_OTHER_BIZ}')`,
+    );
+    expect(stranger.error).toBe('NOT_ORDER_OWNER');
+
+    // La matriz: desde `picked_up`, `completed` o `cancelled` no se cancela.
+    for (const key of ['E', 'H']) {
+      const refusedState = await callRpc(
+        POL_MANAGER,
+        `public.cancel_order(null, '${ORDER[key]}', '${POL_BIZ}')`,
+      );
+      expect(
+        refusedState.error,
+        `cancel_order sobre un pedido en ${await statusOf(ORDER[key])} cambió la ` +
+          'matriz de estados. Esta migración cambia QUIÉN puede, no QUÉ puede.',
+      ).toBe('CANNOT_CANCEL');
+    }
+
+    // La ruta del consumidor, que no lleva `p_business_id` y no pasa por el helper.
+    const own = await callRpc(
+      POL_CONSUMER,
+      `public.cancel_order('${POL_CONSUMER}', '${ORDER.C}', null)`,
+    );
+    expect(own.success).toBe(true);
+    const stolen = await callRpc(
+      POL_CONSUMER2,
+      `public.cancel_order('${POL_CONSUMER2}', '${ORDER.D}', null)`,
+    );
+    expect(
+      stolen.error,
+      'un consumidor canceló el pedido de otro. La ruta del consumidor se ' +
+        'comprueba con `p_user_id`, que no es lo que esta migración tocó.',
+    ).toBe('NOT_ORDER_OWNER');
+  });
+
+  test('set_order_status: el ciclo de vida y sus tres filas de "no"', async () => {
+    // La transición buena, y el estado del que sale se escribe de verdad.
+    const moved = await callRpc(
+      POL_MANAGER,
+      `public.set_order_status('${ORDER.F}', 'confirmed')`,
+    );
+    expect(moved).toEqual({
+      success: true,
+      order_id: ORDER.F,
+      status: 'confirmed',
+    });
+    expect(await statusOf(ORDER.F)).toBe('confirmed');
+
+    // `picked_up` está reservada al sistema, aunque la matriz del ciclo la permita
+    // desde `ready_for_pickup`: la reserva es posterior a la matriz y no se toca.
+    const system = await callRpc(
+      POL_MANAGER,
+      `public.set_order_status('${ORDER.G}', 'picked_up')`,
+    );
+    expect(system).toEqual({
+      success: false,
+      error: 'INVALID_TRANSITION',
+      message: 'Transición reservada al sistema',
+    });
+    expect(await statusOf(ORDER.G)).toBe('ready_for_pickup');
+
+    // Un pedido completado no retrocede.
+    const backwards = await callRpc(
+      POL_MANAGER,
+      `public.set_order_status('${ORDER.H}', 'confirmed')`,
+    );
+    expect(backwards.error).toBe('INVALID_TRANSITION');
+    expect(await statusOf(ORDER.H)).toBe('completed');
+
+    // La misma transición sobre un estado idéntico se distingue de la prohibida.
+    const same = await callRpc(
+      POL_MANAGER,
+      `public.set_order_status('${ORDER.K}', 'pending')`,
+    );
+    expect(same).toEqual({
+      success: false,
+      error: 'INVALID_TRANSITION',
+      message: 'El pedido ya está en ese estado',
+    });
+
+    // Un estado que no existe se rechaza ANTES de mirar el pedido.
+    const label = await callRpc(
+      POL_MANAGER,
+      `public.set_order_status('${ORDER.L}', 'teleportado')`,
+    );
+    expect(label).toEqual({
+      success: false,
+      error: 'INVALID_STATUS',
+      message: 'Estado inválido',
+    });
+
+    // Un pedido de la otra sucursal y un pedido del otro negocio: los dos con el
+    // mismo error que daba el `exists` viejo, porque el mensaje travels to the
+    // cliente y alguien lo compara.
+    const otherBranch = await callRpc(
+      POL_STAFF,
+      `public.set_order_status('${ORDER.I}', 'confirmed')`,
+    );
+    expect(otherBranch).toEqual({
+      success: false,
+      error: 'NOT_ORDER_OWNER',
+      message: 'No eres el dueño de este pedido',
+    });
+    const otherBusiness = await callRpc(
+      POL_MANAGER,
+      `public.set_order_status('${ORDER.J}', 'ready_for_pickup')`,
+    );
+    expect(otherBusiness.error).toBe('NOT_ORDER_OWNER');
+    expect(await statusOf(ORDER.I)).toBe('pending');
+    expect(await statusOf(ORDER.J)).toBe('confirmed');
+  });
+
+  test('validate_pickup_code: el permiso va por sucursal y el orden de los errores se respeta', async () => {
+    // El camino bueno: el gerente cierra el pedido de su negocio y el estado se
+    // escribe. El pago entra por `accrue_order_earnings`, así que esto no es un
+    // UPDATE de mentira.
+    const validated = await callRpc(
+      POL_MANAGER,
+      `public.validate_pickup_code('${ORDER.M}', 'PICKUP-M')`,
+    );
+    expect(validated).toEqual({
+      success: true,
+      order_id: ORDER.M,
+      status: 'completed',
+    });
+    expect(await statusOf(ORDER.M)).toBe('completed');
+
+    // UNA sola fila de `order_events`, y esto es una afirmación de verdad y no un
+    // detalle: la versión que este RPC tenía antes escribía la fila a mano
+    // DESPUÉS del `update`, y el `update` ya dispara el trigger
+    // `on_order_status_change`, que inserta lo suyo. O sea que la versión vieja
+    // dejaba DOS eventos de "completado" por cada recogida validada, uno con
+    // `metadata = {"method":"pickup_code"}` y otro con `{"source":"database"}`.
+    // La que la recreate ya no inserta a mano, y el trigger queda siendo el único
+    // que escribe. Fijar el conteo es lo que impide que un día vuelvan a ser dos.
+    const events = await ctx.sql.unsafe<{ status: string; n: number }[]>(
+      `select status::text as status, count(*)::int as n
+         from public.order_events where order_id = '${ORDER.M}'
+        group by status order by status`,
+    );
+    // La fila `ready_for_pickup` es la del INSERT del fixture, que dispara el
+    // mismo trigger; no forma parte de lo que se está midiendo. Lo que se mide es
+    // que el paso a `completed` produces UN evento y no dos.
+    expect(
+      plainRows(events),
+      'la recogida no dejó exactamente un evento de "completado". El INSERT ' +
+        'explícito que la versión anterior de este RPC tenía se quitó ' +
+        'justamente porque el trigger `on_order_status_change` ya inserta; si ' +
+        'aquí hay dos "completado", alguien lo volvió a poner.',
+    ).toEqual([
+      { status: 'completed', n: 1 },
+      { status: 'ready_for_pickup', n: 1 },
+    ]);
+
+    // El código equivocado se dice antes que el estado.
+    const wrongCode = await callRpc(
+      POL_MANAGER,
+      `public.validate_pickup_code('${ORDER.N}', 'no-es-el-codigo')`,
+    );
+    expect(wrongCode).toEqual({
+      success: false,
+      error: 'INVALID_CODE',
+      message: 'Código de recogida inválido',
+    });
+    expect(await statusOf(ORDER.N)).toBe('ready_for_pickup');
+
+    // El pedido no está listo.
+    const notReady = await callRpc(
+      POL_MANAGER,
+      `public.validate_pickup_code('${ORDER.O}', 'PICKUP-O')`,
+    );
+    expect(notReady).toEqual({
+      success: false,
+      error: 'INVALID_STATUS',
+      message: 'El pedido no está listo para recoger',
+    });
+
+    // El negocio del vecino: nada de eso, ni siquiera con el código correcto.
+    const neighbour = await callRpc(
+      POL_MANAGER,
+      `public.validate_pickup_code('${ORDER.P}', 'PICKUP-P')`,
+    );
+    expect(neighbour).toEqual({
+      success: false,
+      error: 'UNAUTHORIZED',
+      message: 'No tienes permiso para validar este pedido',
+    });
+    expect(await statusOf(ORDER.P)).toBe('ready_for_pickup');
+
+    // Y un pedido que no existe dice `UNAUTHORIZED` y no `ORDER_NOT_FOUND`, que es
+    // lo que decía la versión con el `exists`: el permiso se comprueba antes de
+    // que exista el pedido, y un cliente que ramifica sobre el código depende de
+    // ese orden.
+    const missing = await callRpc(
+      POL_MANAGER,
+      `public.validate_pickup_code('${NO_SUCH_ORDER}', 'lo-que-sea')`,
+    );
+    expect(missing).toEqual({
+      success: false,
+      error: 'UNAUTHORIZED',
+      message: 'No tienes permiso para validar este pedido',
+    });
+  });
+
+  test('los grants EXECUTE de los tres RPCs no se mueven', async () => {
+    // MEDIDO en la base viva antes de escribir la migración, y no de memoria: el
+    // brief decía que `anon` tenía EXECUTE en `cancel_order` y `reserve_offer`, y
+    // no lo tiene — `20260906125927_harden_rpc_grants` se lo quitó y el ledger lo
+    // dice así, con `20260906130017` aplicando antes por necesidad. Lo que esta
+    // migración hace es `create or replace`, que conserva el ACL, así que esto
+    // prueba que conservarlo fue cierto y no una intención.
+    //
+    // Se asserta el CONJUNTO de workables, no la cadena: el `proacl` registra el
+    // orden en que se dieron los permisos, y ese orden es historia de una base
+    // distinta de la que replayea el harness. Un `grant` de más a un rol que nadie
+    // mira —`anon`, `public`— es justo el cambio que rompe otra feature en
+    // silencio, y para eso sí alcanza con el conjunto.
+    //
+    // Y el hueco de `service_role` en `validate_pickup_code` es del HARNESS, no de
+    // esta migración: ningún archivo del ledger le concede EXECUTE a
+    // `service_role`, llega por los privilegios por defecto de Supabase, y la base
+    // que replayea este archivo no los trae. Lo que se afirma es lo que las dos
+    // bases dicen —el conjunto del replay, y el invariante de rol de cliente—.
+    const acl = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ fn: string; grantees: string[] }[]>(`
+        select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' as fn,
+               (select array_agg(x order by x)
+                  from unnest(string_to_array(replace(replace(coalesce(p.proacl::text, ''), '{', ''), '}', ''), ',')) as t(x)
+                 where x <> '') as grantees
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('cancel_order', 'set_order_status', 'validate_pickup_code', 'reserve_offer')
+        order by fn`),
+    );
+
+    expect(
+      plainRows(acl),
+      'el ACL de un RPC de pedidos cambió. `create or replace` lo conserva, así ' +
+        'que un cambio aquí es un `grant` o un `revoke` que alguien escribió, y ' +
+        'ninguna de las dos cosas es inocua: una mueve quién puede cancelar un ' +
+        'pedido y llamar a una función de dinero.',
+    ).toEqual([
+      {
+        fn: 'cancel_order(p_user_id uuid, p_order_id uuid, p_business_id uuid)',
+        grantees: [
+          'authenticated=X/postgres',
+          'postgres=X/postgres',
+          'service_role=X/postgres',
+        ],
+      },
+      {
+        fn: 'reserve_offer(p_user_id uuid, p_offer_id uuid, p_coupon_id uuid, p_idempotency_key text)',
+        grantees: [
+          'authenticated=X/postgres',
+          'postgres=X/postgres',
+          'service_role=X/postgres',
+        ],
+      },
+      {
+        fn: 'set_order_status(p_order_id uuid, p_status text)',
+        grantees: [
+          'authenticated=X/postgres',
+          'postgres=X/postgres',
+          'service_role=X/postgres',
+        ],
+      },
+      {
+        fn: 'validate_pickup_code(p_order_id uuid, p_pickup_code text)',
+        grantees: ['authenticated=X/postgres', 'postgres=X/postgres'],
+      },
+    ]);
+
+    // El invariante que las dos bases comparten, y el que de verdad importa: el
+    // panel entra con `authenticated` y el anónimo no entra.
+    const clients = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ fn: string; anon: boolean; auth: boolean }[]>(`
+        select p.proname as fn,
+               has_function_privilege('anon', p.oid, 'execute') as anon,
+               has_function_privilege('authenticated', p.oid, 'execute') as auth
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('cancel_order', 'set_order_status', 'validate_pickup_code', 'reserve_offer')
+        order by fn`),
+    );
+    expect(plainRows(clients)).toEqual([
+      { fn: 'cancel_order', anon: false, auth: true },
+      { fn: 'reserve_offer', anon: false, auth: true },
+      { fn: 'set_order_status', anon: false, auth: true },
+      { fn: 'validate_pickup_code', anon: false, auth: true },
+    ]);
+
+    // Y las dos propiedades de las que depende que el helper se pueda llamar desde
+    // dentro: SECURITY DEFINER y el `search_path` vacío. Un `create or replace` las
+    // conserva, y si alguna se perdiera la policy nueva no sería un problema de
+    // permisos sino una escalada.
+    const definer = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ fn: string; secdef: boolean; config: string[] | null }[]>(`
+        select p.proname as fn, p.prosecdef as secdef, p.proconfig as config
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('cancel_order', 'set_order_status', 'validate_pickup_code')
+        order by fn`),
+    );
+    expect(plainRows(definer)).toEqual([
+      { fn: 'cancel_order', secdef: true, config: ['search_path=""'] },
+      { fn: 'set_order_status', secdef: true, config: ['search_path=""'] },
+      { fn: 'validate_pickup_code', secdef: true, config: ['search_path=""'] },
+    ]);
   });
 });

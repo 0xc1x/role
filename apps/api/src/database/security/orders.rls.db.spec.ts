@@ -694,8 +694,8 @@ describe('what the grants allow', () => {
   });
 
   /**
-   * The policy set is three SELECT policies on `orders` and three on
-   * `order_events`, asserted as text from the live catalog.
+   * The policy set is four SELECT policies on `orders` and four on `order_events`,
+   * asserted as text from the live catalog.
    *
    * `public-read-grants.spec.ts` reads the migration to confirm the policies
    * were created. This asserts they SURVIVED, and more usefully it asserts they
@@ -723,8 +723,24 @@ describe('what the grants allow', () => {
    * pre-rewrite text is what runs here. The `qual` is therefore NOT asserted for
    * those two, and the reason is in the header: asserting a body that production
    * replaced would be asserting on a version nobody runs.
+   *
+   * ─── THE FOURTH AND FIFTH, AND WHY THEY ARE NOT A WIDENING ─────────────────
+   *
+   * "Members can view own orders" and "Members can view own order events" are the
+   * §6.2 policies: they resolve the business by `can_manage_location` and the
+   * location by the order's own `business_location_id`, which is the column Task
+   * 1 added. They still sit NEXT TO the two they duplicate, because
+   * `business_ownership` has not been dropped yet and the drop is the next
+   * migration.
+   *
+   * They are not a widening of what a manager may see: a manager is an active
+   * member of the business, and `can_manage_location` additionally checks that
+   * the location belongs to it and that the session has not expired. The refusal
+   * side of that is asserted in `business-members.rls.db.spec.ts`, with a
+   * `business_ownership` row of zero para el gerente: si algo se abrió, fue por
+   * una policy nueva, y ahí se mide.
    */
-  test('the policy set is three read-only policies on each table, unmodified', async () => {
+  test('the policy set is four read-only policies on orders and four on order_events, unmodified', async () => {
     const rows = await ctx.sql.unsafe<
       {
         tablename: string;
@@ -756,6 +772,13 @@ describe('what the grants allow', () => {
       },
       {
         tablename: 'order_events',
+        policyname: 'Members can view own order events',
+        cmd: 'SELECT',
+        permissive: 'PERMISSIVE',
+        roles: ['authenticated'],
+      },
+      {
+        tablename: 'order_events',
         policyname: 'Users can view own order events',
         cmd: 'SELECT',
         permissive: 'PERMISSIVE',
@@ -777,6 +800,13 @@ describe('what the grants allow', () => {
       },
       {
         tablename: 'orders',
+        policyname: 'Members can view own orders',
+        cmd: 'SELECT',
+        permissive: 'PERMISSIVE',
+        roles: ['authenticated'],
+      },
+      {
+        tablename: 'orders',
         policyname: 'Users can view own orders',
         cmd: 'SELECT',
         permissive: 'PERMISSIVE',
@@ -785,7 +815,9 @@ describe('what the grants allow', () => {
     ]);
 
     // Said a second way, so that a future migration which added a write policy
-    // fails on a one-line diff rather than inside a six-element array.
+    // fails on a one-line diff rather than inside an eight-element array. The two
+    // new ones are SELECT and do not move this list: a policy de escritura sobre
+    // estas tablas sigue siendo algo que nadie pidió.
     const writePolicies = await ctx.sql.unsafe<
       { tablename: string; policyname: string }[]
     >(

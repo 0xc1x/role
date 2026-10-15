@@ -403,6 +403,35 @@ final state.
 **The ledger has one row for this work that this directory does not have.** See
 the section immediately below.
 
+## Applied: `20261015015012_business_members_policies`
+
+Applied via `apply_migration` on 2026-10-15. The file's `md5sum` is
+`d7b8364ec8fda2908caf20156b8c7041` and that is also the ledger's
+`md5(statements[1])`: byte for byte, no trailing newline added.
+
+It is step 5 of the §6.2 order and the first half of it: **25 new policies** — the
+23 `TO authenticated` business policies, one of which is the self-read on
+`business_members`, plus the two owner/manager reads of `business_members` and
+`business_member_locations` — and three functions recreated with `create or
+replace`: `cancel_order`, `set_order_status` and `validate_pickup_code`.
+
+**Nothing was dropped, and that is the point, not an omission.** All **19**
+policies that still resolve ownership through `business_ownership` are in place and
+unchanged, and the table itself is untouched. The §6.2 order is new-first,
+old-second, and the retirement — `drop table public.business_ownership` — is a
+separate migration that has not been written. `business-members.rls.db.spec.ts`
+pins the residue by name, so the drop is a one-line diff when it lands and a
+two-line diff if anyone writes a policy by hand in the meantime.
+
+**The grants on the three recreated functions are unchanged, and that was measured
+rather than assumed.** The brief for this task stated that `anon` holds EXECUTE on
+`cancel_order` and `reserve_offer`; it does not, in the live database or in the
+replayed one. `20260906125927_harden_rpc_grants` removed it and the ledger says so
+— the only roles that can execute the four order RPCs are `authenticated` and
+`service_role`. The migration therefore carries **not one** `grant` or `revoke`
+for those functions: `create or replace` preserves the ACL on its own, and a
+`drop` + `create` would have handed them back to `PUBLIC`.
+
 ## The ledger has a `staff_permission_helpers` row with no file: `20261014011033`
 
 The ledger contains three rows from the development of the helpers above:
