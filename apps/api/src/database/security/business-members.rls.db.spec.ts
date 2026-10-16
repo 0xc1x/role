@@ -3382,6 +3382,9 @@ describe('los límites del plan bloquean crecer, no operar', () => {
   const LIM_STAFF = 'dddddddd-0000-4000-8000-000000000002';
   const USER_3 = 'dddddddd-0000-4000-8000-000000000003';
   const USER_4 = 'dddddddd-0000-4000-8000-000000000004';
+  const USER_5 = 'dddddddd-0000-4000-8000-000000000005';
+  const USER_6 = 'dddddddd-0000-4000-8000-000000000006';
+  const USER_7 = 'dddddddd-0000-4000-8000-000000000007';
 
   const BIZ_FREE = 'aaaaaaaa-0000-4000-8000-000000000003';
   const BIZ_GRANDFATHERED = 'aaaaaaaa-0000-4000-8000-000000000004';
@@ -3393,6 +3396,9 @@ describe('los límites del plan bloquean crecer, no operar', () => {
   const BIZ_MOVES_FROM = 'aaaaaaaa-0000-4000-8000-00000000000a';
   const BIZ_MOVES_TO = 'aaaaaaaa-0000-4000-8000-00000000000b';
   const BIZ_MOVES_ROOM = 'aaaaaaaa-0000-4000-8000-00000000000c';
+  const BIZ_ARCHIVED = 'aaaaaaaa-0000-4000-8000-00000000000d';
+  const BIZ_ARCHIVED_ROOM = 'aaaaaaaa-0000-4000-8000-00000000000e';
+  const BIZ_BULK = 'aaaaaaaa-0000-4000-8000-00000000000f';
 
   const LOC_FREE = 'bbbbbbbb-0000-4000-8000-000000000001';
   const LOC_GF = [
@@ -3421,6 +3427,32 @@ describe('los límites del plan bloquean crecer, no operar', () => {
   const LOC_MOVE_FROM = 'bbbbbbbb-0000-4000-8000-000000000061';
   const LOC_MOVE_ROOM = 'bbbbbbbb-0000-4000-8000-000000000062';
 
+  // El negocio en el tope CON ARCHIVADOS: dos accesos vivos —el tope de `free`—
+  // más cuatro dados de baja, y su dueño. Los archivados son los que hacen que
+  // «restaurar» y «bajar un dueño» sean las dos escrituras que consumen una plaza
+  // sin que su `business_id` cambie y sin que la fila se inserte.
+  const MEM_ARCH_OWNER = 'c1000000-0000-4000-8000-000000000071';
+  const MEM_ARCH_LIVE = [
+    'c1000000-0000-4000-8000-000000000072',
+    'c1000000-0000-4000-8000-000000000073',
+  ] as const;
+  const MEM_ARCH_DEAD = [
+    'c1000000-0000-4000-8000-000000000074',
+    'c1000000-0000-4000-8000-000000000075',
+    'c1000000-0000-4000-8000-000000000076',
+    'c1000000-0000-4000-8000-000000000077',
+  ] as const;
+
+  // Y su gemelo con sitio: mismo dueño, cero accesos vivos, dos archivados. Sirve
+  // de control positivo para las dos escrituras, y por eso comparte negocio con
+  // ellas: los controles tienen que poder pasar y a la vez dejar el negocio donde
+  // el paso siguiente espera encontrarlo.
+  const MEM_ROOMARCH_OWNER = 'c1000000-0000-4000-8000-000000000081';
+  const MEM_ROOMARCH_DEAD = [
+    'c1000000-0000-4000-8000-000000000082',
+    'c1000000-0000-4000-8000-000000000083',
+  ] as const;
+
   beforeAll(async () => {
     ctx = await createSupabaseTestDb();
 
@@ -3430,6 +3462,9 @@ describe('los límites del plan bloquean crecer, no operar', () => {
         [LIM_STAFF, 'limits-staff@test'],
         [USER_3, 'limits-tres@test'],
         [USER_4, 'limits-cuarto@test'],
+        [USER_5, 'limits-quinto@test'],
+        [USER_6, 'limits-sexto@test'],
+        [USER_7, 'limits-septimo@test'],
       ] as const) {
         await tx.unsafe(
           `insert into auth.users (id, email) values ('${id}', '${email}')
@@ -3448,14 +3483,18 @@ describe('los límites del plan bloquean crecer, no operar', () => {
                ('${BIZ_ROOM}',          'Límites con sitio',      'restaurant', 'limits-room'),
                ('${BIZ_MOVES_FROM}',   'Límites mudanza origen', 'restaurant', 'limits-moves-from'),
                ('${BIZ_MOVES_TO}',     'Límites mudanza destino', 'restaurant', 'limits-moves-to'),
-               ('${BIZ_MOVES_ROOM}',   'Límites mudanza sitio', 'restaurant', 'limits-moves-room');
+               ('${BIZ_MOVES_ROOM}',   'Límites mudanza sitio', 'restaurant', 'limits-moves-room'),
+               ('${BIZ_ARCHIVED}',      'Límites con archivo', 'restaurant', 'limits-archived'),
+               ('${BIZ_ARCHIVED_ROOM}', 'Límites archivo sitio', 'restaurant', 'limits-archived-room'),
+               ('${BIZ_BULK}',          'Límites una sentencia', 'restaurant', 'limits-bulk');
 
         insert into public.business_ownership (business_id, owner_id)
         select b.id, '${LIM_OWNER}'::uuid from public.businesses b
         where b.id in ('${BIZ_FREE}', '${BIZ_GRANDFATHERED}', '${BIZ_AT_LIMIT}',
                        '${BIZ_PLAN_DELETED}', '${BIZ_PRO}', '${BIZ_PRO_PLUS}',
                        '${BIZ_ROOM}', '${BIZ_MOVES_FROM}', '${BIZ_MOVES_TO}',
-                       '${BIZ_MOVES_ROOM}');
+                       '${BIZ_MOVES_ROOM}', '${BIZ_ARCHIVED}',
+                       '${BIZ_ARCHIVED_ROOM}', '${BIZ_BULK}');
       `);
 
       // El plan va PRIMERO y por razones distintas en cada negocio: el
@@ -3501,6 +3540,48 @@ describe('los límites del plan bloquean crecer, no operar', () => {
                ('${MEM_MOVE_B}',         '${BIZ_MOVES_FROM}',    '${USER_3}',    'staff', 'Mudanza B', 'limits-move-b@test',      'active', 24, now());
       `);
 
+      // Los dos negocios del «archivo», con su `deleted_at` YA PUESTO en el mismo
+      // `insert` y no puesto después con un `update`. No es un atajo: sembrarlos
+      // vivos y archivarlos luego es imposible por diseño, porque el cuarto
+      // `insert` de un staff vivo ya se choca contra el tope de 2 —que es
+      // justamente la propiedad que el test del statement masivo mide—. La vía
+      // real es `set deleted_at`, que es una escritura que NO suma, y por eso el
+      // `insert` es la única forma de llegar a un negocio «en el tope con
+      // archivados», que es el estado que un negocio real tiene después de dar de
+      // baja a su equipo durante un año.
+      await tx.unsafe(`
+        insert into public.business_members
+          (id, business_id, user_id, role, label, alias,
+           status, session_ttl_hours, last_authenticated_at, deleted_at)
+        values ('${MEM_ARCH_OWNER}',    '${BIZ_ARCHIVED}',      '${LIM_OWNER}', 'owner', 'Dueña',   'limits-arch-owner@test',   'active', 24, now(), null),
+               ('${MEM_ARCH_DEAD[0]}',  '${BIZ_ARCHIVED}',      '${USER_4}',    'staff', 'Archivada 1', 'limits-arch-1@test',    'active', 24, now(), now()),
+               ('${MEM_ARCH_DEAD[1]}',  '${BIZ_ARCHIVED}',      '${USER_5}',    'staff', 'Archivada 2', 'limits-arch-2@test',    'active', 24, now(), now()),
+               ('${MEM_ARCH_DEAD[2]}',  '${BIZ_ARCHIVED}',      '${USER_6}',    'staff', 'Archivada 3', 'limits-arch-3@test',    'active', 24, now(), now()),
+               ('${MEM_ARCH_DEAD[3]}',  '${BIZ_ARCHIVED}',      '${USER_7}',    'staff', 'Archivada 4', 'limits-arch-4@test',    'active', 24, now(), now()),
+               ('${MEM_ROOMARCH_OWNER}', '${BIZ_ARCHIVED_ROOM}', '${LIM_OWNER}', 'owner', 'Dueña',  'limits-archroom-owner@test', 'active', 24, now(), null),
+               ('${MEM_ROOMARCH_DEAD[0]}', '${BIZ_ARCHIVED_ROOM}', '${USER_4}', 'staff', 'Archivada A', 'limits-archroom-1@test', 'active', 24, now(), now()),
+               ('${MEM_ROOMARCH_DEAD[1]}', '${BIZ_ARCHIVED_ROOM}', '${USER_5}', 'staff', 'Archivada B', 'limits-archroom-2@test', 'active', 24, now(), now());
+      `);
+
+      // Los dos accesos VIVOS del negocio en el tope van en DOS sentencias y no en
+      // una multi-fila, a propósito: sembrarlos juntos depende de que la segunda
+      // fila de un statement vea a la primera, que es exactamente la propiedad que
+      // el test del statement masivo mide. Un fixture que dependiera de ella haría
+      // que un fallo en esa propiedad se manifestara como quince tests rojos en el
+      // `beforeAll` en vez de como un test rojo que la nombra.
+      await tx.unsafe(`
+        insert into public.business_members
+          (id, business_id, user_id, role, label, alias,
+           status, session_ttl_hours, last_authenticated_at)
+        values ('${MEM_ARCH_LIVE[0]}', '${BIZ_ARCHIVED}', '${LIM_STAFF}', 'staff', 'Viva 1', 'limits-arch-live-1@test', 'active', 24, now());
+      `);
+      await tx.unsafe(`
+        insert into public.business_members
+          (id, business_id, user_id, role, label, alias,
+           status, session_ttl_hours, last_authenticated_at)
+        values ('${MEM_ARCH_LIVE[1]}', '${BIZ_ARCHIVED}', '${USER_3}', 'staff', 'Viva 2', 'limits-arch-live-2@test', 'active', 24, now());
+      `);
+
       // Los números del §4.5 sembrados DE VERDAD —5 sucursales y 20 miembros en
       // `pro`— para que el tope se mida contra el número y no contra una
       // suposición sobre lo que dice un `case`. `generate_series` porque veinte
@@ -3537,6 +3618,41 @@ describe('los límites del plan bloquean crecer, no operar', () => {
   afterAll(async () => {
     await ctx.stop();
   });
+
+  /**
+   * Accesos VIVOS que no son del dueño — el número que el tope del §4.5 cuenta, y
+   * el mismo predicado que el trigger usa para `v_otros`. Es un helper y no tres
+   * `select` escritos a mano porque estos tests lo llaman ANTES y DESPUÉS de la
+   * escritura, y una aserción que sólo mira el error no puede distinguir «el
+   * trigger lo negó» de «el trigger lo negó y el statement no dejó basura».
+   */
+  async function liveStaff(businessId: string): Promise<number> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ n: number }[]>(`
+          select count(*)::int as n
+            from public.business_members m
+           where m.business_id = '${businessId}'
+             and m.role <> 'owner'::public.business_member_role
+             and m.deleted_at is null`),
+      ),
+    );
+    return rows[0]?.n ?? -1;
+  }
+
+  /** Sucursales activas de un negocio: el otro número que los topes cuentan. */
+  async function activeLocations(businessId: string): Promise<number> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ n: number }[]>(`
+          select count(*)::int as n
+            from public.business_locations l
+           where l.business_id = '${businessId}'
+             and l.is_active`),
+      ),
+    );
+    return rows[0]?.n ?? -1;
+  }
 
   // ─── LO QUE NO SE PUEDE: CRECER ────────────────────────────────────────────
 
@@ -3895,6 +4011,191 @@ describe('los límites del plan bloquean crecer, no operar', () => {
     expect(locationIntoFull?.message).toBe(
       'el plan free admite hasta 1 sucursal, no más',
     );
+  });
+
+  // ─── LAS TRES FORMAS DE QUE UNA ESCRITURA CONSUMA UNA PLAZA ────────────────
+  //
+  // `v_agrega` de `enforce_business_member_limit` tiene tres ramas, y las tres
+  // son «esta escritura está METIENDO una fila en el conteo»:
+  //
+  //     v_agrega := new.deleted_at is null
+  //                and (old.role = 'owner'          <-- bajar un dueño
+  //                     or old.deleted_at is not null   <-- restaurar un archivado
+  //                     or old.business_id is distinct from new.business_id);  <-- mudanza
+  //
+  // La tercera ya la medía el test de la mudanza. Las otras dos no las medía
+  // NADA, y son las dos que un negocio con el tope encima usaría sin levantar la
+  // voz: restaurar a alguien que se fue hace un mes, y «rebajar al dueño a
+  // empleado». Ninguna cambia el `business_id` y ninguna inserta una fila, así que
+  // las dos se esconden detrás de un `set deleted_at = null` y un `set role` que
+  // parecen no mover nada. La única forma de saber que el trigger las ve es
+  // pedirle que las mida.
+
+  test('restaurar un acceso archivado se mide contra el tope', async () => {
+    // Control positivo PRIMERO, por la razón de `:3773`: un `P0001` en un test
+    // sin control puede ser un trigger roto, una policy, o el tope. Y va primero
+    // porque además fija el punto de partida del negativo: si restaurar no
+    // funciona NINGÚN sitio, el rechazo de más abajo no dice nada.
+    const antesDelControl = await liveStaff(BIZ_ARCHIVED_ROOM);
+    const control = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_members set deleted_at = null
+          where id = '${MEM_ROOMARCH_DEAD[0]}' returning id`,
+      ),
+    );
+    expect(plainRows(control)).toHaveLength(1);
+    expect(await liveStaff(BIZ_ARCHIVED_ROOM)).toBe(antesDelControl + 1);
+
+    // Y ahora el mismo statement contra un negocio que YA está en el tope, donde
+    // queda un archivado de sobra por si alguien quiere ver que hay cuatro y no
+    // uno.
+    expect(await liveStaff(BIZ_ARCHIVED)).toBe(2);
+
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.business_members set deleted_at = null
+          where id = '${MEM_ARCH_DEAD[0]}'`,
+      ),
+    );
+
+    // `P0001` y no `42501`: en Postgres las policies son un trigger AFTER, así que
+    // el BEFORE corre primero y el mensaje es el suyo. Un `42501` sería RLS, y
+    // significaría que este test no midió el tope — o sea que la rama probada no
+    // es la que dice que dice.
+    expect(err?.code).toBe('P0001');
+    expect(err?.message).toBe('el plan free admite hasta 2 miembros, no más');
+
+    // Y el conteo DESPUÉS, que es la mitad de la aserción: que el error haya
+    // llegado no dice por sí solo que la fila siga archivada. Se dice mirando.
+    expect(await liveStaff(BIZ_ARCHIVED)).toBe(2);
+    const stillArchived = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ deleted: boolean }[]>(`
+          select (m.deleted_at is not null) as deleted
+            from public.business_members m where m.id = '${MEM_ARCH_DEAD[0]}'`),
+      ),
+    );
+    expect(stillArchived[0]?.deleted).toBe(true);
+  });
+
+  test('bajar un dueño a staff se mide contra el tope', async () => {
+    // Control positivo primero, y por el mismo motivo que arriba: un `set role`
+    // que el trigger viera mal negaría también aquí, y sin el control el rechazo
+    // de más abajo sería indistinguible de un trigger que niega todo.
+    const antesDelControl = await liveStaff(BIZ_ARCHIVED_ROOM);
+    const control = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_members set role = 'staff'
+          where id = '${MEM_ROOMARCH_OWNER}' returning id`,
+      ),
+    );
+    expect(plainRows(control)).toHaveLength(1);
+    // Y el conteo se mueve UNA plaza: es lo que hace que el paso siguiente sea el
+    // caso interesante y no una repetición del control.
+    expect(await liveStaff(BIZ_ARCHIVED_ROOM)).toBe(antesDelControl + 1);
+
+    // El dueño del negocio que está en el tope. Bajarlo lo convertiría en el tercer
+    // acceso que no es suyo, y el §4.5 cuenta a los owners por `role`, no por
+    // exemptions: un dueño que deja de serlo consume la misma plaza que un empleado.
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.business_members set role = 'staff'
+          where id = '${MEM_ARCH_OWNER}'`,
+      ),
+    );
+    expect(err?.code).toBe('P0001');
+    expect(err?.message).toBe('el plan free admite hasta 2 miembros, no más');
+
+    // El conteo no se mueve y la fila sigue siendo de la dueña.
+    expect(await liveStaff(BIZ_ARCHIVED)).toBe(2);
+    const stillOwner = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ role: string }[]>(`
+          select m.role::text as role
+            from public.business_members m where m.id = '${MEM_ARCH_OWNER}'`),
+      ),
+    );
+    expect(stillOwner[0]?.role).toBe('owner');
+  });
+
+  // ─── UNA SENTENCIA, VARIAS FILAS ───────────────────────────────────────────
+  //
+  // Esto mide una propiedad de Postgres que el trigger DEPENDE y que nadie
+  // escribió en ningún sitio, así que va aquí con su propia explicación y no
+  // escondido de paso en otro test.
+  //
+  // ─── QUÉ PROPIEDAD ES ──────────────────────────────────────────────────────
+  //
+  // `v_otros` excluye del conteo SÓLO la fila que esta escritura está tocando
+  // (`l.id <> new.id`). En un statement de N filas eso deja una pregunta: ¿la
+  // segunda fila ve a la primera, o las N se miden contra el estado de antes del
+  // statement? Si fuera lo segundo, un `insert` de dos filas metería las dos con
+  // el mismo número delante y el tope valdría la mitad de lo que dice.
+  //
+  // La respuesta es que SÍ se ven, y no por casualidad: el conteo es un `select`
+  // VOLATILE dentro de un cuerpo plpgsql, así que se planifica y se ejecuta en
+  // cada invocación del trigger, y cada ejecución toma un snapshot NUEVO bajo el
+  // MISMO command id — el snapshot del comando ve lo que ese comando ya escribió.
+  // El trigger es `for each row`, no de statement: corre una vez por fila, y para
+  // la fila N ya hay N-1 filas escritas en la tabla.
+  //
+  // ─── POR QUÉ PODRÍA DEJAR DE SER CIERTO ───────────────────────────────────
+  //
+  // Porque es una propiedad del MOTOR y no del código, y se pierde sin que nada
+  // avise: si alguien «optimiza» el conteo moviéndolo a una función SQL STABLE, o
+  // lo sube a un `WHEN` del trigger, o a una constraint que se evalúa una vez por
+  // statement, las N filas volverían a medirse contra el mismo estado y la segunda
+  // fila pasaría sin error. No hay ningún `expect` en el mundo que se ponga rojo
+  // solo por eso, y el síntoma sería un negocio con más sucursales de las que dice
+  // su plan, sin un solo error en ningún log.
+  //
+  // ─── POR QUÉ ESTE TEST NO ES ACADÉMICO ─────────────────────────────────────
+  //
+  // Porque un `insert` de varias filas en un solo statement es la forma que
+  // produce el cliente: `supabase-js` con `.insert([a, b])` envía exactamente eso,
+  // así que el dispositivo no tiene que hacer nada raro para llegar a este camino.
+  // Lo que no puede hacer —y por eso el raise es P0001 y no un 400 de PostgREST—
+  // es saltarse el tope por el hecho de mandar dos filas juntas.
+
+  test('un insert de dos sucursales en una sola sentencia no se cuela', async () => {
+    // Control positivo primero: una fila sola entra, así que el trigger está vivo
+    // y este negocio está realmente vacío y en `free`.
+    const primera = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `insert into public.business_locations
+           (business_id, name, address, latitude, longitude)
+         values ('${BIZ_BULK}', 'Primera', 'dir', 0, 0) returning id`,
+      ),
+    );
+    expect(plainRows(primera)).toHaveLength(1);
+    expect(await activeLocations(BIZ_BULK)).toBe(1);
+
+    // Se apaga para volver a dejarlo vacío, que es el estado desde el que la
+    // segunda fila tiene que chocar de frente contra la primera.
+    const apagada = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_locations set is_active = false
+          where business_id = '${BIZ_BULK}' and is_active returning id`,
+      ),
+    );
+    expect(plainRows(apagada)).toHaveLength(1);
+    expect(await activeLocations(BIZ_BULK)).toBe(0);
+
+    // Y ahora las dos, en el MISMO statement. La primera entra; la segunda tiene
+    // que ver a la primera para rebotar, y ese es todo el contenido del test.
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(`
+        insert into public.business_locations
+          (business_id, name, address, latitude, longitude)
+        values ('${BIZ_BULK}', 'A', 'dir', 0, 0),
+               ('${BIZ_BULK}', 'B', 'dir', 0, 0)`),
+    );
+    expect(err?.code).toBe('P0001');
+    expect(err?.message).toBe('el plan free admite hasta 1 sucursal, no más');
+
+    // Y cero, no una: el statement abortó entero. Una fila huérfaca de las dos
+    // sería un estado que el §5.4 no describe y que el siguiente writer heredaría.
+    expect(await activeLocations(BIZ_BULK)).toBe(0);
   });
 
   // ─── LA FORMA, QUE ES LO QUE HACE QUE NADA MÁS SE PUEDA ROMPER ────────────

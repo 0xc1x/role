@@ -684,9 +684,17 @@ Applied via `apply_migration` on 2026-10-15. The file's `md5sum` is
 It creates `public.business_plan_of(business_id) → public.business_plan_code` and
 routes `public.business_has_feature` through it, so that the two limit triggers and
 the feature check have exactly one definition of «qué plan tiene este negocio».
-Before this, that question was answered in two places and the two could disagree: a
-soft-deleted plan row read as `free` to the check and as `pro` to the message, so the
-owner was told they were paying for a plan they no longer had.
+Before this, **only one function answered that question** — `business_has_feature`
+itself, whose subselect has filtered `deleted_at is null` since `20261015003929`
+(`:171-190`, and the filter itself at `:182`) — so there was no disagreement inside
+the database to fix. The disagreement this migration removed was one the **brief**
+would have introduced: its triggers carried their own `left join
+public.business_plans_state` with no `deleted_at` filter, so a soft-deleted plan row
+would have read as `free` to the check and as `pro` to the message, and the owner
+would have been told they were paying for a plan they no longer had. That `left join`
+never reached the ledger, and the sealed file's own header repeats the
+anachronism — it names its triggers' `left join` as one of the two pre-existing
+answers. It is sealed; this paragraph is where the correction lives.
 
 Then it creates `enforce_business_location_limit` and `enforce_business_member_limit`
 plus the two `BEFORE INSERT OR UPDATE` row triggers `trg_enforce_location_limit` and
