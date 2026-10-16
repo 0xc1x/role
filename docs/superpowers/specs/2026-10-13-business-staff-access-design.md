@@ -224,6 +224,18 @@ Interpretación de los límites: **ambos topes son acumulativos**. Un plan `pro`
 hasta 5 sucursales **y** hasta 20 miembros; exceder cualquiera de los dos bloquea el
 crecimiento.
 
+**El archivo de arriba existe, y los números que tiene son una segunda copia de los que
+aplica el motor.** Los `case v_plan` de `enforce_business_location_limit` y
+`enforce_business_member_limit`, más el `case` de `business_has_feature`, llevan los
+mismos números escritos a mano en SQL, y entre dos copias no hay nada que las ate. Por
+eso `apps/api/src/database/security/plan-limits.db.spec.ts` lee los tres cuerpos del
+`pg_proc` **vivo** y los compara contra este archivo celda por celda: el dueño ve un
+número en el panel, el motor aplica un número en Postgres, y si divergen el dueño está
+viendo una mentira que solo se descubre al llegar al tope. Ese test se verificó rojo
+con una divergencia real —`free` a 3 miembros en el `.ts` con el trigger cortando en 2—
+y en rojo nombraba el número, no solo el archivo. Agregar un plan es un commit en
+**ambos** lados o el spec se pone rojo.
+
 **El dueño nunca cuenta como miembro.** El tope `members` cuenta solo filas con
 `role <> 'owner'`: un negocio `free` tiene dueño + 2 empleados, y el dueño no es un
 "miembro" que consuma cupo. El trigger de límite filtra por `role <> 'owner'` y las
@@ -238,9 +250,22 @@ el mismo que aplica el motor.
 -- public.can_manage_location(business_id uuid, location_id uuid) returns boolean
 -- SECURITY DEFINER, SET search_path = ''
 --   owner  -> todo el negocio
---   manager-> todo el negocio, excepto borrar sucursales y administrar al owner
+--   manager-> todo el negocio
 --   staff  -> solo las locations de su fila de alcance
 ```
+
+**El helper no excluye nada, y las dos exclusiones que se le atribuían no son
+suyas.** Borrar una sucursal es una restricción de **policy**, no del helper:
+`Members can delete business locations` exige
+`business_member_role(business_id) = 'owner'` además de `can_manage_location`, y
+`business_member_locations_location_id_fkey` es `ON DELETE CASCADE`, así que un
+gerente que borrara una sucursal desde el helper dejaría sin filas de alcance a
+todo su equipo. Administrar al dueño —pausarlo, degradarlo, borrarlo— no lo
+hace ninguna policy: `business_members` no tiene policy de escritura (§6.3), así
+que la pregunta «¿puede este gerente administrar a este dueño?» no la responde
+RLS sino la capa de servicio de la §8, que la rechaza. Un helper que excluyera
+esas dos cosas sería un segundo sitio donde vivir la misma regla, y la §8.1 ya
+dice que dos copias de una frontera son dos fronteras que pueden divergir.
 
 Se apoya en dos helpers más pequeños, todos `STABLE SECURITY DEFINER` con
 `search_path` pineado (patrón ya establecido por `public.business_is_approved`):
@@ -261,11 +286,44 @@ Los tres helpers son ejecutables por `authenticated`, no solo los dos que consum
 cliente: `business_has_feature` lo consulta la API antes de cada alta y
 `business_member_role` lo invocan las policies de la §6.2.
 
-### 5.2 Validez de sesión, en el mismo lugar
+> **La lista de helpers de esta sección quedó corta, y el código laBn sobrepasó.**
+> Dice «tres» y nombra `business_member_role`, `can_manage_location` y
+> `business_has_feature`. `pg_proc` tiene **siete** para este dominio, y los
+> cuatro que faltan nacieron después de que esta §5.1 se escribiera:
+> `business_member_session_valid` (el guard de la §5.2, el único que puede
+> *denegar*), `business_member_session_expires_at` (la aritmética, `IMMUTABLE`, y
+> por lo tanto no necesita `security definer` ni ejecutable por nadie),
+> `business_member_session_state` (la explicación) y `business_plan_of` (la única
+> respuesta a «qué plan tiene este negocio», de la que dependen los dos triggers
+> de la §5.3). `business_plan_of` **no** es ejecutable por `authenticated` y no
+> debe serlo: no la consulta el cliente, y `business_has_feature` es su versión
+> client-facing. Ver ADR-0013.
 
-`session_ttl_hours` y `last_authenticated_at` se evalúan **dentro de
-`can_manage_location`**, no en un guard aparte. Así RLS y API aplican exactamente la misma
-regla.
+### 5.2 Validez de sesión, en un guard aparte
+
+`session_ttl_hours` y `last_authenticated_at` se evalúan en
+`business_member_session_valid(business_id)`, que es un guard aparte y no una
+rama dentro de `can_manage_location`. La aritmética de la expiración vive una
+sola vez, en `business_member_session_expires_at(ttl, last_authenticated_at)`, y
+la consumen los tres.
+
+> **Por qué cambió, y por qué el guard tiene que existir.** La versión anterior
+> de esta sección decía «dentro de `can_manage_location`, no en un guard
+> aparte», y la frase sobrevivió a cuatro enmiendas porque era cierta para
+> `can_manage_location` y no para las policies que no pasan por él. De las 24
+> policies que resuelven por estos helpers, **11 llaman a
+> `business_member_session_valid`** y todas lo hacen por rol — las trece que
+> resuelven por sucursal van por `can_manage_location`. A una función que
+> devuelve el rol no se le puede añadir una rama de expiración sin romper lo que
+> esta misma §5.2 le pide a `business_member_session_state`: el panel necesita
+> `role: 'staff'` **junto con** `reason: 'session_expired'`, precisamente para
+> poder explicar la salida. Si `business_member_role` devolviera `null` en una
+> sesión vencida, el panel sabría que venció y no sabría quién era.
+>
+> El guard aparte resuelve las dos cosas sin que una tenga que sacrificarse por
+> la otra: `can_manage_location` llama a `business_member_session_valid` para no
+> autorizar, y `business_member_session_state` calcula su propio `reason` para
+> poder explicar. Y es el único helper que puede **negar** por sesión.
 
 - `session_ttl_hours = 0` → la comprobación se salta.
 - `last_authenticated_at` lo sella un endpoint que el panel llama una vez, después del login
@@ -330,9 +388,35 @@ El panel escribe directo a Supabase, así que un límite comprobado en la API se
 saltar con un insert desde el dispositivo. Los límites van en triggers
 `BEFORE INSERT OR UPDATE`:
 
-- `business_locations` → si `count(*) + 1 > locations(plan)` se aborta.
-- `business_members` → si `count(*) + 1 > members(plan)` se aborta.
-- Ambos consultan `business_has_feature(business, 'staff_access')` antes de insertar.
+Los dos comparan **el estado después de la escritura**, no un `count(*)` de lo que ya
+existe. Esta redacción es la que manda, y la razón de que diga esto es §5.4:
+
+- `business_locations` → se aborta si **esta escritura hace crecer el negocio** y el
+  estado resultante queda por encima de `locations(plan)`. Renombrar una sucursal que
+  ya estaba activa no la hace crecer, así que no puede ser la razón de un rechazo; sí
+  cuenta una mudanza a otro negocio, porque para el negocio de destino la fila es
+  nueva.
+- `business_members` → igual, y solo contando filas con `role <> 'owner'` y
+  `deleted_at is null`. Editar el `label`, el `alias`, el `role` o el `status` de un
+  acceso que ya existe no lo mete en el conteo.
+- Los dos consultan `business_plan_of(business)` para el plan — y `business_plan_of`,
+  no una segunda `left join` a `business_plans_state`, porque un negocio al que le
+  borraron la fila del plan tiene que leer `free` **en el mismo sitio** que lo lee el
+  mensaje — y `business_has_feature(business, 'staff_access')` antes de insertar.
+- Un `case` sin fila para el plan que llega levanta excepción en vez de devolver
+  `null`: «nadie describió este plan» y «este plan no tiene tope» no son la misma
+  cosa, y la segunda es un permiso.
+
+> **Por qué no `count(*) + 1`.** La frase anterior a esta decía
+> «si `count(*) + 1 > locations(plan)` se aborta», y un trigger escrito así le
+> responde «no» a un `UPDATE`. El trigger corre en `BEFORE INSERT OR UPDATE`, así que
+> un `UPDATE` también lo atraviesa: renombrar la sucursal de una panadería con tres y
+> plan `free` contaría tres, sumaría uno, compararía cuatro contra uno y la dejaría
+> sin poder corregir ni su dirección. Es el §5.4 escrito al revés — el penalty
+> retroactivo que esta misma sección declara inaceptable — y por eso la comparación
+> es contra el estado posterior, con la fila que la escritura toca excluida del
+> conteo de «los demás» porque en un `UPDATE` sigue en la tabla con sus valores
+> viejos y contarla sería contarla dos veces.
 
 **Los triggers solo disparan en escritura. Nunca bloquean lectura ni operación.** Si a un
 negocio le baja el plan, los accesos que ya creó **siguen funcionando**; lo que se bloquea
