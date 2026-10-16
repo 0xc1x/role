@@ -645,6 +645,126 @@ inline expression meant. In `business_member_session_state` the assignment becom
 call, and the `reason` logic below it, which already read from `v_expires_at`, is
 untouched. No error code, message or returned `jsonb` shape changes.
 
+## The plan limits took three migrations, and that is the point
+
+**One feature, three sealed files, one final state.** They are written here together
+because reading only the newest one is how a reader ends up believing the first never
+existed.
+
+| version | name | md5 | what it does |
+| --- | --- | --- | --- |
+| `20261015034230` | `plan_limit_guards` | `556416b2b4baa383e6452a0c64fe9295` | creates the two limit triggers and `business_plan_of` |
+| `20261016000829` | `plan_limit_guard_counting_and_message` | `3ba17681f995f7355f7abd1f57724ddf` | corrects the member counting, both messages and the `else` |
+| `20261016000934` | `plan_limit_message_suffix` | `a54c50eec8f7904833664c27f319e0a8` | restores the «, no más» that the previous one dropped |
+
+Every one of those md5 values was re-measured against `md5(statements[1])` in
+`supabase_migrations.schema_migrations`, and all three match. **All three files end
+on `;` with no trailing newline**, and that is what makes the equality hold — see the
+block at the top of this file. Do not add the newline.
+
+The second and third were applied 65 seconds apart. The third exists because someone
+read back the *text* the second one produced, saw that it said «el plan free admite
+hasta 1 sucursal» instead of «… hasta 1 sucursal, no más», and knew that a message
+without the closing reads as a description of the plan rather than as a refusal. A
+fix that is correct, tested and applied is still a fix that was wrong for 65 seconds,
+and the ledger is the only place that can show that both states existed.
+
+**A defect found after applying is a new migration here, and that is not a workaround
+— it is the reason the sealed file exists.** `20261015015012`'s section above makes
+the same argument for the same reason: editing an applied file would make this
+directory stop describing the database, which is the one failure mode this README
+exists to prevent.
+
+## Applied: `20261015034230_plan_limit_guards`
+
+Applied via `apply_migration` on 2026-10-15. The file's `md5sum` is
+`556416b2b4baa383e6452a0c64fe9295` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+It creates `public.business_plan_of(business_id) → public.business_plan_code` and
+routes `public.business_has_feature` through it, so that the two limit triggers and
+the feature check have exactly one definition of «qué plan tiene este negocio».
+Before this, that question was answered in two places and the two could disagree: a
+soft-deleted plan row read as `free` to the check and as `pro` to the message, so the
+owner was told they were paying for a plan they no longer had.
+
+Then it creates `enforce_business_location_limit` and `enforce_business_member_limit`
+plus the two `BEFORE INSERT OR UPDATE` row triggers `trg_enforce_location_limit` and
+`trg_enforce_member_limit`, all `security definer` with `search_path` pinned to `''`,
+all revoked from `public` and `anon`.
+
+**`business_plan_of` is deliberately not executable by `authenticated`, and that is
+the right ACL rather than an omission.** It is granted to `postgres` and `service_role`
+only, which is exactly what the project's own defaults give a new function in `public`:
+`pg_default_acl` for role `postgres` on `public`, objtype `f`, reads
+`{postgres=X/postgres, service_role=X/postgres}` — `anon` and `authenticated` are not
+in it. The revoke in the migration is therefore belt-and-braces on top of that default,
+and it keeps being right if the default is ever widened.
+
+Nothing client-facing calls it. `business_has_feature` is the client-facing answer to
+«does this business have this feature», and it is granted to `authenticated`; it calls
+`business_plan_of` from inside its own `security definer` body, so the call runs as
+the owner. The two triggers do the same. §5.1 names three helpers that `authenticated`
+may execute and this is not one of them — it did not exist when §5.1 was written.
+
+**Its own header cannot be corrected, so what this file got wrong is recorded here.**
+Three defects are visible by reading it. The member trigger's `v_agrega` tests
+`old.role is distinct from 'owner'`, which is true exactly when the row *already*
+counted, so an edit to a row that already occupied a seat was read as growth — and the
+location trigger has the same idea written correctly a few lines above, which is what
+makes the member one a misunderstanding rather than a design choice. The branch message
+uses `%s`, which is not a format specifier in plpgsql. Both `case` expressions end in
+`else null`, where "nobody described this plan" and "this plan has no cap" are
+indistinguishable. `20261016000829` corrects those three, and `20261016000934` restores
+the «, no más» suffix that `…00829` dropped while rewriting the line.
+
+What this file does **not** contain is the defect the brief specified. It counts the
+after-state rather than the rows that already exist, so a business above its cap can
+still rename a branch. That correction was made before the file was applied, which is
+why no ledger row in this chain shows the broken version.
+
+## Applied: `20261016000829_plan_limit_guard_counting_and_message`
+
+Applied via `apply_migration` on 2026-10-16. The file's `md5sum` is
+`3ba17681f995f7355f7abd1f57724ddf` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+It supersedes `20261015034230` and changes three things in the two trigger bodies:
+
+1. **The member `v_agrega` had `is distinct from` inverted.**
+   `old.role is distinct from 'owner'` is true exactly when the row *already* counted,
+   so an edit to a row that already occupied a seat was read as growth. A
+   grandfathered business with three staff on `free` could not change a `label`.
+2. **`%s` is not a format specifier in plpgsql.** The marker is `%`; `%s` is a marker
+   followed by a literal `s`. The noun argument was appended as text, so the owner
+   read «el plan free admite hasta 1 sucursals, no más».
+3. **Both `case` expressions got the loud `else`** —
+   `raise exception 'el plan % no tiene límites definidos'` — so that a fourth plan
+   tier cannot fall through to `null`, which would mean *no cap*.
+
+It does not recreate the triggers and carries no `grant`/`revoke`: `create or replace`
+keeps the OID, and the two triggers from `20261015034230` point at these same function
+names.
+
+**Its successor corrects it.** The rewrite of the noun argument dropped the «, no
+más» that `20261015034230` had.
+
+## Applied: `20261016000934_plan_limit_message_suffix`
+
+Applied via `apply_migration` on 2026-10-16. The file's `md5sum` is
+`a54c50eec8f7904833664c27f319e0a8` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+One line. It recreates `enforce_business_location_limit` and nothing else: the `raise`
+goes from `'el plan % admite hasta % %'` back to `'el plan % admite hasta % %, no
+más'`. It does not recreate `enforce_business_member_limit`, whose message never lost
+the suffix, and re-declaring an unchanged body would be a second copy of a function
+that did not change — which is how these chains start to diverge without anyone
+deciding to.
+
+**This is the terminal state for the plan limits.** Three files, and the order to read
+them in is the order they were applied.
+
 ## The ledger has a `staff_permission_helpers` row with no file: `20261014011033`
 
 The ledger contains three rows from the development of the helpers above:

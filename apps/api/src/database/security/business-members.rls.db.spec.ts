@@ -1700,6 +1700,16 @@ describe('las policies y los RPCs resuelven por membresía', () => {
         insert into public.business_ownership (business_id, owner_id)
         values ('${POL_BIZ}', '${POL_OWNER}');
 
+        -- El plan NO es decorativo, y desde que los triggers de crecimiento
+        -- existen es la razón por la que este negocio puede existir con la
+        -- forma que tiene: DOS sucursales activas y TRES membresías que no son
+        -- del dueño. Bajo 'free' —1 sucursal y 2 miembros— ese fixture es
+        -- imposible de construir, porque el trigger rechazaría la segunda
+        -- sucursal y el tercer acceso. Un negocio con dos sucursales es un
+        -- negocio 'pro', que es lo que da el §4.5.
+        insert into public.business_plans_state (business_id, plan_code)
+        values ('${POL_BIZ}', 'pro');
+
         -- Aprobados y activos porque enforce_offer_business_availability baja
         -- is_active a false de una oferta de un negocio que no lo esté. La
         -- business_finance que usa accrue_order_earnings la escribe el trigger
@@ -3331,6 +3341,804 @@ describe('las policies y los RPCs resuelven por membresía', () => {
       { fn: 'cancel_order', secdef: true, config: ['search_path=""'] },
       { fn: 'set_order_status', secdef: true, config: ['search_path=""'] },
       { fn: 'validate_pickup_code', secdef: true, config: ['search_path=""'] },
+    ]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOS LÍMITES DEL PLAN
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ─── POR QUÉ UN TRIGGER Y NO UN GUARD ────────────────────────────────────────
+ *
+ * El panel escribe directo a Supabase, así que un límite comprobado en el API se
+ * salta con un `insert` desde el dispositivo (§5.3). Estos dos triggers son la
+ * frontera, y por eso el bloque mira el CATÁLOGO además del comportamiento: que
+ * sean `BEFORE INSERT OR UPDATE` es lo que hace imposible que bloqueen una
+ * lectura, y eso no se ve en ningún `expect` de comportamiento.
+ *
+ * ─── EL GRANDFATHERED SE SIEMBRA POR ENCIMA Y DESPUÉS BAJA DE PLAN ───────────
+ *
+ * Un negocio con tres sucursales bajo `free` es la promesa del §5.4, y no se
+ * puede sembrar por el camino obvio: el trigger rechazaría la segunda. Se siembra
+ * con `pro_plus`, que no tiene tope, y después se le baja el plan a `free`. Eso
+ * es exactamente lo que pasó en producción —13 de los 13 negocios con
+ * sucursales están en `free`, y uno tiene tres sucursales—, y es el único camino
+ * por el que un negocio llega a estar por encima de un tope sin que el motor lo
+ * haya dejado pasar.
+ *
+ * ─── LO QUE ESTE BLOQUE NO MIDE ─────────────────────────────────────────────
+ *
+ * Que la API no deje crear la sucursal a un gerente (§5.3): eso es el guard del
+ * Plan 2, y el trigger de sucursales NO lleva esa salida a propósito. Una
+ * sucursal nueva consume cupo la cree quien la cree, y lo que se prueba aquí es
+ * justamente eso —que el dueño tampoco tiene salida—, no quién puede crearla.
+ */
+describe('los límites del plan bloquean crecer, no operar', () => {
+  let ctx: SupabaseTestDb;
+
+  const LIM_OWNER = 'dddddddd-0000-4000-8000-000000000001';
+  const LIM_STAFF = 'dddddddd-0000-4000-8000-000000000002';
+  const USER_3 = 'dddddddd-0000-4000-8000-000000000003';
+  const USER_4 = 'dddddddd-0000-4000-8000-000000000004';
+
+  const BIZ_FREE = 'aaaaaaaa-0000-4000-8000-000000000003';
+  const BIZ_GRANDFATHERED = 'aaaaaaaa-0000-4000-8000-000000000004';
+  const BIZ_AT_LIMIT = 'aaaaaaaa-0000-4000-8000-000000000005';
+  const BIZ_PLAN_DELETED = 'aaaaaaaa-0000-4000-8000-000000000006';
+  const BIZ_PRO = 'aaaaaaaa-0000-4000-8000-000000000007';
+  const BIZ_PRO_PLUS = 'aaaaaaaa-0000-4000-8000-000000000008';
+  const BIZ_ROOM = 'aaaaaaaa-0000-4000-8000-000000000009';
+  const BIZ_MOVES_FROM = 'aaaaaaaa-0000-4000-8000-00000000000a';
+  const BIZ_MOVES_TO = 'aaaaaaaa-0000-4000-8000-00000000000b';
+  const BIZ_MOVES_ROOM = 'aaaaaaaa-0000-4000-8000-00000000000c';
+
+  const LOC_FREE = 'bbbbbbbb-0000-4000-8000-000000000001';
+  const LOC_GF = [
+    'bbbbbbbb-0000-4000-8000-000000000011',
+    'bbbbbbbb-0000-4000-8000-000000000012',
+    'bbbbbbbb-0000-4000-8000-000000000013',
+  ] as const;
+  const LOC_LIMIT_ON = 'bbbbbbbb-0000-4000-8000-000000000021';
+  const LOC_LIMIT_OFF = 'bbbbbbbb-0000-4000-8000-000000000022';
+  const LOC_PLAN_DELETED = 'bbbbbbbb-0000-4000-8000-000000000031';
+
+  const MEM_FREE_OWNER = 'c1000000-0000-4000-8000-000000000001';
+  const MEM_FREE_STAFF = 'c1000000-0000-4000-8000-000000000002';
+  const MEM_GF = [
+    'c1000000-0000-4000-8000-000000000011',
+    'c1000000-0000-4000-8000-000000000012',
+    'c1000000-0000-4000-8000-000000000013',
+  ] as const;
+  const MEM_DELETED_PLAN = [
+    'c1000000-0000-4000-8000-000000000031',
+    'c1000000-0000-4000-8000-000000000032',
+  ] as const;
+  const MEM_ROOM_OWNER = 'c1000000-0000-4000-8000-000000000041';
+  const MEM_MOVE_A = 'c1000000-0000-4000-8000-000000000051';
+  const MEM_MOVE_B = 'c1000000-0000-4000-8000-000000000052';
+  const LOC_MOVE_FROM = 'bbbbbbbb-0000-4000-8000-000000000061';
+  const LOC_MOVE_ROOM = 'bbbbbbbb-0000-4000-8000-000000000062';
+
+  beforeAll(async () => {
+    ctx = await createSupabaseTestDb();
+
+    await ctx.sql.begin(async (tx) => {
+      for (const [id, email] of [
+        [LIM_OWNER, 'limits-owner@test'],
+        [LIM_STAFF, 'limits-staff@test'],
+        [USER_3, 'limits-tres@test'],
+        [USER_4, 'limits-cuarto@test'],
+      ] as const) {
+        await tx.unsafe(
+          `insert into auth.users (id, email) values ('${id}', '${email}')
+           on conflict (id) do nothing`,
+        );
+      }
+
+      await tx.unsafe(`
+        insert into public.businesses (id, name, type, slug)
+        values ('${BIZ_FREE}',          'Límites free',           'restaurant', 'limits-free'),
+               ('${BIZ_GRANDFATHERED}', 'Límites grandfathered', 'restaurant', 'limits-grandfathered'),
+               ('${BIZ_AT_LIMIT}',      'Límites en el tope',     'restaurant', 'limits-at-limit'),
+               ('${BIZ_PLAN_DELETED}',  'Límites plan borrado',   'restaurant', 'limits-plan-deleted'),
+               ('${BIZ_PRO}',           'Límites pro',            'restaurant', 'limits-pro'),
+               ('${BIZ_PRO_PLUS}',      'Límites pro plus',       'restaurant', 'limits-pro-plus'),
+               ('${BIZ_ROOM}',          'Límites con sitio',      'restaurant', 'limits-room'),
+               ('${BIZ_MOVES_FROM}',   'Límites mudanza origen', 'restaurant', 'limits-moves-from'),
+               ('${BIZ_MOVES_TO}',     'Límites mudanza destino', 'restaurant', 'limits-moves-to'),
+               ('${BIZ_MOVES_ROOM}',   'Límites mudanza sitio', 'restaurant', 'limits-moves-room');
+
+        insert into public.business_ownership (business_id, owner_id)
+        select b.id, '${LIM_OWNER}'::uuid from public.businesses b
+        where b.id in ('${BIZ_FREE}', '${BIZ_GRANDFATHERED}', '${BIZ_AT_LIMIT}',
+                       '${BIZ_PLAN_DELETED}', '${BIZ_PRO}', '${BIZ_PRO_PLUS}',
+                       '${BIZ_ROOM}', '${BIZ_MOVES_FROM}', '${BIZ_MOVES_TO}',
+                       '${BIZ_MOVES_ROOM}');
+      `);
+
+      // El plan va PRIMERO y por razones distintas en cada negocio: el
+      // grandfathered entra en `pro_plus` para poder sembrarse por encima del
+      // tope y bajar después, y el de plan borrado nace con la fila `pro` ya
+      // en `deleted_at` — que es como se ve un negocio al que le borraron el
+      // plan, no un negocio sin fila.
+      await tx.unsafe(`
+        insert into public.business_plans_state (business_id, plan_code, deleted_at)
+        values ('${BIZ_GRANDFATHERED}', 'pro_plus', null),
+               ('${BIZ_PLAN_DELETED}',   'pro',       now()),
+               ('${BIZ_PRO}',            'pro',       null),
+               ('${BIZ_PRO_PLUS}',       'pro_plus',  null);
+      `);
+
+      await tx.unsafe(`
+        insert into public.business_locations
+          (id, business_id, name, address, latitude, longitude, is_active)
+        values ('${LOC_FREE}',          '${BIZ_FREE}',          'Única',   'dir', 0, 0, true),
+               ('${LOC_GF[0]}',         '${BIZ_GRANDFATHERED}', 'G1',      'dir', 0, 0, true),
+               ('${LOC_GF[1]}',         '${BIZ_GRANDFATHERED}', 'G2',      'dir', 0, 0, true),
+               ('${LOC_GF[2]}',         '${BIZ_GRANDFATHERED}', 'G3',      'dir', 0, 0, true),
+               ('${LOC_LIMIT_ON}',      '${BIZ_AT_LIMIT}',      'Abierta', 'dir', 0, 0, true),
+               ('${LOC_LIMIT_OFF}',     '${BIZ_AT_LIMIT}',      'Cerrada', 'dir', 0, 0, false),
+               ('${LOC_PLAN_DELETED}',  '${BIZ_PLAN_DELETED}',  'Matriz',  'dir', 0, 0, true),
+               ('${LOC_MOVE_FROM}',      '${BIZ_MOVES_FROM}',    'Suelta', 'dir', 0, 0, true),
+               ('${LOC_MOVE_ROOM}',      '${BIZ_MOVES_ROOM}',    'Suelta', 'dir', 0, 0, true);
+      `);
+
+      await tx.unsafe(`
+        insert into public.business_members
+          (id, business_id, user_id, role, label, alias,
+           status, session_ttl_hours, last_authenticated_at)
+        values ('${MEM_FREE_OWNER}',   '${BIZ_FREE}',          '${LIM_OWNER}', 'owner', 'Dueña',   'limits-owner@test',          'active', 24, now()),
+               ('${MEM_FREE_STAFF}',   '${BIZ_FREE}',          '${LIM_STAFF}', 'staff', 'Cajero',  'limits-staff@test',          'active', 24, now()),
+               ('${MEM_GF[0]}',        '${BIZ_GRANDFATHERED}', '${LIM_STAFF}', 'staff', 'G1',      'limits-gf-1@test',           'active', 24, now()),
+               ('${MEM_GF[1]}',        '${BIZ_GRANDFATHERED}', '${USER_3}',    'staff', 'G2',      'limits-gf-2@test',           'active', 24, now()),
+               ('${MEM_GF[2]}',        '${BIZ_GRANDFATHERED}', '${USER_4}',    'staff', 'G3',      'limits-gf-3@test',           'active', 24, now()),
+               ('${MEM_DELETED_PLAN[0]}', '${BIZ_PLAN_DELETED}', '${LIM_STAFF}', 'staff', 'Uno', 'limits-plan-1@test',      'active', 24, now()),
+               ('${MEM_DELETED_PLAN[1]}', '${BIZ_PLAN_DELETED}', '${USER_3}',    'staff', 'Dos', 'limits-plan-2@test',      'active', 24, now()),
+               ('${MEM_ROOM_OWNER}',   '${BIZ_ROOM}',          '${LIM_OWNER}', 'owner', 'Dueña',   'limits-room-owner@test',     'active', 24, now()),
+               ('${MEM_MOVE_A}',         '${BIZ_MOVES_FROM}',    '${LIM_STAFF}', 'staff', 'Mudanza A', 'limits-move-a@test',      'active', 24, now()),
+               ('${MEM_MOVE_B}',         '${BIZ_MOVES_FROM}',    '${USER_3}',    'staff', 'Mudanza B', 'limits-move-b@test',      'active', 24, now());
+      `);
+
+      // Los números del §4.5 sembrados DE VERDAD —5 sucursales y 20 miembros en
+      // `pro`— para que el tope se mida contra el número y no contra una
+      // suposición sobre lo que dice un `case`. `generate_series` porque veinte
+      // filas escritas a mano son veinte filas que alguien va a contar mal, y
+      // porque la quinta sucursal es justo la que tiene que entrar: es la que
+      // separa "admite cinco" de "admite cuatro".
+      await tx.unsafe(`
+        insert into auth.users (id, email)
+        select gen_random_uuid(), 'limits-pro-' || n || '@test'
+        from generate_series(1, 20) n;
+
+        insert into public.business_members (business_id, user_id, role, label, alias)
+        select '${BIZ_PRO}', u.id, 'staff', 'Pro', u.email
+        from auth.users u
+        where u.email like 'limits-pro-%@test';
+
+        insert into public.business_locations (business_id, name, address, latitude, longitude)
+        select '${BIZ_PRO}'::uuid, 'Pro ' || n, 'dir', 0, 0 from generate_series(1, 5) n
+        union all
+        select '${BIZ_PRO_PLUS}'::uuid, 'Plus ' || n, 'dir', 0, 0 from generate_series(1, 5) n;
+      `);
+
+      // Y POR ÚLTIMO LE BAJAN EL PLAN. A partir de acá el negocio tiene tres
+      // sucursales y tres accesos bajo `free`, que es un estado que el motor no
+      // habría dejado crear y que el §5.4 perdona.
+      await tx.unsafe(
+        `update public.business_plans_state
+            set plan_code = 'free'
+          where business_id = '${BIZ_GRANDFATHERED}'`,
+      );
+    });
+  });
+
+  afterAll(async () => {
+    await ctx.stop();
+  });
+
+  // ─── LO QUE NO SE PUEDE: CRECER ────────────────────────────────────────────
+
+  test('un negocio free no crea su segunda sucursal', async () => {
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `insert into public.business_locations
+           (business_id, name, address, latitude, longitude)
+         values ('${BIZ_FREE}', 'Segunda', 'dir', 0, 0)`,
+      ),
+    );
+
+    // `toBe` y no `toContain`: el mensaje es lo que la UI le muestra al dueño
+    // para decirle qué pasó, así que el código del plan tiene que estar EN ÉL y
+    // no en el error de al lado. Con un `toContain('plan free')` pasaría un
+    // mensaje que dice "el plan  no incluye…", que es lo que salía cuando el
+    // `raise` usaba una variable que todavía no tenía valor.
+    expect(err?.message).toBe('el plan free admite hasta 1 sucursal, no más');
+    expect(err?.code).toBe('P0001');
+  });
+
+  test('el dueño no cuenta para el tope de miembros', async () => {
+    // Ya hay dueño + 1 staff; este es el segundo y debe entrar.
+    const ok = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `insert into public.business_members
+           (business_id, user_id, role, label, alias)
+         values ('${BIZ_FREE}', '${USER_3}', 'staff', 'Segundo', 'segundo@x.role.ec')
+         returning id`,
+      ),
+    );
+    expect(plainRows(ok)).toHaveLength(1);
+
+    // Y el tercero es el que rebota: el dueño no consumió cupo.
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `insert into public.business_members
+           (business_id, user_id, role, label, alias)
+         values ('${BIZ_FREE}', '${USER_4}', 'staff', 'Tercero', 'tercero@x.role.ec')`,
+      ),
+    );
+    expect(err?.message).toBe('el plan free admite hasta 2 miembros, no más');
+  });
+
+  // ─── LO QUE SÍ SE PUEDE, Y QUE ES EL §5.4 ENTERO ──────────────────────────
+  //
+  // El trigger es `before insert or update`, así que un UPDATE también pasa por
+  // él. Un conteo literal de las filas que ya existen haría que renombrar una
+  // sucursal de un negocio por encima del tope fallara —que es exactamente el
+  // "meterle un lock a una panadería un viernes a las 5" que el §5.3 descarta—.
+
+  test('un negocio por encima del límite sigue operando', async () => {
+    // Grandfathering: 3 sucursales bajo plan free. Nada de esto puede fallar.
+    const ok = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_locations set name = 'Renombrada'
+          where business_id = '${BIZ_GRANDFATHERED}' and is_active = true
+          returning id`,
+      ),
+    );
+    expect(plainRows(ok)).toHaveLength(3);
+  });
+
+  test('un negocio por encima del límite tampoco crea su cuarta sucursal', async () => {
+    // La mitad que el brief no pedía y que es la que hace que la anterior
+    // signifique algo: si el motor perdonara el exceso, también lo dejaría
+    // crecer, y "sigue operando" se volvería "no tiene límite".
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `insert into public.business_locations
+           (business_id, name, address, latitude, longitude)
+         values ('${BIZ_GRANDFATHERED}', 'Cuarta', 'dir', 0, 0)`,
+      ),
+    );
+    expect(err?.message).toBe('el plan free admite hasta 1 sucursal, no más');
+  });
+
+  test('reactivar una sucursal cerrada con el tope encima se rechaza', async () => {
+    // Cerrar una sucursal la saca del conteo, y volverla a abrir es crecer. Sin
+    // esta mitad, el tope dependería del `is_active` de cada fila y no de lo que
+    // hace la escritura: una panadería podría apagar sus tres sucursales para
+    // abrir la cuarta.
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.business_locations set is_active = true
+          where id = '${LOC_LIMIT_OFF}'`,
+      ),
+    );
+    expect(err?.message).toBe('el plan free admite hasta 1 sucursal, no más');
+
+    // Y apagarla sí: el tope frena crecer, no el trabajo de casa.
+    const closed = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_locations set is_active = false
+          where id = '${LOC_LIMIT_ON}' returning id`,
+      ),
+    );
+    expect(plainRows(closed)).toHaveLength(1);
+
+    // Con la plaza liberada, la misma operación que un momento antes rebotaba
+    // entra. Si esto fallara, lo que se estaría midiendo es el `where`, no el
+    // tope.
+    const reopened = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_locations set is_active = true
+          where id = '${LOC_LIMIT_ON}' returning id`,
+      ),
+    );
+    expect(plainRows(reopened)).toHaveLength(1);
+  });
+
+  test('editar los accesos de un negocio por encima del tope tampoco falla', async () => {
+    // El mismo caso del otro lado de la asimetría: cambiar el `label`, el
+    // `alias` o el `role` de una fila que ya existe no agrega ninguna fila al
+    // conteo, así que no puede rebotar por el mismo motivo que un `rename`.
+    const ok = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_members set label = 'Renombrado'
+          where business_id = '${BIZ_GRANDFATHERED}' and deleted_at is null
+          returning id`,
+      ),
+    );
+    expect(plainRows(ok)).toHaveLength(3);
+  });
+
+  // ─── EL PLAN SE LEE POR SU FILA VIVA, Y EL MENSAJO LO DICE ─────────────────
+
+  test('una fila de plan borrada se lee como free, y el mensaje lo dice', async () => {
+    // `business_plans_state` tiene `deleted_at`, así que un plan puede seguir
+    // escrito y no estar vigente. `business_has_feature` lo tiene en cuenta; el
+    // mensaje que le devuelve este trigger al dueño tiene que decir lo mismo,
+    // porque si dijera `pro` le estaría enseñando el plan que ya no tiene.
+    const denied = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `insert into public.business_locations
+           (business_id, name, address, latitude, longitude)
+         values ('${BIZ_PLAN_DELETED}', 'Segunda', 'dir', 0, 0)`,
+      ),
+    );
+    expect(denied?.message).toBe(
+      'el plan free admite hasta 1 sucursal, no más',
+    );
+
+    const deniedMember = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `insert into public.business_members
+           (business_id, user_id, role, label, alias)
+         values ('${BIZ_PLAN_DELETED}', '${USER_4}', 'staff', 'Tercero', 'tercero@x.role.ec')`,
+      ),
+    );
+    expect(deniedMember?.message).toBe(
+      'el plan free admite hasta 2 miembros, no más',
+    );
+
+    // Y que los dos digan `free` no es una coincidencia de este test: es que las
+    // dos respuestas salen del mismo sitio. Un mensaje que dijera `pro` le
+    // estaría cobrando a un dueño un plan que ya no tiene.
+    //
+    // La comprobación va como `authenticated` y no como `service_role` porque
+    // `authenticated` es el rol con EXECUTE GRANTEO en `20261015003929`, y
+    // `service_role` lo tiene en producción sólo por el blanket default de
+    // Supabase sobre funciones de `public`, que el harness no reproduce a
+    // propósito (`supabase-platform.ts`: "ON FUNCTIONS IN public THIS
+    // DELIBERATELY GRANTS NOTHING"). Como `service_role` el `select` rebotaría
+    // con `42501` y el test mediría el ACL en vez de la feature.
+    const read = await as(ctx.sql, 'authenticated', LIM_OWNER, (tx) =>
+      tx.unsafe<{ staff_access: boolean }[]>(`
+        select public.business_has_feature(
+                 '${BIZ_PLAN_DELETED}'::uuid,
+                 'staff_access'::public.business_feature) as staff_access`),
+    );
+    expect(plainRows(read)[0]?.staff_access).toBe(true);
+  });
+
+  // ─── LOS NÚMEROS DEL §4.5, MEDIDOS Y NO DECLARADOS ────────────────────────
+
+  test('pro admite cinco sucursales y veinte miembros, y no uno más', async () => {
+    const sixth = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `insert into public.business_locations
+           (business_id, name, address, latitude, longitude)
+         values ('${BIZ_PRO}', 'Sexta', 'dir', 0, 0)`,
+      ),
+    );
+    expect(sixth?.message).toBe(
+      'el plan pro admite hasta 5 sucursales, no más',
+    );
+
+    const twentyFirst = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `insert into public.business_members
+           (business_id, user_id, role, label, alias)
+         values ('${BIZ_PRO}', '${LIM_OWNER}', 'staff', 'Número 21', 'pro-21@x.role.ec')`,
+      ),
+    );
+    expect(twentyFirst?.message).toBe(
+      'el plan pro admite hasta 20 miembros, no más',
+    );
+  });
+
+  test('pro_plus no tiene tope: ni de sucursales ni de miembros', async () => {
+    // Dos más que `pro` en cada cosa. Si el `case` de `pro_plus` devolviera un
+    // número en vez de `null`, esta prueba lo diría.
+    const sixth = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `insert into public.business_locations
+           (business_id, name, address, latitude, longitude)
+         values ('${BIZ_PRO_PLUS}', 'Sexta', 'dir', 0, 0)
+         returning id`,
+      ),
+    );
+    expect(plainRows(sixth)).toHaveLength(1);
+
+    for (const userId of [LIM_STAFF, USER_3, USER_4]) {
+      const ok = await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `insert into public.business_members
+             (business_id, user_id, role, label, alias)
+           values ('${BIZ_PRO_PLUS}', '${userId}', 'staff', 'Plus', '${userId}-plus@x.role.ec')
+           returning id`,
+        ),
+      );
+      expect(plainRows(ok)).toHaveLength(1);
+    }
+  });
+
+  // ─── LA ASIMETRIA QUE HAY QUE MANTENER ─────────────────────────────────────
+  //
+  // En `business_members` el dueño no consume cupo y por eso el trigger sale
+  // antes de contar. En `business_locations` NO hay esa salida: una sucursal
+  // nueva consume cupo la cree quien la cree. Lo que decide quién puede crearla
+  // es la policy de INSERT del §6.2, y eso lo aplica el API en el Plan 2.
+
+  test('una sucursal nueva consume cupo aunque la pida el dueño', async () => {
+    // El control positivo va PRIMERO, y es la mitad que hace válida la otra:
+    // sin él, un `P0001` podría ser cualquier cosa, incluso que el dueño no
+    // pueda crear sucursales por RLS y este test no estar probando el tope.
+    const first = await as(ctx.sql, 'authenticated', LIM_OWNER, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `insert into public.business_locations
+           (business_id, name, address, latitude, longitude)
+         values ('${BIZ_ROOM}', 'Primera', 'dir', 0, 0)
+         returning id`,
+      ),
+    );
+    expect(plainRows(first)).toHaveLength(1);
+
+    // Y la segunda es la misma persona, la misma sesión y el mismo negocio.
+    const err = await deniedAs(ctx.sql, 'authenticated', LIM_OWNER, (tx) =>
+      tx.unsafe(
+        `insert into public.business_locations
+           (business_id, name, address, latitude, longitude)
+         values ('${BIZ_ROOM}', 'Segunda', 'dir', 0, 0)`,
+      ),
+    );
+
+    // `P0001` y no `42501` es la prueba de que el trigger es lo que lo paró: en
+    // Postgres las policies son un trigger AFTER, así que el BEFORE corre
+    // primero y el mensaje es el suyo. Un `42501` sería RLS, y significaría que
+    // este test no midió el tope.
+    expect(err?.code).toBe('P0001');
+    expect(err?.message).toBe('el plan free admite hasta 1 sucursal, no más');
+  });
+
+  // ─── UNA MUDANZA ENTRE NEGOCIOS SE MIDE CONTRA EL DESTINO ──────────────────
+
+  test('mover una fila entre negocios se mide contra el de destino, no el de origen', async () => {
+    // `business_id` no lo cambia nadie en el producto hoy, y por eso este caso
+    // es de los que se dejan sin probar. Pero el trigger corre en cada UPDATE,
+    // así que la fila de `v_agrega` que decide esto
+    // —`old.business_id is distinct from new.business_id`— necesita estar
+    // probada: si no, la mudanza sería la puerta de atrás del tope, la forma más
+    // barata de pasar de un negocio sin cupo a uno que tampoco lo tiene.
+    //
+    // Para el DESTINO la fila es nueva. Eso es lo que se mide aquí, en las dos
+    // tablas y en los dos sentidos, y los controles van PRIMERO: sin ellos un
+    // `P0001` podría ser un trigger roto en vez del tope.
+    //
+    // Los tres negocios nacen sin fila de plan, que es como se ve un negocio en
+    // `free` —la ausencia y la fila borrada son lo mismo para
+    // `business_plan_of`— y arrancan así: FROM con dos accesos y una sucursal
+    // (justo en sus topes), TO vacío, y ROOM con una sucursal y sin accesos.
+
+    // ─── Miembros ──────────────────────────────────────────────────────────
+    const memberToEmpty = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_members set business_id = '${BIZ_MOVES_TO}'
+          where id = '${MEM_MOVE_A}' returning id`,
+      ),
+    );
+    expect(plainRows(memberToEmpty)).toHaveLength(1);
+
+    const secondToEmpty = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_members set business_id = '${BIZ_MOVES_TO}'
+          where id = '${MEM_MOVE_B}' returning id`,
+      ),
+    );
+    expect(plainRows(secondToEmpty)).toHaveLength(1);
+
+    // Un tercero nuevo en el ORIGEN, que tiene sitio de sobra: lo que se
+    // prepara aquí es una mudanza con un origen vacío de cuota y un destino
+    // lleno. Si la regla fuera «cuenta el de origen», esto entraría.
+    const newcomer = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `insert into public.business_members
+           (business_id, user_id, role, label, alias)
+         values ('${BIZ_MOVES_FROM}', '${USER_4}', 'staff', 'Recién llegado', 'limits-move-c@test')
+         returning id`,
+      ),
+    );
+    const newcomerId = plainRows(newcomer)[0]?.id;
+    expect(newcomerId).toBeString();
+
+    const memberIntoFull = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.business_members set business_id = '${BIZ_MOVES_TO}'
+          where id = '${newcomerId}'`,
+      ),
+    );
+    expect(memberIntoFull?.code).toBe('P0001');
+    expect(memberIntoFull?.message).toBe(
+      'el plan free admite hasta 2 miembros, no más',
+    );
+
+    // ─── Sucursales, el mismo molde ───────────────────────────────────────
+    const locationToEmpty = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_locations set business_id = '${BIZ_MOVES_TO}'
+          where id = '${LOC_MOVE_FROM}' returning id`,
+      ),
+    );
+    expect(plainRows(locationToEmpty)).toHaveLength(1);
+
+    const secondLocation = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `insert into public.business_locations
+           (business_id, name, address, latitude, longitude)
+         values ('${BIZ_MOVES_FROM}', 'Segunda', 'dir', 0, 0) returning id`,
+      ),
+    );
+    const secondLocationId = plainRows(secondLocation)[0]?.id;
+    expect(secondLocationId).toBeString();
+
+    const locationIntoFull = await deniedAs(
+      ctx.sql,
+      'service_role',
+      null,
+      (tx) =>
+        tx.unsafe(
+          `update public.business_locations set business_id = '${BIZ_MOVES_TO}'
+          where id = '${secondLocationId}'`,
+        ),
+    );
+    expect(locationIntoFull?.code).toBe('P0001');
+    expect(locationIntoFull?.message).toBe(
+      'el plan free admite hasta 1 sucursal, no más',
+    );
+  });
+
+  // ─── LA FORMA, QUE ES LO QUE HACE QUE NADA MÁS SE PUEDA ROMPER ────────────
+
+  test('los dos triggers son BEFORE INSERT OR UPDATE, de fila, y con el search_path pineado', async () => {
+    const shape = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          tabla: string;
+          trigger: string;
+          por_fila: boolean;
+          antes: boolean;
+          al_insertar: boolean;
+          al_actualizar: boolean;
+          secdef: boolean;
+          config: string[] | null;
+        }[]
+      >(`
+        select c.relname as tabla,
+               t.tgname as trigger,
+               (t.tgtype & 1) = 1 as por_fila,
+               (t.tgtype & 2) = 2 as antes,
+               (t.tgtype & 4) = 4 as al_insertar,
+               (t.tgtype & 16) = 16 as al_actualizar,
+               p.prosecdef as secdef,
+               p.proconfig as config
+        from pg_trigger t
+        join pg_class c on c.oid = t.tgrelid
+        join pg_namespace n on n.oid = c.relnamespace
+        join pg_proc p on p.oid = t.tgfoid
+        where n.nspname = 'public'
+          and c.relname in ('business_locations', 'business_members')
+          and p.proname in ('enforce_business_location_limit',
+                            'enforce_business_member_limit')
+          and not t.tgisinternal
+        order by c.relname`),
+    );
+
+    // Los bits de `tgtype`, no el texto: `pg_get_triggerdef` cambia de forma
+    // entre versiones y un reformateo que no cambia una sola cosa de lo que
+    // pasa no puede romper esta prueba.
+    //
+    // Y el filtro es por FUNCIÓN, no por nombre de trigger: `business_locations`
+    // ya traía su `set_business_locations_updated_at` desde el día que se creó la
+    // tabla, y lo que este bloque mide son los dos triggers de límites, no el
+    // inventario completo de la tabla.
+    expect(plainRows(shape)).toEqual([
+      {
+        tabla: 'business_locations',
+        trigger: 'trg_enforce_location_limit',
+        por_fila: true,
+        antes: true,
+        al_insertar: true,
+        al_actualizar: true,
+        secdef: true,
+        config: ['search_path=""'],
+      },
+      {
+        tabla: 'business_members',
+        trigger: 'trg_enforce_member_limit',
+        por_fila: true,
+        antes: true,
+        al_insertar: true,
+        al_actualizar: true,
+        secdef: true,
+        config: ['search_path=""'],
+      },
+    ]);
+  });
+
+  // ─── UNA PREGUNTA, UNA RESPUESTA ───────────────────────────────────────────
+  //
+  // «¿qué plan tiene este negocio?» tiene que tener UN sitio. Antes de la
+  // cadena la contestaban dos —la subconsulta de `business_has_feature`, que
+  // filtraba `deleted_at is null`, y el `left join` que los triggers traían
+  // para poder nombrar el plan en el mensaje— y no podían coincidir: una fila
+  // de plan borrada le contestaba `free` a la comprobación y `pro` al mensaje,
+  // así que el mensaje le decía al dueño que estaba pagando un plan que ya no
+  // tenía. `business_plan_of` es la única definición, y esto es lo que ata esa
+  // unicidad.
+  //
+  // Y mira `prosrc`, no `pg_get_functiondef`: lo que se afirma es QUÉ llama cada
+  // cuerpo y qué tabla lee cada cuerpo, no con qué saltos de línea. Un
+  // reformateo que no cambia una sola cosa de lo que pasa no puede romper esta
+  // prueba, porque lo que busca es el nombre de la función llamada, no una
+  // cadena de bytes.
+
+  test('el plan se resuelve por business_plan_of en los tres cuerpos, y sólo ahí', async () => {
+    const resolved = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ fn: string; por_helper: boolean; lee_la_tabla: boolean }[]>(`
+        select p.proname as fn,
+               (p.prosrc ~ 'business_plan_of\\s*\\(') as por_helper,
+               (p.prosrc ~ 'business_plans_state') as lee_la_tabla
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('business_plan_of', 'business_has_feature',
+                            'enforce_business_location_limit',
+                            'enforce_business_member_limit')
+        order by p.proname`),
+    );
+
+    // `lee_la_tabla` es la mitad que no se ve: los tres cuerpos que la piden
+    // tienen que LEERLA A TRAVÉS del helper, no trayendo su propio `select` de
+    // vuelta. Una segunda copia de la consulta es una segunda respuesta
+    // posible a la misma pregunta, y es exactamente el defecto que esta cadena
+    // vino a cerrar.
+    expect(plainRows(resolved)).toEqual([
+      {
+        fn: 'business_has_feature',
+        por_helper: true,
+        lee_la_tabla: false,
+      },
+      { fn: 'business_plan_of', por_helper: false, lee_la_tabla: true },
+      {
+        fn: 'enforce_business_location_limit',
+        por_helper: true,
+        lee_la_tabla: false,
+      },
+      {
+        fn: 'enforce_business_member_limit',
+        por_helper: true,
+        lee_la_tabla: false,
+      },
+    ]);
+
+    // Y que la fila borrada se cuente como ausencia —no como `pro`— es lo que
+    // hace que `business_plan_of` sea el sitio correcto y no sólo el primero.
+    // El test de comportamiento de más arriba lo midió con un negocio de
+    // verdad; esto afirma la regla en el cuerpo que la va a aplicar a todos.
+    const softDeleted = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ filtra_borrados: boolean }[]>(`
+        select (p.prosrc ~ 'deleted_at\\s+is\\s+null') as filtra_borrados
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'business_plan_of'`),
+    );
+    expect(
+      plainRows(softDeleted)[0]?.filtra_borrados,
+      'business_plan_of no filtra deleted_at, así que un plan retirado sigue ' +
+        'contando topes desde la fila que lo dejó atrás — y el `coalesce` de ' +
+        'ausencia y de borrado son la misma cosa sólo porque el filtro está.',
+    ).toBe(true);
+  });
+
+  test('el plan se resuelve ANTES de que el mensaje lo necesite', async () => {
+    // Hoy los tres planes dan `staff_access`, así que el `raise` de «no incluye
+    // accesos de personal» no lo alcanza nadie y su texto no se puede medir por
+    // comportamiento. Lo que SÍ importa es que la resolución del plan vaya antes
+    // de ese `raise`: si fuera después, el mensaje saldría con el plan en
+    // blanco —«el plan  no incluye…»—, que es un mensaje roto justo cuando el
+    // dueño necesita entender por qué se le frenó el crecimiento.
+    //
+    // Es una guarda de catálogo y no una de comportamiento, y por eso vive acá:
+    // es lo que ata el orden de dos líneas que ningún `select` puede ver.
+    const order = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ fn: string; plan_at: number; feature_at: number }[]>(`
+        select p.proname as fn,
+               strpos(p.prosrc, 'business_plan_of(') as plan_at,
+               strpos(p.prosrc, 'business_has_feature(') as feature_at
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('enforce_business_location_limit',
+                            'enforce_business_member_limit')
+        order by p.proname`),
+    );
+    expect(plainRows(order)).toHaveLength(2);
+    for (const row of plainRows(order)) {
+      expect(
+        row.plan_at,
+        `${row.fn} no llama a business_plan_of, así que el plan del mensaje ` +
+          'sale de otro sitio que el de la comprobación de feature, y son dos ' +
+          'respuestas a la misma pregunta.',
+      ).toBeGreaterThan(0);
+      expect(
+        row.feature_at,
+        `${row.fn} no consulta business_has_feature. El §5.3 lo pide antes de ` +
+          'insertar, y es lo que hace que un plan sin accesos de personal no ' +
+          'crezca ni por un loophole del `case` de límites.',
+      ).toBeGreaterThan(0);
+      expect(
+        row.plan_at < row.feature_at,
+        `${row.fn} mira la feature antes de resolver el plan, así que el ` +
+          'mensaje del raise sale con el plan en blanco.',
+      ).toBe(true);
+    }
+  });
+
+  // ─── EL CATÁLOGO DE TOPES, NOMBRADO PLAN POR PLAN ──────────────────────────
+  //
+  // `business_has_feature` tiene su `else false` para que un plan nuevo no
+  // conceda features antes de que nadie decidiera cuánto cuesta cada una. Los
+  // dos `case` de topes necesitan la misma red, y la necesitan con más razón:
+  // aquí el `else` no sería «sin features» sino SIN TOPE, o sea que agregar un
+  // tier al enum le regalaría un negocio ilimitado a quien lo escribiera.
+  //
+  // Por eso los tres planes se nombran uno por uno y el resto se raisea en
+  // voz alta. Y esto mira el cuerpo, no su respuesta: los números que importan
+  // —que `free` admita uno y `pro` cinco, que `pro_plus` no tenga tope— ya los
+  // miden los tests de comportamiento de arriba, con veinte filas de verdad.
+
+  test('los dos triggers nombran los tres planes, y un cuarto no se cuela sin tope', async () => {
+    const catalog = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          fn: string;
+          free: boolean;
+          pro: boolean;
+          pro_plus: boolean;
+          el_resto_ruidoso: boolean;
+        }[]
+      >(`
+        select p.proname as fn,
+               (p.prosrc ~ 'when\\s+''free''')     as free,
+               (p.prosrc ~ 'when\\s+''pro''')      as pro,
+               (p.prosrc ~ 'when\\s+''pro_plus''') as pro_plus,
+               (p.prosrc ~ 'else\\s+raise\\s+exception') as el_resto_ruidoso
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('enforce_business_location_limit',
+                            'enforce_business_member_limit')
+        order by p.proname`),
+    );
+
+    // `toEqual` sobre el conjunto entero y no tres `toBe` sueltos: así el
+    // fallo dice QUÉ función dejó de nombrar QUÉ plan, que es la mitad de lo
+    // que hay que arreglar cuando esto se pone rojo.
+    expect(plainRows(catalog)).toEqual([
+      {
+        fn: 'enforce_business_location_limit',
+        free: true,
+        pro: true,
+        pro_plus: true,
+        el_resto_ruidoso: true,
+      },
+      {
+        fn: 'enforce_business_member_limit',
+        free: true,
+        pro: true,
+        pro_plus: true,
+        el_resto_ruidoso: true,
+      },
     ]);
   });
 });
