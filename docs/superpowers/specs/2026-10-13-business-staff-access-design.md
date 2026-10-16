@@ -365,7 +365,38 @@ update public.orders o set business_location_id = f.business_location_id
 alter table public.orders alter column business_location_id set not null;
 ```
 
-`reserve_offer` escribe la columna. A partir de ahí, `orders` se acota igual que `offers`.
+**La columna no la escribe `reserve_offer`: la deriva un trigger.** Lo que entró fue
+`trg_set_order_business_location`, un `BEFORE INSERT ... FOR EACH ROW` sobre `public.orders`
+que lee `offers.business_location_id` del `offer_id` de la fila que está entrando y lo
+escribe en la columna antes de que esa fila exista. `reserve_offer` **no se reescribió**: su
+cuerpo es el que era.
+
+La razón es que el trigger hace el trabajo sin entrar en el perímetro que la función ya
+tiene. `reserve_offer` es `SECURITY DEFINER` con una matriz de grants ya medida
+(`revoke all ... from public` + `grant execute ... to authenticated, service_role`), con el
+binding de identidad de la ADR-0011 y con su propia máquina de estados —inserta el pedido,
+abre el `order_events` con `pending`, descuenta stock y quema cupón—. Reescribirla para
+añadir una columna era meter un cambio de comportamiento dentro de una superficie que se
+aceptó a propósito como estable, y cambiar su cuerpo obligaba a reconstruir el grants y a
+re-justificar el advisory. El trigger hace lo mismo **por debajo** de los grants: no necesita
+EXECUTE, no amplía quién puede insertar pedidos y no se puede invocar desde fuera. La
+ventaja que no tiene la reescritura es que además es autoritativo: sobrescribe el valor
+venga de donde venga, así que un caller que pase una sucursal equivocada no puede colarla,
+y un pedido insertado por `reserve_offer`, por un script de soporte o a mano queda acotado
+por sucursal igual que una oferta. A partir de ahí, `orders` se acota como `offers`.
+
+**El límite, sin adornos:** el trigger es `BEFORE INSERT` y nada más. Si una oferta cambia
+de sucursal *después*, los pedidos que ya se le hicieron **conservan la sucursal vieja**, y
+el trigger no los toca porque no vuelve a disparar. La FK compuesta no salta, porque la fila
+de `business_locations` de la sucursal vieja sigue existiendo: lo que el constraint sigue
+validando es el par `(business_location_id, business_id)`, no que la oferta siga estando en
+esa sucursal. Eso es coherente con que la columna sea un **snapshot** —el pedido registra el
+lugar donde se recogió— pero no es lo mismo que un rango vivo, y el código que lea la
+columna tiene que saber cuál de las dos está leyendo. Si algún día tiene que ser cierto en
+el otro sentido, hacen falta dos cosas que hoy no existen: un `BEFORE UPDATE` en
+`offers` que reprograme los pedidos abiertos, o una lectura que resuelva la sucursal
+actual de la oferta en lugar de la guardada. Ninguna de las dos está decidida aquí, y esta
+sección no promete ninguna.
 
 ### 6.2 Sustitución de `business_ownership`
 
@@ -392,7 +423,12 @@ Todas pasan a `public.can_manage_location(...)` o `public.business_member_role(.
 5. Crear las policies nuevas **junto** a las viejas (mismo predicado, evaluadas por
    separado) y verificar que ambas dan el mismo resultado.
 6. Dropear policies viejas y RPCs viejos; recrear los RPCs con el helper.
-7. `drop table public.business_ownership` (y sus grants).
+7. `drop table public.business_ownership` (y sus grants). **Aplazado al Plan 3**: al cierre
+   del Plan 1 los pasos 1-5 están hechos y verificados por paridad, y del paso 6 solo la
+   mitad de las RPCs —`cancel_order`, `set_order_status` y `validate_pickup_code` ya se
+   recrearon con el helper—, pero **las policies viejas siguen en pie y la tabla también**,
+   porque `getBusinessesByOwnerId` todavía la lee y dropearla sin migrar ese reader rompe el
+   panel del dueño. Ver ADR-0013.
 8. Triggers de límites de plan.
 9. Grants a `authenticated` de solo lectura sobre `business_members` /
    `business_member_locations`.
