@@ -608,9 +608,21 @@ The expiry arithmetic was meant to live in one place,
 `business_member_session_expires_at(session_ttl_hours, last_authenticated_at)`, with
 `can_manage_location` and `business_member_session_state` calling it. At the moment this
 migration was sealed that was **not** the case, and both of those functions were still
-computing it inline — see the correction below. The eleven policies call
-`business_member_session_valid` **in addition to** their role check, and that part did
-hold.
+computing it inline — see the correction below.
+
+**This paragraph used to say those two functions were still computing it inline as of
+*this* migration, which was wrong about the origin.** `20261015015012` creates policies
+and grants; it never wrote a function body, so it introduced no arithmetic and fixed
+none. It inherited the duplicates from `20261015001857`, which is where the copies were
+born (`:39` in `can_manage_location`, `:124` and `:136` in
+`business_member_session_state`) — and by the time `20261015003929` recreated both
+bodies it had already written a header claiming the opposite. That earlier claim is
+recorded beside the `20261015024825` one, because it is the same defect class and a
+migration earlier, and because the two sealed files saying it are the reason a reader
+who checks only the newest one concludes the arithmetic was always shared.
+
+The eleven policies call `business_member_session_valid` **in addition to** their role
+check, and that part did hold.
 
 **`deleted_at is null` on the two membership reads**, which §6.3 names explicitly and
 neither of which applied it to the row being listed:
@@ -647,6 +659,37 @@ reintroduces the duplicate.
 The sealed header cannot be edited, so it will keep making that claim. Read it as what
 it is: a statement of intent that was not true on the day it was sealed.
 
+### ⚠ `20261015003929` made the same claim, one migration earlier, and it is sealed too
+
+`20261015024825:46-52` is not the first sealed header to assert a single copy of the
+expiry arithmetic. `20261015003929:51` says, in the paragraph that introduced
+`reason: 'session_never_stamped'`, that "la fecha de expiración se calcula una sola
+vez". **That was false inside the very file that says it**, and it is false in a way
+that is checkable by reading nothing but that file:
+
+| line | what it is |
+| --- | --- |
+| `20261015003929:140` | `or m.last_authenticated_at + (m.session_ttl_hours * interval '1 hour') < now()` — the arithmetic, inline, inside `can_manage_location` |
+| `20261015003929:286` | `v_expires_at := v_row.last_authenticated_at + (v_row.session_ttl_hours * interval '1 hour');` — the same arithmetic, computed a second time, independently, inside `business_member_session_state` |
+| `20261015003929:51` | "se calcula una sola vez" |
+
+Two copies that disagree by construction is the worst shape of this defect: the function
+that AUTHORIZES and the function that EXPLAINS are the two holding them, and §5.2 says
+they have to tell the same story. They could drift, and nothing but a behavioural test
+would notice — and the behavioural matrix passed at the time, because the two copies
+happened to agree.
+
+**The copies were not born in `20261015003929`.** `grep -n "interval '1 hour'"` over the
+chain: `20261015001857:39,124,136` put them there, `20261015012253:89,213` carried them
+through another rewrite of `business_member_session_state`, `20261015003929:140,286`
+recreated both, and `20261015024825` is the migration that finally introduced the shared
+function — while its own header described it as "la única cuenta". So the sentence was
+repeated across three sealed files over four migrations, each of which could have been
+made true and none of which was.
+
+Two corrections in one place would have left the defect class intact, which is why the
+enforcement below is a catalog guard and not a second note.
+
 **`20261015031154_shared_ttl_expiry_accounting` makes it true.** Both functions now
 call `business_member_session_expires_at` instead of computing the expiry inline — one
 line each, with the semantics unchanged, no signature/volatility/`security definer`/
@@ -659,6 +702,10 @@ three must reference `business_member_session_expires_at`. It was verified by pu
 the inline arithmetic back into `can_manage_location`, which turns the guard red
 *while the behavioural matrix in the same test still passes* — which is precisely the
 gap the matrix alone leaves open.
+
+That matrix cannot catch a `20261015003929`-shaped regression on its own, and the
+history above is the proof: every one of those three migrations had a green
+behavioural matrix while two copies of the arithmetic were live.
 
 ## Applied: `20261015031154_shared_ttl_expiry_accounting`
 
@@ -820,20 +867,60 @@ that row completely.
 during the same session. **It has no file here and none should be written.** Two
 reasons, and the second is the one that matters:
 
-1. Its content is unreviewed and superseded. It defined `business_has_feature(uuid,
-   text)` where the shipped one takes the `business_feature` enum, and a
-   `can_manage_location` with different semantics. Reconstructing it would put
-   SQL that never passed review into this directory's history, where a later
+1. Its content is unreviewed and superseded. It defined a `can_manage_location`
+   with different semantics — it returned `true` for an owner or manager *before*
+   checking that the branch belonged to the business, and applied the TTL only to
+   `staff`, so an expired owner kept administering — and reconstructing it would
+   put SQL that never passed review into this directory's history, where a later
    reader would reasonably assume it had.
 2. A reconstructed file would be *approximately* right and would therefore be
    worse than an absent one: it would look like the mirror of the ledger and fail
    the md5 check this README tells you to run, and an unverifiable file in this
    directory is the failure mode the whole document exists to prevent.
 
-**Nothing survives from it in the database.** Both `20261014011033` and
-`20261015001857` define the same four function names, and `create or replace`
-means the later one wins outright. Verified: `pg_proc` holds exactly those four
-functions with no leftover overload of the `text` signature, and every one carries
+### ⚠ An earlier version of this entry named a `text` overload that never existed
+
+This paragraph used to say the orphan "defined `business_has_feature(uuid,
+text)` where the shipped one takes the `business_feature` enum". **That is
+false, and it was false in the only place a reader would go to check it.** Read
+out of the ledger:
+
+```sh
+psql "$DATABASE_URL" -At -c "select regexp_replace(statements[1], '\s+', ' ', 'g')
+  from supabase_migrations.schema_migrations where version = '20261014011033'"
+```
+
+`create or replace function public.business_has_feature(p_business_id uuid,
+p_feature public.business_feature)` — the **enum**, identical signature to the
+shipped one. There was never a `(uuid, text)` overload, before or after. A later
+auditor sent to hunt for it would find nothing and would have to decide whether
+the ledger had been edited, which is a worse afternoon than the one this entry
+caused.
+
+**What did survive is the arity, and it is the one that needed an explicit
+`drop`.** The orphan declared `business_member_session_state()` — **zero
+arguments**, `returns jsonb`. The shipped generation declares
+`(p_business_id uuid default null)`, and those are two different identity-argument
+lists, so `create or replace` did not replace the orphan's function: it sat a
+second overload next to it. That is why `20261015003929:197` carries
+
+```sql
+drop function if exists public.business_member_session_state();
+```
+
+with the reason written out at `:192-196`, and why `session_state()` would have
+been ambiguous between the two otherwise. That `drop` is the trace this orphan
+left in the database, and it is a `drop` in a **different** file — which is
+exactly why the connection is not obvious from the ledger row and is recorded
+here instead.
+
+**The conclusion this entry reached is unchanged, and it was verified
+independently of the reason.** `pg_proc` holds no `(uuid, text)` overload and no
+zero-argument `business_member_session_state`; the seven functions that answer for
+this branch are exactly `business_has_feature(uuid, business_feature)`,
+`business_member_role(uuid)`, `business_member_session_expires_at(integer,
+timestamptz)`, `business_member_session_state(uuid)`, `business_member_session_valid(uuid)`,
+`business_plan_of(uuid)` and `can_manage_location(uuid, uuid)`, every one carrying
 `proconfig = {"search_path=""}` and an ACL of `postgres`, `service_role`,
 `authenticated` — never `anon`, never PUBLIC. So a from-scratch replay of this
 directory reaches the same schema as production, and the gap is bookkeeping rather
@@ -914,6 +1001,189 @@ manufacture a session.
 harness replay starts with no `business_ownership` rows — the seeds are the
 documented irreproducible migrations — so a count assertion would turn every
 `db push` against an empty database into an error.
+
+## Measured: what the permission layer costs per row, and what it costs per statement
+
+Everything above in this file measures SHAPE. This section measures the PLAN,
+because the repository's own standard says both are needed — see the
+`20261004022647_announcements` section below, which asserts an index's form and
+says in the same sentence that no `EXPLAIN` was ever run against it.
+
+**Read-only throughout.** Every query below is a `SELECT` or an `EXPLAIN
+(ANALYZE)` over a `SELECT`. Nothing here inserts, updates or deletes, and no
+data-modifying CTE appears — a CTE that writes is not a dry run, it runs.
+
+### The command
+
+This worktree carries no `DATABASE_URL` and no `psql`, so the runs went through
+the project's Supabase MCP `execute_sql`, which opens one connection per call.
+The SQL is the reproducible artifact and it is reproduced verbatim:
+
+```sql
+select set_config('request.jwt.claims',
+  '{"sub":"<a real owner>","role":"authenticated"}', true);
+set role authenticated;
+explain (analyze, timing on, buffers)
+select count(s.x) from (
+  select ((public.business_member_role(b.business_id) = any
+             (array['owner'::public.business_member_role,
+                   'manager'::public.business_member_role])
+         and public.business_member_session_valid(b.business_id)) as x
+  from public.business_hours b, generate_series(1, <K>) g
+) s;
+```
+
+`generate_series(1, K)` crossed with `business_hours` (42 rows) produces
+`42 × K` rows carrying **real** `business_id` values, and the predicate sits in
+the target list so it is evaluated once per output row. That shape is load
+bearing and it is not the obvious one:
+
+- In the `WHERE` clause with a constant argument, the planner emits
+  `One-Time Filter: (business_member_role('…') IS NOT NULL)` and the whole
+  8,400-row scan costs **one** call. It measured 3.59 ms for the scan against
+  109 ms for the same count with the argument dependent on the row. A
+  measurement that quietly measures one call and reports it as 8,400 is worse
+  than no measurement.
+- With the argument derived from `g`, the plan carries it as a per-row
+  `SubPlan` — which is the thing being measured.
+
+For `EXPLAIN` numbers taken through the MCP, the per-row figure is
+`(Aggregate total) − (Nested Loop total)` over the evaluation count, and the
+repeat-to-repeat spread is reported rather than the best run.
+
+### Per call, at 84,000 evaluations, as a real owner
+
+| helper | evaluations | µs / row | shared buffers / row |
+| --- | --- | --- | --- |
+| `business_member_role` | 84,000 | **14.7** | 1.0 |
+| `business_member_session_valid` | 84,000 | **25.0** | 1.0 |
+| `can_manage_location` | 84,000 | **25.1** | 1.0 |
+| the two together — what `Members can manage business hours` / `coupons` do per row | 84,000 | **33.8 – 43.2** | 2.0 |
+| legacy `exists (select 1 from business_ownership …)` per row | 84,000 | **1.26** | 2.0 |
+
+The pair was run at 4,200 / 42,000 / 84,000 evaluations, twice each. Two
+consecutive runs at 42,000 gave 34.39 and 33.76 µs/row; at 84,000, 38.34 and
+38.46. The spread is reported because it is real and it is about 10%, not
+because a single run would not have produced a confident-looking table.
+
+### ⚠ A review measured this and got the legacy baseline wrong by 21×
+
+The table that prompted this section put the three helpers at ~12 / ~16 / ~21 µs
+per call and the legacy `exists (business_ownership …)` predicate at **~0.06 µs
+per row**. The three helper figures reproduce — same order of magnitude, same
+ranking, mine 1.2× to 1.6× higher. The fourth does not: measured here it is
+**1.26 µs per row**, twenty-one times the quoted figure.
+
+That number is the one that changes a conclusion, because the ratio is the
+finding. Against 0.06 µs/row the regression reads as ~560×. Against the measured
+1.26 µs/row it is **~27×**, or ~34× at the top of the spread. Both are worth
+knowing; only one of them is real.
+
+**The legacy predicate is not a per-row cost at all, and that is why 0.06 looked
+plausible.** Read the actual filter on `coupons` and `orders`:
+
+```
+Filter: ((user_id = (InitPlan 1).col1)
+      OR can_manage_location(business_id, business_location_id)
+      OR (ANY (business_id = (hashed SubPlan 9).col1))
+      OR ((InitPlan 10).col1 = 'admin'::app_role))
+  ->  SubPlan 9
+        ->  Bitmap Heap Scan on business_ownership o  (actual time=0.019..0.021 rows=1 loops=1)
+```
+
+`(hashed SubPlan 9)` — evaluated **once for the statement**, 0.021 ms, because
+`o.owner_id = auth.uid()` does not depend on the row being tested. The
+`can_manage_location(business_id, business_location_id)` next to it does depend
+on it, and it is a per-row `SubPlan`. So the legacy path costs per *statement*
+and the new path costs per *row*, and a per-statement 0.021 ms divided by a row
+count is exactly the kind of number that turns into a believable per-row figure.
+
+**The inversion is the finding, and it is not a tuning detail.** All seven
+helpers carry `proconfig = {"search_path=\"\""}` and every one of them appears
+in a real plan as a per-row `SubPlan`; `business_member_role` is `language sql`
+with a body simple enough to inline and is *still* not inlined, which is
+consistent with the `proconfig` alone being enough to stop the inliner. That
+last step is the one part of this section that is **not** measured — the plans
+show the helpers are per-row, and I did not isolate which clause of the
+`functiondef` is responsible. It does not change any number above.
+
+### What this costs at today's volume, which is the assumption all of it rests on
+
+Row counts in production, 2026-10-15: `business_hours` **42**, `coupons` **6**,
+`orders` **39**, `profiles` **20**, `offers` 25, `businesses` 16,
+`business_members` 16, `business_locations` 15.
+
+Two measurements on the real tables, as a real owner:
+
+| query | rows | plan | Execution |
+| --- | --- | --- | --- |
+| `select id from business_hours` | 42 | Seq Scan, **no `Filter` at all** | 0.049 ms |
+| `select id from orders` | 39 | Seq Scan, `Rows Removed by Filter: 39` | 4.10 – 4.18 ms |
+| `select id from orders` as `postgres` (`bypassrls`) | 39 | Seq Scan | 0.093 ms |
+| `select id from orders where id = '…'` | 1 | Index Scan, `Rows Removed by Filter: 1` | 3.13 ms |
+| `select id from coupons` | 6 | Seq Scan, `Rows Removed by Filter: 4` | 2.54 – 2.69 ms |
+
+**`business_hours` has no RLS qual on SELECT at all**, and that is not an
+accident of the plan: `Anyone can view business hours` is `TO public` with
+`qual = true`, so RLS contributes nothing for a read and the `FOR ALL` members
+policy is only ever consulted as a `WITH CHECK` on the writes that touch it.
+
+**The ~3 ms on a ONE-row indexed read of `orders` is not per-row, and the
+1-row / 39-row pair is what proves it.** One row costs 3.13 ms and 721 shared
+buffer hits; all 39 cost 4.10 ms and the same 721. The 38 extra rows cost
+0.97 ms ≈ **25.5 µs/row**, which is the `can_manage_location` figure in the table
+above arriving independently. So at this volume the fixed per-statement cost of
+the policy layer is an order of magnitude larger than its total per-row cost,
+and it lives in two measured places: `auth_helpers.my_role()` behind an InitPlan
+at 130 buffer hits and 0.68 – 0.71 ms, and the first-call SPI planning of each
+helper's internal queries — visible as the **intercept**, not the slope: 84,000
+evaluations report 84,310 buffer hits, so the fixed part is ~440 hits per
+connection and the marginal part is exactly 2.0 per row.
+
+`coupons` at 6 rows is the same shape with the numbers smaller: Planning Time
+1.33 – 1.50 ms and `auth_helpers.my_role()` 0.67 – 0.77 ms account for nearly
+all of the 2.5 ms, and the four filtered rows cost ~8 helper calls ≈ 0.3 ms —
+invisible next to them.
+
+### What it projects to, and where the cliff is
+
+At 33.8 – 43.2 µs/row for the two-helper pair and 25.1 µs/row for
+`can_manage_location`:
+
+| table | today | 1,000 rows | 10,000 rows | 100,000 rows |
+| --- | --- | --- | --- | --- |
+| `orders` (`can_manage_location`) | 39 rows → ~1.0 ms | ~25 ms | ~250 ms | ~2.5 s |
+| `profiles` (`can_manage_location`) | 20 rows → ~0.5 ms | ~25 ms | ~250 ms | ~2.5 s |
+| `coupons` (pair) | 6 rows → ~0.2 ms | ~34 – 43 ms | ~0.34 – 0.43 s | ~3.4 – 4.3 s |
+| `business_hours` (pair) | **0 on reads, ever** | 0 on reads | 0 on reads | 0 on reads |
+
+**The cliff is `orders` at around 10,000 rows.** It is the only table in this set
+that grows with consumer demand rather than with the number of businesses, it is
+the first tab the mobile panel opens, and a full-table policy scan is what an
+owner without an index-driven filter does. At 30,000 orders one owner read is
+about a second of pure helper time, which is past any budget worth defending
+from a client that talks to Supabase directly.
+
+### Does the branch accept this? Yes, with the measurement rather than the argument
+
+At today's volume the per-row cost is invisible, and for two separate reasons
+that are both worth naming: the volume is tiny, **and** on two of the three
+`FOR ALL` tables a read never reaches the helpers at all (`business_hours` has
+no qual; `coupons` and `orders` reach an owner through the hoisted
+`hashed SubPlan` before the members branch is evaluated). What *is* measurable
+today is the ~3 ms and ~721 buffer hits that the policy layer adds to a one-row
+indexed read of `orders` — larger than the entire per-row cost at this size, and
+belonging to `auth_helpers.my_role()` and per-connection SPI planning rather than
+to this branch's helpers.
+
+**Whether the `FOR ALL` policies need the call hoisted out of the per-row path
+is a decision this section does not make, and the reason it cannot be a
+per-function one is measured above:** the helper is not hoistable, because its
+argument is a `Var`. On `orders` the lever is a plan that visits a bounded set of
+rows, which is an index and a migration, and a migration is not something this
+measurement should smuggle in. The measurement is the deliverable; the
+optimisation is somebody else's decision, made with these numbers in hand instead
+of at the moment the panel starts timing out.
 
 ## Applied: `20260926212729_email_sends_redact_legacy_error_message`
 
