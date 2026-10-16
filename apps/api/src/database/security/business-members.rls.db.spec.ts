@@ -2,6 +2,11 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
+  BUSINESS_FEATURES,
+  BUSINESS_PLAN_FEATURES,
+  type BusinessPlanCode,
+} from '@0xc1x/role-commons';
+import {
   as,
   createSupabaseTestDb,
   deniedAs,
@@ -1647,54 +1652,42 @@ describe('los helpers de permiso', () => {
   // regala una feature de otro.
 
   test('el catálogo plan → feature es el del §4.5, celda por celda', async () => {
+    // La expectativa se DERIVA de `BUSINESS_PLAN_FEATURES` y no está escrita a
+    // mano. Este bloque afirma que la función devuelve lo que el plan concede —
+    // y antes de que `business-plan.ts` existiera, la respuesta correcta a «qué
+    // concede `pro`» estaba copiada en este test y en el `case` de la función, y
+    // las dos copias podían apartarse sin que nada lo notara. Ahora hay una: el
+    // `.ts` es el catálogo y este test lo mide.
+    //
+    // `free` aparece dos veces y por dos caminos distintos: por ausencia de fila
+    // y por fila con `deleted_at`. El motor tiene que leer `free` en los dos
+    // casos, y un solo caso no probaría que la fila borrada no lee `pro`.
     const expected: readonly {
       label: string;
       business: string;
-      features: Record<string, boolean>;
+      plan: BusinessPlanCode;
     }[] = [
-      {
-        label: 'free por ausencia de fila',
-        business: BIZ_C,
-        features: {
-          staff_access: true,
-          payments: false,
-          visibility_plus: false,
-        },
-      },
-      {
-        label: 'free por fila borrada',
-        business: BIZ_D,
-        features: {
-          staff_access: true,
-          payments: false,
-          visibility_plus: false,
-        },
-      },
-      {
-        label: 'pro',
-        business: BIZ_A,
-        features: {
-          staff_access: true,
-          payments: true,
-          visibility_plus: false,
-        },
-      },
-      {
-        label: 'pro_plus',
-        business: BIZ_B,
-        features: {
-          staff_access: true,
-          payments: true,
-          visibility_plus: true,
-        },
-      },
+      { label: 'free por ausencia de fila', business: BIZ_C, plan: 'free' },
+      { label: 'free por fila borrada', business: BIZ_D, plan: 'free' },
+      { label: 'pro', business: BIZ_A, plan: 'pro' },
+      { label: 'pro_plus', business: BIZ_B, plan: 'pro_plus' },
     ];
 
     for (const row of expected) {
+      const features = await featuresOf(MEMBER_STAFF_A, row.business);
       expect(
-        await featuresOf(MEMBER_STAFF_A, row.business),
+        features,
         `el plan ${row.label} no resuelve igual que BUSINESS_PLAN_FEATURES.`,
-      ).toEqual(row.features);
+      ).toEqual(
+        Object.fromEntries(
+          BUSINESS_FEATURES.map((feature) => [
+            feature,
+            (BUSINESS_PLAN_FEATURES[row.plan] as readonly string[]).includes(
+              feature,
+            ),
+          ]),
+        ),
+      );
     }
   });
 });

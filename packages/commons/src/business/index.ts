@@ -11,6 +11,7 @@ export * from "./entities/business-location";
 export * from "./entities/business-notification-preferences";
 export * from "./enums/business-type";
 export * from "./enums/business-verification-status";
+export * from "./enums/business-plan";
 export * from "./schemas/business.schema";
 export * from "./schemas/business-public.schema";
 export * from "./schemas/business-email-send.schema";
