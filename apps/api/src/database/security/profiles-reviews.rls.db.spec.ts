@@ -861,9 +861,16 @@ describe('public.profiles: the shape of the grants', () => {
     // The sixth is "Members can view their order customers", the §6.2 policy that
     // resolves the customer's business by membership and by the location of the
     // order. It sits NEXT TO "Businesses can view their order customers", which
-    // resolves it by `business_ownership` and is still standing: the drop of that
-    // table is the next migration, and until then both grant the same thing to
-    // the owner and the new one is the only thing a manager can see through.
+    // resolves it by `business_ownership` and is still standing. That table has
+    // NOT been dropped, and the drop is not the next migration: it moved to
+    // Plan 3, which has to migrate `getBusinessesByOwnerId` first because the
+    // mobile app reads `business_ownership` on its first panel query.
+    //
+    // They coexist because they were verified equivalent, and the scope of that
+    // word is worth keeping: equivalent for an owner with a live session, which is
+    // what the assertion below exercises. Not equivalent for a lapsed one — the
+    // legacy policy carries no TTL and keeps granting — and that asymmetry is
+    // exactly what the new set was built to end, so it disappears with the drop.
     expect(plainRows(rows).map((r) => r.policyname)).toEqual([
       'Admins can update all profiles',
       'Admins can view all profiles',

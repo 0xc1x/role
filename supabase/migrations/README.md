@@ -451,6 +451,34 @@ default. The migration therefore carries **not one** `grant` or `revoke`
 for those functions: `create or replace` preserves the ACL on its own, and a
 `drop` + `create` would have handed them back to `PUBLIC`.
 
+### ⚠ Its header calls the drop "the next migration", and that stopped being true
+
+**`20261015015012:18-19` says "El retiro de `business_ownership` es la migración
+SIGUIENTE, y no esta." That is no longer the plan, and the file is sealed, so this
+paragraph is where the correction lives.**
+
+The drop moved to **Plan 3**, because the mobile app reads `business_ownership` on
+its first panel query, so Plan 3 has to migrate `getBusinessesByOwnerId` before
+the table can go. It is not coming at the end of this branch.
+
+The current fact, stated plainly, so nobody has to reconstruct it:
+
+- The new policies are **in place and exercised** — 25 of them, plus the three
+  recreated RPCs.
+- The legacy generation is **still in place**: 19 policies across 12 tables, and
+  the table itself, untouched. `business-members.rls.db.spec.ts` pins those 19 by
+  name in three spec files, so a drop shows up as a 19-element array failing.
+- The two generations coexist because they were **verified equivalent — for an
+  owner with a live session**. That is the scope of the word, and it is not
+  wider: the legacy policies carry no TTL, so an owner whose session has lapsed
+  keeps passing them. It is invisible while a real owner has a live session,
+  because then both sets grant the same thing, and it stops being invisible the
+  moment the second generation is the only one. Whoever runs the drop has to
+  close that gap first.
+
+Three test files and this README were the places still telling the next author
+the drop was the next migration; all of them now say Plan 3.
+
 ### That migration did one more thing than its own header says
 
 **Its header claims the only change was who may call the function. That is not the
@@ -813,6 +841,79 @@ than state.
 
 The asymmetry is deliberate: one orphan row is mirrored because it can be mirrored
 exactly, the other is documented because it cannot.
+
+## Applied: `20261016022631_owner_memberships_no_session_expiry`
+
+Applied via `apply_migration` on 2026-10-16. The file's `md5sum` is
+`6c53fa18e959078acdf2700d75e4a547` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**It is a data migration and it is the correction of a production-critical
+defect.** One `update`, and no DDL, no function, no grant.
+
+`20261014005016_backfill_business_members.sql` inserts `(business_id, user_id,
+role, label, alias)` and nothing else. It never writes `last_authenticated_at` —
+it could not: the only writer is §8's `POST /staff/session`, and
+`apps/api/src/modules/staff/` does not exist yet — so all 16 rows it produced
+were born unstamped. And it never writes `session_ttl_hours` either, so each of
+them inherited the `default 24` from `20261014002328:81`.
+
+**A TTL with no stamp is an expired session by definition.** Both
+`business_member_session_valid` and `can_manage_location` contain the
+disjunction `(expires_at is not null and expires_at < now()) or (ttl > 0 and
+last_authenticated_at is null)`, and the second term was true for all 16.
+Measured against the real rows by evaluating the helper's own expression, before
+this migration:
+
+```
+role    | ttl | filas | denegadas_por_ttl | sesion_valida
+owner   | 24  |   16  |                 16 |             0
+```
+
+So the 25 policies of `20261015015012` and the three recreated RPCs denied
+everything to every real business owner. **The product worked only because the
+legacy `business_ownership` policies were still in place** — the generation Plan
+3 retires — and permissive policies are OR'd together.
+
+**Why `0` and not a stamp.** `last_authenticated_at = now()` would be a 24-hour
+fuse: the owners are denied again tomorrow, and again every day, until someone
+builds the endpoint that re-stamps them. A fix that restores access for 24 hours
+and then takes it away silently is worse than no fix, because it looks green.
+`0` is the truth about these rows: §5.2 calls the TTL «un control de
+responsabilidad y UX, no una frontera de seguridad» and §9.2 offers owner and
+manager the persistent session explicitly. The TTL exists to stop a shared tablet
+on a bakery counter. An owner who never used the staff flow has no stamp because
+the flow does not exist, not because their session lapsed — and 24 hours denies
+them the business they own.
+
+**The column default stays `24`.** It is correct for the staff access the API
+will create later. This migration fixes the rows the backfill produced, not the
+default, and `business-members.rls.db.spec.ts` asserts both halves: the default is
+still 24, and a row created the API's way — no `ttl`, no stamp — inherits it and
+is denied.
+
+**Its scope is three predicates and each one is load bearing.** `role = 'owner'`
+(what the backfill creates), `last_authenticated_at is null` (a stamped row's TTL
+is real, and it makes the migration idempotent), and `exists (select 1 from
+business_ownership …)` — that last one is what identifies "the row the backfill
+produced". Without it this would be "turn the TTL off for every unstamped owner",
+which would silently disable the shared-tablet control for every access the API
+creates later.
+
+**Measured after applying**, same query, same helper expression:
+
+```
+role    | ttl | filas | denegadas_por_ttl | sesion_valida | con_sello
+owner   | 0   |   16  |                 0 |            16 |         0
+```
+
+`con_sello` stays 0 on purpose: the fix switches the TTL off, it does not
+manufacture a session.
+
+**There is no `raise exception` on a zero-row update**, deliberately: the
+harness replay starts with no `business_ownership` rows — the seeds are the
+documented irreproducible migrations — so a count assertion would turn every
+`db push` against an empty database into an error.
 
 ## Applied: `20260926212729_email_sends_redact_legacy_error_message`
 

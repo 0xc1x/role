@@ -730,8 +730,18 @@ describe('what the grants allow', () => {
    * §6.2 policies: they resolve the business by `can_manage_location` and the
    * location by the order's own `business_location_id`, which is the column Task
    * 1 added. They still sit NEXT TO the two they duplicate, because
-   * `business_ownership` has not been dropped yet and the drop is the next
-   * migration.
+   * `business_ownership` and its 19 policies are still in place — `business_ownership`
+   * has not been dropped, and the drop is NOT the next migration. It moved to
+   * Plan 3, because the mobile app reads that table on its first panel query, so
+   * Plan 3 has to migrate `getBusinessesByOwnerId` first.
+   *
+   * The two generations coexist because they were verified equivalent, and the
+   * scope of that word matters: equivalent for an owner with a live session, which
+   * is the case every one of those tests exercises. The two sets are NOT
+   * interchangeable for an owner whose session has lapsed — the legacy policies
+   * carry no TTL, so they still grant. That gap is invisible today because a
+   * lapsed owner is also the one thing the legacy set is the only thing still
+   * serving; it stops being invisible the moment the drop happens.
    *
    * They are not a widening of what a manager may see: a manager is an active
    * member of the business, and `can_manage_location` additionally checks that
