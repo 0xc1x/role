@@ -223,11 +223,29 @@ const BUSINESSES: readonly {
 ];
 
 /**
+ * Un id de fila de apoyo para un negocio sembrado, DERIVADO del id del negocio.
+ *
+ * Derivar y no escribir a mano es lo que hace que agregar un cuarto negocio al
+ * fixture no requiera un segundo edit en otro lado, y que el par «negocio» /
+ * «sucursal» no pueda quedar desalineado sin que lo note la aserción. `prefix`
+ * es el primer tramo del uuid, así que cada tabla del fixture tiene su propio.
+ */
+function seedId(prefix: string, businessId: string): string {
+  return `${prefix}-0000-4000-8000-${businessId.slice(-12)}`;
+}
+
+/**
  * Suffix del archivo del ledger, sin versión: el timestamp lo asigna el servidor
  * al aplicar la migración, así que nombrarlo acá con la versión sería una
  * constante que hay que reescribir cada vez que la migración se re-sella.
  */
 const BACKFILL_SUFFIX = '_backfill_business_members.sql';
+
+/**
+ * Sufijo del archivo que quita el TTL a las filas del backfill, sin versión, por
+ * la misma razón que `BACKFILL_SUFFIX`: el timestamp lo asigna el servidor.
+ */
+const SESSION_FIX_SUFFIX = '_owner_memberships_no_session_expiry.sql';
 
 /**
  * Walks up until it finds `supabase/migrations`, for the reason
@@ -256,38 +274,69 @@ function resolveMigrationsDir(): string {
 }
 
 /**
- * The backfill's own statements, read from the ledger and split the way the
+ * The statements of one migration, read from the ledger and split the way the
  * replay splits them.
  *
- * Throws rather than returning `[]` when the file is absent. A backfill that
- * inserts nothing would leave the invariant true for the wrong reason, and that
- * is the one failure this file exists to make impossible.
+ * Throws rather than returning `[]` when the file is absent. A migration that
+ * does nothing would leave the invariant true for the wrong reason, and that is
+ * the one failure this file exists to make impossible.
+ *
+ * `what` completa el mensaje porque los dos llamadores afirman contra archivos
+ * cuya ausencia significa dos razones DISTINTAS de estar mal, y un mensaje que
+ * no las distingue no le sirve a quien lo lea fallando.
  */
-function backfillStatements(): string[] {
+function ledgerStatements(suffix: string, what: string): string[] {
   const dir = resolveMigrationsDir();
-  const file = readdirSync(dir).find((f) => f.endsWith(BACKFILL_SUFFIX));
+  const file = readdirSync(dir).find((f) => f.endsWith(suffix));
   if (!file) {
     throw new Error(
-      `supabase/migrations holds no ${BACKFILL_SUFFIX}. The backfill this file ` +
-        "asserts is the ledger's, and a copy of it here would prove that the " +
-        'copy behaves.',
+      `supabase/migrations holds no ${suffix}. ${what} is the ledger's, and a ` +
+        'copy of it here would prove that the copy behaves.',
     );
   }
   return splitStatements(readFileSync(join(dir, file), 'utf8'));
 }
 
+function backfillStatements(): string[] {
+  return ledgerStatements(BACKFILL_SUFFIX, 'The backfill this file asserts');
+}
+
 /**
- * Run the backfill and COMMIT it, as `apply_migration` did.
+ * Las sentencias de la migración que pone `session_ttl_hours = 0` en las filas
+ * que produjo el backfill.
  *
- * One transaction for the whole file, like the replay's per-file transaction:
- * a half-applied backfill is a state nobody should ever assert against.
+ * Se lee del ledger por la misma razón que el backfill, y por eso este archivo
+ * prueba el PAR de archivos que producción corrió y no dos piezas sueltas: el
+ * backfill solo deja a 16 dueños vencidos, y el arreglo solo no arregla nada.
  */
-async function applyBackfill(): Promise<void> {
+function sessionFixStatements(): string[] {
+  return ledgerStatements(
+    SESSION_FIX_SUFFIX,
+    'The session fix this file asserts',
+  );
+}
+
+/**
+ * Corre un archivo del ledger y lo COMMITEA, como hizo `apply_migration`.
+ *
+ * Una transacción para el archivo entero, como la transacción por archivo del
+ * replay: una migración a medio aplicar es un estado contra el que nadie debería
+ * afirmar nada.
+ */
+async function runLedger(statements: string[]): Promise<void> {
   await ctx.sql.begin(async (tx) => {
-    for (const statement of backfillStatements()) {
+    for (const statement of statements) {
       await tx.unsafe(statement);
     }
   });
+}
+
+async function applyBackfill(): Promise<void> {
+  await runLedger(backfillStatements());
+}
+
+async function applySessionFix(): Promise<void> {
+  await runLedger(sessionFixStatements());
 }
 
 beforeAll(async () => {
@@ -321,6 +370,34 @@ beforeAll(async () => {
         `insert into public.business_ownership (business_id, owner_id)
          values ('${business.id}', '${owner.id}')
          on conflict (business_id) do nothing`,
+      );
+    }
+
+    // UNA sucursal por negocio, y no por decoración: `can_manage_location`
+    // comprueba que la sucursal exista y sea del negocio ANTES de mirar la
+    // membresía, así que sin esta fila la prueba de «el dueño del backfill
+    // administra» no tendría contra qué responder y su `false` no significaría
+    // nada.
+    //
+    // Una sola, y no dos, porque estos tres negocios no tienen fila de plan —
+    // ausente = `free`— y `trg_enforce_location_limit` le da a `free` una
+    // sucursal. Dos reventarían el `beforeAll` entero.
+    //
+    // Y un horario, que es la fila que hace la prueba de la POLICY y no sólo la
+    // del helper: `business_hours` entra por
+    // `business_member_role(...) and business_member_session_valid(...)`, que es
+    // el helper que en producción les negaba el negocio a los 16. Es `FOR ALL`, y
+    // `select` sobre ella es público, así que lo que se afirma es el `update`.
+    for (const business of BUSINESSES) {
+      await tx.unsafe(
+        `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
+         values ('${seedId('e2000000', business.id)}', '${business.id}', 'Sucursal', 'Street', 40.41680000, -3.70380000)
+         on conflict (id) do nothing`,
+      );
+      await tx.unsafe(
+        `insert into public.business_hours (id, business_id, day, open_time, close_time, is_closed)
+         values ('${seedId('e3000000', business.id)}', '${business.id}', 'monday', '08:00', '20:00', false)
+         on conflict (id) do nothing`,
       );
     }
   });
@@ -670,6 +747,160 @@ describe('el backfill de dueños', () => {
     // cada `db push` a un entorno que ya lo corrió, y una migración de datos que
     // no es re-ejecutable convierte cada replay en un error de unicidad.
     expect(await seededMemberRows()).toBe(BUSINESSES.length);
+  });
+
+  // ─── EL DUEÑO DEL BACKFILL TIENE QUE PODER ADMINISTRAR ─────────────────────
+  //
+  // Esta es la prueba cuya ausencia dejó pasar el defecto, y es una aparte de
+  // las tres de arriba porque las tres de arriba miden FORMA. Contaban filas,
+  // afirmaban `role`, `label` y `alias`, y afirmaban que el backfill fuera
+  // re-ejecutable. Ninguna de esas cosas dice que la fila sirva para algo, y la
+  // fila que producción se encontró —16 dueños, `ttl` 24, sin sello— era
+  // perfectamente correcta para las tres y completamente inútil para la cuarta.
+  //
+  // El defecto también era de forma, que es lo que lo hizo pasar: el `insert`
+  // del backfill nombra `(business_id, user_id, role, label, alias)` y nada más,
+  // así que cada fila heredó el `default 24` de `20261014002328:81` y nació sin
+  // `last_authenticated_at`. Un TTL sin sello es una sesión vencida por
+  // definición —la segunda mitad de la disyunción de `can_manage_location` y de
+  // `business_member_session_valid`—, y las 25 policies de `20261015015012` les
+  // negaban todo a los 16 dueños reales.
+  //
+  // Por eso la aserción es de USO y no de FORMA: que el dueño pase
+  // `can_manage_location` en su sucursal, y que modifique un horario por la
+  // policy. Afirmar el `session_ttl_hours` solo sería la forma otra vez.
+
+  test('el dueño del backfill administra su negocio, y su fila no vence', async () => {
+    const business = BUSINESSES[0] as (typeof BUSINESSES)[number];
+    const owner = OWNERS[0] as (typeof OWNERS)[number];
+    const ids = BUSINESSES.map((b) => `'${b.id}'`).join(', ');
+
+    /** The rows the owner the backfill made for itself, as the schema owner. */
+    const members = () =>
+      as(ctx.sql, 'service_role', null, (tx) =>
+        tx
+          .unsafe<{ business_id: string; ttl: number; sello: string | null }[]>(
+            `
+            select m.business_id, m.session_ttl_hours as ttl,
+                   m.last_authenticated_at::text as sello
+            from public.business_members m
+            where m.business_id in (${ids}) and m.user_id = '${owner.id}'
+            order by m.business_id`,
+          )
+          .then((rows) => plainRows(rows)),
+      );
+
+    /** The owner that the backfill makes rows for, over ITS businesses only. */
+    const ownBusinessIds = BUSINESSES.filter((b) => b.owner === 0).map(
+      (b) => b.id,
+    );
+
+    /** The one policy-level question: may this session edit the business? */
+    const editsHours = (userId: string, biz: (typeof BUSINESSES)[number]) =>
+      as(ctx.sql, 'authenticated', userId, (tx) =>
+        tx
+          .unsafe<{ id: string }[]>(
+            `update public.business_hours set open_time = '09:00'
+             where id = '${seedId('e3000000', biz.id)}'
+             returning id::text`,
+          )
+          .then((rows) => plainRows(rows).map((r) => r.id)),
+      );
+
+    await applyBackfill();
+
+    // El estado INTERMEDIO se afirma primero y por separado, porque es el que
+    // documenta el defecto: el backfill solo, sin el arreglo, deja al dueño
+    // fuera. Sin esta mitad un `applySessionFix` que no hiciera nada también
+    // daría verde en todo lo de abajo, con el permiso ya en su sitio.
+    expect(
+      (await members()).map((r) => r.ttl),
+      'el backfill no dejó al dueño repetido con un TTL por negocio. La fila se ' +
+        'identifica por negocio, no por persona: el dueño que dirige dos ' +
+        'negocios son dos accesos, y por eso el `toEqual` tiene dos elementos.',
+    ).toEqual([24, 24]);
+
+    expect(
+      await as(ctx.sql, 'authenticated', owner.id, (tx) =>
+        tx.unsafe<{ ok: boolean }[]>(
+          `select public.can_manage_location('${business.id}', '${seedId('e2000000', business.id)}') as ok`,
+        ),
+      ).then((rows) => plainRows(rows)[0]?.ok),
+      'un dueño con `session_ttl_hours = 24` y sin sello administra su ' +
+        'sucursal. Si esto da `true`, el backfill no nació con el TTL heredado ' +
+        'y el defecto que corrige esta migración no es el que se cree que es; el ' +
+        '`[24, 24]` de arriba es lo que lo prueba.',
+    ).toBe(false);
+
+    expect(
+      await editsHours(owner.id, business),
+      'un dueño con TTL y sin sello dejó de editar el horario de su negocio por ' +
+        'la policy VIEJA de `business_ownership`. Esa fila está sembrada y esa ' +
+        'policy no lleva TTL, así que antes del arreglo el update tenía que ' +
+        'pasar: es la capa que sostuvo el producto mientras las 25 policies ' +
+        'nuevas le negaban todo. Si esto da `[]`, algo cambió en la capa vieja y ' +
+        'esta prueba ya no mide lo que dice medir.',
+    ).toEqual([seedId('e3000000', business.id)]);
+
+    // Ahora el archivo del ledger que arregla las filas, leído del ledger por la
+    // misma razón que el backfill.
+    await applySessionFix();
+
+    // El `0` se afirma POR FILA: es la propiedad que decide, y afirmar el
+    // agregado dejaría pasar un arreglo que apagara una fila y dejara la otra en
+    // 24 — que es media corrección y un dueño más sin panel.
+    expect(
+      (await members()).map((r) => ({
+        business_id: r.business_id,
+        ttl: r.ttl,
+      })),
+      'la migración que apaga el TTL de las filas del backfill no lo apagó en ' +
+        'todas. Lo que se mide es `session_ttl_hours = 0` en CADA fila, no un ' +
+        'promedio ni un conteo: una fila que conserve el 24 sigue denegada.',
+    ).toEqual(ownBusinessIds.map((id) => ({ business_id: id, ttl: 0 })));
+
+    // Y lo que NO se hizo, afirmado para que el arreglo no pueda disfrazarse de
+    // sello. `last_authenticated_at = now()` haría pasar todo lo de arriba y
+    // volvería a vencer en 24 horas, sin que nada se note hasta el día siguiente.
+    expect(
+      (await members()).every((r) => r.sello === null),
+      'la migración selló las filas del backfill en vez de apagarles el TTL. Eso ' +
+        'es una mecha de 24 horas: el acceso vuelve ahora y se va solo mañana, ' +
+        'y hasta que exista el `POST /staff/session` del §8 nadie lo vuelve a ' +
+        'sellar. Sobre un dueño que nunca usó el flujo de personal, lo honesto ' +
+        'es `ttl = 0`: no tiene sello porque ese flujo no existe todavía.',
+    ).toBe(true);
+
+    // Y el permiso, que es la razón de todo lo anterior: el helper en la
+    // sucursal de cada negocio y la policy en el horario de cada negocio. Se
+    // recorre el fixture entero y no sólo `BUSINESSES[0]` porque el dueño se
+    // busca por negocio, y dos de los tres no son del mismo dueño: probar sólo
+    // el primero dejaría sin cubrir la fila de `OWNERS[1]`.
+    for (const biz of BUSINESSES) {
+      const bizOwner = OWNERS[biz.owner] as (typeof OWNERS)[number];
+
+      expect(
+        await as(ctx.sql, 'authenticated', bizOwner.id, (tx) =>
+          tx.unsafe<{ ok: boolean }[]>(
+            `select public.can_manage_location('${biz.id}', '${seedId('e2000000', biz.id)}') as ok`,
+          ),
+        ).then((rows) => plainRows(rows)[0]?.ok),
+        `el dueño del backfill no administra la sucursal de ${biz.id}. Esta es ` +
+          'la aserción que faltaba: las de arriba afirman la FORMA de la fila y ' +
+          'esta es lo único que dice que la fila sirva.',
+      ).toBe(true);
+
+      expect(
+        await editsHours(bizOwner.id, biz),
+        `el dueño del backfill no editó el horario de ${biz.id}. Ojo con lo que ` +
+          'esto SÍ y lo que NO demuestra: las dos generaciones de policies ' +
+          'coexisten y las dos conceden, así que un `update` que pasa no dice ' +
+          'cuál de las dos lo concedió. Lo que prueba es que el arreglo no le ' +
+          'quitó al dueño el negocio que ya tenía; que la fila nueva lo conceda ' +
+          'por sí sola lo mide el `can_manage_location` de arriba, que sólo ' +
+          'puede leer la membresía.',
+      ).toEqual([seedId('e3000000', biz.id)]);
+    }
   });
 });
 
@@ -1490,10 +1721,23 @@ describe('los helpers de permiso', () => {
  * viejo que resuelve por `business_ownership` sigue siendo exactamente el que
  * había antes —19 policies en 12 tablas, medido, no estimado—.
  *
- * El residuo viejo NO es deuda que este bloque perdona: es la fila del ledger que
- * se recoge en la migración siguiente, que es la que hace `drop table`. Afirmar
- * el número exacto es lo que convierte ese `drop` en un diff de una línea: si
- * cambia sin esa migración, alguien escribió una policy a mano.
+ * El residuo viejo NO es deuda que este bloque perdona: es lo que Plan 3 va a
+ * recoger, y Plan 3 empieza por migrar `getBusinessesByOwnerId` porque el móvil
+ * lee `business_ownership` en su primera consulta del panel. El `drop table` NO
+ * es la migración siguiente de esta rama, y quien lea esto antes de escribirla
+ * tiene que saber eso. Afirmar el número exacto es lo que convierte ese `drop`
+ * en un diff de una línea: si cambia sin esa migración, alguien escribió una
+ * policy a mano.
+ *
+ * Y el motivo por el que la lista de más abajo tiene 19 y no 0 no es sólo de
+ * orden: las dos generaciones se declararon equivalentes después de verificarlo,
+ * y esa equivalencia tiene un alcance. Vale para un dueño con la sesión viva,
+ * que es lo único que estos tests miden. NO vale para un dueño con la sesión
+ * vencida: las policies viejas no llevan TTL, así que siguen concediendo. La
+ * diferencia es invisible mientras el dueño tenga sesión —entonces las dos
+ * conceden lo mismo—, y deja de serlo en el instante en que la segunda generación
+ * sea la única. Por eso el `drop` tiene que venir con el fin de la generación
+ * vieja, y no antes.
  *
  * ─── QUIÉN ES QUIÉN EN ESTE FIXTURE ──────────────────────────────────────────
  *
@@ -1530,6 +1774,31 @@ describe('las policies y los RPCs resuelven por membresía', () => {
    * puerta.
    */
   const POL_STALE_OWNER = 'f0000000-0000-4000-8000-000000000009';
+  /**
+   * Un dueño y un cajero con TTL y NUNCA sellados.
+   *
+   * No son un caso raro: son la forma en que producción salió del backfill. El
+   * `insert` del backfill no escribe `last_authenticated_at` —el único que lo
+   * escribe es el `POST /staff/session` del §8, que todavía no existe— y sí
+   * hereda el `default 24`, así que toda fila que él produce nace con TTL y sin
+   * sello. Y eso es exactamente `session_never_stamped`: la segunda mitad de la
+   * disyunción de `can_manage_location` y de `business_member_session_valid` es
+   * cierta, la sesión está vencida por definición y las policies niegan.
+   *
+   * Probadas por el bloque de helpers, que ya tenía una persona así
+   * (`MEMBER_UNSTAMPED`, y de rol `staff`): por los HELPERS sí, y sólo por los
+   * helpers. Una policy es la frontera que de verdad concede, y medirlas era lo
+   * que faltaba. Por eso van las dos, y por eso una es `owner`: el TTL alcanza a
+   * todos los roles, y una fila de dueño es exactamente la que el backfill
+   * produce.
+   *
+   * SIN fila en `business_ownership`, a propósito: sin ella las policies viejas
+   * no dicen nada sobre estas dos personas, así que cualquier cosa que vieran —
+   *o que dejaran de ver— vendría por la generación nueva. Es la misma asimetría
+   * del cajero y el gerente, que tampoco tienen fila de dueño en este fixture.
+   */
+  const POL_UNSTAMPED_OWNER = 'f0000000-0000-4000-8000-00000000000a';
+  const POL_UNSTAMPED_STAFF = 'f0000000-0000-4000-8000-00000000000b';
 
   const POL_BIZ = 'f1000000-0000-4000-8000-000000000001';
   const POL_OTHER_BIZ = 'f1000000-0000-4000-8000-000000000002';
@@ -1554,6 +1823,8 @@ describe('las policies y los RPCs resuelven por membresía', () => {
   const M_DELETED = 'f3000000-0000-4000-8000-000000000005';
   const M_PAUSED = 'f3000000-0000-4000-8000-000000000006';
   const M_STALE_OWNER = 'f3000000-0000-4000-8000-000000000007';
+  const M_UNSTAMPED_OWNER = 'f3000000-0000-4000-8000-000000000008';
+  const M_UNSTAMPED_STAFF = 'f3000000-0000-4000-8000-000000000009';
 
   const OFFER_A = 'f4000000-0000-4000-8000-000000000001';
   const OFFER_B = 'f4000000-0000-4000-8000-000000000002';
@@ -1682,6 +1953,8 @@ describe('las policies y los RPCs resuelven por membresía', () => {
         ['deleted', POL_DELETED],
         ['paused', POL_PAUSED],
         ['stale-owner', POL_STALE_OWNER],
+        ['unstamped-owner', POL_UNSTAMPED_OWNER],
+        ['unstamped-staff', POL_UNSTAMPED_STAFF],
       ] as const) {
         await tx.unsafe(
           `insert into auth.users (id, email) values ('${id}', '${name}@rls-membership.test')
@@ -1738,7 +2011,14 @@ describe('las policies y los RPCs resuelven por membresía', () => {
           -- Vencida: TTL de 24 horas con el sello de hace dos días. Es una
           -- membresía activa y es 'owner', así que lo único que la separa de un
           -- dueño que entra por todas partes es la sesión.
-          ('${M_STALE_OWNER}', '${POL_BIZ}',   '${POL_STALE_OWNER}', 'owner', 'Dueño vencido', 'membership-vencido@test', 'active', 24, now() - interval '48 hours', now(), null);
+          ('${M_STALE_OWNER}', '${POL_BIZ}',   '${POL_STALE_OWNER}', 'owner', 'Dueño vencido', 'membership-vencido@test', 'active', 24, now() - interval '48 hours', now(), null),
+          -- NUNCA selladas, con el TTL de 24 horas puesto: la forma en que el
+          -- backfill dejó a los 16 dueños reales. Un NULL en
+          -- last_authenticated_at NO es una sesión vencida --para quien la explica
+          -- es session_never_stamped-- pero para el que autoriza es denegar
+          -- igual, y eso es lo que se afirma más abajo por las policies.
+          ('${M_UNSTAMPED_OWNER}', '${POL_BIZ}', '${POL_UNSTAMPED_OWNER}', 'owner', 'Dueño sin sello', 'membership-sin-sello-dueno@test', 'active', 24, null, now(), null),
+          ('${M_UNSTAMPED_STAFF}', '${POL_BIZ}', '${POL_UNSTAMPED_STAFF}', 'staff', 'Cajero sin sello', 'membership-sin-sello-cajero@test', 'active', 24, null, now(), null);
 
         -- El staff solo de A. El gerente de las dos, porque owner y manager
         -- reciben el negocio entero y can_manage_location lo dice así; la
@@ -1757,7 +2037,13 @@ describe('las policies y los RPCs resuelven por membresía', () => {
           -- sobre la fila ajena, que es otro filtro y ya estaba. Acá la membresía
           -- está activa, así que sin el filtro de la fila propia esta se vería.
           ('${M_PAUSED}',  '${POL_LOC_B}',     now()),
-          ('${M_OUTSIDER}','${POL_LOC_OTHER}', null);
+          ('${M_OUTSIDER}','${POL_LOC_OTHER}', null),
+          -- El alcance del cajero sin sello, y está a propósito: sin esta fila
+          -- su false sobre OFFER_A no probaría nada, porque también sería
+          -- false sin alcance. Con la fila puesta, la sola diferencia entre
+          -- este cajero y M_STAFF es el sello, así que el update que no
+          -- vuelve lo atribuye al TTL y no al alcance.
+          ('${M_UNSTAMPED_STAFF}', '${POL_LOC_A}', null);
       `);
 
       await tx.unsafe(`
@@ -1932,10 +2218,12 @@ describe('las policies y los RPCs resuelven por membresía', () => {
       'profiles:Members can view their order customers:SELECT',
     ]);
 
-    // Y el residuo viejo, que es lo que la migración siguiente retira con el
-    // `drop table`. MEDIDO: 19, en 12 tablas. El brief decía "unas 20"; lo que
-    // hay en la base son diecinueve, y el número va escrito porque es el que
-    // hace que el `drop` sea un diff de una línea.
+    // Y el residuo viejo, que es lo que Plan 3 retira con el `drop table`, y no
+    // esta rama: Plan 3 empieza por migrar `getBusinessesByOwnerId`, porque el
+    // móvil lee `business_ownership` en su primera consulta del panel. MEDIDO:
+    // 19, en 12 tablas. El brief decía "unas 20"; lo que hay en la base son
+    // diecinueve, y el número va escrito porque es el que hace que el `drop` sea
+    // un diff de una línea.
     const legacy = await as(ctx.sql, 'service_role', null, (tx) =>
       tx
         .unsafe<{ tablename: string; policyname: string; cmd: string }[]>(
@@ -1951,8 +2239,9 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     expect(
       legacy.map((p) => `${p.tablename}:${p.policyname}:${p.cmd}`),
       'el conjunto de policies que resuelve por business_ownership cambió sin ' +
-        'que nadie lo decidiera. Su número solo baja cuando la migración que ' +
-        'hace `drop table public.business_ownership` corre; si baja antes, ' +
+        'que nadie lo decidiera. Su número solo baja cuando Plan 3 los retire, y ' +
+        'Plan 3 empieza por migrar `getBusinessesByOwnerId` —el móvil lee esa ' +
+        'tabla en su primera consulta del panel— y no antes: si bajan antes, ' +
         'alguien dejó al dueño sin panel, y si sube, alguien escribió una policy ' +
         'a mano.',
     ).toEqual([
@@ -2031,7 +2320,7 @@ describe('las policies y los RPCs resuelven por membresía', () => {
       expect(
         body.includes('business_ownership'),
         `${policy.tablename}:${policy.policyname} todavía resuelve el dueño por ` +
-          'la tabla que la migración siguiente borra.',
+          'la tabla que Plan 3 va a borrar.',
       ).toBe(false);
     }
   });
@@ -2764,6 +3053,370 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     ).toEqual([HOUR]);
   });
 
+  // ─── SIN SELLO NO ES «SIN EXPIRAR»: ES DENEGADO ────────────────────────────
+  //
+  // El caso que el backfill produjo y que el bloque de helpers ya medía —una
+  // membresía con `session_ttl_hours = 24` y `last_authenticated_at` null— pasa
+  // por los HELPERS. Nunca pasó por una POLICY, y ése es el hueco por donde se
+  // colaron 16 dueños que su negocio no era: las 25 policies de
+  // `20261015015012` resolvían por `business_members`, leían la fila, y la
+  // denegaban entera.
+  //
+  // Estas dos personas no tienen fila en `business_ownership`, así que todo lo
+  // que ven o dejan de ver aquí viene de la generación nueva. La del cajero trae
+  // alcance a `POL_LOC_A` —igual que `M_STAFF`— y la del dueño tiene el rol que
+  // `business_member_role` devuelve sin preguntar por la fila de `business_ownership`.
+  //
+  // Y NO es un caso raro ni una hipótesis: es la forma exacta de las 16 filas de
+  // producción antes de `owner_memberships_no_session_expiry`.
+
+  test('una membresía con TTL y sin sello no entra por ninguna de las policies', async () => {
+    // Lecturas que sólo concede la policy nueva. `payouts` no tiene policy
+    // pública de lectura, así que un `[]` no puede venir de «se lee lo público».
+    const seePayouts = `select id::text as id from public.payouts order by id`;
+    const seeTeam = `select id::text as id from public.business_members order by id`;
+
+    // Anti-vacuity primero, y con el GERENTE y no con el cajero: `payouts` se
+    // concede a dueño y gerente, así que un cajero con la sesión al día tampoco la
+    // ve y serviría de control para nada. Sin esto, todo lo de abajo podría ser
+    // cierto porque el fixture no se sembró — que es el modo de falla más
+    // probable de un `insert` con una columna mal.
+    expect(await idsSeenBy(POL_OWNER, seePayouts)).toEqual([PAYOUT]);
+    expect(await idsSeenBy(POL_MANAGER, seePayouts)).toEqual([PAYOUT]);
+    expect(
+      await idsSeenBy(POL_UNSTAMPED_OWNER, seePayouts),
+      'el dueño con TTL y sin sello leyó `payouts`. Su fila está activa y es ' +
+        '`owner`, así que `business_member_role` dice que sí; lo único que lo ' +
+        'niega es la sesión, y por eso esta prueba tiene que verlas.',
+    ).toEqual([]);
+    expect(
+      await idsSeenBy(POL_UNSTAMPED_STAFF, seePayouts),
+      'un cajero leyó `payouts`. Es la misma denegación medida por la otra ' +
+        'persona: el TTL no distingue rol, y para el cajero además la policy ni ' +
+        'siquiera lo contempla.',
+    ).toEqual([]);
+
+    // Y en la lista del equipo ven su propia fila y nada más. Es la misma
+    // lectura que puede hacer un panel al que le acaba de vencer la sesión, y por
+    // eso está permitido: para explicar la salida hay que poder leer la fila
+    // propia. Lo que se afirma es que no ven a NADIE MÁS.
+    expect(
+      await idsSeenBy(POL_UNSTAMPED_OWNER, seeTeam),
+      'una membresía sin sello listó el equipo entero, con los alias que son ' +
+        'correos de `auth.users`. La policy `Members can view own membership` es ' +
+        '`user_id = auth.uid()` y no concede nada sobre el negocio.',
+    ).toEqual([M_UNSTAMPED_OWNER]);
+    expect(await idsSeenBy(POL_UNSTAMPED_STAFF, seeTeam)).toEqual([
+      M_UNSTAMPED_STAFF,
+    ]);
+
+    // Escrituras por ROL, que es donde se traduce `business_member_session_valid`.
+    const writes: readonly { name: string; user: string; sql: string }[] = [
+      {
+        name: 'business_hours',
+        user: POL_UNSTAMPED_OWNER,
+        sql: `update public.business_hours set open_time = '07:00' where id = '${HOUR}' returning id::text`,
+      },
+      {
+        name: 'coupons',
+        user: POL_UNSTAMPED_OWNER,
+        sql: `update public.coupons set name = 'sin sello' where id = '${COUPON}' returning id::text`,
+      },
+      {
+        name: 'businesses',
+        user: POL_UNSTAMPED_OWNER,
+        sql: `update public.businesses set name = 'sin sello' where id = '${POL_BIZ}' returning id::text`,
+      },
+      {
+        name: 'business_hours (cajero)',
+        user: POL_UNSTAMPED_STAFF,
+        sql: `update public.business_hours set open_time = '07:00' where id = '${HOUR}' returning id::text`,
+      },
+    ];
+    for (const write of writes) {
+      expect(
+        await as(ctx.sql, 'authenticated', write.user, (tx) =>
+          tx.unsafe<{ id: string }[]>(write.sql),
+        ).then((rows) => plainRows(rows).map((r) => r.id)),
+        `${write.name}: una membresía con TTL y sin sello lo modificó.`,
+      ).toEqual([]);
+    }
+
+    // Y la otra familia, la que resuelve por `can_manage_location`: la oferta de
+    // la sucursal en la que el cajero SÍ tiene alcance. `M_STAFF` la edita y este
+    // cajero no, y para que ese contraste aísle el TTL hay que afirmar que las
+    // dos filas son la MISMA fila salvo por el sello. Sin esa igualdad, el `[]` de
+    // abajo se le podría atribuir al alcance, al rol o al status, y la prueba
+    // estaría culpando al TTL de algo que no midió.
+    const lasDosFilas = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx
+        .unsafe<Record<string, unknown>[]>(
+          `
+          select role::text as role, status::text as status,
+                 session_ttl_hours as ttl, business_id,
+                 (last_authenticated_at is null) as sin_sello
+          from public.business_members
+          where id in ('${M_STAFF}', '${M_UNSTAMPED_STAFF}')
+          order by id`,
+        )
+        .then((rows) => plainRows(rows)),
+    );
+    expect(
+      lasDosFilas,
+      'las dos filas del cajero —con sello y sin sello— no son idénticas salvo ' +
+        'por el sello. Sin esta igualdad, el `update` que se le niega al segundo ' +
+        'podría deberse a cualquier otra columna.',
+    ).toEqual([
+      {
+        role: 'staff',
+        status: 'active',
+        ttl: 24,
+        business_id: POL_BIZ,
+        sin_sello: false,
+      },
+      {
+        role: 'staff',
+        status: 'active',
+        ttl: 24,
+        business_id: POL_BIZ,
+        sin_sello: true,
+      },
+    ]);
+
+    const alcances = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx
+        .unsafe<
+          { member_id: string; location_id: string; borrado: string | null }[]
+        >(
+          `
+          select member_id::text, location_id::text, deleted_at::text as borrado
+          from public.business_member_locations
+          where member_id in ('${M_STAFF}', '${M_UNSTAMPED_STAFF}')
+          order by member_id`,
+        )
+        .then((rows) => plainRows(rows)),
+    );
+    expect(
+      alcances,
+      'los dos cajeros no tienen el mismo alcance sobre `POL_LOC_A`. El del ' +
+        'sello lo edita y el otro no: si el alcance fuese la diferencia, la ' +
+        'prueba estaría probando el alcance.',
+    ).toEqual([
+      { member_id: M_STAFF, location_id: POL_LOC_A, borrado: null },
+      { member_id: M_UNSTAMPED_STAFF, location_id: POL_LOC_A, borrado: null },
+    ]);
+
+    const offerSql = `update public.offers set title = 'sin sello' where id = '${OFFER_A}' returning id::text`;
+    expect(
+      await as(ctx.sql, 'authenticated', POL_STAFF, (tx) =>
+        tx.unsafe<{ id: string }[]>(offerSql),
+      ).then((rows) => plainRows(rows).map((r) => r.id)),
+      'el cajero con la sesión al día no editó la oferta de su sucursal, así que ' +
+        'la denegación de abajo no mide el TTL: mide un fixture roto.',
+    ).toEqual([OFFER_A]);
+
+    expect(
+      await as(ctx.sql, 'authenticated', POL_UNSTAMPED_STAFF, (tx) =>
+        tx.unsafe<{ id: string }[]>(offerSql),
+      ).then((rows) => plainRows(rows).map((r) => r.id)),
+      'un cajero con TTL y sin sello editó la oferta de SU sucursal. Tiene el ' +
+        'alcance puesto y `can_manage_location` lo concede… salvo por la ' +
+        'segunda mitad de la disyunción de "vencida", que es cierta sin sello.',
+    ).toEqual([]);
+
+    // Y el dueño sin sello tampoco entra por la puerta de `can_manage_location`,
+    // que es la que le tocaría por ser dueño del negocio entero.
+    expect(
+      await as(ctx.sql, 'authenticated', POL_UNSTAMPED_OWNER, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `delete from public.business_locations where id = '${POL_LOC_B}' returning id::text`,
+        ),
+      ).then((rows) => plainRows(rows).map((r) => r.id)),
+      'un dueño con TTL y sin sello borró una sucursal. Es owner y la sucursal ' +
+        'es del negocio, así que sin la comprobación de sesión las dos ' +
+        'condiciones se cumplirían.',
+    ).toEqual([]);
+
+    // Y el dueño al día sigue entrando por todo lo anterior. Sin esta mitad, las
+    // denegaciones de arriba se podrían cumplir con una policy rota.
+    expect(await idsSeenBy(POL_OWNER, seePayouts)).toEqual([PAYOUT]);
+    expect(
+      await as(ctx.sql, 'authenticated', POL_OWNER, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `update public.business_hours set open_time = '08:00' where id = '${HOUR}' returning id::text`,
+        ),
+      ).then((rows) => plainRows(rows).map((r) => r.id)),
+    ).toEqual([HOUR]);
+  });
+
+  // ─── EL ARREGLO NO APAGÓ EL TTL, LO QUE HIZO FUE NO CREAR ACCESOS VENCIDOS ───
+  //
+  // Poner `session_ttl_hours = 0` en 16 filas es un arreglo; ponerlo en el
+  // `default` de la columna habría sido otra cosa — un interruptor general que
+  // desactiva la tablet compartida del mostrador de la panadería para todo el
+  // que se cree después—, y por eso esta prueba existe: es la que dice que el
+  // TTL sigue prendido y que lo que cambió fue el SENTIDO de esas 16 filas.
+  //
+  // Y mide lo que de verdad importa del otro lado: que una fila creada como la
+  // creará la API nazca denegada, no antes.
+
+  test('el TTL sigue prendido: el default sigue en 24 y una fila nueva sin sello entra denegada', async () => {
+    // El default de la columna, que es lo que la migración NO toca.
+    const defaults = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx
+        .unsafe<{ column_default: string }[]>(
+          `
+          select column_default
+          from information_schema.columns
+          where table_schema = 'public' and table_name = 'business_members'
+            and column_name = 'session_ttl_hours'`,
+        )
+        .then((rows) => plainRows(rows)),
+    );
+    expect(
+      defaults[0]?.column_default,
+      'el default de `session_ttl_hours` dejó de ser 24. 24 es lo correcto para ' +
+        'el acceso de personal que la API creará después, y el arreglo de las 16 ' +
+        'filas del backfill no lo cambia: apagarlo sería volver permanente un ' +
+        'arreglo que era de esas filas.',
+    ).toBe('24');
+
+    // Y que la migración no alcanzó a ninguna fila que no sea del backfill. Las
+    // tres del fixture existen para esto: la vencida se sembró con 24, y las dos
+    // sin sello también, así que un `update` sin predicado las habría apagado
+    // sin que nadie lo notara.
+    const delResto = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx
+        .unsafe<{ id: string; ttl: number; sello: string | null }[]>(
+          `
+          select id::text, session_ttl_hours as ttl,
+                 last_authenticated_at::text as sello
+          from public.business_members
+          where id in ('${M_STALE_OWNER}', '${M_UNSTAMPED_OWNER}', '${M_UNSTAMPED_STAFF}')
+          order by id`,
+        )
+        .then((rows) => plainRows(rows)),
+    );
+    expect(
+      delResto.map((r) => ({ id: r.id, ttl: r.ttl })),
+      'la migración que apaga el TTL de las filas del backfill alcanzó filas que ' +
+        'no son del backfill. Su predicado es `exists (select 1 from ' +
+        'business_ownership)`, y una fila que la API cree después no puede caer ' +
+        'en eso: el backfill es lo que pega esa fila en `business_ownership`.',
+    ).toEqual([
+      { id: M_STALE_OWNER, ttl: 24 },
+      { id: M_UNSTAMPED_OWNER, ttl: 24 },
+      { id: M_UNSTAMPED_STAFF, ttl: 24 },
+    ]);
+
+    // Y las dos sin sello siguen SIN sello: lo que se apagó fue el TTL, no se
+    // fabricó una sesión. La vencida conserva el suyo, que es lo que la hace
+    // vencida.
+    expect(
+      delResto
+        .filter((r) => r.id !== M_STALE_OWNER)
+        .every((r) => r.sello === null),
+      'una de las dos filas sin sello recibió un `last_authenticated_at`. El ' +
+        'arreglo apaga el TTL; sellarlas sería una mecha de 24 horas.',
+    ).toBe(true);
+    expect(
+      delResto.find((r) => r.id === M_STALE_OWNER)?.sello,
+      'la fila con la sesión vencida perdió su sello. La denegación por ' +
+        '`session_expired` es otra prueba que la de por `session_never_stamped`, ' +
+        'y no es intercambiable.',
+    ).not.toBeNull();
+
+    // Y la fila que la API crearía, creada como la crearía: sin `ttl` y sin
+    // sello. Un GERENTE con alcance a `POL_LOC_A`, y no un cajero, porque el
+    // cajero lo negaría el rol y el denegar no probaría nada del TTL.
+    const nuevoUsuario = 'f0000000-0000-4000-8000-00000000000c';
+    const nuevoMiembro = 'f3000000-0000-4000-8000-00000000000a';
+    let ttlHeredado: number | undefined;
+    let administra: boolean | undefined;
+    let editaHorario: string[] = [];
+
+    // `rolledBack` porque el camino de éxito de esta sonda es escribir filas, y
+    // una fila commiteada envenenaría las listas exhaustivas de arriba.
+    const refusal = await rolledBack(ctx.sql, async (tx) => {
+      // Sin `set local role`: el `insert` va con el rol de la transacción, que
+      // es el dueño del esquema y el mismo con el que siembran el resto de los
+      // fixtures de este archivo. Poner `service_role` explícito se lleva por
+      // delante el `insert` en `auth.users`, que a `service_role` no lo dejan
+      // escribir (`42501`), y eso no es lo que esta sonda quiere medir.
+      await tx.unsafe(
+        `insert into auth.users (id, email)
+           values ('${nuevoUsuario}', 'nuevo@rls-membership.test')`,
+      );
+      // Sin `session_ttl_hours` y sin `last_authenticated_at` en la lista de
+      // columnas: es exactamente el `insert` que hará la API.
+      await tx.unsafe(
+        `insert into public.business_members
+             (id, business_id, user_id, role, label, alias)
+           values ('${nuevoMiembro}', '${POL_BIZ}', '${nuevoUsuario}',
+                   'manager', 'Gerente nuevo', 'nuevo@test')`,
+      );
+      await tx.unsafe(
+        `insert into public.business_member_locations (member_id, location_id, deleted_at)
+           values ('${nuevoMiembro}', '${POL_LOC_A}', null)`,
+      );
+      ttlHeredado = plainRows(
+        await tx.unsafe<{ ttl: number }[]>(
+          `select session_ttl_hours as ttl from public.business_members where id = '${nuevoMiembro}'`,
+        ),
+      )[0]?.ttl;
+
+      await tx.unsafe(`set local role authenticated`);
+      await tx.unsafe(
+        `select set_config('request.jwt.claim.sub', '${nuevoUsuario}', true), ` +
+          `set_config('request.jwt.claim.role', 'authenticated', true), ` +
+          `set_config('request.jwt.claims', '${JSON.stringify({
+            sub: nuevoUsuario,
+            role: 'authenticated',
+          })}', true)`,
+      );
+      administra = plainRows(
+        await tx.unsafe<{ ok: boolean }[]>(
+          `select public.can_manage_location('${POL_BIZ}', '${POL_LOC_A}') as ok`,
+        ),
+      )[0]?.ok;
+      editaHorario = plainRows(
+        await tx.unsafe<{ id: string }[]>(
+          `update public.business_hours set open_time = '07:00'
+             where id = '${HOUR}' returning id::text`,
+        ),
+      ).map((r) => r.id);
+    });
+
+    expect(
+      refusal,
+      'la sonda no llegó a sembrar la fila que la API crearía, así que el `ttl` ' +
+        'de abajo saldría `undefined` y la prueba estaría mintiendo con su ' +
+        'mensaje. El código dice qué la rechazó.',
+    ).toBeNull();
+
+    expect(
+      ttlHeredado,
+      'una membresía creada sin `session_ttl_hours` no heredó 24. El default de ' +
+        'la columna es lo que hace que un acceso nuevo tenga una ventana, y es lo ' +
+        'que impide que la fila del backfill y la fila de la API sean la misma ' +
+        'cosa.',
+    ).toBe(24);
+
+    expect(
+      administra,
+      'un gerente nuevo, con alcance y con la sesión al día, administra su ' +
+        'sucursal sin haber pasado por `POST /staff/session`. Si esto da `true`, ' +
+        'o la sonda no se sembró o el TTL ya no se está comprobando.',
+    ).toBe(false);
+
+    expect(
+      editaHorario,
+      'un gerente nuevo editó el horario. Su rol pasa `business_member_role` y ' +
+        'su alcance pasa `can_manage_location`: lo único que puede negarlo es la ' +
+        'sesión, y con `ttl = 24` y sin sello tiene que negarlo.',
+    ).toEqual([]);
+  });
+
   // ─── LAS TRES POLICIES DE LECTURA DE LAS TABLAS DE ACCESO ─────────────────
   //
   // Del §6.3: el cliente solo lee. Lo que frena la escritura es la AUSENCIA de
@@ -2793,10 +3446,26 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     // estaba escrito, pero aplicado a la fila AJENA del `exists`, no a la que se
     // estaba leyendo. Venía del SQL del brief, y era un hueco del brief.
     expect(await idsSeenBy(POL_MANAGER, allMembers)).toEqual(
-      [M_OWNER, M_MANAGER, M_STAFF, M_PAUSED, M_STALE_OWNER].sort(),
+      [
+        M_OWNER,
+        M_MANAGER,
+        M_STAFF,
+        M_PAUSED,
+        M_STALE_OWNER,
+        M_UNSTAMPED_OWNER,
+        M_UNSTAMPED_STAFF,
+      ].sort(),
     );
     expect(await idsSeenBy(POL_OWNER, allMembers)).toEqual(
-      [M_OWNER, M_MANAGER, M_STAFF, M_PAUSED, M_STALE_OWNER].sort(),
+      [
+        M_OWNER,
+        M_MANAGER,
+        M_STAFF,
+        M_PAUSED,
+        M_STALE_OWNER,
+        M_UNSTAMPED_OWNER,
+        M_UNSTAMPED_STAFF,
+      ].sort(),
     );
 
     // El de fuera ve su negocio y no éste.
@@ -2810,12 +3479,20 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     // de M_DELETED, cuya membresía está dada de baja) y el `20261015024825` puso
     // además `deleted_at is null` sobre la fila PROPIA (la de M_PAUSED en
     // LOC_B, cuya membresía está viva y solo su alcance está borrado).
+    //
+    // Las dos filas sin sello aparecen, y la asimetría es la que importa: las ve
+    // un gerente CON sesión al día, así que la policy de esta tabla filtra por
+    // la sesión de QUIEN PREGUNTA y no por la de cada fila listada. Por eso la
+    // lista incluye a `M_STALE_OWNER` y ahora a las dos sin sello —las tres están
+    // fuera de su propia sesión y las tres se ven igual— y por eso que alguien
+    // figure en esta lista no dice que ese alguien pueda hacer nada.
     expect(await idsSeenBy(POL_MANAGER, ownScope)).toEqual(
       [
         `${M_STAFF}:${POL_LOC_A}`,
         `${M_MANAGER}:${POL_LOC_A}`,
         `${M_MANAGER}:${POL_LOC_B}`,
         `${M_PAUSED}:${POL_LOC_A}`,
+        `${M_UNSTAMPED_STAFF}:${POL_LOC_A}`,
       ].sort(),
     );
     // El cajero no ve ni su propio alcance por esta policy: lo pide con
