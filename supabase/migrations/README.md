@@ -896,6 +896,14 @@ degrading the only owner leaves it without one, and a single-row trigger cannot
 atomic «demote the old one, promote the new one». §5.4 records that transfer as out of
 scope for v1 and **not forgotten**, and that is what this migration enforces.
 
+**⚠ That paragraph is the state of `20261017033947`, and it was incomplete the next
+day.** It enumerates two denied exits, and a third was unguarded: the hard `DELETE`. A
+`before update` trigger does not see `delete`, so removing the owner row passed clean —
+no error, no code. `20261017040808_owner_cannot_be_deleted` adds that arm, and it also
+turns the `status` guard above from a check of the destination into a check of the
+transition, for the same reason: on a row that arrived `disabled`, that guard fired on
+writes that deactivated nothing.
+
 **3. The two plan-limit `raise`s now carry `R0001`, and the owner ones carry `R0002`.**
 `P0001` is Postgres' generic class. A UI that wanted to offer «upgrade to Pro» had to
 regex a Spanish sentence, and the day the sentence changed the button would keep
@@ -949,6 +957,15 @@ ACL through `create or replace` alone, without anyone asking.
 - **It does not see an owner that is born disabled.** Documented above; it is the price
   of `before update`, and the route that would produce it (`POST /staff` with
   `role: 'owner'`) is closed with a 422 in the Plan 2 API layer.
+- ⚠ **It did not see the hard `DELETE` at all, and that omission is the one a reader
+  would try.** The trigger was `before update` and nothing else, so
+  `delete from public.business_members where role = 'owner'` passed clean: no error, no
+  `R0002`, and the business lost its owner in the same statement the partial index
+  protected. RLS stopped a client, because the only two policies on the table are
+  `SELECT` — but `service_role` and `postgres` bypass it, and `service_role` is exactly
+  what `POST /staff` and `PATCH /staff/:memberId` will write with. **Closed in
+  `20261017040808_owner_cannot_be_deleted`**, the next section; this list stays here
+  because the sealed file above still reads as if it covered it.
 - **The other two `raise`s in the two plan-limit bodies keep `P0001`.** They are not the
   limit: «el plan % no incluye accesos de personal» is unreachable today because every
   plan grants `staff_access`, and «el plan % no tiene límites definidos» is a catalogue
@@ -996,6 +1013,106 @@ it, and it is the half that would have quietly weakened a Plan 1 security test.
 Two fixture rows are inactive on purpose: the new coupons are `is_active = false` and
 the new locations are closed, because the public catalogue shows every active row and
 two unrelated assertions compare those lists whole.
+
+**⚠ One claim in the section above stopped being true, and it is sealed.** It says
+`BEFORE UPDATE` «and nothing else», which was true and stopped being true the next day:
+the hard `DELETE` needed its own arm. Read it as the state of
+`20261017033947`, not as the state of the table.
+
+## Applied: `20261017040808_owner_cannot_be_deleted`
+
+Applied via `apply_migration` on 2026-10-17. The file's `md5sum` is
+`85c157cf201cce6c6ee258e0378a6944` and that is the ledger's `md5(statements[1])`: byte
+for byte, ending on `;` with no trailing newline. It supersedes `20261017033947` for two
+things and touches nothing else; the partial index is untouched.
+
+**1. The hard `DELETE` of a live owner row is now refused with `R0002`.** A sibling
+function, `enforce_owner_cannot_be_deleted`, on its own
+`trg_enforce_owner_cannot_be_deleted before delete for each row`.
+
+Sibling and not a branch in the same function, because the two rules do not resemble
+each other: one compares `old` with `new` on a row that keeps existing, the other reads
+a single row that is on its way out. Merging them would put a `tg_op` branch at the
+top and half the body would be «if we are on the other path, leave».
+
+Why it is an API bug and not a feature is in the §8 terms: a hard `DELETE` takes the
+row and, by cascade, the `business_member_locations` rows that record which branch
+someone worked. What is left is a staff list nobody can reconstruct from. And there is
+a second path that is nobody's code — `business_members.user_id` references
+`profiles(id) on delete cascade`, and `profiles` is `on delete cascade` from
+`auth.users`, so deleting a user's account deletes their owner row. The guard is per
+row, which covers both.
+
+**It is deliberately scoped to the LIVE owner.** `old.role = 'owner' and old.deleted_at
+is null`: an already-archived owner row can be hard-deleted. It is history, §8 wants
+history kept, and a future «purge the history» has to be able to say so rather than
+hit a trigger that cannot tell it apart from removing a live business' owner. The way
+out of the guard is the same as the rest of the trigger: demote the row first. After
+that it is not the owner, the `DELETE` goes through like any other, and the business
+has no owner because somebody demoted it on purpose.
+
+**2. The `status` guard now watches the transition, not the destination.**
+`if old.status is distinct from new.status and new.status = 'disabled'` — the same shape
+as the `deleted_at` guard eight lines below it, which already read both halves. The
+sealed version compared the *state* of the destination, and because the trigger is
+`before update` and does not see inserts, a row can arrive `disabled` and stay that way:
+from then on every write that left it there raised «el dueño del negocio no se puede
+desactivar» — including `set label = 'x'`, which deactivates nothing, and
+`set deleted_at = now()`, which reported the wrong rule and never reached the soft-delete
+one. `status` is `NOT NULL`, so this was never a NULL-predicate hole; it was
+state-versus-transition and nothing else.
+
+What did not change: `set status = 'active'` on a disabled owner still goes through, so
+a row is not wedged, and the combined write that does remain is the one that changes the
+row's owner-ness — demote, reactivate and soft-delete together. Both guards still close
+both exits.
+
+**Two combined writes now have a test each, and the reviewer was right that they did
+not.** Demote-and-deactivate passing is not a bypass: its end state is the two-step path
+the trigger already allows, and a trigger that denied it would deny revocation over a
+difference of syntax. Demote-and-delete is denied, and the file's justification — «a low
+with two steps, irreversible from the row» — was a comment and nothing more. The
+dangerous part is that collapsing the demotion guard to `if new.role <> 'owner' … then
+return new` makes **every other test in the block still pass** while opening the
+demote-and-delete door, so both tests now name the guard they pin.
+
+### Measured against production, after
+
+```sql
+select c.relname, t.tgname, pg_get_triggerdef(t.oid)
+  from pg_trigger t join pg_class c on c.oid = t.tgrelid
+  join pg_namespace n on n.oid = c.relnamespace
+ where n.nspname = 'public' and c.relname = 'business_members' and not t.tgisinternal;
+```
+
+| trigger | events |
+| --- | --- |
+| `trg_enforce_member_limit` | `BEFORE INSERT OR UPDATE` |
+| `trg_enforce_owner_is_untouchable` | `BEFORE UPDATE` |
+| `trg_enforce_owner_cannot_be_deleted` | `BEFORE DELETE` |
+
+`prosrc` carries `old.status is distinct from new.status` in the first owner function and
+`old.deleted_at is null and new.deleted_at is not null` beside it; the delete function
+carries the `no se puede borrar` raise. Both are `{postgres=X/postgres,
+service_role=X/postgres}` — no `anon`, no `authenticated`. The data did not move: **16
+rows, 16 owners, 16 businesses, 0 disabled, 0 soft-deleted, 0 businesses with two live
+owners**, before and after.
+
+### The counterfactual the relocated fixtures were missing, and what it found
+
+`20261017033947` gave the stale and never-stamped owners their own businesses, and the
+tests around them assert `[]` — a result a missing row, a missing business or a broken
+policy all produce. The counterfactual was asserted in a comment and nothing measured it:
+with a fresh session, does that same owner see his own payout?
+
+Building it produced a fact that is not about the test. **A client cannot re-stamp a
+session.** `business_members` has no write policy, so `update … set
+last_authenticated_at = now()` as `authenticated` does not raise `42501` — it updates
+**zero rows silently**, because an `UPDATE` under RLS with no policy matches nothing
+and says nothing. The first version of the counterfactual was written that way and
+measured a session that had never been renewed. It has to run the way the product will:
+the seal with `service_role`, then the person asks again. That is the path
+`POST /staff/session` takes, and it is now written down in the test.
 
 ## The ledger has a `staff_permission_helpers` row with no file: `20261014011033`
 
