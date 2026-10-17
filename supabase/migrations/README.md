@@ -856,8 +856,146 @@ the suffix, and re-declaring an unchanged body would be a second copy of a funct
 that did not change — which is how these chains start to diverge without anyone
 deciding to.
 
-**This is the terminal state for the plan limits.** Three files, and the order to read
-them in is the order they were applied.
+**This was the terminal state for the plan limits when it was written, and it stopped
+being one the next day.** The two bodies were superseded again — by
+`20261017033947_owner_is_untouchable`, for the error code and nothing else — and that
+is the terminal state now. The order to read the chain in is still the order it was
+applied in.
+
+## Applied: `20261017033947_owner_is_untouchable`
+
+Applied via `apply_migration` on 2026-10-17. The file's `md5sum` is
+`41a16c7fbcbd973f4990dc614b4f6a95` and that is the ledger's `md5(statements[1])`: byte
+for byte, ending on `;` with no trailing newline.
+
+Four things, and three of them are the ones a reader would otherwise not expect to find
+here.
+
+**1. The partial unique index, `business_members_one_owner_per_business`.** One live
+owner per business. It is partial —`where role = 'owner' and deleted_at is null`—
+because the §8 soft delete keeps the row as history, and a row that stays as history
+must not block the next owner. It does **not** filter by `status`, deliberately: what
+has to be protected is «there are not two», and a disabled owner is not «owner in
+fact», it is a gap that could be filled from behind.
+
+**2. `trg_enforce_owner_is_untouchable`, `BEFORE UPDATE` and nothing else.** The brief
+proposed `before insert or update`; this is `before update`. On insert the index
+already does the work, and a trigger that only inspects the `old → new` transition
+would sit underneath the Plan 1 backfill — the reason those 16 rows exist — and
+underneath any reload of the table. The price is stated in the file and is one state:
+an `insert` of an owner with `status = 'disabled'` is not seen by anyone, and that row
+counts as the owner. It is not a door (it opens no second owner) and it is fixed by an
+`update` this same trigger lets through.
+
+The trigger denies two exits and allows a third. Denied: `status = 'disabled'` on an
+owner row, and `deleted_at` going from null to not null. Allowed: `owner` →
+`manager`, because «no role may deactivate the owner» (§5.4) does not say «and nobody
+may stop being one», and degradation is the exit that ownership transfer will need. What
+this trigger guarantees is deliberately smaller than «the business always has an owner»:
+degrading the only owner leaves it without one, and a single-row trigger cannot
+atomic «demote the old one, promote the new one». §5.4 records that transfer as out of
+scope for v1 and **not forgotten**, and that is what this migration enforces.
+
+**3. The two plan-limit `raise`s now carry `R0001`, and the owner ones carry `R0002`.**
+`P0001` is Postgres' generic class. A UI that wanted to offer «upgrade to Pro» had to
+regex a Spanish sentence, and the day the sentence changed the button would keep
+compiling. Two codes and not one, because they are two rules and the UI reacts
+differently to each: with a single `R0001` the UI would learn «this was a business
+rule» and then have to read the prose again to learn which one — the exact defect this
+code was meant to close, moved somewhere else. The prefix is the same either way, so
+«was it a business rule?» stays one question. The `detail` carries what the prose does
+not (`business=… plan=… limit=… current=…`, and `business=… member=…` for the owner
+rules) and the `message` loses not one comma of the Plan 1 text.
+
+**The brief's `format()` would not have worked, and it was caught by running it.**
+It proposed
+
+```sql
+raise exception using
+  errcode  = 'R0001',
+  message  = format('el plan % admite hasta % miembros, no más', v_plan, v_limit),
+```
+
+`format()` has no bare `%`: the marker is `%` followed by a conversion specifier, so
+`% ` is not a marker, it is an error. Measured against the local Postgres before
+writing the migration, and it fails on the *first refusal*, in the one statement the
+whole feature exists for:
+
+```
+ERROR:  unrecognized format() type specifier " "
+HINT:  For a single "%" use "%%".
+```
+
+So the `USING` clause *accompanies* the format string instead of replacing it — `raise
+exception 'el plan % admite hasta % %, no más', v_plan, v_limit, … using errcode =
+'R0001', detail = …` — which is the only form where the old placeholders and the new
+`detail` coexist. `R0001` and `R0002` are both accepted by Postgres as SQLSTATE values;
+the class letter `R` is not reserved.
+
+**4. The revoke closes against `authenticated`.** `20261015034230:306-308` revoked from
+`public, anon` and not from `authenticated`. Measured before applying: it changes
+nothing today, because `pg_default_acl` for `postgres` in `public` reads
+`{postgres=X, service_role=X}` and all three functions are in exactly that ACL. What
+changes is that the revoke is now self-defending. The `supabase_admin` default in this
+same project grants `anon` and `authenticated` on new functions in `public`, so
+«widen the default one day» is not a hypothetical; and the three functions keep the
+ACL through `create or replace` alone, without anyone asking.
+
+### What it does NOT do, measured and stated
+
+- **It does not stop a business from ending up with no owner.** Degradation is allowed
+  and degradation of the only owner empties the seat. The two-row operation that fixes
+  it is out of v1 scope by §5.4, and the API must not pretend otherwise.
+- **It does not see an owner that is born disabled.** Documented above; it is the price
+  of `before update`, and the route that would produce it (`POST /staff` with
+  `role: 'owner'`) is closed with a 422 in the Plan 2 API layer.
+- **The other two `raise`s in the two plan-limit bodies keep `P0001`.** They are not the
+  limit: «el plan % no incluye accesos de personal» is unreachable today because every
+  plan grants `staff_access`, and «el plan % no tiene límites definidos» is a catalogue
+  bug rather than a business rule. Reaching them would be the moment to revisit that.
+
+### Measured against production, before and after
+
+Before, because a unique index over data that already violates it fails at creation:
+
+```sql
+select count(*) from (
+  select business_id from public.business_members
+   where role = 'owner' and deleted_at is null
+   group by business_id having count(*) > 1) d;
+--  0
+```
+
+The real table, not the test replay: **16 rows, 16 businesses, 16 owners, 0 disabled,
+0 soft-deleted** — every business has exactly one live owner, so the index landed on
+clean data. After, `pg_indexes` holds the index with the predicate above, and
+`pg_trigger` holds `trg_enforce_owner_is_untouchable` as `BEFORE UPDATE ... FOR EACH
+ROW` with `search_path=""`, next to the untouched `trg_enforce_member_limit`
+(`BEFORE INSERT OR UPDATE`). The ACL of all four functions —`business_plan_of`, the two
+limit triggers and the new one— is `{postgres=X/postgres, service_role=X/postgres}` with
+no `anon` and no `authenticated`.
+
+### The fixtures of Plan 1 encoded a state this index makes impossible
+
+`business-members.rls.db.spec.ts` seeded **three** owner rows on one business —the live
+one, one with an expired session and one that was never stamped— and the helpers block
+seeded two. Both were constructible only because Plan 1 had no owner index, and both
+`beforeAll`s died with `23505 business_members_one_owner_per_business` as soon as this
+migration was in the replay.
+
+The fix was not to demote the extra rows: those fixtures exist to prove that the TTL
+reaches **owners**, and an expired *manager* measures a different branch of the same
+predicate. The expired and never-stamped owners were given their own businesses
+(`POL_STALE_BIZ`, `POL_UNSTAMPED_BIZ`, and `BIZ_C` in the helpers block) **with their
+own** rows —location, hours, coupon, payout— because an owner of someone else's
+business is a stranger, and a stranger is denied by the same policy that denies the
+expired session. Without those rows the `[]` of those tests would be true for the wrong
+reason and no assertion would go red. That is the half of this migration with no SQL in
+it, and it is the half that would have quietly weakened a Plan 1 security test.
+
+Two fixture rows are inactive on purpose: the new coupons are `is_active = false` and
+the new locations are closed, because the public catalogue shows every active row and
+two unrelated assertions compare those lists whole.
 
 ## The ledger has a `staff_permission_helpers` row with no file: `20261014011033`
 
