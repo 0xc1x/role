@@ -282,11 +282,15 @@ para `(A, sucursal_de_B)` — y la API escribe con `service_role`, o sea que el 
 la última frontera y no un detalle. La fila de alcance es un alcance dentro de un negocio,
 no un alcance a secas.
 
-Los tres helpers son ejecutables por `authenticated`, no solo los dos que consume el
-cliente: `business_has_feature` lo consulta la API antes de cada alta y
-`business_member_role` lo invocan las policies de la §6.2.
+De esos tres, `business_has_feature` lo consulta la API antes de cada alta y
+`business_member_role` lo invocan las policies de la §6.2. **Atención al conteo,
+porque es la frase que el bloque de al lado corrige:** `pg_proc` tiene siete
+helpers para este dominio y aquí se nombran tres. En particular
+`business_plan_of` existe y **no** es ejecutable por `authenticated`, así que
+«los tres son ejecutables por `authenticated`» no puede leerse como «todos lo
+son».
 
-> **La lista de helpers de esta sección quedó corta, y el código laBn sobrepasó.**
+> **La lista de helpers de esta sección quedó corta, y el código la sobrepasó.**
 > Dice «tres» y nombra `business_member_role`, `can_manage_location` y
 > `business_has_feature`. `pg_proc` tiene **siete** para este dominio, y los
 > cuatro que faltan nacieron después de que esta §5.1 se escribiera:
@@ -395,10 +399,23 @@ existe. Esta redacción es la que manda, y la razón de que diga esto es §5.4:
   estado resultante queda por encima de `locations(plan)`. Renombrar una sucursal que
   ya estaba activa no la hace crecer, así que no puede ser la razón de un rechazo; sí
   cuenta una mudanza a otro negocio, porque para el negocio de destino la fila es
-  nueva.
+  nueva. Y el conteo de «las demás» sólo mira filas **`is_active`** (`prosrc`:
+  `where l.business_id = new.business_id and l.is_active and (tg_op = 'INSERT' or
+  l.id <> new.id)`): desactivar una sucursal la saca del cupo sin que ninguna
+  escritura tenga que crecer.
 - `business_members` → igual, y solo contando filas con `role <> 'owner'` y
-  `deleted_at is null`. Editar el `label`, el `alias`, el `role` o el `status` de un
-  acceso que ya existe no lo mete en el conteo.
+  `deleted_at is null` (`prosrc`: `where m.business_id = new.business_id and
+  m.role <> 'owner' and m.deleted_at is null and (tg_op = 'INSERT' or m.id <> new.id)`).
+  Editar el `label`, el `alias`, el `role` o el `status` de un acceso que ya existe no
+  lo mete en el conteo.
+
+  **La asimetría que hay que saber**: los dos conteos preguntan «¿esta fila sigue
+  consumiendo cupo?», pero cada tabla decide eso con una columna distinta —
+  `is_active` en `business_locations`, `deleted_at is null` en `business_members` —
+  y el de miembros además excluye al `owner`, que no consume cupo nunca. Nadie lo
+  traduce a una regla única, así que un `free` con tres sucursales de las que una
+  está desactivada entra sin tocar el tope, mientras que tres miembros que no son
+  propietario no entran aunque dos estén borrados lógicamente.
 - Los dos consultan `business_plan_of(business)` para el plan — y `business_plan_of`,
   no una segunda `left join` a `business_plans_state`, porque un negocio al que le
   borraron la fila del plan tiene que leer `free` **en el mismo sitio** que lo lee el

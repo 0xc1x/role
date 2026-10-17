@@ -611,15 +611,26 @@ migration was sealed that was **not** the case, and both of those functions were
 computing it inline — see the correction below.
 
 **This paragraph used to say those two functions were still computing it inline as of
-*this* migration, which was wrong about the origin.** `20261015015012` creates policies
-and grants; it never wrote a function body, so it introduced no arithmetic and fixed
-none. It inherited the duplicates from `20261015001857`, which is where the copies were
-born (`:39` in `can_manage_location`, `:124` and `:136` in
-`business_member_session_state`) — and by the time `20261015003929` recreated both
-bodies it had already written a header claiming the opposite. That earlier claim is
-recorded beside the `20261015024825` one, because it is the same defect class and a
-migration earlier, and because the two sealed files saying it are the reason a reader
-who checks only the newest one concludes the arithmetic was always shared.
+*this* migration, which was wrong about the origin — and its correction was wrong
+twice in the same sentence.** It said `20261015015012` "creates policies and grants;
+it never wrote a function body". It does one of those and not the other:
+
+- **It wrote three function bodies.** `cancel_order` (`:260`), `set_order_status`
+  (`:343`) and `validate_pickup_code` (`:424`), all three `create or replace`.
+- **It carries no `grant` or `revoke` at all** — `grep -cE '^[[:space:]]*(grant|revoke)\b'`
+  returns 0, which is not an omission but a decision its own header states at
+  `:71`: `replace` preserves the ACL and a fresh `create` would hand EXECUTE
+  back to `PUBLIC` on a function that cancels orders.
+
+The substantive point is unaffected and was re-checked:
+`grep -c "interval '1 hour'" 20261015015012*.sql` → **0**. It inherited the
+duplicates from `20261015001857`, which is where the copies were born (`:39` in
+`can_manage_location`, `:124` and `:136` in `business_member_session_state`) — and
+by the time `20261015003929` recreated both bodies it had already written a header
+claiming the opposite. That earlier claim is recorded beside the `20261015024825`
+one, because it is the same defect class and a migration earlier, and because the
+two sealed files saying it are the reason a reader who checks only the newest one
+concludes the arithmetic was always shared.
 
 The eleven policies call `business_member_session_valid` **in addition to** their role
 check, and that part did hold.
@@ -921,10 +932,28 @@ this branch are exactly `business_has_feature(uuid, business_feature)`,
 `business_member_role(uuid)`, `business_member_session_expires_at(integer,
 timestamptz)`, `business_member_session_state(uuid)`, `business_member_session_valid(uuid)`,
 `business_plan_of(uuid)` and `can_manage_location(uuid, uuid)`, every one carrying
-`proconfig = {"search_path=""}` and an ACL of `postgres`, `service_role`,
-`authenticated` — never `anon`, never PUBLIC. So a from-scratch replay of this
-directory reaches the same schema as production, and the gap is bookkeeping rather
-than state.
+`proconfig = {"search_path=\"\""}` — never `anon`, never PUBLIC.
+
+**Six of the seven carry an ACL of `postgres`, `service_role`, `authenticated`.
+The seventh, `business_plan_of(uuid)`, carries only `postgres` and `service_role`,
+and `has_function_privilege('authenticated', …, 'execute')` is `false` for it.**
+That is deliberate, not an omission, and this sentence used to contradict both the
+database and `design.md:298` inside a claim whose whole purpose was "verified
+against `pg_proc`". It is internal to the two `enforce_business_*_limit` triggers,
+which run as the table owner, and `business_has_feature` is its client-facing
+version. Measured:
+
+```
+select p.oid::regprocedure::text,
+       has_function_privilege('authenticated', p.oid, 'execute') as auth_exec,
+       has_function_privilege('anon', p.oid, 'execute') as anon_exec
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = 'business_plan_of';
+-- business_plan_of(uuid) | f | f
+```
+
+So a from-scratch replay of this directory reaches the same schema as production,
+and the gap is bookkeeping rather than state.
 
 The asymmetry is deliberate: one orphan row is mirrored because it can be mirrored
 exactly, the other is documented because it cannot.
@@ -1039,13 +1068,26 @@ the target list so it is evaluated once per output row. That shape is load
 bearing and it is not the obvious one:
 
 - In the `WHERE` clause with a constant argument, the planner emits
-  `One-Time Filter: (business_member_role('…') IS NOT NULL)` and the whole
-  8,400-row scan costs **one** call. It measured 3.59 ms for the scan against
-  109 ms for the same count with the argument dependent on the row. A
-  measurement that quietly measures one call and reports it as 8,400 is worse
-  than no measurement.
+  `One-Time Filter: (business_member_role('073854b4-…'::uuid) IS NOT NULL)` and
+  the whole 8,400-row scan costs **one** call. Verified again in this round; the
+  plan still shows `rows=8400 loops=1` with the filter hoisted above the loop. The
+  millisecond figure next to it in the previous version of this entry (3.59 ms vs
+  109 ms) does not reproduce and is not restated here, because the two shapes
+  cannot be timed back to back in one session: whichever runs first pays the
+  helper's first-call SPI planning, and on this run that made the *one-call*
+  shape the slower of the two (the `Result` node alone reported
+  `actual time=9.119..11.468`). A measurement that quietly measures one call and
+  reports it as 8,400 is worse than no measurement — and so is one that compares
+  two shapes across a cold-start boundary.
 - With the argument derived from `g`, the plan carries it as a per-row
   `SubPlan` — which is the thing being measured.
+
+**This harness is right for the helpers and wrong for the legacy predicate, and
+the reason is not the target list — it is `pull_up_sublinks`.** That function only
+walks join quals, so an `exists` written in the target list is never rewritten to
+`= ANY` and never hashed, which is exactly the non-production shape discussed in
+the next section. The legacy arm has to be written as `= any (select …)` to get the
+plan RLS produces.
 
 For `EXPLAIN` numbers taken through the MCP, the per-row figure is
 `(Aggregate total) − (Nested Loop total)` over the evaluation count, and the
@@ -1055,32 +1097,37 @@ repeat-to-repeat spread is reported rather than the best run.
 
 | helper | evaluations | µs / row | shared buffers / row |
 | --- | --- | --- | --- |
-| `business_member_role` | 84,000 | **14.7** | 1.0 |
-| `business_member_session_valid` | 84,000 | **25.0** | 1.0 |
-| `can_manage_location` | 84,000 | **25.1** | 1.0 |
-| the two together — what `Members can manage business hours` / `coupons` do per row | 84,000 | **33.8 – 43.2** | 2.0 |
-| legacy `exists (select 1 from business_ownership …)` per row | 84,000 | **1.26** | 2.0 |
+| `business_member_role` | 84,000 | **14.7 – 15.4** | 1.0 |
+| `business_member_session_valid` | 84,000 | **18.9 – 19.2** | 1.0 |
+| `can_manage_location` | 50,000 (on `offers` — the only other table carrying both columns) | **23.8 – 23.9** | 1.0 |
+| the two together — what `Members can manage business hours` / `coupons` do per row | 84,000 | **33.8 – 35.7** | 2.0 |
 
-The pair was run at 4,200 / 42,000 / 84,000 evaluations, twice each. Two
-consecutive runs at 42,000 gave 34.39 and 33.76 µs/row; at 84,000, 38.34 and
-38.46. The spread is reported because it is real and it is about 10%, not
-because a single run would not have produced a confident-looking table.
+Re-measured in this round, three runs each at 42,000 and 84,000 evaluations
+(`business_hours` × `generate_series`, so `42 × K` rows). The pair gave
+33.65 / 33.69 / 33.71 at 42,000 and 33.78 / 33.88 / 35.74 at 84,000 — a spread
+of about 6%, reported because it is real. `business_member_session_valid` used
+to be listed here at 25.0; it does not reproduce, and 15.4 + 19.0 ≈ the pair's
+measured 33.7 is the arithmetic that says which of the two was wrong.
 
-### ⚠ A review measured this and got the legacy baseline wrong by 21×
+The legacy `exists (business_ownership …)` arm is deliberately **not** in this
+table, because it is not a per-row cost: the planner hashes it once per
+statement. It is measured, in the shape production actually produces, in the next
+section.
 
-The table that prompted this section put the three helpers at ~12 / ~16 / ~21 µs
+### ⚠ The legacy baseline is a per-statement cost, and the shape decides the number
+
+The review that prompted this section put the three helpers at ~12 / ~16 / ~21 µs
 per call and the legacy `exists (business_ownership …)` predicate at **~0.06 µs
 per row**. The three helper figures reproduce — same order of magnitude, same
-ranking, mine 1.2× to 1.6× higher. The fourth does not: measured here it is
-**1.26 µs per row**, twenty-one times the quoted figure.
+ranking, mine 1.2× to 1.6× higher.
 
-That number is the one that changes a conclusion, because the ratio is the
-finding. Against 0.06 µs/row the regression reads as ~560×. Against the measured
-1.26 µs/row it is **~27×**, or ~34× at the top of the spread. Both are worth
-knowing; only one of them is real.
+The fourth is the one that moves the conclusion, and the first thing to settle is
+**which shape it was measured in**, because the planner produces two different
+plans for this predicate and only one of them exists in production.
 
-**The legacy predicate is not a per-row cost at all, and that is why 0.06 looked
-plausible.** Read the actual filter on `coupons` and `orders`:
+**The shape production actually produces.** The legacy arm of the real `orders`
+filter is a **hashed `SubPlan` evaluated once per statement**, followed by a cheap
+per-row array containment — verbatim from `select id from orders` as a real owner:
 
 ```
 Filter: ((user_id = (InitPlan 1).col1)
@@ -1088,24 +1135,106 @@ Filter: ((user_id = (InitPlan 1).col1)
       OR (ANY (business_id = (hashed SubPlan 9).col1))
       OR ((InitPlan 10).col1 = 'admin'::app_role))
   ->  SubPlan 9
-        ->  Bitmap Heap Scan on business_ownership o  (actual time=0.019..0.021 rows=1 loops=1)
+        ->  Bitmap Heap Scan on business_ownership o  (actual time=0.018..0.020 rows=1 loops=1)
 ```
 
-`(hashed SubPlan 9)` — evaluated **once for the statement**, 0.021 ms, because
-`o.owner_id = auth.uid()` does not depend on the row being tested. The
-`can_manage_location(business_id, business_location_id)` next to it does depend
-on it, and it is a per-row `SubPlan`. So the legacy path costs per *statement*
-and the new path costs per *row*, and a per-statement 0.021 ms divided by a row
-count is exactly the kind of number that turns into a believable per-row figure.
+`loops=1`. The subquery's own predicate is `o.owner_id = auth.uid()`, which does
+not depend on the row being tested, so the planner hashes it once and the per-row
+work left over is a `= ANY` against the resulting array. So the legacy path costs
+**per statement**, not per row — and that is exactly how a figure like 0.06 µs/row
+looks credible: a per-statement time divided by a row count.
 
-**The inversion is the finding, and it is not a tuning detail.** All seven
-helpers carry `proconfig = {"search_path=\"\""}` and every one of them appears
-in a real plan as a per-row `SubPlan`; `business_member_role` is `language sql`
-with a body simple enough to inline and is *still* not inlined, which is
-consistent with the `proconfig` alone being enough to stop the inliner. That
-last step is the one part of this section that is **not** measured — the plans
-show the helpers are per-row, and I did not isolate which clause of the
-`functiondef` is responsible. It does not change any number above.
+**What the other shape measures, and why it is not a number this system has.**
+Writing the predicate where the planner will not rewrite it produces a correlated
+per-row index lookup instead:
+
+```
+  ->  SubPlan 3
+        ->  Index Scan using business_ownership_pkey on business_ownership o
+              Index Cond: (business_id = b.business_id)   (… rows=0 loops=84000)
+```
+
+That plan is reachable, and it is the one the harness in `### The command` above
+produces: `pull_up_sublinks` only walks **join quals**, never a `TargetEntry`, so
+an `exists` sitting in the target list is never simplified to `= ANY` and stays
+correlated. It is a real plan — it is just not the one RLS emits. The production
+shape is reproduced by writing the arm the way the planner rewrites it,
+`b.business_id = any (select o.business_id from business_ownership o where
+o.owner_id = auth.uid())`, which plans as `SubPlan 3 … loops=1`.
+
+| shape | µs / row marginal | subplan `loops` | what produced it |
+| --- | --- | --- | --- |
+| `exists` forced correlated, 84,000 rows | **1.339 / 1.343 / 1.338** | 84,000 | no plan in this repo emits it |
+| the figure the previous round published | **1.26** | — | derived from the row above |
+| **production: hashed SubPlan, 84,000 rows** | **0.143 / 0.146 / 0.144** | **1** | the real `orders` plan |
+| **production: hashed SubPlan, 42,000 rows** | **0.155 / 0.154 / 0.157** | **1** | same |
+| the first review's figure | ~0.06 | — | ~2.4× *below* the production marginal |
+
+Buffers are the cleanest confirmation: the production shape reports **134 shared
+hits at both 42,000 and 84,000 rows** — its cost really is invariant to the row
+count — while the correlated shape reports 84,133 and 168,133, i.e. 2.0 per row.
+
+**So the correction replaced an overclaim with a larger one.** The first review
+was closer to production than the round that declared it wrong: 1.26 overstates
+the legacy cost by ~9× (1.26 / 0.144) and 1.75 by ~12×, while ~0.06 understates
+it by ~2.4×. The claim this entry used to make — that the reviewer "got the
+legacy baseline wrong by 21×" and that "only one of them is real" — was false in
+the direction it claimed to correct, and it was checked with less rigour than the
+thing it was correcting.
+
+### The ratio is not a property of the system, and publishing one number is the error
+
+Both arms now have a measured marginal, and the ratio between them is stable,
+because both are per-row quantities:
+
+| | 42,000 rows | 84,000 rows |
+| --- | --- | --- |
+| legacy, production shape | 0.154 – 0.157 µs/row | 0.143 – 0.146 µs/row |
+| the two-helper pair | 33.65 – 33.71 µs/row | 33.78 – 35.74 µs/row |
+| **marginal ratio** | **~215 – 220×** | **~235 – 250×** |
+
+The **per-statement** ratio is a different number, and it moves with the volume,
+because the legacy arm has a fixed component the marginal ratio ignores. Built
+from the measured marginals plus the measured `SubPlan` node time — 21 µs on the
+real 39-row read:
+
+| rows in one statement | legacy arm, total | new pair, total | ratio |
+| --- | --- | --- | --- |
+| 39 — today's `orders`, **measured** | 21 µs + 39 × 0.144 ≈ **27 µs** | 39 × 33.7 µs ≈ **1.3 ms** | **~50×** |
+| 1,000 — projected | 21 µs + 1,000 × 0.144 ≈ **0.17 ms** | 1,000 × 33.7 µs ≈ **34 ms** | **~200×** |
+| 10,000 — projected | 21 µs + 10,000 × 0.144 ≈ **1.5 ms** | 10,000 × 33.7 µs ≈ **0.34 s** | **~230×** |
+| 84,000 — the harness volume | 810 µs + 84,000 × 0.144 ≈ **12.8 ms** | 84,000 × 33.8 µs ≈ **2.84 s** | **~220×** |
+
+The 21 µs is measured, not assumed: it is the `SubPlan 9 → Bitmap Heap Scan`
+node's own time on the real 39-row read of `orders`, 0.018 – 0.021 ms across four
+runs. The 810 µs in the last row is that same node inside the 84,000-row harness
+and it is **not** a clean isolation of the ownership lookup — 0.79 – 0.88 ms of it
+is `auth_helpers.my_role()` behind `InitPlan 2`, which the real read attributes to
+its own InitPlan instead; that row is there to show the fixed term, not to be the
+headline. The first three rows use the 21 µs and are the ones to quote. Quote the
+ratio **at the volume you measured**, and put the volume beside it. "~27×" was
+neither end of this table and was not a property of anything.
+
+### Why the helpers are per row by construction — and what was not measured
+
+All seven helpers carry `proconfig = {"search_path=\"\""}`, and the three a policy
+filter calls directly — `business_member_role`, `business_member_session_valid`
+and `can_manage_location` — each appear in a real plan as a per-row `SubPlan`.
+`business_member_role` is `language sql` with a body simple enough to inline and
+is *still* not inlined, which is consistent with the `proconfig` alone being
+enough to stop the inliner. **That last step is the one part of this section that
+is not measured**: the plans show the helpers are per-row, and I did not isolate
+which clause of the `functiondef` is responsible. It does not change any number
+above.
+
+**The `FOR ALL` policies on `business_hours` and `coupons` do need attention, and
+the reason is structural rather than a number.** In the filter above, `auth.uid()`,
+`auth_helpers.my_role()` and the legacy ownership subquery are all hoisted — they
+appear as `InitPlan 1`, `InitPlan 10` and `hashed SubPlan 9`. The
+`can_manage_location(business_id, business_location_id)` beside them is a
+row-dependent expression with no `InitPlan`, and a `STABLE` function whose
+argument is a `Var` cannot be hoisted past the scan. That one is per row by
+construction.
 
 ### What this costs at today's volume, which is the assumption all of it rests on
 
@@ -1115,30 +1244,65 @@ Row counts in production, 2026-10-15: `business_hours` **42**, `coupons` **6**,
 
 Two measurements on the real tables, as a real owner:
 
-| query | rows | plan | Execution |
-| --- | --- | --- | --- |
-| `select id from business_hours` | 42 | Seq Scan, **no `Filter` at all** | 0.049 ms |
-| `select id from orders` | 39 | Seq Scan, `Rows Removed by Filter: 39` | 4.10 – 4.18 ms |
-| `select id from orders` as `postgres` (`bypassrls`) | 39 | Seq Scan | 0.093 ms |
-| `select id from orders where id = '…'` | 1 | Index Scan, `Rows Removed by Filter: 1` | 3.13 ms |
-| `select id from coupons` | 6 | Seq Scan, `Rows Removed by Filter: 4` | 2.54 – 2.69 ms |
+| query | rows | plan | Execution | shared hits |
+| --- | --- | --- | --- | --- |
+| `select id from business_hours` | 42 | Seq Scan, **no `Filter` at all** | 0.047 – 0.049 ms | 1 |
+| `select id from orders` | 39 | Seq Scan, `Rows Removed by Filter: 39` | 4.05 – 4.15 ms | **765** |
+| `select id from orders` as `postgres` (`bypassrls`) | 39 | Seq Scan | 0.093 – 0.128 ms | 2 |
+| `select id from orders where id = '…'` | 1 | Index Scan, `Rows Removed by Filter: 1` | 2.94 – 3.25 ms | **721** |
+| `select id from coupons` | 6 | Seq Scan, `Rows Removed by Filter: 4` | 2.54 – 2.63 ms | 536 |
+
+The first `EXPLAIN` of a shape in a fresh connection costs 2–3× the warm ones
+(`coupons` came out at 5.35 ms with a 5.19 ms Planning Time, `orders` at 11.16 ms),
+so the ranges above are warm runs and the buffer counts are identical either way —
+which is itself the reason the buffers are the load-bearing column here.
 
 **`business_hours` has no RLS qual on SELECT at all**, and that is not an
 accident of the plan: `Anyone can view business hours` is `TO public` with
-`qual = true`, so RLS contributes nothing for a read and the `FOR ALL` members
-policy is only ever consulted as a `WITH CHECK` on the writes that touch it.
+`qual = true`, so the OR of the quals reduces to `true`, RLS contributes nothing
+for a read, and the `FOR ALL` members policy never reaches a `SELECT`. It is not
+true that it is "only ever consulted as a `WITH CHECK`", though: an `ALL` policy's
+`qual` is also its `USING` clause, so on `UPDATE` this table's members policy is
+consulted **both** as the `USING` (which rows the statement may touch) and as the
+`WITH CHECK` (what they must look like afterwards). The claim that survives is the
+one that matters — **a read never reaches it** — and the `no Filter at all` cell
+in the table above is what proves it, not the policy text.
 
 **The ~3 ms on a ONE-row indexed read of `orders` is not per-row, and the
-1-row / 39-row pair is what proves it.** One row costs 3.13 ms and 721 shared
-buffer hits; all 39 cost 4.10 ms and the same 721. The 38 extra rows cost
-0.97 ms ≈ **25.5 µs/row**, which is the `can_manage_location` figure in the table
-above arriving independently. So at this volume the fixed per-statement cost of
-the policy layer is an order of magnitude larger than its total per-row cost,
-and it lives in two measured places: `auth_helpers.my_role()` behind an InitPlan
-at 130 buffer hits and 0.68 – 0.71 ms, and the first-call SPI planning of each
-helper's internal queries — visible as the **intercept**, not the slope: 84,000
-evaluations report 84,310 buffer hits, so the fixed part is ~440 hits per
-connection and the marginal part is exactly 2.0 per row.
+1-row / 39-row pair is what proves it.** One row costs 2.94 – 3.25 ms and **721**
+shared buffer hits; all 39 cost 4.05 – 4.15 ms and **765**. Those are different
+numbers: the 39-row read is 765, and the sentence that used to say "all 39 cost
+4.10 ms and the same 721" spliced the two. What the pair does support is the
+**slope**: the 38 extra rows cost **44** more buffer hits, ≈ 1.2 per row, and
+taking the scan nodes' own totals (2.845 – 2.952 ms for one row, 3.900 – 3.988 ms
+for 39) the 38 extra rows cost ≈ 1.04 ms ≈ **27 µs/row** — the `can_manage_location`
+figure arriving by another road. So at this volume the fixed per-statement cost of
+the policy layer is an order of magnitude larger than its total per-row cost, and
+it lives in two measured places: `auth_helpers.my_role()` behind an InitPlan at
+130 buffer hits and 0.67 – 0.71 ms, and the first-call SPI planning of each
+helper's internal queries.
+
+**The SPI fixed part has to be quoted per shape, because it is not a single
+number and 84,310 is not the pair.** Re-measured at two volumes, two runs each:
+
+| shape | evaluations | shared hits | fixed | marginal |
+| --- | --- | --- | --- | --- |
+| `business_member_role` alone | 42,000 | 42,441 | **441** | exactly 1.0 / row |
+| `business_member_role` alone | 84,000 | 84,441 | **441** | exactly 1.0 / row |
+| `business_member_session_valid` alone | 42,000 | 42,482 | **482** | exactly 1.0 / row |
+| `business_member_session_valid` alone | 84,000 | 84,482 | **482** | exactly 1.0 / row |
+| the pair together | 42,000 | 84,310 | **310** | ≈ 2.005 / row |
+| the pair together | 84,000 | 168,310 | **310** | ≈ 2.005 / row |
+
+All six rows are invariant across the two volumes, which is what makes the split
+legitimate. Note what 84,310 actually is: the **pair at 42,000 evaluations**. It is
+not "84,000 evaluations reporting 84,310", and 84,000 rows of the pair report
+168,310. The previous entry used the single number for a ~440 fixed part *and* an
+exactly-2.0 marginal at 84,000 rows, which is two different measurements spliced
+into one sentence: ~440 is a single helper's fixed part (441 measured), and 2.005
+is the pair's marginal. The pair's own fixed part is smaller than the sum of the
+two singles' (310 against 441 + 482) because the statement shares what they
+cached.
 
 `coupons` at 6 rows is the same shape with the numbers smaller: Planning Time
 1.33 – 1.50 ms and `auth_helpers.my_role()` 0.67 – 0.77 ms account for nearly
@@ -1147,14 +1311,14 @@ invisible next to them.
 
 ### What it projects to, and where the cliff is
 
-At 33.8 – 43.2 µs/row for the two-helper pair and 25.1 µs/row for
+At 33.8 – 35.7 µs/row for the two-helper pair and 23.8 – 25.2 µs/row for
 `can_manage_location`:
 
 | table | today | 1,000 rows | 10,000 rows | 100,000 rows |
 | --- | --- | --- | --- | --- |
-| `orders` (`can_manage_location`) | 39 rows → ~1.0 ms | ~25 ms | ~250 ms | ~2.5 s |
-| `profiles` (`can_manage_location`) | 20 rows → ~0.5 ms | ~25 ms | ~250 ms | ~2.5 s |
-| `coupons` (pair) | 6 rows → ~0.2 ms | ~34 – 43 ms | ~0.34 – 0.43 s | ~3.4 – 4.3 s |
+| `orders` (`can_manage_location`) | 39 rows → ~1.0 ms | ~24 ms | ~240 ms | ~2.4 s |
+| `profiles` (`can_manage_location`) | 20 rows → ~0.5 ms | ~24 ms | ~240 ms | ~2.4 s |
+| `coupons` (pair) | 6 rows → ~0.2 ms | ~34 – 36 ms | ~0.34 – 0.36 s | ~3.4 – 3.6 s |
 | `business_hours` (pair) | **0 on reads, ever** | 0 on reads | 0 on reads | 0 on reads |
 
 **The cliff is `orders` at around 10,000 rows.** It is the only table in this set
