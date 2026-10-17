@@ -14,7 +14,7 @@ import { compositeOver, contrast } from "@/test-utils/contrast";
 // cambia en el CSS y no acá, la spec sigue midiendo el valor viejo y deja de
 // proteger nada. `tokenContrast.test.ts` falla si alguno de estos hex se mueve.
 const TOKENS = {
-	rolePrimary: "#371949",
+	rolePrimary: "#27123A",
 	roleSecondary: "#DCCBF5",
 	roleDarkBg: "#121212",
 	roleBackground: "#FAF9F7",
@@ -69,8 +69,8 @@ describe("hero de /for-business: los proof numbers sobre el fondo oscuro", () =>
 
 		expect(before).toBeLessThan(AA_LARGE_AND_UI);
 		expect(after).toBeGreaterThanOrEqual(AA_TEXT);
-		// 1.25:1 -> 12.40:1. Si el segundo número cambia, el arreglo se movió.
-		expect(before).toBeCloseTo(1.25, 1);
+		// 1.10:1 -> 12.40:1. Si el segundo número cambia, el arreglo se movió.
+		expect(before).toBeCloseTo(1.10, 1);
 		expect(after).toBeCloseTo(12.4, 1);
 	});
 

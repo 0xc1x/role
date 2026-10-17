@@ -2,6 +2,7 @@ import {
 	ANNOUNCEMENTS_DEFAULT_MODE,
 	expect,
 	getServedHtml,
+	gotoHydrated,
 	setAnnouncementsMode,
 	test,
 } from "./fixtures";
@@ -40,6 +41,34 @@ test.describe("server-rendered landing", () => {
 		// reliable SSR witness.
 		expect(html).toContain("La comida que sobra no tiene que perderse.");
 		expect(html).toContain("Recoges el mismo día.");
+	});
+
+	test("GET / hydrates without a React mismatch", async ({ page }) => {
+		const hydrationErrors: string[] = [];
+		page.on("pageerror", (error) => {
+			if (error.message.includes("Hydration failed")) {
+				hydrationErrors.push(error.message);
+			}
+		});
+
+		await gotoHydrated(page, "/");
+
+		expect(hydrationErrors).toEqual([]);
+	});
+
+	test("metric pages hydrate without a React mismatch", async ({ page }) => {
+		const hydrationErrors: string[] = [];
+		page.on("pageerror", (error) => {
+			if (error.message.includes("Hydration failed")) {
+				hydrationErrors.push(error.message);
+			}
+		});
+
+		for (const path of ["/about", "/for-business"]) {
+			await gotoHydrated(page, path);
+		}
+
+		expect(hydrationErrors).toEqual([]);
 	});
 
 	test("GET / serves the document landmarks a crawler and a screen reader need", async ({

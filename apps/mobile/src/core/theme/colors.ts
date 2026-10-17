@@ -175,11 +175,11 @@ export interface ColorTokens {
 }
 
 const light: ColorTokens = {
-	primary: "#371949",
+	primary: "#27123A",
 	primaryForeground: "#FFFFFF",
 	secondary: "#DCCBF5",
-	secondaryForeground: "#371949",
-	accent: "#311743",
+	secondaryForeground: "#27123A",
+	accent: "#271338",
 	accentForeground: "#FFFFFF",
 
 	background: "#FBFAFD",
@@ -265,7 +265,7 @@ const light: ColorTokens = {
 	purpleLightForeground: "#FFFFFF",
 	purpleDeep: "#6D28D9",
 
-	chart1: "#371949",
+	chart1: "#27123A",
 	chart2: "#B582E4",
 	chart3: "#B1CDB6",
 	chart4: "#2D4142",
@@ -275,7 +275,7 @@ const light: ColorTokens = {
 	navyDeep: "#1D1030",
 	navyDark: "#170D28",
 	shadow: "#00000014",
-	cardShadow: "#3719490A",
+	cardShadow: "#27123A0A",
 	scrim: "#000000",
 	onMedia: "#FFFFFF",
 	ink: "#1A1A18",
@@ -287,8 +287,8 @@ const dark: ColorTokens = {
 	primary: "#B582E4",
 	primaryForeground: "#1A1A18",
 	secondary: "#DCCBF5",
-	secondaryForeground: "#371949",
-	accent: "#311743",
+	secondaryForeground: "#27123A",
+	accent: "#271338",
 	accentForeground: "#FFFFFF",
 
 	background: "#121212",

@@ -224,14 +224,14 @@ test("the explore tip bulb glyph is non-text and clears 3:1 on its circle", () =
 
 test("the landing hero keeps the decorative amber because it is already compliant there", () => {
 	// The one `colors.warning` text foreground left in the app, and it must stay:
-	// the hero word sits on `colors.primary` (#371949) at h1/24px/800, which is
-	// WCAG large text, so the floor is 3:1 and the amber measures 7.00:1.
-	// `warningText` would drop it to 2.90:1 — migrating this site would be a
-	// regression. Asserted so the allowlist entry in the purity guard is a
-	// measurement, not a claim.
-	expect(contrast(light.warning, light.primary)).toBeCloseTo(6.996, 2);
+	// the hero word sits on `colors.primary` (#27123A) at h1/24px/800, which is
+	// WCAG large text, so the floor is 3:1 and the amber measures 7.92:1.
+	// `warningText` is also above the large-text floor after the brand palette
+	// update, but the hero intentionally keeps the decorative amber token. The
+	// allowlist entry in the purity guard is a measurement, not a claim.
+	expect(contrast(light.warning, light.primary)).toBeCloseTo(7.925, 2);
 	expect(contrast(light.warning, light.primary)).toBeGreaterThanOrEqual(3);
-	expect(contrast(light.warningText, light.primary)).toBeLessThan(3);
+	expect(contrast(light.warningText, light.primary)).toBeCloseTo(3.287, 2);
 });
 
 test("the order action labels clear AA on their own fills in both schemes", () => {

@@ -14,7 +14,6 @@ import {
 import { BRAND_TARGETS } from "../manifest";
 import {
 	BRAND_ACCENT,
-	BRAND_ACCENT_LIGHT,
 	BRAND_ASSET_VERSION,
 	BRAND_CREAM,
 	BRAND_PAPER,
@@ -24,7 +23,9 @@ import {
 import {
 	WORDMARK_INNER,
 	WORDMARK_MONO_INNER,
+	WORDMARK_MONO_RENDER_INNER,
 	WORDMARK_MONO_SVG,
+	WORDMARK_RENDER_INNER,
 	WORDMARK_SVG,
 	WORDMARK_VIEWBOX,
 	WORDMARK_WHITE_INNER,
@@ -56,10 +57,10 @@ describe("brand single source of truth", () => {
 		expect(icon).toContain(`viewBox="${ICON_VIEWBOX}"`);
 		expect(wordmark).toContain(`viewBox="${WORDMARK_VIEWBOX}"`);
 		expect(wordmark).toContain(WORDMARK_INNER.slice(0, 80));
-		// icon.ts carries the transparent treatment: same viewBox, cream
-		// background rect removed, artwork kept.
-		expect(ICON_INNER).not.toContain("#FCFBF3");
-		expect(ICON_INNER).toContain("#311743");
+		// icon.ts carries the transparent treatment: same viewBox, any cream
+		// background removed, artwork kept.
+		expect(ICON_INNER).not.toContain(BRAND_CREAM);
+		expect(ICON_INNER).toContain("rgb(39,19,56)");
 		expect(ICON_SVG).toContain(ICON_VIEWBOX);
 		expect(WORDMARK_SVG).toContain(WORDMARK_VIEWBOX);
 	});
@@ -92,19 +93,15 @@ describe("brand single source of truth", () => {
 		expect(y).toBeGreaterThanOrEqual(0);
 		expect(x + w).toBeLessThanOrEqual(1024);
 		expect(y + h).toBeLessThanOrEqual(1024);
-		// Tile and counter punch (BRAND_PRIMARY_DARK) are dropped: the mark
-		// sits directly on the host background.
-		expect(MARK_FULL_INNER).not.toContain(BRAND_PRIMARY_DARK);
-		// Sparkles keep their brand fill; the R tints through currentColor.
-		expect(MARK_FULL_INNER).toContain(BRAND_ACCENT_LIGHT);
+		// The tile is dropped: the mark sits directly on the host background.
+		expect(MARK_FULL_INNER).not.toContain("rgb(39,19,56)");
+		// The R tints through currentColor.
 		expect(MARK_FULL_INNER).toContain("currentColor");
 		expect(MARK_FULL_SVG).toContain(MARK_FULL_VIEWBOX);
 	});
 
 	test("white wordmark maps every fill to paper", () => {
-		expect(WORDMARK_WHITE_INNER).not.toContain("#371949");
-		expect(WORDMARK_WHITE_INNER).not.toContain("#B582E4");
-		expect(WORDMARK_WHITE_INNER).not.toContain("#CD9DFA");
+		expect(WORDMARK_WHITE_INNER).not.toContain("rgb(39,18,58)");
 		expect(WORDMARK_WHITE_INNER).toContain(BRAND_PAPER);
 		expect(WORDMARK_WHITE_SVG).toContain(WORDMARK_VIEWBOX);
 	});
@@ -112,7 +109,13 @@ describe("brand single source of truth", () => {
 	test("monochrome wordmark uses only currentColor", () => {
 		expect(WORDMARK_MONO_INNER).toContain("currentColor");
 		expect(WORDMARK_MONO_INNER).not.toMatch(/#[0-9A-Fa-f]{6}/);
+		expect(WORDMARK_MONO_RENDER_INNER).toContain("scale(0.8)");
 		expect(WORDMARK_MONO_SVG).toContain(WORDMARK_VIEWBOX);
+	});
+
+	test("runtime wordmark adds optical breathing room without changing the source artwork", () => {
+		expect(WORDMARK_RENDER_INNER).toContain("scale(0.8)");
+		expect(WORDMARK_RENDER_INNER).toContain(WORDMARK_INNER.slice(0, 80));
 	});
 
 	test("manifest lists every generated destination", () => {
@@ -120,6 +123,7 @@ describe("brand single source of truth", () => {
 		for (const f of [
 			"apps/admin/public/icon.svg",
 			"apps/landing/public/icon.svg",
+			"apps/landing/public/og.svg",
 			"apps/mobile/assets/svgs/role_wordmark.svg",
 			"apps/landing/public/wordmark.svg",
 			"apps/admin/public/wordmark.svg",

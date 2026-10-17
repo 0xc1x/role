@@ -26,7 +26,7 @@ import type { ThemeScheme } from "./colors";
  *
  * Palette refs (light): surfaceMuted #F2EFF7, infoSurface #F0FDFA,
  * chart3 #B1CDB6.
- * Palette refs (dark): surfaceMuted #2E2A38, accent #311743,
+ * Palette refs (dark): surfaceMuted #2E2A38, accent #271338,
  * chart4 #2D4142.
  */
 export const MAP_STYLE_NO_POI: MapStyleElement[] = [
@@ -113,12 +113,12 @@ export const MAP_STYLE_NO_POI_DARK: MapStyleElement[] = [
 	{
 		featureType: "landscape.natural",
 		elementType: "geometry",
-		stylers: [{ color: "#311743" }],
+		stylers: [{ color: "#271338" }],
 	},
 	{
 		featureType: "poi.park",
 		elementType: "geometry",
-		stylers: [{ color: "#311743" }],
+		stylers: [{ color: "#271338" }],
 	},
 	// Water in dark slate-teal — readable against dark blocks.
 	{

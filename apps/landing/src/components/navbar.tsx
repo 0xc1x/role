@@ -118,11 +118,10 @@ export function Navbar({ children }: { children?: ReactNode }) {
 				// que le pasen el color por prop. El `group` va acá, en el `<header>`,
 				// para que el estado de la navbar alcance a toda su descendencia.
 				data-solid={headerSolid}
-				className={`group fixed inset-x-0 top-0 z-50 border-b ${open ? "transition-none" : "transition-all duration-500"} ${
-					headerSolid
-						? "border-role-border/40 bg-white shadow-soft"
-						: "border-white/10 bg-transparent backdrop-blur-[15px]"
-				}`}
+				className={`group fixed inset-x-0 top-0 z-50 border-b ${open ? "transition-none" : "transition-all duration-500"} ${headerSolid
+					? "border-role-border/40 bg-white shadow-soft"
+					: "border-white/10 bg-transparent backdrop-blur-[15px]"
+					}`}
 			>
 				<div className="mx-auto w-full max-w-6xl">
 					<div className="flex h-14 items-center justify-between px-4 md:h-16 md:px-5">
@@ -133,7 +132,7 @@ export function Navbar({ children }: { children?: ReactNode }) {
 						>
 							{/* Crossfade: wordmark mono en blanco sobre el hero oscuro,
 							    color de marca al pasar a navbar sólida. */}
-							<span className="relative block h-9 md:h-10">
+							<span className="relative block h-8 md:h-7">
 								<Wordmark
 									className={`h-full w-auto transition-opacity duration-500 ${headerSolid ? "opacity-100" : "opacity-0"}`}
 								/>
@@ -156,15 +155,14 @@ export function Navbar({ children }: { children?: ReactNode }) {
 									<Link
 										key={item.href}
 										to={item.href}
-										className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 ${
-											solid
-												? isActive
-													? "bg-role-primary-soft text-role-primary"
-													: "text-role-muted-foreground hover:bg-role-muted/60 hover:text-role-foreground"
-												: isActive
-													? "bg-white/15 text-white backdrop-blur-sm"
-													: "text-white/80 hover:bg-white/10 hover:text-white"
-										}`}
+										className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 ${solid
+											? isActive
+												? "bg-role-primary-soft text-role-primary"
+												: "text-role-muted-foreground hover:bg-role-muted/60 hover:text-role-foreground"
+											: isActive
+												? "bg-white/15 text-white backdrop-blur-sm"
+												: "text-white/80 hover:bg-white/10 hover:text-white"
+											}`}
 									>
 										{item.label}
 									</Link>
@@ -176,11 +174,10 @@ export function Navbar({ children }: { children?: ReactNode }) {
 							<Button
 								variant="brand"
 								render={<a href={storeLink} aria-label="Consigue la app" />}
-								className={`hidden rounded-full px-5 py-2 text-sm font-semibold active:scale-[0.98] md:inline-flex ${
-									solid
-										? ""
-										: "bg-white text-role-primary shadow-dark-glow hover:bg-white/90 hover:text-role-primary"
-								}`}
+								className={`hidden rounded-full px-5 py-2 text-sm font-semibold active:scale-[0.98] md:inline-flex ${solid
+									? ""
+									: "bg-white text-role-primary shadow-dark-glow hover:bg-white/90 hover:text-role-primary"
+									}`}
 							>
 								Consigue la app
 							</Button>
@@ -256,11 +253,10 @@ export function Navbar({ children }: { children?: ReactNode }) {
 										<Link
 											to={item.href}
 											onClick={() => setOpen(false)}
-											className={`block rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
-												isActive
-													? "bg-role-primary-soft text-role-primary"
-													: "text-role-muted-foreground hover:bg-role-muted hover:text-role-foreground"
-											}`}
+											className={`block rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${isActive
+												? "bg-role-primary-soft text-role-primary"
+												: "text-role-muted-foreground hover:bg-role-muted hover:text-role-foreground"
+												}`}
 										>
 											{item.label}
 										</Link>

@@ -26,7 +26,7 @@
         }
       },
       "adaptiveIcon": {
-        "backgroundColor": "#311743",
+        "backgroundColor": "#271338",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -47,8 +47,8 @@
       "name": "Rolé — Rescata Comida",
       "shortName": "Rolé",
       "description": "Rescata comida deliciosa de restaurantes y negocios locales a precios increíbles. Pickup-only y cero desperdicio.",
-      "themeColor": "#311743",
-      "backgroundColor": "#311743",
+      "themeColor": "#271338",
+      "backgroundColor": "#271338",
       "lang": "es"
     },
     "plugins": [
@@ -60,7 +60,7 @@
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#311743"
+          "backgroundColor": "#271338"
         }
       ],
       "expo-notifications",

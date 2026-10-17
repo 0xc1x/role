@@ -75,7 +75,7 @@ export default function ConsumerHomeScreen() {
 				]}
 			>
 				<LocationSelector />
-				<Logo width={100} height={50} />
+				<Logo width={75} height={40} />
 			</View>
 			{pull.indicator}
 			<ScrollView

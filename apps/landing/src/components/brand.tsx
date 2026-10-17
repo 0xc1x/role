@@ -11,8 +11,8 @@ import {
 	MARK_R_D,
 	MARK_R_TRANSFORM,
 	MARK_R_VIEWBOX,
-	WORDMARK_INNER,
-	WORDMARK_MONO_INNER,
+	WORDMARK_MONO_RENDER_INNER,
+	WORDMARK_RENDER_INNER,
 	WORDMARK_VIEWBOX,
 } from "@0xc1x/role-commons";
 
@@ -35,7 +35,7 @@ export function Wordmark({
 			focusable={false}
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: trusted static brand asset compiled from packages/commons/src/brand
 			dangerouslySetInnerHTML={{
-				__html: mono ? WORDMARK_MONO_INNER : WORDMARK_INNER,
+				__html: mono ? WORDMARK_MONO_RENDER_INNER : WORDMARK_RENDER_INNER,
 			}}
 			{...props}
 		/>

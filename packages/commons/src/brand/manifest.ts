@@ -7,12 +7,13 @@ export interface BrandTarget {
 	/** Repo-relative destination, e.g. `apps/admin/public/icon.svg`. */
 	file: string;
 	/** Which canonical asset this file carries. */
-	treatment: "transparent-icon" | "wordmark-file";
+	treatment: "transparent-icon" | "wordmark-file" | "og-card";
 }
 
 export const BRAND_TARGETS: BrandTarget[] = [
 	{ file: "apps/admin/public/icon.svg", treatment: "transparent-icon" },
 	{ file: "apps/landing/public/icon.svg", treatment: "transparent-icon" },
+	{ file: "apps/landing/public/og.svg", treatment: "og-card" },
 	{
 		file: "apps/mobile/assets/svgs/role_wordmark.svg",
 		treatment: "wordmark-file",

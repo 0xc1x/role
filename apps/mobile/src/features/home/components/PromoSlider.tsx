@@ -295,8 +295,8 @@ function PromoCard({ item }: { item: PromoSlide }) {
 					<Button
 						onPress={handleCtaPress}
 						size="sm"
-						// secondary (#DCCBF5 / texto #371949): default (primary #371949)
-						// se fundiría con el fondo accent #311743 en light.
+						// secondary (#DCCBF5 / texto #27123A): default (primary #27123A)
+						// se fundiría con el fondo accent #271338 en light.
 						variant="secondary"
 						style={[
 							item.buttonColor ? { backgroundColor: item.buttonColor } : null,

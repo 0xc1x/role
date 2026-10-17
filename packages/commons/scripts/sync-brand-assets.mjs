@@ -14,9 +14,9 @@
  *     through). Surfaces requiring opacity (apple-touch) flatten on cream
  *     at PNG time.
  *   packages/commons/src/brand/mark.ts (MARK_R_* lone glyph + MARK_FULL_*
- *     transparent logo mark: sparkles + R, tile removed, R on currentColor).
- *   apps/admin/public/{icon,wordmark}.svg (icon = transparent treatment)
- *   apps/landing/public/{icon,wordmark}.svg (icon = transparent treatment)
+ *     transparent logo mark: R, tile removed, R on currentColor).
+ *   apps/admin/public/{icon,wordmark}.svg
+ *   apps/landing/public/{icon,wordmark}.svg + og.svg
  *   apps/mobile/assets/svgs/role_wordmark.svg
  *
  * Usage:
@@ -25,8 +25,8 @@
  *   bun run brand:check           # verify every generated file matches (CI)
  *
  * After sync: rebuild commons + apps. Mobile launcher icons need an EAS
- * rebuild. Legacy `favicon.ico` files and `og.png` cards are NOT regenerated
- * (one-time external tools); modern browsers already use `icon.svg`.
+ * rebuild. Pass `--png` to regenerate raster icons, favicons, splash screens
+ * and the landing share card.
  */
 import {
 	existsSync,
@@ -118,11 +118,55 @@ export const ${upper}_SVG = \`\<svg xmlns="http://www.w3.org/2000/svg" viewBox="
 `;
 }
 
+/** Return the authored fill, whether it is an attribute or a CSS declaration. */
+function pathFill(tag) {
+	const attr = tag.match(/\bfill="([^"]+)"/i);
+	if (attr) return attr[1];
+	return tag.match(/\bfill\s*:\s*([^;\"]+)/i)?.[1]?.trim() ?? null;
+}
+
+function isWhiteFill(tag) {
+	const fill = pathFill(tag)?.toLowerCase().replace(/\s+/g, "");
+	return fill === "#fff" || fill === "#ffffff" || fill === "white" || fill === "rgb(255,255,255)";
+}
+
+/**
+ * Extract paths together with the transforms authored by their parent groups.
+ * Design exports commonly place the transform on a containing `<g>` rather
+ * than on the path itself, so looking only at path attributes loses geometry.
+ */
+function pathRecords(inner) {
+	const records = [];
+	const stack = [];
+	const tokenRe = /<\/?g\b[^>]*>|<path\b[^>]*\/>/gi;
+	for (const match of inner.matchAll(tokenRe)) {
+		const tag = match[0];
+		if (/^<g\b/i.test(tag)) {
+			stack.push(tag.match(/\btransform="([^"]+)"/i)?.[1] ?? null);
+			continue;
+		}
+		if (/^<\/g\b/i.test(tag)) {
+			stack.pop();
+			continue;
+		}
+		const d = tag.match(/\bd="([^"]+)"/i)?.[1];
+		if (!d) continue;
+		const ownTransform = tag.match(/\btransform="([^"]+)"/i)?.[1] ?? null;
+		const transform = [...stack, ownTransform].filter(Boolean).join(" ") || null;
+		records.push({ tag, d, transform });
+	}
+	return records;
+}
+
+function transformedPathSvg(asset, record, fill) {
+	const transform = record.transform ? ` transform="${record.transform}"` : "";
+	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${asset.viewBox}"><path d="${record.d}" fill="${fill}"${transform}/></svg>`;
+}
+
 /**
  * Standalone R mark: the single white-filled path of the icon, reframed to a
- * tight padded viewBox so it fills its space (the full tile keeps sparkles on
- * its right side, which the lone mark must not inherit). Recolorable per app:
- * components default the fill to BRAND_PRIMARY and accept any `fill` override.
+ * tight padded viewBox so it fills its space. Recolorable per app: components
+ * default the fill to BRAND_PRIMARY and accept any `fill` override.
  */
 /**
  * Alpha bounding box of a raw 4-channel rasterization: the inked pixels.
@@ -156,65 +200,38 @@ function padViewBox({ minx, maxx, miny, maxy }, info) {
 }
 
 async function buildMark(sharp, asset) {
-	// Lone R = the single white-filled path. Attribute order is irrelevant;
-	// the authored transform is intentionally dropped: the tight padded
-	// viewBox below reframes the raw path so it fills its space.
-	const tags = [...asset.inner.matchAll(/<path\b[^>]*\/>/g)].map((m) => m[0]);
-	const whites = tags.filter((t) => /fill="#[Ff]{6}"/.test(t));
+	// Lone R = the single white-filled path. Keep transforms from containing
+	// groups because design tools commonly export them there.
+	const whites = pathRecords(asset.inner).filter((record) => isWhiteFill(record.tag));
 	if (whites.length !== 1)
 		throw new Error(
 			`mark extraction: expected exactly 1 white path, found ${whites.length}`,
 		);
-	const d = whites[0].match(/d="([^"]+)"/)[1];
-	const transform = null; // reframed viewBox replaces the authored transform
-	const svg =
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${asset.viewBox}">` +
-		`<path d="${d}" fill="#ffffff"/></svg>`;
+	const { d, transform } = whites[0];
+	const svg = transformedPathSvg(asset, whites[0], "#ffffff");
 	const { data, info } = await sharp(Buffer.from(svg))
 		.raw()
 		.toBuffer({ resolveWithObject: true });
 	return {
 		viewBox: padViewBox(alphaBBox(data, info), info),
 		d,
-		transform: transform ?? null,
+		transform,
 	};
 }
 
 /**
- * Full logo mark: the canonical icon minus every BRAND_PRIMARY_DARK path
- * (the tile and its counter punch), so the artwork is transparent. Keeps the
- * authored R transform and the sparkles exactly as composed, then reframes to
- * a tight padded viewBox so it fills its space. The R is remapped to
- * currentColor (apps tint it through a text color class); the sparkles keep
- * their BRAND_ACCENT_LIGHT fill.
+ * Full logo mark: the canonical icon without its background tile, so the
+ * artwork is transparent. The R is remapped to currentColor so apps tint it
+ * through a text color class.
  */
-async function buildMarkFull(sharp, asset, tokens) {
-	const tags = [...asset.inner.matchAll(/<path\b[^>]*\/>/g)].map((t) => t[0]);
-	const kept = tags.filter(
-		(t) => !t.includes(`fill="${tokens.BRAND_PRIMARY_DARK}"`),
-	);
-	const whites = kept.filter((t) => /fill="#[Ff]{6}"/.test(t));
-	if (whites.length !== 1)
-		throw new Error(
-			`mark-full extraction: expected exactly 1 white path, found ${whites.length}`,
-		);
-	const accents = kept.filter((t) =>
-		t.includes(`fill="${tokens.BRAND_ACCENT_LIGHT}"`),
-	);
-	if (accents.length < 1)
-		throw new Error(
-			`mark-full extraction: expected at least 1 sparkle (${tokens.BRAND_ACCENT_LIGHT})`,
-		);
-	const inner = kept
-		.map((t) => t.replace(/fill="#[Ff]{6}"/, 'fill="currentColor"'))
-		.join("\n");
-	const svg =
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${asset.viewBox}">` +
-		`${inner}</svg>`;
-	const { data, info } = await sharp(Buffer.from(svg))
-		.raw()
-		.toBuffer({ resolveWithObject: true });
-	return { viewBox: padViewBox(alphaBBox(data, info), info), inner };
+async function buildMarkFull(asset, mark) {
+	const inner = transformedPathSvg(asset, {
+		d: mark.d,
+		transform: mark.transform,
+	}, "currentColor")
+		.replace(/^<svg[^>]*>|<\/svg>$/g, "")
+		.trim();
+	return { viewBox: mark.viewBox, inner };
 }
 
 function codegenMarkModule(mark, markFull) {
@@ -224,76 +241,93 @@ function codegenMarkModule(mark, markFull) {
 export const MARK_R_VIEWBOX = ${JSON.stringify(mark.viewBox)};
 export const MARK_R_D = ${JSON.stringify(mark.d)};
 export const MARK_R_TRANSFORM = ${JSON.stringify(mark.transform)};
-// Full logo mark (sparkles + R) with the dark tile removed, reframed to fill
-// its space. The R inherits currentColor; the sparkles keep BRAND_ACCENT_LIGHT.
+// Full logo mark with the dark tile removed, reframed to fill its space. The R
+// inherits currentColor.
 export const MARK_FULL_VIEWBOX = ${JSON.stringify(markFull.viewBox)};
 export const MARK_FULL_INNER = ${JSON.stringify(markFull.inner)};
 export const MARK_FULL_SVG = \`\<svg xmlns="http://www.w3.org/2000/svg" viewBox="\${MARK_FULL_VIEWBOX}">\${MARK_FULL_INNER}</svg>\`;
 `;
 }
 
+function replaceFills(inner, color) {
+	return inner
+		.replace(/\bfill="[^"]+"/gi, `fill="${color}"`)
+		.replace(/\bfill\s*:\s*[^;\"]+/gi, `fill:${color}`);
+}
+
 /** White wordmark variant for dark surfaces (boot splash, app splashes). */
 function whiteInner(inner, paper) {
-	let out = inner;
-	for (const fill of ["#371949", "#B582E4", "#CD9DFA"]) {
-		out = out.split(`fill="${fill}"`).join(`fill="${paper}"`);
-	}
-	return out;
+	return replaceFills(inner, paper);
 }
 
 /** Monochrome wordmark variant: every fill becomes currentColor so each app
  *  tints it with a text color class (e.g. admin sidebar foreground). */
 function monoInner(inner) {
-	return whiteInner(inner, "currentColor");
+	return replaceFills(inner, "currentColor");
+}
+
+/**
+ * The new wordmark's artwork reaches the edge of its design viewBox. The old
+ * wordmark carried optical breathing room in the artwork itself, so rendering
+ * both at the same CSS height made the new one look oversized everywhere.
+ * Keep the canonical SVG untouched and add the shared presentation treatment
+ * to every runtime consumer instead.
+ */
+const WORDMARK_OPTICAL_SCALE = 0.8;
+
+function layoutInner(inner, viewBox) {
+	const [, , width, height] = viewBox.split(" ").map(Number);
+	const cx = width / 2;
+	const cy = height / 2;
+	const transform = `translate(${cx} ${cy}) scale(${WORDMARK_OPTICAL_SCALE}) translate(${-cx} ${-cy})`;
+	return `<g transform="${transform}">${inner}</g>`;
+}
+
+function buildOgSvg(wordmark, paper) {
+	const white = whiteInner(wordmark.inner, paper);
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#1b1210"/>
+  <circle cx="1050" cy="60" r="300" fill="#B582E4" opacity="0.35"/>
+  <circle cx="120" cy="600" r="320" fill="#6D28D9" opacity="0.18"/>
+  <svg x="120" y="90" width="430" height="158" viewBox="${wordmark.viewBox}" preserveAspectRatio="xMinYMin meet">${white}</svg>
+  <text x="120" y="455" font-family="Outfit, Arial, sans-serif" font-size="30" font-weight="500" fill="#ffffff" opacity="0.8">Rescata comida deliciosa a precio increíble</text>
+  <text x="120" y="520" font-family="Outfit, Arial, sans-serif" font-size="64" font-weight="800" fill="#ffffff">Comida deliciosa. Mitad de precio.</text>
+  <text x="120" y="590" font-family="Outfit, Arial, sans-serif" font-size="64" font-weight="800" fill="#ffffff">Cero desperdicio.</text>
+</svg>\n`;
 }
 
 function codegenWordmarkModule(asset, white, mono) {
 	const upper = "WORDMARK";
+	const layout = layoutInner(asset.inner, asset.viewBox);
+	const layoutWhite = layoutInner(white, asset.viewBox);
+	const layoutMono = layoutInner(mono, asset.viewBox);
 	return `// DO NOT EDIT — generated by \`bun run brand:sync\` from \`src/brand/assets/wordmark.svg\`.
 // Canonical artwork lives in that SVG file; this module is its compiled form.
 // WHITE_* is the same artwork mapped to paper for dark surfaces.
 // MONO_* maps every fill to currentColor so apps tint it with text classes.
 export const ${upper}_VIEWBOX = ${JSON.stringify(asset.viewBox)};
 export const ${upper}_INNER = ${JSON.stringify(asset.inner)};
-export const ${upper}_SVG = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="\${${upper}_VIEWBOX}">\${${upper}_INNER}</svg>\`;
+// RENDER_* adds the shared optical padding used by UI consumers. The raw
+// INNER/SVG source remains available for exact asset exports.
+export const ${upper}_RENDER_INNER = ${JSON.stringify(layout)};
+export const ${upper}_SVG = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="\${${upper}_VIEWBOX}">\${${upper}_RENDER_INNER}</svg>\`;
 export const ${upper}_WHITE_INNER = ${JSON.stringify(white)};
-export const ${upper}_WHITE_SVG = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="\${${upper}_VIEWBOX}">\${${upper}_WHITE_INNER}</svg>\`;
+export const ${upper}_WHITE_RENDER_INNER = ${JSON.stringify(layoutWhite)};
+export const ${upper}_WHITE_SVG = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="\${${upper}_VIEWBOX}">\${${upper}_WHITE_RENDER_INNER}</svg>\`;
 export const ${upper}_MONO_INNER = ${JSON.stringify(mono)};
-export const ${upper}_MONO_SVG = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="\${${upper}_VIEWBOX}">\${${upper}_MONO_INNER}</svg>\`;
+export const ${upper}_MONO_RENDER_INNER = ${JSON.stringify(layoutMono)};
+export const ${upper}_MONO_SVG = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="\${${upper}_VIEWBOX}">\${${upper}_MONO_RENDER_INNER}</svg>\`;
 `;
 }
 
-/** Admin favicon file: white R on the dark rounded tile (no sparkles, no
- *  cream) — reads on light and dark browser tabs, like the navbar mark. */
-function adminFaviconFile(iconT, mark, tokens) {
-	const tile = [...iconT.inner.matchAll(/<path\b[^>]*\/>/g)]
-		.map((m) => m[0])
-		.find(
-			(t) =>
-				t.includes(`fill="${tokens.BRAND_PRIMARY_DARK}"`) &&
-				(t.match(/d="([^"]+)"/) || [])[1]?.length > 1000,
-		);
-	if (!tile) throw new Error("admin favicon: dark tile path not found");
-	return (
-		`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="${iconT.viewBox}">\n` +
-		`${tile}\n<path d="${mark.d}" fill="${tokens.BRAND_PAPER}"/>\n</svg>\n`
-	);
-}
-
-/** Admin favicon artwork: full mark (R + sparkles) with the R in paper,
- *  like the reference. Explicit dimensions so rasterizers size it
- *  deterministically. Pass a square `size` for ICO entries (meet-fit);
- *  omit it for the .svg file. */
-function markFaviconFile(markFull, tokens, size = null) {
-	const [x, y, w, h] = markFull.viewBox.split(" ").map(Number);
+/** Favicon artwork with explicit dimensions for deterministic rasterization. */
+function faviconFile(asset, size = null) {
+	const [, , w, h] = asset.viewBox.split(" ").map(Number);
 	const dims =
 		size == null ? `width="${w}" height="${h}"` : `width="${size}" height="${size}"`;
-	const inner = markFull.inner
-		.split('fill="currentColor"')
-		.join(`fill="${tokens.BRAND_PAPER}"`);
 	return (
-		`<svg xmlns="http://www.w3.org/2000/svg" ${dims} viewBox="${markFull.viewBox}">\n` +
-		`${inner}</svg>\n`
+		`<svg xmlns="http://www.w3.org/2000/svg" ${dims} viewBox="${asset.viewBox}">\n` +
+		`${asset.inner}</svg>\n`
 	);
 }
 
@@ -343,7 +377,7 @@ function bumpVersion(rel, version) {
 	const abs = join(root, rel);
 	const src = readFileSync(abs, "utf8");
 	const next = src.replace(
-		/(icon\.svg\?v=|favicon\.ico\?v=)\d+/g,
+		/(icon\.svg\?v=|favicon\.ico\?v=|og\.png\?v=)\d+/g,
 		`$1${version}`,
 	);
 	if (next === src) return "ok";
@@ -358,6 +392,11 @@ const wordmark = loadAsset("wordmark");
 // UI + favicons use the transparent treatment (no cream background);
 // opaque originals are kept for surfaces that require them (apple-touch).
 const iconT = transparentIcon(icon, tokens.BRAND_CREAM);
+const renderWordmark = {
+	...wordmark,
+	inner: layoutInner(wordmark.inner, wordmark.viewBox),
+};
+const ogSvg = buildOgSvg(renderWordmark, tokens.BRAND_PAPER);
 let sharp;
 try {
 	({ default: sharp } = await import("sharp"));
@@ -365,7 +404,7 @@ try {
 	throw new Error("brand:sync needs the sharp devDependency (bun install)");
 }
 const mark = await buildMark(sharp, icon);
-const markFull = await buildMarkFull(sharp, icon, tokens);
+const markFull = await buildMarkFull(icon, mark);
 const results = [];
 
 results.push([
@@ -389,9 +428,9 @@ results.push([
 ]);
 
 results.push([
-	// Admin favicon: full mark (R + sparkles) with the R in paper.
+	// Admin and landing use the canonical icon treatment.
 	"apps/admin/public/icon.svg",
-	writeOrCheck(join(root, "apps/admin/public/icon.svg"), markFaviconFile(markFull, tokens)),
+	writeOrCheck(join(root, "apps/admin/public/icon.svg"), faviconFile(iconT)),
 ]);
 results.push([
 	"apps/landing/public/icon.svg",
@@ -410,6 +449,10 @@ results.push([
 		join(root, "apps/admin/public/wordmark.svg"),
 		wordmark.file,
 	),
+]);
+results.push([
+	"apps/landing/public/og.svg",
+	writeOrCheck(join(root, "apps/landing/public/og.svg"), ogSvg),
 ]);
 results.push([
 	"apps/mobile/assets/svgs/role_wordmark.svg",
@@ -449,7 +492,10 @@ results.push([
 	const rel = "apps/mobile/public/index.html";
 	const abs = join(root, rel);
 	let html = readFileSync(abs, "utf8");
-	const white = whiteInner(wordmark.inner, tokens.BRAND_PAPER);
+	const white = layoutInner(
+		whiteInner(wordmark.inner, tokens.BRAND_PAPER),
+		wordmark.viewBox,
+	);
 	const block =
 		`    <div id="boot-splash" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:${tokens.BRAND_PRIMARY_DARK};">\n` +
 		`      <svg width="60%" height="60%" viewBox="${wordmark.viewBox}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">${white}</svg>\n` +
@@ -459,8 +505,8 @@ results.push([
 		throw new Error("boot-splash markers missing in mobile public/index.html");
 	html = `${parts[0]}<!-- brand:boot-splash:start (generated by \`bun run brand:sync\` — do not hand-edit) -->\n${block}\n    <!-- brand:boot-splash:end -->${parts[2]}`;
 	html = html.replace(
-		'<meta name="theme-color" content="#BF1C19" />',
-		`<meta name="theme-color" content="${tokens.BRAND_PRIMARY_DARK}" />`,
+		/(<meta name="theme-color" content=")[^"]+(" \/>)/,
+		`$1${tokens.BRAND_PRIMARY_DARK}$2`,
 	);
 	results.push(["apps/mobile/public/index.html:boot-splash", writeOrCheck(abs, html)]);
 	results.push([
@@ -472,7 +518,10 @@ results.push([
 	const rel = "apps/mobile/public/manifest.json";
 	const abs = join(root, rel);
 	const src = readFileSync(abs, "utf8");
-	const next = src.split("#bf1c19").join(tokens.BRAND_PRIMARY_DARK.toLowerCase());
+	const next = src.replace(
+		/("(?:background_color|theme_color)":\s*")[^"]+("\s*,?)/g,
+		`$1${tokens.BRAND_PRIMARY_DARK.toLowerCase()}$2`,
+	);
 	results.push(["apps/mobile/public/manifest.json:colors", writeOrCheck(abs, next)]);
 }
 
@@ -509,6 +558,10 @@ if (WANT_PNG && !CHECK) {
 			await pipeline.png().toFile(abs);
 			results.push([rel, "updated"]);
 		}
+		await sharp(Buffer.from(ogSvg))
+			.png()
+			.toFile(join(root, "apps/landing/public/og.png"));
+		results.push(["apps/landing/public/og.png", "updated"]);
 		const bg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><rect width="1024" height="1024" fill="${tokens.BRAND_PRIMARY_DARK}"/></svg>`;
 		await sharp(Buffer.from(bg))
 			.png()
@@ -533,7 +586,7 @@ if (WANT_PNG && !CHECK) {
 				"apps/admin/public/favicon.ico",
 				writeOrCheck(
 					join(root, "apps/admin/public/favicon.ico"),
-					await icoFrom((size) => markFaviconFile(markFull, tokens, size)),
+					await icoFrom(() => faviconFile(iconT)),
 				),
 			]);
 			const tileIco = await icoFrom(() => iconT.file);
@@ -547,7 +600,10 @@ if (WANT_PNG && !CHECK) {
 		// iOS PWA startup images: dark full-screen canvas + centered white
 		// wordmark at 60% width (sizes mirror the link tags in index.html).
 		{
-			const white = whiteInner(wordmark.inner, tokens.BRAND_PAPER);
+			const white = layoutInner(
+				whiteInner(wordmark.inner, tokens.BRAND_PAPER),
+				wordmark.viewBox,
+			);
 			const [vw, vh] = wordmark.viewBox.split(" ").slice(2).map(Number);
 			for (const [w, h] of [
 				[1320, 2868], [1290, 2796], [1206, 2622], [1179, 2556],
@@ -582,7 +638,10 @@ if (WANT_PNG && !CHECK) {
 		// in-app splash renders. The splash is the wordmark; the launcher is the
 		// icon. They are different surfaces and they should carry different art.
 		{
-			const white = whiteInner(wordmark.inner, tokens.BRAND_PAPER);
+			const white = layoutInner(
+				whiteInner(wordmark.inner, tokens.BRAND_PAPER),
+				wordmark.viewBox,
+			);
 			const [vw, vh] = wordmark.viewBox.split(" ").slice(2).map(Number);
 			const size = 1024;
 			const wmW = Math.round(size * 0.6);

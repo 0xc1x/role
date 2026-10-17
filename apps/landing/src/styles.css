@@ -116,15 +116,15 @@
 }
 
 /* Rolé brand tokens — synced with mobile light theme (apps/mobile/src/core/theme/colors.ts).
-   Brand hues follow packages/commons brand tokens (primary #371949 family). */
+   Brand hues follow packages/commons brand tokens (primary #27123A family). */
 @theme {
-  --color-role-primary: #371949;
-  --color-role-primary-deep: #311743;
+  --color-role-primary: #27123A;
+  --color-role-primary-deep: #271338;
   --color-role-primary-soft: #F1EAFB;
   --color-role-primary-hover: #2C143C;
   --color-role-primary-glow: #B582E4;
   --color-role-secondary: #DCCBF5;
-  --color-role-accent: #311743;
+  --color-role-accent: #271338;
   --color-role-background: #FAF9F7;
   --color-role-surface: #FFFFFF;
   --color-role-surface-muted: #F7F3FB;
@@ -133,7 +133,7 @@
   --color-role-foreground: #1A1A18;
   --color-role-muted-foreground: #737373;
   --color-role-border: #E5E5E5;
-  --color-role-ring: #371949;
+  --color-role-ring: #27123A;
   --color-role-success: #22C55E;
   --color-role-warning: #F59E0B;
   --color-role-star: #FACC15;
@@ -146,7 +146,7 @@
   /* Alias sin colisión con shadcn (`--color-muted` resuelve a sage en landing, oklch en admin) */
   --color-sage: #7e7391;
   --color-muted: #7e7391;
-  --color-forest: #371949;
+  --color-forest: #27123A;
   --color-forest-hover: #2c143c;
   --color-leaf: #efe7f9;
   --color-line: #d9d2e6;
@@ -434,4 +434,3 @@ html.js .reveal[data-revealed="true"] {
 .animate-float-y {
   animation: float-y 6s ease-in-out infinite;
 }
-

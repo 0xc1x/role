@@ -83,7 +83,7 @@ const ALLOWED: Record<string, AllowedSite[]> = {
 	"app/landing/index.tsx": [
 		{
 			line: "style={{ color: colors.warning }}",
-			why: "hero word on colors.primary: 7.00:1 at h1/24px/800, so the large-text 3:1 floor applies and it passes. warningText would be 2.90:1, a regression",
+			why: "hero word on colors.primary: 7.92:1 at h1/24px/800, so the large-text 3:1 floor applies and it passes; the decorative amber remains the intentional hero treatment",
 		},
 	],
 	"components/ui/alert.tsx": [
