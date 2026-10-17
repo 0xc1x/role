@@ -168,6 +168,13 @@ raise exception using
 y `P0001` es la clase genérica de Postgres. La UI necesita dos cosas distintas: el código
 para *qué hacer* y el `detail` para *qué pasó exactamente*.
 
+Los códigos que la base emite, y que la Task 4 tiene que mapear a una acción de UI:
+
+| errcode | significado | qué le dice la UI |
+| --- | --- | --- |
+| `R0001` | límite de plan alcanzado | "subí de plan", con el plan y el tope en `detail` |
+| `R0002` | el dueño no se puede desactivar ni dar de baja | "degradalo a manager primero" |
+
 - [ ] **Step 5: Cerrar los `revoke`**
 
 `20261015034230:305-307` revoca de `public, anon` y no de `authenticated`. Hoy no importa
