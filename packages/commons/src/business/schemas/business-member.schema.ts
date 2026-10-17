@@ -41,6 +41,21 @@ export const ROLE_EC_DOMAIN = "role.ec";
  * «sólo `.role.ec` sirve». Ese valor es una convención de la plataforma para no
  * gastar la reputación de envío de un dominio ajeno (§3.1), no una restricción
  * del contrato. El aviso vive en `businessMemberAliasWarnings()`.
+ *
+ * ─── NO NORMALIZA LA MAYÚSCULA, Y ESO TAMBIÉN ES UNA DECISIÓN ──────────────────
+ *
+ * `z.email()` acepta `Caja@Acme.com` y `CAJA@ACME.COM`, y las dos entran: el
+ * schema no baja la caja, porque la columna espeja `auth.users.email` —que
+ * GoTrue también trata sin distinguir mayúsculas— y un `toLowerCase()` aplicado
+ * en el contrato guardaría una cosa distinta de la que el dueño escribió, sin que
+ * nadie lo pidiera.
+ *
+ * La unicidad sí distingue: `business_members_alias_key` es UNIQUE sobre
+ * `(business_id, lower(alias))`, así que dos alias que sólo se diferencian en la
+ * caja son el MISMO alias para la base y se rechazan ahí, con un
+ * `23505 business_members_alias_key`. Quien mapea ese código a la respuesta
+ * limpia es el servicio, no este schema —y por eso hay un test que dice que las
+ * dos variantes son entradas válidas, para que nadie lea «aceptado» como «libre».
  */
 export const BusinessMemberAliasSchema = z.email();
 
@@ -84,18 +99,34 @@ export type StaffAliasWarningCode = (typeof STAFF_ALIAS_WARNING_CODES)[number];
 export const StaffAliasWarningCodeSchema = z.enum(STAFF_ALIAS_WARNING_CODES);
 
 /**
- * ¿Este alias es de una cuenta de negocio de Rolé?
+ * ¿Este alias es una cuenta de equipo de Rolé —la que la UI reconoce como
+ * «negocio»—?
  *
  * Es la condición que el §3.1 fija como SUFIJO, no como formato: la UI la usa
  * para el «¿olvvidaste tu contraseña?» del §9.1 y para el texto de «pide a tu
- * dueño que rote tu PIN». Un alias de dominio propio es una cuenta como otra y
- * tiene que poder usar el login normal.
+ * dueño que rote tu PIN».
+ *
+ * ─── EL ÁPICE FALLA HACIA AFUERA, Y POR QUÉ ──────────────────────────────────
+ *
+ * `x@role.ec` pelado NO es una cuenta de Rolé: la regla del §3.1 es literalmente
+ * el sufijo `.role.ec`, así que hace falta un subdominio. Para el aviso del §9.4
+ * eso no es un defecto sino lo correcto, porque el ápice sí recibe correo de
+ * verdad —`notificaciones@role.ec` y `negocios@role.ec` son buzones vivos—: el
+ * aviso no es ni falso ni innecesario.
+ *
+ * ─── Y EL LECTOR EQUIVOCADO DE ESTA FUNCIÓN ES UN BUG DE SEGURIDAD ─────────────
+ *
+ * **La Task 5 no puede usar esta función para bloquear el correo.** Recipiente y
+ * entregable son preguntas al revés: ella necesita «¿esta dirección recibe
+ * mensajes de verdad?», y esta función contesta «¿es una cuenta de equipo de
+ * Rolé?». Para el ápice las dos respuestas son distintas, y esta falla en la
+ * dirección que importa: `false` sobre una dirección que SÍ recibe correo deja
+ * pasar un `change-email` o un `forgot-password` que el §8 quiere bloquear. Un
+ * `isDeliverableAlias()` escrito para esa pregunta tiene que tratar el ápice
+ * como lo que es; usar esta función ahí es un agujero con forma de refactor.
  *
  * La comparación es sobre el dominio y en minúsculas: `x@a.role.ec` es de Rolé y
  * `X@A.ROLE.EC` también, porque el dominio de un correo no distingue mayúsculas.
- * Un `x@role.ec` pelado —sin subdominio— NO cuenta, porque la regla del §3.1 es
- * literalmente el sufijo `.role.ec`. El error posible es un aviso de más, que es
- * la dirección que no rompe nada.
  */
 export function isRoleEcAlias(alias: string): boolean {
 	const domain = alias.split("@")[1] ?? "";
@@ -177,8 +208,10 @@ export const CreateBusinessMemberSchema = z
 /**
  * `PATCH /businesses/:businessId/staff/:memberId`.
  *
- * Lo que se edita acá es el rol, las sucursales y la política de sesión. NO están
- * `status` ni `alias`, y no es una omisión:
+ * Lo que se edita acá es el rol, las sucursales y la política de sesión, que es
+ * exactamente lo que el §8 pone en la columna «Qué hace» de esta ruta. NO están
+ * `status`, `alias` ni `label`, y en los tres casos es una omisión y no un
+ * olvido:
  *
  *   - `status` tiene su par de rutas (`disable` / `enable`) porque desactivar es
  *     una operación distinta de editar, y su efecto —ban al `auth.users`, sesiones
@@ -188,6 +221,12 @@ export const CreateBusinessMemberSchema = z
  *   - `alias` tiene su ruta porque cambiarlo cambia `auth.users.email` y trae el
  *     aviso del §9.4, que es un dato que hay que devolver, no un campo que se
  *     pueda perder.
+ *   - `label` es el nombre con el que el dueño lo presentó, y ninguna de las nueve
+ *     rutas del §8 lo renombra: la lista de acciones del §9.2 —rotar, cambiar
+ *     sucursales, cambiar rol, editar alias, pausar, reactivar, eliminar— tampoco.
+ *     Un campo editable aquí sería una primera puerta por donde entra un cambio de
+ *     nombre que ningún cliente pidió. Agregarlo después es aditivo y no rompe
+ *     nada; inventarlo ahora afirma una capacidad que el §8 no describe.
  *
  * `.strict()` por el motivo de `email.schema.ts`: sin él, un `PATCH` con
  * `status` dentro devuelve un 200 que aparenta haber pausado a alguien y no lo
@@ -195,7 +234,6 @@ export const CreateBusinessMemberSchema = z
  */
 export const UpdateBusinessMemberSchema = z
 	.object({
-		label: z.string().min(1).optional(),
 		role: BusinessMemberRoleSchema.optional(),
 		session_ttl_hours: BusinessMemberSessionTtlHoursSchema.optional(),
 		business_location_ids: z.array(UuidSchema).optional(),
@@ -235,6 +273,12 @@ export const RotateBusinessMemberPinSchema = z.strictObject({});
  *
  * El PIN son seis dígitos porque el §3.1 dice seis, y es la cuenta del API lo
  * que hay que cambiar si algún día son otro número —no el schema en silencio.
+ *
+ * Y el ancho es un hecho COMPARTIDO, no local: `LoginRequestSchema.password` es
+ * `z.string().min(6)` y el piso de GoTrue también es 6. Un PIN de cinco dígitos
+ * pasaría este schema y fallaría en el login, en el cliente y con un error que
+ * no señala el ancho. Los tres tienen que moverse juntos, que es una razón más
+ * para que la cuenta viva acá y no repartida en tres archivos.
  */
 export const BusinessMemberDeliveryCardSchema = z
 	.object({

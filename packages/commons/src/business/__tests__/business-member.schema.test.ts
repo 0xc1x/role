@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { CREATABLE_BUSINESS_MEMBER_ROLES } from "../enums/business-member-role";
 import {
 	BusinessMemberAliasSchema,
 	BusinessMemberRoleSchema,
@@ -34,6 +35,28 @@ describe("los vocabularios de la membresía", () => {
 		// que es la palabra que usaría un lector y no una que exista.
 		expect(BusinessMemberStatusSchema.safeParse("deleted").success).toBe(false);
 		expect(BusinessMemberStatusSchema.safeParse("paused").success).toBe(false);
+	});
+
+	it("los roles que el alta ofrece son un subconjunto, y sin `owner`", () => {
+		// El §5.4 saca la transferencia de propiedad de la v1 y ninguna de las nueve
+		// rutas del §8 nombra un dueño. El formulario tiene que leer ESTA lista, no
+		// el vocabulario entero: si leyera el entero, el dueño llenaría un formulario
+		// para descubrir un 422.
+		expect([...CREATABLE_BUSINESS_MEMBER_ROLES]).not.toContain("owner");
+		for (const role of CREATABLE_BUSINESS_MEMBER_ROLES) {
+			expect(BusinessMemberRoleSchema.safeParse(role).success).toBe(true);
+			// Y cada rol ofertable tiene que ser aceptable por el alta: el subconjunto
+			// que se ofrece tiene que estar contenido en el que la API acepta, o el
+			// formulario ofrecería algo que el servicio rechaza.
+			expect(
+				CreateBusinessMemberSchema.safeParse({
+					label: "Alta ofertable",
+					role,
+					business_location_ids: [],
+				}).success,
+				role,
+			).toBe(true);
+		}
 	});
 });
 
@@ -91,6 +114,19 @@ describe("BusinessMemberAliasSchema", () => {
 		);
 		expect(BusinessMemberAliasSchema.safeParse("a@b").success).toBe(false);
 		expect(BusinessMemberAliasSchema.safeParse("a b@c.d").success).toBe(false);
+	});
+
+	it("no normaliza la caja: la unicidad la resuelve la base", () => {
+		// El esquema acepta las dos variantes y las guarda tal cual. El índice único
+		// es sobre `lower(alias)` dentro del negocio, así que las dos chocan AL
+		// guardar, con `23505 business_members_alias_key`, que es lo que el servicio
+		// traduce a conflicto. Si algún día este schema normaliza, este test cambia:
+		// no es un test de que la normalización esté mal, es el aviso de que pasó.
+		const mixed = BusinessMemberAliasSchema.parse("Caja@Acme.com");
+		expect(mixed).toBe("Caja@Acme.com");
+		expect(BusinessMemberAliasSchema.safeParse("caja@acme.com").success).toBe(
+			true,
+		);
 	});
 });
 
@@ -205,6 +241,17 @@ describe("UpdateBusinessMemberSchema", () => {
 		).toBe(false);
 		expect(
 			UpdateBusinessMemberSchema.safeParse({ alias: "caja@acme.com" }).success,
+		).toBe(false);
+	});
+
+	it("rechaza `label` tampoco: el §8 no renombra a nadie", () => {
+		// La columna existe y el alta la escribe, pero ninguna de las nueve rutas la
+		// vuelve editable y la lista de acciones del §9.2 tampoco. Un campo editable
+		// acá sería una primera puerta por donde entra un cambio de nombre que
+		// ningún cliente pidió.
+		expect(
+			UpdateBusinessMemberSchema.safeParse({ label: "Cajero nocturno" })
+				.success,
 		).toBe(false);
 	});
 });

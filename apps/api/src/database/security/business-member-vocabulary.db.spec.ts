@@ -3,12 +3,17 @@ import {
   BUSINESS_MEMBER_ROLES,
   BUSINESS_MEMBER_STATUSES,
   BusinessMemberSessionTtlHoursSchema,
+  STAFF_SESSION_REASONS,
 } from '@0xc1x/role-commons';
 import {
   createSupabaseTestDb,
   deniedAs,
   type SupabaseTestDb,
 } from '../../../test/supabase-platform';
+import {
+  businessMemberRoleEnum,
+  businessMemberStatusEnum,
+} from '../schema/business-members';
 
 /**
  * Los vocabularios de `business_members` contra los enums que los guardan.
@@ -116,44 +121,62 @@ async function enumLabels(typeName: string): Promise<string[]> {
 }
 
 /**
- * Una lista de TypeScript y una de Postgres, o un fallo que dice cuál se movió.
+ * Una lista de TypeScript y otra de la base, o un fallo que dice cuál se movió.
  *
  * El anti-vacío va primero, pero es `> 0` y no una comparación de longitudes: una
  * comparación de longitudes se dispara antes que los dos `filter`, y su mensaje
  * —«no tiene los valores que espera»— es el menos útil de los tres, porque no
  * dice de qué lado está la diferencia. La pregunta que el conteo tiene que
- * responder es otra: ¿la consulta encontró el enum? Un `[]` de verdad —el tipo
- * renombrado, una migración que no corrió— tiene que sonar distinto de una
- * discrepancia real, y por eso es su propio `expect`.
+ * responder es otra: ¿la lectura encontró algo? Un `[]` de verdad —el tipo
+ * renombrado, una migración que no corrió, un regex que dejó de matchear— tiene
+ * que sonar distinto de una discrepancia real, y por eso es su propio `expect`.
+ *
+ * `ordered: false` para las listas cuyo orden no es un dato. El de los enums SÍ lo
+ * es: `pg_enum` ordena como los escribió la migración. El de las razones de sesión
+ * no: es el orden en que aparecen en el cuerpo de una función de plpgsql, que es
+ * el orden en que se escribieron las ramas, no una jerarquía.
  */
 function assertSameVocabulary(
-  typeName: string,
+  subject: string,
   fromDatabase: readonly string[],
   fromTypeScript: readonly string[],
+  { ordered = true }: { ordered?: boolean } = {},
 ) {
   expect(
     fromDatabase.length,
-    `public.${typeName} no devolvió ningún valor: el tipo no existe con ese ` +
-      'nombre en el esquema public, o este spec se quedó viejo. Las dos cosas se ' +
-      'arreglan acá, no aflojando la comparación.',
+    `${subject} no devolvió ningún valor: el enum no existe con ese nombre en el ` +
+      'esquema public, la función no está donde se la busca, el patrón dejó de ' +
+      'matchear, o este spec se quedó viejo. Eso se arregla acá, no aflojando la ' +
+      'comparación.',
   ).toBeGreaterThan(0);
 
   expect(
     fromTypeScript.filter((value) => !fromDatabase.includes(value)),
-    `TypeScript tiene un valor que public.${typeName} no: la API lo puede pedir ` +
-      'y la columna no lo puede guardar.',
+    `TypeScript tiene un valor que ${subject} no: la API lo puede pedir y la base ` +
+      'no lo puede guardar.',
   ).toEqual([]);
 
   expect(
     fromDatabase.filter((value) => !fromTypeScript.includes(value)),
-    `public.${typeName} tiene un valor que TypeScript no: no se puede pedir, no ` +
-      'se puede pintar y el tipo no lo conoce. La base manda acá —el schema es ' +
-      'la copia que hay que mover, no la base.',
+    `${subject} tiene un valor que TypeScript no: no se puede pedir, no se puede ` +
+      'pintar y el tipo no lo conoce. La base manda acá —el schema es la copia que ' +
+      'hay que mover, no la base.',
   ).toEqual([]);
+
+  // El conteo igual, después de los `filter`: con las dos listas ya comparadas
+  // como conjuntos, la única diferencia que queda es un valor repetido, que en un
+  // enum no puede pasar y en un cuerpo de función sí.
+  expect(
+    fromDatabase.length,
+    `${subject} y el catálogo de TypeScript tienen los mismos valores y distinto ` +
+      'número de entradas: hay un repetido en alguno de los dos lados.',
+  ).toBe(fromTypeScript.length);
+
+  if (!ordered) return;
 
   expect(
     fromDatabase,
-    `el orden de public.${typeName} no es el del catálogo de TypeScript`,
+    `el orden de ${subject} no es el del catálogo de TypeScript`,
   ).toEqual([...fromTypeScript]);
 }
 
@@ -355,5 +378,91 @@ describe('el `session_ttl_hours >= 0` de la base y el del schema son el mismo', 
     expect(rows[0]?.role).toBe('staff');
     expect(rows[0]?.status).toBe('active');
     expect(rows[0]?.session_ttl_hours).toBe(24);
+  });
+});
+
+describe('las razones de sesión son las que el cuerpo de la función devuelve', () => {
+  test('business_member_session_state y STAFF_SESSION_REASONS', async () => {
+    // ─── POR QUÉ SE PARSEA EL CUERPO Y NO SE LLAMA A LA FUNCIÓN ────────────────
+    //
+    // Porque no se puede llamar: el RPC lee `auth.uid()`, y esta sesión no es
+    // nadie. La enumeración vive en el `prosrc`, que es donde vive de verdad: son
+    // literales dentro de un `jsonb_build_object` y tres `v_reason := '...'`. Es
+    // la misma lectura por texto que hace `plan-limits.db.spec.ts` con los casos
+    // del `case v_plan`, y por el mismo motivo: comparar sin ejecutar.
+    //
+    // ─── POR QUÉ HAY QUE LEER DOS FORMAS Y NO UNA ─────────────────────────────
+    //
+    // Porque la función escribe la razón de dos maneras distintas, y un patrón que
+    // entendiera una leería tres de seis y lo reportaría como una discrepancia
+    // del catálogo en vez de como lo que es —un patrón que no conoce una forma
+    // del SQL que el motor sí—:
+    //
+    //     jsonb_build_object(..., 'reason', 'disabled', ...)   ← tres ramas
+    //     v_reason := 'ok';                                    ← las otras tres
+    //
+    // La clave `'reason', v_reason` del `return` final NO es una razón y no se
+    // captura: no lleva literal al lado, que es justo lo que exige el patrón.
+    //
+    // Y `'active'` / `'disabled'` aparecen también en los predicados de `status`,
+    // que no son razones. Por eso el patrón exige el prefijo —`v_reason :=` o
+    // `'reason',`— y no cualquier cadena entre comillas del cuerpo.
+    const [body] = plainRows<{ prosrc: string }>(
+      await ctx.sql.unsafe(`
+        select p.prosrc
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public'
+           and p.proname = 'business_member_session_state'`),
+    );
+
+    expect(
+      body?.prosrc,
+      'no se encontró el cuerpo de business_member_session_state. Sin él este ' +
+        'archivo no lee de dónde salen las razones, y el test pasa por no haber ' +
+        'leído nada.',
+    ).toBeString();
+
+    const reasons = [
+      ...(body?.prosrc ?? '').matchAll(
+        /(?:v_reason\s*:=\s*|'reason',\s*)'([a-z_]+)'/gi,
+      ),
+    ].map((match) => (match[1] ?? '').toLowerCase());
+
+    assertSameVocabulary(
+      'business_member_session_state()',
+      reasons,
+      STAFF_SESSION_REASONS,
+      // El orden en que aparecen es el de las ramas del plpgsql, no una
+      // jerarquía: el conjunto es el contrato, el orden no.
+      { ordered: false },
+    );
+  });
+});
+
+describe('el espejo de drizzle y el catálogo de commons son la misma lista', () => {
+  test('los dos vocabularios de business_members', () => {
+    // `apps/api/src/database/schema/business-members.ts` es la TERCERA copia:
+    // el enum de drizzle es un array escrito a mano, y `$inferSelect` lo usa para
+    // el tipo de la fila. Nada lo ata a `pg_enum` ni a commons.
+    //
+    // Los dos fallos que evita, y ninguno se ve en un typecheck:
+    //
+    //   - Un valor nuevo en la migración y en commons, y olvidado acá: `db:push`
+    //     no genera migración —drizzle cree que el enum ya está— y el `select` del
+    //     API no puede pedir el valor nuevo aunque la columna lo admita.
+    //   - Un valor que sale de commons y queda acá: el tipo de la fila sigue
+    //     aceptándolo mientras el `z.enum` de la frontera ya lo rechaza, y el
+    //     rechazo pasa en runtime, en el mapper, con el valor en la mano.
+    assertSameVocabulary(
+      'el enum de drizzle business_member_role',
+      businessMemberRoleEnum.enumValues,
+      BUSINESS_MEMBER_ROLES,
+    );
+    assertSameVocabulary(
+      'el enum de drizzle business_member_status',
+      businessMemberStatusEnum.enumValues,
+      BUSINESS_MEMBER_STATUSES,
+    );
   });
 });
