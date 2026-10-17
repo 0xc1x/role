@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { AppRoleSchema, TimestamptzSchema } from "../../_common/schemas/common";
+import { STAFF_SESSION_REASONS } from "../../business/enums/staff-session-reason";
+import { BusinessMemberRoleSchema } from "../../business/schemas/business-member.schema";
+import {
+	AppRoleSchema,
+	TimestamptzSchema,
+	UuidSchema,
+} from "../../_common/schemas/common";
 
 /**
  * The password policy of the platform, in ONE place.
@@ -135,4 +141,42 @@ export const AuthResponseSchema = z.object({
 	expires_in: z.number().int().positive(),
 	expires_at: TimestamptzSchema.nullable(),
 	user: AuthUserSchema,
+});
+
+/**
+ * Why the panel may not operate, in the vocabulary the database returns.
+ *
+ * ─── WHY THIS LIVES UNDER `auth` AND NOT UNDER `business` ────────────────────
+ *
+ * Because it is what a SESSION is allowed to do, not what a membership is: the
+ * panel asks it once after login, before it knows which business it is going to
+ * open, and the §9.3 filter is built on the answer. The business half of the
+ * contract — role, scope, TTL — is `business-member.schema.ts`; this is the other
+ * half, and it crosses over because the whole point is to explain an exit.
+ *
+ * ─── `role` AND `expires_at` ARE NULLABLE, AND BOTH MEANINGS ARE EXACT ───────
+ *
+ * `role: null` is not a broken row. It is what `no_membership`,
+ * `multiple_businesses` and `disabled` return, and the §9.3 note is explicit that
+ * a `null` role is why the filter takes the business as an argument instead of
+ * guessing: a person with six businesses is `multiple_businesses`, not `ok`. So
+ * the type cannot promise a role — `expires_at: null` means three different
+ * things (TTL off, never stamped, no membership), and no union of these six can
+ * tell them apart; that is what `reason` is for.
+ *
+ * ─── THE `reason` LIST IS THE DATABASE'S, AND THIS SCHEMA IS THE COPY ─────────
+ *
+ * The six values are text literals inside `business_member_session_state()`,
+ * not a Postgres enum, so nothing enforces that the two lists match. If the
+ * database grows a seventh, THE SCHEMA IS WHAT IS WRONG: add it to
+ * `STAFF_SESSION_REASONS`. Narrowing the enum here instead would leave the panel
+ * rendering "you were paused" at whoever the new reason was describing, because
+ * an unknown value is dropped rather than reported.
+ */
+export const StaffSessionStateSchema = z.object({
+	role: BusinessMemberRoleSchema.nullable(),
+	location_ids: z.array(UuidSchema),
+	expires_at: TimestamptzSchema.nullable(),
+	reason: z.enum(STAFF_SESSION_REASONS),
+	business_ids: z.array(UuidSchema),
 });

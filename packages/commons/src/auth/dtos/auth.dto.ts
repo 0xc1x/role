@@ -13,6 +13,7 @@ import type {
 	RegisterRequestSchema,
 	ResetPasswordRequestSchema,
 	ResetPasswordResponseSchema,
+	StaffSessionStateSchema,
 } from "../schemas/auth.schema";
 
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
@@ -30,3 +31,4 @@ export type ChangeEmailResponse = z.infer<typeof ChangeEmailResponseSchema>;
 export type InviteBusinessRequest = z.infer<typeof InviteBusinessRequestSchema>;
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 export type AuthResponse = z.infer<typeof AuthResponseSchema>;
+export type StaffSessionState = z.infer<typeof StaffSessionStateSchema>;

@@ -8,6 +8,7 @@ import {
 	RefreshRequestSchema,
 	RegisterRequestSchema,
 	ResetPasswordRequestSchema,
+	StaffSessionStateSchema,
 } from "../schemas/auth.schema";
 
 describe("LoginRequestSchema", () => {
@@ -190,5 +191,102 @@ describe("ChangeEmailRequestSchema", () => {
 			email: "otro@b.com",
 		});
 		expect(Object.keys(parsed)).toEqual(["new_email"]);
+	});
+});
+
+describe("StaffSessionStateSchema", () => {
+	const ids = ["e2000000-0000-4000-8000-000000000001"];
+	const locationIds = ["e3000000-0000-4000-8000-000000000001"];
+
+	it("knows the six reasons the database returns", () => {
+		// The list is the RPC's, and this is the assertion that the schema has all
+		// of it. A seventh reason in the database would have to be added HERE — the
+		// schema is the copy that is wrong, and narrowing the enum instead would
+		// silently drop the value and render "you were paused" at whoever it was
+		// describing.
+		for (const reason of [
+			"ok",
+			"no_membership",
+			"multiple_businesses",
+			"disabled",
+			"session_expired",
+			"session_never_stamped",
+		]) {
+			expect(
+				StaffSessionStateSchema.safeParse({
+					role: null,
+					location_ids: [],
+					expires_at: null,
+					reason,
+					business_ids: ids,
+				}).success,
+				reason,
+			).toBe(true);
+		}
+	});
+
+	it("rejects a reason nobody defined", () => {
+		expect(
+			StaffSessionStateSchema.safeParse({
+				role: null,
+				location_ids: [],
+				expires_at: null,
+				reason: "banned_for_being_rude",
+				business_ids: ids,
+			}).success,
+		).toBe(false);
+	});
+
+	it("`role: null` is an answer, not a broken row", () => {
+		// §9.3: a person with several businesses is `multiple_businesses`, not
+		// `ok`, and a null role is exactly why the panel asks which business rather
+		// than guessing one. A schema that required a role would make the exit the
+		// panel has to explain unrepresentable.
+		const parsed = StaffSessionStateSchema.parse({
+			role: null,
+			location_ids: [],
+			expires_at: null,
+			reason: "multiple_businesses",
+			business_ids: [...ids, "e2000000-0000-4000-8000-000000000002"],
+		});
+		expect(parsed.role).toBeNull();
+		expect(parsed.business_ids).toHaveLength(2);
+	});
+
+	it("an `ok` carries the role, the scope and no expiry date", () => {
+		// `session_ttl_hours = 0` produces exactly this: a live session with no
+		// expiration, which is not the same as an expired one.
+		const parsed = StaffSessionStateSchema.parse({
+			role: "owner",
+			location_ids: locationIds,
+			expires_at: null,
+			reason: "ok",
+			business_ids: ids,
+		});
+		expect(parsed.expires_at).toBeNull();
+		expect(parsed.location_ids).toEqual(locationIds);
+	});
+
+	it("a session that did expire says so with a date", () => {
+		const parsed = StaffSessionStateSchema.parse({
+			role: "staff",
+			location_ids: locationIds,
+			expires_at: "2026-10-16T09:00:00+00:00",
+			reason: "session_expired",
+			business_ids: ids,
+		});
+		expect(parsed.reason).toBe("session_expired");
+	});
+
+	it("an unknown role is rejected rather than cast to null", () => {
+		expect(
+			StaffSessionStateSchema.safeParse({
+				role: "admin",
+				location_ids: [],
+				expires_at: null,
+				reason: "ok",
+				business_ids: ids,
+			}).success,
+		).toBe(false);
 	});
 });
