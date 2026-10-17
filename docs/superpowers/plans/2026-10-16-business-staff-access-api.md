@@ -376,6 +376,25 @@ Un alias de dominio propio **pasa** el flujo normal, porque su destinatario es r
 En ambos endpoints. Un alias de dominio propio no se toca, y el motivo de no bloquearlo es
 justo el que hace legítimo el alias propio: el correo va a una bandeja que existe.
 
+- [ ] **Step 3: El borrado de cuenta tiene que detachment, no cascada**
+
+La cadena `auth.users → profiles → business_members` es toda `ON DELETE CASCADE`, y la
+Task 1 puso un trigger `before delete` que levanta `R0002` sobre la fila de un dueño. El
+efecto, verificado contra la base viva: **borrar la cuenta de un dueño rebota**, y no lo
+detecta ningún test porque el fixture de replay no tiene filas de `business_members`.
+
+Es una regresión a una función que ya existe y que es del derecho del usuario, así que no
+se acepta como efecto secundario. El borrado físico de una membresía no es parte de la v1
+(spec §8: "queda como operación separada, no expuesta"), de modo que lo que corresponde es
+que el camino de borrado de cuenta **desacople la membresía antes de borrar el perfil**,
+igual que ya hace con `order_events`: hay un test que se llama literal "the erase detaches
+an order_events actor instead of failing", o sea que el patrón existe y este caso es el
+mismo con un actor más.
+
+Sin ownerless, la fila no se borra: se degrada o se da de baja lógicamente, y el alias
+queda quemado como queman los demás. Lo que **no** puede ser es que la cascada dispare el
+trigger y el borrado de cuenta falle sin explicación.
+
 ---
 
 ### Task 6: Una sola respuesta a "¿esto es mi negocio?"
