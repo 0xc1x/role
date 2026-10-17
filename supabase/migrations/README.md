@@ -1114,6 +1114,57 @@ table, because it is not a per-row cost: the planner hashes it once per
 statement. It is measured, in the shape production actually produces, in the next
 section.
 
+### ⚠ The `can_manage_location` figure above is the cheap path, and it is 13.7× below the one an owner pays
+
+The harness above crosses a table with `generate_series`, so almost every
+evaluation lands on a business the caller does **not** manage — and
+`can_manage_location` short-circuits for those. Read `pg_proc.prosrc`: the body is
+`select case … from member m cross join role_of r`, and when the `member` CTE is
+empty the `FROM` is empty, so neither the `business_locations` existence check nor
+`role_of`'s `business_member_role` call ever runs and the result is
+`coalesce(null, false)`. The 23.8 µs measured above is that path, and it is the
+path a reader pays for rows **belonging to other businesses**. The path an owner
+pays for rows of **their own** business evaluates both, plus the session
+arithmetic, and it is not cheap.
+
+Measured with four arms in one statement — helper against a matched baseline that
+differs only in the target-list expression, 10,000 evaluations each, three runs.
+The baseline arms still carry the RLS `Filter` (RLS is not something a `WHERE`
+clause removes), so the difference is the target-list calls and nothing else:
+
+| arm | `Nested Loop` total | shared hits |
+| --- | --- | --- |
+| A — member, target list calls the helper | 3279.6 / 3305.6 / 3359.8 ms | **40,143** |
+| B — member, target list does not | 3.822 / 3.960 / 3.974 ms | **5** |
+| C — non-member, target list calls the helper | 245.1 / 245.6 / 250.2 ms | **10,010** |
+| D — non-member, target list does not | 4.476 / 4.505 / 4.574 ms | **8** |
+
+| path | µs / call | shared buffers / call | what it is |
+| --- | --- | --- | --- |
+| **member** — the row belongs to a business the caller manages (`A − B`) | **327.6 – 335.6** | **4.014** | full body: location check, role, session |
+| **non-member** — it belongs to somebody else's (`C − D`) | **24.1 – 24.6** | **1.000** | `member` is empty; `coalesce(null, false)` |
+
+The buffer counts are **byte-identical across all three runs** (40,143 / 5 /
+10,010 / 8), which is why the table above carries no spread at all. The non-member
+arm reproduces the published 23.8 – 23.9 to within its noise, so nothing here
+contradicts the earlier table — it **explains** it: the earlier table measured the
+cheap path and called it the cost.
+
+The same contrast on the two-helper pair is much smaller, and for a reason worth
+recording: `business_member_role` does the same index lookup either way and
+returns `NULL` instead of `'owner'`, so membership is not a shortcut out of it.
+
+| path | pair µs / call | pair shared buffers / call | measured at |
+| --- | --- | --- | --- |
+| member | **65.1 – 70.6** | 2.024 | 14,000 evaluations, two runs |
+| non-member | **33.9 – 36.2** | 2.000 | same |
+
+**Which number a projection should use depends on which side of the `OR` the row
+falls on.** On `orders` and `offers` the member arm sits *before* the legacy
+`business_ownership` arm, so an owner reading their own business pays 328 µs on
+every one of its rows. The projection below uses the member figure for that case
+and says so.
+
 ### ⚠ The legacy baseline is a per-statement cost, and the shape decides the number
 
 The review that prompted this section put the three helpers at ~12 / ~16 / ~21 µs
@@ -1196,14 +1247,25 @@ because both are per-row quantities:
 The **per-statement** ratio is a different number, and it moves with the volume,
 because the legacy arm has a fixed component the marginal ratio ignores. Built
 from the measured marginals plus the measured `SubPlan` node time — 21 µs on the
-real 39-row read:
+real 39-row read. **The row axis is the queried business's own rows, not rows of
+the table**, for the reason measured in `### The axis is the queried business's
+rows, not the table's` below: the `business_id` index is the access method and
+the RLS qual is a `Filter` above it, so the helper runs on that business's rows
+and on nothing else.
 
-| rows in one statement | legacy arm, total | new pair, total | ratio |
+| rows in one statement, for one business | legacy arm, total | new pair, total | ratio |
 | --- | --- | --- | --- |
-| 39 — today's `orders`, **measured** | 21 µs + 39 × 0.144 ≈ **27 µs** | 39 × 33.7 µs ≈ **1.3 ms** | **~50×** |
+| 23 — today's busiest business, **measured** | 21 µs + 23 × 0.144 ≈ **24 µs** | 23 × 33.7 µs ≈ **0.78 ms** | **~32×** |
 | 1,000 — projected | 21 µs + 1,000 × 0.144 ≈ **0.17 ms** | 1,000 × 33.7 µs ≈ **34 ms** | **~200×** |
 | 10,000 — projected | 21 µs + 10,000 × 0.144 ≈ **1.5 ms** | 10,000 × 33.7 µs ≈ **0.34 s** | **~230×** |
 | 84,000 — the harness volume | 810 µs + 84,000 × 0.144 ≈ **12.8 ms** | 84,000 × 33.8 µs ≈ **2.84 s** | **~220×** |
+
+The 33.7 µs in this table is the **non-member** path, which is the path these
+arms were measured on. On the member path the pair is **~65 µs** and
+`can_manage_location` is **328 µs** — see `### The can_manage_location figure
+above is the cheap path` — and the same 23 rows cost ~7.5 ms rather than 0.78 ms.
+The 84,000-row row stays because it is the volume the two arms were actually
+measured at, not a volume any business has.
 
 The 21 µs is measured, not assumed: it is the `SubPlan 9 → Bitmap Heap Scan`
 node's own time on the real 39-row read of `orders`, 0.018 – 0.021 ms across four
@@ -1309,45 +1371,215 @@ cached.
 all of the 2.5 ms, and the four filtered rows cost ~8 helper calls ≈ 0.3 ms —
 invisible next to them.
 
-### What it projects to, and where the cliff is
+### The axis is the queried business's rows, not the table's — and here is what is measured about that
 
-At 33.8 – 35.7 µs/row for the two-helper pair and 23.8 – 25.2 µs/row for
-`can_manage_location`:
+The previous version of this section stated the cliff in rows of the **table**
+(`orders` at 39 → 1,000 → 10,000 → 100,000). That is the wrong axis, and the
+reason it was wrong is visible in a plan rather than arguable.
 
-| table | today | 1,000 rows | 10,000 rows | 100,000 rows |
-| --- | --- | --- | --- | --- |
-| `orders` (`can_manage_location`) | 39 rows → ~1.0 ms | ~24 ms | ~240 ms | ~2.4 s |
-| `profiles` (`can_manage_location`) | 20 rows → ~0.5 ms | ~24 ms | ~240 ms | ~2.4 s |
-| `coupons` (pair) | 6 rows → ~0.2 ms | ~34 – 36 ms | ~0.34 – 0.36 s | ~3.4 – 3.6 s |
-| `business_hours` (pair) | **0 on reads, ever** | 0 on reads | 0 on reads | 0 on reads |
+**Measured.** As owner `e9a8af49-…` — who owns **no** order of their own, so
+`user_id = me` never short-circuits and every row the scan touches pays the
+helper — the same table (`orders`, 39 rows) filtered to one business, four
+different businesses, identical session shape:
 
-**The cliff is `orders` at around 10,000 rows.** It is the only table in this set
-that grows with consumer demand rather than with the number of businesses, it is
-the first tab the mobile panel opens, and a full-table policy scan is what an
-owner without an index-driven filter does. At 30,000 orders one owner read is
-about a second of pure helper time, which is past any budget worth defending
-from a client that talks to Supabase directly.
+| rows belonging to the queried business | access method | shared hits | Execution |
+| --- | --- | --- | --- |
+| 1 (`d0000000-…0004`) | **Index Scan using `idx_orders_business`**, `Index Cond` | **9** | 0.749 ms |
+| 2 (`d0000000-…0003`) | **Bitmap Index Scan on `idx_orders_business`** + Bitmap Heap Scan, `Recheck Cond` | **10** | 0.780 – 0.781 ms |
+| 3 (`d0000000-…0011`) | **Index Scan using `idx_orders_business`**, `Index Cond` | **12** | 0.772 – 0.773 ms |
+| 23 (`b239e579-…`, the busiest business in production) | **Index Scan using `idx_orders_business`**, `Index Cond` | **96** | 9.25 – 9.38 ms |
+| 39 — no business filter at all | Seq Scan, no access method | 116 | 8.53 ms |
+
+The index is the access method in all four business-filtered plans, and the RLS
+qual is a `Filter` **above** it, so it is evaluated on the index's output rows and
+on nothing else. The buffer counts are the proof that this is not a claim about
+what the planner *would* do: **9, 10, 12, 96** on a constant 39-row table. A qual
+evaluated once per table row would report the same helper work in all four. It
+reports 1 row's worth, 2 rows', 3 rows', 23 rows'. The table is not in the
+projection; the business's share of it is.
+
+**Measured, separately.** Every index the projection leans on exists, from
+`pg_indexes`:
+
+| table | index |
+| --- | --- |
+| `orders` | `idx_orders_business (business_id)`, `idx_orders_user (user_id)`, `idx_orders_offer`, `idx_orders_status`, `idx_orders_created` |
+| `business_hours` | `idx_business_hours_business (business_id)`, plus `business_hours_business_id_day_key (business_id, day)` |
+| `coupons` | `idx_coupons_business (business_id)`, `coupons_business_id_code_key` |
+| `offers` | `idx_offers_business (business_id)`, `idx_offers_location_business (business_location_id, business_id)` |
+| `profiles` | `idx_profiles_role (role)`, `profiles_pkey` |
+
+**Reasoned, not measured, and stated as such.** Whether the planner keeps choosing
+that index once `orders` is large. It cannot be forced here without inserting
+rows, and no rows were inserted. What can be said is that the choice is not
+marginal at this size — at the busiest business's 23 of 39 rows (59% of the table
+in one business, far more concentrated than any real marketplace) the index scan
+cost 141.68 against the seq scan's 233.76, and the index still won. The 39-row
+`Seq Scan` is the correct plan for a 39-row table; that it appears at all is a
+statement about the table's size, not about a missing index.
+
+### What it projects to on that axis
+
+At **328 µs** per row for `can_manage_location` on the member path (the figure
+that applies to a business reading its own rows), **~65 µs** for the
+two-helper pair, and the index keeping other businesses' rows out of the
+expression:
+
+| table | rows for the busiest business, **measured 2026-10-16** | 1,000 rows | 10,000 rows |
+| --- | --- | --- | --- |
+| `orders` (`can_manage_location`, member) | **23 rows → ~7.5 ms** | ~0.33 s | ~3.3 s |
+| `orders` (`can_manage_location`, non-member) | **excluded from a business-filtered read by the index** — it only appears in an unfiltered read, where it is the other businesses' rows: 16 → ~0.4 ms | ~24 ms | ~0.24 s |
+| `coupons` (pair) | **1 row → ~0.07 ms** | ~65 ms | ~0.65 s |
+| `business_hours` (pair) | **0 on reads, ever** | 0 on reads | 0 on reads |
+| `profiles` | *its own axis — see below* | | |
+
+**The busiest business you can actually measure is `b239e579-…`, and it is 23
+orders.** From `orders` grouped by `business_id`: 23, 4, 3, 2, 2, 2, 1, 1, 1,
+0, 0, 0, 0, 0. So today's worst case is ~7.5 ms of helper time, inside a
+measured 9.25 ms statement — the two agree, which is the first check that the
+328 µs figure belongs in a real plan rather than only in a harness. The statement
+the owner actually issues (`select id from orders where business_id = 'b239e579…'`)
+is already the filtered one; the 39-row Seq Scan in the table above is the
+unfiltered read, and the panel does not do that.
+
+**Where it becomes noticeable, on this axis:** a business's own orders cross
+**1,000** at ~0.33 s — past any interactive budget — and **10,000** at ~3.3 s,
+which is a timeout rather than a slow query. Both are *per business*. A table
+with 10,000 orders spread over 200 businesses is 50 orders each and ~16 ms: fine.
+The cliff is a business's order count, not the marketplace's.
+
+The number this replaces published ~24 ms at 1,000 orders because it used the
+non-member figure. On the member path the same 1,000 rows cost ~0.33 s, **13.7×
+more** — and the member path is the one an owner is on.
+
+### ⚠ `profiles` is a different axis, and the shape is not the one this file assumed
+
+The previous table above put `profiles` on the same per-row `can_manage_location`
+axis as `orders`, at 20 rows. **Measured, that is wrong**, and so is the premise
+that `Members can view their order customers` is a correlated `exists` against
+`orders` per profile row with a cheap indexed inner side. It is neither.
+
+As `b0000000-…0001` and then `e9a8af49-…`, verbatim:
+
+```
+Seq Scan on profiles  (actual time=7.573..7.594 rows=4 loops=1)
+  Filter: ((id = (InitPlan 1).col1)
+        OR (ANY (id = (hashed SubPlan 23).col1))
+        OR (ANY (id = (hashed SubPlan 51).col1))
+        OR ((InitPlan 52).col1 = 'admin'::app_role))
+  Rows Removed by Filter: 16
+  Buffers: shared hit=102
+  SubPlan 23
+    ->  Seq Scan on orders o_1  (actual time=2.314..17.026 rows=23 loops=1)
+          Filter: (((user_id = (InitPlan 13).col1) OR can_manage_location(business_id, business_location_id)
+                 OR (ANY (business_id = (hashed SubPlan 21).col1)) OR ((InitPlan 22).col1 = 'admin'::app_role))
+                 AND can_manage_location(business_id, business_location_id))
+          Rows Removed by Filter: 16
+          Buffers: shared hit=226
+```
+
+**`SubPlan 23` is `loops=1`.** Both `exists` arms — the legacy one and
+`Members can view their order customers` — were rewritten to **hashed `SubPlan`s
+evaluated once per statement**, exactly like the legacy arm on `orders`. The
+per-profile-row cost that survives is a `= ANY` containment, not a helper call. So
+the risk is **not** `profiles_rows × helper`, and the "correlated exists per
+profile row" shape is not a plan this system emits at any volume measured here.
+
+The cost that does survive is on a different axis, and it is a real one:
+
+| | `b0000000-…0001` (owns a 4-order business) | `e9a8af49-…` (owns the 23-order business) |
+| --- | --- | --- |
+| rows scanned in `profiles` | 20 | 20 |
+| `SubPlan 23` — `orders` rows, `loops=1` | 4 | **23** |
+| `SubPlan 23` own time | 5.276 ms | **17.026 ms** |
+| `SubPlan 23` shared hits | 77 | **226** |
+| whole `select id from profiles` | 7.59 ms, 102 hits | **25.31 ms**, 327 hits |
+
+| axis | what it is | today's cost |
+| --- | --- | --- |
+| rows scanned in `profiles` | cheap `= ANY` containment; `profiles` has no index that RLS can use to narrow the outer scan, so this is the full table — 20 rows | not measured separately, and it is not where the cost is |
+| **rows of `orders` scanned inside `SubPlan 23`, once per statement** | **two `can_manage_location` calls per qualifying row — the policy ANDs a second copy onto the `orders` RLS qual** | **23 rows → ~15 ms** |
+
+The other arm is the same shape: `SubPlan 51`, the members `exists`, is a
+`Nested Loop … loops=1` at 8.272 ms / 98 shared hits for the same 23 rows — also
+once per statement, also not per profile row.
+
+The slope between the two members is (17.026 − 5.276) / 19 ≈ **0.62 ms per
+`orders` row**, which is what two member-path calls at 328 µs each predict. That
+is the number to watch, and it is a **`orders`-table** axis — the one axis the rest
+of this section had just argued was safe. It is safe on `orders`' own policies,
+where the index restricts the scan to one business. It is **not** safe here,
+because the hashed subplan builds its whole answer set with a `Seq Scan on
+orders` — `idx_orders_user` exists and was not used, at either volume.
+
+**What is measured and what is reasoned here.** Measured: both `exists` arms are
+hashed `SubPlan`s with `loops=1`; the inner access method is a `Seq Scan on
+orders`, not `idx_orders_user`; the inner cost and its slope across two members.
+Reasoned: that this remains a hashed, per-statement plan at marketplace scale
+rather than turning into a per-row correlated exists. The rewrite is not a
+cost-based choice — `pull_up_sublinks` pulls the sublink up and
+`simplify_EXISTS`/`convert_ANY` converts the `EXISTS` to `= ANY` regardless of
+size, and both arms were converted at 4 rows and at 23 rows, `loops=1` in both
+cases — so the reasoning is
+that the conversion is size-independent, **not** that it was observed to be. What
+would change at scale is only the inner access method, which is the thing a
+`Seq Scan` on a large `orders` makes expensive.
+
+### The lever, named and not pulled
+
+At 23 orders for the busiest business this costs ~7.5 ms and nothing needs to
+change. If a business ever reaches the volume where it bites, **the lever is not
+an index** — every index on the `business_id` axis already exists and was measured
+in use above. The two real levers, neither implemented here:
+
+1. **Cut the per-row cost of `can_manage_location` itself** — fewer statements
+   inside it. The member path is 328 µs / 4.01 buffers against the non-member
+   path's 24 µs / 1.000, and the difference is exactly the two sub-selects that
+   only run on the member path: the `business_locations` existence check and
+   `role_of`'s `business_member_role` call, which the body already has the inputs
+   to answer without a second round trip. **What would have to be measured:** the
+   member-path cost after collapsing those, in the same four-arm shape, to confirm
+   which of the two round trips carries the 304 µs.
+2. **Restructure the policy so the per-row expression does not call a
+   `security definer` function at all** — the hoisting argument above shows the
+   per-row shape is forced by the function being in the qual with a `Var`
+   argument, so the only ways out are a non-`security definer` helper PostgreSQL
+   will inline, or a membership set materialised once per statement the way the
+   `business_ownership` arm already is. **What would have to be measured:** that
+   PostgreSQL actually inlines the rewritten form — the plans here show it refuses
+   to inline these, and *which* clause of the `functiondef` is responsible is
+   still the one step in this section that is not measured.
+
+Both are somebody else's decision, made with these numbers rather than at the
+moment the panel starts timing out.
 
 ### Does the branch accept this? Yes, with the measurement rather than the argument
 
 At today's volume the per-row cost is invisible, and for two separate reasons
-that are both worth naming: the volume is tiny, **and** on two of the three
-`FOR ALL` tables a read never reaches the helpers at all (`business_hours` has
-no qual; `coupons` and `orders` reach an owner through the hoisted
-`hashed SubPlan` before the members branch is evaluated). What *is* measurable
-today is the ~3 ms and ~721 buffer hits that the policy layer adds to a one-row
-indexed read of `orders` — larger than the entire per-row cost at this size, and
-belonging to `auth_helpers.my_role()` and per-connection SPI planning rather than
-to this branch's helpers.
+that are both worth naming: the volume is tiny, **and** `business_hours` has no
+RLS qual on a read at all. The `coupons` and `orders` halves of the sentence this
+replaces were wrong in two ways, both measured: on `coupons` the pair **is** in
+the read filter and does run (`Seq Scan on coupons`, `Rows Removed by Filter: 3`
+of 6 rows, the pair evaluated on the rows that fail the two earlier arms); and on
+`orders` the `can_manage_location` arm sits **before** the hoisted
+`hashed SubPlan`, so an owner reading their own business pays it on every one of
+that business's rows — measured at 23 rows and 96 shared hits. What *is*
+measurable today is the ~3 ms and ~721 buffer hits that the policy layer adds to
+a one-row indexed read of `orders` — larger than the entire per-row cost at this
+size, and belonging to `auth_helpers.my_role()` and per-connection SPI planning
+rather than to this branch's helpers.
 
 **Whether the `FOR ALL` policies need the call hoisted out of the per-row path
 is a decision this section does not make, and the reason it cannot be a
 per-function one is measured above:** the helper is not hoistable, because its
-argument is a `Var`. On `orders` the lever is a plan that visits a bounded set of
-rows, which is an index and a migration, and a migration is not something this
-measurement should smuggle in. The measurement is the deliverable; the
-optimisation is somebody else's decision, made with these numbers in hand instead
-of at the moment the panel starts timing out.
+argument is a `Var`. The sentence this replaces named the lever as "a plan that
+visits a bounded set of rows, which is an index and a migration". **That was
+wrong: the index already exists and was measured in use.** The levers that remain
+are the per-row cost of the helper and the policy's structure, both written out
+with what would have to be measured in `### The lever, named and not pulled`
+above. The measurement is the deliverable; the optimisation is somebody else's
+decision, made with these numbers in hand instead of at the moment the panel
+starts timing out.
 
 ## Applied: `20260926212729_email_sends_redact_legacy_error_message`
 
