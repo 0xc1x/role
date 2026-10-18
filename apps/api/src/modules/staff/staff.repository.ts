@@ -372,6 +372,21 @@ export class StaffRepository {
   /**
    * `public.business_member_session_state(p_business_id)`, AS THE CALLER.
    *
+   * ─── `null` NO ES «NINGUNO»: ES «PREguntÁLE» ─────────────────────────────────
+   *
+   * El argumento de la función es opcional y sin él hace algo que esta API no
+   * puede replicar: recorre las membresías **activas** de quien pregunta y
+   * devuelve `multiple_businesses` si hay más de una, `no_membership` si no hay
+   * ninguna, y el estado de la única si hay exactamente una. Es la tabla del
+   * §5.2, y la razón por la que el argumento existe siendo opcional es que el
+   * dueño real tiene varios negocios —en producción, seis— y elegir la fila más
+   * antigua devuelve el negocio equivocado sin avisar.
+   *
+   * Por eso el `null` produce un `::uuid` con la llamada SIN argumento, y no un
+   * `business_member_session_state(null::uuid)`: las dos se evalúan igual en
+   * plpgsql, pero la segunda dice «buscá esta membresía que no existe» en vez de
+   * «decime cuáles tenés», y el código tiene que poder leerse.
+   *
    * ─── POR QUÉ SE PREGUNTA Y NO SE CALCULA ────────────────────────────────────
    *
    * El §5.2 quiere que la que autoriza y la que explica nunca se contradigan, y
@@ -441,7 +456,7 @@ export class StaffRepository {
    * pintee como otro.
    */
   async sessionStateAsCaller(
-    businessId: string,
+    businessId: string | null,
     userId: string,
   ): Promise<StaffSessionState> {
     const claims = JSON.stringify({ sub: userId, role: 'authenticated' });
@@ -450,6 +465,11 @@ export class StaffRepository {
       await tx.execute(
         sql`select set_config('request.jwt.claims', ${claims}, true)`,
       );
+      if (businessId === null) {
+        return tx.execute(
+          sql`select public.business_member_session_state()::text as session_state`,
+        );
+      }
       return tx.execute(
         sql`select public.business_member_session_state(${businessId}::uuid)::text as session_state`,
       );

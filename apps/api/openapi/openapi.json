@@ -4455,7 +4455,7 @@
             "bearer": []
           }
         ],
-        "summary": "Stamp last_authenticated_at for one membership and return the §5.2 session state the database computes.",
+        "summary": "Stamp last_authenticated_at and return the §5.2 session state the database computes. Omit business_id and the database resolves the caller’s single membership; with several, it answers multiple_businesses and seals nothing.",
         "tags": [
           "Staff"
         ]

@@ -296,15 +296,26 @@ describe("StampStaffSessionSchema", () => {
 	const businessId = "d0000000-0000-4000-8000-000000000001";
 
 	it("nombra la membresía que se va a sellar", () => {
-		expect(StampStaffSessionSchema.safeParse({ business_id: businessId }).success).toBe(
-			true,
-		);
+		expect(
+			StampStaffSessionSchema.safeParse({ business_id: businessId }).success,
+		).toBe(true);
 	});
 
-	it("no es opcional: el sello es de UNA membresía", () => {
-		// Sin negocio no hay fila que sellar, y adivinar cuál sería un cuarto
-		// sitio decidiendo qué membresía es «la» del que pregunta.
-		expect(StampStaffSessionSchema.safeParse({}).success).toBe(false);
+	it("admite la llamada que NO nombra: es la de un panel recién autenticado", () => {
+		// El §5.2 sella una vez, después del login, y un panel recién autenticado es
+		// el que todavía no eligió negocio. Sin esto, la ruta que existe para
+		// resolver el negocio por su cuenta no resolvería nada.
+		expect(StampStaffSessionSchema.safeParse({}).success).toBe(true);
+		expect(StampStaffSessionSchema.safeParse(undefined).success).toBe(true);
+	});
+
+	it("`null` NO es «no sé»: es un 400", () => {
+		// Aceptar el `null` haría que un cliente que arma el cuerpo con un valor por
+		// defecto pidiera la resolución automática sin saber que la pidió, y el
+		// camino que nadie exercise es el que nadie prueba.
+		expect(
+			StampStaffSessionSchema.safeParse({ business_id: null }).success,
+		).toBe(false);
 		expect(
 			StampStaffSessionSchema.safeParse({ business_id: "no-es-uuid" }).success,
 		).toBe(false);
@@ -318,6 +329,9 @@ describe("StampStaffSessionSchema", () => {
 				business_id: businessId,
 				expires_at: "2031-01-01T00:00:00+00:00",
 			}).success,
+		).toBe(false);
+		expect(
+			StampStaffSessionSchema.safeParse({ member_id: businessId }).success,
 		).toBe(false);
 	});
 });

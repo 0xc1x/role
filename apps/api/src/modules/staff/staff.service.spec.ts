@@ -1429,4 +1429,149 @@ describe('StaffService', () => {
       expect(state.reason).toBe('ok');
     });
   });
+
+  // ─────────────────── el sello sin nombre de negocio ───────────────────
+
+  /**
+   * `POST /staff/session` con `business_id` ausente.
+   *
+   * ─── POR QUÉ ESTOS CASOS VIVEN ACÁ Y NO SÓLO EN EL SPEC DEL CONTROLADOR ──────
+   *
+   * Porque la decisión es de este archivo: la resolución del negocio sale de la
+   * respuesta de `sessionStateAsCaller` y de nada más. Un controlador que
+   * eligiera `body.business_id ?? OWNER` pasaría todos los tests de HTTP.
+   */
+  describe('sin `business_id` la resolución la hace la función, no el servicio', () => {
+    it('pregunta SIN argumento primero, y sella el negocio que la función resolvió', async () => {
+      // La PRIMERA llamada va con `null`: es la que pregunta cuáles son las
+      // membresías del que llama. Un `toHaveBeenCalledWith(BIZ, …)` como única
+      // aserción pasaría con una implementación que eligiera el negocio sola.
+      repository.sessionStateAsCaller.mockImplementation(
+        async (businessId: string | null) =>
+          businessId === null
+            ? sessionState({ business_ids: [BIZ] })
+            : sessionState({ business_ids: [BIZ] }),
+      );
+
+      await service.stampSession(managerAB, null);
+
+      expect(repository.sessionStateAsCaller).toHaveBeenNthCalledWith(
+        1,
+        null,
+        MANAGER_USER,
+      );
+      // Y el sello usa el id que la base devolvió, no el primero de una lista.
+      expect(repository.stampSession).toHaveBeenCalledWith(
+        BIZ,
+        MANAGER_USER,
+        expect.any(Date),
+      );
+    });
+
+    it('la segunda lectura va con el negocio ya resuelto, nunca con `null`', async () => {
+      // La respuesta tiene que ser sobre la fila que se selló. Preguntar de nuevo
+      // sin argumento después del sello volvería a resolver, y si entre las dos
+      // llamadas la persona tivesse otra membresía, la respuesta hablaría de una
+      // fila distinta de la que se renovó.
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({ business_ids: [BIZ] }),
+      );
+
+      await service.stampSession(managerAB, null);
+
+      expect(repository.sessionStateAsCaller).toHaveBeenNthCalledWith(
+        2,
+        BIZ,
+        MANAGER_USER,
+      );
+      expect(repository.sessionStateAsCaller).toHaveBeenCalledTimes(2);
+    });
+
+    it('con varias membresías NO sella: `multiple_businesses` con la lista', async () => {
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({
+          role: null,
+          location_ids: [],
+          expires_at: null,
+          reason: 'multiple_businesses',
+          business_ids: [BIZ, OTHER_BIZ],
+        }),
+      );
+
+      const state = await service.stampSession(owner, null);
+
+      expect(state.reason).toBe('multiple_businesses');
+      expect(state.business_ids).toEqual([BIZ, OTHER_BIZ]);
+      // Sellar sería escribir `last_authenticated_at` en una fila elegida a ciegas:
+      // renovar la sesión de un negocio en el que la persona quizá no está
+      // trabajando es peor que no renovar ninguna.
+      expect(repository.stampSession).not.toHaveBeenCalled();
+      // Y una sola lectura, porque no hay segunda pregunta sin sello que la justifique.
+      expect(repository.sessionStateAsCaller).toHaveBeenCalledTimes(1);
+    });
+
+    it('sin membresías tampoco sella, y contesta lo que la función respondió', async () => {
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({
+          role: null,
+          location_ids: [],
+          expires_at: null,
+          reason: 'no_membership',
+          business_ids: [],
+        }),
+      );
+
+      const state = await service.stampSession(stranger, null);
+
+      expect(state.reason).toBe('no_membership');
+      expect(repository.stampSession).not.toHaveBeenCalled();
+    });
+
+    it('la resolución y el sello son EL MISMO método que el caso nombrado', async () => {
+      // Las dos formas de llamar terminan en `sealAndExplain`. Lo que se comprueba
+      // acá es que la nombrada NO prepende una resolución previa: si lo hiciera,
+      // una llamada con el negocio explícito pagaría un round-trip de más por
+      // preguntar algo que ya sabía.
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({ business_ids: [BIZ] }),
+      );
+
+      await service.stampSession(managerAB, BIZ);
+
+      expect(repository.sessionStateAsCaller).toHaveBeenCalledTimes(1);
+      expect(repository.sessionStateAsCaller).toHaveBeenCalledWith(
+        BIZ,
+        MANAGER_USER,
+      );
+    });
+
+    it('el caso sin nombre deja una línea de log con el motivo, no con un sello', async () => {
+      // El log es lo que separa «no sellé porque no sabía» de «no sellé porque no
+      // había nada», y sin él un panel atascado queda sin línea que lo explique.
+      const entries = captureLogs();
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({
+          role: null,
+          location_ids: [],
+          expires_at: null,
+          reason: 'multiple_businesses',
+          business_ids: [BIZ, OTHER_BIZ],
+        }),
+      );
+
+      await service.stampSession(owner, null);
+
+      expect(entries).toContainEqual(
+        expect.objectContaining({
+          event: 'staff_session_unresolved',
+          userId: OWNER_USER,
+          reason: 'multiple_businesses',
+          businessCount: 2,
+        }),
+      );
+      expect(entries).not.toContainEqual(
+        expect.objectContaining({ event: 'staff_session_stamped' }),
+      );
+    });
+  });
 });

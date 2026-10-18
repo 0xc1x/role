@@ -1,27 +1,36 @@
-import { HttpStatus, type INestApplication } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { HttpStatus } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Test } from '@nestjs/testing';
-import { SignJWT } from 'jose';
-import request from 'supertest';
-import { StaffSessionStateSchema } from '@0xc1x/role-commons';
-import type { StaffSessionState } from '@0xc1x/role-commons';
-import { AuthGuard } from '../../auth/auth.guard';
-import { RolesGuard } from '../../auth/roles.guard';
-import { SupabaseTokenVerifier } from '../../auth/supabase-token-verifier';
 import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
-import type { Env } from '../../config/env.schema';
-import { DRIZZLE } from '../../database/database.tokens';
-import { StaffController, StaffSessionController } from './staff.controller';
-import { StaffRepository, type BusinessMemberRow } from './staff.repository';
-import { StaffService } from './staff.service';
-import { STAFF_AUTH_ADMIN, type StaffAuthAdmin } from './staff.tokens';
+import { StaffController } from './staff.controller';
+import {
+  ADMIN_USER,
+  BIZ,
+  CONSUMER_USER,
+  LOC_A,
+  MANAGER_USER,
+  MEMBER_OWNER,
+  MEMBER_STAFF,
+  NEW_AUTH_USER,
+  OWNER_USER,
+  PROFILES,
+  STAFF_USER,
+  as,
+  authAdmin,
+  bearerFor,
+  bootstrapStaffHttp,
+  closeStaffHttp,
+  ownerRow,
+  repository,
+  resetDoubles,
+  sessionState,
+  staffHttp,
+} from '../../../test/staff-http-harness';
 
 /**
- * Las nueve rutas del §8 sobre el stack HTTP real: los controladores de verdad,
- * los pipes de verdad, los dos guards de `SecurityModule` de verdad y el
- * `StaffService` de verdad.
+ * Las ocho rutas de `businesses/:businessId/staff` sobre el stack HTTP real: los
+ * controladores de verdad, los pipes de verdad, los dos guards de
+ * `SecurityModule` de verdad y el `StaffService` de verdad.
  *
  * ─── POR QUÉ EL SERVICIO NO ESTÁ STUBBEADO ──────────────────────────────────────
  *
@@ -32,370 +41,29 @@ import { STAFF_AUTH_ADMIN, type StaffAuthAdmin } from './staff.tokens';
  * `@Roles('business')`, que es exactamente el defecto que el §8 manda reemplazar.
  *
  * Lo que se stubea es TODO lo que hay debajo del servicio: el repositorio y el
- * admin de Auth. Así el `requireActor` real lee una fila, pregunta por
- * `business_member_session_state` y decide, y el test observa lo que el panel
- * observaría.
+ * admin de Auth. El harness vive en `test/staff-http-harness.ts` y lo comparten
+ * los dos specs de estas rutas.
  *
  * ─── LO QUE ESTOS TESTS NO AFIRMAN ─────────────────────────────────────────────
  *
- * Que `requireActor` pregunte lo correcto ya lo prueban los 68 tests del
- * servicio. Lo que este archivo afirma es de otra capa y es la razón de existir:
- * que la ruta NO tiene una puerta propia que la adelante. Por eso hay tests de
- * metadata (`ROLES_KEY` ausente) y de status sobre el stack real, y no una copia
- * de la lógica de negocio.
+ * Que `requireActor` pregunte lo correcto ya lo prueban los tests del servicio.
+ * Lo que este archivo afirma es de otra capa y es la razón de existir: que la
+ * ruta NO tiene una puerta propia que la adelante. Por eso hay tests de metadata
+ * (`ROLES_KEY` ausente) y de status sobre el stack real, y no una copia de la
+ * lógica de negocio.
  */
-
-const SUPABASE_URL = 'http://127.0.0.1:9';
-const JWT_SECRET = 'staff-controller-secret';
-
-const BIZ = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
-const LOC_A = '11111111-1111-4111-8111-111111111111';
-
-const OWNER_USER = '00000000-0000-4000-8000-000000000001';
-const MANAGER_USER = '00000000-0000-4000-8000-000000000002';
-const STAFF_USER = '00000000-0000-4000-8000-000000000003';
-const CONSUMER_USER = '00000000-0000-4000-8000-000000000004';
-const NEW_AUTH_USER = '00000000-0000-4000-8000-0000000000ff';
-
-const MEMBER_STAFF = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const MEMBER_OWNER = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
-
-const HOUR = 3_600_000;
-
-/**
- * Ids UUID-shaped porque el contrato lo dice: `profiles.id` es una columna uuid
- * y un fixture llamado `owner` sería una fila que la base no puede contener.
- */
-function memberRow(
-  overrides: Partial<BusinessMemberRow> = {},
-): BusinessMemberRow {
-  return {
-    id: MEMBER_STAFF,
-    business_id: BIZ,
-    user_id: STAFF_USER,
-    role: 'staff',
-    label: 'Carla',
-    alias: 'carla@panaderia.role.ec',
-    status: 'active',
-    session_ttl_hours: 24,
-    last_authenticated_at: new Date(Date.now() - HOUR),
-    created_at: new Date('2026-10-01T00:00:00.000Z'),
-    updated_at: new Date('2026-10-01T00:00:00.000Z'),
-    deleted_at: null,
-    ...overrides,
-  };
-}
-
-/**
- * `session_ttl_hours: 0` es lo que dejó `20261016022631` en producción, y es
- * también lo que separa a este dueño del caso que el §5.2 niega.
- */
-const ownerRow = () =>
-  memberRow({
-    id: MEMBER_OWNER,
-    user_id: OWNER_USER,
-    role: 'owner',
-    label: 'Dueña',
-    alias: 'dueno@panaderia.role.ec',
-    session_ttl_hours: 0,
-  });
-
-const managerRow = () =>
-  memberRow({
-    id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-    user_id: MANAGER_USER,
-    role: 'manager',
-    label: 'Karla',
-    alias: 'karla@panaderia.role.ec',
-  });
-
-/**
- * What `business_member_session_state` answers when the session is inside the
- * §5.2 promise.
- *
- * ─── POR QUÉ EL DOBLE NO CALCULA NADA ──────────────────────────────────────────
- *
- * Porque si calculara `sello + ttl` estaría SCIP reimplementando en el test justo
- * la cuenta que Plan 1 quitó del código. Los dos pasarían juntos aunque los dos
- * estuvieran mal, así que devuelve literales.
- */
-function sessionState(
-  overrides: Partial<StaffSessionState> = {},
-): StaffSessionState {
-  return StaffSessionStateSchema.parse({
-    role: 'manager',
-    location_ids: [LOC_A],
-    expires_at: null,
-    reason: 'ok',
-    business_ids: [BIZ],
-    ...overrides,
-  });
-}
-
-/** Which membership `findMemberByUser` finds, per caller. */
-const MEMBER_BY_USER: Record<string, BusinessMemberRow> = {
-  [OWNER_USER]: ownerRow(),
-  [MANAGER_USER]: managerRow(),
-  [STAFF_USER]: memberRow(),
-};
-
-/**
- * What the session function answers, per caller.
- *
- * A map and not a function because the point of the expired-session tests is that
- * two callers with the SAME role get different answers, and a fixture where they
- * agreed would pass through a controller whose gate is the role.
- */
-const SESSION_BY_USER: Record<string, StaffSessionState> = {
-  [OWNER_USER]: sessionState({ role: 'owner', location_ids: [] }),
-  [MANAGER_USER]: sessionState(),
-  [STAFF_USER]: sessionState({ role: 'staff' }),
-};
-
-/**
- * The `app_role` the API attributes to each token.
- *
- * `consumer` carries `user` on purpose: the point of the test is that a consumer
- * is refused by the MEMBERSHIP —the §8 gate— and not by a decorator. If a
- * `@Roles('business')` were added to these routes, this test would keep passing
- * and the §5.2 promise would already estar rota; the `ROLES_KEY` test below es
- * la que lo dice.
- */
-const PROFILES: Record<
-  string,
-  { id: string; email: string | null; role: string }
-> = {
-  [OWNER_USER]: { id: OWNER_USER, email: null, role: 'business' },
-  [MANAGER_USER]: { id: MANAGER_USER, email: null, role: 'business' },
-  [STAFF_USER]: { id: STAFF_USER, email: null, role: 'business' },
-  [CONSUMER_USER]: { id: CONSUMER_USER, email: null, role: 'user' },
-};
-
-/**
- * The subject the REAL verifier just authenticated.
- *
- * `AuthGuard` verifies the token and only then asks `profiles` who that `sub` is.
- * The DB stub answers for the identity that was just verified, which is why the
- * verification stays real (a forged token is a 401 here, no exceptions) and only
- * the row lookup is fake — the row lookup is what a database is.
- */
-let verifiedSub = '';
-
-/** The doubles, declared before the module so DI resolves them once. */
-type Mock = ReturnType<typeof jest.fn>;
-
-/**
- * The last patch each membership row received.
- *
- * `memberDto` RE-READS the row after every write —the service does not answer
- * from memory— so a double that always returned the initial fixture would make
- * the HTTP response contradict the write it just did: a `disable` that answered
- * `status: 'active'`. This is the part of the database that the write is
- * supposed to change, and a fake that ignores it is a fake that lies about the
- * only thing the route is asserting.
- */
-const written = new Map<string, Record<string, unknown>>();
-
-const repository: Record<string, Mock> = {
-  transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),
-  findBusiness: jest.fn(async () => ({ id: BIZ, slug: 'panaderia-familia' })),
-  findMemberByUser: jest.fn(
-    async (_businessId: string, userId: string) =>
-      MEMBER_BY_USER[userId] ?? null,
-  ),
-  findMemberById: jest.fn(async (_businessId: string, id: string) => ({
-    ...memberRow({ id }),
-    ...written.get(id),
-  })),
-  listMembersWithScope: jest.fn(async () => [
-    { row: ownerRow(), locationIds: [] },
-    { row: memberRow(), locationIds: [LOC_A] },
-  ]),
-  locationIdsOfMember: jest.fn(async () => [LOC_A]),
-  findLocationIdsInBusiness: jest.fn(
-    async (_businessId: string, ids: string[]) => ids,
-  ),
-  insertMember: jest.fn(async (_tx: unknown, values: unknown) => ({
-    ...memberRow(),
-    ...(values as object),
-  })),
-  setScope: jest.fn(async () => {}),
-  updateMember: jest.fn(
-    async (
-      _businessId: string,
-      memberId: string,
-      values: Record<string, unknown>,
-    ) => {
-      written.set(memberId, { ...(written.get(memberId) ?? {}), ...values });
-      return { ...memberRow({ id: memberId }), ...written.get(memberId) };
-    },
-  ),
-  softDeleteMember: jest.fn(
-    async (_tx: unknown, _businessId: string, id: string) =>
-      memberRow({ id, deleted_at: new Date() }),
-  ),
-  stampSession: jest.fn(
-    async (_businessId: string, _userId: string, at: Date) =>
-      memberRow({ last_authenticated_at: at }),
-  ),
-  sessionStateAsCaller: jest.fn(
-    async (_businessId: string, userId: string) =>
-      SESSION_BY_USER[userId] ??
-      sessionState({ reason: 'no_membership', business_ids: [] }),
-  ),
-};
-
-const authAdmin = {
-  createUser: jest.fn(async () => ({
-    data: { user: { id: NEW_AUTH_USER } },
-    error: null,
-  })),
-  deleteUser: jest.fn(async () => ({ error: null })),
-  updateUserById: jest.fn(async () => ({ error: null })),
-};
-
-/**
- * The defaults every test starts from.
- *
- * `mockClear()` solo borra las llamadas: una implementación puesta por un test
- * seguiría viva en el siguiente, y un `sessionStateAsCaller` que quedó en
- * `session_expired` volvería negativa la mitad de los tests de abajo sin que
- * ninguno lo pidiera. Por eso se guardan y se reponen.
- */
-const defaults = new Map<string, (() => unknown) | undefined>(
-  [...Object.entries(repository), ...Object.entries(authAdmin)].map(
-    ([name, mock]) => [name, mock.getMockImplementation()],
-  ),
-);
-
-function resetDoubles(): void {
-  written.clear();
-  for (const [name, implementation] of defaults) {
-    const mock = repository[name] ?? authAdmin[name as keyof typeof authAdmin];
-    mock.mockClear();
-    mock.mockImplementation(implementation as never);
-  }
-}
-
-async function tokenFor(id: string): Promise<string> {
-  return new SignJWT({})
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuer(`${SUPABASE_URL}/auth/v1`)
-    .setAudience('authenticated')
-    .setSubject(id)
-    .setIssuedAt()
-    .setExpirationTime('1h')
-    .sign(new TextEncoder().encode(JWT_SECRET));
-}
-
-/**
- * The drizzle shape `AuthGuard` reads, and nothing more: a `select().from(
- * profiles).where(…).limit(1)` that answers for the identity just verified.
- */
-const drizzleStub = {
-  select: () => ({
-    from: () => ({
-      where: () => ({
-        limit: async () => {
-          const profile = PROFILES[verifiedSub];
-          return profile ? [profile] : [];
-        },
-      }),
-    }),
-  }),
-};
-
-let app: INestApplication;
 
 beforeAll(async () => {
-  const config = {
-    get: (key: string) =>
-      ({ SUPABASE_URL, SUPABASE_JWT_SECRET: JWT_SECRET })[key],
-  } as unknown as ConfigService<Env, true>;
-
-  const moduleRef = await Test.createTestingModule({
-    controllers: [StaffController, StaffSessionController],
-    providers: [
-      StaffService,
-      { provide: StaffRepository, useValue: repository },
-      {
-        provide: STAFF_AUTH_ADMIN,
-        useValue: { auth: { admin: authAdmin } } as StaffAuthAdmin,
-      },
-      { provide: DRIZZLE, useValue: drizzleStub },
-      { provide: ConfigService, useValue: config },
-      AuthGuard,
-      RolesGuard,
-      // The REAL verifier, wrapped so the DB stub knows who was authenticated.
-      // Replacing it would make every "no token → 401" test pass for the wrong
-      // reason: it would be the stub negando, no el guard.
-      {
-        provide: SupabaseTokenVerifier,
-        useFactory: () => {
-          const real = new SupabaseTokenVerifier(config);
-          return {
-            verify: async (token: string) => {
-              const verified = await real.verify(token);
-              verifiedSub = verified.sub;
-              return verified;
-            },
-          };
-        },
-      },
-      { provide: 'APP_GUARD', useExisting: AuthGuard },
-      { provide: 'APP_GUARD', useExisting: RolesGuard },
-    ],
-  }).compile();
-
-  // El logger del servicio escribe una línea JSON por evento, y un test no es un
-  // lugar donde lostee el stdout de producción. Se silencia después del
-  // compile, que es cuando el servicio ya existe.
-  (moduleRef.get(StaffService) as unknown as { logger: unknown }).logger = {
-    log: () => {},
-    warn: () => {},
-    error: () => {},
-    debug: () => {},
-  };
-
-  app = moduleRef.createNestApplication();
-  await app.init();
-}, 60000);
+  await bootstrapStaffHttp();
+});
 
 afterAll(async () => {
-  await app?.close();
+  await closeStaffHttp();
 });
 
 beforeEach(() => {
   resetDoubles();
 });
-
-const api = () => request(app.getHttpServer());
-
-/**
- * One authenticated caller.
- *
- * The token is minted once per user because `AuthGuard` caches the profile for
- * 30 s per `sub`, and re-minting would be slower for no gain: the cache key is
- * the identity, which is exactly what these tests vary.
- */
-const tokens = new Map<string, Promise<string>>();
-
-function as(userId: string) {
-  let pending = tokens.get(userId);
-  if (!pending) {
-    pending = tokenFor(userId);
-    tokens.set(userId, pending);
-  }
-  return pending.then((token) => {
-    const auth = { Authorization: `Bearer ${token}` };
-    return {
-      get: (url: string) => api().get(url).set(auth),
-      post: (url: string) => api().post(url).set(auth),
-      patch: (url: string) => api().patch(url).set(auth),
-      delete: (url: string) => api().delete(url).set(auth),
-    };
-  });
-}
 
 // ───────────────────────────── la puerta ─────────────────────────────
 
@@ -468,7 +136,7 @@ describe('la puerta de las ocho rutas es la del §5.2', () => {
     repository.sessionStateAsCaller.mockResolvedValue({
       ...sessionState({ role: 'owner' }),
       reason: 'banned_for_being_rude',
-    } as unknown as StaffSessionState);
+    } as never);
 
     const res = await (await as(OWNER_USER)).get(`/businesses/${BIZ}/staff`);
 
@@ -504,10 +172,136 @@ describe('la puerta de las ocho rutas es la del §5.2', () => {
   });
 });
 
+// ─────────────────── el admin de plataforma, por el stack real ───────────────────
+
+/**
+ * El `app_role: 'admin'` no es miembro de ningún negocio, y eso lo dice la
+ * puerta —por HTTP, no sólo en el servicio.
+ *
+ * ─── POR QUÉ ESTE BLOQUE NO ESTÁ EN EL SPEC DEL SERVICIO ──────────────────────
+ *
+ * Porque el de allí ya existe y pasa, y no alcanza. `requireActor` es una línea
+ * dentro de `StaffService`, y un controlador que se olvidara de enganchar la
+ * puerta —o una ruta nueva que no pasara por ella— dejaría todos los tests del
+ * servicio en verde: ellos no pasan por HTTP. Estos pasan por el stack completo,
+ * así que si el `admin` llegara al servicio por una ruta que no lo engancha, el
+ * `403` se vería acá y en ningún otro lugar.
+ *
+ * ─── Y POR QUÉ SE ASERTA EL MENSAJE Y NO EL STATUS ───────────────────────────
+ *
+ * Porque el status solo no distingue la regresión. El harness responde `null` a
+ * `findMemberByUser` para este `sub` a propósito: si una regresión reordenara
+ * las comprobaciones, el `admin` caería en «no perteneces a este negocio», que
+ * sigue siendo un 403. El MENSAJE sí lo dice —administrar es del dueño del
+ * negocio— y es la aserción que de verdad distingue las dos causas.
+ */
+describe('un admin de plataforma administra de a leer, y sólo de a leer', () => {
+  /**
+   * Las siete escrituras del §8, con su verbo y su camino.
+   *
+   * La lista está escrita completa a propósito: agregar una octava ruta sin
+   * agregar su fila acá es el modo de fallo que este bloque previene, y se
+   * preventa por lectura —una fila que falta es visible en el diff de la tabla.
+   */
+  const writes: Array<
+    [string, 'post' | 'patch' | 'delete', string, Record<string, unknown>]
+  > = [
+    [
+      'alta',
+      'post',
+      `/businesses/${BIZ}/staff`,
+      { label: 'Carla', role: 'staff', business_location_ids: [] },
+    ],
+    [
+      'editar',
+      'patch',
+      `/businesses/${BIZ}/staff/${MEMBER_STAFF}`,
+      { role: 'manager' },
+    ],
+    [
+      'alias',
+      'patch',
+      `/businesses/${BIZ}/staff/${MEMBER_STAFF}/alias`,
+      { alias: 'otro@panaderia.role.ec' },
+    ],
+    ['rotate', 'post', `/businesses/${BIZ}/staff/${MEMBER_STAFF}/rotate`, {}],
+    ['disable', 'post', `/businesses/${BIZ}/staff/${MEMBER_STAFF}/disable`, {}],
+    ['enable', 'post', `/businesses/${BIZ}/staff/${MEMBER_STAFF}/enable`, {}],
+    ['dar de baja', 'delete', `/businesses/${BIZ}/staff/${MEMBER_STAFF}`, {}],
+  ];
+
+  it('el harness le da `app_role: admin`, que es de donde sale el rol', () => {
+    // Sin esto, los siete 403 de abajo serían la respuesta a «no eres miembro» y
+    // no a «supervisas la plataforma pero no administras». Es el ancla del bloque.
+    expect(PROFILES[ADMIN_USER]?.role).toBe('admin');
+    expect(PROFILES[ADMIN_USER]?.id).toBe(ADMIN_USER);
+  });
+
+  for (const [label, verb, url, body] of writes) {
+    it(`${label} recibe 403, y el mensaje dice que administrar es del dueño`, async () => {
+      // El cuerpo es VÁLIDO a propósito: el pipe corre antes que el servicio, así
+      // que un body incompleto sería un 400 del schema y el 403 de la puerta ni
+      // llegaría a medirse. Lo que se afirma acá es que la puerta nega, no que el
+      // body esté bien.
+      const res = await (await as(ADMIN_USER))[verb](url).send(body);
+
+      expect(res.status).toBe(HttpStatus.FORBIDDEN);
+      expect(res.body.message).toBe(
+        'Administrar los accesos del equipo es del dueño del negocio.',
+      );
+    });
+  }
+
+  it('ninguna de las siete alcanzó a escribir algo', async () => {
+    const token = await bearerFor(ADMIN_USER);
+    for (const [, verb, url, body] of writes) {
+      await staffHttp()[verb](url).set('Authorization', token).send(body);
+    }
+
+    expect(repository.insertMember).not.toHaveBeenCalled();
+    expect(repository.updateMember).not.toHaveBeenCalled();
+    expect(repository.softDeleteMember).not.toHaveBeenCalled();
+    expect(repository.setScope).not.toHaveBeenCalled();
+    expect(authAdmin.createUser).not.toHaveBeenCalled();
+    expect(authAdmin.updateUserById).not.toHaveBeenCalled();
+    // Y ni siquiera se buscó una membresía: un `admin` no tiene fila que buscar, y
+    // la negación es anterior a cualquier lectura.
+    expect(repository.findMemberByUser).not.toHaveBeenCalled();
+  });
+
+  /**
+   * LA EXCEPCIÓN, DICHA EN VOZ ALTA.
+   *
+   * `GET /businesses/:id/staff` sí le responde a un `admin`, y es deliberado:
+   * `app_role: 'admin'` es el rol de quien SUPERVISA la plataforma (§10), y la
+   * supervisión necesita poder ver a quién de un negocio se le revocó el acceso
+   * para poder responder por un cobro. Devolverle una lista vacía sería
+   * mentirle sobre el estado del negocio —y una lista vacía es indistinguible de
+   * «aquí no hay nadie»—, que es la misma mentira que el 403 de las otras ocho
+   * evita.
+   *
+   * El precio de la excepción es que el `admin` ve `alias`, que espeja
+   * `auth.users.email`. Es consciente y está en el §10; lo que este test evita
+   * es que la excepción CREZCA sin que nadie lo decida: si mañana una lectura más
+   * se le abre por el mismo camino, este archivo es donde se nota.
+   */
+  it('LA EXCEPCIÓN: la lista sí le responde, y es deliberado', async () => {
+    const res = await (await as(ADMIN_USER)).get(`/businesses/${BIZ}/staff`);
+
+    expect(res.status).toBe(HttpStatus.OK);
+    expect(res.body).toHaveLength(2);
+    // Sin alcance, no por falta de sesión: un `admin` no tiene membresía que
+    // pueda vencer, y preguntarle por su sesión sería preguntar sobre una fila
+    // que no existe. `list` tiene su rama propia justamente por eso.
+    expect(repository.sessionStateAsCaller).not.toHaveBeenCalled();
+  });
+});
+
 describe('la puerta NO es un @Roles: la metadata lo dice', () => {
   const handlers = () => {
-    const controller = app.get(StaffController);
-    const session = app.get(StaffSessionController);
+    const controller = new StaffController(
+      null as unknown as ConstructorParameters<typeof StaffController>[0],
+    );
     return [
       controller.list,
       controller.create,
@@ -517,61 +311,59 @@ describe('la puerta NO es un @Roles: la metadata lo dice', () => {
       controller.disableAccess,
       controller.enableAccess,
       controller.remove,
-      session.stampSession,
     ];
   };
 
   /**
    * La aserción negativa del §8, escrita como test.
    *
-   * `RolesGuard` es global y lee `ROLES_KEY`: si estas nueve rutas lo tuvieran,
-   * el chequeo sería `profiles.role ∈ […]`, que es `app_role` y NO lleva TTL. El
+   * `RolesGuard` es global y lee `ROLES_KEY`: si estas rutas lo tuvieran, el
+   * chequeo sería `profiles.role ∈ […]`, que es `app_role` y NO lleva TTL. El
    * §5.2 sería entonces una promesa que nadie cumple en esta API, que escribe con
    * `service_role`.
    *
    * La ausencia es lo que hay que proteger, y es un test que no se rompe solo: un
    * `@Roles` puesto «por uniformidad con los otros controladores» deja verdes
-   * todos los tests de arriba —`requireActor` deniega igual— y reinstala la
+   * todos los tests de status —`requireActor` deniega igual— y reinstala la
    * frontera equivocada DELANTE de la buena.
    */
-  it('ninguna de las nueve rutas pide un rol de Nest', () => {
-    const reflector = app.get(Reflector);
+  it('ninguna de las ocho pide un rol de Nest', () => {
+    const reflector = new Reflector();
 
     for (const handler of handlers()) {
       expect(reflector.get(ROLES_KEY, handler)).toBeUndefined();
     }
   });
 
-  it('ninguna de las nueve rutas es pública: el AuthGuard global es default-deny', () => {
-    const reflector = app.get(Reflector);
+  it('ninguna de las ocho es pública: el AuthGuard global es default-deny', () => {
+    const reflector = new Reflector();
 
     for (const handler of handlers()) {
       expect(reflector.get(IS_PUBLIC_KEY, handler)).toBeUndefined();
     }
   });
 
-  it('sin token es 401 en las ocho, y también en `POST /staff/session`', async () => {
-    await api().get(`/businesses/${BIZ}/staff`).expect(401);
-    await api()
+  it('sin token es 401 en las ocho', async () => {
+    await staffHttp().get(`/businesses/${BIZ}/staff`).expect(401);
+    await staffHttp()
       .post(`/businesses/${BIZ}/staff/${MEMBER_STAFF}/rotate`)
       .expect(401);
-    // La novena no es pública tampoco: sella la sesión de QUIEN entra, y sin
-    // token no hay nadie a quien sellársela.
-    await api().post('/staff/session').send({ business_id: BIZ }).expect(401);
+    await staffHttp()
+      .delete(`/businesses/${BIZ}/staff/${MEMBER_STAFF}`)
+      .expect(401);
   });
 
   it('un token forjado es 401, y lo nega el verificador real', async () => {
-    await api()
+    await staffHttp()
       .get(`/businesses/${BIZ}/staff`)
       .set('Authorization', 'Bearer no-es-un-jwt')
       .expect(401);
   });
 
-  it('los prefijos son los del §8: ocho bajo el negocio, la novena aparte', () => {
+  it('el prefijo es el del §8', () => {
     expect(Reflect.getMetadata('path', StaffController)).toBe(
       'businesses/:businessId/staff',
     );
-    expect(Reflect.getMetadata('path', StaffSessionController)).toBe('staff');
   });
 });
 
@@ -703,147 +495,6 @@ describe('DELETE /businesses/:id/staff/:memberId', () => {
 
     expect(res.status).toBe(HttpStatus.NOT_FOUND);
     expect(repository.softDeleteMember).not.toHaveBeenCalled();
-  });
-});
-
-// ─────────────────────── POST /staff/session ───────────────────────
-
-describe('POST /staff/session', () => {
-  /**
-   * La respuesta viene de la base y no de una cuenta en TypeScript.
-   *
-   * La fecha que se le pide al doble es una que NINGUNA aritmética de TTL puede
-   * producir: la fila de la que saldría tiene `last_authenticated_at` de hace una
-   * hora y `session_ttl_hours = 24`, así que un `sello + ttl` no puede dar 2031.
-   * Si alguien reintrodujera el cálculo —en el servicio o en el repositorio, que
-   * es donde Plan 1 lo borró— este test se pone rojo; y si sólo cambia el SQL, la
-   * respuesta se mueve con él.
-   */
-  it('el `expires_at` de la respuesta es el que dijo la función', async () => {
-    repository.sessionStateAsCaller.mockResolvedValue(
-      sessionState({
-        role: 'manager',
-        location_ids: [LOC_A],
-        expires_at: '2031-04-05T06:07:08.910000+00:00',
-        reason: 'ok',
-        business_ids: [BIZ],
-      }),
-    );
-
-    const res = await (
-      await as(MANAGER_USER)
-    )
-      .post('/staff/session')
-      .send({ business_id: BIZ });
-
-    expect(res.status).toBe(HttpStatus.OK);
-    expect(res.body.expires_at).toBe('2031-04-05T06:07:08.910000+00:00');
-    expect(res.body.role).toBe('manager');
-    expect(res.body.reason).toBe('ok');
-    expect(repository.stampSession).toHaveBeenCalledWith(
-      BIZ,
-      MANAGER_USER,
-      expect.any(Date),
-    );
-  });
-
-  it('sella primero y pregunta después: por eso una vencida vuelve como `ok`', async () => {
-    // El doble cambia de respuesta según haya pasado el sello, que es lo que
-    // hace la base. Leído al revés, el panel le diría a un gerente que acaba de
-    // entrar que su sesión venció — y sería verdad en un idioma y falsa en el
-    // otro. El ORDEN de las llamadas es la promesa, no el resultado.
-    let sealed = false;
-    repository.stampSession.mockImplementation(async () => {
-      sealed = true;
-      return managerRow();
-    });
-    repository.sessionStateAsCaller.mockImplementation(async () =>
-      sealed
-        ? sessionState({ expires_at: '2031-04-05T06:07:08.910000+00:00' })
-        : sessionState({ reason: 'session_expired' }),
-    );
-
-    const res = await (
-      await as(MANAGER_USER)
-    )
-      .post('/staff/session')
-      .send({ business_id: BIZ });
-
-    expect(res.body.reason).toBe('ok');
-    expect(
-      repository.sessionStateAsCaller.mock.invocationCallOrder[0],
-    ).toBeGreaterThan(repository.stampSession.mock.invocationCallOrder[0]);
-  });
-
-  it('un empleado la puede llamar, y una membresía pausada se explica en vez de negarse', async () => {
-    repository.findMemberByUser.mockResolvedValue(
-      memberRow({ status: 'disabled' }),
-    );
-    repository.sessionStateAsCaller.mockResolvedValue(
-      sessionState({
-        role: null,
-        location_ids: [],
-        expires_at: null,
-        reason: 'disabled',
-        business_ids: [],
-      }),
-    );
-
-    const res = await (
-      await as(STAFF_USER)
-    )
-      .post('/staff/session')
-      .send({ business_id: BIZ });
-
-    // Un 403 sería un error genérico en la pantalla cuyo trabajo es explicar la
-    // salida. Y además este empleado NO pasa la puerta de las otras ocho: esta es
-    // la única de las nueve que puede llamar cualquier miembro.
-    expect(res.status).toBe(HttpStatus.OK);
-    expect(res.body.reason).toBe('disabled');
-    expect(res.body.role).toBeNull();
-    // Y a un acceso pausado no se le renueva la sesión: el sello es lo que revive
-    // una sesión, y una fila que no concede nada no tiene sesión que revivir.
-    expect(repository.stampSession).not.toHaveBeenCalled();
-  });
-
-  it('sin `business_id` es 400: el sello es de UNA membresía', async () => {
-    const res = await (await as(MANAGER_USER)).post('/staff/session').send({});
-
-    expect(res.status).toBe(HttpStatus.BAD_REQUEST);
-    expect(repository.stampSession).not.toHaveBeenCalled();
-    expect(repository.sessionStateAsCaller).not.toHaveBeenCalled();
-  });
-
-  it('un campo de más es 400, no un 200 que finge haber sellado', async () => {
-    const res = await (await as(MANAGER_USER)).post('/staff/session').send({
-      business_id: BIZ,
-      expires_at: '2031-01-01T00:00:00.000000+00:00',
-    });
-
-    expect(res.status).toBe(HttpStatus.BAD_REQUEST);
-    expect(repository.stampSession).not.toHaveBeenCalled();
-  });
-
-  it('quien no es miembro recibe `no_membership`, no un 403', async () => {
-    repository.sessionStateAsCaller.mockResolvedValue(
-      sessionState({
-        role: null,
-        location_ids: [],
-        expires_at: null,
-        reason: 'no_membership',
-        business_ids: [],
-      }),
-    );
-
-    const res = await (
-      await as(CONSUMER_USER)
-    )
-      .post('/staff/session')
-      .send({ business_id: BIZ });
-
-    expect(res.status).toBe(HttpStatus.OK);
-    expect(res.body.reason).toBe('no_membership');
-    expect(repository.stampSession).not.toHaveBeenCalled();
   });
 });
 

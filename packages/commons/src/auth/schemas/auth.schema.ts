@@ -182,7 +182,7 @@ export const StaffSessionStateSchema = z.object({
 });
 
 /**
- * `POST /staff/session` — which membership to stamp.
+ * `POST /staff/session` — which membership to stamp, IF THE CALLER KNOWS.
  *
  * ─── WHY THE BUSINESS IS IN THE BODY AND NOT IN THE PATH ──────────────────────
  *
@@ -193,16 +193,37 @@ export const StaffSessionStateSchema = z.object({
  * the caller is stamping ONE membership and naming it is not a privilege, it is
  * the statement of which row `last_authenticated_at` belongs to.
  *
- * ─── WHY IT IS REQUIRED AND NOT OPTIONAL ──────────────────────────────────────
+ * ─── WHY IT IS OPTIONAL, Y POR QUÉ EL VACÍO NO ES «UN NEGOCIO CUALQUIERA» ──────
  *
- * `business_member_session_state()` also answers without an argument —one
- * membership, `multiple_businesses`, `no_membership`, `disabled`— and the panel
- * CAN call that from its own client, with its own JWT, which is where those four
- * answers are meant to be read. The API cannot: it declares the caller's `sub`
- * to a `service_role` connection on purpose, and a route that guessed which
- * membership to stamp would be a fourth place deciding which row is "the" one.
- * `multiple_businesses` is an answer for someone choosing, not for someone
- * writing.
+ * Because the §5.2 caller does not always know: the panel seals once, right
+ * after login, and a panel that just authenticated is exactly the panel that
+ * has not chosen a business yet. Making the argument required made the client
+ * carry knowledge the route could have resolved for it.
+ *
+ * Leaving it out asks `business_member_session_state()` with NO argument, and
+ * the DATABASE decides: the membership of the caller when it has exactly one
+ * active, `multiple_businesses` plus the list when it has several, and
+ * `no_membership` / `disabled` when it has none. The route never picks a
+ * membership on the caller's behalf —sealing the wrong one renews the session of
+ * a business the person is not working in, which is worse than not sealing— so
+ * the ambiguous case answers `multiple_businesses` and seals nothing.
+ *
+ * ─── POR QUÉ NO ES `null` NI UNA CADENA VACÍA ─────────────────────────────────
+ *
+ * `optional()` y nada más: `business_id: null` es un 400, no un «no sé». Aceptar
+ * el `null` haría que un cliente que arma el cuerpo con un valor por defecto
+ * pidiera pedir explícitamente la resolución automática y no sabría que la
+ * pidió —dos caminos hacia el mismo comportamiento, y el que no se usa es el que
+ * nadie prueba.
+ *
+ * ─── Y EL `.optional()` DE AFUERA, POR EL MISMO MOTIVO QUE EN EL ROTATE ───────
+ *
+ * Un `POST` sin cuerpo deja `req.body` como `undefined` —medido en el stack real
+ * de Nest/Express, no supuesto—, y `strictObject` falla ahí con «expected object,
+ * received undefined». La llamada más natural de esta ruta es exactamente la que
+ * no manda cuerpo: un `fetch('/staff/session', { method: 'POST' })` después del
+ * login. Sin este `.optional()` sería un 400, y la ruta que existe para resolver
+ * el negocio por su cuenta no resolvería nada.
  *
  * `.strict()` for the same reason `CreateBusinessMemberSchema` has it: a
  * `member_id` or an `expires_at` in here is a field the route cannot honor, and
@@ -210,6 +231,7 @@ export const StaffSessionStateSchema = z.object({
  */
 export const StampStaffSessionSchema = z
 	.object({
-		business_id: UuidSchema,
+		business_id: UuidSchema.optional(),
 	})
-	.strict();
+	.strict()
+	.optional();

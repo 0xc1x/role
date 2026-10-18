@@ -25,7 +25,6 @@ import {
 import {
   CreateBusinessMemberSchema,
   RotateBusinessMemberPinSchema,
-  StampStaffSessionSchema,
   UpdateBusinessMemberAliasSchema,
   UpdateBusinessMemberSchema,
 } from '@0xc1x/role-commons';
@@ -34,8 +33,6 @@ import type {
   BusinessMemberDto,
   CreateBusinessMemberDto,
   RotateBusinessMemberPinDto,
-  StaffSessionState,
-  StampStaffSessionDto,
   UpdateBusinessMemberAliasDto,
   UpdateBusinessMemberAliasResponseDto,
   UpdateBusinessMemberDto,
@@ -47,6 +44,12 @@ import { StaffService } from './staff.service';
 
 /**
  * The eight routes that live under `businesses/:businessId/staff`.
+ *
+ * **The ninth §8 route, `POST /staff/session`, is not here**: it seals rather
+ * than administers, and it is the only one a `staff` may call. It lives in
+ * `staff-session.controller.ts`, and its absence from this file is the fact, not
+ * an omission — the other eight all refuse an employee at the door and this one
+ * does not.
  *
  * ─── POR QUÉ NO HAY `@Roles` EN ESTAS RUTAS, Y POR QUÉ ESO NO ES UNA AUSENCIA ────
  *
@@ -332,76 +335,5 @@ export class StaffController {
     @Param('memberId', ParseUUIDPipe) memberId: string,
   ): Promise<void> {
     return this.staffService.remove(user, businessId, memberId);
-  }
-}
-
-/**
- * `POST /staff/session` — the ninth route, and the only one any member may call.
- *
- * ─── POR QUÉ ESTÁ FUERA DEL `@Controller('businesses/:businessId/staff')` ───────
- *
- * Porque no administra nada: sella. Su tabla en el §8 dice «cualquier miembro»
- * y eso incluye al `staff`, que las ocho de arriba rechazan con un 403 en la
- * puerta. Ponerla bajo el prefijo de las otras ocho haría que el prefijo dijera
- * «de este negocio se administra» y esta ruta no administra nada.
- *
- * ─── POR QUÉ NO PASA POR `requireActor` ────────────────────────────────────────
- *
- * Es la operación que hace posible explicar una salida: quien entra después de
- * una pausa o de una baja necesita una respuesta que diga QUÉ pasó, y un 403 en
- * la puerta es un error genérico. `stampSession` sella si la fila está activa y
- * devuelve lo que `business_member_session_state` conteste —`no_membership`,
- * `disabled`, `session_expired`— sin negarse nunca. Es también la razón de que
- * el sello vaya con `service_role`: `business_members` no tiene policy de
- * escritura, así que un `update` de cliente no da `42501`, actualiza cero filas
- * en silencio y deja la sesión donde estaba.
- *
- * ─── EL NEGOCIO VA EN EL CUERPO, Y POR QUÉ ES OBLIGATORIO ─────────────────────
- *
- * La ruta no lleva `:businessId` —eso lo dice el §8— pero el sello es de UNA
- * membresía y hay que nombrarla. Y hay dos razones por las que no puede ser
- * opcional, y ninguna es de estilo:
- *
- *  1. `StaffService.stampSession` recibe el negocio, y ensancharlo para admitir
- *     «ninguno» es reescribir la capa que la Task 3 dejó revisada y probada: los
- *     tres métodos del repositorio que dependen del id —`findMemberByUser`,
- *     `stampSession` y `sessionStateAsCaller`— tendrían que aprender a funcionar
- *     sin él, y la fila que se sella dejaría de ser la que el panel nombró.
- *  2. `business_member_session_state()` SIN argumento sí responde, y sus cuatro
- *     salidas —una membresía, `multiple_businesses`, `no_membership`,
- *     `disabled`— están hechas para el que ESTÁ eligiendo. El panel las tiene
- *     desde su propio cliente, con su propio JWT; esa es la vía por la que se
- *     leen, y por eso `multiple_businesses` es inalcanzable desde acá a
- *     propósito.
- *
- * Con lo cual el cuerpo es un `business_id` y nada más, y el que el nombre no
- * esté en el path es exactamente lo que el §8 pidió.
- */
-@ApiTags('Staff')
-@ApiBearerAuth('bearer')
-@Controller('staff')
-export class StaffSessionController {
-  constructor(private readonly staffService: StaffService) {}
-
-  /**
-   * 200 and not 201: nothing is created. A stamp is a write to a column, and a
-   * 201 would tell the panel's client that there is a resource to keep.
-   */
-  @Post('session')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Stamp last_authenticated_at for one membership and return the §5.2 session state the database computes.',
-  })
-  @ApiOkResponse({
-    description:
-      'The session state, verbatim from business_member_session_state — never a 403 for a membership that cannot operate',
-  })
-  stampSession(
-    @CurrentUser() user: AuthUser,
-    @Body(new ZodValidationPipe(StampStaffSessionSchema))
-    body: StampStaffSessionDto,
-  ): Promise<StaffSessionState> {
-    return this.staffService.stampSession(user, body.business_id);
   }
 }

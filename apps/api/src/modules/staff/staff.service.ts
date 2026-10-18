@@ -175,7 +175,82 @@ export class StaffService {
    * 403. Refusing here would leave the panel with a generic error on the exact
    * screen whose job is to explain the exit.
    *
-   * ─── THE STAMP FIRST AND THE EXPLANATION AFTER, IN THAT ORDER ───────────────
+   * ─── EL NOMBRE DEL NEGOCIO, Y CUÁNDO NO HAY QUE TENERLO ─────────────────────
+   *
+   * `businessId` es `null` cuando la llamada no lo nombró, y eso NO es un caso
+   * degenerado: es la llamada que el §5.2 describe («un endpoint que el panel
+   * llama una vez, después del login») en la forma en que un panel recién
+   * autenticado la hace, sin saber todavía en qué negocio está.
+   *
+   * Con `null` la resolución la hace **la base**, no este archivo:
+   * `business_member_session_state()` sin argumento devuelve la membresía del
+   * que pregunta cuando tiene exactamente una activa, `multiple_businesses` con
+   * la lista cuando tiene varias, y `no_membership` / `disabled` cuando no tiene
+   * ninguna. Es la tabla del §5.2 y es la razón por la que el argumento de la
+   * función existe siendo opcional: el dueño real tiene seis negocios y elegir la
+   * fila más antigua devuelve el equivocado sin avisar.
+   *
+   * ─── Y CUANDO HAY VARIAS, LA RESPUESTA LO DICE Y NO SE SELLA ─────────────────
+   *
+   * Sellar es escribir `last_authenticated_at` en UNA fila, y adivinar cuál sería
+   * renovar la sesión de un negocio en el que la persona quizá no está trabajando
+   * —renovar la sesión equivocada es peor que no renovar ninguna—, así que en
+   * ese caso la respuesta es el `multiple_businesses` de la función y el
+   * `business_ids` que trae para que el panel pregunte cuál. La segunda lectura
+   * no se hace porque no hay nada que leer después de un sello que no ocurrió.
+   */
+  async stampSession(
+    user: AuthUser,
+    businessId: string | null,
+  ): Promise<StaffSessionState> {
+    if (businessId === null) {
+      const probe = await this.repository.sessionStateAsCaller(null, user.id);
+
+      // ─── EL DATO ESTRUCTURAL, NO EL VOCABULARIO DE `reason` ──────────────────
+      //
+      // `business_ids` con exactamente un elemento significa que la función
+      // resolvió una membresía: es el único caso en que la base devuelve una
+      // lista de longitud uno, y se lo usa como HECHO sobre la respuesta en vez
+      // de como un `reason` conocido. Un motivo nuevo en la base no cambia esta
+      // decisión —sellar la única membresía que hay sigue siendo lo correcto— y
+      // una razón desconocida no abre nada.
+      //
+      // `at(0)` y no `[0]` porque el repo compila con `noUncheckedIndexedAccess`:
+      // el índice sale `string | undefined` aunque la longitud sea uno. Y el
+      // `length !== 1` de la guarda es una condición REAL, no un molde para el
+      // compilador — `business_ids` con dos elementos tiene que negarse a sellar
+      // aunque `.at(0)` devuelva algo, porque renovar la fila equivocada es
+      // justamente lo que esta rama existe para no hacer.
+      const only = probe.business_ids.at(0) ?? null;
+
+      if (only === null || probe.business_ids.length !== 1) {
+        this.logger.log({
+          event: 'staff_session_unresolved',
+          userId: user.id,
+          reason: probe.reason,
+          businessCount: probe.business_ids.length,
+        });
+
+        return probe;
+      }
+
+      return this.sealAndExplain(user, only);
+    }
+
+    return this.sealAndExplain(user, businessId);
+  }
+
+  /**
+   * Sella UNA membresía nombrada y devuelve lo que la función dice de ella.
+   *
+   * Las dos formas de llamar a `POST /staff/session` terminan acá, y es a propósito
+   * que compartan el cuerpo entero: la resolución de «en qué negocio» es lo único
+   * que distingue a la llamada que lo nombró de la que no, y desde este punto
+   * hacia abajo las dos son la MISMA operación. Dos copias del sello serían dos
+   * lugares donde el orden stamp-then-read puede desacoplarse, y ese orden es la
+   * promesa del §5.2.
+   *
+   * ─── EL SELLO PRIMERO Y LA EXPLICACIÓN DESPUÉS, EN ESE ORDEN ─────────────────
    *
    * `stampSession` writes with `service_role` and the read happens AFTER the
    * stamp, on purpose: an expired session that signs in again has to come back
@@ -188,7 +263,7 @@ export class StaffService {
    * the function answers is returned, which is where those two
    * `jsonb_build_object` live and where they will keep living if they change.
    */
-  async stampSession(
+  private async sealAndExplain(
     user: AuthUser,
     businessId: string,
   ): Promise<StaffSessionState> {

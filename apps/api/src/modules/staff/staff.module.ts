@@ -2,23 +2,25 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
 import type { Env } from '../../config/env.schema';
-import { StaffController, StaffSessionController } from './staff.controller';
+import { StaffController } from './staff.controller';
 import { StaffRepository } from './staff.repository';
+import { StaffSessionController } from './staff-session.controller';
 import { StaffService } from './staff.service';
 import { STAFF_AUTH_ADMIN, type StaffAuthAdmin } from './staff.tokens';
 
 /**
  * The team-accesses module (§8): its nine routes and everything they need.
  *
- * ─── POR QUÉ DOS CONTROLADORES Y NO UNO ────────────────────────────────────────
+ * ─── POR QUÉ DOS CONTROLADORES Y EN DOS ARCHIVOS ──────────────────────────────
  *
  * Porque el §8 tiene ocho rutas bajo `businesses/:businessId/staff` y una que no
  * cuelga de un negocio —`POST /staff/session`, la que sella la sesión de quien
  * pregunta— y el ADR-0013 lo cuenta así. Meter la novena debajo del prefijo de
  * las otras ocho haría que el prefijo afirmara «de este negocio se administra»
- * para una ruta que no administra nada. Los dos viven en el mismo archivo porque
- * son las nueve rutas de un solo módulo y leerlas juntas vale más que dos
- * archivos de cuarenta líneas.
+ * para una ruta que no administra nada, y un archivo con las dos haría que
+ * `staff.controller.ts` leyéndose como «las rutas del equipo» escondiera la única
+ * que un empleado puede llamar. Un controller por archivo, como el resto del
+ * repo, y el nombre de cada uno dice a qué pertenece la ruta.
  *
  * ─── POR QUÉ EL CLIENTE DE AUTH ES UN PROVIDER ─────────────────────────────────
  *

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import { MODULE_METADATA } from '@nestjs/common/constants';
-import { StaffController, StaffSessionController } from './staff.controller';
+import { StaffController } from './staff.controller';
 import { StaffRepository } from './staff.repository';
 import { StaffService } from './staff.service';
+import { StaffSessionController } from './staff-session.controller';
 import { StaffModule } from './staff.module';
 
 /**
@@ -38,6 +39,20 @@ describe('StaffModule', () => {
     // ruta que no administra nada.
     expect(controllers).toContain(StaffController);
     expect(controllers).toContain(StaffSessionController);
+  });
+
+  it('la novena ruta NO está en el controlador de las ocho', () => {
+    // Un controller por archivo es el patrón del repo, y el nombre de cada uno
+    // dice a qué pertenece la ruta. Si las nueve volvieran a un archivo, un
+    // lector que abriera `staff.controller.ts` buscando «las rutas del equipo»
+    // leería ocho y concluiría que un empleado no tiene ninguna —que es la
+    // lectura equivocada en la dirección que más daña—.
+    expect(Object.getOwnPropertyNames(StaffController.prototype)).not.toContain(
+      'stampSession',
+    );
+    expect(
+      Object.getOwnPropertyNames(StaffSessionController.prototype),
+    ).toContain('stampSession');
   });
 
   it('exporta el servicio: lo consumen los controladores y cualquier "cortar todos los accesos" del §10', () => {
