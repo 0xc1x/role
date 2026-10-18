@@ -9,7 +9,9 @@ import * as nodeCrypto from 'node:crypto';
 import {
   BusinessMemberDeliveryCardSchema,
   BusinessMemberSchema,
+  StaffSessionStateSchema,
   type CreateBusinessMemberDto,
+  type StaffSessionState,
   type UpdateBusinessMemberAliasResponseDto,
 } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
@@ -116,6 +118,32 @@ const managerRow = (locationIds: string[]) =>
     session_ttl_hours: 24,
   });
 
+/**
+ * What `business_member_session_state` answers when the session is inside the
+ * §5.2 promise.
+ *
+ * ─── POR QUÉ EL DOBLE NO CALCULA NADA ──────────────────────────────────────────
+ *
+ * El doble *es* la base de datos para estos tests, así que si calculara
+ * `sello + ttl` estaría SCIP REIMPLEMENTANDO en el test justo la cuenta que
+ * este arreglo quitó del servicio: los dos pasarían juntos aunque los dos
+ * estuvieran mal. Por eso devuelve un literal, y los tests de la costura le
+ * pasan una fecha que ninguna aritmética de TTL puede producir —una que el
+ * servicio tendría que inventar para coincidir.
+ */
+function sessionState(
+  overrides: Partial<StaffSessionState> = {},
+): StaffSessionState {
+  return StaffSessionStateSchema.parse({
+    role: 'manager',
+    location_ids: [],
+    expires_at: null,
+    reason: 'ok',
+    business_ids: [BIZ],
+    ...overrides,
+  });
+}
+
 /** A `23505` / `R0001` / `R0002` as postgres-js hands it over. */
 function pgError(
   code: string,
@@ -188,6 +216,7 @@ describe('StaffService', () => {
       stampSession: jest.fn(async (_b: string, _u: string, at: Date) =>
         memberRow({ last_authenticated_at: at }),
       ),
+      sessionStateAsCaller: jest.fn(async () => sessionState()),
     };
 
     authAdmin = {
@@ -398,6 +427,72 @@ describe('StaffService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
 
       expect(repository.softDeleteMember).not.toHaveBeenCalled();
+      expect(authAdmin.updateUserById).not.toHaveBeenCalled();
+    });
+
+    /**
+     * LA MEDIDA, no el agujero: un gerente puede cortar su propio acceso.
+     *
+     * §8 no lo nombra y el predicado lo admite —su alcance lo contiene—, así que
+     * esto es una decisión y necesita test tanto como el otro lado. El argumento
+     * es que un dueño no puede ser desactivado por NADIE (`R0002`), o sea que
+     * «uno siempre puede cortar lo suyo» ya es la regla del rol más privilegiado;
+     * y un gerente que no puede irse de un negocio queda atrapado en él, que es un
+     * fallo peor que el que el auto-ban podría causar. Está escrito en
+     * `disableAccess` y en la decisión 4 del ADR-0013.
+     */
+    it('un gerente puede pausarse a sí mismo, y es a propósito', async () => {
+      // El DTO que vuelve es la relectura de la fila YA escrita, así que el
+      // doble tiene que servir la fila nueva en la segunda lectura.
+      repository.findMemberById.mockResolvedValue({
+        ...managerRow([LOC_A, LOC_B]),
+        status: 'disabled',
+      });
+      repository.updateMember.mockResolvedValue({
+        ...managerRow([LOC_A, LOC_B]),
+        status: 'disabled',
+      });
+
+      const member = await service.disableAccess(
+        managerAB,
+        BIZ,
+        MEMBER_MANAGER,
+      );
+
+      expect(repository.updateMember).toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_MANAGER,
+        {
+          status: 'disabled',
+        },
+      );
+      // El ban también: pausarse es cortar acceso y no sólo dejar de administer.
+      expect(authAdmin.updateUserById).toHaveBeenCalledWith(MANAGER_USER, {
+        ban_duration: '876000h',
+      });
+      expect(member.status).toBe('disabled');
+    });
+
+    it('pero NO puede pausar a otro gerente que esté fuera de su alcance', async () => {
+      // La contraparte que hace que lo de arriba sea una medida y no una puerta.
+      // Mismo rol, mismas dos sucursales compartidas, y una tercera que el que
+      // llama no gestiona: la diferencia entre las dos mitades es `C`, no el rol.
+      const otroGerente = memberRow({
+        id: MEMBER_OUTSIDE,
+        user_id: OUTSIDE_USER,
+        role: 'manager',
+        label: 'Nadia',
+      });
+      repository.findMemberById.mockResolvedValue(otroGerente);
+      repository.locationIdsOfMember.mockImplementation(async (id: string) =>
+        id === MEMBER_OUTSIDE ? [LOC_B, LOC_C] : [],
+      );
+
+      await expect(
+        service.disableAccess(managerAB, BIZ, MEMBER_OUTSIDE),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(repository.updateMember).not.toHaveBeenCalled();
       expect(authAdmin.updateUserById).not.toHaveBeenCalled();
     });
   });
@@ -1048,13 +1143,10 @@ describe('StaffService', () => {
     });
 
     it('una sesión vencida no administra: es la misma promesa que RLS hace', async () => {
-      repository.findMemberByUser.mockResolvedValue({
-        ...managerRow([LOC_A]),
-        session_ttl_hours: 24,
-        // 48 h atrás con un TTL de 24: vencida para el reloj real, que es el
-        // mismo contra el que calcula `requireActor`.
-        last_authenticated_at: new Date(NOW.getTime() - 48 * HOUR),
-      });
+      repository.findMemberByUser.mockResolvedValue(managerRow([LOC_A]));
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({ reason: 'session_expired' }),
+      );
 
       await expect(service.list(managerAB, BIZ)).rejects.toThrow(/venció/);
     });
@@ -1063,13 +1155,57 @@ describe('StaffService', () => {
       // `can_manage_location` devuelve false para esto, y esta API escribe con
       // `service_role`: si el servicio lo ignorara, la promesa del §5.2 sería
       // cierta en el panel y falsa acá.
+      repository.findMemberByUser.mockResolvedValue(managerRow([LOC_A]));
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({ reason: 'session_never_stamped' }),
+      );
+
+      await expect(service.list(managerAB, BIZ)).rejects.toThrow(/venció/);
+    });
+
+    it('la fila en memoria NO puede contradecir a la base: la palabra es la de la función', async () => {
+      // La fila dice «vencida» —48 h atrás con un TTL de 24— y la función dice
+      // `ok`. Gana la función, porque es la misma que aplica `can_manage_location`
+      // y la que el panel ve. Un test que decidiera al revés —«se permite porque
+      // la fila parece viva»— estaría fijando la cuarta copia de la aritmética
+      // que este arreglo quitó.
       repository.findMemberByUser.mockResolvedValue({
         ...managerRow([LOC_A]),
         session_ttl_hours: 24,
-        last_authenticated_at: null,
+        last_authenticated_at: new Date(NOW.getTime() - 48 * HOUR),
       });
+      repository.locationIdsOfMember.mockResolvedValue([LOC_A]);
+      repository.sessionStateAsCaller.mockResolvedValue(sessionState());
+      repository.listMembersWithScope.mockResolvedValue([
+        { row: memberRow({ id: MEMBER_STAFF }), locationIds: [LOC_A] },
+      ]);
+
+      const members = await service.list(managerAB, BIZ);
+
+      expect(members.map((m) => m.id)).toEqual([MEMBER_STAFF]);
+    });
+
+    it('una razón que esta API no conoce también cierra la puerta, y queda en el log', async () => {
+      // La palabra es la de la base, y la base es la que puede agregar una. Fallar
+      // hacia adentro es lo que hace el §5.2; el log es para que un panel
+      // bloqueado tenga una línea que lo explique.
+      repository.findMemberByUser.mockResolvedValue(managerRow([LOC_A]));
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({
+          reason: 'multiple_businesses',
+          role: null,
+          location_ids: [],
+          business_ids: [BIZ, OTHER_BIZ],
+        }),
+      );
 
       await expect(service.list(managerAB, BIZ)).rejects.toThrow(/venció/);
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          event: 'staff_session_reason_unknown',
+          reason: 'multiple_businesses',
+        }),
+      );
     });
 
     it('un dueño con el modo «equipo propio» (ttl 0) no vence nunca', async () => {
@@ -1174,9 +1310,21 @@ describe('StaffService', () => {
       );
     });
 
-    it('sella y devuelve el estado con la fecha de vencimiento calculada', async () => {
+    it('sella y devuelve lo que la función dijo, sin volver a calcularlo', async () => {
       repository.findMemberByUser.mockResolvedValue(managerRow([LOC_A]));
-      repository.locationIdsOfMember.mockResolvedValue([LOC_A]);
+      // Una fecha que NINGUNA aritmética de TTL puede producir: el TTL de la
+      // fila es 24 h y el sello es `now`, así que un `sello + 24 h` en el
+      // servicio no puede dar esta. Si alguien reintrodujera la aritmética, este
+      // test se pone rojo; si sólo cambiara el SQL, la respuesta se mueve con él.
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({
+          role: 'manager',
+          location_ids: [LOC_A],
+          expires_at: '2031-04-05T06:07:08.910000+00:00',
+          reason: 'ok',
+          business_ids: [BIZ],
+        }),
+      );
 
       const state = await service.stampSession(managerAB, BIZ);
 
@@ -1185,19 +1333,58 @@ describe('StaffService', () => {
         MANAGER_USER,
         expect.any(Date),
       );
+      // Campo por campo, no en bloque: un `toEqual` sobre el objeto entero
+      // pasaría igual con los cinco campos cambiados a la vez, y el campo que
+      // importa es `expires_at`.
+      expect(state.expires_at).toBe('2031-04-05T06:07:08.910000+00:00');
+      expect(state.reason).toBe('ok');
       expect(state.role).toBe('manager');
       expect(state.location_ids).toEqual([LOC_A]);
-      expect(state.reason).toBe('ok');
       expect(state.business_ids).toEqual([BIZ]);
-      // 24 h desde el sello, y el sello es el `Date` que esta request usó.
-      const sealedAt = repository.stampSession.mock.calls[0][2] as Date;
-      expect(new Date(state.expires_at as string).getTime()).toBe(
-        sealedAt.getTime() + 24 * HOUR,
-      );
+      expect(StaffSessionStateSchema.parse(state)).toEqual(state);
     });
 
-    it('sin membresía responde no_membership y NO es un 403', async () => {
+    it('el estado se lee DESPUÉS del sello, que es lo que hace que una vencida vuelva como ok', async () => {
+      // El doble cambia de respuesta según haya pasado el sello, que es lo que
+      // hace la base: una sesión vencida que entra de nuevo ya no está vencida
+      // cuando se pregunta. Leído antes del sello, el panel le diría a un
+      // gerente que acaba de entrar que su sesión venció — y sería verdad en un
+      // idioma y falsa en el otro.
+      let sealed = false;
+      repository.stampSession.mockImplementation(async () => {
+        sealed = true;
+        return managerRow([LOC_A]);
+      });
+      repository.sessionStateAsCaller.mockImplementation(async () =>
+        sealed
+          ? sessionState({ expires_at: '2031-04-05T06:07:08.910000+00:00' })
+          : sessionState({ reason: 'session_expired' }),
+      );
+      repository.findMemberByUser.mockResolvedValue(managerRow([LOC_A]));
+
+      const state = await service.stampSession(managerAB, BIZ);
+
+      expect(state.reason).toBe('ok');
+      expect(state.expires_at).toBe('2031-04-05T06:07:08.910000+00:00');
+      // Y por orden, no sólo por resultado: el orden de las llamadas es lo que
+      // hace la promesa, y un resultado igual con las llamadas al revés sería un
+      // test que pasa por casualidad.
+      expect(
+        repository.sessionStateAsCaller.mock.invocationCallOrder[0],
+      ).toBeGreaterThan(repository.stampSession.mock.invocationCallOrder[0]);
+    });
+
+    it('sin membresía responde lo que la función responde, y NO es un 403', async () => {
       repository.findMemberByUser.mockResolvedValue(null);
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({
+          role: null,
+          location_ids: [],
+          expires_at: null,
+          reason: 'no_membership',
+          business_ids: [],
+        }),
+      );
 
       const state = await service.stampSession(stranger, BIZ);
 
@@ -1210,17 +1397,31 @@ describe('StaffService', () => {
       repository.findMemberByUser.mockResolvedValue(
         memberRow({ user_id: MANAGER_USER, status: 'disabled' }),
       );
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({
+          role: null,
+          location_ids: [],
+          expires_at: null,
+          reason: 'disabled',
+          business_ids: [],
+        }),
+      );
 
       const state = await service.stampSession(managerAB, BIZ);
 
       expect(state.reason).toBe('disabled');
       expect(state.role).toBeNull();
       expect(state.business_ids).toEqual([]);
+      // A un acceso pausado no se le renueva la sesión: el sello es lo que revive
+      // una sesión, y una fila que no concede nada no tiene sesión que revivir.
+      expect(repository.stampSession).not.toHaveBeenCalled();
     });
 
-    it('el modo sin expiración no inventa una fecha', async () => {
+    it('el modo sin expiración no inventa una fecha: la que no hay, se devuelve null', async () => {
       repository.findMemberByUser.mockResolvedValue(ownerRow());
-      repository.stampSession.mockResolvedValue({ ...ownerRow() });
+      repository.sessionStateAsCaller.mockResolvedValue(
+        sessionState({ role: 'owner', expires_at: null, reason: 'ok' }),
+      );
 
       const state = await service.stampSession(owner, BIZ);
 

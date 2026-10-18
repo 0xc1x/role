@@ -1,5 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, isNull, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
+import {
+  StaffSessionStateSchema,
+  type StaffSessionState,
+} from '@0xc1x/role-commons';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import {
@@ -363,6 +367,109 @@ export class StaffRepository {
       .where(liveMember(businessId, memberId))
       .returning();
     return row ?? null;
+  }
+
+  /**
+   * `public.business_member_session_state(p_business_id)`, AS THE CALLER.
+   *
+   * ─── POR QUÉ SE PREGUNTA Y NO SE CALCULA ────────────────────────────────────
+   *
+   * El §5.2 quiere que la que autoriza y la que explica nunca se contradigan, y
+   * el Plan 1 pagó dos rondas de review por ello: `can_manage_location`,
+   * `business_member_session_valid` y `business_member_session_state` tenían cada
+   * una su copia de la aritmética del TTL, y hoy las tres llaman a
+   * `business_member_session_expires_at`. Esta es la CUARTA copia si alguien la
+   * escribe en TypeScript, y es la única de las cuatro que el guard de catálogo no
+   * puede ver: aquel test lee `pg_proc.prosrc` y no sabe que existe este archivo.
+   *
+   * Por eso el `expires_at` de la respuesta sale de acá, de la misma cuenta que
+   * aplica `can_manage_location`, y no de una línea de `.getTime() + ttl * 3_600_000`
+   * al otro lado del cable. Un día que las dos se aparten, el panel muestra una
+   * sesión viva que RLS dice muerta —o al revés— y nada se pone rojo.
+   *
+   * ─── CÓMO SE PONE LA IDENTIDAD DEL QUE LLAMA ───────────────────────────────
+   *
+   * La función es `security definer` y lee `auth.uid()`, que sale de
+   * `request.jwt.claims`; esta API no tiene el JWT del usuario —`AuthUser` son tres
+   * campos, ninguno es el token—, así que no hay PostgREST al que preguntarle. Lo
+   * que hay es el id **ya verificado** por el guard, y eso se le declara a la base
+   * con `set_config(..., true)` dentro de una transacción, que es exactamente lo
+   * que hace PostgREST cuando traduce una llamada RPC.
+   *
+   * Los tres detalles que lo sostienen, y que no son estilo:
+   *
+   *  - `is_local = true` SIN la transacción se derramaría al pooler: la conexión
+   *    vuelve al pool y el siguiente request hereda el `sub` de este. Por eso va
+   *    dentro de `db.transaction`, donde el GUC muere con el commit o el rollback.
+   *  - La transacción también es lo que hace que el *transaction pooler* (:6543)
+   *    sea seguro aquí: la llamada entera cae en una sola conexión de servidor, así
+   *    que el `set_config` y la llamada no pueden separarse.
+   *  - NO se cambia el rol de la sesión a `authenticated`, y está medido por qué:
+   *    `service_role` **no es miembro** de `authenticated` en este proyecto
+   *    (`pg_auth_members`: sus miembros son `postgres` y `authenticator`), así que
+   *    un `set local role authenticated` depende de un privilege del rol del pooler
+   *    que nadie ha medido. Y no haría falta: la función es `security definer`,
+   *    o sea que dentro de ella `current_user` es el dueño y las RLS no aplican; lo
+   *    único que hace que la respuesta sea DEL que pregunta es el `auth.uid()` que
+   *    acabamos de declarar, y `p_business_id` acota el resto. `service_role` sí
+   *    tiene EXECUTE sobre la función
+   *    (`has_function_privilege('service_role', …, 'execute')` = true), así que la
+   *    llamada se hace tal cual, sin migración.
+   *
+   * ─── POR QUÉ ESTA SÍ Y LAS CUATRO AGREGADOS DE `business-owner-stats` NO ───
+   *
+   * Aquel archivo reconstruye cuatro agregados que también existen como funciones,
+   * y explica por qué: son `security invoker` y dejan decidir al RLS del invocante,
+   * que esta conexión no tiene porque es el rol `postgres` del pooler, dueño de las
+   * tablas. El riesgo que venía ahí era devolver la facturación de un negocio a
+   * quien tuviera el token. Esta función no tiene ese riesgo por una razón que se
+   * puede decir en una frase: **la respuesta es sobre quien pregunta**, no sobre un
+   * objetivo que la request pueda elegir.
+   *
+   * ─── LA RESPUESTA SE DEVUELVE TAL CUAL ─────────────────────────────────────
+   *
+   * TAMBIÉN `expires_at`: el `jsonb` de la función lleva el `timestamptz` como un
+   * texto ISO con offset —medido en la base viva:
+   * `{"expires_at": "2026-10-18T01:03:07.204914+00:00"}`— y el panel ya consume
+   * EXACTAMENTE esa forma porque llama al RPC desde el cliente. Reconvertirla aquí
+   * sería una segunda traducción de la misma fecha, que es la clase de copia que
+   * este método existe para quitar.
+   *
+   * `StaffSessionStateSchema.parse` es el borde: si la base crece un séptimo
+   * `reason`, el schema —que es la copia— es lo que está mal, y revienta aquí con
+   * un 500 ruidoso en vez de dejar que un valor desconocido llegue al panel y se
+   * pintee como otro.
+   */
+  async sessionStateAsCaller(
+    businessId: string,
+    userId: string,
+  ): Promise<StaffSessionState> {
+    const claims = JSON.stringify({ sub: userId, role: 'authenticated' });
+
+    const [result] = await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('request.jwt.claims', ${claims}, true)`,
+      );
+      return tx.execute(
+        sql`select public.business_member_session_state(${businessId}::uuid)::text as session_state`,
+      );
+    });
+
+    // El `::text` y el `JSON.parse` de abajo son deliberados: el `jsonb` lo
+    // entrega postgres.js como objeto ya parseado según el driver, y el tipo de
+    // la fila depende de qué versión esté instalada. Un texto no depende.
+    const rows = result as { session_state: string }[] | undefined;
+    const raw = rows?.[0]?.session_state;
+    if (typeof raw !== 'string') {
+      // Una fila sin `session_state` no es un caso que la función pueda
+      // producir: siempre devuelve un objeto. Es o un `execute` que no se
+      // ejecutó o una firma que cambió, y las dos cosas se investigan.
+      throw new Error(
+        'business_member_session_state no devolvió una fila de jsonb legible',
+      );
+    }
+
+    return StaffSessionStateSchema.parse(JSON.parse(raw));
   }
 
   /**

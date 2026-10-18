@@ -18,7 +18,6 @@ import {
   type BusinessMemberDto,
   type BusinessMemberRole,
   type CreateBusinessMemberDto,
-  type StaffSessionReason,
   type StaffSessionState,
   type UpdateBusinessMemberAliasDto,
   type UpdateBusinessMemberAliasResponseDto,
@@ -112,42 +111,25 @@ function asPostgresError(error: unknown): PostgresLikeError | null {
 }
 
 /**
- * The arithmetic of `business_member_session_expires_at`, in TypeScript.
+ * `business_member_session_expires_at` and the `reason` that reads it — IN SQL,
+ * where they live, and not here.
  *
- * `null` means "no expiry date exists", and that covers the two cases the §5.2
- * panel has to tell apart: TTL off (0, the "equipo propio" mode) and never
- * stamped. The reason is computed separately for exactly that reason.
- */
-function sessionExpiresAt(
-  row: Pick<BusinessMemberRow, 'session_ttl_hours' | 'last_authenticated_at'>,
-): Date | null {
-  if (row.session_ttl_hours <= 0) return null;
-  if (!row.last_authenticated_at) return null;
-  return new Date(
-    row.last_authenticated_at.getTime() + row.session_ttl_hours * 3_600_000,
-  );
-}
-
-/**
- * `business_member_session_state`'s reason, for the two cases the gate needs.
+ * THIS IS A DELETION, NOT A MOVE. `can_manage_location`,
+ * `business_member_session_valid` and `business_member_session_state` each used to
+ * carry their own inline copy of `last_authenticated_at + session_ttl_hours *
+ * interval '1 hour'`, and Plan 1 spent two review rounds collapsing them into one
+ * `business_member_session_expires_at`. A fourth copy in TypeScript is invisible to
+ * the guard that prevents the first three: that test reads `pg_proc.prosrc` and
+ * cannot see a `.ts` file. The cost is not a lint, it is a panel that shows an
+ * `expires_at` computed in a different language from the one RLS enforces, and
+ * nothing goes red when the two disagree.
  *
- * The order is the SQL's and it is not cosmetic: a TTL with no stamp is "your
- * session expired" as far as authorization is concerned (`can_manage_location`
- * returns false for it), and calling it "expired" would point the panel at the
- * wrong message. `session_never_stamped` exists to say "sign in again".
+ * So the service asks `StaffRepository.sessionStateAsCaller` — the same
+ * `business_member_session_state` the panel already calls with its own JWT — and
+ * returns what it answers. There is no fallback: a fallback copy is still a copy.
+ * If the function cannot be called, the request fails loudly, which is the correct
+ * outcome for a screen whose job is to explain an exit it cannot compute.
  */
-function sessionReason(
-  row: Pick<BusinessMemberRow, 'session_ttl_hours' | 'last_authenticated_at'>,
-  now: Date,
-): StaffSessionReason {
-  if (row.session_ttl_hours > 0 && !row.last_authenticated_at) {
-    return 'session_never_stamped';
-  }
-  const expiresAt = sessionExpiresAt(row);
-  if (expiresAt && expiresAt < now) return 'session_expired';
-  return 'ok';
-}
-
 @Injectable()
 export class StaffService {
   private readonly logger = new Logger(StaffService.name);
@@ -192,6 +174,19 @@ export class StaffService {
    * answer to a membership that cannot operate is a `StaffSessionState`, not a
    * 403. Refusing here would leave the panel with a generic error on the exact
    * screen whose job is to explain the exit.
+   *
+   * ─── THE STAMP FIRST AND THE EXPLANATION AFTER, IN THAT ORDER ───────────────
+   *
+   * `stampSession` writes with `service_role` and the read happens AFTER the
+   * stamp, on purpose: an expired session that signs in again has to come back
+   * as `ok`, and no arithmetic computed before the stamp can say that. The row
+   * the stamp returns feeds nothing of the state —only the log—, because the
+   * state is what the function says, and the function just read the row.
+   *
+   * The two exits with no session —`no_membership` and `disabled`— are not
+   * assembled here as constants either: the same question is asked and whatever
+   * the function answers is returned, which is where those two
+   * `jsonb_build_object` live and where they will keep living if they change.
    */
   async stampSession(
     user: AuthUser,
@@ -199,53 +194,18 @@ export class StaffService {
   ): Promise<StaffSessionState> {
     const row = await this.repository.findMemberByUser(businessId, user.id);
 
-    if (!row) {
-      return {
-        role: null,
-        location_ids: [],
-        expires_at: null,
-        reason: 'no_membership',
-        business_ids: [],
-      };
+    if (row?.status === 'active') {
+      await this.repository.stampSession(businessId, user.id, new Date());
+
+      this.logger.log({
+        event: 'staff_session_stamped',
+        businessId,
+        memberId: row.id,
+        role: row.role,
+      });
     }
 
-    if (row.status !== 'active') {
-      return {
-        role: null,
-        location_ids: [],
-        expires_at: null,
-        reason: 'disabled',
-        business_ids: [],
-      };
-    }
-
-    const stampedAt = new Date();
-    const stamped = await this.repository.stampSession(
-      businessId,
-      user.id,
-      stampedAt,
-    );
-    const locationIds = await this.repository.locationIdsOfMember(row.id);
-
-    this.logger.log({
-      event: 'staff_session_stamped',
-      businessId,
-      memberId: row.id,
-      role: row.role,
-    });
-
-    // A row that was not stamped (it was given away between the two reads) is
-    // reported as the session it is, not as an error: the panel asked "may I
-    // operate", and "no membership" is a true answer.
-    const state = stamped ?? row;
-
-    return {
-      role: state.role,
-      location_ids: locationIds,
-      expires_at: sessionExpiresAt(state)?.toISOString() ?? null,
-      reason: sessionReason(state, stampedAt),
-      business_ids: [businessId],
-    };
+    return this.repository.sessionStateAsCaller(businessId, user.id);
   }
 
   // ──────────────────────────────── altas ─────────────────────────────────
@@ -570,6 +530,28 @@ export class StaffService {
    * this operation is worse than none of it, because the owner was told "cut
    * access" while the tablet in the shop is still logged in. `disableAccess` is
    * idempotent, so the retry is the fix.
+   *
+   * ─── A MANAGER MAY DISABLE THEMSELVES. THAT IS A RULING, NOT A HOLE ─────────
+   *
+   * §8 lists the containment rule ("only accesses whose branches are contained in
+   * yours") and never mentions the caller, so the predicate admits a manager
+   * disabling their own row: their reach contains them, and the only other
+   * exclusion —never administer the owner— is about a role, not about a person.
+   * Allowed on purpose, for one argument:
+   *
+   * An owner CANNOT be deactivated by anybody —`enforce_owner_is_untouchable`
+   * raises `R0002`, and `20261017040808` made it raise on the removal too— so
+   * "you may always stop your own access" is ALREADY the rule for the most
+   * privileged role in the system. A manager who cannot leave a business is
+   * stranded in it, and a stranded manager is a worse failure than the one a
+   * self-disable could ever cause: it needs somebody else to notice, and nobody
+   * else is watching.
+   *
+   * Containment is untouched by this. It still refuses every OTHER manager outside
+   * the caller's reach, and self-disable is the one case where the target is by
+   * definition inside it. Both halves have tests: the permission and the refusal.
+   * The full argument is decision 4 of
+   * `docs/decisions/ADR-0013-accesos-de-staff-por-sucursal.md`.
    */
   async disableAccess(
     user: AuthUser,
@@ -744,6 +726,21 @@ export class StaffService {
    * question. The §5.2 promise is that an expired session does not operate, and
    * the only place that can be true for BOTH the panel's direct writes and this
    * API is a rule both of them apply.
+   *
+   * ─── AND THE QUESTION IS ASKED BY THE FUNCTION RLS ALREADY USES ──────────────
+   *
+   * The question being this API's does not make the answer this API's: the answer
+   * comes from `business_member_session_state`, which reads the same number
+   * `can_manage_location` applies to the row. This gate used to compare
+   * `last_authenticated_at + ttl` in TypeScript, which made it one more frontier
+   * with its own arithmetic; now both frontiers read one number and there is
+   * nothing left that can drift apart quietly.
+   *
+   * Only `'ok'` passes. The two reasons §5.2 names —`session_expired` and
+   * `session_never_stamped`— deny, and so does a reason this API does not know:
+   * a new word in the database must not open the door by oversight. That case
+   * goes to the log with its name, because a panel locked out with no line
+   * explaining why is the worst outcome of denying on purpose.
    */
   private async requireActor(
     user: AuthUser,
@@ -768,8 +765,19 @@ export class StaffService {
       );
     }
 
-    const reason = sessionReason(row, new Date());
-    if (reason === 'session_expired' || reason === 'session_never_stamped') {
+    const { reason } = await this.repository.sessionStateAsCaller(
+      businessId,
+      user.id,
+    );
+    if (reason !== 'ok') {
+      if (reason !== 'session_expired' && reason !== 'session_never_stamped') {
+        this.logger.warn({
+          event: 'staff_session_reason_unknown',
+          businessId,
+          memberId: row.id,
+          reason,
+        });
+      }
       throw new ForbiddenException(
         'Tu sesión venció. Entra otra vez para seguir administrando el equipo.',
       );

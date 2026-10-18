@@ -184,6 +184,26 @@ con `admin@fudi.app` al frente, dueño de 6 de esos 16 negocios.
    API. Concederle ahora la intermediación total por nueve rutas de administración
    tiraría una decisión de arquitectura por una necesidad que se resuelve con una pantalla.
 
+4. **Un gerente puede pausarse a sí mismo, y es a propósito.** La regla de contención del §8
+   («un `manager` sólo toca accesos cuyas sucursales estén contenidas en las suyas») no
+   menciona al que llama, así que el predicado admite que un gerente se pause a sí mismo: su
+   alcance lo contiene, y la única otra exclusión —nunca administrar al dueño— es sobre un
+   **rol**, no sobre una persona. **Permitido, y escrito porque el §8 no lo nombra** y un
+   botón raro sin explicación se lee como un descuido.
+
+   El argumento es uno, y es el del rol más privilegiado: **un dueño no puede ser desactivado
+   por nadie** —`enforce_owner_is_untouchable` levanta `R0002`, y `20261017040808` lo
+   discute también en el `DELETE`—, así que «uno siempre puede cortar su propio acceso» ya es
+   la regla del rol con más poder del sistema. Un gerente que no puede irse de un negocio
+   queda atrapado en él, y un gerente atrapado es un fallo peor que el que un auto-ban
+   podría causar: necesita que otro lo note, y no hay nadie mirando.
+
+   La contención no se toca: sigue negando a **cada otro** gerente fuera del alcance de quien
+   llama, y el auto-ban es el único caso en que el objetivo está por definición dentro. Las
+   dos mitades tienen test (`staff.service.spec.ts`: se pausa, y no se pausa al de la otra
+   sucursal), y lo que se está fijando es el comportamiento observable, no que el predicado
+   siga siendo el de antes.
+
 ## Consecuencias
 
 - El permiso de negocio tiene **una sola respuesta** y una sola forma de calcularla:
@@ -214,6 +234,19 @@ con `admin@fudi.app` al frente, dueño de 6 de esos 16 negocios.
   motor no aplica, y por eso **ya no está pendiente del Plan 2**:
   `apps/api/src/database/security/plan-limits.db.spec.ts` lee los tres cuerpos del
   `pg_proc` vivo y los compara contra el TypeScript celda por celda.
+- **La sesión es la excepción a esa regla, y ya no es una copia.** «¿Puede esta sesión
+  operar?» la preguntaba `StaffService` en TypeScript —`last_authenticated_at + ttl`— y eso
+  era una **cuarta** cuenta de la expiración: las otras tres (`can_manage_location`,
+  `business_member_session_valid`, `business_member_session_state`) ya llamaban a
+  `business_member_session_expires_at`, y el guard de catálogo que impide que vuelvan a
+  calcularse lee `pg_proc.prosrc`, así que no podía ver una cuarta copia escrita en un `.ts`.
+  Ahora `apps/api/src/modules/staff/staff.repository.ts` declara el `auth.uid()` **ya
+  verificado por el guard** con `set_config('request.jwt.claims', …, true)` dentro de una
+  transacción —que es lo que hace PostgREST al traducir una llamada RPC— y devuelve **tal
+  cual** el `jsonb` de `business_member_session_state`, incluido el `expires_at`. El panel y
+  RLS leen el mismo número y no queda nada que pueda apartarse en silencio. Sigue siendo
+  esta API la que pregunta, y `service_role` el contexto: lo que cambió es que ya no
+  responde por su cuenta.
 - El dominio `role.ec` es un punto único de fallo de la experiencia de staff: si la
   creación del `auth.users` falla, el negocio tiene una membresía sin identidad. Por eso el
   alta es compensada (se revierte la fila si el usuario no se pudo crear) y por eso el
