@@ -38,6 +38,7 @@ import { FavoritesModule } from './modules/favorites/favorites.module';
 import { MeModule } from './modules/me/me.module';
 import { SavedAddressesModule } from './modules/saved-addresses/saved-addresses.module';
 import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
+import { StaffModule } from './modules/staff/staff.module';
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.
     ContactModule,
     ContactInboxModule,
     BugReportInboxModule,
+    StaffModule,
   ],
   providers: [
     {
