@@ -266,6 +266,16 @@ describe("RotateBusinessMemberPinSchema", () => {
 			RotateBusinessMemberPinSchema.safeParse({ pin: "123456" }).success,
 		).toBe(false);
 	});
+
+	it("acepta el cuerpo AUSENTE, que no es lo mismo que `{}`", () => {
+		// Un `POST /…/rotate` sin cuerpo deja `req.body` como `undefined`
+		// (medido en el stack real de Nest/Express), y `strictObject({})` solo
+		// falla ahí. Sin esto, la llamada más natural del panel —rotar, que no
+		// tiene nada que mandar— sería un 400.
+		expect(RotateBusinessMemberPinSchema.safeParse(undefined).success).toBe(
+			true,
+		);
+	});
 });
 
 describe("la tarjeta de entrega y el aviso del alias", () => {

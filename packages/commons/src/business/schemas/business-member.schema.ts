@@ -261,8 +261,21 @@ export const UpdateBusinessMemberAliasSchema = z
  * adentro no es un dato que sobre —es una puerta de atrás para que el PIN lo
  * elija el cliente—. Sin `strict` el objeto de zod lo descarta en silencio y la
  * ruta responde un 200 con un PIN que nadie eligió; con `strict` es un 400.
+ *
+ * ─── Y POR QUÉ `.optional()` A PESAR DE `strictObject` ────────────────────────
+ *
+ * Por el cuerpo ausente, que NO es `{}`: medido en el stack real de Nest
+ * (Express 5 + `body-parser`), un `POST` sin cuerpo deja `req.body` como
+ * `undefined`, y `strictObject({}).safeParse(undefined)` falla con «expected
+ * object, received undefined». Sin este `.optional()`, la llamada más natural que
+ * puede hacer un cliente —rotar, que no tiene nada que mandar— sería un 400.
+ *
+ * `.optional()` no afloja nada de lo anterior: sigue rechazando `{ pin }` y
+ * cualquier otra clave, y ahora además acepta la ausencia, que es lo mismo que
+ * el objeto vacío. Lo que el schema sigue GANANDO es que un cliente no pueda
+ * elegir el PIN.
  */
-export const RotateBusinessMemberPinSchema = z.strictObject({});
+export const RotateBusinessMemberPinSchema = z.strictObject({}).optional();
 
 /**
  * La tarjeta de entrega de `POST …/staff` y de `POST …/:memberId/rotate`.

@@ -4128,6 +4128,338 @@
           "Bug Report Inbox"
         ]
       }
+    },
+    "/api/v1/businesses/{businessId}/staff": {
+      "get": {
+        "operationId": "StaffController_list",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The accesses this caller administers"
+          },
+          "403": {
+            "description": "No live membership, a paused one, or a session outside the §5.2 promise"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the business' team accesses. A manager sees only what their branches contain.",
+        "tags": [
+          "Staff"
+        ]
+      },
+      "post": {
+        "operationId": "StaffController_create",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The delivery card: alias, PIN, warnings"
+          },
+          "403": {
+            "description": "No live membership, a paused one, a session outside the §5.2 promise, or branches the caller does not manage"
+          },
+          "409": {
+            "description": "The alias is already in use in this business"
+          },
+          "422": {
+            "description": "role: 'owner' (the owner is who created the business), a branch of another business, session_ttl_hours: 0 on a staff, or the plan's member limit"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a team access. Returns the delivery card; the PIN is shown once and never again.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}": {
+      "patch": {
+        "operationId": "StaffController_update",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The membership in its new state"
+          },
+          "403": {
+            "description": "The access is outside the caller’s branches, or the caller has no live session inside the §5.2 promise"
+          },
+          "404": {
+            "description": "No such access in this business"
+          },
+          "422": {
+            "description": "Promoting to 'owner', a branch of another business, or session_ttl_hours: 0 on a staff"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit an access' role, branches or session TTL. Neither status nor alias is editable here.",
+        "tags": [
+          "Staff"
+        ]
+      },
+      "delete": {
+        "operationId": "StaffController_remove",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The access was given down"
+          },
+          "403": {
+            "description": "The caller is not the owner of this business, or has no live session inside the §5.2 promise"
+          },
+          "422": {
+            "description": "That membership is the owner’s, and owners are untouchable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft-delete an access (owner only). The row stays, the alias stays burned.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}/alias": {
+      "patch": {
+        "operationId": "StaffController_updateAlias",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The membership, plus the §9.4 alias warnings"
+          },
+          "409": {
+            "description": "The alias is already in use"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change the access' alias and the login address it mirrors. The PIN does not change.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}/rotate": {
+      "post": {
+        "operationId": "StaffController_rotatePin",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The delivery card with the new PIN"
+          },
+          "403": {
+            "description": "The access is outside the caller’s branches"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Generate a new PIN. Returns the delivery card; does NOT revoke open sessions.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}/disable": {
+      "post": {
+        "operationId": "StaffController_disableAccess",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The membership, disabled"
+          },
+          "422": {
+            "description": "That membership is the owner’s, and owners are untouchable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pause an access and close its open sessions (ban). Not a delete: the row stays.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}/enable": {
+      "post": {
+        "operationId": "StaffController_enableAccess",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The membership, active"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reactivate an access and lift the ban on its login.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/staff/session": {
+      "post": {
+        "operationId": "StaffSessionController_stampSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The session state, verbatim from business_member_session_state — never a 403 for a membership that cannot operate"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Stamp last_authenticated_at for one membership and return the §5.2 session state the database computes.",
+        "tags": [
+          "Staff"
+        ]
+      }
     }
   },
   "info": {

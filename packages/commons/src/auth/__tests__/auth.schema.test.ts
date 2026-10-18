@@ -9,6 +9,7 @@ import {
 	RegisterRequestSchema,
 	ResetPasswordRequestSchema,
 	StaffSessionStateSchema,
+	StampStaffSessionSchema,
 } from "../schemas/auth.schema";
 
 describe("LoginRequestSchema", () => {
@@ -286,6 +287,36 @@ describe("StaffSessionStateSchema", () => {
 				expires_at: null,
 				reason: "ok",
 				business_ids: ids,
+			}).success,
+		).toBe(false);
+	});
+});
+
+describe("StampStaffSessionSchema", () => {
+	const businessId = "d0000000-0000-4000-8000-000000000001";
+
+	it("nombra la membresía que se va a sellar", () => {
+		expect(StampStaffSessionSchema.safeParse({ business_id: businessId }).success).toBe(
+			true,
+		);
+	});
+
+	it("no es opcional: el sello es de UNA membresía", () => {
+		// Sin negocio no hay fila que sellar, y adivinar cuál sería un cuarto
+		// sitio decidiendo qué membresía es «la» del que pregunta.
+		expect(StampStaffSessionSchema.safeParse({}).success).toBe(false);
+		expect(
+			StampStaffSessionSchema.safeParse({ business_id: "no-es-uuid" }).success,
+		).toBe(false);
+	});
+
+	it("rechaza un `expires_at`: el servidor no acepta la fecha que el panel dice", () => {
+		// Si lo aceptara, un 200 con el `expires_at` que el cliente mandó sería un
+		// 200 que finge haber sellado.
+		expect(
+			StampStaffSessionSchema.safeParse({
+				business_id: businessId,
+				expires_at: "2031-01-01T00:00:00+00:00",
 			}).success,
 		).toBe(false);
 	});

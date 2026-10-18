@@ -180,3 +180,36 @@ export const StaffSessionStateSchema = z.object({
 	reason: z.enum(STAFF_SESSION_REASONS),
 	business_ids: z.array(UuidSchema),
 });
+
+/**
+ * `POST /staff/session` — which membership to stamp.
+ *
+ * ─── WHY THE BUSINESS IS IN THE BODY AND NOT IN THE PATH ──────────────────────
+ *
+ * The other eight §8 routes hang off `businesses/:businessId/staff`; this one
+ * does not, because it is the one route any member may call and a path segment
+ * read as "the business being administered" would be a claim nobody needs to
+ * make. It still has to arrive somewhere, and the honest place is the body:
+ * the caller is stamping ONE membership and naming it is not a privilege, it is
+ * the statement of which row `last_authenticated_at` belongs to.
+ *
+ * ─── WHY IT IS REQUIRED AND NOT OPTIONAL ──────────────────────────────────────
+ *
+ * `business_member_session_state()` also answers without an argument —one
+ * membership, `multiple_businesses`, `no_membership`, `disabled`— and the panel
+ * CAN call that from its own client, with its own JWT, which is where those four
+ * answers are meant to be read. The API cannot: it declares the caller's `sub`
+ * to a `service_role` connection on purpose, and a route that guessed which
+ * membership to stamp would be a fourth place deciding which row is "the" one.
+ * `multiple_businesses` is an answer for someone choosing, not for someone
+ * writing.
+ *
+ * `.strict()` for the same reason `CreateBusinessMemberSchema` has it: a
+ * `member_id` or an `expires_at` in here is a field the route cannot honor, and
+ * a 400 that says so beats a 200 that pretended.
+ */
+export const StampStaffSessionSchema = z
+	.object({
+		business_id: UuidSchema,
+	})
+	.strict();
