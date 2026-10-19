@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
+import { ConflictException } from '@nestjs/common';
 import {
   businesses,
   businessFinance,
+  businessMembers,
   businessOwnership,
   consumerNotificationPreferences,
   deviceTokens,
@@ -23,6 +25,7 @@ import {
 } from '../../../test/db';
 import {
   seedBusiness,
+  seedBusinessMember,
   seedLocation,
   seedOffer,
   seedOrder,
@@ -33,6 +36,12 @@ import { AuthAccountRepository } from './auth-account.repository';
 import { AuthService } from './auth.service';
 
 let ctx: TestDbContext;
+
+/** Postgres error codes, which Drizzle wraps one level down. */
+function sqlErrorCode(error: unknown): string {
+  const candidate = error as { code?: string; cause?: { code?: string } };
+  return candidate?.cause?.code ?? candidate?.code ?? 'unknown';
+}
 
 const CONFIG = {
   get: (key: string) =>
@@ -320,6 +329,8 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     expect(await accounts().countRetained(userId)).toEqual({
       orders: 1,
       businesses: 1,
+      memberships: 0,
+      owner_memberships: 0,
       reviews: 0,
     });
 
@@ -352,7 +363,13 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     );
 
     const retained = await accounts().countRetained(ownerId);
-    expect(retained).toEqual({ orders: 0, businesses: 1, reviews: 0 });
+    expect(retained).toEqual({
+      orders: 0,
+      businesses: 1,
+      memberships: 0,
+      owner_memberships: 0,
+      reviews: 0,
+    });
 
     await accounts().anonymise(ownerId);
 
@@ -519,6 +536,8 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     expect(await accounts().countRetained(userId)).toEqual({
       orders: 0,
       businesses: 0,
+      memberships: 0,
+      owner_memberships: 0,
       reviews: 0,
     });
     // ...and the erase still works, which is the part that cannot be left to
@@ -566,6 +585,8 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     expect(await accounts().countRetained(actorId)).toEqual({
       orders: 0,
       businesses: 0,
+      memberships: 0,
+      owner_memberships: 0,
       reviews: 0,
     });
     expect(await accounts().eraseAccount(actorId)).toBe(true);
@@ -630,5 +651,228 @@ describe('AuthAccountRepository.delete (DB real)', () => {
       .from(consumerNotificationPreferences)
       .where(eq(consumerNotificationPreferences.user_id, userId));
     expect(notificationPreferences).toBeDefined();
+  });
+});
+
+/**
+ * ─── LA CADENA DE BORRADO, CON UNA MEMBRESÍA DE VERDAD ─────────────────────────
+ *
+ * El resto de este archivo no tiene una sola fila de `business_members`, y esa
+ * es exactamente la razón por la que esta regresión era invisible: `auth.users →
+ * profiles → business_members` es toda `ON DELETE CASCADE` (`profiles_id_fkey`,
+ * `business_members_user_id_fkey`, verificado contra la base viva), así que borrar
+ * el perfil de un dueño dispara el `before delete` que la Task 1 puso sobre la
+ * fila del dueño y el borrado de la cuenta revienta con un `R0002` que llega al
+ * cliente como un 500 sin explicación.
+ *
+ * Los tres tests de abajo son las tres mitades de la respuesta, y en ese orden a
+ * propósito: el primero comprueba que el `R0002` EXISTE —el control positivo, sin
+ * el cual los otros dos pasarían igual en una base sin trigger—, el segundo que el
+ * servicio no deja que la cascada llegue a disparar la guarda, y el tercero que
+ * una membresía que no es de un dueño se desacopla en vez de borrarse.
+ */
+describe('the erase with a membership (DB real)', () => {
+  const accounts = () => new AuthAccountRepository(ctx.db);
+
+  /** Stubs the GoTrue side of `deleteAccount`; the database half is real. */
+  function service() {
+    const built = buildService(new UserDefaultsService(ctx.db));
+    (built as unknown as { supabaseAdmin: unknown }).supabaseAdmin = {
+      auth: {
+        admin: {
+          deleteUser: async () => ({ data: {}, error: null }),
+          updateUserById: async () => ({ data: {}, error: null }),
+          generateLink: async () => ({ data: {}, error: null }),
+          signOut: async () => ({ error: null }),
+        },
+      },
+    };
+    return built;
+  }
+
+  async function profileRow(userId: string) {
+    const [row] = await ctx.db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.id, userId));
+    return row ?? null;
+  }
+
+  async function memberRow(id: string) {
+    const [row] = await ctx.db
+      .select()
+      .from(businessMembers)
+      .where(eq(businessMembers.id, id));
+    return row ?? null;
+  }
+
+  /** A profile that owns a business, with the membership that says so. */
+  async function seedOwner() {
+    const userId = await seedProfile(ctx.db, undefined);
+    const business = await seedBusiness(ctx.db, userId, {
+      verification_status: 'approved',
+    });
+    const member = await seedBusinessMember(ctx.db, business.id, userId, {
+      role: 'owner',
+      label: 'Dueña',
+      alias: `duena-${randomUUID().slice(0, 8)}@negocio.role.ec`,
+    });
+    return { userId, businessId: business.id, memberId: member.id };
+  }
+
+  test('CONTROL: erasing that profile straight through the repository is R0002', async () => {
+    const { userId, memberId } = await seedOwner();
+
+    // The premise, asserted rather than assumed: the cascade really does reach the
+    // guard. If this ever stops raising, the trigger is not in the harness (or a
+    // future change weakened it) and the two tests below would be asserting
+    // nothing.
+    const bounced = await accounts()
+      .eraseAccount(userId)
+      .then(() => null)
+      .catch((err: unknown) => err);
+    expect(bounced).not.toBeNull();
+    expect(sqlErrorCode(bounced)).toBe('R0002');
+
+    // And the transaction left nothing behind: the profile and the membership are
+    // both still there, because the whole erase rolled back.
+    expect(await profileRow(userId)).not.toBeNull();
+    expect(await memberRow(memberId)).not.toBeNull();
+  });
+
+  test('an owner is told to act first, and nothing is destroyed while they do', async () => {
+    const { userId, businessId, memberId } = await seedOwner();
+    const auth = service();
+
+    // The premise again, from the gate's own numbers: this is the case the gate
+    // has to recognise, and it is a SUBTLE one — `memberships` alone would send
+    // this account to `anonymise`, which closes the membership and leaves the
+    // business with nobody who can administer it (§5.4).
+    expect(await accounts().countRetained(userId)).toEqual({
+      orders: 0,
+      businesses: 1,
+      memberships: 1,
+      owner_memberships: 1,
+      reviews: 0,
+    });
+
+    await expect(
+      auth.deleteAccount({
+        id: userId,
+        email: `${userId}@test.cl`,
+        role: 'business' as const,
+      }),
+    ).rejects.toThrow(ConflictException);
+
+    // NOTHING was destroyed: the refusal is a state the caller can change and this
+    // method cannot, so it has to be answerable before the first delete. A 409
+    // after the auth user was soft-deleted would be a 500 the caller cannot retry.
+    const profile = await profileRow(userId);
+    expect(profile?.email).not.toContain('anonymized');
+    expect(await memberRow(memberId)).toMatchObject({ deleted_at: null });
+    const [business] = await ctx.db
+      .select({ id: businesses.id })
+      .from(businesses)
+      .where(eq(businesses.id, businessId));
+    expect(business).toBeDefined();
+
+    // And the account IS still erasable once they act: degrade the membership and
+    // the same call goes through, on the anonymise branch, because a membership is
+    // a row this account does not get to destroy.
+    await ctx.db
+      .update(businessMembers)
+      .set({ role: 'manager' })
+      .where(eq(businessMembers.id, memberId));
+
+    await expect(
+      auth.deleteAccount({
+        id: userId,
+        email: `${userId}@test.cl`,
+        role: 'business' as const,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect((await profileRow(userId))?.email).toBe(
+      `anonymized-${userId}@role.invalid`,
+    );
+    const member = await memberRow(memberId);
+    // The row is history, not a dangling live access: archived, not deleted.
+    expect(member).not.toBeNull();
+    expect(member?.deleted_at).not.toBeNull();
+  });
+
+  test('an employee membership is detached by the erase, not taken by the cascade', async () => {
+    // The same case `order_events.changed_by` has, with one actor more: the
+    // cascade would delete the row, and the §8 says a membership's delete is
+    // logical and not exposed. So the erase writes `deleted_at` and the row stays.
+    const ownerId = await seedProfile(ctx.db, undefined);
+    const staffId = await seedProfile(ctx.db, undefined);
+    const business = await seedBusiness(ctx.db, ownerId, {
+      verification_status: 'approved',
+    });
+    const alias = `caja-${randomUUID().slice(0, 8)}@panaderialafamilia.ec`;
+    const member = await seedBusinessMember(ctx.db, business.id, staffId, {
+      role: 'staff',
+      label: 'Caja de la mañana',
+      alias,
+    });
+
+    // A business alias on a custom domain: the §9.4 case, and a real recipient.
+    // The erase must not touch it.
+    expect(await accounts().countRetained(staffId)).toEqual({
+      orders: 0,
+      businesses: 0,
+      memberships: 1,
+      owner_memberships: 0,
+      reviews: 0,
+    });
+
+    await service().deleteAccount({
+      id: staffId,
+      email: `${staffId}@test.cl`,
+      role: 'business' as const,
+    });
+
+    // THE PROFILE SURVIVES, which is what makes the cascade impossible: there is
+    // nothing to delete for `business_members.user_id` to hang from.
+    const profile = await profileRow(staffId);
+    expect(profile?.email).toBe(`anonymized-${staffId}@role.invalid`);
+
+    // THE ROW SURVIVES, with its identity as a record and without its access.
+    const after = await memberRow(member.id);
+    expect(after).toMatchObject({
+      id: member.id,
+      business_id: business.id,
+      user_id: staffId,
+      role: 'staff',
+      label: 'Caja de la mañana',
+      alias,
+    });
+    expect(after?.deleted_at).not.toBeNull();
+
+    // "Who was here" is answerable: the row is countable, and the business is
+    // untouched — this person's erasure is not a stranger's problem.
+    const [stillThere] = await ctx.db
+      .select({ c: count() })
+      .from(businessMembers)
+      .where(eq(businessMembers.id, member.id));
+    expect(Number(stillThere?.c)).toBe(1);
+
+    // AND THE ALIAS IS BURNT. The unique index is over
+    // `(business_id, lower(alias))` with no `deleted_at` predicate precisely so an
+    // archived row keeps holding its identifier; if the erase had taken the row
+    // with the cascade, this insert would succeed.
+    const recycled = await ctx.db
+      .insert(businessMembers)
+      .values({
+        business_id: business.id,
+        user_id: ownerId,
+        role: 'staff',
+        label: 'Colisión',
+        alias,
+      })
+      .then(() => null)
+      .catch((err: unknown) => err);
+    expect(sqlErrorCode(recycled)).toBe('23505');
   });
 });

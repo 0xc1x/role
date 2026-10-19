@@ -99,6 +99,24 @@ export type StaffAliasWarningCode = (typeof STAFF_ALIAS_WARNING_CODES)[number];
 export const StaffAliasWarningCodeSchema = z.enum(STAFF_ALIAS_WARNING_CODES);
 
 /**
+ * El dominio de una dirección, en minúsculas, y `""` si no trae `@`.
+ *
+ * Una sola implementación para las dos preguntas de este archivo porque las dos
+ * leen la MISMA mitad de la cadena y sólo se diferencian en el predicado: el
+ * dominio de un correo no distingue mayúsculas, así que la comparación se hace
+ * acá una vez y no en cada función.
+ *
+ * Lo que NO hace es validar nada: `sin-dominio` tiene dominio `""`, que no es
+ * `role.ec` ni termina en `.role.ec`, así que `isRoleEcAlias` contesta `false` por
+ * su cuenta. `isDeliverableAlias` lo aparta explícitamente, porque para ella un
+ * `""` no es un destinatario. Un llamador que necesite un correo válido lo pide
+ * antes, en el schema (`BusinessMemberAliasSchema` es `z.email()`).
+ */
+function domainOf(address: string): string {
+	return (address.split("@")[1] ?? "").toLowerCase();
+}
+
+/**
  * ¿Este alias es una cuenta de equipo de Rolé —la que la UI reconoce como
  * «negocio»—?
  *
@@ -116,21 +134,64 @@ export const StaffAliasWarningCodeSchema = z.enum(STAFF_ALIAS_WARNING_CODES);
  *
  * ─── Y EL LECTOR EQUIVOCADO DE ESTA FUNCIÓN ES UN BUG DE SEGURIDAD ─────────────
  *
- * **La Task 5 no puede usar esta función para bloquear el correo.** Recipiente y
- * entregable son preguntas al revés: ella necesita «¿esta dirección recibe
- * mensajes de verdad?», y esta función contesta «¿es una cuenta de equipo de
- * Rolé?». Para el ápice las dos respuestas son distintas, y esta falla en la
- * dirección que importa: `false` sobre una dirección que SÍ recibe correo deja
- * pasar un `change-email` o un `forgot-password` que el §8 quiere bloquear. Un
- * `isDeliverableAlias()` escrito para esa pregunta tiene que tratar el ápice
- * como lo que es; usar esta función ahí es un agujero con forma de refactor.
+ * **Para bloquear el correo, esta función NO sirve y su hermana sí.**
+ * `isDeliverableAlias()` responde la pregunta al revés —«¿esta dirección recibe
+ * mensajes de verdad?»— y trata el ápice como lo que es, que es un buzón de Rolé
+ * pero NO una bandeja de una cuenta de equipo. Recipiente y entregable son
+ * preguntas distintas, y para el ápice dan respuestas distintas: usar esta
+ * función donde hace falta la otra deja pasar un `change-email` o un
+ * `forgot-password` que el §8 quiere bloquear. Es un agujero con forma de
+ * refactor, y por eso la respuesta está escrita en este archivo y no en el
+ * llamador: los dos guards de correo de la API usan `isDeliverableAlias`.
  *
  * La comparación es sobre el dominio y en minúsculas: `x@a.role.ec` es de Rolé y
  * `X@A.ROLE.EC` también, porque el dominio de un correo no distingue mayúsculas.
  */
 export function isRoleEcAlias(alias: string): boolean {
-	const domain = alias.split("@")[1] ?? "";
-	return domain.toLowerCase().endsWith(`.${ROLE_EC_DOMAIN}`);
+	return domainOf(alias).endsWith(`.${ROLE_EC_DOMAIN}`);
+}
+
+/**
+ * ¿Hay una bandeja real detrás de esta dirección?
+ *
+ * La pregunta del §8 para `change-email` y `forgot-password`, y la inversa exacta
+ * de {@link isRoleEcAlias}: aquí lo importante es que `false` significa «el
+ * correo se iría a una bandeja que no existe y rebotaría», y en ambos endpoints
+ * eso es un `422` en vez de una acción.
+ *
+ * ─── POR QUÉ EL ÁPICE CUENTA COMO ROLÉ AQUÍ Y ALLÁ NO ────────────────────────
+ *
+ * `x@role.ec` no es una cuenta de equipo —la regla del §3.1 es el sufijo
+ * `.role.ec`— pero `role.ec` ES un dominio de Rolé: los buzones que la API
+ * gestiona viven ahí (`notificaciones@role.ec`, `negocios@role.ec`, en
+ * `apps/api/src/modules/app-config/outbound-addresses.ts`). Lo que no existe es
+ * una bandeja para `centro@role.ec`: GoTrue acepta la dirección y el proveedor
+ * de envío la rechaza. O sea que el ápice es «dominio de la plataforma» y
+ * «buzón de una cuenta de equipo» a la vez, y cada pregunta tiene que leer la
+ * mitad que le corresponde.
+ *
+ * ─── POR QUÉ EL ARGUMENTO NO ES NECESARIAMENTE UN ALIAS ─────────────────────
+ *
+ * El nombre viene de la familia a la que pertenece, pero lo que se le pasa es
+ * cualquier dirección: acá va el identificador que un desconocido escribe en el
+ * formulario de recuperación de contraseña, que no es un alias de nadie.
+ *
+ * ─── Y POR QUÉ UNA DIRECCIÓN SIN DOMINIO NO ES ENTREGABLE ───────────────────
+ *
+ * El `domain === ""` no es de Rolé, así que sin este predicado la respuesta sería
+ * `true` para `sin-dominio` —que no es una dirección y no tiene bandeja detrás—.
+ * Una guarda que contesta «sí hay bandeja» sobre algo que no la tiene abre por el
+ * otro lado, que es peor que la duda: acá se cierra. El schema de los endpoints
+ * (`ForgotPasswordRequestSchema`, `ChangeEmailRequestSchema`) ya exige un correo
+ * válido, así que esto es la defensa de la función y no un segundo parser.
+ */
+export function isDeliverableAlias(address: string): boolean {
+	const domain = domainOf(address);
+	return (
+		domain !== "" &&
+		domain !== ROLE_EC_DOMAIN &&
+		!domain.endsWith(`.${ROLE_EC_DOMAIN}`)
+	);
 }
 
 /**

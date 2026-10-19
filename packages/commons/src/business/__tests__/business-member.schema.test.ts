@@ -9,6 +9,7 @@ import {
 	businessMemberAliasWarnings,
 	BusinessMemberDeliveryCardSchema,
 	CreateBusinessMemberSchema,
+	isDeliverableAlias,
 	isRoleEcAlias,
 	RotateBusinessMemberPinSchema,
 	UpdateBusinessMemberAliasResponseSchema,
@@ -144,6 +145,41 @@ describe("isRoleEcAlias", () => {
 	});
 });
 
+describe("isDeliverableAlias", () => {
+	it("no entrega a nada de `role.ec`, y el ápice va en el mismo bando", () => {
+		// Un subdominio de equipo es una dirección que generamos nosotros: no hay
+		// bandeja y el correo rebota.
+		expect(isDeliverableAlias("centro@panaderia-familia.role.ec")).toBe(false);
+		expect(isDeliverableAlias("centro@Panaderia-Familia.ROLE.EC")).toBe(false);
+		// Y EL ÁPICE TAMBIÉN, que es justo donde `isRoleEcAlias` contesta otra
+		// cosa: `centro@role.ec` no es una cuenta de equipo, pero el dominio es de
+		// la plataforma y `centro@role.ec` no es un buzón que nadie vaya a abrir.
+		// Los dos guards de correo de la API (el §8: `change-email` y
+		// `forgot-password` rechazan con 422) se apoyan en ESTA, y no en la otra:
+		// usar `isRoleEcAlias` ahí deja pasar el ápice.
+		expect(isDeliverableAlias("centro@role.ec")).toBe(false);
+		expect(isDeliverableAlias("notificaciones@role.ec")).toBe(false);
+		expect(isDeliverableAlias("negocios@role.ec")).toBe(false);
+	});
+
+	it("entrega a un dominio propio, que es el caso legítimo del §9.4", () => {
+		// El dominio de un negocio es un destinatario REAL: bloquearlo sería
+		// inventar una regla que el §9.4 no pide y quitarle al negocio el correo
+		// que sí le funciona.
+		expect(isDeliverableAlias("caja.centro@panaderialafamilia.ec")).toBe(true);
+		expect(isDeliverableAlias("Caja@Acme.com")).toBe(true);
+		// `role` es un subdominio de `role.ec`, no un hermano: sin el punto NO es
+		// el dominio de la plataforma, y el sufijo tiene que mirarlo.
+		expect(isDeliverableAlias("centro@role.ec.example.com")).toBe(true);
+		expect(isDeliverableAlias("centro@panaderialafamilia.ec")).toBe(true);
+	});
+
+	it("lo que no es un correo no es una dirección entregable", () => {
+		expect(isDeliverableAlias("sin-dominio")).toBe(false);
+		expect(isDeliverableAlias("")).toBe(false);
+	});
+});
+
 describe("businessMemberAliasWarnings", () => {
 	it("no avisa sobre un alias de Rolé", () => {
 		expect(businessMemberAliasWarnings("centro@panaderia.role.ec")).toEqual([]);
@@ -156,6 +192,23 @@ describe("businessMemberAliasWarnings", () => {
 			businessMemberAliasWarnings("caja.centro@panaderialafamilia.ec"),
 		).toEqual(["alias_domain_can_receive_mail"]);
 		expect(businessMemberAliasWarnings("caja@acme.com")).toEqual([
+			"alias_domain_can_receive_mail",
+		]);
+	});
+
+	it("el ápice avisa igual, y por eso las dos funciones NO se pueden fusionar", () => {
+		// El ápice es el caso donde `isRoleEcAlias` y `isDeliverableAlias` dan
+		// respuestas opuestas, y las dos respuestas son correctas para lo que
+		// pregunta cada una: `role.ec` recibe correo de verdad
+		// (`notificaciones@role.ec` es la casilla que la API usa), así que el
+		// aviso del §9.4 no es falso; y `centro@role.ec` no es una bandeja, así que
+		// los guards de correo tienen que rechazarla.
+		//
+		// Si alguien "limpia" esta duplicación y deja una sola función, este test
+		// es el que dice cuál de las dos mediadades se rompió.
+		expect(isRoleEcAlias("centro@role.ec")).toBe(false);
+		expect(isDeliverableAlias("centro@role.ec")).toBe(false);
+		expect(businessMemberAliasWarnings("centro@role.ec")).toEqual([
 			"alias_domain_can_receive_mail",
 		]);
 	});

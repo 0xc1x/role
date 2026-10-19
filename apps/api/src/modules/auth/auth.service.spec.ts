@@ -70,6 +70,11 @@ const TEMPLATE = { id: 'tmpl-1', name: 'auth-password-recovery' };
 
 const knownEmail = 'conocida@correo.cl';
 
+const FORGOT_PASSWORD_BODY = {
+  message:
+    'If that address matches an account, a password recovery link is on its way.',
+};
+
 describe('AuthService', () => {
   let service: AuthService;
 
@@ -115,6 +120,8 @@ describe('AuthService', () => {
     mockAccounts.countRetained.mockResolvedValue({
       orders: 0,
       businesses: 0,
+      memberships: 0,
+      owner_memberships: 0,
       reviews: 0,
     });
     mockEmailRepo.listTemplates.mockResolvedValue({
@@ -645,6 +652,70 @@ describe('AuthService', () => {
         options: { redirectTo: 'https://app.role.ec/reset' },
       });
     });
+
+    // ─── §8: un dominio sin buzón no entra a un flujo de correo ────────────────
+
+    it('refuses a generated Rolé address before it can queue anything', async () => {
+      mockSupabaseAdmin.auth.admin.generateLink.mockResolvedValue({
+        data: {
+          user: { id: 'user-1' },
+          properties: { action_link: 'https://l' },
+        },
+        error: null,
+      });
+
+      await expect(
+        service.forgotPassword({ email: 'centro@panaderia-familia.role.ec' }),
+      ).rejects.toThrow(UnprocessableEntityException);
+
+      // Nothing at all: no link generated, no row in `email_sends`. The bounce
+      // this refuses is the one a queued send would produce minutes later.
+      expect(mockSupabaseAdmin.auth.admin.generateLink).not.toHaveBeenCalled();
+      expect(mockEmailRepo.insertSends).not.toHaveBeenCalled();
+    });
+
+    it('refuses the apex too, and the apex is the case a happy path misses', async () => {
+      // `centro@role.ec` is NOT a staff account —`isRoleEcAlias` answers `false`
+      // for it, and that answer is right for the §9.4 warning, where the apex
+      // genuinely receives mail. Here the direction REVERSES: `false` has to mean
+      // "refuse", so the guard that answers "is there a mailbox behind this?" is
+      // `isDeliverableAlias`, and this test is the one that would catch somebody
+      // reaching for the other function.
+      await expect(
+        service.forgotPassword({ email: 'centro@role.ec' }),
+      ).rejects.toThrow(UnprocessableEntityException);
+      // Case-insensitive, because a domain does not distinguish case.
+      await expect(
+        service.forgotPassword({ email: 'centro@Role.EC' }),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('refuses the same for an address that holds no account at all', async () => {
+      // The refusal cannot depend on whether the account exists, or it becomes
+      // the enumeration oracle this route is built to not be.
+      await expect(
+        service.forgotPassword({ email: 'nadie@role.ec' }),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('lets a custom domain through, because that recipient is real', async () => {
+      mockSupabaseAdmin.auth.admin.generateLink.mockResolvedValue({
+        data: {
+          user: { id: 'user-1' },
+          properties: { action_link: 'https://l' },
+        },
+        error: null,
+      });
+
+      await expect(
+        service.forgotPassword({ email: 'caja.centro@panaderialafamilia.ec' }),
+      ).resolves.toEqual(FORGOT_PASSWORD_BODY);
+
+      expect(mockSupabaseAdmin.auth.admin.generateLink).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(mockEmailRepo.insertSends).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('resetPassword', () => {
@@ -849,6 +920,73 @@ describe('AuthService', () => {
         { email: 'nuevo@correo.cl' },
       );
     });
+
+    // ─── §8: un dominio sin buzón no entra a un flujo de correo ────────────────
+
+    it('refuses a generated Rolé address before GoTrue is asked', async () => {
+      await expect(
+        service.changeEmail(user, {
+          new_email: 'centro@panaderia-familia.role.ec',
+        }),
+      ).rejects.toThrow(UnprocessableEntityException);
+
+      // Nothing initiated, and nothing queued: a confirmation sent to an address
+      // we generated is a bounce nobody can read.
+      expect(
+        mockSupabaseAdmin.auth.admin.updateUserById,
+      ).not.toHaveBeenCalled();
+      expect(mockEmailRepo.insertSends).not.toHaveBeenCalled();
+    });
+
+    it('refuses the apex here too, because the guard runs in both flows', async () => {
+      // The same reversal the `forgotPassword` guard documents: `isRoleEcAlias`
+      // says `false` about `x@role.ec` and that is right for the §9.4 warning,
+      // while here `false` has to mean refuse. Same function on both endpoints.
+      await expect(
+        service.changeEmail(user, { new_email: 'centro@role.ec' }),
+      ).rejects.toThrow(UnprocessableEntityException);
+      expect(
+        mockSupabaseAdmin.auth.admin.updateUserById,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('refuses a generated address that is also the one the account has', async () => {
+      // Order matters and this pins it: the domain guard runs BEFORE the
+      // "already your address" comparison, because a generated Rolé address is
+      // refused either way and the caller is told why.
+      const staff = {
+        id: 'user-2',
+        email: 'caja@panaderia.role.ec',
+        role: 'business' as const,
+      };
+      mockDb.limit.mockResolvedValue([
+        {
+          id: 'user-2',
+          email: 'caja@panaderia.role.ec',
+          full_name: 'Caja',
+          avatar_url: null,
+          role: 'business',
+        },
+      ]);
+
+      await expect(
+        service.changeEmail(staff, { new_email: 'caja@panaderia.role.ec' }),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('lets a custom domain through, and that change is initiated', async () => {
+      const result = await service.changeEmail(user, {
+        new_email: 'caja.centro@panaderialafamilia.ec',
+      });
+
+      // The recipient is real —that is exactly what §9.4 buys— so the flow runs
+      // its normal course: GoTrue is asked and the change is 202-initiated.
+      expect(mockSupabaseAdmin.auth.admin.updateUserById).toHaveBeenCalledWith(
+        'user-1',
+        { email: 'caja.centro@panaderialafamilia.ec' },
+      );
+      expect(result.pending_email).toBe('caja.centro@panaderialafamilia.ec');
+    });
   });
 
   describe('deleteAccount', () => {
@@ -858,6 +996,8 @@ describe('AuthService', () => {
       mockAccounts.countRetained.mockResolvedValue({
         orders: 4,
         businesses: 0,
+        memberships: 0,
+        owner_memberships: 0,
         reviews: 0,
       });
       mockSupabaseAdmin.auth.admin.deleteUser.mockResolvedValue({
@@ -881,9 +1021,17 @@ describe('AuthService', () => {
       // `orders.business_id` from `businesses`. An owner who never ordered
       // passes a "no orders" test and would take their customers' purchases with
       // them, so the gate is wider than orders.
+      //
+      // `owner_memberships: 0` on purpose: this is the legacy shape, where the
+      // ownership lives only in `business_ownership` and there is nothing to
+      // degrade, so the gate answers what it answered before. The refusal below
+      // fires on the membership, which is where the "degrade or hand over" move
+      // actually exists.
       mockAccounts.countRetained.mockResolvedValue({
         orders: 0,
         businesses: 1,
+        memberships: 0,
+        owner_memberships: 0,
         reviews: 0,
       });
       mockSupabaseAdmin.auth.admin.deleteUser.mockResolvedValue({
@@ -897,10 +1045,105 @@ describe('AuthService', () => {
       expect(mockAccounts.eraseAccount).not.toHaveBeenCalled();
     });
 
+    it('refuses a live owner with a 409 and destroys nothing', async () => {
+      // The regression this exists for: the cascade from `profiles` reaches
+      // `trg_enforce_owner_cannot_be_deleted` and the erase dies with an `R0002`
+      // from inside a GoTrue delete, which is a 500 with nothing to act on. The
+      // refusal is a state the caller can change, so it has to come before the
+      // first delete — including the auth one.
+      mockAccounts.countRetained.mockResolvedValue({
+        orders: 0,
+        businesses: 1,
+        memberships: 1,
+        owner_memberships: 1,
+        reviews: 0,
+      });
+
+      await expect(service.deleteAccount(user)).rejects.toThrow(
+        ConflictException,
+      );
+
+      expect(mockSupabaseAdmin.auth.admin.deleteUser).not.toHaveBeenCalled();
+      expect(mockAccounts.anonymise).not.toHaveBeenCalled();
+      expect(mockAccounts.eraseAccount).not.toHaveBeenCalled();
+    });
+
+    it('says what the caller has to do, and not just that it is refused', async () => {
+      mockAccounts.countRetained.mockResolvedValue({
+        orders: 0,
+        businesses: 0,
+        memberships: 1,
+        owner_memberships: 1,
+        reviews: 0,
+      });
+
+      // §5.4: a business is not left with nobody who can administer it, and the
+      // two moves that resolve it are the ones that exist today. A refusal whose
+      // body does not name them is the same dead end as a 500, only quieter.
+      const error = await service
+        .deleteAccount(user)
+        .catch((err: unknown) => err);
+      const message = (
+        error as { getResponse: () => { message: string } }
+      ).getResponse().message;
+      expect(message).toContain('manager');
+      expect(message).toContain('hand');
+    });
+
+    it('anonymises an account whose membership is not an owner one', async () => {
+      // The employee case: `memberships > 0` alone must be enough to keep the
+      // profile row, because a membership is a row this account does not get to
+      // destroy — its delete is logical and not exposed in the v1 (§8), and the
+      // cascade would take it along with the alias.
+      mockAccounts.countRetained.mockResolvedValue({
+        orders: 0,
+        businesses: 0,
+        memberships: 2,
+        owner_memberships: 0,
+        reviews: 0,
+      });
+      mockSupabaseAdmin.auth.admin.deleteUser.mockResolvedValue({
+        data: {},
+        error: null,
+      });
+
+      await service.deleteAccount(user);
+
+      // Soft delete of the identity and a scrubbed profile: no cascade, and
+      // `AuthAccountRepository.anonymise` is where the memberships get archived.
+      expect(mockSupabaseAdmin.auth.admin.deleteUser).toHaveBeenCalledWith(
+        'user-1',
+        true,
+      );
+      expect(mockAccounts.anonymise).toHaveBeenCalledWith('user-1');
+      expect(mockAccounts.eraseAccount).not.toHaveBeenCalled();
+    });
+
+    it('an archived owner does not hold the erase hostage', async () => {
+      // `owner_memberships` counts LIVE owner rows only: a row that is already
+      // `deleted_at` is history and grants nothing, so it must not turn the
+      // account into one that can never be erased.
+      mockAccounts.countRetained.mockResolvedValue({
+        orders: 0,
+        businesses: 1,
+        memberships: 3,
+        owner_memberships: 0,
+        reviews: 0,
+      });
+      mockSupabaseAdmin.auth.admin.deleteUser.mockResolvedValue({
+        data: {},
+        error: null,
+      });
+
+      await expect(service.deleteAccount(user)).resolves.toBeUndefined();
+    });
+
     it('hard-deletes an account nothing else points at', async () => {
       mockAccounts.countRetained.mockResolvedValue({
         orders: 0,
         businesses: 0,
+        memberships: 0,
+        owner_memberships: 0,
         reviews: 0,
       });
       mockSupabaseAdmin.auth.admin.deleteUser.mockResolvedValue({
@@ -927,6 +1170,8 @@ describe('AuthService', () => {
       mockAccounts.countRetained.mockResolvedValue({
         orders: 9,
         businesses: 0,
+        memberships: 0,
+        owner_memberships: 0,
         reviews: 0,
       });
       await expect(service.deleteAccount(user)).resolves.toBeUndefined();
@@ -934,6 +1179,8 @@ describe('AuthService', () => {
       mockAccounts.countRetained.mockResolvedValue({
         orders: 0,
         businesses: 0,
+        memberships: 0,
+        owner_memberships: 0,
         reviews: 0,
       });
       await expect(service.deleteAccount(user)).resolves.toBeUndefined();

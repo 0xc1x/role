@@ -599,6 +599,94 @@ export async function createTestDb(): Promise<TestDbContext> {
     $function$;
   `);
 
+  // The two owner guards, verbatim from the ledger. Installed for the same
+  // reason as the block above and with the same warning about copying: the
+  // mirror carries `business_members.user_id ... ON DELETE CASCADE` (Drizzle read
+  // that clause off the live database, so it is IN the generated SQL) and carries
+  // no trigger. Without them, `DELETE /auth/account` on a business owner would
+  // delete the profile, the cascade would delete the membership row, and the spec
+  // would be green — because the very guard that makes that path unsafe is the
+  // guard the harness does not have.
+  //
+  // So this is not "the trigger would be nice to have here": the erase path
+  // (`AuthAccountRepository` + `AuthService.deleteAccount`) is built AROUND these
+  // two functions, and the specs that pin it cannot mean anything without them.
+  // `auth.service.db.spec.ts` holds the positive control — a profile that owns a
+  // business, erased straight through the repository, has to raise `R0002` — so a
+  // harness that lost this block fails loudly instead of passing quietly.
+  //
+  // `trg_enforce_owner_is_untouchable` (BEFORE UPDATE) is installed too, and for
+  // a second reason: `anonymise` writes `deleted_at` on the caller's own
+  // memberships, and a spec can only prove that a row it archived without a raw
+  // database error if the update guard is present.
+  await client.unsafe(`
+    create or replace function public.enforce_owner_is_untouchable()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    begin
+      if old.role <> 'owner'::public.business_member_role then
+        return new;
+      end if;
+
+      if new.role <> 'owner'::public.business_member_role
+         and new.deleted_at is null
+         and old.deleted_at is null then
+        return new;
+      end if;
+
+      if old.status is distinct from new.status
+         and new.status = 'disabled'::public.business_member_status then
+        raise exception 'el dueño del negocio no se puede desactivar; degradalo a manager primero'
+          using
+            errcode = 'R0002',
+            detail = format('business=%s member=%s', new.business_id, old.id),
+            hint = 'ningún rol desactiva al dueño; la transferencia de propiedad no está en la v1';
+      end if;
+
+      if old.deleted_at is null and new.deleted_at is not null then
+        raise exception 'el dueño del negocio no se puede dar de baja; degradalo primero'
+          using
+            errcode = 'R0002',
+            detail = format('business=%s member=%s', new.business_id, old.id),
+            hint = 'bajale el rol antes de darlo de baja';
+      end if;
+
+      return new;
+    end;
+    $fn$;
+
+    create trigger trg_enforce_owner_is_untouchable
+      before update on public.business_members
+      for each row execute function public.enforce_owner_is_untouchable();
+
+    create or replace function public.enforce_owner_cannot_be_deleted()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    begin
+      if old.role <> 'owner'::public.business_member_role
+         or old.deleted_at is not null then
+        return old;
+      end if;
+
+      raise exception 'el dueño del negocio no se puede borrar; dá de baja la fila en vez de borrarla'
+        using
+          errcode = 'R0002',
+          detail = format('business=%s member=%s', old.business_id, old.id),
+          hint = 'el borrado es lógico: la fila queda para saber quién operó en el negocio';
+    end;
+    $fn$;
+
+    create trigger trg_enforce_owner_cannot_be_deleted
+      before delete on public.business_members
+      for each row execute function public.enforce_owner_cannot_be_deleted();
+  `);
+
   const db: TestDatabase = drizzle({ client });
   let stopped = false;
   return {

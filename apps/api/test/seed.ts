@@ -3,6 +3,7 @@ import {
   businessFinance,
   businessHours,
   businessLocations,
+  businessMembers,
   businessModeration,
   businessOwnership,
   businesses,
@@ -11,6 +12,7 @@ import {
   orders,
   profiles,
 } from '../src/database/schema';
+import type { BusinessMemberRole } from '@0xc1x/role-commons';
 import type { TestDatabase } from './db';
 
 /** Seeds mínimos para specs de repositories (DB real, aislada por archivo). */
@@ -18,6 +20,44 @@ export async function seedProfile(db: TestDatabase, email?: string) {
   const id = randomUUID();
   await db.insert(profiles).values({ id, email: email ?? `${id}@test.cl` });
   return id;
+}
+
+/**
+ * A `business_members` row: the membership that decides the §8 erase path.
+ *
+ * It exists because `business_members` is the table whose `user_id` cascades from
+ * `profiles`, and a fixture without a membership row cannot observe anything about
+ * that cascade. The alias is unique per business on `lower(alias)` and is NOT
+ * partial on `deleted_at`, so a spec can assert that an archived row still burns
+ * its alias by trying to insert the same one.
+ */
+export async function seedBusinessMember(
+  db: TestDatabase,
+  businessId: string,
+  userId: string,
+  overrides: {
+    role?: BusinessMemberRole;
+    label?: string;
+    alias?: string;
+    status?: 'active' | 'disabled';
+    deleted_at?: Date | null;
+  } = {},
+) {
+  const suffix = randomUUID().slice(0, 8);
+  const [row] = await db
+    .insert(businessMembers)
+    .values({
+      business_id: businessId,
+      user_id: userId,
+      role: overrides.role ?? 'staff',
+      label: overrides.label ?? `Miembro ${suffix}`,
+      alias: overrides.alias ?? `miembro-${suffix}@negocio.role.ec`,
+      status: overrides.status ?? 'active',
+      deleted_at: overrides.deleted_at ?? null,
+    })
+    .returning();
+  if (!row) throw new Error('seedBusinessMember falló');
+  return row;
 }
 
 /**

@@ -11,7 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { eq } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
-import { safeErrorFields } from '@0xc1x/role-commons';
+import { isDeliverableAlias, safeErrorFields } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
 import { SupabaseTokenVerifier } from '../../auth/supabase-token-verifier';
 import type { Env } from '../../config/env.schema';
@@ -68,6 +68,54 @@ const FORGOT_PASSWORD_RESPONSE: ForgotPasswordResponse = {
   message:
     'If that address matches an account, a password recovery link is on its way.',
 };
+
+/**
+ * THE ONE REFUSAL BOTH MAIL FLOWS SHARE, and the body that says it.
+ *
+ * ─── WHY A GENERATED ADDRESS IS NOT A MAILBOX ─────────────────────────────────
+ *
+ * A staff alias mirrors `auth.users.email`, and by default that address lives on
+ * a Rolé-owned domain: `{código}@{slug}.role.ec` (§3.1). GoTrue accepts it and the
+ * provider refuses it, so a recovery link or a confirmation sent there bounces —
+ * and a bounce on `role.ec` is a complaint the sender cannot answer, because the
+ * person who filed it is a person we generated the address for.
+ *
+ * ─── WHY `isDeliverableAlias` AND NOT `isRoleEcAlias` ──────────────────────────
+ *
+ * The apex is the whole difference between the two, and the direction reverses
+ * here. `isRoleEcAlias("centro@role.ec")` is `false` — it is not a staff account
+ * — and that is correct for the §9.4 warning, where the apex genuinely receives
+ * mail. For a MAIL GUARD, `false` must mean "refuse", so a function that fails
+ * open on the apex would let `centro@role.ec` into both flows. `isDeliverableAlias`
+ * asks the other question —"is there a real mailbox behind this?"— and treats the
+ * apex as what it is: a Rolé domain with Rolé's own mailboxes on it and no
+ * mailbox for a staff account.
+ *
+ * ─── WHY A CUSTOM DOMAIN IS NOT TOUCHED ──────────────────────────────────────
+ *
+ * §9.4 makes the domain editable precisely so a business can run its own mail, and
+ * that address is a real recipient. Refusing it would take away the mail the owner
+ * already has, to protect against a domain we did not generate.
+ *
+ * ─── WHY THIS IS NOT THE ENUMERATION ORACLE ───────────────────────────────────
+ *
+ * The `forgot-password` 200-for-everyone rule is about the answer depending on
+ * whether an ACCOUNT EXISTS. This refusal depends only on the domain of the
+ * address the caller already submitted, so it tells a stranger nothing they did
+ * not send. It is also not a status difference between two accounts: it is the
+ * same 422 for an address that holds a business and one that holds nothing.
+ */
+function assertDeliverableAddress(address: string): void {
+  if (isDeliverableAlias(address)) return;
+
+  throw new UnprocessableEntityException({
+    error: 'Unprocessable Entity',
+    message:
+      'This address cannot receive email. Rolé generates staff addresses on its own ' +
+      'domain, so there is no inbox behind them; ask the business owner to give ' +
+      'this person an address on their own domain.',
+  });
+}
 
 @Injectable()
 export class AuthService {
@@ -261,6 +309,11 @@ export class AuthService {
    * So both branches return the same frozen 200 body, and the difference is
    * recorded in the log where an operator — not a stranger — can see it.
    *
+   * THE ONE ANSWER THAT IS NOT THE SAME: an address on a domain with no mailbox
+   * behind it is a 422, from `assertDeliverableAddress`, and it is the same 422
+   * whether or not the address holds an account. See that helper for why the
+   * branch cannot depend on anything the caller did not already send.
+   *
    * TIMING, HONESTLY: this narrows the side channel, it does not close it. Both
    * branches run the SAME two round trips in the same order (template lookup,
    * then `generateLink`), so the only residual delta is one INSERT into
@@ -274,7 +327,11 @@ export class AuthService {
   async forgotPassword(
     body: ForgotPasswordRequest,
   ): Promise<ForgotPasswordResponse> {
-    // Both branches, same cost. See the note above on why this is first.
+    // Before anything else, including the template lookup: an address with no
+    // mailbox behind it must not produce a queued send that bounces later.
+    assertDeliverableAddress(body.email);
+
+    // Both branches, same cost. See the note above on why the lookup is first.
     const template = await this.findTemplate(RECOVERY_TEMPLATE);
 
     let link: string | null = null;
@@ -454,6 +511,11 @@ export class AuthService {
    * Hence 202, not 200 — the resource is not in the requested state yet, and
    * returning 200 would be the same lie that refusal was built to stop.
    *
+   * AND 422 FOR AN ADDRESS THAT CANNOT RECEIVE MAIL: GoTrue sends the
+   * confirmation to the new address, so a generated Rolé alias is a confirmation
+   * that bounces. `assertDeliverableAddress` refuses it before GoTrue is asked,
+   * and the custom domain a business runs its own mail on (§9.4) goes through.
+   *
    * The notice goes to the CURRENT address. The confirmation of the new one is
    * GoTrue's to send; this one is ours, and its value is that an account whose
    * session was stolen finds out from the real owner. That is also why a failure
@@ -469,6 +531,12 @@ export class AuthService {
     if (!current) {
       throw new NotFoundException('Profile not found');
     }
+
+    // The NEW address, because that is the one GoTrue sends the confirmation to
+    // and the one that decides whether the change can ever land. It runs before the
+    // "same address" comparison below because a generated Rolé address is refused
+    // whether or not it is the one the account already has.
+    assertDeliverableAddress(body.new_email);
 
     const requested = body.new_email.toLowerCase();
     if (requested === current.email.toLowerCase()) {
@@ -535,11 +603,56 @@ export class AuthService {
    * operational cost is real and deliberate: an operator debugging a deletion
    * cannot tell from the log which branch ran. The fix for that is an audited
    * write with its own access control, not a field in an application log.
+   *
+   * ─── Y LA TERCERA SALIDA, QUE ES LA QUE ESTE FEATURE NECESITÓ ───────────────
+   *
+   * A 409, before anything is destroyed, when the caller is still the live owner
+   * of a business. Not because erasing an owner is forbidden —it is their right,
+   * and the account stays erasable— but because the ownership has to be dealt with
+   * first and only the caller can decide how:
+   *
+   *  - The §8 makes a membership's delete logical ("quién estuvo aquí" vale), and
+   *    a cascade from `profiles` destroys it. So the erase path detaches it,
+   *    which means the row survives with `deleted_at` set —history kept, alias
+   *    burnt, access closed.
+   *  - But detaching an OWNER row cannot be done by this service: §5.4 does not
+   *    accept a business left with nobody who can administer it, and the database
+   *    agrees — `trg_enforce_owner_is_untouchable` refuses to archive an owner
+   *    and `trg_enforce_owner_cannot_be_deleted` refuses to delete one.
+   *  - And leaving it to the cascade is not an option either: it raises `R0002`
+   *    from inside a GoTrue delete, which arrives here as an opaque 500 with no
+   *    account of what to do about it. That is the regression this method would
+   *    have shipped.
+   *
+   * So the refusal names the two moves that exist today —degrade the membership
+   * with `PATCH /businesses/:id/staff/:memberId` (`role: 'manager'`, which the
+   * owner guard allows for their own row), or hand the business over— and then
+   * the account erases normally. Nothing is destroyed on this path, so it is
+   * safe to retry after the caller acts.
    */
   async deleteAccount(user: AuthUser): Promise<void> {
     const retained = await this.accounts.countRetained(user.id);
+
+    // First, and before any delete: the answer is a function of state the caller
+    // can change and this method cannot.
+    if (retained.owner_memberships > 0) {
+      this.logger.warn({
+        event: 'account_deletion_needs_ownership_decision',
+        userId: user.id,
+      });
+      throw new ConflictException({
+        error: 'Conflict',
+        message:
+          'This account still owns a business. Degrade the business access to ' +
+          'manager, or hand the business over, and then delete the account.',
+      });
+    }
+
     const mustAnonymise =
-      retained.orders > 0 || retained.businesses > 0 || retained.reviews > 0;
+      retained.orders > 0 ||
+      retained.businesses > 0 ||
+      retained.memberships > 0 ||
+      retained.reviews > 0;
 
     // `shouldSoftDelete`: the only thing the admin API offers that closes the
     // identity without removing the row the surviving records point at. It
@@ -560,6 +673,9 @@ export class AuthService {
     }
 
     if (mustAnonymise) {
+      // The profile row survives, and with it every membership that points at it,
+      // so nothing cascades and the record of who was on the team is still
+      // answerable.
       await this.accounts.anonymise(user.id);
     } else {
       await this.accounts.eraseAccount(user.id);
