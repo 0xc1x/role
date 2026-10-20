@@ -15,7 +15,6 @@ import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import {
   businessFinance,
-  businessOwnership,
   businesses,
   coupons,
   orderEvents,
@@ -130,18 +129,32 @@ export class OrdersRepository {
     return row ?? null;
   }
 
-  async findByIdWithBusinessOwner(id: string) {
+  /**
+   * The order and the business it belongs to.
+   *
+   * The join against `businesses` is a PRESENCE rule: an order whose business
+   * row is gone is an order that does not exist. It is kept as it was, and the
+   * join against the OWNER row is NOT, because the owner is no longer read from
+   * `business_ownership`: the caller's role in the business comes from the
+   * membership model, asked by the service through
+   * `BusinessesRepository.roleOf`.
+   *
+   * ─── POR QUÉ SE SACA EL JOIN Y NO SE CAMBIA DE TABLA ────────────────────────
+   *
+   * Cambiarlo por `business_members` habría dejado el mismo conjunto de filas
+   * —los 16 negocios tienen fila de dueño en las dos tablas— pero con una
+   * diferencia que ningún tipo avisa: el join contra `business_ownership` sigue
+   * existiendo cuando el dueño se degrada a `manager`, y el join contra
+   * `business_members` no. Con el join nuevo, los pedidos de un negocio sin
+   * dueño desaparecerían —404 en lugar de 403— y la fila del pedido dejaría de
+   * depender de una pregunta de permiso. La existencia de un pedido no es una
+   * pregunta de permiso.
+   */
+  async findByIdWithBusiness(id: string) {
     const [row] = await this.db
-      .select({
-        order: orders,
-        business_owner_id: businessOwnership.owner_id,
-      })
+      .select({ order: orders })
       .from(orders)
       .innerJoin(businesses, eq(orders.business_id, businesses.id))
-      .innerJoin(
-        businessOwnership,
-        eq(orders.business_id, businessOwnership.business_id),
-      )
       .where(eq(orders.id, id))
       .limit(1);
     return row ?? null;
@@ -153,19 +166,11 @@ export class OrdersRepository {
     id: string,
   ): Promise<{
     order: typeof orders.$inferSelect;
-    business_owner_id: string;
   } | null> {
     const [row] = await tx
-      .select({
-        order: orders,
-        business_owner_id: businessOwnership.owner_id,
-      })
+      .select({ order: orders })
       .from(orders)
       .innerJoin(businesses, eq(orders.business_id, businesses.id))
-      .innerJoin(
-        businessOwnership,
-        eq(orders.business_id, businessOwnership.business_id),
-      )
       .where(eq(orders.id, id))
       .for('update', { of: orders })
       .limit(1);
@@ -340,20 +345,6 @@ export class OrdersRepository {
       .where(and(...filters))
       .returning();
     return row ?? null;
-  }
-
-  async isBusinessOwner(businessId: string, userId: string): Promise<boolean> {
-    const [row] = await this.db
-      .select({ id: businessOwnership.business_id })
-      .from(businessOwnership)
-      .where(
-        and(
-          eq(businessOwnership.business_id, businessId),
-          eq(businessOwnership.owner_id, userId),
-        ),
-      )
-      .limit(1);
-    return Boolean(row);
   }
 
   /**

@@ -687,6 +687,39 @@ export async function createTestDb(): Promise<TestDbContext> {
       for each row execute function public.enforce_owner_cannot_be_deleted();
   `);
 
+  // The ONE account of the session expiry, copied VERBATIM from the ledger
+  // (`20261015024825_business_policy_tightening.sql`).
+  //
+  // Why it is here: `apps/api/src/database/business-membership.ts` —the shared
+  // answer to «is this my business?»— calls this function instead of computing
+  // `last_authenticated_at + ttl` in TypeScript. That is deliberate: the ADR
+  // says the arithmetic exists in exactly one place, and a copy in a `.ts` file
+  // is invisible to the catalog guard that reads `pg_proc.prosrc`. So the API
+  // asks the database, and the harness has to have the function the API asks.
+  //
+  // It is `IMMUTABLE` and takes its two arguments explicitly —no `auth.uid()`,
+  // no session— so it installs here unchanged and it means the same thing in
+  // the harness as in production. Copied rather than paraphrased so that a
+  // change to the migration shows up as a diff against this block instead of as
+  // a rewrite of it.
+  await client.unsafe(`
+    create or replace function public.business_member_session_expires_at(
+      p_session_ttl_hours integer,
+      p_last_authenticated_at timestamptz
+    )
+    returns timestamptz
+    language sql
+    immutable
+    set search_path = ''
+    as $$
+      select case
+        when p_session_ttl_hours > 0 and p_last_authenticated_at is not null
+          then p_last_authenticated_at + (p_session_ttl_hours * interval '1 hour')
+        else null
+      end;
+    $$;
+  `);
+
   const db: TestDatabase = drizzle({ client });
   let stopped = false;
   return {

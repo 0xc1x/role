@@ -262,7 +262,15 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     const userId = await seedProfile(ctx.db, undefined);
     await defaults().seed({ id: userId, email: `${userId}@t.cl` });
 
-    const business = await seedBusiness(ctx.db, userId, {
+    // The business belongs to SOMEONE ELSE on purpose. The account under test
+    // is a consumer, and a consumer does not own a business: the fixture used
+    // to make it the owner, and that was a fiction that the membership model
+    // stopped allowing —an owner has an owner membership, and the DB's owner
+    // guard refuses to archive it, so the anonymise path could not even run.
+    // With the business owned by a merchant, the ONLY thing that retains this
+    // profile is the order, which is exactly what this file is about.
+    const merchantId = await seedProfile(ctx.db, undefined);
+    const business = await seedBusiness(ctx.db, merchantId, {
       verification_status: 'approved',
     });
     const location = await seedLocation(ctx.db, business.id);
@@ -328,7 +336,7 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     // orders exist — which is the part of the behaviour a mirror can observe.
     expect(await accounts().countRetained(userId)).toEqual({
       orders: 1,
-      businesses: 1,
+      businesses: 0,
       memberships: 0,
       owner_memberships: 0,
       reviews: 0,
@@ -362,16 +370,26 @@ describe('AuthAccountRepository.delete (DB real)', () => {
       { status: 'completed' },
     );
 
+    // The owner's OWNERSHIP is what retains them, and it is a membership now:
+    // the owner of a business has a row in `business_members` with
+    // `role = 'owner'`, and `owner_memberships` is the number that says «this
+    // account administers a business and cannot be erased».
     const retained = await accounts().countRetained(ownerId);
     expect(retained).toEqual({
       orders: 0,
       businesses: 1,
-      memberships: 0,
-      owner_memberships: 0,
+      memberships: 1,
+      owner_memberships: 1,
       reviews: 0,
     });
 
-    await accounts().anonymise(ownerId);
+    // And the soft erase refuses to touch it: `anonymise` archives the
+    // caller's memberships, and the database's owner guard (`R0002`) says that
+    // an owner is not the account's to archive. The service never gets here —
+    // it answers 409 before erasing anything — but the guard is what holds when
+    // the repository is called directly, and this is the assertion that proves
+    // the business and the stranger's purchase are still there.
+    await expect(accounts().anonymise(ownerId)).rejects.toThrow();
 
     // The customer's order, and the business itself, are still there.
     expect(await orderRow(customerOrder.id)).not.toBeNull();
@@ -709,13 +727,17 @@ describe('the erase with a membership (DB real)', () => {
   /** A profile that owns a business, with the membership that says so. */
   async function seedOwner() {
     const userId = await seedProfile(ctx.db, undefined);
+    // `owner_membership: false` porque esta spec siembra su propia fila —necesita
+    // el id para degradarla después— y el seeder la crearía con otro alias.
     const business = await seedBusiness(ctx.db, userId, {
       verification_status: 'approved',
+      owner_membership: false,
     });
     const member = await seedBusinessMember(ctx.db, business.id, userId, {
       role: 'owner',
       label: 'Dueña',
       alias: `duena-${randomUUID().slice(0, 8)}@negocio.role.ec`,
+      session_ttl_hours: 0,
     });
     return { userId, businessId: business.id, memberId: member.id };
   }

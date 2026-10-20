@@ -25,6 +25,7 @@ import { toNumber } from '../../common/utils/numeric';
 import type { AuthUser } from '../../auth/auth.types';
 import type { OfferUpdate } from './offers.repository';
 import { OffersRepository } from './offers.repository';
+import { BusinessesRepository } from '../businesses/businesses.repository';
 import { OfferMapper } from './offers.mapper';
 
 /** TTL corto: ORDER BY random() es full-scan por request del hero de landing. */
@@ -40,6 +41,7 @@ export class OffersService {
 
   constructor(
     private readonly offersRepository: OffersRepository,
+    private readonly businessesRepository: BusinessesRepository,
     private readonly config: ConfigService<Env, true>,
     @Optional()
     private readonly notificationHandlers?: NotificationHandlers,
@@ -257,16 +259,23 @@ export class OffersService {
     });
   }
 
+  /**
+   * Only the OWNER of a business manages its offers.
+   *
+   * The requirement is stated here, over the fact the repository answers: the
+   * caller's role in the business. Before the consolidation this asked
+   * `business_ownership` through a method of this module's own repository —
+   * `OffersRepository.isBusinessOwner` — which was the second of the three
+   * copies of the same predicate. Now the answer comes from the membership
+   * model, from one place, and this method says what it demands of it.
+   */
   private async assertCanMutateBusiness(
     user: AuthUser,
     businessId: string,
   ): Promise<void> {
     if (user.role === 'admin') return;
-    const isOwner = await this.offersRepository.isBusinessOwner(
-      businessId,
-      user.id,
-    );
-    if (!isOwner) {
+    const role = await this.businessesRepository.roleOf(businessId, user.id);
+    if (role !== 'owner') {
       throw new ForbiddenException(
         'You can only manage offers for businesses you own',
       );

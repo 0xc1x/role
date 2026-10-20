@@ -85,7 +85,7 @@ describe('BusinessOwnerStatsService', () => {
       // that is how "is this my business?" ends up answered three slightly
       // different ways.
       const { BusinessesService: Real } = await import('./businesses.service');
-      const repository = { isOwner: jest.fn().mockResolvedValue(false) };
+      const repository = { roleOf: jest.fn().mockResolvedValue(null) };
       const config = {
         get: (key: string) =>
           ({
@@ -103,7 +103,7 @@ describe('BusinessOwnerStatsService', () => {
       await expect(
         real.assertCanViewBusiness(owner, businessId),
       ).rejects.toBeInstanceOf(ForbiddenException);
-      expect(repository.isOwner).toHaveBeenCalledWith(businessId, owner.id);
+      expect(repository.roleOf).toHaveBeenCalledWith(businessId, owner.id);
     });
   });
 

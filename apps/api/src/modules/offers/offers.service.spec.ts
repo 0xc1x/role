@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { OffersService } from './offers.service';
+import { BusinessesRepository } from '../businesses/businesses.repository';
 import { NotificationHandlers } from '../notifications/notification.handlers';
 import {
   OffersRepository,
@@ -73,6 +74,7 @@ const makeListRow = (overrides: Partial<OfferListRow> = {}): OfferListRow => ({
 describe('OffersService', () => {
   let service: OffersService;
   let repository: jest.Mocked<OffersRepository>;
+  let businessesRepository: jest.Mocked<BusinessesRepository>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -94,10 +96,18 @@ describe('OffersService', () => {
             update: jest.fn(),
             setCategories: jest.fn(),
             findCategoryIds: jest.fn(),
-            isBusinessOwner: jest.fn(),
             isBusinessAvailableForOffers: jest.fn(),
             locationBelongsToBusiness: jest.fn(),
             findActiveCategoryIds: jest.fn(),
+          },
+        },
+        {
+          // The ONE answer to «is this my business?». The service asks it and
+          // states what it demands of the answer.
+          provide: BusinessesRepository,
+          useValue: {
+            roleOf: jest.fn(),
+            ownedBusinessIds: jest.fn(),
           },
         },
       ],
@@ -105,6 +115,7 @@ describe('OffersService', () => {
 
     service = module.get(OffersService);
     repository = module.get(OffersRepository);
+    businessesRepository = module.get(BusinessesRepository);
 
     jest.resetAllMocks();
 
@@ -222,7 +233,7 @@ describe('OffersService', () => {
         pickup_end: '2025-02-01T12:00:00Z',
         category_ids: ['c1'],
       };
-      repository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
       repository.isBusinessAvailableForOffers.mockResolvedValue(true);
       repository.locationBelongsToBusiness.mockResolvedValue(true);
       repository.findActiveCategoryIds.mockResolvedValue(['c1']);
@@ -267,7 +278,7 @@ describe('OffersService', () => {
         category_ids: ['c1'],
         is_active: true,
       };
-      repository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
       repository.isBusinessAvailableForOffers.mockResolvedValue(false);
       repository.locationBelongsToBusiness.mockResolvedValue(true);
       repository.findActiveCategoryIds.mockResolvedValue(['c1']);
@@ -294,7 +305,7 @@ describe('OffersService', () => {
       };
       const existing = makeOfferRow();
       repository.findDtoById.mockResolvedValue(existing);
-      repository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
       repository.isBusinessAvailableForOffers.mockResolvedValue(true);
       repository.locationBelongsToBusiness.mockResolvedValue(true);
       repository.findActiveCategoryIds.mockResolvedValue([]);
@@ -340,7 +351,7 @@ describe('OffersService', () => {
       };
       const existing = makeOfferRow();
       repository.findDtoById.mockResolvedValue(existing);
-      repository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
       repository.isBusinessAvailableForOffers.mockResolvedValue(true);
       repository.locationBelongsToBusiness.mockResolvedValue(true);
       repository.findActiveCategoryIds.mockResolvedValue(['c1', 'c2']);
@@ -369,7 +380,7 @@ describe('OffersService', () => {
       };
       const existing = makeOfferRow();
       repository.findDtoById.mockResolvedValue(existing);
-      repository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
       repository.transaction.mockImplementation(async (fn) =>
         fn({} as unknown as DbExecutor),
       );
@@ -422,11 +433,14 @@ describe('OffersService.create (notificación post-creación)', () => {
             update: jest.fn(),
             setCategories: jest.fn(),
             findCategoryIds: jest.fn(async () => []),
-            isBusinessOwner: jest.fn(async () => true),
             isBusinessAvailableForOffers: jest.fn(async () => true),
             locationBelongsToBusiness: jest.fn(async () => true),
             findActiveCategoryIds: jest.fn(async () => []),
           },
+        },
+        {
+          provide: BusinessesRepository,
+          useValue: { roleOf: jest.fn(async () => 'owner') },
         },
         { provide: NotificationHandlers, useValue: { onOfferCreated } },
       ],

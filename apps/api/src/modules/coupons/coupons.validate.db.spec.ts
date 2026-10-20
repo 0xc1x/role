@@ -14,6 +14,7 @@ import type { AuthUser } from '../../auth/auth.types';
 import type { Env } from '../../config/env.schema';
 import { coupons, offers, orders } from '../../database/schema';
 import { OffersRepository } from '../offers/offers.repository';
+import { BusinessesRepository } from '../businesses/businesses.repository';
 import { CouponsRepository, type CouponRow } from './coupons.repository';
 import { CouponsService } from './coupons.service';
 import { OrdersRepository } from '../orders/orders.repository';
@@ -49,6 +50,7 @@ beforeAll(async () => {
   ordersService = new OrdersService(
     ordersRepository,
     new OffersRepository(ctx.db),
+    new BusinessesRepository(ctx.db),
     // Notification flags off, the production default: this spec measures the
     // reservation, not the queue behind it.
     { get: () => false } as unknown as ConfigService<Env, true>,

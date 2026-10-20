@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import {
   businessFinance,
   businessHours,
@@ -30,6 +31,12 @@ export async function seedProfile(db: TestDatabase, email?: string) {
  * that cascade. The alias is unique per business on `lower(alias)` and is NOT
  * partial on `deleted_at`, so a spec can assert that an archived row still burns
  * its alias by trying to insert the same one.
+ *
+ * `session_ttl_hours` and `last_authenticated_at` son overrides y no accidents:
+ * el TTL decide si la sesión de esa membresía está dentro de la promesa del
+ * §5.2, y `0` es el modo «equipo propio» —sin vencimiento— con el que nacen
+ * los dueños. Una fila con TTL y sin sello está vencida, y una spec que no lo
+ * diga está probando una sesión que en producción no existe.
  */
 export async function seedBusinessMember(
   db: TestDatabase,
@@ -40,6 +47,8 @@ export async function seedBusinessMember(
     label?: string;
     alias?: string;
     status?: 'active' | 'disabled';
+    session_ttl_hours?: number;
+    last_authenticated_at?: Date | null;
     deleted_at?: Date | null;
   } = {},
 ) {
@@ -53,6 +62,8 @@ export async function seedBusinessMember(
       label: overrides.label ?? `Miembro ${suffix}`,
       alias: overrides.alias ?? `miembro-${suffix}@negocio.role.ec`,
       status: overrides.status ?? 'active',
+      session_ttl_hours: overrides.session_ttl_hours ?? 24,
+      last_authenticated_at: overrides.last_authenticated_at ?? null,
       deleted_at: overrides.deleted_at ?? null,
     })
     .returning();
@@ -64,6 +75,19 @@ export async function seedBusinessMember(
  * Inserta el negocio y sus tres companions. El espejo no tiene los triggers de
  * Supabase que crean estas filas, así que el seed las escribe explícitamente
  * (mismo inventario que el backfill de la migración).
+ *
+ * Y escribe TAMBIÉN la membresía del dueño, porque es lo que hace el API desde
+ * que el permiso se resuelve por `business_members`: un negocio sin fila de
+ * dueño en `business_members` es un negocio sin dueño, y un spec que siembra un
+ * negocio sin dueño midiendo otra cosa.
+ *
+ * `owner_membership: false` es el escape para el spec que siembra su propia
+ * membresía —porque necesita el id de la fila— y para el que necesita el
+ * estado anterior al backfill. Por defecto está en `true`, porque el estado por
+ * defecto de una base es el de producción: un negocio con dueño.
+ *
+ * El alias es el correo del dueño —como el backfill—, y el TTL es 0 —como
+ * `20261016022631`—: un dueño no es una tablet compartida.
  */
 export async function seedBusiness(
   db: TestDatabase,
@@ -74,6 +98,7 @@ export async function seedBusiness(
     type?: 'restaurant' | 'bakery' | 'cafe' | 'grocery' | 'other';
     is_active?: boolean;
     verification_status?: 'pending' | 'approved' | 'rejected';
+    owner_membership?: boolean;
   } = {},
 ) {
   const suffix = randomUUID().slice(0, 8);
@@ -93,6 +118,22 @@ export async function seedBusiness(
   await db
     .insert(businessOwnership)
     .values({ business_id: row.id, owner_id: ownerId });
+  if (overrides.owner_membership !== false) {
+    const [ownerProfile] = await db
+      .select({ email: profiles.email })
+      .from(profiles)
+      .where(eq(profiles.id, ownerId))
+      .limit(1);
+    await db.insert(businessMembers).values({
+      business_id: row.id,
+      user_id: ownerId,
+      role: 'owner',
+      label: row.name,
+      alias: ownerProfile?.email ?? `${ownerId}@owner.invalid`,
+      status: 'active',
+      session_ttl_hours: 0,
+    });
+  }
   await db.insert(businessFinance).values({ business_id: row.id });
   await db.insert(businessModeration).values({
     business_id: row.id,

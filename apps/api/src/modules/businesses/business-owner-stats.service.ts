@@ -21,14 +21,21 @@ import { BusinessesService } from './businesses.service';
  * invariant is "the guard is the whole story" — there is no path parameter whose
  * value has to be resolved against anything.
  *
- * These two break that invariant. Their entire authorisation is
- * `business_ownership`, and their business id arrives in the PATH, where a
- * reader who has just skimmed `StatsController` would not expect it to matter.
- * The same reasoning put the consumer aggregate on `/me` instead: `MeController`'s
- * invariant is "nothing here takes an id", and a `?user_id=` on a route whose
- * siblings all take no parameters is precisely the thing that turns a comment
- * into a lie. So each aggregate lives where its own ownership story is the
- * module's headline, and `stats` keeps meaning "nobody's numbers in particular".
+ * These two break that invariant. Their entire authorisation is the caller's
+ * OWNER membership in the business, and their business id arrives in the PATH,
+ * where a reader who has just skimmed `StatsController` would not expect it to
+ * matter. The same reasoning put the consumer aggregate on `/me` instead:
+ * `MeController`'s invariant is "nothing here takes an id", and a `?user_id=`
+ * on a route whose siblings all take no parameters is precisely the thing that
+ * turns a comment into a lie. So each aggregate lives where its own ownership
+ * story is the module's headline, and `stats` keeps meaning "nobody's numbers
+ * in particular".
+ *
+ * The gate itself is `BusinessesService.assertCanViewBusiness`, which asks
+ * `BusinessesRepository.roleOf` —the membership model— and requires the OWNER
+ * role. This service does not ask anything of its own: a second way of
+ * answering "may this caller read this business's aggregates" is exactly what
+ * that shared method exists to prevent.
  *
  * EVERY METHOD CALLS `assertCanViewBusiness` FIRST, and the repository is
  * injected behind that call rather than reached from the handler. In Supabase the

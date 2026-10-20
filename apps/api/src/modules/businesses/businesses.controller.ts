@@ -217,9 +217,9 @@ export class BusinessesController {
   // consumer route for the consumer table.
   //
   // The path segment is `:businessId`, as it is for `:businessId/locations`, and
-  // it is a CLAIM, not an identity: `BusinessesService` resolves it against
-  // `business_ownership` before the repository is reached. `@Roles('business',
-  // 'admin')` is the coarse pre-filter every per-business route here carries; the
+  // it is a CLAIM, not an identity: `BusinessesService` resolves it against the
+  // caller's owner membership before the repository is reached.
+  // `@Roles('business', 'admin')` is the coarse pre-filter every per-business route here carries; the
   // ownership check is the real gate and it lives in the service, where a role
   // check alone would be trivially bypassed by any account that owns a business.
 
