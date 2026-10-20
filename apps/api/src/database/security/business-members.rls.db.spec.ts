@@ -4993,35 +4993,46 @@ describe('los límites del plan bloquean crecer, no operar', () => {
     expect(stillArchived[0]?.deleted).toBe(true);
   });
 
-  test('bajar un dueño a staff se mide contra el tope', async () => {
+  test('bajar un dueño a staff se rechaza, y el tope ni lo mira', async () => {
     // Control positivo primero, y por el mismo motivo que arriba: un `set role`
     // que el trigger viera mal negaría también aquí, y sin el control el rechazo
     // de más abajo sería indistinguible de un trigger que niega todo.
-    const antesDelControl = await liveStaff(BIZ_ARCHIVED_ROOM);
-    const control = await as(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe<{ id: string }[]>(
-        `update public.business_members set role = 'staff'
-          where id = '${MEM_ROOMARCH_OWNER}' returning id`,
-      ),
-    );
-    expect(plainRows(control)).toHaveLength(1);
-    // Y el conteo se mueve UNA plaza: es lo que hace que el paso siguiente sea el
-    // caso interesante y no una repetición del control.
-    expect(await liveStaff(BIZ_ARCHIVED_ROOM)).toBe(antesDelControl + 1);
+    //
+    // El control es un cambio de rol entre dos roles que NO son de dueño: la
+    // guarda es del dueño, y una fila que no lo es se puede cambiar de rol. Lo
+    // que antes se medía acá —un dueño que deja de serlo y pasa a ocupar plaza—
+    // ya no es alcanzable: degradar al dueño está cerrado con `R0002` desde
+    // `20261020052915`.
+    //
+    // `rolledBack` porque el camino de éxito de este control ES una escritura y
+    // no tiene que quedar nada detrás.
+    const control = await rolledBack(ctx.sql, async (tx) => {
+      await tx.unsafe(
+        `update public.business_members set role = 'manager'
+          where id = '${MEM_ARCH_LIVE[0]}'`,
+      );
+    });
+    expect(
+      control,
+      'cambiar el rol de un empleado a un gerente no puede rebotar: la guarda ' +
+        'es del dueño, y esta fila no lo es.',
+    ).toBeNull();
 
-    // El dueño del negocio que está en el tope. Bajarlo lo convertiría en el tercer
-    // acceso que no es suyo, y el §4.5 cuenta a los owners por `role`, no por
-    // exemptions: un dueño que deja de serlo consume la misma plaza que un empleado.
+    // Y ahora el dueño: bajarlo a `staff` se rechaza con `R0002` —no con el
+    // `R0001` del plan— porque la degradación no tiene nada que ver con el plan.
+    // El negocio está EN EL TOPE y aun así la respuesta es la del dueño: la
+    // guarda del dueño corre antes que el conteo, y el operador no recibe un
+    // «subí de plan» para una operación que no es del plan.
     const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
       tx.unsafe(
         `update public.business_members set role = 'staff'
           where id = '${MEM_ARCH_OWNER}'`,
       ),
     );
-    expect(err?.code).toBe('R0001');
-    expect(err?.message).toBe('el plan free admite hasta 2 miembros, no más');
+    expect(err?.code).toBe('R0002');
+    expect(err?.message).toContain('no se puede degradar');
 
-    // El conteo no se mueve y la fila sigue siendo de la dueña.
+    // El conteo no se mueve y la fila sigue siendo la de la dueña.
     expect(await liveStaff(BIZ_ARCHIVED)).toBe(2);
     const stillOwner = plainRows(
       await as(ctx.sql, 'service_role', null, (tx) =>
@@ -5389,14 +5400,18 @@ describe('los límites del plan bloquean crecer, no operar', () => {
  * que hacía falta para que las otras dos importen: si un negocio puede tener dos
  * dueños, «proteger al dueño» es proteger a media fila.
  *
- * Y la cuarta dirección —la que NO se niega— es degradarlo. Un trigger que
- * negara la fila entera parece más estricto y es peor: en esta tabla la baja y la
- * pausa son la **revocación real** del acceso de un empleado que se va (§8), y un
- * trigger que las negara dejaría al negocio sin poder despedir a nadie. Por eso
- * hay tests positivos de `manager` y `staff` en las dos direcciones, y no sólo
- * negativos de `owner`.
+ * Y la cuarta dirección es degradarlo, que HASTA `20261020052915` no se negaba y
+ * desde esa migración sí: sin transferencia de propiedad, degradar al único
+ * dueño deja al negocio sin nadie que lo administre y sin ninguna operación que
+ * lo revierta.
+ *
+ * Un trigger que negara la fila entera sigue siendo peor: en esta tabla la baja
+ * y la pausa son la **revocación real** del acceso de un empleado que se va (§8),
+ * y un trigger que las negara dejaría al negocio sin poder despedir a nadie. Por
+ * eso hay tests positivos de `manager` y `staff` en las dos direcciones, y no
+ * sólo negativos de `owner`.
  */
-describe('el dueño no se desactiva, y hay uno por negocio', () => {
+describe('el dueño no se desactiva, no se degrada, y hay uno por negocio', () => {
   let ctx: SupabaseTestDb;
 
   const OWNER = 'f1000000-0000-4000-8000-000000000001';
@@ -5795,31 +5810,64 @@ describe('el dueño no se desactiva, y hay uno por negocio', () => {
     expect(untouched?.deleted).toBe(false);
   });
 
-  test('bajar un dueño a manager se deja: es la única salida que el §5.4 deja', async () => {
+  test('bajar un dueño a manager se rechaza: sin transferencia, no hay salida', async () => {
     // El §5.4 dice «ningún rol puede desactivar al dueño» y no dice «y tampoco
-    // puede dejar de serlo». La degradación es la operación que va a necesitar
-    // la transferencia de propiedad, así que bloquearla sería dejar la base sin
-    // salida: el negocio que llega a no tener dueño —y el §5.4 dice que la
-    // transferencia queda fuera de la v1, no que esté prohibida— no tendría
-    // ninguna forma de volver atrás.
+    // puede dejar de serlo». La degradación se dejó pasar mientras la
+    // transferencia de propiedad iba a necesitar exactamente esa salida.
     //
-    // Y lo que NO se afirma acá es que el negocio siga teniendo dueño después:
-    // degradar al único dueño lo deja sin él, y eso es una operación de dos
-    // filas (degradar al viejo, promover al nuevo) que ningún trigger de una fila
-    // puede atomicar. Lo que este trigger garantiza es más chico y más honesto:
-    // la fila no se DESACTIVA ni se da de baja mientras sea la del dueño.
-    const demoted = await as(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe<{ id: string }[]>(
+    // La transferencia no existe, y mientras tanto la degradación era una puerta
+    // de una línea de HTTP: `PATCH /businesses/:id/staff/:memberId {"role":
+    // "manager"}` sobre la fila del PROPIO dueño. Lo que queda después es un
+    // negocio inmanejable e invisible —las puertas owner-only niegan a todos,
+    // `listForUser` lo borra del listado del panel— y sin ninguna operación que
+    // devuelva el rol de dueño.
+    //
+    // Así que degradar se NIEGA, con el código que ya existía: `R0002`, el dueño
+    // intocable. No es una regla nueva: es la misma invariante con una tercera
+    // salida tapada.
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
         `update public.business_members set role = 'manager'
-          where id = '${MEM_DEMOTE_OWNER}' returning id`,
+          where id = '${MEM_DEMOTE_OWNER}'`,
       ),
     );
-    expect(plainRows(demoted)).toHaveLength(1);
 
+    expect(err?.code).toBe('R0002');
+    expect(err?.message).toContain('no se puede degradar');
+
+    // Y la fila sigue siendo la del dueño, viva y con su rol.
     const row = await ownerRow(MEM_DEMOTE_OWNER);
-    expect(row?.role).toBe('manager');
+    expect(row?.role).toBe('owner');
     expect(row?.status).toBe('active');
-    expect(await liveOwners(BIZ_DEMOTE)).toBe(0);
+    expect(row?.deleted).toBe(false);
+    expect(await liveOwners(BIZ_DEMOTE)).toBe(1);
+  });
+
+  test('un cambio de rol entre manager y staff se deja: la guarda es del dueño', async () => {
+    // El control positivo de la guarda de arriba, y la razón por la que la
+    // guarda mira `old.role`: una fila que NO es la del dueño sale por el primer
+    // `return`, y cambiarle el rol es una operación normal de la §8 —un gerente
+    // que pasa a ser empleado, un empleado que pasa a ser gerente.
+    //
+    // `rolledBack` porque el camino de éxito de este test ES una escritura: el
+    // cambio se hace de verdad y no queda nada detrás.
+    const err = await rolledBack(ctx.sql, async (tx) => {
+      await tx.unsafe(
+        `update public.business_members set role = 'staff'
+          where id = '${MEM_A_MANAGER}'`,
+      );
+    });
+
+    expect(
+      err,
+      'cambiar el rol de un manager a un staff no puede rebotar: la guarda ' +
+        'es del dueño, y esta fila no lo es.',
+    ).toBeNull();
+
+    // Y la fila sigue siendo la misma —no la cambió nadie— porque la transacción
+    // se descartó.
+    const row = await ownerRow(MEM_A_MANAGER);
+    expect(row?.role).toBe('manager');
   });
 
   // ─── LAS DOS ESCRITURAS DOBLES ─────────────────────────────────────────────
@@ -5837,27 +5885,33 @@ describe('el dueño no se desactiva, y hay uno por negocio', () => {
   // protegía. Por eso cada una lleva su test y por eso el test dice qué guarda
   // está pinning.
 
-  test('degradar y desactivar en la misma escritura pasa, y es el camino de dos pasos en uno', async () => {
-    // Pinea la TERCERA guarda —la de la degradación— por el lado de lo que
-    // permite. El final es exactamente el que dan los dos pasos por separado que
-    // el trigger ya deja hacer: `set role = 'manager'` y después
-    // `set status = 'disabled'`. Una fila que llega al mismo estado por un solo
-    // statement no es una puerta, es la misma puerta más corta, y bloquearla
-    // sería bloquear la revocación de la §8 por una diferencia de sintaxis.
-    const ambas = await as(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe<{ id: string }[]>(
+  test('degradar y desactivar en la misma escritura se rechaza', async () => {
+    // La escritura DOBLE no es una puerta: es la misma puerta más corta. Y con
+    // la degradación cerrada, el gesto combinado tiene que rebotar también —y
+    // rebota con la regla del ROL, que es la que lo prohíbe.
+    //
+    // `deniedAs` es lo correcto acá: el camino de éxito de este test es la falla
+    // que el test existe para detectar, y esa es exactamente la asimetría que
+    // hace `deniedAs` commitear. Cuando la guard está bien no commitea nada; si
+    // algún día deja de estarlo, la fila commiteada envenena los tests que
+    // cuentan dueños de este bloque.
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
         `update public.business_members
             set role = 'manager', status = 'disabled'
-          where id = '${MEM_MIX_OK_OWNER}' returning id`,
+          where id = '${MEM_MIX_OK_OWNER}'`,
       ),
     );
-    expect(plainRows(ambas)).toHaveLength(1);
 
+    expect(err?.code).toBe('R0002');
+    expect(err?.message).toContain('no se puede degradar');
+
+    // Y la fila sigue siendo la del dueño, viva y activa.
     const row = await ownerRow(MEM_MIX_OK_OWNER);
-    expect(row?.role).toBe('manager');
-    expect(row?.status).toBe('disabled');
+    expect(row?.role).toBe('owner');
+    expect(row?.status).toBe('active');
     expect(row?.deleted).toBe(false);
-    expect(await liveOwners(BIZ_MIX_OK)).toBe(0);
+    expect(await liveOwners(BIZ_MIX_OK)).toBe(1);
   });
 
   test('degradar y dar de baja en la misma escritura se rechaza', async () => {
@@ -5880,10 +5934,11 @@ describe('el dueño no se desactiva, y hay uno por negocio', () => {
       ),
     );
     expect(err?.code).toBe('R0002');
-    // El mensaje dice BAJA y no «desactivar»: el operador tiene que saber cuál
-    // de las dos reglas lo frenó, porque una y otra tienen salidas distintas.
-    expect(err?.message).toContain('dar de baja');
-    expect(err?.message).not.toContain('desactivar');
+    // El mensaje dice DEGRADAR: la guarda del rol es la primera que se topa con
+    // esta escritura, y es la que explica por qué. La de la baja sigue
+    // existiendo —para una baja sin cambio de rol— y dice «dar de baja».
+    expect(err?.message).toContain('no se puede degradar');
+    expect(err?.message).not.toContain('dar de baja');
 
     // Y la fila sigue siendo la del dueño, viva y sin baja.
     const row = await ownerRow(MEM_MIX_NO_OWNER);

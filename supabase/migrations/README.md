@@ -1114,6 +1114,127 @@ measured a session that had never been renewed. It has to run the way the produc
 the seal with `service_role`, then the person asks again. That is the path
 `POST /staff/session` takes, and it is now written down in the test.
 
+## Applied: `20261020052915_owner_cannot_be_demoted`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`3601d75e5d1c08645033bb55d894e989` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+It supersedes `20261017040808_owner_cannot_be_deleted` for the body of
+`enforce_owner_is_untouchable`, and the sealed file above keeps saying that
+«la degradación pasa». **It stopped passing on 2026-10-20**, and this is why.
+
+**The demotion of an owner is now refused with `R0002`.** `20261017033947` let it
+through on purpose —«ningún rol puede desactivar al dueño» (§5.4) does not say
+«and nobody may stop being one»— because the ownership transfer was going to
+need exactly that exit. The transfer does not exist in v1, and while it did not
+exist the demotion was a door that one line of HTTP opens:
+`PATCH /businesses/:id/staff/:memberId {"role":"manager"}` over the owner's own
+row. What it leaves behind is a business that nobody can administer and that
+disappears from the panel's listing, with no route able to put `role: 'owner'`
+back — the promotion is a 422 from the §5.4.
+
+The code is the one that already existed (`R0002`, the owner is untouchable),
+because this is not a new rule: it is the same invariant with a third exit that
+was covered.
+
+**Two of its messages changed, and they had to.** «degradalo a manager primero»
+and «degradalo primero» pointed at the exit that this migration closes. A
+message that sends the operator to a door that bounces is worse than one that
+gives no exit at all: the operator reads «desactivar», touches «desactivar» and
+gets «no se puede degradar», with nothing in between. Both texts now name the
+real reason —la transferencia de propiedad no existe en esta versión— and both
+are still `R0002`, with the same `detail`.
+
+**What it does not touch.** The `INSERT` is not seen (the trigger is
+`BEFORE UPDATE`), so the Plan 1 backfill and any reload of the table are
+intact. A write that leaves `role = 'owner'` alone still passes —the session
+stamp, the TTL, the label, the alias— because the guard looks at the
+TRANSITION of the role and not at the state of the row. And a row that is not
+the owner's leaves through the first `return`: pausing and archiving an access
+that is going away (§8) are still free, and a trigger that denied the row
+would leave the business unable to fire anybody.
+
+### Measured against production, after
+
+```sql
+update public.business_members set role = 'manager'
+ where id = (select id from public.business_members where role = 'owner' order by id limit 1);
+```
+
+```
+ERROR:  R0002: el dueño del negocio no se puede degradar; la transferencia de propiedad no existe en esta versión
+DETAIL:  business=b239e579-76d0-4290-8e37-20b919064283 member=236ef603-2b83-4e52-baa7-e7c686f0b573
+HINT:  la transferencia de propiedad no está en la v1: degradar al dueño dejaría el negocio sin dueño
+```
+
+The statement aborts, so the data does not move: **16 rows, 16 owners, 0
+non-owners**, before and after.
+
+## Applied: `20261020052952_plan_feature_refusal_on_growth`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`d989274db916cef0957681a7104df457` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+It supersedes the two limit bodies of `20261017033947_owner_is_untouchable`
+(the sealed chain is `…15034230` → `…16000829` → `…16000934` → `…17033947` →
+this), and it changes two things.
+
+**1. The feature is consulted only when the write GROWS.** The §5.3 says, with
+all the letters: «Los triggers solo disparan en escritura. Nunca bloquean
+lectura ni operación. Si a un negocio le baja el plan, los accesos que ya creó
+siguen funcionando; lo que se bloquea es crecer.» The body did not say that:
+the `business_has_feature` check sat before everything, and a trigger runs on
+EVERY write, so renaming an access, pausing it, changing its alias or sealing
+an employee's session all bounced with «el plan % no incluye accesos de
+personal». The shape is now the one the limit already used: the comparison
+happens «sólo cuando la escritura CRECIÓ», and the growth flag (`v_agrega`)
+answers both questions — the limit and the feature.
+
+**2. The feature's refusal is `R0001`, not `P0001`.** The raise carried no
+`USING`, so it was Postgres's generic class, and the README above had left the
+question open —«alcanzarlo sería el momento de revisarlo»—. It is reachable
+now: the API consults the feature before each alta (§5.1). And the refusal IS a
+plan refusal: the plan is the reason and the answer is «subí de plan», which is
+exactly what `R0001` means and what the API already translates into a 422 with
+the message and the numbers of the `detail`. A `P0001` nobody translates arrives
+at the panel as a 500.
+
+The `detail` of the feature carries `business=`, `plan=` and `feature=`, and
+NOT `limit=`: the limit's `detail` describes a NUMBER and this one describes a
+FEATURE, and the API uses the presence of `limit` to decide whether it has to
+draw a limit.
+
+## Applied: `20261020053935_plan_limits_counting_and_demotion`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`c76431f903b4cfd911c8ab2ea890a6e8` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+It supersedes `20261020052952` for the two limit bodies, and it exists because
+**the migration above had a defect and the specs caught it.** The body of
+`enforce_business_location_limit` lost its `select count(*) into v_otros` —the
+block that counts the business' active locations— and without it `v_otros` and
+`v_despues` stayed `null`, the comparison of the limit was never true, and the
+trigger DID NOT COUNT ANYTHING. Ten tests of limits went red on the first pass:
+a limit trigger that does not limit is worse than one that limits wrong,
+because nobody notices.
+
+**The second thing it fixes is the ORDER of two guards.**
+`trg_enforce_member_limit` runs BEFORE `trg_enforce_owner_is_untouchable` —the
+order of Postgres' triggers is the order of their names— and a demotion in a
+business that was at the limit died with the plan's `R0001`: «el plan free
+admite hasta 2 miembros, no más». That message sends the operator to the wrong
+door: the demotion has nothing to do with the plan, it is closed by another
+invariant, and the answer the operator has to see is `R0002`. The demotion
+therefore leaves BEFORE the counting: it does not grow, it does not take a seat
+and it does not touch any limit, and it reaches the owner's guard.
+
+The `old.role = 'owner'` condition inside `v_agrega` stays, because it is the
+one a future ownership transfer will need —a row that stops being the owner
+takes a seat— and today it cannot be reached.
+
 ## The ledger has a `staff_permission_helpers` row with no file: `20261014011033`
 
 The ledger contains three rows from the development of the helpers above:

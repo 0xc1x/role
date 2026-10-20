@@ -631,15 +631,17 @@ export async function createTestDb(): Promise<TestDbContext> {
         return new;
       end if;
 
-      if new.role <> 'owner'::public.business_member_role
-         and new.deleted_at is null
-         and old.deleted_at is null then
-        return new;
+      if new.role <> 'owner'::public.business_member_role then
+        raise exception 'el dueño del negocio no se puede degradar; la transferencia de propiedad no existe en esta versión'
+          using
+            errcode = 'R0002',
+            detail = format('business=%s member=%s', new.business_id, old.id),
+            hint = 'la transferencia de propiedad no está en la v1: degradar al dueño dejaría el negocio sin dueño';
       end if;
 
       if old.status is distinct from new.status
          and new.status = 'disabled'::public.business_member_status then
-        raise exception 'el dueño del negocio no se puede desactivar; degradalo a manager primero'
+        raise exception 'el dueño del negocio no se puede desactivar; la transferencia de propiedad no existe en esta versión'
           using
             errcode = 'R0002',
             detail = format('business=%s member=%s', new.business_id, old.id),
@@ -647,11 +649,11 @@ export async function createTestDb(): Promise<TestDbContext> {
       end if;
 
       if old.deleted_at is null and new.deleted_at is not null then
-        raise exception 'el dueño del negocio no se puede dar de baja; degradalo primero'
+        raise exception 'el dueño del negocio no se puede dar de baja; la transferencia de propiedad no existe en esta versión'
           using
             errcode = 'R0002',
             detail = format('business=%s member=%s', new.business_id, old.id),
-            hint = 'bajale el rol antes de darlo de baja';
+            hint = 'el borrado es lógico: la fila queda para saber quién operó en el negocio';
       end if;
 
       return new;
