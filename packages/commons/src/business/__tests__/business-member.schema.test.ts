@@ -185,6 +185,23 @@ describe("businessMemberAliasWarnings", () => {
 		expect(businessMemberAliasWarnings("centro@panaderia.role.ec")).toEqual([]);
 	});
 
+	it("avisa exactamente cuando la plataforma aceptaría esa dirección", () => {
+		// La invariante que hace que las dos frases que la API manda no se
+		// contradigan: el aviso afirma «esto recibe correo de verdad» y la API
+		// acepta una dirección para el correo si y sólo si hay bandeja detrás.
+		// Con aviso: la API no la rechaza. Sin aviso: la API la rechaza con 422.
+		for (const alias of [
+			"centro@panaderia.role.ec",
+			"centro@role.ec",
+			"caja@panaderialafamilia.ec",
+			"caja@acme.com",
+		]) {
+			expect(businessMemberAliasWarnings(alias).length > 0).toBe(
+				isDeliverableAlias(alias),
+			);
+		}
+	});
+
 	it("avisa —no rechaza— sobre un dominio que puede recibir correo de verdad", () => {
 		// El aviso y el almacenamiento no pueden separarse: la respuesta dice
 		// «esto recibe correo» si y sólo si el alias guardado dice lo contrario.
@@ -196,21 +213,27 @@ describe("businessMemberAliasWarnings", () => {
 		]);
 	});
 
-	it("el ápice avisa igual, y por eso las dos funciones NO se pueden fusionar", () => {
-		// El ápice es el caso donde `isRoleEcAlias` y `isDeliverableAlias` dan
-		// respuestas opuestas, y las dos respuestas son correctas para lo que
-		// pregunta cada una: `role.ec` recibe correo de verdad
-		// (`notificaciones@role.ec` es la casilla que la API usa), así que el
-		// aviso del §9.4 no es falso; y `centro@role.ec` no es una bandeja, así que
-		// los guards de correo tienen que rechazarla.
-		//
-		// Si alguien "limpia" esta duplicación y deja una sola función, este test
+	it("las dos preguntas siguen siendo dos, y se separan donde se separan", () => {
+		// `isRoleEcAlias` contesta «¿es una cuenta de equipo?» (§3.1, el sufijo) y
+		// `isDeliverableAlias` contesta «¿hay una bandeja detrás?». En un subdominio
+		// y en un dominio propio las dos se separan, así que una sola función
+		// rompería una de las dos. Si alguien "limpia" esta duplicación, este test
 		// es el que dice cuál de las dos mediadades se rompió.
+		expect(isRoleEcAlias("centro@panaderia.role.ec")).toBe(true);
+		expect(isDeliverableAlias("centro@panaderia.role.ec")).toBe(false);
+		expect(isRoleEcAlias("caja@panaderialafamilia.ec")).toBe(false);
+		expect(isDeliverableAlias("caja@panaderialafamilia.ec")).toBe(true);
+	});
+
+	it("el ápice ya NO avisa: la plataforma le cierra la puerta al correo", () => {
+		// `role.ec` tiene buzones vivos, pero no tiene una bandeja para
+		// `centro@role.ec`, y `forgot-password`/`change-email` rechazan TODA
+		// dirección de `role.ec` con un 422. Avisar «el empleado podría activar la
+		// recuperación con esta dirección» sería una mentira que la API se
+		// contradice a sí misma: el dueño le creería al aviso antes que al 422.
 		expect(isRoleEcAlias("centro@role.ec")).toBe(false);
 		expect(isDeliverableAlias("centro@role.ec")).toBe(false);
-		expect(businessMemberAliasWarnings("centro@role.ec")).toEqual([
-			"alias_domain_can_receive_mail",
-		]);
+		expect(businessMemberAliasWarnings("centro@role.ec")).toEqual([]);
 	});
 });
 

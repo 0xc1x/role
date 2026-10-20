@@ -43,6 +43,32 @@ function sqlErrorCode(error: unknown): string {
   return candidate?.cause?.code ?? candidate?.code ?? 'unknown';
 }
 
+/**
+ * The constraint Postgres blamed, which is the half the code does not say.
+ *
+ * `23505` alone says «some unique thing was violated»: this table has TWO unique
+ * rules —`(business_id, lower(alias))` and `(business_id, user_id)`— so the code
+ * alone cannot say which one fired, and an assertion that names a rule has to
+ * read the rule, not the class of the error.
+ *
+ * The name comes from the driver's own error: `postgres.js` calls it
+ * `constraint_name` and Drizzle carries it one level down, in `cause`.
+ */
+function sqlErrorConstraint(error: unknown): string {
+  const candidate = error as {
+    constraint?: string;
+    constraint_name?: string;
+    cause?: { constraint?: string; constraint_name?: string };
+  };
+  return (
+    candidate?.cause?.constraint_name ??
+    candidate?.cause?.constraint ??
+    candidate?.constraint_name ??
+    candidate?.constraint ??
+    'unknown'
+  );
+}
+
 const CONFIG = {
   get: (key: string) =>
     ({
@@ -884,11 +910,18 @@ describe('the erase with a membership (DB real)', () => {
     // `(business_id, lower(alias))` with no `deleted_at` predicate precisely so an
     // archived row keeps holding its identifier; if the erase had taken the row
     // with the cascade, this insert would succeed.
+    //
+    // The insert is a THIRD person, one who is not a member of this business, and
+    // that is the whole point: with the owner's id the failure would come from
+    // `business_members_business_id_user_id_key` —the owner has a row here— and
+    // the assertion would pass for a reason that has nothing to do with the
+    // alias. So the failure has to name the constraint it claims.
+    const thirdId = await seedProfile(ctx.db, undefined);
     const recycled = await ctx.db
       .insert(businessMembers)
       .values({
         business_id: business.id,
-        user_id: ownerId,
+        user_id: thirdId,
         role: 'staff',
         label: 'Colisión',
         alias,
@@ -896,5 +929,85 @@ describe('the erase with a membership (DB real)', () => {
       .then(() => null)
       .catch((err: unknown) => err);
     expect(sqlErrorCode(recycled)).toBe('23505');
+    expect(sqlErrorConstraint(recycled)).toBe('business_members_alias_key');
+
+    // The control: the SAME person, another alias, goes in. So what refused the
+    // insert above was the alias and nothing else — not the person, not the
+    // business, and not the fact that the business already has a membership for
+    // that alias.
+    const another = await ctx.db
+      .insert(businessMembers)
+      .values({
+        business_id: business.id,
+        user_id: thirdId,
+        role: 'staff',
+        label: 'Otro',
+        alias: `caja2-${randomUUID().slice(0, 8)}@panaderialafamilia.ec`,
+      })
+      .then(() => null)
+      .catch((err: unknown) => err);
+    expect(another).toBeNull();
+  });
+
+  test('CONTROL: the alias is free again once the archived row is gone', async () => {
+    // The negative control of the assertion above, and the reason that one is
+    // worth anything: the insert is refused WHILE the archived row holds the
+    // alias, and it goes through the moment that row is gone — which is exactly
+    // what the cascade the assertion claims to exclude would have done. If the
+    // insert failed for any other reason, this test would still pass and the one
+    // above would be proving nothing.
+    const ownerId = await seedProfile(ctx.db, undefined);
+    const staffId = await seedProfile(ctx.db, undefined);
+    const business = await seedBusiness(ctx.db, ownerId, {
+      verification_status: 'approved',
+    });
+    const alias = `caja-${randomUUID().slice(0, 8)}@panaderialafamilia.ec`;
+    const member = await seedBusinessMember(ctx.db, business.id, staffId, {
+      role: 'staff',
+      label: 'Caja de la mañana',
+      alias,
+    });
+
+    await service().deleteAccount({
+      id: staffId,
+      email: `${staffId}@test.cl`,
+      role: 'business' as const,
+    });
+
+    // A THIRD person, one who is not a member of this business: with a member's
+    // id the failure would come from `business_members_business_id_user_id_key`
+    // and the test would pass for a reason that has nothing to do with the alias.
+    const thirdId = await seedProfile(ctx.db, undefined);
+    const blocked = await ctx.db
+      .insert(businessMembers)
+      .values({
+        business_id: business.id,
+        user_id: thirdId,
+        role: 'staff',
+        label: 'Colisión',
+        alias,
+      })
+      .then(() => null)
+      .catch((err: unknown) => err);
+    expect(sqlErrorCode(blocked)).toBe('23505');
+    expect(sqlErrorConstraint(blocked)).toBe('business_members_alias_key');
+
+    // …and the moment the archived row is GONE, the alias is free again.
+    await ctx.db
+      .delete(businessMembers)
+      .where(eq(businessMembers.id, member.id));
+
+    const free = await ctx.db
+      .insert(businessMembers)
+      .values({
+        business_id: business.id,
+        user_id: thirdId,
+        role: 'staff',
+        label: 'Colisión',
+        alias,
+      })
+      .then(() => null)
+      .catch((err: unknown) => err);
+    expect(free).toBeNull();
   });
 });

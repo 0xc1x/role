@@ -70,7 +70,7 @@ const FORGOT_PASSWORD_RESPONSE: ForgotPasswordResponse = {
 };
 
 /**
- * THE ONE REFUSAL BOTH MAIL FLOWS SHARE, and the body that says it.
+ * THE ONE REFUSAL EVERY MAIL FLOW SHARES, and the body that says it.
  *
  * ─── WHY A GENERATED ADDRESS IS NOT A MAILBOX ─────────────────────────────────
  *
@@ -84,12 +84,12 @@ const FORGOT_PASSWORD_RESPONSE: ForgotPasswordResponse = {
  *
  * The apex is the whole difference between the two, and the direction reverses
  * here. `isRoleEcAlias("centro@role.ec")` is `false` — it is not a staff account
- * — and that is correct for the §9.4 warning, where the apex genuinely receives
- * mail. For a MAIL GUARD, `false` must mean "refuse", so a function that fails
- * open on the apex would let `centro@role.ec` into both flows. `isDeliverableAlias`
- * asks the other question —"is there a real mailbox behind this?"— and treats the
- * apex as what it is: a Rolé domain with Rolé's own mailboxes on it and no
- * mailbox for a staff account.
+ * — and that is correct for the §3.1 question, which is whether the identifier is
+ * a Rolé account at all. For a MAIL GUARD, `false` must mean "refuse", so a
+ * function that fails open on the apex would let `centro@role.ec` into the flows.
+ * `isDeliverableAlias` asks the other question —"is there a real mailbox behind
+ * this?"— and treats the apex as what it is: a Rolé domain with Rolé's own
+ * mailboxes on it and no mailbox for a staff account.
  *
  * ─── WHY A CUSTOM DOMAIN IS NOT TOUCHED ──────────────────────────────────────
  *
@@ -104,6 +104,12 @@ const FORGOT_PASSWORD_RESPONSE: ForgotPasswordResponse = {
  * address the caller already submitted, so it tells a stranger nothing they did
  * not send. It is also not a status difference between two accounts: it is the
  * same 422 for an address that holds a business and one that holds nothing.
+ *
+ * ─── AND THE FLOWS THAT CALL IT ───────────────────────────────────────────────
+ *
+ * Two, and they are the two that put an address in front of a mailer:
+ * `forgot-password` (the recovery link) and `change-email` (GoTrue's confirmation
+ * of the new address). One function and not two copies of the same rule.
  */
 function assertDeliverableAddress(address: string): void {
   if (isDeliverableAlias(address)) return;
@@ -625,10 +631,19 @@ export class AuthService {
    *    have shipped.
    *
    * So the refusal names the two moves that exist today —degrade the membership
-   * with `PATCH /businesses/:id/staff/:memberId` (`role: 'manager'`, which the
-   * owner guard allows for their own row), or hand the business over— and then
-   * the account erases normally. Nothing is destroyed on this path, so it is
-   * safe to retry after the caller acts.
+   * with `PATCH /businesses/:businessId/staff/:memberId` (`role: 'manager'`,
+   * which the owner guard allows for their own row), or hand the business over—
+   * and then the account erases normally. Nothing is destroyed on this path, so
+   * it is safe to retry after the caller acts.
+   *
+   * ─── Y EL MENSAJE NOMBRA LA RUTA, PORQUE UN 409 SIN RUTA ES UN CALLEJÓN ──────
+   *
+   * El mensaje dice QUÉ hacer; la ruta dice CÓMO. Un 409 que dice «degrade el
+   * acceso» deja a quien lo lee adivinar el endpoint, y un callejón sin salida es
+   * lo mismo que un 500: la misma falta de acción, más silenciosa. La ruta
+   * nombrada es la que existe y hace exactamente eso —el dueño puede degradar su
+   * PROPIA fila, y el trigger de la base deja pasar la degradación—, y el
+   * `memberId` que necesita es el suyo, que la lista del equipo devuelve.
    */
   async deleteAccount(user: AuthUser): Promise<void> {
     const retained = await this.accounts.countRetained(user.id);
@@ -643,8 +658,11 @@ export class AuthService {
       throw new ConflictException({
         error: 'Conflict',
         message:
-          'This account still owns a business. Degrade the business access to ' +
-          'manager, or hand the business over, and then delete the account.',
+          'This account still owns a business. Degrade your own access to ' +
+          'manager with PATCH /businesses/{businessId}/staff/{memberId} and ' +
+          "role 'manager' (your own access id is the one " +
+          'GET /businesses/{businessId}/staff shows for you), or hand the ' +
+          'business over, and then delete the account.',
       });
     }
 

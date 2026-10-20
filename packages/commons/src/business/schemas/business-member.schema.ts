@@ -126,11 +126,14 @@ function domainOf(address: string): string {
  *
  * ─── EL ÁPICE FALLA HACIA AFUERA, Y POR QUÉ ──────────────────────────────────
  *
- * `x@role.ec` pelado NO es una cuenta de Rolé: la regla del §3.1 es literalmente
- * el sufijo `.role.ec`, así que hace falta un subdominio. Para el aviso del §9.4
- * eso no es un defecto sino lo correcto, porque el ápice sí recibe correo de
- * verdad —`notificaciones@role.ec` y `negocios@role.ec` son buzones vivos—: el
- * aviso no es ni falso ni innecesario.
+ * `x@role.ec` pelado NO es una cuenta de equipo de Rolé: la regla del §3.1 es
+ * literalmente el sufijo `.role.ec`, así que hace falta un subdominio. Que el
+ * ápice no sea «cuenta de equipo» NO lo convierte en un destinatario: `role.ec`
+ * tiene buzones vivos —`notificaciones@role.ec` y `negocios@role.ec`— pero no
+ * tiene una bandeja para `centro@role.ec`, así que la API le cierra la puerta al
+ * correo igual que a un subdominio. Por eso el aviso del §9.4 ya no sale para el
+ * ápice: lo que el aviso afirma es que hay BANDEJA, no que la dirección sea de la
+ * plataforma.
  *
  * ─── Y EL LECTOR EQUIVOCADO DE ESTA FUNCIÓN ES UN BUG DE SEGURIDAD ─────────────
  *
@@ -142,7 +145,8 @@ function domainOf(address: string): string {
  * función donde hace falta la otra deja pasar un `change-email` o un
  * `forgot-password` que el §8 quiere bloquear. Es un agujero con forma de
  * refactor, y por eso la respuesta está escrita en este archivo y no en el
- * llamador: los dos guards de correo de la API usan `isDeliverableAlias`.
+ * llamador: los dos guards de correo de la API usan `isDeliverableAlias`, y el
+ * aviso del §9.4 también, porque afirma lo mismo —que hay una bandeja detrás—.
  *
  * La comparación es sobre el dominio y en minúsculas: `x@a.role.ec` es de Rolé y
  * `X@A.ROLE.EC` también, porque el dominio de un correo no distingue mayúsculas.
@@ -154,10 +158,10 @@ export function isRoleEcAlias(alias: string): boolean {
 /**
  * ¿Hay una bandeja real detrás de esta dirección?
  *
- * La pregunta del §8 para `change-email` y `forgot-password`, y la inversa exacta
- * de {@link isRoleEcAlias}: aquí lo importante es que `false` significa «el
- * correo se iría a una bandeja que no existe y rebotaría», y en ambos endpoints
- * eso es un `422` en vez de una acción.
+ * La pregunta del §8 para `change-email` y `forgot-password`, y la pregunta
+ * contraria a la de {@link isRoleEcAlias}: aquí lo importante es que `false`
+ * significa «el correo se iría a una bandeja que no existe y rebotaría», y en
+ * ambos endpoints eso es un `422` en vez de una acción.
  *
  * ─── POR QUÉ EL ÁPICE CUENTA COMO ROLÉ AQUÍ Y ALLÁ NO ────────────────────────
  *
@@ -174,7 +178,9 @@ export function isRoleEcAlias(alias: string): boolean {
  *
  * El nombre viene de la familia a la que pertenece, pero lo que se le pasa es
  * cualquier dirección: acá va el identificador que un desconocido escribe en el
- * formulario de recuperación de contraseña, que no es un alias de nadie.
+ * formulario de recuperación de contraseña, que no es un alias de nadie, y el
+ * alias de un acceso, que sí lo es. Los dos son la misma pregunta —«¿hay una
+ * bandeja detrás?»— y por eso la misma función los contesta.
  *
  * ─── Y POR QUÉ UNA DIRECCIÓN SIN DOMINIO NO ES ENTREGABLE ───────────────────
  *
@@ -201,11 +207,39 @@ export function isDeliverableAlias(address: string): boolean {
  * La lista se calcula acá y no se decide caso por caso en la API, para que el
  * aviso y el almacenamiento no puedan separarse: la respuesta dice «esto puede
  * recibir correo» SI Y SÓLO SI el alias que se acaba de guardar dice lo contrario.
+ *
+ * ─── EL AVISO AFIRMA UNA BANDEJA, Y POR ESO SIGUE A `isDeliverableAlias` ──────
+ *
+ * El aviso del §9.4 es «este dominio puede recibir correos, el empleado podría
+ * activar la recuperación de contraseña con esta dirección». La segunda mitad es
+ * la que decide: la plataforma le cierra la puerta al correo a TODA dirección de
+ * `role.ec` —el ápice incluido— y contesta `422` en `forgot-password` y en
+ * `change-email`. Avisar «el empleado podría activar la recuperación» sobre una
+ * dirección que la API acaba de rechazar sería una mentira que la API se
+ * contradice a sí misma, y el dueño le creería al aviso antes que al 422.
+ *
+ * ─── Y EL ÁPICE, QUE AHORA SE PARECE A UN SUBDOMINIO ─────────────────────────
+ *
+ * `role.ec` tiene buzones vivos —`notificaciones@role.ec`, `negocios@role.ec`—,
+ * así que el DOMINIO recibe correo de verdad; lo que no existe es una bandeja
+ * para `centro@role.ec`. El aviso habla de la bandeja, no del dominio, y por eso
+ * el ápice ya no avisa: se parece a un subdominio en todo lo que el aviso
+ * afirma. La diferencia que queda entre el ápice y un subdominio es la del §3.1
+ * —el ápice no es una cuenta de equipo— y la contesta `isRoleEcAlias`, que es la
+ * pregunta del móvil en el §9.1 («pide a tu dueño que te rote el PIN»).
+ *
+ * ─── LAS DOS PREGUNTAS SIGUEN SIENDO DOS ─────────────────────────────────────
+ *
+ * `isRoleEcAlias` contesta «¿es una cuenta de equipo?» y `isDeliverableAlias`
+ * contesta «¿hay una bandeja detrás?». Se separan en los dos casos que importan:
+ * un subdominio es cuenta de equipo y NO es bandeja, y un dominio propio no es
+ * cuenta de equipo y SÍ es bandeja. Fusionarlas rompería una de las dos, y este
+ * archivo lo dice para que el próximo que «simplifique» lo lea antes de romperlo.
  */
 export function businessMemberAliasWarnings(
 	alias: string,
 ): StaffAliasWarningCode[] {
-	return isRoleEcAlias(alias) ? [] : ["alias_domain_can_receive_mail"];
+	return isDeliverableAlias(alias) ? ["alias_domain_can_receive_mail"] : [];
 }
 
 /**

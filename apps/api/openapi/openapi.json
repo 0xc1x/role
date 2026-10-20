@@ -88,9 +88,12 @@
         "responses": {
           "200": {
             "description": "The same body whether or not the address belongs to an account"
+          },
+          "422": {
+            "description": "The address cannot receive email (a generated Rolé alias); the answer does not depend on whether the account exists"
           }
         },
-        "summary": "Request a password recovery link (always the same 200)",
+        "summary": "Request a password recovery link (the same 200 for every address, except one with no mailbox behind it: a Rolé alias is a 422)",
         "tags": [
           "Auth"
         ]
@@ -121,6 +124,9 @@
         "responses": {
           "202": {
             "description": "The change was initiated"
+          },
+          "422": {
+            "description": "The new address cannot receive mail (a generated Rolé alias)"
           }
         },
         "security": [
@@ -141,6 +147,9 @@
         "responses": {
           "204": {
             "description": "Deleted or anonymised — always 204"
+          },
+          "409": {
+            "description": "The account still owns a business: degrade it with PATCH /businesses/{businessId}/staff/{memberId} (role: \"manager\") or hand it over, then delete the account (204 once it does not)"
           }
         },
         "security": [
@@ -1820,420 +1829,6 @@
         ]
       }
     },
-    "/api/v1/orders": {
-      "post": {
-        "operationId": "OrdersController_create",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The order an earlier request with the same idempotency_key already created. Same body as the 201: this request created nothing."
-          },
-          "201": {
-            "description": "Order created"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Reserve / create an order for an offer",
-        "tags": [
-          "Orders"
-        ]
-      },
-      "get": {
-        "operationId": "OrdersController_listMine",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated orders"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List my orders (consumer)",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/business": {
-      "get": {
-        "operationId": "OrdersController_listForBusiness",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated business orders"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List orders for a business I own",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/admin": {
-      "get": {
-        "operationId": "OrdersController_listForAdmin",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated orders with business and offer"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List every order across businesses (admin)",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}": {
-      "get": {
-        "operationId": "OrdersController_getById",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Order detail"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Get order by id",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}/events": {
-      "get": {
-        "operationId": "OrdersController_listEvents",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated order timeline, oldest first"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Get the status transitions of an order",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}/status": {
-      "patch": {
-        "operationId": "OrdersController_updateStatus",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Updated order"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Transition order status",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}/cancel": {
-      "post": {
-        "operationId": "OrdersController_cancel",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Cancelled order"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Cancel my order (espejo de la RPC cancel_order)",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}/validate-pickup": {
-      "post": {
-        "operationId": "OrdersController_validatePickup",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Completed order"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Validate pickup code (espejo de la RPC validate_pickup_code)",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/upload/image": {
-      "post": {
-        "operationId": "UploadController_uploadImage",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "description": "Archivo de imagen y opciones de bucket/folder",
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/UploadImageBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Imagen subida y comprimida a WebP. La URL pública se devuelve en el cuerpo.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "url": {
-                      "type": "string",
-                      "format": "uri",
-                      "example": "https://[project].supabase.co/storage/v1/object/public/images/categories/uuid.webp"
-                    }
-                  },
-                  "required": [
-                    "url"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Archivo inválido, formato no soportado o excede el tamaño máximo"
-          },
-          "401": {
-            "description": "No autorizado"
-          },
-          "403": {
-            "description": "Requiere rol admin"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Upload an image (admin)",
-        "tags": [
-          "Upload"
-        ]
-      }
-    },
-    "/api/v1/slides": {
-      "get": {
-        "operationId": "SlidesController_list",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated slide list"
-          }
-        },
-        "summary": "List slides",
-        "tags": [
-          "Slides"
-        ]
-      },
-      "post": {
-        "operationId": "SlidesController_create",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": "Slide created"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Create a slide (admin)",
-        "tags": [
-          "Slides"
-        ]
-      }
-    },
-    "/api/v1/slides/admin": {
-      "get": {
-        "operationId": "SlidesController_listAdmin",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated slide list"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List slides (admin)",
-        "tags": [
-          "Slides"
-        ]
-      }
-    },
-    "/api/v1/slides/{id}": {
-      "get": {
-        "operationId": "SlidesController_getById",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Slide detail"
-          }
-        },
-        "summary": "Get slide by id",
-        "tags": [
-          "Slides"
-        ]
-      },
-      "patch": {
-        "operationId": "SlidesController_update",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Slide updated"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Update a slide (admin)",
-        "tags": [
-          "Slides"
-        ]
-      },
-      "delete": {
-        "operationId": "SlidesController_remove",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Slide soft-deleted"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Soft-delete a slide (admin)",
-        "tags": [
-          "Slides"
-        ]
-      }
-    },
     "/api/v1/businesses/public": {
       "get": {
         "description": "Mirrors `public.active_businesses_near` (ADR-0008). This is a list built from live offers, not a business directory: a business with no active, in-stock, unexpired offer is absent rather than listed with a count of 0. `lat` + `lng` + `radius_km` are independent — the radius filters only when all three are present — and the default order is `deals` (`active_deals_count desc`, then `name asc`), not distance.",
@@ -2721,6 +2316,420 @@
         "summary": "Sales for a window I own: count, revenue, top 5 products and a UTC daily series. `from` and `to` are required and both inclusive.",
         "tags": [
           "Business Stats (owner)"
+        ]
+      }
+    },
+    "/api/v1/orders": {
+      "post": {
+        "operationId": "OrdersController_create",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The order an earlier request with the same idempotency_key already created. Same body as the 201: this request created nothing."
+          },
+          "201": {
+            "description": "Order created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reserve / create an order for an offer",
+        "tags": [
+          "Orders"
+        ]
+      },
+      "get": {
+        "operationId": "OrdersController_listMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated orders"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List my orders (consumer)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/business": {
+      "get": {
+        "operationId": "OrdersController_listForBusiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated business orders"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List orders for a business I own",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/admin": {
+      "get": {
+        "operationId": "OrdersController_listForAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated orders with business and offer"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List every order across businesses (admin)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order detail"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get order by id",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/events": {
+      "get": {
+        "operationId": "OrdersController_listEvents",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated order timeline, oldest first"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the status transitions of an order",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/status": {
+      "patch": {
+        "operationId": "OrdersController_updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated order"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Transition order status",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/cancel": {
+      "post": {
+        "operationId": "OrdersController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled order"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel my order (espejo de la RPC cancel_order)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/validate-pickup": {
+      "post": {
+        "operationId": "OrdersController_validatePickup",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completed order"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Validate pickup code (espejo de la RPC validate_pickup_code)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/upload/image": {
+      "post": {
+        "operationId": "UploadController_uploadImage",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "description": "Archivo de imagen y opciones de bucket/folder",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadImageBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Imagen subida y comprimida a WebP. La URL pública se devuelve en el cuerpo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://[project].supabase.co/storage/v1/object/public/images/categories/uuid.webp"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Archivo inválido, formato no soportado o excede el tamaño máximo"
+          },
+          "401": {
+            "description": "No autorizado"
+          },
+          "403": {
+            "description": "Requiere rol admin"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload an image (admin)",
+        "tags": [
+          "Upload"
+        ]
+      }
+    },
+    "/api/v1/slides": {
+      "get": {
+        "operationId": "SlidesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated slide list"
+          }
+        },
+        "summary": "List slides",
+        "tags": [
+          "Slides"
+        ]
+      },
+      "post": {
+        "operationId": "SlidesController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Slide created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a slide (admin)",
+        "tags": [
+          "Slides"
+        ]
+      }
+    },
+    "/api/v1/slides/admin": {
+      "get": {
+        "operationId": "SlidesController_listAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated slide list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List slides (admin)",
+        "tags": [
+          "Slides"
+        ]
+      }
+    },
+    "/api/v1/slides/{id}": {
+      "get": {
+        "operationId": "SlidesController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slide detail"
+          }
+        },
+        "summary": "Get slide by id",
+        "tags": [
+          "Slides"
+        ]
+      },
+      "patch": {
+        "operationId": "SlidesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slide updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a slide (admin)",
+        "tags": [
+          "Slides"
+        ]
+      },
+      "delete": {
+        "operationId": "SlidesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slide soft-deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft-delete a slide (admin)",
+        "tags": [
+          "Slides"
         ]
       }
     },

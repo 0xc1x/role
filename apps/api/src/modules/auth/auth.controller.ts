@@ -136,11 +136,16 @@ export class AuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Request a password recovery link (always the same 200)',
+    summary:
+      'Request a password recovery link (the same 200 for every address, except one with no mailbox behind it: a Rolé alias is a 422)',
   })
   @ApiOkResponse({
     description:
       'The same body whether or not the address belongs to an account',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The address cannot receive email (a generated Rolé alias); the answer does not depend on whether the account exists',
   })
   forgotPassword(
     @Body(new ZodValidationPipe(ForgotPasswordRequestSchema))
@@ -218,8 +223,10 @@ export class AuthController {
    *
    * 409 is the third answer, and the only one that is not silent: an account that
    * still owns a business is told to degrade that access or hand the business
-   * over first. It is a conflict with the caller's own state, not with a rule the
-   * platform invented, and nothing has been destroyed when it comes back.
+   * over first, and the body names the route that does it
+   * (`PATCH /businesses/{businessId}/staff/{memberId}` with `role: 'manager'`).
+   * It is a conflict with the caller's own state, not with a rule the platform
+   * invented, and nothing has been destroyed when it comes back.
    *
    * 3/minute for an irreversible action: a client that retries a DELETE because
    * the network dropped is retrying an idempotent no-op, and one that fires it
@@ -234,7 +241,7 @@ export class AuthController {
   @ApiNoContentResponse({ description: 'Deleted or anonymised — always 204' })
   @ApiConflictResponse({
     description:
-      'The account still owns a business; degrade or hand over first (204 once it does not)',
+      'The account still owns a business: degrade it with PATCH /businesses/{businessId}/staff/{memberId} (role: "manager") or hand it over, then delete the account (204 once it does not)',
   })
   @ApiBearerAuth('bearer')
   deleteAccount(@CurrentUser() user: AuthUser): Promise<void> {

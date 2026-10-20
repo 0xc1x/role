@@ -1088,6 +1088,12 @@ describe('AuthService', () => {
       ).getResponse().message;
       expect(message).toContain('manager');
       expect(message).toContain('hand');
+      // Y la RUTA, porque un 409 que dice QUÉ hacer sin decir CÓMO es un
+      // callejón con salida: el que lo lee tiene que poder actuar sin adivinar
+      // el endpoint, y el endpoint existe y hace exactamente eso.
+      expect(message).toContain(
+        'PATCH /businesses/{businessId}/staff/{memberId}',
+      );
     });
 
     it('anonymises an account whose membership is not an owner one', async () => {
