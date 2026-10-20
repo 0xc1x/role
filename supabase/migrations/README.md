@@ -2288,3 +2288,65 @@ de nadie, hay tabla completa. Un índice sobre `(user_id)` lo resuelve. No se
 agrega acá porque **esta migración ya está aplicada y sellada con su md5**:
 sería una migración nueva, y una que se aplica por un índice que hoy no urge es
 la clase de cambio que entra junto con el próximo que sí lo urge.
+
+## Applied: `20261020152852_location_scope_in_policies`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`2155e50fec45c830014899b128664403` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**This is the migration that moves the branch scope into the policies, and the
+diff is ONE predicate and TWO `alter policy`.** Three changes:
+
+1. **`can_manage_location` stops handing the whole business to a `manager`.**
+   The role branch goes from `when r.member_role in ('owner', 'manager') then
+   true` to `when r.member_role = 'owner' then true`. A manager now arrives at
+   a row through the scope branch —the live rows of `business_member_locations`
+   of its membership— and a manager with no rows arrives at nothing. The owner
+   keeps the whole business, with or without scope rows, because the owner's
+   scope IS the business.
+2. **The two roster policies become "the roster you reach".** `Owners and
+   managers view business members` and `Owners and managers view member scope`
+   are rewritten with `alter policy` (Postgres has no `create or replace
+   policy`, and a `drop` + `create` opens a window in which the policy does
+   not exist). Both carry the ROLE requirement INSIDE, because the scope rule
+   does not distinguish by role: a staff member whose scope covers another
+   member's would satisfy the helper, and would see the roster —whose aliases
+   mirror `auth.users.email`.
+3. **`business_member_reaches_member` gains the exception of the caller's OWN
+   row.** Without it a manager with no scope rows did not reach itself, and
+   the self-service path of ADR-0013 (decision 4) disappeared. The exception
+   lives in the HELPER and not in the policy because the API asks the database
+   (and the "pause me" write is the API's), and because a policy cannot say
+   "my row" without recursing through `business_members`. It grants nothing
+   else: `can_manage_location` does not know about it, so a scopeless manager
+   still touches no offer, no order and no location.
+
+**The thirteen policies that read `can_manage_location` are NOT touched.** They
+read the function's answer, so what changes is what the function answers. That
+is the whole difference between a plan with thirteen policy diffs and one with
+a single predicate —and thirteen copies of a rule are thirteen chances to
+write it differently.
+
+**The nine business-wide policies stay business-wide**: the business row, the
+hours, the coupons, the payouts, the notification preferences and the creation
+of a location. The scope rule bounds THE THINGS THAT LIVE IN A BRANCH; what has
+no branch dimension is still the whole business, and it is granted by ROLE.
+`Members can delete business locations` also stays as it is: it requires
+`role = 'owner'`, so it gives nobody a scope.
+
+**Two consequences worth saying out loud.** The owner is no longer in a
+manager's roster —which is what §8 already said and what the API already did
+(`reaches()` is false for an owner target), and now the database says the same
+thing— and a manager who CREATES a location does not manage it, because the
+new row is in nobody's scope until the owner puts it there.
+
+**Production did not move**: there are sixteen owners and zero managers and
+zero staff (measured 2026-10-21), so nobody loses access with this migration.
+
+The previous migration of this plan, `20261020134712_member_scope_predicates`,
+has no section here yet: it created the two scope helpers and changed no
+policy. The pair reads in order —the rule first, the policies after— and the
+rollback of this one is a NEW migration (the ledger's `rollback` is `NULL` in
+all 153 rows): restore the old role branch, drop the own-row exception, and
+`alter` the two policies back to their `20261015024825` quals.
