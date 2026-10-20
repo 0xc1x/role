@@ -315,9 +315,15 @@ En la API la misma regla se aplica **antes de escribir** y sin depender del text
 del trigger (`staff.service.ts`, en `update`: un 422), así que el dueño recibe un
 mensaje con la razón y no una excepción de Postgres.
 
-**La consecuencia hay que decirla entera, porque es grande: un dueño de un negocio
-vivo no puede borrar su cuenta por ninguna vía.** La transferencia no existe, y
-por eso:
+**La consecuencia hay que decirla entera, porque es grande: un dueño no puede borrar su
+cuenta por ninguna vía — y esto no depende de que el negocio esté vivo.** La puerta
+(`apps/api/src/modules/auth/auth-account.repository.ts`, `countRetained`) cuenta
+membresías de dueño **vivas** (`role = 'owner'` y `deleted_at is null`) y **no mira
+`businesses.is_active`**: desactivar el negocio no abre la salida, y borrarlo tampoco —la
+cascada `business_members_business_id_fkey` dispara `trg_enforce_owner_cannot_be_deleted`
+y falla con `R0002`. (Medido contra la base viva el 2026-10-20: 16 negocios, 2
+desactivados, 16 membresías de dueño vivas —**2 de ellas en negocios desactivados**, que
+siguen bloqueadas.) La transferencia no existe, y por eso:
 
 | vía | qué contesta el cliente | dónde se decide |
 | --- | --- | --- |

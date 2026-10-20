@@ -267,6 +267,34 @@ RLS sino la capa de servicio de la §8, que la rechaza. Un helper que excluyera
 esas dos cosas sería un segundo sitio donde vivir la misma regla, y la §8.1 ya
 dice que dos copias de una frontera son dos fronteras que pueden divergir.
 
+**Lo que RLS respalda de `business_locations`, y lo que no.** El helper es el
+permiso por sucursal, y cada operación de la tabla lo usa con un predicado
+distinto. Medido contra la base viva el 2026-10-20 (`pg_policies`):
+
+| operación | policy | predicado | qué concede **esa** policy a un `staff` dentro de su alcance |
+| --- | --- | --- | --- |
+| `SELECT` | `Members can view business locations` | `can_manage_location(business_id, id)` | **sí**: las de su alcance |
+| `INSERT` | `Members can insert business locations` | `business_member_role(business_id) in ('owner','manager')` **y** `business_member_session_valid(business_id)` | **no**: se lo niega |
+| `UPDATE` | `Members can update business locations` | `can_manage_location(business_id, id)` | **sí lo puede**: la policy lo concede |
+| `DELETE` | `Members can delete business locations` | `business_member_role(business_id) = 'owner'` **y** `can_manage_location(business_id, id)` | **no**: se lo niega |
+
+**El `SELECT` de la primera fila es lo que concede *esa* policy, no el conjunto
+efectivo.** `Anyone can view active business locations` (`roles = public`,
+`is_active = true`) deja leer las sucursales activas a cualquiera, así que un `staff`
+también lee las sucursales activas que **no** son de su alcance. La lectura no es lo que
+esta sección audita —la escritura lo es—, pero el texto no puede afirmar que un `staff`
+sólo ve las suyas.
+
+La fila que decide es la del `UPDATE`: es la única cuya policy es el helper
+**solo**, sin la condición de rol que acompaña a las otras tres, y el helper le
+concede al `staff` las sucursales de su fila de alcance. **Para el `UPDATE` de una
+sucursal, RLS no es la frontera de un `staff`** — lo son el filtro de la API y el
+de la UI (ver §9.3). El CRUD de sucursales de la API lo niega por su cuenta
+(`assertCanMutateBusiness` es owner-only,
+`apps/api/src/modules/businesses/businesses.service.ts:788`), pero un cliente que
+escriba directo a Supabase (el móvil, ADR-0002) **puede renombrar la sucursal que
+el `staff` tiene en su alcance**.
+
 Se apoya en dos helpers más pequeños, todos `STABLE SECURITY DEFINER` con
 `search_path` pineado (patrón ya establecido por `public.business_is_approved`):
 
@@ -455,8 +483,12 @@ queda fuera de la v1 y se anota como pendiente, no como olvidado.
 > transferencia atómica deja al negocio sin dueño —invisible en el listado del panel,
 > con `business_ownership` sigue nombrándolo, y sin ninguna ruta que devuelva
 > `role: 'owner'` porque la promoción es un 422—. **La consecuencia hay que decirla:
-> mientras la transferencia no exista, un dueño de un negocio vivo no puede borrar su
-> cuenta por ninguna vía.** El detalle está en el addendum §A.2 del ADR-0013, y la
+> mientras la transferencia no exista, un dueño —de un negocio activo o no— no puede
+> borrar su cuenta por ninguna vía.** La puerta del borrado cuenta membresías de
+> dueño **vivas** (`role = 'owner'` y `deleted_at is null`) y **no mira
+> `businesses.is_active`**: desactivar el negocio no abre la salida, y borrarlo tampoco
+> —la cascada `business_members_business_id_fkey` dispara el trigger del dueño y falla con
+> `R0002`. El detalle está en el addendum §A.2 del ADR-0013, y la
 > lista de lo que Plan 3 hereda, en el plan del Plan 2.
 >
 > La transferencia de propiedad pasó de «pendiente, no olvidado» a **el primer ítem
@@ -694,9 +726,27 @@ negocio, payouts, métricas, coupons y la propia sección Equipo. Hoy esa secci�
 (`SettingsSection.tsx` / `GestionContent.tsx`) se renderiza completa sin mirar quién entró,
 porque solo existe un tipo de usuario con acceso al panel.
 
-El filtrado es de **UI**, no de seguridad: RLS ya impide que un `staff` escriba en
-`business_locations` o lea `payouts`, así que ocultar controles no agrega una frontera,
-solo deja de ofrecer botones que van a fallar. El origen del rol es
+El filtrado es de **UI**, y para las operaciones que la base ya le niega a un `staff`,
+eso es exactamente lo que es: RLS le niega leer `payouts` (`Members can view own
+payouts` exige `owner | manager`), insertar sucursales (`Members can insert business
+locations`, que exige `owner | manager`) y borrarlas (`Members can delete business
+locations`, que exige `owner`). Ahí, ocultar controles deja de ofrecer botones que van
+a fallar.
+
+**Pero hay una operación que NO está respaldada por RLS, y por eso hay que
+nombrarla: el `UPDATE` de `business_locations`.** La policy
+`Members can update business locations` es `can_manage_location(business_id, id)`
+sin condición de rol, y esa función concede al `staff` las sucursales de su fila
+de alcance: **un `staff` puede renombrar su propia sucursal por PostgREST**
+(medido contra la base viva el 2026-10-20; la tabla completa está en §5.1). En ese
+caso **el filtro de la UI sí recorta el alcance**: no es un botón que vaya a
+fallar, es un botón que **escribe**, y esconderlo es lo único que impide esa
+escritura para un cliente que hable directo con Supabase (el móvil, ADR-0002).
+El CRUD de sucursales de la API lo niega por su cuenta (`assertCanMutateBusiness`
+es owner-only), pero un filtro leído como «RLS ya lo niega» escondería un botón
+que escribe.
+
+El origen del rol es
 `public.business_member_session_state(negocio)`, que la sesión ya consulta en §5.2 — el panel
 pregunta por su rol en lugar de deducirlo de `profiles.role`, que solo dice "de negocio".
 

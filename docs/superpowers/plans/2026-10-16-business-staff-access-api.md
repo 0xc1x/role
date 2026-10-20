@@ -86,10 +86,15 @@ archivo donde se ve. Lo que no está acá está resuelto y sellado.
 6. **La transferencia de propiedad NO EXISTE, y por eso un dueño no puede irse.** Es el
    ítem de mayor prioridad de Plan 3 y es un **hueco de producto**, no limpieza. Con el
    dueño inmutable (`20261020052915_owner_cannot_be_demoted.sql` y
-   `apps/api/src/modules/staff/staff.service.ts:439-443`), un dueño de un negocio vivo
-   **no puede borrar su cuenta por ninguna vía**: `DELETE /auth/account` contesta 409
-   (`apps/api/src/modules/auth/auth.service.ts:691-746`), degradarse contesta 422/R0002,
-   y darse de baja o pausarse también. El addendum §A.2 del ADR-0013 lo dice entero.
+   `apps/api/src/modules/staff/staff.service.ts:439-443`), un dueño **—de un negocio
+   activo o no—** **no puede borrar su cuenta por ninguna vía**: `DELETE /auth/account`
+   contesta 409 (`apps/api/src/modules/auth/auth.service.ts:691-746`), degradarse contesta
+   422/R0002, y darse de baja o pausarse también. La puerta cuenta membresías de dueño
+   **vivas** (`countRetained`,
+   `apps/api/src/modules/auth/auth-account.repository.ts:112-121`) y **no mira
+   `businesses.is_active`**: desactivar el negocio **no** abre la salida, y borrarlo
+   tampoco —la cascada `business_members_business_id_fkey` dispara el trigger del dueño
+   con `R0002`. El addendum §A.2 del ADR-0013 lo dice entero.
    Mientras la transferencia no exista, un dueño que quiere dejar su negocio no tiene
    salida: o se queda, o resuelve el caso por fuera de la API.
 7. **Un dueño legacy que sólo vive en `business_ownership` todavía borra su cuenta en
@@ -124,16 +129,24 @@ archivo donde se ve. Lo que no está acá está resuelto y sellado.
 
 **Lo que las revisiones marcaron «Minor» o «needs partner» y sigue abierto**
 
-10. **La contención del `manager` sólo la aplica esta API, no RLS.**
-    `can_manage_location` da el negocio entero al `manager` lo mismo que al `owner`
-    (`when r.member_role in ('owner','manager') then true`, verificado en la base viva el
-    2026-10-20), así que el alcance por sucursal del `manager` es una **restricción de
-    producto de esta API** (`staff.service.ts:939`, `assertWithinReach`), sin motor detrás.
-    Y como el móvil lee Supabase directo (ADR-0002), la regla del §8 —«un `manager` no ve
-    los accesos de sucursales que no gestiona»— **no está garantizada en el cliente**. La
-    policy `Owners and managers view business members` deja que cualquier gerente lea
-    todos los alias del negocio. La revisión de la Task 3 lo pidió antes de que el panel
-    exista; sigue sin decidir.
+10. **La contención del `manager` sólo la aplica esta API, y para las operaciones que RLS
+    concede no es una frontera.** `can_manage_location` da el negocio entero al `manager`
+    lo mismo que al `owner` (`when r.member_role in ('owner','manager') then true`,
+    verificado en la base viva el 2026-10-20), y ese helper es lo que resuelven **cuatro
+    policies de escritura**: `Members can insert own offers`,
+    `Members can update own offers` y `Members can delete own offers` (las tres con
+    `can_manage_location(business_id, business_location_id)`) y
+    `Members can update business locations` (con `can_manage_location(business_id, id)`).
+    **Un `manager` acotado a la sucursal A puede, por PostgREST, editar y borrar los
+    productos de la sucursal B y renombrar la sucursal B.** El `assertWithinReach`
+    (`staff.service.ts:938`) lo impide **en esta API y sólo en esta API**: es un predicado
+    de TypeScript, y como el móvil escribe directo a Supabase (ADR-0002), la contención del
+    §8 **no es una frontera de seguridad para esas operaciones**. A eso se suma la lectura:
+    la policy `Owners and managers view business members` deja que cualquier gerente lea
+    todos los alias del negocio, así que «un `manager` no ve los accesos de sucursales que
+    no gestiona» **no está garantizada en el cliente**. La revisión de la Task 3 lo pidió
+    antes de que el panel exista; sigue sin decidir, y el costo **no es sólo de
+    *disclosure*: es de escritura sobre el catálogo**.
 11. **La rama de admin de plataforma de `GET /staff` no está acotada.**
     `staff.service.ts` —el `user.role === 'admin'`— sirve el roster de **cualquier**
     negocio a **cualquier** `app_role='admin'`, sin comprobar que el negocio exista (un id
@@ -648,8 +661,8 @@ de "se construyó", y es la diferencia que va a leer el próximo que retome esto
   no construidas». Hoy existen. El párrafo ahora apunta al addendum y dice lo que sigue
   sin existir (el cliente HTTP del panel: Plan 3).
 - Se agregó el **addendum «De «decidido» a «construido»»**, con §A.1 (las nueve rutas, con
-  archivo), §A.2 (el rol del dueño es inmutable y **un dueño de un negocio vivo no puede
-  borrar su cuenta por ninguna vía**), §A.3 (la entitlement del plan se consulta en la API
+  archivo), §A.2 (el rol del dueño es inmutable y **un dueño —de un negocio activo o no—
+  no puede borrar su cuenta por ninguna vía**), §A.3 (la entitlement del plan se consulta en la API
   al crecer y se rechaza con `R0001`, con el costo de reusar el código escrito), §A.4
   (`isDeliverableAlias` vs `isRoleEcAlias`, y por qué `isRoleEcAlias` se conserva aunque
   no tenga llamador en producción) y §A.5 (el borrado de cuenta: 409 antes de la cascada, no
@@ -692,7 +705,8 @@ quedaron como ítems 1 a 5, y se agregaron:
 - **`R0001` cubre dos negativas** (ítem 9) — tope y entitlement; si se elige `R0003`, el
   cambio es de un lado en la API **más el mapeo del panel**.
 - **Los Minor y «needs partner» de las cuatro revisiones que siguen abiertos** (ítems 10 a
-  22), con archivo: la contención del `manager` que sólo aplica esta API y no RLS; la
+  22), con archivo: la contención del `manager` que sólo aplica esta API y **no es una
+  frontera para las cuatro policies de escritura que resuelve `can_manage_location`**; la
   rama de admin de plataforma de `GET /staff` sin acotar; el aviso «tu dirección cambió»
   que se encola a la dirección actual; la guarda de cascada que vive sólo en el servicio;
   el borrado que no archiva las filas de alcance; el `role: 'staff'` explícito; el 404
