@@ -2350,3 +2350,59 @@ policy. The pair reads in order —the rule first, the policies after— and the
 rollback of this one is a NEW migration (the ledger's `rollback` is `NULL` in
 all 153 rows): restore the old role branch, drop the own-row exception, and
 `alter` the two policies back to their `20261015024825` quals.
+
+## Applied: `20261020163244_ownership_transfer`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`14810a9cd47cac8b5b3c56534e4a6b63` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**Three changes, and all three are the same rule**: an ACTIVE business always
+has a live owner, and an INACTIVE one may have none.
+
+1. **`public.transfer_business_ownership(business_id, member_id)`** — the
+   operation. `volatile security definer set search_path = ''`, ACL
+   `{postgres, service_role}`: `anon` and `authenticated` hold nothing, so the
+   mobile —which writes straight to Supabase— cannot open it. The caller is
+   NOT an argument: the function reads `auth.uid()` and refuses with `R0004`
+   unless the caller IS the live owner of that business. The recipient must be
+   a live member of the same business, and the transfer is one transaction:
+   demote the old owner to `manager`, give it the scope of every branch, promote
+   the recipient to `owner`, and point `business_ownership` at the new owner —
+   an UPSERT, because a business with no ownership row is one the mobile could
+   not read, and after the transfer it has to read like the others.
+2. **`public.enforce_business_keeps_an_owner()`** plus
+   `trg_business_keeps_an_owner`, a `CONSTRAINT TRIGGER … DEFERRABLE INITIALLY
+   DEFERRED … FOR EACH ROW` on `business_members`. It is deferred because the
+   demotion and the promotion have to be TWO statements —the partial unique
+   index checks row by row, so a single statement could hit `23505` on the
+   promotion— and a `BEFORE` trigger would see the intermediate state, the
+   business with no owner, and refuse a legitimate transfer. At commit the
+   state is final: the transfer passes, and a lone demotion of an active
+   business is aborted with `R0002`.
+3. **`public.enforce_owner_is_untouchable()`** is rewritten. The `status →
+   'disabled'` guard STAYS in the `BEFORE` trigger —a revocation deserves an
+   immediate error with its own message— and its message changed, because
+   «la transferencia de propiedad no existe en esta versión» stopped being
+   true. The demotion guard and the `deleted_at` guard are GONE: what decides
+   whether a business has an owner is the FINAL state of the transaction, and
+   that is the deferred trigger's business.
+
+**Two consequences worth saying out loud.** A demotion of an owner no longer
+fails in the STATEMENT: it fails at the COMMIT, and only for a business that
+is still active. And an INACTIVE business may now end up with no owner at
+all —which is what makes the release of D2 possible, and what the reactivation
+guard of the next task has to answer.
+
+**The plan said the transfer could fail because of the member limit. Measured,
+it does not.** `enforce_business_member_limit` leaves BEFORE counting when the
+row stops being the owner, and a promotion to `owner` leaves even earlier; and
+the transfer does not grow the team anyway —the outgoing owner takes the seat
+the incoming one gives up. A business at its limit can hand its business over.
+
+**Production did not move**: fourteen active businesses, fourteen live owners,
+zero active businesses without one (measured after applying). The ledger's
+`rollback` is `NULL`, so the rollback of this one is a NEW migration: drop the
+function and the constraint trigger, and restore the old
+`enforce_owner_is_untouchable` body —whose text is in the sealed
+`20261020052915_owner_cannot_be_demoted.sql`, copied, not edited.
