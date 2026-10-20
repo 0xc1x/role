@@ -658,26 +658,41 @@ export class AuthService {
    *    account of what to do about it. That is the regression this method would
    *    have shipped.
    *
-   * So the refusal names the two moves that exist today —degrade the membership
-   * with `PATCH /businesses/:businessId/staff/:memberId` (`role: 'manager'`,
-   * which the owner guard allows for their own row), or hand the business over—
-   * and then the account erases normally. Nothing is destroyed on this path, so
-   * it is safe to retry after the caller acts.
+   * ─── Y POR QUÉ YA NO HAY SALIDA QUE NOMBRAR ─────────────────────────────────
    *
-   * ─── Y EL MENSAJE NOMBRA LA RUTA, PORQUE UN 409 SIN RUTA ES UN CALLEJÓN ──────
+   * Antes este mensaje decía «degradá tu acceso a manager con
+   * `PATCH /businesses/:id/staff/:memberId`», y esa puerta **ya no existe**:
+   * `20261020052915_owner_cannot_be_demoted` cerró la degradación, y con ella la
+   * última operación que dejaba al dueño dejar de serlo. La razón es de fondo y
+   * está en el §5.4: sin transferencia, degradar al único dueño deja al negocio
+   * sin nadie que lo administre, invisible en el listado del panel y sin ninguna
+   * operación que devuelva `role: 'owner'` —la promoción es un 422 desde el
+   * §5.4—. O sea que degradarse no era una salida: era una trampa.
    *
-   * El mensaje dice QUÉ hacer; la ruta dice CÓMO. Un 409 que dice «degrade el
-   * acceso» deja a quien lo lee adivinar el endpoint, y un callejón sin salida es
-   * lo mismo que un 500: la misma falta de acción, más silenciosa. La ruta
-   * nombrada es la que existe y hace exactamente eso —el dueño puede degradar su
-   * PROPIA fila, y el trigger de la base deja pasar la degradación—, y el
-   * `memberId` que necesita es el suyo, que la lista del equipo devuelve.
+   * Lo que queda después de esa migración, verificado contra el espejo:
+   *
+   *  - Degradar al dueño: la API lo niega con un 422 y la base con un `R0002`.
+   *  - Dar de baja la fila del dueño: `R0002` (`trg_enforce_owner_is_untouchable`).
+   *  - Borrarla: `R0002` (`trg_enforce_owner_cannot_be_deleted`).
+   *  - Borrar el NEGOCIO: `R0002` también, porque el borrado en cascada de la
+   *    fila del dueño dispara la misma guarda. O sea que ni siquiera se puede
+   *    eliminar el negocio para deshacerse del dueño.
+   *  - Transferir la propiedad: no hay ruta. Está explícitamente fuera de la v1.
+   *
+   * Así que el mensaje **no puede** ofrecer una salida: no hay ninguna. Lo que
+   * dice es la verdad —la cuenta no se puede borrar mientras sea el dueño de un
+   * negocio, y eso no lo cambia ninguna ruta de la API— y dice cuándo vuelve a
+   * ser borrable: cuando el negocio ya no sea suyo. Quién lo resuelve es cosa
+   * del equipo de Rolé, fuera de la API: es el único que puede cambiar una fila
+   * de dueño. Un 409 que nombra una puerta que rebota es peor que uno que no da
+   * ninguna: el que lo lee toca, recibe un `R0002` y se queda sin explicación en
+   * el medio.
    */
   async deleteAccount(user: AuthUser): Promise<void> {
     const retained = await this.accounts.countRetained(user.id);
 
-    // First, and before any delete: the answer is a function of state the caller
-    // can change and this method cannot.
+    // First, and before any delete: the answer is a function of state that this
+    // method cannot change and, since `20261020052915`, neither can the caller.
     if (retained.owner_memberships > 0) {
       this.logger.warn({
         event: 'account_deletion_needs_ownership_decision',
@@ -686,11 +701,11 @@ export class AuthService {
       throw new ConflictException({
         error: 'Conflict',
         message:
-          'This account still owns a business. Degrade your own access to ' +
-          'manager with PATCH /businesses/{businessId}/staff/{memberId} and ' +
-          "role 'manager' (your own access id is the one " +
-          'GET /businesses/{businessId}/staff shows for you), or hand the ' +
-          'business over, and then delete the account.',
+          'This account still owns a business, and it cannot be deleted while ' +
+          'that is true. The business has to change hands first, and no route ' +
+          'in this version does that: an owner cannot be demoted, given up or ' +
+          'deleted, and ownership cannot be transferred. The account can be ' +
+          'deleted once the business is no longer yours.',
       });
     }
 

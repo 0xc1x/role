@@ -230,11 +230,11 @@ export class AuthController {
    * The response cannot say which happened, and neither can the log.
    *
    * 409 is the third answer, and the only one that is not silent: an account that
-   * still owns a business is told to degrade that access or hand the business
-   * over first, and the body names the route that does it
-   * (`PATCH /businesses/{businessId}/staff/{memberId}` with `role: 'manager'`).
-   * It is a conflict with the caller's own state, not with a rule the platform
-   * invented, and nothing has been destroyed when it comes back.
+   * still owns a business cannot be deleted, and the body says so plainly —
+   * there is no route that ends that ownership in this version, so the business
+   * has to change hands first. It is a conflict with the caller's own state, not
+   * with a rule the platform invented, and nothing has been destroyed when it
+   * comes back.
    *
    * 3/minute for an irreversible action: a client that retries a DELETE because
    * the network dropped is retrying an idempotent no-op, and one that fires it
@@ -249,7 +249,7 @@ export class AuthController {
   @ApiNoContentResponse({ description: 'Deleted or anonymised — always 204' })
   @ApiConflictResponse({
     description:
-      'The account still owns a business: degrade it with PATCH /businesses/{businessId}/staff/{memberId} (role: "manager") or hand it over, then delete the account (204 once it does not)',
+      'The account still owns a business and cannot be deleted while it does; the business has to change hands first, and no route in this version does that (204 once the business is no longer yours)',
   })
   @ApiBearerAuth('bearer')
   deleteAccount(@CurrentUser() user: AuthUser): Promise<void> {

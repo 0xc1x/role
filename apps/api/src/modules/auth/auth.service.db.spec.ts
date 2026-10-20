@@ -788,7 +788,7 @@ describe('the erase with a membership (DB real)', () => {
     expect(await memberRow(memberId)).not.toBeNull();
   });
 
-  test('an owner is told to act first, and nothing is destroyed while they do', async () => {
+  test('an owner cannot be erased while the business is live, and the answer says so', async () => {
     const { userId, businessId, memberId } = await seedOwner();
     const auth = service();
 
@@ -812,41 +812,68 @@ describe('the erase with a membership (DB real)', () => {
       }),
     ).rejects.toThrow(ConflictException);
 
-    // NOTHING was destroyed: the refusal is a state the caller can change and this
-    // method cannot, so it has to be answerable before the first delete. A 409
-    // after the auth user was soft-deleted would be a 500 the caller cannot retry.
+    // The message has to be the truth and not a promise: this account CANNOT be
+    // erased while it owns a business, and —since
+    // `20261020052915_owner_cannot_be_demoted`— no route in the API can change
+    // that. A message that named the old exit (degrade to `manager`) would send
+    // the reader to a door that answers `R0002`.
+    const error = await auth
+      .deleteAccount({
+        id: userId,
+        email: `${userId}@test.cl`,
+        role: 'business' as const,
+      })
+      .catch((err: unknown) => err);
+    const message = (
+      error as { getResponse: () => { message: string } }
+    ).getResponse().message;
+    expect(message).toContain('still owns a business');
+    expect(message).toContain('cannot be deleted');
+    expect(message).not.toContain('manager');
+    expect(message).not.toContain('PATCH');
+
+    // NOTHING was destroyed: the refusal is a state this method cannot change
+    // and neither can the caller, so it has to be answerable before the first
+    // delete. A 409 after the auth user was soft-deleted would be a 500 the
+    // caller cannot retry.
     const profile = await profileRow(userId);
     expect(profile?.email).not.toContain('anonymized');
-    expect(await memberRow(memberId)).toMatchObject({ deleted_at: null });
+    expect(await memberRow(memberId)).toMatchObject({
+      role: 'owner',
+      deleted_at: null,
+    });
     const [business] = await ctx.db
       .select({ id: businesses.id })
       .from(businesses)
       .where(eq(businesses.id, businessId));
     expect(business).toBeDefined();
 
-    // And the account IS still erasable once they act: degrade the membership and
-    // the same call goes through, on the anonymise branch, because a membership is
-    // a row this account does not get to destroy.
-    await ctx.db
+    // AND THE EXIT THAT THE MESSAGE USED TO NAME IS NOW CLOSED, IN THE DATABASE.
+    // Degrading the owner to `manager` was the one operation that used to make
+    // this account erasable, and it is precisely the one the new ruling closed:
+    // without a transfer, it leaves the business ownerless, invisible in the
+    // panel and with no route that can put `role: 'owner'` back. So the database
+    // refuses it, and the refusal is what the test asserts —not the absence of a
+    // call.
+    const demotion = await ctx.db
       .update(businessMembers)
       .set({ role: 'manager' })
-      .where(eq(businessMembers.id, memberId));
+      .where(eq(businessMembers.id, memberId))
+      .then(() => null)
+      .catch((err: unknown) => err);
+    expect(sqlErrorCode(demotion)).toBe('R0002');
+    expect(await memberRow(memberId)).toMatchObject({ role: 'owner' });
 
+    // So the erase STAYS refused, and that is the new truth: while the business
+    // has an owner, this account is not erasable, and no route changes that.
     await expect(
       auth.deleteAccount({
         id: userId,
         email: `${userId}@test.cl`,
         role: 'business' as const,
       }),
-    ).resolves.toBeUndefined();
-
-    expect((await profileRow(userId))?.email).toBe(
-      `anonymized-${userId}@role.invalid`,
-    );
-    const member = await memberRow(memberId);
-    // The row is history, not a dangling live access: archived, not deleted.
-    expect(member).not.toBeNull();
-    expect(member?.deleted_at).not.toBeNull();
+    ).rejects.toThrow(ConflictException);
+    expect((await profileRow(userId))?.email).not.toContain('anonymized');
   });
 
   test('an employee membership is detached by the erase, not taken by the cascade', async () => {

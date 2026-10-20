@@ -152,7 +152,7 @@
             "description": "Deleted or anonymised — always 204"
           },
           "409": {
-            "description": "The account still owns a business: degrade it with PATCH /businesses/{businessId}/staff/{memberId} (role: \"manager\") or hand it over, then delete the account (204 once it does not)"
+            "description": "The account still owns a business and cannot be deleted while it does; the business has to change hands first, and no route in this version does that (204 once the business is no longer yours)"
           }
         },
         "security": [

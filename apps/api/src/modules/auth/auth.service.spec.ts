@@ -1109,7 +1109,7 @@ describe('AuthService', () => {
       expect(mockAccounts.eraseAccount).not.toHaveBeenCalled();
     });
 
-    it('says what the caller has to do, and not just that it is refused', async () => {
+    it('says the truth: it cannot be deleted while it owns a business', async () => {
       mockAccounts.countRetained.mockResolvedValue({
         orders: 0,
         businesses: 0,
@@ -1118,23 +1118,27 @@ describe('AuthService', () => {
         reviews: 0,
       });
 
-      // §5.4: a business is not left with nobody who can administer it, and the
-      // two moves that resolve it are the ones that exist today. A refusal whose
-      // body does not name them is the same dead end as a 500, only quieter.
+      // §5.4: a business is not left with nobody who can administer it. Y desde
+      // `20261020052915` el dueño NO SE DEGRADA, así que la salida que este
+      // mensaje nombraba — degradar la propia fila a `manager` — ya no existe:
+      // la API la niega con un 422 y la base con un `R0002`. Un mensaje que
+      // nombra una puerta que rebota es peor que uno que no da ninguna.
       const error = await service
         .deleteAccount(user)
         .catch((err: unknown) => err);
       const message = (
         error as { getResponse: () => { message: string } }
       ).getResponse().message;
-      expect(message).toContain('manager');
-      expect(message).toContain('hand');
-      // Y la RUTA, porque un 409 que dice QUÉ hacer sin decir CÓMO es un
-      // callejón con salida: el que lo lee tiene que poder actuar sin adivinar
-      // el endpoint, y el endpoint existe y hace exactamente eso.
-      expect(message).toContain(
-        'PATCH /businesses/{businessId}/staff/{memberId}',
-      );
+
+      // Lo que el mensaje AFIRMA: la cuenta no se puede borrar mientras sea la
+      // dueña, y eso no lo cambia ninguna ruta.
+      expect(message).toContain('still owns a business');
+      expect(message).toContain('cannot be deleted');
+
+      // Y lo que NO puede afirmar: una salida que no existe.
+      expect(message).not.toContain('manager');
+      expect(message).not.toContain('PATCH');
+      expect(message).not.toContain('/staff/');
     });
 
     it('anonymises an account whose membership is not an owner one', async () => {
