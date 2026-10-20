@@ -107,9 +107,11 @@ const FORGOT_PASSWORD_RESPONSE: ForgotPasswordResponse = {
  *
  * ─── AND THE FLOWS THAT CALL IT ───────────────────────────────────────────────
  *
- * Two, and they are the two that put an address in front of a mailer:
- * `forgot-password` (the recovery link) and `change-email` (GoTrue's confirmation
- * of the new address). One function and not two copies of the same rule.
+ * Three, and they are the three that put an address in front of a mailer:
+ * `forgot-password` (the recovery link), `change-email` (GoTrue's confirmation of
+ * the new address) and `register` (GoTrue's confirmation of the new account). The
+ * third one came later and the helper was already there, which is why it is one
+ * function and not three copies of the same rule.
  */
 function assertDeliverableAddress(address: string): void {
   if (isDeliverableAlias(address)) return;
@@ -200,7 +202,33 @@ export class AuthService {
     };
   }
 
+  /**
+   * `POST /auth/register` — create the account, unconfirmed, and let GoTrue mail
+   * the confirmation.
+   *
+   * ─── POR QUÉ TAMBIÉN RECHAZA UNA DIRECCIÓN SIN BANDEJA ─────────────────────────
+   *
+   * `email_confirm: false` es lo que manda el correo de confirmación, así que este
+   * es el TERCER flujo de correo de la API y el tercero con el mismo problema: una
+   * dirección de `role.ec` no tiene bandeja detrás, el correo rebota, y el rebote
+   * es una queja que nadie puede contestar (§3.1). El guard es el mismo
+   * (`assertDeliverableAddress`) y va ANTES de que GoTrue sepa nada: así no queda
+   * una cuenta creada que nadie puede confirmar —una cuenta muerta— ni un correo
+   * encolado.
+   *
+   * Y no es un detalle: una dirección de `role.ec` registrada acá ocupa ese
+   * `auth.users`, y el alta de un acceso de equipo —que sí crea su `auth.users`
+   * con el alias— se encontraría con «ya registrado» y no podría completarse.
+   * Un alta que se queda con lo que el negocio necesita no es una molestia: es un
+   * cierre de puerta.
+   *
+   * Lo que NO se hace aquí es confirmarlo sin el correo (`email_confirm: true`):
+   * eso dejaría cualquier persona registrar la dirección de otra y quedarse con
+   * la cuenta. Sin bandeja no hay prueba de nada, así que la respuesta es no.
+   */
   async register(body: RegisterRequest) {
+    assertDeliverableAddress(body.email);
+
     const { data, error } = await this.supabaseAdmin.auth.admin.createUser({
       email: body.email,
       password: body.password,

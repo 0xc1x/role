@@ -42,7 +42,10 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "The account was created, unconfirmed, waiting for the email"
+          },
+          "422": {
+            "description": "The address cannot receive email (a generated Rolé alias), so the confirmation would bounce"
           }
         },
         "summary": "Register a new user account",

@@ -12,6 +12,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConflictResponse,
+  ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
@@ -71,6 +72,13 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiBody({ type: Object })
+  @ApiCreatedResponse({
+    description: 'The account was created, unconfirmed, waiting for the email',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The address cannot receive email (a generated Rolé alias), so the confirmation would bounce',
+  })
   register(
     @Body(new ZodValidationPipe(RegisterRequestSchema))
     body: RegisterRequest,

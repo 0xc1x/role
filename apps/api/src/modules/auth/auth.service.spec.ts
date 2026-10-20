@@ -399,6 +399,47 @@ describe('AuthService', () => {
         }),
       ).rejects.toThrow(InternalServerErrorException);
     });
+
+    it('refuses a generated Rolé address, because the confirmation would bounce', async () => {
+      // El registro es el TERCER flujo de correo de la API: `email_confirm: false`
+      // hace que GoTrue mande la confirmación. Una dirección de `role.ec` no tiene
+      // bandeja detrás, así que ese correo rebota (§3.1) — y además ocuparía el
+      // `auth.users` que el alta de un acceso de equipo necesita para su alias.
+      for (const email of [
+        'caja@panaderia.role.ec',
+        'caja@role.ec',
+        'Caja@PANADERIA.ROLE.EC',
+      ]) {
+        await expect(
+          service.register({
+            email,
+            password: 'password123',
+            full_name: 'Caja',
+          }),
+        ).rejects.toThrow(UnprocessableEntityException);
+      }
+
+      // Y ni GoTrue ni la base saben nada: la puerta está antes de todo.
+      expect(mockSupabaseAdmin.auth.admin.createUser).not.toHaveBeenCalled();
+      expect(mockUserDefaults.seed).not.toHaveBeenCalled();
+    });
+
+    it('lets a custom domain through, because that recipient is real', async () => {
+      mockSupabaseAdmin.auth.admin.createUser.mockResolvedValue({
+        data: {
+          user: { id: 'new-user-3', email: 'caja@panaderialafamilia.ec' },
+        },
+        error: null,
+      });
+
+      const result = await service.register({
+        email: 'caja@panaderialafamilia.ec',
+        password: 'password123',
+        full_name: 'Caja',
+      });
+
+      expect(result.id).toBe('new-user-3');
+    });
   });
 
   describe('refresh', () => {
