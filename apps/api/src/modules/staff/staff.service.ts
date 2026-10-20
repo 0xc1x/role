@@ -19,6 +19,8 @@ import {
   type BusinessMemberRole,
   type CreateBusinessMemberDto,
   type StaffSessionState,
+  type RestoreBusinessOwnershipDto,
+  type RestoreBusinessOwnershipResponseDto,
   type TransferBusinessOwnershipDto,
   type TransferBusinessOwnershipResponseDto,
   type UpdateBusinessMemberAliasDto,
@@ -32,6 +34,7 @@ import {
   StaffRepository,
   type BusinessMemberRow,
   type MemberWithScope,
+  type OwnershipAssignResult,
   type OwnershipTransferResult,
 } from './staff.repository';
 import { STAFF_AUTH_ADMIN, type StaffAuthAdmin } from './staff.tokens';
@@ -304,13 +307,34 @@ export class StaffService {
    * (`businesses.service.ts:114-157`). Without it a retry from the same form
    * finds the alias taken by an account nobody can reach — the alias index
    * includes archived rows precisely so that this cannot be papered over.
+   *
+   * ─── Y LA PUERTA DE LA PLATAFORMA, QUE ES OTRA PUERTA AL MISMO CAMINO ───────
+   *
+   * Un negocio cuyo dueño se fue puede quedarse SIN NINGÚN acceso, y entonces
+   * no hay ni a quién transferirle la propiedad ni quién administre el negocio
+   * que queda. La recuperación son dos pasos y las dos puertas existen: este
+   * (crear el acceso) y `POST /businesses/:id/ownership/restore` (darle el
+   * nombre).
+   *
+   * La rama del admin es DELTA y su condición es DOBLE: `user.role ===
+   * 'admin'` Y el negocio no tiene dueño vivo. Un admin NO administra un
+   * negocio con dueño —eso se le niega a propósito (ítem 11 de la herencia)— y
+   * `requireActor` sigue negándoselo; lo único que la rama abre es el alta en
+   * un negocio que se quedó sin nadie.
+   *
+   * Y la rama vive AQUÍ y no en `requireActor`: en la puerta común, un admin
+   * podría administrar cualquier negocio sin dueño —y de paso cualquier
+   * negocio CON dueño, que es justo lo que se le niega.
    */
   async create(
     user: AuthUser,
     businessId: string,
     body: CreateBusinessMemberDto,
   ): Promise<BusinessMemberDeliveryCardDto> {
-    const actor = await this.requireActor(user, businessId);
+    const isPlatformAdmin = user.role === 'admin';
+    const actor = isPlatformAdmin
+      ? null
+      : await this.requireActor(user, businessId);
 
     // §8: an owner is who created the business. `CreateBusinessMemberSchema`
     // accepts the whole vocabulary ON PURPOSE — the partner put this rejection
@@ -338,7 +362,15 @@ export class StaffService {
       businessId,
       body.business_location_ids,
     );
-    await this.assertWithinReach(actor, locationIds);
+    if (actor) {
+      // The reach of the caller decides whether it may create this access here.
+      // A platform admin has NO reach —it is not a member of any business— and
+      // the branch that let it in does not ask: it administers the whole
+      // platform, and the business it is touching is one that has nobody.
+      await this.assertWithinReach(actor, locationIds);
+    } else {
+      await this.requireOwnerlessBusiness(businessId);
+    }
     this.assertPersistentSessionIsAllowed(role, body.session_ttl_hours);
 
     const alias = body.alias ?? this.proposedAlias(business.slug, body.label);
@@ -392,7 +424,10 @@ export class StaffService {
     this.logger.log({
       event: 'staff_access_created',
       businessId,
-      createdBy: actor.userId,
+      // `actor` is null on the platform branch, and there the caller is the
+      // admin: `requireActor` returns the caller's own id, so the two are the
+      // same person and the log says who asked.
+      createdBy: actor?.userId ?? user.id,
       role,
       locationCount: locationIds.length,
       aliasDomain: this.aliasDomain(parsedAlias.data),
@@ -657,6 +692,73 @@ export class StaffService {
         result.previous_owner_member_id,
       ),
       new_owner: await this.memberDto(businessId, result.new_owner_member_id),
+    };
+  }
+
+  /**
+   * `POST /businesses/:businessId/ownership/restore`: the platform gives a
+   * business its owner back.
+   *
+   * ─── POR QUÉ ES ADMIN-ONLY Y POR QUÉ NO ES LA PUERTA DEL DUEÑO ───────────────
+   *
+   * Porque un negocio sin dueño no tiene a nadie que pueda entregar la
+   * propiedad: la puerta del dueño (`transferOwnership`) exige que quien llama
+   * SEA el dueño, y ese negocio no tiene uno. La recuperación la hace la
+   * plataforma —un `app_role = 'admin'`— y es un hecho distinto de una
+   * entrega: en la entrega hay dos personas y una entrega; en la recuperación
+   * hay una plataforma y un negocio que se quedó solo.
+   *
+   * ─── Y POR QUÉ NO ES UNA SEGUNDA PUERTA PARA SALTARSE EL INVARIANTE ─────────
+   *
+   * Porque la operación es de BASE (`public.assign_business_ownership`) y la
+   * base se niega con `R0004` si el negocio YA tiene un dueño vivo: para eso
+   * está la transferencia. Promover a un acceso vivo deja exactamente un dueño,
+   * que es lo que el índice parcial admite y lo que el trigger diferido exige
+   * al commit. La ruta no puede dejar un negocio con dos dueños ni con
+   * ninguno.
+   *
+   * ─── Y LA AUDITORÍA ─────────────────────────────────────────────────────────
+   *
+   * El repo no tiene una tabla de auditoría de negocio: `order_events` es de
+   * pedidos. Lo que SÍ existe, y lo que este módulo ya usa para cada operación
+   * del equipo, es el log estructurado con un `event`. La recuperación entra
+   * por ahí —con el identificador de la membresía y quién la pidió— y no por
+   * una tabla inventada.
+   */
+  async restoreOwnership(
+    user: AuthUser,
+    businessId: string,
+    body: RestoreBusinessOwnershipDto,
+  ): Promise<RestoreBusinessOwnershipResponseDto> {
+    if (user.role !== 'admin') {
+      throw new ForbiddenException(
+        'Devolver el dueño a un negocio es de la plataforma, no de un miembro del negocio.',
+      );
+    }
+
+    let result: OwnershipAssignResult;
+    try {
+      result = await this.repository.assignOwnership(
+        businessId,
+        body.member_id,
+        user.id,
+      );
+    } catch (err) {
+      // `R0004` es una regla de negocio con su mensaje, y el mensaje es el de
+      // la base: una frase que el operador lee y que nombra la regla que falló.
+      throw this.mapWriteError(err);
+    }
+
+    this.logger.log({
+      event: 'business_ownership_restored',
+      businessId,
+      ownerMemberId: result.owner_member_id,
+      ownerUserId: result.owner_user_id,
+      restoredBy: user.id,
+    });
+
+    return {
+      owner: await this.memberDto(businessId, result.owner_member_id),
     };
   }
 
@@ -1007,6 +1109,40 @@ export class StaffService {
       businessId,
       role: row.role,
     };
+  }
+
+  /**
+   * The platform's door to a business that has NO live owner.
+   *
+   * ─── POR QUÉ ES UNA COMPROBACIÓN DOBLE ──────────────────────────────────────
+   *
+   * Porque son dos hechos: que quien llama es de la plataforma (`user.role ===
+   * 'admin'`, que el servicio ya comprobó antes de llegar acá) Y que el
+   * negocio no tiene dueño vivo. Con uno solo de los dos, la puerta abriría
+   * de más: un admin que pudiera administrar cualquier negocio —incluido uno
+   * con dueño, que es lo que hoy se le niega a propósito (ítem 11 de la
+   * herencia)—, o un miembro del negocio que pudiera darse su propio dueño.
+   *
+   * ─── Y POR QUÉ LA PREGUNTA LA HACE LA BASE ───────────────────────────────────
+   *
+   * Porque «¿tiene dueño vivo?» es la misma pregunta que hace
+   * `public.assign_business_ownership` antes de promover a alguien, y las dos
+   * tienen que tener la misma respuesta: si esta API contara los dueños con su
+   * propio predicado, la puerta podría abrir un negocio que la operación
+   * después cierra.
+   */
+  private async requireOwnerlessBusiness(businessId: string): Promise<void> {
+    const business = await this.repository.findBusiness(businessId);
+    if (!business) {
+      throw new NotFoundException('Negocio no encontrado');
+    }
+
+    const liveOwners = await this.repository.liveOwnerCount(businessId);
+    if (liveOwners > 0) {
+      throw new ForbiddenException(
+        'Un negocio con dueño no se administra desde la plataforma: ese dueño lo administra.',
+      );
+    }
   }
 
   /** A live access of THIS business, or a 404. */

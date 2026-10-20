@@ -46,3 +46,43 @@ export const TransferBusinessOwnershipResponseSchema = z.strictObject({
 	previous_owner: BusinessMemberSchema,
 	new_owner: BusinessMemberSchema,
 });
+
+/**
+ * `POST /businesses/:businessId/ownership/restore`.
+ *
+ * ─── POR QUÉ UN SOLO CAMPO Y POR QUÉ `.strict()` ───────────────────────────────
+ *
+ * La operación es una sola: devolverle el dueño a un negocio que se quedó sin
+ * él. Lo que se manda es a QUIÉN se le devuelve —el identificador de la
+ * MEMBRESÍA, no el de la persona, porque la membresía es lo que tiene el rol— y
+ * el cuerpo no lleva el `business_id` porque la ruta ya lo nombra: un body con
+ * el `business_id` adentro es una puerta de atrás para darle el dueño a otro
+ * negocio.
+ *
+ * `.strict()` por el mismo motivo que `TransferBusinessOwnershipSchema`: un body
+ * con campos que la operación no usa es un 400, no un 200 que finge haber
+ * guardado lo que el cliente creía.
+ *
+ * Y `member_id` tiene que ser un acceso VIVO de ESE negocio: la base lo
+ * rechaza con `R0004`, que la API traduce a un 422 con el motivo.
+ */
+export const RestoreBusinessOwnershipSchema = z.strictObject({
+	member_id: UuidSchema,
+});
+
+/**
+ * La respuesta de `POST …/ownership/restore`: la membresía que quedó como
+ * dueña.
+ *
+ * ─── POR QUÉ UNA SOLA MEMBRESÍA Y NO DOS ───────────────────────────────────────
+ *
+ * Porque la recuperación no tiene un dueño saliente: no hubo una entrega, hubo
+ * una devolución. El que devuelve el dueño es la plataforma, y el negocio no
+ * tenía a nadie. Así que la respuesta es el estado nuevo de UNA fila.
+ *
+ * Y no lleva el PIN, por la misma razón que la transferencia: el PIN es la
+ * contraseña del `auth.users` y se entrega una vez, en la tarjeta de alta.
+ */
+export const RestoreBusinessOwnershipResponseSchema = z.strictObject({
+	owner: BusinessMemberSchema,
+});

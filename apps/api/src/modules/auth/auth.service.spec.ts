@@ -124,6 +124,10 @@ describe('AuthService', () => {
       owner_memberships: 0,
       reviews: 0,
     });
+    // Y el borrado DEVUELVE si la fila se borró: el servicio lo lee, porque un
+    // `false` significa que había una membresía viva que el borrado no podía
+    // llevarse, y la cuenta se anonimiza en vez de desaparecer.
+    mockAccounts.eraseAccount.mockResolvedValue(true);
     mockEmailRepo.listTemplates.mockResolvedValue({
       rows: [TEMPLATE],
       total: 1,
@@ -1109,7 +1113,7 @@ describe('AuthService', () => {
       expect(mockAccounts.eraseAccount).not.toHaveBeenCalled();
     });
 
-    it('says the truth: it cannot be deleted while it owns a business', async () => {
+    it('says the truth: it cannot be deleted while it owns an ACTIVE business', async () => {
       mockAccounts.countRetained.mockResolvedValue({
         orders: 0,
         businesses: 0,
@@ -1131,14 +1135,21 @@ describe('AuthService', () => {
       ).getResponse().message;
 
       // Lo que el mensaje AFIRMA: la cuenta no se puede borrar mientras sea la
-      // dueña, y eso no lo cambia ninguna ruta.
-      expect(message).toContain('still owns a business');
+      // dueña de un negocio ACTIVO, y la salida que nombra es la que EXISTE.
+      expect(message).toContain('still owns an active business');
       expect(message).toContain('cannot be deleted');
+      expect(message).toContain('/ownership/transfer');
+
+      // Y la otra mitad de la verdad: un dueño de un negocio INACTIVO no tiene
+      // que transferir nada, y el mensaje lo dice para que quien lo lea sepa
+      // si la puerta es para él.
+      expect(message).toContain('inactive business');
 
       // Y lo que NO puede afirmar: una salida que no existe.
       expect(message).not.toContain('manager');
       expect(message).not.toContain('PATCH');
       expect(message).not.toContain('/staff/');
+      expect(message).not.toContain('no route in this version');
     });
 
     it('anonymises an account whose membership is not an owner one', async () => {
@@ -1210,6 +1221,31 @@ describe('AuthService', () => {
       );
       expect(mockAccounts.eraseAccount).toHaveBeenCalledWith('user-1');
       expect(mockAccounts.anonymise).not.toHaveBeenCalled();
+    });
+
+    it('anonymises instead of erasing when the erase found a membership to keep', async () => {
+      // La defensa en profundidad del borrado: si la puerta se esquivara y el
+      // borrado encontrara una membresía viva, cierra la membresía y NO borra
+      // el perfil —borrarlo se la llevaría por la cascada— y devuelve `false`.
+      // El servicio lee ese `false` y anonimiza, que es la rama que la puerta
+      // habría elegido.
+      mockAccounts.countRetained.mockResolvedValue({
+        orders: 0,
+        businesses: 0,
+        memberships: 0,
+        owner_memberships: 0,
+        reviews: 0,
+      });
+      mockAccounts.eraseAccount.mockResolvedValue(false);
+      mockSupabaseAdmin.auth.admin.deleteUser.mockResolvedValue({
+        data: {},
+        error: null,
+      });
+
+      await expect(service.deleteAccount(user)).resolves.toBeUndefined();
+
+      expect(mockAccounts.eraseAccount).toHaveBeenCalledWith('user-1');
+      expect(mockAccounts.anonymise).toHaveBeenCalledWith('user-1');
     });
 
     it('resolves void in both branches, so neither is visible in the answer', async () => {

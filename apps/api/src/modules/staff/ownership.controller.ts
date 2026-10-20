@@ -16,7 +16,10 @@ import {
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import {
+  RestoreBusinessOwnershipSchema,
   TransferBusinessOwnershipSchema,
+  type RestoreBusinessOwnershipDto,
+  type RestoreBusinessOwnershipResponseDto,
   type TransferBusinessOwnershipDto,
   type TransferBusinessOwnershipResponseDto,
 } from '@0xc1x/role-commons';
@@ -95,5 +98,39 @@ export class OwnershipController {
     body: TransferBusinessOwnershipDto,
   ): Promise<TransferBusinessOwnershipResponseDto> {
     return this.staffService.transferOwnership(user, businessId, body);
+  }
+
+  /**
+   * `POST /businesses/:businessId/ownership/restore` — the PLATFORM gives a
+   * business its owner back.
+   *
+   * A business whose owner left can end up with nobody, and then it cannot be
+   * reactivated: the database refuses to activate a business without a live
+   * owner. This route is the way out, and it is admin-only because the person
+   * who can restore an owner is the platform, not a member of the business.
+   */
+  @Post('restore')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Give the ownership of a business that has no live owner back to one of its live accesses. Platform only.',
+  })
+  @ApiOkResponse({
+    description: 'The membership in its new state',
+  })
+  @ApiForbiddenResponse({
+    description: 'The caller is not a platform admin',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The business already has a live owner, or the member is not a live access of this business',
+  })
+  restore(
+    @CurrentUser() user: AuthUser,
+    @Param('businessId', ParseUUIDPipe) businessId: string,
+    @Body(new ZodValidationPipe(RestoreBusinessOwnershipSchema))
+    body: RestoreBusinessOwnershipDto,
+  ): Promise<RestoreBusinessOwnershipResponseDto> {
+    return this.staffService.restoreOwnership(user, businessId, body);
   }
 }

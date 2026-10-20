@@ -658,10 +658,10 @@ export class AuthService {
    *    account of what to do about it. That is the regression this method would
    *    have shipped.
    *
-   * ─── Y POR QUÉ YA NO HAY SALIDA QUE NOMBRAR ─────────────────────────────────
+   * ─── Y LA SALIDA QUE AHORA SÍ EXISTE ────────────────────────────────────────
    *
    * Antes este mensaje decía «degradá tu acceso a manager con
-   * `PATCH /businesses/:id/staff/:memberId`», y esa puerta **ya no existe**:
+   * `PATCH /businesses/:id/staff/:memberId`», y esa puerta **no existía**:
    * `20261020052915_owner_cannot_be_demoted` cerró la degradación, y con ella la
    * última operación que dejaba al dueño dejar de serlo. La razón es de fondo y
    * está en el §5.4: sin transferencia, degradar al único dueño deja al negocio
@@ -669,24 +669,21 @@ export class AuthService {
    * operación que devuelva `role: 'owner'` —la promoción es un 422 desde el
    * §5.4—. O sea que degradarse no era una salida: era una trampa.
    *
-   * Lo que queda después de esa migración, verificado contra el espejo:
+   * El mensaje **no podía** ofrecer una salida porque no había ninguna, y un
+   * 409 que nombra una puerta que rebota es peor que uno que no da ninguna
+   * (ADR-0013): el que lo lee toca, recibe un `R0002` y se queda sin
+   * explicación en el medio.
    *
-   *  - Degradar al dueño: la API lo niega con un 422 y la base con un `R0002`.
-   *  - Dar de baja la fila del dueño: `R0002` (`trg_enforce_owner_is_untouchable`).
-   *  - Borrarla: `R0002` (`trg_enforce_owner_cannot_be_deleted`).
-   *  - Borrar el NEGOCIO: `R0002` también, porque el borrado en cascada de la
-   *    fila del dueño dispara la misma guarda. O sea que ni siquiera se puede
-   *    eliminar el negocio para deshacerse del dueño.
-   *  - Transferir la propiedad: no hay ruta. Está explícitamente fuera de la v1.
+   * Ahora hay dos puertas, y el mensaje nombra las dos porque quien lo lee tiene
+   * que saber cuál es la SUYA:
    *
-   * Así que el mensaje **no puede** ofrecer una salida: no hay ninguna. Lo que
-   * dice es la verdad —la cuenta no se puede borrar mientras sea el dueño de un
-   * negocio, y eso no lo cambia ninguna ruta de la API— y dice cuándo vuelve a
-   * ser borrable: cuando el negocio ya no sea suyo. Quién lo resuelve es cosa
-   * del equipo de Rolé, fuera de la API: es el único que puede cambiar una fila
-   * de dueño. Un 409 que nombra una puerta que rebota es peor que uno que no da
-   * ninguna: el que lo lee toca, recibe un `R0002` y se queda sin explicación en
-   * el medio.
+   *  - Un dueño de un negocio **activo** tiene que entregar el negocio primero,
+   *    y la puerta es `POST /businesses/:businessId/ownership/transfer`: el
+   *    dueño entrega a otro acceso vivo del mismo negocio y queda como gerente
+   *    con el alcance de todas las sucursales.
+   *  - Un dueño de un negocio **inactivo** no tiene que entregar nada: el
+   *    negocio apagado libera a su dueño (D2) y la cuenta se borra con el
+   *    negocio en su sitio.
    */
   async deleteAccount(user: AuthUser): Promise<void> {
     const retained = await this.accounts.countRetained(user.id);
@@ -701,11 +698,11 @@ export class AuthService {
       throw new ConflictException({
         error: 'Conflict',
         message:
-          'This account still owns a business, and it cannot be deleted while ' +
-          'that is true. The business has to change hands first, and no route ' +
-          'in this version does that: an owner cannot be demoted, given up or ' +
-          'deleted, and ownership cannot be transferred. The account can be ' +
-          'deleted once the business is no longer yours.',
+          'This account still owns an active business, and it cannot be deleted ' +
+          'while that is true. Hand the business over to another live access ' +
+          'first, with POST /businesses/:businessId/ownership/transfer, and the ' +
+          'account can be deleted afterwards. An owner of an inactive business ' +
+          'can delete their account without transferring anything.',
       });
     }
 
@@ -739,7 +736,15 @@ export class AuthService {
       // answerable.
       await this.accounts.anonymise(user.id);
     } else {
-      await this.accounts.eraseAccount(user.id);
+      const erased = await this.accounts.eraseAccount(user.id);
+      if (!erased) {
+        // The erase found a live membership that the gate had not counted, and
+        // it closed it instead of taking the profile with it: the foreign key
+        // cascades, and a closed membership is still the record of who was
+        // here. The account is anonymised rather than erased —the profile
+        // survives, scrubbed— which is the branch the gate would have chosen.
+        await this.accounts.anonymise(user.id);
+      }
     }
 
     this.logger.log({ event: 'account_deleted', userId: user.id });

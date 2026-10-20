@@ -1,10 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, eq, isNull } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import {
+  businessMemberLocations,
   businessMembers,
   businessOwnership,
+  businesses,
   consumerNotificationPreferences,
   deviceTokens,
   favorites,
@@ -16,6 +18,15 @@ import {
   userConsents,
   userPreferences,
 } from '../../database/schema';
+
+/**
+ * The transaction handle Drizzle hands to a `transaction()` callback.
+ *
+ * It is spelled out because the release of a business's ownership is a helper
+ * that BOTH branches call: `anonymise` and `eraseAccount` have to release the
+ * ownership BEFORE they close the memberships, and that order IS the rule.
+ */
+type AccountTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 /**
  * Rows that point at a profile and belong to somebody ELSE — a customer's
@@ -95,6 +106,18 @@ export class AuthAccountRepository {
    * caller has to do something before the erase (degrade or hand over), because
    * §5.4 says a business is not left without anyone who can administer it. It
    * counts LIVE owner rows only — an archived one is history and grants nothing.
+   *
+   * ─── Y SOLO CUENTA DUEÑOS DE NEGOCIOS ACTIVOS ─────────────────────────────────
+   *
+   * Un negocio INACTIVO no es un negocio que alguien pueda administrar: está
+   * apagado, y su dueño se va con él (D2). Contar su dueño como una razón para
+   * no borrar la cuenta es una jaula sin salida: el dueño no puede transferir
+   * un negocio que no existe a efectos del negocio, y la única puerta que
+   * existe —la liberación— es la que le deja borrar su cuenta.
+   *
+   * El join con `businesses.is_active` es lo que convierte el número en la
+   * puerta que el plan describe: la cuenta de un dueño de un negocio activo
+   * sigue bloqueada, y la de un dueño de un negocio inactivo no.
    */
   async countRetained(userId: string): Promise<RetainedRecords> {
     const [orderCount] = await this.db
@@ -112,11 +135,13 @@ export class AuthAccountRepository {
     const [ownerMembershipCount] = await this.db
       .select({ c: count() })
       .from(businessMembers)
+      .innerJoin(businesses, eq(businesses.id, businessMembers.business_id))
       .where(
         and(
           eq(businessMembers.user_id, userId),
           eq(businessMembers.role, 'owner'),
           isNull(businessMembers.deleted_at),
+          eq(businesses.is_active, true),
         ),
       );
     const [reviewCount] = await this.db
@@ -236,6 +261,28 @@ export class AuthAccountRepository {
    */
   async anonymise(userId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // FIRST, and before anything is archived: the ownership of the
+      // businesses this account owns is RELEASED, not archived.
+      //
+      // ─── POR QUÉ UNA FUNCIÓN DE LA BASE Y NO UN `DELETE` AQUÍ ─────────────────
+      //
+      // Porque «liberado» es una regla de TRES partes —la membresía de dueño
+      // archivada, su alcance archivado y la fila de `business_ownership`
+      // borrada— y la base es la frontera (ADR-0002): el móvil escribe directo
+      // a Supabase y no pasa por esta API. La función
+      // `public.release_business_ownership` la dice una vez, y esta API la
+      // PREGUNTA.
+      //
+      // ─── Y POR QUÉ VA PRIMERO, Y NO DESPUÉS ───────────────────────────────────
+      //
+      // Porque la liberación exige que el actor sea el dueño VIVO del negocio:
+      // si las membresías se archivaran primero, la liberación no encontraría a
+      // su dueño, la fila de `business_ownership` sobreviviría nombrando a una
+      // persona que se va, y el negocio quedaría diciendo que tiene un dueño
+      // que no tiene. Es el huérfano silencioso, y el ORDEN es lo que lo
+      // evita.
+      await this.releaseOwnedBusinesses(tx, userId);
+
       await tx
         .update(profiles)
         .set({
@@ -261,6 +308,27 @@ export class AuthAccountRepository {
           ),
         );
 
+      // Y las filas de ALCANCE, con ellas. El §8 pide marcar `deleted_at` en
+      // `business_members` Y en sus `business_member_locations`, y las dos
+      // tablas discrepaban sobre qué significaba (ítem 14 de la herencia): una
+      // membresía archivada con su alcance vivo sigue diciendo «esta persona
+      // llegaba a esta sucursal» de alguien que ya no está.
+      const memberIds = await tx
+        .select({ id: businessMembers.id })
+        .from(businessMembers)
+        .where(eq(businessMembers.user_id, userId));
+      if (memberIds.length > 0) {
+        await tx
+          .update(businessMemberLocations)
+          .set({ deleted_at: new Date(), updated_at: new Date() })
+          .where(
+            inArray(
+              businessMemberLocations.member_id,
+              memberIds.map((member) => member.id),
+            ),
+          );
+      }
+
       await tx
         .update(marketingPreferences)
         .set({ is_subscribed: false, unsubscribed_at: new Date() })
@@ -278,6 +346,48 @@ export class AuthAccountRepository {
       // what the person can no longer be reached at, then what they published.
       await tx.delete(reviews).where(eq(reviews.user_id, userId));
     });
+  }
+
+  /**
+   * The ownership of the businesses this account owns, RELEASED.
+   *
+   * The rule of what a release is lives in the database
+   * (`public.release_business_ownership`): the owner's membership is archived,
+   * its scope rows are archived with it, and the `business_ownership` row of
+   * that business is deleted —because that row is the one the mobile reads to
+   * know whose business it is, and leaving it names a person who is leaving.
+   *
+   * The business itself is NOT deleted and NOT reactivated: a retirement is
+   * not a deletion. The other members are NOT touched: the team that stays
+   * stays, with its scope, and it is the team that receives the owner back
+   * when the platform returns one.
+   *
+   * AND IT FAILS LOUDLY WHEN IT MUST: the function refuses with `R0004` when
+   * the business is still ACTIVE —an active business does not release its
+   * owner, it hands it over (`POST /businesses/:id/ownership/transfer`)— and
+   * the refusal carries that reason, which is the sentence a person reading
+   * the failure needs.
+   */
+  private async releaseOwnedBusinesses(
+    tx: AccountTransaction,
+    userId: string,
+  ): Promise<void> {
+    const owned = await tx
+      .select({ businessId: businessMembers.business_id })
+      .from(businessMembers)
+      .where(
+        and(
+          eq(businessMembers.user_id, userId),
+          eq(businessMembers.role, 'owner'),
+          isNull(businessMembers.deleted_at),
+        ),
+      );
+
+    for (const { businessId } of owned) {
+      await tx.execute(
+        sql`select public.release_business_ownership(${businessId}::uuid, ${userId}::uuid)`,
+      );
+    }
   }
 
   /**
@@ -313,11 +423,60 @@ export class AuthAccountRepository {
    * `business_ownership` (zero by the gate, and deleting a business here would
    * be the cascade disaster `countRetained` exists to prevent).
    *
+   * ─── Y LAS MEMBRESÍAS, QUE ANTES DE ESTO NO TENÍAN GUARDA PROPIA ────────────
+   *
+   * `business_members.user_id` es `ON DELETE CASCADE` desde `profiles`, así que
+   * borrar el perfil se lleva la fila de la membresía con él —y con ella el
+   * alias, que el índice único `business_members_alias_key` NO libera a
+   * propósito, y el registro de quién estuvo en el equipo. El trigger
+   * `trg_enforce_owner_cannot_be_deleted` sólo protege las filas de DUEÑO
+   * vivas: una fila de `staff` se la lleva la cascada sin que nadie lo note
+   * (ítem 13 de la herencia).
+   *
+   * Por eso, si esta rama encontrara una membresía —VIVA o ya cerrada—, la
+   * cierra y NO borra el perfil: el perfil es lo que cascadea, y borrarlo
+   * dejaría la fila archivada en el aire. La puerta (`countRetained`) manda a
+   * toda cuenta con membresía a la rama de anonimizar, que conserva el perfil;
+   * esto es la defensa en profundidad para el caso de que la puerta se esquive.
+   *
+   * Y la LIBERACIÓN va antes que el archivado, por el mismo motivo que en
+   * `anonymise`: la liberación exige que el actor sea el dueño vivo, y si las
+   * membresías se cerraran primero la fila de `business_ownership` sobreviviría
+   * nombrando a una persona que se va.
+   *
    * One transaction: a partial erase is the one outcome that is worse than not
    * erasing at all.
    */
   async eraseAccount(userId: string): Promise<boolean> {
     return this.db.transaction(async (tx) => {
+      await this.releaseOwnedBusinesses(tx, userId);
+
+      const liveMembers = await tx
+        .select({ id: businessMembers.id })
+        .from(businessMembers)
+        .where(eq(businessMembers.user_id, userId));
+
+      if (liveMembers.length > 0) {
+        const ids = liveMembers.map((member) => member.id);
+        await tx
+          .update(businessMembers)
+          .set({ deleted_at: new Date(), updated_at: new Date() })
+          .where(
+            and(
+              inArray(businessMembers.id, ids),
+              isNull(businessMembers.deleted_at),
+            ),
+          );
+        await tx
+          .update(businessMemberLocations)
+          .set({ deleted_at: new Date(), updated_at: new Date() })
+          .where(inArray(businessMemberLocations.member_id, ids));
+
+        // The profile stays: deleting it would take the closed memberships with
+        // it, and a closed membership is still the record of who was here.
+        return false;
+      }
+
       await tx
         .delete(consumerNotificationPreferences)
         .where(eq(consumerNotificationPreferences.user_id, userId));

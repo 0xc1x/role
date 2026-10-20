@@ -73,6 +73,19 @@ export type OwnershipTransferResult = {
 };
 
 /**
+ * What `public.assign_business_ownership` answers: the three identifiers of the
+ * recovery, and nothing else.
+ *
+ * It is the receipt of a transaction, exactly like the transfer's: the API
+ * turns it into the DTO of the membership it names.
+ */
+export type OwnershipAssignResult = {
+  business_id: string;
+  owner_member_id: string;
+  owner_user_id: string;
+};
+
+/**
  * Every read of a membership filters `deleted_at is null`.
  *
  * §6.3 lists who has to: the helpers, the policies, the limit trigger and this
@@ -557,6 +570,79 @@ export class StaffRepository {
     }
 
     return JSON.parse(raw) as OwnershipTransferResult;
+  }
+
+  /**
+   * `public.assign_business_ownership(business_id, member_id)`: the platform
+   * gives a business its owner back.
+   *
+   * ─── POR QUÉ ES UNA FUNCIÓN DISTINTA A LA DE LA TRANSFERENCIA ────────────────
+   *
+   * Porque son dos hechos y dos permisos: la transferencia la pide el dueño,
+   * que es quien entrega, y la recuperación la pide la plataforma, que es quien
+   * rescata. Una bandera en la misma función sería un interruptor para saltarse
+   * la primera regla.
+   *
+   * ─── Y POR QUÉ NO HAY IDENTIFICADOR DEL QUE PIDE ─────────────────────────────
+   *
+   * Porque la función no lo necesita: la base no sabe de `app_role`, y el
+   * permiso de plataforma lo comprueba la API (`user.role === 'admin'`). La
+   * función es ejecutable sólo por el servicio —el ACL es `{postgres,
+   * service_role}`— así que el móvil no la puede abrir.
+   *
+   * ─── Y EL `R0004` NO SE ENVUELVE ────────────────────────────────────────────
+   *
+   * Por la misma razón que en la transferencia: es una regla de negocio con su
+   * mensaje, y el servicio la traduce a un 422 con ese mensaje.
+   */
+  async assignOwnership(
+    businessId: string,
+    memberId: string,
+    callerUserId: string,
+  ): Promise<OwnershipAssignResult> {
+    const claims = JSON.stringify({ sub: callerUserId, role: 'authenticated' });
+
+    const rows = (await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('request.jwt.claims', ${claims}, true)`,
+      );
+      return tx.execute(
+        sql`select public.assign_business_ownership(${businessId}::uuid, ${memberId}::uuid)::text as assignment`,
+      );
+    })) as { assignment: string }[];
+
+    const raw = rows[0]?.assignment;
+    if (typeof raw !== 'string') {
+      throw new Error(
+        'assign_business_ownership no devolvió una fila de jsonb legible',
+      );
+    }
+
+    return JSON.parse(raw) as OwnershipAssignResult;
+  }
+
+  /**
+   * `public.business_live_owner_count(business_id)`: how many LIVE owners this
+   * business has right now.
+   *
+   * ─── POR QUÉ LA BASE Y NO UN `SELECT` AQUÍ ───────────────────────────────────
+   *
+   * Porque la pregunta es del negocio, no de esta API: «¿tiene dueño vivo?» es
+   * lo que decide si la plataforma puede crear un acceso en él, y la respuesta
+   * tiene que ser la MISMA que la que da la función de recuperación —si esta API
+   * contara los dueños con su propio predicado, la puerta y la operación
+   * podrían discrepar, y un negocio que la puerta da por sin dueño podría
+   * tener dueño en la base—.
+   *
+   * Y el predicado —`role = 'owner'`, `status = 'active'`, `deleted_at is null`—
+   * vive en la base, en una función, y no en dos sitios.
+   */
+  async liveOwnerCount(businessId: string): Promise<number> {
+    const rows = (await this.db.execute(
+      sql`select public.business_live_owner_count(${businessId}::uuid)::int as live_owners`,
+    )) as { live_owners: number }[];
+
+    return Number(rows[0]?.live_owners ?? 0);
   }
 
   /**

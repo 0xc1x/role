@@ -241,6 +241,21 @@ describe('StaffService', () => {
         new_owner_member_id: MEMBER_STAFF,
         new_owner_user_id: STAFF_USER,
       })),
+      /**
+       * La RECUPERACIÓN, como la contesta la base: los tres identificadores de
+       * la operación.
+       */
+      assignOwnership: jest.fn(async () => ({
+        business_id: BIZ,
+        owner_member_id: MEMBER_STAFF,
+        owner_user_id: STAFF_USER,
+      })),
+      /**
+       * Los DUEÑOS VIVOS del negocio. El default es UNO —el negocio con
+       * dueño— y por eso la rama de la plataforma está cerrada en el default: la
+       * rama sólo se abre en un negocio que se quedó sin dueño.
+       */
+      liveOwnerCount: jest.fn(async () => 1),
     };
 
     authAdmin = {
@@ -1829,6 +1844,145 @@ describe('StaffService', () => {
       const message = (error as UnprocessableEntityException).message;
       expect(message).toContain('/ownership/transfer');
       expect(message).not.toContain('no existe en esta versión');
+    });
+  });
+
+  /**
+   * La RECUPERACIÓN: la plataforma le devuelve el dueño a un negocio que se
+   * quedó sin él.
+   *
+   * ─── POR QUÉ NO SE REIMPLEMENTA LA BASE ──────────────────────────────────────
+   *
+   * El doble de `assignOwnership` contesta lo que contesta la FUNCIÓN —los tres
+   * identificadores de la operación— y no simula el efecto: el efecto lo mide el
+   * spec de base, contra la base de verdad. Lo que se mide acá es la capa de
+   * arriba: QUIÉN puede pedir la recuperación, qué se devuelve, qué se registra y
+   * cómo se traduce un refusal.
+   */
+  describe('la recuperación del dueño', () => {
+    beforeEach(() => {
+      // La fila en su estado NUEVO, porque el servicio vuelve a leerla para
+      // armar la respuesta: un doble que devolviera el estado viejo
+      // contestaría con un roster que contradice la recuperación.
+      repository.findMemberById.mockResolvedValue(
+        memberRow({
+          id: MEMBER_STAFF,
+          user_id: STAFF_USER,
+          role: 'owner',
+          label: 'Carla',
+        }),
+      );
+    });
+
+    it('el admin puede darle el dueño a un negocio sin dueño', async () => {
+      const result = await service.restoreOwnership(admin, BIZ, {
+        member_id: MEMBER_STAFF,
+      });
+
+      // Y la respuesta es la membresía que quedó como dueña.
+      expect(result.owner.id).toBe(MEMBER_STAFF);
+      expect(result.owner.role).toBe('owner');
+
+      // Y la llamada a la base lleva el negocio, el miembro y QUIÉN PIDE.
+      expect(repository.assignOwnership).toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_STAFF,
+        admin.id,
+      );
+    });
+
+    it('un dueño no puede usar la ruta de recuperación', async () => {
+      const error = await service
+        .restoreOwnership(owner, BIZ, { member_id: MEMBER_STAFF })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).message).toContain('plataforma');
+
+      // Y no se llamó a la base: la puerta se cerró antes.
+      expect(repository.assignOwnership).not.toHaveBeenCalled();
+    });
+
+    it('un R0004 de la base se traduce a un 422 con el motivo', async () => {
+      repository.assignOwnership.mockRejectedValue(
+        pgError('R0004', {
+          message: 'este negocio ya tiene un dueño: usá la transferencia',
+        }),
+      );
+
+      const error = await service
+        .restoreOwnership(admin, BIZ, { member_id: MEMBER_STAFF })
+        .catch((err: unknown) => err);
+
+      // 422 y no 500: un refusal que llega como 500 es un refusal que el panel
+      // no puede pintar.
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      const message = (error as UnprocessableEntityException).message;
+      expect(message).toContain('ya tiene un dueño');
+      expect(message).not.toContain('R0004');
+    });
+
+    it('la recuperación queda registrada con quién la pidió', async () => {
+      // La auditoría de esta operación es el log estructurado —el mismo
+      // `event` que el resto de las operaciones del equipo—, y no una tabla
+      // nueva: el repo no tiene una tabla de auditoría de negocio, y el log es
+      // lo que el negocio puede leer cuando pregunta quién devolvió qué.
+      const logs = captureLogs();
+
+      await service.restoreOwnership(admin, BIZ, { member_id: MEMBER_STAFF });
+
+      const event = logs.find(
+        (entry) =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          (entry as { event?: string }).event === 'business_ownership_restored',
+      );
+      expect(event).toBeDefined();
+      expect(event).toMatchObject({
+        businessId: BIZ,
+        ownerMemberId: MEMBER_STAFF,
+        restoredBy: admin.id,
+      });
+    });
+
+    it('la recuperación no devuelve el PIN de nadie', async () => {
+      const result = await service.restoreOwnership(admin, BIZ, {
+        member_id: MEMBER_STAFF,
+      });
+
+      expect(Object.keys(result)).toEqual(['owner']);
+      expect(JSON.stringify(result)).not.toContain('pin');
+    });
+
+    it('el admin puede crear un acceso en un negocio SIN dueño', async () => {
+      // La rama de la plataforma: un negocio cuyo dueño se fue puede quedarse
+      // sin ningún acceso, y la plataforma es la que puede poner a alguien.
+      repository.liveOwnerCount.mockResolvedValue(0);
+
+      const card = await service.create(admin, BIZ, {
+        label: 'Carla',
+        role: 'staff',
+      });
+
+      expect(card.alias).toBeTruthy();
+      expect(card.pin).toMatch(/^\d{6}$/);
+      // Y la comprobación es doble: el admin ES de la plataforma Y el negocio
+      // no tiene dueño vivo.
+      expect(repository.liveOwnerCount).toHaveBeenCalledWith(BIZ);
+    });
+
+    it('el admin NO puede crear un acceso en un negocio CON dueño', async () => {
+      // El default del doble es un negocio con dueño, y ahí la rama se cierra:
+      // un negocio con dueño lo administra su dueño, y el admin supervisa.
+      const error = await service
+        .create(admin, BIZ, { label: 'Carla', role: 'staff' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).message).toContain(
+        'Un negocio con dueño no se administra desde la plataforma',
+      );
+      expect(authAdmin.createUser).not.toHaveBeenCalled();
     });
   });
 

@@ -317,6 +317,27 @@ export const repository: Record<string, Mock> = {
       };
     },
   ),
+  /**
+   * La RECUPERACIÓN, como la contesta la BASE: los tres identificadores de la
+   * operación, y el rol nuevo escrito en `written` —el servicio vuelve a leer
+   * la fila para armar la respuesta—.
+   */
+  assignOwnership: jest.fn(
+    async (_businessId: string, memberId: string, _callerUserId: string) => {
+      written.set(memberId, { role: 'owner' });
+      return {
+        business_id: BIZ,
+        owner_member_id: memberId,
+        owner_user_id: STAFF_USER,
+      };
+    },
+  ),
+  /**
+   * Los DUEÑOS VIVOS del negocio, que es lo que decide si la plataforma puede
+   * crear un acceso en él. El default es UNO, que es el negocio con dueño: la
+   * rama de la plataforma sólo se abre en los negocios que se quedaron sin él.
+   */
+  liveOwnerCount: jest.fn(async (_businessId: string) => 1),
 };
 
 export const authAdmin = {
