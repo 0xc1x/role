@@ -2538,3 +2538,62 @@ more at the beginning.
 `business_ownership` in the UPSERT, and that table is retired in that task.
 The two functions of `20261020172601` and `20261020172817`, and the delete
 guard, use `to_regclass` and switch themselves off.
+
+## Applied: `20261020193222_shared_session_promise`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`e45f4622e83c3bb1d0c30d5f675c1d0f` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**One rule, and it is the combination.** «Expired» is two halves: the TTL is
+off, **or** there is a seal and the shared date has not passed. The ARITHMETIC
+—`last_authenticated_at + ttl hours`— has had one home since
+`20261015031154` (`business_member_session_expires_at`). The COMBINATION did
+not: it was written by hand in `business_member_session_valid`, written by
+hand in `can_manage_location` —the same rule, one in the negative and one in
+the positive— and written by hand in TypeScript, in
+`apps/api/src/database/business-membership.ts`.
+
+**Three copies of a rule is three rules that can drift apart, and the drift is
+silent.** The catalog guard reads `pg_proc.prosrc`, so it can only see the SQL
+copies: a migration that changed the definition of «expired» in SQL
+desynchronised the API with no error and no failing test. It was verified on
+this branch: with the OLD code, a migration that turns the boundary
+instant—`expires_at < now()` into `expires_at <= now()`—leaves the whole API
+suite with the same ten pre-existing failures, because the API's own copy of
+the rule does not move with the base's. With the NEW code, the same mutation
+turns one test red, and it names the case that moved: «la fecha compartida
+vence justo ahora».
+
+**`public.business_member_session_inside_promise(ttl, seal)`** is the new home
+of the combination: `stable`, qualified body, `search_path = ''`, WITHOUT
+`security definer` because it reads no row—it answers about the TTL and the
+seal it was given, not about anybody's state—and ACL
+`{postgres, service_role, authenticated}`, the same as its sister.
+
+**Why `STABLE` and not `IMMUTABLE`**: it compares against `now()`, and `now()`
+is `STABLE`. The arithmetic stays `IMMUTABLE`, which is where it belongs: it
+does not depend on the clock.
+
+**`business_member_session_valid` and `can_manage_location` call it.** No
+policy changes, and no behaviour changes: the thirteen policies that read
+`can_manage_location` read the same thing, because what the helper answers is
+exactly what it answered. `business_member_session_state`—the one that
+EXPLAINS—is NOT touched: same `reason`, same `jsonb` shape, same
+`expires_at`.
+
+**One grant that looks like nothing and is not**: `service_role` gets EXECUTE
+on `business_member_session_expires_at`. In production it already had it
+(measured: the ACL is `{postgres, service_role, authenticated}`), so the grant
+is a no-op there. In the TEST MIRROR it did not, because the harness does not
+replicate the project's `pg_default_acl` for functions—and the new function
+is `SECURITY INVOKER`, so a `service_role` call to it ran the inner call as
+`service_role` and got `42501 permission denied for function`. The mirror
+would have refused a call that production grants, and a test that asserts
+«this works» on a mirror that lies is a test that proves nothing.
+
+**The ledger's `rollback` is `NULL`**, so the rollback of this one is a NEW
+migration: drop the function and restore the three bodies. The text is in the
+sealed files `20261015031154_shared_ttl_expiry_accounting.sql`,
+`20261015024825_business_policy_tightening.sql` and
+`20261020152852_location_scope_in_policies.sql`, **copied, not edited**.

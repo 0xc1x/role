@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import postgres, { type Sql } from 'postgres';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import {
   BUSINESS_FEATURES,
   BUSINESS_PLAN_FEATURES,
@@ -14,6 +15,8 @@ import {
   splitStatements,
   type SupabaseTestDb,
 } from '../../../test/supabase-platform';
+import { liveMembership } from '../business-membership';
+import { PROMISE_CASES, promiseAnswers } from '../../../test/session-promise';
 
 /**
  * Las tres tablas de acceso por sucursal y su perímetro, antes de que exista una
@@ -1153,6 +1156,42 @@ describe('los helpers de permiso', () => {
   }
 
   /**
+   * What the API's OWN predicate says about that person's memberships, and
+   * what the database's function says about the same rows.
+   *
+   * ─── Por qué esto corre el SQL de la API y no una copia ────────────────────
+   *
+   * Porque una copia sería una tercera cuenta de la misma regla, y esta
+   * archivo existe para que no las haya. El predicado sale de
+   * `src/database/business-membership.ts` con el mismo renderizador que usa
+   * el driver, y lo ejecuta la base: lo que se compara es lo que la API
+   * manda, no lo que este archivo dice que la API manda.
+   *
+   * Las filas que se comparan son las de la persona: sus membresías VIVAS
+   * (`deleted_at is null`, `status = 'active'`). Las otras dos condiciones
+   * las filtra el predicado y no la promesa, así que la promesa no tiene nada
+   * que decir de ellas.
+   */
+  async function apiPromiseVerdict(userId: string) {
+    const rendered = new PgDialect().sqlToQuery(liveMembership(userId));
+    return as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string; sql_says: boolean; api_says: boolean }[]>(
+        `select business_members.id::text as id,
+                public.business_member_session_inside_promise(
+                  business_members.session_ttl_hours,
+                  business_members.last_authenticated_at
+                ) as sql_says,
+                (${rendered.sql}) as api_says
+         from public.business_members
+         where business_members.user_id = $1
+           and business_members.deleted_at is null
+           and business_members.status = 'active'`,
+        rendered.params,
+      ),
+    );
+  }
+
+  /**
    * Every feature of the enum, resolved for one business.
    *
    * The keys come from `enum_range`, NOT from a hand-written list, so adding a
@@ -1381,15 +1420,37 @@ describe('los helpers de permiso', () => {
     // la matriz falla cuando alguien tropieza con el caso, no cuando alguien
     // reintroduce el duplicado. Lo que hace falta es que la redundancia no exista.
     //
-    // Por eso esto mira el CUERPO de las cuatro funciones y no su respuesta:
-    // exactamente una puede tener escrita la cuenta, y las otras tres tienen que
-    // llamarla.
+    // Por eso esto mira el CUERPO de las funciones y no su respuesta: exactamente
+    // una puede tener escrita la cuenta, y las demás tienen que llamarla.
     //
     // Y se afirma la SUSTANCIA —`security definer`, `search_path = ''`, la lista
     // de argumentos, la volatilidad— y no el texto entero del `functiondef`. Un
     // cuerpo pegado con sus saltos de línea y sus espacios falla el test con un
     // reformateo que no cambia una sola cosa del comportamiento, y un test que se
     // rompe por eso enseña a ignorar los que importan.
+    //
+    // ─── LA CADENA, Y POR QUÉ SON DOS ESLABONES Y NO UNO ─────────────────────
+    //
+    // La cadena de la promesa tiene DOS eslabones, y cada uno tiene su regla:
+    //
+    //   business_member_session_expires_at    la ARITMÉTICA: cuándo vence
+    //   business_member_session_inside_promise la COMBINACIÓN: si está viva
+    //
+    // El segundo eslabón es nuevo: antes, la COMBINACIÓN —TTL apagado **o**
+    // (sello presente **y** la fecha no pasó)— estaba escrita a mano en
+    // `business_member_session_valid` y en `can_manage_location`, y en
+    // TypeScript. Ahora está en un lugar, y los dos que DECIDEN la llaman.
+    //
+    // Por eso las columnas se leen del CUERPO SIN COMENTARIOS, y no del
+    // `functiondef`: el `functiondef` incluye el NOMBRE de la función en su
+    // encabezado —así que una función «se llama a sí misma» para un `like` y la
+    // afirmación queda vacía— y el CUERPO incluye los comentarios, que nombran
+    // funciones sin llamarlas. Un guard que confunde «nombrar» con «llamar»
+    // grita por nada, y un guard que grita por nada se apaga.
+    //
+    // Con el cuerpo limpio las tres afirmaciones son exactas: una función
+    // tiene la aritmética, dos la llaman, y dos llaman a la combinación sin
+    // nombrarla.
     const ttlShapes = await as(ctx.sql, 'service_role', null, (tx) =>
       tx.unsafe<
         {
@@ -1400,32 +1461,46 @@ describe('los helpers de permiso', () => {
           search_path: string | null;
           computes_inline: boolean;
           calls_shared: boolean;
+          calls_promise: boolean;
         }[]
       >(`
-        select p.proname as fn,
-               pg_get_function_identity_arguments(p.oid) as args,
-               p.prosecdef as secdef,
-               p.provolatile as volatile,
-               p.proconfig::text as search_path,
-               pg_get_functiondef(p.oid) like '%interval ''1 hour''%' as computes_inline,
-               pg_get_functiondef(p.oid) like '%business_member_session_expires_at%'
-                 as calls_shared
-        from pg_proc p
-        join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public'
-          and p.proname in ('business_member_session_expires_at',
-                            'business_member_session_valid',
-                            'can_manage_location',
-                            'business_member_session_state')
-        order by p.proname`),
+        with bodies as (
+          select p.proname as fn,
+                 pg_get_function_identity_arguments(p.oid) as args,
+                 p.prosecdef as secdef,
+                 p.provolatile as volatile,
+                 p.proconfig::text as search_path,
+                 regexp_replace(p.prosrc, E'--[^\\n]*', '', 'g') as body
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in ('business_member_session_expires_at',
+                              'business_member_session_inside_promise',
+                              'business_member_session_valid',
+                              'can_manage_location',
+                              'business_member_session_state')
+        )
+        select fn,
+               args,
+               secdef,
+               volatile,
+               search_path,
+               body like '%interval ''1 hour''%' as computes_inline,
+               body like '%business_member_session_expires_at%' as calls_shared,
+               body like '%business_member_session_inside_promise%' as calls_promise
+        from bodies
+        order by fn`),
     );
     expect(
       plainRows(ttlShapes),
       'la cuenta de la expiración volvió a estar copiada, o dejó de estar ' +
         'compartida. Exactamente UNA función puede tener escrita la aritmética ' +
-        '—`business_member_session_expires_at`— y las otras tres tienen que ' +
-        'llamarla. Con dos copias, la que autoriza y la que explica pueden dejar ' +
-        'de contar la misma historia, y el §5.2 dice que no pueden.',
+        '—`business_member_session_expires_at`— y las demás tienen que ' +
+        'llamarla. La COMBINACIÓN tiene su propio lugar ' +
+        '—`business_member_session_inside_promise`—, que es el que la llama, y ' +
+        'las dos que DECIDEN la llaman sin escribirla. Con dos copias, la que ' +
+        'autoriza y la que explica pueden dejar de contar la misma historia, y ' +
+        'el §5.2 dice que no pueden.',
     ).toEqual([
       {
         fn: 'business_member_session_expires_at',
@@ -1434,7 +1509,18 @@ describe('los helpers de permiso', () => {
         volatile: 'i',
         search_path: '{"search_path=\\"\\""}',
         computes_inline: true,
+        calls_shared: false,
+        calls_promise: false,
+      },
+      {
+        fn: 'business_member_session_inside_promise',
+        args: 'p_session_ttl_hours integer, p_last_authenticated_at timestamp with time zone',
+        secdef: false,
+        volatile: 's',
+        search_path: '{"search_path=\\"\\""}',
+        computes_inline: false,
         calls_shared: true,
+        calls_promise: false,
       },
       {
         fn: 'business_member_session_state',
@@ -1444,6 +1530,7 @@ describe('los helpers de permiso', () => {
         search_path: '{"search_path=\\"\\""}',
         computes_inline: false,
         calls_shared: true,
+        calls_promise: false,
       },
       {
         fn: 'business_member_session_valid',
@@ -1452,7 +1539,8 @@ describe('los helpers de permiso', () => {
         volatile: 's',
         search_path: '{"search_path=\\"\\""}',
         computes_inline: false,
-        calls_shared: true,
+        calls_shared: false,
+        calls_promise: true,
       },
       {
         fn: 'can_manage_location',
@@ -1461,7 +1549,8 @@ describe('los helpers de permiso', () => {
         volatile: 's',
         search_path: '{"search_path=\\"\\""}',
         computes_inline: false,
-        calls_shared: true,
+        calls_shared: false,
+        calls_promise: true,
       },
     ]);
 
@@ -1499,6 +1588,242 @@ describe('los helpers de permiso', () => {
       { ttl: 24, hours_ago: 1, expires: true },
       { ttl: 24, hours_ago: null, expires: false },
     ]);
+  });
+
+  // ─── LA COMBINACIÓN DE «VENCIDA», QUE ESTABA EN DOS LUGARES ───────────────
+  //
+  // La ARITMÉTICA —`last_authenticated_at + ttl horas`— tuvo un solo sitio
+  // desde `20261015031154`. La COMBINACIÓN —las dos mitades de «vencida»
+  // juntas— no: estaba escrita a mano en `business_member_session_valid` y en
+  // `can_manage_location`, y en TypeScript, en
+  // `apps/api/src/database/business-membership.ts`.
+  //
+  // Y lo que hace daño de una copia no es que esté mal: es que se puede
+  // apartar SIN QUE NADIE LO NOTE. Una migración que cambia la definición de
+  // «vencida» en SQL deja la API con su propia cuenta, y no hay error, no hay
+  // excepción y no hay diferencia en ninguna respuesta: la API sigue
+  // concediendo con su regla y la base con la suya.
+  //
+  // Estos tres tests son la defensa, y son tres porque hay tres cosas que
+  // pueden romperse:
+  //
+  //   1. que la combinación vuelva a estar ESCRITA en los dos que deciden;
+  //   2. que la función y TypeScript no den la misma respuesta;
+  //   3. que el predicado que la API manda a la base y la función no elijan
+  //      las mismas filas.
+  //
+  // ─── 1. LA COMBINACIÓN VIVE UNA SOLA VEZ ───────────────────────────────────
+
+  test('la combinación de «vencida» vive una sola vez', async () => {
+    // Se mira el CUERPO, y el CUERPO sin comentarios: la respuesta puede
+    // coincidir con dos copias escritas a mano, y lo que hay que afirmar es
+    // que no HAY dos copias. Un comentario que nombra una función no es una
+    // llamada, y un guard que no lo sabe grita por nada.
+    //
+    // Las tres columnas son las tres maneras de escribir la regla a mano:
+    //
+    //   - `compares_now`: la comparación contra el reloj. La combinación
+    //     compara la fecha compartida con `now()`, así que un cuerpo que
+    //     compara contra `now()` está haciendo la regla él mismo.
+    //   - `writes_ttl_zero`: la mitad del TTL apagado. La combinación empieza
+    //     por `ttl = 0`, así que un cuerpo que compara el TTL con cero está
+    //     haciendo la regla él mismo.
+    //   - `calls_promise`: la llamada a la función que la tiene.
+    //
+    // Y `business_member_session_inside_promise` aparece en la lista para que
+    // se vea dónde está: es la que tiene el reloj y el TTL apagado, y es la
+    // única que puede.
+    const shapes = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          fn: string;
+          calls_promise: boolean;
+          compares_now: boolean;
+          writes_ttl_zero: boolean;
+        }[]
+      >(`
+        with bodies as (
+          select p.proname as fn,
+                 regexp_replace(p.prosrc, E'--[^\\n]*', '', 'g') as body
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in ('business_member_session_valid',
+                              'can_manage_location',
+                              'business_member_session_inside_promise')
+        )
+        select fn,
+               body like '%business_member_session_inside_promise%' as calls_promise,
+               body like '%now()%' as compares_now,
+               body ~ 'session_ttl_hours[[:space:]]*=[[:space:]]*0' as writes_ttl_zero
+        from bodies
+        order by fn`),
+    );
+    expect(
+      plainRows(shapes),
+      'la combinación de «vencida» volvió a estar escrita a mano, o dejó de ' +
+        'estar en un solo sitio. Los dos que DECIDEN —`business_member_session_valid` ' +
+        'y `can_manage_location`— tienen que PREGUNTAR a ' +
+        '`business_member_session_inside_promise`, no escribirla. Si la ' +
+        'escriben, hay dos reglas que pueden apartarse, y el §5.2 dice que la ' +
+        'que autoriza y la que explica nunca se contradicen.',
+    ).toEqual([
+      {
+        fn: 'business_member_session_inside_promise',
+        calls_promise: false,
+        compares_now: true,
+        writes_ttl_zero: true,
+      },
+      {
+        fn: 'business_member_session_valid',
+        calls_promise: true,
+        compares_now: false,
+        writes_ttl_zero: false,
+      },
+      {
+        fn: 'can_manage_location',
+        calls_promise: true,
+        compares_now: false,
+        writes_ttl_zero: false,
+      },
+    ]);
+  });
+
+  // ─── 2. LAS CUATRO MITADES, Y QUE SQL Y TYPESCRIPT DIGAN LO MISMO ──────────
+
+  test('las cuatro mitades de la promesa', async () => {
+    // La matriz vive en `test/session-promise.ts` y la comparten los dos
+    // lados: el oráculo de TypeScript y esta consulta. Los casos se arman
+    // desde la matriz, para que la lista de la base y la del oráculo no
+    // puedan separarse sin que se note.
+    const values = PROMISE_CASES.map(
+      (aCase) =>
+        `('${aCase.name.replace(/'/g, "''")}', ${aCase.ttlHours}::int, ` +
+        `${
+          aCase.sealedOffsetHours === null ? 'null' : aCase.sealedOffsetHours
+        }::int)`,
+    ).join(',\n          ');
+
+    // Se pregunta como `authenticated`, que es el rol con el grant y el mismo
+    // con el que el motor evalúa las policies.
+    const rows = await as(ctx.sql, 'authenticated', OWNER_A, (tx) =>
+      tx.unsafe<
+        {
+          name: string;
+          ttl: number;
+          inside: boolean;
+          expires_at: Date | null;
+        }[]
+      >(`
+        select c.name,
+               c.ttl,
+               public.business_member_session_inside_promise(
+                 c.ttl,
+                 case when c.offset_hours is null then null
+                      else now() + (c.offset_hours * interval '1 hour') end
+               ) as inside,
+               public.business_member_session_expires_at(
+                 c.ttl,
+                 case when c.offset_hours is null then null
+                      else now() + (c.offset_hours * interval '1 hour') end
+               ) as expires_at
+        from (values
+          ${values}
+        ) as c(name, ttl, offset_hours)`),
+    );
+
+    // El reloj del proceso. Cada caso es relativo a su propio «ahora», así que
+    // los dos relojes no tienen que coincidir: lo que se compara son las
+    // RESPUESTAS, no las fechas.
+    const oracle = promiseAnswers(new Date());
+
+    const answers = plainRows(rows).map((row) => ({
+      name: row.name,
+      inside: row.inside,
+      // La fecha compartida es `null` cuando el TTL está apagado o cuando nunca
+      // hubo sello: en los dos casos no hay sesión que pueda expirar.
+      expires_at_null: row.expires_at === null,
+    }));
+
+    expect(
+      answers,
+      'la función de la base no contesta lo mismo que el oráculo de ' +
+        'TypeScript. Las dos están midiendo la misma promesa, así que una ' +
+        'discrepancia significa que una de las dos cambió, y la que va a ' +
+        'equivocar es la que concede.',
+    ).toEqual(
+      PROMISE_CASES.map((aCase) => ({
+        name: aCase.name,
+        inside: oracle[aCase.name],
+        expires_at_null:
+          aCase.ttlHours === 0 || aCase.sealedOffsetHours === null,
+      })),
+    );
+
+    // Y el oráculo y la base dicen lo MISMO, caso por caso, y lo que dicen es
+    // lo que la promesa promete. La segunda aserción es la que hace el trabajo
+    // difícil: si la base cambiara su definición de «vencida», esta línea
+    // falla con el nombre del caso que se movió.
+    for (const row of answers) {
+      const aCase = PROMISE_CASES.find((c) => c.name === row.name);
+      expect(
+        row.inside,
+        `«${row.name}»: la base dice ${row.inside} y la promesa promete ` +
+          `${aCase?.expected}.`,
+      ).toBe(aCase?.expected);
+      expect(
+        row.inside,
+        `«${row.name}»: la base dice ${row.inside} y TypeScript dice ` +
+          `${oracle[row.name]}.`,
+      ).toBe(oracle[row.name]);
+    }
+  });
+
+  // ─── 3. EL PREDICADO DE LA API Y LA FUNCIÓN, SOBRE FILAS DE VERDAD ─────────
+
+  test('el predicado de la API y la función eligen las mismas filas', async () => {
+    // La prueba de arriba compara la FUNCIÓN con el ORÁCULO, y el oráculo es
+    // una cuenta hecha en TypeScript. Esta compara la FUNCIÓN con lo que la
+    // API manda de verdad: el SQL que Drizzle genera en
+    // `src/database/business-membership.ts`, ejecutado por la base, sobre
+    // filas que existen.
+    //
+    // Son las dos mitades de la misma afirmación: si el predicado de la API
+    // elige las mismas filas que la función, y la función da las mismas
+    // respuestas que el oráculo, entonces sacar la combinación de TypeScript
+    // no cambió el comportamiento de la API. Lo que no se puede afirmar con
+    // esta prueba es que la API y la base estén de acuerdo sobre una fila que
+    // las dos excluyen por otra razón —`deleted_at`, `status`—: esas las
+    // filtra el predicado, no la promesa.
+    const personas: readonly {
+      id: string;
+      label: string;
+      inside: boolean;
+    }[] = [
+      { id: OWNER_A, label: 'owner con sesión al día', inside: true },
+      { id: MEMBER_ETERNAL, label: 'staff sin TTL', inside: true },
+      { id: MEMBER_STALE, label: 'staff con sesión vencida', inside: false },
+      { id: MEMBER_UNSTAMPED, label: 'staff sin sello', inside: false },
+    ];
+
+    for (const persona of personas) {
+      const rows = await apiPromiseVerdict(persona.id);
+      expect(
+        rows.length,
+        `${persona.label}: el predicado de la API tiene que ver su fila, ` +
+          'que es lo que hace el resto de las pruebas de este archivo.',
+      ).toBe(1);
+      expect(
+        rows[0].sql_says,
+        `${persona.label}: la función de la base dice ${rows[0].sql_says}.`,
+      ).toBe(persona.inside);
+      expect(
+        rows[0].api_says,
+        `${persona.label}: el predicado que la API manda dice ` +
+          `${rows[0].api_says} y la función dice ${rows[0].sql_says}. Son la ` +
+          'misma promesa contada en dos lugares, y tienen que dar lo mismo.',
+      ).toBe(rows[0].sql_says);
+    }
   });
 
   // ─── LA MEMBRESÍA QUE RESPONDE SE ELIGE ENTRE LAS ACTIVAS ───────────────────

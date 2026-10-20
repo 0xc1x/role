@@ -971,6 +971,41 @@ export async function createTestDb(): Promise<TestDbContext> {
     $$;
   `);
 
+  // The COMBINATION of the two halves of «expired», copied VERBATIM from the
+  // ledger (`<version>_shared_session_promise.sql`).
+  //
+  // Why it is here: it is the same reason as the function above, one step up.
+  // The arithmetic was already shared, and the API asked the database for it;
+  // then the COMBINATION —TTL apagado **o** (sello presente **y** la fecha no
+  // pasó)— was still written in TypeScript, and a copy in a `.ts` file is
+  // invisible to the catalog guard that reads `pg_proc.prosrc`. So the
+  // combination moved to the database too, and the API asks for it.
+  //
+  // It is `STABLE` —not `IMMUTABLE`— because it compares against `now()`, and
+  // `now()` is stable: constant inside a transaction, different between them.
+  // It is not `SECURITY DEFINER` because it reads no row: it answers about the
+  // TTL and the seal it was given, not about anybody's state.
+  await client.unsafe(`
+    create or replace function public.business_member_session_inside_promise(
+      p_session_ttl_hours integer,
+      p_last_authenticated_at timestamptz
+    )
+    returns boolean
+    language sql
+    stable
+    set search_path = ''
+    as $$
+      select p_session_ttl_hours = 0
+          or (
+            p_last_authenticated_at is not null
+            and public.business_member_session_expires_at(
+                  p_session_ttl_hours,
+                  p_last_authenticated_at
+                ) >= now()
+          );
+    $$;
+  `);
+
   const db: TestDatabase = drizzle({ client });
   let stopped = false;
   return {
