@@ -66,6 +66,74 @@ function mockChain(result: {
 	return { calls, selectArgs };
 }
 
+/**
+ * A table-aware PostgREST double.
+ *
+ * `mockChain` answers every table with the same body, which is fine for a
+ * single-table read. `getBusinessesByOwnerId` reads TWO tables in order —the
+ * memberships, then the businesses they resolve to— so the double has to
+ * answer per table AND record which tables were asked, because the whole
+ * point of the specs below is WHICH table the owner's panel reads.
+ */
+function mockTables(
+	responses: Record<string, { data?: unknown; error?: unknown }>,
+) {
+	const tables: string[] = [];
+	const calls: Record<string, Record<string, unknown[][]>> = {};
+	const selects: Record<string, unknown[][]> = {};
+	fromMock.mockReset();
+	(fromMock as unknown as Mock<(table: string) => unknown>).mockImplementation(
+		(table: string) => {
+			tables.push(table);
+			calls[table] ??= {};
+			selects[table] ??= [];
+			const answer = responses[table] ?? { data: [], error: null };
+			const chain = {} as Record<string, (...args: unknown[]) => unknown> & {
+				then: unknown;
+			};
+			for (const method of ["eq", "is", "in", "order", "limit"]) {
+				calls[table][method] = [];
+				chain[method] = (...args: unknown[]) => {
+					calls[table][method]?.push(args);
+					return chain;
+				};
+			}
+			// biome-ignore lint/suspicious/noThenProperty: intentional thenable double
+			chain.then = (onF: unknown, onR: unknown) =>
+				Promise.resolve(answer).then(
+					onF as (value: typeof answer) => unknown,
+					onR as (reason: unknown) => unknown,
+				);
+			return {
+				select: (...args: unknown[]) => {
+					selects[table].push(args);
+					return chain;
+				},
+			};
+		},
+	);
+	return { tables, calls, selects };
+}
+
+/** A `businesses` row in the shape the owner's panel reads it. */
+const businessRow = {
+	id: "99999999-8888-7777-6666-555555555555",
+	name: "Café del Valle",
+	type: "restaurant",
+	slug: "cafe-del-valle",
+	image: null,
+	cover_image: null,
+	rating: null,
+	review_count: null,
+	description: null,
+	phone: null,
+	email: null,
+	website: null,
+	is_active: true,
+	created_at: "2026-01-01T00:00:00.000Z",
+	updated_at: "2026-01-01T00:00:00.000Z",
+};
+
 describe("image upload validation", () => {
 	test("detects supported image signatures and rejects arbitrary bytes", () => {
 		const bytes = (...values: number[]) => new Uint8Array(values).buffer;
@@ -282,5 +350,78 @@ describe("businessRepository paginated listing", () => {
 		});
 		expect(calls.eq).toContainEqual(["business_id", "b1"]);
 		expect(calls.limit).toContainEqual([1000]);
+	});
+});
+
+describe("businessRepository.getBusinessesByOwnerId", () => {
+	test("los negocios del dueño salen de sus membresías de dueño, no de business_ownership", async () => {
+		// The owner's panel resolves its businesses through the MEMBERSHIP
+		// model: the owner IS a live `business_members` row. Reading the legacy
+		// ownership table instead is the regression this pins down, so the
+		// assertion is about the TABLE, not about the data that came back.
+		const { tables, calls } = mockTables({
+			business_members: {
+				data: [{ business_id: businessRow.id }],
+				error: null,
+			},
+			businesses: { data: [businessRow], error: null },
+		});
+
+		const businesses =
+			await businessRepository.getBusinessesByOwnerId("owner-1");
+
+		expect(tables).toEqual(["business_members", "businesses"]);
+		expect(tables).not.toContain("business_ownership");
+
+		// The membership read is scoped to THIS user and to the LIVE owner
+		// rows: role, status and deleted_at are the same three halves the
+		// database's own `business_member_role()` uses to decide that somebody
+		// IS the owner. The RLS repeats the tenancy (`user_id = auth.uid()`),
+		// so a caller passing somebody else's id reads nothing.
+		expect(calls.business_members.eq).toContainEqual(["user_id", "owner-1"]);
+		expect(calls.business_members.eq).toContainEqual(["role", "owner"]);
+		expect(calls.business_members.eq).toContainEqual(["status", "active"]);
+		expect(calls.business_members.is).toContainEqual(["deleted_at", null]);
+
+		// And the businesses come from the ids those memberships resolved.
+		expect(calls.businesses.in).toContainEqual(["id", [businessRow.id]]);
+		expect(businesses).toHaveLength(1);
+		expect(businesses[0]?.id).toBe(businessRow.id);
+	});
+
+	test("un dueño que además tiene acceso de personal en el mismo negocio lo lista una sola vez", async () => {
+		// Two rows for the same business: the owner's own membership and a
+		// staff one. The panel lists a business ONCE — the id list is
+		// deduplicated before it asks for the businesses, so a membership read
+		// that answers with the same business twice cannot render it twice.
+		const { calls } = mockTables({
+			business_members: {
+				data: [
+					{ business_id: "biz-1", role: "owner", status: "active" },
+					{ business_id: "biz-1", role: "staff", status: "active" },
+				],
+				error: null,
+			},
+			businesses: { data: [businessRow], error: null },
+		});
+
+		await businessRepository.getBusinessesByOwnerId("owner-1");
+
+		const idCall = calls.businesses.in.find((args) => args[0] === "id");
+		expect(idCall?.[1]).toEqual(["biz-1"]);
+	});
+
+	test("sin membresías de dueño no se pregunta por negocios", async () => {
+		// The empty branch is the app's "you have no business" state, and it
+		// is a state the e2e asserts on the screen. Reaching for `businesses`
+		// with an empty id list would be a query that can only answer empty.
+		const { tables } = mockTables({
+			business_members: { data: [], error: null },
+		});
+
+		await expect(
+			businessRepository.getBusinessesByOwnerId("owner-1"),
+		).resolves.toEqual([]);
+		expect(tables).toEqual(["business_members"]);
 	});
 });

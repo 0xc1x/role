@@ -49,8 +49,8 @@ test.describe("business management screen", () => {
 		await page.goto("/management");
 		await waitForBusinessShell(page);
 
-		// The business name comes from `businesses` resolved THROUGH
-		// `business_ownership`, two hops from the session. A panel that
+		// The business name comes from `businesses` resolved THROUGH the
+		// owner's live membership, two hops from the session. A panel that
 		// rendered a hardcoded or first-row merchant would pass a "something
 		// is rendered" check; only the fixture's own name proves the ownership
 		// chain was walked.
@@ -71,17 +71,21 @@ test.describe("business management screen", () => {
 		).toBeVisible();
 	});
 
-	test("it reads the owner's businesses through business_ownership", async ({
+	test("it reads the owner's businesses through business_members", async ({
 		page,
 	}) => {
 		// The tenant boundary, asserted as a REQUEST.
 		//
-		// `getBusinessesByOwnerId` filters `business_ownership` by
-		// `owner_id = auth.uid()` and the RLS policy repeats that filter, so
+		// `getBusinessesByOwnerId` filters `business_members` by
+		// `user_id = auth.uid()` and the RLS policy repeats that filter, so
 		// this read is the only thing standing between "my businesses" and
 		// "every business". Asserting the rendered name proves the data
 		// arrived; asserting the call proves it arrived through the door that
 		// is scoped to the viewer.
+		//
+		// The owner is a MEMBERSHIP — `role = 'owner'`, `status = 'active'`,
+		// `deleted_at is null` — and the request has to say so: a read that
+		// left the role open would also return the owner's staff access.
 		const supabase = await stubSupabase(page, {
 			viewer: "business",
 			bodies: businessBodies(),
@@ -91,24 +95,36 @@ test.describe("business management screen", () => {
 		await waitForBusinessShell(page);
 		await expect(page.getByText(BUSINESS_NAME, { exact: true })).toBeVisible();
 
-		const ownership = supabase.callsTo("GET", "/rest/v1/business_ownership");
+		const memberships = supabase.callsTo("GET", "/rest/v1/business_members");
 		expect(
-			ownership.length,
-			"the panel resolved its business without asking business_ownership",
+			memberships.length,
+			"the panel resolved its business without asking business_members",
 		).toBeGreaterThan(0);
 		// And it asked for THIS viewer's row, not somebody else's.
 		expect(
-			ownership[0]?.route,
-			"the ownership read is not the one this suite thinks it is",
-		).toBe("GET /rest/v1/business_ownership");
+			memberships[0]?.route,
+			"the membership read is not the one this suite thinks it is",
+		).toBe("GET /rest/v1/business_members");
+		expect(
+			memberships[0]?.search,
+			"the membership read is not scoped to the viewer's own owner rows",
+		).toContain("user_id=eq.");
+		expect(memberships[0]?.search).toContain("role=eq.owner");
+		expect(memberships[0]?.search).toContain("status=eq.active");
+		expect(memberships[0]?.search).toContain("deleted_at=is.null");
+		// And it did NOT go through the legacy ownership table.
+		expect(
+			supabase.callsTo("GET", "/rest/v1/business_ownership").length,
+			"the panel still reads the legacy ownership table",
+		).toBe(0);
 	});
 
-	test("a FAILED ownership read is an error, never 'you have no business'", async ({
+	test("a FAILED membership read is an error, never 'you have no business'", async ({
 		page,
 	}) => {
 		// The assertion this file exists for.
 		//
-		// Only the ownership read fails. The splash's config prefetch and
+		// Only the membership read fails. The splash's config prefetch and
 		// every other query still answer, so a blanket black hole could not
 		// be mistaken for this state — the spec would be measuring the
 		// 6-second splash watchdog instead of the branch it claims to test.
@@ -116,9 +132,9 @@ test.describe("business management screen", () => {
 			viewer: "business",
 			bodies: businessBodies(),
 			fail: {
-				business_ownership: {
+				business_members: {
 					code: "42501",
-					message: "permission denied for table business_ownership",
+					message: "permission denied for table business_members",
 				},
 			},
 		});
@@ -147,7 +163,7 @@ test.describe("business management screen", () => {
 		await expect(page.getByText(/permission denied/i)).toHaveCount(0);
 	});
 
-	test("an EMPTY ownership read IS the 'no business' prompt", async ({
+	test("an EMPTY membership read IS the 'no business' prompt", async ({
 		page,
 	}) => {
 		// The mirror of the previous test, and it is what makes the pair
@@ -155,7 +171,7 @@ test.describe("business management screen", () => {
 		// which branch is which.
 		await stubSupabase(page, {
 			viewer: "business",
-			bodies: businessBodies({ business_ownership: [] }),
+			bodies: businessBodies({ business_members: [] }),
 		});
 
 		await page.goto("/management");

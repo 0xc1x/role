@@ -133,7 +133,7 @@ test.describe("business orders catalog", () => {
 		// while asking the server for every tenant's orders. Only the request
 		// can see that.
 		//
-		// The business id comes from `business_ownership`, NOT from the
+		// The business id comes from the owner's own MEMBERSHIP, NOT from the
 		// signed-in user id. The two coincide in every single-tenant fixture,
 		// which is precisely why this needs asserting: passing `profile.id`
 		// where the business id belongs would typecheck, and only a wrong
@@ -409,7 +409,7 @@ test.describe("business orders catalog", () => {
 		// stopped firing on this tab specifically.
 		await stubSupabase(page, {
 			viewer: "business",
-			bodies: businessBodies({ business_ownership: [] }),
+			bodies: businessBodies({ business_members: [] }),
 		});
 
 		await page.goto("/orders");
