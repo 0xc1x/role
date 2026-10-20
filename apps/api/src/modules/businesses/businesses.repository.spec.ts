@@ -91,6 +91,37 @@ describe('BusinessesRepository (DB real)', () => {
     expect(membership?.alias).toBe('owner@biz.cl');
   });
 
+  /**
+   * A member row needs the owner's email, and there is no second answer.
+   *
+   * The old code had a fallback —`${owner_id}@owner.invalid`— for a profile
+   * that did not exist. It never persisted: `business_ownership.owner_id` is a
+   * FK to `profiles(id)`, so a business for an owner without a profile fails
+   * on that insert and the transaction is undone. The alias was a lie that
+   * could not survive, and `business_members.alias` is UNIQUE per business:
+   * writing it would have burned the alias of a real owner.
+   *
+   * So the owner row is not written, and the reason is said out loud.
+   */
+  test('sin perfil del dueño no hay membresía, y el motivo es explícito', async () => {
+    const ghostOwner = randomUUID();
+
+    await expect(
+      repo.insert(ctx.db, {
+        owner_id: ghostOwner,
+        name: 'Negocio sin dueño',
+        slug: 'negocio-sin-dueno',
+      }),
+    ).rejects.toThrow(/has no profile/);
+
+    // Y NO quedó una fila de miembro con un alias inventado.
+    const members = await ctx.db
+      .select()
+      .from(businessMembers)
+      .where(eq(businessMembers.user_id, ghostOwner));
+    expect(members).toHaveLength(0);
+  });
+
   test('listForUser filtra por owner y estado', async () => {
     const mine = await repo.listForUser(ownerId, { page: 1, limit: 10 });
     expect(mine.total).toBeGreaterThanOrEqual(2);

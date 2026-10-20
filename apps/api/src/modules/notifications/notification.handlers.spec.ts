@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { favorites } from '../../database/schema';
+import { eq } from 'drizzle-orm';
+import { businessOwnership, favorites } from '../../database/schema';
 import { createTestDb, type TestDbContext } from '../../../test/db';
 import {
   seedBusiness,
@@ -71,6 +72,41 @@ describe('NotificationHandlers.onOrderStatusChanged (DB real)', () => {
     expect(
       send.calls.some((call) => call.userIds.includes(businessOwnerId)),
     ).toBe(true);
+  });
+
+  /**
+   * `business_ownership` no es un permiso acá: es una REGLA DE PRESENCIA.
+   *
+   * El handler resuelve «a quién se avisa del pedido» con un `INNER JOIN`
+   * contra esa tabla, así que un negocio SIN fila de propiedad devuelve cero
+   * filas y el `if (!row) return;` se come la notificación entera: no se avisa
+   * ni al comprador ni al negocio, sin error y sin log.
+   *
+   * El fixture de este test es exactamente el estado que Plan 3 va a
+   * producir si dropea la tabla sin mover este lector: el negocio conserva su
+   * membresía de dueño —la fuente de verdad que viene— y pierde la fila vieja.
+   *
+   * El test existe para que ese cambio sea una EDICIÓN deliberada y visible, y
+   * no una eliminación silenciosa que apague todas las push del negocio.
+   */
+  test('un negocio SIN fila en business_ownership no notifica a nadie', async () => {
+    send.calls.length = 0;
+
+    const owner = await seedProfile(ctx.db);
+    const buyer = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner);
+    // El negocio se queda con su membresía de dueño y SIN la fila de propiedad.
+    await ctx.db
+      .delete(businessOwnership)
+      .where(eq(businessOwnership.business_id, biz.id));
+    const loc = await seedLocation(ctx.db, biz.id);
+    const offer = await seedOffer(ctx.db, biz.id, loc.id);
+    const order = await seedOrder(ctx.db, buyer, offer.id, biz.id);
+
+    await handlers.onOrderStatusChanged(order.id);
+
+    // CERO avisos: ni el comprador ni el negocio.
+    expect(send.calls).toHaveLength(0);
   });
 });
 

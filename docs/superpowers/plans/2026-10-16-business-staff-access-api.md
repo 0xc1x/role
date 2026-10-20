@@ -470,3 +470,14 @@ Actualizar la lista de fuera de este plan con lo que este plan dejó abierto:
 - El `Seq Scan on orders` de la policy de `profiles`.
 - El guard que compara `BUSINESS_PLAN_LIMITS` contra los triggers, que pasa a ser la única
   costura entre el número que ve el dueño y el que aplica el motor.
+- El QUINTO lector de `business_ownership` —los otros cuatro son `aggregateSelect`,
+  `insert`, `countRetained` y `announcements.ownerIdsForBusinesses`, y ninguno es una
+  comprobación de permiso—:
+  `apps/api/src/modules/notifications/notification.handlers.ts:36-39` hace un `INNER JOIN`
+  contra la tabla como REGLA DE PRESENCIA. Un negocio sin fila de propiedad devuelve cero
+  filas, el `if (!row) return;` se come el handler entero y NO SE AVISA NI AL CONSUMIDOR NI
+  AL NEGOCIO: sin error y sin log. Plan 3 tiene que moverlo al modelo de membresías
+  ANTES de dropear la tabla; si no, todas las push del negocio mueren en silencio. El test
+  que pinan el comportamiento de hoy está en `notification.handlers.spec.ts` —«un negocio SIN
+  fila en `business_ownership` no notifica a nadie»— y es el que tiene que cambiar cuando
+  el lector se mueva.

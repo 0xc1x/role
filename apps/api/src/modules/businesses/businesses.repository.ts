@@ -330,6 +330,29 @@ export class BusinessesRepository {
       throw new Error('Failed to insert business');
     }
 
+    // ─── EL PERFIL DEL DUEÑO, ANTES QUE NADA ───────────────────────────────────
+    //
+    // SIN PERFIL NO HAY ALIAS. El `@owner.invalid` que estaba aquí era un
+    // fallback que NUNCA persistía: la fila de `business_ownership` exige el
+    // perfil por FK, así que un dueño sin perfil revienta la transacción
+    // entera —y el error era el de la FK, que no dice nada de por qué—. Un
+    // alias inventado habría escrito una fila de miembro con una bandeja que
+    // no existe, y `business_members.alias` es por negocio ÚNICO: ese alias
+    // falso además habría ocupado el del dueño bueno.
+    //
+    // El motivo se dice explícito, y dice la verdad: sin el correo del dueño
+    // no hay una fila de dueño.
+    const [ownerProfile] = await executor
+      .select({ email: profiles.email })
+      .from(profiles)
+      .where(eq(profiles.id, owner_id))
+      .limit(1);
+    if (!ownerProfile) {
+      throw new Error(
+        `Business owner ${owner_id} has no profile: the owner membership cannot be written without the owner's email.`,
+      );
+    }
+
     await executor
       .insert(businessOwnership)
       .values({ business_id: row.id, owner_id })
@@ -368,11 +391,6 @@ export class BusinessesRepository {
     // únicos de la tabla (id, `(business_id, user_id)` y
     // `(business_id, lower(alias))`) impiden nombrar un objetivo único, y un
     // negocio con dueño es un negocio que ya lo tiene.
-    const [ownerProfile] = await executor
-      .select({ email: profiles.email })
-      .from(profiles)
-      .where(eq(profiles.id, owner_id))
-      .limit(1);
     await executor
       .insert(businessMembers)
       .values({
@@ -380,7 +398,7 @@ export class BusinessesRepository {
         user_id: owner_id,
         role: 'owner',
         label: row.name,
-        alias: ownerProfile?.email ?? `${owner_id}@owner.invalid`,
+        alias: ownerProfile.email,
         status: 'active',
         session_ttl_hours: 0,
       })

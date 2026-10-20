@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import type { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env.schema';
@@ -16,6 +16,10 @@ import {
 import {
   businessMemberLocations,
   businessOwnership,
+  // Aliased: this file also has a `businesses` and an `orders` SERVICE, and a
+  // service is not a table. The names would shadow each other.
+  businesses as businessesTable,
+  orders as ordersTable,
 } from '../../database/schema';
 import { AppConfigRepository } from '../app-config/app-config.repository';
 import { UserDefaultsService } from '../users/user-defaults.service';
@@ -41,7 +45,17 @@ import { BusinessesService } from './businesses.service';
  * `BusinessesRepository.isOwner` que existió hasta que el permiso se resolvió
  * por el modelo de membresías, y la tabla que lee —`business_ownership`— sigue
  * viva y con las mismas 16 filas que tenía, así que la comparación es real y no
- * una 나서.
+ * una «caricatura».
+ *
+ * ─── QUÉ COMPARA ESTA TABLA, Y QUÉ NO ────────────────────────────────────────
+ *
+ * Compara el PERMISO, que es lo que la tabla afirma. La regla de presencia
+ * del `INNER JOIN` viejo —«el pedido no existe si su negocio no tiene fila de
+ * dueño»— NO la puede expresar `oldIsOwner`: esa regla no era un permiso sino
+ * una condición de EXISTENCIA, y un predicado de dueño no dice si una fila
+ * existe. El cambio de 404 a 403 que esa regla produjo está pinado aparte, con
+ * el join viejo escrito al lado del nuevo, en «la regla de presencia del
+ * pedido».
  *
  * ─── POR QUÉ UNA TABLA Y NO UNA LISTA DE PERSONAS ────────────────────────────
  *
@@ -196,6 +210,30 @@ async function oldIsOwner(
   return Boolean(row);
 }
 
+/**
+ * The OLD `findByIdWithBusinessOwner`, verbatim: the order row AND the
+ * ownership row, in the same SELECT.
+ *
+ * This one is here for a different reason than {@link oldIsOwner}: the JOIN
+ * carried a PRESENCE rule —an order of a business with no ownership row did
+ * not EXIST— and a presence rule is not a permission, so no owner predicate
+ * can express it. It is written here so the change from 404 to 403 is pinned
+ * and not merely described.
+ */
+async function oldFindByIdWithBusiness(orderId: string): Promise<boolean> {
+  const [row] = await ctx.db
+    .select({ order: ordersTable })
+    .from(ordersTable)
+    .innerJoin(businessesTable, eq(ordersTable.business_id, businessesTable.id))
+    .innerJoin(
+      businessOwnership,
+      eq(ordersTable.business_id, businessOwnership.business_id),
+    )
+    .where(eq(ordersTable.id, orderId))
+    .limit(1);
+  return Boolean(row);
+}
+
 // ─── LOS LLAMADORES ──────────────────────────────────────────────────────────
 
 /** What a call site answers: allowed, or denied. */
@@ -261,6 +299,42 @@ function callSites(): CallSite[] {
       name: 'OrdersService.listForBusiness',
       ask: (user) =>
         asAnswer(() => orders.listForBusiness(user, { page: 1, limit: 10 })),
+    },
+    {
+      name: 'BusinessesService.update (assertCanMutate)',
+      ask: (user, f) =>
+        asAnswer(() =>
+          businesses.update(user, f.businessId, { name: 'El mismo nombre' }),
+        ),
+    },
+    {
+      name: 'BusinessesService.updateLocation (assertCanMutateBusiness)',
+      ask: (user, f) =>
+        asAnswer(() =>
+          businesses.updateLocation(user, f.businessId, f.locationId, {
+            name: 'La misma sucursal',
+          }),
+        ),
+    },
+    {
+      name: 'BusinessesService.updateNotificationPreferences (assertCanMutateBusiness)',
+      ask: (user, f) =>
+        asAnswer(() =>
+          businesses.updateNotificationPreferences(user, f.businessId, {
+            push_enabled: false,
+          }),
+        ),
+    },
+    {
+      name: 'OrdersService.listForBusiness (con business_id)',
+      ask: (user, f) =>
+        asAnswer(() =>
+          orders.listForBusiness(user, {
+            page: 1,
+            limit: 10,
+            business_id: f.businessId,
+          }),
+        ),
     },
     {
       name: 'OrdersService.getById (resolveAccessibleOrder)',
@@ -478,5 +552,216 @@ describe('una sola respuesta a «¿esto es mi negocio?» (DB real)', () => {
       const read = await orders.getById(consumer, order.id);
       expect(read.id).toBe(order.id);
     });
+  });
+});
+
+// ─── LAS PUERTAS QUE LA TABLA DE CUATRO NO CUBRÍA ───────────────────────────
+
+/**
+ * The owner-only gates the four-person table did not reach.
+ *
+ * The table asks a QUESTION —«who may do this?»— and answers it by comparing
+ * the old predicate with the new one for the owner, the manager, the
+ * branch-scoped staff and the stranger. It could only reach the gates that the
+ * call sites named, and these were not among them: `assertCanMutate` (the
+ * business update), `assertCanMutateBusiness` (the locations and the
+ * notification preferences) and `listForBusiness` WITH a `business_id` —a
+ * query parameter the CALLER writes, so a gate that opens here is a gate that
+ * lets a manager of one business read the orders of another.
+ *
+ * Three GATES, four SURFACES: `assertCanMutateBusiness` guards two of them,
+ * and both are here because they are two different routes a manager must not
+ * reach.
+ *
+ * ─── POR QUÉ ESTAS ESTÁN FUERA DE LA TABLA ───────────────────────────────────
+ *
+ * Not by accident: the table compares against `oldIsOwner`, and the table is
+ * about the PERMISSION. These gates are asserted here directly, with the
+ * three personas that have to be refused, so that weakening the requirement to
+ * «any member passes» breaks a test instead of passing the whole suite.
+ *
+ * A test that only checked the stranger would prove that the caller is a
+ * member of SOMETHING, not that the requirement is owner-only. That is the
+ * half test this block exists to avoid.
+ */
+type OwnerOnlyGate = {
+  name: string;
+  ask: (
+    user: AuthUser,
+    target: { businessId: string; locationId: string },
+  ) => Promise<unknown>;
+};
+
+const OWNER_ONLY_GATES: OwnerOnlyGate[] = [
+  {
+    name: 'PATCH /businesses/:id (assertCanMutate)',
+    ask: (user, target) =>
+      businesses.update(user, target.businessId, { name: 'El mismo nombre' }),
+  },
+  {
+    name: 'PATCH /businesses/:id/locations/:locationId (assertCanMutateBusiness)',
+    ask: (user, target) =>
+      businesses.updateLocation(user, target.businessId, target.locationId, {
+        name: 'La misma sucursal',
+      }),
+  },
+  {
+    name: 'PATCH /businesses/:id/notification-preferences (assertCanMutateBusiness)',
+    ask: (user, target) =>
+      businesses.updateNotificationPreferences(user, target.businessId, {
+        push_enabled: false,
+      }),
+  },
+  {
+    name: 'GET /orders?business_id= (listForBusiness)',
+    ask: (user, target) =>
+      orders.listForBusiness(user, {
+        page: 1,
+        limit: 10,
+        business_id: target.businessId,
+      }),
+  },
+];
+
+/**
+ * A business whose owner membership is NOT alive: paused (`status='disabled'`)
+ * or given of low (`deleted_at` set).
+ *
+ * The TTL is 0 on purpose —«own team», no expiry— so the ONLY thing that can
+ * deny this owner is the state of the membership, and the test is about the
+ * state and not about an expired session.
+ *
+ * The `business_ownership` row IS there, and it names this person: the old
+ * predicate would have let them through. That is the narrowing the membership
+ * model introduced, and the test asserts both sides of it.
+ */
+async function fixtureWithDeadOwner(
+  state: 'disabled' | 'deleted',
+): Promise<{ businessId: string; locationId: string; owner: AuthUser }> {
+  const ownerId = await seedProfile(ctx.db);
+  const business = await seedBusiness(ctx.db, ownerId, {
+    verification_status: 'approved',
+    owner_membership: false,
+  });
+  const location = await seedLocation(ctx.db, business.id);
+  await seedBusinessMember(ctx.db, business.id, ownerId, {
+    role: 'owner',
+    label: 'Dueña',
+    alias: `dueno-${ownerId.slice(0, 8)}@negocio.role.ec`,
+    session_ttl_hours: 0,
+    status: state === 'disabled' ? 'disabled' : 'active',
+    deleted_at: state === 'deleted' ? new Date() : null,
+  });
+  return {
+    businessId: business.id,
+    locationId: location.id,
+    owner: { id: ownerId, email: `${ownerId}@t.cl`, role: 'business' },
+  };
+}
+
+describe('las puertas owner-only, con el gerente y el empleado de sucursal', () => {
+  for (const gate of OWNER_ONLY_GATES) {
+    test(`${gate.name}: el gerente, el empleado de sucursal y el que no es miembro reciben 403`, async () => {
+      const f = await fixture();
+
+      // El dueño pasa: la puerta es «owner-only», no «cerrada».
+      await gate.ask(f.owner, f);
+
+      for (const persona of ['manager', 'staff', 'stranger'] as const) {
+        let caught: unknown;
+        try {
+          await gate.ask(f[persona], f);
+        } catch (error) {
+          caught = error;
+        }
+        expect(
+          caught,
+          `${gate.name} para ${persona} tiene que ser 403`,
+        ).toBeInstanceOf(ForbiddenException);
+      }
+    });
+  }
+});
+
+describe('una membresía que no está viva no abre ni la puerta de su dueño', () => {
+  for (const gate of OWNER_ONLY_GATES) {
+    test(`${gate.name}: un dueño con la membresía desactivada o dada de baja recibe 403`, async () => {
+      for (const state of ['disabled', 'deleted'] as const) {
+        const f = await fixtureWithDeadOwner(state);
+
+        // EL HECHO: la fila de dueño sigue en `business_ownership` —la puerta
+        // vieja la habría dejado pasar— pero la membresía no está viva, así
+        // que el rol que contesta la base es `null`.
+        expect(
+          await businessesRepository.roleOf(f.businessId, f.owner.id),
+        ).toBeNull();
+        expect(await oldIsOwner(f.businessId, f.owner.id)).toBe(true);
+
+        let caught: unknown;
+        try {
+          await gate.ask(f.owner, f);
+        } catch (error) {
+          caught = error;
+        }
+        expect(
+          caught,
+          `${gate.name} con la membresía ${state} tiene que ser 403`,
+        ).toBeInstanceOf(ForbiddenException);
+      }
+    });
+  }
+});
+
+describe('la regla de presencia del pedido: 404 → 403', () => {
+  test('un pedido de un negocio SIN fila en business_ownership: el join viejo no lo veía, y ahora es 403 y no 404', async () => {
+    const consumerId = await seedProfile(ctx.db);
+    const ownerId = await seedProfile(ctx.db);
+    const strangerId = await seedProfile(ctx.db);
+
+    // Un negocio SIN fila de dueño: sin `business_ownership` y sin membresía
+    // viva. Es un estado que la API no produce —`insert` escribe las dos filas
+    // en la misma transacción—, pero era la regla de presencia del join viejo.
+    const business = await seedBusiness(ctx.db, ownerId, {
+      verification_status: 'approved',
+      owner_membership: false,
+    });
+    await ctx.db
+      .delete(businessOwnership)
+      .where(eq(businessOwnership.business_id, business.id));
+    const location = await seedLocation(ctx.db, business.id);
+    const offer = await seedOffer(ctx.db, business.id, location.id, {
+      stock: 5,
+    });
+    const order = await seedOrder(ctx.db, consumerId, offer.id, business.id, {
+      status: 'pending',
+    });
+
+    // EL ANTES: el `INNER JOIN` contra la fila de dueño. Sin esa fila el pedido
+    // NO EXISTÍA —404— y no había ningún permiso que decidir.
+    expect(await oldFindByIdWithBusiness(order.id)).toBe(false);
+
+    // EL DESPUÉS: el pedido existe, y el permiso se decide aparte. Un 403 dice
+    // «no puedes»; un 404 diría «no existe», que es otra verdad.
+    const stranger: AuthUser = {
+      id: strangerId,
+      email: `${strangerId}@t.cl`,
+      role: 'business',
+    };
+    let caught: unknown;
+    try {
+      await orders.getById(stranger, order.id);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ForbiddenException);
+    expect(caught).not.toBeInstanceOf(NotFoundException);
+
+    // Y el dueño del pedido sí lo lee: la regla de presencia era del negocio,
+    // no del comprador.
+    const read = await orders.getById(
+      { id: consumerId, email: `${consumerId}@t.cl`, role: 'user' },
+      order.id,
+    );
+    expect(read.id).toBe(order.id);
   });
 });
