@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   jsonb,
   numeric,
   pgTable,
@@ -6,62 +7,91 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { businessLocations } from './business-locations';
 import { businesses } from './businesses';
 import { coupons } from './coupons';
 import { orderStatusEnum } from './enums';
 import { offers } from './offers';
 import { profiles } from './profiles';
 
-export const orders = pgTable('orders', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  user_id: uuid('user_id')
-    .notNull()
-    .references(() => profiles.id, {
-      onDelete: 'cascade',
+export const orders = pgTable(
+  'orders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    user_id: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, {
+        onDelete: 'cascade',
+      }),
+    offer_id: uuid('offer_id')
+      .notNull()
+      .references(() => offers.id, {
+        onDelete: 'cascade',
+      }),
+    business_id: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id, {
+        onDelete: 'cascade',
+      }),
+    // Derived, never written by hand: `trg_set_order_business_location` fills it
+    // from the offer on every INSERT. The key is snake_case because every other
+    // column in this mirror is, and because the repositories read it as
+    // `orders.business_id` — a lone camelCase key here would split the vocabulary
+    // of the file it lives in.
+    business_location_id: uuid('business_location_id').notNull(),
+    order_number: text('order_number').notNull().unique(),
+    idempotency_key: text('idempotency_key'),
+    status: orderStatusEnum('status').notNull().default('pending'),
+    price: numeric('price', { precision: 12, scale: 2 }).notNull(),
+    original_price: numeric('original_price', {
+      precision: 12,
+      scale: 2,
+    }).notNull(),
+    pickup_code: text('pickup_code').notNull(),
+    pickup_time: timestamp('pickup_time', { withTimezone: true }),
+    // SET NULL, matching the database: a coupon can be hard-deleted when it is
+    // retired, and the order has to outlive it — the order is the financial
+    // record. No CASCADE here on purpose, the order is the platform's.
+    coupon_id: uuid('coupon_id').references(() => coupons.id, {
+      onDelete: 'set null',
     }),
-  offer_id: uuid('offer_id')
-    .notNull()
-    .references(() => offers.id, {
-      onDelete: 'cascade',
-    }),
-  business_id: uuid('business_id')
-    .notNull()
-    .references(() => businesses.id, {
-      onDelete: 'cascade',
-    }),
-  order_number: text('order_number').notNull().unique(),
-  idempotency_key: text('idempotency_key'),
-  status: orderStatusEnum('status').notNull().default('pending'),
-  price: numeric('price', { precision: 12, scale: 2 }).notNull(),
-  original_price: numeric('original_price', {
-    precision: 12,
-    scale: 2,
-  }).notNull(),
-  pickup_code: text('pickup_code').notNull(),
-  pickup_time: timestamp('pickup_time', { withTimezone: true }),
-  // SET NULL, matching the database: a coupon can be hard-deleted when it is
-  // retired, and the order has to outlive it — the order is the financial
-  // record. No CASCADE here on purpose, the order is the platform's.
-  coupon_id: uuid('coupon_id').references(() => coupons.id, {
-    onDelete: 'set null',
-  }),
-  commission_rate: numeric('commission_rate', { precision: 10, scale: 4 })
-    .notNull()
-    .default('0.1000'),
-  platform_fee: numeric('platform_fee', { precision: 12, scale: 2 })
-    .notNull()
-    .default('0'),
-  net_amount: numeric('net_amount', { precision: 12, scale: 2 })
-    .notNull()
-    .default('0'),
-  payout_id: uuid('payout_id'),
-  created_at: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+    commission_rate: numeric('commission_rate', { precision: 10, scale: 4 })
+      .notNull()
+      .default('0.1000'),
+    platform_fee: numeric('platform_fee', { precision: 12, scale: 2 })
+      .notNull()
+      .default('0'),
+    net_amount: numeric('net_amount', { precision: 12, scale: 2 })
+      .notNull()
+      .default('0'),
+    payout_id: uuid('payout_id'),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // The composite FK, not a single-column reference, and it is the same reason
+    // `offers` carries `offers_location_business_fkey`: a branch belongs to a
+    // business, so an order that names both has to name a branch OF ITS OWN
+    // business. A single-column `references(businessLocations.id)` would accept an
+    // order whose location belongs to somebody else's business, which is the
+    // cross-tenant row this whole feature exists to make impossible.
+    //
+    // Declared because `mirror-fidelity.db.spec.ts` reports an unlisted foreign
+    // key as drift — and, before this, could not see this one: that spec reads the
+    // TEST database, which `test/db.ts` builds from the mirror with inline
+    // REFERENCES stripped, so a constraint missing from the mirror is
+    // structurally invisible to the check that exists to catch exactly that.
+    foreignKey({
+      columns: [table.business_location_id, table.business_id],
+      foreignColumns: [businessLocations.id, businessLocations.business_id],
+      name: 'orders_location_business_fkey',
+    }).onDelete('restrict'),
+  ],
+);
 
 export const orderEvents = pgTable('order_events', {
   id: uuid('id').primaryKey().defaultRandom(),

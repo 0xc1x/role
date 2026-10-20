@@ -1,0 +1,57 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- El alias único es POR NEGOCIO, no global
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- Procedimiento: supabase/migrations/README.md. Tras aplicar, renombrar este
+-- archivo a la versión que asignó el servidor y confirmar que
+-- md5sum <archivo> == md5(statements[1]) de la fila del ledger.
+--
+-- ─── QUÉ CAMBIA, Y QUÉ NO ────────────────────────────────────────────────────
+--
+-- `business_members_alias_key` pasa de `unique (lower(alias))` a
+-- `unique (business_id, lower(alias))`. El índice NO lleva predicado ni antes ni
+-- después: `where deleted_at is null` devolvería el alias a la bolsa en cuanto la
+-- fila se da de baja, y el `auth.users` de esa fila puede seguir vivo.
+--
+-- La migración que creó el índice (`20261014002328_business_members_and_plans.sql`)
+-- NO se toca: está aplicada y sellada con su md5 contra el ledger, así que un
+-- cambio de schema entra por una migración nueva.
+--
+-- ─── POR QUÉ EL ALIAS NO ES GLOBAL ───────────────────────────────────────────
+--
+-- `alias` es el espejo de `auth.users.email`, y Auth garantiza que un correo es
+-- una persona. El alias identifica un ACCESO —esta fila, en este negocio— y no a
+-- una persona: el mismo dueño que dirige seis negocios es SEIS filas de miembro
+-- con el MISMO alias, y eso no son seis accesos distintos sino uno repetido.
+--
+-- El índice global afirmaba algo más fuerte que lo que es verdad, y no por
+-- gusto: afirmaba que una persona no puede estar en dos negocios. En producción
+-- eso es falso y medido, no una hipótesis —
+--
+--     select count(*), count(distinct owner_id) from public.business_ownership;
+--     -- 16 | 11
+--
+-- con `a0000000-0000-0000-0000-000000000001` (`admin@fudi.app`) al frente:
+-- dueño de 6 de los 16 negocios (Café del Valle, Dulcería El Manjar, La Fogata,
+-- Panadería San Pedro, Pizzería Toscana y Supermercado La Favorita). Con el
+-- índice global, el backfill de dueños de la migración siguiente insertaba 6
+-- filas con el mismo alias y abortaba entero con `23505`.
+--
+-- ─── POR QUÉ NO SE ROMPE EL LOGIN ────────────────────────────────────────────
+--
+-- Porque el alias completo resuelve a UN `auth.users` y solo a uno: eso lo
+-- garantiza Auth, no este índice. El índice solo impedía que la misma persona
+-- apareciera dos veces en el mismo negocio. El flujo de §9 —alias + PIN— sigue
+-- igual y no necesita que se elija el negocio antes de entrar.
+--
+-- ─── POR QUÉ NO ES `create index concurrently` ────────────────────────────────
+--
+-- Porque no puede correr dentro de un bloque de transacción, y `apply_migration`
+-- envuelve el archivo en una. `business_members` está vacía al aplicar esto, así
+-- que el `SHARE` que toma el `CREATE INDEX` dura lo que dura la lectura del
+-- catálogo.
+--
+drop index if exists public.business_members_alias_key;
+
+create unique index business_members_alias_key
+  on public.business_members (business_id, lower(alias));

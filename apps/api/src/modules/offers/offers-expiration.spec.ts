@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { OffersService } from './offers.service';
 import { OffersRepository } from './offers.repository';
+import { BusinessesRepository } from '../businesses/businesses.repository';
 
 describe('OffersService.expireStale (espejo de check_offer_expiry)', () => {
   let service: OffersService;
@@ -12,6 +13,7 @@ describe('OffersService.expireStale (espejo de check_offer_expiry)', () => {
       providers: [
         OffersService,
         { provide: OffersRepository, useValue: { expireStale } },
+        { provide: BusinessesRepository, useValue: { roleOf: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn() } },
       ],
     }).compile();

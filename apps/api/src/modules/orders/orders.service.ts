@@ -26,6 +26,7 @@ import type { AuthUser } from '../../auth/auth.types';
 import { safeErrorFields } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
 import { OffersRepository } from '../offers/offers.repository';
+import { BusinessesRepository } from '../businesses/businesses.repository';
 import { OrderEventMapper } from './order-event.mapper';
 import {
   canActorTransition,
@@ -97,6 +98,7 @@ export class OrdersService {
   constructor(
     private readonly ordersRepository: OrdersRepository,
     private readonly offersRepository: OffersRepository,
+    private readonly businessesRepository: BusinessesRepository,
     private readonly config: ConfigService<Env, true>,
     @Optional()
     private readonly notificationHandlers?: NotificationHandlers,
@@ -242,6 +244,13 @@ export class OrdersService {
         user_id: user.id,
         offer_id: offer.id,
         business_id: offer.business_id,
+        // The branch comes from the offer being reserved, never from the
+        // request. `public.orders.business_location_id` is NOT NULL, and
+        // `trg_set_order_business_location` would derive the same value on the
+        // way in — this line exists because the Drizzle mirror cannot model a
+        // trigger, and an order whose branch disagreed with its offer's is the
+        // exact bug the column exists to prevent.
+        business_location_id: offer.business_location_id,
         order_number: orderNumber,
         // Written, not just checked: the key is what makes the NEXT attempt a
         // replay instead of a second reservation. The partial unique index
@@ -429,7 +438,21 @@ export class OrdersService {
       await this.ordersRepository.setEventActor(tx, user.id);
       // El SQL valida ownership antes que existencia (join contra businesses).
       const locked = await this.ordersRepository.findByIdForUpdate(tx, id);
-      if (!locked || locked.business_owner_id !== user.id) {
+      if (!locked) {
+        throw new ForbiddenException(
+          'UNAUTHORIZED: No tienes permiso para validar este pedido',
+        );
+      }
+      // El HECHO —qué rol tiene quien pregunta en el negocio del pedido— lo
+      // contesta el modelo de membresías; lo que se EXIGE es el dueño, y
+      // está escrito acá. Antes la respuesta venía del join contra
+      // `business_ownership`, que era la tercera copia del mismo predicado.
+      const role = await this.businessesRepository.roleOf(
+        locked.order.business_id,
+        user.id,
+        tx,
+      );
+      if (role !== 'owner') {
         throw new ForbiddenException(
           'UNAUTHORIZED: No tienes permiso para validar este pedido',
         );
@@ -495,7 +518,7 @@ export class OrdersService {
     let businessId = query.business_id;
 
     if (!businessId) {
-      const owned = await this.offersRepository.findBusinessIdsOwnedBy(user.id);
+      const owned = await this.businessesRepository.ownedBusinessIds(user.id);
       if (owned.length === 0 && user.role !== 'admin') {
         throw new ForbiddenException('You do not own any business');
       }
@@ -513,11 +536,8 @@ export class OrdersService {
       }
       businessId = owned[0];
     } else if (user.role !== 'admin') {
-      const isOwner = await this.ordersRepository.isBusinessOwner(
-        businessId,
-        user.id,
-      );
-      if (!isOwner) {
+      const role = await this.businessesRepository.roleOf(businessId, user.id);
+      if (role !== 'owner') {
         throw new ForbiddenException('You do not own this business');
       }
     }
@@ -617,13 +637,21 @@ export class OrdersService {
     user: AuthUser,
     id: string,
   ): Promise<{ order: OrderRow; viewer: OrderViewer }> {
-    const row = await this.ordersRepository.findByIdWithBusinessOwner(id);
+    const row = await this.ordersRepository.findByIdWithBusiness(id);
     if (!row) {
       throw new NotFoundException(`Order ${id} not found`);
     }
 
     const isOrderOwner = row.order.user_id === user.id;
-    const isBusinessOwner = row.business_owner_id === user.id;
+    // El dueño del PEDIDO y el dueño del NEGOCIO son dos preguntas distintas, y
+    // no se mezclan: el primero es una comparación de ids —la fila dice a quién
+    // se le vendió— y el segundo es una membresía viva en el negocio. La fila
+    // del pedido no dice quién es el dueño del negocio, y por eso se pregunta.
+    const role = await this.businessesRepository.roleOf(
+      row.order.business_id,
+      user.id,
+    );
+    const isBusinessOwner = role === 'owner';
     if (!isOrderOwner && !isBusinessOwner && user.role !== 'admin') {
       throw new ForbiddenException('You cannot access this order');
     }
@@ -664,7 +692,12 @@ export class OrdersService {
       }
 
       const isOrderOwner = locked.order.user_id === user.id;
-      const isBusinessOwner = locked.business_owner_id === user.id;
+      const role = await this.businessesRepository.roleOf(
+        locked.order.business_id,
+        user.id,
+        tx,
+      );
+      const isBusinessOwner = role === 'owner';
 
       if (
         !canActorTransition(user.role, current, next, {
@@ -707,10 +740,11 @@ export class OrdersService {
     this.emitOrderChange(id);
 
     const isOrderOwner = updated.user_id === user.id;
-    const isBusinessOwner = await this.ordersRepository.isBusinessOwner(
+    const role = await this.businessesRepository.roleOf(
       updated.business_id,
       user.id,
     );
+    const isBusinessOwner = role === 'owner';
 
     return OrderMapper.toResponse(updated, {
       isOrderOwner,

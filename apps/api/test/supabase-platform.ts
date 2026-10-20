@@ -1624,13 +1624,37 @@ export async function as<T>(
  * the interesting result, and it is exactly the result under which the writes are
  * real. A caller that treats this as "always safe to call" will leak a row.
  * Unconditional cleanup is the obligation, not the default.
+ *
+ * ─── `detail` and `hint`, and why they are on the way out ───────────────────
+ *
+ * A `RAISE ... USING errcode = 'R0001', detail = …, hint = …` puts three
+ * different facts on the wire and they answer three different questions: the code
+ * says *what kind* of refusal this is, the `detail` says *which row and which
+ * numbers*, and the message is the prose a human reads. Handing back only the
+ * first two made the third — the one carrying the numbers the caller has to show —
+ * untestable, which is how a contract like that decays into "the migration says it
+ * does".
+ *
+ * These two fields are read straight off the `PostgresError` (postgres.js maps the
+ * wire's `D` and `H`), NOT through `describeError`: that one collapses whitespace
+ * and truncates at 180 characters for the replay fixtures, where a hundred
+ * messages are compared at once. A truncated `detail` would make an equality
+ * assertion fail for a reason that has nothing to do with the rule being measured.
+ * Both are OPTIONAL because Postgres omits them: a refusal with no `DETAIL` clause
+ * leaves the field absent, and `undefined` is the honest answer for "the server did
+ * not send one".
  */
 export async function deniedAs<T>(
   sql: Sql,
   role: ImpersonatedRole,
   userId: string | null,
   fn: (tx: Sql) => Promise<T>,
-): Promise<{ code: string; message: string } | null> {
+): Promise<{
+  code: string;
+  message: string;
+  detail?: string;
+  hint?: string;
+} | null> {
   assertImpersonatable(role);
   try {
     await as(sql, role, userId, fn);
@@ -1642,7 +1666,13 @@ export async function deniedAs<T>(
     // once already produced four tests that asserted on `undefined` and read as
     // policy failures.
     const { code, msg } = describeError(error);
-    return { code, message: msg };
+    const err = error as { detail?: unknown; hint?: unknown };
+    return {
+      code,
+      message: msg,
+      detail: typeof err.detail === 'string' ? err.detail : undefined,
+      hint: typeof err.hint === 'string' ? err.hint : undefined,
+    };
   }
 }
 

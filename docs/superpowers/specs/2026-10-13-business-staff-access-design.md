@@ -126,13 +126,15 @@ create table public.business_members (
   last_authenticated_at timestamptz,
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
-  deleted_at            timestamptz
+  deleted_at            timestamptz,
+  unique (business_id, user_id)
 );
 create index business_members_business on public.business_members (business_id)
   where deleted_at is null;
 create index business_members_user on public.business_members (user_id)
   where deleted_at is null;
-create unique index business_members_alias_key on public.business_members (lower(alias));
+create unique index business_members_alias_key
+  on public.business_members (business_id, lower(alias));
 ```
 
 - `session_ttl_hours = 0` significa sesión sin expiración (modo "equipo propio").
@@ -140,9 +142,22 @@ create unique index business_members_alias_key on public.business_members (lower
   real es `deleted_at`, que además borra el `auth.users`.
 - `alias` se espeja desde `auth.users.email` para poder listar accesos sin privilegio de
   lectura sobre `auth`.
-- `business_members_alias_key` es único **globalmente e incluye las filas borradas**: un
-  alias dado de baja no se recicla por accidente, porque el mismo `auth.users` podría
-  quedar vivo.
+- `business_members_alias_key` es único **por negocio, sobre `lower(alias)`, e incluye las
+  filas borradas**: un alias dado de baja no se recicla por accidente dentro de su negocio,
+  porque el mismo `auth.users` podría quedar vivo.
+
+  **La unicidad es por negocio y no global, porque un dueño real tiene varios negocios.**
+  Medido en producción el 2026-10-14: `business_ownership` tiene 16 filas y **11 dueños
+  distintos**, y uno de ellos es dueño de 6 negocios. Como `alias` espeja
+  `auth.users.email` —y Auth garantiza que un email identifica a un solo usuario—, seis
+  negocios del mismo dueño son seis membresías con el mismo alias, no seis accesos
+  distintos. Un índice global sobre `lower(alias)` haría fallar el backfill con `23505` y
+  además afirmaría algo falso: no es que dos personas puedan compartir alias, es que una
+  persona aparece en varios negocios.
+
+  El login sigue siendo inequívoco sin el índice global. El alias completo resuelve a un
+  único `auth.users` porque Auth lo garantiza, así que "escribir alias + PIN" basta sin
+  pedir el negocio por delante —que era el requisito del flujo.
 
 ### 4.2 `business_member_locations`
 
@@ -209,6 +224,18 @@ Interpretación de los límites: **ambos topes son acumulativos**. Un plan `pro`
 hasta 5 sucursales **y** hasta 20 miembros; exceder cualquiera de los dos bloquea el
 crecimiento.
 
+**El archivo de arriba existe, y los números que tiene son una segunda copia de los que
+aplica el motor.** Los `case v_plan` de `enforce_business_location_limit` y
+`enforce_business_member_limit`, más el `case` de `business_has_feature`, llevan los
+mismos números escritos a mano en SQL, y entre dos copias no hay nada que las ate. Por
+eso `apps/api/src/database/security/plan-limits.db.spec.ts` lee los tres cuerpos del
+`pg_proc` **vivo** y los compara contra este archivo celda por celda: el dueño ve un
+número en el panel, el motor aplica un número en Postgres, y si divergen el dueño está
+viendo una mentira que solo se descubre al llegar al tope. Ese test se verificó rojo
+con una divergencia real —`free` a 3 miembros en el `.ts` con el trigger cortando en 2—
+y en rojo nombraba el número, no solo el archivo. Agregar un plan es un commit en
+**ambos** lados o el spec se pone rojo.
+
 **El dueño nunca cuenta como miembro.** El tope `members` cuenta solo filas con
 `role <> 'owner'`: un negocio `free` tiene dueño + 2 empleados, y el dueño no es un
 "miembro" que consuma cupo. El trigger de límite filtra por `role <> 'owner'` y las
@@ -223,29 +250,163 @@ el mismo que aplica el motor.
 -- public.can_manage_location(business_id uuid, location_id uuid) returns boolean
 -- SECURITY DEFINER, SET search_path = ''
 --   owner  -> todo el negocio
---   manager-> todo el negocio, excepto borrar sucursales y administrar al owner
+--   manager-> todo el negocio
 --   staff  -> solo las locations de su fila de alcance
 ```
+
+**El helper no excluye nada, y las dos exclusiones que se le atribuían no son
+suyas.** Borrar una sucursal es una restricción de **policy**, no del helper:
+`Members can delete business locations` exige
+`business_member_role(business_id) = 'owner'` además de `can_manage_location`, y
+`business_member_locations_location_id_fkey` es `ON DELETE CASCADE`, así que un
+gerente que borrara una sucursal desde el helper dejaría sin filas de alcance a
+todo su equipo. Administrar al dueño —pausarlo, degradarlo, borrarlo— no lo
+hace ninguna policy: `business_members` no tiene policy de escritura (§6.3), así
+que la pregunta «¿puede este gerente administrar a este dueño?» no la responde
+RLS sino la capa de servicio de la §8, que la rechaza. Un helper que excluyera
+esas dos cosas sería un segundo sitio donde vivir la misma regla, y la §8.1 ya
+dice que dos copias de una frontera son dos fronteras que pueden divergir.
+
+**Lo que RLS respalda de `business_locations`, y lo que no.** El helper es el
+permiso por sucursal, y cada operación de la tabla lo usa con un predicado
+distinto. Medido contra la base viva el 2026-10-20 (`pg_policies`):
+
+| operación | policy | predicado | qué concede **esa** policy a un `staff` dentro de su alcance |
+| --- | --- | --- | --- |
+| `SELECT` | `Members can view business locations` | `can_manage_location(business_id, id)` | **sí**: las de su alcance |
+| `INSERT` | `Members can insert business locations` | `business_member_role(business_id) in ('owner','manager')` **y** `business_member_session_valid(business_id)` | **no**: se lo niega |
+| `UPDATE` | `Members can update business locations` | `can_manage_location(business_id, id)` | **sí lo puede**: la policy lo concede |
+| `DELETE` | `Members can delete business locations` | `business_member_role(business_id) = 'owner'` **y** `can_manage_location(business_id, id)` | **no**: se lo niega |
+
+**El `SELECT` de la primera fila es lo que concede *esa* policy, no el conjunto
+efectivo.** `Anyone can view active business locations` (`roles = public`,
+`is_active = true`) deja leer las sucursales activas a cualquiera, así que un `staff`
+también lee las sucursales activas que **no** son de su alcance. La lectura no es lo que
+esta sección audita —la escritura lo es—, pero el texto no puede afirmar que un `staff`
+sólo ve las suyas.
+
+La fila que decide es la del `UPDATE`: es la única cuya policy es el helper
+**solo**, sin la condición de rol que acompaña a las otras tres, y el helper le
+concede al `staff` las sucursales de su fila de alcance. **Para el `UPDATE` de una
+sucursal, RLS no es la frontera de un `staff`** — lo son el filtro de la API y el
+de la UI (ver §9.3). El CRUD de sucursales de la API lo niega por su cuenta
+(`assertCanMutateBusiness` es owner-only,
+`apps/api/src/modules/businesses/businesses.service.ts:788`), pero un cliente que
+escriba directo a Supabase (el móvil, ADR-0002) **puede renombrar la sucursal que
+el `staff` tiene en su alcance**.
 
 Se apoya en dos helpers más pequeños, todos `STABLE SECURITY DEFINER` con
 `search_path` pineado (patrón ya establecido por `public.business_is_approved`):
 
-- `public.business_member_role(p_business_id uuid) → text` — rol activo del `auth.uid()`.
-- `public.business_has_feature(p_business_id uuid, p_feature text) → boolean` — feature del plan.
+- `public.business_member_role(p_business_id uuid) → public.business_member_role` — rol activo del `auth.uid()`.
+- `public.business_has_feature(p_business_id uuid, p_feature public.business_feature) → boolean` — feature del plan.
 
-### 5.2 Validez de sesión, en el mismo lugar
+**`can_manage_location` además verifica que la sucursal sea del negocio.** La fila de
+alcance en `business_member_locations` dice qué sucursales cubre un miembro, pero no dice
+de qué negocio son: `location_id` no lleva ninguna restricción que lo ate al
+`business_id` del miembro, así que la fila malformada es representable. Sin este chequeo,
+un `staff` de A con una fila de alcance apuntando a una sucursal de B recibiría `true`
+para `(A, sucursal_de_B)` — y la API escribe con `service_role`, o sea que el permiso es
+la última frontera y no un detalle. La fila de alcance es un alcance dentro de un negocio,
+no un alcance a secas.
 
-`session_ttl_hours` y `last_authenticated_at` se evalúan **dentro de
-`can_manage_location`**, no en un guard aparte. Así RLS y API aplican exactamente la misma
-regla.
+De esos tres, `business_has_feature` lo consulta la API antes de cada alta y
+`business_member_role` lo invocan las policies de la §6.2. **Atención al conteo,
+porque es la frase que el bloque de al lado corrige:** `pg_proc` tiene siete
+helpers para este dominio y aquí se nombran tres. En particular
+`business_plan_of` existe y **no** es ejecutable por `authenticated`, así que
+«los tres son ejecutables por `authenticated`» no puede leerse como «todos lo
+son».
+
+> **La lista de helpers de esta sección quedó corta, y el código la sobrepasó.**
+> Dice «tres» y nombra `business_member_role`, `can_manage_location` y
+> `business_has_feature`. `pg_proc` tiene **siete** para este dominio, y los
+> cuatro que faltan nacieron después de que esta §5.1 se escribiera:
+> `business_member_session_valid` (el guard de la §5.2, el único que puede
+> *denegar*), `business_member_session_expires_at` (la aritmética, `IMMUTABLE`, y
+> por lo tanto no necesita `security definer` ni ejecutable por nadie),
+> `business_member_session_state` (la explicación) y `business_plan_of` (la única
+> respuesta a «qué plan tiene este negocio», de la que dependen los dos triggers
+> de la §5.3). `business_plan_of` **no** es ejecutable por `authenticated` y no
+> debe serlo: no la consulta el cliente, y `business_has_feature` es su versión
+> client-facing. Ver ADR-0013.
+
+### 5.2 Validez de sesión, en un guard aparte
+
+`session_ttl_hours` y `last_authenticated_at` se evalúan en
+`business_member_session_valid(business_id)`, que es un guard aparte y no una
+rama dentro de `can_manage_location`. La aritmética de la expiración vive una
+sola vez, en `business_member_session_expires_at(ttl, last_authenticated_at)`, y
+la consumen los tres.
+
+> **Por qué cambió, y por qué el guard tiene que existir.** La versión anterior
+> de esta sección decía «dentro de `can_manage_location`, no en un guard
+> aparte», y la frase sobrevivió a cuatro enmiendas porque era cierta para
+> `can_manage_location` y no para las policies que no pasan por él. De las 24
+> policies que resuelven por estos helpers, **11 llaman a
+> `business_member_session_valid`** y todas lo hacen por rol — las trece que
+> resuelven por sucursal van por `can_manage_location`. A una función que
+> devuelve el rol no se le puede añadir una rama de expiración sin romper lo que
+> esta misma §5.2 le pide a `business_member_session_state`: el panel necesita
+> `role: 'staff'` **junto con** `reason: 'session_expired'`, precisamente para
+> poder explicar la salida. Si `business_member_role` devolviera `null` en una
+> sesión vencida, el panel sabría que venció y no sabría quién era.
+>
+> El guard aparte resuelve las dos cosas sin que una tenga que sacrificarse por
+> la otra: `can_manage_location` llama a `business_member_session_valid` para no
+> autorizar, y `business_member_session_state` calcula su propio `reason` para
+> poder explicar. Y es el único helper que puede **negar** por sesión.
 
 - `session_ttl_hours = 0` → la comprobación se salta.
 - `last_authenticated_at` lo sella un endpoint que el panel llama una vez, después del login
   (`POST /staff/session`). Un solo round-trip extra.
 - Si el TTL venció, RLS deniega y el panel necesita distinguir "venció" de "no autorizado":
-  se expone `public.business_member_session_state() → jsonb` con
-  `{ role, location_ids, expires_at, reason }` para que la app pueda explicar la salida en
-  vez de mostrar un error genérico.
+  se expone `public.business_member_session_state(p_business_id uuid default null) → jsonb` con
+  `{ role, location_ids, expires_at, reason, business_ids }` para que la app pueda explicar
+  la salida en vez de mostrar un error genérico.
+
+**El TTL es de todos los roles, sin excepción para dueño ni gerente.** El §9.2 les ofrece
+a esos dos el modo "equipo propio" con `session_ttl_hours = 0`, o sea que se espera que
+tengan TTL vencenibles; si el TTL solo corriera para `staff`, un dueño con la sesión de
+hace tres días tendría el panel diciéndole "venció tu sesión" mientras RLS le sigue
+concediendo todo. Las dos funciones tienen que contar la misma historia: la que autoriza y
+la que explica.
+
+**`business_member_session_state` sin argumentos solo es honesta cuando la persona tiene
+un negocio.** El dueño real tiene varios —en producción, seis—, y elegir la fila más
+antigua devuelve el negocio equivocado sin avisar. Por eso el argumento es opcional y su
+uso es explícito:
+
+| llamada | qué devuelve |
+| --- | --- |
+| `session_state(negocio)` | el estado de esa membresía |
+| `session_state()` con exactamente una membresía activa | el estado de esa |
+| `session_state()` con varias membresías activas | `reason: 'multiple_businesses'`, `role: null`, y `business_ids` con la lista para que la app pregunte |
+| `session_state()` sin membresías | `reason: 'no_membership'` |
+| `session_state()` sin membresía **activa**, pero con una pausada | `reason: 'disabled'` |
+
+**`disabled` es una salida distinta de "nunca fue miembro", y por eso tiene fila propia.** La
+razón de existir de esta función es que el panel explique la salida en vez de mostrar un error
+genérico, y a quien le revocaron el acceso hay que explicarle lo que le pasó. El vocabulario
+del panel ya distingue **pausar** de **dar de baja**, y "disabled corta acceso de inmediato" es
+un requisito de verificación, no una nota: las dos cosas suponen que la app sepa decir
+"te pausaron" y no "no te conozco".
+
+**El orden importa, y es el que decide si esto es una salida o un error.** La membresía
+pausada se consulta **después** de que la selección por `status = 'active'` no encuentre nada,
+nunca antes: alguien activo en A y pausado en B sigue siendo `ok` en A. La fila pausada
+tampoco entra en `business_ids`, que es la lista de negocios en los que se puede actuar, y
+exige `deleted_at is null` como el resto — una fila borrada no concede nada por ningún camino,
+pero tampoco es "te pausaron": es nada.
+
+La selección mira `status = 'active'` y `deleted_at is null`. Sin `status` en el predicado,
+una membresía deshabilitada más antigua tapa la activa y el panel muestra el negocio
+equivocado — el mismo bug por otro camino.
+
+Y `expires_at` solo se puede calcular si hubo sello: una membresía cuyo
+`last_authenticated_at` es nulo **nunca** tuvo sesión que expirar, y eso no es lo mismo.
+`reason: 'session_never_stamped'` le dice al panel que pida iniciar sesión otra vez, y
+`session_expired` llega con la fecha en que de verdad venció.
 
 **Distinción honesta:** el TTL es un control de responsabilidad y UX, no una frontera de
 seguridad. La frontera es la revocación. Un empleado con sesión abierta y TTL vencido pierde
@@ -259,9 +420,48 @@ El panel escribe directo a Supabase, así que un límite comprobado en la API se
 saltar con un insert desde el dispositivo. Los límites van en triggers
 `BEFORE INSERT OR UPDATE`:
 
-- `business_locations` → si `count(*) + 1 > locations(plan)` se aborta.
-- `business_members` → si `count(*) + 1 > members(plan)` se aborta.
-- Ambos consultan `business_has_feature(business, 'staff_access')` antes de insertar.
+Los dos comparan **el estado después de la escritura**, no un `count(*)` de lo que ya
+existe. Esta redacción es la que manda, y la razón de que diga esto es §5.4:
+
+- `business_locations` → se aborta si **esta escritura hace crecer el negocio** y el
+  estado resultante queda por encima de `locations(plan)`. Renombrar una sucursal que
+  ya estaba activa no la hace crecer, así que no puede ser la razón de un rechazo; sí
+  cuenta una mudanza a otro negocio, porque para el negocio de destino la fila es
+  nueva. Y el conteo de «las demás» sólo mira filas **`is_active`** (`prosrc`:
+  `where l.business_id = new.business_id and l.is_active and (tg_op = 'INSERT' or
+  l.id <> new.id)`): desactivar una sucursal la saca del cupo sin que ninguna
+  escritura tenga que crecer.
+- `business_members` → igual, y solo contando filas con `role <> 'owner'` y
+  `deleted_at is null` (`prosrc`: `where m.business_id = new.business_id and
+  m.role <> 'owner' and m.deleted_at is null and (tg_op = 'INSERT' or m.id <> new.id)`).
+  Editar el `label`, el `alias`, el `role` o el `status` de un acceso que ya existe no
+  lo mete en el conteo.
+
+  **La asimetría que hay que saber**: los dos conteos preguntan «¿esta fila sigue
+  consumiendo cupo?», pero cada tabla decide eso con una columna distinta —
+  `is_active` en `business_locations`, `deleted_at is null` en `business_members` —
+  y el de miembros además excluye al `owner`, que no consume cupo nunca. Nadie lo
+  traduce a una regla única, así que un `free` con tres sucursales de las que una
+  está desactivada entra sin tocar el tope, mientras que tres miembros que no son
+  propietario no entran aunque dos estén borrados lógicamente.
+- Los dos consultan `business_plan_of(business)` para el plan — y `business_plan_of`,
+  no una segunda `left join` a `business_plans_state`, porque un negocio al que le
+  borraron la fila del plan tiene que leer `free` **en el mismo sitio** que lo lee el
+  mensaje — y `business_has_feature(business, 'staff_access')` antes de insertar.
+- Un `case` sin fila para el plan que llega levanta excepción en vez de devolver
+  `null`: «nadie describió este plan» y «este plan no tiene tope» no son la misma
+  cosa, y la segunda es un permiso.
+
+> **Por qué no `count(*) + 1`.** La frase anterior a esta decía
+> «si `count(*) + 1 > locations(plan)` se aborta», y un trigger escrito así le
+> responde «no» a un `UPDATE`. El trigger corre en `BEFORE INSERT OR UPDATE`, así que
+> un `UPDATE` también lo atraviesa: renombrar la sucursal de una panadería con tres y
+> plan `free` contaría tres, sumaría uno, compararía cuatro contra uno y la dejaría
+> sin poder corregir ni su dirección. Es el §5.4 escrito al revés — el penalty
+> retroactivo que esta misma sección declara inaceptable — y por eso la comparación
+> es contra el estado posterior, con la fila que la escritura toca excluida del
+> conteo de «los demás» porque en un `UPDATE` sigue en la tabla con sus valores
+> viejos y contarla sería contarla dos veces.
 
 **Los triggers solo disparan en escritura. Nunca bloquean lectura ni operación.** Si a un
 negocio le baja el plan, los accesos que ya creó **siguen funcionando**; lo que se bloquea
@@ -277,6 +477,22 @@ sentencia retroactiva.
 
 `owner` es intocable: ningún rol puede desactivar al dueño. La transferencia de propiedad
 queda fuera de la v1 y se anota como pendiente, no como olvidado.
+
+> **Actualizado por el Plan 2 (2026-10-20).** «Intocable» quedó más fuerte: el dueño
+> tampoco se puede **degradar** (`20261020052915`), porque una degradación sin
+> transferencia atómica deja al negocio sin dueño —invisible en el listado del panel,
+> con `business_ownership` sigue nombrándolo, y sin ninguna ruta que devuelva
+> `role: 'owner'` porque la promoción es un 422—. **La consecuencia hay que decirla:
+> mientras la transferencia no exista, un dueño —de un negocio activo o no— no puede
+> borrar su cuenta por ninguna vía.** La puerta del borrado cuenta membresías de
+> dueño **vivas** (`role = 'owner'` y `deleted_at is null`) y **no mira
+> `businesses.is_active`**: desactivar el negocio no abre la salida, y borrarlo tampoco
+> —la cascada `business_members_business_id_fkey` dispara el trigger del dueño y falla con
+> `R0002`. El detalle está en el addendum §A.2 del ADR-0013, y la
+> lista de lo que Plan 3 hereda, en el plan del Plan 2.
+>
+> La transferencia de propiedad pasó de «pendiente, no olvidado» a **el primer ítem
+> de Plan 3**, y es un hueco de producto: no es limpieza.
 
 ## 6. Cambios en RLS
 
@@ -294,7 +510,38 @@ update public.orders o set business_location_id = f.business_location_id
 alter table public.orders alter column business_location_id set not null;
 ```
 
-`reserve_offer` escribe la columna. A partir de ahí, `orders` se acota igual que `offers`.
+**La columna no la escribe `reserve_offer`: la deriva un trigger.** Lo que entró fue
+`trg_set_order_business_location`, un `BEFORE INSERT ... FOR EACH ROW` sobre `public.orders`
+que lee `offers.business_location_id` del `offer_id` de la fila que está entrando y lo
+escribe en la columna antes de que esa fila exista. `reserve_offer` **no se reescribió**: su
+cuerpo es el que era.
+
+La razón es que el trigger hace el trabajo sin entrar en el perímetro que la función ya
+tiene. `reserve_offer` es `SECURITY DEFINER` con una matriz de grants ya medida
+(`revoke all ... from public` + `grant execute ... to authenticated, service_role`), con el
+binding de identidad de la ADR-0011 y con su propia máquina de estados —inserta el pedido,
+abre el `order_events` con `pending`, descuenta stock y quema cupón—. Reescribirla para
+añadir una columna era meter un cambio de comportamiento dentro de una superficie que se
+aceptó a propósito como estable, y cambiar su cuerpo obligaba a reconstruir el grants y a
+re-justificar el advisory. El trigger hace lo mismo **por debajo** de los grants: no necesita
+EXECUTE, no amplía quién puede insertar pedidos y no se puede invocar desde fuera. La
+ventaja que no tiene la reescritura es que además es autoritativo: sobrescribe el valor
+venga de donde venga, así que un caller que pase una sucursal equivocada no puede colarla,
+y un pedido insertado por `reserve_offer`, por un script de soporte o a mano queda acotado
+por sucursal igual que una oferta. A partir de ahí, `orders` se acota como `offers`.
+
+**El límite, sin adornos:** el trigger es `BEFORE INSERT` y nada más. Si una oferta cambia
+de sucursal *después*, los pedidos que ya se le hicieron **conservan la sucursal vieja**, y
+el trigger no los toca porque no vuelve a disparar. La FK compuesta no salta, porque la fila
+de `business_locations` de la sucursal vieja sigue existiendo: lo que el constraint sigue
+validando es el par `(business_location_id, business_id)`, no que la oferta siga estando en
+esa sucursal. Eso es coherente con que la columna sea un **snapshot** —el pedido registra el
+lugar donde se recogió— pero no es lo mismo que un rango vivo, y el código que lea la
+columna tiene que saber cuál de las dos está leyendo. Si algún día tiene que ser cierto en
+el otro sentido, hacen falta dos cosas que hoy no existen: un `BEFORE UPDATE` en
+`offers` que reprograme los pedidos abiertos, o una lectura que resuelva la sucursal
+actual de la oferta en lugar de la guardada. Ninguna de las dos está decidida aquí, y esta
+sección no promete ninguna.
 
 ### 6.2 Sustitución de `business_ownership`
 
@@ -321,7 +568,12 @@ Todas pasan a `public.can_manage_location(...)` o `public.business_member_role(.
 5. Crear las policies nuevas **junto** a las viejas (mismo predicado, evaluadas por
    separado) y verificar que ambas dan el mismo resultado.
 6. Dropear policies viejas y RPCs viejos; recrear los RPCs con el helper.
-7. `drop table public.business_ownership` (y sus grants).
+7. `drop table public.business_ownership` (y sus grants). **Aplazado al Plan 3**: al cierre
+   del Plan 1 los pasos 1-5 están hechos y verificados por paridad, y del paso 6 solo la
+   mitad de las RPCs —`cancel_order`, `set_order_status` y `validate_pickup_code` ya se
+   recrearon con el helper—, pero **las policies viejas siguen en pie y la tabla también**,
+   porque `getBusinessesByOwnerId` todavía la lee y dropearla sin migrar ese reader rompe el
+   panel del dueño. Ver ADR-0013.
 8. Triggers de límites de plan.
 9. Grants a `authenticated` de solo lectura sobre `business_members` /
    `business_member_locations`.
@@ -474,11 +726,35 @@ negocio, payouts, métricas, coupons y la propia sección Equipo. Hoy esa secci�
 (`SettingsSection.tsx` / `GestionContent.tsx`) se renderiza completa sin mirar quién entró,
 porque solo existe un tipo de usuario con acceso al panel.
 
-El filtrado es de **UI**, no de seguridad: RLS ya impide que un `staff` escriba en
-`business_locations` o lea `payouts`, así que ocultar controles no agrega una frontera,
-solo deja de ofrecer botones que van a fallar. El origen del rol es
-`public.business_member_session_state()`, que la sesión ya consulta en §5.2 — el panel
+El filtrado es de **UI**, y para las operaciones que la base ya le niega a un `staff`,
+eso es exactamente lo que es: RLS le niega leer `payouts` (`Members can view own
+payouts` exige `owner | manager`), insertar sucursales (`Members can insert business
+locations`, que exige `owner | manager`) y borrarlas (`Members can delete business
+locations`, que exige `owner`). Ahí, ocultar controles deja de ofrecer botones que van
+a fallar.
+
+**Pero hay una operación que NO está respaldada por RLS, y por eso hay que
+nombrarla: el `UPDATE` de `business_locations`.** La policy
+`Members can update business locations` es `can_manage_location(business_id, id)`
+sin condición de rol, y esa función concede al `staff` las sucursales de su fila
+de alcance: **un `staff` puede renombrar su propia sucursal por PostgREST**
+(medido contra la base viva el 2026-10-20; la tabla completa está en §5.1). En ese
+caso **el filtro de la UI sí recorta el alcance**: no es un botón que vaya a
+fallar, es un botón que **escribe**, y esconderlo es lo único que impide esa
+escritura para un cliente que hable directo con Supabase (el móvil, ADR-0002).
+El CRUD de sucursales de la API lo niega por su cuenta (`assertCanMutateBusiness`
+es owner-only), pero un filtro leído como «RLS ya lo niega» escondería un botón
+que escribe.
+
+El origen del rol es
+`public.business_member_session_state(negocio)`, que la sesión ya consulta en §5.2 — el panel
 pregunta por su rol en lugar de deducirlo de `profiles.role`, que solo dice "de negocio".
+
+**El argumento es explícito acá a propósito, y el filtro por `minRole` lo necesita.** La
+llamada sin argumento devuelve `role: null` con `reason: 'multiple_businesses'` para quien
+tiene más de un negocio —el dueño real, que en producción tiene seis—, y un `role: null`
+sobre el que filtrar por rol mínimo no dice nada: todo pasa o nada pasa. El panel ya eligió
+negocio para poder pintar sus controles, así que el rol que necesita es el de ese negocio.
 
 Cada opción de configuración se declara con un rol mínimo
 (`minRole: 'owner' | 'manager' | 'staff'`) y la sección filtra por ese campo. La

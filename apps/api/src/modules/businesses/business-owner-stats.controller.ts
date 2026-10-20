@@ -41,7 +41,8 @@ import { BusinessOwnerStatsService } from './business-owner-stats.service';
  * registers first, and is not a resource.
  *
  * NO `@Body` AND NO `@Public()`. The period is a validated query and the owner
- * is a path segment resolved against `business_ownership` in the service; there
+ * is a path segment resolved against the caller's OWNER membership in the
+ * service; there
  * is no request body here, so there is nothing a caller could put a
  * `business_id` or a `user_id` into. The absence is asserted by arity in
  * `business-owner-stats.controller.spec.ts`, the same way

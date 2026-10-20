@@ -710,11 +710,8 @@ export class BusinessesService {
     business: BusinessRow,
   ): Promise<void> {
     if (user.role === 'admin') return;
-    const isOwner = await this.businessesRepository.isOwner(
-      business.id,
-      user.id,
-    );
-    if (!isOwner) {
+    const role = await this.businessesRepository.roleOf(business.id, user.id);
+    if (role !== 'owner') {
       throw new ForbiddenException('You can only view businesses you own');
     }
   }
@@ -729,24 +726,32 @@ export class BusinessesService {
    * revenue out of `orders`, and the temptation there is to treat the business
    * id in the path as an identity rather than as a claim. Reusing this method
    * is what keeps a fourth copy of the predicate from appearing — and the
-   * predicate has already been copied twice in this codebase
+   * predicate HAD been copied twice in this codebase
    * (`OrdersRepository.isBusinessOwner`, `OffersRepository.isBusinessOwner`),
-   * which is how "is this my business?" ends up answered three slightly
-   * different ways.
+   * which is how "is this my business?" ended up answered three slightly
+   * different ways. Those two copies are gone: the three callers now ask
+   * `BusinessesRepository.roleOf`, and each of them says what it demands of the
+   * answer.
    *
    * Admin passes on role alone, exactly as it does for every other business
-   * route here; for anyone else the answer is the `business_ownership` row.
+   * route here; for anyone else the answer is the caller's membership in this
+   * business, and this gate requires the OWNER one.
+   *
+   * ─── POR QUÉ EL ROL SE PIDE Y NO SE PASA ─────────────────────────────────────
+   *
+   * `roleOf` contesta un HECHO —qué rol tiene quien pregunta— y este método
+   * declara lo que EXIGE: el dueño. Si el helper recibiera un `requiredRole`,
+   * la exigencia se escribiría una sola vez y nadie podría ver, en la línea que
+   * decide, qué se está exigiendo. La diferencia entre un predicado y un
+   * permiso es la diferencia entre una consolidación y una abertura de acceso.
    */
   async assertCanViewBusiness(
     user: AuthUser,
     businessId: string,
   ): Promise<void> {
     if (user.role === 'admin') return;
-    const isOwner = await this.businessesRepository.isOwner(
-      businessId,
-      user.id,
-    );
-    if (!isOwner) {
+    const role = await this.businessesRepository.roleOf(businessId, user.id);
+    if (role !== 'owner') {
       throw new ForbiddenException('You can only access businesses you own');
     }
   }
@@ -774,11 +779,8 @@ export class BusinessesService {
     business: BusinessRow,
   ): Promise<void> {
     if (user.role === 'admin') return;
-    const isOwner = await this.businessesRepository.isOwner(
-      business.id,
-      user.id,
-    );
-    if (!isOwner) {
+    const role = await this.businessesRepository.roleOf(business.id, user.id);
+    if (role !== 'owner') {
       throw new ForbiddenException('You can only manage businesses you own');
     }
   }
@@ -788,11 +790,8 @@ export class BusinessesService {
     businessId: string,
   ): Promise<void> {
     if (user.role === 'admin') return;
-    const isOwner = await this.businessesRepository.isOwner(
-      businessId,
-      user.id,
-    );
-    if (!isOwner) {
+    const role = await this.businessesRepository.roleOf(businessId, user.id);
+    if (role !== 'owner') {
       throw new ForbiddenException('You can only manage businesses you own');
     }
   }

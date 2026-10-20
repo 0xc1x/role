@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import {
   businessFinance,
+  businessMembers,
   businessModeration,
   businessOwnership,
   emailSends,
@@ -40,15 +41,85 @@ describe('BusinessesRepository (DB real)', () => {
     expect(await repo.findBySlug('nope')).toBeNull();
   });
 
-  test('isOwner y findIdsOwnedBy', async () => {
+  test('roleOf y ownedBusinessIds', async () => {
     const row = await repo.insert(ctx.db, {
       owner_id: ownerId,
       name: 'Café',
       slug: 'cafe',
     });
-    expect(await repo.isOwner(row.id, ownerId)).toBe(true);
-    expect(await repo.isOwner(row.id, randomUUID())).toBe(false);
-    expect(await repo.findIdsOwnedBy(ownerId)).toContain(row.id);
+    expect(await repo.roleOf(row.id, ownerId)).toBe('owner');
+    expect(await repo.roleOf(row.id, randomUUID())).toBeNull();
+    expect(await repo.ownedBusinessIds(ownerId)).toContain(row.id);
+  });
+
+  /**
+   * The owner lands in BOTH tables, in the same transaction.
+   *
+   * This is the invariant that keeps the two counts equal —«the businesses with
+   * an ownership row» and «the businesses with an owner membership»— and the
+   * equality is what makes it safe to move a join from one table to the other
+   * without changing WHICH ROWS EXIST. A business with an ownership row and no
+   * membership is a business whose owner is locked out of it, and a business
+   * with a membership and no ownership row is a business that the legacy
+   * readers cannot find.
+   */
+  test('insert deja al dueño en las dos tablas, con la misma fila', async () => {
+    const row = await repo.insert(ctx.db, {
+      owner_id: ownerId,
+      name: 'Panadería La Espiga',
+      slug: 'panaderia-la-espiga',
+    });
+
+    const [ownership] = await ctx.db
+      .select()
+      .from(businessOwnership)
+      .where(eq(businessOwnership.business_id, row.id));
+    expect(ownership?.owner_id).toBe(ownerId);
+
+    const [membership] = await ctx.db
+      .select()
+      .from(businessMembers)
+      .where(eq(businessMembers.business_id, row.id));
+    expect(membership?.user_id).toBe(ownerId);
+    expect(membership?.role).toBe('owner');
+    expect(membership?.status).toBe('active');
+    expect(membership?.deleted_at).toBeNull();
+    // El dueño no vence: un TTL de 24 horas con sello nuevo le quitaría su
+    // propio negocio a las 24 horas de entrar.
+    expect(membership?.session_ttl_hours).toBe(0);
+    // Y el alias espeja el correo del dueño, como el backfill.
+    expect(membership?.alias).toBe('owner@biz.cl');
+  });
+
+  /**
+   * A member row needs the owner's email, and there is no second answer.
+   *
+   * The old code had a fallback —`${owner_id}@owner.invalid`— for a profile
+   * that did not exist. It never persisted: `business_ownership.owner_id` is a
+   * FK to `profiles(id)`, so a business for an owner without a profile fails
+   * on that insert and the transaction is undone. The alias was a lie that
+   * could not survive, and `business_members.alias` is UNIQUE per business:
+   * writing it would have burned the alias of a real owner.
+   *
+   * So the owner row is not written, and the reason is said out loud.
+   */
+  test('sin perfil del dueño no hay membresía, y el motivo es explícito', async () => {
+    const ghostOwner = randomUUID();
+
+    await expect(
+      repo.insert(ctx.db, {
+        owner_id: ghostOwner,
+        name: 'Negocio sin dueño',
+        slug: 'negocio-sin-dueno',
+      }),
+    ).rejects.toThrow(/has no profile/);
+
+    // Y NO quedó una fila de miembro con un alias inventado.
+    const members = await ctx.db
+      .select()
+      .from(businessMembers)
+      .where(eq(businessMembers.user_id, ghostOwner));
+    expect(members).toHaveLength(0);
   });
 
   test('listForUser filtra por owner y estado', async () => {

@@ -8,6 +8,8 @@ import {
 	RefreshRequestSchema,
 	RegisterRequestSchema,
 	ResetPasswordRequestSchema,
+	StaffSessionStateSchema,
+	StampStaffSessionSchema,
 } from "../schemas/auth.schema";
 
 describe("LoginRequestSchema", () => {
@@ -190,5 +192,146 @@ describe("ChangeEmailRequestSchema", () => {
 			email: "otro@b.com",
 		});
 		expect(Object.keys(parsed)).toEqual(["new_email"]);
+	});
+});
+
+describe("StaffSessionStateSchema", () => {
+	const ids = ["e2000000-0000-4000-8000-000000000001"];
+	const locationIds = ["e3000000-0000-4000-8000-000000000001"];
+
+	it("knows the six reasons the database returns", () => {
+		// The list is the RPC's, and this is the assertion that the schema has all
+		// of it. A seventh reason in the database would have to be added HERE — the
+		// schema is the copy that is wrong, and narrowing the enum instead would
+		// silently drop the value and render "you were paused" at whoever it was
+		// describing.
+		for (const reason of [
+			"ok",
+			"no_membership",
+			"multiple_businesses",
+			"disabled",
+			"session_expired",
+			"session_never_stamped",
+		]) {
+			expect(
+				StaffSessionStateSchema.safeParse({
+					role: null,
+					location_ids: [],
+					expires_at: null,
+					reason,
+					business_ids: ids,
+				}).success,
+				reason,
+			).toBe(true);
+		}
+	});
+
+	it("rejects a reason nobody defined", () => {
+		expect(
+			StaffSessionStateSchema.safeParse({
+				role: null,
+				location_ids: [],
+				expires_at: null,
+				reason: "banned_for_being_rude",
+				business_ids: ids,
+			}).success,
+		).toBe(false);
+	});
+
+	it("`role: null` is an answer, not a broken row", () => {
+		// §9.3: a person with several businesses is `multiple_businesses`, not
+		// `ok`, and a null role is exactly why the panel asks which business rather
+		// than guessing one. A schema that required a role would make the exit the
+		// panel has to explain unrepresentable.
+		const parsed = StaffSessionStateSchema.parse({
+			role: null,
+			location_ids: [],
+			expires_at: null,
+			reason: "multiple_businesses",
+			business_ids: [...ids, "e2000000-0000-4000-8000-000000000002"],
+		});
+		expect(parsed.role).toBeNull();
+		expect(parsed.business_ids).toHaveLength(2);
+	});
+
+	it("an `ok` carries the role, the scope and no expiry date", () => {
+		// `session_ttl_hours = 0` produces exactly this: a live session with no
+		// expiration, which is not the same as an expired one.
+		const parsed = StaffSessionStateSchema.parse({
+			role: "owner",
+			location_ids: locationIds,
+			expires_at: null,
+			reason: "ok",
+			business_ids: ids,
+		});
+		expect(parsed.expires_at).toBeNull();
+		expect(parsed.location_ids).toEqual(locationIds);
+	});
+
+	it("a session that did expire says so with a date", () => {
+		const parsed = StaffSessionStateSchema.parse({
+			role: "staff",
+			location_ids: locationIds,
+			expires_at: "2026-10-16T09:00:00+00:00",
+			reason: "session_expired",
+			business_ids: ids,
+		});
+		expect(parsed.reason).toBe("session_expired");
+	});
+
+	it("an unknown role is rejected rather than cast to null", () => {
+		expect(
+			StaffSessionStateSchema.safeParse({
+				role: "admin",
+				location_ids: [],
+				expires_at: null,
+				reason: "ok",
+				business_ids: ids,
+			}).success,
+		).toBe(false);
+	});
+});
+
+describe("StampStaffSessionSchema", () => {
+	const businessId = "d0000000-0000-4000-8000-000000000001";
+
+	it("nombra la membresía que se va a sellar", () => {
+		expect(
+			StampStaffSessionSchema.safeParse({ business_id: businessId }).success,
+		).toBe(true);
+	});
+
+	it("admite la llamada que NO nombra: es la de un panel recién autenticado", () => {
+		// El §5.2 sella una vez, después del login, y un panel recién autenticado es
+		// el que todavía no eligió negocio. Sin esto, la ruta que existe para
+		// resolver el negocio por su cuenta no resolvería nada.
+		expect(StampStaffSessionSchema.safeParse({}).success).toBe(true);
+		expect(StampStaffSessionSchema.safeParse(undefined).success).toBe(true);
+	});
+
+	it("`null` NO es «no sé»: es un 400", () => {
+		// Aceptar el `null` haría que un cliente que arma el cuerpo con un valor por
+		// defecto pidiera la resolución automática sin saber que la pidió, y el
+		// camino que nadie exercise es el que nadie prueba.
+		expect(
+			StampStaffSessionSchema.safeParse({ business_id: null }).success,
+		).toBe(false);
+		expect(
+			StampStaffSessionSchema.safeParse({ business_id: "no-es-uuid" }).success,
+		).toBe(false);
+	});
+
+	it("rechaza un `expires_at`: el servidor no acepta la fecha que el panel dice", () => {
+		// Si lo aceptara, un 200 con el `expires_at` que el cliente mandó sería un
+		// 200 que finge haber sellado.
+		expect(
+			StampStaffSessionSchema.safeParse({
+				business_id: businessId,
+				expires_at: "2031-01-01T00:00:00+00:00",
+			}).success,
+		).toBe(false);
+		expect(
+			StampStaffSessionSchema.safeParse({ member_id: businessId }).success,
+		).toBe(false);
 	});
 });

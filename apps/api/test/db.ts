@@ -444,6 +444,61 @@ export async function createTestDb(): Promise<TestDbContext> {
       for each row
       execute function public.record_order_event();
 
+    -- The branch derivation. Statement for statement this is the body
+    -- 20261013230029_orders_business_location.sql creates; only the header is
+    -- reflowed, to the local style every install in this block uses, and the
+    -- dollar-quote tag with it.
+    --
+    -- No backticks anywhere in this comment: the whole install list is ONE JS
+    -- template literal and this comment sits inside it, so a backtick here
+    -- closes the string and the harness fails to parse.
+    --
+    -- This is the one hand-installed trigger that is not a missing BEHAVIOUR but
+    -- a missing DERIVATION, and the failure it causes is the mirror's worst
+    -- shape: the mirror DECLARES orders.business_location_id as NOT NULL
+    -- because Drizzle read that constraint off the live database, and nothing in
+    -- the mirror FILLS it, because Drizzle cannot express a trigger. So every
+    -- fixture that seeds an order without naming the column -- which is most of
+    -- them, and correctly so, because no application is supposed to name it --
+    -- died with
+    --
+    --     23502 null value in column "business_location_id" of relation "orders"
+    --     violates not-null constraint
+    --
+    -- in me.user-order-stats, business-owner-stats and revenue-stats.repository.
+    -- A harness that was merely missing a trigger fails loudly; this one failed
+    -- with an error that names the column and points at the schema instead of at
+    -- the harness.
+    --
+    -- Installed here for the same reason record_order_event sits two statements
+    -- above: the mirror carries the shape and not the behaviour, and the
+    -- behaviour is what the fixtures exist to exercise.
+    --
+    -- Copied rather than paraphrased so that a change to the migration shows up
+    -- as a diff against this block instead of as a rewrite of it. The raise
+    -- travels with it because the raise is part of the contract: an order whose
+    -- offer does not exist must not land with a NULL branch.
+    create or replace function public.set_order_business_location()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $location_fn$
+    begin
+      select f.business_location_id into new.business_location_id
+      from public.offers f where f.id = new.offer_id;
+      if new.business_location_id is null then
+        raise exception 'la oferta % no existe, no se puede derivar la sucursal', new.offer_id;
+      end if;
+      return new;
+    end;
+    $location_fn$;
+
+    create trigger trg_set_order_business_location
+      before insert on public.orders
+      for each row
+      execute function public.set_order_business_location();
+
     -- Rating triggers, verbatim from the live database. Added because
     -- DELETE /api/v1/auth/account deletes the caller's reviews and relies on
     -- these to rewrite the averages: without them the harness proves the rows
@@ -542,6 +597,129 @@ export async function createTestDb(): Promise<TestDbContext> {
       where business_id = p_business_id
         and status = 'completed'::public.order_status
     $function$;
+  `);
+
+  // The two owner guards, verbatim from the ledger. Installed for the same
+  // reason as the block above and with the same warning about copying: the
+  // mirror carries `business_members.user_id ... ON DELETE CASCADE` (Drizzle read
+  // that clause off the live database, so it is IN the generated SQL) and carries
+  // no trigger. Without them, `DELETE /auth/account` on a business owner would
+  // delete the profile, the cascade would delete the membership row, and the spec
+  // would be green — because the very guard that makes that path unsafe is the
+  // guard the harness does not have.
+  //
+  // So this is not "the trigger would be nice to have here": the erase path
+  // (`AuthAccountRepository` + `AuthService.deleteAccount`) is built AROUND these
+  // two functions, and the specs that pin it cannot mean anything without them.
+  // `auth.service.db.spec.ts` holds the positive control — a profile that owns a
+  // business, erased straight through the repository, has to raise `R0002` — so a
+  // harness that lost this block fails loudly instead of passing quietly.
+  //
+  // `trg_enforce_owner_is_untouchable` (BEFORE UPDATE) is installed too, and for
+  // a second reason: `anonymise` writes `deleted_at` on the caller's own
+  // memberships, and a spec can only prove that a row it archived without a raw
+  // database error if the update guard is present.
+  await client.unsafe(`
+    create or replace function public.enforce_owner_is_untouchable()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    begin
+      if old.role <> 'owner'::public.business_member_role then
+        return new;
+      end if;
+
+      if new.role <> 'owner'::public.business_member_role then
+        raise exception 'el dueño del negocio no se puede degradar; la transferencia de propiedad no existe en esta versión'
+          using
+            errcode = 'R0002',
+            detail = format('business=%s member=%s', new.business_id, old.id),
+            hint = 'la transferencia de propiedad no está en la v1: degradar al dueño dejaría el negocio sin dueño';
+      end if;
+
+      if old.status is distinct from new.status
+         and new.status = 'disabled'::public.business_member_status then
+        raise exception 'el dueño del negocio no se puede desactivar; la transferencia de propiedad no existe en esta versión'
+          using
+            errcode = 'R0002',
+            detail = format('business=%s member=%s', new.business_id, old.id),
+            hint = 'ningún rol desactiva al dueño; la transferencia de propiedad no está en la v1';
+      end if;
+
+      if old.deleted_at is null and new.deleted_at is not null then
+        raise exception 'el dueño del negocio no se puede dar de baja; la transferencia de propiedad no existe en esta versión'
+          using
+            errcode = 'R0002',
+            detail = format('business=%s member=%s', new.business_id, old.id),
+            hint = 'el borrado es lógico: la fila queda para saber quién operó en el negocio';
+      end if;
+
+      return new;
+    end;
+    $fn$;
+
+    create trigger trg_enforce_owner_is_untouchable
+      before update on public.business_members
+      for each row execute function public.enforce_owner_is_untouchable();
+
+    create or replace function public.enforce_owner_cannot_be_deleted()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    begin
+      if old.role <> 'owner'::public.business_member_role
+         or old.deleted_at is not null then
+        return old;
+      end if;
+
+      raise exception 'el dueño del negocio no se puede borrar; dá de baja la fila en vez de borrarla'
+        using
+          errcode = 'R0002',
+          detail = format('business=%s member=%s', old.business_id, old.id),
+          hint = 'el borrado es lógico: la fila queda para saber quién operó en el negocio';
+    end;
+    $fn$;
+
+    create trigger trg_enforce_owner_cannot_be_deleted
+      before delete on public.business_members
+      for each row execute function public.enforce_owner_cannot_be_deleted();
+  `);
+
+  // The ONE account of the session expiry, copied VERBATIM from the ledger
+  // (`20261015024825_business_policy_tightening.sql`).
+  //
+  // Why it is here: `apps/api/src/database/business-membership.ts` —the shared
+  // answer to «is this my business?»— calls this function instead of computing
+  // `last_authenticated_at + ttl` in TypeScript. That is deliberate: the ADR
+  // says the arithmetic exists in exactly one place, and a copy in a `.ts` file
+  // is invisible to the catalog guard that reads `pg_proc.prosrc`. So the API
+  // asks the database, and the harness has to have the function the API asks.
+  //
+  // It is `IMMUTABLE` and takes its two arguments explicitly —no `auth.uid()`,
+  // no session— so it installs here unchanged and it means the same thing in
+  // the harness as in production. Copied rather than paraphrased so that a
+  // change to the migration shows up as a diff against this block instead of as
+  // a rewrite of it.
+  await client.unsafe(`
+    create or replace function public.business_member_session_expires_at(
+      p_session_ttl_hours integer,
+      p_last_authenticated_at timestamptz
+    )
+    returns timestamptz
+    language sql
+    immutable
+    set search_path = ''
+    as $$
+      select case
+        when p_session_ttl_hours > 0 and p_last_authenticated_at is not null
+          then p_last_authenticated_at + (p_session_ttl_hours * interval '1 hour')
+        else null
+      end;
+    $$;
   `);
 
   const db: TestDatabase = drizzle({ client });

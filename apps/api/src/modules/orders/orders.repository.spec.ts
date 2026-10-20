@@ -33,7 +33,7 @@ afterAll(async () => {
 });
 
 describe('OrdersRepository (DB real)', () => {
-  test('insertOrder + findById + findByIdWithBusinessOwner', async () => {
+  test('insertOrder + findById + findByIdWithBusiness', async () => {
     const order = await seedOrder(ctx.db, userId, offerId, businessId);
     expect(await repo.findById(order.id)).toMatchObject({
       order_number: order.order_number,
@@ -41,18 +41,17 @@ describe('OrdersRepository (DB real)', () => {
     expect(
       await repo.findById('00000000-0000-0000-0000-000000000000'),
     ).toBeNull();
-    const withOwner = await repo.findByIdWithBusinessOwner(order.id);
-    expect(withOwner?.order.id).toBe(order.id);
-    expect(withOwner?.business_owner_id).toBeDefined();
+    const withBusiness = await repo.findByIdWithBusiness(order.id);
+    expect(withBusiness?.order.id).toBe(order.id);
+    expect(withBusiness?.order.business_id).toBe(businessId);
   });
 
-  test('updateStatus y isBusinessOwner', async () => {
+  test('updateStatus', async () => {
     const order = await seedOrder(ctx.db, userId, offerId, businessId);
     await repo.updateStatus(ctx.db, order.id, 'confirmed');
     expect(await repo.findById(order.id)).toMatchObject({
       status: 'confirmed',
     });
-    expect(await repo.isBusinessOwner(businessId, userId)).toBe(false);
   });
 
   test('el trigger de estado es la única autoridad y registra una vez', async () => {

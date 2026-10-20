@@ -694,8 +694,8 @@ describe('what the grants allow', () => {
   });
 
   /**
-   * The policy set is three SELECT policies on `orders` and three on
-   * `order_events`, asserted as text from the live catalog.
+   * The policy set is four SELECT policies on `orders` and four on `order_events`,
+   * asserted as text from the live catalog.
    *
    * `public-read-grants.spec.ts` reads the migration to confirm the policies
    * were created. This asserts they SURVIVED, and more usefully it asserts they
@@ -723,8 +723,34 @@ describe('what the grants allow', () => {
    * pre-rewrite text is what runs here. The `qual` is therefore NOT asserted for
    * those two, and the reason is in the header: asserting a body that production
    * replaced would be asserting on a version nobody runs.
+   *
+   * ─── THE FOURTH AND FIFTH, AND WHY THEY ARE NOT A WIDENING ─────────────────
+   *
+   * "Members can view own orders" and "Members can view own order events" are the
+   * §6.2 policies: they resolve the business by `can_manage_location` and the
+   * location by the order's own `business_location_id`, which is the column Task
+   * 1 added. They still sit NEXT TO the two they duplicate, because
+   * `business_ownership` and its 19 policies are still in place — `business_ownership`
+   * has not been dropped, and the drop is NOT the next migration. It moved to
+   * Plan 3, because the mobile app reads that table on its first panel query, so
+   * Plan 3 has to migrate `getBusinessesByOwnerId` first.
+   *
+   * The two generations coexist because they were verified equivalent, and the
+   * scope of that word matters: equivalent for an owner with a live session, which
+   * is the case every one of those tests exercises. The two sets are NOT
+   * interchangeable for an owner whose session has lapsed — the legacy policies
+   * carry no TTL, so they still grant. That gap is invisible today because a
+   * lapsed owner is also the one thing the legacy set is the only thing still
+   * serving; it stops being invisible the moment the drop happens.
+   *
+   * They are not a widening of what a manager may see: a manager is an active
+   * member of the business, and `can_manage_location` additionally checks that
+   * the location belongs to it and that the session has not expired. The refusal
+   * side of that is asserted in `business-members.rls.db.spec.ts`, with a
+   * `business_ownership` row of zero para el gerente: si algo se abrió, fue por
+   * una policy nueva, y ahí se mide.
    */
-  test('the policy set is three read-only policies on each table, unmodified', async () => {
+  test('the policy set is four read-only policies on orders and four on order_events, unmodified', async () => {
     const rows = await ctx.sql.unsafe<
       {
         tablename: string;
@@ -756,6 +782,13 @@ describe('what the grants allow', () => {
       },
       {
         tablename: 'order_events',
+        policyname: 'Members can view own order events',
+        cmd: 'SELECT',
+        permissive: 'PERMISSIVE',
+        roles: ['authenticated'],
+      },
+      {
+        tablename: 'order_events',
         policyname: 'Users can view own order events',
         cmd: 'SELECT',
         permissive: 'PERMISSIVE',
@@ -777,6 +810,13 @@ describe('what the grants allow', () => {
       },
       {
         tablename: 'orders',
+        policyname: 'Members can view own orders',
+        cmd: 'SELECT',
+        permissive: 'PERMISSIVE',
+        roles: ['authenticated'],
+      },
+      {
+        tablename: 'orders',
         policyname: 'Users can view own orders',
         cmd: 'SELECT',
         permissive: 'PERMISSIVE',
@@ -785,7 +825,9 @@ describe('what the grants allow', () => {
     ]);
 
     // Said a second way, so that a future migration which added a write policy
-    // fails on a one-line diff rather than inside a six-element array.
+    // fails on a one-line diff rather than inside an eight-element array. The two
+    // new ones are SELECT and do not move this list: a policy de escritura sobre
+    // estas tablas sigue siendo algo que nadie pidió.
     const writePolicies = await ctx.sql.unsafe<
       { tablename: string; policyname: string }[]
     >(
@@ -1884,5 +1926,181 @@ describe('orders are born inside a function, not from a table grant', () => {
          from public.order_events where order_id = '${first[0]?.result?.order_id}'`,
     );
     expect(events[0]?.count).toBe(1);
+  });
+});
+
+describe('orders lleva la sucursal de la oferta que reservó', () => {
+  /**
+   * The order carries the branch of its offer, and nothing in the INSERT names
+   * the column.
+   *
+   * That is the whole claim. `public.orders.business_location_id` is derived by
+   * `trg_set_order_business_location`, a BEFORE INSERT trigger, which
+   * overwrites `new.business_location_id` from the offer on every insert,
+   * whatever the statement put there. For a CLIENT role that is a closed door
+   * rather than a courtesy: `authenticated` holds SELECT and nothing else on
+   * `orders` (`20260925155153_harden_client_write_boundaries.sql`, revoked
+   * outright at `20260925163235`), so there is no client INSERT to try and no
+   * client UPDATE to rewrite the column with afterwards. `anon` holds nothing at
+   * all.
+   *
+   * ─── SCOPED TO CLIENT ROLES ON PURPOSE ────────────────────────────────────
+   *
+   * "Cannot be forged" is a statement about who the writer is, not about the
+   * table. `service_role` holds all seven privileges here — this file's own
+   * header says so at :49 — and could set the column to any uuid in the schema
+   * with a single UPDATE, because the trigger is BEFORE INSERT and has no UPDATE
+   * arm. The one test below that writes as `service_role` is asserting what the
+   * trigger DERIVES, not what the table FORBIDS; nothing here claims the table
+   * forbids it.
+   *
+   * ─── WHAT IT DOES NOT BUY, because the opposite reads well ────────────────
+   *
+   * `BEFORE INSERT` is the whole of the trigger. There is no UPDATE arm, and
+   * nothing propagates a branch change: an offer that MOVES to another branch
+   * leaves its existing orders pointing at the old one, and the composite FK
+   * still holds, because the old branch row still exists and still belongs to
+   * the same business. The move is a modelled path here, not a hypothetical —
+   * `20260925155433_harden_business_order_reservations.sql:43` installs
+   * `before insert or update of business_id, business_location_id, is_active on
+   * public.offers`, so the schema already knows how an offer changes branch.
+   *
+   * Closing that gap is an `AFTER UPDATE OF business_location_id ON offers`
+   * trigger, which is another migration and another decision, and is not this
+   * one. What the column guarantees is agreement AT INSERT TIME. Nothing in
+   * this file claims agreement forever, and the two sentences that used to
+   * claim it — this one and the one about who may forge the column — were wrong
+   * rather than optimistic.
+   *
+   * ─── WHY IT RUNS LAST IN THIS FILE ────────────────────────────────────────
+   *
+   * This test COMMITS two offers and two orders that no other test knows about,
+   * and the assertions above are exact-set: `each persona reads exactly the
+   * orders the policies describe` holds `['RLS-A', 'RLS-C']`, the reservation
+   * test holds four rows before its call, and `event visibility equals order
+   * visibility` compares the two sets for seven personas. Two extra `MEMBER`
+   * orders at the active business would break every one of them, and they would
+   * break them by ORDER rather than by shape, which is the worst way for a spec
+   * to fail. So the rows are written where no later assertion can see them.
+   *
+   * ─── WHY IT SEEDS ITS OWN reserve_offer CALL ──────────────────────────────
+   *
+   * Because the obvious way to debug a failing test is
+   * `bun test -t 'el pedido hereda la sucursal de su oferta'`, and a test that
+   * reads rows another `describe` created fails under exactly that with an empty
+   * result — which points the reader at the trigger instead of at the coupling.
+   * Everything below is created by the test that asserts on it.
+   *
+   * `pickup_start`, `pickup_end` and `is_active` are named on the offer INSERT
+   * because all three are load-bearing and two of them are NOT NULL with no
+   * default on `public.offers` — measured on the live database, not inferred
+   * from the schema files. `is_active` defaults to `false`, which is the
+   * correct default and the reason `reserve_offer` needs it spelled out:
+   * unmentioned, the reservation below comes back `OFFER_NOT_FOUND`.
+   *
+   * `service_role` writes the direct INSERT because it is the role the API writes
+   * as and the one the ledger permits. The claim is about the trigger, not about
+   * a role: a BEFORE INSERT trigger fires for the writer's statement whoever the
+   * writer is.
+   */
+  test('el pedido hereda la sucursal de su oferta', async () => {
+    // Two offers, same branch. Not one offer twice because `reserve_offer`
+    // refuses a second live order on the same offer for the same consumer with
+    // `DUPLICATE_RESERVATION`, so sharing it would fail the reservation for a
+    // reason that has nothing to do with the branch.
+    const seeded = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string; title: string }[]>(`
+        insert into public.offers (
+          business_id, business_location_id, title, original_price,
+          discounted_price, pickup_start, pickup_end, is_active
+        ) values
+          ('${BIZ_ACTIVE}', '${LOC_ACTIVE}', 'oferta directa',   10, 5,
+           now(), now() + interval '3 hours', true),
+          ('${BIZ_ACTIVE}', '${LOC_ACTIVE}', 'oferta reservada', 10, 5,
+           now(), now() + interval '3 hours', true)
+        returning id, title`),
+    );
+    const offerByTitle = new Map(
+      plainRows(seeded).map((row) => [row.title, row.id]),
+    );
+    const directOffer = offerByTitle.get('oferta directa');
+    const reservedOffer = offerByTitle.get('oferta reservada');
+
+    await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(`
+        insert into public.orders (
+          user_id, offer_id, business_id, order_number, price, original_price,
+          pickup_code, status
+        ) values (
+          '${MEMBER}', '${directOffer}', '${BIZ_ACTIVE}', 'TEST-1',
+          5, 10, 'ABC123', 'confirmed'
+        )`),
+    );
+
+    const read = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ business_location_id: string }[]>(`
+        select business_location_id
+           from public.orders
+          where order_number = 'TEST-1'`),
+    );
+
+    expect(read[0]?.business_location_id).toBe(LOC_ACTIVE);
+
+    // And the column is not nullable by hand either: the derivation writes it,
+    // and a row that reached the table without one would be a 23502 rather than
+    // a silent null. Asserted from the catalog because that is where the
+    // constraint lives, not in any single INSERT.
+    const shape = await ctx.sql.unsafe<{ is_nullable: string }[]>(
+      `select is_nullable from information_schema.columns
+        where table_schema = 'public' and table_name = 'orders'
+          and column_name = 'business_location_id'`,
+    );
+    expect(shape[0]?.is_nullable).toBe('NO');
+
+    // ─── The same claim through the path the product actually uses ────────────
+    //
+    // This is the assertion that pins the reason the column lives in a trigger
+    // rather than in `reserve_offer`. `reserve_offer` is a hardened
+    // `SECURITY DEFINER` that three separate migrations rewrite by matching
+    // literal text, so adding a line to it would mean reproducing its current
+    // body byte for byte. A trigger hands it the same column for free — and
+    // "for free" is only worth claiming if something measures it, which is what
+    // the rest of this block does.
+    //
+    // Reserved as the consumer, through RLS, on this test's own offer in
+    // `LOC_ACTIVE`. `reserve_offer` names no branch anywhere in its INSERT.
+    const reservation = await as(ctx.sql, 'authenticated', MEMBER, (tx) =>
+      tx.unsafe<{ result: { success: boolean; error?: string } }[]>(
+        `select public.reserve_offer(
+                  '${MEMBER}'::uuid, '${reservedOffer}'::uuid,
+                  null::uuid, 'TEST-LOC-RPC'
+                ) as result`,
+      ),
+    );
+    expect(
+      reservation[0]?.result?.success,
+      `reserve_offer refused the reservation: ${reservation[0]?.result?.error ?? 'no error'}`,
+    ).toBe(true);
+
+    // Read back as the consumer, through the SELECT policy, by idempotency key
+    // because the order number is generated. The claim is one sentence: the row
+    // `reserve_offer` wrote WITHOUT naming a branch carries the branch of the
+    // offer it reserved.
+    //
+    // Nothing about `business_id` is asserted here, and that is the point: the
+    // column is NOT NULL and the trigger overwrites whatever the caller passed,
+    // so comparing a location uuid against a business uuid could never have
+    // distinguished a derivation from a default. It is `LOC_ACTIVE` — the
+    // offer's branch — or the assertion fails.
+    const viaRpc = await as(ctx.sql, 'authenticated', MEMBER, (tx) =>
+      tx.unsafe<{ business_location_id: string }[]>(`
+        select business_location_id::text
+           from public.orders
+          where idempotency_key = 'TEST-LOC-RPC'`),
+    );
+    expect(
+      plainRows(viaRpc),
+      'reserve_offer wrote a row without the branch of the offer it reserved',
+    ).toEqual([{ business_location_id: LOC_ACTIVE }]);
   });
 });

@@ -1091,8 +1091,32 @@ describe('public.businesses: the shape phase 3 delivered', () => {
    * DELETE. Two layers, both closed, and the pair is asserted as text precisely
    * so a future migration cannot drop one and leave the other — which would turn
    * a loud refusal into a silent zero-row no-op.
+   *
+   * ─── THE SEVENTH, AND IT IS AN ADDITION, NOT A REPLACEMENT ─────────────────
+   *
+   * "Members can view business" and "Members can update business" are the §6.2
+   * policies: they resolve ownership by `business_member_role(business_id) in
+   * ('owner','manager')` instead of by a row in `business_ownership`. The two
+   * they duplicate are still standing, and the table with them: `business_ownership`
+   * has NOT been dropped and the drop is not the next migration — it moved to
+   * Plan 3, which has to migrate `getBusinessesByOwnerId` first because the mobile
+   * app reads `business_ownership` on its first panel query. The §6.2 order is
+   * new-first-old-second, and it held: for as long as both sets exist, the owner
+   * keeps the access it already had, and the manager gets the one it did not have.
+   *
+   * They were verified equivalent, and the scope of that word is narrower than it
+   * looks: equivalent for an owner whose session is live, which is the case every
+   * assertion here exercises. They are NOT equivalent for an owner whose session
+   * has lapsed — the legacy pair carries no TTL and goes on granting, because it
+   * never learned about sessions. That gap is why the drop cannot be an ordinary
+   * `drop table`: whoever does it has to close it first, or an owner with an
+   * expired session loses the business.
+   *
+   * That is why this list has seven entries where it had five, and why the UPDATE
+   * assertion below grew instead of changing: the new one is the same permission
+   * with a second name, and counting it as a widening would be wrong.
    */
-  test('the policy set is five read/write policies on businesses and two on ownership, unmodified', async () => {
+  test('the policy set is seven read/write policies on businesses and two on ownership, unmodified', async () => {
     const rows = await ctx.sql.unsafe<
       {
         tablename: string;
@@ -1147,6 +1171,20 @@ describe('public.businesses: the shape phase 3 delivered', () => {
       },
       {
         tablename: 'businesses',
+        policyname: 'Members can update business',
+        cmd: 'UPDATE',
+        permissive: 'PERMISSIVE',
+        roles: ['authenticated'],
+      },
+      {
+        tablename: 'businesses',
+        policyname: 'Members can view business',
+        cmd: 'SELECT',
+        permissive: 'PERMISSIVE',
+        roles: ['authenticated'],
+      },
+      {
+        tablename: 'businesses',
         policyname: 'Owners can update own businesses',
         cmd: 'UPDATE',
         permissive: 'PERMISSIVE',
@@ -1183,6 +1221,7 @@ describe('public.businesses: the shape phase 3 delivered', () => {
       'the write policy set on the businesses tables changed',
     ).toEqual([
       'businesses:Authenticated can create businesses',
+      'businesses:Members can update business',
       'businesses:Owners can update own businesses',
     ]);
   });

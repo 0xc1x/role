@@ -843,7 +843,7 @@ describe('public.profiles: the shape of the grants', () => {
    * future migration added `and role = 'user'` to the `with_check`, this diff
    * would show it, and that would be a defence in depth worth having.
    */
-  test('the policy set on profiles is five policies, and the two UPDATE ones constrain the row only', async () => {
+  test('the policy set on profiles is six policies, and the two UPDATE ones constrain the row only', async () => {
     const rows = await ctx.sql.unsafe<
       {
         policyname: string;
@@ -858,10 +858,24 @@ describe('public.profiles: the shape of the grants', () => {
         where schemaname = 'public' and tablename = 'profiles'
         order by policyname`);
 
+    // The sixth is "Members can view their order customers", the §6.2 policy that
+    // resolves the customer's business by membership and by the location of the
+    // order. It sits NEXT TO "Businesses can view their order customers", which
+    // resolves it by `business_ownership` and is still standing. That table has
+    // NOT been dropped, and the drop is not the next migration: it moved to
+    // Plan 3, which has to migrate `getBusinessesByOwnerId` first because the
+    // mobile app reads `business_ownership` on its first panel query.
+    //
+    // They coexist because they were verified equivalent, and the scope of that
+    // word is worth keeping: equivalent for an owner with a live session, which is
+    // what the assertion below exercises. Not equivalent for a lapsed one — the
+    // legacy policy carries no TTL and keeps granting — and that asymmetry is
+    // exactly what the new set was built to end, so it disappears with the drop.
     expect(plainRows(rows).map((r) => r.policyname)).toEqual([
       'Admins can update all profiles',
       'Admins can view all profiles',
       'Businesses can view their order customers',
+      'Members can view their order customers',
       'Users can update own profile',
       'Users can view own profile',
     ]);
@@ -900,19 +914,28 @@ describe('public.profiles: the shape of the grants', () => {
       'Users can update own profile:UPDATE',
     ]);
 
-    // And the three SELECT policies name `auth.uid()` or `my_role()`. Two of
-    // them are `TO authenticated` and the cross-tenant one resolves ownership
-    // through `business_ownership`, which is what makes #7 a tenant boundary
-    // rather than a business-id comparison.
+    // And the four SELECT policies: three name `auth.uid()` or `my_role()`, and
+    // the cross-tenant one resolves ownership through `business_ownership`, which
+    // is what makes #7 a tenant boundary rather than a business-id comparison.
     expect(byName.get('Users can view own profile')?.qual).toBe(
       '(id = ( SELECT auth.uid() AS uid))',
     );
     expect(
       byName.get('Businesses can view their order customers')?.qual,
     ).toContain('business_ownership');
+
+    // The sixth resolves the SAME question through the membership, and says which
+    // one: the location of the order decides, not the business alone, so a cajero
+    // sees the customers of his sucursal and not the ones of the neighbouring one.
+    const byMembership = byName.get('Members can view their order customers');
+    expect(byMembership?.cmd).toBe('SELECT');
+    expect(byMembership?.qual).toContain('can_manage_location');
+    expect(byMembership?.qual).not.toContain('business_ownership');
+
     for (const name of [
       'Admins can view all profiles',
       'Businesses can view their order customers',
+      'Members can view their order customers',
       'Users can view own profile',
     ]) {
       expect(byName.get(name)?.roles).toEqual(['authenticated']);

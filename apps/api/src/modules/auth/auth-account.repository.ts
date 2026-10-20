@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import {
+  businessMembers,
   businessOwnership,
   consumerNotificationPreferences,
   deviceTokens,
@@ -18,14 +19,16 @@ import {
 
 /**
  * Rows that point at a profile and belong to somebody ELSE — a customer's
- * sale, a business's owner, a business's public rating. None of them is the
- * account's to delete, and in Supabase several of them CASCADE from
- * `profiles`, so an erase that does not check them does not erase the account,
- * it erases the platform.
+ * sale, a business's owner, a business's public rating, the account's own
+ * place in a team's history. None of them is the account's to delete, and in
+ * Supabase several of them CASCADE from `profiles`, so an erase that does not
+ * check them does not erase the account, it erases the platform.
  */
 export interface RetainedRecords {
   orders: number;
   businesses: number;
+  memberships: number;
+  owner_memberships: number;
   reviews: number;
 }
 
@@ -72,9 +75,26 @@ export class AuthAccountRepository {
    *    is a business's public rating. Deleting the author's account would move
    *    that business's score without anybody deciding to move it.
    *
-   * So the hard-delete branch is entered only when this returns all zeroes, and
+   *  - `memberships` — `business_members.user_id` is `ON DELETE CASCADE` from
+   *    `profiles`, and the §8 says that table's delete is logical and "queda como
+   *    operación separada, no expuesta en la v1". So a membership is a row this
+   *    account does not get to destroy either: erasing the profile would take
+   *    the alias out of the unique index —giving the identifier back to whoever
+   *    asks for it next— and would delete the answer to "who was on this team",
+   *    which is the whole reason the delete is logical. This is the row that
+   *    decided the hard-delete branch's fate: with the cascade in place, an erase
+   *    that ignored it either destroys the history or —see the owner guard in
+   *    `AuthService.deleteAccount`— runs into a database error.
+   *
+   * SO THE HARD-DELETE BRANCH IS ENTERED ONLY WHEN THIS RETURNS ALL ZEROES, and
    * anything else falls to the anonymise branch, which keeps every one of these
    * rows and removes only the columns that describe a person.
+   *
+   * `owner_memberships` is the one number here that is NOT a retention gate: it
+   * is a subset of `memberships` that the service reads to decide whether the
+   * caller has to do something before the erase (degrade or hand over), because
+   * §5.4 says a business is not left without anyone who can administer it. It
+   * counts LIVE owner rows only — an archived one is history and grants nothing.
    */
   async countRetained(userId: string): Promise<RetainedRecords> {
     const [orderCount] = await this.db
@@ -85,6 +105,20 @@ export class AuthAccountRepository {
       .select({ c: count() })
       .from(businessOwnership)
       .where(eq(businessOwnership.owner_id, userId));
+    const [membershipCount] = await this.db
+      .select({ c: count() })
+      .from(businessMembers)
+      .where(eq(businessMembers.user_id, userId));
+    const [ownerMembershipCount] = await this.db
+      .select({ c: count() })
+      .from(businessMembers)
+      .where(
+        and(
+          eq(businessMembers.user_id, userId),
+          eq(businessMembers.role, 'owner'),
+          isNull(businessMembers.deleted_at),
+        ),
+      );
     const [reviewCount] = await this.db
       .select({ c: count() })
       .from(reviews)
@@ -93,6 +127,8 @@ export class AuthAccountRepository {
     return {
       orders: Number(orderCount?.c ?? 0),
       businesses: Number(businessCount?.c ?? 0),
+      memberships: Number(membershipCount?.c ?? 0),
+      owner_memberships: Number(ownerMembershipCount?.c ?? 0),
       reviews: Number(reviewCount?.c ?? 0),
     };
   }
@@ -158,6 +194,33 @@ export class AuthAccountRepository {
    * body and keeping the score. A score is a fact about a transaction and
    * survives the person; the words are theirs and do not.
    *
+   * THE MEMBERSHIP IS DETACHED, NOT DELETED, and it is the same decision the
+   * `order_events` actor gets below: the row is somebody else's record —"this
+   * person had access to this business, and this is what they touched"— and the
+   * §8 says its delete is logical and not exposed in the v1. So it gets
+   * `deleted_at` and keeps its alias, its role, its branch scope and its
+   * timestamps.
+   *
+   * ─── POR QUÉ ESTA SENTENCIA EXISTE Y NO SÓLO EL CONTEO ───────────────────────
+   *
+   * `auth.users → profiles → business_members` es toda `ON DELETE CASCADE`, así
+   * que la alternativa a esta sentencia es la cascada, y la cascada es justo lo
+   * que no se puede elegir: una fila que la cuenta no tiene derecho a borrar
+   * igual se borraría, en silencio, por la clave foránea. Es la misma forma que
+   * los borrados explícitos de `eraseAccount`: una sentencia cuya corrección
+   * depende de una acción referencial que nadie de este repositorio escribió no
+   * es verificable, y acá es peor que no verificable — contra la fila de un
+   * dueño, la cascada levanta `R0002` de `trg_enforce_owner_cannot_be_deleted` y
+   * el borrado de la cuenta falla.
+   *
+   * La mitad `deleted_at is null` es lo que la hace segura: una fila ya archivada
+   * queda como estaba, y una fila con `role = 'owner'` no puede llegar acá —
+   * `AuthService.deleteAccount` las rechaza antes de tocar la identidad, porque el
+   * §5.4 no admite un negocio sin nadie que lo administre. Si algún llamador
+   * futuro Consegu una, la base dice que no con el motivo adjunto, que es el
+   * resultado que hay que querer: esa guarda existe para que nadie termine la
+   * propiedad de un negocio sin decidirlo.
+   *
    * The average is not recomputed by hand. `on_review_change` and
    * `on_review_offer_change` are `AFTER INSERT OR DELETE OR UPDATE FOR EACH ROW`,
    * so deleting the row fires both and rewrites `businesses.rating`,
@@ -184,6 +247,19 @@ export class AuthAccountRepository {
           updated_at: new Date(),
         })
         .where(eq(profiles.id, userId));
+
+      // Between the scrub and the reviews: the person's access is not personal
+      // data, it is the record of what they could reach, and it is closed before
+      // the identity behind it stops existing.
+      await tx
+        .update(businessMembers)
+        .set({ deleted_at: new Date(), updated_at: new Date() })
+        .where(
+          and(
+            eq(businessMembers.user_id, userId),
+            isNull(businessMembers.deleted_at),
+          ),
+        );
 
       await tx
         .update(marketingPreferences)

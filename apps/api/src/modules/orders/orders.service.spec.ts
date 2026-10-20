@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { OrdersService } from './orders.service';
 import { OrdersRepository } from './orders.repository';
 import { OffersRepository } from '../offers/offers.repository';
+import { BusinessesRepository } from '../businesses/businesses.repository';
 import { NotificationHandlers } from '../notifications/notification.handlers';
 import type { OrderStatus } from '@0xc1x/role-commons';
 
@@ -75,9 +76,8 @@ const makeOfferRow = (overrides: Record<string, any> = {}) => ({
   ...overrides,
 });
 
-const makeOrderWithBusinessOwner = (overrides: Record<string, any> = {}) => ({
+const makeOrderWithBusiness = (overrides: Record<string, any> = {}) => ({
   order: makeOrderRow(),
-  business_owner_id: 'business-1',
   ...overrides,
 });
 
@@ -102,6 +102,7 @@ describe('OrdersService', () => {
   let service: OrdersService;
   let ordersRepository: jest.Mocked<OrdersRepository>;
   let offersRepository: jest.Mocked<OffersRepository>;
+  let businessesRepository: jest.Mocked<BusinessesRepository>;
   const getFlag = jest.fn().mockReturnValue(false);
 
   beforeEach(async () => {
@@ -116,7 +117,7 @@ describe('OrdersService', () => {
             lockIdempotencyKey: jest.fn(),
             findByUserAndIdempotencyKey: jest.fn(),
             findActiveByUserAndOffer: jest.fn(),
-            findByIdWithBusinessOwner: jest.fn(),
+            findByIdWithBusiness: jest.fn(),
             findByIdForUpdate: jest.fn(),
             listForUser: jest.fn(),
             listForBusiness: jest.fn(),
@@ -124,8 +125,6 @@ describe('OrdersService', () => {
             listEvents: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
-            isBusinessOwner: jest.fn(),
-            findBusinessIdsOwnedBy: jest.fn(),
             nextOrderNumber: jest.fn(),
             findCommissionRate: jest.fn(),
             findCouponByCodeForUpdate: jest.fn(),
@@ -140,8 +139,17 @@ describe('OrdersService', () => {
             isBusinessAvailableForOffers: jest.fn(),
             decrementStock: jest.fn(),
             incrementStock: jest.fn(),
-            findBusinessIdsOwnedBy: jest.fn(),
             findOrderCandidatesToExpire: jest.fn(),
+          },
+        },
+        {
+          // The ONE answer to «is this my business?». The service asks it and
+          // states what it demands of the answer; it never asks the old
+          // `business_ownership` table.
+          provide: BusinessesRepository,
+          useValue: {
+            roleOf: jest.fn(),
+            ownedBusinessIds: jest.fn(),
           },
         },
         { provide: ConfigService, useValue: { get: getFlag } },
@@ -151,11 +159,21 @@ describe('OrdersService', () => {
     service = module.get(OrdersService);
     ordersRepository = module.get(OrdersRepository);
     offersRepository = module.get(OffersRepository);
+    businessesRepository = module.get(BusinessesRepository);
 
     jest.resetAllMocks();
 
     (ordersRepository.transaction as jest.Mock).mockImplementation(
       async (fn: (tx: any) => Promise<any>) => fn({}),
+    );
+
+    // The membership model answers for `mockBusinessUser` and for nobody else.
+    // Before the consolidation the fixture carried `business_owner_id` and the
+    // service compared it by id; now the answer is a ROLE, and the role is what
+    // the caller requires.
+    businessesRepository.roleOf.mockImplementation(
+      async (_businessId: string, userId: string) =>
+        userId === mockBusinessUser.id ? 'owner' : null,
     );
   });
 
@@ -547,7 +565,7 @@ describe('OrdersService', () => {
   describe('cancelOrder (espejo de cancel_order)', () => {
     it('feliz: cancela y restaura stock; el trigger registra el evento', async () => {
       ordersRepository.findByIdForUpdate.mockResolvedValue(
-        makeOrderWithBusinessOwner({
+        makeOrderWithBusiness({
           order: makeOrderRow({ user_id: 'user-1', status: 'pending' }),
         }),
       );
@@ -575,7 +593,7 @@ describe('OrdersService', () => {
 
     it('NOT_ORDER_OWNER cuando no es dueño', async () => {
       ordersRepository.findByIdForUpdate.mockResolvedValue(
-        makeOrderWithBusinessOwner({
+        makeOrderWithBusiness({
           order: makeOrderRow({ user_id: 'someone-else' }),
         }),
       );
@@ -589,7 +607,7 @@ describe('OrdersService', () => {
       '%s → CANNOT_CANCEL',
       async (status) => {
         ordersRepository.findByIdForUpdate.mockResolvedValue(
-          makeOrderWithBusinessOwner({
+          makeOrderWithBusiness({
             order: makeOrderRow({ user_id: 'user-1', status }),
           }),
         );
@@ -603,7 +621,7 @@ describe('OrdersService', () => {
 
   describe('validatePickupCode (espejo de validate_pickup_code)', () => {
     const businessLocked = (overrides: Record<string, any> = {}) =>
-      makeOrderWithBusinessOwner({
+      makeOrderWithBusiness({
         order: makeOrderRow({
           user_id: 'consumer-1',
           status: 'ready_for_pickup',
@@ -690,7 +708,7 @@ describe('OrdersService', () => {
         makeOrderRow({ id: 'order-2', user_id: 'user-2' }),
       ];
       ordersRepository.listForBusiness.mockResolvedValue({ items, total: 2 });
-      offersRepository.findBusinessIdsOwnedBy.mockResolvedValue(['business-1']);
+      businessesRepository.ownedBusinessIds.mockResolvedValue(['business-1']);
 
       const result = await service.listForBusiness(mockBusinessUser, {
         page: 1,
@@ -702,7 +720,7 @@ describe('OrdersService', () => {
     });
 
     it('should throw ForbiddenException when user owns no business', async () => {
-      offersRepository.findBusinessIdsOwnedBy.mockResolvedValue([]);
+      businessesRepository.ownedBusinessIds.mockResolvedValue([]);
 
       await expect(
         service.listForBusiness(mockBusinessUser, { page: 1, limit: 10 }),
@@ -710,7 +728,7 @@ describe('OrdersService', () => {
     });
 
     it('should throw UnprocessableEntityException when user owns multiple businesses without business_id', async () => {
-      offersRepository.findBusinessIdsOwnedBy.mockResolvedValue(['b1', 'b2']);
+      businessesRepository.ownedBusinessIds.mockResolvedValue(['b1', 'b2']);
 
       await expect(
         service.listForBusiness(mockBusinessUser, { page: 1, limit: 10 }),
@@ -718,7 +736,7 @@ describe('OrdersService', () => {
     });
 
     it('should throw ForbiddenException when user does not own specified business', async () => {
-      ordersRepository.isBusinessOwner.mockResolvedValue(false);
+      businessesRepository.roleOf.mockResolvedValue(null);
 
       await expect(
         service.listForBusiness(mockBusinessUser, {
@@ -856,10 +874,10 @@ describe('OrdersService', () => {
 
   describe('getById', () => {
     it('should return order when user is owner', async () => {
-      const row = makeOrderWithBusinessOwner({
+      const row = makeOrderWithBusiness({
         order: makeOrderRow({ user_id: 'user-1' }),
       });
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(row);
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(row);
 
       const result = await service.getById(mockAuthUser, 'order-1');
 
@@ -868,10 +886,10 @@ describe('OrdersService', () => {
     });
 
     it('should return order when user is business owner', async () => {
-      const row = makeOrderWithBusinessOwner({
+      const row = makeOrderWithBusiness({
         order: makeOrderRow({ user_id: 'user-1' }),
       });
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(row);
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(row);
 
       const result = await service.getById(mockBusinessUser, 'order-1');
 
@@ -879,10 +897,10 @@ describe('OrdersService', () => {
     });
 
     it('should hide pickup_code from business before ready_for_pickup', async () => {
-      const row = makeOrderWithBusinessOwner({
+      const row = makeOrderWithBusiness({
         order: makeOrderRow({ user_id: 'user-1', status: 'confirmed' }),
       });
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(row);
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(row);
 
       const result = await service.getById(mockBusinessUser, 'order-1');
 
@@ -890,10 +908,10 @@ describe('OrdersService', () => {
     });
 
     it('should show pickup_code to business at ready_for_pickup', async () => {
-      const row = makeOrderWithBusinessOwner({
+      const row = makeOrderWithBusiness({
         order: makeOrderRow({ user_id: 'user-1', status: 'ready_for_pickup' }),
       });
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(row);
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(row);
 
       const result = await service.getById(mockBusinessUser, 'order-1');
 
@@ -901,9 +919,9 @@ describe('OrdersService', () => {
     });
 
     it('should throw NotFoundException when order not found', async () => {
-      (
-        ordersRepository.findByIdWithBusinessOwner as jest.Mock
-      ).mockResolvedValue(null);
+      (ordersRepository.findByIdWithBusiness as jest.Mock).mockResolvedValue(
+        null,
+      );
 
       await expect(
         service.getById(mockAuthUser, 'nonexistent'),
@@ -911,10 +929,10 @@ describe('OrdersService', () => {
     });
 
     it('should throw ForbiddenException when user is stranger', async () => {
-      const row = makeOrderWithBusinessOwner({
+      const row = makeOrderWithBusiness({
         order: makeOrderRow({ user_id: 'other-user' }),
       });
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(row);
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(row);
 
       await expect(service.getById(mockAuthUser, 'order-1')).rejects.toThrow(
         ForbiddenException,
@@ -936,8 +954,8 @@ describe('OrdersService', () => {
     });
 
     it('returns the timeline paginated and without the internal columns', async () => {
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
-        makeOrderWithBusinessOwner(),
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(
+        makeOrderWithBusiness(),
       );
       ordersRepository.listEvents.mockResolvedValue({
         items: [makeEventRow()],
@@ -964,8 +982,8 @@ describe('OrdersService', () => {
     });
 
     it('allows the order owner', async () => {
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
-        makeOrderWithBusinessOwner(),
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(
+        makeOrderWithBusiness(),
       );
       ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
 
@@ -977,8 +995,8 @@ describe('OrdersService', () => {
     // The business panel needs the timeline of the orders it owns. Narrowing
     // this to the order owner is the regression this case exists to catch.
     it('allows the business that owns the order', async () => {
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
-        makeOrderWithBusinessOwner(),
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(
+        makeOrderWithBusiness(),
       );
       ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
 
@@ -991,8 +1009,8 @@ describe('OrdersService', () => {
     });
 
     it('allows an admin who is neither owner nor business owner', async () => {
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
-        makeOrderWithBusinessOwner({
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(
+        makeOrderWithBusiness({
           order: makeOrderRow({ user_id: 'other' }),
         }),
       );
@@ -1004,8 +1022,8 @@ describe('OrdersService', () => {
     });
 
     it('forbids a stranger and reads nothing', async () => {
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
-        makeOrderWithBusinessOwner({
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(
+        makeOrderWithBusiness({
           order: makeOrderRow({ user_id: 'other' }),
         }),
       );
@@ -1017,7 +1035,7 @@ describe('OrdersService', () => {
     });
 
     it('throws NotFound for an order that does not exist', async () => {
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(null);
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(null);
 
       await expect(
         service.listEvents(mockAuthUser, 'missing', { page: 1, limit: 20 }),
@@ -1026,8 +1044,8 @@ describe('OrdersService', () => {
     });
 
     it('passes the pagination through to the repository', async () => {
-      ordersRepository.findByIdWithBusinessOwner.mockResolvedValue(
-        makeOrderWithBusinessOwner(),
+      ordersRepository.findByIdWithBusiness.mockResolvedValue(
+        makeOrderWithBusiness(),
       );
       ordersRepository.listEvents.mockResolvedValue({ items: [], total: 0 });
 
@@ -1042,14 +1060,14 @@ describe('OrdersService', () => {
 
   describe('updateStatus', () => {
     it('should transition order status when allowed', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'pending', user_id: 'user-1' }),
       });
       const updated = makeOrderRow({ status: 'confirmed', user_id: 'user-1' });
 
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
-      ordersRepository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
 
       const result = await service.updateStatus(mockBusinessUser, 'order-1', {
         status: 'confirmed',
@@ -1065,14 +1083,14 @@ describe('OrdersService', () => {
     });
 
     it('should restore stock when cancelling from stock-holding status', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'pending', user_id: 'user-1' }),
       });
       const updated = makeOrderRow({ status: 'cancelled', user_id: 'user-1' });
 
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
-      ordersRepository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
 
       await service.updateStatus(mockBusinessUser, 'order-1', {
         status: 'cancelled',
@@ -1086,14 +1104,14 @@ describe('OrdersService', () => {
     });
 
     it('should not restore stock when completing order', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'picked_up', user_id: 'user-1' }),
       });
       const updated = makeOrderRow({ status: 'completed', user_id: 'user-1' });
 
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
-      ordersRepository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
 
       await service.updateStatus(mockBusinessUser, 'order-1', {
         status: 'completed',
@@ -1113,7 +1131,7 @@ describe('OrdersService', () => {
     });
 
     it('should throw UnprocessableEntityException for invalid transition', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'completed', user_id: 'user-1' }),
       });
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
@@ -1124,7 +1142,7 @@ describe('OrdersService', () => {
     });
 
     it('should throw ForbiddenException when user cannot transition', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'pending', user_id: 'user-1' }),
       });
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
@@ -1135,7 +1153,7 @@ describe('OrdersService', () => {
     });
 
     it('should throw ConflictException when concurrent status change', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'pending', user_id: 'user-1' }),
       });
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
@@ -1149,14 +1167,14 @@ describe('OrdersService', () => {
     });
 
     it('should allow consumer to cancel early order', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'pending', user_id: 'user-1' }),
       });
       const updated = makeOrderRow({ status: 'cancelled', user_id: 'user-1' });
 
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
-      ordersRepository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
 
       const result = await service.updateStatus(mockAuthUser, 'order-1', {
         status: 'cancelled',
@@ -1166,14 +1184,14 @@ describe('OrdersService', () => {
     });
 
     it('should allow admin to do any valid transition', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'picked_up', user_id: 'user-1' }),
       });
       const updated = makeOrderRow({ status: 'completed', user_id: 'user-1' });
 
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(updated);
-      ordersRepository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
 
       const result = await service.updateStatus(mockAdminUser, 'order-1', {
         status: 'completed',
@@ -1183,14 +1201,14 @@ describe('OrdersService', () => {
     });
 
     it('espejo dormido: sin flag NO acumula earnings (el trigger SQL lo hace)', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'picked_up', user_id: 'user-1' }),
       });
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(
         makeOrderRow({ status: 'completed' }),
       );
-      ordersRepository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
 
       getFlag.mockReturnValue(false);
       await service.updateStatus(mockBusinessUser, 'order-1', {
@@ -1201,14 +1219,14 @@ describe('OrdersService', () => {
     });
 
     it('espejo activo (flag): acumula net_amount al completar', async () => {
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'picked_up', user_id: 'user-1' }),
       });
       ordersRepository.findByIdForUpdate.mockResolvedValue(locked);
       ordersRepository.updateStatus.mockResolvedValue(
         makeOrderRow({ status: 'completed' }),
       );
-      ordersRepository.isBusinessOwner.mockResolvedValue(true);
+      businessesRepository.roleOf.mockResolvedValue('owner');
 
       getFlag.mockImplementation(
         (key: string) => key === 'ENABLE_API_MIRROR_ORDERS',
@@ -1228,7 +1246,7 @@ describe('OrdersService', () => {
   describe('expireStaleOrders', () => {
     it('should expire pending orders and restore stock', async () => {
       const candidate = { orderId: 'order-1' };
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'pending', offer_id: 'offer-1' }),
       });
 
@@ -1252,7 +1270,7 @@ describe('OrdersService', () => {
 
     it('should skip orders not in pending/ready_for_pickup', async () => {
       const candidate = { orderId: 'order-1' };
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'confirmed', offer_id: 'offer-1' }),
       });
 
@@ -1269,7 +1287,7 @@ describe('OrdersService', () => {
 
     it('should skip when updateStatus returns null (concurrent change)', async () => {
       const candidate = { orderId: 'order-1' };
-      const locked = makeOrderWithBusinessOwner({
+      const locked = makeOrderWithBusiness({
         order: makeOrderRow({ status: 'pending', offer_id: 'offer-1' }),
       });
 
@@ -1299,7 +1317,7 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
             lockIdempotencyKey: jest.fn(),
             findByUserAndIdempotencyKey: jest.fn(),
             findActiveByUserAndOffer: jest.fn(),
-            findByIdWithBusinessOwner: jest.fn(),
+            findByIdWithBusiness: jest.fn(),
             findByIdForUpdate: jest.fn(),
             listForUser: jest.fn(),
             listForBusiness: jest.fn(),
@@ -1307,8 +1325,6 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
             listEvents: jest.fn(),
             updateStatus: jest.fn(),
             insertOrder: jest.fn(),
-            isBusinessOwner: jest.fn(),
-            findBusinessIdsOwnedBy: jest.fn(),
             nextOrderNumber: jest.fn(),
             findCommissionRate: jest.fn(),
             findCouponByCodeForUpdate: jest.fn(),
@@ -1323,8 +1339,14 @@ describe('OrdersService.emitOrderChange (notificaciones)', () => {
             isBusinessAvailableForOffers: jest.fn(),
             decrementStock: jest.fn(),
             incrementStock: jest.fn(),
-            findBusinessIdsOwnedBy: jest.fn(),
             findOrderCandidatesToExpire: jest.fn(),
+          },
+        },
+        {
+          provide: BusinessesRepository,
+          useValue: {
+            roleOf: jest.fn(),
+            ownedBusinessIds: jest.fn(),
           },
         },
         {

@@ -52,7 +52,7 @@ describe('BusinessesService', () => {
     listForUser: jest.fn(),
     findById: jest.fn(),
     findBySlug: jest.fn(),
-    isOwner: jest.fn(),
+    roleOf: jest.fn(),
     listEmailSends: jest.fn(),
     hasPendingPayout: jest.fn(),
     insert: jest.fn(),
@@ -109,12 +109,12 @@ describe('BusinessesService', () => {
       const dto = await service.getById(admin, businessId);
 
       expect(dto.id).toBe(businessId);
-      expect(repository.isOwner).not.toHaveBeenCalled();
+      expect(repository.roleOf).not.toHaveBeenCalled();
     });
 
     it('forbids non-owner business user', async () => {
       repository.findById.mockResolvedValue(makeBusinessRow());
-      repository.isOwner.mockResolvedValue(false);
+      repository.roleOf.mockResolvedValue(null);
 
       await expect(service.getById(stranger, businessId)).rejects.toThrow(
         ForbiddenException,
@@ -329,7 +329,7 @@ describe('BusinessesService', () => {
     });
 
     it('owner de negocio no puede verificar: solo admin', async () => {
-      repository.isOwner.mockResolvedValue(true);
+      repository.roleOf.mockResolvedValue('owner');
 
       await expect(
         service.update(owner, businessId, { verification_status: 'approved' }),
@@ -338,7 +338,7 @@ describe('BusinessesService', () => {
     });
 
     it('owner puede editar campos no-verificación sin tocar verified_at', async () => {
-      repository.isOwner.mockResolvedValue(true);
+      repository.roleOf.mockResolvedValue('owner');
 
       await service.update(owner, businessId, { description: 'Nuevo texto' });
 
@@ -350,7 +350,7 @@ describe('BusinessesService', () => {
     });
 
     it('owner no puede mutar campos controlados por la plataforma', async () => {
-      repository.isOwner.mockResolvedValue(true);
+      repository.roleOf.mockResolvedValue('owner');
       const attempts = [
         { commission_rate: 0.2 },
         { is_active: false },
@@ -369,7 +369,7 @@ describe('BusinessesService', () => {
     });
 
     it('business user no puede actualizar el negocio de otro owner', async () => {
-      repository.isOwner.mockResolvedValue(false);
+      repository.roleOf.mockResolvedValue(null);
 
       await expect(
         service.update(stranger, businessId, { description: 'Intrusión' }),

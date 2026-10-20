@@ -11,11 +11,14 @@ import {
   ApiAcceptedResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiConflictResponse,
+  ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -69,6 +72,13 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiBody({ type: Object })
+  @ApiCreatedResponse({
+    description: 'The account was created, unconfirmed, waiting for the email',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The address cannot receive email (a generated Rolé alias), so the confirmation would bounce',
+  })
   register(
     @Body(new ZodValidationPipe(RegisterRequestSchema))
     body: RegisterRequest,
@@ -122,6 +132,9 @@ export class AuthController {
    * that needs the index, not a scan smuggled in.
    *
    * 200 in every case, known address or not. See `AuthService.forgotPassword`.
+   * The exception is an address with no mailbox behind it —a Rolé-generated
+   * staff alias, apex included— which is a 422 before any of this happens: it
+   * depends on the domain the caller typed, not on whether the account exists.
    */
   @Public()
   @Throttle({
@@ -131,11 +144,16 @@ export class AuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Request a password recovery link (always the same 200)',
+    summary:
+      'Request a password recovery link (the same 200 for every address, except one with no mailbox behind it: a Rolé alias is a 422)',
   })
   @ApiOkResponse({
     description:
       'The same body whether or not the address belongs to an account',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The address cannot receive email (a generated Rolé alias); the answer does not depend on whether the account exists',
   })
   forgotPassword(
     @Body(new ZodValidationPipe(ForgotPasswordRequestSchema))
@@ -192,6 +210,9 @@ export class AuthController {
     summary: 'Request an email change (applied once the new address confirms)',
   })
   @ApiAcceptedResponse({ description: 'The change was initiated' })
+  @ApiUnprocessableEntityResponse({
+    description: 'The new address cannot receive mail (a generated Rolé alias)',
+  })
   @ApiBearerAuth('bearer')
   changeEmail(
     @CurrentUser() user: AuthUser,
@@ -202,11 +223,18 @@ export class AuthController {
   }
 
   /**
-   * `DELETE /auth/account` — 204 in both branches.
+   * `DELETE /auth/account` — 204 in both erasure branches.
    *
    * An account with order history is anonymised rather than deleted, because
    * `orders.user_id` cascades from `profiles`; see `AuthService.deleteAccount`.
    * The response cannot say which happened, and neither can the log.
+   *
+   * 409 is the third answer, and the only one that is not silent: an account that
+   * still owns a business cannot be deleted, and the body says so plainly —
+   * there is no route that ends that ownership in this version, so the business
+   * has to change hands first. It is a conflict with the caller's own state, not
+   * with a rule the platform invented, and nothing has been destroyed when it
+   * comes back.
    *
    * 3/minute for an irreversible action: a client that retries a DELETE because
    * the network dropped is retrying an idempotent no-op, and one that fires it
@@ -219,6 +247,10 @@ export class AuthController {
     summary: 'Delete my account (anonymised when order history must survive)',
   })
   @ApiNoContentResponse({ description: 'Deleted or anonymised — always 204' })
+  @ApiConflictResponse({
+    description:
+      'The account still owns a business and cannot be deleted while it does; the business has to change hands first, and no route in this version does that (204 once the business is no longer yours)',
+  })
   @ApiBearerAuth('bearer')
   deleteAccount(@CurrentUser() user: AuthUser): Promise<void> {
     return this.authService.deleteAccount(user);

@@ -42,7 +42,10 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "The account was created, unconfirmed, waiting for the email"
+          },
+          "422": {
+            "description": "The address cannot receive email (a generated Rolé alias), so the confirmation would bounce"
           }
         },
         "summary": "Register a new user account",
@@ -88,9 +91,12 @@
         "responses": {
           "200": {
             "description": "The same body whether or not the address belongs to an account"
+          },
+          "422": {
+            "description": "The address cannot receive email (a generated Rolé alias); the answer does not depend on whether the account exists"
           }
         },
-        "summary": "Request a password recovery link (always the same 200)",
+        "summary": "Request a password recovery link (the same 200 for every address, except one with no mailbox behind it: a Rolé alias is a 422)",
         "tags": [
           "Auth"
         ]
@@ -121,6 +127,9 @@
         "responses": {
           "202": {
             "description": "The change was initiated"
+          },
+          "422": {
+            "description": "The new address cannot receive mail (a generated Rolé alias)"
           }
         },
         "security": [
@@ -141,6 +150,9 @@
         "responses": {
           "204": {
             "description": "Deleted or anonymised — always 204"
+          },
+          "409": {
+            "description": "The account still owns a business and cannot be deleted while it does; the business has to change hands first, and no route in this version does that (204 once the business is no longer yours)"
           }
         },
         "security": [
@@ -1820,420 +1832,6 @@
         ]
       }
     },
-    "/api/v1/orders": {
-      "post": {
-        "operationId": "OrdersController_create",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The order an earlier request with the same idempotency_key already created. Same body as the 201: this request created nothing."
-          },
-          "201": {
-            "description": "Order created"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Reserve / create an order for an offer",
-        "tags": [
-          "Orders"
-        ]
-      },
-      "get": {
-        "operationId": "OrdersController_listMine",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated orders"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List my orders (consumer)",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/business": {
-      "get": {
-        "operationId": "OrdersController_listForBusiness",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated business orders"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List orders for a business I own",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/admin": {
-      "get": {
-        "operationId": "OrdersController_listForAdmin",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated orders with business and offer"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List every order across businesses (admin)",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}": {
-      "get": {
-        "operationId": "OrdersController_getById",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Order detail"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Get order by id",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}/events": {
-      "get": {
-        "operationId": "OrdersController_listEvents",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated order timeline, oldest first"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Get the status transitions of an order",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}/status": {
-      "patch": {
-        "operationId": "OrdersController_updateStatus",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Updated order"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Transition order status",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}/cancel": {
-      "post": {
-        "operationId": "OrdersController_cancel",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Cancelled order"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Cancel my order (espejo de la RPC cancel_order)",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/orders/{id}/validate-pickup": {
-      "post": {
-        "operationId": "OrdersController_validatePickup",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Completed order"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Validate pickup code (espejo de la RPC validate_pickup_code)",
-        "tags": [
-          "Orders"
-        ]
-      }
-    },
-    "/api/v1/upload/image": {
-      "post": {
-        "operationId": "UploadController_uploadImage",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "description": "Archivo de imagen y opciones de bucket/folder",
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/UploadImageBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Imagen subida y comprimida a WebP. La URL pública se devuelve en el cuerpo.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "url": {
-                      "type": "string",
-                      "format": "uri",
-                      "example": "https://[project].supabase.co/storage/v1/object/public/images/categories/uuid.webp"
-                    }
-                  },
-                  "required": [
-                    "url"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Archivo inválido, formato no soportado o excede el tamaño máximo"
-          },
-          "401": {
-            "description": "No autorizado"
-          },
-          "403": {
-            "description": "Requiere rol admin"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Upload an image (admin)",
-        "tags": [
-          "Upload"
-        ]
-      }
-    },
-    "/api/v1/slides": {
-      "get": {
-        "operationId": "SlidesController_list",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated slide list"
-          }
-        },
-        "summary": "List slides",
-        "tags": [
-          "Slides"
-        ]
-      },
-      "post": {
-        "operationId": "SlidesController_create",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": "Slide created"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Create a slide (admin)",
-        "tags": [
-          "Slides"
-        ]
-      }
-    },
-    "/api/v1/slides/admin": {
-      "get": {
-        "operationId": "SlidesController_listAdmin",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Paginated slide list"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List slides (admin)",
-        "tags": [
-          "Slides"
-        ]
-      }
-    },
-    "/api/v1/slides/{id}": {
-      "get": {
-        "operationId": "SlidesController_getById",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Slide detail"
-          }
-        },
-        "summary": "Get slide by id",
-        "tags": [
-          "Slides"
-        ]
-      },
-      "patch": {
-        "operationId": "SlidesController_update",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Slide updated"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Update a slide (admin)",
-        "tags": [
-          "Slides"
-        ]
-      },
-      "delete": {
-        "operationId": "SlidesController_remove",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Slide soft-deleted"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Soft-delete a slide (admin)",
-        "tags": [
-          "Slides"
-        ]
-      }
-    },
     "/api/v1/businesses/public": {
       "get": {
         "description": "Mirrors `public.active_businesses_near` (ADR-0008). This is a list built from live offers, not a business directory: a business with no active, in-stock, unexpired offer is absent rather than listed with a count of 0. `lat` + `lng` + `radius_km` are independent — the radius filters only when all three are present — and the default order is `deals` (`active_deals_count desc`, then `name asc`), not distance.",
@@ -2721,6 +2319,420 @@
         "summary": "Sales for a window I own: count, revenue, top 5 products and a UTC daily series. `from` and `to` are required and both inclusive.",
         "tags": [
           "Business Stats (owner)"
+        ]
+      }
+    },
+    "/api/v1/orders": {
+      "post": {
+        "operationId": "OrdersController_create",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The order an earlier request with the same idempotency_key already created. Same body as the 201: this request created nothing."
+          },
+          "201": {
+            "description": "Order created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reserve / create an order for an offer",
+        "tags": [
+          "Orders"
+        ]
+      },
+      "get": {
+        "operationId": "OrdersController_listMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated orders"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List my orders (consumer)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/business": {
+      "get": {
+        "operationId": "OrdersController_listForBusiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated business orders"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List orders for a business I own",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/admin": {
+      "get": {
+        "operationId": "OrdersController_listForAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated orders with business and offer"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List every order across businesses (admin)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order detail"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get order by id",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/events": {
+      "get": {
+        "operationId": "OrdersController_listEvents",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated order timeline, oldest first"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the status transitions of an order",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/status": {
+      "patch": {
+        "operationId": "OrdersController_updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated order"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Transition order status",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/cancel": {
+      "post": {
+        "operationId": "OrdersController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled order"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel my order (espejo de la RPC cancel_order)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/orders/{id}/validate-pickup": {
+      "post": {
+        "operationId": "OrdersController_validatePickup",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completed order"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Validate pickup code (espejo de la RPC validate_pickup_code)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/api/v1/upload/image": {
+      "post": {
+        "operationId": "UploadController_uploadImage",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "description": "Archivo de imagen y opciones de bucket/folder",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadImageBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Imagen subida y comprimida a WebP. La URL pública se devuelve en el cuerpo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://[project].supabase.co/storage/v1/object/public/images/categories/uuid.webp"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Archivo inválido, formato no soportado o excede el tamaño máximo"
+          },
+          "401": {
+            "description": "No autorizado"
+          },
+          "403": {
+            "description": "Requiere rol admin"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload an image (admin)",
+        "tags": [
+          "Upload"
+        ]
+      }
+    },
+    "/api/v1/slides": {
+      "get": {
+        "operationId": "SlidesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated slide list"
+          }
+        },
+        "summary": "List slides",
+        "tags": [
+          "Slides"
+        ]
+      },
+      "post": {
+        "operationId": "SlidesController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Slide created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a slide (admin)",
+        "tags": [
+          "Slides"
+        ]
+      }
+    },
+    "/api/v1/slides/admin": {
+      "get": {
+        "operationId": "SlidesController_listAdmin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated slide list"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List slides (admin)",
+        "tags": [
+          "Slides"
+        ]
+      }
+    },
+    "/api/v1/slides/{id}": {
+      "get": {
+        "operationId": "SlidesController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slide detail"
+          }
+        },
+        "summary": "Get slide by id",
+        "tags": [
+          "Slides"
+        ]
+      },
+      "patch": {
+        "operationId": "SlidesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slide updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a slide (admin)",
+        "tags": [
+          "Slides"
+        ]
+      },
+      "delete": {
+        "operationId": "SlidesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slide soft-deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft-delete a slide (admin)",
+        "tags": [
+          "Slides"
         ]
       }
     },
@@ -4126,6 +4138,338 @@
         "summary": "Set the triage state of a bug report (admin)",
         "tags": [
           "Bug Report Inbox"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff": {
+      "get": {
+        "operationId": "StaffController_list",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The accesses this caller administers"
+          },
+          "403": {
+            "description": "No live membership, a paused one, or a session outside the §5.2 promise"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the business' team accesses. A manager sees only what their branches contain.",
+        "tags": [
+          "Staff"
+        ]
+      },
+      "post": {
+        "operationId": "StaffController_create",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The delivery card: alias, PIN, warnings"
+          },
+          "403": {
+            "description": "No live membership, a paused one, a session outside the §5.2 promise, or branches the caller does not manage"
+          },
+          "409": {
+            "description": "The alias is already in use in this business"
+          },
+          "422": {
+            "description": "role: 'owner' (the owner is who created the business), a branch of another business, session_ttl_hours: 0 on a staff, or the plan's member limit"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a team access. Returns the delivery card; the PIN is shown once and never again.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}": {
+      "patch": {
+        "operationId": "StaffController_update",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The membership in its new state"
+          },
+          "403": {
+            "description": "The access is outside the caller’s branches, or the caller has no live session inside the §5.2 promise"
+          },
+          "404": {
+            "description": "No such access in this business"
+          },
+          "422": {
+            "description": "Promoting to 'owner', demoting the owner (the ownership transfer does not exist in this version), a branch of another business, or session_ttl_hours: 0 on a staff"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Edit an access' role, branches or session TTL. Neither status nor alias is editable here.",
+        "tags": [
+          "Staff"
+        ]
+      },
+      "delete": {
+        "operationId": "StaffController_remove",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The access was given down"
+          },
+          "403": {
+            "description": "The caller is not the owner of this business, or has no live session inside the §5.2 promise"
+          },
+          "422": {
+            "description": "That membership is the owner’s, and owners are untouchable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft-delete an access (owner only). The row stays, the alias stays burned.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}/alias": {
+      "patch": {
+        "operationId": "StaffController_updateAlias",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The membership, plus the §9.4 alias warnings"
+          },
+          "409": {
+            "description": "The alias is already in use"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change the access' alias and the login address it mirrors. The PIN does not change.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}/rotate": {
+      "post": {
+        "operationId": "StaffController_rotatePin",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The delivery card with the new PIN"
+          },
+          "403": {
+            "description": "The access is outside the caller’s branches"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Generate a new PIN. Returns the delivery card; does NOT revoke open sessions.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}/disable": {
+      "post": {
+        "operationId": "StaffController_disableAccess",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The membership, disabled"
+          },
+          "422": {
+            "description": "That membership is the owner’s, and owners are untouchable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pause an access and close its open sessions (ban). Not a delete: the row stays.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/staff/{memberId}/enable": {
+      "post": {
+        "operationId": "StaffController_enableAccess",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The membership, active"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reactivate an access and lift the ban on its login.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/api/v1/staff/session": {
+      "post": {
+        "operationId": "StaffSessionController_stampSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The session state, verbatim from business_member_session_state — never a 403 for a membership that cannot operate"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Stamp last_authenticated_at and return the §5.2 session state the database computes. Omit business_id and the database resolves the caller’s single membership; with several, it answers multiple_businesses and seals nothing.",
+        "tags": [
+          "Staff"
         ]
       }
     }

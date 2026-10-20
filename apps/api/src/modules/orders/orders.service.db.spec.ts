@@ -13,6 +13,7 @@ import type { AuthUser } from '../../auth/auth.types';
 import type { Env } from '../../config/env.schema';
 import { coupons, offers, orders } from '../../database/schema';
 import { OffersRepository } from '../offers/offers.repository';
+import { BusinessesRepository } from '../businesses/businesses.repository';
 import { OrdersRepository } from './orders.repository';
 import { OrdersService } from './orders.service';
 
@@ -38,6 +39,7 @@ beforeAll(async () => {
   service = new OrdersService(
     new OrdersRepository(ctx.db),
     new OffersRepository(ctx.db),
+    new BusinessesRepository(ctx.db),
     // Flags off, the production default: the notification path stays dormant
     // and this spec only measures the reservation.
     { get: () => false } as unknown as ConfigService<Env, true>,

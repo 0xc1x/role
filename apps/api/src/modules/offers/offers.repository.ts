@@ -24,7 +24,6 @@ import { DRIZZLE } from '../../database/database.tokens';
 import { escapeLike } from '../../common/utils/like';
 import {
   businessLocations,
-  businessOwnership,
   businesses,
   categories,
   offerCategories,
@@ -765,28 +764,6 @@ export class OffersRepository {
       .where(eq(offers.id, id))
       .returning({ id: offers.id });
     return result.length > 0;
-  }
-
-  async isBusinessOwner(businessId: string, userId: string): Promise<boolean> {
-    const [row] = await this.db
-      .select({ id: businessOwnership.business_id })
-      .from(businessOwnership)
-      .where(
-        and(
-          eq(businessOwnership.business_id, businessId),
-          eq(businessOwnership.owner_id, userId),
-        ),
-      )
-      .limit(1);
-    return Boolean(row);
-  }
-
-  async findBusinessIdsOwnedBy(userId: string): Promise<string[]> {
-    const rows = await this.db
-      .select({ id: businessOwnership.business_id })
-      .from(businessOwnership)
-      .where(eq(businessOwnership.owner_id, userId));
-    return rows.map((r) => r.id);
   }
 
   /** Ensure location belongs to the given business. */

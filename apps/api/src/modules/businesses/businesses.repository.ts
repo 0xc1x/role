@@ -17,12 +17,18 @@ import {
   publiclyVisibleBusiness,
   type BusinessModerationStatus,
 } from '../../database/business-availability';
+import {
+  membershipRole,
+  ownedBusinessIds,
+  ownerMembership,
+} from '../../database/business-membership';
 import { DRIZZLE } from '../../database/database.tokens';
 import { escapeLike } from '../../common/utils/like';
 import {
   businessFinance,
   businessHours,
   businessLocations,
+  businessMembers,
   businessModeration,
   businessNotificationPreferences,
   businessOwnership,
@@ -30,10 +36,12 @@ import {
   emailSends,
   emailTemplates,
   offers,
+  profiles,
   type BusinessHoursRow,
 } from '../../database/schema';
 import { payouts } from '../../database/schema/payouts';
 import type {
+  BusinessMemberRole,
   ListBusinessesQuery,
   ListBusinessLocationsQuery,
   ListPublicBusinessesQuery,
@@ -174,9 +182,10 @@ export type BusinessNotificationPreferencesRow =
  *
  * `business_id` is the path, not a field, and it is the one that matters: this
  * API connects as the table's owner and is therefore exempt from
- * `business_notification_preferences`' own RLS policies, so the check that
- * `business_ownership.owner_id = caller` is the ONLY thing between a crafted id
- * and another merchant's settings. `created_at` and `updated_at` are derived,
+ * `business_notification_preferences`' own RLS policies, so the check that the
+ * caller is the OWNER of that business —the live owner membership, asked
+ * through `roleOf`— is the ONLY thing between a crafted id and another
+ * merchant's settings. `created_at` and `updated_at` are derived,
  * never carried — the latter because nothing in the database maintains it.
  */
 export type BusinessNotificationPreferencesPatch = Partial<
@@ -321,9 +330,78 @@ export class BusinessesRepository {
       throw new Error('Failed to insert business');
     }
 
+    // ─── EL PERFIL DEL DUEÑO, ANTES QUE NADA ───────────────────────────────────
+    //
+    // SIN PERFIL NO HAY ALIAS. El `@owner.invalid` que estaba aquí era un
+    // fallback que NUNCA persistía: la fila de `business_ownership` exige el
+    // perfil por FK, así que un dueño sin perfil revienta la transacción
+    // entera —y el error era el de la FK, que no dice nada de por qué—. Un
+    // alias inventado habría escrito una fila de miembro con una bandeja que
+    // no existe, y `business_members.alias` es por negocio ÚNICO: ese alias
+    // falso además habría ocupado el del dueño bueno.
+    //
+    // El motivo se dice explícito, y dice la verdad: sin el correo del dueño
+    // no hay una fila de dueño.
+    const [ownerProfile] = await executor
+      .select({ email: profiles.email })
+      .from(profiles)
+      .where(eq(profiles.id, owner_id))
+      .limit(1);
+    if (!ownerProfile) {
+      throw new Error(
+        `Business owner ${owner_id} has no profile: the owner membership cannot be written without the owner's email.`,
+      );
+    }
+
     await executor
       .insert(businessOwnership)
       .values({ business_id: row.id, owner_id })
+      .onConflictDoNothing();
+    // ─── LA MEMBRESÍA DEL DUEÑO, EN LA MISMA TRANSACCIÓN ─────────────────────
+    //
+    // `business_ownership` es la tabla que Plan 3 va a dropear, y desde que el
+    // permiso se resuelve por `business_members` —Plan 1 lo dejó así, y el
+    // predicado de esta API ahora también— un negocio sin fila de dueño en
+    // `business_members` es un negocio SIN DUEÑO: nadie puede administrar sus
+    // ofertas, ni ver sus pedidos, ni entrar a sus estadísticas.
+    //
+    // El alta del negocio escribe las dos filas porque son el mismo hecho y
+    // tienen que estar en la misma transacción: una que sí y otra no es un
+    // negocio con dueño en un panel y sin dueño en el otro.
+    //
+    // ─── POR QUÉ `session_ttl_hours = 0` ────────────────────────────────────────
+    //
+    // Un dueño no es una tablet compartida en el mostrador: es la persona que
+    // dirige el negocio, y su sesión no vence. Es lo mismo que dejó
+    // `20261016022631` en las 16 filas del backfill —«un dueño que nunca usó el
+    // flujo de personal no tiene sello porque ese flujo no existe todavía»— y
+    // lo contrario sería peor que no hacerlo: con el TTL de 24 horas que trae la
+    // columna por defecto, un dueño nuevo entraría y a las 24 horas perdería su
+    // propio negocio sin haber hecho nada.
+    //
+    // ─── EL ALIAS ES EL CORREO DEL DUEÑO ───────────────────────────────────────
+    //
+    // Como el backfill: `alias` espeja `auth.users.email`, y para el dueño ese
+    // correo es de verdad —no es un `{código}@{slug}.role.ec`— porque el dueño
+    // es una persona con una bandeja, no un acceso de equipo. El índice único es
+    // por negocio (`business_members_alias_key`), así que el mismo dueño en
+    // varios negocios son varias filas con el mismo alias, a propósito.
+    //
+    // `onConflictDoNothing` sin objetivo, como el backfill: los tres índices
+    // únicos de la tabla (id, `(business_id, user_id)` y
+    // `(business_id, lower(alias))`) impiden nombrar un objetivo único, y un
+    // negocio con dueño es un negocio que ya lo tiene.
+    await executor
+      .insert(businessMembers)
+      .values({
+        business_id: row.id,
+        user_id: owner_id,
+        role: 'owner',
+        label: row.name,
+        alias: ownerProfile.email,
+        status: 'active',
+        session_ttl_hours: 0,
+      })
       .onConflictDoNothing();
     await executor
       .insert(businessFinance)
@@ -421,6 +499,22 @@ export class BusinessesRepository {
    * one-row-per-business invariant for `total` to match the page: the count
    * query reads `businesses` alone, and it is the write paths above plus the
    * Supabase backfill that keep the companions complete.
+   *
+   * ─── EL JOIN CONTRA `business_ownership` SIGUE AQUÍ, Y A PROPÓSITO ───────────
+   *
+   * `owner_id` es un DATO de la fila —la cuenta del dueño— y no una pregunta
+   * de permiso: el DTO lo expone y el contrato lo declara `string`. Por eso el
+   * join no se movió al modelo de membresías todavía, y por eso NO es una
+   * cuarta copia del predicado: la copia que había en este archivo —el método
+   * `isOwner`— sí se movió, y este join no contesta «¿puedo?».
+   *
+   * Igual hay que decirlo: cuando Plan 3 dropee `business_ownership`, este join
+   * tiene que moverse también, y el movimiento tiene una forma y no otra —el
+   * dueño del negocio es una membresía viva con `role = 'owner'`— porque un
+   * negocio sin dueño tiene que seguir siendo visible para el panel (un
+   * `LEFT JOIN` con `owner_id` nullable cambia el contrato del DTO) y tiene que
+   * seguir teniendo dueño (un `INNER JOIN` contra la membresía de dueño
+   * desaparecería del listado el negocio de un dueño degradado a `manager`).
    */
   private aggregateSelect(executor: DbExecutor = this.db) {
     return executor
@@ -460,9 +554,22 @@ export class BusinessesRepository {
     return moderationStatus(status);
   }
 
-  /** The business is owned by the user (business_ownership is the source). */
+  /**
+   * The business is OWNED by the user, and the membership model is the source.
+   *
+   * The same `exists` shape as before —it is correlated to `businesses.id` and
+   * the count query reads `businesses` alone— but the row it looks for is the
+   * live OWNER membership, not the `business_ownership` row. The two halves of
+   * «live» (`deleted_at is null` and `status = 'active'`) y la promesa de la
+   * sesión están en `database/business-membership.ts`, que es el único lugar
+   * donde están escritas.
+   *
+   * SIN ALIAS en el subquery, a propósito: el fragmento compartido califica las
+   * columnas con el nombre de la tabla (`"business_members"."user_id"`), y un
+   * alias renombra la tabla y deja de resolver.
+   */
   private ownedBy(userId: string): SQL {
-    return sql`exists (select 1 from ${businessOwnership} o where o.business_id = ${businesses.id} and o.owner_id = ${userId})`;
+    return sql`exists (select 1 from ${businessMembers} where ${businessMembers.business_id} = ${businesses.id} and ${ownerMembership(userId)})`;
   }
 
   async findById(
@@ -549,18 +656,31 @@ export class BusinessesRepository {
       .orderBy(desc(emailSends.created_at));
   }
 
-  async isOwner(businessId: string, userId: string): Promise<boolean> {
-    const [row] = await this.db
-      .select({ id: businessOwnership.business_id })
-      .from(businessOwnership)
-      .where(
-        and(
-          eq(businessOwnership.business_id, businessId),
-          eq(businessOwnership.owner_id, userId),
-        ),
-      )
-      .limit(1);
-    return Boolean(row);
+  /**
+   * THE fact: what role the caller has in this business right now.
+   *
+   * `null` when the caller is not a member that grants anything. It does NOT
+   * answer «¿puedo?»: every caller states its own requirement over this answer,
+   * and that is what keeps the consolidation from opening anybody's access.
+   *
+   * It lives HERE, and not in the three repositories that used to ask the
+   * question, because this module's repository is the one that was exported and
+   * injected everywhere the question mattered. The other two modules import
+   * `BusinessesModule` and use this one method, so the predicate has exactly one
+   * home —the alternative was three one-line delegations to the same function,
+   * which is three places to change when Plan 3 drops the old table.
+   *
+   * `executor` is last and optional, like `findById`'s: a caller that is inside
+   * a transaction —`OrdersService.updateStatus` reads the order locked— has to
+   * ask on the same connection, or the answer could be about a different
+   * snapshot than the row it is about to act on.
+   */
+  async roleOf(
+    businessId: string,
+    userId: string,
+    executor: DbExecutor = this.db,
+  ): Promise<BusinessMemberRole | null> {
+    return membershipRole(executor, businessId, userId);
   }
 
   // ─── Preferencias de notificación del negocio ────────────────────
@@ -625,12 +745,19 @@ export class BusinessesRepository {
     return row ?? null;
   }
 
-  async findIdsOwnedBy(userId: string): Promise<string[]> {
-    const rows = await this.db
-      .select({ id: businessOwnership.business_id })
-      .from(businessOwnership)
-      .where(eq(businessOwnership.owner_id, userId));
-    return rows.map((r) => r.id);
+  /**
+   * The businesses whose OWNER this caller is.
+   *
+   * It replaces two methods that asked the same question of the old table —
+   *this one and `OffersRepository.findBusinessIdsOwnedBy`— because the answer
+   * was written twice and the two could disagree as soon as one of them was
+   * edited.
+   */
+  async ownedBusinessIds(
+    userId: string,
+    executor: DbExecutor = this.db,
+  ): Promise<string[]> {
+    return ownedBusinessIds(executor, userId);
   }
 
   async listAll(

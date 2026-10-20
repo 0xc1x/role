@@ -30,11 +30,26 @@ const EXPECTED: ReadonlyArray<readonly [string, string, string]> = [
   ['business_finance', 'business_id', 'CASCADE'],
   ['business_hours', 'business_id', 'CASCADE'],
   ['business_locations', 'business_id', 'CASCADE'],
+  // Las tres tablas de acceso de la migración `20261014002328`, con CASCADE en
+  // las cinco: un negocio que se borra se lleva a sus miembros, a sus filas de
+  // alcance y a su estado de plan, y un perfil que se borra se lleva sus
+  // membresías.
+  //
+  // `business_members.user_id` NO es una divergencia declarada como lo son
+  // `marketing_preferences.user_id` y `payment_methods.user_id`: el espejo y la
+  // base apuntan los dos a `public.profiles`, así que la cascada sigue al mismo
+  // borrado en los dos lados. El espejo no puede nombrar `auth.users`, y acá
+  // tampoco lo necesita.
+  ['business_member_locations', 'location_id', 'CASCADE'],
+  ['business_member_locations', 'member_id', 'CASCADE'],
+  ['business_members', 'business_id', 'CASCADE'],
+  ['business_members', 'user_id', 'CASCADE'],
   ['business_moderation', 'business_id', 'CASCADE'],
   ['business_moderation', 'verified_by', 'NO ACTION'],
   ['business_notification_preferences', 'business_id', 'NO ACTION'],
   ['business_ownership', 'business_id', 'CASCADE'],
   ['business_ownership', 'owner_id', 'CASCADE'],
+  ['business_plans_state', 'business_id', 'CASCADE'],
   ['consumer_notification_preferences', 'user_id', 'NO ACTION'],
   ['coupons', 'business_id', 'CASCADE'],
   ['device_tokens', 'user_id', 'CASCADE'],

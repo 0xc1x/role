@@ -183,11 +183,9 @@ describe('OffersRepository (DB real)', () => {
     }
   });
 
-  test('isBusinessOwner y locationBelongsToBusiness', async () => {
+  test('locationBelongsToBusiness', async () => {
     const owner = await seedProfile(ctx.db);
     const biz = await seedBusiness(ctx.db, owner);
-    expect(await repo.isBusinessOwner(biz.id, owner)).toBe(true);
-    expect(await repo.isBusinessOwner(biz.id, businessId)).toBe(false);
     expect(await repo.locationBelongsToBusiness(locationId, businessId)).toBe(
       true,
     );
@@ -224,10 +222,9 @@ describe('OffersRepository consultas (DB real)', () => {
     expect(byBiz.items.every((o) => o.business_id === businessId)).toBe(true);
   });
 
-  test('findBusinessIdsOwnedBy y findActiveCategoryIds', async () => {
+  test('findActiveCategoryIds', async () => {
     const owner = await seedProfile(ctx.db);
-    const biz = await seedBusiness(ctx.db, owner);
-    expect(await repo.findBusinessIdsOwnedBy(owner)).toContain(biz.id);
+    await seedBusiness(ctx.db, owner);
     const cat = await seedCategory(ctx.db);
     expect(
       await repo.findActiveCategoryIds([

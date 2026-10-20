@@ -316,18 +316,55 @@ describe('business_sales_stats (DB real)', () => {
     // looks like good news. The day `orders.offer_id` becomes SET NULL (the change
     // that would let an order outlive its offer, the way `coupon_id` already does)
     // this stops being a fixture and becomes the production path.
-    await ctx.db.execute(
-      sql`alter table public.orders drop constraint orders_offer_id_offers_id_fkey`,
-    );
+    //
+    // The branch derivation goes with the FK, and for the same reason it is a
+    // SECOND unreachable guard on the very same state. The column
+    // orders.business_location_id is NOT NULL and is filled by
+    // trg_set_order_business_location, a BEFORE INSERT trigger that derives it
+    // from the offer and raises when there is no offer to derive it from. So an
+    // order whose offer is gone cannot be born — the trigger refuses it before
+    // the FK would have. Dropping only the FK would move this fixture's failure
+    // from 23503 to P0001 "la oferta % no existe, no se puede derivar la
+    // sucursal", which proves the same thing about a different layer.
+    //
+    // The column is therefore also written BY HAND below. That is the third thing
+    // this fixture suspends to reach the state, and it is the reason the trigger
+    // is restored in the `finally` rather than left off for the rest of the file.
     const dangling = crypto.randomUUID();
     let inserted: string | null = null;
+    // Both suspensions are INSIDE the try, and each is remembered so the finally
+    // restores exactly what was taken and nothing more. Outside the try, a
+    // `drop trigger` that threw after `drop constraint` had already succeeded
+    // would skip the teardown entirely and leave the rest of this file measuring
+    // an `orders` table with a silently missing FK. Unconditional restore in the
+    // finally has the mirror problem in reverse: it would try to re-create a
+    // trigger that was never dropped and fail with "already exists", masking the
+    // original error with a different one. The row is deleted before either
+    // restore for the same reason the file already gives for that.
+    let suspendedConstraint = false;
+    let suspendedTrigger = false;
     try {
+      await ctx.db.execute(
+        sql`alter table public.orders drop constraint orders_offer_id_offers_id_fkey`,
+      );
+      suspendedConstraint = true;
+      await ctx.db.execute(
+        sql`drop trigger trg_set_order_business_location on public.orders`,
+      );
+      suspendedTrigger = true;
+
       const [row] = await ctx.db
         .insert(orders)
         .values({
           user_id: userId,
           offer_id: dangling,
           business_id: salesBusinessId,
+          // `salesLocationId` is this file's own location for
+          // `salesBusinessId`, so the row is as well-formed as the dangling
+          // `offer_id` allows it to be. It is written here rather than derived,
+          // because the trigger that would have derived it refuses this row
+          // outright — which is the whole reason it is dropped above.
+          business_location_id: salesLocationId,
           order_number: `A-${crypto.randomUUID().slice(0, 8)}`,
           status: 'completed' as never,
           price: '42.00',
@@ -361,9 +398,19 @@ describe('business_sales_stats (DB real)', () => {
       if (inserted) {
         await ctx.db.delete(orders).where(eq(orders.id, inserted));
       }
-      await ctx.db.execute(
-        sql`alter table public.orders add constraint orders_offer_id_offers_id_fkey foreign key (offer_id) references offers(id) on delete cascade`,
-      );
+      // Then exactly what was taken, in reverse order of removal, and only if it
+      // was actually taken. The function was never dropped, so re-creating the
+      // trigger is the whole restore for it.
+      if (suspendedTrigger) {
+        await ctx.db.execute(
+          sql`create trigger trg_set_order_business_location before insert on public.orders for each row execute function public.set_order_business_location()`,
+        );
+      }
+      if (suspendedConstraint) {
+        await ctx.db.execute(
+          sql`alter table public.orders add constraint orders_offer_id_offers_id_fkey foreign key (offer_id) references offers(id) on delete cascade`,
+        );
+      }
     }
   });
 
