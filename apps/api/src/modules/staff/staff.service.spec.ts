@@ -197,6 +197,14 @@ describe('StaffService', () => {
       findMemberById: jest.fn(async () => memberRow()),
       listMembersWithScope: jest.fn(async () => []),
       locationIdsOfMember: jest.fn(async () => []),
+      /**
+       * Las dos preguntas que ahora contesta la BASE. El default es un `true`
+       * generoso y lo cambia `installScopeDatabase`, que está abajo: el doble
+       * tiene que responder como responde el SQL, o los tests de este archivo
+       * medirían un servicio que decide por su cuenta.
+       */
+      reachesMember: jest.fn(async () => true),
+      coversLocations: jest.fn(async () => true),
       findLocationIdsInBusiness: jest.fn(
         async (_b: string, ids: string[]) => ids,
       ),
@@ -251,7 +259,74 @@ describe('StaffService', () => {
 
     service = module.get(StaffService);
     logs = captureLogs();
+    installScopeDatabase();
   });
+
+  /**
+   * The double IS the database, and this is the rule it answers with.
+   *
+   * The two new repository methods are the two questions the base answers now,
+   * and the mock has to answer them the way the SQL does. If it answered
+   * "always yes", the tests of this file would pass against a service that
+   * still decided for itself —which is the thing this change removes— and they
+   * would pass against a service that asks the base and ignores the answer.
+   *
+   * The data it answers from is the data of the fixture: `findMemberByUser` is
+   * the caller's row, and `locationIdsOfMember` is the live scope of a member.
+   * The rule itself is measured in SQL, in
+   * `src/database/security/business-members.rls.db.spec.ts`; this is the model
+   * of that database, not a second copy of the rule in the product.
+   *
+   * THE THREE PARTS OF THE RULE, and they are the same three that the SQL has:
+   * the owner reaches everything; a member reaches an access only if its own
+   * scope is not empty, the access's scope is not empty, and the access's scope
+   * is contained in its own.
+   */
+  function installScopeDatabase(): void {
+    repository.reachesMember.mockImplementation(
+      async (
+        businessId: string,
+        memberId: string,
+        callerUserId: string,
+      ): Promise<boolean> => {
+        const caller = await repository.findMemberByUser(
+          businessId,
+          callerUserId,
+        );
+        if (!caller) return false;
+        if (caller.role === 'owner') return true;
+        const callerScope = (await repository.locationIdsOfMember(
+          caller.id,
+        )) as string[];
+        const targetScope = (await repository.locationIdsOfMember(
+          memberId,
+        )) as string[];
+        if (callerScope.length === 0) return false;
+        if (targetScope.length === 0) return false;
+        return targetScope.every((id) => callerScope.includes(id));
+      },
+    );
+
+    repository.coversLocations.mockImplementation(
+      async (
+        businessId: string,
+        locationIds: string[],
+        callerUserId: string,
+      ): Promise<boolean> => {
+        const caller = await repository.findMemberByUser(
+          businessId,
+          callerUserId,
+        );
+        if (!caller) return false;
+        if (caller.role === 'owner') return true;
+        if (locationIds.length === 0) return false;
+        const callerScope = (await repository.locationIdsOfMember(
+          caller.id,
+        )) as string[];
+        return locationIds.every((id) => callerScope.includes(id));
+      },
+    );
+  }
 
   // ───────────────────────── la regla que se rompe ────────────────────────
 
@@ -329,9 +404,13 @@ describe('StaffService', () => {
       expect(repository.updateMember).not.toHaveBeenCalled();
     });
 
-    it('un empleado sin sucursales está contenido: no alcanza ninguna', async () => {
-      // El conjunto vacío es subconjunto de todo, y es lo correcto: un acceso sin
-      // sucursales no toca nada (§5.1), así que no hay por dónde ampliarlo.
+    it('un acceso sin alcance NO lo alcanza ni un gerente con alcance: sólo el dueño', async () => {
+      // ESTA REGLA CAMBIÓ, y el cambio es de la regla y no del código: el
+      // conjunto vacío es subconjunto de todo, así que la versión que estaba
+      // escrita en TypeScript admitía al gerente a tocar un acceso sin
+      // sucursales. En la base el alcance del ACCESO también tiene que ser no
+      // vacío: un acceso sin alcance no toca ninguna sucursal, y no hay por
+      // dónde ampliarlo.
       repository.locationIdsOfMember.mockImplementation(async (id: string) =>
         id === MEMBER_MANAGER ? [LOC_A, LOC_B] : id === MEMBER_STAFF ? [] : [],
       );
@@ -339,17 +418,64 @@ describe('StaffService', () => {
         memberRow({ id: MEMBER_STAFF }),
       );
 
-      await service.update(managerAB, BIZ, MEMBER_STAFF, {
-        session_ttl_hours: 12,
-      });
+      await expect(
+        service.update(managerAB, BIZ, MEMBER_STAFF, {
+          session_ttl_hours: 12,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.updateMember).not.toHaveBeenCalled();
+      expect(repository.setScope).not.toHaveBeenCalled();
+    });
 
-      expect(repository.updateMember).toHaveBeenCalledWith(
+    it('un gerente SIN alcance no crea, no edita y no toca un acceso sin alcance', async () => {
+      // El caso que no estaba testeado (ítem 18 de la herencia): sin filas de
+      // alcance no se alcanza NADA, ni siquiera un acceso sin alcance. Las tres
+      // preguntas del §5.1 —crear, editar, tocar— con la misma respuesta.
+      repository.findMemberByUser.mockResolvedValue(managerRow([]));
+      repository.locationIdsOfMember.mockImplementation(async () => []);
+      repository.findMemberById.mockResolvedValue(
+        memberRow({ id: MEMBER_STAFF }),
+      );
+
+      // CREAR: ni siquiera un acceso sin sucursales.
+      await expect(
+        service.create(managerAB, BIZ, {
+          label: 'Carla',
+          business_location_ids: [],
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(authAdmin.createUser).not.toHaveBeenCalled();
+      expect(repository.insertMember).not.toHaveBeenCalled();
+
+      // EDITAR: el acceso sin alcance no lo alcanza, y tampoco puede dejarle
+      // un alcance que no tiene.
+      await expect(
+        service.update(managerAB, BIZ, MEMBER_STAFF, {
+          session_ttl_hours: 12,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.updateMember).not.toHaveBeenCalled();
+      expect(repository.setScope).not.toHaveBeenCalled();
+    });
+
+    it('el servicio NO vuelve a decidir: obedece a la base aunque el dato local diga otra cosa', async () => {
+      // El alcance local de MEMBER_STAFF ({LOC_A}) está contenido en el del
+      // gerente ({LOC_A, LOC_B}), así que un servicio que volviera a calcular
+      // la contención en TypeScript lo admitiría. La base dice que no —este
+      // `false` lo pone el doble, a mano— y el servicio tiene que obedecer.
+      // Esta es la prueba de que la regla vive en SQL y no en el servicio.
+      repository.reachesMember.mockResolvedValue(false);
+      repository.listMembersWithScope.mockResolvedValue([
+        { row: memberRow({ id: MEMBER_STAFF }), locationIds: [LOC_A] },
+      ]);
+
+      const members = await service.list(managerAB, BIZ);
+
+      expect(members).toEqual([]);
+      expect(repository.reachesMember).toHaveBeenCalledWith(
         BIZ,
         MEMBER_STAFF,
-        { session_ttl_hours: 12 },
-        // La cuarta es el executor de la transacción: el PATCH del rol y el del
-        // alcance tienen que commitear juntos.
-        expect.anything(),
+        MANAGER_USER,
       );
     });
 
@@ -489,8 +615,14 @@ describe('StaffService', () => {
         label: 'Nadia',
       });
       repository.findMemberById.mockResolvedValue(otroGerente);
+      // El que llama CONSERVA su alcance: la diferencia entre las dos mitades
+      // es `C`, no el rol ni un alcance vacío del que llama.
       repository.locationIdsOfMember.mockImplementation(async (id: string) =>
-        id === MEMBER_OUTSIDE ? [LOC_B, LOC_C] : [],
+        id === MEMBER_OUTSIDE
+          ? [LOC_B, LOC_C]
+          : id === MEMBER_MANAGER
+            ? [LOC_A, LOC_B]
+            : [],
       );
 
       await expect(

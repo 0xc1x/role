@@ -1789,6 +1789,426 @@ describe('los helpers de permiso', () => {
  * bloque mide: el dueño conserva el acceso que ya tenía (una regresión aquí sería
  * un panel vacío) y encima gana el camino nuevo.
  */
+
+// ─── EL ALCANCE POR SUCURSAL, COMO REGLA DE LA BASE ──────────────────────────
+//
+// La regla del §5.1 —el dueño llega a todo, un gerente o un empleado llega a la
+// unión de sus sucursales, y SIN FILAS no llega a nada— estaba escrita en
+// TypeScript, en `scopeIsContained` de `staff.service.ts`, y en ningún otro
+// lugar. Este bloque mide la regla donde vive ahora: en SQL.
+//
+// Las dos funciones son las que produce la migración del alcance:
+//
+//   business_member_reaches_member(business_id, member_id)      → boolean
+//   business_member_covers_locations(business_id, location_ids) → boolean
+//
+// La PRIMERA la llama una policy —la migración siguiente la pone en las dos
+// policies del roster—, y una policy la evalúa el motor como el rol que la
+// invoca: sin el grant a `authenticated`, la policy nueva no concede NADA y el
+// roster se vacía. La SEGUNDA la llama sólo la API, y `authenticated` no tiene
+// por qué verla.
+//
+// ─── EL FIXTURE, Y POR QUÉ HAY TRES SUCURSALES Y DOS GERENTES ───────────────
+//
+// Un gerente de UNA sucursal y otro de DOS: «contenido» y «salido» sólo se
+// distinguen con las dos mitades, y una matriz con un solo ancho de alcance no
+// separa «{A} ⊆ {A,B}» de «{A,B} ⊆ {A,B}».
+//
+// Y TRES sucursales, no dos: el gerente de DOS necesita algo que NO cubre, y
+// ese algo es la mitad de la regla.
+//
+// Los dos gerentes y los tres empleados tienen alcances DISTINTOS a propósito:
+// `M_STAFF_A` ({LOC_A}) está contenido en `M_MANAGER` ({LOC_A}) y en
+// `M_MANAGER_AB` ({LOC_A, LOC_B}), y `M_STAFF_B` ({LOC_B}) está contenido en el
+// segundo y no en el primero. Un fixture donde las dos lecturas de la regla
+// dieran lo mismo probaría que la regla no está escrita.
+describe('el alcance por sucursal es una regla de la base', () => {
+  let ctx: SupabaseTestDb;
+
+  const BIZ_A = '9c000000-0000-4000-8000-000000000001';
+  const LOC_A = '9d000000-0000-4000-8000-000000000001';
+  const LOC_B = '9d000000-0000-4000-8000-000000000002';
+  const LOC_C = '9d000000-0000-4000-8000-000000000003';
+
+  const USER_OWNER = '9e000000-0000-4000-8000-000000000001';
+  const USER_MANAGER = '9e000000-0000-4000-8000-000000000002';
+  const USER_MANAGER_SIN_ALCANCE = '9e000000-0000-4000-8000-000000000003';
+  const USER_MANAGER_AB = '9e000000-0000-4000-8000-000000000004';
+  const USER_STAFF_A = '9e000000-0000-4000-8000-000000000005';
+  const USER_STAFF_B = '9e000000-0000-4000-8000-000000000006';
+  const USER_STAFF_C = '9e000000-0000-4000-8000-000000000007';
+  const USER_STAFF_SIN_ALCANCE = '9e000000-0000-4000-8000-000000000008';
+  const USER_STAFF_AC = '9e000000-0000-4000-8000-00000000000b';
+  const USER_STALE = '9e000000-0000-4000-8000-000000000009';
+  const USER_NOBODY = '9e000000-0000-4000-8000-00000000000a';
+
+  const M_OWNER = '9f000000-0000-4000-8000-000000000001';
+  const M_MANAGER = '9f000000-0000-4000-8000-000000000002';
+  const M_MANAGER_SIN_ALCANCE = '9f000000-0000-4000-8000-000000000003';
+  const M_MANAGER_AB = '9f000000-0000-4000-8000-000000000004';
+  const M_STAFF_A = '9f000000-0000-4000-8000-000000000005';
+  const M_STAFF_B = '9f000000-0000-4000-8000-000000000006';
+  const M_STAFF_C = '9f000000-0000-4000-8000-000000000007';
+  const M_STAFF_SIN_ALCANCE = '9f000000-0000-4000-8000-000000000008';
+  const M_STALE = '9f000000-0000-4000-8000-000000000009';
+  const M_STAFF_AC = '9f000000-0000-4000-8000-00000000000b';
+
+  beforeAll(async () => {
+    ctx = await createSupabaseTestDb();
+
+    await ctx.sql.begin(async (tx) => {
+      for (const id of [
+        USER_OWNER,
+        USER_MANAGER,
+        USER_MANAGER_SIN_ALCANCE,
+        USER_MANAGER_AB,
+        USER_STAFF_A,
+        USER_STAFF_B,
+        USER_STAFF_C,
+        USER_STAFF_SIN_ALCANCE,
+        USER_STAFF_AC,
+        USER_STALE,
+        USER_NOBODY,
+      ]) {
+        await tx.unsafe(
+          `insert into auth.users (id, email, raw_user_meta_data)
+           values ('${id}', 'alcance-${id}@test', '{"role":"business"}'::jsonb)
+           on conflict (id) do nothing`,
+        );
+      }
+
+      await tx.unsafe(
+        `insert into public.businesses (id, name, type, slug)
+         values ('${BIZ_A}', 'Alcance Biz A', 'restaurant', 'alcance-biz-a')`,
+      );
+
+      // El plan se escribe a mano y NO es el de defecto: sin esta fila el
+      // negocio se lee como `free`, y `free` admite UNA sucursal y DOS miembros
+      // (`trg_enforce_location_limit` y `trg_enforce_member_limit`). Este
+      // fixture necesita tres sucursales y nueve accesos.
+      await tx.unsafe(
+        `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+         values ('${BIZ_A}', 'pro', null)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
+         values ('${LOC_A}', '${BIZ_A}', 'A', 'Street', 40.41680000, -3.70380000),
+                ('${LOC_B}', '${BIZ_A}', 'B', 'Street2', 40.41680000, -3.70380000),
+                ('${LOC_C}', '${BIZ_A}', 'C', 'Street3', 40.41680000, -3.70380000)`,
+      );
+
+      // El dueño tiene TTL 0 y NUNCA fue sellado, que es lo que producción
+      // tiene (`20261016022631_owner_memberships_no_session_expiry`): un dueño
+      // con TTL y sin sello es una sesión vencida por definición, y el dueño
+      // REAL no podría administrar su propio negocio.
+      await tx.unsafe(
+        `insert into public.business_members
+           (id, business_id, user_id, role, label, alias, status, session_ttl_hours, last_authenticated_at, created_at, deleted_at)
+         values
+           ('${M_OWNER}', '${BIZ_A}', '${USER_OWNER}', 'owner', 'Dueña', 'alcance-duena@test', 'active', 0, null, now(), null),
+           ('${M_MANAGER}', '${BIZ_A}', '${USER_MANAGER}', 'manager', 'Gerente de A', 'alcance-gerente-a@test', 'active', 24, now(), now(), null),
+           ('${M_MANAGER_SIN_ALCANCE}', '${BIZ_A}', '${USER_MANAGER_SIN_ALCANCE}', 'manager', 'Gerente sin alcance', 'alcance-gerente-sin@test', 'active', 24, now(), now(), null),
+           ('${M_MANAGER_AB}', '${BIZ_A}', '${USER_MANAGER_AB}', 'manager', 'Gerente de A y B', 'alcance-gerente-ab@test', 'active', 24, now(), now(), null),
+           ('${M_STAFF_A}', '${BIZ_A}', '${USER_STAFF_A}', 'staff', 'Empleada de A', 'alcance-empleada-a@test', 'active', 24, now(), now(), null),
+           ('${M_STAFF_B}', '${BIZ_A}', '${USER_STAFF_B}', 'staff', 'Empleado de B', 'alcance-empleado-b@test', 'active', 24, now(), now(), null),
+           ('${M_STAFF_C}', '${BIZ_A}', '${USER_STAFF_C}', 'staff', 'Empleada de C', 'alcance-empleada-c@test', 'active', 24, now(), now(), null),
+           ('${M_STAFF_SIN_ALCANCE}', '${BIZ_A}', '${USER_STAFF_SIN_ALCANCE}', 'staff', 'Empleado sin alcance', 'alcance-empleado-sin@test', 'active', 24, now(), now(), null),
+           ('${M_STALE}', '${BIZ_A}', '${USER_STALE}', 'manager', 'Gerente vencido', 'alcance-vencido@test', 'active', 24, now() - interval '26 hours', now(), null),
+           ('${M_STAFF_AC}', '${BIZ_A}', '${USER_STAFF_AC}', 'staff', 'Empleada de A y C', 'alcance-empleada-ac@test', 'active', 24, now(), now(), null)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_member_locations (member_id, location_id, deleted_at)
+         values
+           ('${M_MANAGER}', '${LOC_A}', null),
+           ('${M_MANAGER_AB}', '${LOC_A}', null),
+           ('${M_MANAGER_AB}', '${LOC_B}', null),
+           ('${M_STAFF_A}', '${LOC_A}', null),
+           ('${M_STAFF_B}', '${LOC_B}', null),
+           ('${M_STAFF_C}', '${LOC_C}', null),
+           ('${M_STAFF_AC}', '${LOC_A}', null),
+           ('${M_STAFF_AC}', '${LOC_C}', null),
+           ('${M_STALE}', '${LOC_A}', null)`,
+      );
+    });
+  });
+
+  afterAll(async () => {
+    await ctx.stop();
+  });
+
+  /**
+   * «¿alcanzo a este acceso?», como la policy lo va a preguntar.
+   *
+   * Se llama como `authenticated` a propósito: el grant a ese rol es parte del
+   * contrato de la función —sin él, la policy nueva no concede nada— y una
+   * prueba que la llamara con el dueño de la base no mediría ese grant.
+   */
+  async function reaches(userId: string, memberId: string): Promise<boolean> {
+    const r = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ ok: boolean }[]>(
+        `select public.business_member_reaches_member('${BIZ_A}'::uuid, '${memberId}'::uuid) as ok`,
+      ),
+    );
+    return r[0].ok;
+  }
+
+  /**
+   * «¿estas sucursales están dentro de mi alcance?», como la API lo pregunta.
+   *
+   * Se llama como `service_role`, que es el rol con el que la API habla con la
+   * base, y el único que puede ejecutarla: `authenticated` no la ve.
+   */
+  async function covers(
+    userId: string,
+    locationIds: readonly string[],
+  ): Promise<boolean> {
+    const array =
+      locationIds.length === 0
+        ? `'{}'::uuid[]`
+        : `array[${locationIds.map((id) => `'${id}'::uuid`).join(', ')}]`;
+    const r = await as(ctx.sql, 'service_role', userId, (tx) =>
+      tx.unsafe<{ ok: boolean }[]>(
+        `select public.business_member_covers_locations('${BIZ_A}'::uuid, ${array}) as ok`,
+      ),
+    );
+    return r[0].ok;
+  }
+
+  /**
+   * The live scope of one access, read as the database sees it.
+   *
+   * It exists for ANTI-VACUITY: a `false` that comes from a fixture that was
+   * never seeded proves nothing, and the fixture of this block has three ways
+   * of being wrong —a row that was not inserted, a column that does not exist,
+   * and a `deleted_at` that is not null.
+   */
+  async function scopeOf(memberId: string): Promise<string[]> {
+    const r = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ location_id: string }[]>(
+        `select l.location_id
+           from public.business_member_locations l
+          where l.member_id = '${memberId}'::uuid
+            and l.deleted_at is null
+          order by l.location_id`,
+      ),
+    );
+    return plainRows(r).map((row) => row.location_id);
+  }
+
+  test('el dueño alcanza a todos los accesos del negocio, sin filas de alcance', async () => {
+    // Anti-vacuity: el dueño NO tiene filas de alcance, y su alcance implícito
+    // es el negocio entero.
+    expect(await scopeOf(M_OWNER)).toEqual([]);
+
+    expect(await reaches(USER_OWNER, M_STAFF_A)).toBe(true);
+    expect(await reaches(USER_OWNER, M_STAFF_B)).toBe(true);
+    expect(await reaches(USER_OWNER, M_STAFF_C)).toBe(true);
+    // Y también a los que no tienen alcance: el dueño llega a los accesos
+    // SCOPELESS, que es la mitad de la regla.
+    expect(await reaches(USER_OWNER, M_STAFF_SIN_ALCANCE)).toBe(true);
+    expect(await reaches(USER_OWNER, M_MANAGER_SIN_ALCANCE)).toBe(true);
+  });
+
+  test('un gerente alcanza el acceso cuyo alcance está contenido en el suyo', async () => {
+    // Anti-vacuity: los alcances del fixture son los que la prueba afirma.
+    expect(await scopeOf(M_MANAGER)).toEqual([LOC_A]);
+    expect(await scopeOf(M_MANAGER_AB)).toEqual([LOC_A, LOC_B]);
+    expect(await scopeOf(M_STAFF_A)).toEqual([LOC_A]);
+    expect(await scopeOf(M_STAFF_B)).toEqual([LOC_B]);
+
+    // Contenido exacto: el alcance del objetivo es el mismo.
+    expect(await reaches(USER_MANAGER, M_STAFF_A)).toBe(true);
+    // Contenido parcial: {A} ⊆ {A,B}.
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_A)).toBe(true);
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_B)).toBe(true);
+    // Y el mismo gerente de dos sucursales alcanza al de una.
+    expect(await reaches(USER_MANAGER_AB, M_MANAGER)).toBe(true);
+  });
+
+  test('un gerente NO alcanza el acceso cuyo alcance sale del suyo', async () => {
+    // {B} ⊄ {A}: comparte el negocio entero y no comparte ninguna sucursal.
+    expect(await reaches(USER_MANAGER, M_STAFF_B)).toBe(false);
+    expect(await reaches(USER_MANAGER, M_STAFF_C)).toBe(false);
+    // {C} ⊄ {A,B}: el gerente de dos sucursales tampoco llega a la tercera.
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_C)).toBe(false);
+    // Y ESTE es el caso que separa la contención de la intersección: {A, C}
+    // COMPARTE una sucursal con {A}, así que una lectura por intersección lo
+    // admitiría —y con ella, un gerente de A podría tocar un acceso que escribe
+    // en C—. La contención lo niega, y esta aserción es la que se pone roja si
+    // alguien cambia la regla por una intersección.
+    expect(await reaches(USER_MANAGER, M_STAFF_AC)).toBe(false);
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_AC)).toBe(false);
+    // Y el simétrico: el alcance del que llama es el que sale del del objetivo.
+    // {A} ⊄ {A,B}: el empleado de A no llega al gerente de A y B. La regla NO
+    // distingue por rol —un empleado de A alcanza a otro de A— porque el §5.1
+    // habla de ALCANCE y no de cargo: el que administra al equipo lo decide
+    // `requireActor`, que no deja entrar a un empleado.
+    expect(await reaches(USER_STAFF_A, M_MANAGER_AB)).toBe(false);
+    expect(await reaches(USER_STAFF_A, M_STAFF_A)).toBe(true);
+  });
+
+  test('un gerente sin filas de alcance no alcanza a nadie', async () => {
+    // Anti-vacuity: no tiene filas, y eso es lo que se está probando.
+    expect(await scopeOf(M_MANAGER_SIN_ALCANCE)).toEqual([]);
+
+    expect(await reaches(USER_MANAGER_SIN_ALCANCE, M_STAFF_A)).toBe(false);
+    expect(await reaches(USER_MANAGER_SIN_ALCANCE, M_MANAGER)).toBe(false);
+    // Ni siquiera a un acceso sin alcance: el conjunto vacío es subconjunto de
+    // todo, y por eso la versión de esta regla que estaba escrita en
+    // TypeScript admitía aquí a tocar cualquier acceso sin alcance.
+    expect(await reaches(USER_MANAGER_SIN_ALCANCE, M_STAFF_SIN_ALCANCE)).toBe(
+      false,
+    );
+  });
+
+  test('un acceso sin alcance sólo lo alcanza el dueño', async () => {
+    expect(await scopeOf(M_STAFF_SIN_ALCANCE)).toEqual([]);
+
+    expect(await reaches(USER_MANAGER, M_STAFF_SIN_ALCANCE)).toBe(false);
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_SIN_ALCANCE)).toBe(false);
+    expect(await reaches(USER_OWNER, M_STAFF_SIN_ALCANCE)).toBe(true);
+  });
+
+  test('un miembro sin filas de alcance no cubre ni una sucursal', async () => {
+    expect(await covers(USER_MANAGER_SIN_ALCANCE, [LOC_A])).toBe(false);
+    expect(await covers(USER_STAFF_SIN_ALCANCE, [LOC_A])).toBe(false);
+  });
+
+  test('un gerente cubre las sucursales de su alcance y ninguna más', async () => {
+    expect(await covers(USER_MANAGER, [LOC_A])).toBe(true);
+    // La que no gestiona, no.
+    expect(await covers(USER_MANAGER, [LOC_B])).toBe(false);
+    // Y un conjunto que se sale por UNA sucursal no está cubierto: la
+    // contención es de conjunto, no «al menos una».
+    expect(await covers(USER_MANAGER, [LOC_A, LOC_B])).toBe(false);
+
+    expect(await covers(USER_MANAGER_AB, [LOC_A, LOC_B])).toBe(true);
+    expect(await covers(USER_MANAGER_AB, [LOC_A, LOC_B, LOC_C])).toBe(false);
+
+    // El dueño cubre el negocio entero.
+    expect(await covers(USER_OWNER, [LOC_A, LOC_B, LOC_C])).toBe(true);
+  });
+
+  test('el conjunto vacío de sucursales lo cubre sólo el dueño', async () => {
+    // El conjunto vacío es la forma degenerada de la regla, y es la que más
+    // puerta abre: un `true` acá significaría que un gerente sin alcance puede
+    // crear accesos sin alcance.
+    expect(await covers(USER_MANAGER, [])).toBe(false);
+    expect(await covers(USER_MANAGER_SIN_ALCANCE, [])).toBe(false);
+    expect(await covers(USER_OWNER, [])).toBe(true);
+  });
+
+  test('una sesión vencida no alcanza nada', async () => {
+    // Anti-vacuity: el alcance del gerente vencido SÍ contiene al de la
+    // empleada de A, así que el `false` de abajo no puede ser por el alcance.
+    expect(await scopeOf(M_STALE)).toEqual([LOC_A]);
+
+    expect(await reaches(USER_STALE, M_STAFF_A)).toBe(false);
+    expect(await covers(USER_STALE, [LOC_A])).toBe(false);
+  });
+
+  test('quien no es miembro del negocio no alcanza nada', async () => {
+    expect(await reaches(USER_NOBODY, M_STAFF_A)).toBe(false);
+    expect(await covers(USER_NOBODY, [LOC_A])).toBe(false);
+  });
+
+  test('las dos funciones se ejecutan con los roles que las necesitan', async () => {
+    const acl = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          fn: string;
+          args: string;
+          authenticated: boolean;
+          anon: boolean;
+          service_role: boolean;
+        }[]
+      >(`
+          select p.proname as fn,
+                 pg_get_function_identity_arguments(p.oid) as args,
+                 has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
+                 has_function_privilege('anon', p.oid, 'execute') as anon,
+                 has_function_privilege('service_role', p.oid, 'execute') as service_role
+          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in ('business_member_reaches_member',
+                              'business_member_covers_locations')
+          order by p.proname`),
+    );
+
+    // `business_member_reaches_member` la llama una POLICY, y una policy la
+    // evalúa el motor como el rol que la invoca: sin el grant a `authenticated`
+    // la policy nueva no concede NADA y el roster del gerente se vacía.
+    //
+    // `business_member_covers_locations` la llama SÓLO la API, así que
+    // `authenticated` no tiene por qué verla: una función que el cliente puede
+    // ejecutar es una función que hay que auditar.
+    expect(
+      plainRows(acl).map((r) => ({
+        fn: r.fn,
+        args: r.args,
+        authenticated: r.authenticated,
+        anon: r.anon,
+        service_role: r.service_role,
+      })),
+    ).toEqual([
+      {
+        fn: 'business_member_covers_locations',
+        args: 'p_business_id uuid, p_location_ids uuid[]',
+        authenticated: false,
+        anon: false,
+        service_role: true,
+      },
+      {
+        fn: 'business_member_reaches_member',
+        args: 'p_business_id uuid, p_target_member_id uuid',
+        authenticated: true,
+        anon: false,
+        service_role: true,
+      },
+    ]);
+  });
+
+  test('las dos funciones son estables, con `security definer` y el search_path pineado', async () => {
+    // `security definer` es lo que permite que una policy las llame sin
+    // recursionar la RLS del llamador (`business_members` →
+    // `business_member_locations` → `business_members`), y `search_path = ''`
+    // es lo que hace que el cuerpo tenga que calificar cada nombre.
+    const shape = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          fn: string;
+          prosecdef: boolean;
+          provolatile: string;
+          proconfig: string[] | null;
+        }[]
+      >(`
+          select p.proname as fn,
+                 p.prosecdef as prosecdef,
+                 p.provolatile::text as provolatile,
+                 p.proconfig as proconfig
+          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in ('business_member_reaches_member',
+                              'business_member_covers_locations')
+          order by p.proname`),
+    );
+
+    expect(plainRows(shape).map((r) => r.fn)).toEqual([
+      'business_member_covers_locations',
+      'business_member_reaches_member',
+    ]);
+    for (const row of plainRows(shape)) {
+      expect(row.prosecdef).toBe(true);
+      // 's' = stable. 'v' (volatile) dejaría la función re-evaluada por fila y
+      // su resultado dentro de una policy dependería del orden de evaluación.
+      expect(row.provolatile).toBe('s');
+      expect(row.proconfig).toEqual(['search_path=""']);
+    }
+  });
+});
+
 describe('las policies y los RPCs resuelven por membresía', () => {
   let ctx: SupabaseTestDb;
 

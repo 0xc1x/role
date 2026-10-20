@@ -26,7 +26,11 @@ import {
 import { safeErrorFields } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
 import { StaffMapper } from './staff.mapper';
-import { StaffRepository, type BusinessMemberRow } from './staff.repository';
+import {
+  StaffRepository,
+  type BusinessMemberRow,
+  type MemberWithScope,
+} from './staff.repository';
 import { STAFF_AUTH_ADMIN, type StaffAuthAdmin } from './staff.tokens';
 
 /**
@@ -61,38 +65,18 @@ const MEMBER_PER_BUSINESS_CONSTRAINT =
 /**
  * The reach of whoever is calling, resolved once per request.
  *
- * `locationIds` is the caller's OWN set of branches and it is empty for an
- * `owner`: an owner is not restricted by branches at all (`can_manage_location`
- * hands it the whole business), so representing its reach as "the set of
- * branches of the business" would be a fiction this module then has to remember
- * to special-case. Empty means "no restriction" and only `role` decides that.
+ * There is NO `locationIds` here, and its absence is the point: the caller's
+ * branches are not what decides anything. The reach rule lives in the database
+ * (`business_member_reaches_member` and
+ * `business_member_covers_locations`), which answers it for the caller that the
+ * transaction declares. An actor that carried its own copy of the branches
+ * would be a second implementation of a rule that is supposed to have one.
  */
 type StaffActor = {
   userId: string;
   businessId: string;
   role: BusinessMemberRole;
-  locationIds: Set<string>;
 };
-
-/**
- * CONTAINMENT, NOT INTERSECTION. This is the whole reach rule of §8 in one line.
- *
- * A `manager` of A+B may touch an access whose branches are a SUBSET of {A, B}:
- * ∅, {A}, {B}, {A, B}. It may NOT touch an access scoped to {A, C} even though A
- * is inside its reach, because C is not, and that access can *write* C. Reading
- * it as "shares a branch" would hand every manager of a chain a way to widen a
- * colleague's reach by one overlapping branch.
- *
- * The empty scope is a subset of everything and that is deliberate, not a hole: a
- * member with no branches touches nothing anywhere (§5.1), so there is nothing
- * for the caller to reach through it.
- */
-function scopeIsContained(
-  reach: ReadonlySet<string>,
-  scope: readonly string[],
-): boolean {
-  return scope.every((locationId) => reach.has(locationId));
-}
 
 /** The SQL shape of a raise that carries machine-readable detail. */
 type PostgresLikeError = {
@@ -161,9 +145,21 @@ export class StaffService {
     const actor = await this.requireActor(user, businessId);
     const members = await this.repository.listMembersWithScope(businessId);
 
-    return members
-      .filter((member) => this.reaches(actor, member.row, member.locationIds))
-      .map((member) => StaffMapper.toMemberDto(member.row, member.locationIds));
+    // ─── UNA IDA A LA BASE POR ACCESO, Y ES UN COSTE CONSCIENTE ──────────────
+    //
+    // La regla la contesta la base, y la base la contesta de a uno en uno: no
+    // hay helper que devuelva el conjunto de ids alcanzables. El roster está
+    // topado por plan —2 accesos en `free`, 20 en `pro`, sin tope en
+    // `pro_plus`—, así que el peor caso son veinte idas. Una versión de una
+    // sola llamada es una decisión de performance, y este plan no la toma.
+    const reachable: MemberWithScope[] = [];
+    for (const member of members) {
+      if (await this.reaches(actor, member.row)) reachable.push(member);
+    }
+
+    return reachable.map((member) =>
+      StaffMapper.toMemberDto(member.row, member.locationIds),
+    );
   }
 
   /**
@@ -329,7 +325,7 @@ export class StaffService {
       businessId,
       body.business_location_ids,
     );
-    this.assertWithinReach(actor, locationIds);
+    await this.assertWithinReach(actor, locationIds);
     this.assertPersistentSessionIsAllowed(role, body.session_ttl_hours);
 
     const alias = body.alias ?? this.proposedAlias(business.slug, body.label);
@@ -448,7 +444,7 @@ export class StaffService {
         businessId,
         body.business_location_ids,
       );
-      this.assertWithinReach(actor, locationIds);
+      await this.assertWithinReach(actor, locationIds);
     }
     this.assertPersistentSessionIsAllowed(
       body.role ?? member.role,
@@ -885,7 +881,6 @@ export class StaffService {
       userId: user.id,
       businessId,
       role: row.role,
-      locationIds: new Set(await this.repository.locationIdsOfMember(row.id)),
     };
   }
 
@@ -910,23 +905,30 @@ export class StaffService {
    * no branches, so containment would admit it vacuously— it is the §8 sentence
    * that a manager never administers the owner. Keeping it here means the list and
    * the writes cannot drift apart on it either.
+   *
+   * The CONTAINMENT, though, is not decided here: it is the database's answer,
+   * and the only thing this method decides is which rule is whose. The §8
+   * containment rule is a rule of SCOPE, and the scope lives in
+   * `business_member_locations`.
    */
-  private reaches(
+  private async reaches(
     actor: StaffActor,
-    member: Pick<BusinessMemberRow, 'role'>,
-    locationIds: readonly string[],
-  ): boolean {
+    member: Pick<BusinessMemberRow, 'id' | 'role'>,
+  ): Promise<boolean> {
     if (actor.role === 'owner') return true;
     if (member.role === 'owner') return false;
-    return scopeIsContained(actor.locationIds, locationIds);
+    return this.repository.reachesMember(
+      actor.businessId,
+      member.id,
+      actor.userId,
+    );
   }
 
   private async assertCanReachMember(
     actor: StaffActor,
     member: BusinessMemberRow,
   ): Promise<void> {
-    const locationIds = await this.repository.locationIdsOfMember(member.id);
-    if (this.reaches(actor, member, locationIds)) return;
+    if (await this.reaches(actor, member)) return;
 
     // Only a manager arrives here: `reaches` is unconditionally true for an
     // owner, so there is no "you do not administer this" message to write.
@@ -935,13 +937,23 @@ export class StaffService {
     );
   }
 
-  /** The same rule, applied to a reach that is ABOUT TO BE WRITTEN. */
-  private assertWithinReach(
+  /**
+   * The same rule, applied to a reach that is ABOUT TO BE WRITTEN.
+   *
+   * The database answers it, and the answer is the same one that decides
+   * whether the caller reaches the access it is about to widen: a manager of
+   * {A, B} can move an access to {A} or to {B}, and not to {A, C}.
+   */
+  private async assertWithinReach(
     actor: StaffActor,
     locationIds: readonly string[],
-  ): void {
-    if (actor.role === 'owner') return;
-    if (scopeIsContained(actor.locationIds, locationIds)) return;
+  ): Promise<void> {
+    const covered = await this.repository.coversLocations(
+      actor.businessId,
+      locationIds,
+      actor.userId,
+    );
+    if (covered) return;
 
     throw new ForbiddenException(
       'No puedes asignar sucursales que no gestionas.',

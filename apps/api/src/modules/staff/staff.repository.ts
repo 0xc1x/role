@@ -399,6 +399,94 @@ export class StaffRepository {
   }
 
   /**
+   * `public.business_member_reaches_member(business_id, member_id)`, AS THE CALLER.
+   *
+   * ─── POR QUÉ LA PREGUNTA LE VA A LA BASE Y NO ACÁ ──────────────────────────
+   *
+   * El alcance por sucursal es UNA regla, y mientras la escribía el servicio en
+   * TypeScript (`scopeIsContained`) y la base la tenía en otro sitio, eran dos
+   * reglas que podían apartarse sin que nada se enterara. Ahora la base la
+   * contesta y esta API pregunta.
+   *
+   * ─── CÓMO SE DECLARA QUIÉN ES EL QUE PREGUNTA ─────────────────────────────
+   *
+   * La función es `security definer` y lee `auth.uid()`, que sale de
+   * `request.jwt.claims`; esta API no tiene el JWT del usuario —`AuthUser` son
+   * tres campos, ninguno es el token—, así que no hay PostgREST al que
+   * preguntarle. Lo que hay es el id YA VERIFICADO por el guard, y eso se le
+   * declara a la base con `set_config(..., true)` dentro de una transacción, que
+   * es exactamente lo que hace PostgREST cuando traduce una llamada RPC.
+   *
+   * Los tres detalles que lo sostienen, y que no son estilo, están escritos en
+   * `sessionStateAsCaller` (más abajo) y no se repiten: el `is_local = true` sin
+   * la transacción se derramaría al pooler; la transacción es también lo que
+   * hace que el *transaction pooler* (:6543) sea seguro, porque la llamada
+   * entera cae en una sola conexión; y NO se cambia el rol de la sesión a
+   * `authenticated`, porque la función es `security definer` y dentro de ella
+   * `current_user` es el dueño y las RLS no aplican.
+   */
+  async reachesMember(
+    businessId: string,
+    memberId: string,
+    callerUserId: string,
+  ): Promise<boolean> {
+    const claims = JSON.stringify({ sub: callerUserId, role: 'authenticated' });
+
+    const rows = (await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('request.jwt.claims', ${claims}, true)`,
+      );
+      return tx.execute(
+        sql`select public.business_member_reaches_member(${businessId}::uuid, ${memberId}::uuid) as ok`,
+      );
+    })) as { ok?: unknown }[];
+
+    return rows[0]?.ok === true;
+  }
+
+  /**
+   * `public.business_member_covers_locations(business_id, location_ids)`, AS THE
+   * CALLER.
+   *
+   * La otra mitad de la misma regla, leída de lado del CONJUNTO de sucursales:
+   * el dueño cubre todo, y cualquier otro miembro cubre un conjunto NO VACÍO de
+   * sucursales si todas están en su alcance.
+   *
+   * El conjunto vacío no lo cubre nadie salvo el dueño, y esa es la razón de
+   * que la función exista: un `true` para el conjunto vacío significaría que un
+   * gerente sin alcance puede crear accesos sin alcance, o ampliar los que ya
+   * tiene a ninguno.
+   *
+   * El arreglo se arma con `array[...]` y no con un parámetro de tipo `uuid[]`:
+   * un arreglo de parámetros es un `text[]` con los uuid adentro, y el cast
+   * implícito de `text[]` a `uuid[]` depende de la versión. Los identificadores
+   * van como parámetros, que es lo que los hace seguros contra inyección.
+   */
+  async coversLocations(
+    businessId: string,
+    locationIds: readonly string[],
+    callerUserId: string,
+  ): Promise<boolean> {
+    const claims = JSON.stringify({ sub: callerUserId, role: 'authenticated' });
+    const unique = [...new Set(locationIds)];
+    const array =
+      unique.length === 0
+        ? sql`'{}'::uuid[]`
+        : sql`array[${sql.join(unique.map((id) => sql`${id}::uuid`))}]`;
+
+    const rows = (await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('request.jwt.claims', ${claims}, true)`,
+      );
+      return tx.execute(
+        sql`select public.business_member_covers_locations(${businessId}::uuid, ${array}) as ok`,
+      );
+    })) as { ok?: unknown }[];
+
+    return rows[0]?.ok === true;
+  }
+
+  /**
    * `public.business_member_session_state(p_business_id)`, AS THE CALLER.
    *
    * ─── `null` NO ES «NINGUNO»: ES «PREguntÁLE» ─────────────────────────────────
@@ -490,7 +578,12 @@ export class StaffRepository {
   ): Promise<StaffSessionState> {
     const claims = JSON.stringify({ sub: userId, role: 'authenticated' });
 
-    const [result] = await this.db.transaction(async (tx) => {
+    // La transacción devuelve las FILAS, no la primera fila: `db.transaction`
+    // resuelve con lo que el callback devuelve, y el callback devuelve el
+    // `execute`, que es el arreglo de filas. Sacar la primera fila de eso y
+    // después indexarla otra vez devolvía `undefined` siempre, y este método
+    // tiraba «no devolvió una fila de jsonb legible» en TODAS las llamadas.
+    const rows = (await this.db.transaction(async (tx) => {
       await tx.execute(
         sql`select set_config('request.jwt.claims', ${claims}, true)`,
       );
@@ -502,13 +595,12 @@ export class StaffRepository {
       return tx.execute(
         sql`select public.business_member_session_state(${businessId}::uuid)::text as session_state`,
       );
-    });
+    })) as { session_state: string }[];
 
     // El `::text` y el `JSON.parse` de abajo son deliberados: el `jsonb` lo
     // entrega postgres.js como objeto ya parseado según el driver, y el tipo de
     // la fila depende de qué versión esté instalada. Un texto no depende.
-    const rows = result as { session_state: string }[] | undefined;
-    const raw = rows?.[0]?.session_state;
+    const raw = rows[0]?.session_state;
     if (typeof raw !== 'string') {
       // Una fila sin `session_state` no es un caso que la función pueda
       // producir: siempre devuelve un objeto. Es o un `execute` que no se

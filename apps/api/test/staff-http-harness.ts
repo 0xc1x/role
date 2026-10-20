@@ -240,6 +240,16 @@ export const repository: Record<string, Mock> = {
     { row: memberRow(), locationIds: [LOC_A] },
   ]),
   locationIdsOfMember: jest.fn(async () => [LOC_A]),
+  /**
+   * The two reach questions, and the answer they give here.
+   *
+   * They are the DATABASE's answer, and the double plays the database: the
+   * owner reaches everything, and everybody else reaches what is inside their
+   * own scope. The scope of the fixture is `{LOC_A}`, so that is what a member
+   * reaches and what a set of branches is covered by.
+   */
+  reachesMember: jest.fn(async () => true),
+  coversLocations: jest.fn(async () => true),
   findLocationIdsInBusiness: jest.fn(
     async (_businessId: string, ids: string[]) => ids,
   ),
