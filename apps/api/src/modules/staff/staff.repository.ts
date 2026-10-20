@@ -58,6 +58,21 @@ export type MemberWithScope = {
 };
 
 /**
+ * What `public.transfer_business_ownership` answers: the five identifiers of
+ * the operation, and nothing else.
+ *
+ * It is NOT the roster and NOT a person: it is the receipt of a transaction, and
+ * the API turns it into two DTOs by reading the two rows it names.
+ */
+export type OwnershipTransferResult = {
+  business_id: string;
+  previous_owner_member_id: string;
+  previous_owner_user_id: string;
+  new_owner_member_id: string;
+  new_owner_user_id: string;
+};
+
+/**
  * Every read of a membership filters `deleted_at is null`.
  *
  * §6.3 lists who has to: the helpers, the policies, the limit trigger and this
@@ -484,6 +499,64 @@ export class StaffRepository {
     })) as { ok?: unknown }[];
 
     return rows[0]?.ok === true;
+  }
+
+  /**
+   * `public.transfer_business_ownership(business_id, member_id)`, AS THE CALLER.
+   *
+   * ─── POR QUÉ ESTA LLAMADA ES UNA TRANSACCIÓN ────────────────────────────────
+   *
+   * La operación de la base ya es atómica —una llamada a la función es su propia
+   * transacción—, pero la llamada necesita el `sub` de QUIÉN pregunta, y el
+   * `sub` se declara con `set_config(..., true)`, que es de alcance
+   * TRANSACCIONAL: sin una transacción, el GUC se derramaría al pooler y la
+   * request siguiente heredaría el dueño de esta.
+   *
+   * Y la transacción también es lo que hace que el *transaction pooler* (:6543)
+   * sea seguro: la llamada entera cae en una sola conexión de servidor, así que
+   * el `set_config` y la llamada no pueden separarse.
+   *
+   * ─── POR QUÉ NO SE CAMBIA EL ROL DE LA SESIÓN ──────────────────────────────
+   *
+   * Por lo mismo que dice `sessionStateAsCaller`: la función es `security
+   * definer`, así que dentro de ella `current_user` es el dueño y las RLS no
+   * aplican. Lo único que hace que la respuesta sea DEL que pregunta es el
+   * `auth.uid()` que se declara, y `p_business_id` acota el resto.
+   *
+   * ─── POR QUÉ EL REFUSAL SALE DE AQUÍ, SIN ENVOLVERLO ───────────────────────
+   *
+   * Porque `R0004` es una regla de negocio con su mensaje, y el servicio la
+   * traduce a un 422 con ese mensaje. Si esta llamada la envolviera, el servicio
+   * no podría distinguirla de un 500 —y un refusal que llega como 500 es un
+   * refusal que el panel no puede pintar.
+   */
+  async transferOwnership(
+    businessId: string,
+    newOwnerMemberId: string,
+    callerUserId: string,
+  ): Promise<OwnershipTransferResult> {
+    const claims = JSON.stringify({ sub: callerUserId, role: 'authenticated' });
+
+    const rows = (await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('request.jwt.claims', ${claims}, true)`,
+      );
+      return tx.execute(
+        sql`select public.transfer_business_ownership(${businessId}::uuid, ${newOwnerMemberId}::uuid)::text as transfer`,
+      );
+    })) as { transfer: string }[];
+
+    // El `::text` y el `JSON.parse` son los mismos que usa `sessionStateAsCaller`,
+    // y por el mismo motivo: el `jsonb` lo entrega el driver como objeto ya
+    // parseado según la versión, y un texto no depende.
+    const raw = rows[0]?.transfer;
+    if (typeof raw !== 'string') {
+      throw new Error(
+        'transfer_business_ownership no devolvió una fila de jsonb legible',
+      );
+    }
+
+    return JSON.parse(raw) as OwnershipTransferResult;
   }
 
   /**

@@ -2,6 +2,7 @@ import { HttpStatus } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
+import { OwnershipController } from './ownership.controller';
 import { StaffController } from './staff.controller';
 import {
   ADMIN_USER,
@@ -836,5 +837,122 @@ describe('PATCH /businesses/:id/staff/:memberId', () => {
 
     expect(res.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY);
     expect(repository.updateMember).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────── la transferencia de propiedad ──────────────────────
+
+/**
+ * `POST /businesses/:businessId/ownership/transfer` sobre el stack HTTP real.
+ *
+ * Lo que este bloque afirma es de la CAPA DE LA RUTA, y no del negocio: que la
+ * ruta existe bajo el prefijo de la propiedad —y no del equipo—, que no lleva
+ * `@Roles` (la puerta es la membresía, como en las otras ocho), que el dueño
+ * entra y un gerente no, y que un `R0004` de la base sale como un 422 con el
+ * motivo y no como un 500.
+ */
+describe('POST /businesses/:id/ownership/transfer', () => {
+  beforeEach(() => {
+    repository.sessionStateAsCaller.mockResolvedValue(
+      sessionState({ role: 'owner', location_ids: [] }),
+    );
+  });
+
+  it('el dueño entra y la respuesta son las dos membresías en su rol nuevo', async () => {
+    const res = await (
+      await as(OWNER_USER)
+    )
+      .post(`/businesses/${BIZ}/ownership/transfer`)
+      .send({ new_owner_member_id: MEMBER_STAFF });
+
+    expect(res.status).toBe(HttpStatus.OK);
+    expect(res.body.previous_owner.id).toBe(MEMBER_OWNER);
+    expect(res.body.previous_owner.role).toBe('manager');
+    expect(res.body.new_owner.id).toBe(MEMBER_STAFF);
+    expect(res.body.new_owner.role).toBe('owner');
+    expect(repository.transferOwnership).toHaveBeenCalledWith(
+      BIZ,
+      MEMBER_STAFF,
+      OWNER_USER,
+    );
+  });
+
+  it('la respuesta NO lleva el PIN de nadie', async () => {
+    const res = await (
+      await as(OWNER_USER)
+    )
+      .post(`/businesses/${BIZ}/ownership/transfer`)
+      .send({ new_owner_member_id: MEMBER_STAFF });
+
+    expect(res.status).toBe(HttpStatus.OK);
+    expect(JSON.stringify(res.body)).not.toContain('pin');
+    expect(res.body.pin).toBeUndefined();
+  });
+
+  it('un gerente recibe 403 y la base no se toca', async () => {
+    const res = await (
+      await as(MANAGER_USER)
+    )
+      .post(`/businesses/${BIZ}/ownership/transfer`)
+      .send({ new_owner_member_id: MEMBER_STAFF });
+
+    expect(res.status).toBe(HttpStatus.FORBIDDEN);
+    expect(repository.transferOwnership).not.toHaveBeenCalled();
+  });
+
+  it('un R0004 de la base sale como 422 con el motivo, no como un 500', async () => {
+    repository.transferOwnership.mockRejectedValue(
+      Object.assign(
+        new Error('el receptor tiene que ser un acceso vivo de este negocio'),
+        {
+          code: 'R0004',
+          message: 'el receptor tiene que ser un acceso vivo de este negocio',
+        },
+      ),
+    );
+
+    const res = await (
+      await as(OWNER_USER)
+    )
+      .post(`/businesses/${BIZ}/ownership/transfer`)
+      .send({ new_owner_member_id: MEMBER_STAFF });
+
+    expect(res.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY);
+    expect(res.body.message).toContain('acceso vivo de este negocio');
+    expect(res.body.message).not.toContain('R0004');
+  });
+
+  it('un cuerpo sin `new_owner_member_id` es 400 antes de tocar la base', async () => {
+    const res = await (
+      await as(OWNER_USER)
+    )
+      .post(`/businesses/${BIZ}/ownership/transfer`)
+      .send({});
+
+    expect(res.status).toBe(HttpStatus.BAD_REQUEST);
+    expect(repository.transferOwnership).not.toHaveBeenCalled();
+  });
+
+  it('un id que no es uuid es 400 antes de tocar la base', async () => {
+    const res = await (
+      await as(OWNER_USER)
+    )
+      .post(`/businesses/${BIZ}/ownership/transfer`)
+      .send({ new_owner_member_id: 'no-es-un-uuid' });
+
+    expect(res.status).toBe(HttpStatus.BAD_REQUEST);
+    expect(repository.transferOwnership).not.toHaveBeenCalled();
+  });
+
+  it('la ruta NO tiene `@Roles`: la puerta es la membresía', async () => {
+    // Un `@Roles` mide `profiles.role`, que es el `app_role` de la cuenta y no
+    // lleva TTL. Si esta ruta lo tuviera, un dueño con la sesión vencida
+    // entraría igual —las dos filas dicen `role = 'business'`— y la promesa del
+    // §5.2 quedaría rota en la puerta que la cumple.
+    const roles = Reflect.getMetadata(
+      ROLES_KEY,
+      OwnershipController.prototype.transfer,
+    );
+    expect(roles).toBeUndefined();
   });
 });

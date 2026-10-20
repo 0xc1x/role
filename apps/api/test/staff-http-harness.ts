@@ -10,6 +10,7 @@ import { RolesGuard } from '../src/auth/roles.guard';
 import { SupabaseTokenVerifier } from '../src/auth/supabase-token-verifier';
 import type { Env } from '../src/config/env.schema';
 import { DRIZZLE } from '../src/database/database.tokens';
+import { OwnershipController } from '../src/modules/staff/ownership.controller';
 import { StaffController } from '../src/modules/staff/staff.controller';
 import { StaffSessionController } from '../src/modules/staff/staff-session.controller';
 import {
@@ -289,6 +290,33 @@ export const repository: Record<string, Mock> = {
       SESSION_BY_USER[userId] ??
       sessionState({ reason: 'no_membership', business_ids: [] }),
   ),
+  /**
+   * La transferencia de propiedad, como la contesta la BASE: los cinco
+   * identificadores de la operación.
+   *
+   * Y además ESCRIBE el rol nuevo en `written`, porque el servicio vuelve a
+   * leer las dos filas para armar la respuesta: un doble que no escribiera
+   * contestaría con un roster que contradice la transferencia que acaba de
+   * hacer —el dueño saliente seguiría siendo `owner` en la respuesta de una
+   * operación que lo degradó.
+   */
+  transferOwnership: jest.fn(
+    async (
+      _businessId: string,
+      newOwnerMemberId: string,
+      _callerUserId: string,
+    ) => {
+      written.set(MEMBER_OWNER, { role: 'manager' });
+      written.set(newOwnerMemberId, { role: 'owner' });
+      return {
+        business_id: BIZ,
+        previous_owner_member_id: MEMBER_OWNER,
+        previous_owner_user_id: OWNER_USER,
+        new_owner_member_id: newOwnerMemberId,
+        new_owner_user_id: STAFF_USER,
+      };
+    },
+  ),
 };
 
 export const authAdmin = {
@@ -361,7 +389,7 @@ export async function bootstrapStaffHttp(): Promise<INestApplication> {
   } as unknown as ConfigService<Env, true>;
 
   const moduleRef = await Test.createTestingModule({
-    controllers: [StaffController, StaffSessionController],
+    controllers: [StaffController, StaffSessionController, OwnershipController],
     providers: [
       StaffService,
       { provide: StaffRepository, useValue: repository },

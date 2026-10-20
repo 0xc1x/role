@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { MODULE_METADATA } from '@nestjs/common/constants';
+import { OwnershipController } from './ownership.controller';
 import { StaffController } from './staff.controller';
 import { StaffRepository } from './staff.repository';
 import { StaffService } from './staff.service';
@@ -39,6 +40,20 @@ describe('StaffModule', () => {
     // ruta que no administra nada.
     expect(controllers).toContain(StaffController);
     expect(controllers).toContain(StaffSessionController);
+  });
+
+  it('registra el controlador de la propiedad, que NO cuelga del equipo', () => {
+    // La transferencia de propiedad cuelga de
+    // `businesses/:businessId/ownership`, no de `…/staff`: no es una
+    // operación del equipo, y un módulo sin esta entrada arranca sin error y
+    // responde 404 a la ruta —el modo de fallo más caro de los que no se ven.
+    const controllers = Reflect.getMetadata(
+      MODULE_METADATA.CONTROLLERS,
+      StaffModule,
+    ) as unknown[];
+
+    expect(controllers).toContain(OwnershipController);
+    expect(controllers).toHaveLength(3);
   });
 
   it('la novena ruta NO está en el controlador de las ocho', () => {

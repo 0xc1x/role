@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
 import type { Env } from '../../config/env.schema';
+import { OwnershipController } from './ownership.controller';
 import { StaffController } from './staff.controller';
 import { StaffRepository } from './staff.repository';
 import { StaffSessionController } from './staff-session.controller';
@@ -22,6 +23,14 @@ import { STAFF_AUTH_ADMIN, type StaffAuthAdmin } from './staff.tokens';
  * que un empleado puede llamar. Un controller por archivo, como el resto del
  * repo, y el nombre de cada uno dice a qué pertenece la ruta.
  *
+ * ─── Y EL TERCER CONTROLADOR, QUE NO ES DEL EQUIPO ───────────────────────────
+ *
+ * `OwnershipController` cuelga de `businesses/:businessId/ownership`, no de
+ * `…/staff`: la transferencia de propiedad no es una operación del equipo, es
+ * una operación de la PROPIEDAD, y el prefijo de una ruta afirma de qué trata.
+ * Además devuelve dos membresías y ningún PIN, y eso no se parece en nada a
+ * las otras ocho.
+ *
  * ─── POR QUÉ EL CLIENTE DE AUTH ES UN PROVIDER ─────────────────────────────────
  *
  * `service_role` is the only key that can create an `auth.users`, and
@@ -34,7 +43,7 @@ import { STAFF_AUTH_ADMIN, type StaffAuthAdmin } from './staff.tokens';
  * must never try to keep a user session alive for an account it administers.
  */
 @Module({
-  controllers: [StaffController, StaffSessionController],
+  controllers: [StaffController, StaffSessionController, OwnershipController],
   providers: [
     StaffService,
     StaffRepository,

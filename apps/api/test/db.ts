@@ -619,6 +619,22 @@ export async function createTestDb(): Promise<TestDbContext> {
   // a second reason: `anonymise` writes `deleted_at` on the caller's own
   // memberships, and a spec can only prove that a row it archived without a raw
   // database error if the update guard is present.
+  //
+  // Y CON EL INVARIANTE DIFERIDO, que es la mitad que se movió de sitio:
+  // `20261020163244_ownership_transfer.sql` sacó del guard de la fila las dos
+  // reglas que dependen del ESTADO FINAL de la transacción —la degradación y la
+  // baja del dueño— y las puso en un `CONSTRAINT TRIGGER … DEFERRABLE INITIALLY
+  // DEFERRED` que se evalúa al commit. Un espejo con el guard viejo y sin el
+  // trigger diferido negaría la degradación en la SENTENCIA, que es justo lo
+  // que producción ya no hace: las dos copias tienen que ser la misma, porque
+  // una spec del espejo que afirme lo contrario que producción está probando
+  // otra cosa.
+  //
+  // OJO con la diferencia que el espejo NO tiene: `default_business_inactive`
+  // (un trigger `BEFORE INSERT` de Supabase) no está acá, así que un negocio
+  // sembrado por `seedBusiness` queda ACTIVO. En producción nace inactivo y hay
+  // que activarlo a mano. El espejo no puede tener las dos cosas, y esta tarea
+  // no es la de arreglarlo.
   await client.unsafe(`
     create or replace function public.enforce_owner_is_untouchable()
     returns trigger
@@ -631,29 +647,13 @@ export async function createTestDb(): Promise<TestDbContext> {
         return new;
       end if;
 
-      if new.role <> 'owner'::public.business_member_role then
-        raise exception 'el dueño del negocio no se puede degradar; la transferencia de propiedad no existe en esta versión'
-          using
-            errcode = 'R0002',
-            detail = format('business=%s member=%s', new.business_id, old.id),
-            hint = 'la transferencia de propiedad no está en la v1: degradar al dueño dejaría el negocio sin dueño';
-      end if;
-
       if old.status is distinct from new.status
          and new.status = 'disabled'::public.business_member_status then
-        raise exception 'el dueño del negocio no se puede desactivar; la transferencia de propiedad no existe en esta versión'
+        raise exception 'el dueño del negocio no se puede desactivar: transferí la propiedad a otro acceso primero'
           using
             errcode = 'R0002',
             detail = format('business=%s member=%s', new.business_id, old.id),
-            hint = 'ningún rol desactiva al dueño; la transferencia de propiedad no está en la v1';
-      end if;
-
-      if old.deleted_at is null and new.deleted_at is not null then
-        raise exception 'el dueño del negocio no se puede dar de baja; la transferencia de propiedad no existe en esta versión'
-          using
-            errcode = 'R0002',
-            detail = format('business=%s member=%s', new.business_id, old.id),
-            hint = 'el borrado es lógico: la fila queda para saber quién operó en el negocio';
+            hint = 'ningún rol desactiva al dueño; la propiedad se transfiere, no se desactiva';
       end if;
 
       return new;
@@ -663,6 +663,57 @@ export async function createTestDb(): Promise<TestDbContext> {
     create trigger trg_enforce_owner_is_untouchable
       before update on public.business_members
       for each row execute function public.enforce_owner_is_untouchable();
+
+    create or replace function public.enforce_business_keeps_an_owner()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    declare
+      v_ids         uuid[];
+      v_business_id uuid;
+      v_active      boolean;
+      v_live        integer;
+    begin
+      v_ids := array[new.business_id];
+      if old.business_id is distinct from new.business_id then
+        v_ids := array_append(v_ids, old.business_id);
+      end if;
+
+      foreach v_business_id in array v_ids loop
+        select b.is_active into v_active
+          from public.businesses b
+         where b.id = v_business_id;
+
+        if not coalesce(v_active, false) then
+          continue;
+        end if;
+
+        select count(*)::int into v_live
+          from public.business_members m
+         where m.business_id = v_business_id
+           and m.role = 'owner'::public.business_member_role
+           and m.status = 'active'::public.business_member_status
+           and m.deleted_at is null;
+
+        if v_live <> 1 then
+          raise exception 'un negocio activo no puede quedar sin dueño vivo'
+            using
+              errcode = 'R0002',
+              detail = format('business=%s member=%s', v_business_id, new.id),
+              hint = 'transferí la propiedad a otro acceso antes de dejar al negocio sin dueño; un negocio inactivo puede no tenerlo';
+        end if;
+      end loop;
+
+      return new;
+    end;
+    $fn$;
+
+    create constraint trigger trg_business_keeps_an_owner
+      after update on public.business_members
+      deferrable initially deferred
+      for each row execute function public.enforce_business_keeps_an_owner();
 
     create or replace function public.enforce_owner_cannot_be_deleted()
     returns trigger

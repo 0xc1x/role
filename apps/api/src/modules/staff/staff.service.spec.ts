@@ -230,6 +230,17 @@ describe('StaffService', () => {
         memberRow({ last_authenticated_at: at }),
       ),
       sessionStateAsCaller: jest.fn(async () => sessionState()),
+      /**
+       * La transferencia de propiedad, como la contesta la base: los cinco
+       * identificadores de la operación.
+       */
+      transferOwnership: jest.fn(async () => ({
+        business_id: BIZ,
+        previous_owner_member_id: MEMBER_OWNER,
+        previous_owner_user_id: OWNER_USER,
+        new_owner_member_id: MEMBER_STAFF,
+        new_owner_user_id: STAFF_USER,
+      })),
     };
 
     authAdmin = {
@@ -1001,17 +1012,22 @@ describe('StaffService', () => {
     });
 
     it('un R0002 al dar de baja NO banea a nadie: la fila sigue viva', async () => {
-      repository.softDeleteMember.mockRejectedValue(
-        pgError('R0002', {
-          message:
-            'el dueño del negocio no se puede dar de baja; la transferencia de propiedad no existe en esta versión',
-        }),
-      );
+      // Y el refusal del dueño al dar de baja es de ESTA capa, no de la base:
+      // el guard de la fila que lo negaba se fue —la baja de un dueño la decide
+      // el invariante, al commit, y sólo para un negocio que sigue activo— y
+      // esta puerta no es la de la liberación, que además borra la fila de
+      // `business_ownership`.
       repository.findMemberById.mockResolvedValue(ownerRow());
 
-      await expect(
-        service.remove(owner, BIZ, MEMBER_OWNER),
-      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      const error = await service
+        .remove(owner, BIZ, MEMBER_OWNER)
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      expect((error as UnprocessableEntityException).message).toContain(
+        '/ownership/transfer',
+      );
+      expect(repository.softDeleteMember).not.toHaveBeenCalled();
       expect(authAdmin.updateUserById).not.toHaveBeenCalled();
     });
 
@@ -1647,6 +1663,172 @@ describe('StaffService', () => {
 
       expect(BusinessMemberSchema.parse(member)).toEqual(member);
       expect(member.business_location_ids).toEqual([]);
+    });
+  });
+
+  // ─────────────────────────────── la propiedad ───────────────────────────
+
+  /**
+   * La TRANSFERENCIA de propiedad: la puerta, la operación y su traducción.
+   *
+   * ─── POR QUÉ ESTOS TESTS NO REIMPLEMENTAN LA BASE ─────────────────────────
+   *
+   * El doble de `transferOwnership` contesta lo que contesta la FUNCIÓN —los
+   * cinco identificadores de la operación— y no simula el efecto: el efecto lo
+   * mide el spec de base, contra la base de verdad. Lo que se mide acá es la
+   * capa de arriba: quién puede pedir la transferencia, qué se devuelve, qué
+   * se registra y cómo se traduce un refusal.
+   */
+  describe('la transferencia de propiedad', () => {
+    beforeEach(() => {
+      // Las dos filas en su estado NUEVO, porque el servicio vuelve a leerlas
+      // para armar la respuesta: un doble que devolviera el estado viejo
+      // contestaría con un roster que contradice la transferencia.
+      repository.findMemberById.mockImplementation(
+        async (_businessId: string, memberId: string) =>
+          memberId === MEMBER_OWNER
+            ? memberRow({
+                id: MEMBER_OWNER,
+                user_id: OWNER_USER,
+                role: 'manager',
+                label: 'Dueña',
+              })
+            : memberRow({
+                id: memberId,
+                user_id: STAFF_USER,
+                role: 'owner',
+                label: 'Karla',
+              }),
+      );
+    });
+
+    it('el dueño transfiere la propiedad y los dos quedan con su rol nuevo', async () => {
+      const result = await service.transferOwnership(owner, BIZ, {
+        new_owner_member_id: MEMBER_STAFF,
+      });
+
+      // El dueño saliente queda como `manager` y el receptor como `owner`.
+      expect(result.previous_owner.id).toBe(MEMBER_OWNER);
+      expect(result.previous_owner.role).toBe('manager');
+      expect(result.new_owner.id).toBe(MEMBER_STAFF);
+      expect(result.new_owner.role).toBe('owner');
+
+      // Y la llamada a la base lleva el negocio, el receptor y QUIÉN PIDE.
+      expect(repository.transferOwnership).toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_STAFF,
+        OWNER_USER,
+      );
+    });
+
+    it('un gerente no puede transferir la propiedad', async () => {
+      repository.findMemberByUser.mockResolvedValue(managerRow([LOC_A]));
+
+      const error = await service
+        .transferOwnership(managerAB, BIZ, {
+          new_owner_member_id: MEMBER_STAFF,
+        })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      // Y el refusal NO dice si el acceso receptor existe: un 403 que lo
+      // dijera le enseñaría al gerente un id de membresía que no administra.
+      expect((error as ForbiddenException).message).not.toContain(MEMBER_STAFF);
+      expect((error as ForbiddenException).message).toContain('del dueño');
+
+      // Y no se llamó a la base: la puerta se neg antes.
+      expect(repository.transferOwnership).not.toHaveBeenCalled();
+    });
+
+    it('un R0004 de la base se traduce a un 422 con el motivo', async () => {
+      repository.transferOwnership.mockRejectedValue(
+        pgError('R0004', {
+          message: 'el receptor tiene que ser un acceso vivo de este negocio',
+        }),
+      );
+
+      const error = await service
+        .transferOwnership(owner, BIZ, {
+          new_owner_member_id: MEMBER_OUTSIDE,
+        })
+        .catch((err: unknown) => err);
+
+      // 422 y no 500: un refusal que llega como 500 es un refusal que el panel
+      // no puede pintar.
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      const message = (error as UnprocessableEntityException).message;
+      // El mensaje es el de la BASE —la prosa que el dueño lee— y no el código.
+      expect(message).toContain('acceso vivo de este negocio');
+      expect(message).not.toContain('R0004');
+    });
+
+    it('la transferencia no devuelve el PIN de nadie', async () => {
+      const result = await service.transferOwnership(owner, BIZ, {
+        new_owner_member_id: MEMBER_STAFF,
+      });
+
+      // La respuesta son DOS membresías, y una membresía no lleva PIN: el PIN
+      // es la contraseña del `auth.users` y se entrega una vez, en la tarjeta
+      // de alta.
+      expect(Object.keys(result).sort()).toEqual([
+        'new_owner',
+        'previous_owner',
+      ]);
+      expect(JSON.stringify(result)).not.toContain('pin');
+    });
+
+    it('la transferencia queda registrada con quién la pidió', async () => {
+      // La auditoría de esta operación es el log estructurado —el mismo
+      // `event` que el resto de las operaciones del equipo—, y no una tabla
+      // nueva: el repo no tiene una tabla de auditoría de negocio, y el log es
+      // lo que el negocio puede leer cuando pregunta quién entregó qué.
+      const logs = captureLogs();
+
+      await service.transferOwnership(owner, BIZ, {
+        new_owner_member_id: MEMBER_STAFF,
+      });
+
+      const event = logs.find(
+        (entry) =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          (entry as { event?: string }).event ===
+            'business_ownership_transferred',
+      );
+      expect(event).toBeDefined();
+      expect(event).toMatchObject({
+        businessId: BIZ,
+        previousOwnerMemberId: MEMBER_OWNER,
+        newOwnerMemberId: MEMBER_STAFF,
+        transferredBy: OWNER_USER,
+      });
+    });
+
+    it('el 422 de degradar nombra la puerta que sí abre', async () => {
+      repository.findMemberById.mockResolvedValue(ownerRow());
+
+      const error = await service
+        .update(owner, BIZ, MEMBER_OWNER, { role: 'manager' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      const message = (error as UnprocessableEntityException).message;
+      expect(message).toContain('no se lo degrada');
+      // Y nombra la puerta que EXISTE: un mensaje que manda al operador a una
+      // ruta que rebota es peor que uno que no da ninguna.
+      expect(message).toContain('/ownership/transfer');
+      expect(message).not.toContain('no existe en esta versión');
+    });
+
+    it('el 422 de promover nombra la misma puerta', async () => {
+      const error = await service
+        .update(owner, BIZ, MEMBER_STAFF, { role: 'owner' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      const message = (error as UnprocessableEntityException).message;
+      expect(message).toContain('/ownership/transfer');
+      expect(message).not.toContain('no existe en esta versión');
     });
   });
 
