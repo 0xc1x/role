@@ -168,6 +168,14 @@ const OWNER2 = '55555555-5555-5555-5555-555555555555';
 
 const BIZ_ACTIVE = 'aaaaaaaa-0000-4000-8000-000000000001';
 const BIZ_INACTIVE = 'aaaaaaaa-0000-4000-8000-000000000002';
+
+/**
+ * The owner MEMBERSHIP of the active business.
+ *
+ * Since the Task 5, a business can only be activated if it has a live owner,
+ * and the approval of the moderation IS an activation.
+ */
+const MEMBER_OWNER = 'cccccccc-0000-4000-8000-000000000001';
 const LOC_ACTIVE = 'bbbbbbbb-0000-4000-8000-000000000001';
 const LOC_INACTIVE = 'bbbbbbbb-0000-4000-8000-000000000002';
 
@@ -316,6 +324,21 @@ beforeAll(async () => {
       insert into public.business_ownership (business_id, owner_id)
       values ('${BIZ_ACTIVE}',   '${OWNER}'),
              ('${BIZ_INACTIVE}', '${OWNER2}');
+
+      -- Y la MEMBRESÍA DE DUEÑO del negocio activo.
+      --
+      -- Desde la Task 5, activar un negocio exige que tenga un dueño VIVO, y la
+      -- aprobación de la moderación es una activación: el trigger
+      -- apply_business_verification_state hace update businesses set is_active
+      -- = (new.verification_status = 'approved'). Un negocio sin dueño no
+      -- puede ser aprobado, así que el fixture tiene que sembrar lo que en
+      -- producción existe: el dueño del negocio es un miembro suyo con el rol
+      -- 'owner' y el TTL en cero (que es lo que dejó 20261016022631 en los 16
+      -- dueños reales).
+      insert into public.business_members
+        (id, business_id, user_id, role, label, alias,
+         status, session_ttl_hours, last_authenticated_at)
+      values ('${MEMBER_OWNER}', '${BIZ_ACTIVE}', '${OWNER}', 'owner', 'Dueña', 'rls-orders-owner@test', 'active', 0, null);
 
       update public.business_moderation
          set verification_status = 'approved'

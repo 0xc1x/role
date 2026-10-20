@@ -124,6 +124,18 @@ const SLUG_B = 'rls-biz-b';
 const SLUG_C = 'rls-biz-c';
 
 /**
+ * The owner MEMBERSHIP of each of the three businesses.
+ *
+ * Since the Task 5, a business can only be activated if it has a live owner,
+ * and the approval of the moderation IS an activation. So the fixture has to
+ * carry what production carries: the owner of a business is a member of it with
+ * the `owner` role.
+ */
+const MEMBER_A = 'bbbbbbbb-0000-4000-8000-000000000001';
+const MEMBER_B = 'bbbbbbbb-0000-4000-8000-000000000002';
+const MEMBER_C = 'bbbbbbbb-0000-4000-8000-000000000003';
+
+/**
  * The 16 columns `businesses` holds after phase 3, in order — which is also the
  * 16 the live project holds, read back from `information_schema.columns` there.
  *
@@ -307,6 +319,26 @@ beforeAll(async () => {
       values ('${BIZ_A}', '${OWNER_A}'),
              ('${BIZ_B}', '${OWNER_B}'),
              ('${BIZ_C}', '${OWNER_B}');
+
+      -- Y la MEMBRESÍA DE DUEÑO de cada uno de los tres.
+      --
+      -- Desde la Task 5, activar un negocio exige que tenga un dueño VIVO
+      -- (trg_business_reactivation_needs_owner), y la aprobación de la
+      -- moderación es una activación: apply_business_verification_state hace
+      -- update businesses set is_active = (new.verification_status =
+      -- 'approved'). Un negocio sin dueño no puede ser aprobado, y sin dueño
+      -- tampoco puede reactivarse.
+      --
+      -- Así que el fixture siembra lo que en producción existe: los tres
+      -- negocios tienen a su dueño como miembro 'owner' de su negocio, con el
+      -- TTL en cero —que es lo que dejó 20261016022631 en los 16 dueños
+      -- reales: un dueño no tiene sesión que venza—.
+      insert into public.business_members
+        (id, business_id, user_id, role, label, alias,
+         status, session_ttl_hours, last_authenticated_at)
+      values ('${MEMBER_A}', '${BIZ_A}', '${OWNER_A}', 'owner', 'Dueña A', 'rls-owner-a@rls-businesses.test', 'active', 0, null),
+             ('${MEMBER_B}', '${BIZ_B}', '${OWNER_B}', 'owner', 'Dueño B', 'rls-owner-b@rls-businesses.test', 'active', 0, null),
+             ('${MEMBER_C}', '${BIZ_C}', '${OWNER_B}', 'owner', 'Dueño C', 'rls-owner-c@rls-businesses.test', 'active', 0, null);
 
       update public.business_moderation
          set verification_status = 'approved'
@@ -1259,6 +1291,9 @@ describe('public.businesses: the shape phase 3 delivered', () => {
     expect(plainRows(triggers).map((t) => t.tgname)).toEqual([
       'set_businesses_updated_at',
       'trg_bootstrap_business_companions',
+      // La guarda de la RECACTIVACIÓN: desde la Task 5, un negocio sin dueño
+      // vivo no puede volver a activarse, y esta es la trigger que lo dice.
+      'trg_business_reactivation_needs_owner',
       'trg_create_business_notification_preferences',
       'trg_default_business_inactive',
       'trg_notify_business_pending',

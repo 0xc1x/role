@@ -2406,3 +2406,135 @@ zero active businesses without one (measured after applying). The ledger's
 function and the constraint trigger, and restore the old
 `enforce_owner_is_untouchable` body —whose text is in the sealed
 `20261020052915_owner_cannot_be_demoted.sql`, copied, not edited.
+
+## Applied: `20261020172601_inactive_business_releases_owner`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`ca431d6698e00fa4d5ff40d2ecd148f6` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**One rule, in one sentence**: an INACTIVE business may have no owner, an
+ACTIVE one may not, and a business that lost its owner does not come back to
+life without the platform returning one.
+
+**Five objects, and the five are the same rule**:
+
+1. **`public.business_live_owner_count(business_id)`** — the definition of
+   «live owner» (`role = 'owner'`, `status = 'active'`, `deleted_at is null`).
+   It lives in ONE function because four objects consult it: the deferred
+   invariant trigger, the reactivation guard, the recovery of the next migration
+   and the API. Four copies of the same predicate are four rules that can drift
+   apart, and the predicate IS the rule.
+2. **`public.enforce_business_keeps_an_owner()`** is recreated to call the
+   helper. Its behaviour does NOT change —the `v_live <> 1` is the same
+   predicate— and the tests that measure it are the ones Task 3 wrote.
+3. **`public.release_business_ownership(business_id, actor_user_id)`** — the
+   release. `volatile security definer set search_path = ''`, ACL
+   `{postgres, service_role}`. It refuses with `R0004` when the business is
+   still ACTIVE (an active business is handed over, not released) and when the
+   actor is not its live owner. It archives the owner's membership AND its
+   scope rows, and DELETES the `business_ownership` row of that business: that
+   row is the one the mobile reads, and leaving it names a person who is
+   leaving —the silent orphan. The business itself is NOT deleted and NOT
+   reactivated, and the other members are NOT touched.
+4. **`public.enforce_business_reactivation_needs_owner()`** plus
+   `trg_business_reactivation_needs_owner`, a `BEFORE UPDATE OF is_active` on
+   `businesses`, refusing with `R0002` the activation of a business with no
+   live owner. The deferred trigger of Task 3 watches the MEMBERSHIPS, so
+   without this one `update businesses set is_active = true` would leave an
+   active business with no owner and nobody would say so.
+5. **`public.enforce_owner_cannot_be_deleted()`** is rewritten with ONE more
+   condition: an owner row cannot be DELETED while the business still names
+   that person as its owner. Task 3 removed the `deleted_at` guard from the
+   `BEFORE UPDATE` trigger —archiving IS half a release— so "archive and then
+   delete" became the path with no door, and it left the ownership row naming
+   somebody with no membership. The release deletes that row in the SAME
+   transaction, so after a release the delete is history cleanup and before it
+   is the orphan. The check uses `to_regclass`, because `business_ownership` is
+   retired in Task 10 and the guard has to switch itself off instead of
+   breaking every delete.
+
+**Two consequences worth saying out loud.** APPROVING a business without a
+live owner now ABORTS the approval: `apply_business_verification_state` does
+`update businesses set is_active = (new.verification_status = 'approved')`,
+and that is an activation. The moderation can no longer publish a business
+whose owner left, and the way out is the recovery of the next migration. And
+the fixture order became mandatory —business → owner membership → activate—
+which cost three fixtures in three other spec files their approval statement
+and gave them a `business_members` row, because in production every business
+has a live owner.
+
+**Two typos are sealed in this file and cannot be fixed**: the ledger stores
+exactly what was sent, and the file has to be byte for byte what the ledger
+stored —that is the proof of what ran. «consecuancia» and «sayirla» are in the
+ledger, so they are in the file. A migration cannot change a comment.
+
+**The ledger's `rollback` is `NULL`**, so the rollback of this one is a NEW
+migration: drop the three objects and the trigger, restore the old
+`enforce_business_keeps_an_owner` body, and restore the old
+`enforce_owner_cannot_be_deleted` body.
+
+## Applied: `20261020172817_assign_business_ownership`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`69648d3f5367084e0421037a1711408b` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**`public.assign_business_ownership(business_id, member_id)`** — the recovery.
+`volatile security definer set search_path = ''`, ACL `{postgres, service_role}`.
+It refuses with `R0004` when the business ALREADY has a live owner («este
+negocio ya tiene un dueño: usá la transferencia») and when the member is not a
+live access of that business. It promotes the member and leaves
+`business_ownership` coherent, with an UPSERT, while that table exists.
+
+**It is a second function and not a flag on the transfer**: the transfer
+requires the caller to BE the owner, and a business with no owner has nobody
+who can be. Two facts, two permissions, two functions. And it cannot be a way
+around the invariant: a business with a live owner is refused, and promoting a
+live access leaves EXACTLY one owner, which is what the partial unique index
+allows and what the deferred trigger demands at commit.
+
+**The platform permission is the API's**, not the database's: it is an
+`app_role`, and the function is executable only by the service, which is the
+API. The route is `POST /businesses/:businessId/ownership/restore`, and the
+admin's branch on `POST /businesses/:id/staff` opens only for a business with
+NO live owner.
+
+**The ledger's `rollback` is `NULL`**: the rollback is a NEW migration that
+drops the function.
+
+## Applied: `20261020174431_ownership_transfer_concurrency`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`663b51984092c30d1d3db060fa2cd489` and that is also the ledger's
+`md5(statements[1])`: byte for byte.
+
+**One change, and it is a lock.** `20261020163244_ownership_transfer.sql`
+created the transfer WITHOUT a lock, and concurrency found it: two transfers of
+the same business running at once read the same state, and the second one
+competed with the first for the partial unique index —the invariant held, but
+the loser learned about it with a `23505`, which is a storage error and not a
+business rule.
+
+Worse: the release of `20261020172601` and the transfer crossed each other.
+The release deletes the `business_ownership` row in the same transaction that
+archives the owner's membership; a transfer in the middle could leave a
+business with a live owner and NO ownership row —the silent orphan again, from
+the other side.
+
+**`select … for update` on the business row, at the beginning of the function.**
+It is the same lock the release and the recovery take, and for the same
+reason: property operations on one business have to see each other. Each of
+the three takes ONE lock and none takes two, so no deadlock is possible. With
+the lock, the second operation waits for the first to commit, sees the final
+state —the old owner is already a `manager`— and refuses with `R0004` and the
+reason that belongs to it.
+
+**Nothing else changes**: same name, same signature, same ACL, same messages,
+same `jsonb` answer. The body is the one of `20261020163244` with one step
+more at the beginning.
+
+**Task 10 has to replace this function**: its body mentions
+`business_ownership` in the UPSERT, and that table is retired in that task.
+The two functions of `20261020172601` and `20261020172817`, and the delete
+guard, use `to_regclass` and switch themselves off.

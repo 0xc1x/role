@@ -664,6 +664,21 @@ export async function createTestDb(): Promise<TestDbContext> {
       before update on public.business_members
       for each row execute function public.enforce_owner_is_untouchable();
 
+    create or replace function public.business_live_owner_count(p_business_id uuid)
+    returns integer
+    language sql
+    stable
+    security definer
+    set search_path = ''
+    as $fn$
+      select count(*)::int
+        from public.business_members m
+       where m.business_id = p_business_id
+         and m.role = 'owner'::public.business_member_role
+         and m.status = 'active'::public.business_member_status
+         and m.deleted_at is null;
+    $fn$;
+
     create or replace function public.enforce_business_keeps_an_owner()
     returns trigger
     language plpgsql
@@ -690,12 +705,7 @@ export async function createTestDb(): Promise<TestDbContext> {
           continue;
         end if;
 
-        select count(*)::int into v_live
-          from public.business_members m
-         where m.business_id = v_business_id
-           and m.role = 'owner'::public.business_member_role
-           and m.status = 'active'::public.business_member_status
-           and m.deleted_at is null;
+        v_live := public.business_live_owner_count(v_business_id);
 
         if v_live <> 1 then
           raise exception 'un negocio activo no puede quedar sin dueño vivo'
@@ -722,22 +732,210 @@ export async function createTestDb(): Promise<TestDbContext> {
     set search_path = ''
     as $fn$
     begin
-      if old.role <> 'owner'::public.business_member_role
-         or old.deleted_at is not null then
+      if old.role <> 'owner'::public.business_member_role then
         return old;
       end if;
 
-      raise exception 'el dueño del negocio no se puede borrar; dá de baja la fila en vez de borrarla'
-        using
-          errcode = 'R0002',
-          detail = format('business=%s member=%s', old.business_id, old.id),
-          hint = 'el borrado es lógico: la fila queda para saber quién operó en el negocio';
+      if old.deleted_at is null then
+        raise exception 'el dueño del negocio no se puede borrar; dá de baja la fila en vez de borrarla'
+          using
+            errcode = 'R0002',
+            detail = format('business=%s member=%s', old.business_id, old.id),
+            hint = 'el borrado es lógico: la fila queda para saber quién operó en el negocio';
+      end if;
+
+      if to_regclass('public.business_ownership') is not null then
+        if exists (
+          select 1
+            from public.business_ownership o
+           where o.business_id = old.business_id
+             and o.owner_id = old.user_id
+        ) then
+          raise exception 'el dueño del negocio no se puede borrar mientras el negocio lo nombre como su dueño: liberá la propiedad primero'
+            using
+              errcode = 'R0002',
+              detail = format('business=%s member=%s', old.business_id, old.id),
+              hint = 'la liberación archiva la membresía y borra la fila de propiedad en la misma transacción';
+        end if;
+      end if;
+
+      return old;
     end;
     $fn$;
 
     create trigger trg_enforce_owner_cannot_be_deleted
       before delete on public.business_members
       for each row execute function public.enforce_owner_cannot_be_deleted();
+
+    create or replace function public.release_business_ownership(
+      p_business_id uuid,
+      p_actor_user_id uuid
+    )
+    returns jsonb
+    language plpgsql
+    volatile
+    security definer
+    set search_path = ''
+    as $fn$
+    declare
+      v_member record;
+      v_active boolean;
+    begin
+      select b.is_active into v_active
+        from public.businesses b
+       where b.id = p_business_id
+         for update;
+
+      if not found then
+        raise exception 'el negocio no existe'
+          using
+            errcode = 'R0004',
+            detail = format('business=%s', p_business_id),
+            hint = 'no hay un negocio con ese identificador';
+      end if;
+
+      if coalesce(v_active, false) then
+        raise exception 'un negocio activo no libera a su dueño: transferí la propiedad'
+          using
+            errcode = 'R0004',
+            detail = format('business=%s', p_business_id),
+            hint = 'la propiedad de un negocio activo se transfiere con POST /businesses/:businessId/ownership/transfer';
+      end if;
+
+      select m.id, m.user_id into v_member
+        from public.business_members m
+       where m.business_id = p_business_id
+         and m.user_id = p_actor_user_id
+         and m.role = 'owner'::public.business_member_role
+         and m.status = 'active'::public.business_member_status
+         and m.deleted_at is null
+       limit 1;
+
+      if not found then
+        raise exception 'sólo el dueño vivo del negocio puede liberar la propiedad'
+          using
+            errcode = 'R0004',
+            detail = format('business=%s actor=%s', p_business_id, p_actor_user_id),
+            hint = 'la liberación la pide el dueño vivo del negocio';
+      end if;
+
+      update public.business_members
+         set deleted_at = now(),
+             updated_at = now()
+       where id = v_member.id;
+
+      update public.business_member_locations
+         set deleted_at = now(),
+             updated_at = now()
+       where member_id = v_member.id
+         and deleted_at is null;
+
+      if to_regclass('public.business_ownership') is not null then
+        delete from public.business_ownership
+         where business_id = p_business_id;
+      end if;
+
+      return jsonb_build_object(
+        'business_id', p_business_id,
+        'released_member_id', v_member.id,
+        'released_user_id', v_member.user_id
+      );
+    end;
+    $fn$;
+
+    create or replace function public.enforce_business_reactivation_needs_owner()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    begin
+      if new.is_active and public.business_live_owner_count(new.id) < 1 then
+        raise exception 'un negocio sin dueño no se reactiva: devolvé el dueño primero'
+          using
+            errcode = 'R0002',
+            detail = format('business=%s', new.id),
+            hint = 'reactivar exige un dueño vivo: la plataforma se lo devuelve con POST /businesses/:businessId/ownership/restore';
+      end if;
+
+      return new;
+    end;
+    $fn$;
+
+    create trigger trg_business_reactivation_needs_owner
+      before update of is_active on public.businesses
+      for each row execute function public.enforce_business_reactivation_needs_owner();
+
+    create or replace function public.assign_business_ownership(
+      p_business_id uuid,
+      p_member_id uuid
+    )
+    returns jsonb
+    language plpgsql
+    volatile
+    security definer
+    set search_path = ''
+    as $fn$
+    declare
+      v_business_id uuid;
+      v_member      record;
+    begin
+      select b.id into v_business_id
+        from public.businesses b
+       where b.id = p_business_id
+         for update;
+
+      if not found then
+        raise exception 'el negocio no existe'
+          using
+            errcode = 'R0004',
+            detail = format('business=%s', p_business_id),
+            hint = 'no hay un negocio con ese identificador';
+      end if;
+
+      if public.business_live_owner_count(p_business_id) > 0 then
+        raise exception 'este negocio ya tiene un dueño: usá la transferencia'
+          using
+            errcode = 'R0004',
+            detail = format('business=%s member=%s', p_business_id, p_member_id),
+            hint = 'para cambiar de dueño está la transferencia: POST /businesses/:businessId/ownership/transfer';
+      end if;
+
+      select m.id, m.user_id into v_member
+        from public.business_members m
+       where m.id = p_member_id
+         and m.business_id = p_business_id
+         and m.status = 'active'::public.business_member_status
+         and m.deleted_at is null
+       limit 1;
+
+      if not found then
+        raise exception 'el miembro tiene que ser un acceso vivo de este negocio'
+          using
+            errcode = 'R0004',
+            detail = format('business=%s member=%s', p_business_id, p_member_id),
+            hint = 'un acceso dado de baja, pausado o de otro negocio no puede recibir la propiedad';
+      end if;
+
+      update public.business_members
+         set role = 'owner'::public.business_member_role,
+             updated_at = now()
+       where id = v_member.id;
+
+      if to_regclass('public.business_ownership') is not null then
+        insert into public.business_ownership (business_id, owner_id)
+        values (p_business_id, v_member.user_id)
+        on conflict (business_id)
+        do update set owner_id = excluded.owner_id, updated_at = now();
+      end if;
+
+      return jsonb_build_object(
+        'business_id', p_business_id,
+        'owner_member_id', v_member.id,
+        'owner_user_id', v_member.user_id
+      );
+    end;
+    $fn$;
   `);
 
   // The ONE account of the session expiry, copied VERBATIM from the ledger
