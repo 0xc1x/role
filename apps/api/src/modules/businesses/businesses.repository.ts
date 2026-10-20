@@ -31,7 +31,6 @@ import {
   businessMembers,
   businessModeration,
   businessNotificationPreferences,
-  businessOwnership,
   businesses,
   emailSends,
   emailTemplates,
@@ -79,7 +78,7 @@ export type PublicBusinessRow = Pick<
 /**
  * Companion fields of the business aggregate, flattened under their historical
  * column names. `businesses` no longer stores them — they moved to
- * business_ownership / business_finance / business_moderation so anon can hold
+ * business_members / business_finance / business_moderation so anon can hold
  * table-level SELECT on `businesses` for PostgREST — but the DTO keeps the same
  * shape, so the mapper reads them from here under the same names.
  */
@@ -333,12 +332,12 @@ export class BusinessesRepository {
     // ─── EL PERFIL DEL DUEÑO, ANTES QUE NADA ───────────────────────────────────
     //
     // SIN PERFIL NO HAY ALIAS. El `@owner.invalid` que estaba aquí era un
-    // fallback que NUNCA persistía: la fila de `business_ownership` exige el
-    // perfil por FK, así que un dueño sin perfil revienta la transacción
-    // entera —y el error era el de la FK, que no dice nada de por qué—. Un
-    // alias inventado habría escrito una fila de miembro con una bandeja que
-    // no existe, y `business_members.alias` es por negocio ÚNICO: ese alias
-    // falso además habría ocupado el del dueño bueno.
+    // fallback que NUNCA persistía: la membresía del dueño exige el perfil por
+    // FK (`business_members.user_id` → `profiles(id)`), así que un dueño sin
+    // perfil revienta la transacción entera —y el error era el de la FK, que no
+    // dice nada de por qué—. Un alias inventado habría escrito una fila de
+    // miembro con una bandeja que no existe, y `business_members.alias` es por
+    // negocio ÚNICO: ese alias falso además habría ocupado el del dueño bueno.
     //
     // El motivo se dice explícito, y dice la verdad: sin el correo del dueño
     // no hay una fila de dueño.
@@ -353,10 +352,6 @@ export class BusinessesRepository {
       );
     }
 
-    await executor
-      .insert(businessOwnership)
-      .values({ business_id: row.id, owner_id })
-      .onConflictDoNothing();
     // ─── LA MEMBRESÍA DEL DUEÑO, EN LA MISMA TRANSACCIÓN ─────────────────────
     //
     // `business_ownership` es la tabla que Plan 3 va a dropear, y desde que el
@@ -365,9 +360,13 @@ export class BusinessesRepository {
     // `business_members` es un negocio SIN DUEÑO: nadie puede administrar sus
     // ofertas, ni ver sus pedidos, ni entrar a sus estadísticas.
     //
-    // El alta del negocio escribe las dos filas porque son el mismo hecho y
-    // tienen que estar en la misma transacción: una que sí y otra no es un
-    // negocio con dueño en un panel y sin dueño en el otro.
+    // El alta del negocio escribe SÓLO la membresía, porque es la fila que
+    // sobrevive y la que decide. La fila de `business_ownership` era su
+    // espejo, y nadie la escribe más desde acá: el trigger
+    // `trg_bootstrap_business_companions` sólo la escribe cuando
+    // `auth.uid()` está puesto, y esta API conecta como el rol del pooler,
+    // donde no lo está. La Task 10 reescribe ese trigger para que escriba la
+    // membresía y borra la tabla.
     //
     // ─── POR QUÉ `session_ttl_hours = 0` ────────────────────────────────────────
     //
@@ -500,27 +499,37 @@ export class BusinessesRepository {
    * query reads `businesses` alone, and it is the write paths above plus the
    * Supabase backfill that keep the companions complete.
    *
-   * ─── EL JOIN CONTRA `business_ownership` SIGUE AQUÍ, Y A PROPÓSITO ───────────
+   * ─── EL DUEÑO VIENE DE LA MEMBRESÍA ─────────────────────────────────────────
    *
    * `owner_id` es un DATO de la fila —la cuenta del dueño— y no una pregunta
    * de permiso: el DTO lo expone y el contrato lo declara `string`. Por eso el
-   * join no se movió al modelo de membresías todavía, y por eso NO es una
-   * cuarta copia del predicado: la copia que había en este archivo —el método
-   * `isOwner`— sí se movió, y este join no contesta «¿puedo?».
+   * join no pregunta «¿puedo?»; la copia que sí lo preguntaba (`isOwner`) se
+   * movió en el Plan 2, y esta se mueve ahora.
    *
-   * Igual hay que decirlo: cuando Plan 3 dropee `business_ownership`, este join
-   * tiene que moverse también, y el movimiento tiene una forma y no otra —el
-   * dueño del negocio es una membresía viva con `role = 'owner'`— porque un
-   * negocio sin dueño tiene que seguir siendo visible para el panel (un
-   * `LEFT JOIN` con `owner_id` nullable cambia el contrato del DTO) y tiene que
-   * seguir teniendo dueño (un `INNER JOIN` contra la membresía de dueño
-   * desaparecería del listado el negocio de un dueño degradado a `manager`).
+   * El dueño se toma con un LATERAL correlacionado —una fila por negocio— y
+   * NO con un `innerJoin` sobre `business_members`: un negocio puede tener más
+   * de una fila con `role = 'owner'` (la archivada de una liberación y la
+   * viva de una recuperación) y un join plano multiplicaría las filas del
+   * agregado.
+   *
+   * ─── LA REGLA DEL DUEÑO CUANDO NO HAY DUEÑO VIVO ────────────────────────────
+   *
+   * Se toma el dueño **vivo** si hay uno, y si no, **el dueño archivado más
+   * reciente**. La razón es que `owner_id` es `string` en el DTO y no nullable,
+   * y que la liberación **archiva** la fila en vez de borrarla precisamente
+   * para que ese dato siga existiendo: un negocio liberado sigue siendo un
+   * negocio, y el panel tiene que poder nombrarlo.
+   *
+   * Y un negocio sin NINGÚN dueño —ni vivo ni archivado— no está en el
+   * agregado, como no estaba cuando el join era contra la fila de propiedad:
+   * un `LEFT JOIN` con `owner_id` nullable cambiaría el contrato del DTO.
    */
   private aggregateSelect(executor: DbExecutor = this.db) {
+    const owner = this.businessOwner(executor);
     return executor
       .select({
         ...getTableColumns(businesses),
-        owner_id: businessOwnership.owner_id,
+        owner_id: owner.user_id,
         balance: businessFinance.balance,
         commission_rate: businessFinance.commission_rate,
         verification_status: businessModeration.verification_status,
@@ -529,10 +538,7 @@ export class BusinessesRepository {
         rejection_reason: businessModeration.rejection_reason,
       })
       .from(businesses)
-      .innerJoin(
-        businessOwnership,
-        eq(businessOwnership.business_id, businesses.id),
-      )
+      .innerJoinLateral(owner, sql`true`)
       .innerJoin(
         businessFinance,
         eq(businessFinance.business_id, businesses.id),
@@ -541,6 +547,40 @@ export class BusinessesRepository {
         businessModeration,
         eq(businessModeration.business_id, businesses.id),
       );
+  }
+
+  /**
+   * The OWNER of a business, as a correlated one-row pick.
+   *
+   * It is the `join lateral (...) on true` of a correlated subquery, spelled the
+   * way `nearestLocation` spells it: the subquery sees the outer `businesses`
+   * row, and the `limit 1` is what makes it ONE row and not a set.
+   *
+   * The ORDER is the rule of the comment above, in one line: the LIVE owner
+   * first —`deleted_at is null` AND `status = 'active'`, which are the two
+   * halves of «alive» that `public.business_live_owner_count` counts— and, when
+   * there is none, the most recently ARCHIVED one (`deleted_at desc`). The last
+   * key breaks a tie between two rows of the same shape, so the pick is
+   * deterministic and the same business does not name a different owner on two
+   * reads.
+   */
+  private businessOwner(executor: DbExecutor) {
+    return executor
+      .select({ user_id: businessMembers.user_id })
+      .from(businessMembers)
+      .where(
+        and(
+          eq(businessMembers.business_id, businesses.id),
+          eq(businessMembers.role, 'owner'),
+        ),
+      )
+      .orderBy(
+        sql`(${businessMembers.deleted_at} is null and ${businessMembers.status} = 'active') desc`,
+        desc(businessMembers.deleted_at),
+        desc(businessMembers.updated_at),
+      )
+      .limit(1)
+      .as('business_owner');
   }
 
   /**
@@ -802,7 +842,7 @@ export class BusinessesRepository {
   /**
    * Base projection for every public business read.
    *
-   * It selects from `businesses` ALONE — no join to `business_ownership`,
+   * It selects from `businesses` ALONE — no join to `business_members`,
    * `business_finance` or `business_moderation`. Two reasons, and the second is
    * the one that matters:
    *

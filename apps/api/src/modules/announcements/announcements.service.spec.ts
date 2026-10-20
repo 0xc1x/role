@@ -57,8 +57,8 @@ const TOKEN = 'Bearer jwt-del-admin';
  * test lo mire, que es justo el agujero que esta regla vino a cerrar.
  */
 const duenarios = (
-  pares: ReadonlyArray<readonly [businessId: string, ownerId: string]>,
-) => pares.map(([business_id, owner_id]) => ({ business_id, owner_id }));
+  pares: ReadonlyArray<readonly [businessId: string, userId: string]>,
+) => pares.map(([business_id, user_id]) => ({ business_id, user_id }));
 
 /** Payload mínimo de creación: lo que la base exige sin default. */
 const minimalCreate: CreateAnnouncementDto = {
@@ -478,7 +478,7 @@ describe('AnnouncementsService', () => {
   // misma nombra como posible —"que la API resuelva los negocios a sus user_ids
   // al publicar"—, y por eso los dueños se SUMAN a la lista de personas.
   describe('create · los negocios se resuelven a sus dueños', () => {
-    it('un negocio agrega el owner_id de su dueño a user_ids', async () => {
+    it('un negocio agrega el id de su dueño a user_ids', async () => {
       repository.ownerIdsForBusinesses.mockResolvedValue(
         duenarios([[BUSINESS, OWNER]]),
       );

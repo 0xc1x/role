@@ -2597,3 +2597,42 @@ migration: drop the function and restore the three bodies. The text is in the
 sealed files `20261015031154_shared_ttl_expiry_accounting.sql`,
 `20261015024825_business_policy_tightening.sql` and
 `20261020152852_location_scope_in_policies.sql`, **copied, not edited**.
+
+## Applied: `20261020210413_admin_view_business_members`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`35f1ecc44fe40e1716fdeb61c42733d8` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**The whole file is one statement and it is five lines long.** The prose that
+usually lives in the header of a migration lives HERE, on purpose: the file has
+to be byte-identical to what ran, and what ran is the statement, not the
+explanation of it.
+
+**The rule, in one sentence: the platform's admin sees the roster of any
+business.** It is `Admins can view all business members`—SELECT, `to
+authenticated`, `using ((select auth_helpers.my_role()) = 'admin'::app_role)`—and
+it is the exact parallel of `Admins can view all business ownership`
+(`20260925225227`), which goes away with the table in Plan 3's Task 10.
+
+**Why it exists.** The announcement flow resolves `business_ids` to `user_ids`
+through PostgREST **with the operator's own session**—on purpose, so the read
+is recorded as what that operator can see—and the operator is a platform admin
+who is not a member of the businesses they are targeting. `business_members`
+had only two read policies (`Members can view own membership`, and `Owners and
+managers view business members`, which requires being an owner or a manager OF
+that business). Without this one, the resolution would return ZERO rows and the
+service would reject the publication with a false reason—«these businesses have
+no owner»—over data that does.
+
+**What it does NOT open.** It is a SELECT policy for `authenticated`, and it
+grants nothing that was not already granted to that admin: the same admin
+already reads `GET /staff` for any business (the admin supervises, it does not
+administer) and already read every owner row through the old policy. It does
+not grant a single write: `business_members` still has NO insert, update or
+delete policy, which is what §6.3 of the spec decides and what
+`business-members.rls.db.spec.ts` measures.
+
+**The rollback of this one is a new migration**: `drop policy "Admins can view
+all business members"`. The ledger's `rollback` is `NULL`, as it is for all of
+them.

@@ -83,25 +83,27 @@ export type EligibleAnnouncementRow = {
 };
 
 /**
- * Una fila de `public.business_ownership` como la devuelve PostgREST.
+ * Una fila de `public.business_members` como la devuelve PostgREST: el negocio y
+ * la persona que lo dirige.
  *
- * La tabla tiene `PRIMARY KEY (business_id)` —un dueño por negocio—, y el tipo
- * NO declara esa cardinalidad: la resolución suma todos los `owner_id` que
- * vuelven, así que el día que la co-propiedad cambie la clave, el código ya
- * hace lo correcto sin que haya que tocarlo.
+ * La tabla tiene UN dueño vivo por negocio —el índice parcial
+ * `business_members_one_owner_per_business` lo admite— y el tipo NO declara esa
+ * cardinalidad: la resolución suma todos los `user_id` que vuelven, así que el
+ * día que la co-propiedad cambie la clave, el código ya hace lo correcto sin que
+ * haya que tocarlo.
  */
-export type BusinessOwnershipRow = {
+export type BusinessOwnerRow = {
   business_id: string;
-  owner_id: string;
+  user_id: string;
 };
 
 /**
- * Columnas de la resolución de dueños: los dos ids y nada más. `owner_id` es
- * la columna que salió de `businesses` justamente para esto —está en
- * `business_ownership` y no en la tabla pública porque `anon` puede leer el
- * catálogo—, así que la lectura se hace por esta tabla y no por un join.
+ * Columnas de la resolución de dueños: los dos ids y nada más. `user_id` es
+ * la columna que dice de quién es el negocio —la que salió de `businesses` y
+ * vive hoy en `business_members`—, y la tabla se lee aparte porque `anon` puede
+ * leer el catálogo.
  */
-const OWNERSHIP_COLUMNS = 'business_id, owner_id';
+const OWNER_COLUMNS = 'business_id, user_id';
 
 /** Un objeto cualquiera, para poder mirar sus claves sin castear. */
 function esObjeto(valor: unknown): valor is Record<string, unknown> {
@@ -109,21 +111,21 @@ function esObjeto(valor: unknown): valor is Record<string, unknown> {
 }
 
 /**
- * Una fila de `business_ownership` con los dos ids en string.
+ * Una fila de dueño con los dos ids en string.
  *
  * Existe porque el cliente de Supabase va sin tipo genérico de `Database` y la
  * cadena `from().select()` devuelve `any`. Acá `any` no pasa: una fila a la que
  * le falte cualquiera de los dos ids se descarta, y el resultado es que el
  * negocio se ve SIN DUEÑO —que es exactamente lo que es— y el service rechaza
- * la publicación nombrándolo. Es preferible a creerse un `any`: un `owner_id`
+ * la publicación nombrándolo. Es preferible a creerse un `any`: un `user_id`
  * inventado mete a una persona en la audiencia de un aviso, y una audiencia con
  * un id de más es una fuga.
  */
-function esFilaDeOwnership(fila: unknown): fila is BusinessOwnershipRow {
+function esFilaDeDueño(fila: unknown): fila is BusinessOwnerRow {
   return (
     esObjeto(fila) &&
     typeof fila.business_id === 'string' &&
-    typeof fila.owner_id === 'string'
+    typeof fila.user_id === 'string'
   );
 }
 
@@ -203,30 +205,39 @@ export class AnnouncementsRepository {
    * PostgREST y con el token del operador, y no por drizzle, por la misma razón
    * que `listEligible`: la conexión de la API es `service_role` —BYPASSRLS— y
    * resolvería los dueños sin que ninguna policy opinara. Con la sesión del
-   * operador, `business_ownership` decide, y la lectura queda registrada como lo
+   * operador, `business_members` decide, y la lectura queda registrada como lo
    * que ese operador puede ver.
    *
    * No choca con ninguna policy: `authenticated` tiene SELECT sobre la tabla y
-   * `Admins can view all business ownership` —`my_role() = 'admin'`— deja pasar
+   * `Admins can view all business members` —`my_role() = 'admin'`— deja pasar
    * las filas que el guard de `@Roles('admin')` ya le garantiza a esta request.
-   * `anon` no tiene ni grant ni policy, y por eso el token acá no es opcional:
-   * resolver por `anon` no puede devolver nada.
+   * `anon` no tiene grant ni policy que le sirva, y por eso el token acá no es
+   * opcional: resolver por `anon` no puede devolver nada.
+   *
+   * Los TRES filtros son la regla de presencia del aviso: `role = 'owner'`,
+   * `status = 'active'` y `deleted_at is null` son las tres mitades de «dueño
+   * vivo» con las que la base define quién dirige un negocio
+   * (`public.business_member_role`). Un negocio sin dueño vivo no tiene a quién
+   * mandarle el aviso, y el service lo rechaza nombrándolo.
    *
    * Devuelve FILAS y no un `Map` de negocio → dueño: la resolución suma todos
-   * los `owner_id` que vuelven, así que un negocio con más de un dueño los
+   * los `user_id` que vuelven, así que un negocio con más de un dueño los
    * agrega a todos en vez de pisar uno. Además devuelve el `business_id`, que es
    * lo que permite notar el negocio al que no se le encontró dueño.
    */
   async ownerIdsForBusinesses(
     token: string,
     businessIds: readonly string[],
-  ): Promise<BusinessOwnershipRow[]> {
+  ): Promise<BusinessOwnerRow[]> {
     const supabase = this.supabaseDe(token);
 
     const { data, error } = await supabase
-      .from('business_ownership')
-      .select(OWNERSHIP_COLUMNS)
-      .in('business_id', businessIds);
+      .from('business_members')
+      .select(OWNER_COLUMNS)
+      .in('business_id', businessIds)
+      .eq('role', 'owner')
+      .eq('status', 'active')
+      .is('deleted_at', null);
 
     if (error) {
       // Se propaga, igual que en `listEligible`: acá además el service NO puede
@@ -237,7 +248,7 @@ export class AnnouncementsRepository {
       );
     }
 
-    return (data ?? []).filter(esFilaDeOwnership);
+    return (data ?? []).filter(esFilaDeDueño);
   }
 
   /**

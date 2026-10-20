@@ -310,8 +310,8 @@ describe('listEligible · lo que devuelve y lo que lanza', () => {
  * la misma exigencia que `listEligible`: si fuera por la conexión de la API —
  * `service_role`, BYPASSRLS— resolvería los dueños sin que ninguna policy
  * opinara, y la lectura no quedaría registrada como lo que el operador puede ver.
- * `authenticated` tiene SELECT sobre `business_ownership` y
- * `Admins can view all business ownership` la deja pasar, así que la sesión del
+ * `authenticated` tiene SELECT sobre `business_members` y
+ * `Admins can view all business members` la deja pasar, así que la sesión del
  * operador alcanza.
  */
 describe('ownerIdsForBusinesses · la sesión con la que se resuelve', () => {
@@ -327,13 +327,14 @@ describe('ownerIdsForBusinesses · la sesión con la que se resuelve', () => {
     expect(opciones[0]?.global).toEqual({ headers: { Authorization: TOKEN } });
   });
 
-  test('consulta business_ownership, no businesses', async () => {
-    // `businesses` no tiene columna de dueño: la relación vive en su tabla
-    // companion, y por eso esta consulta existe.
+  test('consulta business_members, no business_ownership', async () => {
+    // La tabla que resuelve «de quién es el negocio» es la del modelo de
+    // membresías: la vieja se cae en la Task 10 y esta consulta es la que
+    // decide a quién le llega un aviso.
     await repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]);
 
     expect(llamadaDe(llamadas, 'from')?.argumentos).toEqual([
-      'business_ownership',
+      'business_members',
     ]);
   });
 
@@ -341,11 +342,29 @@ describe('ownerIdsForBusinesses · la sesión con la que se resuelve', () => {
     await repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO, OTRO]);
 
     expect(llamadaDe(llamadas, 'select')?.argumentos).toEqual([
-      'business_id, owner_id',
+      'business_id, user_id',
     ]);
     expect(llamadaDe(llamadas, 'in')?.argumentos).toEqual([
       'business_id',
       [NEGOCIO, OTRO],
+    ]);
+  });
+
+  test('filtra por dueño VIVO: rol, estado y no archivada', async () => {
+    // La regla de presencia del aviso es la misma del handler de
+    // notificaciones: un negocio sin dueño vivo no tiene a quién mandarle el
+    // aviso, y el service lo rechaza nombrándolo. Los tres filtros son las
+    // tres mitades de «dueño vivo» (`public.business_member_role`).
+    await repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]);
+
+    const filtros = llamadas
+      .filter((c) => c.metodo === 'eq' || c.metodo === 'is')
+      .map((c) => [c.metodo, ...c.argumentos]);
+
+    expect(filtros).toEqual([
+      ['eq', 'role', 'owner'],
+      ['eq', 'status', 'active'],
+      ['is', 'deleted_at', null],
     ]);
   });
 
@@ -359,24 +378,24 @@ describe('ownerIdsForBusinesses · la sesión con la que se resuelve', () => {
 
   test('devuelve las filas tal como llegaron, con el negocio y el dueño', async () => {
     respuesta = {
-      data: [{ business_id: NEGOCIO, owner_id: DUENO }],
+      data: [{ business_id: NEGOCIO, user_id: DUENO }],
       error: null,
     };
 
     await expect(
       repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]),
-    ).resolves.toEqual([{ business_id: NEGOCIO, owner_id: DUENO }]);
+    ).resolves.toEqual([{ business_id: NEGOCIO, user_id: DUENO }]);
   });
 
   test('devuelve una fila por dueño, sin reindexar ni quedarse con la última', async () => {
-    // La resolución suma lo que volvió; acá está la mitad de eso. Hoy
-    // `business_ownership_pkey` es PRIMARY KEY (business_id) y no puede haber dos
-    // filas del mismo negocio, pero la consulta no proyecta esa cardinalidad y el
+    // La resolución suma lo que volvió; acá está la mitad de eso. Hoy el
+    // índice parcial `business_members_one_owner_per_business` admite UN dueño
+    // vivo por negocio, pero la consulta no proyecta esa cardinalidad y el
     // repositorio no la impone: la co-propiedad no tendría que pasar por acá.
     respuesta = {
       data: [
-        { business_id: NEGOCIO, owner_id: DUENO },
-        { business_id: NEGOCIO, owner_id: OTRO },
+        { business_id: NEGOCIO, user_id: DUENO },
+        { business_id: NEGOCIO, user_id: OTRO },
       ],
       error: null,
     };
@@ -384,8 +403,8 @@ describe('ownerIdsForBusinesses · la sesión con la que se resuelve', () => {
     const filas = await repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO]);
 
     expect(filas).toEqual([
-      { business_id: NEGOCIO, owner_id: DUENO },
-      { business_id: NEGOCIO, owner_id: OTRO },
+      { business_id: NEGOCIO, user_id: DUENO },
+      { business_id: NEGOCIO, user_id: OTRO },
     ]);
   });
 
@@ -393,13 +412,13 @@ describe('ownerIdsForBusinesses · la sesión con la que se resuelve', () => {
     // El cliente de Supabase va sin tipo genérico, así que la respuesta es `any`.
     // Creerse un id inexistente mete a una persona en la audiencia de un aviso, y
     // una audiencia con un id de más es una fuga: lo que no tiene los dos ids no
-    // es una fila de `business_ownership`, y el negocio se ve sin dueño —que es
-    // exactamente lo que es— para que el service lo rechace nombrándolo.
+    // es una fila de dueño, y el negocio se ve sin dueño —que es exactamente lo
+    // que es— para que el service lo rechace nombrándolo.
     respuesta = {
       data: [
-        { business_id: NEGOCIO, owner_id: DUENO },
+        { business_id: NEGOCIO, user_id: DUENO },
         { business_id: OTRO },
-        { business_id: OTRO, owner_id: null },
+        { business_id: OTRO, user_id: null },
         null,
       ],
       error: null,
@@ -407,7 +426,7 @@ describe('ownerIdsForBusinesses · la sesión con la que se resuelve', () => {
 
     await expect(
       repository.ownerIdsForBusinesses(TOKEN, [NEGOCIO, OTRO]),
-    ).resolves.toEqual([{ business_id: NEGOCIO, owner_id: DUENO }]);
+    ).resolves.toEqual([{ business_id: NEGOCIO, user_id: DUENO }]);
   });
 
   test('una lista vacía es una lista vacía, no un error', async () => {

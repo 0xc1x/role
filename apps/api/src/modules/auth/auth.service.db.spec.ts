@@ -427,6 +427,65 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     expect(stillOwned?.owner).toBe(ownerId);
   });
 
+  /**
+   * The `businesses` counter comes from the MEMBERSHIP, not from the legacy row.
+   *
+   * The counter is half of the erase gate: it says whether the account still
+   * administers a business. The row that says so is `business_members`, which is
+   * the table that survives the retirement of `business_ownership` —and the
+   * legacy row is the one that goes away.
+   *
+   * The test moves the legacy row to ANOTHER person and asserts the counter
+   * does not move with it: the owner still owns a business (1) and the other
+   * person owns none (0), even though the legacy row names them.
+   */
+  test('el conteo de negocios sale de la membresía de dueño, no de la fila vieja', async () => {
+    const ownerId = await seedProfile(ctx.db);
+    const otroId = await seedProfile(ctx.db);
+    const business = await seedBusiness(ctx.db, ownerId);
+
+    await ctx.db
+      .update(businessOwnership)
+      .set({ owner_id: otroId })
+      .where(eq(businessOwnership.business_id, business.id));
+
+    const delDueño = await accounts().countRetained(ownerId);
+    expect(delDueño.businesses).toBe(1);
+
+    const delOtro = await accounts().countRetained(otroId);
+    expect(delOtro.businesses).toBe(0);
+  });
+
+  /**
+   * An ARCHIVED owner membership is history, and it does not retain anything.
+   *
+   * The release (D2) archives the owner's membership instead of deleting it,
+   * precisely so that the fact survives; but an archived row grants nothing, so
+   * it is not a business the account still administers.
+   *
+   * The erase gate does NOT widen because of this: `memberships` counts every
+   * row of the account —archived ones included— and it is the one that keeps
+   * the profile alive. What changes is the NUMBER of businesses that the
+   * account administers, which is what this test measures.
+   */
+  test('un dueño archivado no cuenta como dueño de un negocio', async () => {
+    const ownerId = await seedProfile(ctx.db);
+    // INACTIVO a propósito: el invariante «un negocio activo tiene dueño vivo»
+    // lo impide archivar el dueño de un negocio que sigue encendido.
+    const business = await seedBusiness(ctx.db, ownerId, { is_active: false });
+
+    await ctx.db
+      .update(businessMembers)
+      .set({ deleted_at: new Date() })
+      .where(eq(businessMembers.business_id, business.id));
+
+    const retained = await accounts().countRetained(ownerId);
+    expect(retained.businesses).toBe(0);
+    expect(retained.owner_memberships).toBe(0);
+    // Y la cuenta sigue retenida por la fila archivada: la puerta no se abrió.
+    expect(retained.memberships).toBe(1);
+  });
+
   test('anonymising scrubs the identifying columns and keeps the key ones', async () => {
     const { userId } = await seedConsumerWithOrder();
     await ctx.db

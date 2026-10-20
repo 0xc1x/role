@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { type Database } from '../../database/database.module';
 import { DRIZZLE } from '../../database/database.tokens';
 import {
@@ -8,8 +8,8 @@ import {
   orders,
   orderEvents,
   businesses,
+  businessMembers,
   businessNotificationPreferences,
-  businessOwnership,
 } from '../../database/schema';
 import { NotificationsService } from './notifications.service';
 import { NotificationsRepository } from './notifications.repository';
@@ -22,11 +22,28 @@ export class NotificationHandlers {
     private readonly repo: NotificationsRepository,
   ) {}
 
+  /**
+   * «A quién se avisa del pedido» — y la REGLA DE PRESENCIA que decide si se
+   * avisa a alguien.
+   *
+   * El `INNER JOIN` de abajo es una REGLA DE PRESENCIA, no un permiso: un
+   * negocio SIN dueño devuelve cero filas, el `if (!row) return;` se come el
+   * handler entero y no se avisa ni al comprador ni al negocio, sin error y sin
+   * log. Eso es lo que hacía la tabla vieja y lo que hace ahora la MEMBRESÍA DE
+   * DUEÑO VIVA: `role = 'owner'`, `deleted_at is null` y `status = 'active'` —
+   * las tres mitades con las que la base define «alguien es el dueño»
+   * (`public.business_member_role` y `public.business_live_owner_count`).
+   *
+   * La fila vieja no participa, y el cambio es DELIBERADO: el test que lo
+   * pinnea cambió de nombre y de fixture (`notification.handlers.spec.ts`),
+   * porque la regla dejó de ser «el negocio tiene fila de propiedad» y pasó a
+   * ser «el negocio tiene dueño vivo».
+   */
   async onOrderStatusChanged(orderId: string): Promise<void> {
     const [row] = await this.db
       .select({
         order: orders,
-        business_owner_id: businessOwnership.owner_id,
+        business_owner_id: businessMembers.user_id,
         business_name: businesses.name,
         business_image: businesses.image,
         offer_image: offers.image,
@@ -34,8 +51,13 @@ export class NotificationHandlers {
       .from(orders)
       .innerJoin(businesses, eq(orders.business_id, businesses.id))
       .innerJoin(
-        businessOwnership,
-        eq(orders.business_id, businessOwnership.business_id),
+        businessMembers,
+        and(
+          eq(businessMembers.business_id, orders.business_id),
+          eq(businessMembers.role, 'owner'),
+          isNull(businessMembers.deleted_at),
+          eq(businessMembers.status, 'active'),
+        ),
       )
       .innerJoin(offers, eq(orders.offer_id, offers.id))
       .where(eq(orders.id, orderId))

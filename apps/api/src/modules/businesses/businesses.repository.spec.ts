@@ -53,28 +53,23 @@ describe('BusinessesRepository (DB real)', () => {
   });
 
   /**
-   * The owner lands in BOTH tables, in the same transaction.
+   * The owner lands in the MEMBERSHIP, and the legacy row is nobody's business.
    *
-   * This is the invariant that keeps the two counts equal —«the businesses with
-   * an ownership row» and «the businesses with an owner membership»— and the
-   * equality is what makes it safe to move a join from one table to the other
-   * without changing WHICH ROWS EXIST. A business with an ownership row and no
-   * membership is a business whose owner is locked out of it, and a business
-   * with a membership and no ownership row is a business that the legacy
-   * readers cannot find.
+   * `business_ownership` was the table Plan 3 drops, and the API was its last
+   * writer: the trigger `trg_bootstrap_business_companions` only writes it when
+   * `auth.uid()` is set, and the API connects as the pooler role, where it is
+   * not. So the row existed only because this method wrote it, and once the
+   * readers moved to the membership model there was nothing left for it to be.
+   *
+   * The membership is what survives: it is the row that decides who the owner
+   * is, and the one the transfer, the release and the recovery all move.
    */
-  test('insert deja al dueño en las dos tablas, con la misma fila', async () => {
+  test('insert deja al dueño en la membresía, y no escribe la fila vieja', async () => {
     const row = await repo.insert(ctx.db, {
       owner_id: ownerId,
       name: 'Panadería La Espiga',
       slug: 'panaderia-la-espiga',
     });
-
-    const [ownership] = await ctx.db
-      .select()
-      .from(businessOwnership)
-      .where(eq(businessOwnership.business_id, row.id));
-    expect(ownership?.owner_id).toBe(ownerId);
 
     const [membership] = await ctx.db
       .select()
@@ -89,6 +84,14 @@ describe('BusinessesRepository (DB real)', () => {
     expect(membership?.session_ttl_hours).toBe(0);
     // Y el alias espeja el correo del dueño, como el backfill.
     expect(membership?.alias).toBe('owner@biz.cl');
+
+    // Y la fila vieja NO la escribe el API: la tabla que Plan 3 dropea ya no
+    // tiene un escritor en esta API.
+    const legacy = await ctx.db
+      .select()
+      .from(businessOwnership)
+      .where(eq(businessOwnership.business_id, row.id));
+    expect(legacy).toHaveLength(0);
   });
 
   /**
@@ -176,10 +179,6 @@ describe('BusinessesRepository companions (DB real)', () => {
       verified_by: null,
     });
 
-    const [ownership] = await ctx.db
-      .select()
-      .from(businessOwnership)
-      .where(eq(businessOwnership.business_id, row.id));
     const [finance] = await ctx.db
       .select()
       .from(businessFinance)
@@ -188,9 +187,121 @@ describe('BusinessesRepository companions (DB real)', () => {
       .select()
       .from(businessModeration)
       .where(eq(businessModeration.business_id, row.id));
-    expect(ownership?.owner_id).toBe(ownerId);
     expect(finance?.commission_rate).toBe('0.1500');
     expect(moderation?.verification_status).toBe('rejected');
+  });
+
+  /**
+   * The DTO's `owner_id` is a FACT of the row, and it comes from the
+   * membership model now.
+   *
+   * The test moves the LEGACY row to another person and asserts that the
+   * aggregate does not move with it. If the aggregate still read
+   * `business_ownership`, the `owner_id` of the DTO would name somebody who
+   * does not own anything —and the table that says so is the one Plan 3 drops.
+   */
+  test('el dueño del negocio sale de la membresía, no de la fila vieja', async () => {
+    const owner = await seedProfile(ctx.db);
+    const otro = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner);
+
+    // La fila vieja dice otra persona...
+    await ctx.db
+      .update(businessOwnership)
+      .set({ owner_id: otro })
+      .where(eq(businessOwnership.business_id, biz.id));
+
+    // ...y el agregado no se mueve: la membresía de dueño manda.
+    const row = await repo.findById(biz.id);
+    expect(row?.owner_id).toBe(owner);
+  });
+
+  /**
+   * The owner of a RETIRED business is still named, and that is the point.
+   *
+   * The release archives the owner's membership instead of deleting it, precisely
+   * so that the fact «this business had an owner» survives —and `owner_id` is a
+   * `string` in the DTO, not a nullable one. So the aggregate takes the LIVE
+   * owner when there is one, and the most recent ARCHIVED one when there is
+   * not.
+   *
+   * The business is seeded INACTIVE on purpose: the invariant «an active
+   * business always has a live owner» is enforced by the database
+   * (`trg_business_keeps_an_owner`), and archiving the owner of an active
+   * business is refused with `R0002`.
+   */
+  test('un negocio liberado sigue trayendo a su dueño, aunque la membresía esté archivada', async () => {
+    const owner = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner, { is_active: false });
+
+    await ctx.db
+      .update(businessMembers)
+      .set({ deleted_at: new Date() })
+      .where(eq(businessMembers.business_id, biz.id));
+
+    const row = await repo.findById(biz.id);
+    expect(row?.owner_id).toBe(owner);
+  });
+
+  /**
+   * A business with a LIVE owner AND an archived one names the LIVE one.
+   *
+   * The state is real: a release archives the owner's membership, and a later
+   * recovery (`assign_business_ownership`) promotes somebody else —so the
+   * business carries two rows with `role = 'owner'`, one archived and one
+   * alive. The aggregate has to pick the alive one, and it has to pick it the
+   * same way on every read.
+   *
+   * The business is seeded INACTIVE because the invariant «an active business
+   * always has a live owner» is enforced by the database
+   * (`trg_business_keeps_an_owner`), and archiving the owner of an active
+   * business is refused with `R0002`.
+   */
+  test('con dueño vivo y dueño archivado, el dueño es el VIVO', async () => {
+    const owner = await seedProfile(ctx.db);
+    const nuevo = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner, { is_active: false });
+
+    // El dueño viejo se archiva —una liberación— y su fila queda como
+    // HISTORIA: con la fecha de la baja, que es más reciente que la del dueño
+    // nuevo.
+    await ctx.db
+      .update(businessMembers)
+      .set({ deleted_at: new Date(), updated_at: new Date() })
+      .where(eq(businessMembers.business_id, biz.id));
+    // …y el nuevo es un dueño VIVO del mismo negocio, con una fila más vieja:
+    // si el agregado se guiara por la fecha de la última modificación, elegiría
+    // al ARCHIVADO, que es el error que este test mide.
+    await ctx.db.insert(businessMembers).values({
+      business_id: biz.id,
+      user_id: nuevo,
+      role: 'owner',
+      label: 'Dueño nuevo',
+      alias: `nuevo-dueno-${nuevo.slice(0, 8)}@negocio.role.ec`,
+      status: 'active',
+      session_ttl_hours: 0,
+      created_at: new Date('2020-01-01T00:00:00.000Z'),
+      updated_at: new Date('2020-01-01T00:00:00.000Z'),
+    });
+
+    const row = await repo.findById(biz.id);
+    expect(row?.owner_id).toBe(nuevo);
+  });
+
+  /**
+   * A business with NO owner at all is not in the aggregate.
+   *
+   * The old join was an `INNER JOIN` against the ownership row, so a business
+   * without one was not returned: `findById` said «no existe» and the listing
+   * did not show it. The membership model keeps that shape —a business without
+   * an owner is not a business anybody can administer— and the DTO's
+   * `owner_id` cannot be null.
+   */
+  test('un negocio sin ningún dueño no está en el agregado', async () => {
+    const owner = await seedProfile(ctx.db);
+    const biz = await seedBusiness(ctx.db, owner, { owner_membership: false });
+
+    expect(await repo.findById(biz.id)).toBeNull();
   });
 
   test('update reparte el patch entre businesses y sus companions', async () => {

@@ -5,7 +5,6 @@ import { DRIZZLE } from '../../database/database.tokens';
 import {
   businessMemberLocations,
   businessMembers,
-  businessOwnership,
   businesses,
   consumerNotificationPreferences,
   deviceTokens,
@@ -76,9 +75,11 @@ export class AuthAccountRepository {
    * BUT ORDERS ALONE ARE NOT THE CONDITION, and the other two are the reason
    * this method exists rather than a single `countOrders`:
    *
-   *  - `businesses` — ownership moved to `business_ownership`, whose `owner_id`
-   *    is `ON DELETE CASCADE` from `profiles`. A business owner who never placed
-   *    an order passes a "no orders" test, and erasing their profile takes the
+   *  - `businesses` — the ownership of a business lived in `business_ownership`
+   *    (whose `owner_id` is `ON DELETE CASCADE` from `profiles`) and now lives
+   *    in the owner's `business_members` row (whose `user_id` is `ON DELETE
+   *    CASCADE` from `profiles` too). A business owner who never placed an
+   *    order passes a "no orders" test, and erasing their profile takes the
    *    business with it — and with it every order that business's OTHER
    *    customers placed, since `orders.business_id` cascades too. That is a
    *    stranger's purchase destroyed by somebody else's account deletion.
@@ -118,6 +119,20 @@ export class AuthAccountRepository {
    * El join con `businesses.is_active` es lo que convierte el número en la
    * puerta que el plan describe: la cuenta de un dueño de un negocio activo
    * sigue bloqueada, y la de un dueño de un negocio inactivo no.
+   *
+   * ─── EL CONTEO DE NEGOCIOS SALE DE LA MEMBRESÍA ──────────────────────────────
+   *
+   * `businesses` cuenta los negocios que la cuenta ADMINISTRA, y la fila que
+   * lo dice es la membresía de dueño viva: `role = 'owner'` y
+   * `deleted_at is null`. No es lo mismo que `owner_memberships` —que además
+   * exige que el negocio esté ACTIVO— porque los dos números cuentan cosas
+   * distintas: uno cuenta los negocios que la cuenta dirige, y el otro cuenta
+   * los que la bloquearían.
+   *
+   * La fila de `business_ownership` era el espejo de esto y se retira con la
+   * Task 10: leerla sería leer una tabla que ya no existe, y su número y el
+   * de la membresía son iguales en producción (16 negocios, 16 filas de
+   * propiedad, 16 membresías de dueño vivas: medido).
    */
   async countRetained(userId: string): Promise<RetainedRecords> {
     const [orderCount] = await this.db
@@ -126,8 +141,14 @@ export class AuthAccountRepository {
       .where(eq(orders.user_id, userId));
     const [businessCount] = await this.db
       .select({ c: count() })
-      .from(businessOwnership)
-      .where(eq(businessOwnership.owner_id, userId));
+      .from(businessMembers)
+      .where(
+        and(
+          eq(businessMembers.user_id, userId),
+          eq(businessMembers.role, 'owner'),
+          isNull(businessMembers.deleted_at),
+        ),
+      );
     const [membershipCount] = await this.db
       .select({ c: count() })
       .from(businessMembers)

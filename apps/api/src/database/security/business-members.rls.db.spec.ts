@@ -2547,6 +2547,16 @@ describe('las policies y los RPCs resuelven por membresía', () => {
   const POL_DELETED = 'f0000000-0000-4000-8000-000000000007';
   const POL_PAUSED = 'f0000000-0000-4000-8000-000000000008';
   /**
+   * Un admin DE PLATAFORMA: `profiles.role = 'admin'`, y no es miembro de
+   * ningún negocio.
+   *
+   * Existe por la policy `Admins can view all business members`, que es lo que
+   * permite al operador de un aviso resolver los dueños por PostgREST con su
+   * propia sesión: sin ella, un admin que no es miembro no vería el roster y
+   * la publicación se rechazaría con un motivo falso.
+   */
+  const POL_ADMIN = 'f0000000-0000-4000-8000-00000000000d';
+  /**
    * Un dueño con la sesión VENCIDA.
    *
    * Existe para el TTL de las policies que resuelven por ROL, que hasta
@@ -2784,12 +2794,21 @@ describe('las policies y los RPCs resuelven por membresía', () => {
         ['stale-owner', POL_STALE_OWNER],
         ['unstamped-owner', POL_UNSTAMPED_OWNER],
         ['unstamped-staff', POL_UNSTAMPED_STAFF],
+        ['admin', POL_ADMIN],
       ] as const) {
         await tx.unsafe(
           `insert into auth.users (id, email) values ('${id}', '${name}@rls-membership.test')
            on conflict (id) do nothing`,
         );
       }
+
+      // El admin es de PLATAFORMA, no de negocio: `handle_new_user` sólo
+      // acepta 'user' y 'business' del metadata, así que el rol se escribe
+      // después, en la fila del perfil. No es miembro de ningún negocio, que es
+      // justo lo que lo hace el caso que mide la policy del admin.
+      await tx.unsafe(
+        `update public.profiles set role = 'admin' where id = '${POL_ADMIN}'`,
+      );
 
       await tx.unsafe(`
         insert into public.businesses (id, name, type, slug)
@@ -3123,6 +3142,80 @@ describe('las policies y los RPCs resuelven por membresía', () => {
       'payouts:Business can view own payouts:SELECT',
       'profiles:Businesses can view their order customers:SELECT',
     ]);
+  });
+
+  // ─── LA PLATAFORMA LEE EL ROSTER ───────────────────────────────────────────
+  //
+  // La tercera policy de `business_members` es la del admin, y existe por una
+  // razón CONCRETA: la resolución de los dueños de un aviso va por PostgREST
+  // CON LA SESIÓN DEL OPERADOR —a propósito, para que la lectura quede
+  // registrada como lo que ese operador puede ver— y el operador es un admin
+  // de plataforma, que no es miembro de los negocios a los que apunta. Sin
+  // esta policy esa resolución devolvería CERO filas, y el service —que no
+  // degrada a «el negocio no tiene dueño», porque esa es otra afirmación—
+  // rechazaría la publicación con un motivo falso, sobre datos que sí están.
+  //
+  // Es el paralelo exacto de `Admins can view all business ownership`, que se
+  // cae con la tabla en la Task 10.
+
+  test('las policies de business_members son tres, y la tercera es la del admin', async () => {
+    const rows = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ tablename: string; policyname: string; cmd: string }[]>(
+        `
+        select tablename, policyname, cmd from pg_policies
+        where schemaname = 'public' and tablename = 'business_members'
+        order by policyname`,
+      ),
+    );
+
+    expect(
+      plainRows(rows).map((p) => `${p.policyname}:${p.cmd}`),
+      'las policies de `business_members` no son las que el plan dice. El ' +
+        'conjunto se afirma por NOMBRE: un conteo pasaría con tres policies ' +
+        'cambiadas de sitio.',
+    ).toEqual([
+      'Admins can view all business members:SELECT',
+      'Members can view own membership:SELECT',
+      'Owners and managers view business members:SELECT',
+    ]);
+  });
+
+  test('un admin ve el roster de un negocio del que no es miembro', async () => {
+    // El admin ve TODAS las filas, de todos los negocios, incluidas las
+    // archivadas: la policy no filtra, como la de `business_ownership` que se
+    // cae con la tabla en la Task 10.
+    const seen = await as(ctx.sql, 'authenticated', POL_ADMIN, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `select id::text as id from public.business_members order by id`,
+      ),
+    );
+    expect(
+      plainRows(seen).map((r) => r.id),
+      'el admin de plataforma no ve el roster entero. Sin esta fila, la ' +
+        'resolución de los dueños de un aviso no podría hacerse con la sesión ' +
+        'del operador.',
+    ).toEqual(
+      [
+        M_OWNER,
+        M_MANAGER,
+        M_STAFF,
+        M_OUTSIDER,
+        M_DELETED,
+        M_PAUSED,
+        M_STALE_OWNER,
+        M_UNSTAMPED_OWNER,
+        M_UNSTAMPED_STAFF,
+      ].sort(),
+    );
+
+    // Y un dueño que NO es admin sigue viendo sólo lo suyo: la policy del
+    // admin no le abre el roster de al lado.
+    const ownerSeen = await as(ctx.sql, 'authenticated', POL_OWNER, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `select id::text as id from public.business_members order by id`,
+      ),
+    );
+    expect(plainRows(ownerSeen).map((r) => r.id)).not.toContain(M_OUTSIDER);
   });
 
   // ─── LA FORMA DEL PREDICADO, Y A QUIÉN LE HABLA ─────────────────────────────
