@@ -107,6 +107,35 @@ export class StaffRepository {
   }
 
   /**
+   * `public.business_has_feature(business_id, 'staff_access')` — the plan's
+   * entitlement, asked to the DATABASE and not to a copy of the catalogue.
+   *
+   * The catalogue of «which plan grants which feature» lives in
+   * `packages/commons` (for the panel) and in the body of
+   * `business_has_feature` (for the engine), and the §4.5 says the two move
+   * together. A TypeScript copy of the question would be a THIRD copy, and the
+   * third one is the one that drifts: the panel and the trigger would keep
+   * agreeing with each other and the API would be the odd one out — asking the
+   * owner to upgrade for a feature the engine is still granting.
+   *
+   * The function is `stable security definer` and reads the PLAN ROW, not the
+   * caller: it answers for the business, which is what the question is about.
+   * `business_plan_of` — the function behind it — is deliberately NOT executable
+   * by `authenticated`, so this asks the client-facing version and does not
+   * reach for the internal one.
+   */
+  async hasStaffAccessFeature(businessId: string): Promise<boolean> {
+    const rows = (await this.db.execute(sql`
+      select public.business_has_feature(
+               ${businessId}::uuid,
+               'staff_access'::public.business_feature
+             ) as entitled
+    `)) as { entitled?: unknown }[];
+
+    return rows[0]?.entitled === true;
+  }
+
+  /**
    * The caller's own membership row, whatever its `status`.
    *
    * `status` is NOT filtered here on purpose. The service has to tell three

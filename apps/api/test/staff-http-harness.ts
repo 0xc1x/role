@@ -218,6 +218,15 @@ const written = new Map<string, Record<string, unknown>>();
 export const repository: Record<string, Mock> = {
   transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),
   findBusiness: jest.fn(async () => ({ id: BIZ, slug: 'panaderia-familia' })),
+  /**
+   * The plan's entitlement, and the answer every plan gives today.
+   *
+   * `business_has_feature` is the DATABASE's answer, and the database's answer
+   * today is `true` for every plan in the catalogue. A test that needs the other
+   * answer sets this mock itself: the point of the double is to be the plan
+   * table, not to have a private opinion about which plans exist.
+   */
+  hasStaffAccessFeature: jest.fn(async () => true),
   findMemberByUser: jest.fn(
     async (_businessId: string, userId: string) =>
       MEMBER_BY_USER[userId] ?? null,

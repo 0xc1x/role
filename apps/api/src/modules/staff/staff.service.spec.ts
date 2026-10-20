@@ -9,8 +9,8 @@ import * as nodeCrypto from 'node:crypto';
 import {
   BusinessMemberDeliveryCardSchema,
   BusinessMemberSchema,
+  CreateBusinessMemberSchema,
   StaffSessionStateSchema,
-  type CreateBusinessMemberDto,
   type StaffSessionState,
   type UpdateBusinessMemberAliasResponseDto,
 } from '@0xc1x/role-commons';
@@ -188,6 +188,11 @@ describe('StaffService', () => {
         id: BIZ,
         slug: 'panaderia-familia',
       })),
+      /**
+       * The plan's entitlement, and the answer every plan in the catalogue
+       * gives today. A test that needs the other answer sets this mock.
+       */
+      hasStaffAccessFeature: jest.fn(async () => true),
       findMemberByUser: jest.fn(async () => ownerRow()),
       findMemberById: jest.fn(async () => memberRow()),
       listMembersWithScope: jest.fn(async () => []),
@@ -681,6 +686,111 @@ describe('StaffService', () => {
     });
   });
 
+  // ───────────────────────────── el plan y el dueño ─────────────────────────
+
+  /**
+   * La NEGATIVA DEL PLAN, Y NO UN 500.
+   *
+   * El §5.1 le asigna la consulta de `business_has_feature` a la API, y sin ella
+   * el primer plan sin `staff_access` se topaba con el `P0001` crudo del trigger:
+   * un 500 con la prosa de Postgres en el log. El refus es del plan —un 422 con
+   * «subí de plan»—, que es lo que el panel ya sabe contestar.
+   *
+   * Y la respuesta la DA LA BASE: el doble es la tabla de planes, no una opinión
+   * sobre qué planes existen.
+   */
+  describe('el plan decide si se puede dar de alta', () => {
+    it('un plan sin la feature es un 422 del plan, y no se escribe nada', async () => {
+      repository.hasStaffAccessFeature.mockResolvedValue(false);
+
+      const error = await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      expect((error as UnprocessableEntityException).message).toContain(
+        'no incluye accesos de personal',
+      );
+      // Lo que hace que no sea un 500 disfrazado: NADA se escribió. Ni la cuenta
+      // de Auth —que dejaría el alias quemado para siempre— ni la membresía.
+      expect(authAdmin.createUser).not.toHaveBeenCalled();
+      expect(repository.insertMember).not.toHaveBeenCalled();
+      expect(repository.transaction).not.toHaveBeenCalled();
+    });
+
+    it('y la consulta va a la base, no a una copia del catálogo de planes', async () => {
+      await service.create(owner, BIZ, {
+        label: 'Carla',
+        business_location_ids: [],
+      });
+
+      expect(repository.hasStaffAccessFeature).toHaveBeenCalledWith(BIZ);
+    });
+
+    it('la lista NO se niega: el plan no bloquea leer (§5.3)', async () => {
+      repository.hasStaffAccessFeature.mockResolvedValue(false);
+
+      await service.list(owner, BIZ);
+
+      expect(repository.listMembersWithScope).toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * EL DUEÑO NO SE DEGRADA.
+   *
+   * `PATCH {"role":"manager"}` sobre la fila del propio dueño lo dejaba sin
+   * dueño: todas las puertas owner-only niegan a todos, el negocio desaparece del
+   * listado del panel y ninguna ruta puede devolver `role: 'owner'` —la
+   * promoción es un 422 desde el §5.4. No hay una línea de HTTP que lo arregle.
+   *
+   * El servicio lo niegue ANTES de escribir y por su cuenta —no leyendo el
+   * texto del trigger— porque la API escribe con `service_role` y el mensaje del
+   * trigger no es un contrato.
+   */
+  describe('el dueño no se degrada', () => {
+    it('un `role` distinto sobre la fila del dueño es un 422 que dice por qué', async () => {
+      repository.findMemberById.mockResolvedValue(ownerRow());
+
+      const error = await service
+        .update(owner, BIZ, MEMBER_OWNER, { role: 'manager' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      expect((error as UnprocessableEntityException).message).toContain(
+        'no se lo degrada',
+      );
+      // Y no se escribió nada: la fila sigue siendo la del dueño.
+      expect(repository.updateMember).not.toHaveBeenCalled();
+      expect(repository.transaction).not.toHaveBeenCalled();
+    });
+
+    it('un PATCH que NO toca el rol del dueño sigue pasando', async () => {
+      repository.findMemberById.mockResolvedValue(ownerRow());
+
+      await service.update(owner, BIZ, MEMBER_OWNER, {
+        session_ttl_hours: 24,
+      });
+
+      expect(repository.updateMember).toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_OWNER,
+        { session_ttl_hours: 24 },
+        expect.anything(),
+      );
+    });
+
+    it('un gerente NO degrada al dueño: ni por el rol ni por otra cosa', async () => {
+      repository.findMemberByUser.mockResolvedValue(managerRow([LOC_A]));
+      repository.findMemberById.mockResolvedValue(ownerRow());
+
+      await expect(
+        service.update(managerAB, BIZ, MEMBER_OWNER, { role: 'manager' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.updateMember).not.toHaveBeenCalled();
+    });
+  });
+
   // ───────────────────────────── traducción de errores ────────────────────
 
   describe('los códigos de la base se traducen a algo que un dueño pueda leer', () => {
@@ -737,10 +847,14 @@ describe('StaffService', () => {
     });
 
     it('R0002 es el dueño intocable y NO es un problema de plan', async () => {
+      // El mensaje es el del TRIGGER —la base lo escribió— y el servicio lo
+      // reenvía tal cual: el `detail` y el `hint` los pone la migración, y esta
+      // capa no los reescribe. El texto es el de
+      // `20261020052915_owner_cannot_be_demoted`.
       repository.updateMember.mockRejectedValue(
         pgError('R0002', {
           message:
-            'el dueño del negocio no se puede desactivar; degradalo a manager primero',
+            'el dueño del negocio no se puede desactivar; la transferencia de propiedad no existe en esta versión',
         }),
       );
 
@@ -750,7 +864,7 @@ describe('StaffService', () => {
 
       expect(error).toBeInstanceOf(UnprocessableEntityException);
       const message = (error as UnprocessableEntityException).message;
-      expect(message).toContain('degradalo a manager primero');
+      expect(message).toContain('no se puede desactivar');
       expect(message).not.toContain('plan');
     });
 
@@ -758,7 +872,7 @@ describe('StaffService', () => {
       repository.softDeleteMember.mockRejectedValue(
         pgError('R0002', {
           message:
-            'el dueño del negocio no se puede dar de baja; degradalo primero',
+            'el dueño del negocio no se puede dar de baja; la transferencia de propiedad no existe en esta versión',
         }),
       );
       repository.findMemberById.mockResolvedValue(ownerRow());
@@ -879,18 +993,94 @@ describe('StaffService', () => {
       });
     });
 
-    it('no borra físicamente nada: no hay DELETE en ninguna de las dos tablas', async () => {
+    /**
+     * Lo que el SERVICIO pide: un archivado y un ban.
+     *
+     * La propiedad que el nombre de este test afirma —«no hay `DELETE` en ninguna
+     * de las dos tablas»— es del REPOSITORIO, y el repositorio está mockeado
+     * acá: esta capa no puede ver el SQL. Por eso la mitad que SÍ es de esta
+     * capa se afirma (el servicio pide un archivado, no una eliminación) y la
+     * otra mitad vive en `staff.repository.spec.ts`, que lee el SQL que el
+     * repositorio emite.
+     */
+    it('la baja pide un archivado y un ban: no pide eliminar nada', async () => {
       await service.remove(owner, BIZ, MEMBER_STAFF);
 
-      expect(repository.softDeleteMember).toHaveBeenCalled();
+      // Un archivado: la fila queda y le pone `deleted_at`. Un borrado físico
+      // sería OTRA llamada al repositorio —y esta aserción la vería, porque el
+      // doble no tiene ese método y la llamada reventaría.
+      expect(repository.softDeleteMember).toHaveBeenCalledWith(
+        expect.anything(),
+        BIZ,
+        MEMBER_STAFF,
+      );
+      // Y el alcance también se archiva, no se borra: `setScope(tx, id, [])`.
+      expect(repository.setScope).toHaveBeenCalledWith(
+        expect.anything(),
+        MEMBER_STAFF,
+        [],
+      );
+      // La cuenta de Auth no se borra: se banea. Un `deleteUser` acá sería el
+      // borrado físico que el §8 deja para una operación que no existe.
       expect(authAdmin.deleteUser).not.toHaveBeenCalled();
+      expect(authAdmin.updateUserById).toHaveBeenCalledWith(STAFF_USER, {
+        ban_duration: '876000h',
+      });
     });
 
-    it('el borrado físico de auth.users queda para una operación que no existe', async () => {
-      const methods = Object.getOwnPropertyNames(StaffService.prototype);
+    /**
+     * El borrado físico de `auth.users` NO es ninguna operación — la PROPIEDAD, no
+     * el nombre.
+     *
+     * El test anterior buscaba dos NOMBRES en el prototipo (`purge` y
+     * `hardDelete`), y un nombre no es una operación: un método con otro nombre
+     * lo sobrevivía. Acá se ejecutan las ocho operaciones que el §8 expone y se
+     * afirma que NINGUNA borra la cuenta de Auth: la baja de un acceso es un
+     * `ban`, no un borrado.
+     *
+     * Y la cuenta sólo se borra cuando el MISMO request la creó y el alta falló
+     * —que es la compensación, no una operación de borrado de un acceso. Esa
+     * cuenta se identifica por su id, no por el nombre del método que la borra.
+     */
+    it('ninguna operación borra la cuenta de Auth: el borrado físico no existe', async () => {
+      const operaciones: Array<() => Promise<unknown>> = [
+        () => service.list(owner, BIZ),
+        () =>
+          service.create(owner, BIZ, {
+            label: 'Carla',
+            business_location_ids: [],
+          }),
+        () =>
+          service.update(owner, BIZ, MEMBER_STAFF, { session_ttl_hours: 12 }),
+        () =>
+          service.updateAlias(owner, BIZ, MEMBER_STAFF, {
+            alias: 'carla.nueva@panaderia.role.ec',
+          }),
+        () => service.rotatePin(owner, BIZ, MEMBER_STAFF),
+        () => service.disableAccess(owner, BIZ, MEMBER_STAFF),
+        () => service.enableAccess(owner, BIZ, MEMBER_STAFF),
+        () => service.remove(owner, BIZ, MEMBER_STAFF),
+      ];
 
-      expect(methods).not.toContain('purge');
-      expect(methods).not.toContain('hardDelete');
+      for (const operacion of operaciones) {
+        await operacion();
+      }
+
+      expect(authAdmin.deleteUser).not.toHaveBeenCalled();
+
+      // Y la excepción es la compensación, que borra la cuenta que ESTE request
+      // creó —un id que el servicio no tenía antes de la llamada— y no la de
+      // alguien que ya estaba en el equipo.
+      repository.insertMember.mockRejectedValue(
+        pgError('23505', { constraint_name: 'business_members_alias_key' }),
+      );
+
+      await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch(() => undefined);
+
+      expect(authAdmin.deleteUser).toHaveBeenCalledTimes(1);
+      expect(authAdmin.deleteUser).toHaveBeenCalledWith(NEW_AUTH_USER);
     });
   });
 
@@ -1105,15 +1295,48 @@ describe('StaffService', () => {
       );
     });
 
-    it('el cuerpo se valida con el schema de commons, no con un copia del formato', () => {
-      // El tipo del cuerpo YA es el DTO inferido del schema; lo que se asserta
-      // aquí es que el servicio no re-declara el vocabulario: no hay una lista
-      // local de roles admitidos en el archivo.
-      const body: CreateBusinessMemberDto = {
-        label: 'Carla',
-        business_location_ids: [],
-      };
-      expect(body.role).toBeUndefined();
+    /**
+     * El cuerpo lo valida el schema de `commons`, y el servicio no re-declara el
+     * vocabulario.
+     *
+     * El test anterior armaba un DTO a mano y afirmaba que `body.role` era
+     * `undefined`: no llamaba al servicio, así que no podía fallar por ninguna
+     * implementación de `StaffService`. La propiedad que el nombre afirma es
+     * «el vocabulario de roles viene del schema y el servicio no tiene una lista
+     * propia», y esa propiedad se afirma acá de la única forma que puede fallar:
+     * se da de alta un acceso POR CADA ROL QUE EL SCHEMA ADMITE, y si el servicio
+     * trajera su propia lista —más chica o más grande— uno de esos altas no
+     * ocurriría.
+     *
+     * El `owner` queda fuera del recorrido y por una razón que ya está probada
+     * en otro lado: el schema lo ADMITE (a propósito, para que el rechazo sea un
+     * 422 de producto y no un 400 de formato) y el servicio lo rechaza con un
+     * 422. Un vocabulario propio que se olvidara del `owner` convertiría ese
+     * 422 en un 400, y eso ya lo afirma el test del controlador.
+     */
+    it('el cuerpo lo valida el schema de commons: el servicio no re-declara el vocabulario', async () => {
+      const admitidos = ['staff', 'manager'] as const;
+
+      for (const role of admitidos) {
+        const body = CreateBusinessMemberSchema.parse({
+          label: `Carla ${role}`,
+          role,
+          business_location_ids: [],
+        });
+
+        await service.create(owner, BIZ, body);
+      }
+
+      // Un alta por cada rol que el schema admite: ni una más, ni una menos.
+      expect(repository.insertMember).toHaveBeenCalledTimes(admitidos.length);
+      expect(repository.insertMember).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ role: 'manager' }),
+      );
+      expect(repository.insertMember).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ role: 'staff' }),
+      );
     });
   });
 

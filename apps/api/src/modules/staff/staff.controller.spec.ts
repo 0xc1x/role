@@ -326,21 +326,41 @@ describe('la puerta NO es un @Roles: la metadata lo dice', () => {
    * `@Roles` puesto «por uniformidad con los otros controladores» deja verdes
    * todos los tests de status —`requireActor` deniega igual— y reinstala la
    * frontera equivocada DELANTE de la buena.
+   *
+   * ─── Y LA PREGUNTA ES LA DEL GUARD, NO UNA MÁS ────────────────────────────────
+   *
+   * El guard lee `getAllAndOverride(ROLES_KEY, [handler, class])`: la clase es la
+   * SEGUNDA mitad de la pregunta, y un `@Roles('business')` en la clase alcanzaría
+   * a las ocho rutas sin tocar ninguna. Un test que mirara sólo el handler no lo
+   * vería —y por eso esta aserción usa la misma forma que el guard, y no una
+   * más laxa.
    */
-  it('ninguna de las ocho pide un rol de Nest', () => {
+  it('ninguna de las ocho pide un rol de Nest, ni en la clase', () => {
     const reflector = new Reflector();
 
     for (const handler of handlers()) {
-      expect(reflector.get(ROLES_KEY, handler)).toBeUndefined();
+      expect(
+        reflector.getAllAndOverride(ROLES_KEY, [handler, StaffController]),
+      ).toBeUndefined();
     }
+
+    // Y la clase sola, para que el caso se lea también como lo que es: un
+    // `@Roles` de clase es la forma que efectivamente tomaría efecto.
+    expect(reflector.get(ROLES_KEY, StaffController)).toBeUndefined();
   });
 
   it('ninguna de las ocho es pública: el AuthGuard global es default-deny', () => {
     const reflector = new Reflector();
 
+    // La misma forma que el guard (`auth.guard.ts:53`): un `@Public` de clase
+    // abriría las ocho de una, y el guard lo leería.
     for (const handler of handlers()) {
-      expect(reflector.get(IS_PUBLIC_KEY, handler)).toBeUndefined();
+      expect(
+        reflector.getAllAndOverride(IS_PUBLIC_KEY, [handler, StaffController]),
+      ).toBeUndefined();
     }
+
+    expect(reflector.get(IS_PUBLIC_KEY, StaffController)).toBeUndefined();
   });
 
   it('sin token es 401 en las ocho', async () => {
@@ -484,6 +504,31 @@ describe('DELETE /businesses/:id/staff/:memberId', () => {
       STAFF_USER,
       expect.objectContaining({ ban_duration: expect.any(String) }),
     );
+  });
+
+  /**
+   * El 403 del gerente, INCLUYENDO con un id que no existe.
+   *
+   * El orden importa: `remove` pregunta por el rol ANTES de `requireMember`, así
+   * que un gerente recibe 403 para cualquier id —existente o no—. Al revés, el
+   * 404 le diría a un gerente qué ids existen en un negocio que sólo administra
+   * a medias: la ruta se vuelve un oráculo de existencia.
+   *
+   * El test usa un id que NO existe, y por eso puede ver la diferencia: con un id
+   * vivo, un 403 y un 404 se distinguen igual, y un cambio de orden dejaría la
+   * suite verde.
+   */
+  it('un gerente recibe 403 también con un id que no existe: la ruta no es un oráculo', async () => {
+    repository.findMemberById.mockResolvedValue(null);
+
+    const res = await (
+      await as(MANAGER_USER)
+    ).delete(`/businesses/${BIZ}/staff/${MEMBER_STAFF}`);
+
+    expect(res.status).toBe(HttpStatus.FORBIDDEN);
+    expect(res.body.message).toContain('dueño del negocio');
+    expect(repository.softDeleteMember).not.toHaveBeenCalled();
+    expect(authAdmin.updateUserById).not.toHaveBeenCalled();
   });
 
   it('un id que no es de este negocio es 404, y no se toca nada', async () => {

@@ -319,6 +319,12 @@ export class StaffService {
       throw new NotFoundException('Negocio no encontrado');
     }
 
+    // §5.1: the entitlement is consulted BEFORE the alta, and the answer comes
+    // from the database. Without this, the first plan without `staff_access`
+    // would hit the trigger's raw `P0001` and the owner would get a 500 with
+    // Postgres' prose in the log instead of the refusal he can act on.
+    await this.assertStaffAccessEntitlement(businessId);
+
     const locationIds = await this.resolveLocations(
       businessId,
       body.business_location_ids,
@@ -416,6 +422,23 @@ export class StaffService {
     if (body.role === 'owner') {
       throw new UnprocessableEntityException(
         'Un acceso no se promueve a dueño: la transferencia de propiedad no existe en esta versión.',
+      );
+    }
+
+    // ─── EL DUEÑO NO SE DEGRADA, Y HASTA QUE HAYA TRANSFERENCIA ────────────────
+    //
+    // `PATCH {"role":"manager"}` sobre la fila del PROPIO dueño lo dejaba sin
+    // dueño: las puertas owner-only niegan a todos (incluido el degradado),
+    // `listForUser` lo borra del listado del panel y ninguna ruta puede
+    // devolver `role: 'owner'` — la promoción es un 422 desde el §5.4. El
+    // negocio quedaba inmanejable e invisible con una operación de una línea.
+    //
+    // La transferencia atómica no existe en esta versión, así que degradar se
+    // NIEGA, y se niega acá —antes de escribir, y sin depender del texto del
+    // trigger— además de negarse en la base (§2 de la revisión de la Task 6).
+    if (body.role !== undefined && member.role === 'owner') {
+      throw new UnprocessableEntityException(
+        'Al dueño del negocio no se lo degrada: la transferencia de propiedad no existe en esta versión.',
       );
     }
 
@@ -1144,25 +1167,80 @@ export class StaffService {
       // wants to draw "el plan free admite 2" does not have to read Spanish to
       // get them. Nothing is invented here: the message is the trigger's and the
       // tail is the `detail`, both of them ours.
-      const numbers = this.describePlanLimit(postgresError.detail);
-      return new UnprocessableEntityException({
-        statusCode: 422,
-        error: 'Unprocessable Entity',
-        message: `${postgresError.message ?? 'El plan no admite otro acceso.'}${numbers}`,
-      });
+      return this.planRefusal(
+        postgresError.message ?? 'El plan no admite otro acceso.',
+        postgresError.detail,
+      );
     }
 
     if (postgresError.code === PG_OWNER_UNTOUCHABLE) {
       // `R0002`: the owner is untouchable and it is NOT the plan's fault. The
       // message is the trigger's own —a fixed string from our migration, and the
-      // one that names the way out ("degradalo a manager primero").
+      // one that names the reason: la transferencia de propiedad no existe en
+      // esta versión.
       return new UnprocessableEntityException(
         postgresError.message ??
-          'El dueño del negocio no se puede desactivar ni dar de baja.',
+          'El dueño del negocio no se puede desactivar, degradar ni dar de baja.',
       );
     }
 
     return this.asError(error);
+  }
+
+  /**
+   * The plan's refusal — ONE body, TWO doors.
+   *
+   * The database's `R0001` (the LIMIT) and this API's own check (the FEATURE)
+   * are the same answer for the panel: a 422, the plan as the reason, and a way
+   * out. They share the body builder so the two refusals cannot drift into two
+   * shapes, and the panel does not have to learn a second one.
+   *
+   * The `detail` is the tail: `business=… plan=… limit=… current=…` is what the
+   * trigger wrote, and the numbers go into the message for a panel that wants
+   * to draw "el plan free admite 2" without reading Spanish to get them.
+   */
+  private planRefusal(
+    message: string,
+    detail?: string,
+  ): UnprocessableEntityException {
+    const numbers = this.describePlanLimit(detail);
+    return new UnprocessableEntityException({
+      statusCode: 422,
+      error: 'Unprocessable Entity',
+      message: `${message}${numbers}`,
+    });
+  }
+
+  /**
+   * The plan's entitlement for the staff feature — asked to the DATABASE.
+   *
+   * §5.1: "de esos tres, `business_has_feature` lo consulta la API antes de
+   * cada alta". This is that consultation, and the catalogue is NOT copied here:
+   * the answer is a boolean the database gives, and the only thing this file
+   * decides is WHICH refusal to answer with.
+   *
+   * The refusal is the PLAN's (`R0001`), the same one the limit produces, and
+   * not a new code: the panel already knows that a plan refusal is a 422 whose
+   * answer is "subí de plan", and a code the panel has never seen is a code the
+   * panel cannot react to. The limit is a COUNT and the feature is an
+   * ENTITLEMENT, and a distinct code (`R0003`) would say that better — but the
+   * panel's contract today is `R0001`, and inventing a second one without the
+   * panel would break the one thing that works.
+   *
+   * The message does NOT name the plan, and that is a decision too: naming it
+   * would mean asking `business_plan_of`, which is deliberately not executable
+   * by clients (`business_has_feature` is the client-facing version of it). The
+   * refusal says what the owner has to do, and that is what the panel shows.
+   */
+  private async assertStaffAccessEntitlement(
+    businessId: string,
+  ): Promise<void> {
+    const entitled = await this.repository.hasStaffAccessFeature(businessId);
+    if (entitled) return;
+
+    throw this.planRefusal(
+      'Este plan no incluye accesos de personal: subí de plan para administrar el equipo.',
+    );
   }
 
   /** `business=… plan=… limit=… current=…` → ` (plan free: admite hasta 2, serían 3)`. */
