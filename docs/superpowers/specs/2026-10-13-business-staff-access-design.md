@@ -450,6 +450,18 @@ sentencia retroactiva.
 `owner` es intocable: ningún rol puede desactivar al dueño. La transferencia de propiedad
 queda fuera de la v1 y se anota como pendiente, no como olvidado.
 
+> **Actualizado por el Plan 2 (2026-10-20).** «Intocable» quedó más fuerte: el dueño
+> tampoco se puede **degradar** (`20261020052915`), porque una degradación sin
+> transferencia atómica deja al negocio sin dueño —invisible en el listado del panel,
+> con `business_ownership` sigue nombrándolo, y sin ninguna ruta que devuelva
+> `role: 'owner'` porque la promoción es un 422—. **La consecuencia hay que decirla:
+> mientras la transferencia no exista, un dueño de un negocio vivo no puede borrar su
+> cuenta por ninguna vía.** El detalle está en el addendum §A.2 del ADR-0013, y la
+> lista de lo que Plan 3 hereda, en el plan del Plan 2.
+>
+> La transferencia de propiedad pasó de «pendiente, no olvidado» a **el primer ítem
+> de Plan 3**, y es un hueco de producto: no es limpieza.
+
 ## 6. Cambios en RLS
 
 ### 6.1 `orders` gana columna de sucursal
