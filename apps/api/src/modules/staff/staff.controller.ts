@@ -182,7 +182,7 @@ export class StaffController {
   @ApiNotFoundResponse({ description: 'No such access in this business' })
   @ApiUnprocessableEntityResponse({
     description:
-      "Promoting to 'owner', a branch of another business, or session_ttl_hours: 0 on a staff",
+      "Promoting to 'owner', demoting the owner (the ownership transfer does not exist in this version), a branch of another business, or session_ttl_hours: 0 on a staff",
   })
   @ApiForbiddenResponse({
     description:
