@@ -42,6 +42,14 @@ mock.module("@/src/features/business/data/notifications", () => ({
 		updatePreferences: async () => ({}),
 	},
 }));
+// El módulo de los accesos del equipo se importa en `hooks.ts` desde que
+// existe `useStaffMutations`, y el suyo arrastra el cliente HTTP —que llega al
+// cliente de Supabase y de ahí a `react-native`, que bun no puede parsear—.
+// Por eso el doble va aquí también: sin él, este fichero no llega a cargarse.
+mock.module("@/src/features/business/data/staff", () => ({
+	staffRepository: {},
+	aliasWarnings: () => [],
+}));
 mock.module("@/src/features/orders/data/repository", () => ({
 	orderRepository: {},
 }));

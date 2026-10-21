@@ -7,8 +7,10 @@ import {
 import { toast } from "sonner-native";
 import { strings } from "@/src/core/i18n/strings";
 import type {
+	CreateBusinessMemberDto,
 	OrderStatus as OrderStatusType,
 	PayoutStatus as PayoutStatusType,
+	UpdateBusinessMemberDto,
 } from "@0xc1x/role-commons";
 
 import {
@@ -17,6 +19,9 @@ import {
 	saveOffer,
 } from "@/src/features/business/data/repository";
 import { notificationRepository } from "@/src/features/business/data/notifications";
+// Los accesos del equipo se administran por el API (ADR-0013 §A.1): el tope
+// del plan y el alcance del gerente son reglas del servidor, no del cliente.
+import { staffRepository } from "@/src/features/business/data/staff";
 // Los writes de pedidos (RPCs) viven en el repo de orders; estos hooks solo
 // orquestan vistas del rol negocio sobre esa API.
 import { orderRepository } from "@/src/features/orders/data/repository";
@@ -614,4 +619,128 @@ export function useValidatePickupCode(businessId: string) {
 		},
 		onError: () => toast.error(strings.business.ordersValidateError),
 	});
+}
+
+// ─── Los accesos del equipo (ADR-0013 §A.1) ────────────────────────────────
+
+/**
+ * La clave del caché donde vive la lista de accesos del negocio.
+ *
+ * El equipo tiene su propia entrada y no comparte la de los negocios: lo que
+ * pasa por `/staff` no es un dato del negocio, es quién lo opera, y las dos
+ * listas se invalidan por razones distintas.
+ */
+const staffListKey = (businessId: string) => ["staff", "list", businessId];
+
+/**
+ * Los accesos del negocio, con su rol, su estado y su alcance.
+ *
+ * La consulta se habilita sólo con un negocio: sin id no hay ruta y una
+ * consulta a `/businesses//staff` sería un 404 que nadie pidió.
+ */
+export function useStaffMembers(businessId: string) {
+	return useQuery({
+		queryKey: staffListKey(businessId),
+		queryFn: () => staffRepository.list(businessId),
+		enabled: Boolean(businessId),
+	});
+}
+
+/**
+ * Las ocho operaciones del equipo, una mutación cada una.
+ *
+ * ─── POR QUÉ NO HAY UN TOAST POR MUTACIÓN ───────────────────────────────────
+ *
+ * Porque el API ya escribe la prosa PARA esta persona —«Tu plan no admite otro
+ * acceso»— y esa prosa llega en el `AppError` con su categoría: un 422 es
+ * `business_rule`, un 409 es `conflict`, un 400 es `validation`. Un toast
+ * genérico taparía el motivo real y dejaría a la persona sin saber qué
+ * corregir. La pantalla pinta `error.message` y decide con `error.kind`.
+ *
+ * ─── Y POR QUÉ CADA UNA INVALIDA LA LISTA ────────────────────────────────────
+ *
+ * Porque la lista es la lectura de ese estado: un acceso dado de alta, editado,
+ * pausado, reactivado o dado de baja no se ve hasta que la lista se vuelve a
+ * leer. Y la transferencia invalida además los NEGOCIOS: el dueño cambió y el
+ * panel lee ese rol en `useBusinesses`.
+ *
+ * Las variables de cada mutación: `create(body)`, `update({ memberId, body })`,
+ * `updateAlias({ memberId, alias })` y —las que sólo necesitan a quién——
+ * `rotate(memberId)`, `disable(memberId)`, `enable(memberId)`,
+ * `remove(memberId)` y `transferOwnership(memberId)`.
+ */
+export function useStaffMutations(businessId: string) {
+	const queryClient = useQueryClient();
+
+	const invalidateStaffList = () => {
+		void queryClient.invalidateQueries({ queryKey: staffListKey(businessId) });
+	};
+
+	const create = useMutation({
+		mutationFn: (body: CreateBusinessMemberDto) =>
+			staffRepository.create(businessId, body),
+		onSuccess: invalidateStaffList,
+	});
+
+	const update = useMutation({
+		mutationFn: ({
+			memberId,
+			body,
+		}: {
+			memberId: string;
+			body: UpdateBusinessMemberDto;
+		}) => staffRepository.update(businessId, memberId, body),
+		onSuccess: invalidateStaffList,
+	});
+
+	const updateAlias = useMutation({
+		mutationFn: ({ memberId, alias }: { memberId: string; alias: string }) =>
+			staffRepository.updateAlias(businessId, memberId, alias),
+		onSuccess: invalidateStaffList,
+	});
+
+	const rotate = useMutation({
+		mutationFn: (memberId: string) =>
+			staffRepository.rotate(businessId, memberId),
+		onSuccess: invalidateStaffList,
+	});
+
+	const disable = useMutation({
+		mutationFn: (memberId: string) =>
+			staffRepository.disable(businessId, memberId),
+		onSuccess: invalidateStaffList,
+	});
+
+	const enable = useMutation({
+		mutationFn: (memberId: string) =>
+			staffRepository.enable(businessId, memberId),
+		onSuccess: invalidateStaffList,
+	});
+
+	const remove = useMutation({
+		mutationFn: (memberId: string) =>
+			staffRepository.remove(businessId, memberId),
+		onSuccess: invalidateStaffList,
+	});
+
+	const transferOwnership = useMutation({
+		mutationFn: (memberId: string) =>
+			staffRepository.transferOwnership(businessId, memberId),
+		onSuccess: () => {
+			invalidateStaffList();
+			// El rol del dueño cambió: el panel lo lee de `useBusinesses`.
+			void queryClient.invalidateQueries({ queryKey: ["businesses"] });
+		},
+	});
+
+	return {
+		create,
+		update,
+		updateAlias,
+		rotate,
+		disable,
+		enable,
+		remove,
+		transferOwnership,
+	};
 }
