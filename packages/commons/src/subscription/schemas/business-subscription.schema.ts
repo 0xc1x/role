@@ -40,11 +40,11 @@ export const BusinessSubscriptionSchema = z
  *
  * ─── POR QUÉ SOLO EL PLAN, Y NADA MÁS ───────────────────────────────────────
  *
- * El plan es lo único que decide quien ASIGNA el plan —el admin de plataforma—:
- * los límites y las features salen del catálogo, y mandarlos en el cuerpo sería
- * dejar que el cliente se escriba el número que el motor aplica. `.strict()`
- * convierte esa puerta de atrás en un 400 en vez de en un 200 que finge haber
- * guardado lo que el cliente creía.
+ * El plan decide QUÉ LLEGA el negocio: los límites y las features salen del
+ * catálogo, y mandarlos en el cuerpo sería dejar que el cliente se escriba el
+ * número que el motor aplica. Y el CÓDIGO del plan es lo único que el cuerpo
+ * puede traer: `.strict()` convierte esa puerta de atrás en un 400 en vez de en
+ * un 200 que finge haber guardado lo que el cliente creía.
  *
  * El `business_id` tampoco está: lo trae la ruta, y un body que pudiera
  * contradecirla es una puerta de atrás para cambiarle el plan a otro negocio.
