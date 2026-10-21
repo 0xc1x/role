@@ -634,9 +634,9 @@ export class StaffService {
    * ─── POR QUÉ LA OPERACIÓN NO SE REESCRIBE AQUÍ ─────────────────────────────
    *
    * Porque la transferencia es una operación de BASE: una función `security
-   * definer` que degrada al dueño viejo, promueve al receptor y deja
-   * `business_ownership` coherente, todo en una transacción. Dos llamadas de
-   * API dejarían una ventana con dos dueños o con ninguno, y el índice parcial
+   * definer` que degrada al dueño viejo, promueve al receptor y deja la
+   * membresía coherente, todo en una transacción. Dos llamadas de API dejarían
+   * una ventana con dos dueños o con ninguno, y el índice parcial
    * `business_members_one_owner_per_business` no lo permite.
    *
    * Y esta capa NO vuelve a decidir quién puede transferir: la función comprueba
@@ -977,9 +977,9 @@ export class StaffService {
     // dar de baja»— y el mensaje era el suyo. Hoy ese guard se fue: la baja de
     // un dueño la decide el INVARIANTE, al commit, y sólo para un negocio que
     // sigue activo. Un negocio INACTIVO puede quedarse sin dueño —es lo que
-    // hace posible la liberación— y esta puerta NO es la de la liberación: no
-    // borra la fila de `business_ownership`, y dejarla apuntando a un dueño
-    // archivado es el «huérfano silencioso» que el móvil todavía lee.
+    // hace posible la liberación— y esta puerta NO es la de la liberación: la
+    // liberación es la de `public.release_business_ownership`, que suelta al
+    // dueño del negocio junto con su alcance.
     //
     // Así que la negativa vive ACÁ, y es la misma regla que dice que un dueño
     // no se degrada ni se pausa: el dueño se va ENTREGANDO el negocio, no

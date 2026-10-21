@@ -177,7 +177,7 @@ describe('no client role holds a privilege RLS cannot govern', () => {
     ).toBeGreaterThan(30);
     // And the exact number, so a schema that lost RLS wholesale fails HERE with
     // a count in the message rather than three tests later as an empty set.
-    expect(tables).toBe(44);
+    expect(tables).toBe(43);
 
     const residue = await ctx.sql.unsafe<
       { grantee: string; table_name: string; privilege_type: string }[]
@@ -324,7 +324,7 @@ describe('no client role holds a privilege RLS cannot govern', () => {
       "the harness no longer reproduces production's RLS coverage. This file " +
         'can only claim the migration covers every RLS table in public if every ' +
         'table in public has RLS.',
-    ).toBe(44);
+    ).toBe(43);
   });
 });
 

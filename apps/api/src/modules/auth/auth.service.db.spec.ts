@@ -1,13 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import { ConflictException } from '@nestjs/common';
 import {
   businesses,
   businessFinance,
   businessMemberLocations,
   businessMembers,
-  businessOwnership,
   consumerNotificationPreferences,
   deviceTokens,
   marketingPreferences,
@@ -397,8 +396,8 @@ describe('AuthAccountRepository.delete (DB real)', () => {
       { status: 'completed' },
     );
 
-    // The owner's OWNERSHIP is what retains them, and it is a membership now:
-    // the owner of a business has a row in `business_members` with
+    // The owner's OWNERSHIP is what retains them, and it is a membership: the
+    // owner of a business has a row in `business_members` with
     // `role = 'owner'`, and `owner_memberships` is the number that says «this
     // account administers a business and cannot be erased».
     const retained = await accounts().countRetained(ownerId);
@@ -421,33 +420,27 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     // The customer's order, and the business itself, are still there.
     expect(await orderRow(customerOrder.id)).not.toBeNull();
     const [stillOwned] = await ctx.db
-      .select({ owner: businessOwnership.owner_id })
-      .from(businessOwnership)
-      .where(eq(businessOwnership.business_id, business.id));
-    expect(stillOwned?.owner).toBe(ownerId);
+      .select({ user_id: businessMembers.user_id })
+      .from(businessMembers)
+      .where(eq(businessMembers.business_id, business.id));
+    expect(stillOwned?.user_id).toBe(ownerId);
   });
 
   /**
-   * The `businesses` counter comes from the MEMBERSHIP, not from the legacy row.
+   * The `businesses` counter comes from the MEMBERSHIP.
    *
    * The counter is half of the erase gate: it says whether the account still
-   * administers a business. The row that says so is `business_members`, which is
-   * the table that survives the retirement of `business_ownership` —and the
-   * legacy row is the one that goes away.
+   * administers a business. The row that says so is `business_members`, la
+   * única que queda: la fila de propiedad se retiró con su tabla.
    *
-   * The test moves the legacy row to ANOTHER person and asserts the counter
-   * does not move with it: the owner still owns a business (1) and the other
-   * person owns none (0), even though the legacy row names them.
+   * El dueño cuenta 1 y un tercero cuenta 0, que es lo que la puerta necesita:
+   * el que administra un negocio no puede borrarse, y el que no administra
+   * ninguno puede.
    */
-  test('el conteo de negocios sale de la membresía de dueño, no de la fila vieja', async () => {
+  test('el conteo de negocios sale de la membresía de dueño', async () => {
     const ownerId = await seedProfile(ctx.db);
     const otroId = await seedProfile(ctx.db);
     const business = await seedBusiness(ctx.db, ownerId);
-
-    await ctx.db
-      .update(businessOwnership)
-      .set({ owner_id: otroId })
-      .where(eq(businessOwnership.business_id, business.id));
 
     const delDueño = await accounts().countRetained(ownerId);
     expect(delDueño.businesses).toBe(1);
@@ -993,34 +986,41 @@ describe('the erase with a membership (DB real)', () => {
       );
     });
 
-    test('al borrar la cuenta, la fila de propiedad del negocio inactivo se borra', async () => {
+    test('al borrar la cuenta, el negocio inactivo queda sin dueño vivo', async () => {
       const { userId, businessId, memberId } = await seedOwner({
         is_active: false,
       });
 
-      // La fila de propiedad es la que el móvil lee para saber de quién es el
-      // negocio. Dejarla apuntando a una persona que se va es el huérfano
-      // silencioso: un negocio que dice tener un dueño y no tiene a nadie.
+      // El dueño de un negocio es su membresía, y la de un negocio INACTIVO se
+      // archiva cuando la persona se va: el negocio queda sin dueño vivo, que es
+      // el estado que la base sabe reponer por la puerta de la plataforma.
       const antes = await ctx.db
-        .select({ owner: businessOwnership.owner_id })
-        .from(businessOwnership)
-        .where(eq(businessOwnership.business_id, businessId));
+        .select({ user_id: businessMembers.user_id })
+        .from(businessMembers)
+        .where(eq(businessMembers.business_id, businessId));
       expect(antes).toHaveLength(1);
 
       await accounts().anonymise(userId);
 
-      const despues = await ctx.db
-        .select({ owner: businessOwnership.owner_id })
-        .from(businessOwnership)
-        .where(eq(businessOwnership.business_id, businessId));
-      expect(despues).toHaveLength(0);
-
       // Y la membresía quedó ARCHIVADA, no borrada: la fila sigue ahí para
-      // saber quién operó en el negocio.
+      // saber quién operó en el negocio, y no es un dueño vivo —el panel del
+      // dueño queda vacío y el negocio no lo nombra a nadie.
       expect(await memberRow(memberId)).toMatchObject({
         role: 'owner',
         deleted_at: expect.anything(),
       });
+
+      const vivos = await ctx.db
+        .select({ user_id: businessMembers.user_id })
+        .from(businessMembers)
+        .where(
+          and(
+            eq(businessMembers.business_id, businessId),
+            eq(businessMembers.role, 'owner'),
+            isNull(businessMembers.deleted_at),
+          ),
+        );
+      expect(vivos).toHaveLength(0);
     });
 
     test('al borrar la cuenta, las filas de alcance quedan archivadas', async () => {

@@ -39,6 +39,7 @@ import {
 } from '../app-config/outbound-addresses';
 import {
   BusinessesRepository,
+  type DbExecutor,
   type BusinessRow,
   type BusinessUpdate,
   type BusinessLocationUpdate,
@@ -53,6 +54,18 @@ const PLATFORM_CONTROLLED_BUSINESS_FIELDS = [
   'verification_status',
   'rejection_reason',
 ] as const;
+
+/**
+ * `R0002`: el guard de la base que dice que un negocio sin dueño vivo no
+ * vuelve a la vida.
+ *
+ * La aprobación de la moderación ES una activación —`apply_business_verification_state`
+ * hace `update businesses set is_active = (new.verification_status = 'approved')`—,
+ * así que aprobar un negocio sin dueño vivo aborta con este código. Es la
+ * consecuencia buscada de la regla D2, y la regla del módulo de personal lo
+ * traduce igual: 422 con el mensaje de la base.
+ */
+const PG_BUSINESS_NEEDS_OWNER = 'R0002';
 
 @Injectable()
 export class BusinessesService {
@@ -375,7 +388,7 @@ export class BusinessesService {
       }
     }
 
-    const updated = await this.businessesRepository.transaction(async (tx) => {
+    const updated = await this.runBusinessWrite(async (tx) => {
       const patch: BusinessUpdate = {};
       if (body.name !== undefined) patch.name = body.name;
       if (body.type !== undefined) patch.type = body.type;
@@ -423,6 +436,74 @@ export class BusinessesService {
     });
 
     return BusinessMapper.toDto(updated);
+  }
+
+  /**
+   * UNA ESCRITURA DE NEGOCIO, Y LA TRADUCCIÓN DE SUS REFUSOS.
+   *
+   * La base es la frontera (ADR-0002) y por eso es la que dice «no»: un
+   * trigger de Postgres levanta un `errcode` de dominio y esta API lo traduce
+   * a una respuesta que el panel sabe pintar. Sin esta traducción, un `R0002`
+   * salía como un 500 —un error de servidor para una regla de negocio— y el
+   * panel no tenía nada que mostrar.
+   *
+   * ─── EL `R0002` DE LA APROBACIÓN, Y POR QUÉ NO ES UN 500 ───────────────────
+   *
+   * Aprobar un negocio SIN dueño vivo aborta: la moderación publica con un
+   * `update businesses set is_active = true`, y ese `update` dispara la guarda
+   * de reactivación, que exige un dueño vivo. Es la regla de D2 —«un negocio
+   * sin dueño no vuelve a la vida»— y la excepción es la de siempre: la
+   * plataforma le devuelve el dueño primero, con
+   * `POST /businesses/:businessId/ownership/restore`.
+   *
+   * El mensaje NO se reescribe: es el de la base, con su `hint`, que ya nombra
+   * la puerta que existe. Un 422 con ese texto es una instrucción; un 500 es un
+   * ticket.
+   */
+  private async runBusinessWrite<T>(
+    write: (tx: DbExecutor) => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await this.businessesRepository.transaction(write);
+    } catch (error) {
+      throw this.mapBusinessWriteError(error);
+    }
+  }
+
+  /**
+   * El error de la base, traducido. Un `R0002` es un 422 con el mensaje de la
+   * base; cualquier otra cosa se devuelve tal cual, porque un error que esta
+   * capa no conoce es un error que esta capa no debe inventar.
+   *
+   * El `errcode` se busca en el error Y en su `cause`: Drizzle envuelve el
+   * error de Postgres en un `DrizzleQueryError` que no copia el código, así que
+   * un `error.code === 'R0002'` solo no encontraría nunca nada.
+   */
+  private mapBusinessWriteError(error: unknown): unknown {
+    const candidates = [
+      error,
+      (error as { cause?: unknown } | null)?.cause,
+    ] as unknown[];
+    for (const candidate of candidates) {
+      const postgresError = candidate as {
+        code?: string;
+        message?: string;
+        hint?: string;
+      } | null;
+      if (postgresError?.code !== PG_BUSINESS_NEEDS_OWNER) continue;
+      const reason = postgresError.message;
+      const door = postgresError.hint;
+      return new UnprocessableEntityException(
+        [
+          reason ??
+            'Este negocio no tiene un dueño vivo, y no se puede activar.',
+          door,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+    }
+    return error;
   }
 
   async remove(user: AuthUser, id: string): Promise<void> {

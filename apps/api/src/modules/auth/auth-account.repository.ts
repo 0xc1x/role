@@ -75,10 +75,9 @@ export class AuthAccountRepository {
    * BUT ORDERS ALONE ARE NOT THE CONDITION, and the other two are the reason
    * this method exists rather than a single `countOrders`:
    *
-   *  - `businesses` — the ownership of a business lived in `business_ownership`
-   *    (whose `owner_id` is `ON DELETE CASCADE` from `profiles`) and now lives
-   *    in the owner's `business_members` row (whose `user_id` is `ON DELETE
-   *    CASCADE` from `profiles` too). A business owner who never placed an
+   *  - `businesses` — the ownership of a business lives in the owner's
+   *    `business_members` row (whose `user_id` is `ON DELETE CASCADE` from
+   *    `profiles`). A business owner who never placed an
    *    order passes a "no orders" test, and erasing their profile takes the
    *    business with it — and with it every order that business's OTHER
    *    customers placed, since `orders.business_id` cascades too. That is a
@@ -129,10 +128,8 @@ export class AuthAccountRepository {
    * distintas: uno cuenta los negocios que la cuenta dirige, y el otro cuenta
    * los que la bloquearían.
    *
-   * La fila de `business_ownership` era el espejo de esto y se retira con la
-   * Task 10: leerla sería leer una tabla que ya no existe, y su número y el
-   * de la membresía son iguales en producción (16 negocios, 16 filas de
-   * propiedad, 16 membresías de dueño vivas: medido).
+   * La fila de `business_ownership` era el espejo de esto y se retiró con la
+   * Task 10: leerla sería leer una tabla que ya no existe.
    */
   async countRetained(userId: string): Promise<RetainedRecords> {
     const [orderCount] = await this.db
@@ -287,21 +284,19 @@ export class AuthAccountRepository {
       //
       // ─── POR QUÉ UNA FUNCIÓN DE LA BASE Y NO UN `DELETE` AQUÍ ─────────────────
       //
-      // Porque «liberado» es una regla de TRES partes —la membresía de dueño
-      // archivada, su alcance archivado y la fila de `business_ownership`
-      // borrada— y la base es la frontera (ADR-0002): el móvil escribe directo
-      // a Supabase y no pasa por esta API. La función
-      // `public.release_business_ownership` la dice una vez, y esta API la
-      // PREGUNTA.
+      // Porque «liberado» es una regla de DOS partes —la membresía de dueño
+      // archivada y su alcance archivado con ella— y la base es la frontera
+      // (ADR-0002): el móvil escribe directo a Supabase y no pasa por esta API.
+      // La función `public.release_business_ownership` la dice una vez, y esta
+      // API la PREGUNTA.
       //
       // ─── Y POR QUÉ VA PRIMERO, Y NO DESPUÉS ───────────────────────────────────
       //
       // Porque la liberación exige que el actor sea el dueño VIVO del negocio:
       // si las membresías se archivaran primero, la liberación no encontraría a
-      // su dueño, la fila de `business_ownership` sobreviviría nombrando a una
-      // persona que se va, y el negocio quedaría diciendo que tiene un dueño
-      // que no tiene. Es el huérfano silencioso, y el ORDEN es lo que lo
-      // evita.
+      // su dueño, el negocio quedaría diciendo que tiene un dueño que no tiene,
+      // y el dueño que se va seguiría siendo el dueño de un negocio que ya no
+      // lo admite. Es el huérfano silencioso, y el ORDEN es lo que lo evita.
       await this.releaseOwnedBusinesses(tx, userId);
 
       await tx
@@ -373,10 +368,10 @@ export class AuthAccountRepository {
    * The ownership of the businesses this account owns, RELEASED.
    *
    * The rule of what a release is lives in the database
-   * (`public.release_business_ownership`): the owner's membership is archived,
-   * its scope rows are archived with it, and the `business_ownership` row of
-   * that business is deleted —because that row is the one the mobile reads to
-   * know whose business it is, and leaving it names a person who is leaving.
+   * (`public.release_business_ownership`): the owner's membership is archived
+   * and its scope rows are archived with it —because the membership is the one
+   * the mobile reads to know whose business it is, and leaving it live names a
+   * person who is leaving.
    *
    * The business itself is NOT deleted and NOT reactivated: a retirement is
    * not a deletion. The other members are NOT touched: the team that stays
@@ -440,9 +435,9 @@ export class AuthAccountRepository {
    * ledger that is not theirs to erase.
    *
    * Not listed, because they cascade in BOTH places and are this account's own:
-   * `marketing_preferences`, `segment_users`, `push_sends`, `saved_addresses`,
-   * `business_ownership` (zero by the gate, and deleting a business here would
-   * be the cascade disaster `countRetained` exists to prevent).
+   * `marketing_preferences`, `segment_users`, `push_sends`, `saved_addresses`
+   * (deleting a business here would be the cascade disaster `countRetained`
+   * exists to prevent).
    *
    * ─── Y LAS MEMBRESÍAS, QUE ANTES DE ESTO NO TENÍAN GUARDA PROPIA ────────────
    *
@@ -462,8 +457,8 @@ export class AuthAccountRepository {
    *
    * Y la LIBERACIÓN va antes que el archivado, por el mismo motivo que en
    * `anonymise`: la liberación exige que el actor sea el dueño vivo, y si las
-   * membresías se cerraran primero la fila de `business_ownership` sobreviviría
-   * nombrando a una persona que se va.
+   * membresías se cerraran primero el negocio se quedaría con un dueño que no
+   * puede administrar nada.
    *
    * One transaction: a partial erase is the one outcome that is worse than not
    * erasing at all.

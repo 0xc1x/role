@@ -529,7 +529,7 @@ describe('AnnouncementsService', () => {
 
     it('un negocio con dos dueños suma los dos, y no se queda con uno', async () => {
       // La cardinalidad es de la BASE, no del código: hoy
-      // `business_ownership_pkey` es PRIMARY KEY (business_id) y no admite dos,
+      // la fila de dueño es PRIMARY KEY (business_id) y no admite dos,
       // pero la resolución no puede apoyarse en eso. Un `Map` de
       // negocio → dueño que se quede con el último perdería a un dueño el día
       // que la co-propiedad entre, y el aviso se publicaría más corto sin que
@@ -613,7 +613,7 @@ describe('AnnouncementsService', () => {
     });
 
     it('resuelve con el token del operador, no con la conexión de la API', async () => {
-      // La lectura de `business_ownership` va por PostgREST con la sesión de
+      // La lectura de los dueños va por PostgREST con la sesión de
       // quien publica: la conexión de la API es `service_role` y vería los
       // dueños sin que ninguna policy opinara.
       repository.ownerIdsForBusinesses.mockResolvedValue(
@@ -637,7 +637,7 @@ describe('AnnouncementsService', () => {
       ]);
     });
 
-    it('no consulta business_ownership si no hay negocios elegidos', async () => {
+    it('no consulta los dueños si no hay negocios elegidos', async () => {
       repository.insert.mockResolvedValue(makeRow());
 
       await service.create(
@@ -741,7 +741,7 @@ describe('AnnouncementsService', () => {
     it('sin token no resuelve y no publica: es un 500, no un negocio sin dueño', async () => {
       // La ruta es `@Roles('admin')`, así que el guard ya verificó un JWT. Si la
       // cabecera no llega, resolver por `anon` no puede: no hay grant ni policy
-      // sobre `business_ownership`, la lectura saldría vacía y TODOS los
+      // sobre la membresía, la lectura saldría vacía y TODOS los
       // negocios parecerían sin dueño — un rechazo con un motivo falso.
       const fallo = await service
         .create(

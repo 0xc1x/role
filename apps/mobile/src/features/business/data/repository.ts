@@ -432,14 +432,14 @@ export const businessRepository = {
 		const businessResult = await supabase
 			.from("businesses")
 			.insert({
-				// owner_id is NOT sent by the client. It lives in
-				// business_ownership and the database derives it from auth.uid()
-				// on insert, so ownership can no longer be written by a caller.
+				// owner_id is NOT sent by the client. The database derives the
+				// owner from auth.uid() on insert, so ownership can no longer be
+				// written by a caller.
 				//
-				// The owner's panel does NOT read that row: it reads the live
-				// ownership MEMBERSHIP in `business_members` — see
-				// `getBusinessesByOwnerId`. The API's alta writes both; this
-				// insert only gets the legacy row from the database trigger.
+				// The owner's panel reads the live ownership MEMBERSHIP in
+				// `business_members` — see `getBusinessesByOwnerId` — and that
+				// membership is what the database trigger writes on insert. The
+				// API's alta writes it itself, in its own transaction.
 				name: input.name,
 				slug,
 				type: input.type,

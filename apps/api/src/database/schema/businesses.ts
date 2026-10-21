@@ -10,10 +10,10 @@ import {
 import { businessTypeEnum } from './enums';
 
 // Solo datos públicos: `owner_id`, `balance`, `commission_rate` y el estado de
-// moderación viven en business_ownership / business_finance /
-// business_moderation (ver business-companions.ts) para que anon pueda tener
-// SELECT de tabla sobre `businesses`, que PostgREST necesita para resolver
-// relaciones.
+// moderación viven en business_members / business_finance /
+// business_moderation (ver business-companions.ts y business-members.ts) para
+// que anon pueda tener SELECT de tabla sobre `businesses`, que PostgREST
+// necesita para resolver relaciones.
 export const businesses = pgTable('businesses', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),

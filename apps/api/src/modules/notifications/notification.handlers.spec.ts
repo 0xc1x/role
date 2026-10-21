@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
-import { businessOwnership, favorites } from '../../database/schema';
+import { favorites } from '../../database/schema';
 import { createTestDb, type TestDbContext } from '../../../test/db';
 import {
   seedBusiness,
@@ -75,13 +75,13 @@ describe('NotificationHandlers.onOrderStatusChanged (DB real)', () => {
   });
 
   /**
-   * `business_ownership` no era un permiso acá: era una REGLA DE PRESENCIA, y
-   * la regla ahora la dice el modelo de membresías.
+   * La fila de propiedad no era un permiso acá: era una REGLA DE PRESENCIA, y la
+   * regla ahora la dice el modelo de membresías.
    *
    * El handler resuelve «a quién se avisa del pedido» con un `INNER JOIN`
-   * contra la tabla de dueño, así que un negocio SIN fila de dueño devolvía
-   * cero filas y el `if (!row) return;` se comía la notificación entera: no se
-   * avisaba ni al comprador ni al negocio, sin error y sin log.
+   * contra la fila de dueño, así que un negocio SIN dueño devolvía cero filas y
+   * el `if (!row) return;` se comía la notificación entera: no se avisaba ni al
+   * comprador ni al negocio, sin error y sin log.
    *
    * ─── LA REGLA NUEVA, DICHA ───────────────────────────────────────────────────
    *
@@ -98,7 +98,7 @@ describe('NotificationHandlers.onOrderStatusChanged (DB real)', () => {
    *  - con dueño vivo, SÍ se avisa, aunque el negocio no tenga la fila vieja.
    *
    * El segundo es el que dice que la fila vieja ya no gobierna nada: si el
-   * `INNER JOIN` contra `business_ownership` se quedara, ese test falla. Y el
+   * `INNER JOIN` contra la fila de propiedad se quedara, ese test falla. Y el
    * primero es el que dice que la fila vieja tampoco alcanza para AVISAR: si
    * el `INNER JOIN` se hubiera cambiado por un `LEFT JOIN`, ese test fallaría.
    *
@@ -111,9 +111,8 @@ describe('NotificationHandlers.onOrderStatusChanged (DB real)', () => {
 
     const owner = await seedProfile(ctx.db);
     const buyer = await seedProfile(ctx.db);
-    // El negocio TIENE la fila vieja y NO tiene membresía de dueño: es el
-    // estado que decide la regla nueva, y el que la regla vieja resolvía al
-    // revés.
+    // El negocio NO tiene membresía de dueño: es el estado que decide la regla
+    // nueva.
     const biz = await seedBusiness(ctx.db, owner, { owner_membership: false });
     const loc = await seedLocation(ctx.db, biz.id);
     const offer = await seedOffer(ctx.db, biz.id, loc.id);
@@ -125,17 +124,12 @@ describe('NotificationHandlers.onOrderStatusChanged (DB real)', () => {
     expect(send.calls).toHaveLength(0);
   });
 
-  test('un negocio con dueño vivo notifica, aunque no tenga la fila vieja', async () => {
+  test('un negocio con dueño vivo notifica', async () => {
     send.calls.length = 0;
 
     const owner = await seedProfile(ctx.db);
     const buyer = await seedProfile(ctx.db);
     const biz = await seedBusiness(ctx.db, owner);
-    // El negocio conserva su membresía de dueño y PIERDE la fila vieja: el
-    // estado que produce el `drop table` de la Task 10.
-    await ctx.db
-      .delete(businessOwnership)
-      .where(eq(businessOwnership.business_id, biz.id));
     const loc = await seedLocation(ctx.db, biz.id);
     const offer = await seedOffer(ctx.db, biz.id, loc.id);
     const order = await seedOrder(ctx.db, buyer, offer.id, biz.id);

@@ -5,7 +5,6 @@ import {
   businessFinance,
   businessMembers,
   businessModeration,
-  businessOwnership,
   emailSends,
   emailTemplates,
   profiles,
@@ -53,10 +52,10 @@ describe('BusinessesRepository (DB real)', () => {
   });
 
   /**
-   * The owner lands in the MEMBERSHIP, and the legacy row is nobody's business.
+   * The owner lands in the MEMBERSHIP, and that is the only place he lands.
    *
    * `business_ownership` was the table Plan 3 drops, and the API was its last
-   * writer: the trigger `trg_bootstrap_business_companions` only writes it when
+   * writer: the trigger `trg_bootstrap_business_companions` only wrote it when
    * `auth.uid()` is set, and the API connects as the pooler role, where it is
    * not. So the row existed only because this method wrote it, and once the
    * readers moved to the membership model there was nothing left for it to be.
@@ -64,7 +63,7 @@ describe('BusinessesRepository (DB real)', () => {
    * The membership is what survives: it is the row that decides who the owner
    * is, and the one the transfer, the release and the recovery all move.
    */
-  test('insert deja al dueño en la membresía, y no escribe la fila vieja', async () => {
+  test('insert deja al dueño en la membresía', async () => {
     const row = await repo.insert(ctx.db, {
       owner_id: ownerId,
       name: 'Panadería La Espiga',
@@ -84,14 +83,6 @@ describe('BusinessesRepository (DB real)', () => {
     expect(membership?.session_ttl_hours).toBe(0);
     // Y el alias espeja el correo del dueño, como el backfill.
     expect(membership?.alias).toBe('owner@biz.cl');
-
-    // Y la fila vieja NO la escribe el API: la tabla que Plan 3 dropea ya no
-    // tiene un escritor en esta API.
-    const legacy = await ctx.db
-      .select()
-      .from(businessOwnership)
-      .where(eq(businessOwnership.business_id, row.id));
-    expect(legacy).toHaveLength(0);
   });
 
   /**
@@ -193,25 +184,17 @@ describe('BusinessesRepository companions (DB real)', () => {
 
   /**
    * The DTO's `owner_id` is a FACT of the row, and it comes from the
-   * membership model now.
+   * membership model.
    *
-   * The test moves the LEGACY row to another person and asserts that the
-   * aggregate does not move with it. If the aggregate still read
-   * `business_ownership`, the `owner_id` of the DTO would name somebody who
-   * does not own anything —and the table that says so is the one Plan 3 drops.
+   * El agregado toma el dueño VIVO de la membresía, y la membresía archivada
+   * cuando no hay ninguna viva —que es el caso del negocio liberado, medido en
+   * la prueba de abajo. La fila de propiedad, la que Plan 3 retiró, no participa
+   * de nada de esto.
    */
-  test('el dueño del negocio sale de la membresía, no de la fila vieja', async () => {
+  test('el dueño del negocio sale de la membresía', async () => {
     const owner = await seedProfile(ctx.db);
-    const otro = await seedProfile(ctx.db);
     const biz = await seedBusiness(ctx.db, owner);
 
-    // La fila vieja dice otra persona...
-    await ctx.db
-      .update(businessOwnership)
-      .set({ owner_id: otro })
-      .where(eq(businessOwnership.business_id, biz.id));
-
-    // ...y el agregado no se mueve: la membresía de dueño manda.
     const row = await repo.findById(biz.id);
     expect(row?.owner_id).toBe(owner);
   });

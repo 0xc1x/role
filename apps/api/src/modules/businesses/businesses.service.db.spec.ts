@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
-import { businessModeration } from '../../database/schema';
+import { UnprocessableEntityException } from '@nestjs/common';
+import {
+  businessMembers,
+  businessModeration,
+  businesses,
+} from '../../database/schema';
 import { createTestDb, type TestDbContext } from '../../../test/db';
 import { seedBusiness, seedLocation, seedProfile } from '../../../test/seed';
 import { BusinessesService } from './businesses.service';
@@ -142,6 +147,61 @@ describe('BusinessesService verificación (DB real)', () => {
       .from(businessModeration)
       .where(eq(businessModeration.business_id, biz.id));
     expect(moderation?.verification_status).toBe('pending');
+  });
+
+  /**
+   * APROBAR UN NEGOCIO SIN DUEÑO VIVO ES UN 422, NO UN 500.
+   *
+   * La moderación publica con un `update businesses set is_active = true`, y ese
+   * `update` dispara la guarda de la base que exige un dueño vivo: sin él, el
+   * negocio se quedaría activo y sin dueño, que es el estado que el plan
+   * llama el invariante roto.
+   *
+   * La negativa es de la BASE, y la base la dice con un `R0002` y un mensaje
+   * que nombra la puerta que sí existe. Sin traducción, ese `R0002` salía del
+   * API como un 500 —un error de servidor para una regla de negocio— y el
+   * panel del admin no tenía nada que pintar.
+   */
+  test('aprobar un negocio sin dueño vivo es un 422 que dice qué hacer', async () => {
+    // Un negocio SIN dueño VIVO: el fixture lo siembra con su dueño y le
+    // archiva la membresía, que es exactamente lo que deja una liberación.
+    //
+    // (Sin fila de dueño no serviría: un negocio sin fila de dueño no tiene
+    // ni fila de propietario para el agregado del API, y el panel ni lo
+    // encontraría —un problema de otra cosa, y de la que el plan ya se ocupa
+    // en otro lado.)
+    const biz = await seedBusiness(ctx.db, ownerId, {
+      is_active: false,
+      verification_status: 'pending',
+    });
+    await ctx.db
+      .update(businessMembers)
+      .set({ deleted_at: new Date() })
+      .where(eq(businessMembers.business_id, biz.id));
+
+    let caught: unknown;
+    try {
+      await service.update(adminUser, biz.id, {
+        verification_status: 'approved',
+      } as never);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(UnprocessableEntityException);
+    const response = caught as UnprocessableEntityException;
+    expect(response.getStatus()).toBe(422);
+    const message = JSON.stringify(response.getResponse());
+    expect(message).toContain('dueño');
+    // Y nombra la puerta que existe: la de devolverle el dueño.
+    expect(message).toContain('ownership/restore');
+
+    // Y el negocio NO se activó: la transacción se fue entera.
+    const [row] = await ctx.db
+      .select()
+      .from(businesses)
+      .where(eq(businesses.id, biz.id));
+    expect(row?.is_active).toBe(false);
   });
 });
 

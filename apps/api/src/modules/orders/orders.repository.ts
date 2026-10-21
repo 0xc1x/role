@@ -142,9 +142,9 @@ export class OrdersRepository {
    * ─── POR QUÉ SE SACA EL JOIN Y NO SE CAMBIA DE TABLA ────────────────────────
    *
    * Cambiarlo por `business_members` habría dejado el mismo conjunto de filas
-   * —los 16 negocios tienen fila de dueño en las dos tablas— pero con una
-   * diferencia que ningún tipo avisa: el join contra `business_ownership` sigue
-   * existiendo cuando el dueño se degrada a `manager`, y el join contra
+   * —cada negocio tiene fila de dueño en su membresía— pero con una diferencia
+   * que ningún tipo avisa: el join contra la fila de dueño seguía existiendo
+   * cuando el dueño se degradaba a `manager`, y el join contra
    * `business_members` no. Con el join nuevo, los pedidos de un negocio sin
    * dueño desaparecerían —404 en lugar de 403— y la fila del pedido dejaría de
    * depender de una pregunta de permiso. La existencia de un pedido no es una

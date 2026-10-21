@@ -146,7 +146,7 @@ describe('AnnouncementsController', () => {
     it('create sin cabecera pasa null y no una cadena vacía', async () => {
       // `null` es lo que el service distingue de "hay sesión": resolver los
       // dueños sin token saldría como `anon`, que no tiene grant sobre
-      // `business_ownership`, y todos los negocios parecerían sin dueño.
+      // la membresía, y todos los negocios parecerían sin dueño.
       service.create.mockResolvedValue(dto);
 
       await controller.create({ ...dto });

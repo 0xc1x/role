@@ -71,8 +71,8 @@ export class OwnershipController {
    *
    * The operation is ONE database transaction: the old owner is demoted, the
    * recipient is promoted, the outgoing owner keeps the scope of every branch,
-   * and `business_ownership` is pointed at the new owner — all of it together,
-   * so there is never a moment in which the business has two owners or none.
+   * and the owner membership points at the new owner — all of it together, so
+   * there is never a moment in which the business has two owners or none.
    */
   @Post('transfer')
   @HttpCode(HttpStatus.OK)

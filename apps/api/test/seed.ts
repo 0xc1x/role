@@ -6,7 +6,6 @@ import {
   businessLocations,
   businessMembers,
   businessModeration,
-  businessOwnership,
   businesses,
   categories,
   offers,
@@ -72,7 +71,7 @@ export async function seedBusinessMember(
 }
 
 /**
- * Inserta el negocio y sus tres companions. El espejo no tiene los triggers de
+ * Inserta el negocio y sus dos companions. El espejo no tiene los triggers de
  * Supabase que crean estas filas, así que el seed las escribe explícitamente
  * (mismo inventario que el backfill de la migración).
  *
@@ -115,9 +114,6 @@ export async function seedBusiness(
     })
     .returning();
   if (!row) throw new Error('seedBusiness falló');
-  await db
-    .insert(businessOwnership)
-    .values({ business_id: row.id, owner_id: ownerId });
   if (overrides.owner_membership !== false) {
     const [ownerProfile] = await db
       .select({ email: profiles.email })

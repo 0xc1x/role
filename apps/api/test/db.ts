@@ -744,21 +744,6 @@ export async function createTestDb(): Promise<TestDbContext> {
             hint = 'el borrado es lógico: la fila queda para saber quién operó en el negocio';
       end if;
 
-      if to_regclass('public.business_ownership') is not null then
-        if exists (
-          select 1
-            from public.business_ownership o
-           where o.business_id = old.business_id
-             and o.owner_id = old.user_id
-        ) then
-          raise exception 'el dueño del negocio no se puede borrar mientras el negocio lo nombre como su dueño: liberá la propiedad primero'
-            using
-              errcode = 'R0002',
-              detail = format('business=%s member=%s', old.business_id, old.id),
-              hint = 'la liberación archiva la membresía y borra la fila de propiedad en la misma transacción';
-        end if;
-      end if;
-
       return old;
     end;
     $fn$;
@@ -829,11 +814,6 @@ export async function createTestDb(): Promise<TestDbContext> {
              updated_at = now()
        where member_id = v_member.id
          and deleted_at is null;
-
-      if to_regclass('public.business_ownership') is not null then
-        delete from public.business_ownership
-         where business_id = p_business_id;
-      end if;
 
       return jsonb_build_object(
         'business_id', p_business_id,
@@ -921,13 +901,6 @@ export async function createTestDb(): Promise<TestDbContext> {
          set role = 'owner'::public.business_member_role,
              updated_at = now()
        where id = v_member.id;
-
-      if to_regclass('public.business_ownership') is not null then
-        insert into public.business_ownership (business_id, owner_id)
-        values (p_business_id, v_member.user_id)
-        on conflict (business_id)
-        do update set owner_id = excluded.owner_id, updated_at = now();
-      end if;
 
       return jsonb_build_object(
         'business_id', p_business_id,
