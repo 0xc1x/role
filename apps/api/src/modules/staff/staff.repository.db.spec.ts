@@ -2,6 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import {
+  BUSINESS_PLAN_FEATURES,
+  BUSINESS_PLAN_LIMITS,
+} from '@0xc1x/role-commons';
+import {
   createSupabaseTestDb,
   type SupabaseTestDb,
 } from '../../../test/supabase-platform';
@@ -193,17 +197,24 @@ describe('el derecho del negocio a la feature de personal', () => {
         plan: 'pro',
       });
     } finally {
+      // El catálogo se vuelve a armar con el ESPEJO de `packages/commons`, no
+      // con números escritos a mano: una restaura con literales devolvería
+      // los topes viejos si el seed cambiara, y el spec seguiría en verde
+      // contra un catálogo que ya no es el de producción.
+      const limits = BUSINESS_PLAN_LIMITS.pro;
       await ctx.sql.unsafe(
         `insert into public.subscription_plans
            (code, audience, max_locations, max_members, is_active)
-         values ('pro', 'business', 5, 20, true)
+         values ('pro', 'business', ${limits.locations}, ${limits.members}, true)
          on conflict do nothing`,
       );
-      await ctx.sql.unsafe(
-        `insert into public.subscription_plan_features (plan_code, feature)
-         values ('pro', 'staff_access'), ('pro', 'payments')
-         on conflict do nothing`,
-      );
+      for (const feature of BUSINESS_PLAN_FEATURES.pro) {
+        await ctx.sql.unsafe(
+          `insert into public.subscription_plan_features (plan_code, feature)
+           values ('pro', '${feature}')
+           on conflict do nothing`,
+        );
+      }
     }
   });
 });
