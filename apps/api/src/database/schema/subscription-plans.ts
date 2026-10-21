@@ -8,7 +8,41 @@ import {
   primaryKey,
   timestamp,
 } from 'drizzle-orm/pg-core';
-import { businessFeatureEnum, businessPlanCodeEnum } from './business-members';
+
+/**
+ * Los dos vocabularios del CATÁLOGO: el código del plan y sus features.
+ *
+ * ─── POR QUÉ SON ENUMS DE POSTGRES Y NO `text` CON CHECK ──────────────────────
+ *
+ * Porque el motor los LEE para comparar —`business_plan_of` devuelve un
+ * código, el trigger compara contra él— y una comparación contra una cadena
+ * es una comparación que puede fallar por una tilde. Un `pgEnum` obliga a una
+ * migración por cada valor nuevo, y aquí eso es lo correcto: el vocabulario
+ * cambia por decisión y no por conveniencia.
+ *
+ * `business_feature` existe sin efecto asociado todavía (`visibility_plus` no
+ * hace nada): es el asiento del plan, y llegar sin la feature es más caro que
+ * llegar con una que hoy es un no-op.
+ *
+ * ─── Y POR QUÉ VIVEN AQUÍ Y NO EN EL FICHERO DE LOS MIEMBROS ───────────────────
+ *
+ * Porque el CATÁLOGO es su dueño: `subscription_plans` y
+ * `subscription_plan_features` los usan, y `subscriptions` los usa como el
+ * código de su plan. El fichero de los miembros no los usaba para nada, y un
+ * vocabulario que vive en un fichero que no lo usa es un sitio donde el
+ * siguiente lo busca y no lo encuentra.
+ */
+export const businessPlanCodeEnum = pgEnum('business_plan_code', [
+  'free',
+  'pro',
+  'pro_plus',
+]);
+
+export const businessFeatureEnum = pgEnum('business_feature', [
+  'staff_access',
+  'payments',
+  'visibility_plus',
+]);
 
 /**
  * A quién se le puede asignar un plan.

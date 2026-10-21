@@ -6,7 +6,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { businessPlanCodeEnum } from './business-members';
+import { businessPlanCodeEnum } from './subscription-plans';
 import { businesses } from './businesses';
 import { profiles } from './profiles';
 

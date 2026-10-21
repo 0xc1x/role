@@ -17,19 +17,20 @@ import { businessLocations } from './business-locations';
 import { profiles } from './profiles';
 
 /**
- * Los cuatro vocabularios del eje de negocio, en `public` y de verdad.
+ * Los dos vocabularios del ACCESO, en `public` y de verdad.
  *
  * A diferencia de `announcements`, acá SÍ son enums de Postgres y no `text` con
  * CHECK. La diferencia con `severity` es qué pasa al agregar un valor: `severity`
  * es una cadena de salida y `info` o `required` es un hecho editorial, mientras
- * que un valor de rol o de plan es una decisión sobre QUÉ PUEDE HACER una
- * persona, y el motor de límites lo lee para contar. Un `pgEnum` obliga a una
- * migración por cada valor nuevo, y aquí eso es lo correcto: el vocabulario
- * cambia por decisión y no por conveniencia.
+ * que un valor de rol es una decisión sobre QUÉ PUEDE HACER una persona, y el
+ * motor de límites lo lee para contar. Un `pgEnum` obliga a una migración por
+ * cada valor nuevo, y aquí eso es lo correcto: el vocabulario cambia por
+ * decisión y no por conveniencia.
  *
- * `business_feature` existe sin efecto asociado todavía (`visibility_plus` no
- * hace nada): es el asiento del plan, y llegar sin la feature es más caro que
- * llegar con una que hoy es un no-op.
+ * Los otros dos vocabularios del eje —el CÓDIGO del plan y sus FEATURES— no
+ * están aquí: viven en `subscription-plans.ts`, que es el fichero del
+ * catálogo. Aquí no los usaba nadie, y un fichero que define un vocabulario
+ * ajeno es un sitio donde el siguiente busca el enum y no lo encuentra.
  */
 export const businessMemberRoleEnum = pgEnum('business_member_role', [
   'owner',
@@ -40,18 +41,6 @@ export const businessMemberRoleEnum = pgEnum('business_member_role', [
 export const businessMemberStatusEnum = pgEnum('business_member_status', [
   'active',
   'disabled',
-]);
-
-export const businessPlanCodeEnum = pgEnum('business_plan_code', [
-  'free',
-  'pro',
-  'pro_plus',
-]);
-
-export const businessFeatureEnum = pgEnum('business_feature', [
-  'staff_access',
-  'payments',
-  'visibility_plus',
 ]);
 
 /**
