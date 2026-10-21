@@ -34,7 +34,15 @@ const envSchema = z.object({
 	EXPO_PUBLIC_FIREBASE_APP_ID: z.string().optional().default(""),
 	/** VAPID key para suscribir clientes web a FCM */
 	EXPO_PUBLIC_FIREBASE_VAPID_KEY: z.string().optional().default(""),
-	/** API BFF URL para notificaciones admin (opcional en mobile) */
+	/**
+	 * API BFF del panel — la excepción consciente al ADR-0002 (ADR-0013 §A.1):
+	 * el móvil la consulta SÓLO para administrar quién opera el negocio, que
+	 * necesita reglas de negocio que no viven en el cliente.
+	 *
+	 * La URL base lleva el prefijo global del API (`/api/v1`): el cliente
+	 * compone `${EXPO_PUBLIC_API_URL}${path}` con rutas relativas al API.
+	 * Vacía = la sección Equipo del panel no puede hablar con el API.
+	 */
 	EXPO_PUBLIC_API_URL: z.url().optional().or(z.literal("")).default(""),
 });
 
