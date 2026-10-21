@@ -85,7 +85,9 @@ const COPY: Record<
  * pausa se revierte reactivando, una reactivación se revierte pausando, y un
  * PIN rotado se vuelve a rotar—, y una baja no se deshace. El botón que la
  * confirma se pinta como el «Dar de baja» de la hoja: el mismo gesto pide lo
- * mismo.
+ * mismo. Y su TEXTO lleva el color destructivo, no el de por defecto: el
+ * blanco del botón es el que contrasta con el fondo de la baja, y el de por
+ * defecto —casi negro en modo oscuro— sobre ese fondo no se lee.
  */
 export function DisableAccessDialog({
 	action,
@@ -137,7 +139,20 @@ export function DisableAccessDialog({
 								: undefined
 						}
 					>
-						<Text>{copy?.confirm ?? ""}</Text>
+						<Text
+							// El fondo destructivo trae SU texto: el de por
+							// defecto (`primaryForeground`) es casi negro en
+							// modo oscuro y sobre el fondo de la baja no se
+							// lee —2:1—. El `style` explícito le gana a la
+							// clase del botón (`components/ui/text.tsx`).
+							style={
+								action === "remove"
+									? { color: colors.destructiveForeground }
+									: undefined
+							}
+						>
+							{copy?.confirm ?? ""}
+						</Text>
 					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>

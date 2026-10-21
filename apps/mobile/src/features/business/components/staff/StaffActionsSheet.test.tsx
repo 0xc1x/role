@@ -180,7 +180,12 @@ interface DialogProbe {
 	onOpenChange?: (open: boolean) => void;
 	title?: string;
 	description?: string;
-	confirm?: { label: string; onPress?: () => void; style?: unknown };
+	confirm?: {
+		label: string;
+		onPress?: () => void;
+		style?: unknown;
+		labelStyle?: unknown;
+	};
 	cancel?: { label: string; onPress?: () => void };
 }
 let dialog: DialogProbe = {};
@@ -220,6 +225,7 @@ mock.module("@/components/ui/alert-dialog", () => ({
 			label: textOf(props.children),
 			onPress: props.onPress,
 			style: props.style,
+			labelStyle: labelStyle(props.children),
 		};
 		return createElement(nativeWeb.Text, null, props.children);
 	},
@@ -319,6 +325,21 @@ function textOf(node: unknown): string {
 		return textOf((props as { children: unknown }).children);
 	}
 	return "";
+}
+
+/**
+ * El `style` de la etiqueta que compone el diálogo.
+ *
+ * El color del texto del botón lo decide el `style` que la etiqueta lleva: el
+ * `Text` aplana `[{ color: laDeLaClase }, style]` y el `style` explícito
+ * gana (`components/ui/text.tsx`). Por eso se mira la PROP que el diálogo
+ * pasa, no el color que sale en el HTML.
+ */
+function labelStyle(children: ReactNode): unknown {
+	if (!children || typeof children !== "object" || !("props" in children)) {
+		return undefined;
+	}
+	return (children as { props: { style?: unknown } }).props.style;
 }
 
 /** Drena la cadena de microtareas de la mutación. */
@@ -523,6 +544,12 @@ test("la baja se confirma con un botón destructivo y las otras no", () => {
 	expect(dialog.confirm?.style).toEqual({
 		backgroundColor: light.destructive,
 	});
+	// Y el TEXTO del botón tiene que contrastar con ese fondo: el color de
+	// por defecto del botón (`primaryForeground`) es casi negro en modo
+	// oscuro y sobre el fondo de la baja no se lee.
+	expect(dialog.confirm?.labelStyle).toEqual({
+		color: light.destructiveForeground,
+	});
 
 	// Y las otras tres no lo llevan: pausar, reactivar y rotar se deshacen.
 	render(member());
@@ -531,6 +558,8 @@ test("la baja se confirma con un botón destructivo y las otras no", () => {
 
 	expect(dialog.confirm?.label).toBe(strings.business.staff.actionPause);
 	expect(dialog.confirm?.style).toBeUndefined();
+	// Su texto es el de siempre: el del botón normal.
+	expect(dialog.confirm?.labelStyle).toBeUndefined();
 });
 
 // ─── Los fallos y los aciertos ───────────────────────────────────────────────
