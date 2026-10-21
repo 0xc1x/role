@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { BusinessDto } from "@0xc1x/role-commons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@/test-utils/dom";
+import { cleanup, fireEvent, render, screen, waitFor } from "@/test-utils/dom";
 import { BusinessDetailDrawer } from "../business-detail-drawer";
 
 const previousFetch = globalThis.fetch;
@@ -31,17 +31,29 @@ const applicant: BusinessDto = {
 	updated_at: "2026-09-01T10:00:00.000Z",
 };
 
+interface RecordedCall {
+	url: string;
+	method: string;
+}
+
 /**
- * La ficha consulta dos recursos hijos del negocio (notificaciones y puntos de
- * retiro), y cada uno tiene su propia forma de respuesta: los correos son un
- * array plano, las ubicaciones un sobre paginado. Un stub único que devuelva `[]`
- * para todo rompía la sección de ubicaciones, así que el stub enruta por URL.
+ * La ficha consulta tres recursos hijos del negocio (notificaciones, puntos de
+ * retiro y equipo), y cada uno tiene su propia forma de respuesta: los correos
+ * y el equipo son arrays planos, las ubicaciones un sobre paginado. Un stub
+ * único que devuelva `[]` para todo rompía la sección de ubicaciones, así que el
+ * stub enruta por URL.
  */
 function stubFetch(
-	routes: { emailSends?: unknown[]; locations?: unknown[] } = {},
+	routes: {
+		emailSends?: unknown[];
+		locations?: unknown[];
+		staff?: unknown[];
+	} = {},
 ) {
-	globalThis.fetch = (async (input: string) => {
+	const calls: RecordedCall[] = [];
+	globalThis.fetch = (async (input: string, init?: RequestInit) => {
 		const url = String(input);
+		calls.push({ url, method: init?.method ?? "GET" });
 		const body = url.includes("/locations")
 			? {
 					data: routes.locations ?? [],
@@ -52,12 +64,15 @@ function stubFetch(
 						total_pages: 1,
 					},
 				}
-			: (routes.emailSends ?? []);
+			: url.includes("/staff")
+				? (routes.staff ?? [])
+				: (routes.emailSends ?? []);
 		return new Response(JSON.stringify(body), {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
 		});
 	}) as unknown as typeof fetch;
+	return calls;
 }
 
 function renderDrawer(business: BusinessDto) {
@@ -177,5 +192,42 @@ describe("ficha del negocio", () => {
 				screen.getByRole("button", { name: "Nuevo punto de retiro" }),
 			).toBeDefined(),
 		);
+	});
+
+	// La ficha tiene pestañas, y el equipo es una de ellas: con «Ficha» activa
+	// el roster NO se pide, porque el operador no lo está mirando.
+	test("el equipo se consulta sólo cuando se abre su pestaña", async () => {
+		const calls = stubFetch({
+			staff: [
+				{
+					id: "44444444-4444-4444-8444-444444444444",
+					business_id: applicant.id,
+					user_id: "55555555-5555-4555-8555-555555555555",
+					role: "owner",
+					label: "María Dueña",
+					alias: "maria@cafe-central.role.ec",
+					status: "active",
+					session_ttl_hours: 0,
+					business_location_ids: [],
+					last_authenticated_at: null,
+					created_at: "2026-09-01T10:00:00.000Z",
+					updated_at: "2026-09-01T10:00:00.000Z",
+					deleted_at: null,
+				},
+			],
+		});
+
+		renderDrawer(applicant);
+
+		expect(screen.getByRole("tab", { name: "Ficha" })).toBeDefined();
+		expect(screen.getByRole("tab", { name: "Equipo" })).toBeDefined();
+		expect(calls.some((call) => call.url.includes("/staff"))).toBe(false);
+
+		fireEvent.click(screen.getByRole("tab", { name: "Equipo" }));
+
+		await waitFor(() =>
+			expect(calls.some((call) => call.url.includes("/staff"))).toBe(true),
+		);
+		await waitFor(() => expect(screen.getByText("María Dueña")).toBeDefined());
 	});
 });

@@ -1,6 +1,8 @@
 import type {
 	AudienceKind,
 	BugTriageState,
+	BusinessMemberRole,
+	BusinessMemberStatus,
 	BusinessVerificationStatus,
 	ContactDeliveryStatus,
 	EmailSendStatus,
@@ -62,6 +64,42 @@ const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 /** Verificación de negocio: `approved` → "Aprobado". */
 export const businessVerificationLabel = (status: string): string =>
 	BUSINESS_VERIFICATION_LABELS[status as BusinessVerificationStatus] ?? status;
+
+/**
+ * El rol de un acceso del equipo: `owner` → "Dueño".
+ *
+ * El enum crudo obliga al operador a traducir en la cabeza, y un rol mal leído
+ * es un alcance mal entendido: un `staff` no administra el equipo y un `owner`
+ * sí. En el panel de la plataforma el rol decide qué puede hacer el negocio, y
+ * una palabra mal traducida se convierte en un permiso mal entendido.
+ *
+ * `?? role` y no "Rol desconocido": un token fuera del enum es un dato que el
+ * panel todavía no sabe nombrar, y mostrarlo crudo es más honesto que taparlo
+ * con una etiqueta inventada.
+ */
+const BUSINESS_MEMBER_ROLE_LABELS: Record<BusinessMemberRole, string> = {
+	owner: "Dueño",
+	manager: "Gerente",
+	staff: "Empleado",
+};
+
+export const businessMemberRoleLabel = (role: string): string =>
+	BUSINESS_MEMBER_ROLE_LABELS[role as BusinessMemberRole] ?? role;
+
+/**
+ * El estado de un acceso: `active` → "Activo", `disabled` → "Pausado".
+ *
+ * "Deshabilitado" no es lo que pasó: el acceso sigue existiendo y el dueño
+ * puede reactivarlo. Pausado dice lo que es —una puerta cerrada que se puede
+ * volver a abrir— y no "deshabilitado", que suena a borrado.
+ */
+const BUSINESS_MEMBER_STATUS_LABELS: Record<BusinessMemberStatus, string> = {
+	active: "Activo",
+	disabled: "Pausado",
+};
+
+export const businessMemberStatusLabel = (status: string): string =>
+	BUSINESS_MEMBER_STATUS_LABELS[status as BusinessMemberStatus] ?? status;
 
 /** Estado de corte de pago: `paid` → "Pagado". */
 export const payoutStatusLabel = (status: string): string =>
