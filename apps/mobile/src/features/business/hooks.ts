@@ -21,10 +21,17 @@ import { notificationRepository } from "@/src/features/business/data/notificatio
 // orquestan vistas del rol negocio sobre esa API.
 import { orderRepository } from "@/src/features/orders/data/repository";
 
+/**
+ * Los negocios que el lector opera, con su rol en cada uno.
+ *
+ * La firma no cambia —las pantallas del panel la llaman igual— pero lo que
+ * devuelve ya no es sólo del dueño: es de quien tenga una membresía viva en
+ * el negocio, con el rol que tiene en él.
+ */
 export function useBusinesses(ownerId: string) {
 	return useQuery({
-		queryKey: ["businesses", "owned", ownerId],
-		queryFn: () => businessRepository.getBusinessesByOwnerId(ownerId),
+		queryKey: ["businesses", "operated", ownerId],
+		queryFn: () => businessRepository.getOperatedBusinesses(ownerId),
 		enabled: ownerId.length > 0,
 	});
 }

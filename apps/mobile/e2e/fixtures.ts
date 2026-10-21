@@ -1024,14 +1024,17 @@ export async function waitForBusinessShell(page: Page) {
  * is the whole point.
  *
  * `business_members` is the FIRST read the panel makes and the one that
- * decides whether the owner has a business at all: `useBusinesses` resolves
- * ids through the owner's own LIVE membership and returns `[]` when it is
+ * decides whether the viewer has a business at all: `useBusinesses` resolves
+ * ids through the viewer's own LIVE membership and returns `[]` when it is
  * empty, which is the app's "you have no business" state. Every other
  * business read is keyed on the id it hands back.
  *
- * The body is a MEMBERSHIP, not an ownership row: the owner is
- * `role = 'owner'`, `status = 'active'` and `deleted_at is null` — the same
- * three halves the database uses to decide that somebody IS the owner.
+ * The body is a MEMBERSHIP, not an ownership row: it carries the role the
+ * viewer holds in that business —`role = 'owner'` here— plus
+ * `status = 'active'` and `deleted_at is null`, the same three halves the
+ * database uses to decide that somebody operates the business. A panel that
+ * asks for the three operator roles (`owner`, `manager`, `staff`) reads this
+ * row the same way a manager's or a cashier's row would be read.
  */
 export function businessBodies(
 	overrides: Record<string, unknown> = {},

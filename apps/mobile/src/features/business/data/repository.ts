@@ -1,11 +1,13 @@
 import { Platform } from "react-native";
-import type {
-	Business,
-	BusinessLocation,
-	BusinessType,
-	Coupon,
-	Payout,
-	PayoutStatus,
+import {
+	type Business,
+	type BusinessLocation,
+	type BusinessMemberRole,
+	type BusinessType,
+	BUSINESS_MEMBER_ROLES,
+	type Coupon,
+	type Payout,
+	type PayoutStatus,
 } from "@0xc1x/role-commons";
 import { File } from "expo-file-system";
 
@@ -28,6 +30,7 @@ import type {
 	BusinessStats,
 	DailyStat,
 	HoursRange,
+	OperatedBusiness,
 	TopProductStat,
 } from "../domain/business";
 import { PAYOUT_FIELDS } from "../domain/business";
@@ -349,45 +352,78 @@ export const businessRepository = {
 		}));
 	},
 
-	async getBusinessesByOwnerId(ownerId: string): Promise<Business[]> {
-		// The owner is a LIVE MEMBERSHIP, not a row in a legacy ownership
-		// table: `business_members.role = 'owner'`, `deleted_at is null` and
-		// `status = 'active'` — the same three conditions the database's own
-		// `business_member_role()` uses to decide that somebody IS the owner.
-		// The RLS on `business_members` filters by `user_id = auth.uid()`, so a
-		// caller passing someone else's id gets an empty result instead of
-		// another tenant's businesses.
+	/**
+	 * Los negocios que el lector OPERA, con el rol que tiene en cada uno.
+	 *
+	 * El panel ya no es sólo del dueño: un gerente y un cajero operan el
+	 * negocio también —un cajero necesita el panel para cobrar— y lo que la
+	 * base les concede es la fila de `business_members`. Por eso la lectura
+	 * pide los TRES roles que operan (`BUSINESS_MEMBER_ROLES`: `owner`,
+	 * `manager`, `staff`) y no sólo el de dueño: preguntar por menos le
+	 * mostraría a quien sí opera el negocio la pantalla de "no tienes
+	 * negocio" mientras la base ya se lo había concedido.
+	 *
+	 * Los tres BINOMIOS —`role in (…)`, `status = 'active'` y
+	 * `deleted_at is null`— son los mismos que usa el
+	 * `business_member_role()` de la base para decidir que alguien opera el
+	 * negocio. El RLS de `business_members` filtra por `user_id = auth.uid()`,
+	 * así que un llamador que pase el id de otro lee vacío en vez de los
+	 * negocios de otro inquilino.
+	 */
+	async getOperatedBusinesses(userId: string): Promise<OperatedBusiness[]> {
 		const { data: memberships, error: membershipsError } = await supabase
 			.from("business_members")
-			.select("business_id")
-			.eq("user_id", ownerId)
-			.eq("role", "owner")
+			.select("business_id, role")
+			.eq("user_id", userId)
+			.in("role", BUSINESS_MEMBER_ROLES)
 			.eq("status", "active")
 			.is("deleted_at", null);
 		if (membershipsError)
 			throw toAppError(membershipsError, "Error al cargar negocios");
 
-		// One id per business: a membership read that answers with two rows
-		// for the same business (an owner who ALSO holds staff access there)
-		// must still list that business once.
-		const ids = [
-			...new Set(
-				(memberships ?? [])
-					.map((row) => (row as { business_id?: string }).business_id)
-					.filter((id): id is string => Boolean(id)),
-			),
-		];
-		if (ids.length === 0) return [];
+		// Un rol por negocio: una lectura de membresías que conteste con dos
+		// filas del mismo negocio (un dueño que TAMBIÉN tiene acceso de
+		// personal ahí) lo lista una sola vez. Cuando las dos filas dicen
+		// roles distintos gana el de MÁS autoridad —el orden de
+		// `BUSINESS_MEMBER_ROLES` es el orden de autoridad— para que un dueño
+		// nunca sea degradado a cajero por una fila de más. El `unique
+		// (business_id, user_id)` hace esto un no-op hoy; se queda para que el
+		// resultado sea determinista.
+		const rolesByBusiness = new Map<string, BusinessMemberRole>();
+		for (const row of memberships ?? []) {
+			const membership = row as {
+				business_id?: string;
+				role?: BusinessMemberRole;
+			};
+			const businessId = membership.business_id;
+			const role = membership.role;
+			if (!businessId || !role) continue;
+			const rank = BUSINESS_MEMBER_ROLES.indexOf(role);
+			// Un rol fuera del vocabulario no es un rol: la fila se ignora.
+			if (rank < 0) continue;
+			const current = rolesByBusiness.get(businessId);
+			if (
+				current === undefined ||
+				rank < BUSINESS_MEMBER_ROLES.indexOf(current)
+			) {
+				rolesByBusiness.set(businessId, role);
+			}
+		}
+		if (rolesByBusiness.size === 0) return [];
 
 		const { data, error } = await supabase
 			.from("businesses")
 			.select(BUSINESS_PUBLIC_COLUMNS)
-			.in("id", ids)
+			.in("id", [...rolesByBusiness.keys()])
 			.order("name");
 		if (error) throw toAppError(error, "Error al cargar negocios");
-		return (data ?? []).map((row) =>
-			toBusiness(row as unknown as Record<string, unknown>),
-		);
+		// El rol se adjunta al negocio que lo resolvió: un negocio sin
+		// membresía no entra (y sin rol no se puede pintar una sección).
+		return (data ?? []).flatMap((row) => {
+			const business = toBusiness(row as unknown as Record<string, unknown>);
+			const role = rolesByBusiness.get(business.id);
+			return role ? [{ ...business, role }] : [];
+		});
 	},
 
 	async createBusiness(input: {
@@ -436,8 +472,8 @@ export const businessRepository = {
 				// owner from auth.uid() on insert, so ownership can no longer be
 				// written by a caller.
 				//
-				// The owner's panel reads the live ownership MEMBERSHIP in
-				// `business_members` — see `getBusinessesByOwnerId` — and that
+				// The owner's panel reads the live MEMBERSHIP in
+				// `business_members` — see `getOperatedBusinesses` — and that
 				// membership is what the database trigger writes on insert. The
 				// API's alta writes it itself, in its own transaction.
 				name: input.name,

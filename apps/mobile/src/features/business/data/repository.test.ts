@@ -70,10 +70,10 @@ function mockChain(result: {
  * A table-aware PostgREST double.
  *
  * `mockChain` answers every table with the same body, which is fine for a
- * single-table read. `getBusinessesByOwnerId` reads TWO tables in order —the
+ * single-table read. `getOperatedBusinesses` reads TWO tables in order —the
  * memberships, then the businesses they resolve to— so the double has to
  * answer per table AND record which tables were asked, because the whole
- * point of the specs below is WHICH table the owner's panel reads.
+ * point of the specs below is WHICH table the panel reads.
  */
 function mockTables(
 	responses: Record<string, { data?: unknown; error?: unknown }>,
@@ -115,7 +115,7 @@ function mockTables(
 	return { tables, calls, selects };
 }
 
-/** A `businesses` row in the shape the owner's panel reads it. */
+/** A `businesses` row in the shape the panel reads it. */
 const businessRow = {
 	id: "99999999-8888-7777-6666-555555555555",
 	name: "Café del Valle",
@@ -353,33 +353,40 @@ describe("businessRepository paginated listing", () => {
 	});
 });
 
-describe("businessRepository.getBusinessesByOwnerId", () => {
-	test("los negocios del dueño salen de sus membresías de dueño, no de business_ownership", async () => {
-		// The owner's panel resolves its businesses through the MEMBERSHIP
-		// model: the owner IS a live `business_members` row. Reading the legacy
+describe("businessRepository.getOperatedBusinesses", () => {
+	test("los negocios que se operan salen de las membresías del lector, no de business_ownership", async () => {
+		// The panel resolves its businesses through the MEMBERSHIP model: the
+		// operator IS a live `business_members` row. Reading the legacy
 		// ownership table instead is the regression this pins down, so the
 		// assertion is about the TABLE, not about the data that came back.
 		const { tables, calls } = mockTables({
 			business_members: {
-				data: [{ business_id: businessRow.id }],
+				data: [{ business_id: businessRow.id, role: "owner" }],
 				error: null,
 			},
 			businesses: { data: [businessRow], error: null },
 		});
 
 		const businesses =
-			await businessRepository.getBusinessesByOwnerId("owner-1");
+			await businessRepository.getOperatedBusinesses("operator-1");
 
 		expect(tables).toEqual(["business_members", "businesses"]);
 		expect(tables).not.toContain("business_ownership");
 
-		// The membership read is scoped to THIS user and to the LIVE owner
-		// rows: role, status and deleted_at are the same three halves the
-		// database's own `business_member_role()` uses to decide that somebody
-		// IS the owner. The RLS repeats the tenancy (`user_id = auth.uid()`),
+		// The membership read is scoped to THIS user and to every LIVE
+		// operator role. A manager and a cashier operate the business too, so
+		// the read has to ask for the three roles — a read that left the role
+		// closed on the owner would show the empty "no business" screen to
+		// somebody the database already granted the business to.
+		// `status` and `deleted_at` are the other two halves the database's
+		// own `business_member_role()` uses to decide that somebody operates
+		// the business. The RLS repeats the tenancy (`user_id = auth.uid()`),
 		// so a caller passing somebody else's id reads nothing.
-		expect(calls.business_members.eq).toContainEqual(["user_id", "owner-1"]);
-		expect(calls.business_members.eq).toContainEqual(["role", "owner"]);
+		expect(calls.business_members.eq).toContainEqual(["user_id", "operator-1"]);
+		expect(calls.business_members.in).toContainEqual([
+			"role",
+			["owner", "manager", "staff"],
+		]);
 		expect(calls.business_members.eq).toContainEqual(["status", "active"]);
 		expect(calls.business_members.is).toContainEqual(["deleted_at", null]);
 
@@ -387,31 +394,79 @@ describe("businessRepository.getBusinessesByOwnerId", () => {
 		expect(calls.businesses.in).toContainEqual(["id", [businessRow.id]]);
 		expect(businesses).toHaveLength(1);
 		expect(businesses[0]?.id).toBe(businessRow.id);
+		// The role travels WITH the business: that is what the panel filters
+		// on, and a panel that only knew "there is a business" could not tell
+		// a cashier from an owner.
+		expect(businesses[0]?.role).toBe("owner");
 	});
 
-	test("un dueño que además tiene acceso de personal en el mismo negocio lo lista una sola vez", async () => {
-		// Two rows for the same business: the owner's own membership and a
-		// staff one. The panel lists a business ONCE — the id list is
-		// deduplicated before it asks for the businesses, so a membership read
-		// that answers with the same business twice cannot render it twice.
+	test("una persona con fila en dos negocios recibe los dos, cada uno con SU rol", async () => {
+		// Two memberships, two businesses, two different roles. The role is
+		// per BUSINESS, not per person: the same reader can be the manager of
+		// one business and a cashier of another, and the panel has to know
+		// which is which before it hides or shows a section.
 		const { calls } = mockTables({
 			business_members: {
 				data: [
-					{ business_id: "biz-1", role: "owner", status: "active" },
-					{ business_id: "biz-1", role: "staff", status: "active" },
+					{ business_id: "biz-1", role: "manager" },
+					{ business_id: "biz-2", role: "staff" },
 				],
 				error: null,
 			},
-			businesses: { data: [businessRow], error: null },
+			businesses: {
+				data: [
+					{ ...businessRow, id: "biz-1", name: "Panadería" },
+					{ ...businessRow, id: "biz-2", name: "Cafetería" },
+				],
+				error: null,
+			},
 		});
 
-		await businessRepository.getBusinessesByOwnerId("owner-1");
+		const businesses =
+			await businessRepository.getOperatedBusinesses("operator-1");
+
+		expect(calls.businesses.in).toContainEqual(["id", ["biz-1", "biz-2"]]);
+		expect(businesses.map((business) => business.id)).toEqual([
+			"biz-1",
+			"biz-2",
+		]);
+		expect(businesses.map((business) => business.role)).toEqual([
+			"manager",
+			"staff",
+		]);
+	});
+
+	test("una membresía duplicada no lista el negocio dos veces ni le baja el rol", async () => {
+		// Two rows for the same business: the owner's own membership and a
+		// staff one. The panel lists a business ONCE — the id list is
+		// deduplicated before it asks for the businesses, so a membership read
+		// that answers with the same business twice cannot render it twice —
+		// and it keeps the HIGHEST of the two roles, so an owner is never
+		// downgraded into a cashier by a duplicate row.
+		const { calls } = mockTables({
+			business_members: {
+				data: [
+					{ business_id: "biz-1", role: "staff" },
+					{ business_id: "biz-1", role: "owner" },
+				],
+				error: null,
+			},
+			businesses: {
+				data: [{ ...businessRow, id: "biz-1" }],
+				error: null,
+			},
+		});
+
+		const businesses =
+			await businessRepository.getOperatedBusinesses("operator-1");
 
 		const idCall = calls.businesses.in.find((args) => args[0] === "id");
 		expect(idCall?.[1]).toEqual(["biz-1"]);
+		expect(businesses).toHaveLength(1);
+		expect(businesses[0]?.role).toBe("owner");
 	});
 
-	test("sin membresías de dueño no se pregunta por negocios", async () => {
+	test("sin membresías no se pregunta por negocios", async () => {
 		// The empty branch is the app's "you have no business" state, and it
 		// is a state the e2e asserts on the screen. Reaching for `businesses`
 		// with an empty id list would be a query that can only answer empty.
@@ -420,7 +475,7 @@ describe("businessRepository.getBusinessesByOwnerId", () => {
 		});
 
 		await expect(
-			businessRepository.getBusinessesByOwnerId("owner-1"),
+			businessRepository.getOperatedBusinesses("operator-1"),
 		).resolves.toEqual([]);
 		expect(tables).toEqual(["business_members"]);
 	});

@@ -2,6 +2,7 @@ import type {
 	Business,
 	BusinessHours,
 	BusinessLocation,
+	BusinessMemberRole,
 	BusinessNotificationPreferences,
 	Payout,
 	PayoutStatus,
@@ -11,10 +12,22 @@ export type {
 	Business,
 	BusinessHours,
 	BusinessLocation,
+	BusinessMemberRole,
 	BusinessNotificationPreferences,
 	Payout,
 	PayoutStatus,
 };
+
+/**
+ * Un negocio que el lector OPERA, con el rol que tiene en él.
+ *
+ * El panel ya no es sólo del dueño: un gerente y un cajero operan el
+ * negocio también, y la fila de `business_members` es lo que la base les
+ * concede. Por eso el rol viaja JUNTO al negocio —es por negocio, no por
+ * persona: el mismo lector puede ser gerente de un negocio y cajero de otro— y
+ * es lo que las secciones del panel van a filtrar.
+ */
+export type OperatedBusiness = Business & { role: BusinessMemberRole };
 
 export const DEFAULT_BUSINESS_NOTIFICATION_PREFS: BusinessNotificationPreferences =
 	{

@@ -71,21 +71,23 @@ test.describe("business management screen", () => {
 		).toBeVisible();
 	});
 
-	test("it reads the owner's businesses through business_members", async ({
+	test("it reads the operated businesses through business_members", async ({
 		page,
 	}) => {
 		// The tenant boundary, asserted as a REQUEST.
 		//
-		// `getBusinessesByOwnerId` filters `business_members` by
+		// `getOperatedBusinesses` filters `business_members` by
 		// `user_id = auth.uid()` and the RLS policy repeats that filter, so
 		// this read is the only thing standing between "my businesses" and
 		// "every business". Asserting the rendered name proves the data
 		// arrived; asserting the call proves it arrived through the door that
 		// is scoped to the viewer.
 		//
-		// The owner is a MEMBERSHIP — `role = 'owner'`, `status = 'active'`,
-		// `deleted_at is null` — and the request has to say so: a read that
-		// left the role open would also return the owner's staff access.
+		// The operator is a MEMBERSHIP — and the request has to say WHICH
+		// roles: `role in (owner, manager, staff)`, `status = 'active'`,
+		// `deleted_at is null`. A read closed on the owner would show the
+		// "no business" screen to a manager the database already granted the
+		// business to.
 		const supabase = await stubSupabase(page, {
 			viewer: "business",
 			bodies: businessBodies(),
@@ -107,9 +109,11 @@ test.describe("business management screen", () => {
 		).toBe("GET /rest/v1/business_members");
 		expect(
 			memberships[0]?.search,
-			"the membership read is not scoped to the viewer's own owner rows",
+			"the membership read is not scoped to the viewer's own rows",
 		).toContain("user_id=eq.");
-		expect(memberships[0]?.search).toContain("role=eq.owner");
+		expect(memberships[0]?.search).toContain(
+			"role=in.%28owner%2Cmanager%2Cstaff%29",
+		);
 		expect(memberships[0]?.search).toContain("status=eq.active");
 		expect(memberships[0]?.search).toContain("deleted_at=is.null");
 		// And it did NOT go through the legacy ownership table.
