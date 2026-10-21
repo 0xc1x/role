@@ -654,10 +654,11 @@ test("un fallo sin prosa propia se pinta con la copia de la casa", async () => {
 	render("owner");
 
 	expect(html).toContain(strings.business.genericError);
-	// Y con el rojo de la casa: el `destructive` oscuro no se lee sobre la
-	// superficie destructiva.
+	// Y con la prosa del error: `destructiveText`, el único rojo que pasa AA
+	// sobre la superficie destructiva (`destructiveVibrant` medía 3.08:1 en
+	// claro y 4.02:1 en oscuro).
 	expect(textStyle(strings.business.genericError)).toEqual({
-		color: light.destructiveVibrant,
+		color: light.destructiveText,
 	});
 });
 

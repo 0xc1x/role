@@ -178,13 +178,12 @@ export function RevokeAllCard({
 				</AppText>
 			) : null}
 
-			{/* El error se pinta con el rojo de la casa: el `destructive` oscuro
-			    no llega a leerse sobre la superficie destructiva. */}
+			{/* El error se pinta con la PROSA del error: `destructiveText`, el
+			    único rojo de la casa que pasa AA sobre la superficie
+			    destructiva. El `destructiveVibrant` de antes medía 3.08:1 en
+			    claro y 4.02:1 en oscuro: no se leía. */}
 			{error ? (
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.destructiveVibrant }}
-				>
+				<AppText variant="bodySmall" style={{ color: colors.destructiveText }}>
 					{error}
 				</AppText>
 			) : null}

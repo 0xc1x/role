@@ -151,11 +151,15 @@ export function DeliveryCardSheet({
 					</AppText>
 				</View>
 
+				{/* El aviso del §9.4 es un AVISO, no un fallo: la tarjeta se
+				    entrega igual, y el dominio es un dato que la persona
+				    escribió. Por eso lleva el ámbar de la casa
+				    (`warningText`), no el rojo. */}
 				{card.alias_warnings.map((code) => (
 					<AppText
 						key={code}
 						variant="bodySmall"
-						style={{ color: colors.destructive }}
+						style={{ color: colors.warningText }}
 					>
 						{ALIAS_WARNING_COPY[code]}
 					</AppText>

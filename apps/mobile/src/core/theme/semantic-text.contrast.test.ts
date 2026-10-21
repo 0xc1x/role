@@ -54,6 +54,23 @@ const INFO_DARK_SURFACES = [
 	"inputBackground",
 ] as const;
 
+/**
+ * Light surfaces `destructiveText` is actually painted on, per call site.
+ *
+ * - `card`: las hojas de acciones y de transferencia, y el formulario del
+ *   equipo (el `Drawer` se pinta sobre `card`).
+ * - `destructiveSurface`: la caja del corte de emergencia.
+ */
+const DESTRUCTIVE_LIGHT_SURFACES = ["card", "destructiveSurface"] as const;
+
+/**
+ * Dark surfaces `destructiveText` is actually painted on.
+ *
+ * La caja del corte de emergencia NO va aquí: su wash se aplana sobre la
+ * PANTALLA, no sobre una tarjeta, y por eso tiene su propia aserción.
+ */
+const DESTRUCTIVE_DARK_SURFACES = ["card"] as const;
+
 /** Dark `surface*` tokens are alpha washes; flatten them the way the device does. */
 function opaque(scheme: "light" | "dark", key: keyof typeof light): string {
 	const tokens: ColorTokens = scheme === "light" ? light : dark;
@@ -66,6 +83,8 @@ test("the palette exposes the text-safe tokens in both schemes", () => {
 	expect(dark.warningText).toBe("#F59E0B");
 	expect(light.infoText).toBe("#115E59");
 	expect(dark.infoText).toBe("#2DD4BF");
+	expect(light.destructiveText).toBe("#B91C1C");
+	expect(dark.destructiveText).toBe("#F87171");
 });
 
 test("the solid action fills exist in both schemes and are the measured values", () => {
@@ -123,6 +142,63 @@ test("dark infoText clears AA on every opaque dark surface it is used on", () =>
 	for (const surface of INFO_DARK_SURFACES) {
 		expect(contrast(dark.infoText, dark[surface])).toBeGreaterThanOrEqual(4.5);
 	}
+});
+
+// ─── El rojo de la prosa del error ───────────────────────────────────────────
+
+test("light destructiveText clears AA on every light surface it is used on", () => {
+	for (const surface of DESTRUCTIVE_LIGHT_SURFACES) {
+		expect(
+			contrast(light.destructiveText, light[surface]),
+		).toBeGreaterThanOrEqual(4.5);
+	}
+});
+
+test("dark destructiveText clears AA on every opaque dark surface it is used on", () => {
+	for (const surface of DESTRUCTIVE_DARK_SURFACES) {
+		expect(
+			contrast(dark.destructiveText, dark[surface]),
+		).toBeGreaterThanOrEqual(4.5);
+	}
+});
+
+test("the emergency card's dark wash is flattened over the SCREEN, not over a card", () => {
+	// La caja del corte de emergencia se pinta sobre la pantalla del panel, no
+	// sobre una tarjeta: su wash oscuro se aplana sobre `background`. Aplanarlo
+	// sobre `card` —como hace el `opaque()` de más arriba— daría un fondo
+	// equivocado y un par que NO es el que el dispositivo muestra.
+	const wash = compositeOver(dark.destructiveSurface, dark.background);
+	expect(wash).toBe("#3e1c1c");
+	expect(contrast(dark.destructiveText, wash)).toBeGreaterThanOrEqual(4.5);
+});
+
+test("the destructive text ratios are measured passes, not rounded ones", () => {
+	// Los números del comentario de `destructiveText`, afirmados en su
+	// precisión real: si el token se mueve, el comentario deja de ser cierto.
+	expect(contrast(light.destructiveText, light.destructiveSurface)).toBeCloseTo(
+		5.296,
+		2,
+	);
+	expect(contrast(light.destructiveText, light.card)).toBeCloseTo(5.906, 2);
+	expect(contrast(dark.destructiveText, dark.card)).toBeCloseTo(5.049, 2);
+	expect(
+		contrast(
+			dark.destructiveText,
+			compositeOver(dark.destructiveSurface, dark.background),
+		),
+	).toBeCloseTo(5.471, 2);
+});
+
+test("the decorative reds stay out of the text role, and that is asserted", () => {
+	// `destructiveVibrant` es el rojo DECORATIVO —bordes, iconos, washes— y
+	// `destructive` es el SÓLIDO de los botones: ninguno puede escribir prosa.
+	// La regresión que este token viene a tapar los pintó con el decorativo.
+	expect(
+		contrast(light.destructiveVibrant, light.destructiveSurface),
+	).toBeLessThan(4.5);
+	expect(contrast(light.destructiveVibrant, light.card)).toBeLessThan(4.5);
+	expect(contrast(dark.destructiveVibrant, dark.card)).toBeLessThan(4.5);
+	expect(contrast(dark.destructive, dark.card)).toBeLessThan(4.5);
 });
 
 test("the measured values behind the palette comments are still true", () => {

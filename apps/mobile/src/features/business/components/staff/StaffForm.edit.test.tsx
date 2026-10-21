@@ -91,6 +91,24 @@ let switches: CheckProps[] = [];
 let radios: PressProps[] = [];
 let html = "";
 
+/**
+ * Los textos pintados, con su prosa y su `style`.
+ *
+ * El `style` es lo que se mira para la SEVERIDAD: un aviso que se pinta con
+ * el rojo de un fallo está mintiendo, porque el acceso se puede guardar
+ * igual.
+ */
+interface TextProbe {
+	text: string;
+	style?: unknown;
+}
+let texts: TextProbe[] = [];
+
+/** El `style` del texto con esa prosa. */
+function textStyle(copy: string): unknown {
+	return texts.find((candidate) => candidate.text === copy)?.style;
+}
+
 /** El texto que un nodo pinta. */
 function textOf(node: unknown): string {
 	if (typeof node === "string" || typeof node === "number") return String(node);
@@ -145,8 +163,10 @@ mock.module("@/src/core/theme", () => ({
 }));
 
 mock.module("@/src/core/ui", () => ({
-	AppText: ({ children }: { children?: ReactNode }) =>
-		createElement(nativeWeb.Text, null, children),
+	AppText: (props: { children?: ReactNode; style?: unknown }) => {
+		texts.push({ text: textOf(props.children), style: props.style });
+		return createElement(nativeWeb.Text, null, props.children);
+	},
 	TextField: (props: FieldProps) => {
 		fields.push(props);
 		return createElement(
@@ -237,6 +257,7 @@ function render(props: Partial<typeof currentProps> = {}): void {
 	checkboxes = [];
 	switches = [];
 	radios = [];
+	texts = [];
 	html = renderToStaticMarkup(
 		createElement(StaffForm, {
 			locations: currentProps.locations,
@@ -399,6 +420,32 @@ test("un alcance vacío se puede guardar en la edición", () => {
 	submitButton().onPress?.();
 
 	expect(submitted[0]?.business_location_ids).toEqual([]);
+});
+
+// ─── La severidad de los avisos ──────────────────────────────────────────────
+//
+// Un aviso es un AVISO: el acceso se puede guardar igual. Pintarlo con el rojo
+// de un fallo —como hacía el formulario— confunde a quien lee: el mismo color
+// para «esto no se puede hacer» y para «esto conviene que lo sepas».
+
+test("el aviso del §9.4 lleva el ámbar de la casa, no el rojo de un fallo", () => {
+	typeAlias("ana@panaderialafamilia.ec");
+	render({
+		aliasWarnings: ["alias_domain_can_receive_mail"],
+		aliasWarningsFor: "ana@panaderialafamilia.ec",
+	});
+
+	expect(textStyle(strings.business.staff.aliasWarning)).toEqual({
+		color: light.warningText,
+	});
+});
+
+test("el alcance vacío lleva el ámbar de la casa, no el rojo de un fallo", () => {
+	mount({ initial: { ...INITIAL, business_location_ids: [] } });
+
+	expect(textStyle(strings.business.staff.noLocationsWarning)).toEqual({
+		color: light.warningText,
+	});
 });
 
 // ─── La política de sesión ───────────────────────────────────────────────────

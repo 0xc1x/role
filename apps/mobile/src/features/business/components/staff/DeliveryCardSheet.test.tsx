@@ -45,6 +45,24 @@ let buttons: ButtonProps[] = [];
 let sheetProps: SheetProps | null = null;
 let html = "";
 
+/**
+ * Los textos pintados, con su prosa y su `style`.
+ *
+ * El `style` es lo que se mira para la SEVERIDAD: el aviso del dominio es un
+ * AVISO —la tarjeta se entrega igual— y no puede pintarse con el rojo de un
+ * fallo.
+ */
+interface TextProbe {
+	text: string;
+	style?: unknown;
+}
+let texts: TextProbe[] = [];
+
+/** El `style` del texto con esa prosa. */
+function textStyle(copy: string): unknown {
+	return texts.find((candidate) => candidate.text === copy)?.style;
+}
+
 /** Lo que se copió al portapapeles. */
 const clipboard: string[] = [];
 /** Lo que se compartió. */
@@ -95,8 +113,10 @@ mock.module("@/src/core/theme", () => ({
 }));
 
 mock.module("@/src/core/ui", () => ({
-	AppText: ({ children }: { children?: ReactNode }) =>
-		createElement(nativeWeb.Text, null, children),
+	AppText: (props: { children?: ReactNode; style?: unknown }) => {
+		texts.push({ text: textOf(props.children), style: props.style });
+		return createElement(nativeWeb.Text, null, props.children);
+	},
 	// La hoja se dobla en sus tres piezas —título, cuerpo y pie— para poder
 	// afirmar el pie: el botón de cerrar vive ahí, y es el que reconoce la
 	// entrega.
@@ -140,6 +160,7 @@ const closed: string[] = [];
 function render(deliveryCard: BusinessMemberDeliveryCardDto = card()): void {
 	buttons = [];
 	sheetProps = null;
+	texts = [];
 	html = renderToStaticMarkup(
 		createElement(DeliveryCardSheet, {
 			card: deliveryCard,
@@ -254,4 +275,14 @@ test("el aviso del dominio aparece cuando el API lo manda", () => {
 	render(card({ alias_warnings: ["alias_domain_can_receive_mail"] }));
 
 	expect(html).toContain(strings.business.staff.aliasWarning);
+});
+
+test("el aviso del dominio lleva el ámbar de la casa, no el rojo de un fallo", () => {
+	render(card({ alias_warnings: ["alias_domain_can_receive_mail"] }));
+
+	// Es un AVISO: la tarjeta se entrega igual y el dominio es un dato que la
+	// persona escribió. Pintarlo con el rojo de un fallo engaña.
+	expect(textStyle(strings.business.staff.aliasWarning)).toEqual({
+		color: light.warningText,
+	});
 });

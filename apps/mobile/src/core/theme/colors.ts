@@ -37,6 +37,21 @@ export interface ColorTokens {
 	destructive: string;
 	destructiveForeground: string;
 	destructiveVibrant: string;
+	/**
+	 * `destructive` (#901B35) es el SÓLIDO de la casa —el fondo del botón
+	 * destructivo y de la ventana de confirmación— y `destructiveVibrant`
+	 * (#EF4444) es el rojo DECORATIVO: bordes, iconos y washes. Ninguno de los
+	 * dos es texto seguro: el decorativo mide 3.08:1 sobre `destructiveSurface`
+	 * en claro y 3.71:1 sobre `card` en oscuro, y el sólido mide 1.59:1 sobre
+	 * `card` en oscuro.
+	 *
+	 * Éste es el token de la PROSA del error: 5.30:1 sobre `destructiveSurface`
+	 * (#FEE2E2) y 5.91:1 sobre `card` en claro; 5.05:1 sobre `card` y 5.47:1
+	 * sobre el wash oscuro aplanado sobre la pantalla en oscuro. Los textos
+	 * de error y sus equivalentes (el motivo que el API escribió) deben usar
+	 * este token, no el decorativo.
+	 */
+	destructiveText: string;
 	destructiveSurface: string;
 	destructiveBorder: string;
 	destructiveSurfaceBorder: string;
@@ -200,6 +215,7 @@ const light: ColorTokens = {
 	destructive: "#901B35",
 	destructiveForeground: "#FFFFFF",
 	destructiveVibrant: "#EF4444",
+	destructiveText: "#B91C1C",
 	destructiveSurface: "#FEE2E2",
 	destructiveBorder: "#FCA5A5",
 	destructiveSurfaceBorder: "#FECACA",
@@ -309,6 +325,7 @@ const dark: ColorTokens = {
 	destructive: "#901B35",
 	destructiveForeground: "#FFFFFF",
 	destructiveVibrant: "#EF4444",
+	destructiveText: "#F87171",
 	destructiveSurface: "#EF444433",
 	destructiveBorder: "#FCA5A5",
 	destructiveSurfaceBorder: "#FECACA",

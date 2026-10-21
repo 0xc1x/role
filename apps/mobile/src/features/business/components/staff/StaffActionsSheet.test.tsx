@@ -720,10 +720,11 @@ test("una acción rechazada se pinta con la prosa del API y deja la hoja abierta
 
 	// El motivo lo escribió el API: la app no lo tapa.
 	expect(html).toContain("Tu plan no admite otro acceso.");
-	// Y se pinta con el rojo de la casa: el `destructive` oscuro no se lee
-	// sobre la superficie de la hoja.
+	// Y se pinta con la prosa del error: `destructiveText`, el único rojo que
+	// pasa AA sobre la superficie de la hoja (`destructiveVibrant` medía
+	// 3.43:1 en claro y 3.71:1 en oscuro).
 	expect(textStyle("Tu plan no admite otro acceso.")).toEqual({
-		color: light.destructiveVibrant,
+		color: light.destructiveText,
 	});
 	// Y la hoja sigue abierta: la persona puede leerlo y reintentar.
 	expect(closed).toEqual([]);

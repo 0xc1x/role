@@ -315,10 +315,7 @@ export function StaffActionsSheet({
 			</View>
 
 			{error ? (
-				<AppText
-					variant="bodySmall"
-					style={{ color: colors.destructiveVibrant }}
-				>
+				<AppText variant="bodySmall" style={{ color: colors.destructiveText }}>
 					{error}
 				</AppText>
 			) : null}

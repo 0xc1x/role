@@ -145,7 +145,7 @@ export function TransferOwnershipSheet({
 				{error ? (
 					<AppText
 						variant="bodySmall"
-						style={{ color: colors.destructiveVibrant }}
+						style={{ color: colors.destructiveText }}
 					>
 						{error}
 					</AppText>

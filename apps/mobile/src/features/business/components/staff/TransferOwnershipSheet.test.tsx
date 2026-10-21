@@ -509,10 +509,11 @@ test("un rechazo se pinta con la prosa del API y deja la hoja utilizable", async
 
 	// Lo que ve la persona es la prosa del API: la app no la tapa.
 	expect(html).toContain(SERVER_PROSE);
-	// Y se pinta con el rojo de la casa: el `destructive` oscuro no se lee
-	// sobre la superficie de la hoja.
+	// Y se pinta con la prosa del error: `destructiveText`, el único rojo que
+	// pasa AA sobre la superficie de la hoja (`destructiveVibrant` medía
+	// 3.43:1 en claro y 3.71:1 en oscuro).
 	expect(textStyle(SERVER_PROSE)).toEqual({
-		color: light.destructiveVibrant,
+		color: light.destructiveText,
 	});
 	// Y la hoja sigue en pie: se puede leer y reintentar.
 	expect(button(confirmLabel())).toBeDefined();

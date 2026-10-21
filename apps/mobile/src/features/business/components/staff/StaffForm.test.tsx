@@ -92,6 +92,24 @@ let radios: PressProps[] = [];
 let radioGroups: ViewProps[] = [];
 let html = "";
 
+/**
+ * Los textos pintados, con su prosa y su `style`.
+ *
+ * El `style` es lo que se mira para la SEVERIDAD: un aviso que se pinta con
+ * el rojo de un fallo está mintiendo, porque el acceso se puede guardar
+ * igual.
+ */
+interface TextProbe {
+	text: string;
+	style?: unknown;
+}
+let texts: TextProbe[] = [];
+
+/** El `style` del texto con esa prosa. */
+function textStyle(copy: string): unknown {
+	return texts.find((candidate) => candidate.text === copy)?.style;
+}
+
 /** El texto que un nodo pinta. */
 function textOf(node: unknown): string {
 	if (typeof node === "string" || typeof node === "number") return String(node);
@@ -151,8 +169,10 @@ mock.module("@/src/core/theme", () => ({
 }));
 
 mock.module("@/src/core/ui", () => ({
-	AppText: ({ children }: { children?: ReactNode }) =>
-		createElement(nativeWeb.Text, null, children),
+	AppText: (props: { children?: ReactNode; style?: unknown }) => {
+		texts.push({ text: textOf(props.children), style: props.style });
+		return createElement(nativeWeb.Text, null, props.children);
+	},
 	TextField: (props: FieldProps) => {
 		fields.push(props);
 		return createElement(
@@ -230,6 +250,7 @@ function render(
 	switches = [];
 	radios = [];
 	radioGroups = [];
+	texts = [];
 	html = renderToStaticMarkup(
 		createElement(StaffForm, {
 			locations: props.locations ?? [CENTRO, SUR],
@@ -459,6 +480,26 @@ test("el error del servidor se pinta con su prosa", () => {
 	render({ error: "Tu plan no admite otro acceso." });
 
 	expect(html).toContain("Tu plan no admite otro acceso.");
+});
+
+test("el aviso del dominio lleva el ámbar de la casa, no el rojo de un fallo", () => {
+	typeAlias("ana@panaderialafamilia.ec");
+
+	// Es un AVISO: el alta se puede enviar igual, y el dominio es un dato que
+	// la persona escribe. Pintarlo con el rojo de un fallo engaña.
+	expect(textStyle(strings.business.staff.aliasWarning)).toEqual({
+		color: light.warningText,
+	});
+});
+
+test("el error del alta lleva la prosa del error, que sí se lee", () => {
+	render({ error: "Tu plan no admite otro acceso." });
+
+	// Un ERROR sí es un error: lleva el rojo de la prosa (`destructiveText`),
+	// el único rojo que pasa AA sobre la tarjeta del formulario.
+	expect(textStyle("Tu plan no admite otro acceso.")).toEqual({
+		color: light.destructiveText,
+	});
 });
 
 test("mientras se envía, el botón no se puede volver a tocar", () => {

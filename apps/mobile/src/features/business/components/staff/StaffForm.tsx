@@ -303,11 +303,15 @@ export function StaffForm({
 										: null
 							}
 						/>
+						{/* El aviso del §9.4 es un AVISO, no un fallo: el acceso se
+						    puede guardar igual, y el dominio es un dato que la
+						    persona escribe. Por eso lleva el ámbar de la casa
+						    (`warningText`), no el rojo. */}
 						{warningCodes.map((code) => (
 							<AppText
 								key={code}
 								variant="bodySmall"
-								style={{ color: colors.destructive }}
+								style={{ color: colors.warningText }}
 							>
 								{ALIAS_WARNING_COPY[code]}
 							</AppText>
@@ -387,12 +391,13 @@ export function StaffForm({
 					{/* El pie dice el alcance EFECTIVO: en el alta, marcar al
 					    menos una es obligatorio; en la edición, un alcance vacío
 					    es una verdad que se avisa, no un error que impide
-					    guardar. */}
+					    guardar. Por eso el aviso lleva el ámbar de la casa
+					    (`warningText`): el acceso se guarda igual. */}
 					<AppText
 						variant="bodySmall"
 						style={{
 							color: showsNoLocationsWarning
-								? colors.destructive
+								? colors.warningText
 								: colors.mutedForeground,
 						}}
 					>
@@ -449,7 +454,7 @@ export function StaffForm({
 			</Card>
 
 			{error ? (
-				<AppText variant="bodySmall" style={{ color: colors.destructive }}>
+				<AppText variant="bodySmall" style={{ color: colors.destructiveText }}>
 					{error}
 				</AppText>
 			) : null}
