@@ -67,6 +67,47 @@ export function useBusinessLocations(businessId: string | null) {
 }
 
 /**
+ * La página MÍNIMA para el conteo: una fila y el filtro del motor.
+ *
+ * No se quiere ninguna fila —se quiere el `total`—, así que la página pide
+ * una. Y el filtro es el del motor: `business_locations … is_active`.
+ */
+const ACTIVE_LOCATIONS_COUNT_PAGE = {
+	page: 1,
+	limit: 1,
+	is_active: true,
+} as const;
+
+/**
+ * El CONTEO EXACTO de las sucursales activas del negocio.
+ *
+ * ─── POR QUÉ NO SE CUENTA LA LISTA ───────────────────────────────────────────
+ *
+ * Porque la lista se pide con el máximo del contrato —100 filas— y un
+ * negocio con más de cien sucursales contaría las que se le ven, no las que
+ * tiene. El motor cuenta `business_locations … is_active`, así que el panel
+ * tiene que contar lo MISMO: la API filtra por `is_active` y devuelve el
+ * TOTAL SIN PAGINAR en el `meta`, y de ahí sale el número.
+ *
+ * ─── Y SI LA LECTURA FALLA ───────────────────────────────────────────────────
+ *
+ * El contador es `null` y el panel lo pinta como «—»: un «0» pintado por un
+ * error de red afirma que el negocio no usa nada, y este número existe para
+ * decir si está por encima del tope.
+ */
+export function useBusinessActiveLocationsCount(businessId: string | null) {
+	return useQuery({
+		queryKey: businessesKeys.locationsCount(businessId ?? ""),
+		queryFn: () =>
+			businessLocationsApi
+				.forBusiness(businessId as string)
+				.list(ACTIVE_LOCATIONS_COUNT_PAGE),
+		enabled: Boolean(businessId),
+		staleTime: 30_000,
+	});
+}
+
+/**
  * Las ubicaciones viven bajo la clave del negocio, no bajo `businessesKeys.lists()`:
  * invalidar la lista de negocios por escrito un punto de retiro refetcharía
  * páginas que el operador no está tocando. Se invalidan solo ellas.

@@ -118,6 +118,14 @@ function stubFetch(
 		/** El catálogo falla: es la rama de error de la lectura. */
 		catalogueError?: { status?: number; body?: unknown };
 		locations?: unknown[];
+		/**
+		 * El TOTAL que dice la API para las sucursales activas.
+		 *
+		 * Va aparte del arreglo a propósito: el contador tiene que salir del
+		 * total, y un doble que obliga a que el total sea el largo de la
+		 * lista no puede afirmar de dónde salió el número.
+		 */
+		locationsTotal?: number;
 		/** La lista de puntos de retiro falla. */
 		locationsError?: { status?: number; body?: unknown };
 		staff?: unknown[];
@@ -180,6 +188,16 @@ function stubFetch(
 				);
 			}
 			const rows = options.locations ?? [];
+			// El CONTEO de las sucursales activas es otra consulta: pide una
+			// fila y filtra por `is_active`, y de eso vive el número que el
+			// panel muestra. La lista y el conteo no son la misma pregunta.
+			if (url.includes("is_active=true")) {
+				const total = options.locationsTotal ?? rows.length;
+				return json({
+					data: rows.slice(0, 1),
+					meta: { page: 1, limit: 1, total, total_pages: total },
+				});
+			}
 			return json({
 				data: rows,
 				meta: { page: 1, limit: 100, total: rows.length, total_pages: 1 },
@@ -381,6 +399,30 @@ describe("pestaña Plan del negocio", () => {
 		const buttons = screen.getAllByRole("button");
 		expect(buttons).toHaveLength(1);
 		expect(buttons[0]?.textContent).toContain("Cambiar plan");
+	});
+
+	// El contador tiene que ser EXACTO: sale del total que devuelve la API
+	// —la misma pregunta que hace el motor— y no del largo de una lista que
+	// viene topeada en cien filas. Un negocio con más de cien sucursales
+	// contaría las que se le ven.
+	test("el conteo de sucursales sale del total de la API, no del largo de la lista", async () => {
+		stubFetch({
+			subscription: subscription({
+				plan_code: "pro",
+				since: "2026-10-01T10:00:00.000Z",
+				limits: PRO_PLAN.limits,
+				features: PRO_PLAN.features,
+			}),
+			// La lista trae UNA fila, pero la API dice que hay siete activas.
+			locations: [locations[0]],
+			locationsTotal: 7,
+			staff: [owner, staff],
+		});
+		renderTab();
+
+		await waitFor(() => expect(screen.getByText("7 de 5")).toBeDefined());
+		// Y el largo de la lista no aparece por ningún lado.
+		expect(screen.queryByText("1 de 5")).toBeNull();
 	});
 });
 

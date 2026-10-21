@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@/test-utils/dom";
 import { businessesKeys } from "../businesses.keys";
 import {
+	useBusinessActiveLocationsCount,
 	useBusinessLocations,
 	useCreateBusinessLocation,
 	useDeleteBusinessLocation,
@@ -100,6 +101,31 @@ describe("ubicaciones del negocio — capa de datos", () => {
 
 		expect(result.current.fetchStatus).toBe("idle");
 		expect(calls).toHaveLength(0);
+	});
+
+	// El CONTEO tiene que ser exacto, y el total de la API es lo exacto:
+	// la lista viene topeada en cien filas y contarla daría un número
+	// falso para el negocio que tiene más.
+	test("el conteo de sucursales activas pregunta el total, no la lista", async () => {
+		const calls = stubFetch(200, {
+			data: [location],
+			meta: { page: 1, limit: 1, total: 7, total_pages: 7 },
+		});
+		const { result } = setup(
+			() => useBusinessActiveLocationsCount(businessId),
+			{
+				seed: false,
+			},
+		);
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+		// La pregunta es la del motor: las sucursales ACTIVAS.
+		expect(calls[0]?.url).toContain(`/businesses/${businessId}/locations`);
+		expect(calls[0]?.url).toContain("is_active=true");
+		// Y de las filas se pide UNA: lo que se quiere es el total.
+		expect(calls[0]?.url).toContain("limit=1");
+		expect(result.current.data?.meta.total).toBe(7);
 	});
 
 	// Escribir un punto de retiro no puede invalidar `businessesKeys.lists()`: la

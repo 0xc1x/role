@@ -14,7 +14,7 @@ import {
 	useBusinessPlans,
 	useBusinessSubscription,
 } from "../queries/business-subscription.queries";
-import { useBusinessLocations } from "../queries/businesses.queries";
+import { useBusinessActiveLocationsCount } from "../queries/businesses.queries";
 import { BusinessPlanChangeDialog } from "./business-plan-change-dialog";
 
 /**
@@ -58,7 +58,7 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 	// El catálogo se pide gateado por la MISMA bandera que el resto de la
 	// pestaña: si el operador no está mirando el plan, no se pide.
 	const plans = useBusinessPlans(Boolean(businessId));
-	const locations = useBusinessLocations(businessId);
+	const locationsCount = useBusinessActiveLocationsCount(businessId);
 	const staff = useBusinessStaff(businessId);
 	// El diálogo se abre PARA un negocio. La pestaña sigue montada cuando se
 	// deja de mirarla (los paneles inactivos no se desmontan), así que el
@@ -102,19 +102,20 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 	const current = subscription.data;
 
 	// Las sucursales que CUENTAN son las activas: es lo que cuenta el motor
-	// (§5.3), y una sucursal dada de baja no consume cupo. El conteo sale de
-	// las filas que trae la lista del panel, que pide el máximo del contrato
-	// (100): un negocio con más de cien sucursales contaría las que se le
-	// ven, y los topes del catálogo llegan hasta cinco.
+	// (§5.3), y una sucursal dada de baja no consume cupo.
+	//
+	// El conteo sale del TOTAL que devuelve la API —la misma pregunta que
+	// hace el motor, `business_locations … is_active`—, y no del largo de una
+	// lista: la lista se pide con el máximo del contrato (100) y un negocio
+	// con más de cien sucursales contaría las que se le ven.
 	//
 	// `null` cuando la lectura FALLÓ: un «0» pintado por un error de red
 	// afirma que el negocio no usa nada, y este bloque existe justo para
 	// dizer si está por encima del tope. Un conteo que no se pudo leer se
 	// dice que no se pudo leer.
-	const locationsUsed = locations.isError
+	const locationsUsed = locationsCount.isError
 		? null
-		: (locations.data?.data ?? []).filter((location) => location.is_active)
-				.length;
+		: (locationsCount.data?.meta.total ?? null);
 	// El dueño NO consume cupo: el motor excluye al `owner` del conteo, y el
 	// conteo del panel tiene que contar lo mismo que el motor.
 	const membersUsed = staff.isError
@@ -178,7 +179,7 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 					label="Sucursales"
 					used={locationsUsed}
 					cap={current.limits.max_locations}
-					isPending={locations.isPending}
+					isPending={locationsCount.isPending}
 				/>
 				<UsageRow
 					label="Miembros"
@@ -186,7 +187,7 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 					cap={current.limits.max_members}
 					isPending={staff.isPending}
 				/>
-				{locations.isError || staff.isError ? (
+				{locationsCount.isError || staff.isError ? (
 					<p className="text-destructive text-sm">
 						No se pudo leer el uso del negocio: los conteos de arriba no están
 						disponibles.
