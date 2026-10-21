@@ -1,6 +1,8 @@
+import { type Href, router } from "expo-router";
 import type { BusinessLocation, BusinessMemberDto } from "@0xc1x/role-commons";
 import { StyleSheet, View } from "react-native";
 
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { strings } from "@/src/core/i18n/strings";
 import { AppText, StatusBadge } from "@/src/core/ui";
@@ -65,18 +67,27 @@ function staffSessionLabel(ttlHours: number): string {
 /**
  * Un acceso del equipo: quién es, qué alcanza, cómo entra y si está en pie.
  *
- * ─── POR QUÉ NO HAY ACCIONES TODAVÍA ──────────────────────────────────────────
+ * ─── POR QUÉ EL BOTÓN DE EDITAR NO SE OFRECE AL DUEÑO ────────────────────────
  *
- * Porque las acciones sobre un acceso (cambiar el rol, el alias o el alcance,
- * rotar el PIN, pausar, reactivar y dar de baja) llegan en las Tasks 9, 10 y
- * 13, y se montan EN LA PANTALLA: la tarjeta dice qué es un acceso y el menú
- * dice qué se le puede hacer. Una tarjeta con acciones a medias sería media
- * puerta.
+ * Porque la propiedad del negocio no se cambia editando un acceso: se
+ * TRANSFIERE, y el API rechaza (`R0002`) un cambio de rol sobre el dueño. Un
+ * botón que lleva a una pantalla que el servidor va a rechazar es una puerta
+ * que se abre para encontrar un error.
+ *
+ * ─── Y POR QUÉ LA TARJETA SÍ DICE QUÉ SE PUEDE HACER ─────────────────────────
+ *
+ * Porque la lista es el lugar donde se ve QUIÉN es cada acceso, y ahí es donde
+ * se decide qué se le hace: la tarjeta dice qué es un acceso y ofrece la
+ * entrada a lo que se le puede cambiar. Las demás acciones —rotar el PIN,
+ * pausar, reactivar, dar de baja— llegan en las Tasks 10 y 13 sobre esta misma
+ * tarjeta.
  */
 export function StaffMemberCard({
+	businessId,
 	member,
 	locations,
 }: {
+	businessId: string;
 	member: BusinessMemberDto;
 	/**
 	 * Las sucursales del negocio. La tarjeta NO las busca: las trae quien la
@@ -86,6 +97,7 @@ export function StaffMemberCard({
 }) {
 	const { colors } = useTheme();
 	const isPaused = member.status === "disabled";
+	const isOwner = member.role === "owner";
 
 	return (
 		<View
@@ -157,6 +169,26 @@ export function StaffMemberCard({
 						: strings.business.staff.neverLoggedIn}
 				</AppText>
 			</View>
+
+			{isOwner ? null : (
+				<Button
+					variant="outline"
+					// El botón dice a QUIÉN se edita: en una lista de accesos,
+					// un «Editar» a secas es un botón que no dice de qué.
+					accessibilityLabel={strings.business.staff.editAccessibilityLabel.replace(
+						"{name}",
+						member.label,
+					)}
+					onPress={() =>
+						router.push(
+							`/business/${businessId}/staff/${member.id}/edit` as Href,
+						)
+					}
+					style={styles.editButton}
+				>
+					{strings.business.staff.edit}
+				</Button>
+			)}
 		</View>
 	);
 }
@@ -219,4 +251,5 @@ const styles = StyleSheet.create({
 	skeletonBadge: { height: 22, width: 72, borderRadius: radii.pill },
 	skeletonLine: { height: 12, width: "70%", borderRadius: radii.sm },
 	skeletonLineShort: { height: 12, width: "45%", borderRadius: radii.sm },
+	editButton: { marginTop: spacing.sm },
 });

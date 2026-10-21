@@ -1604,6 +1604,25 @@ export const strings = {
 			deliveryCopied: "Alias y PIN copiados",
 			deliveryCopyFailed: "No se pudo copiar. Cópialo a mano.",
 			deliveryClose: "Listo, ya lo entregué",
+			// La edición de un acceso (Task 9). El nombre NO se edita —ninguna
+			// de las nueve rutas del §8 lo renombra—, así que en la edición se
+			// MUESTRA como texto y no como un campo que alguien pueda
+			// cambiar.
+			editTitle: "Editar acceso",
+			edit: "Editar",
+			editAccessibilityLabel: "Editar el acceso de {name}",
+			saveChanges: "Guardar cambios",
+			editSaved: "Acceso actualizado",
+			ownerNotEditable:
+				"El acceso del dueño no se edita: la propiedad del negocio se transfiere.",
+			nameReadOnly:
+				"El nombre con el que lo reconoces no se cambia aquí.",
+			// El alias no puede quedar vacío en la edición: es con lo que la
+			// persona entra. «Vacío = lo propone el servidor» es una regla del
+			// ALTA, no de la edición.
+			aliasRequired: "El alias no puede quedar vacío",
+			aliasEditHint:
+				"Con este alias entra la persona. No puede quedar vacío.",
 		},
 	},
 	// Copy del panel multi-negocio (app/my-business/*). Antes vivía como

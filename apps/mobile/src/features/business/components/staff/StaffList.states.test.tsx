@@ -29,10 +29,10 @@ import { mockNativeUi } from "@/src/test-utils/native-mocks";
  *
  * ─── Y LO QUE NO ─────────────────────────────────────────────────────────────
  *
- * Las ACCIONES sobre un acceso (pausar, rotar, cambiar el alias) no están: las
- * agregan las Tasks 9, 10 y 13 sobre esta misma tarjeta. Esta tarea afirma
- * que la tarjeta NO ofrece acciones: un botón que todavía no existe es una
- * puerta que se puede abrir por error.
+ * Las acciones sobre un acceso (pausar, rotar, eliminar) no están: las
+ * agregan las Tasks 10 y 13 sobre esta misma tarjeta. Esta tarea afirma que
+ * la tarjeta ofrece SÓLO la entrada a la edición, y que el dueño —a quien la
+ * propiedad se le TRANSFIERE, no se le edita— no la tiene.
  */
 
 const BUSINESS_ID = "11111111-1111-4111-8111-111111111111";
@@ -232,7 +232,11 @@ const renderCard = (
 	locations: BusinessLocation[] = [],
 ) =>
 	renderToStaticMarkup(
-		createElement(StaffMemberCard, { member: access, locations }),
+		createElement(StaffMemberCard, {
+			businessId: BUSINESS_ID,
+			member: access,
+			locations,
+		}),
 	);
 
 beforeEach(() => {
@@ -318,8 +322,9 @@ test("con dos accesos hay una tarjeta por acceso y la sección cuenta dos", () =
 	expect(html).toContain("ana@panaderia.role.ec");
 	expect(html).toContain("Luis Vega");
 	expect(html).toContain("luis@panaderia.role.ec");
-	// Y la tarjeta NO ofrece acciones: las agregan las Tasks 9, 10 y 13.
-	expect(buttons).toHaveLength(0);
+	// Y la tarjeta ofrece la entrada a la edición: una por acceso, y las
+	// demás acciones llegan en las Tasks 10 y 13.
+	expect(buttons).toHaveLength(2);
 
 	// Y la sección del panel anuncia el conteo.
 	const section = renderSection("owner");
@@ -371,9 +376,8 @@ test("la tarjeta dice el rol, el alcance, la sesión, la última entrada y el es
 	expect(html).toContain(strings.business.staff.sessionNever);
 	expect(html).toContain(formatDateTime(lastLogin));
 	expect(html).toContain(strings.business.staff.statusPaused);
-	// Una tarjeta sin acciones es lo que esta tarea promises: el menú de lo
-	// que se le puede hacer a un acceso llega en las Tasks 9, 10 y 13.
-	expect(buttons).toHaveLength(0);
+	// La única acción de la tarjeta es la entrada a la edición.
+	expect(buttons).toHaveLength(1);
 });
 
 test("una sesión por turnos dice las horas y un acceso que nunca entró lo dice", () => {
@@ -429,6 +433,40 @@ test("un acceso sin alcance alcanza a todas las sucursales", () => {
 	expect(html).not.toContain(
 		strings.business.staff.locations.replace("{n}", "0"),
 	);
+});
+
+// ─── La entrada a la edición ─────────────────────────────────────────────────
+
+test("un acceso que no es el dueño ofrece editar y lleva a su pantalla", () => {
+	const html = renderCard(member({ role: "staff" }));
+
+	expect(html).toContain(strings.business.staff.edit);
+
+	const editar = buttons.find(
+		(button) => button.label === strings.business.staff.edit,
+	);
+	expect(editar).toBeDefined();
+	// El botón dice a QUIÉN se edita: en una lista, un «Editar» a secas es
+	// un botón que no dice de qué.
+	expect(editar?.accessibilityLabel).toBe(
+		strings.business.staff.editAccessibilityLabel.replace(
+			"{name}",
+			"Ana Torres",
+		),
+	);
+	editar?.onPress?.();
+
+	// La ruta lleva al acceso CONCRETO: editar «alguien» no dice a quién.
+	expect(navigations).toEqual([
+		`/business/${BUSINESS_ID}/staff/${member().id}/edit`,
+	]);
+});
+
+test("el dueño no ofrece editar: la propiedad se transfiere, no se edita", () => {
+	const html = renderCard(member({ role: "owner" }));
+
+	expect(html).not.toContain(strings.business.staff.edit);
+	expect(buttons).toHaveLength(0);
 });
 
 // ─── La tarjeta de la sección ─────────────────────────────────────────────────

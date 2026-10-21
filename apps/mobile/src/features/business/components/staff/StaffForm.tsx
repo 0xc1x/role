@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import {
 	BusinessMemberAliasSchema,
 	type BusinessLocation,
+	type StaffAliasWarningCode,
 } from "@0xc1x/role-commons";
 
 import { Button } from "@/components/ui/button";
@@ -19,14 +20,15 @@ import { AppText, TextField } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
-import { aliasWarnings } from "@/src/features/business/data/staff";
+import { aliasWarnings as computeAliasWarnings } from "@/src/features/business/data/staff";
 
 /**
  * Lo que el formulario entrega al API.
  *
  * El alias es OPCIONAL y su ausencia es un dato: vacío significa que lo
  * propone el servidor (`{código}@{slug}.role.ec`), y mandarlo vacío sería
- * mandarle un alias que no existe.
+ * mandarle un alias que no existe. En la EDICIÓN el alias nunca falta: lo
+ * tiene el acceso, y un acceso sin alias es un acceso con el que nadie entra.
  */
 export interface StaffFormValues {
 	label: string;
@@ -34,6 +36,23 @@ export interface StaffFormValues {
 	business_location_ids: string[];
 	session_ttl_hours: number;
 	alias?: string;
+}
+
+/**
+ * Los valores con los que el formulario llega PINTADO en modo edición.
+ *
+ * El `label` viene porque el formulario lo muestra —como texto, no como un
+ * campo: ninguna de las nueve rutas del §8 renombra a nadie—, pero la pantalla
+ * NO lo manda en el `PATCH`: el `UpdateBusinessMemberSchema` es estricto y no
+ * acepta un `label` que nadie pidió cambiar.
+ */
+export interface StaffFormInitial {
+	/** El nombre con el que el dueño lo presentó. Se MUESTRA, no se edita. */
+	label: string;
+	role: "manager" | "staff";
+	business_location_ids: string[];
+	session_ttl_hours: number;
+	alias: string;
 }
 
 /**
@@ -46,7 +65,18 @@ export interface StaffFormValues {
 const SHIFT_SESSION_TTL_HOURS = 24;
 
 /**
- * El formulario del alta de un acceso (§9.2).
+ * La prosa de cada aviso del §9.4.
+ *
+ * Los códigos son del CONTRATO (`StaffAliasWarningCode`) y la prosa es de la
+ * app: un código sin su frase sería un aviso que no dice nada, y una frase
+ * sin su código sería una verdad que nadie puede leer.
+ */
+const ALIAS_WARNING_COPY: Record<StaffAliasWarningCode, string> = {
+	alias_domain_can_receive_mail: strings.business.staff.aliasWarning,
+};
+
+/**
+ * El formulario del alta de un acceso (§9.2) y de su edición (§9.2).
  *
  * ─── POR QUÉ EL AVISO DEL DOMINIO LO CONTESTA COMMONS ─────────────────────────
  *
@@ -57,6 +87,16 @@ const SHIFT_SESSION_TTL_HOURS = 24;
  * dos verdades sobre la misma regla son dos reglas que algún día dejan de
  * coincidir.
  *
+ * ─── Y POR QUÉ EN LA EDICIÓN EL AVISO LO CONTESTA EL API ─────────────────────
+ *
+ * Porque en la edición el alias YA EXISTE: lo que se está a punto de guardar es
+ * una decisión del servidor —que además cambia el correo de `auth.users`—, y la
+ * respuesta de `PATCH …/alias` trae su propio `alias_warnings`. Calcularlo en
+ * el cliente sería dar la misma respuesta con una regla que puede derivar de la
+ * del API sin que nadie se entere: el aviso del ALTA se anticipa, el de la
+ * EDICIÓN se cuenta. Por eso el formulario pinta en modo edición SÓLO los
+ * códigos que le pasa quien pinta la pantalla.
+ *
  * ─── Y POR QUÉ EL MODO PERSISTENTE SÓLO EXISTE PARA EL GERENTE ───────────────
  *
  * Porque lo dice el §9.2 y porque el API lo rechaza: `assertPersistentSessionIsAllowed`
@@ -66,12 +106,30 @@ const SHIFT_SESSION_TTL_HOURS = 24;
  */
 export function StaffForm({
 	locations,
+	initial,
+	aliasWarnings,
 	submitting,
 	error,
 	onSubmit,
 }: {
 	/** Las sucursales del negocio: el alcance que se puede marcar. */
 	locations: BusinessLocation[];
+	/**
+	 * Los valores con los que el formulario llega pintado.
+	 *
+	 * Su presencia es lo que hace que el formulario sea de EDICIÓN: el nombre
+	 * deja de editarse, el alias deja de poder quedar vacío y el aviso del
+	 * dominio deja de calcularse en el cliente.
+	 */
+	initial?: StaffFormInitial;
+	/**
+	 * Los avisos del §9.4 que CONTESTÓ EL API.
+	 *
+	 * Sólo se usan en modo edición: en el alta el aviso se anticipa con la
+	 * regla del contrato, y lo que el servidor responda después es la
+	 * autoridad.
+	 */
+	aliasWarnings?: StaffAliasWarningCode[];
 	/** El alta está en vuelo: el botón no se vuelve a tocar. */
 	submitting: boolean;
 	/** El motivo del fallo, con la prosa que el API ya escribió. */
@@ -79,19 +137,32 @@ export function StaffForm({
 	onSubmit: (values: StaffFormValues) => void;
 }) {
 	const { colors } = useTheme();
-	const [label, setLabel] = useState("");
-	const [role, setRole] = useState<"manager" | "staff">("staff");
-	const [alias, setAlias] = useState("");
-	const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
-	const [persistentSession, setPersistentSession] = useState(false);
+	const isEdit = initial !== undefined;
+	const [label, setLabel] = useState(initial?.label ?? "");
+	const [role, setRole] = useState<"manager" | "staff">(initial?.role ?? "staff");
+	const [alias, setAlias] = useState(initial?.alias ?? "");
+	const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(
+		initial?.business_location_ids ?? [],
+	);
+	// El `0` del acceso es «sin expiración»: el interruptor empieza dado
+	// cuando el valor con el que llega es ese. Un valor CUALQUIERA —24, 8—
+	// es la política de por turnos, con el interruptor apagado.
+	const [persistentSession, setPersistentSession] = useState(
+		initial !== undefined &&
+			initial.role === "manager" &&
+			initial.session_ttl_hours === 0,
+	);
 
 	const trimmedAlias = alias.trim();
 	const labelValid = label.trim().length > 0;
-	// El alias vacío es válido —lo propone el servidor—; uno escrito tiene que
-	// ser un correo, y el validador es el del CONTRATO, no uno más laxo.
-	const aliasValid =
-		trimmedAlias === "" ||
-		BusinessMemberAliasSchema.safeParse(trimmedAlias).success;
+	// En el ALTA el alias vacío es válido —lo propone el servidor—; en la
+	// EDICIÓN no: un acceso sin alias es un acceso con el que nadie entra, y
+	// «vacío = lo propone el servidor» es una regla del alta, no de la
+	// edición.
+	const aliasValid = isEdit
+		? BusinessMemberAliasSchema.safeParse(trimmedAlias).success
+		: trimmedAlias === "" ||
+			BusinessMemberAliasSchema.safeParse(trimmedAlias).success;
 	const locationsValid = selectedLocationIds.length > 0;
 	const canSubmit = labelValid && aliasValid && locationsValid && !submitting;
 
@@ -100,10 +171,15 @@ export function StaffForm({
 	const sessionTtlHours =
 		role === "manager" && persistentSession ? 0 : SHIFT_SESSION_TTL_HOURS;
 
-	// El aviso del §9.4 vive con el campo, mientras se escribe: el dueño ve la
-	// consecuencia de lo que está tecleando antes de guardarlo.
-	const showsDomainWarning =
-		trimmedAlias !== "" && aliasWarnings(trimmedAlias).length > 0;
+	// El aviso del §9.4: en el ALTA se anticipa con la regla del contrato,
+	// mientras se escribe —el dueño ve la consecuencia de lo que está
+	// tecleando antes de guardarlo—; en la EDICIÓN lo cuenta el API, y lo
+	// único que se pinta es lo que él devolvió.
+	const warningCodes: StaffAliasWarningCode[] = isEdit
+		? (aliasWarnings ?? [])
+		: trimmedAlias !== ""
+			? computeAliasWarnings(trimmedAlias)
+			: [];
 
 	const toggleLocation = (locationId: string) => {
 		setSelectedLocationIds((current) =>
@@ -135,17 +211,42 @@ export function StaffForm({
 					</AppText>
 				</CardHeader>
 				<CardContent>
-					<TextField
-						label={strings.business.staff.nameLabel}
-						value={label}
-						onChangeText={setLabel}
-						hint={strings.business.staff.nameHint}
-						error={
-							label.length > 0 && !labelValid
-								? strings.business.staff.nameRequired
-								: null
-						}
-					/>
+					{isEdit ? (
+						// El nombre NO se edita: ninguna de las nueve rutas del §8
+						// renombra a nadie, y un campo editable aquí sería una
+						// puerta por donde entra un cambio que el API ni
+						// siquiera acepta.
+						<View style={styles.identity}>
+							<AppText
+								variant="labelSmall"
+								weight="semiBold"
+								style={{ color: colors.mutedForeground }}
+							>
+								{strings.business.staff.nameLabel}
+							</AppText>
+							<AppText variant="bodyMedium" weight="semiBold">
+								{label}
+							</AppText>
+							<AppText
+								variant="bodySmall"
+								style={{ color: colors.mutedForeground }}
+							>
+								{strings.business.staff.nameReadOnly}
+							</AppText>
+						</View>
+					) : (
+						<TextField
+							label={strings.business.staff.nameLabel}
+							value={label}
+							onChangeText={setLabel}
+							hint={strings.business.staff.nameHint}
+							error={
+								label.length > 0 && !labelValid
+									? strings.business.staff.nameRequired
+									: null
+							}
+						/>
+					)}
 					<View style={styles.spaced}>
 						<TextField
 							label={strings.business.staff.aliasLabel}
@@ -156,27 +257,39 @@ export function StaffForm({
 							autoCorrect={false}
 							keyboardType="email-address"
 							error={
-								trimmedAlias !== "" && !aliasValid
-									? strings.business.staff.aliasInvalid
-									: null
+								isEdit
+									? trimmedAlias === ""
+										? strings.business.staff.aliasRequired
+										: !aliasValid
+											? strings.business.staff.aliasInvalid
+											: null
+									: trimmedAlias !== "" && !aliasValid
+										? strings.business.staff.aliasInvalid
+										: null
 							}
 						/>
-						{showsDomainWarning ? (
+						{warningCodes.map((code) => (
 							<AppText
+								key={code}
 								variant="bodySmall"
 								style={{ color: colors.destructive }}
 							>
-								{strings.business.staff.aliasWarning}
+								{ALIAS_WARNING_COPY[code]}
 							</AppText>
-						) : null}
+						))}
 					</View>
 				</CardContent>
 				<CardFooter>
+					{/* El recordatorio del «vacío = lo propone el servidor» es del
+					    ALTA: en la edición el alias ya existe y no puede quedar
+					    vacío, así que la frase sería una regla que no aplica. */}
 					<AppText
 						variant="bodySmall"
 						style={{ color: colors.mutedForeground }}
 					>
-						{strings.business.staff.aliasHint}
+						{isEdit
+							? strings.business.staff.aliasEditHint
+							: strings.business.staff.aliasHint}
 					</AppText>
 				</CardFooter>
 			</Card>
@@ -302,7 +415,9 @@ export function StaffForm({
 				disabled={!canSubmit}
 				onPress={submit}
 			>
-				{strings.business.staff.createAccess}
+				{isEdit
+					? strings.business.staff.saveChanges
+					: strings.business.staff.createAccess}
 			</Button>
 		</View>
 	);
@@ -393,6 +508,7 @@ function LocationOption({
 const styles = StyleSheet.create({
 	container: { gap: spacing.md },
 	spaced: { marginTop: spacing.lg },
+	identity: { gap: 2 },
 	flex1: { flex: 1, gap: 2 },
 	option: {
 		borderRadius: radii.md,

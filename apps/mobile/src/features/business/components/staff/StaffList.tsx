@@ -85,6 +85,7 @@ export function StaffList({
 			{data.map((member) => (
 				<StaffMemberCard
 					key={member.id}
+					businessId={businessId}
 					member={member}
 					locations={locations}
 				/>
