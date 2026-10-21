@@ -1327,6 +1327,174 @@ describe('StaffService', () => {
     });
 
     /**
+     * EL GERENTE QUE CORTE AL EQUIPO QUE ADMINISTRA, y no sólo a sí mismo.
+     *
+     * ─── POR QUÉ ESTE TEST MODELA LA BASE Y NO LA RESUELVE ──────────────────────
+     *
+     * Porque el predicado de alcance lo contesta la BASE, y lo contesta leyendo
+     * la fila DEL QUE LLAMA: el `caller` CTE de
+     * `20261020134712_member_scope_predicates.sql` (línea 87) exige que la
+     * membresía del llamador esté `status = 'active'`, y sin esa fila la
+     * respuesta es `false` —alcanza a NADA, ni siquiera a sí mismo—. Los tests
+     * de este bloque usaban un doble que contestaba siempre lo mismo, así que
+     * no podían ver lo que pasa cuando la escritura del corte cambia la fila
+     * del llamador.
+     *
+     * Y lo que pasa es el fallo entero: el gerente está en SU PROPIO roster
+     * (`created_at` lo pone antes que al empleado que administra), el corte lo
+     * desactiva, y a partir de ahí la base dice que el gerente no alcanza a
+     * nadie. El corte se detenía en el gerente y dejaba al equipo con la
+     * tablet abierta —que es exactamente lo que la operación existe para
+     * evitar—.
+     *
+     * ─── POR QUÉ EL DOBLE ES ESTATAL Y NO UNA COPIA DE LA REGLA ──────────────────
+     *
+     * Porque el doble ES la base de este test, y una base sin estado no puede
+     * mostrar un fallo que depende del estado. Lo que se modela son TRES hechos
+     * del SQL, no la regla entera: la fila del llamador tiene que estar viva,
+     * el alcance del objetivo tiene que estar contenido en el del llamador, y
+     * un `UPDATE` cambia el `status` de verdad.
+     */
+    it('el corte de un gerente alcanza a SU EQUIPO, aunque el corte lo desactive a él primero', async () => {
+      // El estado VIVO de la base, y el ORDEN en que el roster lo devuelve:
+      // `created_at` ascendente, así que el dueño va primero, después el
+      // gerente, y después el empleado que el gerente administra.
+      const ownerLive = ownerRow();
+      const managerLive = managerRow([LOC_A, LOC_B]);
+      const staffLive = memberRow({ id: MEMBER_STAFF });
+
+      const rows = new Map<string, BusinessMemberRow>([
+        [MEMBER_OWNER, ownerLive],
+        [MEMBER_MANAGER, managerLive],
+        [MEMBER_STAFF, staffLive],
+      ]);
+      const scopes = new Map<string, string[]>([
+        [MEMBER_OWNER, []],
+        [MEMBER_MANAGER, [LOC_A, LOC_B]],
+        [MEMBER_STAFF, [LOC_A]],
+      ]);
+
+      repository.listMembersWithScope.mockResolvedValue([
+        { row: ownerLive, locationIds: [] },
+        { row: managerLive, locationIds: [LOC_A, LOC_B] },
+        { row: staffLive, locationIds: [LOC_A] },
+      ]);
+
+      repository.findMemberByUser.mockImplementation(
+        async (_businessId: string, userId: string) => {
+          for (const row of rows.values()) {
+            if (row.user_id === userId) return { ...row };
+          }
+          return null;
+        },
+      );
+
+      repository.locationIdsOfMember.mockImplementation(async (id: string) => [
+        ...(scopes.get(id) ?? []),
+      ]);
+
+      /**
+       * El predicado de la base, con el `caller` CTE: la fila del llamador tiene
+       * que estar VIVA, y el alcance del objetivo tiene que estar contenido en
+       * el suyo. Sin lo primero, la respuesta es `false` —y eso es lo que hace
+       * que el corte de un gerente se detenga en el gerente.
+       */
+      repository.reachesMember.mockImplementation(
+        async (
+          _businessId: string,
+          memberId: string,
+          callerUserId: string,
+        ): Promise<boolean> => {
+          const caller = [...rows.values()].find(
+            (row) => row.user_id === callerUserId && row.status === 'active',
+          );
+          if (!caller) return false;
+          if (caller.role === 'owner') return true;
+          const callerScope = scopes.get(caller.id) ?? [];
+          const targetScope = scopes.get(memberId) ?? [];
+          if (callerScope.length === 0) return false;
+          if (targetScope.length === 0) return false;
+          return targetScope.every((id) => callerScope.includes(id));
+        },
+      );
+
+      /**
+       * La escritura MUEVE la fila, como el `UPDATE` de verdad: el `status`
+       * cambia en el estado que la base contesta después.
+       */
+      repository.updateMember.mockImplementation(
+        async (
+          _businessId: string,
+          memberId: string,
+          values: Record<string, unknown>,
+        ) => {
+          const row = rows.get(memberId);
+          if (!row) return null;
+          const next = { ...row, ...values } as BusinessMemberRow;
+          rows.set(memberId, next);
+          return next;
+        },
+      );
+
+      const result = await service.revokeAll(managerAB, BIZ);
+
+      // El gerente se corta a sí mismo —su alcance lo contiene, y la exclusión
+      // del §8 es sobre el ROL del dueño, no sobre la persona— Y su equipo se
+      // corta con él: el empleado de {A} está dentro de su {A, B}.
+      expect(result.disabled.map((member) => member.id)).toContain(
+        MEMBER_MANAGER,
+      );
+      expect(result.disabled.map((member) => member.id)).toContain(
+        MEMBER_STAFF,
+      );
+      // Y en el ORDEN del roster: el gerente primero, después su equipo.
+      expect(result.disabled.map((member) => member.id)).toEqual([
+        MEMBER_MANAGER,
+        MEMBER_STAFF,
+      ]);
+
+      // El empleado se cortó de verdad: fila y login.
+      expect(repository.updateMember).toHaveBeenCalledWith(BIZ, MEMBER_STAFF, {
+        status: 'disabled',
+      });
+      expect(authAdmin.updateUserById).toHaveBeenCalledWith(STAFF_USER, {
+        ban_duration: '876000h',
+      });
+      // Y el dueño, ni una vez: la exclusión es por ROL.
+      expect(repository.updateMember).not.toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_OWNER,
+        expect.anything(),
+      );
+      expect(authAdmin.updateUserById).not.toHaveBeenCalledWith(
+        OWNER_USER,
+        expect.anything(),
+      );
+    });
+
+    /**
+     * EL NEGOCIO VACÍO, que es un CONTRATO DOCUMENTADO y no tenía test.
+     *
+     * El docblock de `revokeAll` promete `200 { disabled: [], owner_skipped:
+     * false }` para un negocio sin equipo —o que no existe—, y esa promesa es
+     * idempotencia: un reintento tiene que ser seguro. Es también el caso que
+     * el panel de admin se encuentra (un negocio sin equipo), así que la
+     * respuesta tiene que poder pintarse.
+     */
+    it('un negocio sin equipo es un 200 vacío: no corta nada y no inventa un dueño', async () => {
+      repository.listMembersWithScope.mockResolvedValue([]);
+      repository.liveOwnerCount.mockResolvedValue(0);
+
+      const result = await service.revokeAll(admin, BIZ);
+
+      expect(result).toEqual({ disabled: [], owner_skipped: false });
+      expect(RevokeBusinessAccessResponseSchema.parse(result)).toEqual(result);
+      // Y NADA se escribió: ni una fila, ni un login, ni un ban.
+      expect(repository.updateMember).not.toHaveBeenCalled();
+      expect(authAdmin.updateUserById).not.toHaveBeenCalled();
+    });
+
+    /**
      * El dueño NUNCA entra en la lista, y su fila y su login no se tocan.
      *
      * ─── Y POR QUÉ NO SE AFIRMA QUE `business_live_owner_count` NO CAMBIÓ ─────────

@@ -166,9 +166,10 @@ export class StaffService {
     //
     // La regla la contesta la base, y la base la contesta de a uno en uno: no
     // hay helper que devuelva el conjunto de ids alcanzables. El roster está
-    // topado por plan —2 accesos en `free`, 20 en `pro`, sin tope en
-    // `pro_plus`—, así que el peor caso son veinte idas. Una versión de una
-    // sola llamada es una decisión de performance, y este plan no la toma.
+    // topado por plan —2 accesos en `free`, 20 en `pro`—, pero `pro_plus` NO
+    // tiene tope, así que el peor caso es el TAMAÑO DEL ROSTER y no un número.
+    // Una versión de una sola llamada es una decisión de performance, y este
+    // plan no la toma.
     const reachable: MemberWithScope[] = [];
     for (const member of members) {
       if (await this.reaches(actor, member.row)) reachable.push(member);
@@ -1074,8 +1075,29 @@ export class StaffService {
    * El roster se pide UNA vez y el alcance se contesta de a uno: no hay helper
    * que devuelva el conjunto de ids alcanzables, y `list()` ya decidió no
    * tomarlo. El roster está topado por plan —2 accesos en `free`, 20 en `pro`—,
-   * así que el peor caso son veinte idas. El corte de emergencia no es el
-   * momento de cambiar esa decisión.
+   * pero `pro_plus` NO tiene tope, así que el peor caso es el TAMAÑO DEL
+   * ROSTER y no un número. El corte de emergencia no es el momento de cambiar
+   * esa decisión.
+   *
+   * ─── Y LAS DOS PASADAS, Y POR QUÉ NO SE PUEDE HACER EN UNA ─────────────────────
+   *
+   * El corte se decide en dos pasadas: primero se calcula el conjunto alcanzable
+   * y después se corta, y el motivo es que el llamador PUEDE ESTAR EN EL
+   * CONJUNTO QUE CORTA.
+   *
+   * Un gerente se corta a sí mismo —la exclusión del §8 es sobre el ROL del
+   * dueño, no sobre la persona— y el roster lo pone antes que al empleado que
+   * administra. El predicado de alcance lo contesta la BASE, y la base lo
+   * contesta leyendo la fila del llamador: `business_member_reaches_member`
+   * exige que esa fila esté `status = 'active'` y, si no lo está, contesta
+   * «no alcanza a nada». Preguntar el alcance DENTRO del bucle de escritura
+   * hacía que la fila del gerente ya estuviera pausada cuando se llegaba al
+   * empleado: el corte se detenía en el gerente y dejaba al equipo con la
+   * tablet abierta.
+   *
+   * Dos pasadas no son dos reglas: el alcance se decide con el MISMO predicado
+   * que usa `list()`, las mismas preguntas, en el mismo número de idas. Lo que
+   * cambia es CUÁNDO se pregunta: antes de escribir, no después.
    */
   async revokeAll(
     user: AuthUser,
@@ -1088,7 +1110,29 @@ export class StaffService {
 
     const ownerSkipped = (await this.repository.liveOwnerCount(businessId)) > 0;
 
-    const disabled: BusinessMemberDto[] = [];
+    // ─── PRIMERA PASADA: EL CONJUNTO ALCANZABLE, CON EL QUE LLAMA TODAVÍA VIVO ──
+    //
+    // El alcance se calcula ANTES de cortar, y no por gusto: el predicado lo
+    // contesta la BASE, y la base lo contesta leyendo la fila DEL QUE LLAMA
+    // (`business_member_reaches_member`, el `caller` CTE de
+    // `20261020134712_member_scope_predicates.sql`: la membresía del llamador
+    // tiene que estar `status = 'active'`).
+    //
+    // Y el llamador PUEDE estar en el conjunto que corta: un gerente se corta a
+    // sí mismo —su alcance lo contiene, y la exclusión del §8 es sobre el ROL
+    // del dueño, no sobre la persona—, y el roster lo pone antes que al
+    // empleado que administra (`created_at` ascendente). Si el alcance se
+    // preguntara dentro del bucle de escritura, la fila del gerente ya estaría
+    // `disabled` cuando se llegara al empleado: la base respondería «no alcanza
+    // a nada» y el corte se detendría en el gerente, dejando al equipo con la
+    // tablet abierta — que es exactamente lo que la operación existe para
+    // evitar.
+    //
+    // Las dos pasadas no cambian el alcance de la operación: mismas preguntas,
+    // mismo número de idas al alcance, y el alcance se decide con el MISMO
+    // predicado que usa `list()`, para que la lista y el corte no puedan
+    // apartarse.
+    const reachable: MemberWithScope[] = [];
     for (const member of roster) {
       // El dueño primero: no se corta, ni por él, ni por un gerente, ni por la
       // plataforma.
@@ -1097,10 +1141,19 @@ export class StaffService {
       // Sólo los activos: lo que ya está pausado no se vuelve a cortar.
       if (member.row.status !== 'active') continue;
 
-      // Y sólo lo que el que llama administra: el MISMO predicado que usa
-      // `list()`, para que la lista y el corte no puedan apartarse.
+      // Y sólo lo que el que llama administra.
       if (actor && !(await this.reaches(actor, member.row))) continue;
 
+      reachable.push(member);
+    }
+
+    // ─── SEGUNDA PASADA: LOS CORTES, EN EL ORDEN DEL ROSTER ─────────────────────
+    //
+    // La escritura va después de TODA la lectura del alcance, y por eso el
+    // alcance de esta pasada ya no depende de que el llamador siga vivo: se
+    // decidió con la fila que había antes del corte.
+    const disabled: BusinessMemberDto[] = [];
+    for (const member of reachable) {
       const cut = await this.cutAccess(
         businessId,
         member.row,
