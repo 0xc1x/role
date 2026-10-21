@@ -64,6 +64,24 @@
 -- filas VIVAS del mismo negocio son un plan con dos respuestas, y el motor
 -- leería una de las dos.
 --
+-- ─── NO HAY ÍNDICE ÚNICO PARA EL SUJETO PERSONA, Y POR QUÉ ──────────────────
+--
+-- `subscriptions_live_business_key` cubre SÓLO el sujeto de negocio: dos
+-- suscripciones VIVAS de la misma persona se pueden meter hoy, y nada las
+-- niegue.
+--
+-- Es correcto a propósito, y no por descuido: los planes de consumidor están
+-- FUERA de este plan —no hay superficie que los ofrezca y no se siembra ni uno—,
+-- así que la unicidad del sujeto de persona no protege nada todavía. Lo que
+-- protege es que el sujeto de negocio tenga UNA respuesta.
+--
+-- Pero el día que exista un `user_plan_of` —el gemelo de `business_plan_of`
+-- para las personas— esta tabla necesita su propio índice único parcial, con
+-- la MISMA forma que el del negocio: `on (user_id) where user_id is not null
+-- and cancelled_at is null and deleted_at is null`. Está anotado acá para que
+-- ese día el índice se escriba con el mismo criterio, y no se descubra
+-- entonces que faltaba.
+--
 -- ─── `business_plan_of`: MISMO NOMBRE, MISMA FIRMA, MISMA ACL ────────────────
 --
 -- La función conserva nombre, firma, `stable`, `security definer` y

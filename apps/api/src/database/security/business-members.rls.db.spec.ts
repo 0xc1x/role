@@ -5082,9 +5082,16 @@ describe('los límites del plan bloquean crecer, no operar', () => {
       // tope y bajar después, y el de plan borrado nace con la suscripción `pro`
       // ya en `deleted_at` — que es como se ve un negocio al que le borraron el
       // plan, no un negocio sin suscripción.
+      //
+      // Y el grandfathered tiene DOS filas a propósito: la viva, que es la que
+      // cuenta, y una ARCHIVADA de antes, que es HISTORIA. La fila archivada
+      // hace de contraprueba de la baja de plan de más abajo: un `update` por
+      // `business_id` la reescribiría con el plan de ahora, y un negocio que
+      // cambió de plan no puede tener su historia reescrita.
       await tx.unsafe(`
         insert into public.subscriptions (business_id, plan_code, deleted_at)
         values ('${BIZ_GRANDFATHERED}', 'pro_plus', null),
+               ('${BIZ_GRANDFATHERED}', 'pro',      now()),
                ('${BIZ_PLAN_DELETED}',   'pro',       now()),
                ('${BIZ_PRO}',            'pro',       null),
                ('${BIZ_PRO_PLUS}',       'pro_plus',  null);
@@ -5187,10 +5194,22 @@ describe('los límites del plan bloquean crecer, no operar', () => {
       // Y POR ÚLTIMO LE BAJAN EL PLAN. A partir de acá el negocio tiene tres
       // sucursales y tres accesos bajo `free`, que es un estado que el motor no
       // habría dejado crear y que el §5.4 perdona.
+      //
+      // Y la baja se le hace a LA SUSCRIPCIÓN VIVA, no a todas las filas del
+      // negocio: `subscriptions` guarda HISTORIA —una suscripción cancelada o
+      // archivada se queda para decir qué hubo— y un `update` por `business_id`
+      // reescribiría esa historia con el plan de ahora. La fila viva se localiza
+      // por su `id`, que es lo que un `update` a una fila tiene que hacer.
       await tx.unsafe(
         `update public.subscriptions
             set plan_code = 'free'
-          where business_id = '${BIZ_GRANDFATHERED}'`,
+          where id = (
+            select id
+              from public.subscriptions
+             where business_id = '${BIZ_GRANDFATHERED}'
+               and cancelled_at is null
+               and deleted_at is null
+          )`,
       );
 
       // Y EL NEGOCIO DEL TOPE SE ACTIVA, y el orden es obligatorio:
@@ -5420,6 +5439,31 @@ describe('los límites del plan bloquean crecer, no operar', () => {
                  'staff_access'::public.business_feature) as staff_access`),
     );
     expect(plainRows(read)[0]?.staff_access).toBe(true);
+  });
+
+  // ─── LA BAJA DE UN PLAN TOCA SÓLO LA FILA VIVA ─────────────────────────────
+
+  test('bajar el plan no reescribe la historia del negocio', async () => {
+    // El negocio del fixture tiene DOS suscripciones: la viva, que es la que
+    // cuenta, y una archivada de antes, que es HISTORIA. La baja de plan se
+    // hizo sobre la viva, y la archivada sigue diciendo lo que decía.
+    //
+    // Sin esto, un `update ... where business_id = '…'` —que en la tabla vieja
+    // tocaba una fila porque `business_id` era la PRIMARY KEY— reescribiría la
+    // historia con el plan de ahora, y el patrón lo copiaría Task 5.
+    const rows = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ plan_code: string; viva: boolean }[]>(
+        `select plan_code, (deleted_at is null) as viva
+           from public.subscriptions
+          where business_id = '${BIZ_GRANDFATHERED}'
+          order by viva desc`,
+      ),
+    ).then((rows) => plainRows(rows));
+
+    expect(rows).toEqual([
+      { plan_code: 'free', viva: true },
+      { plan_code: 'pro', viva: false },
+    ]);
   });
 
   // ─── LOS NÚMEROS DEL §4.5, MEDIDOS Y NO DECLARADOS ────────────────────────

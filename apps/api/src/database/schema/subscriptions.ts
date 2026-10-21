@@ -40,6 +40,21 @@ import { profiles } from './profiles';
  * inalcanzable la negativa del motor. La columna es el enum y el motor lee el
  * catálogo; esta tabla no opina.
  *
+ * ─── EL ÍNDICE ÚNICO SÓLO ABORDA EL SUJETO DE NEGOCIO ───────────────────────
+ *
+ * `subscriptions_live_business_key` es UNIQUE sobre `(business_id)` y lo es
+ * SÓLO para las filas vivas. Del sujeto de persona NO hay índice: dos
+ * suscripciones vivas de la misma persona se pueden meter hoy.
+ *
+ * Es correcto a propósito: los planes de consumidor están fuera de este plan
+ * —no hay superficie que los ofrezca y no se siembra ni uno—, así que la
+ * unicidad de ese sujeto no protege nada todavía. Pero el día que exista un
+ * `user_plan_of` —el gemelo de `business_plan_of` para las personas— esta
+ * tabla necesita su propio índice único parcial, con la misma forma que el del
+ * negocio: `on (user_id) where user_id is not null and cancelled_at is null and
+ * deleted_at is null`. Está anotado acá para que ese día se escriba con el
+ * mismo criterio, y no se descubra entonces que faltaba.
+ *
  * ─── `updated_at` LO MANTIENE UN TRIGGER, NO LA APLICACIÓN ───────────────────
  *
  * El trigger `set_subscriptions_updated_at` de la base pone `now()` en la
