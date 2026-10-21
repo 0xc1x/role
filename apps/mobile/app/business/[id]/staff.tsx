@@ -33,6 +33,15 @@ import {
  * compara con el id de la ruta. Pasarlo por la URL dejaría que la URL mintiera
  * sobre el rol, y el rol decide si se ofrece el corte de emergencia. La
  * puerta de verdad, de todas formas, la tiene el API: esto es UX.
+ *
+ * ─── Y POR QUÉ «DAR ACCESO» DEPENDE DEL ROL ───────────────────────────────────
+ *
+ * Porque dar de alta un acceso es ADMINISTRAR el equipo, y eso lo hacen el
+ * dueño y el gerente: el API le responde un 403 al empleado («Un empleado no
+ * administra los accesos del negocio»). Y mientras el rol no se sabe —el
+ * panel todavía está cargando— la puerta se cierra por defecto: el botón no
+ * se ofrece. La fila entera se oculta, no sólo el botón: una fila vacía deja
+ * márgenes que empujan el contenido hacia abajo.
  */
 export default function BusinessStaffScreen() {
 	const { colors } = useTheme();
@@ -48,6 +57,11 @@ export default function BusinessStaffScreen() {
 	const { data: businesses } = useBusinesses(profile?.id ?? "");
 	const role = businesses?.find((business) => business.id === businessId)?.role;
 
+	// Dar acceso lo hace quien ADMINISTRA el equipo: el dueño y el gerente.
+	// Un empleado no da de alta a nadie —el API se lo niega con un 403— y la
+	// puerta se cierra por defecto mientras el rol todavía no se sabe.
+	const canAddAccess = role === "owner" || role === "manager";
+
 	// Las sucursales las trae quien pinta: la tarjeta dice el alcance de cada
 	// acceso y, con una sola sucursal, dice su nombre.
 	const { data: locations } = useBusinessLocations(businessId);
@@ -58,22 +72,24 @@ export default function BusinessStaffScreen() {
 				title={strings.business.staff.title}
 				fallback={`/business/${businessId}`}
 			/>
-			<View style={styles.actions}>
-				<Button
-					size="sm"
-					icon={<Plus size={16} color={colors.primaryForeground} />}
-					// «Dar acceso» a secas no dice a QUIÉN se da el acceso: el
-					// lector de pantalla necesita el objeto.
-					accessibilityLabel={
-						strings.business.staff.addAccessAccessibilityLabel
-					}
-					onPress={() =>
-						router.push(`/business/${businessId}/staff/new` as Href)
-					}
-				>
-					{strings.business.staff.addAccess}
-				</Button>
-			</View>
+			{canAddAccess ? (
+				<View style={styles.actions}>
+					<Button
+						size="sm"
+						icon={<Plus size={16} color={colors.primaryForeground} />}
+						// «Dar acceso» a secas no dice a QUIÉN se da el acceso: el
+						// lector de pantalla necesita el objeto.
+						accessibilityLabel={
+							strings.business.staff.addAccessAccessibilityLabel
+						}
+						onPress={() =>
+							router.push(`/business/${businessId}/staff/new` as Href)
+						}
+					>
+						{strings.business.staff.addAccess}
+					</Button>
+				</View>
+			) : null}
 			{role ? <RevokeAllCard businessId={businessId} role={role} /> : null}
 			<StaffList
 				businessId={businessId}

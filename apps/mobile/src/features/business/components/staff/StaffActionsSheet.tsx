@@ -50,6 +50,15 @@ import { TransferOwnershipSheet } from "./TransferOwnershipSheet";
  * de valer el PIN que la persona tenía. Sin una ventana de por medio, un
  * toque-equivocado deja a un empleado fuera del negocio.
  *
+ * ─── POR QUÉ LA BAJA SÓLO LA PIDE EL DUEÑO ───────────────────────────────────
+ *
+ * Porque el API lo dice con su prosa: «Dar de baja un acceso es del dueño del
+ * negocio, no de un gerente» (`DELETE /businesses/:id/staff/:memberId`, §8).
+ * Un gerente que pulses la baja llega hasta el diálogo de confirmación —donde
+ * se dice lo que NO se recupera— y sólo entonces recibe un 403. Un botón que
+ * el servidor va a rechazar es una puerta que se abre para encontrar un error,
+ * y el error llega tarde: cuando la persona ya creyó que lo estaba haciendo.
+ *
  * ─── POR QUÉ LA TRANSFERENCIA SÓLO LA VE EL DUEÑO ────────────────────────────
  *
  * Porque la propiedad la entrega QUIEN ES EL DUEÑO: la base exige que quien
@@ -126,6 +135,11 @@ export function StaffActionsSheet({
 	// La transferencia la pide el DUEÑO y el receptor tiene que ser un acceso
 	// ACTIVO. El dueño no llega aquí: la hoja se cierra para él antes.
 	const canTransfer = actorRole === "owner" && !isPaused;
+	// La BAJA también la pide el dueño: el API la leal al dueño y le responde
+	// un 403 al gerente («Dar de baja un acceso es del dueño del negocio, no
+	// de un gerente»). Un rol que todavía no se sabe NO la ofrece tampoco: la
+	// puerta se cierra por defecto.
+	const canRemove = actorRole === "owner";
 	// Con una mutación en vuelo no se ofrece otra: dos rotaciones seguidas
 	// dejarían un PIN entregado que ya no vale, y dos pausas no dicen más que
 	// una.
@@ -288,14 +302,16 @@ export function StaffActionsSheet({
 					</Button>
 				) : null}
 
-				<Button
-					variant="destructive"
-					disabled={busy}
-					onPress={() => setPending("remove")}
-					style={styles.action}
-				>
-					{strings.business.staff.actionRemove}
-				</Button>
+				{canRemove ? (
+					<Button
+						variant="destructive"
+						disabled={busy}
+						onPress={() => setPending("remove")}
+						style={styles.action}
+					>
+						{strings.business.staff.actionRemove}
+					</Button>
+				) : null}
 			</View>
 
 			{error ? (

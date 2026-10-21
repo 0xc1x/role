@@ -469,6 +469,44 @@ test("un gerente no ve la transferencia: la propiedad no es suya", () => {
 	expect(button(strings.business.staff.transferTrigger)).toBeUndefined();
 });
 
+// ─── La baja es del dueño ─────────────────────────────────────────────────────
+//
+// El API responde al `DELETE` con un 403 para quien no sea el dueño («Dar de
+// baja un acceso es del dueño del negocio, no de un gerente»). Un botón que
+// el servidor va a rechazar es una puerta que se abre para encontrar un
+// error.
+
+test("un gerente no ve la baja: la baja la pide el dueño", () => {
+	renderWith(member(), "manager");
+
+	expect(button(strings.business.staff.actionRemove)).toBeUndefined();
+});
+
+test("un gerente sí ve lo que el API le deja hacer: editar, rotar y pausar", () => {
+	renderWith(member(), "manager");
+
+	expect(button(strings.business.staff.edit)).toBeDefined();
+	expect(button(strings.business.staff.actionRotate)).toBeDefined();
+	expect(button(strings.business.staff.actionPause)).toBeDefined();
+	// Y lo que no puede hacer, no está: ni la transferencia ni la baja.
+	expect(button(strings.business.staff.transferTrigger)).toBeUndefined();
+	expect(button(strings.business.staff.actionRemove)).toBeUndefined();
+});
+
+test("un rol que todavía no se sabe no ve la baja", () => {
+	// La puerta se cierra por defecto: mientras no se sepa quién mira, la
+	// baja no se ofrece.
+	renderWith(member(), undefined);
+
+	expect(button(strings.business.staff.actionRemove)).toBeUndefined();
+});
+
+test("el dueño sí ve la baja", () => {
+	renderWith(member(), "owner");
+
+	expect(button(strings.business.staff.actionRemove)).toBeDefined();
+});
+
 test("un rol que todavía no se sabe no ve la transferencia", () => {
 	// La puerta se cierra por defecto: mientras no se sepa quién mira, la
 	// transferencia no se ofrece.
