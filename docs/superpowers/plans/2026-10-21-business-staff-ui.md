@@ -866,4 +866,9 @@ git commit -m "feat(admin): pestañas en la ficha del negocio y equipo de sólo 
       superficie móvil del plan (Plan 5). — el escáner queda fuera por F8 (el empleado teclea el
       alias; el chip lo abarata), y la superficie móvil del Plan 5 vive en
       `docs/superpowers/plans/2026-10-21-generalized-subscriptions.md`.
-- [ ] Plan cerrado en este documento (casillas marcadas con su evidencia).
+- [x] Plan cerrado en este documento (casillas marcadas con su evidencia). — **Merge fast-forward a
+      `main` en `e60ff59`** (47 commits desde `cc97eae`). Las 14 tareas están completas y revisadas;
+      la revisión amplia de rama dio verde tras las rondas de arreglo (`5562b5f`, `6ccbdef`,
+      `738e0e3`, `054977a`, `a60a803`, `2313e20`, `6c1a6b5`, `184bddf`, `75e14ca`, `63f2bd4`,
+      `c06cd05`, `af838ff`, `e5a12d5`). La única casilla sin marcar es la del smoke manual, que
+      queda anotada como deuda operativa.
