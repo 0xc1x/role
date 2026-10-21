@@ -5,6 +5,7 @@ import { StyleSheet, View } from "react-native";
 import type {
 	BusinessMemberDeliveryCardDto,
 	BusinessMemberDto,
+	BusinessMemberRole,
 } from "@0xc1x/role-commons";
 import { Button } from "@/components/ui/button";
 import { toAppError } from "@/src/core/error/mapper";
@@ -18,6 +19,7 @@ import {
 	type StaffAccessAction,
 } from "./DisableAccessDialog";
 import { RotatePinSheet } from "./RotatePinSheet";
+import { TransferOwnershipSheet } from "./TransferOwnershipSheet";
 
 /**
  * Las acciones sobre UN acceso del equipo (§9.2).
@@ -32,11 +34,13 @@ import { RotatePinSheet } from "./RotatePinSheet";
  *
  * ─── POR QUÉ EL DUEÑO NO TIENE ACCIONES ───────────────────────────────────────
  *
- * Porque la propiedad del negocio no se administra desde aquí: se
- * TRANSFIERE, y el API rechaza (`R0002`) un cambio de rol sobre el dueño. La
- * hoja se cierra para él aunque se monte directamente —la tarjeta no ofrece
- * el botón, y la hoja tampoco ofrece acciones si el dueño llega a ella—:
- * dos barreras para el mismo hecho.
+ * Porque el acceso del DUEÑO no se administra desde aquí: no se edita —el API
+ * rechaza (`R0002`) un cambio de rol sobre el dueño— ni se pausa. Y tampoco se
+ * transfiere a sí mismo: la propiedad se TRANSFIERE a otro acceso, y la
+ * transferencia la pide el dueño —no se la pide a sí mismo—. La hoja se cierra
+ * para él aunque se monte directamente —la tarjeta no ofrece el botón, y la
+ * hoja tampoco ofrece acciones si el dueño llega a ella—: dos barreras para
+ * el mismo hecho.
  *
  * ─── POR QUÉ CADA MUTACIÓN PIDE CONFIRMACIÓN ──────────────────────────────────
  *
@@ -45,6 +49,22 @@ import { RotatePinSheet } from "./RotatePinSheet";
  * abiertas—, una baja lo deja sin poder volver a entrar, y una rotación deja
  * de valer el PIN que la persona tenía. Sin una ventana de por medio, un
  * toque-equivocado deja a un empleado fuera del negocio.
+ *
+ * ─── POR QUÉ LA TRANSFERENCIA SÓLO LA VE EL DUEÑO ────────────────────────────
+ *
+ * Porque la propiedad la entrega QUIEN ES EL DUEÑO: la base exige que quien
+ * llama sea el dueño vivo del negocio (`transfer_business_ownership` lee
+ * `auth.uid()` y busca esa fila). Un gerente que la pidiera recibiría un 422
+ * con el motivo, así que el botón no se le ofrece. Y un rol que todavía no se
+ * sabe —la pantalla del equipo aún está cargando— NO la ofrece tampoco: la
+ * puerta se cierra por defecto.
+ *
+ * ─── POR QUÉ EL RECEPTOR TIENE QUE ESTAR ACTIVO ───────────────────────────────
+ *
+ * Porque la base rechaza un receptor pausado o dado de baja («un acceso dado
+ * de baja, pausado o de otro negocio no puede recibir la propiedad»). Un
+ * botón que el servidor va a rechazar es una puerta que se abre para
+ * encontrar un error.
  *
  * ─── POR QUÉ EL ERROR NO CIERRA LA HOJA ───────────────────────────────────────
  *
@@ -55,6 +75,7 @@ import { RotatePinSheet } from "./RotatePinSheet";
 export function StaffActionsSheet({
 	businessId,
 	member,
+	actorRole,
 	onClose,
 	onRotated,
 }: {
@@ -62,6 +83,15 @@ export function StaffActionsSheet({
 	businessId: string;
 	/** El acceso sobre el que se actúa. */
 	member: BusinessMemberDto;
+	/**
+	 * El rol de QUIEN MIRA.
+	 *
+	 * No es el del acceso sobre el que se actúa: es el de la persona que tiene
+	 * la hoja abierta. La transferencia la pide el dueño, y sin este dato la
+	 * hoja no puede saber si puede ofrecerla. `undefined` es «todavía no se
+	 * sabe», y en ese caso no se ofrece.
+	 */
+	actorRole: BusinessMemberRole | undefined;
 	/** Cierra la hoja. */
 	onClose: () => void;
 	/**
@@ -86,11 +116,16 @@ export function StaffActionsSheet({
 	const [pending, setPending] = useState<StaffAccessAction | null>(null);
 	// La tarjeta del PIN rotado. Mientras exista, la hoja se sustituye por ella.
 	const [card, setCard] = useState<BusinessMemberDeliveryCardDto | null>(null);
+	// La hoja de transferencia abierta: sustituye a esta, como la tarjeta.
+	const [transferOpen, setTransferOpen] = useState(false);
 	// El error de la última acción: lo escribe el API y se pinta tal cual.
 	const [error, setError] = useState<string | null>(null);
 
 	const isOwner = member.role === "owner";
 	const isPaused = member.status === "disabled";
+	// La transferencia la pide el DUEÑO y el receptor tiene que ser un acceso
+	// ACTIVO. El dueño no llega aquí: la hoja se cierra para él antes.
+	const canTransfer = actorRole === "owner" && !isPaused;
 	// Con una mutación en vuelo no se ofrece otra: dos rotaciones seguidas
 	// dejarían un PIN entregado que ya no vale, y dos pausas no dicen más que
 	// una.
@@ -109,6 +144,18 @@ export function StaffActionsSheet({
 
 	// El dueño no se administra desde aquí: la hoja se queda vacía.
 	if (isOwner) return null;
+
+	// La hoja de transferencia SUSTITUYE a la de acciones: son dos modales y
+	// sólo uno puede estar abierto. Al cerrarla se cierra todo.
+	if (transferOpen) {
+		return (
+			<TransferOwnershipSheet
+				businessId={businessId}
+				member={member}
+				onClose={onClose}
+			/>
+		);
+	}
 
 	const fail = (cause: unknown) => {
 		setError(toAppError(cause, strings.business.genericError).message);
@@ -223,6 +270,17 @@ export function StaffActionsSheet({
 					</Button>
 				)}
 
+				{canTransfer ? (
+					<Button
+						variant="outline"
+						disabled={busy}
+						onPress={() => setTransferOpen(true)}
+						style={styles.action}
+					>
+						{strings.business.staff.transferTrigger}
+					</Button>
+				) : null}
+
 				<Button
 					variant="destructive"
 					disabled={busy}
@@ -234,7 +292,10 @@ export function StaffActionsSheet({
 			</View>
 
 			{error ? (
-				<AppText variant="bodySmall" style={{ color: colors.destructive }}>
+				<AppText
+					variant="bodySmall"
+					style={{ color: colors.destructiveVibrant }}
+				>
 					{error}
 				</AppText>
 			) : null}

@@ -1,5 +1,9 @@
 import { type Href, router } from "expo-router";
-import type { BusinessLocation, BusinessMemberDto } from "@0xc1x/role-commons";
+import type {
+	BusinessLocation,
+	BusinessMemberDto,
+	BusinessMemberRole,
+} from "@0xc1x/role-commons";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
@@ -103,6 +107,7 @@ export function StaffMemberCard({
 	businessId,
 	member,
 	locations,
+	actorRole,
 }: {
 	businessId: string;
 	member: BusinessMemberDto;
@@ -111,6 +116,14 @@ export function StaffMemberCard({
 	 * pinta, para que pintarla no sea una consulta más.
 	 */
 	locations: BusinessLocation[];
+	/**
+	 * El rol de QUIEN MIRA el equipo.
+	 *
+	 * No es el de este acceso: es el de la persona que está en la pantalla. La
+	 * hoja de acciones lo necesita para ofrecer —o no— la transferencia de la
+	 * propiedad, que sólo el dueño puede hacer.
+	 */
+	actorRole: BusinessMemberRole | undefined;
 }) {
 	const { colors } = useTheme();
 	const isPaused = member.status === "disabled";
@@ -232,6 +245,7 @@ export function StaffMemberCard({
 				<StaffActionsSheet
 					businessId={businessId}
 					member={member}
+					actorRole={actorRole}
 					onClose={() => setActionsOpen(false)}
 				/>
 			) : null}

@@ -1675,6 +1675,28 @@ export const strings = {
 			revokeAllResultOwnerSkipped:
 				"El dueño del negocio quedó fuera del corte.",
 			revokeAllResultEmpty: "No había accesos activos que cortar.",
+			// La transferencia de la propiedad (Task 13). El copy dice las DOS
+			// consecuencias —quién queda como dueño y quién queda como gerente—
+			// y la condición que hereda el dueño: no se puede pausar, ni dar de
+			// baja, ni borrar su cuenta mientras el negocio siga activo.
+			//
+			// Y el aviso del dueño intocable habla del ROL, no de una persona:
+			// después de la transferencia el que entrega es un gerente —y un
+			// gerente sí puede borrar su cuenta—, así que el aviso no le puede
+			// atribuir esa condición a quien transfiere.
+			transferTitle: "Transferir la propiedad",
+			transferBody:
+				"{name} pasa a ser el dueño del negocio y tú quedas como gerente, con el mismo alcance que tienes ahora.",
+			transferOwnerWarning:
+				"Un dueño no se puede pausar ni dar de baja, y no puede borrar su cuenta mientras el negocio siga activo.",
+			transferTrigger: "Transferir la propiedad",
+			transferConfirm: "Hacer a {name} el dueño",
+			// Los nombres del aviso salen de la RESPUESTA del API, no de lo que
+			// la app suponía: quien entrega y quien recibe quedan los dos con
+			// un rol nuevo.
+			transferSuccess:
+				"Ahora {newOwner} es el dueño; {previousOwner} queda como gerente.",
+			transferError: "No se pudo transferir la propiedad.",
 		},
 	},
 	// Copy del panel multi-negocio (app/my-business/*). Antes vivía como

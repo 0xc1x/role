@@ -42,7 +42,8 @@ export default function BusinessStaffScreen() {
 	useStaffSessionStamp(businessId);
 
 	// El rol de quien mira en este negocio: sin él no se sabe si el corte de
-	// emergencia se ofrece (un empleado no lo ve).
+	// emergencia se ofrece (un empleado no lo ve), ni si la hoja de acciones
+	// ofrece la transferencia de la propiedad (sólo el dueño la ofrece).
 	const profile = useAuthStore((s) => s.profile);
 	const { data: businesses } = useBusinesses(profile?.id ?? "");
 	const role = businesses?.find((business) => business.id === businessId)?.role;
@@ -74,7 +75,11 @@ export default function BusinessStaffScreen() {
 				</Button>
 			</View>
 			{role ? <RevokeAllCard businessId={businessId} role={role} /> : null}
-			<StaffList businessId={businessId} locations={locations ?? []} />
+			<StaffList
+				businessId={businessId}
+				locations={locations ?? []}
+				actorRole={role}
+			/>
 		</Screen>
 	);
 }

@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
 	BusinessMemberDeliveryCardDto,
 	BusinessMemberDto,
+	BusinessMemberRole,
 } from "@0xc1x/role-commons";
 import { Errors } from "@/src/core/error/app-error";
 import { strings } from "@/src/core/i18n/strings";
@@ -149,9 +150,24 @@ mock.module("@/components/ui/button", () => ({
 /** La hoja donde vive la tarjeta de entrega. */
 let sheetProps: { title?: string } | null = null;
 
+/**
+ * Los textos pintados, con su prosa y su `style`.
+ *
+ * El `style` es lo que se mira para el CONTRASTE: el color del texto va en la
+ * prop, no en el HTML, y el color es el dato (un texto apagado sobre la
+ * superficie de la hoja no se lee).
+ */
+interface TextProbe {
+	text: string;
+	style?: unknown;
+}
+let texts: TextProbe[] = [];
+
 mock.module("@/src/core/ui", () => ({
-	AppText: ({ children }: { children?: ReactNode }) =>
-		createElement(nativeWeb.Text, null, children),
+	AppText: (props: { children?: ReactNode; style?: unknown }) => {
+		texts.push({ text: textOf(props.children), style: props.style });
+		return createElement(nativeWeb.Text, null, props.children);
+	},
 	BottomSheetModal: (props: {
 		title?: string;
 		onClose?: () => void;
@@ -289,9 +305,20 @@ const closed: string[] = [];
 /** La callback que recibe la tarjeta rotada. */
 let onRotated: ((card: BusinessMemberDeliveryCardDto) => void) | undefined;
 
-function render(access: BusinessMemberDto = member()): void {
+/**
+ * El render con el rol de QUIEN MIRA.
+ *
+ * El rol va en un parámetro aparte —y sin valor por defecto— porque
+ * `undefined` es un valor DELIBERADO: es «el rol todavía no se sabe», y un
+ * parámetro con valor por defecto se lo comería.
+ */
+function renderWith(
+	access: BusinessMemberDto,
+	actorRole: BusinessMemberRole | undefined,
+): void {
 	hookCursor = 0;
 	buttons = [];
+	texts = [];
 	dialog = {};
 	sheetProps = null;
 	html = renderToStaticMarkup(
@@ -301,6 +328,7 @@ function render(access: BusinessMemberDto = member()): void {
 			createElement(StaffActionsSheet, {
 				businessId: BUSINESS_ID,
 				member: access,
+				actorRole,
 				onClose: () => closed.push("close"),
 				onRotated,
 			}),
@@ -308,9 +336,19 @@ function render(access: BusinessMemberDto = member()): void {
 	);
 }
 
+/** El render de siempre: quien mira es el dueño. */
+function render(access: BusinessMemberDto = member()): void {
+	renderWith(access, "owner");
+}
+
 /** El botón con esa etiqueta. */
 function button(label: string): ButtonProbe | undefined {
 	return buttons.find((candidate) => candidate.label === label);
+}
+
+/** El `style` del texto con esa prosa. */
+function textStyle(copy: string): unknown {
+	return texts.find((candidate) => candidate.text === copy)?.style;
 }
 
 /** El texto que un nodo pinta. */
@@ -396,6 +434,50 @@ test("el dueño no tiene acciones: la propiedad se transfiere, no se administra"
 	expect(buttons).toHaveLength(0);
 	expect(html).not.toContain(strings.business.staff.actionRotate);
 	expect(html).not.toContain(strings.business.staff.actionRemove);
+});
+
+// ─── La transferencia de la propiedad ─────────────────────────────────────────
+//
+// La transferencia la pide el DUEÑO, y no cualquiera: la base exige que
+// quien llama sea el dueño vivo del negocio. Y el receptor tiene que ser un
+// acceso ACTIVO: la base rechaza un acceso pausado o dado de baja.
+
+test("el dueño ve la transferencia de la propiedad", () => {
+	renderWith(member(), "owner");
+
+	expect(button(strings.business.staff.transferTrigger)).toBeDefined();
+});
+
+test("un gerente no ve la transferencia: la propiedad no es suya", () => {
+	renderWith(member(), "manager");
+
+	expect(button(strings.business.staff.transferTrigger)).toBeUndefined();
+});
+
+test("un rol que todavía no se sabe no ve la transferencia", () => {
+	// La puerta se cierra por defecto: mientras no se sepa quién mira, la
+	// transferencia no se ofrece.
+	renderWith(member(), undefined);
+
+	expect(button(strings.business.staff.transferTrigger)).toBeUndefined();
+});
+
+test("un acceso pausado no puede recibir la propiedad", () => {
+	renderWith(member({ status: "disabled" }), "owner");
+
+	expect(button(strings.business.staff.transferTrigger)).toBeUndefined();
+});
+
+test("al pulsar la transferencia se abre la hoja con el nombre del acceso", () => {
+	renderWith(member({ label: "Luis Vega" }), "owner");
+	button(strings.business.staff.transferTrigger)?.onPress?.();
+	renderWith(member({ label: "Luis Vega" }), "owner");
+
+	// La hoja de transferencia SUSTITUYE a la de acciones: son dos modales y
+	// sólo uno puede estar abierto.
+	expect(html).toContain("Luis Vega");
+	expect(html).toContain(strings.business.staff.transferTitle);
+	expect(html).not.toContain(strings.business.staff.actionsTitle);
 });
 
 // ─── Rotar el PIN ────────────────────────────────────────────────────────────
@@ -579,6 +661,11 @@ test("una acción rechazada se pinta con la prosa del API y deja la hoja abierta
 
 	// El motivo lo escribió el API: la app no lo tapa.
 	expect(html).toContain("Tu plan no admite otro acceso.");
+	// Y se pinta con el rojo de la casa: el `destructive` oscuro no se lee
+	// sobre la superficie de la hoja.
+	expect(textStyle("Tu plan no admite otro acceso.")).toEqual({
+		color: light.destructiveVibrant,
+	});
 	// Y la hoja sigue abierta: la persona puede leerlo y reintentar.
 	expect(closed).toEqual([]);
 });

@@ -2,7 +2,7 @@ import { type Href, router } from "expo-router";
 import { Users } from "lucide-react-native";
 import { StyleSheet, View } from "react-native";
 
-import type { BusinessLocation } from "@0xc1x/role-commons";
+import type { BusinessLocation, BusinessMemberRole } from "@0xc1x/role-commons";
 import { Button } from "@/components/ui/button";
 import { strings } from "@/src/core/i18n/strings";
 import { EmptyState, ErrorState } from "@/src/core/ui";
@@ -30,10 +30,20 @@ import { StaffMemberCard, StaffMemberCardSkeleton } from "./StaffMemberCard";
 export function StaffList({
 	businessId,
 	locations,
+	actorRole,
 }: {
 	businessId: string;
 	/** Las sucursales del negocio, para leer el alcance de cada acceso. */
 	locations: BusinessLocation[];
+	/**
+	 * El rol de QUIEN MIRA el equipo.
+	 *
+	 * No es el de cada acceso: es el de la persona que está en la pantalla. La
+	 * hoja de acciones lo necesita para ofrecer —o no— la transferencia de la
+	 * propiedad, que sólo el dueño puede hacer. `undefined` es «todavía no se
+	 * sabe», y en ese caso no se ofrece.
+	 */
+	actorRole: BusinessMemberRole | undefined;
 }) {
 	const { colors } = useTheme();
 	const { data, isLoading, isError, error, refetch } =
@@ -88,6 +98,7 @@ export function StaffList({
 					businessId={businessId}
 					member={member}
 					locations={locations}
+					actorRole={actorRole}
 				/>
 			))}
 		</View>

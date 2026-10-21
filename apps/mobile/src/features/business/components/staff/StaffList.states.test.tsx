@@ -5,7 +5,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 // @ts-expect-error react-native-web does not ship declarations in this workspace.
 import * as nativeWeb from "react-native-web";
 
-import type { BusinessLocation, BusinessMemberDto } from "@0xc1x/role-commons";
+import type {
+	BusinessLocation,
+	BusinessMemberDto,
+	BusinessMemberRole,
+} from "@0xc1x/role-commons";
 import { strings } from "@/src/core/i18n/strings";
 import { light } from "@/src/core/theme/colors";
 import { formatDateTime } from "@/src/core/utils/formatters";
@@ -52,8 +56,11 @@ const buttons: ButtonProbe[] = [];
 const errorStates: Array<{ error: unknown; onRetry?: () => void }> = [];
 
 /** Las hojas de acciones montadas, con las props con las que se pintaron. */
-const actionSheets: Array<{ businessId: string; member: BusinessMemberDto }> =
-	[];
+const actionSheets: Array<{
+	businessId: string;
+	member: BusinessMemberDto;
+	actorRole: BusinessMemberRole | undefined;
+}> = [];
 
 /** Cuántas veces se ha vuelto a pedir la lista. */
 let refetchCalls = 0;
@@ -135,6 +142,7 @@ mock.module("./StaffActionsSheet", () => ({
 	StaffActionsSheet: (props: {
 		businessId: string;
 		member: BusinessMemberDto;
+		actorRole: BusinessMemberRole | undefined;
 	}) => {
 		actionSheets.push(props);
 		return createElement(nativeWeb.Text, null, "STAFF_ACTIONS_SHEET");
@@ -268,7 +276,11 @@ const NORTE = location("66666666-6666-4666-8666-666666666666", "Norte");
 const renderList = (locations: BusinessLocation[] = []) => {
 	hookCursor = 0;
 	return renderToStaticMarkup(
-		createElement(StaffList, { businessId: BUSINESS_ID, locations }),
+		createElement(StaffList, {
+			businessId: BUSINESS_ID,
+			locations,
+			actorRole: "owner",
+		}),
 	);
 };
 
@@ -289,6 +301,7 @@ const renderCard = (
 			businessId: BUSINESS_ID,
 			member: access,
 			locations,
+			actorRole: "owner",
 		}),
 	);
 };
@@ -573,6 +586,9 @@ for (const role of ["staff", "manager"] as const) {
 		expect(actionSheets).toHaveLength(1);
 		expect(actionSheets[0]?.businessId).toBe(BUSINESS_ID);
 		expect(actionSheets[0]?.member.id).toBe(member().id);
+		// Y el rol de QUIEN MIRA viaja a la hoja: sin él no se puede ofrecer
+		// la transferencia de la propiedad, que sólo el dueño puede pedir.
+		expect(actionSheets[0]?.actorRole).toBe("owner");
 	});
 }
 
