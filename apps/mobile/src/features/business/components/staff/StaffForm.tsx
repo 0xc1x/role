@@ -188,17 +188,21 @@ export function StaffForm({
 					</AppText>
 				</CardHeader>
 				<CardContent>
-					<RoleOption
-						label={strings.business.staff.roleManager}
-						selected={role === "manager"}
-						onPress={() => setRole("manager")}
-					/>
-					<View style={styles.spaced}>
+					{/* El grupo: el lector de pantalla anuncia las dos opciones
+					    como una sola pregunta, y no como dos botones sueltos. */}
+					<View accessibilityRole="radiogroup">
 						<RoleOption
-							label={strings.business.staff.roleStaff}
-							selected={role === "staff"}
-							onPress={() => setRole("staff")}
+							label={strings.business.staff.roleManager}
+							selected={role === "manager"}
+							onPress={() => setRole("manager")}
 						/>
+						<View style={styles.spaced}>
+							<RoleOption
+								label={strings.business.staff.roleStaff}
+								selected={role === "staff"}
+								onPress={() => setRole("staff")}
+							/>
+						</View>
 					</View>
 				</CardContent>
 				<CardFooter>
@@ -258,12 +262,6 @@ export function StaffForm({
 								<AppText variant="bodyMedium" weight="semiBold">
 									{strings.business.staff.sessionNever}
 								</AppText>
-								<AppText
-									variant="bodySmall"
-									style={{ color: colors.mutedForeground }}
-								>
-									{strings.business.staff.sessionPersistentHint}
-								</AppText>
 							</View>
 							<Switch
 								checked={persistentSession}
@@ -277,11 +275,17 @@ export function StaffForm({
 					)}
 				</CardContent>
 				<CardFooter>
+					{/* El pie dice la política EFECTIVA, no una explicación fija:
+					    con el modo persistente dado, decir «la sesión dura 24
+					    horas» sería mentirle a la persona sobre lo que acaba de
+					    elegir. */}
 					<AppText
 						variant="bodySmall"
 						style={{ color: colors.mutedForeground }}
 					>
-						{strings.business.staff.sessionShiftsHint}
+						{role === "manager" && persistentSession
+							? strings.business.staff.sessionPersistentHint
+							: strings.business.staff.sessionShiftsHint}
 					</AppText>
 				</CardFooter>
 			</Card>
@@ -325,7 +329,7 @@ function RoleOption({
 		<Pressable
 			onPress={onPress}
 			accessibilityRole="radio"
-			accessibilityState={{ selected }}
+			accessibilityState={{ checked: selected }}
 			style={[
 				styles.option,
 				{
@@ -370,7 +374,15 @@ function LocationOption({
 			accessibilityState={{ checked }}
 			style={styles.locationRow}
 		>
-			<Checkbox checked={checked} onCheckedChange={onPress} />
+			{/* La fila es el control —un checkbox con su nombre— y la casilla
+			    de dentro es sólo el dibujo: sin `accessible={false}` el
+			    VoiceOver anunciaría una casilla suelta al lado de la fila que
+			    ya dice lo mismo. */}
+			<Checkbox
+				checked={checked}
+				onCheckedChange={onPress}
+				accessible={false}
+			/>
 			<AppText variant="bodyMedium" style={{ color: colors.foreground }}>
 				{location.name}
 			</AppText>

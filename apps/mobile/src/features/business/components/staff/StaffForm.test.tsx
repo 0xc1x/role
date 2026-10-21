@@ -68,6 +68,7 @@ interface ButtonProps {
 
 interface CheckProps {
 	checked?: boolean;
+	accessible?: boolean;
 	onCheckedChange?: (checked: boolean) => void;
 }
 
@@ -78,11 +79,17 @@ interface PressProps {
 	onPress?: () => void;
 }
 
+interface ViewProps {
+	accessibilityRole?: string;
+	children?: ReactNode;
+}
+
 let fields: FieldProps[] = [];
 let buttons: ButtonProps[] = [];
 let checkboxes: CheckProps[] = [];
 let switches: CheckProps[] = [];
 let radios: PressProps[] = [];
+let radioGroups: ViewProps[] = [];
 let html = "";
 
 /** El texto que un nodo pinta. */
@@ -104,7 +111,12 @@ const ProbePressable = (props: PressProps) => {
 	return createElement(nativeWeb.View, null, props.children);
 };
 
-mockNativeUi({ Pressable: ProbePressable });
+const ProbeView = (props: ViewProps) => {
+	if (props.accessibilityRole === "radiogroup") radioGroups.push(props);
+	return createElement(nativeWeb.View, null, props.children);
+};
+
+mockNativeUi({ Pressable: ProbePressable, View: ProbeView });
 
 // `nativewind` arrastra su `doctor` —que es un script de Node, no un módulo— y
 // bun no lo parsea. Lo que hace falta de él aquí es `cssInterop`, que el
@@ -217,6 +229,7 @@ function render(
 	checkboxes = [];
 	switches = [];
 	radios = [];
+	radioGroups = [];
 	html = renderToStaticMarkup(
 		createElement(StaffForm, {
 			locations: props.locations ?? [CENTRO, SUR],
@@ -329,6 +342,44 @@ test("con rol de gerente la sesión sin expiración sí se ofrece", () => {
 
 	expect(html).toContain(strings.business.staff.sessionNever);
 	expect(switches).toHaveLength(1);
+});
+
+test("el pie de la política de sesión dice la política efectiva", () => {
+	// El pie no es una explicación fija: con el modo persistente dado, decir
+	// «la sesión dura 24 horas» sería mentirle sobre lo que acaba de elegir.
+	expect(html).toContain(strings.business.staff.sessionShiftsHint);
+	expect(html).not.toContain(strings.business.staff.sessionPersistentHint);
+
+	chooseRole(strings.business.staff.roleManager);
+	enablePersistentSession();
+
+	expect(html).toContain(strings.business.staff.sessionPersistentHint);
+	expect(html).not.toContain(strings.business.staff.sessionShiftsHint);
+});
+
+test("las opciones de rol son un grupo de radios y el elegido lo dice", () => {
+	expect(radioGroups).toHaveLength(1);
+
+	const gerente = radio(strings.business.staff.roleManager);
+	const empleado = radio(strings.business.staff.roleStaff);
+	expect(gerente.accessibilityState?.checked).toBe(false);
+	expect(empleado.accessibilityState?.checked).toBe(true);
+
+	chooseRole(strings.business.staff.roleManager);
+
+	expect(
+		radio(strings.business.staff.roleManager).accessibilityState?.checked,
+	).toBe(true);
+	expect(
+		radio(strings.business.staff.roleStaff).accessibilityState?.checked,
+	).toBe(false);
+});
+
+test("la casilla de dentro de la fila no es un elemento de accesibilidad propio", () => {
+	// La fila es el control —un checkbox con su nombre— y la casilla es el
+	// dibujo: sin `accessible={false}` el VoiceOver anunciaría una casilla
+	// suelta al lado de la fila que ya dice lo mismo.
+	expect(checkboxes[0]?.accessible).toBe(false);
 });
 
 test("la sesión por turnos son 24 horas y la persistente es cero", () => {

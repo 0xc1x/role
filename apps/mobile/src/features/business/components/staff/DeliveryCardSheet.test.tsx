@@ -51,6 +51,12 @@ const clipboard: string[] = [];
 const shared: Array<{ message: string }> = [];
 /** El valor de cada QR pintado. */
 const qrValues: string[] = [];
+/** Los avisos que se pintaron. */
+const toasts: Array<{ kind: "success" | "error"; message: string }> = [];
+/** Lo que responde el portapapeles: `false` es «no copié». */
+let clipboardResult = true;
+/** Si el portapapeles revienta en vez de responder. */
+let clipboardThrows = false;
 
 mockNativeUi({
 	Share: {
@@ -62,12 +68,17 @@ mockNativeUi({
 
 mock.module("expo-clipboard", () => ({
 	setStringAsync: async (text: string) => {
+		if (clipboardThrows) throw new Error("sin portapapeles");
 		clipboard.push(text);
+		return clipboardResult;
 	},
 }));
 
 mock.module("sonner-native", () => ({
-	toast: { success: (message: string) => void message },
+	toast: {
+		success: (message: string) => toasts.push({ kind: "success", message }),
+		error: (message: string) => toasts.push({ kind: "error", message }),
+	},
 }));
 
 // El QR se dobla para poder afirmar QUÉ se codifica: el valor que recibe, no
@@ -162,6 +173,9 @@ beforeEach(() => {
 	clipboard.length = 0;
 	shared.length = 0;
 	qrValues.length = 0;
+	toasts.length = 0;
+	clipboardResult = true;
+	clipboardThrows = false;
 	render();
 });
 
@@ -185,15 +199,47 @@ test("copiar deja el alias y el PIN juntos en el portapapeles", async () => {
 	expect(clipboard).toHaveLength(1);
 	expect(clipboard[0]).toContain(ALIAS);
 	expect(clipboard[0]).toContain(PIN);
+	expect(toasts).toEqual([
+		{ kind: "success", message: strings.business.staff.deliveryCopied },
+	]);
 });
 
-test("compartir manda lo mismo que copiar", async () => {
+test("si el portapapeles no copia, se avisa en vez de decir «copiado»", async () => {
+	// El portapapeles puede responder `false`: copiar sin copiar y decirlo
+	// igual dejaría a la persona con el PIN en la cabeza y sin nada copiado.
+	clipboardResult = false;
+
+	button(strings.business.staff.deliveryCopy).onPress?.();
+	await flush();
+
+	expect(toasts).toEqual([
+		{ kind: "error", message: strings.business.staff.deliveryCopyFailed },
+	]);
+});
+
+test("si el portapapeles falla también se avisa", async () => {
+	clipboardThrows = true;
+
+	button(strings.business.staff.deliveryCopy).onPress?.();
+	await flush();
+
+	expect(toasts).toEqual([
+		{ kind: "error", message: strings.business.staff.deliveryCopyFailed },
+	]);
+});
+
+test("compartir manda EXACTAMENTE lo que se copia", async () => {
+	button(strings.business.staff.deliveryCopy).onPress?.();
+	await flush();
 	button(strings.business.staff.deliveryShare).onPress?.();
 	await flush();
 
 	expect(shared).toHaveLength(1);
 	expect(shared[0]?.message).toContain(ALIAS);
 	expect(shared[0]?.message).toContain(PIN);
+	// Lo mismo, byte a byte: si un día divergen, la persona compartiría una
+	// cosa y copiaría otra.
+	expect(shared[0]?.message).toBe(clipboard[0]);
 });
 
 test("el botón de cerrar reconoce la entrega y cierra la hoja", () => {

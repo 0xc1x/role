@@ -1602,6 +1602,7 @@ export const strings = {
 			deliveryCopy: "Copiar",
 			deliveryShare: "Compartir",
 			deliveryCopied: "Alias y PIN copiados",
+			deliveryCopyFailed: "No se pudo copiar. Cópialo a mano.",
 			deliveryClose: "Listo, ya lo entregué",
 		},
 	},

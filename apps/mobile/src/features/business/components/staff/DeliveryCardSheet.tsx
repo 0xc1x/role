@@ -3,12 +3,34 @@ import { Share, StyleSheet, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { toast } from "sonner-native";
 
-import type { BusinessMemberDeliveryCardDto } from "@0xc1x/role-commons";
+import type {
+	BusinessMemberDeliveryCardDto,
+	STAFF_ALIAS_WARNING_CODES,
+} from "@0xc1x/role-commons";
 import { Button } from "@/components/ui/button";
 import { strings } from "@/src/core/i18n/strings";
 import { AppText, BottomSheetModal } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
+
+/**
+ * El código de aviso, tal como lo nombra commons.
+ *
+ * La unión sale de la constante exportada, no de una lista escrita acá: el
+ * registro de abajo tiene que cubrirla ENTERA, y si mañana hay un código
+ * nuevo el compilador lo dice en vez de dejar el aviso sin texto.
+ */
+type AliasWarningCode = (typeof STAFF_ALIAS_WARNING_CODES)[number];
+
+/**
+ * La prosa de cada aviso del dominio.
+ *
+ * Se ITERAN los avisos que llegan en vez de preguntarle por uno: así un
+ * código que la app no conoce no se pierde en silencio.
+ */
+const ALIAS_WARNING_COPY: Record<AliasWarningCode, string> = {
+	alias_domain_can_receive_mail: strings.business.staff.aliasWarning,
+};
 
 /**
  * La tarjeta de entrega (§9.2).
@@ -44,8 +66,19 @@ export function DeliveryCardSheet({
 	const payload = `${card.alias}\n${strings.business.staff.deliveryPinLabel}: ${card.pin}`;
 
 	const copy = async () => {
-		await Clipboard.setStringAsync(payload);
-		toast.success(strings.business.staff.deliveryCopied);
+		// El portapapeles puede FALLAR —y devuelve `false` cuando no copió— y
+		// un «copiado» que no copió es peor que un aviso: la persona se iría
+		// con el PIN en la cabeza y sin nada en el portapapeles.
+		try {
+			const copied = await Clipboard.setStringAsync(payload);
+			if (copied) {
+				toast.success(strings.business.staff.deliveryCopied);
+				return;
+			}
+		} catch {
+			// El portapapeles no está disponible: cae al aviso de abajo.
+		}
+		toast.error(strings.business.staff.deliveryCopyFailed);
 	};
 
 	const share = () => {
@@ -118,11 +151,15 @@ export function DeliveryCardSheet({
 					</AppText>
 				</View>
 
-				{card.alias_warnings.includes("alias_domain_can_receive_mail") ? (
-					<AppText variant="bodySmall" style={{ color: colors.destructive }}>
-						{strings.business.staff.aliasWarning}
+				{card.alias_warnings.map((code) => (
+					<AppText
+						key={code}
+						variant="bodySmall"
+						style={{ color: colors.destructive }}
+					>
+						{ALIAS_WARNING_COPY[code]}
 					</AppText>
-				) : null}
+				))}
 
 				{/* El aviso del PIN irrecuperable: SIEMPRE visible, porque el
 				    momento de leerlo es ahora y no después de cerrar. */}
