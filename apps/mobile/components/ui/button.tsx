@@ -165,14 +165,21 @@ function Button({
 				return {};
 		}
 	})();
+	// El texto de un botón destructivo es el `destructiveForeground` —blanco—
+	// y NO el `primaryForeground`: en modo oscuro el `primaryForeground` es
+	// casi negro (#1A1A18) y sobre el fondo destructivo (#901B35) se leía a
+	// 2:1, muy por debajo del 4.5:1. El `style` nativo le ganaba a la clase
+	// del cva (`text-white`), así que el color roto era éste y no aquél.
 	const textColor =
-		resolvedVariant === "default" || resolvedVariant === "destructive"
+		resolvedVariant === "default"
 			? colors.primaryForeground
-			: resolvedVariant === "secondary"
-				? colors.secondaryForeground
-				: resolvedVariant === "link"
-					? colors.primary
-					: colors.foreground;
+			: resolvedVariant === "destructive"
+				? colors.destructiveForeground
+				: resolvedVariant === "secondary"
+					? colors.secondaryForeground
+					: resolvedVariant === "link"
+						? colors.primary
+						: colors.foreground;
 	const pressableStyle: React.ComponentProps<typeof Pressable>["style"] =
 		typeof style === "function"
 			? (state: PressableStateCallbackType) => [variantStyle, style(state)]
