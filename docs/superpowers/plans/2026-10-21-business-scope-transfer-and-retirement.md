@@ -313,9 +313,11 @@ regla y le pregunta a la API; **no cambia ninguna policy**, así que el comporta
 producción no se mueve (y con 0 gerentes y 0 empleados en producción, no hay a quién
 moverse). La Task 2 la pasa a las policies.
 
-- [ ] **Step 1: Escribir los tests que fallan** (en
+- [x] **Step 1: Escribir los tests que fallan** (en
   `apps/api/src/database/security/business-members.rls.db.spec.ts`, un `describe` nuevo
   `el alcance por sucursal es una regla de la base`)
+
+  > Verificado: el describe «el alcance por sucursal es una regla de la base» existe con sus doce casos, y `staff.service.spec.ts` tiene «un gerente SIN alcance no crea, no edita y no toca un acceso sin alcance» (ítem 18 de la herencia).
 
   Fijo: `BIZ_A` con `LOC_A` y `LOC_B`; un `M_MANAGER` con alcance `{LOC_A}`; un
   `M_MANAGER_SIN_ALCANCE` sin filas; un `M_STAFF_A` con alcance `{LOC_A}`; un `M_STAFF_B`
@@ -355,12 +357,16 @@ moverse). La Task 2 la pasa a las policies.
   testeado** (ítem 18 de la herencia): un `manager` **sin** alcance no puede crear ni editar
   un acceso sin alcance, y **no** puede tocar un acceso sin alcance.
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > Verificado: el rojo quedó registrado en el commit `d962314` —M5 y M6 ponen rojas «un gerente NO alcanza el acceso cuyo alcance sale del suyo» y «el conjunto vacío de sucursales lo cubre sólo el dueño».
 
   Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
   Expected: FAIL — las dos funciones no existen todavía (`42883`).
 
-- [ ] **Step 3: Escribir los dos helpers**
+- [x] **Step 3: Escribir los dos helpers**
+
+  > Verificado en la base viva: `business_member_reaches_member` y `business_member_covers_locations` existen, `stable security definer`, con el ACL que dice el plan (`authenticated` sólo en el primero).
 
   Los dos son `security definer` con `search_path = ''` y el cuerpo calificado, como los
   siete que ya existen. Los dos leen el alcance del llamador con la misma forma
@@ -373,7 +379,9 @@ moverse). La Task 2 la pasa a las policies.
   llamador)`, no con `&&` de arrays: el operador `&&` sobre `uuid[]` existe, pero el predicado
   con `not exists` es el que el harness puede leer y el que la spec puede mutar.
 
-- [ ] **Step 4: La API pregunta, y deja de decidir**
+- [x] **Step 4: La API pregunta, y deja de decidir**
+
+  > Verificado: `scopeIsContained` ya no existe, `StaffActor.locationIds` tampoco, y `staff.repository.ts` expone `reachesMember` y `coversLocations`.
 
   En `staff.service.ts`:
   - `scopeIsContained` (`:90`) **se borra**: es la segunda implementación de la regla.
@@ -394,12 +402,16 @@ moverse). La Task 2 la pasa a las policies.
   `db.transaction`, y el `::text` + `JSON.parse` no hace falta acá porque el retorno es
   booleano).
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (api 2900/0).
 
   Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts src/modules/staff/staff.service.spec.ts`
   Expected: PASS.
 
-- [ ] **Step 6: Aplicar, sellar y commitear**
+- [x] **Step 6: Aplicar, sellar y commitear**
+
+  > Verificado: migración aplicada y sellada como `20261020134712_member_scope_predicates.sql` —`md5sum` del archivo igual al `md5(statements[1])` del ledger—; commit `d962314`.
 
   ```bash
   # apply_migration(name: "member_scope_predicates", query: <el sql de la Task 1>)
@@ -432,7 +444,9 @@ moverse). La Task 2 la pasa a las policies.
 **Ésta es la tarea arriesgada y va temprano a propósito**: después de ella, todo lo demás
 se construye sobre el alcance, no alrededor de él.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: el describe «la frontera de sucursal, en las policies» existe con la matriz `(rol, sucursal)`, las dos policies del roster y las diez operaciones de negocio entero.
 
   En `business-members.rls.db.spec.ts`, un `describe` nuevo `la frontera de sucursal` con
   una matriz `(rol, sucursal) → puede leer / puede escribir` sobre `offers`, `orders`,
@@ -466,19 +480,25 @@ se construye sobre el alcance, no alrededor de él.
   // el gerente SIN alcance sigue viendo y escribiendo todo eso
   ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > Verificado: el rojo quedó registrado en el commit `040f6bf` (siete mutaciones). El M3 del plan no tiene equivalente exacto —la M7 del informe de la Task 2 es otra mutación—, y queda anotado en «Cierre».
 
   Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
   Expected: FAIL — el gerente ve el negocio entero.
 
-- [ ] **Step 3: Cambiar el helper, no las trece policies**
+- [x] **Step 3: Cambiar el helper, no las trece policies**
+
+  > Verificado en la base viva: `can_manage_location` dice `when r.member_role = 'owner' then true`; las trece policies no se tocaron.
 
   En `can_manage_location`, la rama `when r.member_role in ('owner', 'manager') then true`
   pasa a `when r.member_role = 'owner' then true`. **Las trece policies no se tocan**: lo
   que cambia es lo que el helper contesta, y por eso el diff de la migración es de un
   predicado y no de trece.
 
-- [ ] **Step 4: Cambiar las dos policies del roster**
+- [x] **Step 4: Cambiar las dos policies del roster**
+
+  > Verificado: las dos policies del roster se reescribieron con `alter policy` —hay un test que lo afirma: «la migración reescribe las dos policies con ALTER y no con DROP + CREATE».
 
   - `Owners and managers view business members` → su `qual` pasa a
     `public.business_member_reaches_member(business_id, id) and deleted_at is null`.
@@ -493,14 +513,18 @@ se construye sobre el alcance, no alrededor de él.
   plan exige **`alter policy`**, y por eso el diff de la migración es de dos `alter` y no de
   dos `drop` + dos `create`.
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (api 2900/0).
 
   Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
   Expected: PASS.
 
   Run: `bun run typecheck && bun run test && bun run build` — verde.
 
-- [ ] **Step 6: Aplicar, sellar y commitear**
+- [x] **Step 6: Aplicar, sellar y commitear**
+
+  > Verificado: migración aplicada y sellada como `20261020152852_location_scope_in_policies.sql`; commit `040f6bf`.
 
   ```bash
   git commit -am "feat(db): el gerente alcanza sólo sus sucursales, y el roster también"
@@ -553,7 +577,9 @@ dueño?»—, y lo que decide si el negocio tiene dueño es el estado **final** 
 transacción. La guarda de `status → 'disabled'` **se queda** en el `BEFORE`, porque no es
 una transferencia: es una revocación, y merece un error inmediato y con su mensaje.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: el describe «la transferencia de propiedad» existe con sus ocho casos, y el fixture activa el negocio a mano antes de probar el invariante.
 
   En `business-members.rls.db.spec.ts`, `describe` nuevo `la transferencia de propiedad`:
 
@@ -595,12 +621,16 @@ una transferencia: es una revocación, y merece un error inmediato y con su mens
   guarda de reactivación, así que el orden del fixture es **obligatorio**, no una
   recomendación.)
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `3c62f60` no nombra el test que se puso rojo. Las M7 y M8 se declaran cumplidas en «Cierre», con la evidencia en el informe de la Task 3 —un archivo que ya no está en el repositorio—.
 
   Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
   Expected: FAIL — la función no existe (`42883`) y la degradación sigue prohibida.
 
-- [ ] **Step 3: Escribir la función y el trigger diferido**
+- [x] **Step 3: Escribir la función y el trigger diferido**
+
+  > Verificado en la base viva: `transfer_business_ownership` y el trigger diferido `trg_business_keeps_an_owner` existen. **El punto 7 —la coherencia con `business_ownership`— quedó supersedido** por `20261021002713_owner_membership_and_ownership_readers.sql` y `20261021005034_drop_business_ownership.sql`: la función ya no escribe la fila de propiedad.
 
   `transfer_business_ownership`, en este orden y en **una sola transacción** (una llamada a
   función llamada sola es su propia transacción; llamada dentro de la transacción de la API,
@@ -647,7 +677,9 @@ una transferencia: es una revocación, y merece un error inmediato y con su mens
   DELETE) **no se toca**: ya acepta borrar un dueño archivado, que es lo que hace posible
   borrar el negocio después de una liberación.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (api 2900/0).
 
   Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts`
   Expected: PASS.
@@ -660,7 +692,9 @@ una transferencia: es una revocación, y merece un error inmediato y con su mens
   demás**, y lo que se afirma es que la **sentencia** pasó y el **commit** no. Un test que
   afirma que la sentencia falló estaría probando otra cosa.
 
-- [ ] **Step 5: Aplicar, sellar y commitear**
+- [x] **Step 5: Aplicar, sellar y commitear**
+
+  > Verificado: migración aplicada y sellada como `20261020163244_ownership_transfer.sql`, más `20261020174431_ownership_transfer_concurrency.sql` —el cerrojo, que la Task 3 selló sin él y que la concurrencia encontró—; commit `3c62f60`.
 
   ```bash
   git commit -am "feat(db): la transferencia de propiedad es una operación, y un negocio activo tiene dueño"
@@ -700,7 +734,9 @@ una transferencia: es una revocación, y merece un error inmediato y con su mens
     ya significa dos cosas (el tope y la entitlement) y no puede absorber una tercera sin
     que el panel tenga que parsear el `detail` para distinguirla.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: `staff.service.spec.ts` tiene el describe «la transferencia de propiedad» (los cinco casos) y `staff.controller.spec.ts` prueba la ruta sobre el stack HTTP real.
 
   En `staff.service.spec.ts` y en `staff.controller.spec.ts`:
 
@@ -715,12 +751,16 @@ una transferencia: es una revocación, y merece un error inmediato y con su mens
   «la transferencia de propiedad no existe en esta versión» (`staff.service.ts:439-443`), y
   después de esta tarea **ya existe**. El texto nuevo nombra la puerta que sí abre.
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `57f43fd` no nombra el test que se puso rojo, y el informe de la Task 4 no tiene sección de mutación —queda anotado en «Cierre».
 
   Run: `cd apps/api && bun test --isolate src/modules/staff/staff.service.spec.ts src/modules/staff/staff.controller.spec.ts`
   Expected: FAIL — la ruta no existe.
 
-- [ ] **Step 3: Los contratos, el servicio y el controlador**
+- [x] **Step 3: Los contratos, el servicio y el controlador**
+
+  > Verificado: `business-ownership.schema.ts`, `ownership.controller.ts` y los dos DTOs existen, y `R0004` se traduce a un 422 con el mensaje de la base.
 
   - `packages/commons/src/business/schemas/business-ownership.schema.ts`:
     `TransferBusinessOwnershipSchema = z.strictObject({ new_owner_member_id: UuidSchema })`
@@ -735,14 +775,18 @@ una transferencia: es una revocación, y merece un error inmediato y con su mens
   - `ownership.controller.ts`: `@Controller('businesses/:businessId/ownership')`, un
     `@Post('transfer')`. Sin `@Roles`: la puerta es la membresía, como en las otras ocho.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (api 2900/0).
 
   Run: `cd apps/api && bun test --isolate src/modules/staff/staff.service.spec.ts src/modules/staff/staff.controller.spec.ts`
   Expected: PASS.
 
   Run: `bun run typecheck && bun run test && bun run build` — verde.
 
-- [ ] **Step 5: Commitear**
+- [x] **Step 5: Commitear**
+
+  > Verificado: commit `57f43fd`.
 
   ```bash
   git commit -am "feat(api): la propiedad se transfiere, y el dueño que se va ya no queda atrapado"
@@ -815,7 +859,9 @@ backfill, y hay que decirlo con el número:** medido el 2026-10-21, hay **0** fi
 `business_ownership` sin membresía de dueño y **0** membresías de dueño sin fila de
 propiedad. No hay nada que rellenar. Lo que se cierra es el **camino**, con los puntos 1 y 2.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: `auth.service.db.spec.ts` tiene «al borrar la cuenta, el negocio inactivo queda sin dueño vivo», «al borrar la cuenta, las filas de alcance quedan archivadas» y «an employee membership is detached by the erase, not taken by the cascade»; el rls spec tiene los casos de la liberación y de la reactivación.
 
   En `auth.service.db.spec.ts` (el que corre contra el espejo con los triggers del ledger
   instalados *verbatim*):
@@ -843,17 +889,23 @@ propiedad. No hay nada que rellenar. Lo que se cierra es el **camino**, con los 
   test('la liberación archiva la membresía y borra la fila de propiedad', …)
   ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: los informes de las Tasks 4, 5 y 6 no tienen sección de mutación —las M9, M10 y M11 no tienen evidencia— y queda anotado en «Cierre».
 
   Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts src/modules/auth/auth.service.db.spec.ts`
   Expected: FAIL — la función no existe y la puerta cuenta los dueños de negocios inactivos.
 
-- [ ] **Step 3: La base**
+- [x] **Step 3: La base**
+
+  > Verificado en la base viva: `release_business_ownership` y `enforce_business_reactivation_needs_owner` existen. **La fila de `business_ownership` que la función borraba ya no existe**: la tabla se cayó en la Task 10, y la liberación archiva la membresía y su alcance.
 
   `release_business_ownership` y el trigger de reactivación, según las interfaces de arriba.
   La función **no** reactiva el negocio: no lo toca.
 
-- [ ] **Step 4: La API**
+- [x] **Step 4: La API**
+
+  > Verificado: `countRetained` cuenta sólo dueños de negocios activos, `anonymise` llama a `release_business_ownership` y archiva las filas de alcance, `eraseAccount` archiva las membresías, y el 409 nombra `POST /businesses/:businessId/ownership/transfer`. **Supersedido en un punto:** la fila de `business_ownership` que `anonymise` borraba ya no está —la tabla no existe— y la liberación la hace la función de la base.
 
   - `countRetained`: el conteo de `owner_memberships` se hace contra las membresías de dueño
     **vivas** (`role='owner'`, `deleted_at is null`) **de negocios activos**
@@ -873,14 +925,18 @@ propiedad. No hay nada que rellenar. Lo que se cierra es el **camino**, con los 
     rebota es peor que uno que no da ninguna** (el ADR-0013 lo dice): el mensaje nombra la
     ruta que existe.
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (api 2900/0).
 
   Run: `cd apps/api && bun test --isolate src/database/security/business-members.rls.db.spec.ts src/modules/auth/auth.service.db.spec.ts src/modules/auth/auth.service.spec.ts`
   Expected: PASS.
 
   Run: `bun run typecheck && bun run test && bun run build` — verde.
 
-- [ ] **Step 6: Aplicar, sellar y commitear**
+- [x] **Step 6: Aplicar, sellar y commitear**
+
+  > Verificado: migraciones aplicadas y selladas como `20261020172601_inactive_business_releases_owner.sql` y `20261020172817_assign_business_ownership.sql`; commit `3df353d`.
 
   ```bash
   git commit -am "feat(db,api): un negocio inactivo libera a su dueño, y el borrado de cuenta no lo deja huérfano"
@@ -933,7 +989,9 @@ admin**, y la rama de admin vive **en `create`**, no en la puerta común. Si viv
 negocio con dueño, que es lo que hoy se le niega a propósito (ítem 11 de la herencia). La
 comprobación es doble: `user.role === 'admin'` **y** el negocio no tiene dueño vivo.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: `staff.service.spec.ts` tiene el describe «la recuperación del dueño» (los cinco casos) y el rls spec los tres de la base.
 
   ```ts
   test('el admin puede darle el dueño a un negocio sin dueño', …)
@@ -943,25 +1001,33 @@ comprobación es doble: `user.role === 'admin'` **y** el negocio no tiene dueño
   test('un dueño no puede usar la ruta de recuperación', …)                     // 403
   ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el informe de la Task 6 no tiene sección de mutación —queda anotado en «Cierre».
 
   Run: `cd apps/api && bun test --isolate src/modules/staff/staff.service.spec.ts`
   Expected: FAIL — la ruta no existe.
 
-- [ ] **Step 3: La base, el servicio y el controlador**
+- [x] **Step 3: La base, el servicio y el controlador**
+
+  > Verificado: `assign_business_ownership` existe en la base viva, y `POST /businesses/:businessId/ownership/restore` es admin-only. **Supersedido en un punto:** la fila de `business_ownership` que la función mantenía coherente ya no existe —la tabla se cayó en la Task 10— y la verdad del dueño es la membresía.
 
   según las interfaces de arriba. La rama de admin del alta reutiliza **todo** el camino
   que ya existe (`createUser` + membresía + tarjeta de entrega con el PIN): no hay un
   segundo camino de alta, hay una segunda **puerta** al mismo camino.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (api 2900/0).
 
   Run: `cd apps/api && bun test --isolate src/modules/staff/staff.service.spec.ts src/modules/staff/staff.controller.spec.ts src/database/security/business-members.rls.db.spec.ts`
   Expected: PASS.
 
   Run: `bun run typecheck && bun run test && bun run build` — verde.
 
-- [ ] **Step 5: Aplicar, sellar y commitear**
+- [x] **Step 5: Aplicar, sellar y commitear**
+
+  > Verificado: migración aplicada y sellada como `20261020172817_assign_business_ownership.sql`; commit `3df353d`.
 
   ```bash
   git commit -am "feat(api,db): la plataforma le devuelve el dueño a un negocio que se quedó sin él"
@@ -996,7 +1062,9 @@ comprobación es doble: `user.role === 'admin'` **y** el negocio no tiene dueño
 `STABLE`. La aritmética (`business_member_session_expires_at`) sigue siendo `IMMUTABLE`, que
 es donde tiene que estar.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: `business-membership.spec.ts` existe con «el módulo de membresía no reescribe la combinación» y «la promesa en TypeScript tiene las cuatro mitades», y el guard hermano del SQL quedó al lado, en el rls spec.
 
   En `business-members.rls.db.spec.ts`, **al lado del guard hermano** que ya comprueba la
   aritmética (`:1380-1470`):
@@ -1021,12 +1089,16 @@ es donde tiene que estar.
   // y NO contiene `interval`
   ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > Verificado: el rojo quedó registrado en el commit `8615eff` —M12, con el caso del instante del borde.
 
   Run: `cd apps/api && bun test --isolate src/database/business-membership.spec.ts`
   Expected: FAIL — el módulo de TypeScript todavía escribe la combinación.
 
-- [ ] **Step 3: La función SQL y el módulo de TypeScript**
+- [x] **Step 3: La función SQL y el módulo de TypeScript**
+
+  > Verificado en la base viva: `business_member_session_inside_promise` existe, `stable`, sin `security definer`, con el ACL `{postgres, service_role, authenticated}`; `business-membership.ts` ya no escribe la combinación.
 
   - La función nueva, y `business_member_session_valid` + `can_manage_location` la llaman.
   - `sessionInsidePromise()` en `business-membership.ts` pasa a ser el fragmento que llama a
@@ -1035,14 +1107,18 @@ es donde tiene que estar.
     `ownedBusinessIds` no cambian de comportamiento: lo que cambia es que la combinación ya
     no está escrita dos veces.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (api 2900/0).
 
   Run: `cd apps/api && bun test --isolate src/database/business-membership.spec.ts src/database/security/business-members.rls.db.spec.ts`
   Expected: PASS.
 
   Run: `bun run typecheck && bun run test && bun run build` — verde.
 
-- [ ] **Step 5: Aplicar, sellar y commitear**
+- [x] **Step 5: Aplicar, sellar y commitear**
+
+  > Verificado: migración aplicada y sellada como `20261020193222_shared_session_promise.sql`; commit `8615eff`.
 
   ```bash
   git commit -am "refactor(db,api): la promesa de sesión vive en SQL y no en dos lugares"
@@ -1072,7 +1148,9 @@ es donde tiene que estar.
 panel del dueño (`useBusinesses`, `apps/mobile/src/features/business/hooks.ts:25-31`), y sin
 ella el `drop table` apaga el panel de todos los dueños.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: `repository.test.ts` tiene «los negocios del dueño salen de sus membresías de dueño, no de business_ownership», y el e2e `07-business-management.spec.ts` afirma la petición a `/rest/v1/business_members`.
 
   En el spec del repositorio del móvil y en `apps/mobile/e2e/07-business-management.spec.ts`:
 
@@ -1086,12 +1164,16 @@ ella el `drop table` apaga el panel de todos los dueños.
   `business_ownership: [{ business_id: BUSINESS_ID }]`, y pasa a servir
   `business_members: [{ business_id: BUSINESS_ID, role: 'owner', status: 'active', deleted_at: null }]`.
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > Verificado: el rojo quedó registrado en el commit `7ce3b09` (tres mutaciones).
 
   Run: `cd apps/mobile && bun test --isolate src/features/business/data/repository.test.ts`
   Expected: FAIL — todavía lee `business_ownership`.
 
-- [ ] **Step 3: La lectura nueva**
+- [x] **Step 3: La lectura nueva**
+
+  > Verificado: `getBusinessesByOwnerId` consulta `business_members` por `user_id`, `role='owner'`, `status='active'` y `deleted_at is null`.
 
   `getBusinessesByOwnerId` consulta `business_members` con `user_id = ownerId`,
   `role = 'owner'`, `deleted_at is null`, `status = 'active'`, saca los `business_id` y
@@ -1101,7 +1183,9 @@ ella el `drop table` apaga el panel de todos los dueños.
   RLS on that table is `owner_id = auth.uid()`, so a caller passing someone else's id gets
   an empty result») se conserva, reescrito con la columna nueva.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (mobile 759/0).
 
   Run: `cd apps/mobile && bun test --isolate ./src`
   Expected: PASS (los 3 fallos preexistentes de `mobile` siguen siendo 3; el plan 2 los
@@ -1109,7 +1193,9 @@ ella el `drop table` apaga el panel de todos los dueños.
 
   Run: `bun run typecheck && bun run test && bun run build` — verde.
 
-- [ ] **Step 5: Commitear**
+- [x] **Step 5: Commitear**
+
+  > Verificado: commit `7ce3b09`.
 
   ```bash
   git commit -m "feat(mobile): el panel del dueño lee sus membresías, no la tabla vieja"
@@ -1159,7 +1245,9 @@ pasa a «un negocio SIN dueño vivo no notifica a nadie». **Es una edición del
 visible**, y el plan 2 lo pidió así: el test existe para que el cambio sea una decisión y no
 una eliminación silenciosa.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: `notification.handlers.spec.ts` tiene los dos tests de presencia —«un negocio SIN dueño vivo no notifica a nadie» y «un negocio con dueño vivo notifica»—, `businesses.repository.spec.ts` tiene «el dueño del negocio sale de la membresía», y `announcements.repository.spec.ts` tiene «consulta business_members, no business_ownership».
 
   ```ts
   // notification.handlers.spec.ts
@@ -1177,12 +1265,16 @@ una eliminación silenciosa.
   Y en `business-members.rls.db.spec.ts`, la lista de policies de `business_members` pasa
   de 2 a 3 (se suma `Admins can view all business members`).
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > Verificado: el rojo quedó registrado en el commit `2c659e2` (siete mutaciones).
 
   Run: `cd apps/api && bun test --isolate src/modules/notifications src/modules/announcements src/modules/businesses`
   Expected: FAIL — los lectores todavía leen la tabla vieja.
 
-- [ ] **Step 3: Migrar los cinco**
+- [x] **Step 3: Migrar los cinco**
+
+  > Verificado: los cinco lectores leen `business_members`, y la policy nueva `Admins can view all business members` está aplicada —`20261020210413_admin_view_business_members.sql`.
 
   - `aggregateSelect`: el join pasa a `business_members` con `role='owner'`. **La regla del
     «dueño» cuando el negocio no tiene dueño vivo**: se toma el dueño **vivo** si hay uno, y
@@ -1200,7 +1292,9 @@ una eliminación silenciosa.
   - `notification.handlers.ts`: el `INNER JOIN` pasa a `business_members` con
     `role='owner'`, `deleted_at is null` y `status='active'`.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (api 2900/0).
 
   Run: `cd apps/api && bun test --isolate ./src`
   Expected: PASS (los 10 fallos preexistentes de `api` siguen siendo 10: los 3 de
@@ -1208,7 +1302,9 @@ una eliminación silenciosa.
 
   Run: `bun run typecheck && bun run test && bun run build` — verde.
 
-- [ ] **Step 5: Commitear**
+- [x] **Step 5: Commitear**
+
+  > Verificado: commit `2c659e2`.
 
   ```bash
   git commit -am "refactor(api): los cinco lectores de business_ownership leen las membresías"
@@ -1240,7 +1336,9 @@ lee la tabla (Task 8), los cinco lectores de la API ya no la leen (Task 9), y el
 `trg_bootstrap_business_companions` deja de crearla (esta misma tarea). Si se cae antes, el
 panel del dueño se queda sin negocios y el handler de notificaciones se come las push.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
+
+  > Verificado: el rls spec tiene «no queda ninguna policy que resuelva por business_ownership», y `businesses.rls.db.spec.ts` y `orders.rls.db.spec.ts` ya no nombran las policies viejas.
 
   En `business-members.rls.db.spec.ts`, la lista de las 19 policies legacy pasa a `[]`, y
   el nombre del test cambia de «ninguna policy de negocio resuelve por `business_ownership`,
@@ -1253,12 +1351,16 @@ panel del dueño se queda sin negocios y el handler de notificaciones se come la
 
   En `mirror-fidelity.db.spec.ts`: el espejo de Drizzle no declara `business_ownership`.
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
+
+  > El rojo no quedó registrado: el commit `bcb19ba` no nombra el test que se puso rojo —queda anotado en «Cierre».
 
   Run: `cd apps/api && bun test --isolate src/database/security`
   Expected: FAIL — las 19 policies siguen en pie y la tabla existe.
 
-- [ ] **Step 3: La migración**
+- [x] **Step 3: La migración**
+
+  > Verificado: `20261021002713_owner_membership_and_ownership_readers.sql` deja de escribir la fila de propiedad —trigger, funciones y correo—, y `20261021005034_drop_business_ownership.sql` borra las diecinueve policies por nombre y la tabla. En la base viva la tabla no existe (`to_regclass` → `NULL`) y **0** policies la nombran.
 
   En este orden, en una sola migración:
 
@@ -1275,20 +1377,26 @@ panel del dueño se queda sin negocios y el handler de notificaciones se come la
   `drop table` falla con `23503` y nombra la dependencia. Eso es el mecanismo de seguridad
   del `drop`: si algo se olvidó, la tabla no se cae.
 
-- [ ] **Step 4: El espejo de Drizzle**
+- [x] **Step 4: El espejo de Drizzle**
+
+  > Verificado: `businessOwnership` ya no está en `business-companions.ts` ni en `index.ts`, y el espejo no declara `business_ownership`.
 
   `businessOwnership` sale de `business-companions.ts` y de `index.ts`. El
   `mirror-fidelity.db.spec.ts` compara el espejo con la base y falla si queda una tabla
   que ya no existe.
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
+
+  > Verificado: la suite queda verde (api 2900/0).
 
   Run: `cd apps/api && bun test --isolate src/database/security src/database/schema`
   Expected: PASS.
 
   Run: `bun run typecheck && bun run test && bun run build` — verde.
 
-- [ ] **Step 6: Aplicar, sellar y commitear**
+- [x] **Step 6: Aplicar, sellar y commitear**
+
+  > Verificado: commit `bcb19ba`; el `grep` de lecturas vivas de `business_ownership` fuera de los specs da **cero** —sólo quedan comentarios históricos.
 
   ```bash
   git commit -am "feat(db): business_ownership y sus diecinueve policies se retiran"
@@ -1323,7 +1431,9 @@ panel del dueño se queda sin negocios y el handler de notificaciones se come la
 - Consumes: todo lo anterior.
 - Produce: el **addendum §B** del ADR-0013, escrito desde lo que se construyó.
 
-- [ ] **Step 1: El addendum §B — «De «decidido» a «construido» (Plan 3)»**
+- [x] **Step 1: El addendum §B — «De «decidido» a «construido» (Plan 3)»**
+
+  > Verificado: el addendum §B del ADR-0013 existe, con §B.1 a §B.7, escrito desde lo que se construyó.
 
   Con el mismo formato del addendum §A: **§B.1** las tres decisiones con el nombre del
   archivo y de la migración que las implementa; **§B.2** la regla del alcance, con las
@@ -1337,10 +1447,14 @@ panel del dueño se queda sin negocios y el handler de notificaciones se come la
   encontró algo distinto de lo que este plan dice, el addendum dice lo que se construyó y
   este plan se corrige.
 
-- [ ] **Step 2: La auditoría de herencia** — la tabla de abajo, con la columna «tarea» de
+- [x] **Step 2: La auditoría de herencia** — la tabla de abajo, con la columna «tarea» de
   esta tabla. **Los 22 ítems, ninguno omitido.**
 
-- [ ] **Step 3: El spec y el README**
+  > Verificado: la tabla de los veintidós ítems está, con la columna «tarea» y el bloque `[cerrado — 2026-10-21]`.
+
+- [x] **Step 3: El spec y el README**
+
+  > Verificado: el §5.1 y el §12 del spec están corregidos (`[corregido por el Plan 3, 2026-10-21]`) y el README de migraciones tiene el estado final del `drop table`.
 
   El §5.1 del spec dice hoy que `can_manage_location` le da el negocio entero al `manager`
   («owner -> todo el negocio / manager -> todo el negocio / staff -> sólo las locations de
@@ -1351,7 +1465,9 @@ panel del dueño se queda sin negocios y el handler de notificaciones se come la
   `supabase/migrations/README.md` tiene una sección sobre las 19 policies y sobre el
   `drop table` pendiente: hay que actualizarla con el estado final.
 
-- [ ] **Step 4: El cierre**
+- [x] **Step 4: El cierre**
+
+  > Verificado: `typecheck`, `test` y `build` se corrieron en el cierre. **La línea base de dieciocho fallos que este paso describe ya no es el estado final**: los commits `b3a6dd2` y `31f5b12` (api), `9745bee` (admin), `9eba8e5` (landing) y `687881e` (móvil) los dejaron en cero. Ver «Cierre de ejecución».
 
   ```sh
   bun run typecheck
@@ -1367,7 +1483,9 @@ panel del dueño se queda sin negocios y el handler de notificaciones se come la
   plan **no agrega ni arregla ninguno**: el criterio de aceptación es «los mismos 18, con
   los mismos nombres».
 
-- [ ] **Step 5: Commitear**
+- [x] **Step 5: Commitear**
+
+  > Verificado: commit `37b928d`.
 
   ```bash
   git commit -am "docs(adr,spec): la transferencia, el alcance y la jubilación, como se construyeron"
@@ -1599,3 +1717,63 @@ El plan cierra cuando:
 | los 22 ítems de la herencia | **SÍ** — 10 cerrados (9 por tareas + 1 ya cerrado), 12 diferidos con su razón, 0 sin destino. **Y tres cierres incidentales** que no estaban en la lista |
 | el addendum §B | **SÍ** — escrito desde lo que se construyó, con **cinco** desviaciones del plan corregidas |
 | 0 policies por `business_ownership` y la tabla no existe | **SÍ** en la base viva. **PERO la afirmación de la prosa era incompleta**: quedaba **una consulta viva** en la Edge Function `handle-order-event`, que ni `pg_proc` ni `pg_policies` pueden ver. La Task 11 la migró y le puso un guard |
+
+---
+
+## Cierre de ejecución
+
+Este registro se escribió **después** de la construcción. Cada uno de los **59** pasos quedó
+marcado, y cada marca lleva **la evidencia con la que se verificó**: contra el árbol y contra
+la base viva, no contra los informes de tarea.
+
+### El commit
+
+- **Mergeado en `main`:** `e29f4b5` — *feat(api): el alcance por sucursal, la transferencia de
+  propiedad y el retiro de `business_ownership`* (73 archivos, +14036 / −1692). Junta la rama
+  del plan —doce commits, de `979d60c` (este plan) a `37b928d` (el addendum §B)— sobre `main`.
+- **`HEAD`:** `687881e` — *fix(mobile): el entorno de pruebas se inyecta y no se hereda*. Entre
+  el merge y el `HEAD` hay cuatro commits de arreglo: `31f5b12` (api), `9745bee` (admin),
+  `9eba8e5` (landing) y `687881e` (móvil).
+
+### La suite, medida en `HEAD`
+
+| paquete | tests | fallos |
+| --- | --- | --- |
+| `api` | **2900** | **0** |
+| `admin` | **642** | **0** |
+| `landing` | **177** | **0** |
+| `mobile` | **759** | **0** |
+| `commons` | **394** | **0** |
+| `supabase` (`bun test supabase`) | **45** | **0** |
+
+`typecheck` y `build`: **9/9** tareas de turbo en verde —las **6** de `typecheck` y las **4** de
+`build`, con `@0xc1x/role-commons#build` contada una sola vez porque es dependencia de las
+otras—.
+
+**El «18 de la línea base» del criterio de cierre ya no aplica:** eran los fallos de la máquina
+de la Task 11, y los commits `b3a6dd2`, `31f5b12`, `9745bee`, `9eba8e5` y `687881e` los dejaron
+en cero. Lo que sigue abierto **no es código**: son dos cosas de operación.
+
+### Los dos ítems operativos que quedan abiertos
+
+1. **Las dos configs de Vite sin commitear.** `apps/admin/vite.config.ts` y
+   `apps/landing/vite.config.ts` tienen un `host: true` sin commitear —el arreglo de WSL, para
+   que Vite no quede atado a `::1`—. **No es código de este plan**: o se decide que es una
+   comodidad local y se deja así, o se sube en un commit aparte y con su propia decisión.
+2. **La Edge Function `handle-order-event` desplegada quedó en la v13.** La Task 11 migró el
+   código del repositorio —que ya lee `business_members`—, pero **lo desplegado sigue siendo la
+   v13**, que hace `select("name, image, owner_id")` sobre `businesses`: la columna `owner_id`
+   **ya no existe** —medido en la base viva, `businesses` tiene `id, name, type, slug, image,
+   cover_image, rating, review_count, description, phone, email, website, is_active,
+   created_at, updated_at, currency`—. Con la v13 desplegada, ese `select` de PostgREST falla y
+   **la push al negocio se pierde en silencio**. **Falta redesplegar la función.**
+
+### Lo que no se pudo verificar desde afuera
+
+Los informes de tarea (`.superpowers/sdd/2026-10-21-business-scope-transfer-and-retirement/`)
+**no están en el repositorio**: el directorio no existe y `.superpowers/sdd/.gitignore` ignora
+todo lo que hay debajo. Por eso cada paso se verificó contra el árbol y contra la base viva, y
+por eso **el rojo de los pasos «correr y verificar que falla» sólo tiene evidencia donde el
+commit la registra** —las Tasks 1, 2, 7, 8 y 9. En las Tasks 3, 4, 5, 6 y 10 la nota del paso
+dice que el commit no nombra el test que se puso rojo, y el conteo de lo que falta está en
+«Cierre»: las **M9, M10 y M11** sin evidencia.
