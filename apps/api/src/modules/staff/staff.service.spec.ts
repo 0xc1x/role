@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { DrizzleQueryError } from 'drizzle-orm';
 import * as nodeCrypto from 'node:crypto';
 import {
   BusinessMemberDeliveryCardSchema,
@@ -980,6 +981,74 @@ describe('StaffService', () => {
 
       expect(logs).not.toContainEqual(
         expect.objectContaining({ event: 'plan_not_in_catalogue' }),
+      );
+    });
+
+    /**
+     * LA CARRERA ENTRE LA PRE-COMPROBACIÓN Y EL `INSERT`.
+     *
+     * La puerta mira el catálogo antes de escribir, y el trigger lo mira OTRA
+     * vez al escribir. Si la fila del plan se pierde en ese hueco, el que se
+     * niega es el trigger —con su `P0001` sin `errcode`—, y el API tiene que
+     * contestar con el MISMO 500 de la pre-comprobación: son la misma avería y
+     * el operador tiene que ver una respuesta, no dos.
+     *
+     * El error llega ENVUELTO: Drizzle mete el error de Postgres en un
+     * `DrizzleQueryError` que no copia el mensaje, así que la prosa del
+     * trigger vive en el `cause`.
+     */
+    it('el trigger que se dispara en la carrera contesta lo mismo', async () => {
+      const postgresError = Object.assign(
+        new Error('el plan pro no está en el catálogo de planes'),
+        { code: 'P0001' },
+      );
+      repository.insertMember.mockRejectedValue(
+        new DrizzleQueryError(
+          'insert into "business_members" ("business_id", "user_id", "role") values ($1, $2, $3)',
+          [],
+          postgresError,
+        ),
+      );
+
+      const error = await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(InternalServerErrorException);
+      const message = (error as InternalServerErrorException).message;
+      expect(message).toContain('catálogo de planes está roto');
+      expect(message).toContain('`pro`');
+      // Y NO es la puerta del plan: el catálogo roto no se contesta como una
+      // negativa.
+      expect(error).not.toBeInstanceOf(UnprocessableEntityException);
+      // Y el operador lo ve igual que en la pre-comprobación: el mismo evento,
+      // con el plan nombrado.
+      expect(logs).toContainEqual({
+        event: 'plan_not_in_catalogue',
+        businessId: BIZ,
+        plan: 'pro',
+      });
+    });
+
+    /**
+     * El mismo error, SIN envolver: el `cause` no está y la prosa viene
+     * directa. La traducción no depende de la forma del envoltorio.
+     */
+    it('y también cuando el error llega sin envolver', async () => {
+      repository.insertMember.mockRejectedValue(
+        Object.assign(
+          new Error('el plan pro no está en el catálogo de planes'),
+          { code: 'P0001' },
+        ),
+      );
+
+      const error = await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(InternalServerErrorException);
+      expect((error as InternalServerErrorException).message).toContain(
+        'catálogo de planes está roto',
       );
     });
 

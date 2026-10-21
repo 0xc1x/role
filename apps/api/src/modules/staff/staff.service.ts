@@ -17,6 +17,7 @@ import {
   type BusinessMemberDeliveryCardDto,
   type BusinessMemberDto,
   type BusinessMemberRole,
+  type BusinessPlanCode,
   type CreateBusinessMemberDto,
   type RevokeBusinessAccessResponseDto,
   type StaffSessionState,
@@ -78,6 +79,17 @@ const ALIAS_CONSTRAINT = 'business_members_alias_key';
 const ONE_OWNER_CONSTRAINT = 'business_members_one_owner_per_business';
 const MEMBER_PER_BUSINESS_CONSTRAINT =
   'business_members_business_id_user_id_key';
+
+/**
+ * LA PROSA DEL TRIGGER CUANDO EL PLAN NO ESTÁ EN EL CATÁLOGO.
+ *
+ * Es el `raise` de `20261021182624_plan_limits_from_catalog.sql`: `raise
+ * exception 'el plan % no está en el catálogo de planes', v_plan`, sin
+ * `errcode` —el `P0001` genérico de Postgres—. El acoplamiento con esa prosa
+ * está anotado en `brokenCataloguePlan`, que es donde se traduce.
+ */
+const CATALOGUE_BROKEN_BY_TRIGGER =
+  /^el plan (\S+) no está en el catálogo de planes\s*$/;
 
 /**
  * The reach of whoever is calling, resolved once per request.
@@ -420,7 +432,7 @@ export class StaffService {
       });
     } catch (err) {
       await this.compensateCreatedUser(userId, businessId);
-      throw this.mapWriteError(err);
+      throw this.mapWriteError(businessId, err);
     }
 
     this.logger.log({
@@ -526,7 +538,7 @@ export class StaffService {
         }
       });
     } catch (err) {
-      throw this.mapWriteError(err);
+      throw this.mapWriteError(businessId, err);
     }
 
     this.logger.log({
@@ -578,7 +590,7 @@ export class StaffService {
       await this.repository.updateMember(businessId, memberId, { alias });
     } catch (err) {
       // Nothing to compensate: Auth has not been told anything yet.
-      throw this.mapWriteError(err);
+      throw this.mapWriteError(businessId, err);
     }
 
     const { error } = await this.authAdmin.auth.admin.updateUserById(
@@ -677,7 +689,7 @@ export class StaffService {
     } catch (err) {
       // `R0004` es una regla de negocio con su mensaje, y el mensaje es el de
       // la base: una frase que el dueño lee y que nombra la regla que falló.
-      throw this.mapWriteError(err);
+      throw this.mapWriteError(businessId, err);
     }
 
     this.logger.log({
@@ -748,7 +760,7 @@ export class StaffService {
     } catch (err) {
       // `R0004` es una regla de negocio con su mensaje, y el mensaje es el de
       // la base: una frase que el operador lee y que nombra la regla que falló.
-      throw this.mapWriteError(err);
+      throw this.mapWriteError(businessId, err);
     }
 
     this.logger.log({
@@ -886,7 +898,7 @@ export class StaffService {
         status: 'active',
       });
     } catch (err) {
-      throw this.mapWriteError(err);
+      throw this.mapWriteError(businessId, err);
     }
 
     const { error } = await this.authAdmin.auth.admin.updateUserById(
@@ -970,7 +982,7 @@ export class StaffService {
     } catch (err) {
       // `R0002` here means "that was the owner" — the trigger of
       // `20261017040808`. The row is untouched and no ban was sent.
-      throw this.mapWriteError(err);
+      throw this.mapWriteError(businessId, err);
     }
 
     const { error } = await this.authAdmin.auth.admin.updateUserById(
@@ -1216,7 +1228,7 @@ export class StaffService {
         status: 'disabled',
       });
     } catch (err) {
-      throw this.mapWriteError(err);
+      throw this.mapWriteError(businessId, err);
     }
 
     const { error } = await this.authAdmin.auth.admin.updateUserById(
@@ -1626,10 +1638,23 @@ export class StaffService {
    * The database answers in codes and this service answers in Spanish, because
    * the person reading it is an owner in the panel, not a developer with the log.
    *
-   * Three translations and nothing else: the rest bubbles up as a 500, which is
+   * Four translations and nothing else: the rest bubbles up as a 500, which is
    * what an unmapped database error IS.
    */
-  private mapWriteError(error: unknown): Error {
+  private mapWriteError(businessId: string, error: unknown): Error {
+    // ─── EL CATÁLOGO ROTO, CUANDO SE ENTERA EL TRIGGER ─────────────────────────
+    //
+    // La pre-comprobación de la puerta mira el catálogo ANTES de escribir, y
+    // el trigger lo mira OTRA vez al escribir. Si la fila del plan se pierde
+    // entre las dos, el trigger es el que se niega —con su `P0001` sin
+    // `errcode`— y esta capa tiene que contestarlo con el MISMO 500 de la
+    // pre-comprobación: son la misma avería y el operador tiene que ver una
+    // sola respuesta, no dos.
+    const brokenCatalogue = this.brokenCataloguePlan(error);
+    if (brokenCatalogue) {
+      return this.catalogueIsBroken(businessId, brokenCatalogue);
+    }
+
     const postgresError = asPostgresError(error);
     if (!postgresError?.code) return this.asError(error);
 
@@ -1776,25 +1801,95 @@ export class StaffService {
     if (entitlement.status === 'plan_not_in_catalogue') {
       // ─── EL EVENTO ES EL OBSERVABLE, NO EL MENSAJE ──────────────────────────
       //
-      // El mensaje de la excepción de abajo nombra el plan, pero el filtro de
-      // 5xx lo redacta de la respuesta Y del log: al operador le llega
+      // El mensaje de la excepción nombra el plan, pero el filtro de 5xx lo
+      // redacta de la respuesta Y del log: al operador le llega
       // `http_exception` con `errorType` y `status`, sin plan y sin «catálogo
-      // roto». La línea que nombra el plan es ESTA, y por eso se escribe
-      // antes de tirar y no dentro del mensaje.
-      this.logger.log({
-        event: 'plan_not_in_catalogue',
-        businessId,
-        plan: entitlement.plan,
-      });
-
-      throw new InternalServerErrorException(
-        `El catálogo de planes está roto: no tiene la fila del plan \`${entitlement.plan}\`, que es el plan de este negocio. Es una avería de configuración, no una negativa del plan.`,
-      );
+      // roto». La línea que nombra el plan es la que escribe
+      // `catalogueIsBroken`, y por eso se escribe antes de tirar y no dentro
+      // del mensaje.
+      throw this.catalogueIsBroken(businessId, entitlement.plan);
     }
 
     throw this.planRefusal(
       'Este plan no incluye accesos de personal: subí de plan para administrar el equipo.',
     );
+  }
+
+  /**
+   * EL CATÁLOGO ROTO, CONTESTADO SIEMPRE IGUAL.
+   *
+   * ─── POR QUÉ ESTO ES UN MÉTODO Y NO DOS RESPUESTAS ───────────────────────────
+   *
+   * Porque el catálogo roto se puede descubrir en DOS momentos: en la
+   * pre-comprobación de la puerta —que pregunta al catálogo si el negocio tiene
+   * la fila— o en el TRIGGER, si la fila se pierde ENTRE la pre-comprobación y
+   * el `INSERT`. La segunda es la carrera: la pre-comprobación vio el catálogo
+   * entero, y un `delete` de la fila del plan en ese hueco hace que el motor se
+   * niegue en voz alta.
+   *
+   * Las dos son la MISMA avería, así que la respuesta es la misma: un 500 que
+   * dice que el catálogo está roto y nombra el plan. Y el operador la ve
+   * igual en los dos casos, porque el EVENTO se escribe en los dos.
+   */
+  private catalogueIsBroken(
+    businessId: string,
+    plan: BusinessPlanCode,
+  ): InternalServerErrorException {
+    // El evento va PRIMERO: el mensaje de la excepción de abajo lo redacta el
+    // filtro de 5xx —de la respuesta y del log—, y el evento es lo único que
+    // nombra la fila que falta.
+    this.logger.log({
+      event: 'plan_not_in_catalogue',
+      businessId,
+      plan,
+    });
+
+    return new InternalServerErrorException(
+      `El catálogo de planes está roto: no tiene la fila del plan \`${plan}\`, que es el plan de este negocio. Es una avería de configuración, no una negativa del plan.`,
+    );
+  }
+
+  /**
+   * EL PLAN QUE EL TRIGGER DICE QUE NO ESTÁ EN EL CATÁLOGO.
+   *
+   * ─── POR QUÉ SE BUSCA POR LA PROSA DEL TRIGGER ──────────────────────────────
+   *
+   * El trigger del motor —`20261021182624_plan_limits_from_catalog.sql`— se
+   * niega con `raise exception 'el plan % no está en el catálogo de planes'` y
+   * SIN `errcode`: es el `P0001` genérico de Postgres, no un código de esta
+   * API. No hay `code` que traducir, así que la traducción se hace por la
+   * PROSA, que es la del trigger.
+   *
+   * ─── Y POR QUÉ LA PROSA NO PUEDE CAMBIAR ─────────────────────────────────────
+   *
+   * Porque la migración está SELLADA por md5 y aplicada en producción: su
+   * texto es el registro histórico de lo que la base hace. Si algún día
+   * cambiara —porque esa migración se corrigiera con otra nueva—, esta
+   * traducción dejaría de encontrar la prosa y el error volvería a ser un 500
+   * genérico sin nombre de plan, que es SEGURO: un 500 que no promete nada.
+   * El acoplamiento es deliberado y está anotado aquí para que el que lea
+   * esta traducción sepa qué pasa si la prosa cambia.
+   *
+   * ─── Y POR QUÉ SE MIRA EL ERROR **Y** SU `cause` ────────────────────────────
+   *
+   * Porque Drizzle envuelve el error de Postgres en un `DrizzleQueryError` que
+   * no copia el mensaje: la prosa del trigger vive un nivel más abajo, en el
+   * `cause`. Es la misma búsqueda que hacen `BusinessesService.mapBusinessWriteError`
+   * y `SubscriptionsService.isLiveBusinessKeyViolation`.
+   */
+  private brokenCataloguePlan(error: unknown): BusinessPlanCode | null {
+    const candidates = [
+      error,
+      (error as { cause?: unknown } | null)?.cause,
+    ] as unknown[];
+
+    for (const candidate of candidates) {
+      const message = (candidate as { message?: string } | null)?.message;
+      if (!message) continue;
+      const match = CATALOGUE_BROKEN_BY_TRIGGER.exec(message);
+      if (match?.[1]) return match[1] as BusinessPlanCode;
+    }
+    return null;
   }
 
   /** `business=… plan=… limit=… current=…` → ` (plan free: admite hasta 2, serían 3)`. */
