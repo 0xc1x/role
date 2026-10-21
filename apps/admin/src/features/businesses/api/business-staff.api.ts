@@ -1,6 +1,6 @@
-import type {
-	BusinessMemberDto,
-	RevokeBusinessAccessResponseDto,
+import {
+	type BusinessMemberDto,
+	RevokeBusinessAccessResponseSchema,
 } from "@0xc1x/role-commons";
 import { api } from "@/lib/api/client";
 
@@ -11,11 +11,13 @@ import { api } from "@/lib/api/client";
  * falta. No da de alta ni edita accesos —esas rutas son del dueño y del
  * gerente, y el panel no las tiene—.
  *
- * ─── POR QUÉ NO HAY SCHEMAS DE ZOD ACÁ ───────────────────────────────────────
+ * ─── POR QUÉ EL CONTRATO NO SE RE-DECLARA ACÁ ────────────────────────────────
  *
- * El contrato está en `commons` y lo valida la API: el panel no re-declara la
- * forma de la respuesta, la importa. Un `zod` en el cliente sería una segunda
- * copia del contrato que puede desincronizarse sin que nada se ponga rojo.
+ * El contrato está en `commons` y lo valida la API: el panel no escribe una
+ * segunda forma de la respuesta. Pero el corte SÍ parsea el sobre con el
+ * schema de `commons` antes de contar sus campos: el móvil ya lo hace, y una
+ * deriva del servidor tiene que romper en voz alta en los dos clientes, no
+ * sólo en uno.
  *
  * ─── Y POR QUÉ EL CORTE NO LLEVA CUERPO ──────────────────────────────────────
  *
@@ -34,8 +36,8 @@ export const businessStaffApi = {
 	 * afuera (`owner_skipped`): el panel tiene que poder contarlo, en vez de
 	 * dejar que el dueño se entere porque su tablet se apagó.
 	 */
-	revokeAll: (businessId: string) =>
-		api.post<RevokeBusinessAccessResponseDto>(
-			`/businesses/${businessId}/staff/revoke-all`,
+	revokeAll: async (businessId: string) =>
+		RevokeBusinessAccessResponseSchema.parse(
+			await api.post<unknown>(`/businesses/${businessId}/staff/revoke-all`),
 		),
 };

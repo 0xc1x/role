@@ -497,4 +497,32 @@ describe("corte de emergencia desde el panel", () => {
 		// El corte no se aplicó: el diálogo sigue abierto.
 		expect(await screen.findByRole("alertdialog")).toBeDefined();
 	});
+
+	test("una respuesta del corte fuera de contrato rompe en voz alta", async () => {
+		stubFetch({
+			staff: members,
+			locations: [location],
+			revoke: {
+				status: 200,
+				body: { disabled: [], owner_skipped: "yes" },
+			},
+		});
+		const error = spyOn(toast, "error");
+		renderTable();
+
+		fireEvent.click(
+			await screen.findByRole("button", {
+				name: `Cortar todos los accesos de ${businessName}`,
+			}),
+		);
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Cortar los accesos" }),
+		);
+
+		// El schema de commons dice que el campo es booleano: la deriva se
+		// nombra, en vez de contar un dueño que nadie sabe si quedó.
+		await waitFor(() => expect(error).toHaveBeenCalled());
+		expect(String(error.mock.calls[0]?.[0])).toContain("owner_skipped");
+		expect(await screen.findByRole("alertdialog")).toBeDefined();
+	});
 });
