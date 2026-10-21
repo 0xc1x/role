@@ -1,9 +1,27 @@
-import { describe, expect, test } from "bun:test";
-import { apiPost, apiUrl } from "../api";
+import { describe, expect, mock, test } from "bun:test";
+import { apiPost } from "../api";
+
+/**
+ * El destino de la API lo elige `VITE_API_URL`, y ese valor llega desde el
+ * `.env` local (o desde el ambiente) porque `api.ts` lee `env` en el scope del
+ * módulo.
+ *
+ * HEREDARLO hacía que esta aserción dependiera del entorno del desarrollador:
+ * verde en la laptop de quien tiene `apps/landing/.env`, roja en CI, que no lo
+ * tiene. Y una prueba que hereda el destino del `.env` del otro no prueba el
+ * destino de nadie. El valor se FIJA acá —el mismo patrón que `env.test.ts`—:
+ * se sustituye `../env` y se reimporta `../api` con una query distinta para
+ * que el módulo vuelva a evaluarse contra la env fijada.
+ */
+const BASE = "http://api.test.invalid/api/v1";
 
 describe("apiUrl", () => {
-	test("devuelve la base configurada", () => {
-		expect(apiUrl()).toContain("http");
+	test("devuelve la base configurada", async () => {
+		mock.module("../env", () => ({ env: { VITE_API_URL: BASE } }));
+		const { apiUrl } = await import(`../api?base=${Math.random()}`);
+		// Exacto, no "contiene http": la base configurada es la que se pidió,
+		// con su prefijo incluido, y no un prefijo cualquiera.
+		expect(apiUrl()).toBe(BASE);
 	});
 });
 
