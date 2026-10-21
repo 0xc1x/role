@@ -1,8 +1,17 @@
 import { mock } from "bun:test";
 
+import { applyTestEnv } from "@/src/test-utils/test-env";
+
 // Bun test preload (wired via bunfig.toml [test] preload). Runs before every
 // test file, so mocks registered here cover transitive native imports that
 // per-file mock.module("react-native") calls cannot reach.
+
+// El entorno va PRIMERO y en el preload (no en cada test) porque
+// `src/core/config/env.ts` valida con Zod AL IMPORTAR: sin estas variables
+// cualquier test que llegue a él de forma transitiva muere al cargarse, y
+// el fallo se reporta como "fichero de test roto" en vez de "falta env".
+// Ver `src/test-utils/test-env.ts` para el porqué de los valores.
+applyTestEnv();
 //
 // Root cause: lucide-react-native requires the real react-native-svg, whose
 // src/fabric/*NativeComponent.ts files import Flow-typed deep paths such as
