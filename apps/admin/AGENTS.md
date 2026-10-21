@@ -64,6 +64,12 @@ Sin errores pendientes de typecheck ni lint (`bun run check` y `bun run typechec
 
 Notas de mantenimiento:
 
+- **El `<form>` del login lleva `method="post"` a propósito.** Un form que
+  lleva credenciales no puede ser un GET: sin JS (o sin hidratación) el
+  navegador lo envía solo, y un GET mete la contraseña en la URL, el historial
+  y los logs. Con `post`, el camino degradado manda las credenciales en el
+  cuerpo. Está fijado por el e2e "without JavaScript the credentials never
+  reach the URL" (`e2e/auth.login.spec.ts`).
 - **La suite corre con `--isolate` y el DOM se instala en el PRELOAD.** Son las
   dos mitades del mismo problema: en bun el registro de módulos es del proceso,
   así que un spec puede cambiar el mundo de los otros noventa y uno. Medido en

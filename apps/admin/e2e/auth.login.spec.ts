@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import {
+	ADMIN_EMAIL,
 	ADMIN_PASSWORD,
 	signIn,
 	stubApi,
@@ -248,5 +249,78 @@ test.describe("the login form", () => {
 
 		await page.goto("/login");
 		await expect(page).toHaveURL(/\/home$/);
+	});
+
+	/**
+	 * ─── LA CONTRASEÑA NUNCA EN LA URL ────────────────────────────────────────
+	 *
+	 * El `<form>` del login es un `<form>` de HTML: si React no lo reclama, el
+	 * navegador lo envía por su cuenta. Ese camino degradado no es una hipótesis
+	 * — es lo que pasó: con el bundle del cliente roto (el dev server servía una
+	 * copia vieja de `commons` y el módulo moría antes de hidratar), el submit
+	 * nativo de un `<form>` sin `method` es un GET, y la URL medida quedó en
+	 * `/login?email=…&password=…`: la contraseña en el historial del navegador, en
+	 * los logs del servidor y en la cabecera `Referer` de todo lo que viniera
+	 * después.
+	 *
+	 * El arreglo NO es "no dejar que el operador haga clic tan rápido": el
+	 * formulario tiene que ser seguro por su cuenta, en cualquier estado en que
+	 * esté. Por eso lleva `method="post"`: el submit nativo manda las
+	 * credenciales en el CUERPO, y la URL queda limpia.
+	 *
+	 * Este test reproduce el estado degradado de verdad (sin JavaScript no hay
+	 * hidratación que lo impida) y afirma la propiedad, no la forma: NINGUNA
+	 * petición de la página lleva la contraseña en su URL.
+	 */
+	test("without JavaScript the credentials never reach the URL", async ({
+		page,
+	}) => {
+		await stubApi(page);
+		// El panel sin JavaScript: es el estado en el que quedó cuando el bundle
+		// del cliente murió. Se abortan los scripts; el HTML del servidor sigue
+		// ahí, con su `<form>` y sus campos.
+		await page.route("**/*", async (route) => {
+			if (route.request().resourceType() === "script") {
+				await route.abort();
+				return;
+			}
+			// `fallback` (y no `continue`) deja que el stub de la API siga
+			// aplicando: el último handler registrado es el que se ejecuta
+			// primero, y `continue` se saltaría al siguiente.
+			await route.fallback();
+		});
+
+		const requestUrls: string[] = [];
+		page.on("request", (r) => requestUrls.push(r.url()));
+
+		await page.goto("/login");
+		await page.locator('input[name="email"]').fill(ADMIN_EMAIL);
+		await page.locator('input[name="password"]').fill(ADMIN_PASSWORD);
+
+		// El submit nativo: una navegacion a `/login` que no es la de React. El
+		// listener se arma ANTES del clic —la peticion ocurre durante el clic y
+		// un `waitForEvent` posterior se la pierde.
+		const nativeSubmit = page.waitForEvent("request", {
+			predicate: (r) => r.isNavigationRequest() && r.url().includes("/login"),
+		});
+		await page.getByRole("button", { name: "Iniciar Sesión" }).click();
+
+		const submit = await nativeSubmit;
+		expect(
+			submit.method(),
+			"the native submit was a GET: the credentials went into the URL",
+		).toBe("POST");
+		expect(
+			new URL(submit.url()).search,
+			"the native submit put the credentials in the query string",
+		).toBe("");
+
+		// Y la propiedad completa: la contraseña no aparece en NINGUNA URL.
+		for (const url of requestUrls) {
+			expect(url, "a request URL carried the password").not.toContain(
+				ADMIN_PASSWORD,
+			);
+		}
+		expect(new URL(page.url()).search).toBe("");
 	});
 });

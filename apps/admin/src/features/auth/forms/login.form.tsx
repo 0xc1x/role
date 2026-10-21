@@ -104,7 +104,30 @@ export function LoginForm({
 				<CardDescription>Ingresa tus credenciales para acceder</CardDescription>
 			</CardHeader>
 			<CardContent>
+				{/*
+				 * ─── POR QUÉ `method="post"` ───────────────────────────────────────
+				 *
+				 * El login NUNCA debe ser un GET: una credencial en la URL queda en el
+				 * historial del navegador, en los logs del servidor y en la cabecera
+				 * `Referer` de cualquier petición posterior. La regla es "un form que
+				 * lleva credenciales no usa GET", y aquí no es una recomendación: es
+				 * lo que pasó.
+				 *
+				 * MEDIDO: con el bundle del cliente roto (un export de `commons` que
+				 * el dev server servía de una copia vieja), React nunca hidrataba y
+				 * el `<form>` caía al submit NATIVO del navegador — GET, sin cuerpo.
+				 * El resultado medido en el navegador: la URL quedó en
+				 * `/login?email=…&password=…`, con la contraseña en claro.
+				 *
+				 * Con `method="post"` ese camino degradado manda las credenciales en
+				 * el CUERPO, no en la URL, y el servidor responde 405 en vez de
+				 * aceptarlas: el operador ve un error en vez de dejar su contraseña
+				 * escrita en el historial. Con el panel funcionando, el
+				 * `preventDefault` de abajo cancela el submit nativo y esto no
+				 * cambia: el login real es la server function.
+				 */}
 				<form
+					method="post"
 					onSubmit={(e) => {
 						e.preventDefault();
 						e.stopPropagation();

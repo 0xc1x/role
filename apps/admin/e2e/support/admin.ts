@@ -90,9 +90,15 @@ export async function stubApi(page: Page, overrides: ApiOverride = {}) {
  *
  * Clicking "Iniciar Sesión" before React hydrates does not fail loudly. The
  * server-rendered `<form>` has no `action`, so the browser performs its native
- * GET submit and navigates to `/login?email=…&password=…` — leaking the
- * password into the URL and the history — and the spec is left holding a login
- * page that still has a password field in it.
+ * submit and navigates to `/login` — and the spec is left holding a login page
+ * that still has a password field in it.
+ *
+ * The credentials are no longer part of that navigation: the form carries
+ * `method="post"`, so the native submit sends them in the body and the URL
+ * stays clean. That is asserted on its own in `auth.login.spec.ts` ("without
+ * JavaScript the credentials never reach the URL"); the property measured here
+ * is a different one — that the click went through REACT and not through the
+ * browser.
  *
  * Two plausible gates were measured and BOTH are wrong:
  *
