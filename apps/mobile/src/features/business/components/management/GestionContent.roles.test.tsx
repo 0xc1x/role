@@ -22,10 +22,7 @@ import { mockNativeUi } from "@/src/test-utils/native-mocks";
  *
  * ─── LO QUE NO SE AFIRMA AQUÍ ────────────────────────────────────────────────
  *
- * «Equipo y accesos» no se afirma: esa tarjeta la monta la Task 7, que es
- * donde existe la ruta a la que apunta.
- *
- * Y «Pedidos» tampoco: no es una fila del panel, es la PESTAÑA del shell del
+ * «Pedidos» tampoco: no es una fila del panel, es la PESTAÑA del shell del
  * negocio (`app/(business)/_layout.tsx`), y el shell no filtra por rol —esta
  * tarea filtra el PANEL—. Lo que el panel del cajero conserva es lo suyo:
  * reseñas y soporte. De configuración, nada.
@@ -105,6 +102,18 @@ mock.module("@/src/features/business/hooks", () => ({
 	// Sin sucursales: el bloque pinta su estado vacío, que también se abre y
 	// se cierra con el resto del bloque.
 	useBusinessLocations: () => ({ data: [], isLoading: false }),
+	// El equipo se lee del API: la tarjeta de la sección sólo necesita el
+	// conteo para anunciarlo.
+	useStaffMembers: () => ({
+		data: [
+			{ id: "member-1", business_location_ids: [] },
+			{ id: "member-2", business_location_ids: [] },
+		],
+		isLoading: false,
+		isError: false,
+		error: null,
+		refetch: async () => {},
+	}),
 }));
 
 const { GestionContent } = await import("./GestionContent");
@@ -148,6 +157,9 @@ test("el cajero no ve configuración y sí ve lo suyo", () => {
 	expect(html).not.toContain(strings.business.quickAlerts);
 	expect(html).not.toContain(strings.business.notifications);
 	expect(html).not.toContain(strings.business.generalSettings);
+	// Y el equipo tampoco: un cajero no administra el equipo (§9.3).
+	expect(html).not.toContain(strings.business.staff.sectionTitle);
+	expect(html).not.toContain(strings.business.staff.manage);
 
 	// Lo que sí le toca: reseñas, soporte y el buzón.
 	expect(html).toContain(strings.business.quickReviews);
@@ -167,6 +179,10 @@ test("el gerente ve las sucursales y no edita el negocio", () => {
 	expect(html).toContain(strings.business.myLocations);
 	expect(html).toContain(strings.business.addLocation);
 	expect(html).not.toContain(strings.business.editProfile);
+	// El equipo se administra desde el dueño y el gerente (§9.3): el gerente
+	// ve la sección y el botón que la abre.
+	expect(html).toContain(strings.business.staff.sectionTitle);
+	expect(html).toContain(strings.business.staff.manage);
 	// Las métricas y los cupones siguen siendo del dueño.
 	expect(html).not.toContain(strings.business.quickStats);
 	expect(html).not.toContain(strings.business.quickCoupons);

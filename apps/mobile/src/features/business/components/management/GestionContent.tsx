@@ -19,6 +19,7 @@ import {
 	LocationCard,
 	LocationCardSkeleton,
 } from "@/src/features/business/components/LocationCard";
+import { StaffSectionCard } from "@/src/features/business/components/staff/StaffSectionCard";
 import {
 	useBusinessLocations,
 	useBusinessProfile,
@@ -265,6 +266,12 @@ export function GestionContent({
 						)}
 					</>
 				) : null}
+
+				{/* ── Equipo y accesos ────────────────────────────── */}
+				{/* La tarjeta declara su propio mínimo (§9.3): el equipo se
+				    administra desde el dueño y el gerente, y un cajero no ve
+				    ni la tarjeta ni la lista que hay detrás. */}
+				<StaffSectionCard businessId={businessId} role={role} />
 
 				{/* ── Accesos rápidos ─────────────────────────────── */}
 				<QuickActionsGrid businessId={businessId} role={role} />

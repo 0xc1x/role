@@ -1529,6 +1529,31 @@ export const strings = {
 		helpFaqLocationsAnswer:
 			"Gestiona tus sucursales desde Mis Locales; cada una tiene productos, horarios y pedidos propios.",
 		helpMailSubject: "Contacto - Soporte de negocio",
+		// Copy de los accesos del equipo (§9.2). La tarjeta de la sección
+		// cuenta CUÁNTAS personas tienen acceso; la lista cuenta QUIÉN. Los
+		// marcadores `{count}` y `{n}` los reemplaza el componente: este
+		// archivo es un catálogo, no un formateador.
+		staff: {
+			title: "Equipo",
+			sectionTitle: "Equipo y accesos",
+			sectionSubtitle: "{count} personas con acceso",
+			manage: "Administrar",
+			emptyTitle: "Aún no hay accesos",
+			emptyBody: "Dale acceso a tu equipo para que retiren las ofertas por ti.",
+			addAccess: "Dar acceso",
+			roleOwner: "Dueño",
+			roleManager: "Gerente",
+			roleStaff: "Empleado",
+			statusActive: "Activo",
+			statusPaused: "Pausado",
+			lastLogin: "Última entrada",
+			neverLoggedIn: "Nunca ha entrado",
+			locations: "{n} sucursales",
+			allLocations: "Todas las sucursales",
+			sessionPolicy: "Política de sesión",
+			sessionNever: "Sin expiración",
+			sessionHours: "Sesión de {n} h",
+		},
 	},
 	// Copy del panel multi-negocio (app/my-business/*). Antes vivía como
 	// literales en la pantalla, fuera del catálogo.
