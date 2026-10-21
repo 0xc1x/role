@@ -3,6 +3,7 @@ export * from './profiles';
 export * from './businesses';
 export * from './business-companions';
 export * from './business-members';
+export * from './subscription-plans';
 export * from './business-locations';
 export * from './business-hours';
 export * from './offers';
@@ -72,6 +73,10 @@ import {
   businessMembers,
   businessPlansState,
 } from './business-members';
+import {
+  subscriptionPlanFeatures,
+  subscriptionPlans,
+} from './subscription-plans';
 import { defineRelations } from 'drizzle-orm';
 
 /** Schema map passed to drizzle() for typed queries. */
@@ -117,6 +122,8 @@ export const schema = {
   businessMembers,
   businessMemberLocations,
   businessPlansState,
+  subscriptionPlans,
+  subscriptionPlanFeatures,
 };
 
 export type DatabaseSchema = typeof schema;
@@ -173,6 +180,15 @@ export const relations = defineRelations(schema, (helpers) => ({
     business: helpers.one.businesses({
       from: helpers.businessPlansState.business_id,
       to: helpers.businesses.id,
+    }),
+  },
+  // El catálogo: cada feature pertenece a un plan, y ese vínculo es lo que una
+  // consulta no puede inferir — `plan_code` es el código del plan y no una
+  // foreign key a `subscription_plans.code` que el query builder sepa resolver.
+  subscriptionPlanFeatures: {
+    plan: helpers.one.subscriptionPlans({
+      from: helpers.subscriptionPlanFeatures.plan_code,
+      to: helpers.subscriptionPlans.code,
     }),
   },
 }));

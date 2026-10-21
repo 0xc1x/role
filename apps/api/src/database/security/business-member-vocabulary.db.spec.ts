@@ -388,8 +388,11 @@ describe('las razones de sesión son las que el cuerpo de la función devuelve',
     // Porque no se puede llamar: el RPC lee `auth.uid()`, y esta sesión no es
     // nadie. La enumeración vive en el `prosrc`, que es donde vive de verdad: son
     // literales dentro de un `jsonb_build_object` y tres `v_reason := '...'`. Es
-    // la misma lectura por texto que hace `plan-limits.db.spec.ts` con los casos
-    // del `case v_plan`, y por el mismo motivo: comparar sin ejecutar.
+    // la misma lectura por texto que hacía `plan-limits.db.spec.ts` con los casos
+    // del `case v_plan`, y por el mismo motivo: comparar sin ejecutar. Ese spec
+    // lee hoy el catálogo en tablas —el plan vive en una fila desde
+    // `20261021160000_subscription_plan_catalog.sql`—, pero la pregunta es la
+    // misma: ¿la base y el espejo de TypeScript dicen lo mismo?
     //
     // ─── POR QUÉ HAY QUE LEER DOS FORMAS Y NO UNA ─────────────────────────────
     //

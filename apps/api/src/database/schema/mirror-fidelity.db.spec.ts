@@ -106,6 +106,10 @@ const EXPECTED: ReadonlyArray<readonly [string, string, string]> = [
   ['saved_addresses', 'user_id', 'CASCADE'],
   ['segment_users', 'segment_id', 'CASCADE'],
   ['segment_users', 'user_id', 'CASCADE'],
+  // La fila de una feature pertenece a su plan, y muere con él: si el plan se
+  // borra del catálogo, sus features tienen que irse con él y no quedar
+  // apuntando a un plan que ya no existe.
+  ['subscription_plan_features', 'plan_code', 'CASCADE'],
   ['user_consents', 'user_id', 'CASCADE'],
   ['user_preferences', 'user_id', 'CASCADE'],
   // La baja de un aviso se lleva sus acks: `announcement_acknowledgements`

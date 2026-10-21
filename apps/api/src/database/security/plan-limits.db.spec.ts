@@ -4,6 +4,7 @@ import {
   BUSINESS_PLAN_CODES,
   BUSINESS_PLAN_FEATURES,
   BUSINESS_PLAN_LIMITS,
+  PLAN_AUDIENCES,
 } from '@0xc1x/role-commons';
 import {
   as,
@@ -13,7 +14,7 @@ import {
 } from '../../../test/supabase-platform';
 
 /**
- * El catálogo de planes de `packages/commons` contra el motor que lo aplica.
+ * El catálogo de planes de `packages/commons` contra la tabla que lo guarda.
  *
  * ─── POR QUÉ ESTE ARCHIVO, Y POR QUÉ NO ES EL DE LOS TRIGGERS ────────────────
  *
@@ -24,47 +25,77 @@ import {
  *
  * Lo que no existe en ninguna parte del repositorio es la otra mitad: que el
  * número que el dueño ve en el panel y el número que el motor aplica sean EL
- * MISMO. Son dos copias —`BUSINESS_PLAN_LIMITS` en TypeScript y el `case v_plan`
- * dentro de `enforce_business_location_limit` y `enforce_business_member_limit`
- * en Postgres— y entre dos copias no hay nada que las ate. El dueño lee «2
- * miembros» en el panel, el motor corta en 3, y nada en el sistema se da cuenta:
- * el panel no sabe lo que el trigger va a hacer y el trigger no sabe qué dice el
- * panel. Esa es exactamente la clase de mentira que la §4.5 dice que no quiere.
+ * MISMO. Son dos copias —`BUSINESS_PLAN_LIMITS` en TypeScript y la fila del
+ * catálogo en Postgres— y entre dos copias no hay nada que las ate. El dueño lee
+ * «2 miembros» en el panel, el motor corta en 3, y nada en el sistema se da
+ * cuenta: el panel no sabe lo que el motor va a hacer y el motor no sabe qué dice
+ * el panel. Esa es exactamente la clase de mentira que la §4.5 dice que no quiere.
  *
  * ─── POR QUÉ SE LEE EL CATÁLOGO VIVO Y NO UNA COPIA DEL TEST ──────────────────
  *
- * Los cuatro assertions de abajo leen `pg_proc.prosrc` y `pg_enum` de la base
- * que este spec acaba de construir replicando `supabase/migrations/`, y los
- * comparan contra el archivo de TypeScript. No hay una segunda lista de números
- * escrita a mano que pueda quedarse vieja: si alguien cambia `free` de 2 a 3 en
- * el trigger y olvida el `.ts`, este spec se pone rojo señalando el `case`.
+ * Las assertions de abajo leen `public.subscription_plans` y
+ * `public.subscription_plan_features` de la base que este spec acaba de
+ * construir replicando `supabase/migrations/`, y las comparan contra el archivo
+ * de TypeScript. No hay una segunda lista de números escrita a mano que pueda
+ * quedarse vieja: si alguien sube el plan gratis a 3 miembros en la tabla y
+ * olvida el `.ts`, este spec se pone rojo señalando la celda.
  *
  * Y al revés también, que es la mitad que importa más: si alguien sube el plan
- * gratis a 3 miembros en `commons` para venderlo, el motor sigue cortando en 2 y
- * el spec lo dice.
+ * gratis a 3 miembros en `commons` para venderlo, la tabla sigue diciendo 2 y el
+ * spec lo dice.
  *
  * `expect(BUSINESS_PLAN_LIMITS).toEqual(BUSINESS_PLAN_LIMITS)` sería verde con
  * cualquier base y para cualquier número. Nunca se compara una constante consigo
  * misma.
  *
- * ─── POR QUÉ SE PARSEA EL CUERPO Y NO SE LLAMA A LA FUNCIÓN ───────────────────
+ * ─── LO QUE MIDE HOY, Y LA COPIA QUE TODAVÍA QUEDA ───────────────────────────
+ *
+ * Este archivo mide que la FILA del catálogo y el espejo de TypeScript digan lo
+ * mismo. El motor, en cambio, todavía lleva sus propios números escritos a mano
+ * —el `case v_plan` de `enforce_business_location_limit` y
+ * `enforce_business_member_limit`, y el `case` de `business_has_feature`—, y
+ * esa es la copia que se retira cuando los triggers lean el catálogo. Hasta
+ * entonces, este archivo no puede afirmar que el número que el motor aplica es
+ * el de la fila: afirma que el número de la fila es el del §4.5, y el bloque
+ * final —el del mensaje en voz alta— es lo que todavía ata al motor.
+ *
+ * ─── POR QUÉ SE COMPARA CELDA POR CELDA, Y POR QUÉ EL `null` CUENTA ───────────
+ *
+ * Un plan sin tope es `null`, y `null` es una celda como cualquier otra: el
+ * `pro_plus` no tiene tope, y eso NO es lo mismo que tener un tope de cero. Un
+ * `0` donde va un `null` es un tope, y un tope de cero es un plan distinto del
+ * que el dueño compró —uno en el que no puede tener ni una sucursal—. La
+ * comparación incluye el `null` justamente para que esa diferencia se vea en el
+ * diff y no en un fallo de runtime.
+ *
+ * ─── `is_active` NO ENTRA EN LA COMPARACIÓN, Y POR QUÉ ───────────────────────
+ *
+ * Porque es OPERATIVO: retira un plan de la oferta sin borrarlo —dejar de vender
+ * el `pro` no es borrar el `pro`— y no tiene espejo en TypeScript. No hay
+ * `BUSINESS_PLAN_IS_ACTIVE` porque no es un dato del catálogo sino una decisión
+ * del día. Por eso queda fuera a propósito, y por eso este párrafo existe: para
+ * que nadie lo agregue al espejo por simetría y rompa el catálogo entero para
+ * poder observar una columna que no está en el contrato.
+ *
+ * ─── POR QUÉ SE MIDE EL MENSAJE Y NO SÓLO EL COMPORTAMIENTO ──────────────────
  *
  * El mensaje que el motor levanta lleva el número adentro —«el plan free admite
  * hasta 2 miembros, no más»—, y ese mensaje es lo que el dueño lee cuando lo
  * rechazan. Es el mismo número por una vía distinta: el `raise` lo formatea desde
- * `v_limit`, y `v_limit` sale del `case`. Por eso el último test de este archivo
- * no pregunta sólo si el `case` dice 2, sino si lo que el motor dice en voz alta
- * es el 2 de `BUSINESS_PLAN_LIMITS`. Un `case` correcto con un `raise` que
- * imprime otra cosa también le está mintiendo al dueño, y por eso la pregunta
- * tiene que incluir el mensaje.
+ * el valor que el motor aplicó. Por eso el último bloque de este archivo no
+ * pregunta sólo si el motor rechaza, sino si lo que el motor dice en voz alta es
+ * el 2 de `BUSINESS_PLAN_LIMITS`. Un rechazo correcto con un `raise` que imprime
+ * otra cosa también le está mintiendo al dueño, y por eso la pregunta tiene que
+ * incluir el mensaje.
  *
  * ─── LA ANTI-VACUIDAD ESTÁ EN LOS MISMOS TESTS, NO EN UNO DE PERDA ───────────
  *
- * Cada parsing afirma cuántas ramas encontró, antes de afirmar qué dicen. Un
- * regex que deja de matchear devuelve un objeto vacío, y `toEqual({})` contra un
- * catálogo de tres planes falla —pero por la razón equivocada, y un mensaje de
- * fallo que dice «no hay arms» es mucho más útil que uno que dice «los límites no
- * coinciden». Por eso el conteo va primero y con su propio `expect`.
+ * Cada lectura afirma cuántas filas encontró, antes de afirmar qué dicen. Una
+ * tabla vacía —una migración que no corrió, un nombre mal escrito— devuelve
+ * `[]`, y `toEqual([])` contra un catálogo de tres planes falla —pero por la
+ * razón equivocada, y un mensaje de fallo que dice «no hay filas» es mucho más
+ * útil que uno que dice «los límites no coinciden». Por eso el conteo va primero
+ * y con su propio `expect`.
  */
 
 let ctx: SupabaseTestDb;
@@ -82,56 +113,6 @@ const LOC_FREE = 'e3000000-0000-4000-8000-000000000001';
 
 function plainRows<T>(result: unknown): T[] {
   return [...(result as Iterable<T>)];
-}
-
-/**
- * Los topes que el trigger declara, leídos del CUERPO de la función.
- *
- * El `case` está escrito en el `prosrc`, no en un comentario: es la única
- *statement de Postgres donde vive el número, y leerla por texto es lo que
- * permite comparar sin ejecutar nada.
- *
- * `null` se devuelve como `null` y no como `0` porque `pro_plus` no tiene tope:
- * `0` significaría «no puede tener ninguna sucursal», que es un plan distinto y
- * uno que nadie quiere.
- */
-function limitsFrom(source: string): Record<string, number | null> {
-  const out: Record<string, number | null> = {};
-  const arms = source.matchAll(
-    /when\s+'([^']+)'\s+then\s+v_limit\s*:=\s*(null|\d+)/gi,
-  );
-  for (const arm of arms) {
-    const plan = (arm[1] ?? '').toLowerCase();
-    const value = (arm[2] ?? '').toLowerCase();
-    out[plan] = value === 'null' ? null : Number(value);
-  }
-  return out;
-}
-
-/**
- * Las features que el trigger concede, leídas del CUERPO de
- * `business_has_feature`. Es `language sql`, así que el catálogo entero está en
- * el `prosrc` y no detrás de una llamada.
- *
- * El brazo se captura hasta el SIGUIENTE `when` y no por paréntesis, porque las
- * dos formas que escriben las dos cosas distintas: `free` concede una sola
- * feature con `p_feature = 'staff_access'` y `pro` la concede con `p_feature in
- * (…)`. Un parser que sólo entendiera la segunda habría leído dos de tres
- * planes y lo habría reportado como una discrepancia del catálogo en vez de como
- * lo que es —un parser que no conocía una forma del SQL que el motor sí.
- */
-function featuresFrom(source: string): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-  const arms = source.matchAll(
-    /when\s+'([^']+)'\s+then\s+p_feature\s*(?:=|in)\s*([^\n]*?)(?=\s+when\s+'|\s+else\b)/gi,
-  );
-  for (const arm of arms) {
-    const plan = (arm[1] ?? '').toLowerCase();
-    out[plan] = [...(arm[2] ?? '').matchAll(/'([^']+)'/g)].map((f) =>
-      (f[1] ?? '').toLowerCase(),
-    );
-  }
-  return out;
 }
 
 beforeAll(async () => {
@@ -229,85 +210,108 @@ describe('el enum de Postgres y el de TypeScript son el mismo catálogo', () => 
     );
     expect(labels.map((l) => l.label)).toEqual([...BUSINESS_FEATURES]);
   });
+
+  test('plan_audience', async () => {
+    // `n.nspname = 'public'` y no sólo el nombre: el tipo tiene que ser ÉSTE y
+    // no otro `plan_audience` de otro esquema. El enum lo trae la migración
+    // del catálogo y su segundo valor —`consumer`— existe para el futuro que
+    // este plan no siembra: la tabla lo admite y no hay fila que lo use.
+    const labels = plainRows<{ label: string }>(
+      await ctx.sql.unsafe(`
+				select e.enumlabel as label
+				  from pg_type t
+				  join pg_enum e on e.enumtypid = t.oid
+				  join pg_namespace n on n.oid = t.typnamespace
+				 where n.nspname = 'public'
+				   and t.typname = 'plan_audience'
+				 order by e.enumsortorder`),
+    );
+
+    expect(labels.length, 'el enum de audiencias de Postgres está vacío').toBe(
+      PLAN_AUDIENCES.length,
+    );
+    expect(
+      labels.map((l) => l.label),
+      'PLAN_AUDIENCES y el enum public.plan_audience no son la misma lista. ' +
+        'Una audiencia que la API no conoce no se puede pedir, y una que la ' +
+        'base tiene y la API no, no se puede pintar.',
+    ).toEqual([...PLAN_AUDIENCES]);
+  });
 });
 
-describe('los dos triggers llevan los topes del §4.5', () => {
-  test('los topes de business_locations y de business_members', async () => {
-    const bodies = plainRows<{ proname: string; prosrc: string }>(
+describe('el catálogo de planes lleva los topes del §4.5', () => {
+  test('celda por celda, con el `null` del `pro_plus` incluido', async () => {
+    const rows = plainRows<{
+      code: string;
+      audience: string;
+      max_locations: number | null;
+      max_members: number | null;
+    }>(
       await ctx.sql.unsafe(`
-				select p.proname, p.prosrc
-				  from pg_proc p
-				  join pg_namespace n on n.oid = p.pronamespace
-				 where n.nspname = 'public'
-				   and p.proname in ('enforce_business_location_limit',
-				                     'enforce_business_member_limit')
-				 order by p.proname`),
+				select code, audience, max_locations, max_members
+				  from public.subscription_plans
+				 order by code`),
     );
 
+    // El conteo ANTES del valor. Una tabla vacía —una migración que no corrió,
+    // un nombre mal escrito— devuelve `[]`, y `[]` contra un catálogo de tres
+    // planes falla por el motivo equivocado.
     expect(
-      bodies.map((b) => b.proname),
-      'faltan los dos triggers de límite de la §5.3. Si este spec no los ' +
-        'lee, no está comparando nada: el archivo entero se vuelve verde ' +
-        'porque no encontró nada que contrastar.',
-    ).toEqual([
-      'enforce_business_location_limit',
-      'enforce_business_member_limit',
-    ]);
+      rows.length,
+      'el catálogo de planes está vacío. O la migración no corrió, o la tabla ' +
+        'no existe, o este spec se quedó viejo.',
+    ).toBe(BUSINESS_PLAN_CODES.length);
 
-    const fromLocation = limitsFrom(
-      bodies.find((b) => b.proname === 'enforce_business_location_limit')
-        ?.prosrc ?? '',
-    );
-    const fromMember = limitsFrom(
-      bodies.find((b) => b.proname === 'enforce_business_member_limit')
-        ?.prosrc ?? '',
-    );
-
-    // El conteo ANTES del valor. Un regex que dejó de matchear devuelve `{}`,
-    // y `{}` contra un catálogo de tres planes falla por el motivo equivocado.
+    // El `order by code` ordena por el ORDEN DEL ENUM —`free`, `pro`,
+    // `pro_plus`—, que es el mismo orden que `BUSINESS_PLAN_CODES`. La
+    // comparación es posicional a propósito: un plan de más o de menos tiene
+    // que verse como una fila de más o de menos, y no como un conjunto que
+    // casualmente tiene el mismo tamaño.
     expect(
-      Object.keys(fromLocation),
-      'no se encontraron las tres ramas del `case v_plan` del trigger de ' +
-        'sucursales. O el `case` cambió de forma, o este spec quedó viejo: ' +
-        'las dos cosas se arreglan aquí, no volviendo a aflojar la comparación.',
+      rows.map((r) => r.code),
+      'el catálogo no tiene los mismos planes que el espejo de TypeScript. Un ' +
+        'plan que existe en la tabla y no en el `.ts` no se puede pedir en el ' +
+        'panel, y uno que existe en el `.ts` y no en la tabla no se puede ' +
+        'cobrar.',
     ).toEqual([...BUSINESS_PLAN_CODES]);
-    expect(Object.keys(fromMember)).toEqual([...BUSINESS_PLAN_CODES]);
 
+    // La audiencia: los tres planes que existen son de negocio. El enum también
+    // admite `consumer`, pero no se siembra ninguno —y no sembrar ninguno es
+    // una decisión, no un olvido: un plan de consumidor sin superficie que lo
+    // ofrezca es una promesa que nadie puede cobrar.
     expect(
-      fromLocation,
-      'El número de sucursales que el motor aplica no es el que el panel ' +
-        'muestra. El dueño lee BUSINESS_PLAN_LIMITS[plan].locations y el ' +
-        'trigger corta en otra cosa, así que le están cobrando por encima ' +
-        'del plan que compró.',
+      rows.map((r) => r.audience),
+      'un plan del catálogo no es de negocio. Los tres planes del §4.5 son ' +
+        'de negocio, y la audiencia es lo que decide a quién se le puede ' +
+        'asignar.',
+    ).toEqual(BUSINESS_PLAN_CODES.map(() => 'business'));
+
+    // Y los topes, celda por celda. El `null` del `pro_plus` va incluido: es
+    // una celda como cualquier otra, y es la que distingue «sin tope» de
+    // «tope de cero».
+    expect(
+      rows.map((r) => r.max_locations),
+      'El número de sucursales del catálogo no es el del §4.5. La fila es la ' +
+        'fuente de la que salen el panel y el motor, así que una diferencia ' +
+        'aquí es el dueño leyendo un número y topando con otro.',
     ).toEqual(
-      Object.fromEntries(
-        BUSINESS_PLAN_CODES.map((plan) => [
-          plan,
-          BUSINESS_PLAN_LIMITS[plan].locations,
-        ]),
-      ),
+      BUSINESS_PLAN_CODES.map((plan) => BUSINESS_PLAN_LIMITS[plan].locations),
     );
 
     expect(
-      fromMember,
-      'El número de miembros que el motor aplica no es el que el panel ' +
-        'muestra. Y el dueño sí lo va a notar, porque es el número que ' +
-        'compra.',
+      rows.map((r) => r.max_members),
+      'El número de miembros del catálogo no es el del §4.5. Y el dueño sí lo ' +
+        'va a notar, porque es el número que compra.',
     ).toEqual(
-      Object.fromEntries(
-        BUSINESS_PLAN_CODES.map((plan) => [
-          plan,
-          BUSINESS_PLAN_LIMITS[plan].members,
-        ]),
-      ),
+      BUSINESS_PLAN_CODES.map((plan) => BUSINESS_PLAN_LIMITS[plan].members),
     );
   });
 
   test('`pro_plus` no tiene tope, y eso no es lo mismo que un tope de cero', async () => {
-    // El `case` del trigger tiene un `else` que levanta excepción, así que un
-    // plan sin fila en el catálogo no cae en `null` por accidente. Lo que se
-    // afirma aquí es el otro lado: que `null` de verdad no limita, y que se
-    // comporta distinto de `0`.
+    // El motor tiene un `else` que levanta excepción, así que un plan sin fila
+    // en el catálogo no cae en `null` por accidente. Lo que se afirma aquí es el
+    // otro lado: que `null` de verdad no limita, y que se comporta distinto de
+    // `0`.
     const rows = plainRows<{ locs: number }>(
       await as(ctx.sql, 'service_role', null, (tx) =>
         tx.unsafe<{ locs: number }[]>(`
@@ -338,38 +342,41 @@ describe('los dos triggers llevan los topes del §4.5', () => {
   });
 });
 
-describe('business_has_feature lleva el catálogo de features del §4.5', () => {
+describe('el catálogo de features lleva lo que el §4.5 dice', () => {
   test('celda por celda', async () => {
-    const body = plainRows<{ prosrc: string }>(
+    const rows = plainRows<{ plan_code: string; feature: string }>(
       await ctx.sql.unsafe(`
-				select p.prosrc
-				  from pg_proc p
-				  join pg_namespace n on n.oid = p.pronamespace
-				 where n.nspname = 'public'
-				   and p.proname = 'business_has_feature'`),
+				select plan_code, feature
+				  from public.subscription_plan_features
+				 order by plan_code, feature`),
     );
-    expect(body).toHaveLength(1);
 
-    const fromTrigger = featuresFrom(body[0]?.prosrc ?? '');
-    expect(
-      Object.keys(fromTrigger),
-      'no se encontraron las tres ramas del `case` de ' +
-        '`business_has_feature`. El catálogo se mudó de forma o este spec ' +
-        'quedó viejo.',
-    ).toEqual([...BUSINESS_PLAN_CODES]);
+    // El espejo, aplanado: un par (plan, feature) por fila.
+    //
+    // El `order by` ordena por el orden de los ENUM (`business_plan_code` y
+    // `business_feature`), y ese orden es el que declaran las migraciones: los
+    // planes de primero a último y, dentro de cada plan, las features en el
+    // orden en que `BUSINESS_PLAN_FEATURES` las lista. La comparación es
+    // posicional por eso, y el orden de las features no es un dato de negocio:
+    // es el orden del enum.
+    const expected = BUSINESS_PLAN_CODES.flatMap((plan) => {
+      const features: readonly string[] = BUSINESS_PLAN_FEATURES[plan];
+      return features.map((feature) => ({ plan_code: plan, feature }));
+    });
 
-    const expected = Object.fromEntries(
-      BUSINESS_PLAN_CODES.map((plan) => [
-        plan,
-        [...BUSINESS_PLAN_FEATURES[plan]],
-      ]),
-    );
     expect(
-      fromTrigger,
-      'El catálogo plan → feature del motor no es BUSINESS_PLAN_FEATURES. ' +
+      rows.length,
+      'el catálogo de features no tiene las filas que dice el §4.5. O la ' +
+        'migración no corrió, o la tabla no existe, o este spec se quedó ' +
+        'viejo.',
+    ).toBe(expected.length);
+
+    expect(
+      rows.map((r) => `${r.plan_code}:${r.feature}`),
+      'El catálogo plan → feature de la tabla no es BUSINESS_PLAN_FEATURES. ' +
         'Una celda equivocada no rompe nada visible: le cobra de más a un ' +
         'plan, o le regala una feature de otro.',
-    ).toEqual(expected);
+    ).toEqual(expected.map((e) => `${e.plan_code}:${e.feature}`));
   });
 });
 
