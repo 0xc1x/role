@@ -802,3 +802,58 @@ Ninguna se decidió acá. Se registran con lo que cuesta decidirla, para el part
    trae la feature». Adoptar `R0003` es un cambio de un solo lado en la API
    (`PG_PLAN_LIMIT` y `mapWriteError`) **más el mapeo del panel**, que es donde de
    verdad se nota.
+
+---
+
+## Addendum §C (2026-10-21) — Plan 4: el corte de emergencia
+
+Lo de arriba describe el **diseño**. Este addendum registra lo que el Plan 4 **añadió**
+—una ruta y una puerta de plataforma— sin reescribir lo que ya está escrito. Si algo de
+acá se contradice con una decisión de arriba, **manda la de arriba** y esto es un bug:
+el addendum documenta, no redefine.
+
+### C.1 — La décima ruta, y una puerta de plataforma de condición simple
+
+`POST /businesses/:businessId/staff/revoke-all` es la **décima** ruta del módulo de staff
+—§A.1 inventariaba nueve— y es el **corte de emergencia**: una operación que corta los
+accesos **activos** que quien llama administra y devuelve los que cortó.
+
+**Qué corta, y qué no:**
+
+- **corta** los accesos **activos** que el llamador **alcanza**: el dueño, todo su
+  negocio; el gerente, lo que su alcance contiene.
+- **no corta** al **dueño**, nunca —la exclusión es por **ROL**, no por persona—, ni a los
+  accesos ya pausados, que no tienen nada que cortar.
+- **se corta a sí mismo** un gerente que se alcanza: **sí**. Su alcance lo contiene, y la
+  única exclusión del §8 es la del dueño. Es la medida de la decisión 4, por el mismo
+  motivo —un gerente atrapado en un negocio es un fallo peor que el que un auto-corte
+  puede causar—.
+
+**La puerta de la plataforma es de condición SIMPLE, y es más ancha que las otras dos.**
+Un `app_role = 'admin'` corta los accesos de cualquier negocio, **con dueño vivo o sin
+él**:
+
+| puerta | condición | qué abre |
+| --- | --- | --- |
+| `create` (`POST /businesses/:id/staff`) | **doble**: `admin` **y** el negocio sin dueño vivo | un alta en un negocio que se quedó sin nadie |
+| `restore` (`POST /businesses/:id/ownership/restore`) | **la base la niega** con `R0004` si el negocio ya tiene dueño vivo | darle el dueño a un negocio que se quedó sin él |
+| **`revoke-all`** | **simple**: `admin` | cortar los accesos de cualquier negocio, **con dueño vivo incluido** |
+
+Que sea más ancha no es un descuido, y por eso conviene que quede escrito: el objeto del
+corte de emergencia es dejar a un negocio **sin accesos**, no administrarlo. Un admin de
+plataforma que *administrara* un negocio con dueño sigue siendo el problema —y eso se le
+sigue negando en `requireActor`—. Lo que esta puerta abre es otra cosa.
+
+**`owner_skipped` lo contesta la base, y no el roster.** Es la misma pregunta que hace
+`requireOwnerlessBusiness` —`public.business_live_owner_count`—, y por eso no depende de
+QUIÉN corta: el gerente y el dueño ven el mismo `true`, y un negocio sin dueño vivo ve
+`false`.
+
+**Y una cosa de implementación que el SSOT tiene que decir, porque es la que hace que la
+ruta funcione:** el alcance se calcula **antes** de cualquier corte, en **dos pasadas**.
+El predicado de alcance lo contesta la base leyendo la fila **del que llama** —
+`business_member_reaches_member` exige que esté `status = 'active'`— y el llamador puede
+estar en el conjunto que corta. Preguntar el alcance dentro del bucle de escritura hacía
+que la fila del gerente ya estuviera pausada cuando se llegaba al empleado, y el corte se
+detenía en el gerente: el equipo quedaba con la tablet abierta, que es exactamente lo que
+la operación existe para evitar.
