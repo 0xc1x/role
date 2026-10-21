@@ -10,7 +10,11 @@ import { AppText, EmptyState, ErrorState, Screen } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { withAlpha } from "@/src/core/theme/alpha";
-import { BUSINESS_TYPE_LABELS } from "@/src/features/business/domain/business";
+import {
+	BUSINESS_TYPE_LABELS,
+	type BusinessMemberRole,
+} from "@/src/features/business/domain/business";
+import { meetsMinRole } from "@/src/features/business/domain/panel-role";
 import {
 	LocationCard,
 	LocationCardSkeleton,
@@ -24,7 +28,20 @@ import { SettingsSection } from "./SettingsSection";
 import { SignOutSection } from "@/src/features/auth/presentation/SignOutSection";
 import { Button } from "@/components/ui/button";
 
-export function GestionContent({ businessId }: { businessId: string }) {
+/**
+ * El panel del negocio, pintado según el rol que tiene quien lo abre (§9.3).
+ *
+ * El rol es POR NEGOCIO (Task 4), así que viaja con el negocio y lo reparte
+ * cada sección: el botón de editar el negocio es del dueño, las sucursales
+ * son del dueño y del gerente, y lo demás depende de la fila.
+ */
+export function GestionContent({
+	businessId,
+	role,
+}: {
+	businessId: string;
+	role: BusinessMemberRole;
+}) {
 	const { colors } = useTheme();
 	const {
 		data: profile,
@@ -154,103 +171,106 @@ export function GestionContent({ businessId }: { businessId: string }) {
 						>
 							{profile.address ?? strings.business.ordersNoAddress}
 						</AppText>
-						<Button
-							icon={<Pencil size={20} color={colors.primaryForeground} />}
-							style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
-							onPress={() => router.push("/business/profile/edit" as Href)}
-						>
-							{strings.business.editProfile}
-						</Button>
+						{/* Editar el negocio es del dueño: el cajero ve el negocio,
+						    no lo cambia. */}
+						{meetsMinRole(role, "owner") ? (
+							<Button
+								icon={<Pencil size={20} color={colors.primaryForeground} />}
+								style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
+								onPress={() => router.push("/business/profile/edit" as Href)}
+							>
+								{strings.business.editProfile}
+							</Button>
+						) : null}
 					</View>
 				</View>
 
 				{/* ── Mis Locales ─────────────────────────────────── */}
-				<View style={styles.sectionHeader}>
-					<AppText variant="h4" weight="bold">
-						{strings.business.myLocations}
-					</AppText>
-					<Button
-						size="sm"
-						icon={<Plus size={16} color={colors.primaryForeground} />}
-						onPress={() =>
-							router.push(`/business/${businessId}/locations/create` as Href)
-						}
-						style={{ borderRadius: radii.pill }}
-					>
-						{strings.business.addLocation}
-					</Button>
-				</View>
-
-				{locationsLoading ? (
-					<View style={styles.locations}>
-						{[0, 1].map((i) => (
-							<LocationCardSkeleton key={`location-skeleton-${i}`} />
-						))}
-					</View>
-				) : !locations || locations.length === 0 ? (
-					<View
-						style={[
-							styles.emptyLocations,
-							{
-								backgroundColor: colors.card,
-								borderColor: colors.borderSolid,
-								borderWidth: 1,
-								borderRadius: radii.lg,
-							},
-						]}
-					>
-						<EmptyState
-							icon={<Pin size={28} />}
-							title={strings.business.noLocationsTitle}
-							message={strings.business.noLocationsBody}
-							action={
-								<Button
-									onPress={() =>
-										router.push(
-											`/business/${businessId}/locations/create` as Href,
-										)
-									}
-								>
-									{strings.business.createLocation}
-								</Button>
-							}
-						/>
-					</View>
-				) : (
-					<View style={styles.locations}>
-						{(locations ?? []).map((location) => (
-							<LocationCard
-								key={location.id}
-								name={location.name}
-								address={location.address}
-								phone={location.phone}
-								isActive={location.is_active}
-								imageUrl={business?.image ?? null}
+				{/* El bloque entero —título, botón de agregar, lista y vacío— es
+				    del dueño y del gerente: un cajero no administra sucursales
+				    (§9.3). */}
+				{meetsMinRole(role, "manager") ? (
+					<>
+						<View style={styles.sectionHeader}>
+							<AppText variant="h4" weight="bold">
+								{strings.business.myLocations}
+							</AppText>
+							<Button
+								size="sm"
+								icon={<Plus size={16} color={colors.primaryForeground} />}
 								onPress={() =>
 									router.push(
-										`/business/${businessId}/locations/${location.id}` as Href,
+										`/business/${businessId}/locations/create` as Href,
 									)
 								}
-							/>
-						))}
-					</View>
-				)}
+								style={{ borderRadius: radii.pill }}
+							>
+								{strings.business.addLocation}
+							</Button>
+						</View>
+
+						{locationsLoading ? (
+							<View style={styles.locations}>
+								{[0, 1].map((i) => (
+									<LocationCardSkeleton key={`location-skeleton-${i}`} />
+								))}
+							</View>
+						) : !locations || locations.length === 0 ? (
+							<View
+								style={[
+									styles.emptyLocations,
+									{
+										backgroundColor: colors.card,
+										borderColor: colors.borderSolid,
+										borderWidth: 1,
+										borderRadius: radii.lg,
+									},
+								]}
+							>
+								<EmptyState
+									icon={<Pin size={28} />}
+									title={strings.business.noLocationsTitle}
+									message={strings.business.noLocationsBody}
+									action={
+										<Button
+											onPress={() =>
+												router.push(
+													`/business/${businessId}/locations/create` as Href,
+												)
+											}
+										>
+											{strings.business.createLocation}
+										</Button>
+									}
+								/>
+							</View>
+						) : (
+							<View style={styles.locations}>
+								{(locations ?? []).map((location) => (
+									<LocationCard
+										key={location.id}
+										name={location.name}
+										address={location.address}
+										phone={location.phone}
+										isActive={location.is_active}
+										imageUrl={business?.image ?? null}
+										onPress={() =>
+											router.push(
+												`/business/${businessId}/locations/${location.id}` as Href,
+											)
+										}
+									/>
+								))}
+							</View>
+						)}
+					</>
+				) : null}
 
 				{/* ── Accesos rápidos ─────────────────────────────── */}
-				<View style={styles.sectionTitle}>
-					<AppText variant="h4" weight="bold">
-						{strings.business.quickActions}
-					</AppText>
-				</View>
-				<QuickActionsGrid businessId={businessId} />
+				<QuickActionsGrid businessId={businessId} role={role} />
 
 				{/* ── Configuración ────────────────────────────────── */}
-				<View style={styles.sectionTitle}>
-					<AppText variant="h4" weight="bold">
-						{strings.business.settingsSection}
-					</AppText>
-				</View>
-				<SettingsSection businessId={businessId} />
+				<SettingsSection businessId={businessId} role={role} />
 
 				<SignOutSection style={{ marginTop: spacing.xl }} />
 				<View style={{ height: 40 }} />

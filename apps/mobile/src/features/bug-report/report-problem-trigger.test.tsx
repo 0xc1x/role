@@ -174,7 +174,12 @@ function renderBusiness(): void {
 	rows.length = 0;
 	sheetMounted = false;
 	renderToStaticMarkup(
-		createElement(SettingsSection, { businessId: "business-1" }),
+		// El rol es `staff`: es el que alcanza la fila del buzón, así que la
+		// hoja sigue siendo alcanzable desde el panel (§9.3).
+		createElement(SettingsSection, {
+			businessId: "business-1",
+			role: "staff",
+		}),
 	);
 }
 

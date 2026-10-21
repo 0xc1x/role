@@ -35,5 +35,8 @@ export default function GestionScreen() {
 		return <NoBusinessPrompt />;
 	}
 
-	return <GestionContent businessId={business.id} />;
+	// El rol viaja con el negocio (Task 4): es por negocio, no por persona, y
+	// es lo que el panel filtra para pintar la configuración que ese rol
+	// alcanza (§9.3).
+	return <GestionContent businessId={business.id} role={business.role} />;
 }
