@@ -29,10 +29,10 @@ import { mockNativeUi } from "@/src/test-utils/native-mocks";
  *
  * ─── Y LO QUE NO ─────────────────────────────────────────────────────────────
  *
- * Las acciones sobre un acceso (pausar, rotar, eliminar) no están: las
- * agregan las Tasks 10 y 13 sobre esta misma tarjeta. Esta tarea afirma que
- * la tarjeta ofrece SÓLO la entrada a la edición, y que el dueño —a quien la
- * propiedad se le TRANSFIERE, no se le edita— no la tiene.
+ * La lista y la tarjeta no PINTA las acciones: la tarjeta ofrece la entrada —
+ *«Editar» y «Más acciones»— y las acciones viven en una hoja aparte (Task 10).
+ * Esta tarea afirma que la tarjeta ofrece esas dos entradas, y que el dueño —
+ * a quien la propiedad se le TRANSFIERE, no se le edita— no tiene ninguna.
  */
 
 const BUSINESS_ID = "11111111-1111-4111-8111-111111111111";
@@ -50,6 +50,10 @@ const buttons: ButtonProbe[] = [];
 
 /** Las props con las que se pintó el estado de error. */
 const errorStates: Array<{ error: unknown; onRetry?: () => void }> = [];
+
+/** Las hojas de acciones montadas, con las props con las que se pintaron. */
+const actionSheets: Array<{ businessId: string; member: BusinessMemberDto }> =
+	[];
 
 /** Cuántas veces se ha vuelto a pedir la lista. */
 let refetchCalls = 0;
@@ -124,6 +128,19 @@ mock.module("@/components/ui/skeleton", () => ({
 	Skeleton: () => createElement(nativeWeb.Text, null, "SKELETON"),
 }));
 
+// La hoja de acciones se dobla: lo que se afirma acá es que la tarjeta la
+// ABRE y con qué acceso —no lo que la hoja hace por dentro, que es cosa de su
+// propio test—.
+mock.module("./StaffActionsSheet", () => ({
+	StaffActionsSheet: (props: {
+		businessId: string;
+		member: BusinessMemberDto;
+	}) => {
+		actionSheets.push(props);
+		return createElement(nativeWeb.Text, null, "STAFF_ACTIONS_SHEET");
+	},
+}));
+
 mock.module("@/src/core/ui", () => ({
 	AppText: nativeWeb.Text,
 	StatusBadge: ({ label }: { label: string }) =>
@@ -171,6 +188,37 @@ mock.module("@/src/features/business/hooks", () => ({
 	},
 }));
 
+// ─── Un `useState` que REALMENTE guarda ──────────────────────────────────────
+//
+// `renderToStaticMarkup` es un render único: la fibra se descarta y un
+// `setState` posterior no vuelve a pintar nada. El reemplazo guarda el valor
+// en una casilla que sobrevive entre renders, así que el ciclo escribir →
+// volver a renderizar → leer es el mismo que en la app. Sin esto, «pulsar
+// «Más acciones»» no abriría nada que se pueda ver.
+const slots: unknown[] = [];
+let hookCursor = 0;
+
+function useStoredState(initial: unknown): [unknown, (next: unknown) => void] {
+	const index = hookCursor;
+	hookCursor += 1;
+	if (!(index in slots)) {
+		slots[index] =
+			typeof initial === "function" ? (initial as () => unknown)() : initial;
+	}
+	return [
+		slots[index],
+		(next: unknown) => {
+			slots[index] =
+				typeof next === "function"
+					? (next as (prev: unknown) => unknown)(slots[index])
+					: next;
+		},
+	];
+}
+
+const React = await import("react");
+mock.module("react", () => ({ ...React, useState: useStoredState }));
+
 const { StaffList } = await import("./StaffList");
 const { StaffSectionCard } = await import("./StaffSectionCard");
 const { StaffMemberCard } = await import("./StaffMemberCard");
@@ -217,34 +265,42 @@ const CENTRO = location("44444444-4444-4444-8444-444444444444", "Centro");
 const SUR = location("55555555-5555-4555-8555-555555555555", "Sur");
 const NORTE = location("66666666-6666-4666-8666-666666666666", "Norte");
 
-const renderList = (locations: BusinessLocation[] = []) =>
-	renderToStaticMarkup(
+const renderList = (locations: BusinessLocation[] = []) => {
+	hookCursor = 0;
+	return renderToStaticMarkup(
 		createElement(StaffList, { businessId: BUSINESS_ID, locations }),
 	);
+};
 
-const renderSection = (role: "owner" | "manager" | "staff") =>
-	renderToStaticMarkup(
+const renderSection = (role: "owner" | "manager" | "staff") => {
+	hookCursor = 0;
+	return renderToStaticMarkup(
 		createElement(StaffSectionCard, { businessId: BUSINESS_ID, role }),
 	);
+};
 
 const renderCard = (
 	access: BusinessMemberDto,
 	locations: BusinessLocation[] = [],
-) =>
-	renderToStaticMarkup(
+) => {
+	hookCursor = 0;
+	return renderToStaticMarkup(
 		createElement(StaffMemberCard, {
 			businessId: BUSINESS_ID,
 			member: access,
 			locations,
 		}),
 	);
+};
 
 beforeEach(() => {
 	navigations.length = 0;
 	buttons.length = 0;
 	errorStates.length = 0;
+	actionSheets.length = 0;
 	staffQueries.length = 0;
 	refetchCalls = 0;
+	slots.length = 0;
 	staffQuery = {
 		data: undefined,
 		isLoading: true,
@@ -322,9 +378,9 @@ test("con dos accesos hay una tarjeta por acceso y la sección cuenta dos", () =
 	expect(html).toContain("ana@panaderia.role.ec");
 	expect(html).toContain("Luis Vega");
 	expect(html).toContain("luis@panaderia.role.ec");
-	// Y la tarjeta ofrece la entrada a la edición: una por acceso, y las
-	// demás acciones llegan en las Tasks 10 y 13.
-	expect(buttons).toHaveLength(2);
+	// Y la tarjeta ofrece las dos entradas: la de editar y la de las demás
+	// acciones. Dos por acceso.
+	expect(buttons).toHaveLength(4);
 
 	// Y la sección del panel anuncia el conteo.
 	const section = renderSection("owner");
@@ -376,8 +432,8 @@ test("la tarjeta dice el rol, el alcance, la sesión, la última entrada y el es
 	expect(html).toContain(strings.business.staff.sessionNever);
 	expect(html).toContain(formatDateTime(lastLogin));
 	expect(html).toContain(strings.business.staff.statusPaused);
-	// La única acción de la tarjeta es la entrada a la edición.
-	expect(buttons).toHaveLength(1);
+	// Las dos entradas de la tarjeta: editar y las demás acciones.
+	expect(buttons).toHaveLength(2);
 });
 
 test("una sesión por turnos dice las horas y un acceso que nunca entró lo dice", () => {
@@ -484,6 +540,44 @@ test("el dueño no ofrece editar: la propiedad se transfiere, no se edita", () =
 
 	expect(html).not.toContain(strings.business.staff.edit);
 	expect(buttons).toHaveLength(0);
+});
+
+// ─── La entrada a las demás acciones ─────────────────────────────────────────
+
+test("un acceso que no es el dueño ofrece más acciones y abre la hoja", () => {
+	const html = renderCard(member({ role: "staff" }));
+
+	expect(html).toContain(strings.business.staff.moreActions);
+
+	const mas = buttons.find(
+		(button) => button.label === strings.business.staff.moreActions,
+	);
+	expect(mas).toBeDefined();
+	// El botón dice a QUIÉN: en una lista, un «Más acciones» a secas es un
+	// botón que no dice de qué.
+	expect(mas?.accessibilityLabel).toBe(
+		strings.business.staff.moreActionsAccessibilityLabel.replace(
+			"{name}",
+			"Ana Torres",
+		),
+	);
+
+	// Y al pulsarlo se abre la hoja de acciones DE ESE acceso.
+	expect(actionSheets).toHaveLength(0);
+	mas?.onPress?.();
+	renderCard(member({ role: "staff" }));
+
+	expect(actionSheets).toHaveLength(1);
+	expect(actionSheets[0]?.businessId).toBe(BUSINESS_ID);
+	expect(actionSheets[0]?.member.id).toBe(member().id);
+});
+
+test("el dueño no ofrece más acciones: la propiedad se transfiere, no se administra", () => {
+	const html = renderCard(member({ role: "owner" }));
+
+	expect(html).not.toContain(strings.business.staff.moreActions);
+	expect(buttons).toHaveLength(0);
+	expect(actionSheets).toHaveLength(0);
 });
 
 // ─── La tarjeta de la sección ─────────────────────────────────────────────────

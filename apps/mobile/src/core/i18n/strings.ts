@@ -1629,6 +1629,30 @@ export const strings = {
 			aliasRequired: "El alias no puede quedar vacío",
 			aliasEditHint:
 				"Con este alias entra la persona. No puede quedar vacío.",
+			// Las acciones sobre un acceso (Task 10). Cada confirmación dice
+			// TRES cosas: qué pasa, qué NO pasa y qué hay que saber antes de
+			// pulsar. Lo que no pasa es lo que más importa: quien rota el PIN
+			// tiene que saber que las sesiones abiertas siguen vivas, y quien
+			// pausa tiene que saber que el corte es AHORA.
+			actionsTitle: "Acciones del acceso",
+			moreActions: "Más acciones",
+			moreActionsAccessibilityLabel: "Más acciones del acceso de {name}",
+			actionRotate: "Rotar PIN",
+			actionPause: "Pausar",
+			actionReactivate: "Reactivar",
+			actionRemove: "Dar de baja",
+			rotateTitle: "Rotar el PIN de {name}",
+			rotateBody:
+				"El PIN anterior deja de valer: hay que entregar el nuevo. Pero las sesiones abiertas siguen vivas —quien ya entró sigue dentro hasta que su sesión caduque—.",
+			pauseTitle: "Pausar el acceso de {name}",
+			pauseBody:
+				"El acceso se corta ahora, incluidas las sesiones de tablet que estén abiertas. La persona no puede entrar hasta que lo actives de nuevo.",
+			reactivateTitle: "Reactivar el acceso de {name}",
+			reactivateBody:
+				"La persona vuelve a poder entrar con su PIN y con su alias, como estaba antes de la pausa.",
+			removeTitle: "Dar de baja el acceso de {name}",
+			removeBody:
+				"La persona no puede volver a entrar hasta que se le dé un acceso nuevo, y el alias no se recicla: ese correo queda quemado.",
 		},
 	},
 	// Copy del panel multi-negocio (app/my-business/*). Antes vivía como

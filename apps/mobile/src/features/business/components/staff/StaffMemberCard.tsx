@@ -1,5 +1,6 @@
 import { type Href, router } from "expo-router";
 import type { BusinessLocation, BusinessMemberDto } from "@0xc1x/role-commons";
+import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { AppText, StatusBadge } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { formatDateTime } from "@/src/core/utils/formatters";
+import { StaffActionsSheet } from "./StaffActionsSheet";
 
 /**
  * El nombre del rol, en el idioma de la persona (§9.2).
@@ -94,8 +96,8 @@ function staffSessionLabel(ttlHours: number): string {
  * Porque la lista es el lugar donde se ve QUIÉN es cada acceso, y ahí es donde
  * se decide qué se le hace: la tarjeta dice qué es un acceso y ofrece la
  * entrada a lo que se le puede cambiar. Las demás acciones —rotar el PIN,
- * pausar, reactivar, dar de baja— llegan en las Tasks 10 y 13 sobre esta misma
- * tarjeta.
+ * pausar, reactivar, dar de baja— llegan en una hoja que la tarjeta abre, para
+ * que la lista siga siendo una lista de personas y no un panel de botones.
  */
 export function StaffMemberCard({
 	businessId,
@@ -113,6 +115,9 @@ export function StaffMemberCard({
 	const { colors } = useTheme();
 	const isPaused = member.status === "disabled";
 	const isOwner = member.role === "owner";
+	// La hoja de acciones se monta sólo mientras está abierta: así el PIN que
+	// puede venir de una rotación no queda esperando en la tarjeta.
+	const [actionsOpen, setActionsOpen] = useState(false);
 
 	return (
 		<View
@@ -186,24 +191,50 @@ export function StaffMemberCard({
 			</View>
 
 			{isOwner ? null : (
-				<Button
-					variant="outline"
-					// El botón dice a QUIÉN se edita: en una lista de accesos,
-					// un «Editar» a secas es un botón que no dice de qué.
-					accessibilityLabel={strings.business.staff.editAccessibilityLabel.replace(
-						"{name}",
-						member.label,
-					)}
-					onPress={() =>
-						router.push(
-							`/business/${businessId}/staff/${member.id}/edit` as Href,
-						)
-					}
-					style={styles.editButton}
-				>
-					{strings.business.staff.edit}
-				</Button>
+				<View style={styles.actions}>
+					<Button
+						variant="outline"
+						// El botón dice a QUIÉN se edita: en una lista de accesos,
+						// un «Editar» a secas es un botón que no dice de qué.
+						accessibilityLabel={strings.business.staff.editAccessibilityLabel.replace(
+							"{name}",
+							member.label,
+						)}
+						onPress={() =>
+							router.push(
+								`/business/${businessId}/staff/${member.id}/edit` as Href,
+							)
+						}
+						style={styles.action}
+					>
+						{strings.business.staff.edit}
+					</Button>
+
+					{/* Las demás acciones —rotar, pausar, reactivar, dar de baja—
+					    viven en una hoja: son cuatro y cada una con su
+					    confirmación, y cuatro botones con sus consecuencias no
+					    caben en una tarjeta. */}
+					<Button
+						variant="outline"
+						accessibilityLabel={strings.business.staff.moreActionsAccessibilityLabel.replace(
+							"{name}",
+							member.label,
+						)}
+						onPress={() => setActionsOpen(true)}
+						style={styles.action}
+					>
+						{strings.business.staff.moreActions}
+					</Button>
+				</View>
 			)}
+
+			{actionsOpen ? (
+				<StaffActionsSheet
+					businessId={businessId}
+					member={member}
+					onClose={() => setActionsOpen(false)}
+				/>
+			) : null}
 		</View>
 	);
 }
@@ -266,5 +297,6 @@ const styles = StyleSheet.create({
 	skeletonBadge: { height: 22, width: 72, borderRadius: radii.pill },
 	skeletonLine: { height: 12, width: "70%", borderRadius: radii.sm },
 	skeletonLineShort: { height: 12, width: "45%", borderRadius: radii.sm },
-	editButton: { marginTop: spacing.sm },
+	actions: { gap: spacing.sm, marginTop: spacing.sm },
+	action: { width: "100%" },
 });
