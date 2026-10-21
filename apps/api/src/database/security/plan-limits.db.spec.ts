@@ -61,13 +61,17 @@ import {
  * tabla y olvida el `.ts`, este spec se pone rojo señalando la celda; y si lo
  * sube en el trigger, se pone rojo señalando el `case`.
  *
- * El catálogo de FEATURES no se consulta desde acá: la tabla
- * `public.subscription_plan_features` ya no la lee ningún test de este archivo,
- * porque ya no hay una copia del plan → feature que comparar contra el espejo
- * de TypeScript —la hay en la tabla, y `business-members.rls.db.spec.ts` la
- * consulta y la llama como `authenticated`—. Lo que este archivo mira de las
- * features es el TEXTO del cuerpo de `business_has_feature`, que es lo que
- * tiene que nombrarlas.
+ * El catálogo de FEATURES no se consulta para COMPARARLO contra el espejo: la
+ * tabla `public.subscription_plan_features` no se lee para contrastarla con el
+ * TypeScript, porque ya no hay una copia del plan → feature que comparar —la
+ * hay en la tabla, y `business-members.rls.db.spec.ts` la consulta y la llama
+ * como `authenticated`—. Lo que este archivo mira de las features es el TEXTO
+ * del cuerpo de `business_has_feature`, que es lo que tiene que nombrarlas.
+ *
+ * Y hay UNA lectura de esa tabla, y no es una comparación: es la PRECONDICIÓN
+ * del caso del plan que no está en el catálogo —el `on delete cascade` se lleva
+ * las features con la fila del plan, y sin afirmar que las features se fueron
+ * ese test mediría el orden de las comprobaciones sin saberlo—.
  *
  * Y al revés también, que es la mitad que importa más: si alguien sube el plan
  * gratis a 3 miembros en `commons` para venderlo, la tabla y el trigger siguen
