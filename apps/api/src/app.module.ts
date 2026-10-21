@@ -39,6 +39,7 @@ import { MeModule } from './modules/me/me.module';
 import { SavedAddressesModule } from './modules/saved-addresses/saved-addresses.module';
 import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
 import { StaffModule } from './modules/staff/staff.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { StaffModule } from './modules/staff/staff.module';
     ContactInboxModule,
     BugReportInboxModule,
     StaffModule,
+    SubscriptionsModule,
   ],
   providers: [
     {
