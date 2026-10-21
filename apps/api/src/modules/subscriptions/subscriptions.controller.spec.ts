@@ -105,6 +105,26 @@ const repository: Record<string, ReturnType<typeof jest.fn>> = {
   roleOf: jest.fn(
     async (_businessId: string, userId: string) => ROLE_BY_USER[userId] ?? null,
   ),
+  /**
+   * La transacción y la fila viva que se lee para escribir encima.
+   *
+   * La fila dice `free`: el negocio está en el plan gratuito y el admin le
+   * asigna el `pro`, así que la asignación ES un cambio y la fila se escribe.
+   */
+  transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({ tx: true }),
+  ),
+  findLiveSubscriptionForUpdate: jest.fn(async () => ({
+    id: 'sub-1',
+    business_id: BIZ,
+    user_id: null,
+    plan_code: 'free',
+    started_at: SINCE,
+    cancelled_at: null,
+    deleted_at: null,
+    created_at: SINCE,
+    updated_at: SINCE,
+  })),
   updateLiveSubscription: jest.fn(async () => ({
     id: 'sub-1',
     business_id: BIZ,
@@ -348,7 +368,11 @@ describe('PATCH /businesses/:businessId/subscription', () => {
     expect(res.status).toBe(HttpStatus.OK);
     expect(res.body.plan_code).toBe('pro');
     expect(res.body.limits).toEqual({ max_locations: 5, max_members: 20 });
-    expect(repository.updateLiveSubscription).toHaveBeenCalledWith(BIZ, 'pro');
+    expect(repository.updateLiveSubscription).toHaveBeenCalledWith(
+      expect.anything(),
+      BIZ,
+      'pro',
+    );
   });
 
   it('sin token es 401', async () => {

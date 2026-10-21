@@ -1,5 +1,6 @@
 import {
   ForbiddenException,
+  InternalServerErrorException,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -106,6 +107,16 @@ describe('SubscriptionsService', () => {
   let repository: Record<string, ReturnType<typeof jest.fn>>;
   let logs: Record<string, unknown>[];
 
+  /**
+   * El handle de transacción, para poder afirmar que la lectura y la escritura
+   * van con EL MISMO.
+   *
+   * No es un doble de la base: es una marca. Lo que se afirma es que las dos
+   * mitades de la asignación viajan por la transacción, y eso se ve en que
+   * reciben la misma marca.
+   */
+  const TX = { tx: true };
+
   beforeEach(async () => {
     repository = {
       listActivePlans: jest.fn(async () => [freePlan, proPlan]),
@@ -120,6 +131,20 @@ describe('SubscriptionsService', () => {
         if (userId === STAFF_USER) return 'staff';
         return null;
       }),
+      /**
+       * La transacción: corre el callback con SU handle. El doble no sabe
+       * nada de rollback —eso lo sabe la base—, así que un error del callback
+       * sale tal cual, que es lo que el servicio necesita para reintentar.
+       */
+      transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn(TX),
+      ),
+      /**
+       * La fila VIVA, leída para escribir encima. Por defecto NO hay fila: un
+       * negocio sin suscripción es el caso de arranque, y el test que necesita
+       * una fila viva la pone.
+       */
+      findLiveSubscriptionForUpdate: jest.fn(async () => null),
       updateLiveSubscription: jest.fn(async () => null),
       insertBusinessSubscription: jest.fn(async () => ({
         id: 'sub-1',
@@ -307,6 +332,7 @@ describe('SubscriptionsService', () => {
       const dto = await service.assign(admin, BIZ, { plan_code: 'pro' });
 
       expect(repository.insertBusinessSubscription).toHaveBeenCalledWith(
+        TX,
         BIZ,
         'pro',
       );
@@ -317,6 +343,9 @@ describe('SubscriptionsService', () => {
     });
 
     it('un negocio CON fila viva recibe una ACTUALIZACIÓN, y no queda una segunda fila viva', async () => {
+      repository.findLiveSubscriptionForUpdate.mockResolvedValue(
+        subscriptionRow({ plan_code: 'free' }),
+      );
       repository.updateLiveSubscription.mockResolvedValue({
         id: 'sub-1',
         business_id: BIZ,
@@ -332,6 +361,7 @@ describe('SubscriptionsService', () => {
       const dto = await service.assign(admin, BIZ, { plan_code: 'pro' });
 
       expect(repository.updateLiveSubscription).toHaveBeenCalledWith(
+        TX,
         BIZ,
         'pro',
       );
@@ -373,6 +403,12 @@ describe('SubscriptionsService', () => {
           postgresError,
         ),
       );
+      repository.findLiveSubscriptionForUpdate
+        // La primera vuelta no ve fila: los dos escritores vieron que no la
+        // había.
+        .mockResolvedValueOnce(null)
+        // El reintento sí la ve: el otro escritor ya la insertó.
+        .mockResolvedValueOnce(subscriptionRow({ plan_code: 'free' }));
       repository.updateLiveSubscription
         // El primer `UPDATE` no encuentra fila: los dos escritores vieron que
         // no la había.
@@ -383,6 +419,9 @@ describe('SubscriptionsService', () => {
       const dto = await service.assign(admin, BIZ, { plan_code: 'pro' });
 
       expect(repository.updateLiveSubscription).toHaveBeenCalledTimes(2);
+      // Y el reintento es la TRANSACCIÓN ENTERA: se vuelve a leer la fila y a
+      // escribir encima, porque la fila del otro escritor ya está.
+      expect(repository.transaction).toHaveBeenCalledTimes(2);
       expect(dto.plan_code).toBe('pro');
     });
 
@@ -418,8 +457,8 @@ describe('SubscriptionsService', () => {
     });
 
     it('el cambio queda en el log con el evento, el de antes y el de después', async () => {
-      repository.findBusinessSubscription.mockResolvedValue(
-        subscriptionEntry({ plan_code: 'free', plan: freePlan }),
+      repository.findLiveSubscriptionForUpdate.mockResolvedValue(
+        subscriptionRow({ plan_code: 'free' }),
       );
 
       await service.assign(admin, BIZ, { plan_code: 'pro' });
@@ -434,7 +473,7 @@ describe('SubscriptionsService', () => {
     });
 
     it('un alta se registra desde free: la ausencia de fila es el plan free', async () => {
-      repository.findBusinessSubscription.mockResolvedValue(null);
+      repository.findLiveSubscriptionForUpdate.mockResolvedValue(null);
 
       await service.assign(admin, BIZ, { plan_code: 'pro' });
 
@@ -444,6 +483,150 @@ describe('SubscriptionsService', () => {
         from: 'free',
         to: 'pro',
         actorId: ADMIN_USER,
+      });
+    });
+
+    /**
+     * LA ASIGNACIÓN QUE NO CAMBIA NADA.
+     *
+     * La fila ya dice ese plan: escribirla sólo movería el `updated_at` del
+     * trigger —un «cambió» que no pasó— y el log registraría un cambio con el
+     * plan de antes y el de después IGUALES. No se escribe y no se registra.
+     */
+    it('asignar el plan que el negocio ya tiene no escribe ni se registra', async () => {
+      repository.findLiveSubscriptionForUpdate.mockResolvedValue(
+        subscriptionRow({ plan_code: 'pro' }),
+      );
+
+      const dto = await service.assign(admin, BIZ, { plan_code: 'pro' });
+
+      expect(repository.updateLiveSubscription).not.toHaveBeenCalled();
+      expect(repository.insertBusinessSubscription).not.toHaveBeenCalled();
+      expect(logs).not.toContainEqual(
+        expect.objectContaining({ event: 'business_plan_changed' }),
+      );
+      // Y la respuesta es la suscripción que el negocio ya tenía: el mismo
+      // plan, la misma fecha y los límites del catálogo.
+      expect(dto.plan_code).toBe('pro');
+      expect(dto.since).toBe(SINCE.toISOString());
+      expect(dto.limits).toEqual({ max_locations: 5, max_members: 20 });
+      expect(BusinessSubscriptionSchema.parse(dto)).toEqual(dto);
+    });
+
+    /**
+     * Y el caso del NEGOCIO SIN FILA al que se le asigna el plan que ya tenía
+     * de facto.
+     *
+     * Sin fila, el negocio se lee `free` —es el `coalesce` de la base—, así
+     * que asignarle el `free` no cambia lo que tiene: no se crea la fila, no
+     * se registra el cambio y la respuesta es la que ya se leía.
+     */
+    it('asignar el free a un negocio sin fila tampoco escribe', async () => {
+      repository.findLiveSubscriptionForUpdate.mockResolvedValue(null);
+
+      const dto = await service.assign(admin, BIZ, { plan_code: 'free' });
+
+      expect(repository.updateLiveSubscription).not.toHaveBeenCalled();
+      expect(repository.insertBusinessSubscription).not.toHaveBeenCalled();
+      expect(logs).not.toContainEqual(
+        expect.objectContaining({ event: 'business_plan_changed' }),
+      );
+      expect(dto.plan_code).toBe('free');
+      expect(dto.since).toBeNull();
+      expect(dto.limits).toEqual({ max_locations: 1, max_members: 2 });
+    });
+
+    /**
+     * LA LECTURA Y LA ESCRITURA, EN UNA TRANSACCIÓN.
+     *
+     * El `from` del log tiene que ser el valor que la escritura SOBRESCRIBIÓ:
+     * leer en una consulta y escribir en otra deja una ventana en la que otro
+     * escritor cambia el plan, y el log acaba diciendo `from: free` para una
+     * fila que estaba en `pro`.
+     */
+    it('la fila viva se lee y se escribe en la MISMA transacción', async () => {
+      repository.findLiveSubscriptionForUpdate.mockResolvedValue(
+        subscriptionRow({ plan_code: 'free' }),
+      );
+
+      await service.assign(admin, BIZ, { plan_code: 'pro' });
+
+      expect(repository.transaction).toHaveBeenCalledTimes(1);
+      // Las dos mitades viajan con el MISMO handle: la que se leyó es la que
+      // se escribe.
+      expect(repository.findLiveSubscriptionForUpdate).toHaveBeenCalledWith(
+        TX,
+        BIZ,
+      );
+      expect(repository.updateLiveSubscription).toHaveBeenCalledWith(
+        TX,
+        BIZ,
+        'pro',
+      );
+    });
+
+    it('el `from` del log es el valor que la fila tenía', async () => {
+      repository.findLiveSubscriptionForUpdate.mockResolvedValue(
+        subscriptionRow({ plan_code: 'pro' }),
+      );
+      repository.updateLiveSubscription.mockResolvedValue(
+        subscriptionRow({ plan_code: 'pro_plus' }),
+      );
+
+      await service.assign(admin, BIZ, { plan_code: 'pro_plus' });
+
+      expect(logs).toContainEqual({
+        event: 'business_plan_changed',
+        businessId: BIZ,
+        from: 'pro',
+        to: 'pro_plus',
+        actorId: ADMIN_USER,
+      });
+    });
+
+    /**
+     * EL REINTENTO QUE TAMPOCO PUEDE ESCRIBIR.
+     *
+     * La carrera de dos escritores se reintenta; si el reintento tampoco
+     * puede aplicar el plan, el `DrizzleQueryError` crudo salía como un 500
+     * sin traducir: un error que el panel no sabe pintar y que no dice qué
+     * pasó. Ahora es un 500 de avería de configuración, con su mensaje.
+     */
+    it('si el reintento tampoco puede escribir, el error sale traducido', async () => {
+      const postgresError = Object.assign(
+        new Error(
+          'duplicate key value violates unique constraint "subscriptions_live_business_key"',
+        ),
+        {
+          code: '23505',
+          constraint_name: 'subscriptions_live_business_key',
+        },
+      );
+
+      repository.insertBusinessSubscription.mockRejectedValue(
+        new DrizzleQueryError(
+          'insert into "subscriptions" ("business_id", "plan_code") values ($1, $2)',
+          [],
+          postgresError,
+        ),
+      );
+
+      const error = await service
+        .assign(admin, BIZ, { plan_code: 'pro' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(InternalServerErrorException);
+      const message = (error as InternalServerErrorException).message;
+      expect(message).toContain('No se pudo guardar el plan del negocio');
+      // Y no dice «subí de plan»: esto no es una negativa del plan.
+      expect(message).not.toContain('subí de plan');
+      // El operador ve el fallo con su código de Postgres: el `code` vive en
+      // el `cause`, como en la búsqueda del `23505`.
+      expect(logs).toContainEqual({
+        event: 'business_plan_write_failed',
+        businessId: BIZ,
+        errorType: 'Error',
+        errorCode: '23505',
       });
     });
   });

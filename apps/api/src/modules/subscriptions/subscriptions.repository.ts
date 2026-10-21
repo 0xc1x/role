@@ -61,6 +61,15 @@ export type SubscriptionEntry = {
 export type SubscriptionRow = typeof subscriptions.$inferSelect;
 
 /**
+ * DB executor: root client or an open transaction.
+ *
+ * The call sites pass `tx` inside `transaction()` so that the two halves of an
+ * assignment —the read of the live row and the write on top of it— share one
+ * connection and one commit.
+ */
+export type SubscriptionsDbExecutor = Database;
+
+/**
  * La fila VIVA de un negocio, y sólo la viva.
  *
  * `cancelled_at is null and deleted_at is null` es el mismo predicado que usa
@@ -80,6 +89,17 @@ function liveSubscription(businessId: string) {
 @Injectable()
 export class SubscriptionsRepository {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+
+  /**
+   * Una transacción, con su propio executor.
+   *
+   * El handle que devuelve es el que se le pasa a las llamadas de escritura:
+   * una escritura que se saliera de la transacciónaría la fila FUERA del
+   * commit, que es exactamente lo que esta operación no puede hacer.
+   */
+  transaction<T>(fn: (tx: SubscriptionsDbExecutor) => Promise<T>): Promise<T> {
+    return this.db.transaction(fn);
+  }
 
   /**
    * Los planes QUE ESTÁN EN LA OFERTA.
@@ -245,6 +265,34 @@ export class SubscriptionsRepository {
   }
 
   /**
+   * La fila VIVA del negocio, leída PARA ESCRIBIR ENCIMA.
+   *
+   * ─── POR QUÉ `for update` Y NO UN `SELECT` DE SANGRÍA ─────────────────────────
+   *
+   * Porque la lectura y la escritura tienen que ser UNA cosa: el `from` del
+   * log es el valor que la escritura sobrescribió, y sin el candado el segundo
+   * escritor leería el plan que había antes de que el primero escribiera.
+   *
+   * `for update` hace que el segundo escritor ESPERE a que el primero suelte
+   * la fila, y entonces lee el plan que el primero dejó. Y sólo se leen las
+   * columnas de la suscripción —sin `LEFT JOIN` al catálogo— porque un
+   * `for update` sobre el lado nullable de una unión exterior no es una
+   * consulta que Postgres acepte.
+   */
+  async findLiveSubscriptionForUpdate(
+    executor: SubscriptionsDbExecutor,
+    businessId: string,
+  ): Promise<SubscriptionRow | null> {
+    const [row] = await executor
+      .select()
+      .from(subscriptions)
+      .where(liveSubscription(businessId))
+      .for('update')
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
    * Cambia el plan de la fila VIVA del negocio.
    *
    * ─── POR QUÉ EL `WHERE` ES UN SUBSELECT Y NO UN `id` ─────────────────────────
@@ -266,10 +314,11 @@ export class SubscriptionsRepository {
    * de la base.
    */
   async updateLiveSubscription(
+    executor: SubscriptionsDbExecutor,
     businessId: string,
     planCode: BusinessPlanCode,
   ): Promise<SubscriptionRow | null> {
-    const [row] = await this.db
+    const [row] = await executor
       .update(subscriptions)
       .set({ plan_code: planCode })
       .where(
@@ -291,10 +340,11 @@ export class SubscriptionsRepository {
    * sujeto.
    */
   async insertBusinessSubscription(
+    executor: SubscriptionsDbExecutor,
     businessId: string,
     planCode: BusinessPlanCode,
   ): Promise<SubscriptionRow> {
-    const [row] = await this.db
+    const [row] = await executor
       .insert(subscriptions)
       .values({ business_id: businessId, plan_code: planCode })
       .returning();

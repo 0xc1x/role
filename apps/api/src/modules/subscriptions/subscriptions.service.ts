@@ -12,12 +12,28 @@ import type {
   SubscriptionPlanDto,
   UpdateBusinessSubscriptionDto,
 } from '@0xc1x/role-commons';
+import { safeErrorFields } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
 import { SubscriptionsMapper } from './subscriptions.mapper';
-import {
-  SubscriptionsRepository,
-  type SubscriptionRow,
-} from './subscriptions.repository';
+import { SubscriptionsRepository } from './subscriptions.repository';
+
+/**
+ * LO QUE LA ASIGNACIÓN DEJÓ.
+ *
+ * `changed` es la respuesta a «¿hubo algo que guardar?»: una asignación que no
+ * cambia el plan no escribe y no se registra, así que la respuesta es la
+ * suscripción que el negocio ya tenía.
+ */
+type PlanAssignment = {
+  /** El plan que tenía el negocio ANTES de esta asignación. */
+  from: BusinessPlanCode;
+  /** El plan que tiene el negocio AHORA. */
+  planCode: BusinessPlanCode;
+  /** Desde cuándo es la suscripción: la fecha de la fila que la sostiene. */
+  startedAt: Date | null;
+  /** ¿Se escribió algo? */
+  changed: boolean;
+};
 
 /**
  * El código de Postgres de una unicidad violada.
@@ -158,6 +174,14 @@ export class SubscriptionsService {
    *(actualizar la fila viva) o (insertar una nueva). La fila cancelada o
    * archivada se queda para decir qué hubo: no se toca, y no se la cuenta.
    *
+   * ─── Y LA ASIGNACIÓN QUE NO CAMBIA NADA NO ESCRIBE ──────────────────────────
+   *
+   * Porque la fila ya dice ese plan: no hay nada que guardar y nada que
+   * cambió. Escribirla sólo movería el `updated_at` del trigger —un «cambió»
+   * que no pasó— y el log registraría un `business_plan_changed` con el plan
+   * de antes y el de después IGUALES. La respuesta es la suscripción que el
+   * negocio ya tenía.
+   *
    * ─── Y EL `422` DEL PLAN QUE NO EXISTE ──────────────────────────────────────
    *
    * Un `plan_code` que no está en el catálogo —o que está retirado de la
@@ -192,25 +216,28 @@ export class SubscriptionsService {
       throw new UnprocessableEntityException('Ese plan no existe.');
     }
 
-    // El plan DE ANTES, para el log. Se lee antes de escribir, porque después
-    // de escribir la fila ya dice el plan nuevo.
-    const current = await this.repository.findBusinessSubscription(businessId);
-    const from: BusinessPlanCode = current?.plan_code ?? 'free';
+    // La LECTURA de la fila viva y la ESCRITURA del plan van en UNA
+    // transacción, con la fila leída `for update`: el `from` del log tiene que
+    // ser el valor que la escritura sobrescribió, y no el que había un rato
+    // antes.
+    const applied = await this.writePlan(businessId, body.plan_code);
 
-    const row = await this.writePlan(businessId, body.plan_code);
-
-    this.logger.log({
-      event: 'business_plan_changed',
-      businessId,
-      from,
-      to: body.plan_code,
-      actorId: user.id,
-    });
+    // Una asignación que NO cambia nada no se registra: el log dice lo que
+    // pasó, y no pasó nada.
+    if (applied.changed) {
+      this.logger.log({
+        event: 'business_plan_changed',
+        businessId,
+        from: applied.from,
+        to: body.plan_code,
+        actorId: user.id,
+      });
+    }
 
     return SubscriptionsMapper.toSubscriptionDto(
       businessId,
-      body.plan_code,
-      row.started_at,
+      applied.planCode,
+      applied.startedAt,
       plan,
     );
   }
@@ -263,35 +290,160 @@ export class SubscriptionsService {
    *
    * Dos escritores simultáneos: los dos ven que no hay fila y los dos
    * insertan, y el segundo choca con el índice único parcial. En ese caso —
-   * y sólo en ese caso— el segundo vuelve a hacer el `UPDATE` y su plan
+   * y sólo en ese caso— la transacción entera se corre OTRA VEZ, y su plan
    * termina aplicado. La última escritura gana, que es lo que se espera de
    * una asignación a mano.
+   *
+   * ─── Y POR QUÉ EL REINTENTO ESTÁ FUERA DE LA TRANSACCIÓN ────────────────────
+   *
+   * Porque una transacción que se cayó no se reintenta por dentro: se vuelve
+   * a abrir. Y porque el reintento tiene que ser la TRANSACCIÓN ENTERA —leer
+   * la fila y escribir encima— y no sólo la escritura: la fila que el otro
+   * escritor metió ya está, así que el `UPDATE` la encuentra y la cambia.
    */
   private async writePlan(
     businessId: string,
     planCode: BusinessPlanCode,
-  ): Promise<SubscriptionRow> {
-    const updated = await this.repository.updateLiveSubscription(
-      businessId,
-      planCode,
-    );
-    if (updated) return updated;
-
+  ): Promise<PlanAssignment> {
     try {
-      return await this.repository.insertBusinessSubscription(
-        businessId,
-        planCode,
-      );
+      return await this.applyPlan(businessId, planCode);
     } catch (error) {
       if (!this.isLiveBusinessKeyViolation(error)) throw error;
 
-      const retried = await this.repository.updateLiveSubscription(
+      try {
+        return await this.applyPlan(businessId, planCode);
+      } catch (retryError) {
+        throw this.mapSubscriptionWriteError(businessId, error, retryError);
+      }
+    }
+  }
+
+  /**
+   * LA LECTURA Y LA ESCRITURA, EN UNA TRANSACCIÓN.
+   *
+   * ─── POR QUÉ VAN JUNTAS ─────────────────────────────────────────────────────
+   *
+   * Porque el `from` del log tiene que ser el valor que la escritura
+   * SOBRESCRIBIÓ: leer la fila en una consulta y escribir en otra deja una
+   * ventana en la que otro escritor cambia el plan, y el log acaba diciendo
+   * `from: free` para una fila que en realidad estaba en `pro`.
+   *
+   * La fila se lee `for update`, así que el segundo escritor ESPERA a que el
+   * primero suelte la fila y entonces lee el plan que el primero dejó. La
+   * lectura y la escritura son una sola cosa, y el `from` es exactamente lo
+   * que se sobrescribió.
+   *
+   * ─── Y LA ASIGNACIÓN QUE NO CAMBIA NADA ─────────────────────────────────────
+   *
+   * No escribe. La fila ya dice ese plan, y escribirla sólo movería el
+   * `updated_at` del trigger: un «cambió» que no pasó. La respuesta es la
+   * suscripción que el negocio ya tenía, con su `since` de la fila.
+   */
+  private async applyPlan(
+    businessId: string,
+    planCode: BusinessPlanCode,
+  ): Promise<PlanAssignment> {
+    return this.repository.transaction(async (tx) => {
+      const current = await this.repository.findLiveSubscriptionForUpdate(
+        tx,
+        businessId,
+      );
+      const from: BusinessPlanCode = current?.plan_code ?? 'free';
+
+      if (from === planCode) {
+        return {
+          from,
+          planCode,
+          startedAt: current?.started_at ?? null,
+          changed: false,
+        };
+      }
+
+      const updated = await this.repository.updateLiveSubscription(
+        tx,
         businessId,
         planCode,
       );
-      if (!retried) throw error;
-      return retried;
+      const row =
+        updated ??
+        (await this.repository.insertBusinessSubscription(
+          tx,
+          businessId,
+          planCode,
+        ));
+
+      return {
+        from,
+        planCode,
+        startedAt: row.started_at,
+        changed: true,
+      };
+    });
+  }
+
+  /**
+   * LA ESCRITURA QUE NO SE PUDO APLICAR.
+   *
+   * ─── POR QUÉ NO SALE EL ERROR CRUDO ────────────────────────────────────────
+   *
+   * Porque un `DrizzleQueryError` sin traducir es un 500 que no dice nada: el
+   * panel no sabe pintarlo y el operador no sabe qué pasó. Esto es una
+   * AVERÍA DE CONFIGURACIÓN y la casa la contesta con un 500 que dice lo que
+   * pasó, como la puerta del catálogo roto del módulo de personal.
+   *
+   * El mensaje dice lo que esta capa SABE: la fila de la suscripción no se
+   * pudo escribir. Lo que no sabe —y por eso no lo dice— es si la culpa es
+   * del catálogo o de la fila: el catálogo se comprobó antes de la
+   * transacción y estaba entero, así que lo que se rompió fue la escritura.
+   *
+   * ─── Y POR QUÉ EL ERROR DE ABAJO SE REGISTRA ────────────────────────────────
+   *
+   * Porque el mensaje de un 5xx lo redacta el filtro —de la respuesta y del
+   * log—, así que sin esta línea el operador vería un `InternalServerError
+   * Exception` sin saber si fue el `23505` de la carrera o la caída de la
+   * conexión. La línea lleva el `errorType` y el `errorCode` del error de
+   * Postgres —el `code` vive en el `cause`, como en `isLiveBusinessKeyViolation`—
+   * y nunca su mensaje.
+   */
+  private mapSubscriptionWriteError(
+    businessId: string,
+    error: unknown,
+    retryError: unknown,
+  ): InternalServerErrorException {
+    const cause = this.postgresCause(retryError) ?? this.postgresCause(error);
+    this.logger.error({
+      event: 'business_plan_write_failed',
+      businessId,
+      ...safeErrorFields(cause ?? retryError),
+    });
+
+    return new InternalServerErrorException(
+      'No se pudo guardar el plan del negocio: la fila de la suscripción no se pudo escribir. Es una avería de configuración, no una negativa del plan.',
+    );
+  }
+
+  /**
+   * EL ERROR DE POSTGRES, O EL QUE LO ENVUELVE.
+   *
+   * Drizzle envuelve el error de Postgres en un `DrizzleQueryError` que no
+   * copia el código: el `code` —el `23505`— vive un nivel más abajo, en el
+   * `cause`. Es la misma búsqueda que hace `isLiveBusinessKeyViolation`.
+   *
+   * Devuelve `null` cuando ningún nivel trae un código: un error sin código
+   * no tiene un diagnóstico que registrar, y el que se registra es el error
+   * entero.
+   */
+  private postgresCause(error: unknown): unknown | null {
+    const candidates = [
+      error,
+      (error as { cause?: unknown } | null)?.cause,
+    ] as unknown[];
+
+    for (const candidate of candidates) {
+      const code = (candidate as { code?: unknown } | null)?.code;
+      if (typeof code === 'string') return candidate;
     }
+    return null;
   }
 
   /**

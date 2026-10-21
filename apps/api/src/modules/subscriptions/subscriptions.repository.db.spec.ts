@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import type { Database } from '../../database/database.module';
 import {
   createSupabaseTestDb,
   type SupabaseTestDb,
@@ -29,6 +30,7 @@ import { SubscriptionsRepository } from './subscriptions.repository';
 
 let ctx: SupabaseTestDb;
 let repo: SubscriptionsRepository;
+let db: Database;
 let client: postgres.Sql;
 
 /**
@@ -106,16 +108,15 @@ const FECHA_VIEJA = '2020-01-01T00:00:00Z';
 beforeAll(async () => {
   ctx = await createSupabaseTestDb();
   client = postgres(ctx.connectionString, { prepare: false });
-  repo = new SubscriptionsRepository(
-    drizzle({
-      client,
-      logger: {
-        logQuery: (query: string) => {
-          queries.push(query);
-        },
+  db = drizzle({
+    client,
+    logger: {
+      logQuery: (query: string) => {
+        queries.push(query);
       },
-    }),
-  );
+    },
+  });
+  repo = new SubscriptionsRepository(db);
 
   await ctx.sql.begin(async (tx) => {
     await tx.unsafe(
@@ -220,10 +221,23 @@ describe('la lectura de la suscripción y del catálogo', () => {
 });
 
 describe('la escritura', () => {
+  test('la lectura para escribir toma el candado de la fila VIVA', async () => {
+    const row = await repo.findLiveSubscriptionForUpdate(db, BIZ_VIVA);
+
+    expect(row?.plan_code).toBe('pro');
+    // Y el candado está en la consulta: sin `for update` la lectura y la
+    // escritura serían dos cosas, y el `from` del log podría quedar viejo.
+    expect(lastQuery()).toContain('for update');
+  });
+
+  test('y un negocio SIN fila viva no tiene fila que escribir', async () => {
+    expect(await repo.findLiveSubscriptionForUpdate(db, BIZ_SIN)).toBeNull();
+  });
+
   test('el UPDATE toca la fila VIVA y sólo la fila viva', async () => {
     const antes = await repo.findBusinessSubscription(BIZ_VIVA);
 
-    const updated = await repo.updateLiveSubscription(BIZ_VIVA, 'pro_plus');
+    const updated = await repo.updateLiveSubscription(db, BIZ_VIVA, 'pro_plus');
 
     expect(updated?.plan_code).toBe('pro_plus');
     // Y no se crea una segunda fila viva: dos planes vivos del mismo negocio
@@ -266,7 +280,7 @@ describe('la escritura', () => {
     // consulta: las columnas que el `SET` escribe. Una implementación que
     // escribiera la columna a mano dejaría el mismo resultado y aparecería
     // acá.
-    await repo.updateLiveSubscription(BIZ_VIVA, 'pro');
+    await repo.updateLiveSubscription(db, BIZ_VIVA, 'pro');
 
     const set = updateSetClause(lastQuery());
     expect(set).toContain('"plan_code"');
@@ -281,7 +295,7 @@ describe('la escritura', () => {
     // aplicación no escribe ninguna. Drizzle nombra todas las columnas de la
     // tabla y pone `default` en las que no se escriben, así que lo que se
     // afirma es cuáles reciben un VALOR.
-    await repo.insertBusinessSubscription(BIZ_INSERT, 'pro');
+    await repo.insertBusinessSubscription(db, BIZ_INSERT, 'pro');
 
     expect(insertColumnsWithValue(lastQuery())).toEqual([
       'business_id',
@@ -290,7 +304,7 @@ describe('la escritura', () => {
   });
 
   test('un UPDATE sobre un negocio sin fila viva no inventa una fila', async () => {
-    expect(await repo.updateLiveSubscription(BIZ_SIN, 'pro')).toBeNull();
+    expect(await repo.updateLiveSubscription(db, BIZ_SIN, 'pro')).toBeNull();
 
     const rows = await ctx.sql.unsafe<{ filas: number }[]>(
       `select count(*)::int as filas
@@ -305,7 +319,7 @@ describe('la escritura', () => {
     // CANCELADA. Un `UPDATE` ingenuo —`where business_id = X`— le reescribiría
     // el plan a la fila muerta, y el negocio se leería como si tuviera ese
     // plan. Con el predicado de la fila viva no la toca.
-    const updated = await repo.updateLiveSubscription(BIZ_CANCELADA, 'pro');
+    const updated = await repo.updateLiveSubscription(db, BIZ_CANCELADA, 'pro');
 
     expect(updated).toBeNull();
 
@@ -328,7 +342,7 @@ describe('la escritura', () => {
   });
 
   test('el INSERT deja las fechas a la base, y la fila queda viva', async () => {
-    const row = await repo.insertBusinessSubscription(BIZ_SIN, 'pro');
+    const row = await repo.insertBusinessSubscription(db, BIZ_SIN, 'pro');
 
     expect(row.plan_code).toBe('pro');
     expect(row.business_id).toBe(BIZ_SIN);
