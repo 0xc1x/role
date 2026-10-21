@@ -1632,7 +1632,6 @@ export const strings = {
 			// tiene que saber que las sesiones abiertas siguen vivas, y quien
 			// pausa tiene que saber que el corte es AHORA.
 			actionsTitle: "Acciones del acceso",
-			moreActions: "Más acciones",
 			moreActionsAccessibilityLabel: "Más acciones del acceso de {name}",
 			actionRotate: "Rotar PIN",
 			actionPause: "Pausar",

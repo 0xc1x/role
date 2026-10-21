@@ -544,38 +544,42 @@ test("el dueño no ofrece editar: la propiedad se transfiere, no se edita", () =
 
 // ─── La entrada a las demás acciones ─────────────────────────────────────────
 
-test("un acceso que no es el dueño ofrece más acciones y abre la hoja", () => {
-	const html = renderCard(member({ role: "staff" }));
+// El gerente y el empleado administran sus accesos igual: los dos tienen la
+// hoja. Lo que NO la tiene es el dueño.
+for (const role of ["staff", "manager"] as const) {
+	test(`un acceso de rol ${role} ofrece más acciones y abre la hoja`, () => {
+		const html = renderCard(member({ role }));
 
-	expect(html).toContain(strings.business.staff.moreActions);
+		expect(html).toContain(strings.business.moreActions);
 
-	const mas = buttons.find(
-		(button) => button.label === strings.business.staff.moreActions,
-	);
-	expect(mas).toBeDefined();
-	// El botón dice a QUIÉN: en una lista, un «Más acciones» a secas es un
-	// botón que no dice de qué.
-	expect(mas?.accessibilityLabel).toBe(
-		strings.business.staff.moreActionsAccessibilityLabel.replace(
-			"{name}",
-			"Ana Torres",
-		),
-	);
+		const mas = buttons.find(
+			(button) => button.label === strings.business.moreActions,
+		);
+		expect(mas).toBeDefined();
+		// El botón dice a QUIÉN: en una lista, un «Más acciones» a secas es un
+		// botón que no dice de qué.
+		expect(mas?.accessibilityLabel).toBe(
+			strings.business.staff.moreActionsAccessibilityLabel.replace(
+				"{name}",
+				"Ana Torres",
+			),
+		);
 
-	// Y al pulsarlo se abre la hoja de acciones DE ESE acceso.
-	expect(actionSheets).toHaveLength(0);
-	mas?.onPress?.();
-	renderCard(member({ role: "staff" }));
+		// Y al pulsarlo se abre la hoja de acciones DE ESE acceso.
+		expect(actionSheets).toHaveLength(0);
+		mas?.onPress?.();
+		renderCard(member({ role }));
 
-	expect(actionSheets).toHaveLength(1);
-	expect(actionSheets[0]?.businessId).toBe(BUSINESS_ID);
-	expect(actionSheets[0]?.member.id).toBe(member().id);
-});
+		expect(actionSheets).toHaveLength(1);
+		expect(actionSheets[0]?.businessId).toBe(BUSINESS_ID);
+		expect(actionSheets[0]?.member.id).toBe(member().id);
+	});
+}
 
 test("el dueño no ofrece más acciones: la propiedad se transfiere, no se administra", () => {
 	const html = renderCard(member({ role: "owner" }));
 
-	expect(html).not.toContain(strings.business.staff.moreActions);
+	expect(html).not.toContain(strings.business.moreActions);
 	expect(buttons).toHaveLength(0);
 	expect(actionSheets).toHaveLength(0);
 });

@@ -223,7 +223,7 @@ export function StaffMemberCard({
 						onPress={() => setActionsOpen(true)}
 						style={styles.action}
 					>
-						{strings.business.staff.moreActions}
+						{strings.business.moreActions}
 					</Button>
 				</View>
 			)}

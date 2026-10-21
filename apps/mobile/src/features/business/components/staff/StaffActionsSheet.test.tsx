@@ -180,7 +180,7 @@ interface DialogProbe {
 	onOpenChange?: (open: boolean) => void;
 	title?: string;
 	description?: string;
-	confirm?: { label: string; onPress?: () => void };
+	confirm?: { label: string; onPress?: () => void; style?: unknown };
 	cancel?: { label: string; onPress?: () => void };
 }
 let dialog: DialogProbe = {};
@@ -214,8 +214,13 @@ mock.module("@/components/ui/alert-dialog", () => ({
 	AlertDialogAction: (props: {
 		children?: ReactNode;
 		onPress?: () => void;
+		style?: unknown;
 	}) => {
-		dialog.confirm = { label: textOf(props.children), onPress: props.onPress };
+		dialog.confirm = {
+			label: textOf(props.children),
+			onPress: props.onPress,
+			style: props.style,
+		};
 		return createElement(nativeWeb.Text, null, props.children);
 	},
 	AlertDialogCancel: (props: {
@@ -503,6 +508,29 @@ test("dar de baja pide confirmación y sale con DELETE .../:memberId", async () 
 		`/businesses/${BUSINESS_ID}/staff/${MEMBER_ID}`,
 	);
 	expect(closed).toEqual(["close"]);
+});
+
+// ─── El botón que confirma ───────────────────────────────────────────────────
+
+test("la baja se confirma con un botón destructivo y las otras no", () => {
+	// La baja es la única de las cuatro que destruye: su botón lo dice con el
+	// color, igual que el «Dar de baja» de la hoja.
+	render(member());
+	button(strings.business.staff.actionRemove)?.onPress?.();
+	render(member());
+
+	expect(dialog.confirm?.label).toBe(strings.business.staff.actionRemove);
+	expect(dialog.confirm?.style).toEqual({
+		backgroundColor: light.destructive,
+	});
+
+	// Y las otras tres no lo llevan: pausar, reactivar y rotar se deshacen.
+	render(member());
+	button(strings.business.staff.actionPause)?.onPress?.();
+	render(member());
+
+	expect(dialog.confirm?.label).toBe(strings.business.staff.actionPause);
+	expect(dialog.confirm?.style).toBeUndefined();
 });
 
 // ─── Los fallos y los aciertos ───────────────────────────────────────────────

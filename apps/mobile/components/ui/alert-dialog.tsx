@@ -18,9 +18,34 @@ const AlertDialogPortal = AlertDialogPrimitive.Portal;
 const FullWindowOverlay =
 	Platform.OS === "ios" ? RNFullWindowOverlay : React.Fragment;
 
+/**
+ * El `z-index` de la ventana de confirmación.
+ *
+ * ─── POR QUÉ 1100 Y NO 50 ─────────────────────────────────────────────────────
+ *
+ * Porque el diálogo se abre ENCIMA de una hoja —la de acciones del equipo— y
+ * los dos se portalean al MISMO host: en `@rn-primitives/portal` el `name` del
+ * portal es sólo la clave dentro del host, así que la hoja y el diálogo
+ * compiten como hermanos. La hoja pone su fondo en `zIndex: 1000` y su panel
+ * en `zIndex: 1001` (`src/components/ui/drawer.tsx`): con el `z-50` de
+ * Tailwind, la hoja se pintaba encima del diálogo —su fondo atenuaba la
+ * ventana y se comía el toque de «confirmar», que cerraba la hoja en vez de
+ * confirmar—.
+ *
+ * ─── Y POR QUÉ EN iOS NO HACÍA FALTA ──────────────────────────────────────────
+ *
+ * Porque en iOS el diálogo se apoya en `FullWindowOverlay`
+ * (`react-native-screens`), que lo pone por encima de la pantalla entera. En
+ * Android y en web ese apoyo no existe —ahí `FullWindowOverlay` es un
+ * fragmento— y el orden lo decide el `z-index`. Por eso el número va aquí y
+ * no en una clase: tiene que ganarle al de la hoja en las TRES plataformas.
+ */
+const ALERT_DIALOG_Z_INDEX = 1100;
+
 function AlertDialogOverlay({
 	className,
 	children,
+	style,
 	...props
 }: Omit<
 	React.ComponentProps<typeof AlertDialogPrimitive.Overlay>,
@@ -32,13 +57,16 @@ function AlertDialogOverlay({
 		<FullWindowOverlay>
 			<AlertDialogPrimitive.Overlay
 				className={cn(
-					"absolute bottom-0 left-0 right-0 top-0 z-50 flex items-center justify-center bg-black/50 p-2",
+					"absolute bottom-0 left-0 right-0 top-0 flex items-center justify-center bg-black/50 p-2",
 					Platform.select({
 						web: "animate-in fade-in-0 fixed",
 					}),
 					className,
 				)}
 				{...props}
+				// El `z-index` va en el estilo y no en la clase, y va al
+				// final: es lo que tiene que ganarle al de la hoja.
+				style={[{ zIndex: ALERT_DIALOG_Z_INDEX }, style]}
 				asChild={Platform.OS !== "web"}
 			>
 				<NativeOnlyAnimatedView

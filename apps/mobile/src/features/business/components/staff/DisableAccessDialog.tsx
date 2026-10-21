@@ -9,6 +9,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Text } from "@/components/ui/text";
+import { useTheme } from "@/src/core/theme";
 import { strings } from "@/src/core/i18n/strings";
 
 /**
@@ -77,6 +78,14 @@ const COPY: Record<
  * Porque una ventana de confirmación sin objeto es una ventana sobre algo
  * que no se sabe: en una lista de accesos hay varias personas, y el nombre va
  * en el título para que la confirmación sea de ESTA persona.
+ *
+ * ─── Y POR QUÉ SÓLO LA BAJA SE PINTA DESTRUCTIVA ──────────────────────────────
+ *
+ * Porque es la única de las cuatro que DESTRUYE: las otras se deshacen —una
+ * pausa se revierte reactivando, una reactivación se revierte pausando, y un
+ * PIN rotado se vuelve a rotar—, y una baja no se deshace. El botón que la
+ * confirma se pinta como el «Dar de baja» de la hoja: el mismo gesto pide lo
+ * mismo.
  */
 export function DisableAccessDialog({
 	action,
@@ -97,6 +106,7 @@ export function DisableAccessDialog({
 	onCancel: () => void;
 }) {
 	const copy = action ? COPY[action] : null;
+	const { colors } = useTheme();
 
 	return (
 		<AlertDialog
@@ -116,7 +126,17 @@ export function DisableAccessDialog({
 					<AlertDialogCancel>
 						<Text>{strings.common.cancel}</Text>
 					</AlertDialogCancel>
-					<AlertDialogAction onPress={onConfirm}>
+					<AlertDialogAction
+						onPress={onConfirm}
+						// La baja es la única de las cuatro que DESTRUYE: su
+						// botón se pinta como el «Dar de baja» de la hoja, para
+						// que el dedo sepa lo que está a punto de perder.
+						style={
+							action === "remove"
+								? { backgroundColor: colors.destructive }
+								: undefined
+						}
+					>
 						<Text>{copy?.confirm ?? ""}</Text>
 					</AlertDialogAction>
 				</AlertDialogFooter>
