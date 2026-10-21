@@ -120,9 +120,18 @@ function domainOf(address: string): string {
  * ¿Este alias es una cuenta de equipo de Rolé —la que la UI reconoce como
  * «negocio»—?
  *
- * Es la condición que el §3.1 fija como SUFIJO, no como formato: la UI la usa
- * para el «¿olvvidaste tu contraseña?» del §9.1 y para el texto de «pide a tu
- * dueño que rote tu PIN».
+ * Es la condición que el §3.1 fija como SUFIJO, no como formato: contesta
+ * «¿es una cuenta de equipo de Rolé?», que es la pregunta de la que habla el
+ * aviso «pide a tu dueño que rote tu PIN» del §9.1 —un aviso sobre la cuenta de
+ * equipo, no sobre la bandeja—.
+ *
+ * ─── EL DIÁLOGO DEL §9.1 NO SE DECIDE CON ESTA FUNCIÓN ────────────────────────
+ *
+ * El «¿olvvidaste tu contraseña?» del §9.1 lo decide `!isDeliverableAlias`, NO
+ * esta función: la pregunta de ese diálogo es de CORREO («¿hay una bandeja
+ * detrás de esta dirección?»), y para el ápice las dos dan respuestas
+ * DISTINTAS a propósito. La razón —y el agujero con forma de refactor— está en
+ * el bloque de abajo.
  *
  * ─── EL ÁPICE FALLA HACIA AFUERA, Y POR QUÉ ──────────────────────────────────
  *

@@ -103,6 +103,14 @@ export const strings = {
 		resetSentMessage:
 			"Si el correo existe, enviaremos un enlace de recuperación.",
 		resetSendFailed: "No pudimos enviar el correo.",
+		// ── §9.1: el login de los accesos de staff ────────────────────────
+		// Los chips con los identificadores con los que ya se entró en este
+		// dispositivo, y el aviso del diálogo de recuperación cuando detrás
+		// del identificador NO hay una bandeja.
+		recentIdentifiers: "Cuentas usadas en este dispositivo",
+		useIdentifier: "Usar {identifier}",
+		staffNoMailboxNotice:
+			"Las cuentas de negocio no usan correo. Pide a tu dueño que rote tu PIN.",
 		loginFailed: "No pudimos iniciar sesión. Intenta de nuevo.",
 		signupFailed: "No pudimos crear tu cuenta. Intenta de nuevo.",
 		// ── Clases de fallo de Supabase Auth ──────────────────────────

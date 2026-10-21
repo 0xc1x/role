@@ -103,6 +103,16 @@ const signIn = mock(
 mock.module("@/src/features/auth/data/repository", () => ({
 	authRepository: { signInWithEmail: signIn },
 }));
+// El login recuerda el identificador con el que se entra (§9.1), y eso escribe
+// en el almacenamiento local: sin este doble, la escritura falla por falta de
+// `window` y ensucia la salida con el aviso de fallo.
+mock.module("@react-native-async-storage/async-storage", () => ({
+	default: {
+		getItem: async () => null,
+		setItem: async () => {},
+		removeItem: async () => {},
+	},
+}));
 const { default: LoginScreen } = await import("../../../../app/(auth)/login");
 
 test("login guards button and keyboard submissions, releases after success/failure, and validates first", async () => {
