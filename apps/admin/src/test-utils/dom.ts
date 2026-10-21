@@ -1,33 +1,13 @@
-import { Window } from "happy-dom";
+import { installDomEnvironment } from "./dom-env";
 
-// Entorno DOM mínimo para specs de componentes bajo bun:test.
-// Importar este módulo (en vez de @testing-library/react directo) garantiza
-// que los globales existan antes de que testing-library se ligue a ellos.
-const happy = new Window({ url: "http://localhost/" });
-const g = globalThis as Record<string, unknown>;
-g.window ??= happy;
-g.document ??= happy.document;
-g.navigator ??= happy.navigator;
-g.HTMLElement ??= happy.HTMLElement;
-g.Element ??= happy.Element;
-g.Node ??= happy.Node;
-g.Event ??= happy.Event;
-g.CustomEvent ??= happy.CustomEvent;
-g.getComputedStyle ??= happy.getComputedStyle.bind(happy);
-g.MutationObserver ??= happy.MutationObserver;
-// `HTMLIFrameElement` en el global, no en el window: el `window` global lo puso
-// `test-preload.ts` (es `globalThis`, para que los specs que leen `window.x`
-// como el panel.findan el shim de storage). React lo lee del global en
-// `getActiveElementDeep`, así que con el shim tal cual, montar sobre `document`
-// —lo que necesita un componente que renderiza `<html>`— moría con
-// `TypeError: Right hand side of instanceof is not an object`.
-g.HTMLIFrameElement ??= happy.HTMLIFrameElement;
-// Base UI usa requestAnimationFrame para transiciones (happy-dom no lo define).
-if (typeof g.requestAnimationFrame !== "function") {
-	g.requestAnimationFrame = ((cb: FrameRequestCallback) =>
-		setTimeout(() => cb(Date.now()), 0)) as unknown;
-	g.cancelAnimationFrame = ((id: number) => clearTimeout(id)) as unknown;
-}
+// El entorno DOM se instala antes de ligar testing-library: es lo que hace que
+// `screen`/`render` operen sobre el documento de happy-dom y no sobre el global.
+//
+// Es idempotente a propósito. Con el preload de `bunfig.toml` el DOM ya está
+// instalado cuando este módulo se importa, y el que manda es el del preload
+// (el primero que se ve); sin preload —`bun test` desde otro cwd— este módulo
+// lo instala igual, antes de que se cargue testing-library.
+installDomEnvironment();
 
 export const { render, screen, fireEvent, waitFor, cleanup, renderHook, act } =
 	await import("@testing-library/react");

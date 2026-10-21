@@ -4,11 +4,31 @@ import { toast } from "sonner";
 
 // HeadContent/Scripts leen el router activo; el shell del documento raíz no lo
 // necesita para probar que el toaster está montado.
+//
+// POR QUÉ `...actualRouter`: `mock.module` de bun es GLOBAL al proceso, así que
+// lo que instala un spec lo heredan los que corren después (y no se puede
+// depender de que `mock.restore()` lo revierta: la nota de
+// `list-route-retry.test.tsx` y la de `navigation.test.ts` dicen que no, y es
+// justo esa dependencia la que vuelve a la suite una ruleta).
+// Un mock que reemplaza el módulo ENTERO le BORRA al resto de la suite las
+// exportaciones que no declara: las rutas que importan `createFileRoute` o
+// `useNavigate` dejaban de linkear y el spec moría con
+// `SyntaxError: Export named 'createFileRoute' not found in module …`, y los
+// `<Link>` de los demás specs se renderizaban vacíos, así que sus `findBy*`
+// expiraban. Medido: 129 fallos y 9 errores según el orden de archivos.
+//
+// El `Link` renderiza sus hijos: un stub que no renderiza nada borra el texto
+// que otros specs esperan encontrar.
+const actualRouter = await import("@tanstack/react-router");
+
 mock.module("@tanstack/react-router", () => ({
+	...actualRouter,
 	createRootRouteWithContext: () => (options: unknown) => options,
 	HeadContent: () => null,
 	Scripts: () => null,
-	Link: () => null,
+	Link: ({ children }: { children: React.ReactNode }) => (
+		<a href="/">{children}</a>
+	),
 }));
 
 const { Route } = await import("../__root");

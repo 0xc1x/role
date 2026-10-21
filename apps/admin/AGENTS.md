@@ -19,7 +19,7 @@ Panel de administración de Rolé: negocios, órdenes, ofertas, slides, categor�
 | HTTP | `fetch` nativo |
 | Tipos | `@0xc1x/role-commons` (`workspace:*`) |
 | Lint/Format | Biome |
-| Tests | bun:test (`bun test src`) |
+| Tests | bun:test (`bun test --isolate src`) |
 
 ## Estructura (feature-first)
 
@@ -64,6 +64,24 @@ Sin errores pendientes de typecheck ni lint (`bun run check` y `bun run typechec
 
 Notas de mantenimiento:
 
+- **La suite corre con `--isolate` y el DOM se instala en el PRELOAD.** Son las
+  dos mitades del mismo problema: en bun el registro de módulos es del proceso,
+  así que un spec puede cambiar el mundo de los otros noventa y uno. Medido en
+  el mismo commit: 642/642 en un clon y 423 pass / 129 fail / 9 errors (552
+  tests, 117 s) en otro, sin que cambiara una línea —el orden de archivos lo da
+  el filesystem—. Las dos causas:
+  - `@base-ui/utils` decide en el ámbito del módulo si hay DOM
+    (`useIsoLayoutEffect = typeof document !== "undefined" ? … : noop`). Por eso
+    el DOM se instala en `test-preload.ts` (bun lo ejecuta antes de importar el
+    primer spec) y no en `test-utils/dom.ts` (que se importa donde le place al
+    spec: hay specs que importan el componente bajo prueba antes que el helper,
+    y entonces base-ui queda en modo SSR y sus portales no abren).
+  - `mock.module` de bun es global al proceso. Un mock que reemplaza un módulo
+    ENTERO le borra al resto de la suite las exportaciones que no declara: por
+    eso todo mock de `@tanstack/react-router` reparte `...actualRouter` y su
+    `Link` renderiza sus hijos. Un mock que no lo hace rompe el link de las rutas
+    (`SyntaxError: Export named 'createFileRoute' not found`) y borra el texto
+    de los enlaces que otros specs esperan.
 - Los primitivos vendidos en `src/components/ui/**` tienen overrides de reglas
   a11y/suspicious en `biome.json` (patrón estándar para shadcn/Base UI). Si
   actualizas un primitivo, conserva los overrides.
