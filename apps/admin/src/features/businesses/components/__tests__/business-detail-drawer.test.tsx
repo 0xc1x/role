@@ -38,16 +38,19 @@ interface RecordedCall {
 
 /**
  * La ficha consulta tres recursos hijos del negocio (notificaciones, puntos de
- * retiro y equipo), y cada uno tiene su propia forma de respuesta: los correos
- * y el equipo son arrays planos, las ubicaciones un sobre paginado. Un stub
- * único que devuelva `[]` para todo rompía la sección de ubicaciones, así que el
- * stub enruta por URL.
+ * retiro y equipo) y dos del plan (la suscripción y el catálogo), y cada uno
+ * tiene su propia forma de respuesta: los correos y el equipo son arrays
+ * planos, las ubicaciones un sobre paginado, la suscripción un objeto y el
+ * catálogo un array de planes. Un stub único que devuelva `[]` para todo
+ * rompía la sección de ubicaciones, así que el stub enruta por URL.
  */
 function stubFetch(
 	routes: {
 		emailSends?: unknown[];
 		locations?: unknown[];
 		staff?: unknown[];
+		subscription?: unknown;
+		plans?: unknown[];
 	} = {},
 ) {
 	const calls: RecordedCall[] = [];
@@ -66,7 +69,11 @@ function stubFetch(
 				}
 			: url.includes("/staff")
 				? (routes.staff ?? [])
-				: (routes.emailSends ?? []);
+				: url.includes("/subscription")
+					? routes.subscription
+					: url.includes("/plans")
+						? (routes.plans ?? [])
+						: (routes.emailSends ?? []);
 		return new Response(JSON.stringify(body), {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
@@ -236,5 +243,52 @@ describe("ficha del negocio", () => {
 			expect(calls.some((call) => call.url.includes("/staff"))).toBe(true),
 		);
 		await waitFor(() => expect(screen.getByText("María Dueña")).toBeDefined());
+	});
+
+	// El plan es la tercera pregunta de la ficha, y se pregunta sólo cuando se
+	// abre su pestaña: con «Ficha» activa el panel no pide la suscripción ni el
+	// catálogo de planes.
+	test("el plan se consulta sólo cuando se abre su pestaña", async () => {
+		const calls = stubFetch({
+			subscription: {
+				business_id: applicant.id,
+				plan_code: "free",
+				since: null,
+				limits: { max_locations: 1, max_members: 2 },
+				features: ["staff_access"],
+			},
+			plans: [
+				{
+					code: "free",
+					audience: "business",
+					limits: { max_locations: 1, max_members: 2 },
+					features: ["staff_access"],
+				},
+			],
+		});
+
+		renderDrawer(applicant);
+
+		expect(screen.getByRole("tab", { name: "Plan" })).toBeDefined();
+
+		// Se espera a una petición POSITIVA de la ficha antes de negar las del
+		// plan: sin ese primer await, el motor de consultas puede no haber
+		// corrido todavía y la negación probaría el reloj, no el gating.
+		await waitFor(() =>
+			expect(calls.some((call) => call.url.includes("/locations"))).toBe(true),
+		);
+		expect(calls.some((call) => call.url.includes("/subscription"))).toBe(
+			false,
+		);
+		expect(calls.some((call) => call.url.includes("/plans"))).toBe(false);
+
+		fireEvent.click(screen.getByRole("tab", { name: "Plan" }));
+
+		await waitFor(() =>
+			expect(calls.some((call) => call.url.includes("/subscription"))).toBe(
+				true,
+			),
+		);
+		await waitFor(() => expect(screen.getByText("Gratis")).toBeDefined());
 	});
 });
