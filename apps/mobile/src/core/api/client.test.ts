@@ -277,6 +277,41 @@ describe("el plazo de la petición", () => {
 		jest.advanceTimersByTime(60_000);
 		expect(signal?.aborted).toBe(false);
 	});
+
+	test("el plazo cubre el cuerpo, no sólo las cabeceras", async () => {
+		jest.useFakeTimers();
+
+		// El servidor manda las cabeceras y se cuelga a mitad del cuerpo:
+		// `fetch` ya resolvió, pero leer el cuerpo no termina.
+		globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+			signal = init?.signal ?? undefined;
+			return {
+				ok: true,
+				status: 200,
+				statusText: "",
+				text: () =>
+					new Promise<string>((_resolve, reject) => {
+						signal?.addEventListener("abort", () => {
+							reject(new DOMException("Aborted", "AbortError"));
+						});
+					}),
+			} as unknown as Response;
+		}) as unknown as typeof fetch;
+
+		const fallo = apiRequest("GET", "/businesses/x/staff").then(
+			() => null,
+			(cause: unknown) => cause,
+		);
+
+		await flushMicrotasks();
+		expect(signal).toBeDefined();
+
+		jest.advanceTimersByTime(15_000);
+
+		const caught = await fallo;
+		expect(caught).toMatchObject({ kind: "network" });
+		expect(signal?.aborted).toBe(true);
+	});
 });
 
 describe("api", () => {

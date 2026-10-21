@@ -64,6 +64,8 @@ export async function apiRequest<T>(
 	}
 
 	let response: Response;
+	/** El cuerpo ya leído, dentro del plazo (ver el `finally`). */
+	let text: string;
 	// El plazo de la petición. El `AbortController` es MANUAL a propósito:
 	// `AbortSignal.timeout` no existe en todas las versiones de React Native
 	// que soporta la app, y un timeout que no existe deja el login colgado
@@ -82,6 +84,11 @@ export async function apiRequest<T>(
 				options?.body === undefined ? undefined : JSON.stringify(options.body),
 			signal: controller.signal,
 		});
+		// El cuerpo también está bajo el plazo: `fetch` resuelve con las
+		// CABECERAS, y un servidor que se cuelga a mitad del cuerpo dejaría a
+		// quien espera colgado aunque las cabeceras hayan llegado. Un 204 no
+		// tiene cuerpo y no se pide.
+		text = response.status === 204 ? "" : await response.text();
 	} catch (cause) {
 		// Un ABORTO es un fallo de red como otro cualquiera: no llegó nada, y
 		// lo que puede hacer la persona es reintentar. La taxonomía de red lo
@@ -95,14 +102,14 @@ export async function apiRequest<T>(
 	}
 
 	if (!response.ok) {
-		return fromApiResponse(response, path);
+		// El cuerpo va ya leído: el error se parsea dentro del mismo plazo.
+		return fromApiResponse(response, path, text);
 	}
 
 	// Un 204 no tiene cuerpo: se devuelve `undefined` sin parsear (el
-	// `DELETE` del API responde así).
+	// `DELETE` del API responde así). Su `text()` es vacío y no cuesta.
 	if (response.status === 204) return undefined as T;
 
-	const text = await response.text();
 	if (!text) return undefined as T;
 
 	try {

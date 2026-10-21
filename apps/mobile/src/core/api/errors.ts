@@ -126,9 +126,16 @@ function withContext(
 	});
 }
 
-async function readEnvelope(response: Response): Promise<ApiEnvelope | null> {
+async function readEnvelope(
+	response: Response,
+	bodyText?: string,
+): Promise<ApiEnvelope | null> {
 	try {
-		const body = await response.json();
+		// El cliente ya leyó el cuerpo DENTRO de su plazo (un cuerpo que se
+		// cuelga no puede colgar la app), así que acá no se vuelve a pedir:
+		// `response.json()` sobre un cuerpo ya consumido lanzaría.
+		const body =
+			bodyText === undefined ? await response.json() : JSON.parse(bodyText);
 		if (body && typeof body === "object") return body as ApiEnvelope;
 		return null;
 	} catch {
@@ -226,8 +233,13 @@ function copyFor(
 export async function fromApiResponse(
 	response: Response,
 	path: string,
+	/**
+	 * El cuerpo ya leído por el cliente. Sin esto, la lectura del error
+	 * quedaría fuera del plazo de la petición.
+	 */
+	bodyText?: string,
 ): Promise<never> {
-	const envelope = await readEnvelope(response);
+	const envelope = await readEnvelope(response, bodyText);
 	const kind = kindForStatus(response.status);
 	const serverMessage = readServerText(envelope, response);
 	const message = copyFor(
