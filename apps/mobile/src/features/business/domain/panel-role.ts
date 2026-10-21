@@ -40,8 +40,10 @@ const ROLE_RANK: Record<PanelMinRole, number> = {
  *
  * RLS sigue siendo la frontera de datos (§9.3): esto no concede nada, sólo
  * esconde lo que el servidor iba a negar. La excepción que hay que nombrar es
- * el `UPDATE` de `business_locations`, que RLS NO le niega a un `staff`: ahí
- * esconder el botón es la única barrera que hay.
+ * el `UPDATE` de `business_locations`: RLS lo permite a un `staff` que tiene
+ * esa sucursal en su alcance —`can_manage_location` sólo es `true` para un
+ * no-dueño con una fila viva en `business_member_locations`—, así que para
+ * ESE cajero esconder el bloque de sucursales es la única barrera que hay.
  *
  * ─── POR QUÉ EL MÍNIMO, Y NO EL ROL EXACTO ──────────────────────────────────
  *

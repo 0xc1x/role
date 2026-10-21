@@ -127,6 +127,11 @@ test("el dueño ve la configuración que le corresponde", () => {
 	// Métricas y cupones.
 	expect(html).toContain(strings.business.quickStats);
 	expect(html).toContain(strings.business.quickCoupons);
+	// Y las tres filas que son del dueño y de nadie más: alertas,
+	// notificaciones y configuración general.
+	expect(html).toContain(strings.business.quickAlerts);
+	expect(html).toContain(strings.business.notifications);
+	expect(html).toContain(strings.business.generalSettings);
 });
 
 test("el cajero no ve configuración y sí ve lo suyo", () => {
@@ -138,6 +143,11 @@ test("el cajero no ve configuración y sí ve lo suyo", () => {
 	expect(html).not.toContain(strings.business.noLocationsTitle);
 	expect(html).not.toContain(strings.business.quickStats);
 	expect(html).not.toContain(strings.business.quickCoupons);
+	// Las tres filas del dueño tampoco: ni alertas, ni notificaciones, ni
+	// configuración general.
+	expect(html).not.toContain(strings.business.quickAlerts);
+	expect(html).not.toContain(strings.business.notifications);
+	expect(html).not.toContain(strings.business.generalSettings);
 
 	// Lo que sí le toca: reseñas, soporte y el buzón.
 	expect(html).toContain(strings.business.quickReviews);
@@ -160,6 +170,11 @@ test("el gerente ve las sucursales y no edita el negocio", () => {
 	// Las métricas y los cupones siguen siendo del dueño.
 	expect(html).not.toContain(strings.business.quickStats);
 	expect(html).not.toContain(strings.business.quickCoupons);
+	// Y las tres filas del dueño tampoco: el gerente administra sucursales,
+	// pero no configura el negocio.
+	expect(html).not.toContain(strings.business.quickAlerts);
+	expect(html).not.toContain(strings.business.notifications);
+	expect(html).not.toContain(strings.business.generalSettings);
 	// Y las filas de apoyo siguen siendo de quien opera el negocio.
 	expect(html).toContain(strings.business.helpCenter);
 	expect(html).toContain(strings.business.quickReviews);

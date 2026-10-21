@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import type { BusinessMemberRole } from "@/src/features/business/domain/business";
 import { meetsMinRole, type PanelMinRole } from "./panel-role";
 
 /**
@@ -34,5 +35,15 @@ describe("meetsMinRole", () => {
 		for (const minRole of minRoles) {
 			expect(meetsMinRole(null, minRole)).toBe(false);
 		}
+	});
+
+	it("un rol fuera del vocabulario tampoco abre nada", () => {
+		// El rango es una tabla: un rol que no está en ella no tiene rango, y
+		// la comparación sale `false` —el mínimo se cierra— igual que con
+		// `null`. El `cast` es por el type, que es un vocabulario cerrado; el
+		// runtime es el que decide.
+		expect(
+			meetsMinRole("owner_2" as unknown as BusinessMemberRole, "staff"),
+		).toBe(false);
 	});
 });
