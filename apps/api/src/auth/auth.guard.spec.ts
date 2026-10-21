@@ -154,6 +154,8 @@ describe('AuthGuard', () => {
       {
         id: 'user-1',
         email: 'profile@test.com',
+        full_name: 'Ada Admin',
+        avatar_url: null,
         role: 'user',
       },
     ]);
@@ -163,7 +165,38 @@ describe('AuthGuard', () => {
     expect(ctx._request.user).toEqual({
       id: 'user-1',
       email: 'profile@test.com',
+      full_name: 'Ada Admin',
+      avatar_url: null,
       role: 'user',
+    });
+  });
+
+  /**
+   * El nombre tiene que llegar a `request.user`, no sólo a la fila.
+   *
+   * `GET /auth/me` devuelve este objeto tal cual y el panel admin pinta el
+   * nombre en la barra lateral y en el saludo de la home. Sin `full_name`
+   * aquí, el panel caía al `?? user.email` y enseñaba el CORREO: el nombre
+   * estaba en la base de datos y no llegaba a ninguna parte.
+   */
+  it('carries the profile name and avatar into the request user', async () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+    const token = await signHs256Token({ sub: 'user-1' });
+    db.limit.mockResolvedValueOnce([
+      {
+        id: 'user-1',
+        email: 'profile@test.com',
+        full_name: 'Ada Admin',
+        avatar_url: 'https://cdn.test/ada.png',
+        role: 'user',
+      },
+    ]);
+
+    const ctx = mockExecutionContext(`Bearer ${token}`);
+    await guard.canActivate(ctx);
+    expect(ctx._request.user).toMatchObject({
+      full_name: 'Ada Admin',
+      avatar_url: 'https://cdn.test/ada.png',
     });
   });
 
@@ -171,7 +204,13 @@ describe('AuthGuard', () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
     const token = await signHs256Token({ sub: 'user-1' });
     db.limit.mockResolvedValueOnce([
-      { id: 'user-1', email: 'p@test.com', role: 'business' },
+      {
+        id: 'user-1',
+        email: 'p@test.com',
+        full_name: 'Ada Admin',
+        avatar_url: null,
+        role: 'business',
+      },
     ]);
 
     const ctx1 = mockExecutionContext(`Bearer ${token}`);
@@ -184,6 +223,10 @@ describe('AuthGuard', () => {
     expect(ctx2._request.user).toMatchObject({
       id: 'user-1',
       role: 'business',
+      // La caché no puede perder el nombre: sin él, el mismo usuario se
+      // pintaba con el correo en la primera petición y con el nombre en la
+      // segunda.
+      full_name: 'Ada Admin',
     });
   });
 

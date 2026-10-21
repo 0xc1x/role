@@ -401,6 +401,8 @@ describe('Login e2e', () => {
     expect(me.body.user).toEqual({
       id: consumerId,
       email: CONSUMER_EMAIL,
+      full_name: null,
+      avatar_url: null,
       role: 'user',
     });
 
@@ -637,9 +639,15 @@ describe('Login e2e', () => {
       .get('/api/v1/auth/me')
       .set('Authorization', `Bearer ${res.body.access_token}`)
       .expect(200);
+    // The SAME five keys the login answered. `/auth/me` is the row the guard
+    // resolved, and the guard is what the panel paints: sin `full_name` aquí,
+    // el panel caía al `?? user.email` y mostraba el CORREO donde debía ir el
+    // nombre. El nombre reparado es el de la fila, no el del fallback.
     expect(me.body.user).toEqual({
       id: orphanId,
       email: ORPHAN_EMAIL,
+      full_name: 'Reparada por el login',
+      avatar_url: null,
       role: 'user',
     });
   });

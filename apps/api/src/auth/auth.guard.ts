@@ -16,7 +16,13 @@ import type { AuthUser } from './auth.types';
 import { SupabaseTokenVerifier } from './supabase-token-verifier';
 
 interface ProfileCacheEntry {
-  profile: { id: string; email: string | null; role: AppRole };
+  profile: {
+    id: string;
+    email: string | null;
+    full_name: string | null;
+    avatar_url: string | null;
+    role: AppRole;
+  };
   expiresAt: number;
 }
 
@@ -81,6 +87,8 @@ export class AuthGuard implements CanActivate {
       request.user = {
         id: cached.profile.id,
         email: cached.profile.email ?? email,
+        full_name: cached.profile.full_name,
+        avatar_url: cached.profile.avatar_url,
         role: cached.profile.role,
       };
       return true;
@@ -90,6 +98,10 @@ export class AuthGuard implements CanActivate {
       .select({
         id: profiles.id,
         email: profiles.email,
+        // El nombre y el avatar son parte de la identidad que el panel muestra:
+        // sin ellos, `/auth/me` obligaba al cliente a caer al correo.
+        full_name: profiles.full_name,
+        avatar_url: profiles.avatar_url,
         role: profiles.role,
       })
       .from(profiles)
@@ -107,6 +119,8 @@ export class AuthGuard implements CanActivate {
       profile: {
         id: profile.id,
         email: profile.email,
+        full_name: profile.full_name,
+        avatar_url: profile.avatar_url,
         role: profile.role,
       },
       expiresAt: Date.now() + this.cacheTtl,
@@ -115,6 +129,8 @@ export class AuthGuard implements CanActivate {
     request.user = {
       id: profile.id,
       email: profile.email ?? email,
+      full_name: profile.full_name,
+      avatar_url: profile.avatar_url,
       role: profile.role,
     };
 
