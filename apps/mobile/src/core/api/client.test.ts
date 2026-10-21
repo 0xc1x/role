@@ -204,6 +204,81 @@ describe("apiRequest", () => {
 	});
 });
 
+// ─── El plazo de la petición ──────────────────────────────────────────────────
+
+describe("el plazo de la petición", () => {
+	/** El `signal` con el que salió la petición. */
+	let signal: AbortSignal | undefined;
+
+	beforeEach(() => {
+		signal = undefined;
+	});
+
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	/**
+	 * Deja que las microtareas se vacíen.
+	 *
+	 * El fetch no sale hasta que la sesión se resuelve, y eso es una
+	 * microtarea: sin vaciarla, el temporizador del plazo todavía no existe
+	 * cuando se hace avanzar el reloj.
+	 */
+	async function flushMicrotasks(): Promise<void> {
+		for (let i = 0; i < 5; i += 1) await Promise.resolve();
+	}
+
+	test("a los quince segundos la petición se aborta y el fallo es de red", async () => {
+		jest.useFakeTimers();
+
+		// El fetch se queda colgado: la conexión se tragó los paquetes.
+		globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+			signal = init?.signal ?? undefined;
+			return new Promise<Response>((_resolve, reject) => {
+				signal?.addEventListener("abort", () => {
+					reject(new DOMException("Aborted", "AbortError"));
+				});
+			});
+		}) as unknown as typeof fetch;
+
+		// El fallo se captura a mano y no con `expect(...).rejects`: los
+		// temporizadores de mentira congelan también el reloj del matcher, y
+		// la espera se quedaría colgada con él.
+		const fallo = apiRequest("GET", "/businesses/x/staff").then(
+			() => null,
+			(cause: unknown) => cause,
+		);
+
+		// La petición ya salió: el plazo está corriendo.
+		await flushMicrotasks();
+		expect(signal).toBeDefined();
+
+		// Y el plazo vence: la señal se aborta.
+		jest.advanceTimersByTime(15_000);
+
+		const caught = await fallo;
+		expect(caught).toMatchObject({ kind: "network" });
+		expect(signal?.aborted).toBe(true);
+	});
+
+	test("una respuesta a tiempo limpia el temporizador: no queda vivo", async () => {
+		jest.useFakeTimers();
+
+		globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+			signal = init?.signal ?? undefined;
+			return jsonResponse(200, { ok: true });
+		}) as unknown as typeof fetch;
+
+		await apiRequest("GET", "/businesses/x/staff");
+
+		// El temporizador se limpió al settle: pasado el plazo, la señal sigue
+		// viva. Un temporizador vivo abortaría una petición ya terminada.
+		jest.advanceTimersByTime(60_000);
+		expect(signal?.aborted).toBe(false);
+	});
+});
+
 describe("api", () => {
 	test("cada verbo pega en su método", async () => {
 		fetchResponse = jsonResponse(200, { ok: true });

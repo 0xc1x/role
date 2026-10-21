@@ -12,6 +12,26 @@ export interface ApiRequestOptions {
 }
 
 /**
+ * El tiempo máximo de una petición, en milisegundos.
+ *
+ * ─── POR QUÉ EL CLIENTE TIENE PLAZO ───────────────────────────────────────────
+ *
+ * Porque el cliente está en el LOGIN del consumidor: `signInWithEmail` sella
+ * la sesión del staff antes de devolver, y ese sello espera al API. Una
+ * conexión que se traga los paquetes —un portal cautivo, una red que se cae
+ * sin avisar— dejaría la pantalla de entrada colgada PARA SIEMPRE, sin error
+ * y sin forma de reintentar.
+ *
+ * Quince segundos son de sobra para una llamada de la API —los tiempos
+ * normales son de milisegundos— y lo bastante cortos para que la persona
+ * pueda volver a pulsar sin pensar que la app se quedó muerta.
+ *
+ * Y el plazo es del CLIENTE, no del API: el API no puede contestar a una
+ * petición que no llegó.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
  * Cliente HTTP del panel — EXCEPCIÓN CONSCIENTE a ADR-0002.
  *
  * El móvil consume Supabase directo (RLS es la frontera de datos), pero
@@ -44,6 +64,12 @@ export async function apiRequest<T>(
 	}
 
 	let response: Response;
+	// El plazo de la petición. El `AbortController` es MANUAL a propósito:
+	// `AbortSignal.timeout` no existe en todas las versiones de React Native
+	// que soporta la app, y un timeout que no existe deja el login colgado
+	// igual de colgado.
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 	try {
 		response = await fetch(`${baseUrl}${path}`, {
 			method,
@@ -54,9 +80,18 @@ export async function apiRequest<T>(
 			},
 			body:
 				options?.body === undefined ? undefined : JSON.stringify(options.body),
+			signal: controller.signal,
 		});
 	} catch (cause) {
+		// Un ABORTO es un fallo de red como otro cualquiera: no llegó nada, y
+		// lo que puede hacer la persona es reintentar. La taxonomía de red lo
+		// dice sin inventar un motivo que el servidor no escribió.
 		throw fromNetworkFailure(path, cause);
+	} finally {
+		// El temporizador se limpia al SETTLE, en los dos caminos: si la
+		// respuesta llegó a tiempo, el temporizador sobra y no puede quedar
+		// vivo pidiendo un abort sobre una petición ya terminada.
+		clearTimeout(timeout);
 	}
 
 	if (!response.ok) {
