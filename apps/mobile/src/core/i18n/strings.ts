@@ -1631,12 +1631,21 @@ export const strings = {
 			// pulsar. Lo que no pasa es lo que más importa: quien rota el PIN
 			// tiene que saber que las sesiones abiertas siguen vivas, y quien
 			// pausa tiene que saber que el corte es AHORA.
-			actionsTitle: "Acciones del acceso",
+			// El TÍTULO de la hoja nombra al acceso: «Acciones del acceso» no
+			// dice de QUIÉN, y la hoja se abre sobre una persona concreta.
+			actionsTitle: "Acciones de {name}",
 			moreActionsAccessibilityLabel: "Más acciones del acceso de {name}",
 			actionRotate: "Rotar PIN",
 			actionPause: "Pausar",
 			actionReactivate: "Reactivar",
 			actionRemove: "Dar de baja",
+			// Cada botón de la hoja dice A QUIÉN actúa: un lector de pantalla
+			// anuncia cuatro acciones —rotar, pausar, reactivar, dar de baja—
+			// y sin el objeto no sabe de qué se trata.
+			actionRotateAccessibilityLabel: "Rotar el PIN de {name}",
+			actionPauseAccessibilityLabel: "Pausar el acceso de {name}",
+			actionReactivateAccessibilityLabel: "Reactivar el acceso de {name}",
+			actionRemoveAccessibilityLabel: "Dar de baja el acceso de {name}",
 			rotateTitle: "Rotar el PIN de {name}",
 			rotateBody:
 				"El PIN anterior deja de valer: hay que entregar el nuevo. Pero las sesiones abiertas siguen vivas —quien ya entró sigue dentro hasta que su sesión caduque—.",

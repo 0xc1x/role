@@ -35,8 +35,10 @@ import { mockNativeUi } from "@/src/test-utils/native-mocks";
  *
  * La lista y la tarjeta no PINTA las acciones: la tarjeta ofrece la entrada —
  *«Editar» y «Más acciones»— y las acciones viven en una hoja aparte (Task 10).
- * Esta tarea afirma que la tarjeta ofrece esas dos entradas, y que el dueño —
- * a quien la propiedad se le TRANSFIERE, no se le edita— no tiene ninguna.
+ * Esta tarea afirma que la tarjeta ofrece esas dos entradas, que un acceso
+ * PAUSADO sólo ofrece la segunda —el plan dice que un acceso pausado se
+ * reactiva, no se edita— y que el dueño —a quien la propiedad se le
+ * TRANSFIERE, no se le edita— no tiene ninguna.
  */
 
 const BUSINESS_ID = "11111111-1111-4111-8111-111111111111";
@@ -445,8 +447,12 @@ test("la tarjeta dice el rol, el alcance, la sesión, la última entrada y el es
 	expect(html).toContain(strings.business.staff.sessionNever);
 	expect(html).toContain(formatDateTime(lastLogin));
 	expect(html).toContain(strings.business.staff.statusPaused);
-	// Las dos entradas de la tarjeta: editar y las demás acciones.
-	expect(buttons).toHaveLength(2);
+	// Un acceso PAUSADO no se edita: la edición es para cambiar el rol, el
+	// alcance y la política de sesión. La hoja tampoco lo ofrece —el plan lo
+	// dice así: `active` ofrece editar; `disabled`, reactivar—, así que la
+	// tarjeta queda con una sola entrada: «Más acciones».
+	expect(buttons).toHaveLength(1);
+	expect(buttons[0]?.label).toBe(strings.business.moreActions);
 });
 
 test("una sesión por turnos dice las horas y un acceso que nunca entró lo dice", () => {
@@ -553,6 +559,22 @@ test("el dueño no ofrece editar: la propiedad se transfiere, no se edita", () =
 
 	expect(html).not.toContain(strings.business.staff.edit);
 	expect(buttons).toHaveLength(0);
+});
+
+test("un acceso pausado no ofrece editar, pero sí sus demás acciones", () => {
+	// El plan es explícito: `active` → rotar, editar, pausar, eliminar;
+	// `disabled` → reactivar, eliminar. La tarjeta y la hoja offers lo mismo.
+	const html = renderCard(member({ status: "disabled" }));
+
+	expect(html).not.toContain(strings.business.staff.edit);
+	const mas = buttons.find(
+		(button) => button.label === strings.business.moreActions,
+	);
+	expect(mas).toBeDefined();
+	// Y la hoja es la que ofrece reactivar.
+	mas?.onPress?.();
+	renderCard(member({ status: "disabled" }));
+	expect(actionSheets).toHaveLength(1);
 });
 
 // ─── La entrada a las demás acciones ─────────────────────────────────────────

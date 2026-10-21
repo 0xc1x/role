@@ -446,9 +446,11 @@ test("el acierto se anuncia con los nombres de la RESPUESTA y lleva al panel", a
 	expect(expected).toContain(RESPONSE.new_owner.label);
 	expect(expected).toContain(RESPONSE.previous_owner.label);
 
-	// Y la persona vuelve al panel del negocio, no hacia atrás: el rol que
-	// tiene ahora es otro.
-	expect(navigations).toEqual([`/business/${BUSINESS_ID}`]);
+	// Y la persona vuelve al PANEL del negocio, no hacia atrás: el rol que
+	// tiene ahora es otro —gerente— y el panel es donde ese rol se ve. El
+	// hub no filtra por rol, así que el destino sería una pantalla donde el
+	// nuevo rol no se ve.
+	expect(navigations).toEqual(["/(business)/management"]);
 	// La hoja se cierra.
 	expect(closed).toEqual(["close"]);
 });

@@ -42,6 +42,13 @@ import { TransferOwnershipSheet } from "./TransferOwnershipSheet";
  * hoja tampoco ofrece acciones si el dueño llega a ella—: dos barreras para
  * el mismo hecho.
  *
+ * ─── POR QUÉ EL TÍTULO Y LOS BOTONES NOMBRAN AL ACCESO ───────────────────────
+ *
+ * Porque la hoja se abre sobre UNA persona: sin su nombre, el lector de
+ * pantalla anuncia «Rotar PIN», «Pausar», «Reactivar» y «Dar de baja» como
+ * cuatro acciones sin objeto, y el título —«Acciones de Ana Torres»— es lo
+ * único que dice de quién se trata.
+ *
  * ─── POR QUÉ CADA MUTACIÓN PIDE CONFIRMACIÓN ──────────────────────────────────
  *
  * Porque las cuatro escriben en el acceso de una persona y tres de ellas
@@ -238,7 +245,10 @@ export function StaffActionsSheet({
 
 	return (
 		<BottomSheetModal
-			title={strings.business.staff.actionsTitle}
+			title={strings.business.staff.actionsTitle.replace(
+				"{name}",
+				member.label,
+			)}
 			onClose={onClose}
 		>
 			<View style={styles.actions}>
@@ -246,6 +256,13 @@ export function StaffActionsSheet({
 					<Button
 						variant="outline"
 						disabled={busy}
+						// Cada botón dice A QUIÉN actúa: sin el objeto, el
+						// lector de pantalla anuncia cuatro acciones sin
+						// saber sobre quién.
+						accessibilityLabel={strings.business.staff.editAccessibilityLabel.replace(
+							"{name}",
+							member.label,
+						)}
 						onPress={goToEdit}
 						style={styles.action}
 					>
@@ -257,6 +274,10 @@ export function StaffActionsSheet({
 					<Button
 						variant="outline"
 						disabled={busy}
+						accessibilityLabel={strings.business.staff.actionRotateAccessibilityLabel.replace(
+							"{name}",
+							member.label,
+						)}
 						onPress={() => setPending("rotate")}
 						style={styles.action}
 					>
@@ -268,6 +289,10 @@ export function StaffActionsSheet({
 					<Button
 						variant="outline"
 						disabled={busy}
+						accessibilityLabel={strings.business.staff.actionReactivateAccessibilityLabel.replace(
+							"{name}",
+							member.label,
+						)}
 						onPress={() => setPending("reactivate")}
 						style={styles.action}
 					>
@@ -277,6 +302,10 @@ export function StaffActionsSheet({
 					<Button
 						variant="outline"
 						disabled={busy}
+						accessibilityLabel={strings.business.staff.actionPauseAccessibilityLabel.replace(
+							"{name}",
+							member.label,
+						)}
 						onPress={() => setPending("pause")}
 						style={styles.action}
 					>
@@ -306,6 +335,10 @@ export function StaffActionsSheet({
 					<Button
 						variant="destructive"
 						disabled={busy}
+						accessibilityLabel={strings.business.staff.actionRemoveAccessibilityLabel.replace(
+							"{name}",
+							member.label,
+						)}
 						onPress={() => setPending("remove")}
 						style={styles.action}
 					>

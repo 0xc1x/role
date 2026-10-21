@@ -205,23 +205,31 @@ export function StaffMemberCard({
 
 			{isOwner ? null : (
 				<View style={styles.actions}>
-					<Button
-						variant="outline"
-						// El botón dice a QUIÉN se edita: en una lista de accesos,
-						// un «Editar» a secas es un botón que no dice de qué.
-						accessibilityLabel={strings.business.staff.editAccessibilityLabel.replace(
-							"{name}",
-							member.label,
-						)}
-						onPress={() =>
-							router.push(
-								`/business/${businessId}/staff/${member.id}/edit` as Href,
-							)
-						}
-						style={styles.action}
-					>
-						{strings.business.staff.edit}
-					</Button>
+					{/* Un acceso PAUSADO no se edita: la edición es para
+					    cambiar el rol, el alcance y la política de sesión, y
+					    un acceso pausado se reactivia desde la hoja. El plan lo
+					    dice así —`active` ofrece editar; `disabled`, reactivar— y
+					    la hoja ya lo escondía: ahora la tarjeta tampoco lo
+					    ofrece. */}
+					{isPaused ? null : (
+						<Button
+							variant="outline"
+							// El botón dice a QUIÉN se edita: en una lista de accesos,
+							// un «Editar» a secas es un botón que no dice de qué.
+							accessibilityLabel={strings.business.staff.editAccessibilityLabel.replace(
+								"{name}",
+								member.label,
+							)}
+							onPress={() =>
+								router.push(
+									`/business/${businessId}/staff/${member.id}/edit` as Href,
+								)
+							}
+							style={styles.action}
+						>
+							{strings.business.staff.edit}
+						</Button>
+					)}
 
 					{/* Las demás acciones —rotar, pausar, reactivar, dar de baja—
 					    viven en una hoja: son cuatro y cada una con su

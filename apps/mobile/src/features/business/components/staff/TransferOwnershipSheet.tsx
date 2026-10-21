@@ -84,9 +84,11 @@ export function TransferOwnershipSheet({
 						.replace("{previousOwner}", response.previous_owner.label),
 				);
 				onClose();
-				// El panel del negocio: el rol de quien está mirando cambió, y
-				// el panel es donde se ve.
-				router.replace(`/business/${businessId}` as Href);
+				// El PANEL del negocio, no el hub: el rol de quien está
+				// mirando cambió —de dueño a gerente— y el panel es donde ese
+				// rol se ve. El hub no filtra por rol, así que el destino
+				// sería una pantalla donde el nuevo rol no se ve.
+				router.replace("/(business)/management" as Href);
 			})
 			.catch((cause: unknown) => {
 				setError(

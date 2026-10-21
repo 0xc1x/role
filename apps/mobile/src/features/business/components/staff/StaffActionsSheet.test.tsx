@@ -21,17 +21,21 @@ import { mockNativeUi } from "@/src/test-utils/native-mocks";
  *
  * ─── LO QUE SE AFIRMA AQUÍ ────────────────────────────────────────────────────
  *
- *  1. Las acciones dependen del ESTADO del acceso: un acceso activo ofrece
- *     editar, rotar, pausar y dar de baja; uno pausado ofrece reactivar y dar
- *     de baja. El dueño no ofrece ninguna.
- *  2. Cada mutación está detrás de su CONFIRMACIÓN: antes de confirmar no sale
+ *  1. Las acciones dependen del ESTADO del acceso y del ROL de quien mira: un
+ *     acceso activo ofrece editar, rotar, pausar y —sólo el dueño— dar de
+ *     baja; uno pausado ofrece reactivar y, sólo para el dueño, dar de baja.
+ *     El dueño no ofrece ninguna.
+ *  2. La hoja se titula con el nombre del acceso y cada botón dice a QUIÉN
+ *     actúa: sin el objeto, el lector de pantalla anuncia cuatro acciones
+ *     sin saber de quién se trata.
+ *  3. Cada mutación está detrás de su CONFIRMACIÓN: antes de confirmar no sale
  *     nada por la red, y después sale la llamada exacta.
- *  3. Los VERBOS son los del §8, con los ids dentro de la ruta:
+ *  4. Los VERBOS son los del §8, con los ids dentro de la ruta:
  *     `POST …/rotate`, `POST …/disable`, `POST …/enable` y `DELETE …/:memberId`.
- *  4. Rotar NO corta sesiones: no hay un `POST …/disable` en la llamada.
- *  5. La prosa de cada confirmación dice la consecuencia real: lo que pasa, lo
+ *  5. Rotar NO corta sesiones: no hay un `POST …/disable` en la llamada.
+ *  6. La prosa de cada confirmación dice la consecuencia real: lo que pasa, lo
  *     que NO pasa y lo que no se recupera.
- *  6. Un fallo se pinta con la prosa que escribió el API y deja la hoja
+ *  7. Un fallo se pinta con la prosa que escribió el API y deja la hoja
  *     abierta; un acierto la cierra.
  *
  * ─── POR QUÉ SE AFIRMA EL VERBO Y NO «QUÉ HOOK CORRIÓ» ────────────────────────
@@ -436,6 +440,61 @@ test("el dueño no tiene acciones: la propiedad se transfiere, no se administra"
 	expect(html).not.toContain(strings.business.staff.actionRemove);
 });
 
+// ─── El nombre del acceso ────────────────────────────────────────────────────
+//
+// La hoja se abre sobre UNA persona: sin su nombre, el lector de pantalla
+// anuncia cuatro acciones sin objeto.
+
+test("la hoja se titula con el nombre del acceso", () => {
+	renderWith(member({ label: "Ana Torres" }), "owner");
+
+	expect(sheetProps?.title).toBe(
+		strings.business.staff.actionsTitle.replace("{name}", "Ana Torres"),
+	);
+});
+
+test("cada botón dice A QUIÉN actúa", () => {
+	renderWith(member({ label: "Ana Torres" }), "owner");
+
+	expect(button(strings.business.staff.edit)?.accessibilityLabel).toBe(
+		strings.business.staff.editAccessibilityLabel.replace(
+			"{name}",
+			"Ana Torres",
+		),
+	);
+	expect(button(strings.business.staff.actionRotate)?.accessibilityLabel).toBe(
+		strings.business.staff.actionRotateAccessibilityLabel.replace(
+			"{name}",
+			"Ana Torres",
+		),
+	);
+	expect(button(strings.business.staff.actionPause)?.accessibilityLabel).toBe(
+		strings.business.staff.actionPauseAccessibilityLabel.replace(
+			"{name}",
+			"Ana Torres",
+		),
+	);
+	expect(button(strings.business.staff.actionRemove)?.accessibilityLabel).toBe(
+		strings.business.staff.actionRemoveAccessibilityLabel.replace(
+			"{name}",
+			"Ana Torres",
+		),
+	);
+});
+
+test("un acceso pausado dice el nombre en la reactivación", () => {
+	renderWith(member({ label: "Ana Torres", status: "disabled" }), "owner");
+
+	expect(
+		button(strings.business.staff.actionReactivate)?.accessibilityLabel,
+	).toBe(
+		strings.business.staff.actionReactivateAccessibilityLabel.replace(
+			"{name}",
+			"Ana Torres",
+		),
+	);
+});
+
 // ─── La transferencia de la propiedad ─────────────────────────────────────────
 //
 // La transferencia la pide el DUEÑO, y no cualquiera: la base exige que
@@ -534,9 +593,13 @@ test("al pulsar la transferencia se abre la hoja con el nombre del acceso", () =
 	expect(sheetProps?.title).toBe(
 		strings.business.staff.transferSheetTitle.replace("{name}", "Luis Vega"),
 	);
-	expect(sheetProps?.title).not.toBe(strings.business.staff.actionsTitle);
+	expect(sheetProps?.title).not.toBe(
+		strings.business.staff.actionsTitle.replace("{name}", "Luis Vega"),
+	);
 	expect(html).toContain("Luis Vega");
-	expect(html).not.toContain(strings.business.staff.actionsTitle);
+	expect(html).not.toContain(
+		strings.business.staff.actionsTitle.replace("{name}", "Luis Vega"),
+	);
 });
 
 // ─── Rotar el PIN ────────────────────────────────────────────────────────────
