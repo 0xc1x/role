@@ -7,6 +7,7 @@ import { BusinessPlanTab } from "../business-plan-tab";
 const previousFetch = globalThis.fetch;
 
 const businessId = "11111111-1111-4111-8111-111111111111";
+const otherBusinessId = "22222222-2222-4222-8222-222222222222";
 
 const FREE_PLAN = {
 	code: "free",
@@ -149,7 +150,18 @@ function stubFetch(
 			return json(patch.body, patch.status ?? 200);
 		}
 		if (method === "GET" && url.includes("/subscription")) {
-			return json(options.subscription ?? subscription());
+			// El plan del stub SÍ depende del negocio: así una prueba puede
+			// esperar a que la ficha del negocio NUEVO esté cargada, y no sólo
+			// a que su consulta arrancó.
+			const otro = url.includes(otherBusinessId);
+			return json(
+				options.subscription ??
+					subscription({
+						plan_code: otro ? "pro" : "free",
+						limits: otro ? PRO_PLAN.limits : FREE_PLAN.limits,
+						features: otro ? PRO_PLAN.features : FREE_PLAN.features,
+					}),
+			);
 		}
 		if (method === "GET" && url.includes("/plans")) {
 			if (options.catalogueError) {
@@ -273,6 +285,25 @@ describe("pestaña Plan del negocio", () => {
 		await waitFor(() => expect(screen.getByText("Pro Plus")).toBeDefined());
 		expect(screen.getAllByText("sin tope").length).toBeGreaterThan(0);
 		expect(screen.queryByText("0")).toBeNull();
+	});
+
+	// El rótulo dice lo que mide: la fecha es la de la SUSCRIPCIÓN, no la del
+	// plan de hoy. Cambiar de plan no reinicia la suscripción, así que un
+	// «Desde cuándo» sin más leía como la fecha del plan actual.
+	test("el rótulo de la fecha dice que es la de la suscripción", async () => {
+		stubFetch({
+			subscription: subscription({
+				plan_code: "pro",
+				since: "2026-10-01T10:00:00.000Z",
+				limits: PRO_PLAN.limits,
+				features: PRO_PLAN.features,
+			}),
+		});
+		renderTab();
+
+		await waitFor(() => expect(screen.getByText("Pro")).toBeDefined());
+		expect(screen.getByText("Suscripción desde")).toBeDefined();
+		expect(screen.queryByText("Desde cuándo")).toBeNull();
 	});
 
 	test("sin negocio no consulta nada", () => {
@@ -460,6 +491,49 @@ describe("cambio de plan desde el panel", () => {
 			).toBeDefined(),
 		);
 		expect(screen.queryByRole("alertdialog")).toBeNull();
+	});
+
+	// El plan elegido es del DIÁLOGO, y el diálogo es del negocio: cambiar de
+	// negocio no puede dejar elegido el plan del anterior. El cierre desde el
+	// padre no limpia la selección interna del hijo, así que el diálogo se
+	// monta con la `key` del negocio.
+	test("al cambiar de negocio, el diálogo no conserva el plan elegido", async () => {
+		stubFetch();
+		const view = renderTab();
+
+		// Los DOS negocios se cargan ANTES de cambiar: si el nuevo no está en
+		// caché, la pestaña muestra su esqueleto y el diálogo se desmonta —y
+		// entonces la selección se pierde sola, sin que la `key` tenga nada que
+		// ver. Con las dos fichas en caché, el cambio NO pasa por el esqueleto
+		// y el diálogo sigue montado: que es el estado que la `key` endurece.
+		await waitFor(() => expect(screen.getByText("Gratis")).toBeDefined());
+		view.rerenderWithBusiness(otherBusinessId);
+		await waitFor(() => expect(screen.getByText("Pro")).toBeDefined());
+		view.rerenderWithBusiness(businessId);
+		await waitFor(() => expect(screen.getByText("Gratis")).toBeDefined());
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Cambiar plan" }),
+		);
+		fireEvent.click(screen.getByRole("radio", { name: "Pro Plus" }));
+		expect(
+			(screen.getByRole("radio", { name: "Pro Plus" }) as HTMLInputElement)
+				.checked,
+		).toBe(true);
+
+		// El panel pasa a mirar el otro negocio.
+		view.rerenderWithBusiness(otherBusinessId);
+
+		// Y al abrirlo para el otro negocio, la decisión se pide DE NUEVO: el
+		// plan del anterior no viene elegido.
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Cambiar plan" }),
+		);
+		await screen.findByRole("alertdialog");
+		expect(
+			(screen.getByRole("radio", { name: "Pro Plus" }) as HTMLInputElement)
+				.checked,
+		).toBe(false);
 	});
 
 	// La asignación que sí se aplica se avisa y cierra el diálogo.

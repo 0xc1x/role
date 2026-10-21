@@ -41,6 +41,17 @@ import { BusinessPlanChangeDialog } from "./business-plan-change-dialog";
  * Porque `null` es «todavía no hay suscripción»: el negocio se lee `free` por
  * el `coalesce` de la base y la fecha no existe porque la suscripción no
  * existe. Ponerle una fecha sería inventar un dato que nadie midió.
+ *
+ * ─── Y POR QUÉ EL BLOQUE DICE «SUSCRIPCIÓN DESDE» ─────────────────────────────
+ *
+ * Porque la fecha que se muestra es la de la SUSCRIPCIÓN —la fila de
+ * `subscriptions`— y no la del plan que el negocio tiene HOY: cambiar de plan
+ * no reinicia la suscripción (`started_at` no se mueve), así que un negocio que
+ * llevaba el `pro` desde junio y pasó al `pro_plus` en octubre tiene la
+ * suscripción de junio y el plan de octubre.
+ *
+ * Un rótulo que dijera sólo «Desde cuándo» leía como la fecha del plan
+ * actual, y eso es MENTIRA: el rótulo dice lo que mide, que es la suscripción.
  */
 export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 	const subscription = useBusinessSubscription(businessId);
@@ -128,8 +139,8 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 				</div>
 			</section>
 
-			<section className="space-y-2" aria-label="Desde cuándo">
-				<h3 className="font-medium text-sm">Desde cuándo</h3>
+			<section className="space-y-2" aria-label="Suscripción desde">
+				<h3 className="font-medium text-sm">Suscripción desde</h3>
 				<p className="text-sm">
 					{current.since
 						? formatBusinessDate(current.since)
@@ -200,7 +211,14 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 				</Button>
 			)}
 
+			{/*
+			  La `key` es el negocio: el diálogo guarda el plan elegido DENTRO de
+			  sí, y un cierre desde el padre —el reset de arriba— no la limpia.
+			  Sin la `key`, cambiar de negocio dejaría el plan del negocio
+			  anterior elegido en el diálogo del nuevo.
+			*/}
 			<BusinessPlanChangeDialog
+				key={businessId}
 				businessId={businessId}
 				currentPlanCode={current.plan_code}
 				plans={plans.data ?? []}
