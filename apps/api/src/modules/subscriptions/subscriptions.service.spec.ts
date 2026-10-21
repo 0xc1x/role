@@ -431,8 +431,14 @@ describe('SubscriptionsService', () => {
      * Un `23505` de otra unicidad es un error de otra cosa: tragárselo —o
      * reintentarlo— sería estar mintiendo sobre lo que pasó. El nombre del
      * índice es lo que distingue los dos.
+     *
+     * Y lo que sale es la RESPUESTA DE LA AVERÍA —el mismo 500 que el del
+     * reintento—, porque un fallo de la escritura es un fallo de la
+     * escritura: el operador tiene que ver una sola respuesta y una sola
+     * línea de log, no un `unhandled_exception` en un camino y un
+     * `http_exception` en el otro.
      */
-    it('un 23505 de OTRA unicidad no se reintenta: sale tal cual', async () => {
+    it('un 23505 de OTRA unicidad no se reintenta, y sale como la avería que es', async () => {
       const postgresError = Object.assign(
         new Error('duplicate key value violates unique constraint "otra_cosa"'),
         { code: '23505', constraint_name: 'otra_cosa' },
@@ -446,14 +452,51 @@ describe('SubscriptionsService', () => {
         ),
       );
 
-      // El error sale TAL CUAL: no se traga, no se reintenta y no se
-      // traduce. Lo que no se sabe, esta capa no lo inventa.
-      await expect(
-        service.assign(admin, BIZ, { plan_code: 'pro' }),
-      ).rejects.toThrow(DrizzleQueryError);
+      const error = await service
+        .assign(admin, BIZ, { plan_code: 'pro' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(InternalServerErrorException);
       // Y NO se reintenta: el `UPDATE` se llamó una vez, la de antes del
       // `INSERT`.
       expect(repository.updateLiveSubscription).toHaveBeenCalledTimes(1);
+      // Y el operador lo ve con su código de Postgres, como en el reintento.
+      expect(logs).toContainEqual({
+        event: 'business_plan_write_failed',
+        businessId: BIZ,
+        errorType: 'Error',
+        errorCode: '23505',
+      });
+    });
+
+    /**
+     * EL PRIMER INTENTO CONTESTA COMO EL REINTENTO.
+     *
+     * Un fallo de la escritura es un fallo de la escritura, lo diga el
+     * intento que lo sufrió: sin esto, el primer intento subía el error crudo
+     * —un `unhandled_exception` con sólo `errorType` y `errorCode`— y el
+     * reintento contestaba un 500 con su mensaje. Dos respuestas para la misma
+     * avería, y el operador sin poder saber que son la misma.
+     */
+    it('un fallo del PRIMER intento sale traducido y con su línea de log', async () => {
+      repository.insertBusinessSubscription.mockRejectedValue(
+        new Error('connection terminated unexpectedly'),
+      );
+
+      const error = await service
+        .assign(admin, BIZ, { plan_code: 'pro' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(InternalServerErrorException);
+      expect((error as InternalServerErrorException).message).toContain(
+        'No se pudo guardar el plan del negocio',
+      );
+      // Y la misma línea de log que el reintento.
+      expect(logs).toContainEqual({
+        event: 'business_plan_write_failed',
+        businessId: BIZ,
+        errorType: 'Error',
+      });
     });
 
     it('el cambio queda en el log con el evento, el de antes y el de después', async () => {

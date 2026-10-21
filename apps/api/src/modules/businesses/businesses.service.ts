@@ -13,6 +13,7 @@ import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { safeErrorFields } from '@0xc1x/role-commons';
 import type { Env } from '../../config/env.schema';
+import { findPostgresError } from '../../common/utils/postgres-error';
 import {
   paginatedDataFromQuery,
   type BusinessDto,
@@ -477,33 +478,23 @@ export class BusinessesService {
    *
    * El `errcode` se busca en el error Y en su `cause`: Drizzle envuelve el
    * error de Postgres en un `DrizzleQueryError` que no copia el código, así que
-   * un `error.code === 'R0002'` solo no encontraría nunca nada.
+   * un `error.code === 'R0002'` solo no encontraría nunca nada. La búsqueda es
+   * la del helper compartido (`common/utils/postgres-error.ts`).
    */
   private mapBusinessWriteError(error: unknown): unknown {
-    const candidates = [
-      error,
-      (error as { cause?: unknown } | null)?.cause,
-    ] as unknown[];
-    for (const candidate of candidates) {
-      const postgresError = candidate as {
-        code?: string;
-        message?: string;
-        hint?: string;
-      } | null;
-      if (postgresError?.code !== PG_BUSINESS_NEEDS_OWNER) continue;
-      const reason = postgresError.message;
-      const door = postgresError.hint;
-      return new UnprocessableEntityException(
-        [
-          reason ??
-            'Este negocio no tiene un dueño vivo, y no se puede activar.',
-          door,
-        ]
-          .filter(Boolean)
-          .join(' '),
-      );
-    }
-    return error;
+    const postgresError = findPostgresError(error);
+    if (postgresError?.code !== PG_BUSINESS_NEEDS_OWNER) return error;
+
+    const reason = postgresError.message;
+    const door = postgresError.hint;
+    return new UnprocessableEntityException(
+      [
+        reason ?? 'Este negocio no tiene un dueño vivo, y no se puede activar.',
+        door,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
   }
 
   async remove(user: AuthUser, id: string): Promise<void> {

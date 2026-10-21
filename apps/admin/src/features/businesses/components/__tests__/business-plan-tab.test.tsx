@@ -424,6 +424,36 @@ describe("pestaña Plan del negocio", () => {
 		// Y el largo de la lista no aparece por ningún lado.
 		expect(screen.queryByText("1 de 5")).toBeNull();
 	});
+
+	// UN VIAJE, NO DOS.
+	//
+	// La lista compartida de puntos de retiro la usan otras vistas —la sección
+	// de la ficha y la tabla del equipo—, pero la pestaña del plan NO la
+	// necesita: su contador sale del total. Preguntarla las dos sería pagar
+	// un viaje por el conteo.
+	test("la pestaña pide los puntos de retiro una sola vez, y es el conteo", async () => {
+		const calls = stubFetch({
+			subscription: subscription({
+				plan_code: "pro",
+				since: "2026-10-01T10:00:00.000Z",
+				limits: PRO_PLAN.limits,
+				features: PRO_PLAN.features,
+			}),
+			locations,
+			staff: [owner, staff],
+		});
+		renderTab();
+
+		await waitFor(() => expect(screen.getByText("2 de 5")).toBeDefined());
+
+		const locationsCalls = calls.filter((call) =>
+			call.url.includes("/locations"),
+		);
+		expect(locationsCalls).toHaveLength(1);
+		// Y ese viaje es el del conteo: la página mínima y el filtro del motor.
+		expect(locationsCalls[0]?.url).toContain("is_active=true");
+		expect(locationsCalls[0]?.url).toContain("limit=1");
+	});
 });
 
 describe("cambio de plan desde el panel", () => {

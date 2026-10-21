@@ -13,6 +13,7 @@ import type {
   UpdateBusinessSubscriptionDto,
 } from '@0xc1x/role-commons';
 import { safeErrorFields } from '@0xc1x/role-commons';
+import { findPostgresError } from '../../common/utils/postgres-error';
 import type { AuthUser } from '../../auth/auth.types';
 import { SubscriptionsMapper } from './subscriptions.mapper';
 import { SubscriptionsRepository } from './subscriptions.repository';
@@ -300,6 +301,15 @@ export class SubscriptionsService {
    * a abrir. Y porque el reintento tiene que ser la TRANSACCIÓN ENTERA —leer
    * la fila y escribir encima— y no sólo la escritura: la fila que el otro
    * escritor metió ya está, así que el `UPDATE` la encuentra y la cambia.
+   *
+   * ─── Y POR QUÉ LOS DOS INTENTOS CONTESTAN LO MISMO ──────────────────────────
+   *
+   * Porque un fallo de la escritura es un fallo de la escritura: el primer
+   * intento y el reintento son la misma avería y se contestan con la misma
+   * respuesta y con la misma línea de log. Si el primero subiera crudo, el
+   * operador vería un `unhandled_exception` —sólo `errorType` y `errorCode`—
+   * en un camino y un `http_exception` con su mensaje en el otro, sin poder
+   * saber que son lo mismo.
    */
   private async writePlan(
     businessId: string,
@@ -308,7 +318,9 @@ export class SubscriptionsService {
     try {
       return await this.applyPlan(businessId, planCode);
     } catch (error) {
-      if (!this.isLiveBusinessKeyViolation(error)) throw error;
+      if (!this.isLiveBusinessKeyViolation(error)) {
+        throw this.mapSubscriptionWriteError(businessId, error);
+      }
 
       try {
         return await this.applyPlan(businessId, planCode);
@@ -396,6 +408,13 @@ export class SubscriptionsService {
    * del catálogo o de la fila: el catálogo se comprobó antes de la
    * transacción y estaba entero, así que lo que se rompió fue la escritura.
    *
+   * ─── Y EL PRIMER INTENTO Y EL REINTENTO CONTESTAN IGUAL ─────────────────────
+   *
+   * Los dos caminos llaman a ESTE método: el primero que no es el `23505` de
+   * la carrera y el del reintento que tampoco pudo aplicar el plan. Son la
+   * misma avería y se contestan con la misma respuesta y con la misma línea
+   * de log.
+   *
    * ─── Y POR QUÉ EL ERROR DE ABAJO SE REGISTRA ────────────────────────────────
    *
    * Porque el mensaje de un 5xx lo redacta el filtro —de la respuesta y del
@@ -408,42 +427,18 @@ export class SubscriptionsService {
   private mapSubscriptionWriteError(
     businessId: string,
     error: unknown,
-    retryError: unknown,
+    retryError?: unknown,
   ): InternalServerErrorException {
-    const cause = this.postgresCause(retryError) ?? this.postgresCause(error);
+    const cause = findPostgresError(retryError) ?? findPostgresError(error);
     this.logger.error({
       event: 'business_plan_write_failed',
       businessId,
-      ...safeErrorFields(cause ?? retryError),
+      ...safeErrorFields(cause ?? retryError ?? error),
     });
 
     return new InternalServerErrorException(
       'No se pudo guardar el plan del negocio: la fila de la suscripción no se pudo escribir. Es una avería de configuración, no una negativa del plan.',
     );
-  }
-
-  /**
-   * EL ERROR DE POSTGRES, O EL QUE LO ENVUELVE.
-   *
-   * Drizzle envuelve el error de Postgres en un `DrizzleQueryError` que no
-   * copia el código: el `code` —el `23505`— vive un nivel más abajo, en el
-   * `cause`. Es la misma búsqueda que hace `isLiveBusinessKeyViolation`.
-   *
-   * Devuelve `null` cuando ningún nivel trae un código: un error sin código
-   * no tiene un diagnóstico que registrar, y el que se registra es el error
-   * entero.
-   */
-  private postgresCause(error: unknown): unknown | null {
-    const candidates = [
-      error,
-      (error as { cause?: unknown } | null)?.cause,
-    ] as unknown[];
-
-    for (const candidate of candidates) {
-      const code = (candidate as { code?: unknown } | null)?.code;
-      if (typeof code === 'string') return candidate;
-    }
-    return null;
   }
 
   /**
@@ -462,26 +457,14 @@ export class SubscriptionsService {
    * en vez de en el reintento —que es el comportamiento que este método
    * promete.
    *
-   * Es la misma búsqueda que hace `BusinessesService.mapBusinessWriteError`
-   * (`businesses.service.ts:482-507`), y se copia en vez de inventar una
-   * tercera forma: tres búsquedas del mismo código de Postgres son tres
-   * lugares donde puede estar la copia que no encuentra nada.
+   * La búsqueda es la del helper compartido
+   * (`common/utils/postgres-error.ts`), que devuelve el nivel que trae el
+   * `code` —el del `cause` cuando el error viene envuelto— y con él su
+   * `constraint_name`.
    */
   private isLiveBusinessKeyViolation(error: unknown): boolean {
-    const candidates = [
-      error,
-      (error as { cause?: unknown } | null)?.cause,
-    ] as unknown[];
-
-    for (const candidate of candidates) {
-      const postgresError = candidate as {
-        code?: string;
-        constraint_name?: string;
-      } | null;
-      if (postgresError?.code !== PG_UNIQUE_VIOLATION) continue;
-      if (postgresError.constraint_name !== LIVE_BUSINESS_KEY) continue;
-      return true;
-    }
-    return false;
+    const postgresError = findPostgresError(error);
+    if (postgresError?.code !== PG_UNIQUE_VIOLATION) return false;
+    return postgresError.constraint_name === LIVE_BUSINESS_KEY;
   }
 }
