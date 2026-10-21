@@ -6054,35 +6054,39 @@ describe('los límites del plan bloquean crecer, no operar', () => {
     }
   });
 
-  // ─── EL CATÁLOGO DE TOPES, NOMBRADO PLAN POR PLAN ──────────────────────────
+  // ─── EL TOPE SALE DE LA FILA DEL CATÁLOGO, Y UN PLAN SIN FILA SE NIEGA ─────
   //
-  // `business_has_feature` tiene su `else false` para que un plan nuevo no
-  // conceda features antes de que nadie decidiera cuánto cuesta cada una. Los
-  // dos `case` de topes necesitan la misma red, y la necesitan con más razón:
-  // aquí el `else` no sería «sin features» sino SIN TOPE, o sea que agregar un
-  // tier al enum le regalaría un negocio ilimitado a quien lo escribiera.
+  // Esta guarda cambió de forma con `20261021180000_plan_limits_from_catalog`.
+  // Antes afirmaba que los dos triggers NOMBRABAN los tres planes uno por uno
+  // —`when 'free' then v_limit := 1`— y que el resto se negaba en voz alta. Eso
+  // era la segunda copia del catálogo: el número del tope estaba escrito en el
+  // motor Y en la fila, y entre las dos copias no había nada que las ate.
   //
-  // Por eso los tres planes se nombran uno por uno y el resto se raisea en
-  // voz alta. Y esto mira el cuerpo, no su respuesta: los números que importan
-  // —que `free` admita uno y `pro` cinco, que `pro_plus` no tenga tope— ya los
-  // miden los tests de comportamiento de arriba, con veinte filas de verdad.
+  // Ahora los topes salen de `public.subscription_plans` —una fila por plan— y
+  // el motor NO nombra ningún plan: el nombre lo pone el `raise`, que lo toma
+  // de `business_plan_of`. La red se mantiene, y es la misma: un plan sin fila
+  // en el catálogo NO puede «colarse sin tope», porque sin fila el motor no
+  // sabe qué admite y se niega en voz alta.
+  //
+  // Y esto mira el cuerpo, no su respuesta: los números que importan —que
+  // `free` admita uno y `pro` cinco, que `pro_plus` no tenga tope— ya los miden
+  // los tests de comportamiento de arriba, con veinte filas de verdad, y
+  // `plan-limits.db.spec.ts` mide además que el número sale de la fila.
 
-  test('los dos triggers nombran los tres planes, y un cuarto no se cuela sin tope', async () => {
+  test('los dos triggers leen el plan del catálogo, y un plan sin fila se niegan en voz alta', async () => {
     const catalog = await as(ctx.sql, 'service_role', null, (tx) =>
       tx.unsafe<
         {
           fn: string;
-          free: boolean;
-          pro: boolean;
-          pro_plus: boolean;
+          lee_la_fila: boolean;
+          nombra_los_planes: boolean;
           el_resto_ruidoso: boolean;
         }[]
       >(`
         select p.proname as fn,
-               (p.prosrc ~ 'when\\s+''free''')     as free,
-               (p.prosrc ~ 'when\\s+''pro''')      as pro,
-               (p.prosrc ~ 'when\\s+''pro_plus''') as pro_plus,
-               (p.prosrc ~ 'else\\s+raise\\s+exception') as el_resto_ruidoso
+               (p.prosrc ~ 'public\\.subscription_plans') as lee_la_fila,
+               (p.prosrc ~ 'when\\s+''(free|pro|pro_plus)''') as nombra_los_planes,
+               (p.prosrc ~ 'not\\s+found\\s+then\\s+raise\\s+exception') as el_resto_ruidoso
         from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public'
@@ -6092,21 +6096,20 @@ describe('los límites del plan bloquean crecer, no operar', () => {
     );
 
     // `toEqual` sobre el conjunto entero y no tres `toBe` sueltos: así el
-    // fallo dice QUÉ función dejó de nombrar QUÉ plan, que es la mitad de lo
-    // que hay que arreglar cuando esto se pone rojo.
+    // fallo dice QUÉ función dejó de leer la fila —o volvió a nombrar los
+    // planes—, que es la mitad de lo que hay que arreglar cuando esto se pone
+    // rojo.
     expect(plainRows(catalog)).toEqual([
       {
         fn: 'enforce_business_location_limit',
-        free: true,
-        pro: true,
-        pro_plus: true,
+        lee_la_fila: true,
+        nombra_los_planes: false,
         el_resto_ruidoso: true,
       },
       {
         fn: 'enforce_business_member_limit',
-        free: true,
-        pro: true,
-        pro_plus: true,
+        lee_la_fila: true,
+        nombra_los_planes: false,
         el_resto_ruidoso: true,
       },
     ]);
