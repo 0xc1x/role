@@ -164,13 +164,17 @@ export function BusinessDetailDrawer({
 						</section>
 					</TabPanel>
 
+					{/*
+					  El equipo va con `mt-4` porque `space-y-4` del `DrawerBody`
+					  llega a todos los hijos menos al ÚLTIMO, y este panel es el
+					  último: sin ese margen la tabla se pegaba a las pestañas.
+					*/}
 					<TabPanel
 						tab="equipo"
 						active={tab === "equipo"}
-						className="space-y-4"
+						className="mt-4 space-y-4"
 					>
 						<section className="space-y-3" aria-label="Equipo del negocio">
-							<h3 className="font-medium text-sm">Equipo</h3>
 							<BusinessStaffTable
 								businessId={isOpen && tab === "equipo" ? business.id : null}
 								businessName={business.name}

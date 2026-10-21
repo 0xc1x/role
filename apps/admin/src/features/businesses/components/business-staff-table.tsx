@@ -54,13 +54,30 @@ const NO_SCOPE = "Sin sucursales";
  * La lista de puntos de retiro NO se filtra por `is_active` (misma razón que en
  * la ficha): un acceso sobre un punto dado de baja sigue siendo un acceso, y
  * esconder el punto haría creer que el acceso no existe.
+ *
+ * ─── POR QUÉ MIENTRAS LOS NOMBRES LLEGAN HAY UN ESQUELETO ─────────────────────
+ *
+ * Porque el roster puede estar listo antes que la lista de puntos de retiro, y
+ * un «—» en esa celda diría «este acceso no tiene alcance» cuando lo que pasa
+ * es que todavía no se sabe. El esqueleto dice «viene»; el «—» se reserva para
+ * el caso en que la lista YA llegó y el id no resuelve.
+ *
+ * Y si la lista de puntos de retiro FALLA, la celda queda en «—»: el roster
+ * sigue siendo legible —el nombre, el rol y el estado no dependen de ella— y
+ * un error de una lista secundaria no puede tapar la lectura del equipo.
  */
-function scopeOf(
-	member: BusinessMemberDto,
-	locations: BusinessLocationDto[],
-): string {
+function ScopeCell({
+	member,
+	locations,
+	isPending,
+}: {
+	member: BusinessMemberDto;
+	locations: BusinessLocationDto[];
+	isPending: boolean;
+}) {
 	if (member.role === "owner") return OWNER_SCOPE;
 	if (member.business_location_ids.length === 0) return NO_SCOPE;
+	if (isPending) return <Skeleton className="h-4 w-24" />;
 	const names = member.business_location_ids
 		.map((id) => locations.find((location) => location.id === id)?.name)
 		.filter((name): name is string => Boolean(name));
@@ -171,11 +188,15 @@ export function BusinessStaffTable({
 						<TableRow key={member.id}>
 							<TableCell className="font-medium">{member.label}</TableCell>
 							<TableCell className="text-muted-foreground text-sm">
-								{member.alias || "—"}
+								{member.alias}
 							</TableCell>
 							<TableCell>{businessMemberRoleLabel(member.role)}</TableCell>
 							<TableCell className="text-muted-foreground text-sm">
-								{scopeOf(member, locationRows)}
+								<ScopeCell
+									member={member}
+									locations={locationRows}
+									isPending={locations.isPending}
+								/>
 							</TableCell>
 							<TableCell>
 								<Badge

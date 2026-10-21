@@ -90,7 +90,15 @@ export function BusinessStaffRevokeDialog({
 						disabled={revoke.isPending}
 						onClick={confirm}
 					>
-						{revoke.isPending ? <Spinner /> : null} Cortar los accesos
+						{/*
+						  El spinner va `aria-hidden`: el `Spinner` es un `role="status"`
+						  con nombre «Loading», y dentro del botón se sumaría al nombre
+						  accesible («Loading Cortar los accesos») y el botón cambiaría
+						  de nombre a mitad del vuelo. El estado del corte ya lo dice
+						  el botón deshabilitado.
+						*/}
+						{revoke.isPending ? <Spinner aria-hidden="true" /> : null} Cortar
+						los accesos
 					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>

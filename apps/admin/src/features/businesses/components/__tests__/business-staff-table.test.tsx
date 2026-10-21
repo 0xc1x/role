@@ -90,8 +90,14 @@ interface RecordedCall {
 function stubFetch(
 	options: {
 		staff?: unknown[];
+		/** El GET del equipo falla: es la rama de error de la lectura. */
+		staffError?: { status?: number; body?: unknown };
 		locations?: unknown[];
+		/** La lista de puntos de retiro no llega nunca. */
+		locationsPending?: boolean;
 		revoke?: { status?: number; body?: unknown };
+		/** El corte queda en vuelo: el POST no responde nunca. */
+		revokePending?: boolean;
 	} = {},
 ) {
 	const calls: RecordedCall[] = [];
@@ -107,6 +113,11 @@ function stubFetch(
 			});
 
 		if (method === "POST" && url.includes("/staff/revoke-all")) {
+			if (options.revokePending) {
+				// El corte no termina: el botón queda deshabilitado y su nombre
+				// accesible tiene que seguir siendo el mismo.
+				await new Promise<void>(() => undefined);
+			}
 			const revoke = options.revoke ?? {
 				status: 200,
 				body: { disabled: [], owner_skipped: true },
@@ -114,9 +125,18 @@ function stubFetch(
 			return json(revoke.body, revoke.status ?? 200);
 		}
 		if (method === "GET" && url.includes("/staff")) {
+			if (options.staffError) {
+				return json(
+					options.staffError.body ?? { message: "Internal server error" },
+					options.staffError.status ?? 500,
+				);
+			}
 			return json(options.staff ?? []);
 		}
 		if (method === "GET" && url.includes("/locations")) {
+			if (options.locationsPending) {
+				await new Promise<void>(() => undefined);
+			}
 			const rows = options.locations ?? [];
 			return json({
 				data: rows,
@@ -229,6 +249,76 @@ describe("equipo del negocio (sólo lectura)", () => {
 			).toBeDefined(),
 		);
 	});
+
+	// Si la lectura falla, se dice POR QUÉ y no se inventan filas: un roster
+	// vacío por un error de red se lee como «este negocio no tiene equipo».
+	test("un fallo de la API se muestra y no deja filas pintadas", async () => {
+		stubFetch({
+			staffError: {
+				status: 500,
+				body: { statusCode: 500, message: "Internal server error" },
+			},
+		});
+		renderTable();
+
+		await waitFor(() =>
+			expect(screen.getByText("Error interno del servidor")).toBeDefined(),
+		);
+		expect(screen.queryByText("María Dueña")).toBeNull();
+		expect(screen.queryByRole("table")).toBeNull();
+	});
+
+	// El roster puede llegar antes que la lista de puntos de retiro. Un «—» en
+	// esa celda diría «este acceso no tiene alcance» cuando lo que pasa es que
+	// todavía no se sabe: mientras tanto hay un esqueleto.
+	test("mientras no llegan los nombres de las sucursales, la celda es un esqueleto", async () => {
+		stubFetch({ staff: members, locationsPending: true });
+		renderTable();
+
+		await waitFor(() => expect(screen.getByText("María Dueña")).toBeDefined());
+		const managerRow = screen.getByText("Jorge Gerente").closest("tr");
+		expect(managerRow?.textContent).not.toContain("—");
+		expect(managerRow?.querySelector("[data-slot='skeleton']")).not.toBeNull();
+
+		// El dueño y el empleado no dependen de la lista: su alcance se sabe
+		// sin ella.
+		expect(screen.getByText("Todo el negocio")).toBeDefined();
+		expect(screen.getByText("Sin sucursales")).toBeDefined();
+	});
+
+	// Un id de alcance que no está en la lista de puntos de retiro no tiene
+	// nombre: se deja el hueco en vez de inventar uno.
+	test("un acceso con una sucursal que no existe deja el hueco, no un nombre", async () => {
+		const unknownLocationId = "99999999-9999-4999-8999-999999999999";
+		stubFetch({
+			staff: [
+				owner,
+				manager,
+				member({
+					id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+					label: "Luis Repartidor",
+					alias: "luis@cafe-central.role.ec",
+					role: "staff",
+					status: "active",
+					business_location_ids: [unknownLocationId],
+				}),
+			],
+			locations: [location],
+		});
+		renderTable();
+
+		// Los nombres que sí resuelven se pintan.
+		await waitFor(() =>
+			expect(screen.getByText("Sucursal del centro")).toBeDefined(),
+		);
+		const knownRow = screen.getByText("Jorge Gerente").closest("tr");
+		expect(knownRow?.textContent).toContain("Sucursal del centro");
+
+		// Y el que no resuelve queda con el hueco, en su propia fila.
+		const unknownRow = screen.getByText("Luis Repartidor").closest("tr");
+		expect(unknownRow?.textContent).toContain("—");
+		expect(unknownRow?.textContent).not.toContain("Sucursal del centro");
+	});
 });
 
 describe("corte de emergencia desde el panel", () => {
@@ -259,6 +349,36 @@ describe("corte de emergencia desde el panel", () => {
 		);
 		const post = calls.find((call) => call.method === "POST");
 		expect(post?.url).toContain(`/businesses/${businessId}/staff/revoke-all`);
+	});
+
+	test("mientras el corte corre el botón no cambia de nombre ni admite otro clic", async () => {
+		const calls = stubFetch({
+			staff: members,
+			locations: [location],
+			revokePending: true,
+		});
+		renderTable();
+
+		fireEvent.click(
+			await screen.findByRole("button", {
+				name: `Cortar todos los accesos de ${businessName}`,
+			}),
+		);
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Cortar los accesos" }),
+		);
+
+		// El nombre accesible tiene que seguir siendo EXACTO «Cortar los
+		// accesos»: con el spinner dentro, el botón se llamaba «Loading Cortar
+		// los accesos» y era otro botón para el lector de pantalla.
+		await waitFor(() => {
+			const confirm = screen.getByRole("button", {
+				name: "Cortar los accesos",
+			}) as HTMLButtonElement;
+			expect(confirm.disabled).toBe(true);
+		});
+		// Un solo POST: el corte en vuelo no se repite.
+		expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
 	});
 
 	test("el aviso dice cuántos accesos se cortaron y si el dueño quedó adentro", async () => {

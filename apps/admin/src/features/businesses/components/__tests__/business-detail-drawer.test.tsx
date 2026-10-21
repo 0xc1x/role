@@ -221,6 +221,13 @@ describe("ficha del negocio", () => {
 
 		expect(screen.getByRole("tab", { name: "Ficha" })).toBeDefined();
 		expect(screen.getByRole("tab", { name: "Equipo" })).toBeDefined();
+
+		// Se espera a una petición POSITIVA de la ficha antes de negar la del
+		// equipo: sin ese primer await, el motor de consultas puede no haber
+		// corrido todavía y la negación probaría el reloj, no el gating.
+		await waitFor(() =>
+			expect(calls.some((call) => call.url.includes("/locations"))).toBe(true),
+		);
 		expect(calls.some((call) => call.url.includes("/staff"))).toBe(false);
 
 		fireEvent.click(screen.getByRole("tab", { name: "Equipo" }));

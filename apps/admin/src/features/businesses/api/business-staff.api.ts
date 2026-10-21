@@ -9,7 +9,7 @@ import { api } from "@/lib/api/client";
  *
  * El panel SUPERVISA: lee el roster y corta el acceso de todos cuando hace
  * falta. No da de alta ni edita accesos —esas rutas son del dueño y del
- * gerente, y el panel no las tiene-.
+ * gerente, y el panel no las tiene—.
  *
  * ─── POR QUÉ NO HAY SCHEMAS DE ZOD ACÁ ───────────────────────────────────────
  *
