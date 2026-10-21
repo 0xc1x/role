@@ -53,17 +53,19 @@ export const Route = createFileRoute("/")({
 	// primer render del cliente tiene que ser el mismo que el crawler leyó.
 	// Ver la tabla de los cuatro casos en `use-config.ts`.
 	loader: async ({ context }) => {
-		const [stats, announcements] = await Promise.all([
+		const [stats, announcements, [, offer]] = await Promise.all([
 			ensurePlatformStats(context.queryClient),
 			ensureAnnouncements(context.queryClient),
-			context.queryClient
-				.ensureQueryData(appConfigQueryOptions)
-				.catch(() => undefined),
-			context.queryClient
-				.ensureQueryData(randomOfferQueryOptions)
-				.catch(() => undefined),
+			Promise.all([
+				context.queryClient
+					.ensureQueryData(appConfigQueryOptions)
+					.catch(() => undefined),
+				context.queryClient
+					.ensureQueryData(randomOfferQueryOptions)
+					.catch(() => undefined),
+			]),
 		]);
-		return { announcements, stats };
+		return { announcements, stats, offer };
 	},
 	head: () => ({
 		...pageHead(
@@ -122,7 +124,10 @@ function LandingPage() {
 			  incidente que el servicio de la API evita tapar devolviendo `[]`.
 			*/}
 			<main id="main" data-announcements-source={avisos.source}>
-				<Hero statsDelServidor={loaderData.stats} />
+				<Hero
+					statsDelServidor={loaderData.stats}
+					offerDelServidor={loaderData.offer}
+				/>
 				<Features />
 				<HowItWorks />
 				<Testimonials />

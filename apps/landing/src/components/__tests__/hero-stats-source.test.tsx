@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { OfferWithBusiness } from "@0xc1x/role-commons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@/test-utils/dom";
 
@@ -16,7 +17,10 @@ import { Hero } from "../hero";
 
 const previousFetch = globalThis.fetch;
 
-function setup(stats: { status: number; body: unknown }) {
+function setup(
+	stats: { status: number; body: unknown },
+	offerDelServidor?: OfferWithBusiness | null,
+) {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
@@ -39,7 +43,7 @@ function setup(stats: { status: number; body: unknown }) {
 
 	return render(
 		<QueryClientProvider client={queryClient}>
-			<Hero />
+			<Hero offerDelServidor={offerDelServidor} />
 		</QueryClientProvider>,
 	);
 }
@@ -93,5 +97,57 @@ describe("procedencia de las stats del hero", () => {
 			"loading",
 		);
 		expect(container.textContent).not.toContain("0+");
+	});
+
+	test("la oferta resuelta por SSR está en el primer render del cliente", () => {
+		const offer = {
+			id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+			business_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+			business_location_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+			title: "Algo Nuevo",
+			description: null,
+			image: "https://cdn.example.test/algo-nuevo.jpg",
+			category_ids: [],
+			original_price: 10,
+			discounted_price: 5,
+			discount_percentage: 50,
+			stock: 3,
+			initial_stock: 3,
+			pickup_start: "2026-01-01T12:00:00.000Z",
+			pickup_end: "2026-01-01T18:00:00.000Z",
+			is_active: true,
+			includes: null,
+			allergens: null,
+			rating: 0,
+			review_count: 0,
+			created_at: "2026-01-01T12:00:00.000Z",
+			updated_at: "2026-01-01T12:00:00.000Z",
+			categories: [],
+			business: {
+				id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+				name: "Panadería Central",
+				slug: "panaderia-central",
+				image: null,
+				rating: 4.5,
+			},
+			location: {
+				id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+				name: "Matriz",
+				address: "Calle 123",
+				latitude: -33.45,
+				longitude: -70.66,
+				zone: null,
+			},
+			distance_km: null,
+		} satisfies OfferWithBusiness;
+
+		const { container } = setup(
+			{ status: 200, body: { users: 10, businesses: 2, meals_saved: 5 } },
+			offer,
+		);
+
+		const image = container.querySelector<HTMLImageElement>("img");
+		expect(image?.getAttribute("src")).toBe(offer.image);
+		expect(container.textContent).toContain("Algo Nuevo");
 	});
 });

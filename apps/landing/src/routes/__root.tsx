@@ -28,7 +28,7 @@ export interface RouterContext {
 
 export const Route = createRootRouteWithContext<RouterContext>()({
 	head: () => {
-		const ogImage = absoluteUrl("/og.png");
+		const ogImage = absoluteUrl("/og.png?v=11");
 		const ogImageAlt = "Rolé — rescata comida deliciosa a precio increíble";
 		return {
 			meta: [
@@ -72,8 +72,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			links: [
 				{ rel: "stylesheet", href: appCss },
 
-				{ rel: "icon", type: "image/svg+xml", href: "/icon.svg?v=10" },
-				{ rel: "icon", href: "/favicon.ico?v=10", sizes: "any" },
+				{ rel: "icon", type: "image/svg+xml", href: "/icon.svg?v=11" },
+				{ rel: "icon", href: "/favicon.ico?v=11", sizes: "any" },
 				{ rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
 				{ rel: "manifest", href: "/site.webmanifest" },
 			],

@@ -22,7 +22,7 @@
  */
 const BRAND = {
   /** --color-role-primary / colors.ts `primary` (deep aubergine) */
-  primary: '#371949',
+  primary: '#27123A',
   /** --color-role-primary-foreground / colors.ts `primaryForeground` */
   onPrimary: '#FFFFFF',
   /** --color-role-secondary (soft lilac) */

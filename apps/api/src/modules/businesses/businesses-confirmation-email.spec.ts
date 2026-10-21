@@ -49,7 +49,7 @@ describe('renderBusinessConfirmationEmail', () => {
     const { html, text } = renderBusinessConfirmationEmail(input);
     // Bulletproof-button markup (table + bgcolor, no background-image).
     expect(html).toContain('Confirmar mi cuenta en Rolé');
-    expect(html).toContain('bgcolor="#371949"');
+    expect(html).toContain('bgcolor="#27123A"');
     expect(html).not.toContain('background-image');
     // Fallback anchor with meaningful text, not "click here".
     expect(html).not.toMatch(/click here|pulsa aquí/i);

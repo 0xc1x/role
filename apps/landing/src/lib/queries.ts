@@ -74,14 +74,38 @@ export const announcementsQueryOptions = queryOptions({
 	staleTime: 60_000,
 });
 
-/** Oferta activa aleatoria para la tarjeta flotante del hero. */
+/**
+ * Oferta activa aleatoria para la tarjeta flotante del hero.
+ *
+ * Un shape que no encaja FALLA, no devuelve `null`. Es la misma regla de
+ * `announcementsQueryOptions` de arriba, y aquí importa más: un `null`
+ * indistinguible de "no hay oferta" hacía que la tarjeta cayera a los valores
+ * fijos del hero y publicara un `-70%` calculado de esos números inventados —
+ * un descuento que contradice el claim del producto (`DISCOUNT_MAX_PERCENT`).
+ *
+ * MEDIDO con la respuesta real de la API (200, cuerpo correcto): el parseo
+ * falla en `id`, `business_id` y `business.id`, porque los UUID de semilla
+ * `e0000000-0000-…` llevan `0` donde RFC 4122 exige `[89ab]`. Postgres los
+ * acepta como `uuid` porque su cast es más permisivo; Zod no. Por eso el
+ * mensaje nombra los paths: sin ellos esto era un `null` sin explicación, y el
+ * síntoma —una tarjeta con datos inventados— no señalaba la causa.
+ *
+ * El HERO degrada solo: su loader envuelve esto con `.catch()`, así que un 500
+ * o un shape roto no tumba la landing. Lo que cambia es que ahora el fallo
+ * queda en la consola y en el estado de la query.
+ */
 export const randomOfferQueryOptions = queryOptions({
 	queryKey: ["offers", "random"],
 	queryFn: async () => {
 		const raw = await apiGet<unknown>("/offers/random");
 		if (raw === null) return null;
 		const parsed = OfferWithBusinessSchema.safeParse(raw);
-		if (!parsed.success) return null;
+		if (!parsed.success) {
+			const rutas = parsed.error.issues
+				.map((i) => i.path.join("."))
+				.join(", ");
+			throw new Error(`oferta inválida: ${rutas}`);
+		}
 		const data: OfferWithBusiness = parsed.data;
 		return data;
 	},

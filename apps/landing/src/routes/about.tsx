@@ -6,8 +6,10 @@ import { HeartIcon, LeafIcon, SparkIcon, UsersIcon } from "@/components/icons";
 import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
 import { pageHead } from "@/lib/seo";
+import { formatStat } from "@/lib/stats-format";
 import { useStoreLink } from "@/lib/store-links";
 import { ensurePlatformStats, usePlatformStats } from "@/lib/use-config";
+import { useCountUp } from "@/lib/use-count-up";
 import { useRevealOnScroll } from "@/lib/use-reveal-on-scroll";
 
 export const Route = createFileRoute("/about")({
@@ -22,13 +24,6 @@ export const Route = createFileRoute("/about")({
 			"Nuestra misión: que la comida excedente llegue a gente que la valora, no al contenedor.",
 		),
 });
-
-const numberFormat = new Intl.NumberFormat("es-EC");
-
-function formatStat(value: number | undefined): string {
-	if (value === undefined) return "—";
-	return `${numberFormat.format(value)}+`;
-}
 
 const VALUES = [
 	{
@@ -61,11 +56,14 @@ function AboutPage() {
 	// resolved. Ver la tabla de los cuatro casos en `use-config.ts`.
 	const stats = usePlatformStats(Route.useLoaderData());
 	const storeLink = useStoreLink();
+	const animatedUsers = useCountUp(stats.data?.users);
+	const animatedBusinesses = useCountUp(stats.data?.businesses);
+	const animatedMeals = useCountUp(stats.data?.meals_saved);
 	const IMPACT = [
-		{ value: formatStat(stats.data?.users), label: "usuarios activos" },
-		{ value: formatStat(stats.data?.businesses), label: "comercios aliados" },
+		{ value: formatStat(animatedUsers), label: "usuarios activos" },
+		{ value: formatStat(animatedBusinesses), label: "comercios aliados" },
 		{
-			value: formatStat(stats.data?.meals_saved),
+			value: formatStat(animatedMeals),
 			label: "comidas salvadas",
 		},
 	];

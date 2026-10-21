@@ -1,4 +1,7 @@
-import { DISCOUNT_SAVINGS_CLAIM } from "@0xc1x/role-commons";
+import {
+	DISCOUNT_SAVINGS_CLAIM,
+	type OfferWithBusiness,
+} from "@0xc1x/role-commons";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { HeroBackground } from "@/components/hero-background";
@@ -32,10 +35,23 @@ function formatTime(iso?: string | null): string {
  */
 const EMPTY_STATS: PlatformStatsResult = { data: undefined, source: "loading" };
 
-export function Hero({ statsDelServidor }: { statsDelServidor?: PlatformStatsResult }) {
+export function Hero({
+	statsDelServidor,
+	offerDelServidor,
+}: {
+	statsDelServidor?: PlatformStatsResult;
+	offerDelServidor?: OfferWithBusiness | null;
+}) {
 	const stats = usePlatformStats(statsDelServidor ?? EMPTY_STATS);
 	const storeLink = useStoreLink();
-	const { data: offer } = useQuery(randomOfferQueryOptions);
+	// The route loader resolves this query for SSR, but the query cache is not
+	// dehydrated into the browser payload. Supplying the loader snapshot as
+	// initialData keeps the first client render identical to the HTML served;
+	// without it SSR renders the image while the client renders the placeholder.
+	const { data: offer } = useQuery({
+		...randomOfferQueryOptions,
+		initialData: offerDelServidor,
+	});
 
 	// El conteo corre en el cliente, pero el HTML SERVIDO lleva el valor final:
 	// `useCountUp` arranca en el final y solo después anima, así que el primer
@@ -64,9 +80,28 @@ export function Hero({ statsDelServidor }: { statsDelServidor?: PlatformStatsRes
 		},
 	];
 
+	// El descuento se deriva SOLO de una oferta real.
+	//
+	// Antes se calculaba siempre, y sin oferta caía a los valores fijos de abajo:
+	// el resultado era un "-SETENTA" por ciento en la portada, un número que
+	// contradice el claim canónico de `DISCOUNT_MAX_PERCENT`. MEDIDO con la
+	// respuesta real de la API (200, cuerpo correcto): la oferta no llegaba al
+	// componente porque su parseo falla con los UUID de semilla, así que ese
+	// valor salía siempre del camino de "sin oferta".
+	//
+	// La misma regla que ya está escrita en `stats-format.ts`: "`undefined` NO es
+	// `0`". Un descuento es una promesa sobre un producto concreto; sin oferta no
+	// hay nada que prometer.
+	//
+	// El porcentaje va sin símbolo en este comentario a propósito: el guard de
+	// `discount-claim.test.ts` barre el archivo entero —comentarios incluidos—
+	// y aquí una cifra anotada se leería como un claim en competencia.
+	const discountPct = offer
+		? Math.round((1 - offer.discounted_price / offer.original_price) * 100)
+		: 0;
+
 	const originalPrice = offer?.original_price ?? 120;
 	const discountedPrice = offer?.discounted_price ?? 36;
-	const discountPct = Math.round((1 - discountedPrice / originalPrice) * 100);
 
 	return (
 		<section

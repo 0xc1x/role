@@ -13,11 +13,13 @@ import { Navbar } from "@/components/navbar";
 import { Eyebrow } from "@/components/section";
 import { StepsGrid } from "@/components/steps-grid";
 import { pageHead } from "@/lib/seo";
+import { formatStat } from "@/lib/stats-format";
 import {
 	ensurePlatformStats,
 	useConfig,
 	usePlatformStats,
 } from "@/lib/use-config";
+import { useCountUp } from "@/lib/use-count-up";
 import { useRevealOnScroll } from "@/lib/use-reveal-on-scroll";
 
 export const Route = createFileRoute("/for-business")({
@@ -56,8 +58,6 @@ const BENEFITS = [
 	},
 ];
 
-const numberFormat = new Intl.NumberFormat("es-EC");
-
 const PROCESS = [
 	{
 		n: "01",
@@ -84,16 +84,24 @@ function ForBusinessPage() {
 	// resolvió. Ver la tabla de los cuatro casos en `use-config.ts`.
 	const statsData = usePlatformStats(Route.useLoaderData());
 	const salesEmail = useConfig("contact.negocios_email", "negocios@role.app");
+	const animatedExtraRevenue = useCountUp(12);
+	const animatedBusinesses = useCountUp(statsData.data?.businesses);
+	const animatedTimeToStart = useCountUp(24);
 	const stats = [
-		{ value: "12%", label: "ingresos extra en promedio" },
 		{
 			value:
-				statsData.data === undefined
-					? "—"
-					: `${numberFormat.format(statsData.data.businesses)}+`,
+				animatedExtraRevenue === undefined ? "—" : `${animatedExtraRevenue}%`,
+			label: "ingresos extra en promedio",
+		},
+		{
+			value: formatStat(animatedBusinesses),
 			label: "comercios ya con nosotros",
 		},
-		{ value: "<24h", label: "para empezar a vender" },
+		{
+			value:
+				animatedTimeToStart === undefined ? "—" : `<${animatedTimeToStart}h`,
+			label: "para empezar a vender",
+		},
 	];
 	const businessesLabel =
 		stats[1].value === "—" ? undefined : stats[1].value.replace(/\+$/, "");
