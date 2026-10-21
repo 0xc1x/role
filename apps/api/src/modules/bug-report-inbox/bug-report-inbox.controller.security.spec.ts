@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { createServer, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -36,12 +38,104 @@ import { BugReportInboxService } from './bug-report-inbox.service';
  * publique el `reporter_id`.
  */
 
-const SUPABASE_URL = 'http://127.0.0.1:9';
 const JWT_SECRET = 'bug-report-inbox-security-secret';
+
+/** Lo que el doble vio: el método y el path de cada petición. */
+type StorageCall = { method: string; pathname: string };
+
+/**
+ * EL DOBLE DE STORAGE, y por qué este archivo lo necesita.
+ *
+ * `BugReportInboxService.withSignedImages` firma las capturas con un cliente
+ * REAL de Supabase (`createClient`), y ese cliente habla HTTP. Con
+ * `SUPABASE_URL` apuntando a un puerto de descarte (`127.0.0.1:9`) la firma
+ * se quedaba COLGADA: la conexión a ese puerto no rechaza ni responde, así
+ * que la petición de firma nunca cerraba, el detalle HTTP nunca respondía y
+ * el test moría por timeout —no por aserción—. Después el `afterAll` también
+ * moría, esperando las peticiones colgadas.
+ *
+ * El puerto de descarte era un PLACEHOLDER, no un doble. Este archivo levanta
+ * un servidor HTTP de verdad en un puerto efímero y lo usa como
+ * `SUPABASE_URL`: el cliente real de `supabase-js` le pega de verdad, y lo
+ * que contesta es una respuesta de Storage de verdad.
+ *
+ * QUÉ RESPONDE, y por qué: `404 Object not found`, lo que Storage contesta
+ * cuando el objeto no está en el bucket. La captura de este archivo no está
+ * en el bucket, así que la firma falla y el service OMITE la captura. Ese es
+ * justamente el estado que el test de "el detalle nunca lleva la ruta cruda"
+ * necesita para tener dientes: si el service llenara el hueco con la ruta
+ * desnuda, el cuerpo llevaría `captura-1.png` y el assert lo cazaría. El caso
+ * de la firma exitosa vive en `bug-report-inbox.images.spec.ts`.
+ */
+async function startStorageStub() {
+  const calls: StorageCall[] = [];
+
+  const send = (res: ServerResponse, status: number, body: unknown) => {
+    const payload = JSON.stringify(body);
+    res.writeHead(status, {
+      'content-type': 'application/json; charset=utf-8',
+      'content-length': Buffer.byteLength(payload),
+    });
+    res.end(payload);
+  };
+
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+      calls.push({ method: req.method ?? 'GET', pathname: url.pathname });
+
+      // La firma de una captura: `POST /storage/v1/object/sign/<bucket>/<path>`.
+      if (
+        req.method === 'POST' &&
+        url.pathname.startsWith('/storage/v1/object/sign/')
+      ) {
+        return send(res, 404, {
+          error: 'Object not found',
+          statusCode: '404',
+        });
+      }
+
+      // Cualquier otra cosa es un 404 que NOMBRA lo que no tiene doble: una
+      // ruta que respondiera en silencio dejaría la suite verde sin ejercitar
+      // nada, y el primer cliente sorpresa —un JWKS, un probe de sesión—
+      // caería acá en vez de en un falso verde.
+      return send(res, 404, {
+        error: `no storage stub for ${req.method} ${url.pathname}`,
+        statusCode: '404',
+      });
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+
+  return {
+    url: `http://127.0.0.1:${port}`,
+    calls,
+    stop: () =>
+      new Promise<void>((resolve, reject) => {
+        // `closeAllConnections` primero: el pool de `fetch` deja la conexión
+        // keep-alive abierta, y `close()` solo cortaría cuando el servidor la
+        // cerrara por su cuenta —una espera de segundos en el `afterAll` que
+        // no es un fallo pero parece uno.
+        server.closeAllConnections();
+        server.close((err) => (err ? reject(err) : resolve()));
+      }),
+  };
+}
+
+/**
+ * La URL de Supabase del archivo: la del DOBLE de Storage. Es un `let`
+ * porque el doble escucha en un puerto efímero que se elige al arrancar.
+ */
+let SUPABASE_URL: string;
 
 let ctx: TestDbContext;
 let app: INestApplication;
 let store: AppStoreRepository;
+let storage: Awaited<ReturnType<typeof startStorageStub>>;
 const tokens: Record<'user' | 'business' | 'admin', string> = {
   user: '',
   business: '',
@@ -80,11 +174,17 @@ async function seedRole(role: 'user' | 'business' | 'admin'): Promise<string> {
 beforeAll(async () => {
   ctx = await createTestDb();
 
+  // El doble de Storage primero: `SUPABASE_URL` es su origen, y es la URL que
+  // el cliente real de `supabase-js` va a usar para firmar las capturas.
+  storage = await startStorageStub();
+  SUPABASE_URL = storage.url;
+
   // `SUPABASE_ALLOWED_BUCKETS` con la allowlist de ESCRITURA real, sin
   // `bug_report_images`: el bucket de reportes no depende de esta lista para
-  // firmar, así que este archivo no necesita Supabase para probar la frontera
-  // HTTP. Que el detalle nunca deje pasar la ruta cruda también se comprueba
-  // acá, abajo.
+  // firmar (eso lo fija `bug-report-inbox.images.spec.ts`), así que acá no
+  // aporta nada —y por eso este archivo no necesita Supabase de verdad, solo
+  // el doble de arriba. Que el detalle nunca deje pasar la ruta cruda también
+  // se comprueba acá, abajo.
   const config = {
     get: (key: string) =>
       ({
@@ -126,6 +226,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app?.close();
+  await storage?.stop();
   await ctx?.stop();
 });
 
@@ -223,12 +324,17 @@ describe('GET /bug-report-inbox/:id (frontera de seguridad)', () => {
     // empiece a filtrar `...row.value`: el parseo se comería la clave y el test
     // quedaría verde mintiendo. Este repo ya pagó esa clase de error una vez.
     //
-    // En este config el bucket NO está en la allowlist, así que la firma se
-    // omite y `image_urls` llega vacío: ese es el estado donde la ruta cruda
-    // tendría que aparecer si alguien la publicara como fallback. Con la firma
-    // funcionando la URL sí contiene el path (así la construye Storage), y eso
-    // se prueba en `bug-report-inbox.images.spec.ts`.
+    // La firma falla porque el DOBLE de Storage responde `404 Object not
+    // found` —la captura de este reporte no está en el bucket— así que la
+    // captura se OMITE y `image_urls` llega vacío: ese es el estado donde la
+    // ruta cruda tendría que aparecer si alguien la publicara como fallback.
+    // Con la firma funcionando la URL sí contiene el path (así la construye
+    // Storage), y eso se prueba en `bug-report-inbox.images.spec.ts`.
     const reporte = await seedReporte();
+    // El doble acumula las llamadas de todo el archivo, así que se marca
+    // dónde empieza esta: lo que se aserta abajo es que ESTA petición de
+    // detalle fue la que llegó a pedir la firma.
+    const llamadasAntes = storage.calls.length;
 
     const res = await comoAdmin(
       api().get(`/bug-report-inbox/${reporte.id}`),
@@ -257,9 +363,24 @@ describe('GET /bug-report-inbox/:id (frontera de seguridad)', () => {
       expect(url.startsWith('https://')).toBe(true);
       expect(url).toContain('token=');
     }
-    // En este config no hay bucket en la allowlist, así que no hay ninguna: el
-    // caso con firmas reales lo cubre `bug-report-inbox.images.spec.ts`.
+    // El doble no firmó la captura, así que no hay ninguna: el caso con
+    // firmas reales lo cubre `bug-report-inbox.images.spec.ts`.
     expect(urls).toEqual([]);
+
+    // Y la omisión vino de una FIRMA RECHAZADA, no de que el service ni
+    // preguntara: la petición de firma llegó al doble y él la rechazó. Sin
+    // esto, un service que dejara de firmar en silencio dejaría este test
+    // verde con la misma `image_urls` vacía, y el test que existe para
+    // cazar la ruta cruda se volvería decorativo.
+    expect(
+      storage.calls
+        .slice(llamadasAntes)
+        .some(
+          (c) =>
+            c.method === 'POST' &&
+            c.pathname.startsWith('/storage/v1/object/sign/'),
+        ),
+    ).toBe(true);
 
     // Y el parseo queda solo para verificar la FORMA, que es lo que sí le
     // corresponde: que la respuesta sea un detalle válido del contrato.
