@@ -1657,6 +1657,10 @@ export const strings = {
 			// corta a quien llama y sólo deja fuera al dueño).
 			revokeAllTitle: "Cortar todos los accesos",
 			revokeAllHeading: "Corte de emergencia",
+			// La acción de confirmar NO repite el título de la ventana: el
+			// lector de pantalla anuncia los dos y «Cortar todos los accesos»
+			// dos veces seguidas suena a un botón que no dice qué hace.
+			revokeAllConfirmAction: "Cortar los accesos",
 			revokeAllAccessibilityLabel:
 				"Cortar todos los accesos del equipo de este negocio",
 			revokeAllBody:

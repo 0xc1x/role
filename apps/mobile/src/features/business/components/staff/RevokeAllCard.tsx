@@ -143,7 +143,9 @@ export function RevokeAllCard({
 			<AppText variant="h4" weight="bold">
 				{strings.business.staff.revokeAllHeading}
 			</AppText>
-			<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+			{/* El color de primer plano, NO el apagado: el fondo de la tarjeta
+			    es la superficie destructiva y el apagado no llega al 4.5:1. */}
+			<AppText variant="bodySmall" style={{ color: colors.foreground }}>
 				{strings.business.staff.revokeAllBody}
 			</AppText>
 
@@ -166,13 +168,18 @@ export function RevokeAllCard({
 			) : null}
 
 			{result?.owner_skipped ? (
-				<AppText variant="bodySmall" style={{ color: colors.mutedForeground }}>
+				<AppText variant="bodySmall" style={{ color: colors.foreground }}>
 					{strings.business.staff.revokeAllResultOwnerSkipped}
 				</AppText>
 			) : null}
 
+			{/* El error se pinta con el rojo de la casa: el `destructive` oscuro
+			    no llega a leerse sobre la superficie destructiva. */}
 			{error ? (
-				<AppText variant="bodySmall" style={{ color: colors.destructive }}>
+				<AppText
+					variant="bodySmall"
+					style={{ color: colors.destructiveVibrant }}
+				>
 					{error}
 				</AppText>
 			) : null}
@@ -209,7 +216,7 @@ export function RevokeAllCard({
 								// lee —2:1—.
 								style={{ color: colors.destructiveForeground }}
 							>
-								{strings.business.staff.revokeAllTitle}
+								{strings.business.staff.revokeAllConfirmAction}
 							</Text>
 						</AlertDialogAction>
 					</AlertDialogFooter>

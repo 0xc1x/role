@@ -10,7 +10,8 @@ import type {
 	BusinessMemberDto,
 	BusinessMemberRole,
 } from "@0xc1x/role-commons";
-import { Errors } from "@/src/core/error/app-error";
+import { fromApiResponse } from "@/src/core/api/errors";
+import { type AppError, Errors } from "@/src/core/error/app-error";
 import { strings } from "@/src/core/i18n/strings";
 import { light } from "@/src/core/theme/colors";
 import { mockNativeUi } from "@/src/test-utils/native-mocks";
@@ -28,10 +29,14 @@ import { mockNativeUi } from "@/src/test-utils/native-mocks";
  *     dice que el dueño quedó fuera SÓLO cuando la respuesta lo dice.
  *  4. Un negocio sin accesos activos no es «se cortaron 0»: es «no había
  *     accesos activos que cortar».
- *  5. Un 403 se pinta con la prosa que escribió el API y deja la tarjeta
- *     usable: se puede volver a intentarlo.
+ *  5. Un 403 se pinta con la COPIA CURADA de la taxonomía —la que el cliente
+ *     entrega en `error.message`— y deja la tarjeta usable: se puede volver a
+ *     intentarlo. La prosa cruda del servidor NO se muestra: vive en
+ *     `context.serverMessage`, para el diagnóstico (política de T1).
  *  6. Un gerente ve, además, que su propio acceso se corta: el servidor corta
  *     a quien llama y sólo deja fuera al dueño.
+ *  7. Los textos de la tarjeta se pintan con los colores que CONTRASTAN con
+ *     su fondo, y la acción de confirmar no repite el título de la ventana.
  *
  * ─── POR QUÉ SE AFIRMA LA LLAMADA Y NO «QUÉ HOOK CORRIÓ» ──────────────────────
  *
@@ -132,9 +137,24 @@ mock.module("@/components/ui/button", () => ({
 	},
 }));
 
+/**
+ * Los textos pintados, con su prosa y su `style`.
+ *
+ * El `style` es lo que se mira para el CONTRASTE: el color del texto va en la
+ * prop, no en el HTML, y el color es el dato (un texto apagado sobre la
+ * superficie destructiva no se lee).
+ */
+interface TextProbe {
+	text: string;
+	style?: unknown;
+}
+let texts: TextProbe[] = [];
+
 mock.module("@/src/core/ui", () => ({
-	AppText: ({ children }: { children?: ReactNode }) =>
-		createElement(nativeWeb.Text, null, children),
+	AppText: (props: { children?: ReactNode; style?: unknown }) => {
+		texts.push({ text: textOf(props.children), style: props.style });
+		return createElement(nativeWeb.Text, null, props.children);
+	},
 }));
 
 mock.module("@/components/ui/text", () => ({
@@ -215,6 +235,13 @@ mock.module("@/components/ui/alert-dialog", () => ({
 // `setState` posterior no vuelve a pintar nada. El reemplazo guarda el valor
 // en una casilla que sobrevive entre renders, así que el ciclo escribir →
 // volver a renderizar → leer es el mismo que en la app.
+//
+// Y las casillas se numeran por el ORDEN DE LAS LLAMADAS que pasan por este
+// doble: el cursor cuenta una por llamada. Hoy sólo la tarjeta las usa —React
+// Query se cargó ANTES del doble y sigue con el `useState` de verdad—, pero
+// una subida de versión que moviera una llamada al `useState` del doble
+// desplazaría los índices. No cambia el comportamiento: sólo hay que revisar
+// este arnés si eso ocurre.
 const slots: unknown[] = [];
 let hookCursor = 0;
 
@@ -249,6 +276,7 @@ let client: QueryClient;
 function render(role: BusinessMemberRole = "owner"): void {
 	hookCursor = 0;
 	buttons = [];
+	texts = [];
 	dialog = {};
 	html = renderToStaticMarkup(
 		createElement(
@@ -262,6 +290,11 @@ function render(role: BusinessMemberRole = "owner"): void {
 /** El botón con esa etiqueta. */
 function button(label: string): ButtonProbe | undefined {
 	return buttons.find((candidate) => candidate.label === label);
+}
+
+/** El `style` del texto con esa prosa. */
+function textStyle(copy: string): unknown {
+	return texts.find((candidate) => candidate.text === copy)?.style;
 }
 
 /** El texto que un nodo pinta. */
@@ -395,6 +428,18 @@ test("cancelar la confirmación no llama al API", () => {
 	expect(dialog.open).toBe(false);
 });
 
+test("la acción de confirmar no repite el título de la ventana", () => {
+	openDialog("owner");
+
+	// El lector de pantalla anuncia el título y la etiqueta del botón: si
+	// fueran la misma frase, se oiría dos veces seguidas.
+	expect(dialog.title).toBe(strings.business.staff.revokeAllTitle);
+	expect(dialog.confirm?.label).toBe(
+		strings.business.staff.revokeAllConfirmAction,
+	);
+	expect(dialog.confirm?.label).not.toBe(dialog.title);
+});
+
 // ─── La llamada ──────────────────────────────────────────────────────────────
 
 test("antes de confirmar no sale nada por la red; después sale POST .../revoke-all", async () => {
@@ -516,20 +561,83 @@ test("un negocio sin accesos activos no es «se cortaron 0»", async () => {
 	expect(html).not.toContain("0 accesos");
 });
 
-// ─── El fallo ────────────────────────────────────────────────────────────────
+// ─── El contraste ────────────────────────────────────────────────────────────
 
-test("un 403 se pinta con la prosa que escribió el API y deja la tarjeta usable", async () => {
-	// El doble entrega el `AppError` con su prosa: lo que se afirma es que la
-	// tarjeta la pinta TAL CUAL y no la tapa con un texto genérico.
-	apiPost.mockRejectedValue(Errors.forbidden("No perteneces a este negocio."));
+test("los textos de la tarjeta se pintan con los colores que contrastan", async () => {
+	apiPost.mockResolvedValue({
+		disabled: [member({ status: "disabled" })],
+		owner_skipped: true,
+	});
 
 	openDialog("owner");
 	dialog.confirm?.onPress?.();
 	await flush();
 	render("owner");
 
-	// El motivo lo escribió el API: la app no lo tapa con un «algo salió mal».
-	expect(html).toContain("No perteneces a este negocio.");
+	// El fondo de la tarjeta es la superficie destructiva: el color apagado no
+	// llega al 4.5:1 que pide un `bodySmall`.
+	expect(textStyle(strings.business.staff.revokeAllBody)).toEqual({
+		color: light.foreground,
+	});
+	expect(textStyle(strings.business.staff.revokeAllResultOwnerSkipped)).toEqual(
+		{
+			color: light.foreground,
+		},
+	);
+});
+
+// ─── El fallo ────────────────────────────────────────────────────────────────
+
+/**
+ * La prosa que el API escribe en su sobre cuando el corte se rechaza.
+ *
+ * El API habla en español para esta persona («Un empleado no administra los
+ * accesos del negocio»), pero el cliente NO la muestra: la política de T1
+ * (`src/core/api/errors.ts`) reserva la prosa del servidor para las
+ * categorías cuya copia ES la del producto, y un 403 no lo es —el guard de
+ * auth responde en inglés y `orders`/`reviews` escriben texto técnico—.
+ */
+const SERVER_PROSE = "Un empleado no administra los accesos del negocio.";
+
+/**
+ * El 403 TAL COMO LLEGA EN PRODUCCIÓN.
+ *
+ * Se construye con `fromApiResponse` —el mismo camino que el cliente— y no
+ * con un `Errors.forbidden(...)` a mano: un error de ForbiddenException
+ * inventado es construible, pero INALCANZABLE, y un test que afirma sobre él
+ * afirma sobre una ficción.
+ */
+async function forbiddenFromApi(): Promise<AppError> {
+	const rejection = await fromApiResponse(
+		new Response(
+			JSON.stringify({
+				statusCode: 403,
+				message: SERVER_PROSE,
+				error: "Forbidden",
+			}),
+			{ status: 403, headers: { "content-type": "application/json" } },
+		),
+		`/businesses/${BUSINESS_ID}/staff/revoke-all`,
+	).catch((cause: unknown) => cause);
+	return rejection as AppError;
+}
+
+test("un 403 se pinta con la copia curada de la taxonomía y deja la tarjeta usable", async () => {
+	const error = await forbiddenFromApi();
+	apiPost.mockRejectedValue(error);
+
+	openDialog("owner");
+	dialog.confirm?.onPress?.();
+	await flush();
+	render("owner");
+
+	// Lo que ve la persona es la COPIA CURADA, tal cual: el mensaje del error,
+	// sin taparlo con un texto genérico.
+	expect(html).toContain(Errors.forbidden().message);
+	// Y la prosa cruda del servidor NO sale: es diagnóstico, no copia.
+	expect(html).not.toContain(SERVER_PROSE);
+	// Pero no se pierde: vive en el contexto, para el log.
+	expect(error.context?.serverMessage).toBe(SERVER_PROSE);
 	// Y la tarjeta sigue en pie: se puede volver a intentarlo.
 	expect(button(strings.business.staff.revokeAllTitle)).toBeDefined();
 	expect(button(strings.business.staff.revokeAllTitle)?.disabled).toBe(false);
@@ -544,6 +652,11 @@ test("un fallo sin prosa propia se pinta con la copia de la casa", async () => {
 	render("owner");
 
 	expect(html).toContain(strings.business.genericError);
+	// Y con el rojo de la casa: el `destructive` oscuro no se lee sobre la
+	// superficie destructiva.
+	expect(textStyle(strings.business.genericError)).toEqual({
+		color: light.destructiveVibrant,
+	});
 });
 
 // ─── El corte en vuelo ───────────────────────────────────────────────────────
