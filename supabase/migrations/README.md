@@ -2837,3 +2837,25 @@ DEPLOYED function has been reading a column that does not exist since then, and
 the REPOSITORY source had been reading a table that does not exist since this
 migration. **Redeploying it is an operational step, outside the migrations
 ledger**: `supabase functions deploy handle-order-event`.
+
+## Applied: `20261021163528_subscription_plan_catalog`
+
+Applied via `apply_migration` on 2026-10-21. The file's `md5sum` is
+`e1fe1fe3cdd237d42c2cf27171509699` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**What it creates, and nothing else:** the type `public.plan_audience`
+(`'business','consumer'`), the table `public.subscription_plans` (the plan: its
+topes, its audiencia, `is_active`), the table `public.subscription_plan_features`
+(what each plan includes: one row per plan and feature), the trigger
+`set_subscription_plans_updated_at` over `public.handle_updated_at()`, RLS
+habilitada en las dos tablas con **cero** policies, el
+`revoke truncate, trigger, references` de las tablas de staff, y el seed del §4.5:
+`free` 1/2, `pro` 5/20, `pro_plus` `null`/`null` —`null` es SIN TOPE, no cero—, con
+`staff_access`, `+payments` y `+visibility_plus`.
+
+**It does not touch** `business_members`, `business_plans_state`,
+`business_plan_of`, `business_has_feature` ni los triggers de topes: la segunda
+copia de los números sigue en el motor hasta que la migración de la Task 4 la
+retire. El catálogo y el motor todavía no están atados; el guard que los ata es el
+de `apps/api/src/database/security/plan-limits.db.spec.ts`.
