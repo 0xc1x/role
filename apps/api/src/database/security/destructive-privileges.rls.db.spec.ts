@@ -110,9 +110,10 @@ function plainRows<T>(result: unknown): T[] {
  * The number itself is never written here: the two `expect(tables).toBe(...)`
  * assertions below pin it, and that pin moved from 39 to 41 when
  * `20261004022647_announcements.sql` added `public.announcements` and
- * `public.announcement_acknowledgements`, from 41 to 43 when
+ * `public.announcement_acknowledgements`, from 41 to 44 when
  * `20261014002328_business_members_and_plans.sql` added the three staff tables,
- * and from 43 to 45 when `20261021160000_subscription_plan_catalog.sql` added the
+ * back to 43 when `20261021005034_drop_business_ownership.sql` dropped one, and
+ * from 43 to 45 when `20261021160000_subscription_plan_catalog.sql` added the
  * two catalog tables.
  * A constant in this comment would have
  * been a lie the first time a table was added, which is the reason the count is
@@ -274,9 +275,9 @@ describe('no client role holds a privilege RLS cannot govern', () => {
    * the RLS table count must be exactly the number production holds, which the
    * `expect(tables).toBe(...)` below pins rather than this comment: the count
    * went from 39 to 41 with `20261004022647_announcements.sql`, from 41 to 44
-   * with `20261014002328_business_members_and_plans.sql`, and the two catalog
-   * tables of `20261021160000_subscription_plan_catalog.sql` moved the harness
-   * from 43 to 45. A constant
+   * with `20261014002328_business_members_and_plans.sql`, back to 43 with
+   * `20261021005034_drop_business_ownership.sql`, and from 43 to 45 with the two
+   * catalog tables of `20261021160000_subscription_plan_catalog.sql`. A constant
    * written here would be wrong again by the next table. The count is what makes
    * the first half mean something: "no residue" is trivially true in a database
    * where almost nothing has RLS, and that pin is what rules that out.

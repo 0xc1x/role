@@ -94,6 +94,28 @@ create table public.subscription_plan_features (
   primary key (plan_code, feature)
 );
 
+-- ─── `updated_at` LO MANTIENE UN TRIGGER ──────────────────────────────────────
+--
+-- La casa tiene dos costumbres y el catálogo usa la de las tablas del núcleo:
+-- catorce tablas (`profiles`, `businesses`, `offers`, `orders`…) llevan
+-- `set_<tabla>_updated_at` sobre `public.handle_updated_at()`, que pone `now()`
+-- en la columna; las de acceso (`business_members` y compañía) NO lo llevan y
+-- escriben la columna a mano en el repositorio.
+--
+-- El catálogo usa la primera porque su fila la edita la PLATAFORMA —retirar un
+-- plan de la oferta es `is_active = false`— y una columna que dice cuándo se
+-- retiró el plan no puede depender de que quien escribe se acuerde de
+-- escribirla. `is_active` es justo la columna que este catálogo existe para
+-- cambiar, así que es la que tiene que quedar con la fecha de verdad.
+--
+-- La función es la de la casa —`public.handle_updated_at()`, con `search_path`
+-- vacío desde `20260507201134`—, verificada en la base viva antes de escribir
+-- esto.
+
+create trigger set_subscription_plans_updated_at
+  before update on public.subscription_plans
+  for each row execute function public.handle_updated_at();
+
 alter table public.subscription_plans enable row level security;
 alter table public.subscription_plan_features enable row level security;
 
