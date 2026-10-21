@@ -359,6 +359,17 @@ function latestDefinitionOf(name: string): FunctionDefinition {
   return last;
 }
 
+/** The definition the routing migration saw before it rewrote the catalog. */
+function definitionAtOrBefore(name: string, index: number): FunctionDefinition {
+  const definition = DEFINITIONS.filter(
+    (d) => d.name === name && d.index <= index,
+  ).pop();
+  if (!definition) {
+    throw new Error(`No definition of ${name} at migration index ${index}`);
+  }
+  return definition;
+}
+
 /** Every `create policy` in the ledger, with the policy text only. */
 function policyBodies(): { file: string; policy: string }[] {
   const policies: { file: string; policy: string }[] = [];
@@ -461,12 +472,11 @@ describe('the four client-facing catalog RPCs', () => {
     expect(sql).toMatch(/^\s*commit;/im);
   });
 
-  test('each of the four is SECURITY INVOKER and still carries the inline subquery in the ledger', () => {
-    // This asserts the pre-fix state on purpose. The last literal definition of
-    // these four is the text 20260929010149 rewrites, so it MUST still contain
-    // the subquery: a ledger where it does not would mean the body was
-    // re-emitted somewhere and the routing migration's search pattern no
-    // longer matches anything.
+  test('each routed RPC has the expected replay definition', () => {
+    // Three RPCs retain the pre-routing body because 20260929010149 rewrites
+    // those definitions at replay time. `active_offers_near` was redefined
+    // later with the helper already in place, so its final source body must be
+    // safe without relying on the earlier rewrite.
     //
     // The file each one is last defined in is pinned too, because "the last
     // definition" is a fact that changes. A new migration redefining
@@ -478,7 +488,8 @@ describe('the four client-facing catalog RPCs', () => {
         '20260928044518_active_businesses_near_require_approved_business.sql',
       active_offer_category_counts:
         '20260928041322_explore_aggregates_require_approved_business.sql',
-      active_offers_near: '20260928041036_explore_search_escape_wildcards.sql',
+      active_offers_near:
+        '20261006001707_active_offers_near_business_filter.sql',
       popular_zones:
         '20260928041322_explore_aggregates_require_approved_business.sql',
     };
@@ -487,19 +498,30 @@ describe('the four client-facing catalog RPCs', () => {
       const definition = latestDefinitionOf(name);
       expect(definition.file, `${name} moved`).toBe(expected[name]);
       expect(definition.definer, `${name} must be invoker-owned`).toBe(false);
-      expect(readsGatedTable(definition.body)).toBe(true);
+      if (name === 'active_offers_near') {
+        // A later migration recreated this overload with the helper already
+        // in place. It must remain safe after the routing migration runs.
+        expect(definition.body).toContain('public.business_is_approved(b.id)');
+        expect(readsGatedTable(definition.body)).toBe(false);
+      } else {
+        expect(readsGatedTable(definition.body)).toBe(true);
+      }
     }
   });
 
   test('the routing migration swaps that exact predicate for the helper in all four', () => {
-    // The link the fix depends on: the string the migration searches for IS the
-    // string in the body, down to the indentation that pg_get_functiondef emits.
+    // The link the fix depends on: at replay time, the string the migration
+    // searches for IS the string in the definition it read, down to the
+    // indentation that pg_get_functiondef emits.
     // active_businesses_near gates on the `bv` alias and the other three on
     // `b`; a pattern that dropped the alias would not match its own body.
     expect(REWRITE_PAIRS.length).toBe(ROUTED_FUNCTIONS.length);
 
     for (const pair of REWRITE_PAIRS) {
-      const body = latestDefinitionOf(pair.fn).body;
+      const body = definitionAtOrBefore(
+        pair.fn,
+        migration(ROUTING_MIGRATION).index,
+      ).body;
       const alias = /m\.business_id = (\w+)\.id/.exec(pair.from)?.[1];
       expect(
         alias,
@@ -765,13 +787,11 @@ describe('no client role holds a privilege on the two companion tables', () => {
  * or by the admin surface and run as the owner, and four were SECURITY INVOKER
  * and belonged to the public catalog.
  *
- * The scan covers every migration, forever, and it exempts exactly the four
- * functions the routing migration rewrites — derived from that migration, and
- * only while nothing has redefined them since. That derivation is the part that
- * matters: a hardcoded exemption list is a list that eventually forgives
- * something, and the replay-position check means re-adding the inline predicate
- * to one of the four in a later migration is a violation again, not an
- * inherited pass.
+ * The scan replays the ledger positions: historical superseded bodies are not
+ * reachable, the routing migration exempts the three remaining pre-routing
+ * bodies, and later redefinitions are checked as live definitions. That
+ * replay-position check means re-adding the inline predicate later is a
+ * regression, not an exemption.
  */
 describe('an invoker-owned body never inlines a subquery against a gated table', () => {
   test('the ledger names a gated table in six function bodies, and four of them are invoker-owned', () => {
@@ -813,9 +833,17 @@ describe('an invoker-owned body never inlines a subquery against a gated table',
   test('every gated-table reference reachable by a client role goes through the helper', () => {
     const routingIndex = migration(ROUTING_MIGRATION).index;
     const violations: string[] = [];
-    const exempted: string[] = [];
+    const exempted = new Set<string>();
 
     for (const definition of DEFINITIONS) {
+      const lastDefinition = DEFINITIONS.filter(
+        (d) => d.name === definition.name,
+      ).pop();
+      // A historical body is not reachable after a later CREATE OR REPLACE or
+      // DROP/CREATE. Only the replay-final body can be a live client outage.
+      if (lastDefinition !== definition) {
+        continue;
+      }
       if (definition.definer || !readsGatedTable(definition.body)) {
         continue;
       }
@@ -823,16 +851,13 @@ describe('an invoker-owned body never inlines a subquery against a gated table',
       // later than the last literal definition of that name. Reverse either
       // half and the exemption is void: a redefined body re-enters the scan,
       // and a deleted routing migration re-opens the four.
-      const lastDefinition = DEFINITIONS.filter(
-        (d) => d.name === definition.name,
-      ).pop();
       const isRouted =
         REWRITE_PAIRS.some((p) => p.fn === definition.name) &&
         lastDefinition !== undefined &&
         routingIndex > lastDefinition.index;
 
       if (isRouted) {
-        exempted.push(definition.name);
+        exempted.add(definition.name);
         continue;
       }
       violations.push(
@@ -845,8 +870,14 @@ describe('an invoker-owned body never inlines a subquery against a gated table',
       'a SECURITY INVOKER function in public inlines a subquery against a table no client role can read; it will raise 42501 permission denied for table at executor startup, for every client role, and the DDL will still apply',
     ).toEqual([]);
     // The empty set above is ambiguous between "clean" and "the exemption grew
-    // to cover everything". These four are the whole exemption, asserted.
-    expect([...new Set(exempted)].sort()).toEqual(ROUTED_FUNCTIONS);
+    // to cover everything". A routed function may also be safe because a later
+    // migration recreated it with the helper already in place; count both
+    // forms, but never a later inline body.
+    for (const name of ROUTED_FUNCTIONS) {
+      const latest = latestDefinitionOf(name);
+      if (!readsGatedTable(latest.body)) exempted.add(name);
+    }
+    expect([...exempted].sort()).toEqual(ROUTED_FUNCTIONS);
   });
 
   test('no RLS policy in the ledger reads a gated table inline', () => {

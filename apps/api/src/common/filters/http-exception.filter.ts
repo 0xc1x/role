@@ -91,7 +91,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       details = undefined;
     }
 
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (Number(status) >= 500) {
       message = 'Error interno del servidor';
       error = 'Internal Server Error';
       details = undefined;
@@ -124,7 +124,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status,
     };
     const active = getRequestContext();
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (status >= 500) {
       this.logger.error({
         ...fields,
         ...(active ? { durationMs: elapsedMs(active.startedAt) } : {}),
