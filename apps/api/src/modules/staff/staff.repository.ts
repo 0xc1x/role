@@ -71,8 +71,12 @@ export type MemberWithScope = {
  * that nobody can fix from the panel.
  *
  * The plan travels with the answer because the refusal of the broken case has
- * to NAME it: «the catalogue does not have the plan `pro`» is an actionable
- * log line, and «the catalogue is broken» on its own is not.
+ * to NAME it —and the name is what the operator reads. The EXCEPTION's message
+ * is not that name: the 5xx filter redacts it from the response AND from the
+ * log, so what reaches the operator is the structured event
+ * (`plan_not_in_catalogue`, with `businessId` and `plan`) that the service
+ * writes before throwing. «the catalogue does not have the plan `pro`» is an
+ * actionable log line, and «the catalogue is broken» on its own is not.
  */
 export type StaffAccessEntitlement =
   /** The plan is in the catalogue and grants `staff_access`. */

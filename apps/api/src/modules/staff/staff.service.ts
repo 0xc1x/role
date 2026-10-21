@@ -1748,9 +1748,18 @@ export class StaffService {
    * del TOPE— sigue reservado: el contrato del panel hoy es `R0001`.
    *
    * Y la avería del CATÁLOGO es un 500: no es una regla de negocio, es una
-   * configuración rota, y su mensaje NOMBRA el plan porque es el log del
-   * operador el que tiene que decir qué fila falta. No dice «subí de plan» —
-   * eso sería mandar otra vez a la puerta que no arregla nada—.
+   * configuración rota. No dice «subí de plan» —eso sería mandar otra vez a la
+   * puerta que no arregla nada—.
+   *
+   * ─── Y EL MENSAJE DE LA EXCEPCIÓN NO ES LO QUE VE EL OPERADOR ───────────────
+   *
+   * El mensaje nombra el plan, pero ese mensaje NO es el observable: el filtro
+   * de 5xx lo redacta de la respuesta Y del log, y lo que queda en el registro
+   * es `errorType`/`errorCode` y nada más. Lo que SÍ nombra el plan y llega al
+   * operador es el EVENTO `plan_not_in_catalogue` que esta puerta escribe
+   * antes de tirar: una línea JSON con `event`, `businessId` y `plan`. Por eso
+   * el evento existe, y por eso se escribe aunque la excepción vaya a ser
+   * redactada.
    *
    * El mensaje de la negativa del plan NO nombra el plan, y eso sigue siendo una
    * decisión: la negativa le dice al dueño lo que tiene que hacer, y el plan
@@ -1765,6 +1774,19 @@ export class StaffService {
     if (entitlement.status === 'entitled') return;
 
     if (entitlement.status === 'plan_not_in_catalogue') {
+      // ─── EL EVENTO ES EL OBSERVABLE, NO EL MENSAJE ──────────────────────────
+      //
+      // El mensaje de la excepción de abajo nombra el plan, pero el filtro de
+      // 5xx lo redacta de la respuesta Y del log: al operador le llega
+      // `http_exception` con `errorType` y `status`, sin plan y sin «catálogo
+      // roto». La línea que nombra el plan es ESTA, y por eso se escribe
+      // antes de tirar y no dentro del mensaje.
+      this.logger.log({
+        event: 'plan_not_in_catalogue',
+        businessId,
+        plan: entitlement.plan,
+      });
+
       throw new InternalServerErrorException(
         `El catálogo de planes está roto: no tiene la fila del plan \`${entitlement.plan}\`, que es el plan de este negocio. Es una avería de configuración, no una negativa del plan.`,
       );

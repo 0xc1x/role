@@ -921,8 +921,7 @@ describe('StaffService', () => {
    *
    * El motor lo distingue mirando la fila del plan ANTES de preguntarle por la
    * feature, y esta puerta tiene que distinguirlo igual. La respuesta es un
-   * 500 —no una regla de negocio, una avería— y su mensaje nombra el plan,
-   * porque es el log del operador el que tiene que decir qué fila falta.
+   * 500 —no una regla de negocio, una avería—.
    */
   describe('un catálogo roto no se contesta como una negativa del plan', () => {
     it('es un 500 que dice que el catálogo está roto y nombra el plan', async () => {
@@ -946,6 +945,42 @@ describe('StaffService', () => {
       // evitar.
       expect(message).not.toContain('subí de plan');
       expect(error).not.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    /**
+     * EL EVENTO ESTRUCTURADO, QUE ES LO QUE LLEGA AL OPERADOR.
+     *
+     * El mensaje de la excepción nombra el plan, pero el filtro de 5xx lo
+     * redacta de la respuesta Y del log: al operador le llega
+     * `http_exception` con `errorType` y `status`, y sin una palabra sobre la
+     * fila que falta. Lo que lo dice es el EVENTO.
+     */
+    it('el operador ve el plan: el evento estructurado lo nombra', async () => {
+      repository.staffAccessEntitlement.mockResolvedValue({
+        status: 'plan_not_in_catalogue',
+        plan: 'pro',
+      });
+
+      await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch(() => undefined);
+
+      expect(logs).toContainEqual({
+        event: 'plan_not_in_catalogue',
+        businessId: BIZ,
+        plan: 'pro',
+      });
+    });
+
+    it('y con el plan en el catálogo el evento NO se emite', async () => {
+      await service.create(owner, BIZ, {
+        label: 'Carla',
+        business_location_ids: [],
+      });
+
+      expect(logs).not.toContainEqual(
+        expect.objectContaining({ event: 'plan_not_in_catalogue' }),
+      );
     });
 
     it('y no se escribe nada: ni la cuenta de Auth ni la membresía', async () => {
