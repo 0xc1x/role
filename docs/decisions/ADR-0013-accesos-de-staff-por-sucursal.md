@@ -280,9 +280,11 @@ un bug: el addendum documenta, no redefine.
 | las ocho `businesses/:businessId/staff…` | `apps/api/src/modules/staff/staff.controller.ts` |
 | `POST /staff/session` (la novena) | `apps/api/src/modules/staff/staff-session.controller.ts` |
 
-La puerta es una: `StaffService.requireActor` (`apps/api/src/modules/staff/staff.service.ts`),
-y la pregunta de la sesión es **de la base** (`business_member_session_state`), no
-una cuarta cuenta de la expiración escrita en TypeScript.
+La puerta es una **en las nueve rutas de este inventario**: `StaffService.requireActor`
+(`apps/api/src/modules/staff/staff.service.ts`), y la pregunta de la sesión es **de la base**
+(`business_member_session_state`), no una cuarta cuenta de la expiración escrita en TypeScript.
+La décima ruta que el Plan 4 añadió —`POST …/staff/revoke-all`— tiene además la puerta de
+plataforma que el §C documenta; no contradice esta frase, la acota.
 `POST /staff/session` **no** pasa por `requireActor` a propósito —sella y explica,
 no administra— y por eso un `staff` puede llamarla.
 
@@ -752,6 +754,10 @@ final: ya no hay dos respuestas a «¿esta persona es el dueño?».
 ### B.6 — Lo que se dejó fuera a propósito, y por qué
 
 Cada línea es una cosa que **podía** haberse hecho y no se hizo, con su razón:
+
+> **Nota (2026-10-21).** El Plan 4 construyó la pantalla del panel (móvil y admin), el alias
+> editable con su aviso y la tarjeta de entrega. Las filas de abajo quedan como registro de lo
+> que el Plan 3 dejó fuera, no como estado actual.
 
 | lo que no se hizo | por qué |
 | --- | --- |
