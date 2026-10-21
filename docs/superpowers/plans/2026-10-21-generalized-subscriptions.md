@@ -120,16 +120,16 @@ export const BusinessSubscriptionSchema = z.object({
 `UpdateBusinessSubscriptionSchema = z.strictObject({ plan_code: BusinessPlanCodeSchema })`; y los DTO inferidos `SubscriptionPlanDto`, `BusinessSubscriptionDto`, `UpdateBusinessSubscriptionDto`.
 - Produce además: `BusinessPlanCodeSchema` (el `z.enum` del enum que hoy no existe: el archivo actual no exporta ningún schema zod, y el API lo necesita para validar el cuerpo).
 
-- [ ] **Step 1: El test de los contratos**
+- [x] **Step 1: El test de los contratos**
 
 `SubscriptionPlanSchema` acepta `{ code: "pro_plus", audience: "business", limits: { max_locations: null, max_members: null }, features: ["staff_access","payments","visibility_plus"] }` y **rechaza** `limits.max_members: 0` (un tope de cero no es "sin tope") y `features: ["pagos"]` (un valor fuera de `BUSINESS_FEATURES`). `UpdateBusinessSubscriptionSchema` rechaza `{ plan_code: "premium" }`.
 
-- [ ] **Step 2: Correr y ver que falla**
+- [x] **Step 2: Correr y ver que falla**
 
 Run: `cd packages/commons && bun test src/subscription`
 Expected: FAIL — `Cannot find module`
 
-- [ ] **Step 3: Escribir los contratos y mover el archivo**
+- [x] **Step 3: Escribir los contratos y mover el archivo**
 
 El archivo de códigos y del espejo de límites se muda sin cambiar nombres de
 export. `packages/commons/src/business/index.ts` deja de exportarlo; el dominio
@@ -137,23 +137,23 @@ nuevo sí. El comentario de cabecera del archivo movido se actualiza: ya no dice
 "cuando existan precios o tiers por tamaño esto se mueve a tablas" — se movió, y
 ahora es el espejo tipado de las tablas, no la fuente.
 
-- [ ] **Step 4: Correr el typecheck de la raíz y ver el blast radius**
+- [x] **Step 4: Correr el typecheck de la raíz y ver el blast radius**
 
 Run: `bun run typecheck`
 Expected: FAIL — los consumidores que importaban desde `business/enums/business-plan`
 (el guard test `apps/api/src/database/security/plan-limits.db.spec.ts` y cualquier
 otro que el compilador liste). Anotarlos: se arreglan en este mismo plan.
 
-- [ ] **Step 5: Actualizar los imports de los consumidores**
+- [x] **Step 5: Actualizar los imports de los consumidores**
 
 Sólo cambia la ruta del import; ningún valor cambia.
 
-- [ ] **Step 6: Correr y verificar**
+- [x] **Step 6: Correr y verificar**
 
 Run: `bun run typecheck && cd packages/commons && bun test`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/commons apps/api
@@ -172,7 +172,7 @@ git commit -m "feat(commons): contratos de suscripción y catálogo de planes"
 **Interfaces:**
 - Produce: `public.subscription_plans(code public.business_plan_code primary key, audience public.plan_audience not null, max_locations integer, max_members integer, is_active boolean not null default true, created_at, updated_at)` con `check ((max_locations is null or max_locations > 0) and (max_members is null or max_members > 0))`; `public.subscription_plan_features(plan_code public.business_plan_code references public.subscription_plans on delete cascade, feature public.business_feature not null, primary key (plan_code, feature))`; `create type public.plan_audience as enum ('business','consumer')`.
 
-- [ ] **Step 1: El test del catálogo, contra las tablas**
+- [x] **Step 1: El test del catálogo, contra las tablas**
 
 En `plan-limits.db.spec.ts`, las dos assertions que hoy parsean `pg_proc` pasan a
 leer las tablas: `select code, audience, max_locations, max_members from
@@ -185,12 +185,12 @@ comparación: es operativo —retirar un plan de la oferta sin borrarlo— y no 
 espejo en TypeScript; el test lo dice para que nadie lo agregue al espejo por
 simetría.
 
-- [ ] **Step 2: Correr y ver que falla**
+- [x] **Step 2: Correr y ver que falla**
 
 Run: `cd apps/api && bun test src/database/security/plan-limits.db.spec.ts`
 Expected: FAIL — `relation "public.subscription_plans" does not exist`
 
-- [ ] **Step 3: La migración**
+- [x] **Step 3: La migración**
 
 Tablas + enum + seed **con los números del §4.5**, RLS habilitada, **cero policies**
 y el mismo `revoke truncate, trigger, references` que llevan las otras tablas de
@@ -198,25 +198,25 @@ staff: el catálogo se lee por la API (`service_role`), no por los clientes. El
 seed es idempotente (`on conflict do nothing`) y nombra el porqué de cada número
 con el plan al que pertenece.
 
-- [ ] **Step 4: Aplicar y verificar la migración**
+- [x] **Step 4: Aplicar y verificar la migración**
 
 Run: `apply_migration` con el nombre del archivo; después renombrar al versionado
 del servidor y `md5sum` contra el ledger. Verificación `SELECT`-only: una fila por
 plan, las features por plan, y `relrowsecurity = true` en las dos tablas.
 
-- [ ] **Step 5: El espejo de drizzle**
+- [x] **Step 5: El espejo de drizzle**
 
 `subscriptionPlans` y `subscriptionPlanFeatures` en el schema, y regenerar
 `apps/api/drizzle/` (`bunx drizzle-kit generate`). **No se commitea** `drizzle/`:
 es generado y está en `.gitignore`, pero `mirror-fidelity.db.spec.ts` lo necesita
 fresco.
 
-- [ ] **Step 6: Correr y verificar**
+- [x] **Step 6: Correr y verificar**
 
 Run: `cd apps/api && bun test src/database && bun run typecheck`
 Expected: PASS, incluido `mirror-fidelity`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add supabase/migrations apps/api/src/database
@@ -236,7 +236,7 @@ git commit -m "feat(db): el catálogo de planes en tablas"
 - Produce: `public.subscriptions(id uuid primary key default gen_random_uuid(), business_id uuid references public.businesses(id) on delete cascade, user_id uuid references public.profiles(id) on delete cascade, plan_code public.business_plan_code not null, started_at timestamptz not null default now(), cancelled_at timestamptz, deleted_at timestamptz, created_at, updated_at)` con `check ((business_id is not null) <> (user_id is not null))`; índice único parcial `subscriptions_live_business_key on (business_id) where business_id is not null and cancelled_at is null and deleted_at is null`; **sin FK al catálogo, a propósito**: un `cascade` haría que borrar un plan del catálogo devuelva a los negocios a `free` en silencio, y un `restrict` volvería inalcanzable la negativa ruidosa del motor cuando el enum va por delante del catálogo. El que se niega es el motor, y se niega en voz alta. Y `business_plan_of(uuid)` reescrita para leer de `subscriptions`, conservando el `coalesce` a `'free'` y su ACL (`{postgres, service_role}`, revocada de `public, anon, authenticated`).
 - Produce: `business_plans_state` **eliminada**.
 
-- [ ] **Step 1: El test**
+- [x] **Step 1: El test**
 
 Cuatro casos sobre la base real: (a) un negocio sin fila se lee `free`; (b) con una
 suscripción viva se lee su `plan_code`; (c) una fila con `cancelled_at` o
@@ -245,12 +245,12 @@ afecta a ningún negocio. Más dos invariantes: dos filas vivas del mismo negoci
 rechazadas por el índice único, y una fila con `business_id` y `user_id` a la vez
 viola el check. Y `to_regclass('public.business_plans_state')` es `null`.
 
-- [ ] **Step 2: Correr y ver que falla**
+- [x] **Step 2: Correr y ver que falla**
 
 Run: `cd apps/api && bun test src/database/security/subscriptions.db.spec.ts`
 Expected: FAIL — `relation "public.subscriptions" does not exist`
 
-- [ ] **Step 3: La migración**
+- [x] **Step 3: La migración**
 
 La tabla, el check, el índice y la reescritura de `business_plan_of`; después
 `drop table public.business_plans_state` — **está vacía en producción** (medido el
@@ -258,23 +258,23 @@ La tabla, el check, el índice y la reescritura de `business_plan_of`; después
 necesita backfill. La nota va en la migración para que quien la lea no sospeche una
 pérdida.
 
-- [ ] **Step 4: Aplicar y verificar**
+- [x] **Step 4: Aplicar y verificar**
 
 `apply_migration`, renombrar al versionado del servidor, `md5sum` contra el ledger.
 Verificación `SELECT`-only: `business_plan_of` devuelve `free` para los 16 negocios
 vivos, y `business_plans_state` ya no existe.
 
-- [ ] **Step 5: Actualizar drizzle y todos los lectores**
+- [x] **Step 5: Actualizar drizzle y todos los lectores**
 
 Quitar `businessPlansState` del schema y agregar `subscriptions`; regenerar
 `apps/api/drizzle/`. El compilador y los specs listan cualquier lector que quede.
 
-- [ ] **Step 6: Correr y verificar**
+- [x] **Step 6: Correr y verificar**
 
 Run: `cd apps/api && bun test src/database && bun run typecheck`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add supabase/migrations apps/api/src/database
@@ -292,7 +292,7 @@ git commit -m "feat(db): suscripciones con sujeto genérico"
 **Interfaces:**
 - Produce: `enforce_business_location_limit()` y `enforce_business_member_limit()` leyendo `subscription_plans.max_locations` / `.max_members`; `business_has_feature(uuid, business_feature)` leyendo `subscription_plan_features`. Los tres conservan nombre, firma, ACL (`business_has_feature` sigue concedida a `authenticated`) y **todos** sus mensajes y códigos (`R0001`, `detail = business=… plan=… limit=… current=…`).
 
-- [ ] **Step 1: La assertion que prueba que ya no hay segunda copia**
+- [x] **Step 1: La assertion que prueba que ya no hay segunda copia**
 
 La assertion de los triggers deja de parsear `case v_plan`: ahora afirma que cada
 `pg_proc.prosrc` **menciona** `subscription_plans` / `subscription_plan_features` y
@@ -301,7 +301,7 @@ número de `BUSINESS_PLAN_LIMITS[plan].members` y `.locations` no aparece como
 literal suelto en el cuerpo). Es la prueba de que el número que se hace cumplir y
 el número que se dice salen de la misma fila.
 
-- [ ] **Step 2: El caso del plan fuera del catálogo**
+- [x] **Step 2: El caso del plan fuera del catálogo**
 
 El `else` ruidoso sigue existiendo: con un plan que no está en el catálogo, el
 trigger levanta excepción en vez de asumir "sin tope". El test lo provoca así:
@@ -313,18 +313,18 @@ sobrevive sin catálogo, que es exactamente el estado que el motor tiene que sab
 detectar. La excepción no es `R0001` — un catálogo incompleto es un error de
 configuración y tiene que ser ruidoso.
 
-- [ ] **Step 3: Correr y ver que falla**
+- [x] **Step 3: Correr y ver que falla**
 
 Run: `cd apps/api && bun test src/database/security/plan-limits.db.spec.ts`
 Expected: FAIL — el trigger sigue con los números escritos
 
-- [ ] **Step 4: La migración**
+- [x] **Step 4: La migración**
 
 Reescribir los tres cuerpos conservando **la letra** de los mensajes en español
 (el API los reenvía tal cual al dueño, y `staff.service.ts:1534` parsea el
 `detail`). La única prosa que cambia es la del `else`: ahora habla del catálogo.
 
-- [ ] **Step 5: Aplicar y verificar**
+- [x] **Step 5: Aplicar y verificar**
 
 `apply_migration`, renombrar, `md5sum` contra el ledger. Y la medición que prueba
 equivalencia de comportamiento: los dos topes de `free` siguen rechazando la
@@ -336,14 +336,14 @@ deja entrar al tercer miembro y rechaza al cuarto; bajar el de `pro` a 1 hace qu
 el mensaje diga 1. Si eso no pasa, el número que el motor hace cumplir y el que
 dice en voz alta no salen de la misma fila, y la tarea no está hecha.
 
-- [ ] **Step 6: La suite de base entera, sin cambios de semántica**
+- [x] **Step 6: La suite de base entera, sin cambios de semántica**
 
 Run: `cd apps/api && bun test src/database`
 Expected: PASS — incluidos `business-members.rls.db.spec.ts` (141+ casos de RLS y
 grandfathering) y `plan-limits.db.spec.ts`, sin haberlos tocado más que en la
 assertion del Step 1.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add supabase/migrations apps/api/src/database
@@ -370,7 +370,7 @@ git commit -m "feat(db): los topes y las features se leen del catálogo"
   - `GET /businesses/:businessId/subscription` → `BusinessSubscriptionDto` — dueño o gerente del negocio, o admin de plataforma; 403 con `'Ver el plan del negocio es del dueño o su gerente.'` en cualquier otro caso.
   - `PATCH /businesses/:businessId/subscription` → `BusinessSubscriptionDto` — **sólo** admin de plataforma (403 `'Asignar el plan de un negocio es de la plataforma.'`), cuerpo `UpdateBusinessSubscriptionDto`, actualiza la fila viva o inserta una nueva, y emite el evento de log estructurado `business_plan_changed` con `{ businessId, from, to, actorId }`.
 
-- [ ] **Step 1: El test del servicio**
+- [x] **Step 1: El test del servicio**
 
 `assign` sobre un negocio sin fila **inserta**; sobre uno con fila viva
 **actualiza** y no deja dos vivas; la respuesta trae límites y features del
@@ -378,18 +378,18 @@ catálogo, no de la suscripción (la suscripción sólo dice **qué plan**, el c
 dice **qué incluye**); un `plan_code` inexistente o `is_active = false` → 422
 `'Ese plan no existe.'`
 
-- [ ] **Step 2: El test de las puertas**
+- [x] **Step 2: El test de las puertas**
 
 `GET` con `staff` → 403; con gerente → 200; con admin de plataforma → 200.
 `PATCH` con dueño → 403; con admin → 200. Sin token → 401. Un negocio inexistente
 → 404 en las dos.
 
-- [ ] **Step 3: Correr y ver que fallan**
+- [x] **Step 3: Correr y ver que fallan**
 
 Run: `cd apps/api && bun test src/modules/subscriptions`
 Expected: FAIL — `Cannot find module`
 
-- [ ] **Step 4: El repositorio y el servicio**
+- [x] **Step 4: El repositorio y el servicio**
 
 Drizzle sobre las tres tablas. La lectura de la suscripción y del catálogo se
 resuelve en **una** consulta con `left join` al catálogo (el plan vive en la
@@ -398,17 +398,17 @@ Cuando no hay fila, el DTO sale con `plan_code: 'free'` y `since: null` — la m
 respuesta que da `business_plan_of`, calculada igual, para que el panel y el motor
 no puedan discrepar.
 
-- [ ] **Step 5: El controlador y el módulo**
+- [x] **Step 5: El controlador y el módulo**
 
 Tres rutas con `@ApiTags('Subscriptions')`, `@ApiBearerAuth('bearer')`, DTOs zod
 (patrón del módulo de staff: schema de commons → `ZodValidationPipe` → DTO).
 
-- [ ] **Step 6: Correr y verificar**
+- [x] **Step 6: Correr y verificar**
 
 Run: `cd apps/api && bun test src/modules/subscriptions && bun run typecheck && bun run test`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/api/src
@@ -432,37 +432,37 @@ git commit -m "feat(api): catálogo de planes y suscripción del negocio"
 - Consumes: `businessesKeys` (las claves del negocio), `api.get/patch` (`@/lib/api/client`), `PageTabs`/`TabPanel`, `AlertDialog`, `notifyMutationError`.
 - Produce: `businessSubscriptionApi = { get(businessId), update(businessId, body) }`; `businessSubscriptionKeys = { all: ["businesses","subscription"], detail: (id) => [...] }`; `useBusinessSubscription(id: string | null)`, `useUpdateBusinessSubscription(businessId)` (invalida la suscripción **y** el detalle del negocio); `BusinessPlanTab({ businessId })`.
 
-- [ ] **Step 1: El test de la pestaña**
+- [x] **Step 1: El test de la pestaña**
 
 Con un negocio sin suscripción se muestra "Gratis" y "sin suscripción registrada"
 (no una fecha inventada); con `pro` se muestran plan, sucursales (5), miembros (20)
 y las features traducidas ("Pagos", "Accesos de personal"); el cambio de plan abre
 confirmación, emite el `PATCH` y el `422` del API se ve con el `requestId`.
 
-- [ ] **Step 2: Correr y ver que falla**
+- [x] **Step 2: Correr y ver que falla**
 
 Run: `cd apps/admin && bun test --isolate src/features/businesses/components/__tests__/business-plan-tab.test.tsx`
 Expected: FAIL — `Cannot find module`
 
-- [ ] **Step 3: La pestaña**
+- [x] **Step 3: La pestaña**
 
 Bloques: plan actual, desde cuándo, qué incluye (límites + features del catálogo) y
 el botón "Cambiar plan" (diálogo con los tres planes, límites a la vista). El
 conteo **usado** contra el tope (sucursales y miembros) se muestra como texto, no
 como acción: el admin no expulsa gente, sólo asigna plan.
 
-- [ ] **Step 4: La copia de la consecuencia**
+- [x] **Step 4: La copia de la consecuencia**
 
 El diálogo dice qué pasa al bajar de plan: **nada se corta**; el negocio deja de
 poder crecer hasta que vuelva a estar por debajo del tope. Es la regla del §5.4 y
 es lo que el admin necesita saber antes de confirmar.
 
-- [ ] **Step 5: Correr y verificar**
+- [x] **Step 5: Correr y verificar**
 
 Run: `cd apps/admin && bun test --isolate src && bun run typecheck`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/admin
@@ -473,13 +473,40 @@ git commit -m "feat(admin): pestaña Plan con asignación manual"
 
 ## Cierre
 
-- [ ] `bun run typecheck && bun run test && bun run build` en la raíz, verdes.
-- [ ] `bunx turbo run test --force --continue` (el caché de turbo no incluye las env de las apps).
-- [ ] Contra la base viva: los 16 negocios siguen leyéndose `free`; los dos topes de
+- [x] `bun run typecheck && bun run test && bun run build` en la raíz, verdes. — **typecheck 6/6 y
+      build 4/4**. `bun run test` sale 1 **sólo** por `apps/landing`: el test
+      `organizationJsonLd > url y logo son absolutas y del dominio configurado` espera
+      `https://role.app/` y recibe el `VITE_SITE_URL=http://localhost:3001` del `.env` local
+      copiado —con `VITE_SITE_URL=https://role.app` el paquete da **177 pass / 0 fail**—, y la
+      rama **no toca `apps/landing`** (`git diff 1902541..HEAD -- apps/landing` sale vacío).
+      API **2996 pass / 0 fail**, admin **677/0**, móvil **1008/0**, commons 0 fallos.
+- [x] `bunx turbo run test --force --continue` (el caché de turbo no incluye las env de las apps).
+      — corrido con el caché apagado: los mismos números; el único rojo es el de `landing` por la
+      env local, idéntico a la línea base.
+- [x] Contra la base viva: los 16 negocios siguen leyéndose `free`; los dos topes de
       `free` siguen rechazando con `R0001` y el mismo mensaje; `business_plans_state`
-      no existe; el catálogo tiene 3 filas y sus features.
-- [ ] Un `pro_plus` sin tope sigue sin tope (y "sin tope" no es cero).
-- [ ] El registro de decisiones abiertas se actualiza con lo que este plan deja
+      no existe; el catálogo tiene 3 filas y sus features. — **medido en la base viva después de
+      aplicar las tres migraciones**: los **16** negocios leen `free`;
+      `to_regclass('public.business_plans_state')` es `null`; el catálogo tiene sus **3** filas
+      (`free` 1/2, `pro` 5/20, `pro_plus` `null`/`null`) y sus **6** features; y los dos topes de
+      `free` rechazan con **`R0001`** y el mismo mensaje de siempre —«el plan free admite hasta 2
+      miembros, no más» y «el plan free admite hasta 1 sucursal, no más»—, medido dentro de una
+      transacción descartada.
+- [x] Un `pro_plus` sin tope sigue sin tope (y "sin tope" no es cero). — los topes de `pro_plus`
+      son `null` en la fila viva del catálogo; el motor distingue «fila con tope `null`» de «fila
+      que no está» (`found`), y el panel pinta «sin tope» y nunca `0`
+      (`businessPlanLimitLabel`, con test que lo afirma).
+- [x] El registro de decisiones abiertas se actualiza con lo que este plan deja
       apuntado: precios, pasarela, facturación del SRI, planes de consumidor y la
-      superficie móvil del plan.
-- [ ] Plan cerrado en este documento (casillas marcadas con su evidencia).
+      superficie móvil del plan. — **Ruling:** el registro es la propia sección «Fuera de este
+      plan (decidido con el partner, 2026-10-21)» de este plan, que nombra las cinco cosas
+      pendientes, más la lista de fuera de alcance del ADR-0013 (§B). No hay un fichero de
+      «decisiones abiertas» en el repo —`docs/decisions/` son ADRs, no una lista—, y no se crea
+      uno nuevo para este plan.
+- [x] Plan cerrado en este documento (casillas marcadas con su evidencia). — **Merge
+      fast-forward a `main`**: las seis tareas están implementadas y revisadas; la revisión
+      amplia de rama dio verde con dos Importantes que la ola final cerró; las tres migraciones
+      están aplicadas y selladas (`20261021163528`, `20261021172305`, `20261021182624`, con su
+      `md5sum` igual al `md5(statements[1])` del ledger); y el registro de la ejecución, con cada
+      ruling y cada menor diferido, está en
+      `.superpowers/sdd/2026-10-21-generalized-subscriptions/progress.md`.

@@ -13,7 +13,6 @@ export * from "./entities/business-location";
 export * from "./entities/business-notification-preferences";
 export * from "./enums/business-type";
 export * from "./enums/business-verification-status";
-export * from "./enums/business-plan";
 export * from "./enums/business-member-role";
 export * from "./enums/business-member-status";
 export * from "./enums/staff-session-reason";

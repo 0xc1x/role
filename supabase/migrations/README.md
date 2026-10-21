@@ -2837,3 +2837,78 @@ DEPLOYED function has been reading a column that does not exist since then, and
 the REPOSITORY source had been reading a table that does not exist since this
 migration. **Redeploying it is an operational step, outside the migrations
 ledger**: `supabase functions deploy handle-order-event`.
+
+## Applied: `20261021163528_subscription_plan_catalog`
+
+Applied via `apply_migration` on 2026-10-21. The file's `md5sum` is
+`e1fe1fe3cdd237d42c2cf27171509699` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**What it creates, and nothing else:** the type `public.plan_audience`
+(`'business','consumer'`), the table `public.subscription_plans` (the plan: its
+topes, its audiencia, `is_active`), the table `public.subscription_plan_features`
+(what each plan includes: one row per plan and feature), the trigger
+`set_subscription_plans_updated_at` over `public.handle_updated_at()`, RLS
+habilitada en las dos tablas con **cero** policies, el
+`revoke truncate, trigger, references` de las tablas de staff, y el seed del §4.5:
+`free` 1/2, `pro` 5/20, `pro_plus` `null`/`null` —`null` es SIN TOPE, no cero—, con
+`staff_access`, `+payments` y `+visibility_plus`.
+
+**It does not touch** `business_members`, `business_plans_state`,
+`business_plan_of`, `business_has_feature` ni los triggers de topes: la segunda
+copia de los números sigue en el motor hasta que la migración de la Task 4 la
+retire. El catálogo y el motor todavía no están atados; el guard que los ata es el
+de `apps/api/src/database/security/plan-limits.db.spec.ts`.
+
+## Applied: `20261021172305_generic_subscriptions`
+
+Applied via `apply_migration` on 2026-10-21. The file's `md5sum` is
+`401bbebc347920f8643cd5a1a4a9d3b7` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**What it does, in this order:** creates `public.subscriptions` (sujeto un negocio
+**o** una persona, `check` de XOR, índice único parcial
+`subscriptions_live_business_key`, **sin** FK al catálogo), reescribe
+`public.business_plan_of()` para leer de ahí conservando el `coalesce` a `'free'`,
+su firma, su `security definer`, su `search_path` y su ACL (`postgres` y
+`service_role`; ni `authenticated` ni `anon`), y **al final** hace
+`drop table public.business_plans_state` **sin `cascade`**.
+
+**La tabla que se va estaba vacía**, medido el 2026-10-21: 0 filas y 16 negocios,
+todos leyendo `free` por el `coalesce`. No hay backfill porque no hay datos que
+migrar, y la nota está aquí para que quien lea esto no sospeche una pérdida.
+
+**Verificado en la base viva tras aplicar:** `to_regclass('public.business_plans_state')`
+es `null`; `public.subscriptions` existe con RLS activa y **0** policies; los
+**16** negocios siguen leyéndose `free`; y la ACL de `business_plan_of` queda
+igual que antes (ejecuta `postgres` y `service_role`, no `authenticated` ni
+`anon`).
+
+## Applied: `20261021182624_plan_limits_from_catalog`
+
+Applied via `apply_migration` on 2026-10-21. The file's `md5sum` is
+`8e436f88955a4d09e362545663351a0e` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**Qué hace:** reescribe las tres funciones que hacen cumplir los topes para que
+lean la fila del catálogo en vez de sus números escritos a mano:
+`enforce_business_location_limit` y `enforce_business_member_limit` leen
+`public.subscription_plans` (`max_locations` / `max_members`) y
+`business_has_feature` lee `public.subscription_plan_features`. **La segunda copia
+de los números desaparece**: los `raise` quedan idénticos letra por letra
+(`R0001`, `detail`, `hint`), la firma, el `language`, el `security definer`, el
+`search_path` y las ACL no cambian, y los triggers no se tocan.
+
+**La fila que falta es una avería, no un permiso:** un plan sin fila en el
+catálogo levanta excepción **sin `errcode`** (o sea, no es `R0001`), y sólo cuando
+la escritura **crece** —renombrar, pausar o cambiar una etiqueta siguen
+funcionando, que es el §5.4—. Un `null` en el tope sigue siendo «sin tope».
+
+**Medido en la base viva después de aplicar:** las tres funciones leen el
+catálogo (`pg_proc.prosrc`), ninguna conserva el `case v_plan` ni nombra un
+plan; `business_has_feature` sigue siendo ejecutable por `authenticated`; el
+catálogo tiene sus tres filas con los números del §4.5; los **16** negocios
+siguen leyéndose `free`; y los dos topes de `free` rechazan con `R0001` y el
+mismo mensaje de siempre —«el plan free admite hasta 2 miembros, no más» y «el
+plan free admite hasta 1 sucursal, no más»—, medido dentro de una transacción
+descartada.

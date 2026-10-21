@@ -187,24 +187,8 @@ export const businessMemberLocations = pgTable(
   }),
 );
 
-/**
- * El plan de cada negocio: el asiento de la monetización.
- *
- * UNA fila por negocio y solo si alguien eligió un plan. No hay backfill y no
- * debe haberlo: un negocio sin fila se lee `free` por el `coalesce` de los
- * triggers de límites, y sembrar `free` en todas partes sería afirmar que cada
- * negocio eligió un plan. Nadie lo eligió.
- */
-export const businessPlansState = pgTable('business_plans_state', {
-  business_id: uuid('business_id')
-    .primaryKey()
-    .references(() => businesses.id, { onDelete: 'cascade' }),
-  plan_code: businessPlanCodeEnum('plan_code').notNull().default('free'),
-  created_at: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  deleted_at: timestamp('deleted_at', { withTimezone: true }),
-});
+// El plan de cada negocio NO vive aquí: vive en `subscriptions`
+// (`schema/subscriptions.ts`), que es la tabla que sustituyó a
+// `business_plans_state`. La razón es el SUJETO: allí el sujeto es una
+// columna (`business_id` o `user_id`) y el plan es una fila, no una columna de
+// la fila del negocio.

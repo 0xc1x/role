@@ -1,6 +1,7 @@
 import {
   ConflictException,
   ForbiddenException,
+  InternalServerErrorException,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -197,7 +198,10 @@ describe('StaffService', () => {
        * The plan's entitlement, and the answer every plan in the catalogue
        * gives today. A test that needs the other answer sets this mock.
        */
-      hasStaffAccessFeature: jest.fn(async () => true),
+      staffAccessEntitlement: jest.fn(async () => ({
+        status: 'entitled',
+        plan: 'pro',
+      })),
       findMemberByUser: jest.fn(async () => ownerRow()),
       findMemberById: jest.fn(async () => memberRow()),
       listMembersWithScope: jest.fn(async () => []),
@@ -852,7 +856,7 @@ describe('StaffService', () => {
   // ───────────────────────────── el plan y el dueño ─────────────────────────
 
   /**
-   * La NEGATIVA DEL PLAN, Y NO UN 500.
+   * LA NEGATIVA DEL PLAN, Y NO UN 500.
    *
    * El §5.1 le asigna la consulta de `business_has_feature` a la API, y sin ella
    * el primer plan sin `staff_access` se topaba con el `P0001` crudo del trigger:
@@ -864,7 +868,10 @@ describe('StaffService', () => {
    */
   describe('el plan decide si se puede dar de alta', () => {
     it('un plan sin la feature es un 422 del plan, y no se escribe nada', async () => {
-      repository.hasStaffAccessFeature.mockResolvedValue(false);
+      repository.staffAccessEntitlement.mockResolvedValue({
+        status: 'not_entitled',
+        plan: 'free',
+      });
 
       const error = await service
         .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
@@ -887,15 +894,73 @@ describe('StaffService', () => {
         business_location_ids: [],
       });
 
-      expect(repository.hasStaffAccessFeature).toHaveBeenCalledWith(BIZ);
+      expect(repository.staffAccessEntitlement).toHaveBeenCalledWith(BIZ);
     });
 
     it('la lista NO se niega: el plan no bloquea leer (§5.3)', async () => {
-      repository.hasStaffAccessFeature.mockResolvedValue(false);
+      repository.staffAccessEntitlement.mockResolvedValue({
+        status: 'not_entitled',
+        plan: 'free',
+      });
 
       await service.list(owner, BIZ);
 
       expect(repository.listMembersWithScope).toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * EL CATÁLOGO ROTO NO ES UN 422 DEL PLAN.
+   *
+   * `business_has_feature` contesta `false` para dos situaciones: un plan que
+   * está en el catálogo y no concede la feature, y un plan que NO TIENE FILA en
+   * el catálogo. La segunda es una avería de configuración, y la puerta del
+   * §5.1 la contestaba como si fuera la primera: un 422 con «subí de plan»,
+   * que es MENTIRA —subir de plan no arregla un catálogo roto— y manda al
+   * dueño a una puerta que no arregla nada.
+   *
+   * El motor lo distingue mirando la fila del plan ANTES de preguntarle por la
+   * feature, y esta puerta tiene que distinguirlo igual. La respuesta es un
+   * 500 —no una regla de negocio, una avería— y su mensaje nombra el plan,
+   * porque es el log del operador el que tiene que decir qué fila falta.
+   */
+  describe('un catálogo roto no se contesta como una negativa del plan', () => {
+    it('es un 500 que dice que el catálogo está roto y nombra el plan', async () => {
+      repository.staffAccessEntitlement.mockResolvedValue({
+        status: 'plan_not_in_catalogue',
+        plan: 'pro',
+      });
+
+      const error = await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(InternalServerErrorException);
+      const message = (error as InternalServerErrorException).message;
+      expect(message).toContain('catálogo de planes está roto');
+      // El plan se nombra: es el log del operador el que tiene que decir qué
+      // fila falta del catálogo.
+      expect(message).toContain('`pro`');
+      // Y NO es la puerta del plan: mandar al dueño a «subí de plan» cuando lo
+      // que falta es una fila del catálogo es la mentira que esta puerta vino a
+      // evitar.
+      expect(message).not.toContain('subí de plan');
+      expect(error).not.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('y no se escribe nada: ni la cuenta de Auth ni la membresía', async () => {
+      repository.staffAccessEntitlement.mockResolvedValue({
+        status: 'plan_not_in_catalogue',
+        plan: 'pro',
+      });
+
+      await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch(() => undefined);
+
+      expect(authAdmin.createUser).not.toHaveBeenCalled();
+      expect(repository.insertMember).not.toHaveBeenCalled();
+      expect(repository.transaction).not.toHaveBeenCalled();
     });
   });
 

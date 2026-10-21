@@ -11,7 +11,7 @@ DTOs, schemas **Zod**, enums y entidades por dominio, consumidos por `api`, `adm
 ```
 src/
 ├── <dominio>/{schemas,dtos,enums,entities}/
-│   business · catalog (offers/coupons) · order · payment · review · slides · categories · user
+│   business · subscription · catalog (offers/coupons) · order · payment · review · slides · categories · user
 └── _common/          # enums y schemas transversales (app-role, platform, day-of-week, api)
 ```
 

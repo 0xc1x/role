@@ -358,8 +358,8 @@ afterAll(async () => {
   await ctx.stop();
 });
 
-describe('las tres tablas de staff nacen cerradas', () => {
-  test('las tres tablas nuevas traen RLS y sin privilegios destructivos', async () => {
+describe('las tablas de acceso y la suscripción nacen cerradas', () => {
+  test('las tres tablas del perímetro traen RLS y sin privilegios destructivos', async () => {
     const rls = await as(ctx.sql, 'service_role', null, (tx) =>
       tx
         .unsafe<{ relname: string; rls: boolean }[]>(
@@ -367,7 +367,7 @@ describe('las tres tablas de staff nacen cerradas', () => {
           select c.relname, c.relrowsecurity as rls
           from pg_class c join pg_namespace n on n.oid = c.relnamespace
           where n.nspname = 'public'
-            and c.relname in ('business_members','business_member_locations','business_plans_state')
+            and c.relname in ('business_members','business_member_locations','subscriptions')
           order by c.relname`,
         )
         .then((rows) => plainRows(rows)),
@@ -375,7 +375,7 @@ describe('las tres tablas de staff nacen cerradas', () => {
     expect(rls).toEqual([
       { relname: 'business_member_locations', rls: true },
       { relname: 'business_members', rls: true },
-      { relname: 'business_plans_state', rls: true },
+      { relname: 'subscriptions', rls: true },
     ]);
 
     // El RLS habilitado no es la mitad de la obligación: TRUNCATE, TRIGGER y
@@ -384,6 +384,11 @@ describe('las tres tablas de staff nacen cerradas', () => {
     // porque ese archivo afirma el conjunto —lo que importa es que las tres
     // tablas nuevas estén dentro— y este afirma las tres por nombre, que es lo
     // que dice qué tabla es cuál cuando el conjunto falla.
+    //
+    // La tercera es `subscriptions`, que sustituyó a `business_plans_state`: el
+    // plan pasó de ser una columna de la fila del negocio a ser una fila con
+    // sujeto, y la tabla nueva repitió la postura de la vieja —RLS activa, cero
+    // policies y su propio revoke—.
     const destructive = await as(ctx.sql, 'service_role', null, (tx) =>
       tx
         .unsafe<{ relname: string; priv: string }[]>(
@@ -395,7 +400,7 @@ describe('las tres tablas de staff nacen cerradas', () => {
             array['TRUNCATE', 'TRIGGER', 'REFERENCES']
           ) as p(priv)
           where n.nspname = 'public'
-            and c.relname in ('business_members','business_member_locations','business_plans_state')
+            and c.relname in ('business_members','business_member_locations','subscriptions')
             and (has_table_privilege('anon', c.oid, p.priv)
               or has_table_privilege('authenticated', c.oid, p.priv))
           order by c.relname, p.priv`,
@@ -815,10 +820,10 @@ describe('los helpers de permiso', () => {
 
       // El catálogo de planes se mide sobre cuatro negocios y no sobre uno
       // mutado entre aserciones: BIZ_A es `pro`, BIZ_B es `pro_plus`, BIZ_C NO
-      // tiene fila (ausente = `free`) y BIZ_D tiene una fila `pro` con
-      // `deleted_at`, que también tiene que leerse como `free`.
+      // tiene suscripción (ausente = `free`) y BIZ_D tiene una suscripción `pro`
+      // con `deleted_at`, que también tiene que leerse como `free`.
       await tx.unsafe(
-        `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+        `insert into public.subscriptions (business_id, plan_code, deleted_at)
          values ('${BIZ_A}', 'pro', null),
                 ('${BIZ_B}', 'pro_plus', null),
                 ('${BIZ_D}', 'pro', now())`,
@@ -2013,12 +2018,12 @@ describe('el alcance por sucursal es una regla de la base', () => {
          values ('${BIZ_A}', 'Alcance Biz A', 'restaurant', 'alcance-biz-a')`,
       );
 
-      // El plan se escribe a mano y NO es el de defecto: sin esta fila el
+      // El plan se escribe a mano y NO es el de defecto: sin esta suscripción el
       // negocio se lee como `free`, y `free` admite UNA sucursal y DOS miembros
       // (`trg_enforce_location_limit` y `trg_enforce_member_limit`). Este
       // fixture necesita tres sucursales y nueve accesos.
       await tx.unsafe(
-        `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+        `insert into public.subscriptions (business_id, plan_code, deleted_at)
          values ('${BIZ_A}', 'pro', null)`,
       );
 
@@ -2629,7 +2634,7 @@ describe('las policies y los RPCs resuelven por membresía', () => {
         -- imposible de construir, porque el trigger rechazaría la segunda
         -- sucursal y el tercer acceso. Un negocio con dos sucursales es un
         -- negocio 'pro', que es lo que da el §4.5.
-        insert into public.business_plans_state (business_id, plan_code)
+        insert into public.subscriptions (business_id, plan_code)
         values ('${POL_BIZ}', 'pro');
 
         insert into public.business_locations (id, business_id, name, address, latitude, longitude, is_active)
@@ -5074,12 +5079,19 @@ describe('los límites del plan bloquean crecer, no operar', () => {
 
       // El plan va PRIMERO y por razones distintas en cada negocio: el
       // grandfathered entra en `pro_plus` para poder sembrarse por encima del
-      // tope y bajar después, y el de plan borrado nace con la fila `pro` ya
-      // en `deleted_at` — que es como se ve un negocio al que le borraron el
-      // plan, no un negocio sin fila.
+      // tope y bajar después, y el de plan borrado nace con la suscripción `pro`
+      // ya en `deleted_at` — que es como se ve un negocio al que le borraron el
+      // plan, no un negocio sin suscripción.
+      //
+      // Y el grandfathered tiene DOS filas a propósito: la viva, que es la que
+      // cuenta, y una ARCHIVADA de antes, que es HISTORIA. La fila archivada
+      // hace de contraprueba de la baja de plan de más abajo: un `update` por
+      // `business_id` la reescribiría con el plan de ahora, y un negocio que
+      // cambió de plan no puede tener su historia reescrita.
       await tx.unsafe(`
-        insert into public.business_plans_state (business_id, plan_code, deleted_at)
+        insert into public.subscriptions (business_id, plan_code, deleted_at)
         values ('${BIZ_GRANDFATHERED}', 'pro_plus', null),
+               ('${BIZ_GRANDFATHERED}', 'pro',      now()),
                ('${BIZ_PLAN_DELETED}',   'pro',       now()),
                ('${BIZ_PRO}',            'pro',       null),
                ('${BIZ_PRO_PLUS}',       'pro_plus',  null);
@@ -5182,10 +5194,22 @@ describe('los límites del plan bloquean crecer, no operar', () => {
       // Y POR ÚLTIMO LE BAJAN EL PLAN. A partir de acá el negocio tiene tres
       // sucursales y tres accesos bajo `free`, que es un estado que el motor no
       // habría dejado crear y que el §5.4 perdona.
+      //
+      // Y la baja se le hace a LA SUSCRIPCIÓN VIVA, no a todas las filas del
+      // negocio: `subscriptions` guarda HISTORIA —una suscripción cancelada o
+      // archivada se queda para decir qué hubo— y un `update` por `business_id`
+      // reescribiría esa historia con el plan de ahora. La fila viva se localiza
+      // por su `id`, que es lo que un `update` a una fila tiene que hacer.
       await tx.unsafe(
-        `update public.business_plans_state
+        `update public.subscriptions
             set plan_code = 'free'
-          where business_id = '${BIZ_GRANDFATHERED}'`,
+          where id = (
+            select id
+              from public.subscriptions
+             where business_id = '${BIZ_GRANDFATHERED}'
+               and cancelled_at is null
+               and deleted_at is null
+          )`,
       );
 
       // Y EL NEGOCIO DEL TOPE SE ACTIVA, y el orden es obligatorio:
@@ -5371,8 +5395,8 @@ describe('los límites del plan bloquean crecer, no operar', () => {
   // ─── EL PLAN SE LEE POR SU FILA VIVA, Y EL MENSAJO LO DICE ─────────────────
 
   test('una fila de plan borrada se lee como free, y el mensaje lo dice', async () => {
-    // `business_plans_state` tiene `deleted_at`, así que un plan puede seguir
-    // escrito y no estar vigente. `business_has_feature` lo tiene en cuenta; el
+    // `subscriptions` tiene `deleted_at`, así que una suscripción puede seguir
+    // escrita y no estar vigente. `business_has_feature` lo tiene en cuenta; el
     // mensaje que le devuelve este trigger al dueño tiene que decir lo mismo,
     // porque si dijera `pro` le estaría enseñando el plan que ya no tiene.
     const denied = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
@@ -5415,6 +5439,31 @@ describe('los límites del plan bloquean crecer, no operar', () => {
                  'staff_access'::public.business_feature) as staff_access`),
     );
     expect(plainRows(read)[0]?.staff_access).toBe(true);
+  });
+
+  // ─── LA BAJA DE UN PLAN TOCA SÓLO LA FILA VIVA ─────────────────────────────
+
+  test('bajar el plan no reescribe la historia del negocio', async () => {
+    // El negocio del fixture tiene DOS suscripciones: la viva, que es la que
+    // cuenta, y una archivada de antes, que es HISTORIA. La baja de plan se
+    // hizo sobre la viva, y la archivada sigue diciendo lo que decía.
+    //
+    // Sin esto, un `update ... where business_id = '…'` —que en la tabla vieja
+    // tocaba una fila porque `business_id` era la PRIMARY KEY— reescribiría la
+    // historia con el plan de ahora, y el patrón lo copiaría Task 5.
+    const rows = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ plan_code: string; viva: boolean }[]>(
+        `select plan_code, (deleted_at is null) as viva
+           from public.subscriptions
+          where business_id = '${BIZ_GRANDFATHERED}'
+          order by viva desc`,
+      ),
+    ).then((rows) => plainRows(rows));
+
+    expect(rows).toEqual([
+      { plan_code: 'free', viva: true },
+      { plan_code: 'pro', viva: false },
+    ]);
   });
 
   // ─── LOS NÚMEROS DEL §4.5, MEDIDOS Y NO DECLARADOS ────────────────────────
@@ -5898,7 +5947,7 @@ describe('los límites del plan bloquean crecer, no operar', () => {
       tx.unsafe<{ fn: string; por_helper: boolean; lee_la_tabla: boolean }[]>(`
         select p.proname as fn,
                (p.prosrc ~ 'business_plan_of\\s*\\(') as por_helper,
-               (p.prosrc ~ 'business_plans_state') as lee_la_tabla
+               (p.prosrc ~ 'public\\.subscriptions') as lee_la_tabla
         from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public'
@@ -5932,22 +5981,32 @@ describe('los límites del plan bloquean crecer, no operar', () => {
       },
     ]);
 
-    // Y que la fila borrada se cuente como ausencia —no como `pro`— es lo que
+    // Y que la fila muerta se cuente como ausencia —no como `pro`— es lo que
     // hace que `business_plan_of` sea el sitio correcto y no sólo el primero.
     // El test de comportamiento de más arriba lo midió con un negocio de
     // verdad; esto afirma la regla en el cuerpo que la va a aplicar a todos.
+    //
+    // Los DOS filtros se afirman, porque una suscripción es VIVA mientras no
+    // esté cancelada NI archivada: `cancelled_at` es la baja del contrato y
+    // `deleted_at` es el archivo, y los dos dejan de contar.
     const softDeleted = await as(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe<{ filtra_borrados: boolean }[]>(`
-        select (p.prosrc ~ 'deleted_at\\s+is\\s+null') as filtra_borrados
+      tx.unsafe<{ filtra_borrados: boolean; filtra_canceladas: boolean }[]>(`
+        select (p.prosrc ~ 'deleted_at\\s+is\\s+null') as filtra_borrados,
+               (p.prosrc ~ 'cancelled_at\\s+is\\s+null') as filtra_canceladas
         from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = 'business_plan_of'`),
     );
     expect(
       plainRows(softDeleted)[0]?.filtra_borrados,
-      'business_plan_of no filtra deleted_at, así que un plan retirado sigue ' +
+      'business_plan_of no filtra deleted_at, así que una suscripción retirada sigue ' +
         'contando topes desde la fila que lo dejó atrás — y el `coalesce` de ' +
         'ausencia y de borrado son la misma cosa sólo porque el filtro está.',
+    ).toBe(true);
+    expect(
+      plainRows(softDeleted)[0]?.filtra_canceladas,
+      'business_plan_of no filtra cancelled_at, así que una suscripción cancelada ' +
+        'sigue contando topes desde la fila que la dejó atrás.',
     ).toBe(true);
   });
 
@@ -5995,35 +6054,39 @@ describe('los límites del plan bloquean crecer, no operar', () => {
     }
   });
 
-  // ─── EL CATÁLOGO DE TOPES, NOMBRADO PLAN POR PLAN ──────────────────────────
+  // ─── EL TOPE SALE DE LA FILA DEL CATÁLOGO, Y UN PLAN SIN FILA SE NIEGA ─────
   //
-  // `business_has_feature` tiene su `else false` para que un plan nuevo no
-  // conceda features antes de que nadie decidiera cuánto cuesta cada una. Los
-  // dos `case` de topes necesitan la misma red, y la necesitan con más razón:
-  // aquí el `else` no sería «sin features» sino SIN TOPE, o sea que agregar un
-  // tier al enum le regalaría un negocio ilimitado a quien lo escribiera.
+  // Esta guarda cambió de forma con `20261021180000_plan_limits_from_catalog`.
+  // Antes afirmaba que los dos triggers NOMBRABAN los tres planes uno por uno
+  // —`when 'free' then v_limit := 1`— y que el resto se negaba en voz alta. Eso
+  // era la segunda copia del catálogo: el número del tope estaba escrito en el
+  // motor Y en la fila, y entre las dos copias no había nada que las ate.
   //
-  // Por eso los tres planes se nombran uno por uno y el resto se raisea en
-  // voz alta. Y esto mira el cuerpo, no su respuesta: los números que importan
-  // —que `free` admita uno y `pro` cinco, que `pro_plus` no tenga tope— ya los
-  // miden los tests de comportamiento de arriba, con veinte filas de verdad.
+  // Ahora los topes salen de `public.subscription_plans` —una fila por plan— y
+  // el motor NO nombra ningún plan: el nombre lo pone el `raise`, que lo toma
+  // de `business_plan_of`. La red se mantiene, y es la misma: un plan sin fila
+  // en el catálogo NO puede «colarse sin tope», porque sin fila el motor no
+  // sabe qué admite y se niega en voz alta.
+  //
+  // Y esto mira el cuerpo, no su respuesta: los números que importan —que
+  // `free` admita uno y `pro` cinco, que `pro_plus` no tenga tope— ya los miden
+  // los tests de comportamiento de arriba, con veinte filas de verdad, y
+  // `plan-limits.db.spec.ts` mide además que el número sale de la fila.
 
-  test('los dos triggers nombran los tres planes, y un cuarto no se cuela sin tope', async () => {
+  test('los dos triggers leen el plan del catálogo, y un plan sin fila se niegan en voz alta', async () => {
     const catalog = await as(ctx.sql, 'service_role', null, (tx) =>
       tx.unsafe<
         {
           fn: string;
-          free: boolean;
-          pro: boolean;
-          pro_plus: boolean;
+          lee_la_fila: boolean;
+          nombra_los_planes: boolean;
           el_resto_ruidoso: boolean;
         }[]
       >(`
         select p.proname as fn,
-               (p.prosrc ~ 'when\\s+''free''')     as free,
-               (p.prosrc ~ 'when\\s+''pro''')      as pro,
-               (p.prosrc ~ 'when\\s+''pro_plus''') as pro_plus,
-               (p.prosrc ~ 'else\\s+raise\\s+exception') as el_resto_ruidoso
+               (p.prosrc ~ 'public\\.subscription_plans') as lee_la_fila,
+               (p.prosrc ~ 'when\\s+''(free|pro|pro_plus)''') as nombra_los_planes,
+               (p.prosrc ~ 'not\\s+found\\s+then\\s+raise\\s+exception') as el_resto_ruidoso
         from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public'
@@ -6033,21 +6096,20 @@ describe('los límites del plan bloquean crecer, no operar', () => {
     );
 
     // `toEqual` sobre el conjunto entero y no tres `toBe` sueltos: así el
-    // fallo dice QUÉ función dejó de nombrar QUÉ plan, que es la mitad de lo
-    // que hay que arreglar cuando esto se pone rojo.
+    // fallo dice QUÉ función dejó de leer la fila —o volvió a nombrar los
+    // planes—, que es la mitad de lo que hay que arreglar cuando esto se pone
+    // rojo.
     expect(plainRows(catalog)).toEqual([
       {
         fn: 'enforce_business_location_limit',
-        free: true,
-        pro: true,
-        pro_plus: true,
+        lee_la_fila: true,
+        nombra_los_planes: false,
         el_resto_ruidoso: true,
       },
       {
         fn: 'enforce_business_member_limit',
-        free: true,
-        pro: true,
-        pro_plus: true,
+        lee_la_fila: true,
+        nombra_los_planes: false,
         el_resto_ruidoso: true,
       },
     ]);
@@ -7176,11 +7238,11 @@ describe('la frontera de sucursal, en las policies', () => {
          values ('${BIZ_F}', 'Frontera Biz', 'restaurant', 'frontera-biz')`,
       );
 
-      // El plan NO es decorativo: sin esta fila el negocio se lee como `free`,
-      // y `free` admite UNA sucursal y DOS miembros. Este fixture necesita
+      // El plan NO es decorativo: sin esta suscripción el negocio se lee como
+      // `free`, y `free` admite UNA sucursal y DOS miembros. Este fixture necesita
       // tres sucursales y seis accesos.
       await tx.unsafe(
-        `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+        `insert into public.subscriptions (business_id, plan_code, deleted_at)
          values ('${BIZ_F}', 'pro', null)`,
       );
 
@@ -8244,7 +8306,7 @@ describe('la transferencia de propiedad', () => {
 
       if ((options.plan ?? 'pro') === 'pro') {
         await tx.unsafe(
-          `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+          `insert into public.subscriptions (business_id, plan_code, deleted_at)
            values ('${businessId}', 'pro', null)`,
         );
       }
@@ -9075,7 +9137,7 @@ describe('la liberación y la recuperación del dueño', () => {
       );
 
       await tx.unsafe(
-        `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+        `insert into public.subscriptions (business_id, plan_code, deleted_at)
          values ('${businessId}', 'pro', null)`,
       );
 

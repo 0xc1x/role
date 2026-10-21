@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/drawer";
 import { BusinessEmailSendsTable } from "@/features/businesses/components/business-email-sends-table";
 import { BusinessLocationsSection } from "@/features/businesses/components/business-locations-section";
+import { BusinessPlanTab } from "@/features/businesses/components/business-plan-tab";
 import { BusinessStaffTable } from "@/features/businesses/components/business-staff-table";
 import { VerificationBadge } from "@/features/businesses/tables/cells/verification-badge";
 import { formatBusinessDate } from "@/lib/dates";
@@ -38,12 +39,13 @@ import { formatBusinessDate } from "@/lib/dates";
  * drawer se monta y se desmonta con la ficha, cada apertura arranca en «Ficha».
  */
 
-const TABS = ["ficha", "equipo"] as const;
+const TABS = ["ficha", "equipo", "plan"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
 	ficha: "Ficha",
 	equipo: "Equipo",
+	plan: "Plan",
 };
 
 function DetailField({
@@ -165,9 +167,8 @@ export function BusinessDetailDrawer({
 					</TabPanel>
 
 					{/*
-					  El equipo va con `mt-4` porque `space-y-4` del `DrawerBody`
-					  llega a todos los hijos menos al ÚLTIMO, y este panel es el
-					  último: sin ese margen la tabla se pegaba a las pestañas.
+					  Los dos paneles de la derecha van con `mt-4`: sin ese margen
+					  la tabla se pegaba a las pestañas.
 					*/}
 					<TabPanel
 						tab="equipo"
@@ -178,6 +179,18 @@ export function BusinessDetailDrawer({
 							<BusinessStaffTable
 								businessId={isOpen && tab === "equipo" ? business.id : null}
 								businessName={business.name}
+							/>
+						</section>
+					</TabPanel>
+
+					<TabPanel
+						tab="plan"
+						active={tab === "plan"}
+						className="mt-4 space-y-4"
+					>
+						<section className="space-y-3" aria-label="Plan del negocio">
+							<BusinessPlanTab
+								businessId={isOpen && tab === "plan" ? business.id : null}
 							/>
 						</section>
 					</TabPanel>

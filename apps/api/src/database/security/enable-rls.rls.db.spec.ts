@@ -119,7 +119,7 @@ describe('no table in public is left without RLS', () => {
       'public holds no ordinary tables, so "none is without RLS" is true for a ' +
         'reason that has nothing to do with RLS. This file would be asserting ' +
         'against an empty schema.',
-    ).toBe(43);
+    ).toBe(45);
 
     expect(
       plainRows(withoutRls).map((r) => r.relname),
@@ -141,7 +141,7 @@ describe('no table in public is left without RLS', () => {
    * that migration was proven over 34 tables in this harness while running over
    * 39 in production.
    */
-  test('the harness reproduces production coverage: 43 of 43', async () => {
+  test('the harness reproduces production coverage: 45 of 45', async () => {
     const counts = await ctx.sql.unsafe<{ total: number; with_rls: number }[]>(
       `select count(*)::int as total,
               count(*) filter (where c.relrowsecurity)::int as with_rls
@@ -152,7 +152,7 @@ describe('no table in public is left without RLS', () => {
           and c.relname <> '_harness_fingerprint'`,
     );
 
-    expect(plainRows(counts)[0]).toEqual({ total: 43, with_rls: 43 });
+    expect(plainRows(counts)[0]).toEqual({ total: 45, with_rls: 45 });
   });
 });
 

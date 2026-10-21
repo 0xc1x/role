@@ -1722,27 +1722,53 @@ export class StaffService {
    *
    * §5.1: "de esos tres, `business_has_feature` lo consulta la API antes de
    * cada alta". This is that consultation, and the catalogue is NOT copied here:
-   * the answer is a boolean the database gives, and the only thing this file
-   * decides is WHICH refusal to answer with.
+   * the answer is what the database gives, and the only thing this file decides
+   * is WHICH refusal to answer with.
    *
-   * The refusal is the PLAN's (`R0001`), the same one the limit produces, and
-   * not a new code: the panel already knows that a plan refusal is a 422 whose
-   * answer is "subí de plan", and a code the panel has never seen is a code the
-   * panel cannot react to. The limit is a COUNT and the feature is an
-   * ENTITLEMENT, and a distinct code (`R0003`) would say that better — but the
-   * panel's contract today is `R0001`, and inventing a second one without the
-   * panel would break the one thing that works.
+   * ─── LAS TRES RESPUESTAS, Y POR QUÉ NO SON DOS ───────────────────────────────
    *
-   * The message does NOT name the plan, and that is a decision too: naming it
-   * would mean asking `business_plan_of`, which is deliberately not executable
-   * by clients (`business_has_feature` is the client-facing version of it). The
-   * refusal says what the owner has to do, and that is what the panel shows.
+   * La base contesta TRES cosas y no dos, y la tercera es la que este plan vino
+   * a desterrar: el plan NO incluye la feature (un 422 del plan), el plan SÍ la
+   * incluye (se pasa), y el plan NO TIENE FILA en el catálogo (un catálogo roto).
+   *
+   * `business_has_feature` contesta `false` para las dos negativas, y por eso
+   * esta puerta NO puede leer su `false` y concluir «el plan no incluye la
+   * feature»: el motor distingue las dos mirando la fila del plan ANTES de
+   * preguntarle por la feature (`20261021182624_plan_limits_from_catalog.sql`),
+   * y esta puerta tiene que distinguirlas igual. Sin esa distinción, un
+   * catálogo roto se contestaba con «subí de plan» —que es MENTIRA, porque
+   * subir de plan no arregla un catálogo roto— y el dueño iba a una puerta que
+   * no arregla nada.
+   *
+   * ─── LAS DOS NEGATIVAS Y SUS DOS PUERTAS ────────────────────────────────────
+   *
+   * La negativa DEL PLAN es la de siempre: un 422 con «subí de plan», el mismo
+   * cuerpo y el mismo mensaje de siempre, porque el panel ya sabe contestar eso
+   * y no se le inventa un código nuevo. `R0003` —que separaría la ENTITLEMENT
+   * del TOPE— sigue reservado: el contrato del panel hoy es `R0001`.
+   *
+   * Y la avería del CATÁLOGO es un 500: no es una regla de negocio, es una
+   * configuración rota, y su mensaje NOMBRA el plan porque es el log del
+   * operador el que tiene que decir qué fila falta. No dice «subí de plan» —
+   * eso sería mandar otra vez a la puerta que no arregla nada—.
+   *
+   * El mensaje de la negativa del plan NO nombra el plan, y eso sigue siendo una
+   * decisión: la negativa le dice al dueño lo que tiene que hacer, y el plan
+   * ya se lo ve en el panel.
    */
   private async assertStaffAccessEntitlement(
     businessId: string,
   ): Promise<void> {
-    const entitled = await this.repository.hasStaffAccessFeature(businessId);
-    if (entitled) return;
+    const entitlement =
+      await this.repository.staffAccessEntitlement(businessId);
+
+    if (entitlement.status === 'entitled') return;
+
+    if (entitlement.status === 'plan_not_in_catalogue') {
+      throw new InternalServerErrorException(
+        `El catálogo de planes está roto: no tiene la fila del plan \`${entitlement.plan}\`, que es el plan de este negocio. Es una avería de configuración, no una negativa del plan.`,
+      );
+    }
 
     throw this.planRefusal(
       'Este plan no incluye accesos de personal: subí de plan para administrar el equipo.',

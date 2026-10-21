@@ -28,8 +28,15 @@ const BASE_URL =
  */
 async function loadInitSql(): Promise<string> {
   const dir = join(__dirname, '..', 'drizzle');
-  const entries = (await readdir(dir))
-    .filter((e) => e !== 'meta' && !e.startsWith('.'))
+  const entries = (await readdir(dir, { withFileTypes: true }))
+    // Sólo las CARPETAS: `drizzle-kit pull` deja `schema.ts` y `relations.ts`
+    // en la raíz del espejo, y leerlos como si fueran migraciones revienta con
+    // ENOTDIR. El filtro es por TIPO de entrada y no por una lista de nombres,
+    // para que un archivo nuevo en la raíz no rompa el arnés.
+    .filter(
+      (e) => e.isDirectory() && e.name !== 'meta' && !e.name.startsWith('.'),
+    )
+    .map((e) => e.name)
     .sort();
   if (entries.length === 0) throw new Error('Sin migraciones en drizzle/');
 

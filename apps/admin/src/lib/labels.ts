@@ -1,14 +1,17 @@
 import type {
 	AudienceKind,
 	BugTriageState,
+	BusinessFeature,
 	BusinessMemberRole,
 	BusinessMemberStatus,
+	BusinessPlanCode,
 	BusinessVerificationStatus,
 	ContactDeliveryStatus,
 	EmailSendStatus,
 	EntryOrigin,
 	OrderStatus,
 	PayoutStatus,
+	PlanAudience,
 	ReviewModerationReason,
 	ReviewVisibility,
 } from "@0xc1x/role-commons";
@@ -244,3 +247,70 @@ export const announcementAudienceLabel = (audienceKind: string): string =>
  */
 export const reviewModerationReasonLabel = (reason: string): string =>
 	REVIEW_MODERATION_REASON_LABELS[reason as ReviewModerationReason] ?? reason;
+
+/**
+ * El nombre del plan, en el vocabulario del operador.
+ *
+ * `free` → «Gratis»: es lo que el negocio tiene de verdad —sin pagar nada— y
+ * no un «plan básico» que suena a producto de pago. `pro_plus` → «Pro Plus»:
+ * el sufijo se escribe con mayúscula porque es parte del nombre del plan, no
+ * una categoría.
+ *
+ * `?? code` y no "Plan desconocido": el código crudo ES la información cuando
+ * el catálogo trae un plan que esta versión del panel todavía no nombra.
+ */
+const BUSINESS_PLAN_LABELS: Record<BusinessPlanCode, string> = {
+	free: "Gratis",
+	pro: "Pro",
+	pro_plus: "Pro Plus",
+};
+
+export const businessPlanLabel = (code: string): string =>
+	BUSINESS_PLAN_LABELS[code as BusinessPlanCode] ?? code;
+
+/**
+ * A quién sirve el plan: `business` → «Negocio», `consumer` → «Consumidor».
+ *
+ * El panel de hoy sólo ofrece planes de negocio, pero el catálogo admite las dos
+ * audiencias y el plan DICE a qué clase de sujeto sirve: un «Pro» de negocio y
+ * un «Pro» de consumidor no son el mismo plan, y el operador tiene que poder
+ * distinguirlo sin leer el código.
+ */
+const PLAN_AUDIENCE_LABELS: Record<PlanAudience, string> = {
+	business: "Negocio",
+	consumer: "Consumidor",
+};
+
+export const businessPlanAudienceLabel = (audience: string): string =>
+	PLAN_AUDIENCE_LABELS[audience as PlanAudience] ?? audience;
+
+/**
+ * Lo que un plan incluye, traducido.
+ *
+ * Las features son la puerta que el motor abre (`staff_access` habilita el
+ * equipo, `payments` los pagos): mostrarlas crudas obliga al operador a
+ * traducirlas en la cabeza, y una feature mal leída es una feature que el
+ * operador cree que el negocio tiene y no tiene.
+ *
+ * `?? feature` por el mismo motivo que el resto del archivo: un token fuera del
+ * enum se muestra crudo en vez de inventarle un nombre.
+ */
+const BUSINESS_FEATURE_LABELS: Record<BusinessFeature, string> = {
+	staff_access: "Accesos de personal",
+	payments: "Pagos",
+	visibility_plus: "Visibilidad plus",
+};
+
+export const businessFeatureLabel = (feature: string): string =>
+	BUSINESS_FEATURE_LABELS[feature as BusinessFeature] ?? feature;
+
+/**
+ * El tope de un plan, en palabras: «5» o «sin tope».
+ *
+ * `null` NO es cero: `pro_plus` no tiene tope, y un «0» leería como un plan que
+ * no admite ni una sucursal —que no es lo que dice el catálogo, que prohíbe el
+ * cero como tope—. El «sin tope» se dice con palabras porque es un permiso, y
+ * un permiso no se escribe como un número.
+ */
+export const businessPlanLimitLabel = (limit: number | null): string =>
+	limit === null ? "sin tope" : String(limit);

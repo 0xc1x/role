@@ -226,8 +226,15 @@ export const repository: Record<string, Mock> = {
    * today is `true` for every plan in the catalogue. A test that needs the other
    * answer sets this mock itself: the point of the double is to be the plan
    * table, not to have a private opinion about which plans exist.
+   *
+   * Y la respuesta son TRES estados, no dos: el plan que concede la feature, el
+   * que no la concede, y el que no tiene fila en el catálogo —una avería, y no
+   * una negativa del plan—. El primero es el que se sembró.
    */
-  hasStaffAccessFeature: jest.fn(async () => true),
+  staffAccessEntitlement: jest.fn(async () => ({
+    status: 'entitled',
+    plan: 'pro',
+  })),
   findMemberByUser: jest.fn(
     async (_businessId: string, userId: string) =>
       MEMBER_BY_USER[userId] ?? null,

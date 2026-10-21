@@ -62,8 +62,15 @@ import {
  *
  * ─── THE HARNESS AND PRODUCTION AGREE ON EVERY RLS TABLE ────────────────────
  *
- * As of `20261014002328_business_members_and_plans`, production has 44 tables in
- * `public` and RLS enabled on all 44. This replay
+ * As of `20261014002328_business_members_and_plans`, production had 44 tables in
+ * `public` and RLS enabled on all 44 — 43 after
+ * `20261021005034_drop_business_ownership.sql` dropped one, and 45 with the two
+ * catalog tables of `20261021160000_subscription_plan_catalog.sql`. The count is
+ * STILL 45 after `20261021170000_generic_subscriptions.sql`, because that one
+ * drops a table and adds another: `business_plans_state` goes out and
+ * `subscriptions` comes in.
+ *
+ * This replay
  * used to have 39 tables and RLS enabled on 34 — `business_finance`,
  * `business_moderation`, `app_store`, `offer_categories` and `slides` all landed
  * without it, because no statement in `supabase/migrations/` ever enabled RLS on
@@ -108,8 +115,12 @@ function plainRows<T>(result: unknown): T[] {
  * The number itself is never written here: the two `expect(tables).toBe(...)`
  * assertions below pin it, and that pin moved from 39 to 41 when
  * `20261004022647_announcements.sql` added `public.announcements` and
- * `public.announcement_acknowledgements`, and from 41 to 44 when
- * `20261014002328_business_members_and_plans.sql` added the three staff tables.
+ * `public.announcement_acknowledgements`, from 41 to 44 when
+ * `20261014002328_business_members_and_plans.sql` added the three staff tables,
+ * back to 43 when `20261021005034_drop_business_ownership.sql` dropped one, and
+ * from 43 to 45 when `20261021160000_subscription_plan_catalog.sql` added the
+ * two catalog tables. `20261021170000_generic_subscriptions.sql` leaves it at 45:
+ * it drops `business_plans_state` and adds `subscriptions`.
  * A constant in this comment would have
  * been a lie the first time a table was added, which is the reason the count is
  * pinned in a test and described here by reference. The count is still read from
@@ -177,7 +188,7 @@ describe('no client role holds a privilege RLS cannot govern', () => {
     ).toBeGreaterThan(30);
     // And the exact number, so a schema that lost RLS wholesale fails HERE with
     // a count in the message rather than three tests later as an empty set.
-    expect(tables).toBe(43);
+    expect(tables).toBe(45);
 
     const residue = await ctx.sql.unsafe<
       { grantee: string; table_name: string; privilege_type: string }[]
@@ -269,8 +280,12 @@ describe('no client role holds a privilege RLS cannot govern', () => {
    * the three privileges on must have RLS — so nothing escapes the filter — AND
    * the RLS table count must be exactly the number production holds, which the
    * `expect(tables).toBe(...)` below pins rather than this comment: the count
-   * went from 39 to 41 with `20261004022647_announcements.sql` and from 41 to 44
-   * with `20261014002328_business_members_and_plans.sql`, and a constant
+   * went from 39 to 41 with `20261004022647_announcements.sql`, from 41 to 44
+   * with `20261014002328_business_members_and_plans.sql`, back to 43 with
+   * `20261021005034_drop_business_ownership.sql`, and from 43 to 45 with the two
+   * catalog tables of `20261021160000_subscription_plan_catalog.sql`. It is still
+   * 45 after `20261021170000_generic_subscriptions.sql`, which drops one table
+   * and adds another. A constant
    * written here would be wrong again by the next table. The count is what makes
    * the first half mean something: "no residue" is trivially true in a database
    * where almost nothing has RLS, and that pin is what rules that out.
@@ -324,7 +339,7 @@ describe('no client role holds a privilege RLS cannot govern', () => {
       "the harness no longer reproduces production's RLS coverage. This file " +
         'can only claim the migration covers every RLS table in public if every ' +
         'table in public has RLS.',
-    ).toBe(43);
+    ).toBe(45);
   });
 });
 

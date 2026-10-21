@@ -69,10 +69,10 @@ beforeAll(async () => {
        values ('${BIZ}', 'Alcance Repo', 'restaurant', 'alcance-repo')`,
     );
 
-    // El plan se escribe a mano: sin esta fila el negocio se lee como `free`, y
-    // `free` admite UNA sucursal y DOS miembros.
+    // El plan se escribe a mano: sin esta suscripción el negocio se lee como
+    // `free`, y `free` admite UNA sucursal y DOS miembros.
     await tx.unsafe(
-      `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+      `insert into public.subscriptions (business_id, plan_code, deleted_at)
        values ('${BIZ}', 'pro', null)`,
     );
 
@@ -130,5 +130,80 @@ describe('las dos preguntas del alcance, contra la base de verdad', () => {
 
     expect(state.reason).toBe('ok');
     expect(state.role).toBe('manager');
+  });
+});
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * EL DERECHO A LA FEATURE DE PERSONAL, Y LAS TRES RESPUESTAS
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * La puerta del §5.1 pregunta al catálogo si el negocio puede tener accesos de
+ * personal, y la respuesta tiene TRES formas —tiene la feature, no la tiene, o
+ * el plan no tiene fila en el catálogo— porque `business_has_feature` contesta
+ * `false` para las dos negativas y el motor las separa mirando la fila del
+ * plan ANTES de preguntarle por la feature.
+ *
+ * Estas pruebas miran las tres contra la base de verdad, y las dos últimas
+ * ROMPEN el catálogo a propósito y lo vuelven a armar: un doble no puede
+ * afirmar nada de esto, y un catálogo roto que se contesta como una negativa
+ * del plan manda al dueño a una puerta que no arregla nada.
+ */
+describe('el derecho del negocio a la feature de personal', () => {
+  test('un plan del catálogo que concede la feature', async () => {
+    const entitlement = await repo.staffAccessEntitlement(BIZ);
+
+    expect(entitlement).toEqual({ status: 'entitled', plan: 'pro' });
+  });
+
+  test('un plan del catálogo que NO concede la feature', async () => {
+    // La fila del plan SIGUE AHÍ: lo que falta es la feature. Por eso esto no
+    // es un catálogo roto, y la respuesta tiene que ser la del plan —un 422
+    // con «subí de plan»—, no la de una avería.
+    await ctx.sql.unsafe(
+      `delete from public.subscription_plan_features
+        where plan_code = 'pro' and feature = 'staff_access'`,
+    );
+    try {
+      const entitlement = await repo.staffAccessEntitlement(BIZ);
+
+      expect(entitlement).toEqual({ status: 'not_entitled', plan: 'pro' });
+    } finally {
+      await ctx.sql.unsafe(
+        `insert into public.subscription_plan_features (plan_code, feature)
+         values ('pro', 'staff_access')
+         on conflict do nothing`,
+      );
+    }
+  });
+
+  test('un plan SIN fila en el catálogo: el catálogo está roto', async () => {
+    // El `on delete cascade` de `subscription_plan_features` se lleva las
+    // features con la fila, así que `business_has_feature` contesta `false`
+    // —como en el caso de arriba— y las dos noticias son distintas: la fila
+    // que falta es la avería.
+    await ctx.sql.unsafe(
+      `delete from public.subscription_plans where code = 'pro'`,
+    );
+    try {
+      const entitlement = await repo.staffAccessEntitlement(BIZ);
+
+      expect(entitlement).toEqual({
+        status: 'plan_not_in_catalogue',
+        plan: 'pro',
+      });
+    } finally {
+      await ctx.sql.unsafe(
+        `insert into public.subscription_plans
+           (code, audience, max_locations, max_members, is_active)
+         values ('pro', 'business', 5, 20, true)
+         on conflict do nothing`,
+      );
+      await ctx.sql.unsafe(
+        `insert into public.subscription_plan_features (plan_code, feature)
+         values ('pro', 'staff_access'), ('pro', 'payments')
+         on conflict do nothing`,
+      );
+    }
   });
 });

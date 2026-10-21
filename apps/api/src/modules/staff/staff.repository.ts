@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import {
   StaffSessionStateSchema,
+  type BusinessPlanCode,
   type StaffSessionState,
 } from '@0xc1x/role-commons';
 import { type Database } from '../../database/database.module';
@@ -56,6 +57,30 @@ export type MemberWithScope = {
   row: BusinessMemberRow;
   locationIds: string[];
 };
+
+/**
+ * What the DATABASE says about the business's right to the staff feature.
+ *
+ * ─── WHY THE THIRD STATE EXISTS ──────────────────────────────────────────────
+ *
+ * A boolean cannot carry the answer, because `business_has_feature` says
+ * `false` for two different situations: a plan in the catalogue that does not
+ * grant the feature, and a plan with NO ROW in the catalogue. The first is the
+ * owner's business and the second is a broken configuration, and they are
+ * answered with two different HTTP shapes —a 422 the owner can act on and a 500
+ * that nobody can fix from the panel.
+ *
+ * The plan travels with the answer because the refusal of the broken case has
+ * to NAME it: «the catalogue does not have the plan `pro`» is an actionable
+ * log line, and «the catalogue is broken» on its own is not.
+ */
+export type StaffAccessEntitlement =
+  /** The plan is in the catalogue and grants `staff_access`. */
+  | { status: 'entitled'; plan: BusinessPlanCode }
+  /** The plan is in the catalogue and does NOT grant `staff_access`. */
+  | { status: 'not_entitled'; plan: BusinessPlanCode }
+  /** The plan has NO ROW in the catalogue: the catalogue is broken. */
+  | { status: 'plan_not_in_catalogue'; plan: BusinessPlanCode };
 
 /**
  * What `public.transfer_business_ownership` answers: the five identifiers of
@@ -136,31 +161,93 @@ export class StaffRepository {
 
   /**
    * `public.business_has_feature(business_id, 'staff_access')` — the plan's
-   * entitlement, asked to the DATABASE and not to a copy of the catalogue.
+   * entitlement — AND the plan's ROW in the catalogue, because those are two
+   * different questions and the API has to be able to tell them apart.
    *
-   * The catalogue of «which plan grants which feature» lives in
-   * `packages/commons` (for the panel) and in the body of
-   * `business_has_feature` (for the engine), and the §4.5 says the two move
-   * together. A TypeScript copy of the question would be a THIRD copy, and the
-   * third one is the one that drifts: the panel and the trigger would keep
-   * agreeing with each other and the API would be the odd one out — asking the
-   * owner to upgrade for a feature the engine is still granting.
+   * ─── WHERE THE CATALOGUE LIVES NOW ─────────────────────────────────────────
    *
-   * The function is `stable security definer` and reads the PLAN ROW, not the
-   * caller: it answers for the business, which is what the question is about.
-   * `business_plan_of` — the function behind it — is deliberately NOT executable
-   * by `authenticated`, so this asks the client-facing version and does not
-   * reach for the internal one.
+   * The catalogue of «which plan grants which feature» is DATA: the table
+   * `public.subscription_plans` (the plan and its limits) and the table
+   * `public.subscription_plan_features` (one row per plan and feature).
+   * `packages/commons` keeps only the TYPED MIRROR of those tables — the
+   * vocabulary the compiler knows, so that nobody writes a `plan_code` by hand
+   * — and the ENGINE reads the row: the triggers look the limit up in
+   * `subscription_plans` and `business_has_feature` looks the feature up in
+   * `subscription_plan_features`.
+   *
+   * There is no second copy of the question in TypeScript, and that is the
+   * point: a TypeScript copy would be a THIRD one, and the third one is the one
+   * that drifts — the panel and the trigger would keep agreeing with each other
+   * and the API would be the odd one out, asking the owner to upgrade for a
+   * feature the engine is still granting.
+   *
+   * ─── WHY THREE ANSWERS AND NOT TWO ─────────────────────────────────────────
+   *
+   * `business_has_feature` answers `false` for TWO different situations, and
+   * they are not the same news:
+   *
+   *   1. the plan IS in the catalogue and does not grant the feature — the
+   *      owner's business, and the answer is a 422 that says «subí de plan»;
+   *   2. the plan has NO ROW in the catalogue — the catalogue is BROKEN, and the
+   *      answer is a 500, because upgrading does not fix a broken catalogue.
+   *
+   * The engine tells them apart: it looks at the plan's row BEFORE asking for
+   * the feature and refuses out loud when the row is not there
+   * (`20261021182624_plan_limits_from_catalog.sql`). This API has to tell them
+   * apart too, or it answers the broken catalogue with the plan-shaped 422 and
+   * sends the owner to a door that fixes nothing.
+   *
+   * So the question is asked as TWO facts in ONE query: the feature's answer and
+   * the row's existence. The plan itself comes from `public.business_plan_of` —
+   * the same function the engine asks — and this API can ask it because it
+   * connects with the service role (`postgres`, BYPASSRLS): `business_plan_of`
+   * is deliberately NOT executable by `authenticated`, and this is not a client.
    */
-  async hasStaffAccessFeature(businessId: string): Promise<boolean> {
+  async staffAccessEntitlement(
+    businessId: string,
+  ): Promise<StaffAccessEntitlement> {
     const rows = (await this.db.execute(sql`
-      select public.business_has_feature(
-               ${businessId}::uuid,
-               'staff_access'::public.business_feature
-             ) as entitled
-    `)) as { entitled?: unknown }[];
+      select
+        public.business_plan_of(${businessId}::uuid) as plan,
+        public.business_has_feature(
+          ${businessId}::uuid,
+          'staff_access'::public.business_feature
+        ) as entitled,
+        exists (
+          select 1
+            from public.subscription_plans p
+           where p.code = public.business_plan_of(${businessId}::uuid)
+        ) as plan_in_catalogue
+    `)) as {
+      plan?: unknown;
+      entitled?: unknown;
+      plan_in_catalogue?: unknown;
+    }[];
 
-    return rows[0]?.entitled === true;
+    const row = rows[0];
+    const plan = row?.plan as BusinessPlanCode | undefined;
+    if (!plan) {
+      // `business_plan_of` coalesces to `free`, so it never comes back empty.
+      // If it does, the answer is not "no": it is "nobody knows", and the door
+      // must not open on a guess.
+      throw new Error(
+        'staff access entitlement: the database returned no plan for the business',
+      );
+    }
+
+    // The ROW first, and the feature second, for the same reason the engine
+    // does it that way: a catalogue without the plan's row takes its features
+    // with it (the `on delete cascade`), so asking the feature first would
+    // answer «your plan does not include staff access» — which is a lie.
+    if (row?.plan_in_catalogue !== true) {
+      return { status: 'plan_not_in_catalogue', plan };
+    }
+
+    if (row?.entitled === true) {
+      return { status: 'entitled', plan };
+    }
+
+    return { status: 'not_entitled', plan };
   }
 
   /**

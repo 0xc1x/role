@@ -4574,6 +4574,97 @@
           "Ownership"
         ]
       }
+    },
+    "/api/v1/plans": {
+      "get": {
+        "operationId": "SubscriptionsController_listPlans",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The active plans of the catalogue"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The plans on offer, with their limits and the features they include.",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/subscription": {
+      "get": {
+        "operationId": "SubscriptionsController_getSubscription",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The plan the business has right now"
+          },
+          "403": {
+            "description": "The caller is neither the owner nor a manager of the business"
+          },
+          "404": {
+            "description": "No such business"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The plan of a business: its code, its limits and its features. The owner, its manager or the platform.",
+        "tags": [
+          "Subscriptions"
+        ]
+      },
+      "patch": {
+        "operationId": "SubscriptionsController_assign",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The plan the business has after the change"
+          },
+          "403": {
+            "description": "The caller is not the platform"
+          },
+          "404": {
+            "description": "No such business"
+          },
+          "422": {
+            "description": "That plan is not in the catalogue, or it is not on offer"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Assign the plan of a business. Platform only: the limits and the features come from the catalogue, never from the body.",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
     }
   },
   "info": {
