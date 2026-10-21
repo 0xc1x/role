@@ -64,6 +64,16 @@ Sin errores pendientes de typecheck ni lint (`bun run check` y `bun run typechec
 
 Notas de mantenimiento:
 
+- **El dev server resuelve `commons` desde el SOURCE, no desde `dist`.** El
+  `resolve.alias` de `vite.config.ts` (sólo en `serve`) apunta a
+  `packages/commons/src/index.ts` y `optimizeDeps.exclude` deja de pre-bundlear
+  el paquete. Con el paquete pre-bundleado, Vite congelaba una COPIA del
+  contrato al arrancar y no volvía a mirarla: un `dist` desactualizado rompía
+  TODAS las rutas con `does not provide an export named '…'` (porque el route
+  tree importa estáticamente cada archivo de ruta). Consecuencia práctica: **un
+  cambio en `commons` se ve en el panel sin reconstruirlo**; el `dist` sólo hace
+  falta para `typecheck`, el build y los consumidores que no son Vite (api,
+  mobile).
 - **El `<form>` del login lleva `method="post"` a propósito.** Un form que
   lleva credenciales no puede ser un GET: sin JS (o sin hidratación) el
   navegador lo envía solo, y un GET mete la contraseña en la URL, el historial

@@ -150,12 +150,53 @@ function applyVercelEnv(mode: string): void {
 	}
 }
 
+/**
+ * ─── `commons` se resuelve desde el SOURCE en dev, no desde `dist` ──────────
+ *
+ * `packages/commons` es un paquete de workspace: su `exports` apunta a
+ * `dist/index.js`, y `dist` es un artefacto que se reconstruye aparte. Si el dev
+ * server consume ese `dist`, queda sirviendo una COPIA del contrato congelada
+ * en el momento en que Vite pre-bundló el paquete — y Vite no vuelve a mirarla:
+ * la optimización de dependencias sólo se recalcula cuando cambian el lockfile
+ * o la config, no cuando cambia el contenido de un paquete enlazado.
+ *
+ * MEDIDO en `apps/admin`: con `optimizeDeps.include: ["@0xc1x/role-commons"]` y
+ * un `dist` desactualizado, el navegador moría con
+ * `does not provide an export named '…'` en TODAS las rutas —incluido
+ * `/login`— y el `<form>` de login caía al submit NATIVO del navegador (GET):
+ * la contraseña acababa en la URL. Un solo fallo de caché rompía el panel
+ * entero y filtraba credenciales.
+ *
+ * Resolver desde el source elimina la clase de bug: no hay copia que pueda
+ * quedar vieja, y un cambio de contrato se ve sin reconstruir `commons`. El
+ * alias se aplica SÓLO en `serve` —el build de producción sigue consumiendo el
+ * paquete publicado (`dist`), que es lo que se despliega—.
+ */
+function resolveCommonsSrc(): string {
+	return path.resolve(process.cwd(), "../../packages/commons/src/index.ts");
+}
+
 const config = defineConfig(({ command, mode }) => {
 	if (command === "build") applyVercelEnv(mode);
 	assertServeEnvConfigured(command, process.cwd(), mode);
 
 	return {
-		resolve: { tsconfigPaths: true },
+		resolve: {
+			tsconfigPaths: true,
+			// Array form: Vite pasa `resolve.alias` al plugin de alias de Rollup,
+			// que sólo entiende la forma `{ find, replacement }` en array. La forma
+			// objeto (`{ "@0xc1x/role-commons": … }`) trata el valor como
+			// `replacement` literal, y un objeto ahí produce un id roto.
+			alias:
+				command === "serve"
+					? [
+							{
+								find: "@0xc1x/role-commons",
+								replacement: resolveCommonsSrc(),
+							},
+						]
+					: [],
+		},
 		server: {
 			// WSL: sin esto Vite queda atado a ::1 y Windows no lo ve.
 			host: true,
@@ -164,7 +205,10 @@ const config = defineConfig(({ command, mode }) => {
 			},
 		},
 		optimizeDeps: {
-			include: ["@0xc1x/role-commons"],
+			// El paquete se resuelve al source (ver `resolve.alias`): no hay nada
+			// que pre-bundlear, y una copia pre-bundlada es justo lo que quedó
+			// vieja. `exclude` evita que el optimizador intente empaquetarlo.
+			exclude: ["@0xc1x/role-commons"],
 		},
 		plugins: [
 			devtools(),

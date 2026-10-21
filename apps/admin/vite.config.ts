@@ -1,13 +1,44 @@
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
-
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig, loadEnv } from "vite";
 
 import { DEFAULT_API_URL, resolveApiUrl } from "./src/config/api-url.ts";
+
+/**
+ * ─── `commons` se resuelve desde el SOURCE en dev, no desde `dist` ──────────
+ *
+ * `packages/commons` es un paquete de workspace: su `exports` apunta a
+ * `dist/index.js`, y `dist` es un artefacto que se reconstruye aparte. Si el dev
+ * server consume ese `dist`, el servidor queda sirviendo una COPIA del contrato
+ * que quedó congelada en el momento en que Vite pre-bundló el paquete — y Vite
+ * no vuelve a mirarla: la optimización de dependencias sólo se recalcula cuando
+ * cambian el lockfile o la config, no cuando cambia el contenido de un paquete
+ * enlazado.
+ *
+ * MEDIDO: con `optimizeDeps.include: ["@0xc1x/role-commons"]` y un `dist`
+ * desactualizado, el navegador moría con
+ * `does not provide an export named 'RevokeBusinessAccessResponseSchema'` en
+ * TODAS las rutas —incluido `/login`— porque el route tree importa estáticamente
+ * cada archivo de ruta. Y como el bundle del cliente moría antes de hidratar,
+ * el `<form>` de login caía al submit NATIVO del navegador (GET): la contraseña
+ * acababa en la URL (`/login?email=…&password=…`), en el historial y en los logs
+ * del servidor. Un solo fallo de caché rompía el panel entero y filtraba
+ * credenciales.
+ *
+ * Resolver desde el source elimina la clase de bug: no hay copia que pueda
+ * quedar vieja, y un cambio de contrato se ve en el panel sin reconstruir
+ * `commons`. El alias se aplica SÓLO en `serve` —el build de producción sigue
+ * consumiendo el paquete publicado (`dist`), que es lo que se despliega—.
+ */
+function resolveCommonsSrc(): string {
+	return fileURLToPath(
+		new URL("../../packages/commons/src/index.ts", import.meta.url),
+	);
+}
 
 /**
  * ─── La configuración se valida ANTES de que arranque el servidor ───────────
@@ -39,11 +70,26 @@ function checkApiUrl(mode: string) {
 	}
 }
 
-const config = defineConfig(({ mode }) => {
+const config = defineConfig(({ mode, command }) => {
 	checkApiUrl(mode);
 
 	return {
-		resolve: { tsconfigPaths: true },
+		resolve: {
+			tsconfigPaths: true,
+			// Array form: Vite pasa `resolve.alias` al plugin de alias de Rollup,
+			// que sólo entiende la forma `{ find, replacement }` en array. La forma
+			// objeto (`{ "@0xc1x/role-commons": … }`) trata el valor como
+			// `replacement` literal, y un objeto ahí produce un id roto.
+			alias:
+				command === "serve"
+					? [
+							{
+								find: "@0xc1x/role-commons",
+								replacement: resolveCommonsSrc(),
+							},
+						]
+					: [],
+		},
 		server: {
 			// WSL: sin esto Vite queda atado a ::1 y Windows no lo ve.
 			host: true,
@@ -52,7 +98,10 @@ const config = defineConfig(({ mode }) => {
 			},
 		},
 		optimizeDeps: {
-			include: ["@0xc1x/role-commons"],
+			// El paquete se resuelve al source (ver `resolve.alias`): no hay nada
+			// que pre-bundlear, y una copia pre-bundlada es justo lo que quedó
+			// vieja. `exclude` evita que el optimizador intente empaquetarlo.
+			exclude: ["@0xc1x/role-commons"],
 		},
 		build: {
 			rollupOptions: {
