@@ -1418,39 +1418,82 @@ mutación sobre un archivo sellado se hace en una transacción de prueba, no en 
 Ninguno se omite. Cada uno está cerrado por una tarea, cerrado de antemano, o diferido con
 su razón.
 
-| # | ítem | estado | tarea / razón |
-| --- | --- | --- | --- |
-| 1 | `getBusinessesByOwnerId` y el `drop table business_ownership` con sus 19 policies | **cerrado** | Tasks 8 y 10 |
-| 2 | El acantilado de performance (~328 µs por fila en el camino de miembro) | **diferido** | medido y escrito en `supabase/migrations/README.md`; el lever es el costo por fila del helper, y no urge antes de que un negocio se acerque a 1.000 pedidos. Este plan **no** optimiza ese costo: el helper nuevo se llama **una vez por fila de policy**, no una vez por fila de la tabla, pero eso no se mide acá y queda como deuda anotada, igual que hoy |
-| 3 | El `Seq Scan on orders` dentro del subplan hasheado de la policy de `profiles` | **diferido** | es un eje de tabla, medido y anotado; este plan no cambia la forma de la policy de `profiles` más que por el predicado que ya usa |
-| 4 | El guard que compara `BUSINESS_PLAN_LIMITS` contra los triggers | **ya cerrado** | existe (`plan-limits.db.spec.ts`) y este plan **no toca el catálogo de planes**, así que el guard tiene que seguir verde: se verifica en el Task 11 |
-| 5 | El QUINTO lector de `business_ownership` (`notification.handlers.ts:36-39`) | **cerrado** | Task 9, con el cambio deliberado del test que lo pinnea |
-| 6 | La transferencia de propiedad NO EXISTE | **cerrado** | Tasks 3 (la base) y 4 (la puerta) |
-| 7 | Un dueño legacy que sólo vive en `business_ownership` borra su cuenta en silencio | **cerrado** | Task 5. **El backfill NO se hace**: medido, hay **0** filas en ese estado (0 `business_ownership` sin membresía, 0 membresías sin `business_ownership`). Lo que se cierra es el **camino**: la puerta cuenta sólo dueños de negocios activos y `anonymise` borra la fila de propiedad |
-| 8 | La combinación de «vencida» duplicada en TypeScript | **cerrado** | Task 7 |
-| 9 | `R0001` cubre DOS negativas (tope y entitlement) | **diferido** | este plan **no** adopta `R0003`: el panel no lo conoce y este plan no toca el panel. La transferencia usa `R0004`, un código **nuevo**, así que `R0001` sigue significando exactamente las dos cosas que significa hoy |
-| 10 | La contención del `manager` sólo la aplica esta API, y no es una frontera para las cuatro policies de escritura | **cerrado** | Tasks 1 y 2. El detalle: eran **cuatro**, y el plan verificó que son **trece** las policies que usan `can_manage_location` (tabla completa más arriba) |
-| 11 | La rama de admin de plataforma de `GET /staff` no está acotada | **diferido** | el admin **supervisa**, no administra: leer el roster de cualquier negocio es deliberado y está pineado por un test. Este plan le **agrega** una puerta de escritura (Task 6) y no le quita ninguna de lectura |
-| 12 | El aviso de «tu dirección cambió» se encola a la dirección actual sin comprobar la entregabilidad | **diferido** | el §8 nombra los dos endpoints que rechazan el **identificador enviado**, no el actual; y el rebote cae en el dominio del negocio, no en el de Rolé |
-| 13 | La propiedad «la cascada no destruye una membresía» vive sólo en el servicio | **cerrado** | Task 5 (`eraseAccount` archiva las membresías vivas antes de borrar el perfil) |
-| 14 | El borrado archiva la membresía pero no sus filas de alcance | **cerrado** | Task 5 (`anonymise` archiva también las `business_member_locations`) |
-| 15 | El servicio escribe `role: 'staff'` explícitamente | **diferido** | el default de la columna no es una frontera: el API y el esquema coinciden hoy, y quitar el default sería un cambio sin una decisión detrás |
-| 16 | El 404 «Negocio no encontrado» es inalcanzable | **diferido** | es un problema del **fixture** del spec (le da una membresía en un negocio inexistente), no del producto; y el fixture es de `create`, que este plan no toca |
-| 17 | La compensación del alta es best-effort | **diferido** | la compensación existe; lo que falta es el mensaje al dueño («y la cuenta puede seguir existiendo»), y el mensaje es de la pantalla del panel, que este plan no construye |
-| 18 | El alcance vacío del que llama no está documentado ni testeado | **cerrado** | Task 1. La regla es explícita: **sin filas de alcance no se alcanza nada, ni siquiera un acceso sin alcance** (sólo el dueño lo alcanza) |
-| 19 | Las nueve rutas no tienen bucket de throttler propio | **diferido** | el tope global (100/min/IP) cubre las dos rutas nuevas; la presión sobre GoTrue viene de `createUser`, que este plan no agrega a una ruta nueva (la recuperación crea el acceso por la puerta que ya existe) |
-| 20 | Un round-trip más por lectura de pedido (`roleOf`) | **diferido** | es un ítem de performance, con el mismo lever que el 2 |
-| 21 | El test del token forjado afirma sólo el status | **diferido** | los tests **nuevos** de esta plan (transfer, restore) **sí** afirman el cuerpo de la respuesta y el código; el test viejo no se toca porque cambiarlo no es una decisión de este plan |
-| 22 | El módulo no afirma el provider del `service_role` | **diferido** | los providers del módulo no cambian; el `STAFF_AUTH_ADMIN` sigue siendo el mismo. (El módulo **sí** crece: registra el controlador de ownership) |
+> **[cerrado — 2026-10-21]** Cada fila de esta tabla se **contrastó contra el árbol** y
+> no contra el informe de la tarea que la dice: un informe que dice «cerrado» no es
+> evidencia. Donde la construcción se apartó de lo que este plan decía, la columna
+> «estado» dice **lo que se construyó** y este plan se corrige.
+>
+> **Totales: 10 cerrados** (9 por tareas de este plan + 1 ya cerrado antes), **12
+> diferidos** con su razón, **0 sin destino**. Y hay **tres cierres incidentales** que no
+> estaban en la lista de los veintidós y que se anotan aparte, al final de la tabla,
+> porque el registro tiene que estar completo.
 
-**Resumen:** **9** ítems cerrados por tareas (1, 5, 6, 7, 8, 10, 13, 14, 18), **1** ya
-cerrado antes de este plan (4) y **12** diferidos con su razón escrita. Ninguno sin destino.
+| # | ítem | estado | tarea | cómo se verificó, o por qué se difiere |
+| --- | --- | --- | --- | --- |
+| 1 | `getBusinessesByOwnerId` y el `drop table business_ownership` con sus 19 policies | **cerrado** | Tasks 8 y 10 | El móvil lee `business_members` (`repository.ts`); la tabla **no existe** —`to_regclass(...)` → `NULL`— y **0** policies y **0** funciones la nombran, medido en la base viva el 2026-10-21 |
+| 2 | El acantilado de performance (~328 µs por fila en el camino de miembro) | **diferido** | — | Medido y escrito en `supabase/migrations/README.md`. El lever es el costo por fila del helper, y no urge antes de que un negocio se acerque a 1.000 pedidos. Este plan **no** optimiza ese costo: el helper nuevo se llama **una vez por fila de policy**, no una vez por fila de la tabla, pero eso no se mide acá y queda como deuda anotada, igual que hoy |
+| 3 | El `Seq Scan on orders` dentro del subplan hasheado de la policy de `profiles` | **diferido** | — | Es un eje de tabla, medido y anotado; este plan no cambia la forma de la policy de `profiles` más que por el predicado que ya usa |
+| 4 | El guard que compara `BUSINESS_PLAN_LIMITS` contra los triggers | **ya cerrado** | — (pre-existente) | Existe (`apps/api/src/database/security/plan-limits.db.spec.ts`) y este plan **no toca el catálogo de planes**, así que el guard tiene que seguir verde: **verificado en el cierre** (suite del API completa, 2026-10-21) |
+| 5 | El QUINTO lector de `business_ownership` (`notification.handlers.ts:36-39`) | **cerrado** | Task 9 | La regla de presencia pasó a «el negocio tiene un dueño **vivo**», y el test que la pineaba **cambió de nombre y de fixture**: ahora son **dos** tests («un negocio SIN dueño vivo no notifica a nadie» / «un negocio con dueño vivo notifica, aunque no tenga la fila vieja») |
+| 6 | La transferencia de propiedad NO EXISTE | **cerrado** | Tasks 3 (la base) y 4 (la puerta) | `public.transfer_business_ownership` existe y es `VOLATILE SECURITY DEFINER` con ACL `{postgres, service_role}`; la puerta es `POST /businesses/:businessId/ownership/transfer`. El invariante es un trigger **diferido**, no un `BEFORE`: la degradación y la promoción tienen que ser **dos sentencias** |
+| 7 | Un dueño legacy que sólo vive en `business_ownership` borra su cuenta en silencio | **cerrado** | Task 5 | **El backfill NO se hace**: medido, hay **0** filas en ese estado (0 `business_ownership` sin membresía, 0 membresías sin `business_ownership`). Lo que se cierra es el **camino**: la puerta cuenta sólo dueños de negocios **activos** y `anonymise` llama a `release_business_ownership` **antes** de archivar las membresías. [corregido] La fila de `business_ownership` que `anonymise` borraba **ya no existe**: la tabla se cayó en la Task 10 |
+| 8 | La combinación de «vencida» duplicada en TypeScript | **cerrado** | Task 7 | `public.business_member_session_inside_promise` es la única copia, y hay un guard unitario que afirma que el SQL de la API la nombra **una** vez. La mutación del instante del borde (`>= now()` → `> now()`) es **invisible** con el código viejo y **visible** con el nuevo: ése es el test |
+| 9 | `R0001` cubre DOS negativas (tope y entitlement) | **diferido** | — | Este plan **no** adopta `R0003`: el panel no lo conoce y este plan no toca el panel. La transferencia y la liberación usan `R0004`, un código **nuevo**, así que `R0001` sigue significando exactamente las dos cosas que significa hoy. **El costo sigue vivo** y está registrado como decisión abierta (§B.7 del ADR-0013) |
+| 10 | La contención del `manager` sólo la aplica esta API, y no es una frontera para las cuatro policies de escritura | **cerrado** | Tasks 1 y 2 | El detalle: eran **cuatro**, y el plan verificó que son **trece** las policies que usan `can_manage_location`. El plan cambió **el helper, no las trece**, así que la contención pasó a ser una frontera de **datos**, en lecturas y en escrituras |
+| 11 | La rama de admin de plataforma de `GET /staff` no está acotada | **diferido** | — | El admin **supervisa**, no administra: leer el roster de cualquier negocio es deliberado y está pineado por un test. Este plan le **agrega** una puerta de escritura (Task 6) y no le quita ninguna de lectura |
+| 12 | El aviso de «tu dirección cambió» se encola a la dirección actual sin comprobar la entregabilidad | **diferido** | — | El §8 nombra los dos endpoints que rechazan el **identificador enviado**, no el actual; y el rebote cae en el dominio del negocio, no en el de Rolé |
+| 13 | La propiedad «la cascada no destruye una membresía» vive sólo en el servicio | **cerrado** | Task 5 | `eraseAccount` **ganó su propia guarda**: con una membresía —viva o cerrada— cierra la cuenta y **no** borra el perfil, porque la cascada se lo llevaría con el alias |
+| 14 | El borrado archiva la membresía pero no sus filas de alcance | **cerrado** | Task 5 | `anonymise` archiva también las `business_member_locations`, y `release_business_ownership` hace lo mismo dentro de la base |
+| 15 | El servicio escribe `role: 'staff'` explícitamente | **diferido** | — | El default de la columna no es una frontera: el API y el esquema coinciden hoy (`body.role ?? 'staff'`), y quitar el default sería un cambio sin una decisión detrás |
+| 16 | El 404 «Negocio no encontrado» es inalcanzable | **diferido** | — | [corregido] **La afirmación era IMPRECISA.** `requireActor` —la puerta de las ocho rutas del equipo— nunca lanza un 404: lanza 403. Los **dos** 404 que existen están en la **rama de admin de la plataforma**, que no pasa por `requireActor`, y ahí **sí son alcanzables** y **sí están probados**. El estado imposible es el del **fixture** de ese test, y el fixture es de `create`, que este plan no toca |
+| 17 | La compensación del alta es best-effort | **diferido** | — | La compensación existe; lo que falta es el mensaje al dueño («y la cuenta puede seguir existiendo»), y el mensaje es de la pantalla del panel, que este plan no construye |
+| 18 | El alcance vacío del que llama no está documentado ni testeado | **cerrado** | Task 1 | La regla es explícita y vive en la base: **sin filas de alcance no se alcanza nada, ni siquiera un acceso sin alcance** (sólo el dueño lo alcanza). Y el alcance vacío **no** concede recursos: lo único que concede es la **propia fila de membresía**, por la excepción de `business_member_reaches_member`, que `can_manage_location` no conoce |
+| 19 | Las nueve rutas no tienen bucket de throttler propio | **diferido** | — | El tope global (100/min/IP) cubre las dos rutas nuevas; la presión sobre GoTrue viene de `createUser`, que este plan no agrega a una ruta nueva (la recuperación crea el acceso por la puerta que ya existe). Verificado en el árbol: `apps/api/src/modules/staff/` no tiene decorador de throttler |
+| 20 | Un round-trip más por lectura de pedido (`roleOf`) | **diferido** | — | Es un ítem de performance, con el mismo lever que el 2 |
+| 21 | El test del token forjado afirma sólo el status | **diferido** | — | Los tests **nuevos** de este plan (transfer, restore) **sí** afirman el cuerpo de la respuesta y el código; el test viejo no se toca porque cambiarlo no es una decisión de este plan |
+| 22 | El módulo no afirma el provider del `service_role` | **diferido** | — | Los providers del módulo no cambian; el `STAFF_AUTH_ADMIN` sigue siendo el mismo, y `staff.module.spec.ts` sigue **sin** afirmarlo (verificado en el árbol). (El módulo **sí** crece: registra el controlador de ownership, y ahora son **exactamente tres** controladores, con un test que lo afirma) |
 
----
+**Resumen:** **10** ítems cerrados (9 por tareas de este plan: 1, 5, 6, 7, 8, 10, 13, 14, 18
+— más 1 ya cerrado antes de este plan: 4) y **12** diferidos con su razón escrita.
+Ninguno sin destino.
+
+### Los tres cierres incidentales — los que NO estaban en los veintidós
+
+El registro tiene que estar completo, y hay tres cosas que este plan cerró **de paso**,
+que no estaban en la lista y que nadie había listado:
+
+1. **Las dos funciones de correo que también leían `business_ownership`.**
+   `public.notify_business_pending()` (el `AFTER INSERT` de `businesses`) y
+   `public.notify_business_verification()` (el `AFTER UPDATE OF verification_status` de
+   `business_moderation`) leían la tabla, y **no estaban en el plan**. Una función de
+   plpgsql que nombra una tabla que ya no está **no falla al compilar: falla al
+   ejecutarse**, así que sin reescribirlas, **TODOS** los altas de negocio y **TODAS**
+   las aprobaciones de moderación habrían fallado en tiempo de ejecución. Se
+   reescribieron en la Task 10.
+2. **El defecto de `sessionStateAsCaller`.** `StaffRepository.sessionStateAsCaller()`
+   sacaba la primera fila del arreglo de filas y después la indexaba otra vez: el
+   resultado era `undefined` **siempre**, y el método tiraba en **todas** las llamadas.
+   Como `requireActor()` lo llama en cada escritura del módulo de personal, **el módulo
+   entero estaba roto** y ninguna prueba lo cubría —el spec del servicio mockea el
+   repositorio—. Lo encontró y lo arregló la Task 1.
+3. **La Edge Function `handle-order-event`.** Es el **séptimo** lector de la tabla (los cinco
+   de la API, el del móvil y este), y es el
+   único que **ninguna** comprobación de base de datos puede ver: no es un `pg_proc` ni
+   un `pg_policies`, es PostgREST desde Deno, y es la función que dispara el trigger
+   `trg_order_event_push` en cada `order_events` INSERT. Lo encontró y lo cerró la Task
+   11 —el día del cierre, que es el último momento en que se puede.
+
+Y una cuarta, que **no** es un cierre sino una **corrección de una prosa**: el §5.1 del
+spec decía que `can_manage_location` le daba el negocio entero al `manager`, y eso dejó
+de ser cierto con la Task 2. El addendum §B.2 y el §5.1 del spec lo dicen ahora como se
+construyó.
 
 ## Fuera de este plan (no-goals)
 
-Explicitamente, para que la rama no crezca:
+Explicitamente, para que la rama no crezca. **Esta lista se escribió antes de construir;
+la de abajo es la de después**, y la diferencia es lo que la construcción enseñó.
+
+### Lo que se dejó fuera, y por qué
 
 1. **La pantalla del panel** (admin y móvil) que llama a las dos rutas nuevas. La API
    existe; el botón no. La interfaz de «Equipo» del panel y las dos pestañas de admin son
@@ -1473,6 +1516,61 @@ Explicitamente, para que la rama no crezca:
 9. **El borrado físico de membresías** (§12): sigue siendo lógico, y ahora además es lo que
    hace posible borrar un negocio liberado.
 
+### Lo que la construcción añadió a la lista de «fuera»
+
+10. **La tabla de auditoría de propiedad.** El repo **no tiene** una tabla de auditoría de
+    negocio (`order_events` es de pedidos). Una tabla de auditoría es un esquema nuevo que
+    nadie pidió y que nadie lee: lo que hay es el **log estructurado** con un `event`
+    (`business_ownership_transferred`, `business_ownership_restored`, y los del resto de las
+    operaciones del equipo). **Si el negocio necesita un historial consultable, es una tabla y
+    es una decisión de producto** —y está en §B.7 del addendum.
+11. **El renombrado de los eventos de analítica.** Dicen «ownership», que era el nombre de
+    la tabla, y renombrarlos **parte los tableros**: es una decisión de producto, no de este
+    plan.
+12. **Adoptar `R0003`.** El panel no lo conoce y este plan no toca el panel; la
+    transferencia y la liberación usan `R0004`, un código nuevo.
+13. **El bucket de throttler propio para las dos rutas nuevas.** El tope global
+    (100/min/IP) las cubre, y la presión sobre GoTrue viene de `createUser`, que este plan
+    no agrega a una ruta nueva.
+14. **El round-trip menos por lectura de pedido** (`roleOf`): ítem de performance, con el
+    mismo lever que el 6.
+15. **Recuperar la fila de propiedad histórica.** La tabla se cayó con sus datos. **El dueño
+    vive en `business_members`, que no se tocó** —16 negocios, 16 membresías, 16 dueños
+    vivos—, así que los negocios **vuelven a tener dueño**; lo que se pierde es el
+    **histórico de propiedad**, y recuperarlo es una tabla nueva.
+16. **Corregir el `BEFORE` del guard del dueño.** La guarda de `status → disabled` se
+    queda; la de degradación y la de `deleted_at` se fueron al trigger diferido, y **no
+    vuelven**: el invariante se evalúa al commit.
+17. **Traducir el `R0002` de la moderación en el servicio de negocios**, que Task 5 dejó
+    como un 500 opaco. **La Task 10 lo hizo** (`mapBusinessWriteError`, 422 con el mensaje y
+    con la puerta), porque una moderación que aborta con un 500 no le dice a nadie qué
+    hacer.
+
+---
+
+## Las decisiones que quedan ABIERTAS, y su costo
+
+Ninguna se decidió acá. Se registran con lo que cuesta decidirla, para el partner. El
+detalle completo está en el **addendum §B.7 del ADR-0013**.
+
+1. **Un gerente que crea una sucursal no la administra hasta que el dueño se la da.**
+   Crear una sucursal es de negocio entero —la fila que se crea no está en el alcance de
+   nadie— y administrar es del alcance. **Costo:** o el dueño tiene que poner cada
+   sucursal nueva en el alcance de alguien (una acción manual por sucursal), o la creación
+   pasa a ser «de alcance», que es una tercera semántica para `business_locations` y toca
+   la policy de `INSERT` y la del helper.
+2. **El dueño saliente conserva el alcance de TODAS las sucursales, como `manager`.** Es
+   lo que dice D1 y lo que la transferencia hace. **Costo:** «entregar el negocio» deja al
+   que se va con acceso de gerente sobre **todo** el negocio, no sobre lo que la otra
+   persona le ceda.
+3. **No hay tabla de auditoría.** Las transferencias y las asignaciones emiten un log
+   estructurado y nada más. **Costo:** no hay historial **consultable** de quién fue dueño
+   de un negocio y cuándo.
+4. **`R0003` sigue sin adoptarse.** `R0004` es para la transferencia y la liberación, y
+   `R0001` sigue significando **dos** negativas: el tope de plan y la entitlement
+   `staff_access`. **Costo:** el panel tiene que leer el `detail` —que es prosa— para
+   distinguir «te pasaste de miembros» de «tu plan no trae la feature».
+
 ---
 
 ## Cierre
@@ -1489,3 +1587,15 @@ El plan cierra cuando:
 - El addendum §B del ADR-0013 está escrito **desde lo que se construyó**.
 - La base viva tiene **0** policies que resuelvan por `business_ownership`, y la tabla no
   existe.
+
+### El estado de cada criterio, medido el 2026-10-21 (Task 11)
+
+| criterio | veredicto |
+| --- | --- |
+| `typecheck` verde | **SÍ** — 6/6, con el caché de turbo apagado |
+| `build` verde | **SÍ** — 4/4, con el caché de turbo apagado |
+| `test` no agrega ni un fallo | **SÍ** — el conjunto de fallos es **idéntico, nombre por nombre**, al de `59ae872` medido en la misma máquina. **PERO el «18» del criterio no es reproducible acá**: los 4 de `admin` del Plan 2 son **129** en esta máquina (timeouts de `waitFor` de 1 s). El total comparable es **143** en los dos árboles |
+| las 12 mutaciones | **NINE de doce.** M9, M10 y M11 —las tres de la Task 5— **no tienen evidencia**: los informes de las Tasks 4, 5 y 6 no tienen sección de mutación. Y el M3 del plan no tiene equivalente exacto (la M7 del informe de la Task 2 es otra mutación). Queda anotado en el informe de la Task 11 |
+| los 22 ítems de la herencia | **SÍ** — 10 cerrados (9 por tareas + 1 ya cerrado), 12 diferidos con su razón, 0 sin destino. **Y tres cierres incidentales** que no estaban en la lista |
+| el addendum §B | **SÍ** — escrito desde lo que se construyó, con **cinco** desviaciones del plan corregidas |
+| 0 policies por `business_ownership` y la tabla no existe | **SÍ** en la base viva. **PERO la afirmación de la prosa era incompleta**: quedaba **una consulta viva** en la Edge Function `handle-order-event`, que ni `pg_proc` ni `pg_policies` pueden ver. La Task 11 la migró y le puso un guard |

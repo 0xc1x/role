@@ -249,10 +249,20 @@ el mismo que aplica el motor.
 ```sql
 -- public.can_manage_location(business_id uuid, location_id uuid) returns boolean
 -- SECURITY DEFINER, SET search_path = ''
---   owner  -> todo el negocio
---   manager-> todo el negocio
---   staff  -> solo las locations de su fila de alcance
+--   owner  -> todo el negocio, con o sin filas de alcance
+--   manager-> solo las locations de su fila de alcance; sin filas, ninguna
+--   staff  -> solo las locations de su fila de alcance; sin filas, ninguna
 ```
+
+> **[corregido por el Plan 3, 2026-10-21] La prosa de arriba era media verdad y
+> ahora es falsa.** Decía «manager → todo el negocio», y la base lo concedía:
+> `when r.member_role in ('owner', 'manager') then true`, verificado en la base viva.
+> El Plan 3 lo cambió a `when r.member_role = 'owner' then true`, y el `manager` —y
+> el `staff`— llegan a la fila por la rama del alcance: la sucursal tiene que estar en
+> las filas **vivas** de `business_member_locations` de ese miembro. **Sin filas de
+> alcance no se alcanza ningún recurso.** Es la migración
+> `20261020152852_location_scope_in_policies.sql`, y el detalle completo está en el
+> **addendum §B.2 del ADR-0013**.
 
 **El helper no excluye nada, y las dos exclusiones que se le atribuían no son
 suyas.** Borrar una sucursal es una restricción de **policy**, no del helper:
@@ -285,7 +295,7 @@ también lee las sucursales activas que **no** son de su alcance. La lectura no 
 esta sección audita —la escritura lo es—, pero el texto no puede afirmar que un `staff`
 sólo ve las suyas.
 
-La fila que decide es la del `UPDATE`: es la única cuya policy es el helper
+**La fila que decide es la del `UPDATE`**: es la única cuya policy es el helper
 **solo**, sin la condición de rol que acompaña a las otras tres, y el helper le
 concede al `staff` las sucursales de su fila de alcance. **Para el `UPDATE` de una
 sucursal, RLS no es la frontera de un `staff`** — lo son el filtro de la API y el
@@ -294,6 +304,32 @@ de la UI (ver §9.3). El CRUD de sucursales de la API lo niega por su cuenta
 `apps/api/src/modules/businesses/businesses.service.ts:788`), pero un cliente que
 escriba directo a Supabase (el móvil, ADR-0002) **puede renombrar la sucursal que
 el `staff` tiene en su alcance**.
+
+**El alcance es una frontera de datos, en lecturas y en escrituras, y el «sin filas»
+es una respuesta.** Esto lo construyó el Plan 3 (`20261020152852`) y lo midió contra
+la base viva, no contra este documento:
+
+- **lecturas y escrituras**: las trece policies que leen `can_manage_location` —que
+  son las que gobiernan sucursales, productos, categorías, pedidos, eventos, intents
+  de pago y los clientes de un pedido— leen la respuesta del helper, así que el
+  cambio del helper las acota a las trece. Un `manager` con alcance en A **no lee** y
+  **no escribe** nada de B: ni un `SELECT`, ni un `INSERT`, ni un `UPDATE`, ni un
+  `DELETE`.
+- **«sin filas de alcance» no es «todo»**: un `manager` o un `staff` sin filas de
+  alcance no alcanzan **ningún** recurso. Lo que sí alcanzan es **su propia fila de
+  membresía** —y nada más— por la excepción que vive en
+  `public.business_member_reaches_member`, y que existe para el autoservicio de la
+  decisión 4 del ADR-0013 («un gerente puede cortar su propio acceso»). La excepción
+  concede **su fila**, no un recurso: `can_manage_location` no se entera de ella.
+- **las dos policies del roster** —`Owners and managers view business members` y
+  `Owners and managers view member scope`— son «el roster que alcanzas», y llevan el
+  **requisito de rol DENTRO** (`owner` o `manager`), porque la regla del alcance no
+  distingue por rol y un `staff` cuyo alcance cubre el de otro acceso cumple el
+  helper.
+
+El detalle completo —las quince policies que dependen del alcance, las nueve que se
+quedan de negocio entero y la owner-only que no cambia— está en el **addendum §B.2 del
+ADR-0013**.
 
 Se apoya en dos helpers más pequeños, todos `STABLE SECURITY DEFINER` con
 `search_path` pineado (patrón ya establecido por `public.business_is_approved`):
@@ -318,7 +354,8 @@ helpers para este dominio y aquí se nombran tres. En particular
 «los tres son ejecutables por `authenticated`» no puede leerse como «todos lo
 son».
 
-> **La lista de helpers de esta sección quedó corta, y el código la sobrepasó.**
+> **La lista de helpers de esta sección quedó corta, y el código la sobrepasó — dos
+> veces.**
 > Dice «tres» y nombra `business_member_role`, `can_manage_location` y
 > `business_has_feature`. `pg_proc` tiene **siete** para este dominio, y los
 > cuatro que faltan nacieron después de que esta §5.1 se escribiera:
@@ -330,6 +367,27 @@ son».
 > de la §5.3). `business_plan_of` **no** es ejecutable por `authenticated` y no
 > debe serlo: no la consulta el cliente, y `business_has_feature` es su versión
 > client-facing. Ver ADR-0013.
+>
+> **[corregido por el Plan 3, 2026-10-21] Hoy son ONCE, no siete.** Los cuatro que
+> nacieron después son `business_member_reaches_member` (la frontera de **personas**,
+> `STABLE SECURITY DEFINER`, ACL `{postgres, service_role, authenticated}` porque una
+> policy la evalúa como el rol que la invoca),
+> `business_member_covers_locations` (la pregunta de la API «¿este conjunto de
+> sucursales está cubierto?», ACL `{postgres, service_role}`),
+> `business_live_owner_count` (la **única** definición de «dueño vivo»:
+> `role='owner'` ∧ `status='active'` ∧ `deleted_at is null`; la consultan el trigger
+> diferido del invariante, la guarda de reactivación, la recuperación y el servicio) y
+> `business_member_session_inside_promise` (la **combinación** de «vencida» —`ttl = 0`
+> **o** (sello presente **y** la fecha compartida no pasó)— que el Plan 3 sacó de
+> TypeScript, porque una copia en un `.ts` es invisible para el guard de catálogo que
+> lee `pg_proc.prosrc`).
+>
+> **Y hay tres que no son de permiso sino de operación**, y que por eso no cuentan
+> en esta lista: `transfer_business_ownership`, `release_business_ownership` y
+> `assign_business_ownership`. Las tres son `VOLATILE SECURITY DEFINER` con ACL
+> `{postgres, service_role}` —`anon` y `authenticated` no las pueden abrir— y las
+> tres son *operaciones de propiedad*, no predicados. Ver el **addendum §B.1 del
+> ADR-0013**.
 
 ### 5.2 Validez de sesión, en un guard aparte
 
@@ -574,6 +632,22 @@ Todas pasan a `public.can_manage_location(...)` o `public.business_member_role(.
    recrearon con el helper—, pero **las policies viejas siguen en pie y la tabla también**,
    porque `getBusinessesByOwnerId` todavía la lee y dropearla sin migrar ese reader rompe el
    panel del dueño. Ver ADR-0013.
+
+   > **[corregido por el Plan 3, 2026-10-21] El paso 7 está HECHO.** La tabla ya no
+   > existe: `to_regclass('public.business_ownership')` → `NULL`, medido en la base viva
+   > el 2026-10-21. Las **19** policies viejas se borraron por nombre (una por una, con
+   > `drop policy if exists`), las dos policies de la propia tabla cayeron con ella, y
+   > los siete lectores se mudaron a `business_members`: los cinco de la API
+   > (`aggregateSelect`, `insert`, `countRetained`, `announcements.ownerIdsForBusinesses` y
+   > `notification.handlers.ts`), el `getBusinessesByOwnerId` del móvil y la Edge Function
+   > `handle-order-event`. **Dos
+   > funciones que no estaban en el plan** también la leían —`notify_business_pending` y
+   > `notify_business_verification`— y si no se hubieran reescrito, **todas** las altas
+   > de negocio y **todas** las aprobaciones de moderación habrían fallado en tiempo de
+   > ejecución (una función de plpgsql que nombra una tabla que no está no falla al
+   > compilar: falla al ejecutarse). El detalle completo, con la lista de las 19 y la
+   > de los lectores, está en el **addendum §B.5 del ADR-0013** y en
+   > `supabase/migrations/README.md`.
 8. Triggers de límites de plan.
 9. Grants a `authenticated` de solo lectura sobre `business_members` /
    `business_member_locations`.
@@ -818,7 +892,6 @@ Migraciones solo por `apply_migration`, con la verificación de `md5sum` contra
 
 ## 12. Fuera de alcance
 
-- Transferencia de propiedad del negocio.
 - Borrado físico de membresías (`deleted_at` los deja para siempre; la limpieza no se expone
   en la v1).
 - Confirmación por teléfono del empleado (el campo `phone` queda listo).
@@ -826,6 +899,31 @@ Migraciones solo por `apply_migration`, con la verificación de `md5sum` contra
 - Facturación, suscripciones recurrentes, descuentos y tiers por tamaño.
 - `visibility_plus` como efecto real (el enum existe; el comportamiento, no).
 - Auditoría histórica de acciones por miembro más allá de atribuir la sesión.
+
+> **[corregido por el Plan 3, 2026-10-21] «Transferencia de propiedad del negocio» sale
+> de esta lista: EXISTE.** La lista de arriba decía «Transferencia de propiedad del
+> negocio» fuera de alcance, y eso dejó de ser cierto el 2026-10-21. Lo que se
+> construyó es:
+>
+> - **La operación de base**: `public.transfer_business_ownership(business_id, member_id)`,
+>   `VOLATILE SECURITY DEFINER`, ACL `{postgres, service_role}` —`anon` y
+>   `authenticated` no la pueden abrir—, atómica, con el invariante de «un negocio
+>   activo tiene un dueño vivo» como trigger **diferido** que se evalúa al commit.
+> - **La puerta HTTP**: `POST /businesses/:businessId/ownership/transfer`, del dueño
+>   vivo, con el `R0004` de la base traducido a un 422 con el motivo.
+> - **La liberación**: `public.release_business_ownership(business_id, actor_user_id)`,
+>   sólo para un negocio **inactivo**; archiva la membresía de dueño y sus filas de
+>   alcance, y deja el negocio sin dueño vivo.
+> - **La recuperación**: `public.assign_business_ownership(business_id, member_id)` y
+>   `POST /businesses/:businessId/ownership/restore`, de la plataforma, para un negocio
+>   que se quedó sin dueño. **La pantalla de admin que lo llama no existe todavía.**
+>
+> El detalle completo está en el **addendum §B del ADR-0013**. Lo que **sigue** fuera
+> de alcance es lo de la lista de arriba, y además: la **pantalla** de la
+> transferencia y de la recuperación (la API existe, el botón no), una **tabla de
+> auditoría** de propiedad (lo que hay es un log estructurado con un `event`), y el
+> **renombrado de los eventos de analítica** que dicen «ownership» (renombrarlos parte
+> los tableros: es una decisión de producto).
 
 ## 13. Riesgos
 

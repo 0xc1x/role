@@ -436,3 +436,356 @@ Con el dueño inmutable (§A.2), la rama `owner_memberships > 0` es la **única*
 forma de tener una membresía viva de dueño, y por eso el 409 no puede tener una
 salida por la API: la salida es **de producto** (transferir la propiedad), no de
 software.
+
+---
+
+## Addendum §B (2026-10-21) — De «decidido» a «construido» (Plan 3)
+
+El addendum §A documentó lo que el **Plan 2** construyó. Este §B documenta lo que el
+**Plan 3** construyó: las tres decisiones que el partner tomó el 2026-10-21 (D1, D2, D3),
+la frontera de datos que resultó, el invariante que sostiene la propiedad, la regla del
+negocio inactivo y el retiro de `business_ownership`.
+
+**Escrito desde lo que se construyó, no desde lo que se planeó.** Donde la implementación
+se apartó del plan, este §B dice lo que hay —con su número medido— y el plan se corrige.
+Las correcciones están marcadas con **[corregido]**.
+
+### B.1 — Las tres decisiones, con el archivo y la migración que las implementa
+
+| decisión | qué es | dónde está |
+| --- | --- | --- |
+| **D1 — la transferencia de propiedad existe** | `public.transfer_business_ownership(uuid, uuid) → jsonb`: `volatile`, `security definer`, `search_path = ''`, ACL **`{postgres, service_role}`** — `anon` y `authenticated` no la pueden abrir | `supabase/migrations/20261020163244_ownership_transfer.sql`; el cerrojo, en `20261020174431_ownership_transfer_concurrency.sql` |
+| | la puerta HTTP: `POST /businesses/:businessId/ownership/transfer`, cuerpo `{ new_owner_member_id }`, respuesta `{ previous_owner, new_owner }` | `apps/api/src/modules/staff/ownership.controller.ts`; el servicio, `apps/api/src/modules/staff/staff.service.ts`; los contratos, `packages/commons/src/business/schemas/business-ownership.schema.ts` |
+| **D2 — un negocio inactivo libera a su dueño** | `public.release_business_ownership(uuid, uuid) → jsonb`: `volatile`, `security definer`, `search_path = ''`, ACL **`{postgres, service_role}`** | `supabase/migrations/20261020172601_inactive_business_releases_owner.sql` |
+| | la recuperación: `public.assign_business_ownership(uuid, uuid) → jsonb`, misma forma y mismo ACL | `supabase/migrations/20261020172817_assign_business_ownership.sql` |
+| | la puerta HTTP: `POST /businesses/:businessId/ownership/restore`, cuerpo `{ member_id }`, respuesta `{ owner }` | `apps/api/src/modules/staff/ownership.controller.ts` |
+| | la puerta del borrado de cuenta (el 409) y la rama que anonimiza | `apps/api/src/modules/auth/auth-account.repository.ts` (`countRetained`, `anonymise`) y `apps/api/src/modules/auth/auth.service.ts` |
+| **D3 — el alcance por sucursal es una frontera de datos** | `public.business_member_reaches_member(uuid, uuid) → boolean` — `stable`, `security definer`, `search_path = ''`, ACL **`{postgres, service_role, authenticated}`** (una policy la evalúa como el rol que la invoca) | `supabase/migrations/20261020134712_member_scope_predicates.sql` |
+| | `public.business_member_covers_locations(uuid, uuid[]) → boolean` — misma forma, ACL **`{postgres, service_role}`** (sólo la API la llama) | el mismo archivo |
+| | la frontera en las policies: la rama del rol de `can_manage_location` y las dos policies del roster | `supabase/migrations/20261020152852_location_scope_in_policies.sql` |
+
+Los tres ACL son **medidos**, no copiados: `pg_proc.proacl` en la base viva, con el
+`revoke all … from public, anon, authenticated` y el `grant execute … to service_role`
+escritos **explícitamente** en cada migración, porque `create or replace` conserva el
+ACL pero no lo deja a la vista.
+
+**El que llama no es un argumento, salvo en la liberación.** La transferencia lee
+`auth.uid()`: una función que recibiera «el dueño» como parámetro dejaría que
+cualquiera pidiera transferir la propiedad de cualquiera. La liberación es la
+excepción, y por una razón buena: **la pide una cuenta que se va, que ya no tiene
+sesión** — su `actor` es un argumento, y la función comprueba ella misma que ese
+argumento es el dueño vivo del negocio.
+
+### B.2 — La regla del alcance, tal como quedó
+
+> **El dueño alcanza el negocio entero, con y sin filas de alcance. Cualquier otro
+> miembro alcanza exactamente las sucursales de sus filas vivas de
+> `business_member_locations`. Sin filas, no alcanza ningún recurso.**
+
+La regla está en **dos** helpers, y no hay una tercera copia en TypeScript:
+
+- **`can_manage_location(business_id, location_id)`** — la frontera de **recursos**.
+  Su rama de rol pasó de `when r.member_role in ('owner','manager') then true` a
+  `when r.member_role = 'owner' then true`; el `manager` llega a la fila por la rama
+  del alcance, y un `manager` sin filas llega a nada.
+- **`business_member_reaches_member(business_id, member_id)`** — la frontera de
+  **personas**. El dueño vivo alcanza a todos los accesos; cualquier otro miembro
+  alcanza a un acceso si y sólo si **su** alcance es no vacío, **el del acceso** es no
+  vacío, y **el del acceso está contenido en el suyo** (subconjunto, no intersección).
+
+**El alcance vacío es una respuesta, no una ausencia.** Sin filas de alcance, un
+`manager` o un `staff`:
+
+- **no alcanza ningún recurso**: ni una sucursal, ni un producto, ni un pedido, ni un
+  evento, ni un intent de pago, ni un cliente de un pedido — en lecturas **y** en
+  escrituras, que es lo que D3 pedía y lo que la §5.1 del spec ya no puede negar;
+- **sí alcanza su propia fila de membresía**, y nada más. La excepción vive **en el
+  helper** y no en la policy, por dos razones: la API pregunta a la base (y el
+  autoservicio de la decisión 4 de este ADR es una escritura de la API), y una policy
+  no puede decir «mi fila» sin leer `business_members` con la RLS del llamador —lo que
+  recursiona— o sin un segundo helper `security definer`, que sería un segundo sitio
+  con la regla.
+
+**El inventario, medido en `pg_policies` el 2026-10-21** (no estimado):
+
+| grupo | cuántas | cuáles | qué pasó |
+| --- | --- | --- | --- |
+| **dependen del alcance** | **15** | las **13** que leen `can_manage_location` + las **2** del roster | **14 cambian** de comportamiento |
+| … de las cuales **no cambian** | 1 | `business_locations` · `Members can delete business locations` (DELETE) | exige `role = 'owner'`: **no da alcance a nadie**, así que el cambio del helper no la toca. Por qué no cambia: borrar una sucursal es *owner-only* por decisión de producto (§5.1 del spec), no por límite de ubicación |
+| **siguen siendo de negocio entero** | **9** | `business_hours` (1) · `business_locations` INSERT (1) · `business_notification_preferences` (3) · `businesses` SELECT y UPDATE (2) · `coupons` (1) · `payouts` (1) | **no cambian**: el alcance acota *las cosas que viven en una sucursal*; lo que no tiene dimensión de sucursal sigue siendo del negocio entero, y se concede **por rol** |
+
+> **[corregido] El plan decía «diez» de negocio entero y la lista tenía nueve.** La
+> cifra correcta es **nueve**. De las **doce** policies que usan `business_member_role`
+> (medido en `pg_policies`), **dos** cambian de texto —las del roster—, **una** es la
+> owner-only que no cambia ni es de negocio entero
+> (`Members can delete business locations`), y **nueve** se quedan de negocio entero.
+> La aritmética del plan —«doce, dos cambian, diez se quedan»— metió la owner-only
+> en el grupo de las de negocio entero, y su lista tenía nueve filas, no diez.
+
+**Las trece policies que leen `can_manage_location` no se tocaron.** Cambió lo que el
+helper contesta, no su texto: trece diffs de policy son trece copias de una regla, y
+trece copias son trece formas de escribirla distinto. Dos de las trece se tocan
+**por efecto** del cambio del helper y no por su texto: `Members can view business
+locations` y `Members can update business locations`.
+
+**Las dos policies del roster se reescribieron con `alter policy`, no con `drop` +
+`create`.** Postgres no tiene `create or replace policy`; `alter` conserva el OID y no
+saca nunca la policy de `pg_policies`, y `drop` + `create` abre una ventana en la que
+la tabla queda abierta para el rol que la policy restringía. Las dos llevan el
+**requisito de rol DENTRO** (`business_member_role(business_id) in ('owner','manager')`),
+porque la regla del alcance **no distingue por rol**: un `staff` cuyo alcance cubre el
+de otro acceso cumple el helper, y sin el requisito de rol vería el roster —cuyos
+alias espejan `auth.users.email`—.
+
+**Dos consecuencias que hay que decir en voz alta**, porque el panel las va a
+preguntar:
+
+1. **El dueño desaparece del roster del gerente.** Es lo que el §8 ya decía («un
+   gerente nunca administra al dueño») y lo que la API ya hacía; ahora la base lo dice
+   también, y las dos capas coinciden.
+2. **Un gerente que crea una sucursal no la administra.** Crear es de negocio entero
+   (la fila que se crea no está en el alcance de nadie) y administrar es del alcance.
+   La sucursal nueva no la administra nadie hasta que el dueño la pone en el alcance de
+   alguien. **Es una decisión pendiente del partner** —ver §B.7.
+
+**Lo que NO cambió, y por qué, con nombre:**
+
+- `Anyone can view active business locations` (`roles = public`, `is_active = true`)
+  deja leer las sucursales **activas** a cualquiera: un `staff` sigue leyendo las
+  sucursales activas que no son de su alcance. El §5.1 del spec ya lo dice; el Plan 3
+  no lo cambió y el texto no puede afirmar lo contrario.
+- El `UPDATE` de una sucursal sigue concediéndose a quien la alcanza: un `staff` con
+  alcance sobre la sucursal A puede renombrar A. El §9.3 del spec decidió que eso se
+  recorta en la UI, y el Plan 3 no reabre esa decisión.
+
+### B.3 — «Un negocio activo tiene un dueño vivo», y por qué es un trigger diferido
+
+> **Un negocio ACTIVO siempre tiene un dueño vivo. Un negocio INACTIVO puede no
+> tenerlo.**
+
+El invariante vive en un **`CONSTRAINT TRIGGER … DEFERRABLE INITIALLY DEFERRED …
+FOR EACH ROW`** sobre `business_members` (`trg_business_keeps_an_owner`,
+`public.enforce_business_keeps_an_owner()`, `security definer`, `search_path = ''`).
+
+**Por qué diferido y no `BEFORE`.** La degradación y la promoción tienen que ser
+**dos sentencias**. El índice parcial `business_members_one_owner_per_business` comprueba
+fila por fila, así que en una sola sentencia el orden de las filas no está garantizado
+y la promoción puede chocar con un `23505` —un error de índice, no una regla—. Un
+`BEFORE` vería el **estado intermedio**: el negocio sin dueño, y negaría una
+transferencia legítima. El diferido se evalúa **al commit**, con el estado final.
+
+**El predicado, exacto:** un negocio activo tiene **exactamente un** dueño vivo, y
+«dueño vivo» es una sola definición —`role = 'owner'` ∧ `status = 'active'` ∧
+`deleted_at is null`— en `public.business_live_owner_count(uuid)`, que consultan el
+trigger, la guarda de reactivación, la recuperación y el servicio. Como el índice
+parcial impide dos dueños vivos, «exactamente uno» y «al menos uno» son la misma cosa;
+se escribió la forma exacta porque es la que dice la regla.
+
+**El trigger mira los dos negocios de la fila** —el de destino y el de origen cuando
+la fila se muda de negocio—, porque una mudanza puede dejar al negocio viejo sin
+dueño.
+
+**Lo que se movió de sitio al construirlo:** la guarda de degradación y la de
+`deleted_at` estaban en el `BEFORE UPDATE` de la fila (`enforce_owner_is_untouchable`),
+y de ahí se fueron al trigger diferido. El efecto observable: **una degradación suelta
+ya no se niega en la sentencia, se niega en el commit**, y sólo si el negocio sigue
+activo. La guarda de `status → 'disabled'` **se queda** en el `BEFORE`, porque una
+revocación merece un error inmediato con su propio mensaje.
+
+### B.4 — El negocio inactivo, su dueño, y quién reactiva
+
+**«Liberado» tiene cinco mitades, y las cinco están en la base** (no en TypeScript):
+
+1. **La membresía de dueño se ARCHIVA** (`deleted_at`), no se borra: la fila queda para
+   saber quién operó en el negocio, y el alias queda quemado a propósito (el índice
+   único es por negocio y **no** lleva predicado de `deleted_at`).
+2. **Sus filas de alcance se archivan con ella** (`business_member_locations`): una
+   membresía archivada con su alcance vivo sigue diciendo «esta persona llegaba a
+   esta sucursal» de alguien que ya no está.
+3. **La fila de `business_ownership` de ese negocio se BORRA** —mientras la tabla
+   exista—. [corregido] **Esta mitad ya no aplica: la tabla se retiró en la Task 10**
+   (ver §B.5), y el `delete` desapareció con ella.
+4. **El negocio no se borra ni se reactiva**: conserva ofertas, pedidos, sucursales y
+   horarios. Esto es una jubilación, no un borrado.
+5. **Los otros miembros no se tocan**: el gerente y el empleado siguen vivos, con su
+   alcance, y son los que reciben al dueño nuevo cuando la plataforma lo devuelva.
+
+**La liberación es explícita y sólo para un negocio inactivo.** `release_business_ownership`
+niega con `R0004` si el negocio está activo («un negocio activo no libera a su dueño:
+transferí la propiedad»), y el `DELETE` de la cuenta se lleva por delante esa salida:
+la puerta del 409 cuenta **sólo dueños de negocios activos**, así que el dueño de un
+negocio inactivo puede borrar su cuenta sin transferir nada.
+
+**Un negocio sin dueño no vuelve a la vida.** `trg_business_reactivation_needs_owner`
+(`BEFORE UPDATE OF is_active ON businesses`) niega con `R0002` la activación de un
+negocio sin dueño vivo. El trigger diferido de §B.3 vigila las **membresías**, así que
+sin este trigger `update businesses set is_active = true` dejaba un negocio activo sin
+dueño y nadie lo avisaba.
+
+**Quién reactiva:** el dueño, si lo hay —y un dueño con sesión viva es el que
+transfiere (§B.1)—; y si no lo hay, **la plataforma**. `assign_business_ownership` es
+la puerta del rescate, y **no es una bandera de la transferencia**: son dos hechos y
+dos permisos. La transferencia la pide el dueño, que es quien entrega; la recuperación
+la pide la plataforma, que es quien rescata. Por eso **niega con `R0004` si el
+negocio ya tiene un dueño vivo** —«este negocio ya tiene un dueño: usá la
+transferencia»—, que es la línea que impide que la recuperación sea una segunda puerta
+para saltarse el invariante.
+
+**La recuperación es de la plataforma, y la API lo comprueba con el `app_role`:**
+`user.role === 'admin'`. La función es ejecutable sólo por el servicio, así que el
+móvil no la puede abrir. El **permiso de plataforma** no vive en la base, y está
+dicho: la base no sabe qué es un admin de plataforma.
+
+**Y hay una segunda puerta, y es la que hace posible el rescate:** un negocio cuyo
+dueño se fue puede quedarse **sin ningún acceso**, y entonces no hay ni a quién
+transferirle la propiedad ni quién administre lo que queda. La rama de admin vive en
+**`create`** (`POST /businesses/:id/staff`), no en `requireActor` (que sigue negando
+al admin), y su condición es **doble**: `user.role === 'admin'` **y** el negocio no
+tiene dueño vivo — y esa segunda mitad la contesta la **base**
+(`public.business_live_owner_count`), no un predicado propio de la API, para que la
+puerta no pueda abrir un negocio que la operación después cierra.
+
+**Lo que la regla de la reactivación rompió, y está medido:** la moderación
+(`apply_business_verification_state`) reactiva con
+`update businesses set is_active = (new.verification_status = 'approved')`, así que
+**aprobar un negocio sin dueño vivo aborta la aprobación**. La API traduce el `R0002`
+a un **422** con el mensaje de la base y con la puerta que lo resuelve
+(`apps/api/src/modules/businesses/businesses.service.ts`, `mapBusinessWriteError`), y la
+salida es la de la plataforma: devolverle el dueño primero.
+
+### B.5 — El retiro de `business_ownership`
+
+**La tabla ya no existe.** Medido en la base viva el 2026-10-21, sólo `SELECT`:
+`to_regclass('public.business_ownership')` → `NULL`; `pg_class` en `public`: **43**
+tablas (eran 44); `pg_policies` que nombran la tabla: **0**; `pg_proc` que la nombran:
+**0**; policies de `public`: **112** (eran 133: 133 − 19 − 2).
+
+**Las diecinueve policies que se retiraron**, en doce tablas — la lista se midió contra
+`pg_policies` **antes** de escribir la migración, y la migración las borra **por
+nombre**, una por una:
+
+| tabla | policy | cmd |
+| --- | --- | --- |
+| `business_hours` | Owners can manage own business hours | ALL |
+| `business_locations` | Owners can manage own business locations | ALL |
+| `business_notification_preferences` | Business owners insert own notification preferences | INSERT |
+| `business_notification_preferences` | Business owners update own notification preferences | UPDATE |
+| `business_notification_preferences` | Business owners view own notification preferences | SELECT |
+| `businesses` | Owners can update own businesses | UPDATE |
+| `businesses` | Owners can view own businesses | SELECT |
+| `coupons` | Owners can manage own coupons | ALL |
+| `offer_categories` | Owners can delete offer categories | DELETE |
+| `offer_categories` | Owners can insert offer categories | INSERT |
+| `offers` | Owners can delete own offers | DELETE |
+| `offers` | Owners can insert own offers | INSERT |
+| `offers` | Owners can update own offers | UPDATE |
+| `offers` | Owners can view own offers | SELECT |
+| `order_events` | Business can view own order events | SELECT |
+| `orders` | Business can view own orders | SELECT |
+| `payment_intents` | Business can view own payment intents | SELECT |
+| `payouts` | Business can view own payouts | SELECT |
+| `profiles` | Businesses can view their order customers | SELECT |
+
+Las **dos** policies de la propia tabla —«Owners can view own business ownership» y
+«Admins can view all business ownership»— **no están en la lista porque no nombran la
+tabla en su predicado** (`owner_id = auth.uid()` y `my_role() = 'admin'`): caen con
+ella.
+
+**Los lectores que se mudaron.** Los **cinco** de la API, que eran los que la
+auditoría del Plan 2 había contado:
+
+| # | lector | ahora |
+| --- | --- | --- |
+| 1 | `businesses.repository.ts` · `aggregateSelect` | un `inner join lateral` correlacionado sobre `business_members`, con preferencia por el dueño **vivo** |
+| 2 | `businesses.repository.ts` · `insert` | escribe **sólo** la membresía de dueño |
+| 3 | `auth-account.repository.ts` · `countRetained` | `businesses` sale de las membresías de dueño vivas |
+| 4 | `announcements.repository.ts` · `ownerIdsForBusinesses` | `business_members` con tres filtros: rol, estado y no archivada |
+| 5 | `notification.handlers.ts` · `onOrderStatusChanged` | `inner join business_members` con `role='owner'`, `status='active'`, `deleted_at is null` |
+
+Y el **sexto**, que no estaba en la lista del Plan 2 y que era el ítem 1 de la
+herencia: el **móvil** (`apps/mobile/src/features/business/data/repository.ts` ·
+`getBusinessesByOwnerId`), que ahora lee `business_members` y deduplica los ids.
+
+**Las dos funciones que NO estaban en el plan y que también la leían** — y que
+habrían reventado producción en silencio:
+
+- `public.notify_business_pending()` — corre en el `AFTER INSERT` de `businesses`.
+- `public.notify_business_verification()` — corre en el `AFTER UPDATE OF
+  verification_status` de `business_moderation`.
+
+Una función de plpgsql que nombra una tabla que ya no está **no falla al compilar:
+falla al ejecutarse**, con `relation "business_ownership" does not exist`. Lo que eso
+significa: **TODOS los altas de negocio** —del móvil y del API— y **TODAS las
+aprobaciones y rechazos** de la moderación habrían empezado a fallar. Ninguna de las
+dos es un permiso: son **reglas de existencia** (quién es el dueño, para poder
+avisarle), y la reescritura conserva la semántica exacta: la membresía viva es la
+misma definición que usa `public.business_member_role`, y el `left join lateral`
+conserva el `left join` viejo —un negocio sin dueño vivo deja el correo en `NULL`, que
+es lo que pasaba cuando la fila de propiedad no estaba—.
+
+**Y un séptimo lector que ninguna comprobación de base de datos puede ver:** la Edge
+Function `handle-order-event` (`supabase/functions/handle-order-event/index.ts`), que
+es la que dispara el trigger `trg_order_event_push` en cada `order_events` INSERT. No
+es una función de Postgres —es PostgREST desde Deno—, así que ni `pg_proc.prosrc` ni
+`pg_policies` la ven. Ese lector se mudó en la Task 11, con el mismo patrón de
+membresía viva que los otros cinco lectores de la API. Ver §B.7.
+
+**Lo que se conserva de la generación vieja, y por qué no se nota:** las dos
+generaciones de policies coexistieron durante el Plan 3, y su equivalencia era **para
+un dueño con la sesión viva**, y sólo esa —la generación vieja no miraba el TTL—. Con
+la tabla caída, la paridad deja de ser un estado transitorio y pasa a ser el estado
+final: ya no hay dos respuestas a «¿esta persona es el dueño?».
+
+### B.6 — Lo que se dejó fuera a propósito, y por qué
+
+Cada línea es una cosa que **podía** haberse hecho y no se hizo, con su razón:
+
+| lo que no se hizo | por qué |
+| --- | --- |
+| **La pantalla del panel** (admin y móvil) que llama a las dos rutas nuevas | la API existe; el botón no. La interfaz de «Equipo» y las dos pestañas de admin son un plan aparte (§9.2 y §10 del spec) |
+| **La pantalla de admin que muestra los negocios sin dueño** | la base los hace imposibles de reactivar sin dueño, así que el estado es raro y explícito; **verlo** en una tabla del panel es otra historia |
+| **El login condicional del §9.1** (los chips de cuentas, el «¿olvvidaste tu contraseña?» para `.role.ec`, el escáner de la tarjeta) | es un plan aparte del móvil; el Plan 3 sólo deja `isRoleEcAlias` viva, como el §A.4 pide |
+| **El filtrado de configuración por rol mínimo del §9.3** | es UI, y el §9.3 ya decidió que el filtrado es de UI. Lo que el Plan 3 hizo fue lo que el §9.3 no podía hacer: que la **base** acote al gerente |
+| **El alias editable y su aviso** (§9.4) | el §9.4 y el §A.4 ya están construidos en `packages/commons`; lo que falta es la pantalla |
+| **La edición de alias desde la app** y la tarjeta de entrega con QR | idem |
+| **La eficiencia del helper de alcance** (el acantilado de ~328 µs por fila) | medido y escrito en `supabase/migrations/README.md`. El lever es el costo por fila del helper, y no urge antes de que un negocio se acerque a 1.000 pedidos. **Este plan no optimiza ese costo** |
+| **El `Seq Scan on orders`** dentro del subplan hasheado de la policy de `profiles` | es un eje de tabla, medido y anotado; el Plan 3 no cambia la forma de esa policy más que por el predicado que ya usaba |
+| **Facturación, planes y `visibility_plus`** (§12 del spec) | fuera del alcance del spec desde el principio |
+| **El borrado físico de membresías** (§12) | sigue siendo lógico, y ahora además es lo que hace posible borrar un negocio liberado |
+| **Una tabla de auditoría de propiedad** | el repo **no tiene** una tabla de auditoría de negocio (`order_events` es de pedidos). Una tabla de auditoría es un esquema nuevo que nadie pidió y que nadie lee. Lo que hay es el **log estructurado**, con un `event`: `business_ownership_transferred`, `business_ownership_restored`, y los del resto de las operaciones del equipo. Si el negocio necesita un historial **consultable**, es una tabla y es una decisión de producto — **ver §B.7** |
+| **Adoptar `R0003`** | el panel no lo conoce y este plan no toca el panel. La transferencia usa `R0004`, un código **nuevo**, así que `R0001` sigue significando exactamente las dos cosas que significa hoy (el tope y la entitlement) |
+| **Un bucket de throttler propio para las rutas nuevas** | el tope global (100/min/IP) las cubre, y la presión sobre GoTrue viene de `createUser`, que este plan no agrega a una ruta nueva: la recuperación crea el acceso por la puerta que ya existe |
+| **Un round-trip menos por lectura de pedido** (`roleOf`) | es un ítem de performance, con el mismo lever que el acantilado |
+| **Renombrar los eventos de analítica** (`business_ownership_transferred`, `business_ownership_restored`) | dicen «ownership», que era el nombre de la tabla, pero renombrarlos **parte los tableros**: es una decisión de producto, no de este plan |
+| **Recuperar la fila de propiedad histórica** | la tabla se cayó con sus datos. **El dueño vive en `business_members`, que no se tocó** —16 negocios, 16 membresías, 16 dueños vivos—, así que los negocios **vuelven a tener dueño**; lo que se pierde es el **histórico de propiedad** |
+
+### B.7 — Cuatro decisiones que quedan ABIERTAS, y su costo
+
+Ninguna se decidió acá. Se registran con lo que cuesta decidirla, para el partner.
+
+1. **Un gerente que crea una sucursal no la administra hasta que el dueño se la da.**
+   Crear una sucursal es una operación de negocio entero —la fila que se crea no está en
+   el alcance de nadie— y administrar es del alcance. **El costo de la decisión:** o el
+   dueño tiene que poner cada sucursal nueva en el alcance de alguien (una acción
+   manual por sucursal, y un negocio con veinte sucursales la tiene que hacer veinte
+   veces), o la creación pasa a ser «de alcance», que es una tercera semántica para
+   `business_locations` y toca la policy de `INSERT` y la del helper.
+2. **El dueño saliente conserva el alcance de TODAS las sucursales, como `manager`.**
+   Es lo que dice D1 y lo que la transferencia hace: el ex-dueño no pierde el panel de
+   un día para otro. **El costo de la decisión:** «entregar el negocio» deja al que se
+   va con acceso de gerente sobre **todo** el negocio, no sobre lo que la otra persona
+   le ceda. La alternativa —dejarlo sin alcance— es más limpia, pero rompe el panel del
+   que se va el mismo día de la entrega, que es exactamente lo que D1 quiso evitar.
+3. **No hay tabla de auditoría.** Las transferencias y las asignaciones emiten un
+   **log estructurado** con un `event` (`business_ownership_transferred`,
+   `business_ownership_restored`), y nada más. **El costo de la decisión:** no hay
+   historial **consultable** de quién fue dueño de un negocio y cuándo. Si el negocio
+   lo necesita —para un reclamo, para unaimpitación, para un due diligence— es una
+   tabla nueva, con su schema, sus policies y su retención, y es un plan aparte.
+4. **`R0003` sigue sin adoptarse.** La transferencia y la liberación usan `R0004`, un
+   código nuevo, y `R0001` sigue significando **dos** negativas: el tope de plan y la
+   entitlement `staff_access`. **El costo de la decisión:** el panel tiene que leer el
+   `detail` —que es prosa— para distinguir «te pasaste de miembros» de «tu plan no
+   trae la feature». Adoptar `R0003` es un cambio de un solo lado en la API
+   (`PG_PLAN_LIMIT` y `mapWriteError`) **más el mapeo del panel**, que es donde de
+   verdad se nota.

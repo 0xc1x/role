@@ -61,14 +61,30 @@ Deno.serve(async (request) => {
 		return json({ error: "ORDER_NOT_FOUND" }, { status: 404 });
 	}
 
-	// Ownership lives in `business_ownership`: the `businesses.owner_id` column is
-	// dropped when the sensitive columns move to the companion tables, and a
-	// business is expected to have exactly one owner row, so `maybeSingle` keeps a
-	// missing owner from failing the whole lookup.
-	const [{ data: business }, { data: offer }, { data: ownership }] = await Promise.all([
+	// The owner lives in `business_members`, NOT in `business_ownership`: that
+	// table was retired on 2026-10-21 (`20261021005034_drop_business_ownership`)
+	// and reading it now fails at runtime with "relation does not exist".
+	//
+	// The rule is the SAME one the database uses to decide that somebody IS the
+	// owner — `public.business_member_role` and
+	// `public.business_live_owner_count` both spell it out: role `owner`, status
+	// `active`, and not archived. The partial unique index
+	// `business_members_one_owner_per_business` guarantees at most one live owner
+	// row per business, so `maybeSingle` cannot see two.
+	//
+	// This function reads with the service role, so RLS does not apply; the
+	// filter below IS the rule.
+	const [{ data: business }, { data: offer }, { data: owner }] = await Promise.all([
 		supabase.from("businesses").select("name, image").eq("id", order.business_id).single(),
 		supabase.from("offers").select("image").eq("id", order.offer_id).single(),
-		supabase.from("business_ownership").select("owner_id").eq("business_id", order.business_id).maybeSingle(),
+		supabase
+			.from("business_members")
+			.select("user_id")
+			.eq("business_id", order.business_id)
+			.eq("role", "owner")
+			.eq("status", "active")
+			.is("deleted_at", null)
+			.maybeSingle(),
 	]);
 
 	const { data: consumerPrefs } = await supabase
@@ -80,7 +96,7 @@ Deno.serve(async (request) => {
 	// Read only when the business would be notified anyway, exactly as before the
 	// split. The decision module takes the rows as given; deciding WHICH rows to
 	// fetch stays here, because that is I/O and not a rule.
-	const businessOwnerId = ownership?.owner_id ?? null;
+	const businessOwnerId = owner?.user_id ?? null;
 	const businessWouldBeNotified =
 		["pending", "confirmed", "cancelled", "expired"].includes(event.status) &&
 		!!businessOwnerId;
@@ -97,7 +113,7 @@ Deno.serve(async (request) => {
 		order,
 		business,
 		offer,
-		ownership,
+		owner,
 		consumerPrefs,
 		businessPrefs,
 	});
