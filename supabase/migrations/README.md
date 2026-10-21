@@ -2883,3 +2883,32 @@ es `null`; `public.subscriptions` existe con RLS activa y **0** policies; los
 **16** negocios siguen leyéndose `free`; y la ACL de `business_plan_of` queda
 igual que antes (ejecuta `postgres` y `service_role`, no `authenticated` ni
 `anon`).
+
+## Applied: `20261021182624_plan_limits_from_catalog`
+
+Applied via `apply_migration` on 2026-10-21. The file's `md5sum` is
+`8e436f88955a4d09e362545663351a0e` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**Qué hace:** reescribe las tres funciones que hacen cumplir los topes para que
+lean la fila del catálogo en vez de sus números escritos a mano:
+`enforce_business_location_limit` y `enforce_business_member_limit` leen
+`public.subscription_plans` (`max_locations` / `max_members`) y
+`business_has_feature` lee `public.subscription_plan_features`. **La segunda copia
+de los números desaparece**: los `raise` quedan idénticos letra por letra
+(`R0001`, `detail`, `hint`), la firma, el `language`, el `security definer`, el
+`search_path` y las ACL no cambian, y los triggers no se tocan.
+
+**La fila que falta es una avería, no un permiso:** un plan sin fila en el
+catálogo levanta excepción **sin `errcode`** (o sea, no es `R0001`), y sólo cuando
+la escritura **crece** —renombrar, pausar o cambiar una etiqueta siguen
+funcionando, que es el §5.4—. Un `null` en el tope sigue siendo «sin tope».
+
+**Medido en la base viva después de aplicar:** las tres funciones leen el
+catálogo (`pg_proc.prosrc`), ninguna conserva el `case v_plan` ni nombra un
+plan; `business_has_feature` sigue siendo ejecutable por `authenticated`; el
+catálogo tiene sus tres filas con los números del §4.5; los **16** negocios
+siguen leyéndose `free`; y los dos topes de `free` rechazan con `R0001` y el
+mismo mensaje de siempre —«el plan free admite hasta 2 miembros, no más» y «el
+plan free admite hasta 1 sucursal, no más»—, medido dentro de una transacción
+descartada.
