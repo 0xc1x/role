@@ -359,7 +359,7 @@ describe("businessRepository.getOperatedBusinesses", () => {
 		// operator IS a live `business_members` row. Reading the legacy
 		// ownership table instead is the regression this pins down, so the
 		// assertion is about the TABLE, not about the data that came back.
-		const { tables, calls } = mockTables({
+		const { tables, calls, selects } = mockTables({
 			business_members: {
 				data: [{ business_id: businessRow.id, role: "owner" }],
 				error: null,
@@ -372,6 +372,12 @@ describe("businessRepository.getOperatedBusinesses", () => {
 
 		expect(tables).toEqual(["business_members", "businesses"]);
 		expect(tables).not.toContain("business_ownership");
+
+		// The membership read MUST ask for the role. Without it every row
+		// fails the rank guard below, the panel answers "you have no
+		// business" for EVERYBODY, and nothing else in this suite notices:
+		// the empty branch is a legitimate answer.
+		expect(selects.business_members[0]?.[0]).toBe("business_id, role");
 
 		// The membership read is scoped to THIS user and to every LIVE
 		// operator role. A manager and a cashier operate the business too, so
@@ -405,6 +411,12 @@ describe("businessRepository.getOperatedBusinesses", () => {
 		// per BUSINESS, not per person: the same reader can be the manager of
 		// one business and a cashier of another, and the panel has to know
 		// which is which before it hides or shows a section.
+		//
+		// The rows come in NAME order because that is the order production
+		// produces: the read ends in `.order("name")`, which sorts server-side.
+		// The stub answers the array as it is given, so the fixture has to
+		// carry the order the server would have sent — otherwise this test
+		// would pin an artifact of the stub and not of the app.
 		const { calls } = mockTables({
 			business_members: {
 				data: [
@@ -415,8 +427,8 @@ describe("businessRepository.getOperatedBusinesses", () => {
 			},
 			businesses: {
 				data: [
-					{ ...businessRow, id: "biz-1", name: "Panadería" },
 					{ ...businessRow, id: "biz-2", name: "Cafetería" },
+					{ ...businessRow, id: "biz-1", name: "Panadería" },
 				],
 				error: null,
 			},
@@ -426,13 +438,15 @@ describe("businessRepository.getOperatedBusinesses", () => {
 			await businessRepository.getOperatedBusinesses("operator-1");
 
 		expect(calls.businesses.in).toContainEqual(["id", ["biz-1", "biz-2"]]);
+		// The order comes from the server, and the server was asked for it.
+		expect(calls.businesses.order).toContainEqual(["name"]);
 		expect(businesses.map((business) => business.id)).toEqual([
-			"biz-1",
 			"biz-2",
+			"biz-1",
 		]);
 		expect(businesses.map((business) => business.role)).toEqual([
-			"manager",
 			"staff",
+			"manager",
 		]);
 	});
 

@@ -369,6 +369,27 @@ export const businessRepository = {
 	 * negocio. El RLS de `business_members` filtra por `user_id = auth.uid()`,
 	 * así que un llamador que pase el id de otro lee vacío en vez de los
 	 * negocios de otro inquilino.
+	 *
+	 * ─── POR QUÉ UN CAJERO PUEDE LEER LA FILA DEL NEGOCIO ────────────────────
+	 *
+	 * Porque `businesses` tiene DOS policies de lectura PERMISIVAS, y las
+	 * permisivas se ORean: o basta con una para ver la fila.
+	 *
+	 *   - `"Anyone can view active businesses"`, `to public`: `is_active` y
+	 *     `business_is_approved(id)` —migración
+	 *     `20260928161526_add_business_moderation_catalog_gate.sql`;
+	 *   - `"Members can view business"`, `to authenticated`:
+	 *     `business_member_role(id) in ('owner', 'manager')` con la sesión
+	 *     viva —migración `20261015024825_business_policy_tightening.sql`.
+	 *
+	 * O sea: un CAJERO de un negocio activo y aprobado lee su fila por la
+	 * policy PÚBLICA, no por la de membresía —que es la de dueño y gerente—.
+	 * Ése es el caso operativo, y es el que el panel necesita.
+	 *
+	 * El único hueco es un negocio INACTIVO o sin aprobar: ahí el cajero no
+	 * lee nada (la policy pública se cierra) mientras que dueño y gerente
+	 * sí lo leen (su policy de membresía no exige aprobación). No es una
+	 * sorpresa de este código: es lo que dicen las dos policies.
 	 */
 	async getOperatedBusinesses(userId: string): Promise<OperatedBusiness[]> {
 		const { data: memberships, error: membershipsError } = await supabase
@@ -472,10 +493,11 @@ export const businessRepository = {
 				// owner from auth.uid() on insert, so ownership can no longer be
 				// written by a caller.
 				//
-				// The owner's panel reads the live MEMBERSHIP in
-				// `business_members` — see `getOperatedBusinesses` — and that
-				// membership is what the database trigger writes on insert. The
-				// API's alta writes it itself, in its own transaction.
+				// The panel reads the live MEMBERSHIP in `business_members` of
+				// whoever operates the business — see `getOperatedBusinesses` —
+				// and that membership is what the database trigger writes on
+				// insert. The API's alta writes it itself, in its own
+				// transaction.
 				name: input.name,
 				slug,
 				type: input.type,
