@@ -4209,6 +4209,38 @@
         ]
       }
     },
+    "/api/v1/businesses/{businessId}/staff/revoke-all": {
+      "post": {
+        "operationId": "StaffController_revokeAll",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The accesses that were disabled, and whether the owner was left out"
+          },
+          "403": {
+            "description": "No live membership, a paused one, a session outside the §5.2 promise, or an employee"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Emergency cut: disable every access this caller administers. The owner is never cut, and the response says so.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
     "/api/v1/businesses/{businessId}/staff/{memberId}": {
       "patch": {
         "operationId": "StaffController_update",
@@ -4241,7 +4273,7 @@
             "description": "No such access in this business"
           },
           "422": {
-            "description": "Promoting to 'owner', demoting the owner (the ownership transfer does not exist in this version), a branch of another business, or session_ttl_hours: 0 on a staff"
+            "description": "Promoting to 'owner' (the ownership is transferred with POST /businesses/:businessId/ownership/transfer), demoting the owner, a branch of another business, or session_ttl_hours: 0 on a staff"
           }
         },
         "security": [
@@ -4470,6 +4502,76 @@
         "summary": "Stamp last_authenticated_at and return the §5.2 session state the database computes. Omit business_id and the database resolves the caller’s single membership; with several, it answers multiple_businesses and seals nothing.",
         "tags": [
           "Staff"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/ownership/transfer": {
+      "post": {
+        "operationId": "OwnershipController_transfer",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The two memberships in their new state"
+          },
+          "403": {
+            "description": "The caller is not the owner of this business, or has no live session inside the §5.2 promise"
+          },
+          "422": {
+            "description": "The recipient is not a live access of this business, or the plan does not allow the operation"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Transfer the ownership of the business to another live access. The outgoing owner stays as a manager with the scope of every branch.",
+        "tags": [
+          "Ownership"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/ownership/restore": {
+      "post": {
+        "operationId": "OwnershipController_restore",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The membership in its new state"
+          },
+          "403": {
+            "description": "The caller is not a platform admin"
+          },
+          "422": {
+            "description": "The business already has a live owner, or the member is not a live access of this business"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Give the ownership of a business that has no live owner back to one of its live accesses. Platform only.",
+        "tags": [
+          "Ownership"
         ]
       }
     }

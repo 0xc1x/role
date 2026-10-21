@@ -18,6 +18,7 @@ import {
   type BusinessMemberDto,
   type BusinessMemberRole,
   type CreateBusinessMemberDto,
+  type RevokeBusinessAccessResponseDto,
   type StaffSessionState,
   type RestoreBusinessOwnershipDto,
   type RestoreBusinessOwnershipResponseDto,
@@ -864,37 +865,7 @@ export class StaffService {
     const member = await this.requireMember(businessId, memberId);
     await this.assertCanReachMember(actor, member);
 
-    try {
-      await this.repository.updateMember(businessId, memberId, {
-        status: 'disabled',
-      });
-    } catch (err) {
-      throw this.mapWriteError(err);
-    }
-
-    const { error } = await this.authAdmin.auth.admin.updateUserById(
-      member.user_id,
-      { ban_duration: BAN_DURATION },
-    );
-    if (error) {
-      this.logger.error({
-        event: 'staff_access_ban_failed',
-        businessId,
-        memberId,
-        revokedBy: actor.userId,
-        ...safeErrorFields(error),
-      });
-      throw new InternalServerErrorException(
-        'El acceso quedó pausado pero no se pudieron cerrar las sesiones abiertas. Reintentalo.',
-      );
-    }
-
-    this.logger.log({
-      event: 'staff_access_disabled',
-      businessId,
-      memberId,
-      disabledBy: actor.userId,
-    });
+    await this.cutAccess(businessId, member, actor.userId);
 
     return this.memberDto(businessId, memberId);
   }
@@ -1029,6 +1000,169 @@ export class StaffService {
       memberId,
       removedBy: actor.userId,
     });
+  }
+
+  /**
+   * `POST /businesses/:businessId/staff/revoke-all`: el CORTE DE EMERGENCIA.
+   *
+   * Una operación, muchas filas: corta todos los accesos que quien llama
+   * administra, y devuelve los que cortó. Es la respuesta a «el equipo se fue y
+   * las tablets siguen abiertas», y por eso tiene que ser UNA llamada y no una
+   * por persona: el dueño que corta veinte accesos a mano es un dueño que
+   * corta trece.
+   *
+   * ─── LAS DOS PUERTAS, Y POR QUÉ SON DOS ──────────────────────────────────────
+   *
+   * El dueño y el gerente cortan lo que administran —el gerente, lo que su
+   * alcance contiene— y la plataforma corta el de cualquier negocio. La
+   * plataforma NO pasa por `requireActor`: esa puerta es de MEMBRESÍA, y un
+   * admin de plataforma no es miembro de ningún negocio (el precedente es
+   * `restoreOwnership`, que abre por `app_role` y no por una fila). Y el corte
+   * del admin NO se acota por alcance, porque no tiene: administra la
+   * plataforma entera.
+   *
+   * ─── EL DUEÑO NO SE CORTA, Y SE SALTEA ANTES DEL ALCANCE ─────────────────────
+   *
+   * Por la regla del §8 y por la del trigger (`R0002`): al dueño no lo corta
+   * nadie. Y el salto va ANTES de mirar el alcance, no después, porque el
+   * alcance contesta una pregunta distinta —«¿esto está dentro de lo que
+   * administras?»— y la del dueño es «¿esto se puede cortar?».
+   *
+   * ─── Y `owner_skipped` SE CALCULA SOBRE EL ROSTER CRUDO ──────────────────────
+   *
+   * Antes del filtro de alcance, a propósito: si hay una fila de dueño viva, el
+   * dueño quedó FUERA del corte, y eso hay que decirlo. Preguntarlo después
+   * del filtro lo haría depender de QUIÉN corta —el dueño se cortaría a sí
+   * mismo y su `owner_skipped` sería `false`—, y el campo tiene que decir lo
+   * mismo para todos los que cortan. Un negocio sin dueño vivo dice `false`, y
+   * también lo dice: no había nadie que dejar afuera.
+   *
+   * ─── SOLO LOS ACTIVOS ────────────────────────────────────────────────────────
+   *
+   * Un acceso ya pausado no tiene nada que cortar: no se devuelve, no se
+   * re-banea y no se toca. Volver a banear una cuenta que ya está baneada es
+   * ruido, y una lista que lo devolviera como «cortado» sería una lista de
+   * lo que pasó, no de lo que había.
+   *
+   * ─── EL COSTE, Y ES EL MISMO DE `list()` ─────────────────────────────────────
+   *
+   * El roster se pide UNA vez y el alcance se contesta de a uno: no hay helper
+   * que devuelva el conjunto de ids alcanzables, y `list()` ya decidió no
+   * tomarlo. El roster está topado por plan —2 accesos en `free`, 20 en `pro`—,
+   * así que el peor caso son veinte idas. El corte de emergencia no es el
+   * momento de cambiar esa decisión.
+   */
+  async revokeAll(
+    user: AuthUser,
+    businessId: string,
+  ): Promise<RevokeBusinessAccessResponseDto> {
+    const actor =
+      user.role === 'admin' ? null : await this.requireActor(user, businessId);
+
+    const roster = await this.repository.listMembersWithScope(businessId);
+
+    const ownerSkipped = roster.some((member) => member.row.role === 'owner');
+
+    const disabled: BusinessMemberDto[] = [];
+    for (const member of roster) {
+      // El dueño primero: no se corta, ni por él, ni por un gerente, ni por la
+      // plataforma.
+      if (member.row.role === 'owner') continue;
+
+      // Sólo los activos: lo que ya está pausado no se vuelve a cortar.
+      if (member.row.status !== 'active') continue;
+
+      // Y sólo lo que el que llama administra: el MISMO predicado que usa
+      // `list()`, para que la lista y el corte no puedan apartarse.
+      if (actor && !(await this.reaches(actor, member.row))) continue;
+
+      const cut = await this.cutAccess(
+        businessId,
+        member.row,
+        actor?.userId ?? user.id,
+      );
+      disabled.push(StaffMapper.toMemberDto(cut, member.locationIds));
+    }
+
+    this.logger.log({
+      event: 'staff_access_revoked_all',
+      businessId,
+      revokedBy: user.id,
+      count: disabled.length,
+      ownerSkipped,
+    });
+
+    return { disabled, owner_skipped: ownerSkipped };
+  }
+
+  // ─────────────────────────── el corte de un acceso ────────────────────────
+
+  /**
+   * EL CORTE DE UN ACCESO, y el camino que el corte de emergencia REUSA.
+   *
+   * ─── POR QUÉ ES UN PRIVADO Y NO UNA COPIA ────────────────────────────────────
+   *
+   * Porque pausar a una persona y cortar el equipo son la MISMA operación sobre
+   * la fila y sobre el login, y el ban es lo que cierra las sesiones abiertas
+   * —incluida la tablet persistente del §9.2—. Un segundo camino de corte sería
+   * un segundo `ban_duration`, un segundo mensaje de error y una segunda prosa
+   * que puede apartarse de la primera sin que nada lo note.
+   *
+   * ─── Y EL BAN QUE FALLA NO SE COMPENSA ──────────────────────────────────────
+   *
+   * La fila queda pausada —que es lo que hace que no conceda nada por RLS— y
+   * el acceso queda con la sesión abierta, que es justo lo que el reintento
+   * idempotente arregla. En un corte de emergencia esto significa que los
+   * cortes ANTERIORES quedan hechos y el que falló queda a medias: no hay una
+   * compensación nueva que deshaga lo que sí se pudo cortar, porque deshacer un
+   * ban es más caro que el corte que se quiso hacer.
+   *
+   * Y el error es el de `disableAccess`, literal: el que lee el dueño es el
+   * mismo texto en las dos rutas.
+   */
+  private async cutAccess(
+    businessId: string,
+    member: BusinessMemberRow,
+    actorId: string,
+  ): Promise<BusinessMemberRow> {
+    let updated: BusinessMemberRow | null;
+    try {
+      updated = await this.repository.updateMember(businessId, member.id, {
+        status: 'disabled',
+      });
+    } catch (err) {
+      throw this.mapWriteError(err);
+    }
+
+    const { error } = await this.authAdmin.auth.admin.updateUserById(
+      member.user_id,
+      { ban_duration: BAN_DURATION },
+    );
+    if (error) {
+      this.logger.error({
+        event: 'staff_access_ban_failed',
+        businessId,
+        memberId: member.id,
+        revokedBy: actorId,
+        ...safeErrorFields(error),
+      });
+      throw new InternalServerErrorException(
+        'El acceso quedó pausado pero no se pudieron cerrar las sesiones abiertas. Reintentalo.',
+      );
+    }
+
+    this.logger.log({
+      event: 'staff_access_disabled',
+      businessId,
+      memberId: member.id,
+      disabledBy: actorId,
+    });
+
+    // La fila que devuelve la escritura es la que quedó, con el estado del corte
+    // y el `updated_at` del corte. Y si la base no devolvió nada —que no puede
+    // pasar: la fila se acaba de leer viva—, lo que se devuelve es la que se
+    // tenía, con el estado del corte.
+    return updated ?? { ...member, status: 'disabled' };
   }
 
   // ─────────────────────────────── la puerta ───────────────────────────────

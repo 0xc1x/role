@@ -10,6 +10,7 @@ import {
   BusinessMemberDeliveryCardSchema,
   BusinessMemberSchema,
   CreateBusinessMemberSchema,
+  RevokeBusinessAccessResponseSchema,
   StaffSessionStateSchema,
   type StaffSessionState,
   type UpdateBusinessMemberAliasResponseDto,
@@ -41,6 +42,10 @@ const MEMBER_STAFF = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const MEMBER_MANAGER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const MEMBER_OUTSIDE = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const MEMBER_OWNER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const MEMBER_CASHIER = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const MEMBER_PAUSED = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+const CASHIER_USER = '00000000-0000-4000-8000-000000000006';
+const PAUSED_USER = '00000000-0000-4000-8000-000000000007';
 
 const owner: AuthUser = { id: OWNER_USER, role: 'business', email: null };
 const managerAB: AuthUser = {
@@ -1130,6 +1135,335 @@ describe('StaffService', () => {
       expect(card.alias).toBe(memberRow().alias);
       expect(card.pin).toMatch(/^\d{6}$/);
       expect(card.alias_warnings).toEqual([]);
+    });
+  });
+
+  // ───────────────────────── el corte de emergencia ───────────────────────
+
+  /**
+   * `POST /businesses/:businessId/staff/revoke-all`: el corte de emergencia.
+   *
+   * ─── POR QUÉ ESTE BLOQUE AFIRMA LA OPERACIÓN Y NO SUS PARTES ──────────────────
+   *
+   * Un corte es un bucle, y un bucle se prueba con lo que importa del bucle: a
+   * QUIÉN corta, a QUIÉN no, y qué dice cuando termina. Las piezas —el `status`,
+   * el `ban_duration`, el 500 del ban que falla— ya están probadas por
+   * `disableAccess`, que es el camino que el corte REUSA. Lo que se afirma acá es
+   * que el corte llama a ese camino y que no se inventa un segundo.
+   */
+  describe('el corte de emergencia', () => {
+    const cashierRow = () =>
+      memberRow({
+        id: MEMBER_CASHIER,
+        user_id: CASHIER_USER,
+        label: 'Nadia',
+        alias: 'nadia@panaderia.role.ec',
+      });
+
+    /** Ya pausado: un corte no tiene nada que cortar acá. */
+    const pausedRow = () =>
+      memberRow({
+        id: MEMBER_PAUSED,
+        user_id: PAUSED_USER,
+        label: 'Toti',
+        alias: 'toti@panaderia.role.ec',
+        status: 'disabled',
+      });
+
+    const outsideRow = () =>
+      memberRow({
+        id: MEMBER_OUTSIDE,
+        user_id: OUTSIDE_USER,
+        label: 'Nuria',
+        alias: 'nuria@panaderia.role.ec',
+      });
+
+    /** The live rows of the business, as the roster query returns them. */
+    const roster = () => [
+      { row: memberRow({ id: MEMBER_STAFF }), locationIds: [LOC_A] },
+      { row: managerRow([LOC_A, LOC_B]), locationIds: [LOC_A, LOC_B] },
+      { row: cashierRow(), locationIds: [LOC_A] },
+      { row: pausedRow(), locationIds: [LOC_A] },
+      { row: ownerRow(), locationIds: [] },
+    ];
+
+    /**
+     * El roster con un acceso FUERA del alcance del gerente de {A, B}: el que
+     * escribe en C, una sucursal que el gerente no gestiona.
+     */
+    const rosterWithOutside = () => [
+      ...roster().filter((entry) => entry.row.id !== MEMBER_PAUSED),
+      {
+        row: outsideRow(),
+        locationIds: [LOC_A, LOC_C],
+      },
+    ];
+
+    const rowsById = (): Record<string, BusinessMemberRow> => ({
+      [MEMBER_STAFF]: memberRow({ id: MEMBER_STAFF }),
+      [MEMBER_MANAGER]: managerRow([LOC_A, LOC_B]),
+      [MEMBER_CASHIER]: cashierRow(),
+      [MEMBER_OUTSIDE]: outsideRow(),
+      [MEMBER_PAUSED]: pausedRow(),
+      [MEMBER_OWNER]: ownerRow(),
+    });
+
+    beforeEach(() => {
+      repository.listMembersWithScope.mockResolvedValue(roster());
+
+      /**
+       * El doble devuelve la fila REAL que se cortó.
+       *
+       * El default del archivo devuelve `memberRow()` —la fila de la cajera—
+       * para cualquier id, y una respuesta de corte que dijera `staff` para
+       * todos sería un doble que miente sobre lo único que la ruta afirma.
+       */
+      repository.updateMember.mockImplementation(
+        async (
+          _b: string,
+          memberId: string,
+          values: Record<string, unknown>,
+        ) => ({
+          ...(rowsById()[memberId] ?? memberRow({ id: memberId })),
+          ...values,
+        }),
+      );
+
+      /**
+       * El alcance de cada fila, que es lo que contesta la regla de contención.
+       */
+      repository.locationIdsOfMember.mockImplementation(
+        async (id: string) =>
+          ({
+            [MEMBER_MANAGER]: [LOC_A, LOC_B],
+            [MEMBER_STAFF]: [LOC_A],
+            [MEMBER_CASHIER]: [LOC_A],
+            [MEMBER_OUTSIDE]: [LOC_A, LOC_C],
+            [MEMBER_PAUSED]: [LOC_A],
+            [MEMBER_OWNER]: [],
+          })[id] ?? [],
+      );
+    });
+
+    it('el dueño corta los tres accesos activos y recibe tres', async () => {
+      const result = await service.revokeAll(owner, BIZ);
+
+      expect(result.disabled.map((member) => member.id)).toEqual([
+        MEMBER_STAFF,
+        MEMBER_MANAGER,
+        MEMBER_CASHIER,
+      ]);
+      // Y lo que vuelve es el estado NUEVO: una fila `active` en la respuesta de
+      // un corte sería una respuesta que dice que no se cortó nada.
+      expect(
+        result.disabled.every((member) => member.status === 'disabled'),
+      ).toBe(true);
+      expect(result.owner_skipped).toBe(true);
+      expect(RevokeBusinessAccessResponseSchema.parse(result)).toEqual(result);
+    });
+
+    it('cada acceso cortado es una escritura y un ban, y nada más', async () => {
+      await service.revokeAll(owner, BIZ);
+
+      expect(repository.updateMember).toHaveBeenCalledTimes(3);
+      for (const memberId of [MEMBER_STAFF, MEMBER_MANAGER, MEMBER_CASHIER]) {
+        expect(repository.updateMember).toHaveBeenCalledWith(BIZ, memberId, {
+          status: 'disabled',
+        });
+      }
+      // El ban es el corte de sesiones, y es el MISMO ban de `disableAccess`:
+      // no hay un segundo camino de corte inventado para el corte de emergencia.
+      expect(authAdmin.updateUserById).toHaveBeenCalledTimes(3);
+      expect(authAdmin.updateUserById).toHaveBeenCalledWith(STAFF_USER, {
+        ban_duration: '876000h',
+      });
+      expect(authAdmin.updateUserById).toHaveBeenCalledWith(MANAGER_USER, {
+        ban_duration: '876000h',
+      });
+      expect(authAdmin.updateUserById).toHaveBeenCalledWith(CASHIER_USER, {
+        ban_duration: '876000h',
+      });
+    });
+
+    it('un gerente corta SÓLO lo que su alcance contiene, y los demás no se tocan', async () => {
+      repository.findMemberByUser.mockResolvedValue(managerRow([LOC_A, LOC_B]));
+      repository.listMembersWithScope.mockResolvedValue(rosterWithOutside());
+
+      const result = await service.revokeAll(managerAB, BIZ);
+
+      // El acceso de {A, C} NO está en la respuesta, igual que no está en la
+      // lista: la contención es de alcance, no de existencia.
+      expect(result.disabled.map((member) => member.id)).not.toContain(
+        MEMBER_OUTSIDE,
+      );
+      expect(result.disabled.map((member) => member.id)).toEqual([
+        MEMBER_STAFF,
+        MEMBER_MANAGER,
+        MEMBER_CASHIER,
+      ]);
+      // Y el gerente se corta A SÍ MISMO, que es lo que el predicado dice: su
+      // alcance lo contiene. La exclusión del §8 es la del DUEÑO —una frase
+      // sobre un ROL—, no la de quien llama, y un gerente atrapado en un
+      // negocio es un fallo peor que el que un auto-corte puede causar. Es una
+      // observación de producto, no una excepción inventada acá.
+      expect(result.disabled.map((member) => member.id)).toContain(
+        MEMBER_MANAGER,
+      );
+      // Y no se tocó: ni la fila ni el login.
+      expect(repository.updateMember).not.toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_OUTSIDE,
+        expect.anything(),
+      );
+      expect(authAdmin.updateUserById).not.toHaveBeenCalledWith(
+        OUTSIDE_USER,
+        expect.anything(),
+      );
+    });
+
+    /**
+     * El dueño NUNCA entra en la lista, y su fila y su login no se tocan.
+     *
+     * ─── POR QUÉ NO SE AFIRMA `business_live_owner_count` ────────────────────────
+     *
+     * El brief lo pedía, y es la pregunta que hace la base —«¿este negocio tiene
+     * dueño vivo?»— pero el doble de este archivo ES la base y no puede llamar a
+     * una función de Postgres. Lo que sí se puede afirmar, y es la consecuencia
+     * que importa, es lo de abajo: la fila del dueño no se escribe y su
+     * `auth.users` no se banea, ni por el dueño, ni por un gerente, ni por la
+     * plataforma. Y el `owner_skipped` dice que el dueño quedó afuera, que es
+     * la otra mitad de la misma verdad.
+     */
+    it('el dueño NUNCA entra en la lista, y su fila y su login no se tocan', async () => {
+      const result = await service.revokeAll(owner, BIZ);
+
+      expect(result.disabled.map((member) => member.id)).not.toContain(
+        MEMBER_OWNER,
+      );
+      expect(result.owner_skipped).toBe(true);
+      expect(repository.updateMember).not.toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_OWNER,
+        expect.anything(),
+      );
+      expect(authAdmin.updateUserById).not.toHaveBeenCalledWith(
+        OWNER_USER,
+        expect.anything(),
+      );
+    });
+
+    it('un negocio sin dueño vivo corta igual, y lo dice: `owner_skipped` es false', async () => {
+      // El negocio se quedó sin dueño: su roster no tiene fila de dueño. Y el
+      // que corta es la PLATAFORMA, porque es la única puerta que queda: un
+      // dueño que no existe no puede abrir la suya.
+      //
+      // El `owner_skipped` sale del roster crudo, así que es `false` —y no un
+      // silencio—: la UI puede decir que no había dueño que dejar afuera.
+      repository.listMembersWithScope.mockResolvedValue([
+        { row: memberRow({ id: MEMBER_STAFF }), locationIds: [LOC_A] },
+        { row: cashierRow(), locationIds: [LOC_A] },
+      ]);
+
+      const result = await service.revokeAll(admin, BIZ);
+
+      expect(result.owner_skipped).toBe(false);
+      expect(result.disabled.map((member) => member.id)).toEqual([
+        MEMBER_STAFF,
+        MEMBER_CASHIER,
+      ]);
+    });
+
+    it('un admin de plataforma corta los accesos de cualquier negocio, sin membresía', async () => {
+      const result = await service.revokeAll(admin, BIZ);
+
+      expect(result.disabled.map((member) => member.id)).toEqual([
+        MEMBER_STAFF,
+        MEMBER_MANAGER,
+        MEMBER_CASHIER,
+      ]);
+      expect(result.owner_skipped).toBe(true);
+      // La puerta del admin es la PLATAFORMA: no hay membresía que buscar ni
+      // sesión que perguntar.
+      expect(repository.findMemberByUser).not.toHaveBeenCalled();
+      expect(repository.sessionStateAsCaller).not.toHaveBeenCalled();
+      expect(authAdmin.updateUserById).toHaveBeenCalledTimes(3);
+    });
+
+    it('un acceso ya pausado no se devuelve ni se vuelve a banear', async () => {
+      const result = await service.revokeAll(owner, BIZ);
+
+      expect(result.disabled.map((member) => member.id)).not.toContain(
+        MEMBER_PAUSED,
+      );
+      expect(repository.updateMember).not.toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_PAUSED,
+        expect.anything(),
+      );
+      expect(authAdmin.updateUserById).not.toHaveBeenCalledWith(
+        PAUSED_USER,
+        expect.anything(),
+      );
+    });
+
+    it('si un ban falla, el 500 sale y los cortes anteriores quedan', async () => {
+      // El corte NO compensa: los cortes que ya ocurrieron quedan hechos, y el
+      // que falló tiene la fila pausada y el login abierto —que es exactamente
+      // lo que el reintento idempotente arregla—. No hay una compensación nueva
+      // aquí: la que hay es la del alta.
+      authAdmin.updateUserById.mockImplementation(async (userId: string) =>
+        userId === MANAGER_USER
+          ? { error: { message: 'auth unavailable' } }
+          : { error: null },
+      );
+
+      await expect(service.revokeAll(owner, BIZ)).rejects.toThrow(
+        /no se pudieron cerrar las sesiones/,
+      );
+
+      // El primero se cortó y quedó cortado.
+      expect(repository.updateMember).toHaveBeenCalledWith(BIZ, MEMBER_STAFF, {
+        status: 'disabled',
+      });
+      // Y el que falló también quedó con la fila pausada: el ban es lo que no
+      // se pudo hacer.
+      expect(repository.updateMember).toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_MANAGER,
+        { status: 'disabled' },
+      );
+      // Y el tercero no se tocó: el corte se detiene en el fallo.
+      expect(repository.updateMember).not.toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_CASHIER,
+        expect.anything(),
+      );
+    });
+
+    it('el corte queda registrado en una línea, con quién lo pidió', async () => {
+      const entries = captureLogs();
+
+      await service.revokeAll(owner, BIZ);
+
+      expect(entries).toContainEqual(
+        expect.objectContaining({
+          event: 'staff_access_revoked_all',
+          businessId: BIZ,
+          revokedBy: OWNER_USER,
+          count: 3,
+          ownerSkipped: true,
+        }),
+      );
+      // Y la línea por acceso sigue ahí: el corte no reemplaza la traza de cada
+      // deactivate, la resume.
+      expect(
+        entries.filter(
+          (entry) =>
+            typeof entry === 'object' &&
+            entry !== null &&
+            (entry as { event?: string }).event === 'staff_access_disabled',
+        ),
+      ).toHaveLength(3);
     });
   });
 

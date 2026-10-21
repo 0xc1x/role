@@ -24,6 +24,7 @@ import {
 } from '@nestjs/swagger';
 import {
   CreateBusinessMemberSchema,
+  RevokeBusinessAccessSchema,
   RotateBusinessMemberPinSchema,
   UpdateBusinessMemberAliasSchema,
   UpdateBusinessMemberSchema,
@@ -32,6 +33,8 @@ import type {
   BusinessMemberDeliveryCardDto,
   BusinessMemberDto,
   CreateBusinessMemberDto,
+  RevokeBusinessAccessDto,
+  RevokeBusinessAccessResponseDto,
   RotateBusinessMemberPinDto,
   UpdateBusinessMemberAliasDto,
   UpdateBusinessMemberAliasResponseDto,
@@ -43,18 +46,21 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { StaffService } from './staff.service';
 
 /**
- * The eight routes that live under `businesses/:businessId/staff`.
+ * The nine routes that live under `businesses/:businessId/staff`.
+ *
+ * Eight are the §8 ones; the ninth is `POST …/staff/revoke-all`, the emergency
+ * cut, which is new and not a §8 route.
  *
  * **The ninth §8 route, `POST /staff/session`, is not here**: it seals rather
  * than administers, and it is the only one a `staff` may call. It lives in
  * `staff-session.controller.ts`, and its absence from this file is the fact, not
- * an omission — the other eight all refuse an employee at the door and this one
+ * an omission — the other nine all refuse an employee at the door and this one
  * does not.
  *
  * ─── POR QUÉ NO HAY `@Roles` EN ESTAS RUTAS, Y POR QUÉ ESO NO ES UNA AUSENCIA ────
  *
  * El §8 dice que el guard de rol de negocio de Nest **se reemplaza** por
- * `can_manage_location`, y este controlador es donde eso se ve. Las ocho rutas de
+ * `can_manage_location`, y este controlador es donde eso se ve. Las nueve rutas de
  * abajo NO llevan `@Roles('business')`, y el motivo no es que la puerta se
  * haya olvidado: es que un `@Roles` mide `profiles.role`, que es `app_role` —la
  * cuenta es de negocio o de consumidor— y **no lleva TTL**. La promesa del §5.2
@@ -77,6 +83,12 @@ import { StaffService } from './staff.service';
  * Ese es el motivo de que este controlador no escriba un guard propio: dos
  * fronteras para la misma pregunta son dos fronteras que pueden divergir, y el
  * §5.2 depende de que no lo hagan.
+ *
+ * Y `revoke-all` tiene DOS puertas, y las dos están en el servicio: la de la
+ * membresía —`requireActor`— y la de la plataforma —`app_role = 'admin'`—, que
+ * es un hecho distinto de una membresía. Ninguna de las dos se puede decidir
+ * acá: la primera es la misma pregunta que RLS hace, y la segunda es la del
+ * `app_role`, que el guard de Nest no lee.
  *
  * El `AuthGuard` global sí corre —token válido y perfil existente—, así que
  * ninguna de estas rutas es anónima; lo que no corre es un chequeo de rol que
@@ -166,6 +178,51 @@ export class StaffController {
     body: CreateBusinessMemberDto,
   ): Promise<BusinessMemberDeliveryCardDto> {
     return this.staffService.create(user, businessId, body);
+  }
+
+  /**
+   * `POST /businesses/:businessId/staff/revoke-all` — el CORTE DE EMERGENCIA:
+   * todos los accesos que quien llama administra, en una llamada.
+   *
+   * 200 y no 201: no se crea nada, se corta. Y el sobre es de DOS cosas: los
+   * accesos que quedaron pausados y el hecho de que el dueño quedó afuera —que
+   * es un hecho que el panel tiene que poder decir, y por eso `owner_skipped` es
+   * obligatorio en el contrato y no opcional.
+   *
+   * El cuerpo es vacío y `.strict()`: el alcance lo decide QUIEN llama, no lo
+   * que dice el body, y una lista de ids en el cuerpo sería una segunda puerta
+   * de alcance. `.optional()` es lo que deja pasar el `POST` sin cuerpo, que es
+   * la llamada más natural que hay.
+   *
+   * Y NO lleva `@Roles`: las dos puertas —la de la membresía y la de la
+   * plataforma— están en el servicio, que es donde se pueden hacer las dos
+   * preguntas.
+   */
+  @Post('revoke-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Emergency cut: disable every access this caller administers. The owner is never cut, and the response says so.',
+  })
+  @ApiOkResponse({
+    description:
+      'The accesses that were disabled, and whether the owner was left out',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'No live membership, a paused one, a session outside the §5.2 promise, or an employee',
+  })
+  revokeAll(
+    @CurrentUser() user: AuthUser,
+    @Param('businessId', ParseUUIDPipe) businessId: string,
+    // El cuerpo puede estar ausente y no es más que eso: el corte no tiene
+    // parámetros, y un `member_ids` adentro sería una puerta de atrás para
+    // cortar otra cosa. `.strict()` lo vuelve un 400 en vez de un 200 que
+    // aparenta haber cortado lo que el cliente pidió.
+    @Body(new ZodValidationPipe(RevokeBusinessAccessSchema))
+    _body: RevokeBusinessAccessDto,
+  ): Promise<RevokeBusinessAccessResponseDto> {
+    return this.staffService.revokeAll(user, businessId);
   }
 
   /**

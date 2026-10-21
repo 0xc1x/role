@@ -419,3 +419,62 @@ export const UpdateBusinessMemberAliasResponseSchema = z
 		alias_warnings: z.array(StaffAliasWarningCodeSchema),
 	})
 	.strict();
+
+/**
+ * `POST /businesses/:businessId/staff/revoke-all`: el cuerpo vacío.
+ *
+ * ─── POR QUÉ NO HAY PARÁMETROS, Y POR QUÉ ESO NO ES UNA AUSENCIA ───────────────
+ *
+ * La operación es «corta TODOS los accesos del negocio»: el alcance lo decide
+ * QUIEN llama —el dueño corta todo, un gerente corta lo que su alcance contiene,
+ * la plataforma corta el de cualquier negocio—, no lo que dice el cuerpo. Un
+ * cuerpo con una lista de ids sería una segunda puerta de alcance, y una segunda
+ * puerta de alcance es un alcance que puede apartarse del otro sin que nada lo
+ * note.
+ *
+ * Y el `.strict()` es lo mismo que en `RotateBusinessMemberPinSchema`, por el
+ * mismo motivo: una clave de más no es un dato que sobre, es una puerta de atrás.
+ * Con `strict` es un 400; sin él, zod la descarta en silencio y la ruta responde
+ * un 200 que aparenta haber cortado lo que el cliente pidió.
+ *
+ * El `.optional()` es por el cuerpo AUSENTE, que NO es `{}`: un `POST` sin cuerpo
+ * deja `req.body` como `undefined`, y `strictObject({}).safeParse(undefined)` falla
+ * con «expected object, received undefined». Sin esto, la llamada más natural que
+ * puede hacer un cliente —el corte de emergencia, que no tiene nada que mandar—
+ * sería un 400.
+ */
+export const RevokeBusinessAccessSchema = z.strictObject({}).optional();
+
+/**
+ * La respuesta de `POST …/staff/revoke-all`.
+ *
+ * ─── `disabled`: LO QUE SE CORTÓ, Y NO LO QUE SE PIDIÓ ─────────────────────────
+ *
+ * El arreglo lleva las membresías que esta llamada dejó pausadas, y su estado es
+ * `disabled`: es el hecho, no la intención. Un arreglo con lo que el cliente pidió
+ * sería una respuesta de eco, y en un corte de emergencia la diferencia entre «se
+ * cortaron tres» y «se pidieron tres» es la diferencia entre un negocio con tres
+ * tablets abiertas y un negocio con ninguna.
+ *
+ * Y los accesos que NO se cortaron no aparecen: los que ya estaban pausados (no
+ * hay nada que cortar) y los que están fuera del alcance de quien llama (no son
+ * suyos). La lista es lo que pasó, no un inventario.
+ *
+ * ─── `owner_skipped`: OBLIGATORIO, Y POR QUÉ ───────────────────────────────────
+ *
+ * El dueño del negocio NUNCA se corta: ni por esta vía ni por ninguna otra
+ * (`R0002` lo intocable, y la operación que degrada al dueño es la transferencia
+ * de propiedad). El campo está para que el panel pueda decirlo —«se cortaron
+ * tres accesos; el dueño quedó fuera»— en vez de dejar que el dueño se entere
+ * porque su tablet se apagó.
+ *
+ * Por eso es obligatorio y no opcional: un campo opcional sería un silencio, y un
+ * silencio en la respuesta de un corte de emergencia es una respuesta que dice
+ * «se cortó todo» cuando no se cortó todo. Una respuesta sin el campo no es una
+ * respuesta válida del contrato; el valor de `false` —un negocio sin dueño vivo—
+ * es un hecho que también se dice.
+ */
+export const RevokeBusinessAccessResponseSchema = z.strictObject({
+	disabled: z.array(BusinessMemberSchema),
+	owner_skipped: z.boolean(),
+});

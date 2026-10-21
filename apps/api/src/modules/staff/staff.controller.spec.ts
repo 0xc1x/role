@@ -29,7 +29,7 @@ import {
 } from '../../../test/staff-http-harness';
 
 /**
- * Las ocho rutas de `businesses/:businessId/staff` sobre el stack HTTP real: los
+ * Las nueve rutas de `businesses/:businessId/staff` sobre el stack HTTP real: los
  * controladores de verdad, los pipes de verdad, los dos guards de
  * `SecurityModule` de verdad y el `StaffService` de verdad.
  *
@@ -68,7 +68,7 @@ beforeEach(() => {
 
 // ───────────────────────────── la puerta ─────────────────────────────
 
-describe('la puerta de las ocho rutas es la del §5.2', () => {
+describe('la puerta de las nueve rutas es la del §5.2', () => {
   /**
    * El test que decide esta tarea, y el que un stub pasaría: con el servicio
    * reemplazado por `jest.fn()`, estas dos llamadas darían 200 las dos.
@@ -319,6 +319,7 @@ describe('la puerta NO es un @Roles: la metadata lo dice', () => {
     return [
       controller.list,
       controller.create,
+      controller.revokeAll,
       controller.update,
       controller.updateAlias,
       controller.rotatePin,
@@ -345,11 +346,11 @@ describe('la puerta NO es un @Roles: la metadata lo dice', () => {
    *
    * El guard lee `getAllAndOverride(ROLES_KEY, [handler, class])`: la clase es la
    * SEGUNDA mitad de la pregunta, y un `@Roles('business')` en la clase alcanzaría
-   * a las ocho rutas sin tocar ninguna. Un test que mirara sólo el handler no lo
+   * a las nueve rutas sin tocar ninguna. Un test que mirara sólo el handler no lo
    * vería —y por eso esta aserción usa la misma forma que el guard, y no una
    * más laxa.
    */
-  it('ninguna de las ocho pide un rol de Nest, ni en la clase', () => {
+  it('ninguna de las nueve pide un rol de Nest, ni en la clase', () => {
     const reflector = new Reflector();
 
     for (const handler of handlers()) {
@@ -363,11 +364,11 @@ describe('la puerta NO es un @Roles: la metadata lo dice', () => {
     expect(reflector.get(ROLES_KEY, StaffController)).toBeUndefined();
   });
 
-  it('ninguna de las ocho es pública: el AuthGuard global es default-deny', () => {
+  it('ninguna de las nueve es pública: el AuthGuard global es default-deny', () => {
     const reflector = new Reflector();
 
     // La misma forma que el guard (`auth.guard.ts:53`): un `@Public` de clase
-    // abriría las ocho de una, y el guard lo leería.
+    // abriría las nueve de una, y el guard lo leería.
     for (const handler of handlers()) {
       expect(
         reflector.getAllAndOverride(IS_PUBLIC_KEY, [handler, StaffController]),
@@ -377,11 +378,12 @@ describe('la puerta NO es un @Roles: la metadata lo dice', () => {
     expect(reflector.get(IS_PUBLIC_KEY, StaffController)).toBeUndefined();
   });
 
-  it('sin token es 401 en las ocho', async () => {
+  it('sin token es 401 en las nueve', async () => {
     await staffHttp().get(`/businesses/${BIZ}/staff`).expect(401);
     await staffHttp()
       .post(`/businesses/${BIZ}/staff/${MEMBER_STAFF}/rotate`)
       .expect(401);
+    await staffHttp().post(`/businesses/${BIZ}/staff/revoke-all`).expect(401);
     await staffHttp()
       .delete(`/businesses/${BIZ}/staff/${MEMBER_STAFF}`)
       .expect(401);
@@ -849,6 +851,84 @@ describe('PATCH /businesses/:id/staff/:memberId', () => {
       .send({ business_location_ids: [LOC_A] });
 
     expect(res.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY);
+    expect(repository.updateMember).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────── el corte de emergencia ───────────────────────
+
+/**
+ * `POST /businesses/:id/staff/revoke-all` sobre el stack HTTP real.
+ *
+ * Lo que este bloque afirma es de la CAPA DE LA RUTA: que la ruta existe bajo el
+ * prefijo del equipo, que NO lleva `@Roles` —la puerta es la del servicio, que
+ * tiene dos— y que un empleado recibe el mismo 403 que en las otras ocho.
+ */
+describe('POST /businesses/:id/staff/revoke-all', () => {
+  beforeEach(() => {
+    repository.sessionStateAsCaller.mockResolvedValue(
+      sessionState({ role: 'owner', location_ids: [] }),
+    );
+  });
+
+  it('un empleado recibe 403 y no se corta nada', async () => {
+    const res = await (
+      await as(STAFF_USER)
+    ).post(`/businesses/${BIZ}/staff/revoke-all`);
+
+    expect(res.status).toBe(HttpStatus.FORBIDDEN);
+    expect(res.body.message).toContain('empleado');
+    expect(repository.updateMember).not.toHaveBeenCalled();
+    expect(authAdmin.updateUserById).not.toHaveBeenCalled();
+  });
+
+  it('el dueño entra y recibe el sobre con lo que se cortó', async () => {
+    const res = await (
+      await as(OWNER_USER)
+    ).post(`/businesses/${BIZ}/staff/revoke-all`);
+
+    expect(res.status).toBe(HttpStatus.OK);
+    expect(res.body.owner_skipped).toBe(true);
+    // El roster del harness tiene al dueño y a un acceso: el corte baja al
+    // acceso y deja al dueño afuera.
+    expect(res.body.disabled).toHaveLength(1);
+    expect(res.body.disabled[0].id).toBe(MEMBER_STAFF);
+    expect(res.body.disabled[0].status).toBe('disabled');
+    // Y el corte cierra la sesión abierta: es un `disable`, no una etiqueta.
+    expect(authAdmin.updateUserById).toHaveBeenCalledWith(
+      STAFF_USER,
+      expect.objectContaining({ ban_duration: expect.any(String) }),
+    );
+  });
+
+  it('la fila del dueño no se escribe y su login no se banea', async () => {
+    const res = await (
+      await as(OWNER_USER)
+    ).post(`/businesses/${BIZ}/staff/revoke-all`);
+
+    expect(res.status).toBe(HttpStatus.OK);
+    expect(
+      res.body.disabled.map((member: { id: string }) => member.id),
+    ).not.toContain(MEMBER_OWNER);
+    expect(repository.updateMember).not.toHaveBeenCalledWith(
+      BIZ,
+      MEMBER_OWNER,
+      expect.anything(),
+    );
+    expect(authAdmin.updateUserById).not.toHaveBeenCalledWith(
+      OWNER_USER,
+      expect.anything(),
+    );
+  });
+
+  it('un cuerpo con algo adentro es 400 antes de tocar la base', async () => {
+    const res = await (
+      await as(OWNER_USER)
+    )
+      .post(`/businesses/${BIZ}/staff/revoke-all`)
+      .send({ member_ids: [MEMBER_STAFF] });
+
+    expect(res.status).toBe(HttpStatus.BAD_REQUEST);
     expect(repository.updateMember).not.toHaveBeenCalled();
   });
 });

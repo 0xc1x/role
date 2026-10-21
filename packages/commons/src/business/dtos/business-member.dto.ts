@@ -3,6 +3,8 @@ import type {
 	BusinessMemberDeliveryCardSchema,
 	BusinessMemberSchema,
 	CreateBusinessMemberSchema,
+	RevokeBusinessAccessResponseSchema,
+	RevokeBusinessAccessSchema,
 	RotateBusinessMemberPinSchema,
 	UpdateBusinessMemberAliasResponseSchema,
 	UpdateBusinessMemberAliasSchema,
@@ -27,4 +29,10 @@ export type BusinessMemberDeliveryCardDto = z.infer<
 >;
 export type UpdateBusinessMemberAliasResponseDto = z.infer<
 	typeof UpdateBusinessMemberAliasResponseSchema
+>;
+export type RevokeBusinessAccessDto = z.infer<
+	typeof RevokeBusinessAccessSchema
+>;
+export type RevokeBusinessAccessResponseDto = z.infer<
+	typeof RevokeBusinessAccessResponseSchema
 >;

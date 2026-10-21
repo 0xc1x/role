@@ -11,6 +11,8 @@ import {
 	CreateBusinessMemberSchema,
 	isDeliverableAlias,
 	isRoleEcAlias,
+	RevokeBusinessAccessResponseSchema,
+	RevokeBusinessAccessSchema,
 	RotateBusinessMemberPinSchema,
 	UpdateBusinessMemberAliasResponseSchema,
 	UpdateBusinessMemberAliasSchema,
@@ -351,6 +353,73 @@ describe("RotateBusinessMemberPinSchema", () => {
 		expect(RotateBusinessMemberPinSchema.safeParse(undefined).success).toBe(
 			true,
 		);
+	});
+});
+
+describe("RevokeBusinessAccessSchema", () => {
+	it("no acepta nada, y el cuerpo puede estar AUSENTE", () => {
+		// El corte de emergencia no tiene parámetros: lo que se corta es «todos los
+		// accesos del negocio», y un cuerpo con algo adentro sería una puerta de
+		// atrás para cortar otra cosa. Es el mismo criterio que el del rotate, con el
+		// mismo `.optional()`: el `POST` sin cuerpo deja `req.body` como `undefined`.
+		expect(RevokeBusinessAccessSchema.safeParse({}).success).toBe(true);
+		expect(RevokeBusinessAccessSchema.safeParse(undefined).success).toBe(true);
+		expect(
+			RevokeBusinessAccessSchema.safeParse({ member_ids: ["e4000000"] })
+				.success,
+		).toBe(false);
+	});
+});
+
+describe("RevokeBusinessAccessResponseSchema", () => {
+	const member = {
+		id: "e4000000-0000-4000-8000-000000000001",
+		business_id: "e2000000-0000-4000-8000-000000000001",
+		user_id: "e1000000-0000-4000-8000-000000000001",
+		role: "staff",
+		label: "Caja",
+		alias: "caja@acme.com",
+		status: "disabled",
+		session_ttl_hours: 24,
+		business_location_ids: [LOC_A],
+		last_authenticated_at: null,
+		created_at: "2026-10-16T00:00:00+00:00",
+		updated_at: "2026-10-16T00:00:00+00:00",
+		deleted_at: null,
+	};
+
+	it("devuelve los accesos cortados y dice si el dueño quedó afuera", () => {
+		expect(
+			RevokeBusinessAccessResponseSchema.safeParse({
+				disabled: [member],
+				owner_skipped: true,
+			}).success,
+		).toBe(true);
+		expect(
+			RevokeBusinessAccessResponseSchema.safeParse({
+				disabled: [],
+				owner_skipped: false,
+			}).success,
+		).toBe(true);
+	});
+
+	it("`owner_skipped` es OBLIGATORIO: opcional sería un silencio", () => {
+		// El campo existe para que la UI pueda decir que el dueño quedó afuera. Un
+		// campo opcional sería un silencio, y un silencio en un corte de emergencia
+		// es una mentira: el dueño NO se corta y el panel tiene que poder decirlo.
+		expect(
+			RevokeBusinessAccessResponseSchema.safeParse({ disabled: [] }).success,
+		).toBe(false);
+	});
+
+	it("no acepta claves de más", () => {
+		expect(
+			RevokeBusinessAccessResponseSchema.safeParse({
+				disabled: [],
+				owner_skipped: true,
+				skipped: [],
+			}).success,
+		).toBe(false);
 	});
 });
 
