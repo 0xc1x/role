@@ -40,14 +40,17 @@ export function StaffList({
 	 *
 	 * No es el de cada acceso: es el de la persona que está en la pantalla. La
 	 * hoja de acciones lo necesita para ofrecer —o no— la transferencia de la
-	 * propiedad, que sólo el dueño puede hacer. `undefined` es «todavía no se
-	 * sabe», y en ese caso no se ofrece.
+	 * propiedad y la baja, que sólo el dueño puede hacer. `undefined` es
+	 * «todavía no se sabe», y en ese caso no se ofrece.
 	 */
 	actorRole: BusinessMemberRole | undefined;
 }) {
 	const { colors } = useTheme();
 	const { data, isLoading, isError, error, refetch } =
 		useStaffMembers(businessId);
+	// Sólo dueño y gerente dan de alta (el API lo exige); el estado vacío no
+	// es la excepción. La cabecera de la pantalla aplica la misma puerta.
+	const canAddAccess = actorRole === "owner" || actorRole === "manager";
 
 	if (isLoading) {
 		return (
@@ -72,19 +75,21 @@ export function StaffList({
 				title={strings.business.staff.emptyTitle}
 				message={strings.business.staff.emptyBody}
 				action={
-					<Button
-						// «Dar acceso» a secas no dice a QUIÉN se da el acceso:
-						// el lector de pantalla necesita el objeto.
-						accessibilityLabel={
-							strings.business.staff.addAccessAccessibilityLabel
-						}
-						onPress={() =>
-							router.push(`/business/${businessId}/staff/new` as Href)
-						}
-						style={{ marginTop: spacing.md }}
-					>
-						{strings.business.staff.addAccess}
-					</Button>
+					canAddAccess ? (
+						<Button
+							// «Dar acceso» a secas no dice a QUIÉN se da el acceso:
+							// el lector de pantalla necesita el objeto.
+							accessibilityLabel={
+								strings.business.staff.addAccessAccessibilityLabel
+							}
+							onPress={() =>
+								router.push(`/business/${businessId}/staff/new` as Href)
+							}
+							style={{ marginTop: spacing.md }}
+						>
+							{strings.business.staff.addAccess}
+						</Button>
+					) : undefined
 				}
 			/>
 		);

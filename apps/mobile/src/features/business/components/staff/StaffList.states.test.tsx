@@ -275,13 +275,16 @@ const CENTRO = location("44444444-4444-4444-8444-444444444444", "Centro");
 const SUR = location("55555555-5555-4555-8555-555555555555", "Sur");
 const NORTE = location("66666666-6666-4666-8666-666666666666", "Norte");
 
-const renderList = (locations: BusinessLocation[] = []) => {
+const renderList = (
+	locations: BusinessLocation[] = [],
+	actorRole: BusinessMemberRole = "owner",
+) => {
 	hookCursor = 0;
 	return renderToStaticMarkup(
 		createElement(StaffList, {
 			businessId: BUSINESS_ID,
 			locations,
-			actorRole: "owner",
+			actorRole,
 		}),
 	);
 };
@@ -366,6 +369,22 @@ test("sin accesos se ofrece el alta y el alta lleva a la pantalla de alta", () =
 	expect(add).toBeDefined();
 	add?.onPress?.();
 	expect(navigations).toEqual([`/business/${BUSINESS_ID}/staff/new`]);
+});
+
+test("en el estado vacío el alta sigue la misma puerta que la cabecera", () => {
+	staffQuery = { data: [], isLoading: false, isError: false, error: null };
+
+	const staffHtml = renderList([], "staff");
+	expect(staffHtml).toContain(strings.business.staff.emptyTitle);
+	expect(
+		buttons.some((button) => button.label === strings.business.staff.addAccess),
+	).toBe(false);
+
+	const managerHtml = renderList([], "manager");
+	expect(managerHtml).toContain(strings.business.staff.emptyTitle);
+	expect(
+		buttons.some((button) => button.label === strings.business.staff.addAccess),
+	).toBe(true);
 });
 
 test("con dos accesos hay una tarjeta por acceso y la sección cuenta dos", () => {
