@@ -396,12 +396,25 @@ de correo (`forgot-password`, `change-email` y `register`) porque lo que importa
 ahí es la bandeja; y el aviso del §9.4 (`businessMemberAliasWarnings`) usa la
 misma, porque lo que **afirma** el aviso es la bandeja.
 
+**El «¿olvvidaste tu contraseña?» condicional del login del móvil (§9.1) lo decide
+`isDeliverableAlias`, NO `isRoleEcAlias`.** La pregunta del diálogo es de CORREO
+—«¿hay una bandeja detrás de esta dirección?»— y ésa es la que la plataforma
+contesta con un `422` en el §8: ofrecer la recuperación a una dirección sin bandeja
+promete un correo que no llega. Preguntarlo con la función del §3.1 dejaría pasar
+un `forgot-password` que el §8 bloquea, y para el ápice —donde las dos funciones
+responden distinto a propósito— lo dejaría pasar de más.
+
+**Un identificador a medias no decide nada.** En ese diálogo, un identificador que
+todavía no tiene `@` no es una dirección que juzgar: el diálogo sigue siendo el de
+siempre hasta que se escribe una dirección completa.
+
 **`isRoleEcAlias` no tiene hoy ningún llamador en producción, y se conserva a
-propósito.** Es el contrato del §9.1 del spec —el «¿olvvidaste tu contraseña?»
-condicional del login del móvil y el «pide a tu dueño que te rote el PIN»—, que
-es exactamente lo que el móvil tiene que preguntar en el Plan 3. **Borrarla como
-código muerto rompe el contrato del §9.1 antes de que exista su consumidor**, así
-que está anotado acá para que el próximo que la encuentre no la toque.
+propósito.** Contesta la pregunta del §3.1 —«¿es una cuenta de equipo?»—, que es la
+que sostiene el aviso «pide a tu dueño que te rote el PIN», y sigue siendo parte del
+contrato del §9.1 aunque el diálogo no la use. **Borrarla como código muerto rompe
+ese contrato**, así que está anotado acá para que el próximo que la encuentre no la
+toque: si algún día la UI necesita distinguir una cuenta de equipo de un dominio
+propio, esta es la función, y `isDeliverableAlias` no la reemplaza.
 
 ### A.5 — El borrado de cuenta: un **409 antes de la cascada**, no un cambio de schema
 
