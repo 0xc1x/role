@@ -47,16 +47,6 @@ import { Errors } from "@/src/core/error/app-error";
  */
 
 /**
- * Lo que se le dice a la persona cuando el servidor contesta algo que no
- * cumple el contrato.
- *
- * Es una frase, no un volcado: el cuerpo crudo —donde puede venir el PIN de la
- * tarjeta de entrega— no se muestra, ni se registra, ni se cuela en el
- * mensaje.
- */
-const RESPUESTA_INESPERADA = "El API devolvió una respuesta inesperada.";
-
-/**
  * Valida la respuesta del API contra el schema del contrato.
  *
  * ─── POR QUÉ UN `AppError` Y NO UN `ZodError` ────────────────────────────────
@@ -67,13 +57,21 @@ const RESPUESTA_INESPERADA = "El API devolvió una respuesta inesperada.";
  * `ZodError` que se escapara pondría un volcado de zod delante de la persona
  * en el preciso momento en que el servidor se rompió.
  *
+ * ─── Y POR QUÉ EL MENSAJE ES EL DE LA TAXONOMÍA ──────────────────────────────
+ *
+ * Porque el mensaje es para la persona, y la app no nombra al API en su prosa.
+ * Es el mismo camino que el cuerpo inválido del cliente (`fromInvalidBody`,
+ * `src/core/api/errors.ts`): `Errors.unknown()` sin argumento, con su texto de
+ * casa. Y el cuerpo crudo —donde puede venir el PIN de la tarjeta de entrega—
+ * no va al mensaje, ni al contexto, ni a un log.
+ *
  * La categoría es `unknown` a propósito: es la que el `MutationCache` global
  * reporta a Sentry (`src/core/query/client.ts`), porque una respuesta rota no
  * es algo que la persona pueda corregir.
  */
 function parseResponse<T>(schema: ZodType<T>, body: unknown): T {
 	const parsed = schema.safeParse(body);
-	if (!parsed.success) throw Errors.unknown(RESPUESTA_INESPERADA);
+	if (!parsed.success) throw Errors.unknown();
 	return parsed.data;
 }
 

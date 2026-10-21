@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { BusinessMemberDto } from "@0xc1x/role-commons";
-import type { AppError } from "@/src/core/error/app-error";
+import { type AppError, Errors } from "@/src/core/error/app-error";
 
 /**
  * Los accesos del equipo, por el API.
@@ -232,11 +232,13 @@ describe("staffRepository: la frontera se valida con zod", () => {
 	 * Una respuesta rota sale como `AppError` de la taxonomía, NO como un
 	 * `ZodError`: las pantallas pintan `error.message` y deciden con
 	 * `error.kind`, y un volcado de zod no es una respuesta que se pueda pintar.
+	 *
+	 * El mensaje NO se afirma con una literal: es el de la taxonomía —el mismo
+	 * que usa el cuerpo inválido del cliente (`fromInvalidBody`)— y el test lo
+	 * toma de ahí, para que la app pueda cambiar su prosa sin que este
+	 * contrato se rompa.
 	 */
-	const ROTTA = {
-		kind: "unknown",
-		message: "El API devolvió una respuesta inesperada.",
-	};
+	const ROTTA = { kind: "unknown" };
 
 	test("una lista con un rol fuera del vocabulario falla", async () => {
 		apiGet.mockResolvedValue([
@@ -288,9 +290,9 @@ describe("staffRepository: la frontera se valida con zod", () => {
 
 		await intento.catch((error: unknown) => {
 			const fallo = error as AppError;
-			// El PIN no sale: el mensaje es la prosa de la taxonomía, no el
-			// volcado del schema.
-			expect(fallo.message).toBe(ROTTA.message);
+			// La prosa es la de la taxonomía —no una frase que nombre al API— y
+			// el PIN no sale: ni en el mensaje, ni en un volcado del schema.
+			expect(fallo.message).toBe(Errors.unknown().message);
 			expect(fallo.message).not.toContain("48291");
 			expect(fallo.message).not.toMatch(/invalid_type|expected|received/i);
 		});
@@ -326,10 +328,7 @@ describe("staffRepository: la frontera se valida con zod", () => {
 
 		await expect(
 			staffRepository.transferOwnership(BUSINESS_ID, MEMBER_ID),
-		).rejects.toMatchObject({
-			kind: "unknown",
-			message: "El API devolvió una respuesta inesperada.",
-		});
+		).rejects.toMatchObject(ROTTA);
 	});
 });
 
