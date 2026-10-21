@@ -218,14 +218,12 @@ const { StaffNewScreen } = await import("./StaffNewScreen");
 
 let html = "";
 
-function render(): void {
+function render(businessId: string = BUSINESS_ID): void {
 	hookCursor = 0;
 	formProps = null;
 	sheetProps = null;
 	errorStates = [];
-	html = renderToStaticMarkup(
-		createElement(StaffNewScreen, { businessId: BUSINESS_ID }),
-	);
+	html = renderToStaticMarkup(createElement(StaffNewScreen, { businessId }));
 }
 
 const VALUES: StaffFormValues = {
@@ -358,4 +356,46 @@ test("con las sucursales cargadas se pinta el formulario con su alcance", () => 
 	expect(formProps?.locations).toEqual([CENTRO]);
 	expect(locationsBusinessIds).toEqual([BUSINESS_ID]);
 	expect(mutationsBusinessIds).toEqual([BUSINESS_ID]);
+});
+
+test("sin negocio no se pinta el formulario: es un negocio que no está", () => {
+	// La consulta está apagada sin id, así que no hay cargando ni fallando:
+	// sin este caso el formulario se pintaría con cero sucursales y le
+	// diría a la persona que este negocio no tiene sucursales.
+	render("");
+
+	expect(formProps).toBeNull();
+	expect(errorStates).toHaveLength(1);
+	// Y no hay reintento: lo que falta es la ruta, no la respuesta.
+	expect(errorStates[0]?.onRetry).toBeUndefined();
+});
+
+test("la hoja del PIN sobrevive al fallo de las sucursales", () => {
+	// La consulta de sucursales es compartida con el listado, así que un
+	// reintento en segundo plano puede fallar con la pantalla abierta. Si la
+	// hoja viviera dentro del estado de éxito, ese fallo la taparía y el PIN
+	// se perdería sin copia de nadie.
+	formProps?.onSubmit(VALUES);
+	resolveWith(CARD);
+	expect(sheetProps?.card).toEqual(CARD);
+
+	// La consulta falla en segundo plano: hay error, pero la tarjeta sigue.
+	locationsQuery = {
+		data: undefined,
+		isLoading: false,
+		isError: true,
+		error: new Error("sin permisos"),
+	};
+	render();
+
+	expect(errorStates).toHaveLength(1);
+	expect(sheetProps?.card).toEqual(CARD);
+
+	// Y cerrar la hoja sigue soltando la tarjeta y volviendo al listado.
+	sheetProps?.onClose();
+
+	expect(createResets).toEqual([1]);
+	expect(navigations).toEqual([
+		{ kind: "replace", path: `/business/${BUSINESS_ID}/staff` },
+	]);
 });

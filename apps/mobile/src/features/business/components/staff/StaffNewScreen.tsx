@@ -7,6 +7,7 @@ import { strings } from "@/src/core/i18n/strings";
 import { ErrorState, Screen, ScreenHeader } from "@/src/core/ui";
 import { spacing, radii } from "@/src/core/theme/spacing";
 import { toAppError } from "@/src/core/error/mapper";
+import { Errors } from "@/src/core/error/app-error";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeliveryCardSheet } from "./DeliveryCardSheet";
 import { StaffForm, type StaffFormValues } from "./StaffForm";
@@ -48,6 +49,16 @@ import {
  * consulta viva se pinta un esqueleto; si falla, se pinta el error con su
  * reintento; y sólo cuando llega una lista vacía se puede decir que el
  * negocio no tiene sucursales.
+ *
+ * ─── Y POR QUÉ LA HOJA NO DEPENDE DE LAS SUCURSALES ──────────────────────────
+ *
+ * Porque la hoja de entrega es lo único que tiene el PIN, y el PIN no se
+ * puede volver a pedir. La consulta de sucursales es COMPARTIDA con la
+ * pantalla del listado, así que un reintento en segundo plano que falle la
+ * dejaría en error con los datos ya en memoria: si la hoja viviera dentro
+ * del estado de éxito, ese fallo reemplazaría la tarjeta por un error de
+ * sucursales y el PIN se perdería sin que nadie lo hubiera visto. Por eso la
+ * hoja se monta fuera de los estados de la consulta.
  */
 export function StaffNewScreen({ businessId }: { businessId: string }) {
 	const {
@@ -101,6 +112,30 @@ export function StaffNewScreen({ businessId }: { businessId: string }) {
 		/>
 	);
 
+	// La hoja se monta FUERA de los estados de las sucursales: depende sólo
+	// de la tarjeta y del cierre. Si viviera dentro del estado de éxito, un
+	// reintento de la consulta que fallara —el que dispara un `visibility
+	// change` con la pantalla en primer plano— reemplazaría la hoja por un
+	// error de las sucursales y el PIN se perdería sin copia de nadie.
+	const sheet = card ? (
+		<DeliveryCardSheet card={card} onClose={closeSheet} />
+	) : null;
+
+	// Un negocio sin identificador es un NEGOCIO QUE NO ESTÁ: la consulta
+	// está apagada, así que no hay cargando ni fallando —hay nada— y sin este
+	// caso el formulario se pintaría con cero sucursales y le diría a la
+	// persona que este negocio no tiene sucursales. No hay reintento porque no
+	// hay nada que reintentar: lo que falta es la ruta.
+	if (!businessId) {
+		return (
+			<Screen scroll contentContainerStyle={styles.container}>
+				{header}
+				<ErrorState error={Errors.notFound()} />
+				{sheet}
+			</Screen>
+		);
+	}
+
 	if (isLoading) {
 		return (
 			<Screen scroll contentContainerStyle={styles.container}>
@@ -114,6 +149,7 @@ export function StaffNewScreen({ businessId }: { businessId: string }) {
 					))}
 					<Skeleton style={styles.skeletonButton} />
 				</View>
+				{sheet}
 			</Screen>
 		);
 	}
@@ -123,6 +159,7 @@ export function StaffNewScreen({ businessId }: { businessId: string }) {
 			<Screen scroll contentContainerStyle={styles.container}>
 				{header}
 				<ErrorState error={locationsError} onRetry={() => void refetch()} />
+				{sheet}
 			</Screen>
 		);
 	}
@@ -138,7 +175,7 @@ export function StaffNewScreen({ businessId }: { businessId: string }) {
 					onSubmit={save}
 				/>
 			</View>
-			{card ? <DeliveryCardSheet card={card} onClose={closeSheet} /> : null}
+			{sheet}
 		</Screen>
 	);
 }
