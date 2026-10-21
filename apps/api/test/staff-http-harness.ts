@@ -10,6 +10,7 @@ import { RolesGuard } from '../src/auth/roles.guard';
 import { SupabaseTokenVerifier } from '../src/auth/supabase-token-verifier';
 import type { Env } from '../src/config/env.schema';
 import { DRIZZLE } from '../src/database/database.tokens';
+import { OwnershipController } from '../src/modules/staff/ownership.controller';
 import { StaffController } from '../src/modules/staff/staff.controller';
 import { StaffSessionController } from '../src/modules/staff/staff-session.controller';
 import {
@@ -240,6 +241,16 @@ export const repository: Record<string, Mock> = {
     { row: memberRow(), locationIds: [LOC_A] },
   ]),
   locationIdsOfMember: jest.fn(async () => [LOC_A]),
+  /**
+   * The two reach questions, and the answer they give here.
+   *
+   * They are the DATABASE's answer, and the double plays the database: the
+   * owner reaches everything, and everybody else reaches what is inside their
+   * own scope. The scope of the fixture is `{LOC_A}`, so that is what a member
+   * reaches and what a set of branches is covered by.
+   */
+  reachesMember: jest.fn(async () => true),
+  coversLocations: jest.fn(async () => true),
   findLocationIdsInBusiness: jest.fn(
     async (_businessId: string, ids: string[]) => ids,
   ),
@@ -279,6 +290,54 @@ export const repository: Record<string, Mock> = {
       SESSION_BY_USER[userId] ??
       sessionState({ reason: 'no_membership', business_ids: [] }),
   ),
+  /**
+   * La transferencia de propiedad, como la contesta la BASE: los cinco
+   * identificadores de la operación.
+   *
+   * Y además ESCRIBE el rol nuevo en `written`, porque el servicio vuelve a
+   * leer las dos filas para armar la respuesta: un doble que no escribiera
+   * contestaría con un roster que contradice la transferencia que acaba de
+   * hacer —el dueño saliente seguiría siendo `owner` en la respuesta de una
+   * operación que lo degradó.
+   */
+  transferOwnership: jest.fn(
+    async (
+      _businessId: string,
+      newOwnerMemberId: string,
+      _callerUserId: string,
+    ) => {
+      written.set(MEMBER_OWNER, { role: 'manager' });
+      written.set(newOwnerMemberId, { role: 'owner' });
+      return {
+        business_id: BIZ,
+        previous_owner_member_id: MEMBER_OWNER,
+        previous_owner_user_id: OWNER_USER,
+        new_owner_member_id: newOwnerMemberId,
+        new_owner_user_id: STAFF_USER,
+      };
+    },
+  ),
+  /**
+   * La RECUPERACIÓN, como la contesta la BASE: los tres identificadores de la
+   * operación, y el rol nuevo escrito en `written` —el servicio vuelve a leer
+   * la fila para armar la respuesta—.
+   */
+  assignOwnership: jest.fn(
+    async (_businessId: string, memberId: string, _callerUserId: string) => {
+      written.set(memberId, { role: 'owner' });
+      return {
+        business_id: BIZ,
+        owner_member_id: memberId,
+        owner_user_id: STAFF_USER,
+      };
+    },
+  ),
+  /**
+   * Los DUEÑOS VIVOS del negocio, que es lo que decide si la plataforma puede
+   * crear un acceso en él. El default es UNO, que es el negocio con dueño: la
+   * rama de la plataforma sólo se abre en los negocios que se quedaron sin él.
+   */
+  liveOwnerCount: jest.fn(async (_businessId: string) => 1),
 };
 
 export const authAdmin = {
@@ -351,7 +410,7 @@ export async function bootstrapStaffHttp(): Promise<INestApplication> {
   } as unknown as ConfigService<Env, true>;
 
   const moduleRef = await Test.createTestingModule({
-    controllers: [StaffController, StaffSessionController],
+    controllers: [StaffController, StaffSessionController, OwnershipController],
     providers: [
       StaffService,
       { provide: StaffRepository, useValue: repository },

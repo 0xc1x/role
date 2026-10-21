@@ -43,7 +43,7 @@ const happy = {
   order: ORDER,
   business: { name: "Panadería Falsa", image: "https://img/b.png" },
   offer: { image: "https://img/o.png" },
-  ownership: { owner_id: OWNER },
+  owner: { user_id: OWNER },
   consumerPrefs: { push_enabled: true },
   businessPrefs: { push_enabled: true, new_orders_enabled: true },
 } as const;
@@ -217,11 +217,12 @@ describe("the business hears about fewer states than the consumer", () => {
     }
   });
 
-  test("a business with no ownership row is not notified at all", () => {
-    // Ownership moved to `business_ownership` and `maybeSingle` tolerates a
-    // missing row. Tolerating it must not turn into guessing an owner, and
-    // `user_id` is the consumer's, never a substitute.
-    const only = pushes({ ownership: null });
+  test("a business with no live owner is not notified at all", () => {
+    // The owner lives in `business_members` since 2026-10-21, and the rule is
+    // "a LIVE owner": role `owner`, status `active`, not archived. `maybeSingle`
+    // tolerates a missing row. Tolerating it must not turn into guessing an
+    // owner, and `user_id` is the consumer's, never a substitute.
+    const only = pushes({ owner: null });
     expect(only.map((p) => p.audience)).toEqual(["consumer"]);
     expect(only[0].userIds).toEqual([ORDER.user_id]);
   });

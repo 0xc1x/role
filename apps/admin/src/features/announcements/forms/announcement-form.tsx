@@ -353,7 +353,7 @@ export function AnnouncementForm({
 	/**
 	 * El nombre del negocio para un id del 400, o el id solo cuando el directorio
 	 * no lo conoce. El id nunca se oculta: es lo que el servidor nombró a
-	 * propósito —`business_ownership` no tiene el nombre del negocio— y alcanza
+	 * propósito —`business_members` no tiene el nombre del negocio— y alcanza
 	 * para ir a buscarlo, así que un nombre de menos no deja al operador sin
 	 * salida.
 	 */

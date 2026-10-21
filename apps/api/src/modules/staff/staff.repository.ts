@@ -58,6 +58,34 @@ export type MemberWithScope = {
 };
 
 /**
+ * What `public.transfer_business_ownership` answers: the five identifiers of
+ * the operation, and nothing else.
+ *
+ * It is NOT the roster and NOT a person: it is the receipt of a transaction, and
+ * the API turns it into two DTOs by reading the two rows it names.
+ */
+export type OwnershipTransferResult = {
+  business_id: string;
+  previous_owner_member_id: string;
+  previous_owner_user_id: string;
+  new_owner_member_id: string;
+  new_owner_user_id: string;
+};
+
+/**
+ * What `public.assign_business_ownership` answers: the three identifiers of the
+ * recovery, and nothing else.
+ *
+ * It is the receipt of a transaction, exactly like the transfer's: the API
+ * turns it into the DTO of the membership it names.
+ */
+export type OwnershipAssignResult = {
+  business_id: string;
+  owner_member_id: string;
+  owner_user_id: string;
+};
+
+/**
  * Every read of a membership filters `deleted_at is null`.
  *
  * §6.3 lists who has to: the helpers, the policies, the limit trigger and this
@@ -399,6 +427,225 @@ export class StaffRepository {
   }
 
   /**
+   * `public.business_member_reaches_member(business_id, member_id)`, AS THE CALLER.
+   *
+   * ─── POR QUÉ LA PREGUNTA LE VA A LA BASE Y NO ACÁ ──────────────────────────
+   *
+   * El alcance por sucursal es UNA regla, y mientras la escribía el servicio en
+   * TypeScript (`scopeIsContained`) y la base la tenía en otro sitio, eran dos
+   * reglas que podían apartarse sin que nada se enterara. Ahora la base la
+   * contesta y esta API pregunta.
+   *
+   * ─── CÓMO SE DECLARA QUIÉN ES EL QUE PREGUNTA ─────────────────────────────
+   *
+   * La función es `security definer` y lee `auth.uid()`, que sale de
+   * `request.jwt.claims`; esta API no tiene el JWT del usuario —`AuthUser` son
+   * tres campos, ninguno es el token—, así que no hay PostgREST al que
+   * preguntarle. Lo que hay es el id YA VERIFICADO por el guard, y eso se le
+   * declara a la base con `set_config(..., true)` dentro de una transacción, que
+   * es exactamente lo que hace PostgREST cuando traduce una llamada RPC.
+   *
+   * Los tres detalles que lo sostienen, y que no son estilo, están escritos en
+   * `sessionStateAsCaller` (más abajo) y no se repiten: el `is_local = true` sin
+   * la transacción se derramaría al pooler; la transacción es también lo que
+   * hace que el *transaction pooler* (:6543) sea seguro, porque la llamada
+   * entera cae en una sola conexión; y NO se cambia el rol de la sesión a
+   * `authenticated`, porque la función es `security definer` y dentro de ella
+   * `current_user` es el dueño y las RLS no aplican.
+   */
+  async reachesMember(
+    businessId: string,
+    memberId: string,
+    callerUserId: string,
+  ): Promise<boolean> {
+    const claims = JSON.stringify({ sub: callerUserId, role: 'authenticated' });
+
+    const rows = (await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('request.jwt.claims', ${claims}, true)`,
+      );
+      return tx.execute(
+        sql`select public.business_member_reaches_member(${businessId}::uuid, ${memberId}::uuid) as ok`,
+      );
+    })) as { ok?: unknown }[];
+
+    return rows[0]?.ok === true;
+  }
+
+  /**
+   * `public.business_member_covers_locations(business_id, location_ids)`, AS THE
+   * CALLER.
+   *
+   * La otra mitad de la misma regla, leída de lado del CONJUNTO de sucursales:
+   * el dueño cubre todo, y cualquier otro miembro cubre un conjunto NO VACÍO de
+   * sucursales si todas están en su alcance.
+   *
+   * El conjunto vacío no lo cubre nadie salvo el dueño, y esa es la razón de
+   * que la función exista: un `true` para el conjunto vacío significaría que un
+   * gerente sin alcance puede crear accesos sin alcance, o ampliar los que ya
+   * tiene a ninguno.
+   *
+   * El arreglo se arma con `array[...]` y no con un parámetro de tipo `uuid[]`:
+   * un arreglo de parámetros es un `text[]` con los uuid adentro, y el cast
+   * implícito de `text[]` a `uuid[]` depende de la versión. Los identificadores
+   * van como parámetros, que es lo que los hace seguros contra inyección.
+   */
+  async coversLocations(
+    businessId: string,
+    locationIds: readonly string[],
+    callerUserId: string,
+  ): Promise<boolean> {
+    const claims = JSON.stringify({ sub: callerUserId, role: 'authenticated' });
+    const unique = [...new Set(locationIds)];
+    const array =
+      unique.length === 0
+        ? sql`'{}'::uuid[]`
+        : sql`array[${sql.join(unique.map((id) => sql`${id}::uuid`))}]`;
+
+    const rows = (await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('request.jwt.claims', ${claims}, true)`,
+      );
+      return tx.execute(
+        sql`select public.business_member_covers_locations(${businessId}::uuid, ${array}) as ok`,
+      );
+    })) as { ok?: unknown }[];
+
+    return rows[0]?.ok === true;
+  }
+
+  /**
+   * `public.transfer_business_ownership(business_id, member_id)`, AS THE CALLER.
+   *
+   * ─── POR QUÉ ESTA LLAMADA ES UNA TRANSACCIÓN ────────────────────────────────
+   *
+   * La operación de la base ya es atómica —una llamada a la función es su propia
+   * transacción—, pero la llamada necesita el `sub` de QUIÉN pregunta, y el
+   * `sub` se declara con `set_config(..., true)`, que es de alcance
+   * TRANSACCIONAL: sin una transacción, el GUC se derramaría al pooler y la
+   * request siguiente heredaría el dueño de esta.
+   *
+   * Y la transacción también es lo que hace que el *transaction pooler* (:6543)
+   * sea seguro: la llamada entera cae en una sola conexión de servidor, así que
+   * el `set_config` y la llamada no pueden separarse.
+   *
+   * ─── POR QUÉ NO SE CAMBIA EL ROL DE LA SESIÓN ──────────────────────────────
+   *
+   * Por lo mismo que dice `sessionStateAsCaller`: la función es `security
+   * definer`, así que dentro de ella `current_user` es el dueño y las RLS no
+   * aplican. Lo único que hace que la respuesta sea DEL que pregunta es el
+   * `auth.uid()` que se declara, y `p_business_id` acota el resto.
+   *
+   * ─── POR QUÉ EL REFUSAL SALE DE AQUÍ, SIN ENVOLVERLO ───────────────────────
+   *
+   * Porque `R0004` es una regla de negocio con su mensaje, y el servicio la
+   * traduce a un 422 con ese mensaje. Si esta llamada la envolviera, el servicio
+   * no podría distinguirla de un 500 —y un refusal que llega como 500 es un
+   * refusal que el panel no puede pintar.
+   */
+  async transferOwnership(
+    businessId: string,
+    newOwnerMemberId: string,
+    callerUserId: string,
+  ): Promise<OwnershipTransferResult> {
+    const claims = JSON.stringify({ sub: callerUserId, role: 'authenticated' });
+
+    const rows = (await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('request.jwt.claims', ${claims}, true)`,
+      );
+      return tx.execute(
+        sql`select public.transfer_business_ownership(${businessId}::uuid, ${newOwnerMemberId}::uuid)::text as transfer`,
+      );
+    })) as { transfer: string }[];
+
+    // El `::text` y el `JSON.parse` son los mismos que usa `sessionStateAsCaller`,
+    // y por el mismo motivo: el `jsonb` lo entrega el driver como objeto ya
+    // parseado según la versión, y un texto no depende.
+    const raw = rows[0]?.transfer;
+    if (typeof raw !== 'string') {
+      throw new Error(
+        'transfer_business_ownership no devolvió una fila de jsonb legible',
+      );
+    }
+
+    return JSON.parse(raw) as OwnershipTransferResult;
+  }
+
+  /**
+   * `public.assign_business_ownership(business_id, member_id)`: the platform
+   * gives a business its owner back.
+   *
+   * ─── POR QUÉ ES UNA FUNCIÓN DISTINTA A LA DE LA TRANSFERENCIA ────────────────
+   *
+   * Porque son dos hechos y dos permisos: la transferencia la pide el dueño,
+   * que es quien entrega, y la recuperación la pide la plataforma, que es quien
+   * rescata. Una bandera en la misma función sería un interruptor para saltarse
+   * la primera regla.
+   *
+   * ─── Y POR QUÉ NO HAY IDENTIFICADOR DEL QUE PIDE ─────────────────────────────
+   *
+   * Porque la función no lo necesita: la base no sabe de `app_role`, y el
+   * permiso de plataforma lo comprueba la API (`user.role === 'admin'`). La
+   * función es ejecutable sólo por el servicio —el ACL es `{postgres,
+   * service_role}`— así que el móvil no la puede abrir.
+   *
+   * ─── Y EL `R0004` NO SE ENVUELVE ────────────────────────────────────────────
+   *
+   * Por la misma razón que en la transferencia: es una regla de negocio con su
+   * mensaje, y el servicio la traduce a un 422 con ese mensaje.
+   */
+  async assignOwnership(
+    businessId: string,
+    memberId: string,
+    callerUserId: string,
+  ): Promise<OwnershipAssignResult> {
+    const claims = JSON.stringify({ sub: callerUserId, role: 'authenticated' });
+
+    const rows = (await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('request.jwt.claims', ${claims}, true)`,
+      );
+      return tx.execute(
+        sql`select public.assign_business_ownership(${businessId}::uuid, ${memberId}::uuid)::text as assignment`,
+      );
+    })) as { assignment: string }[];
+
+    const raw = rows[0]?.assignment;
+    if (typeof raw !== 'string') {
+      throw new Error(
+        'assign_business_ownership no devolvió una fila de jsonb legible',
+      );
+    }
+
+    return JSON.parse(raw) as OwnershipAssignResult;
+  }
+
+  /**
+   * `public.business_live_owner_count(business_id)`: how many LIVE owners this
+   * business has right now.
+   *
+   * ─── POR QUÉ LA BASE Y NO UN `SELECT` AQUÍ ───────────────────────────────────
+   *
+   * Porque la pregunta es del negocio, no de esta API: «¿tiene dueño vivo?» es
+   * lo que decide si la plataforma puede crear un acceso en él, y la respuesta
+   * tiene que ser la MISMA que la que da la función de recuperación —si esta API
+   * contara los dueños con su propio predicado, la puerta y la operación
+   * podrían discrepar, y un negocio que la puerta da por sin dueño podría
+   * tener dueño en la base—.
+   *
+   * Y el predicado —`role = 'owner'`, `status = 'active'`, `deleted_at is null`—
+   * vive en la base, en una función, y no en dos sitios.
+   */
+  async liveOwnerCount(businessId: string): Promise<number> {
+    const rows = (await this.db.execute(
+      sql`select public.business_live_owner_count(${businessId}::uuid)::int as live_owners`,
+    )) as { live_owners: number }[];
+
+    return Number(rows[0]?.live_owners ?? 0);
+  }
+
+  /**
    * `public.business_member_session_state(p_business_id)`, AS THE CALLER.
    *
    * ─── `null` NO ES «NINGUNO»: ES «PREguntÁLE» ─────────────────────────────────
@@ -490,7 +737,12 @@ export class StaffRepository {
   ): Promise<StaffSessionState> {
     const claims = JSON.stringify({ sub: userId, role: 'authenticated' });
 
-    const [result] = await this.db.transaction(async (tx) => {
+    // La transacción devuelve las FILAS, no la primera fila: `db.transaction`
+    // resuelve con lo que el callback devuelve, y el callback devuelve el
+    // `execute`, que es el arreglo de filas. Sacar la primera fila de eso y
+    // después indexarla otra vez devolvía `undefined` siempre, y este método
+    // tiraba «no devolvió una fila de jsonb legible» en TODAS las llamadas.
+    const rows = (await this.db.transaction(async (tx) => {
       await tx.execute(
         sql`select set_config('request.jwt.claims', ${claims}, true)`,
       );
@@ -502,13 +754,12 @@ export class StaffRepository {
       return tx.execute(
         sql`select public.business_member_session_state(${businessId}::uuid)::text as session_state`,
       );
-    });
+    })) as { session_state: string }[];
 
     // El `::text` y el `JSON.parse` de abajo son deliberados: el `jsonb` lo
     // entrega postgres.js como objeto ya parseado según el driver, y el tipo de
     // la fila depende de qué versión esté instalada. Un texto no depende.
-    const rows = result as { session_state: string }[] | undefined;
-    const raw = rows?.[0]?.session_state;
+    const raw = rows[0]?.session_state;
     if (typeof raw !== 'string') {
       // Una fila sin `session_state` no es un caso que la función pueda
       // producir: siempre devuelve un objeto. Es o un `execute` que no se

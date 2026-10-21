@@ -85,7 +85,7 @@ export class AnnouncementsController {
 
   /**
    * Publica un aviso. La cabecera `Authorization` también se lee acá, y no es un
-   * detalle: la resolución de `business_ids` a `user_ids` lee `business_ownership`
+   * detalle: la resolución de `business_ids` a `user_ids` lee `business_members`
    * por PostgREST con la sesión del operador, así que la identidad de la escritura
    * es la que decide si esa lectura tiene filas. Es el mismo motivo por el que
    * `list` la reenvía.

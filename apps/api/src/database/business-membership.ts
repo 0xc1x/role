@@ -59,13 +59,19 @@ import type { Database } from './database.module';
  * invisible para el guard de catálogo —que lee `pg_proc.prosrc`— y por eso el
  * módulo de `staff` dejó de calcularla y pregunta a la función.
  *
- * Lo que sí está escrito acá es la COMBINACIÓN de las dos mitades de «vencida»:
- * una sesión con TTL y sin sello es vencida por definición, y una con sello
- * vence cuando la fecha compartida ya pasó. Las dos mitades son las mismas que
- * lee `business_member_session_valid`; la diferencia es que esa función
- * pregunta «¿es válida la sesión DE QUIEN PREGUNTA?», y esta pregunta por una
- * persona explícita porque esta API ya tiene el id verificado por el guard y
- * no tiene el JWT del usuario.
+ * La COMBINACIÓN tampoco está escrita acá. La COMBINACIÓN de las dos mitades de
+ * «vencida» —TTL apagado **o** (sello presente **y** la fecha compartida no
+ * pasó)— vive en `public.business_member_session_inside_promise`, y este módulo
+ * la llama. Antes vivía acá también, y eso era un bug con la misma forma del
+ * de la aritmética: dos copias de la misma regla, atadas sólo por una matriz
+ * de pruebas, que se apartan en silencio cuando alguien cambia una de las dos.
+ *
+ * La diferencia entre esa función y `business_member_session_valid` es la
+ * misma que había antes entre este módulo y aquella: la función de la base
+ * pregunta «¿es válida la sesión DE QUIEN PREGUNTA?», y esta API pregunta por
+ * una persona explícita porque ya tiene el id verificado por el guard y no
+ * tiene el JWT del usuario. La COMBINACIÓN que usan las dos es la misma, y esa
+ * es la parte que no se duplica.
  */
 export type MembershipDbExecutor = Database;
 
@@ -78,22 +84,28 @@ export type MembershipDbExecutor = Database;
  * denies nada —que es exactamente lo que la generación vieja de policies
  * concedía y lo que la nueva concede para un dueño con la sesión viva.
  *
- * El resto es la cuenta de la base: `last_authenticated_at + ttl horas`, y la
- * comparación con `now()`. La fecha la pone `business_member_session_expires_at`;
- * el `>=` es el `not (expires_at < now())` de `business_member_session_valid`,
- * escrito al revés para que el caso del TTL apagado no tenga que compararse con
- * `null`.
+ * La cuenta —`last_authenticated_at + ttl horas`, comparada con `now()`— la
+ * tiene la base: `business_member_session_expires_at` para la aritmética y
+ * `business_member_session_inside_promise` para la combinación. Este módulo
+ * no escribe ninguna de las dos.
+ *
+ * ─── POR QUÉ ESTO ES UNA LLAMADA Y NO UNA EXPRESIÓN ──────────────────────────
+ *
+ * Porque la expresión era la COPIA. La combinación de las dos mitades de
+ * «vencida» escrita acá y escrita en SQL son dos reglas que pueden apartarse,
+ * y el guard de catálogo —que lee `pg_proc.prosrc`— no las ve: sólo ve SQL.
+ * Una migración que cambiara la definición de «vencida» en la base
+ * desincronizaba esta API sin error y sin prueba, que es la clase de defecto
+ * que el §5.2 dice que no puede existir.
+ *
+ * La función es `stable` y no `security definer`: no lee ninguna fila, y por
+ * eso el `authenticated` que la ejecuta no filtra nada —contesta sobre el TTL y
+ * el sello que le pasaron, no sobre el estado de nadie.
  */
 function sessionInsidePromise(): SQL {
-  return sql`(
-    ${businessMembers.session_ttl_hours} = 0
-    or (
-      ${businessMembers.last_authenticated_at} is not null
-      and public.business_member_session_expires_at(
-            ${businessMembers.session_ttl_hours},
-            ${businessMembers.last_authenticated_at}
-          ) >= now()
-    )
+  return sql`public.business_member_session_inside_promise(
+    ${businessMembers.session_ttl_hours},
+    ${businessMembers.last_authenticated_at}
   )`;
 }
 

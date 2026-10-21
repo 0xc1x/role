@@ -33,6 +33,7 @@ type Recorded = {
   table?: string;
   values?: unknown;
   sql?: string;
+  query?: unknown;
 };
 
 const BIZ = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
@@ -118,9 +119,29 @@ function recordingExecutor(calls: Recorded[]): StaffDbExecutor {
       return chain(call);
     },
     execute(query: unknown) {
-      const call: Recorded = { op: 'execute', sql: sqlText(query) };
+      const call: Recorded = { op: 'execute', sql: sqlText(query), query };
       calls.push(call);
-      return chain(call);
+      // Un `execute` de verdad devuelve las FILAS, y por eso el repositorio las
+      // lee como un arreglo. Acá no hay base, así que devuelve un arreglo vacío:
+      // es la forma que hace que `rows[0]` sea `undefined` y no una excepción.
+      const rows: unknown[] = [];
+      return {
+        then(resolve: (value: unknown) => unknown) {
+          resolve(rows);
+          return Promise.resolve(rows);
+        },
+      };
+    },
+    /**
+     * Las dos preguntas del alcance se hacen DENTRO de una transacción, porque
+     * el `set_config` que declara quién pregunta tiene que morir con el commit
+     * o el rollback: sin la transacción, el `sub` se derramaría al pooler y la
+     * llamada siguiente sería la de otra persona.
+     */
+    transaction(fn: (tx: unknown) => Promise<unknown>) {
+      const call: Recorded = { op: 'execute', sql: 'transaction' };
+      calls.push(call);
+      return fn(executor);
     },
   };
 
@@ -179,5 +200,81 @@ describe('la baja de un acceso es un UPDATE, no un DELETE', () => {
 
     expect(calls.map((call) => call.op)).toEqual(['update']);
     expect(calls[0]?.values).toMatchObject({ deleted_at: expect.any(Date) });
+  });
+});
+
+/**
+ * ─── LAS DOS PREGUNTAS DEL ALCANCE ───────────────────────────────────────────
+ *
+ * El alcance por sucursal es una regla de la BASE, y estas dos llamadas son las
+ * dos preguntas que se le hacen. Lo que se mide acá no es la regla —eso está en
+ * `src/database/security/business-members.rls.db.spec.ts`, contra la base de
+ * verdad— sino el Cable: que la pregunta salga con QUIÉN PREGUNTA declarado, y
+ * que la función que se llama sea la que tiene que ser.
+ *
+ * El "quién pregunta" es la parte que no se ve en el SQL: viaja como un
+ * parámetro del `set_config`, y un ejecutor que no lo declara devuelve la
+ * respuesta de OTRO usuario. Por eso el `set_config` va con `is_local = true`
+ * DENTRO de una transacción, y por eso esto se mira.
+ */
+describe('las dos preguntas del alcance se las hace a la base', () => {
+  const CALLER_USER = '11111111-2222-4333-8444-555555555555';
+
+  /** El texto de una consulta con sus parámetros, que es donde viaja el llamador. */
+  function rawText(calls: Recorded[]): string {
+    return calls
+      .map((call) => `${call.sql ?? ''} ${JSON.stringify(call.query ?? '')}`)
+      .join('\n');
+  }
+
+  it('reachesMember declara quién pregunta y llama a la función de la base', async () => {
+    const calls: Recorded[] = [];
+    const { repository } = repositoryWith(calls);
+
+    await repository.reachesMember(BIZ, MEMBER_ID, CALLER_USER);
+
+    const text = rawText(calls);
+    expect(text).toContain("set_config('request.jwt.claims'");
+    // El `sub` de los claims: la identidad de quien pregunta, y no un ids que
+    // la función pudiera leer de otro lado.
+    expect(text).toContain(CALLER_USER);
+    expect(text).toContain('public.business_member_reaches_member');
+  });
+
+  it('coversLocations manda las sucursales como un arreglo de uuid', async () => {
+    const calls: Recorded[] = [];
+    const { repository } = repositoryWith(calls);
+
+    await repository.coversLocations(
+      BIZ,
+      [LOCATION_ID, '22222222-3333-4444-8555-666666666666'],
+      CALLER_USER,
+    );
+
+    const text = rawText(calls);
+    expect(text).toContain('public.business_member_covers_locations');
+    expect(text).toContain('array[');
+    expect(text).toContain(LOCATION_ID);
+  });
+
+  it('un conjunto vacío de sucursales viaja como un arreglo vacío, no como un null', async () => {
+    const calls: Recorded[] = [];
+    const { repository } = repositoryWith(calls);
+
+    await repository.coversLocations(BIZ, [], CALLER_USER);
+
+    // El conjunto vacío es la forma degenerada de la regla, y es la que decide
+    // que un gerente sin alcance no pueda crear accesos sin alcance.
+    expect(rawText(calls)).toContain("'{}'::uuid[]");
+  });
+
+  it('las dos preguntas van dentro de una transacción, para que el llamador no se derrame al pooler', async () => {
+    const calls: Recorded[] = [];
+    const { repository } = repositoryWith(calls);
+
+    await repository.reachesMember(BIZ, MEMBER_ID, CALLER_USER);
+    await repository.coversLocations(BIZ, [LOCATION_ID], CALLER_USER);
+
+    expect(calls.filter((call) => call.sql === 'transaction')).toHaveLength(2);
   });
 });

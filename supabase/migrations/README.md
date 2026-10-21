@@ -439,6 +439,20 @@ deliberate: a count would pass with three policies moved somewhere else, and the
 whole value of pinning them by name is that the diff shows *which* one changed. A
 hand-written policy in the meantime shows up in the same place.
 
+> ### ⚠ THE DROP HAPPENED. This paragraph describes a state that is over.
+>
+> **Everything this section says about the 19 policies still being in place is
+> HISTORY.** The retirement was applied on 2026-10-21 by Plan 3's Task 10, in two
+> migrations: `20261021002713_owner_membership_and_ownership_readers` (the seven
+> bodies that still named the table) and `20261021005034_drop_business_ownership`
+> (the 19 policies and the table). **The table does not exist**, and the state of
+> the live database is measured in the section of `20261021005034` below.
+>
+> The paragraph above is left as it was written because it is the reason the drop
+> could be scheduled: it names the residue by name, and the drop is what the
+> residue was waiting for. **What to read now instead:** the `## Applied:
+> 20261021005034_drop_business_ownership` section at the end of this file.
+
 **The grants on the three recreated functions are unchanged, and that was measured
 rather than assumed.** The brief for this task stated that `anon` holds EXECUTE on
 `cancel_order` and `reserve_offer`; it does not, in the live database or in the
@@ -2288,3 +2302,538 @@ de nadie, hay tabla completa. Un índice sobre `(user_id)` lo resuelve. No se
 agrega acá porque **esta migración ya está aplicada y sellada con su md5**:
 sería una migración nueva, y una que se aplica por un índice que hoy no urge es
 la clase de cambio que entra junto con el próximo que sí lo urge.
+
+## Applied: `20261020152852_location_scope_in_policies`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`2155e50fec45c830014899b128664403` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**This is the migration that moves the branch scope into the policies, and the
+diff is ONE predicate and TWO `alter policy`.** Three changes:
+
+1. **`can_manage_location` stops handing the whole business to a `manager`.**
+   The role branch goes from `when r.member_role in ('owner', 'manager') then
+   true` to `when r.member_role = 'owner' then true`. A manager now arrives at
+   a row through the scope branch —the live rows of `business_member_locations`
+   of its membership— and a manager with no rows arrives at nothing. The owner
+   keeps the whole business, with or without scope rows, because the owner's
+   scope IS the business.
+2. **The two roster policies become "the roster you reach".** `Owners and
+   managers view business members` and `Owners and managers view member scope`
+   are rewritten with `alter policy` (Postgres has no `create or replace
+   policy`, and a `drop` + `create` opens a window in which the policy does
+   not exist). Both carry the ROLE requirement INSIDE, because the scope rule
+   does not distinguish by role: a staff member whose scope covers another
+   member's would satisfy the helper, and would see the roster —whose aliases
+   mirror `auth.users.email`.
+3. **`business_member_reaches_member` gains the exception of the caller's OWN
+   row.** Without it a manager with no scope rows did not reach itself, and
+   the self-service path of ADR-0013 (decision 4) disappeared. The exception
+   lives in the HELPER and not in the policy because the API asks the database
+   (and the "pause me" write is the API's), and because a policy cannot say
+   "my row" without recursing through `business_members`. It grants nothing
+   else: `can_manage_location` does not know about it, so a scopeless manager
+   still touches no offer, no order and no location.
+
+**The thirteen policies that read `can_manage_location` are NOT touched.** They
+read the function's answer, so what changes is what the function answers. That
+is the whole difference between a plan with thirteen policy diffs and one with
+a single predicate —and thirteen copies of a rule are thirteen chances to
+write it differently.
+
+**The nine business-wide policies stay business-wide**: the business row, the
+hours, the coupons, the payouts, the notification preferences and the creation
+of a location. The scope rule bounds THE THINGS THAT LIVE IN A BRANCH; what has
+no branch dimension is still the whole business, and it is granted by ROLE.
+`Members can delete business locations` also stays as it is: it requires
+`role = 'owner'`, so it gives nobody a scope.
+
+**Two consequences worth saying out loud.** The owner is no longer in a
+manager's roster —which is what §8 already said and what the API already did
+(`reaches()` is false for an owner target), and now the database says the same
+thing— and a manager who CREATES a location does not manage it, because the
+new row is in nobody's scope until the owner puts it there.
+
+**Production did not move**: there are sixteen owners and zero managers and
+zero staff (measured 2026-10-21), so nobody loses access with this migration.
+
+The previous migration of this plan, `20261020134712_member_scope_predicates`,
+has no section here yet: it created the two scope helpers and changed no
+policy. The pair reads in order —the rule first, the policies after— and the
+rollback of this one is a NEW migration (the ledger's `rollback` is `NULL` in
+all 153 rows): restore the old role branch, drop the own-row exception, and
+`alter` the two policies back to their `20261015024825` quals.
+
+## Applied: `20261020163244_ownership_transfer`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`14810a9cd47cac8b5b3c56534e4a6b63` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**Three changes, and all three are the same rule**: an ACTIVE business always
+has a live owner, and an INACTIVE one may have none.
+
+1. **`public.transfer_business_ownership(business_id, member_id)`** — the
+   operation. `volatile security definer set search_path = ''`, ACL
+   `{postgres, service_role}`: `anon` and `authenticated` hold nothing, so the
+   mobile —which writes straight to Supabase— cannot open it. The caller is
+   NOT an argument: the function reads `auth.uid()` and refuses with `R0004`
+   unless the caller IS the live owner of that business. The recipient must be
+   a live member of the same business, and the transfer is one transaction:
+   demote the old owner to `manager`, give it the scope of every branch, promote
+   the recipient to `owner`, and point `business_ownership` at the new owner —
+   an UPSERT, because a business with no ownership row is one the mobile could
+   not read, and after the transfer it has to read like the others.
+2. **`public.enforce_business_keeps_an_owner()`** plus
+   `trg_business_keeps_an_owner`, a `CONSTRAINT TRIGGER … DEFERRABLE INITIALLY
+   DEFERRED … FOR EACH ROW` on `business_members`. It is deferred because the
+   demotion and the promotion have to be TWO statements —the partial unique
+   index checks row by row, so a single statement could hit `23505` on the
+   promotion— and a `BEFORE` trigger would see the intermediate state, the
+   business with no owner, and refuse a legitimate transfer. At commit the
+   state is final: the transfer passes, and a lone demotion of an active
+   business is aborted with `R0002`.
+3. **`public.enforce_owner_is_untouchable()`** is rewritten. The `status →
+   'disabled'` guard STAYS in the `BEFORE` trigger —a revocation deserves an
+   immediate error with its own message— and its message changed, because
+   «la transferencia de propiedad no existe en esta versión» stopped being
+   true. The demotion guard and the `deleted_at` guard are GONE: what decides
+   whether a business has an owner is the FINAL state of the transaction, and
+   that is the deferred trigger's business.
+
+**Two consequences worth saying out loud.** A demotion of an owner no longer
+fails in the STATEMENT: it fails at the COMMIT, and only for a business that
+is still active. And an INACTIVE business may now end up with no owner at
+all —which is what makes the release of D2 possible, and what the reactivation
+guard of the next task has to answer.
+
+**The plan said the transfer could fail because of the member limit. Measured,
+it does not.** `enforce_business_member_limit` leaves BEFORE counting when the
+row stops being the owner, and a promotion to `owner` leaves even earlier; and
+the transfer does not grow the team anyway —the outgoing owner takes the seat
+the incoming one gives up. A business at its limit can hand its business over.
+
+**Production did not move**: fourteen active businesses, fourteen live owners,
+zero active businesses without one (measured after applying). The ledger's
+`rollback` is `NULL`, so the rollback of this one is a NEW migration: drop the
+function and the constraint trigger, and restore the old
+`enforce_owner_is_untouchable` body —whose text is in the sealed
+`20261020052915_owner_cannot_be_demoted.sql`, copied, not edited.
+
+## Applied: `20261020172601_inactive_business_releases_owner`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`ca431d6698e00fa4d5ff40d2ecd148f6` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**One rule, in one sentence**: an INACTIVE business may have no owner, an
+ACTIVE one may not, and a business that lost its owner does not come back to
+life without the platform returning one.
+
+**Five objects, and the five are the same rule**:
+
+1. **`public.business_live_owner_count(business_id)`** — the definition of
+   «live owner» (`role = 'owner'`, `status = 'active'`, `deleted_at is null`).
+   It lives in ONE function because four objects consult it: the deferred
+   invariant trigger, the reactivation guard, the recovery of the next migration
+   and the API. Four copies of the same predicate are four rules that can drift
+   apart, and the predicate IS the rule.
+2. **`public.enforce_business_keeps_an_owner()`** is recreated to call the
+   helper. Its behaviour does NOT change —the `v_live <> 1` is the same
+   predicate— and the tests that measure it are the ones Task 3 wrote.
+3. **`public.release_business_ownership(business_id, actor_user_id)`** — the
+   release. `volatile security definer set search_path = ''`, ACL
+   `{postgres, service_role}`. It refuses with `R0004` when the business is
+   still ACTIVE (an active business is handed over, not released) and when the
+   actor is not its live owner. It archives the owner's membership AND its
+   scope rows, and DELETES the `business_ownership` row of that business: that
+   row is the one the mobile reads, and leaving it names a person who is
+   leaving —the silent orphan. The business itself is NOT deleted and NOT
+   reactivated, and the other members are NOT touched.
+4. **`public.enforce_business_reactivation_needs_owner()`** plus
+   `trg_business_reactivation_needs_owner`, a `BEFORE UPDATE OF is_active` on
+   `businesses`, refusing with `R0002` the activation of a business with no
+   live owner. The deferred trigger of Task 3 watches the MEMBERSHIPS, so
+   without this one `update businesses set is_active = true` would leave an
+   active business with no owner and nobody would say so.
+5. **`public.enforce_owner_cannot_be_deleted()`** is rewritten with ONE more
+   condition: an owner row cannot be DELETED while the business still names
+   that person as its owner. Task 3 removed the `deleted_at` guard from the
+   `BEFORE UPDATE` trigger —archiving IS half a release— so "archive and then
+   delete" became the path with no door, and it left the ownership row naming
+   somebody with no membership. The release deletes that row in the SAME
+   transaction, so after a release the delete is history cleanup and before it
+   is the orphan. The check uses `to_regclass`, because `business_ownership` is
+   retired in Task 10 and the guard has to switch itself off instead of
+   breaking every delete.
+
+**Two consequences worth saying out loud.** APPROVING a business without a
+live owner now ABORTS the approval: `apply_business_verification_state` does
+`update businesses set is_active = (new.verification_status = 'approved')`,
+and that is an activation. The moderation can no longer publish a business
+whose owner left, and the way out is the recovery of the next migration. And
+the fixture order became mandatory —business → owner membership → activate—
+which cost three fixtures in three other spec files their approval statement
+and gave them a `business_members` row, because in production every business
+has a live owner.
+
+**Two typos are sealed in this file and cannot be fixed**: the ledger stores
+exactly what was sent, and the file has to be byte for byte what the ledger
+stored —that is the proof of what ran. «consecuancia» and «sayirla» are in the
+ledger, so they are in the file. A migration cannot change a comment.
+
+**The ledger's `rollback` is `NULL`**, so the rollback of this one is a NEW
+migration: drop the three objects and the trigger, restore the old
+`enforce_business_keeps_an_owner` body, and restore the old
+`enforce_owner_cannot_be_deleted` body.
+
+## Applied: `20261020172817_assign_business_ownership`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`69648d3f5367084e0421037a1711408b` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**`public.assign_business_ownership(business_id, member_id)`** — the recovery.
+`volatile security definer set search_path = ''`, ACL `{postgres, service_role}`.
+It refuses with `R0004` when the business ALREADY has a live owner («este
+negocio ya tiene un dueño: usá la transferencia») and when the member is not a
+live access of that business. It promotes the member and leaves
+`business_ownership` coherent, with an UPSERT, while that table exists.
+
+**It is a second function and not a flag on the transfer**: the transfer
+requires the caller to BE the owner, and a business with no owner has nobody
+who can be. Two facts, two permissions, two functions. And it cannot be a way
+around the invariant: a business with a live owner is refused, and promoting a
+live access leaves EXACTLY one owner, which is what the partial unique index
+allows and what the deferred trigger demands at commit.
+
+**The platform permission is the API's**, not the database's: it is an
+`app_role`, and the function is executable only by the service, which is the
+API. The route is `POST /businesses/:businessId/ownership/restore`, and the
+admin's branch on `POST /businesses/:id/staff` opens only for a business with
+NO live owner.
+
+**The ledger's `rollback` is `NULL`**: the rollback is a NEW migration that
+drops the function.
+
+## Applied: `20261020174431_ownership_transfer_concurrency`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`663b51984092c30d1d3db060fa2cd489` and that is also the ledger's
+`md5(statements[1])`: byte for byte.
+
+**One change, and it is a lock.** `20261020163244_ownership_transfer.sql`
+created the transfer WITHOUT a lock, and concurrency found it: two transfers of
+the same business running at once read the same state, and the second one
+competed with the first for the partial unique index —the invariant held, but
+the loser learned about it with a `23505`, which is a storage error and not a
+business rule.
+
+Worse: the release of `20261020172601` and the transfer crossed each other.
+The release deletes the `business_ownership` row in the same transaction that
+archives the owner's membership; a transfer in the middle could leave a
+business with a live owner and NO ownership row —the silent orphan again, from
+the other side.
+
+**`select … for update` on the business row, at the beginning of the function.**
+It is the same lock the release and the recovery take, and for the same
+reason: property operations on one business have to see each other. Each of
+the three takes ONE lock and none takes two, so no deadlock is possible. With
+the lock, the second operation waits for the first to commit, sees the final
+state —the old owner is already a `manager`— and refuses with `R0004` and the
+reason that belongs to it.
+
+**Nothing else changes**: same name, same signature, same ACL, same messages,
+same `jsonb` answer. The body is the one of `20261020163244` with one step
+more at the beginning.
+
+**Task 10 has to replace this function**: its body mentions
+`business_ownership` in the UPSERT, and that table is retired in that task.
+The two functions of `20261020172601` and `20261020172817`, and the delete
+guard, use `to_regclass` and switch themselves off.
+
+## Applied: `20261020193222_shared_session_promise`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`e45f4622e83c3bb1d0c30d5f675c1d0f` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**One rule, and it is the combination.** «Expired» is two halves: the TTL is
+off, **or** there is a seal and the shared date has not passed. The ARITHMETIC
+—`last_authenticated_at + ttl hours`— has had one home since
+`20261015031154` (`business_member_session_expires_at`). The COMBINATION did
+not: it was written by hand in `business_member_session_valid`, written by
+hand in `can_manage_location` —the same rule, one in the negative and one in
+the positive— and written by hand in TypeScript, in
+`apps/api/src/database/business-membership.ts`.
+
+**Three copies of a rule is three rules that can drift apart, and the drift is
+silent.** The catalog guard reads `pg_proc.prosrc`, so it can only see the SQL
+copies: a migration that changed the definition of «expired» in SQL
+desynchronised the API with no error and no failing test. It was verified on
+this branch: with the OLD code, a migration that turns the boundary
+instant—`expires_at < now()` into `expires_at <= now()`—leaves the whole API
+suite with the same ten pre-existing failures, because the API's own copy of
+the rule does not move with the base's. With the NEW code, the same mutation
+turns one test red, and it names the case that moved: «la fecha compartida
+vence justo ahora».
+
+**`public.business_member_session_inside_promise(ttl, seal)`** is the new home
+of the combination: `stable`, qualified body, `search_path = ''`, WITHOUT
+`security definer` because it reads no row—it answers about the TTL and the
+seal it was given, not about anybody's state—and ACL
+`{postgres, service_role, authenticated}`, the same as its sister.
+
+**Why `STABLE` and not `IMMUTABLE`**: it compares against `now()`, and `now()`
+is `STABLE`. The arithmetic stays `IMMUTABLE`, which is where it belongs: it
+does not depend on the clock.
+
+**`business_member_session_valid` and `can_manage_location` call it.** No
+policy changes, and no behaviour changes: the thirteen policies that read
+`can_manage_location` read the same thing, because what the helper answers is
+exactly what it answered. `business_member_session_state`—the one that
+EXPLAINS—is NOT touched: same `reason`, same `jsonb` shape, same
+`expires_at`.
+
+**One grant that looks like nothing and is not**: `service_role` gets EXECUTE
+on `business_member_session_expires_at`. In production it already had it
+(measured: the ACL is `{postgres, service_role, authenticated}`), so the grant
+is a no-op there. In the TEST MIRROR it did not, because the harness does not
+replicate the project's `pg_default_acl` for functions—and the new function
+is `SECURITY INVOKER`, so a `service_role` call to it ran the inner call as
+`service_role` and got `42501 permission denied for function`. The mirror
+would have refused a call that production grants, and a test that asserts
+«this works» on a mirror that lies is a test that proves nothing.
+
+**The ledger's `rollback` is `NULL`**, so the rollback of this one is a NEW
+migration: drop the function and restore the three bodies. The text is in the
+sealed files `20261015031154_shared_ttl_expiry_accounting.sql`,
+`20261015024825_business_policy_tightening.sql` and
+`20261020152852_location_scope_in_policies.sql`, **copied, not edited**.
+
+## Applied: `20261020210413_admin_view_business_members`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`35f1ecc44fe40e1716fdeb61c42733d8` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**The whole file is one statement and it is five lines long.** The prose that
+usually lives in the header of a migration lives HERE, on purpose: the file has
+to be byte-identical to what ran, and what ran is the statement, not the
+explanation of it.
+
+**The rule, in one sentence: the platform's admin sees the roster of any
+business.** It is `Admins can view all business members`—SELECT, `to
+authenticated`, `using ((select auth_helpers.my_role()) = 'admin'::app_role)`—and
+it is the exact parallel of `Admins can view all business ownership`
+(`20260925225227`), which goes away with the table in Plan 3's Task 10.
+
+**Why it exists.** The announcement flow resolves `business_ids` to `user_ids`
+through PostgREST **with the operator's own session**—on purpose, so the read
+is recorded as what that operator can see—and the operator is a platform admin
+who is not a member of the businesses they are targeting. `business_members`
+had only two read policies (`Members can view own membership`, and `Owners and
+managers view business members`, which requires being an owner or a manager OF
+that business). Without this one, the resolution would return ZERO rows and the
+service would reject the publication with a false reason—«these businesses have
+no owner»—over data that does.
+
+**What it does NOT open.** It is a SELECT policy for `authenticated`, and it
+grants nothing that was not already granted to that admin: the same admin
+already reads `GET /staff` for any business (the admin supervises, it does not
+administer) and already read every owner row through the old policy. It does
+not grant a single write: `business_members` still has NO insert, update or
+delete policy, which is what §6.3 of the spec decides and what
+`business-members.rls.db.spec.ts` measures.
+
+**The rollback of this one is a new migration**: `drop policy "Admins can view
+all business members"`. The ledger's `rollback` is `NULL`, as it is for all of
+them.
+
+## Applied: `20261020134712_member_scope_predicates`
+
+Applied via `apply_migration` on 2026-10-20. The file's `md5sum` is
+`6564fb752ddb282bda3f01dcc82efb98` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**This is the migration that puts the scope rule in ONE place, and it changes no
+policy at all.** It creates the two helpers that the next migration (`20261020152852`)
+wires into the policies, so that the rule exists before anybody writes it twice.
+
+**`public.business_member_reaches_member(business_id uuid, target_member_id uuid) →
+boolean`** — `stable security definer set search_path = ''`, ACL
+`{postgres, service_role, authenticated}`. The `authenticated` grant is NOT
+cosmetic: a policy evaluates it as the role that invokes it, and without the grant
+the new roster policy grants nothing.
+
+The rule, in one sentence: **the live owner of the business reaches every access;
+any other member reaches an access if and only if its own scope is non-empty, the
+access's scope is non-empty, and the access's scope is CONTAINED in its own.** A
+lapsed session denies (it asks `business_member_session_valid`, the same clock the
+policies use).
+
+**`public.business_member_covers_locations(business_id uuid, location_ids uuid[]) →
+boolean`** — same shape, ACL `{postgres, service_role}`. Only the API calls it, so
+`authenticated` has no reason to see it.
+
+The rule: **the owner covers everything (the empty set included); any other member
+covers a NON-EMPTY set of locations if all of them are in its scope; and the EMPTY
+set is covered by nobody but the owner.** The empty set is the case that separates
+"subset" from "everything" and it is the one the API got wrong before this plan.
+
+**The containment is computed with `not exists` and not with `&&` over `uuid[]`.**
+The array operator exists, but the `not exists` form is the one the test harness
+can read and the one a mutation can break.
+
+**The functions are measured in the live database**: `prosecdef = true`,
+`provolatile = 's'`, `proconfig = {"search_path=\"\""}`, and the two ACLs as above.
+
+**The rollback of this one is a NEW migration**: drop the two functions. The
+ledger's `rollback` is `NULL`, as it is for all of them.
+
+## Applied: `20261021002713_owner_membership_and_ownership_readers`
+
+Applied via `apply_migration` on 2026-10-21. The file's `md5sum` is
+`421a16c70ce4f5a31255c9e5eedfe145` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**This migration is the first half of the drop, and it is the half that has to come
+first.** `business_ownership` is the source of truth of the nineteen old policies,
+so a trigger that stops writing it while those policies are still standing leaves
+the owner of a NEW business without access through the old layer.
+
+**Seven bodies are rewritten, and four of them are the ownership operations:**
+
+| # | body | what changed |
+| --- | --- | --- |
+| 1 | `bootstrap_business_companions()` | the trigger of the business creation stops writing the ownership row and writes the **OWNER MEMBERSHIP** instead (`role='owner'`, `status='active'`, `session_ttl_hours = 0`, `alias` = the owner's email) |
+| 2 | `transfer_business_ownership(uuid,uuid)` | step 7 (the ownership `upsert`) is gone |
+| 3 | `assign_business_ownership(uuid,uuid)` | step 5 (the ownership `upsert`) is gone |
+| 4 | `release_business_ownership(uuid,uuid)` | step 6 (the ownership `delete`) is gone |
+| 5 | `enforce_owner_cannot_be_deleted()` | the second guard — the one that compared against the ownership row — is switched off |
+| 6 | `notify_business_pending()` | the owner's email is resolved through the LIVE membership |
+| 7 | `notify_business_verification()` | the owner's email is resolved through the LIVE membership |
+
+**What the four ownership operations KEEP, because losing it was the real risk:**
+the **ACL** (`revoke all … from public, anon, authenticated` + `grant execute … to
+service_role`, written explicitly even though `create or replace` preserves it),
+`security definer` and `set search_path = ''` with a fully QUALIFIED body, the
+**error codes** (`R0004`) and their messages —which are the prose the owner reads—
+and the **lock**: `select … for update` on the business row, AT THE TOP of each
+function. Without it, two ownership operations on the same business read the old
+state and race for the partial unique index of the owner with a `23505` —an index
+error, not a rule.
+
+**The two mail readers were not in the plan, and they are the reason this migration
+exists.** `notify_business_pending` runs in the `AFTER INSERT` of `businesses` and
+`notify_business_verification` in the `AFTER UPDATE OF verification_status` of
+`business_moderation`. A plpgsql function that names a table that no longer exists
+**does not fail at compile time: it fails when it runs**, with `relation
+"business_ownership" does not exist`. So EVERY business creation —mobile and API—
+and EVERY moderation approval would have started failing with an error about a
+missing table. Neither of the two is a permission: both are **existence rules**
+(who the owner is, so the owner can be told), and the rewrite keeps the exact
+semantics: the live membership (`role='owner'`, `status='active'`, `deleted_at is
+null`) is the same definition `public.business_member_role` uses, and the `left join
+lateral` keeps the old `left join` —a business with no live owner leaves the email
+in `NULL`, which is what happened when the ownership row was not there.
+
+**Measured in the live database after applying**: `functions_mentioning_the_table = 0`
+(it was 7 before: the four ownership operations, the delete guard and the two mails).
+
+**The trigger of the business creation was proved BY THE REAL PATH**, not by calling
+it by hand: an `insert` into `public.businesses` **as `authenticated`**, with the
+owner's JWT and the role set —exactly what PostgREST does when the mobile registers
+a business— inside a transaction with `rollback`. Before the drop:
+`ownership_rows: 0  member_rows: 1  panel_rows: 1  panel_businesses: 1
+finance_rows: 1  moderation_rows: 1`. After the drop: `member_rows: 1  panel_rows: 1
+panel_businesses: 1  emails_queued: 2` — and `emails_queued: 2` is the proof that
+`notify_business_pending` finds the owner THROUGH THE MEMBERSHIP.
+
+**The ledger's `rollback` is `NULL`**, so the rollback of this one is a NEW
+migration: reinstall the seven previous bodies. Their text is in the sealed files
+`20260927025753`, `20261020163244`, `20261020172601`, `20261020172817`,
+`20261020174431` and `20260902001059` — **copied, not edited**.
+
+## Applied: `20261021005034_drop_business_ownership`
+
+Applied via `apply_migration` on 2026-10-21. The file's `md5sum` is
+`648756dd5b362ad8d9f6519157a5e537` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**The table is gone and the nineteen policies are gone, and the file does exactly
+two kinds of thing:** `drop policy if exists "<the exact name>" on public.<table>;`
+for each of the nineteen, one by one and by name, and then
+`drop table if exists public.business_ownership;`.
+
+**The list was MEASURED against `pg_policies` before it was written** — nineteen,
+across twelve tables — and the two policies **of the table itself** are NOT in the
+list, because they do not name the table in their predicate (`owner_id =
+auth.uid()` and `my_role() = 'admin'`): they fall with it.
+
+The nineteen, by table: `business_hours` (1), `business_locations` (1),
+`business_notification_preferences` (3), `businesses` (2), `coupons` (1),
+`offer_categories` (2), `offers` (4), `order_events` (1), `orders` (1),
+`payment_intents` (1), `payouts` (1), `profiles` (1). The exact names are in
+`apps/api/src/database/security/business-members.rls.db.spec.ts`, and that list IS
+the test — it is now the EMPTY list, and the test asserts the empty list against
+`pg_policies`.
+
+**The live database after the drop, measured with `SELECT` only (2026-10-21):**
+
+```json
+{"business_ownership_regclass":null,"businesses_owner_id_exists":false,
+ "policies_naming_business_ownership":0,"functions_naming_business_ownership":0,
+ "public_policies":112,"public_tables":43,"businesses":16,"active_businesses":14,
+ "memberships":16,"live_memberships":16,"live_owners":16,"scope_rows":0}
+```
+
+- `business_ownership_regclass = null` — the table is not there (`pg_class`).
+- `businesses_owner_id_exists = false` — the column the sensitive-columns migration
+  dropped in September is still dropped.
+- `policies_naming_business_ownership = 0` — **no** policy names it, in `qual` or in
+  `with_check`.
+- `functions_naming_business_ownership = 0` — **no** function names it
+  (`pg_proc.prosrc`).
+- `public_policies`: 133 → **112** (133 − 19 − 2). `public_tables`: 44 → **43**.
+- The data is intact: 16 businesses (14 active), 16 memberships, 16 live owners.
+
+**The ledger now has 161 rows and the `rollback` is `NULL` in all of them.** The
+last version is this one.
+
+**This one has NO rollback by migration.** `create table` does not rebuild a table
+with data and policies. It is undone by recreating the table EMPTY and restoring
+the nineteen policies from the sealed files. **The businesses would have an owner
+again —because the owner lives in `business_members`, which this plan did not
+touch— but the ownership HISTORY is lost.**
+
+**What did NOT fall, and why:**
+
+- The **owner** of each of the sixteen businesses: it lives in `business_members`
+  (16 rows, 16 live owners, verified). The table was a MIRROR of that, and the
+  mirror is what is gone.
+- The **backfill** `20261014005016_backfill_business_members.sql` stays in the ledger
+  as history and the replay still runs it BEFORE the retirement; it can no longer be
+  re-run by hand, because its source table is not there. The tests that used to run
+  it live were replaced by the tests of the trigger.
+- The owners' **session TTL** (0) and their **alias** (the email): they live in
+  `business_members`.
+
+**And one reader that no database-side check can see.** The Edge Function
+`handle-order-event` (`supabase/functions/handle-order-event/index.ts`) reads the
+table over PostgREST — it is the function the `trg_order_event_push` trigger calls
+on every `order_events` INSERT — and it is neither a `pg_proc` entry nor a
+`pg_policies` row, so `functions_naming_business_ownership = 0` does not say a word
+about it. It was migrated to `business_members` on 2026-10-21, in Plan 3's Task 11,
+with the same liveness rule the other five API readers use
+(`role='owner'` ∧ `status='active'` ∧ `deleted_at is null`).
+
+**The deployed Edge Function is STALE, and that is not this migration's doing.**
+`handle-order-event` is ACTIVE in production at **version 13**, and its deployed
+source still selects `businesses.owner_id` — the column that
+`20260927025753_businesses_drop_sensitive_columns.sql` dropped in September. So the
+DEPLOYED function has been reading a column that does not exist since then, and
+the REPOSITORY source had been reading a table that does not exist since this
+migration. **Redeploying it is an operational step, outside the migrations
+ledger**: `supabase functions deploy handle-order-event`.

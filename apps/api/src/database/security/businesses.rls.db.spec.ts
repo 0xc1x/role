@@ -44,11 +44,12 @@ import {
  *   - `businesses` carries 16 columns, the same 16 the live project carries;
  *   - the seven moved columns (`owner_id`, `balance`, `commission_rate`,
  *     `verification_status`, `verified_at`, `verified_by`, `rejection_reason`)
- *     are GONE, and their data lives on `business_ownership`,
- *     `business_finance` and `business_moderation`;
- *   - every owner policy resolves through `business_ownership`;
+ *     are GONE, and their data lives on `business_finance`,
+ *     `business_moderation` and —desde que se retiró `business_ownership`— en
+ *     `business_members`;
+ *   - every owner policy resolves through `business_members`;
  *   - `trg_bootstrap_business_companions` exists, so a client-created business
- *     writes its own ownership, finance and moderation rows;
+ *     writes its own owner membership, finance and moderation rows;
  *   - the moderation triggers live on `business_moderation`, not on
  *     `businesses`.
  *
@@ -116,12 +117,24 @@ const OWNER_B = '55555555-5555-5555-5555-555555555555';
 const BIZ_A = 'aaaaaaaa-0000-4000-8000-000000000001';
 /** Inactive and pending. Owned by B, so it is the cross-tenant target. */
 const BIZ_B = 'aaaaaaaa-0000-4000-8000-000000000002';
-/** Inactive and pending, and owned by nobody in `business_ownership`. */
+/** Inactive and pending, and owned by B, whose membership is what says so. */
 const BIZ_C = 'aaaaaaaa-0000-4000-8000-000000000003';
 
 const SLUG_A = 'rls-biz-a';
 const SLUG_B = 'rls-biz-b';
 const SLUG_C = 'rls-biz-c';
+
+/**
+ * The owner MEMBERSHIP of each of the three businesses.
+ *
+ * Since the Task 5, a business can only be activated if it has a live owner,
+ * and the approval of the moderation IS an activation. So the fixture has to
+ * carry what production carries: the owner of a business is a member of it with
+ * the `owner` role.
+ */
+const MEMBER_A = 'bbbbbbbb-0000-4000-8000-000000000001';
+const MEMBER_B = 'bbbbbbbb-0000-4000-8000-000000000002';
+const MEMBER_C = 'bbbbbbbb-0000-4000-8000-000000000003';
 
 /**
  * The 16 columns `businesses` holds after phase 3, in order — which is also the
@@ -260,9 +273,9 @@ beforeAll(async () => {
      *     `business_finance` row for each — so both already exist by the time
      *     this transaction's next statement runs, and the seed UPDATES them
      *     rather than inserting over them;
-     *   - the trigger writes NO `business_ownership` row here, because it guards
-     *     on `(select auth.uid()) is not null` and this transaction is the
-     *     schema owner with no JWT. That is why the ownership rows below are a
+     *   - the trigger writes NO owner membership here, because it guards on
+     *     `(select auth.uid()) is not null` and this transaction is the schema
+     *     owner with no JWT. That is why the owner memberships below are a
      *     genuine fixture and not a duplicate of something the trigger did.
      *
      * The rule this file follows because of all that: every assertion about a
@@ -278,9 +291,8 @@ beforeAll(async () => {
     `);
 
     /**
-     * The companion rows. Ownership is still seeded by hand — see above — and
-     * the other two are already there from the trigger, so they are moved to the
-     * values this file needs rather than inserted.
+     * The companion rows. The other two are already there from the trigger, so
+     * they are moved to the values this file needs rather than inserted.
      *
      * The `business_moderation` update is LOAD-BEARING and is the reason the
      * public catalog policy can be tested at all. Since `20260928161526` the
@@ -303,10 +315,25 @@ beforeAll(async () => {
      * defaults the trigger wrote made the row look empty.
      */
     await tx.unsafe(`
-      insert into public.business_ownership (business_id, owner_id)
-      values ('${BIZ_A}', '${OWNER_A}'),
-             ('${BIZ_B}', '${OWNER_B}'),
-             ('${BIZ_C}', '${OWNER_B}');
+      -- Y la MEMBRESÍA DE DUEÑO de cada uno de los tres.
+      --
+      -- Desde la Task 5, activar un negocio exige que tenga un dueño VIVO
+      -- (trg_business_reactivation_needs_owner), y la aprobación de la
+      -- moderación es una activación: apply_business_verification_state hace
+      -- update businesses set is_active = (new.verification_status =
+      -- 'approved'). Un negocio sin dueño no puede ser aprobado, y sin dueño
+      -- tampoco puede reactivarse.
+      --
+      -- Así que el fixture siembra lo que en producción existe: los tres
+      -- negocios tienen a su dueño como miembro 'owner' de su negocio, con el
+      -- TTL en cero —que es lo que dejó 20261016022631 en los 16 dueños
+      -- reales: un dueño no tiene sesión que venza—.
+      insert into public.business_members
+        (id, business_id, user_id, role, label, alias,
+         status, session_ttl_hours, last_authenticated_at)
+      values ('${MEMBER_A}', '${BIZ_A}', '${OWNER_A}', 'owner', 'Dueña A', 'rls-owner-a@rls-businesses.test', 'active', 0, null),
+             ('${MEMBER_B}', '${BIZ_B}', '${OWNER_B}', 'owner', 'Dueño B', 'rls-owner-b@rls-businesses.test', 'active', 0, null),
+             ('${MEMBER_C}', '${BIZ_C}', '${OWNER_B}', 'owner', 'Dueño C', 'rls-owner-c@rls-businesses.test', 'active', 0, null);
 
       update public.business_moderation
          set verification_status = 'approved'
@@ -354,44 +381,6 @@ async function visibleSlugs(
   return as(sql, role, userId, run);
 }
 
-/**
- * `business_ownership` rows visible to the current session, as `business_id`.
- *
- * Scoped to the three seeded slugs, exactly like `visibleSlugs`, and for the same
- * reason. It became necessary when phase 3 landed: `trg_bootstrap_business_
- * companions` now writes an ownership row for every business a client creates, so
- * the probe businesses in this file — which created NO ownership row before,
- * because the trigger did not exist — started adding rows to this table. An
- * unscoped exact-set assertion then depended on which test ran first, which is
- * the same order-dependence `visibleSlugs` documents and avoids.
- *
- * There is deliberately no `anon` arm, and the reason is worth stating because it
- * is the answer to the "strictly fewer" problem this file had to solve: `anon`
- * holds no privilege on this table at all, so `as()` would THROW rather than
- * return an empty set. The `anon` case is therefore asserted where it belongs —
- * as a grant refusal with its message shape pinned, in
- * `business_ownership isolates tenants` — rather than being flattened into a
- * "zero rows" result that would look like a policy outcome.
- */
-async function visibleOwnership(
-  sql: Parameters<typeof as>[0],
-  role: 'owner' | 'authenticated' | 'service_role',
-  userId: string | null,
-): Promise<string[]> {
-  const run = (tx: Parameters<typeof as>[0]) =>
-    tx
-      .unsafe<{ business_id: string }[]>(
-        `select o.business_id::text
-           from public.business_ownership o
-           join public.businesses b on b.id = o.business_id
-          where b.slug in ('${SEEDED_SLUGS.join("', '")}')
-          order by o.business_id`,
-      )
-      .then((rows) => rows.map((r) => r.business_id));
-  if (role === 'owner') return run(sql);
-  return as(sql, role, userId, run);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('the impersonation is live on these tables', () => {
@@ -402,9 +391,9 @@ describe('the impersonation is live on these tables', () => {
    * session that forgets `set local role` runs as the table owner and bypasses
    * every policy in this file while every assertion still passes.
    *
-   * The second table is `business_ownership` rather than `businesses`, and the
+   * The second table is `business_members` rather than `businesses`, and the
    * reason is the shape of the policy set. `anon` holds NO privilege there, and
-   * neither of its two policies names `anon` in the `TO` list, so there is no
+   * none of its policies names `anon` in the `TO` list, so there is no
    * permissive policy that could OR its way into producing a row for a browser
    * with no JWT. A zero here means the policies ran, full stop.
    */
@@ -445,74 +434,6 @@ describe('the impersonation is live on these tables', () => {
 
     expect(anonymous[0]?.uid).toBeNull();
     expect(signedIn[0]?.uid).toBe(OWNER_A);
-  });
-
-  /**
-   * The meta-test, on the table where "strictly fewer" is unambiguous.
-   *
-   * The brief for this file warned about the obvious framing, and the warning is
-   * right: on `businesses`, a business owner is not "the owner" of the table. An
-   * owner of business A legitimately sees every ACTIVE business in the catalog,
-   * including ones it does not own, so "client sees fewer rows than the owner"
-   * is a statement about how many inactive rows exist, not about ownership, and
-   * it can be made true or false by seeding alone.
-   *
-   * `business_ownership` has no such ambiguity. Its only two policies are
-   * `owner_id = auth.uid()` and the admin one, both `TO authenticated`, and the
-   * client role holds SELECT on nothing else. So the rows a client can see are
-   * exactly its own, and a client that saw one it did not own would mean a policy
-   * had been widened. The schema owner — who bypasses RLS entirely, and is
-   * therefore the only way to see the full set — holds two.
-   */
-  test('a client role sees strictly fewer ownership rows than the owner, and no row that is not its own', async () => {
-    const asSchemaOwner = await visibleOwnership(ctx.sql, 'owner', null);
-    const asOwnerA = await visibleOwnership(ctx.sql, 'authenticated', OWNER_A);
-    const asOwnerB = await visibleOwnership(ctx.sql, 'authenticated', OWNER_B);
-    const asMember = await visibleOwnership(ctx.sql, 'authenticated', MEMBER);
-
-    // Three seeded businesses and three ownership rows: A belongs to A, and both
-    // B and C belong to B. `BIZ_C` is the cross-tenant probe and it is OWNED —
-    // the point of the test below is that owning a business and being able to
-    // see it in the CATALOG are two different questions, which is what phase 3
-    // made separable by moving ownership onto its own table.
-    expect(asSchemaOwner).toEqual([BIZ_A, BIZ_B, BIZ_C]);
-    expect(asOwnerA).toEqual([BIZ_A]);
-    expect(asOwnerB).toEqual([BIZ_B, BIZ_C]);
-    // A signed-in user that owns nothing owns no rows. A member holding a
-    // non-empty set here would mean a policy resolved ownership by something
-    // other than `auth.uid()`.
-    expect(asMember).toEqual([]);
-
-    // RLS narrows, it never widens. This is the invariant the pilot pins on
-    // `categories`, and the direction matters: a permissive policy that ORed its
-    // way in would show up here and nowhere else.
-    const ownerSet = new Set(asSchemaOwner);
-    const leaked = [...asOwnerA, ...asOwnerB, ...asMember].filter(
-      (id) => !ownerSet.has(id),
-    );
-    expect(
-      leaked,
-      'a client role saw an ownership row the owner cannot see',
-    ).toEqual([]);
-    expect(
-      asSchemaOwner.length,
-      `a member saw ${asMember.length} ownership rows; the difference must be ` +
-        `strictly positive or the policies are not filtering`,
-    ).toBeGreaterThan(asMember.length);
-
-    // And the anonymous path is closed a layer earlier, which is the whole reason
-    // it cannot be a "zero rows" comparison: `anon` is in the `TO` list of
-    // neither ownership policy, so even with a grant it would get nothing. The
-    // grant is what closes it today.
-    const denial = await deniedAs(ctx.sql, 'anon', null, (tx) =>
-      tx.unsafe(`select business_id::text from public.business_ownership`),
-    );
-    expect(denial, 'anon read the ownership table').not.toBeNull();
-    expect(denial?.code).toBe('42501');
-    expect(denial?.message).toContain(
-      'permission denied for table business_ownership',
-    );
-    expect(denial?.message).not.toContain('row-level security policy');
   });
 });
 
@@ -557,7 +478,7 @@ describe('public.businesses: the shape of the grants', () => {
       `select table_name, grantee, privilege_type
          from information_schema.table_privileges
         where table_schema = 'public'
-          and table_name   in ('businesses','business_ownership','business_finance','business_moderation')
+          and table_name   in ('businesses','business_finance','business_moderation')
           and grantee in ('anon', 'authenticated')
         order by table_name, grantee, privilege_type`,
     );
@@ -566,11 +487,7 @@ describe('public.businesses: the shape of the grants', () => {
       plainRows(catalog).map(
         (r) => `${r.table_name}/${r.grantee}/${r.privilege_type}`,
       ),
-    ).toEqual([
-      'business_ownership/authenticated/SELECT',
-      'businesses/anon/SELECT',
-      'businesses/authenticated/SELECT',
-    ]);
+    ).toEqual(['businesses/anon/SELECT', 'businesses/authenticated/SELECT']);
 
     // The same question asked of the live session, all seven privileges, both
     // roles, so a grant that exists in the catalog and was revoked for this role
@@ -588,7 +505,6 @@ describe('public.businesses: the shape of the grants', () => {
                  has_table_privilege('${role}', 'public.businesses', 'truncate')   as trunc,
                  has_table_privilege('${role}', 'public.businesses', 'references') as refs,
                  has_table_privilege('${role}', 'public.businesses', 'trigger')    as trg,
-                 has_table_privilege('${role}', 'public.business_ownership', 'select') as own_sel,
                  has_table_privilege('${role}', 'public.business_finance', 'select')  as fin_sel,
                  has_table_privilege('${role}', 'public.business_moderation', 'select') as mod_sel`),
       );
@@ -601,7 +517,6 @@ describe('public.businesses: the shape of the grants', () => {
           trunc: false,
           refs: false,
           trg: false,
-          own_sel: role === 'authenticated',
           fin_sel: false,
           mod_sel: false,
         },
@@ -785,7 +700,7 @@ describe('public.businesses: the shape of the grants', () => {
   });
 
   /**
-   * RLS is enabled on all four of these tables, `business_finance` and
+   * RLS is enabled on all three of these tables, `business_finance` and
    * `business_moderation` included.
    *
    * This assertion used to read `false` for the two companions, and it was
@@ -812,7 +727,7 @@ describe('public.businesses: the shape of the grants', () => {
    * the role the harness connects as. The next test is unaffected by the flag
    * here and is still the one that proves no client role reaches these rows.
    */
-  test('RLS is on for all four, including the money and moderation companions', async () => {
+  test('RLS is on for all three, including the money and moderation companions', async () => {
     const rows = await ctx.sql.unsafe<
       {
         relname: string;
@@ -824,7 +739,7 @@ describe('public.businesses: the shape of the grants', () => {
          from pg_class c
          join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public'
-          and c.relname in ('businesses','business_ownership','business_finance','business_moderation')
+          and c.relname in ('businesses','business_finance','business_moderation')
         order by c.relname`,
     );
 
@@ -837,7 +752,6 @@ describe('public.businesses: the shape of the grants', () => {
     ).toEqual([
       ['business_finance', true, false],
       ['business_moderation', true, false],
-      ['business_ownership', true, false],
       ['businesses', true, false],
     ]);
   });
@@ -866,9 +780,9 @@ describe('public.businesses: the shape of the grants', () => {
    * The temptation is real and it is worth naming precisely, because the fix
    * looks so reasonable: `grant select on business_finance to authenticated` plus
    * `alter table ... enable row level security` plus an owner policy. That is the
-   * `business_ownership` shape, and it would work. What it would also do is put
-   * a table whose RLS has never run behind a policy nobody has executed, on a
-   * ledger whose client roles have been written to be unable to touch these
+   * shape of `business_ownership`, and it would work. What it would also do is
+   * put a table whose RLS has never run behind a policy nobody has executed, on
+   * a ledger whose client roles have been written to be unable to touch these
    * tables at all. If that is the product decision, it belongs in a migration
    * with its own tests, not as a patch for a missing screen.
    *
@@ -1001,23 +915,23 @@ describe('public.businesses: the shape phase 3 delivered', () => {
   });
 
   /**
-   * Every ownership policy on `businesses` resolves through `business_ownership`,
-   * and NONE of them mentions the dropped column.
+   * Every ownership policy on `businesses` resolves through `business_members`,
+   * and NONE of them mentions the dropped column — or the table that is gone.
    *
-   * The same debt measured where it has consequences, now inverted. Phase 3
-   * replaced the three pre-phase-3 policies on this table with versions whose
-   * predicate is an EXISTS against `business_ownership`, and the old column-keyed
-   * ones are gone.
+   * La misma deuda medida donde tiene consecuencias, ahora invertida dos veces:
+   * la fase 3 reemplazó las policies pre-fase-3 por unas cuyo predicado es un
+   * EXISTS contra `business_ownership`, y la retirada de esa tabla las dejó
+   * apuntando al modelo de membresías.
    *
-   * Asserted as a COUNT rather than as policy text on purpose: the names, cmds
-   * and roles are asserted verbatim in the next test, and what this one is about
-   * is WHICH relation the predicate reaches for. A count is the form that stays
-   * meaningful if a future migration renames a policy, and `byOwnerColumn` being
-   * zero is the assertion that matters — a policy cannot reference a column the
-   * table no longer has, so this also proves the rewrite was a rewrite and not a
-   * rename.
+   * Afirmado como un CONTEO y no como texto de policy a propósito: los nombres,
+   * cmds y roles se afirman textualmente en la prueba siguiente, y lo que ésta
+   * mide es A QUÉ RELACIÓN llega el predicado. Un conteo es la forma que sigue
+   * significando algo si una migración futura renombra una policy, y que
+   * `byOwnerColumn` sea cero es la aserción que importa —una policy no puede
+   * referenciar una columna que la tabla ya no tiene, así que esto también
+   * prueba que la reescritura fue una reescritura y no un renombrado—.
    */
-  test('every owner policy on businesses resolves ownership through business_ownership, and none through a column', async () => {
+  test('every owner policy on businesses resolves ownership through business_members, and none through a column', async () => {
     const rows = await ctx.sql.unsafe<
       { qual: string | null; with_check: string | null }[]
     >(
@@ -1042,6 +956,10 @@ describe('public.businesses: the shape phase 3 delivered', () => {
         /(^|[^.\w])owner_id\b/.test(value));
     const mentionsOwnershipTable = (value: string | null) =>
       value !== null && /business_ownership/.test(value);
+    const mentionsMembership = (value: string | null) =>
+      value !== null &&
+      (value.includes('business_member_role') ||
+        value.includes('business_members'));
 
     const byOwnerColumn = plainRows(rows).filter(
       (r) =>
@@ -1051,10 +969,14 @@ describe('public.businesses: the shape phase 3 delivered', () => {
       (r) =>
         mentionsOwnershipTable(r.qual) || mentionsOwnershipTable(r.with_check),
     );
+    const byMembership = plainRows(rows).filter(
+      (r) => mentionsMembership(r.qual) || mentionsMembership(r.with_check),
+    );
 
-    // The two policies that carry an owner predicate: view and update. INSERT is
-    // the third and is deliberately NOT among them — see the policy-set test
-    // below for why its `WITH CHECK` is `true`.
+    // Las dos policies que llevan predicado de dueño: la de lectura y la de
+    // escritura. INSERT es la tercera y deliberadamente NO está entre ellas —
+    // ver la prueba del conjunto de policies de abajo para saber por qué su
+    // `WITH CHECK` es `true`.
     expect(
       byOwnerColumn.length,
       'a policy on businesses resolves ownership through businesses.owner_id ' +
@@ -1063,15 +985,21 @@ describe('public.businesses: the shape phase 3 delivered', () => {
     ).toBe(0);
     expect(
       byOwnershipTable.length,
-      'no policy on businesses resolves through business_ownership. Either the ' +
-        'phase-3 rewrite was lost, or the owner policies are gone — and a ' +
-        'business owner who cannot read their own row is the failure the whole ' +
-        'companion split was for.',
+      'a policy on businesses still resolves through business_ownership. La ' +
+        'tabla se retiró: una policy que la nombre no puede resolver, así que ' +
+        'es una policy que no concede nada.',
+    ).toBe(0);
+    expect(
+      byMembership.length,
+      'ninguna policy on businesses resuelve el acceso por la membresía. Las ' +
+        'dos policies de dueño se fueron con la tabla vieja, y un dueño que ' +
+        'no puede leer su propia fila es exactamente la falla que la ' +
+        'generación nueva de policies vino a evitar.',
     ).toBe(2);
   });
 
   /**
-   * The full policy set on both tables, asserted as text from the live catalog,
+   * The full policy set on `businesses`, asserted as text from the live catalog,
    * because that is the layer under test.
    *
    * Two things about it are worth reading off the list rather than being told.
@@ -1079,7 +1007,7 @@ describe('public.businesses: the shape phase 3 delivered', () => {
    * First, "Authenticated can create businesses" carries a `WITH CHECK` of
    * `true`, and that is the most surprising line in this file. It is correct:
    * the bootstrap trigger runs AFTER the row exists, so at `WITH CHECK` time
-   * there is no ownership row to constrain against, and the pre-phase-3
+   * there is no owner membership to constrain against, and the pre-phase-3
    * alternative — `WITH CHECK (owner_id = auth.uid())` — is gone because the
    * column is. Ownership stopped being something the caller expresses and became
    * something the database assigns, which is why the drop and the policy change
@@ -1087,36 +1015,32 @@ describe('public.businesses: the shape phase 3 delivered', () => {
    * looking at the wrong layer: the defence is `trg_bootstrap_business_
    * companions`, asserted in the next test.
    *
-   * Second, no DELETE policy exists on either table and no client role holds
+   * Second, no DELETE policy exists on the table and no client role holds
    * DELETE. Two layers, both closed, and the pair is asserted as text precisely
    * so a future migration cannot drop one and leave the other — which would turn
    * a loud refusal into a silent zero-row no-op.
    *
-   * ─── THE SEVENTH, AND IT IS AN ADDITION, NOT A REPLACEMENT ─────────────────
+   * ─── LAS CINCO, Y SON LAS QUE QUEDAN ──────────────────────────────────────
    *
-   * "Members can view business" and "Members can update business" are the §6.2
-   * policies: they resolve ownership by `business_member_role(business_id) in
-   * ('owner','manager')` instead of by a row in `business_ownership`. The two
-   * they duplicate are still standing, and the table with them: `business_ownership`
-   * has NOT been dropped and the drop is not the next migration — it moved to
-   * Plan 3, which has to migrate `getBusinessesByOwnerId` first because the mobile
-   * app reads `business_ownership` on its first panel query. The §6.2 order is
-   * new-first-old-second, and it held: for as long as both sets exist, the owner
-   * keeps the access it already had, and the manager gets the one it did not have.
+   * "Members can view business" y "Members can update business" son las policies
+   * del §6.2: resuelven el acceso por
+   * `business_member_role(business_id) in ('owner','manager')` en vez de por una
+   * fila en `business_ownership`.
    *
-   * They were verified equivalent, and the scope of that word is narrower than it
-   * looks: equivalent for an owner whose session is live, which is the case every
-   * assertion here exercises. They are NOT equivalent for an owner whose session
-   * has lapsed — the legacy pair carries no TTL and goes on granting, because it
-   * never learned about sessions. That gap is why the drop cannot be an ordinary
-   * `drop table`: whoever does it has to close it first, or an owner with an
-   * expired session loses the business.
+   * Ellas convivieron con las dos que duplicaban —"Owners can view own
+   * businesses" y "Owners can update own businesses"— y con la tabla que las dos
+   * leían. La tabla se retiró con sus diecinueve policies, y esas dos se fueron
+   * con ella: hoy el dueño de un negocio entra por la membresía, y el conjunto
+   * es de cinco.
    *
-   * That is why this list has seven entries where it had five, and why the UPDATE
-   * assertion below grew instead of changing: the new one is the same permission
-   * with a second name, and counting it as a widening would be wrong.
+   * La equivalencia que se verificó entre las dos generaciones —para un dueño
+   * con la sesión viva, que es lo único que estos tests miden— era lo que
+   *permitía dejar caer la vieja. NO valía para un dueño con la sesión vencida: la
+   * pareja vieja no lleva TTL y seguía concediendo. Por eso el `drop` no podía
+   * ser un `drop table` ordinario: quien lo hiciera tenía que cerrar ese hueco
+   * primero, o un dueño con la sesión vencida perdía el negocio.
    */
-  test('the policy set is seven read/write policies on businesses and two on ownership, unmodified', async () => {
+  test('the policy set is five read/write policies on businesses, and none on ownership', async () => {
     const rows = await ctx.sql.unsafe<
       {
         tablename: string;
@@ -1134,20 +1058,6 @@ describe('public.businesses: the shape phase 3 delivered', () => {
     );
 
     expect(plainRows<Record<string, unknown>>(rows)).toEqual([
-      {
-        tablename: 'business_ownership',
-        policyname: 'Admins can view all business ownership',
-        cmd: 'SELECT',
-        permissive: 'PERMISSIVE',
-        roles: ['authenticated'],
-      },
-      {
-        tablename: 'business_ownership',
-        policyname: 'Owners can view own business ownership',
-        cmd: 'SELECT',
-        permissive: 'PERMISSIVE',
-        roles: ['authenticated'],
-      },
       {
         tablename: 'businesses',
         policyname: 'Admins full access on businesses',
@@ -1183,24 +1093,10 @@ describe('public.businesses: the shape phase 3 delivered', () => {
         permissive: 'PERMISSIVE',
         roles: ['authenticated'],
       },
-      {
-        tablename: 'businesses',
-        policyname: 'Owners can update own businesses',
-        cmd: 'UPDATE',
-        permissive: 'PERMISSIVE',
-        roles: ['authenticated'],
-      },
-      {
-        tablename: 'businesses',
-        policyname: 'Owners can view own businesses',
-        cmd: 'SELECT',
-        permissive: 'PERMISSIVE',
-        roles: ['authenticated'],
-      },
     ]);
 
     // Said a second way, so a new write policy fails on a one-line diff rather
-    // than inside a seven-element array. The command list is spelled out rather
+    // than inside a five-element array. The command list is spelled out rather
     // than written as `cmd <> 'SELECT'`, because "Admins full access on
     // businesses" is `FOR ALL` and would land in a negated filter — turning an
     // assertion about CLIENT write policies into one that also reports the admin
@@ -1222,7 +1118,6 @@ describe('public.businesses: the shape phase 3 delivered', () => {
     ).toEqual([
       'businesses:Authenticated can create businesses',
       'businesses:Members can update business',
-      'businesses:Owners can update own businesses',
     ]);
   });
 
@@ -1230,9 +1125,9 @@ describe('public.businesses: the shape phase 3 delivered', () => {
    * Creating a business DOES write its companion rows, because the trigger that
    * does it exists.
    *
-   * `trg_bootstrap_business_companions` runs AFTER INSERT and writes
-   * `business_ownership`, `business_finance` and `business_moderation` for every
-   * new business. It is AFTER and not BEFORE because the companions carry foreign
+   * `trg_bootstrap_business_companions` runs AFTER INSERT and writes the owner
+   * membership, `business_finance` and `business_moderation` for every new
+   * business. It is AFTER and not BEFORE because the companions carry foreign
    * keys to `businesses(id)` that are validated immediately — a BEFORE trigger
    * runs before the parent row exists and fails with `23503`. That was found by
    * running the flow rather than by reading the code, and it is why the INSERT
@@ -1244,7 +1139,7 @@ describe('public.businesses: the shape phase 3 delivered', () => {
    * weight — fails here rather than silently leaving every client-created
    * business unowned.
    */
-  test('a client-created business writes its own ownership row, and the bootstrap trigger is installed', async () => {
+  test('a client-created business writes its own owner membership, and the bootstrap trigger is installed', async () => {
     const triggers = await ctx.sql.unsafe<{ tgname: string; def: string }[]>(
       `select t.tgname, pg_get_triggerdef(t.oid, true) as def
          from pg_trigger t
@@ -1259,6 +1154,9 @@ describe('public.businesses: the shape phase 3 delivered', () => {
     expect(plainRows(triggers).map((t) => t.tgname)).toEqual([
       'set_businesses_updated_at',
       'trg_bootstrap_business_companions',
+      // La guarda de la RECACTIVACIÓN: desde la Task 5, un negocio sin dueño
+      // vivo no puede volver a activarse, y esta es la trigger que lo dice.
+      'trg_business_reactivation_needs_owner',
       'trg_create_business_notification_preferences',
       'trg_default_business_inactive',
       'trg_notify_business_pending',
@@ -1283,14 +1181,17 @@ describe('public.businesses: the shape phase 3 delivered', () => {
     const businessId = plainRows(created)[0]?.id as string;
     expect(businessId, 'the client insert did not land a row').toBeDefined();
 
-    // The ownership row is the assertion. The caller did not name an owner — it
-    // CANNOT, the column is gone — so this row can only have come from the
+    // The owner membership is the assertion. The caller did not name an owner —
+    // it CANNOT, the column is gone — so this row can only have come from the
     // trigger reading `auth.uid()`. Ownership is assigned by the database.
-    const ownership = await ctx.sql.unsafe<{ owner_id: string }[]>(
-      `select owner_id::text from public.business_ownership where business_id = '${businessId}'`,
+    const ownership = await ctx.sql.unsafe<{ user_id: string }[]>(
+      `select user_id::text from public.business_members
+        where business_id = '${businessId}'
+          and role = 'owner'::public.business_member_role
+          and deleted_at is null`,
     );
     expect(
-      plainRows(ownership).map((r) => r.owner_id),
+      plainRows(ownership).map((r) => r.user_id),
       'a client-created business is not owned by the client that created it. ' +
         'Either trg_bootstrap_business_companions is gone, or it stopped ' +
         'reading auth.uid() — and an unowned business is invisible to its own ' +
@@ -1372,11 +1273,14 @@ describe('public.businesses: the shape phase 3 delivered', () => {
         `select id::text from public.businesses where slug = '${slug}'`,
       ),
     )[0]?.id as string;
-    const owned = await ctx.sql.unsafe<{ owner_id: string }[]>(
-      `select owner_id::text from public.business_ownership where business_id = '${newId}'`,
+    const owned = await ctx.sql.unsafe<{ user_id: string }[]>(
+      `select user_id::text from public.business_members
+        where business_id = '${newId}'
+          and role = 'owner'::public.business_member_role
+          and deleted_at is null`,
     );
     expect(
-      plainRows(owned).map((r) => r.owner_id),
+      plainRows(owned).map((r) => r.user_id),
       'an insert that named no owner did not land owned by the caller who made ' +
         'it. The trigger is the only thing that can assign it.',
     ).toEqual([OWNER_A]);
@@ -1445,16 +1349,18 @@ describe('public.businesses: the shape phase 3 delivered', () => {
       ),
     );
     const landed = await ctx.sql.unsafe<
-      { is_active: boolean; owner_id: string; status: string }[]
+      { is_active: boolean; user_id: string; status: string }[]
     >(
-      `select b.is_active, o.owner_id::text, m.verification_status::text as status
+      `select b.is_active, o.user_id::text, m.verification_status::text as status
          from public.businesses b
-         join public.business_ownership o on o.business_id = b.id
+         join public.business_members o on o.business_id = b.id
          join public.business_moderation m on m.business_id = b.id
-        where b.slug = 'rls-biz-returned'`,
+        where b.slug = 'rls-biz-returned'
+          and o.role = 'owner'::public.business_member_role
+          and o.deleted_at is null`,
     );
     expect(plainRows(landed)).toEqual([
-      { is_active: false, owner_id: MEMBER, status: 'pending' },
+      { is_active: false, user_id: MEMBER, status: 'pending' },
     ]);
   });
 });
@@ -1539,162 +1445,51 @@ describe('the boundary between tenants', () => {
   });
 
   /**
-   * The owner of A does not read B's ownership row, and a non-admin member reads
-   * none at all.
+   * Nobody can claim a business by writing its owner membership, and the grant is
+   * what stops them.
    *
-   * `business_ownership` is where phase 3 is going to put every ownership
-   * predicate, so its isolation is not a side note: it becomes the thing every
-   * `Owners can …` policy on offers, orders, coupons, payouts, locations, hours,
-   * notification preferences and payment intents will delegate to. A leak here is
-   * not one row, it is the ownership half of the entire authorisation model.
+   * La garantía que sostenía la fila de propiedad cuando este archivo lo
+   * afirmaba sobre `business_ownership` —que un cliente no puede reclamar un
+   * negocio escribiendo su fila de dueño— se mudó con la tabla. Hoy la única
+   * fuente de verdad de quién es el dueño de un negocio es
+   * `business_members`, y su perímetro está medido en
+   * `business-members.rls.db.spec.ts`, "el móvil no puede escribir en las
+   * membresías: la RLS no tiene policy de escritura": sin policy de INSERT, sin
+   * policy de UPDATE y sin policy de DELETE, un cliente no puede escribir una
+   * fila de dueño ni aunque le den el privilegio de tabla.
    *
-   * The grant is `SELECT` for `authenticated` and nothing for `anon`, and the
-   * assertions are on the exact sets rather than on spot checks, because the
-   * interesting failure is a policy that is subtly wider than it looks — for
-   * instance one that reached `businesses` instead of its own `owner_id`, and
-   * therefore granted every business to whoever could read the catalog.
+   * Acá queda la mitad que sí es de este archivo: la fila del negocio, sus
+   * grants y el hecho de que la generación vieja ya no está.
    */
-  test('business_ownership isolates tenants, and an admin is the only role that sees them all', async () => {
-    expect(await visibleOwnership(ctx.sql, 'authenticated', OWNER_A)).toEqual([
-      BIZ_A,
-    ]);
-    // B owns two of the seeded businesses. That is the point of `BIZ_C`: an owner
-    // sees its OWN rows whether or not they are in the public catalog, which is
-    // the separation phase 3 introduced and the reason ownership had to move onto
-    // its own table rather than stay a column of a table the catalog policy also
-    // reads.
-    expect(await visibleOwnership(ctx.sql, 'authenticated', OWNER_B)).toEqual([
-      BIZ_B,
-      BIZ_C,
-    ]);
-    expect(await visibleOwnership(ctx.sql, 'authenticated', MEMBER)).toEqual(
-      [],
-    );
-
-    // The contrast that proves the admin policy is alive, in the same session
-    // role, on the same table, with only `auth_helpers.my_role()` able to produce
-    // the difference. Postgres does not error on a false qual and does not need a
-    // true one, so a policy that evaluates to false is indistinguishable, to a
-    // member, from one that was never reached — which is why the "sees more"
-    // half has to be asserted rather than assumed.
-    const asAdmin = await visibleOwnership(ctx.sql, 'authenticated', ADMIN);
-    const asMember = await visibleOwnership(ctx.sql, 'authenticated', MEMBER);
-    expect(
-      asAdmin,
-      'an admin reads fewer ownership rows than a member',
-    ).not.toEqual(asMember);
-    expect(asAdmin).toEqual([BIZ_A, BIZ_B, BIZ_C]);
-
-    // A member holding nothing is a different result from an admin holding
-    // everything, produced by the same statement. Asserted in the same place as
-    // the ownership set rather than as a separate test, because the whole claim
-    // is the contrast: the admin policy is the ONLY thing that can widen this
-    // table for a signed-in role.
-    expect(asMember).toEqual([]);
-
-    // And `anon` is closed a layer earlier, so the two "nothing" answers are not
-    // the same fact. A member gets an empty set from two policies that were both
-    // evaluated and both false; `anon` never reaches a policy at all.
-    const anonDenial = await deniedAs(ctx.sql, 'anon', null, (tx) =>
-      tx.unsafe(`select business_id::text from public.business_ownership`),
-    );
-    expect(anonDenial, 'anon read the ownership table').not.toBeNull();
-    expect(anonDenial?.message).not.toContain('row-level security policy');
-  });
-
-  /**
-   * Nobody can insert into `business_ownership` to claim a business, and the
-   * refusal is the GRANT — which is independent of the policy in a way worth
-   * being precise about.
-   *
-   * `20260925225227` runs `revoke all on public.business_ownership from anon,
-   * authenticated` and grants back only SELECT, and the table has no INSERT,
-   * UPDATE or DELETE policy to bypass. Both layers are closed, and this test
-   * asserts both: the catalog shows the write privileges are absent, and the
-   * statements are refused with a message that names the table rather than a
-   * policy. If a future migration granted INSERT to `authenticated` without
-   * adding a policy, the ACL half of this test fails and the denial half starts
-   * reporting `row-level security policy` instead — which is a different and much
-   * more interesting failure, so the message shape is pinned.
-   *
-   * The claim is aimed at `BIZ_C`, which has no ownership row, so the primary
-   * key can never be the reason for the refusal. A caller that could write here
-   * would be able to take over any business on the platform, including one that
-   * does not exist in the table yet.
-   */
-  test('nobody can claim a business by writing its ownership row, and the grant is what stops them', async () => {
-    const privileges = await ctx.sql.unsafe<
-      { grantee: string; privilege_type: string }[]
-    >(
-      `select grantee, privilege_type
-         from information_schema.table_privileges
-        where table_schema = 'public'
-          and table_name   = 'business_ownership'
-          and grantee in ('anon', 'authenticated')
-        order by grantee, privilege_type`,
+  test('the ownership table is gone, and the owner of a business is its membership', async () => {
+    const table = await ctx.sql.unsafe<{ n: number }[]>(
+      `select count(*)::int as n
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relname = 'business_ownership'`,
     );
     expect(
-      plainRows(privileges).map((p) => `${p.grantee}:${p.privilege_type}`),
-    ).toEqual(['authenticated:SELECT']);
+      plainRows(table)[0]?.n,
+      'la tabla de propiedad volvió a existir. El dueño de un negocio es su ' +
+        'fila de `business_members`, y una segunda fuente de verdad es una ' +
+        'segunda cosa que puede quedar desactualizada.',
+    ).toBe(0);
 
-    for (const [label, role, userId] of [
-      ['anon', 'anon', null],
-      ['a member', 'authenticated', MEMBER],
-      ['the owner of another business', 'authenticated', OWNER_A],
-      ['an admin', 'authenticated', ADMIN],
-    ] as const) {
-      for (const [verb, statement] of [
-        [
-          'insert',
-          `insert into public.business_ownership (business_id, owner_id) values ('${BIZ_C}', '${OWNER_A}')`,
-        ],
-        [
-          'update',
-          `update public.business_ownership set owner_id = '${OWNER_A}' where business_id = '${BIZ_B}' returning business_id`,
-        ],
-        [
-          'delete',
-          `delete from public.business_ownership where business_id = '${BIZ_B}' returning business_id`,
-        ],
-      ] as const) {
-        const denial = await deniedAs(ctx.sql, role, userId, (tx) =>
-          tx.unsafe(statement),
-        );
-
-        expect(
-          denial,
-          `${label} was able to ${verb} an ownership row`,
-        ).not.toBeNull();
-        expect(denial?.code).toBe('42501');
-        expect(denial?.message).toContain(
-          'permission denied for table business_ownership',
-        );
-        expect(denial?.message).not.toContain('row-level security policy');
-        // The primary key cannot be the cause. `BIZ_C` DOES carry an ownership
-        // row now — the seed gives it one, and the bootstrap trigger gives one to
-        // every business after that — so the INSERT below would also violate
-        // `business_ownership_pkey` if the privilege check did not come first.
-        // Asserting the message is not a constraint error is what keeps this a
-        // measurement of the GRANT rather than an accident of the fixture.
-        expect(denial?.message).not.toContain('duplicate key');
-      }
-    }
-
-    // Nothing moved. Scoped to the three seeded slugs, because the probe
-    // businesses earlier in this file now carry ownership rows of their own —
-    // `trg_bootstrap_business_companions` writes them — and an unscoped exact
-    // list would be asserting this test's neighbours' rows rather than its own.
-    const unchanged = await ctx.sql.unsafe<
-      { business_id: string; owner_id: string }[]
+    // Y los tres negocios sembrados siguen teniendo su dueño, que es lo que
+    // esta tabla decía antes.
+    const duenos = await ctx.sql.unsafe<
+      { business_id: string; user_id: string }[]
     >(
-      `select o.business_id::text, o.owner_id::text
-         from public.business_ownership o
-         join public.businesses b on b.id = o.business_id
+      `select m.business_id::text, m.user_id::text
+         from public.business_members m
+         join public.businesses b on b.id = m.business_id
         where b.slug in ('${SEEDED_SLUGS.join("', '")}')
-        order by o.business_id`,
+          and m.role = 'owner'::public.business_member_role
+          and m.deleted_at is null
+        order by m.business_id`,
     );
     expect(
-      plainRows(unchanged).map((r) => `${r.business_id}/${r.owner_id}`),
+      plainRows(duenos).map((r) => `${r.business_id}/${r.user_id}`),
     ).toEqual([
       `${BIZ_A}/${OWNER_A}`,
       `${BIZ_B}/${OWNER_B}`,

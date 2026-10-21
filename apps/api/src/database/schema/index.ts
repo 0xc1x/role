@@ -66,11 +66,7 @@ import {
 } from './push-notifications';
 import { payouts } from './payouts';
 import { paymentMethods } from './payment-methods';
-import {
-  businessFinance,
-  businessModeration,
-  businessOwnership,
-} from './business-companions';
+import { businessFinance, businessModeration } from './business-companions';
 import {
   businessMemberLocations,
   businessMembers,
@@ -116,7 +112,6 @@ export const schema = {
   pushTemplates,
   pushNotifications,
   pushSends,
-  businessOwnership,
   businessFinance,
   businessModeration,
   businessMembers,
@@ -141,15 +136,8 @@ export type DatabaseSchema = typeof schema;
  */
 export const relations = defineRelations(schema, (helpers) => ({
   businesses: {
-    ownership: helpers.one.businessOwnership(),
     finance: helpers.one.businessFinance(),
     moderation: helpers.one.businessModeration(),
-  },
-  businessOwnership: {
-    business: helpers.one.businesses({
-      from: helpers.businessOwnership.business_id,
-      to: helpers.businesses.id,
-    }),
   },
   businessFinance: {
     business: helpers.one.businesses({

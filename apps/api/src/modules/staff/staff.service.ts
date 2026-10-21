@@ -19,6 +19,10 @@ import {
   type BusinessMemberRole,
   type CreateBusinessMemberDto,
   type StaffSessionState,
+  type RestoreBusinessOwnershipDto,
+  type RestoreBusinessOwnershipResponseDto,
+  type TransferBusinessOwnershipDto,
+  type TransferBusinessOwnershipResponseDto,
   type UpdateBusinessMemberAliasDto,
   type UpdateBusinessMemberAliasResponseDto,
   type UpdateBusinessMemberDto,
@@ -26,7 +30,13 @@ import {
 import { safeErrorFields } from '@0xc1x/role-commons';
 import type { AuthUser } from '../../auth/auth.types';
 import { StaffMapper } from './staff.mapper';
-import { StaffRepository, type BusinessMemberRow } from './staff.repository';
+import {
+  StaffRepository,
+  type BusinessMemberRow,
+  type MemberWithScope,
+  type OwnershipAssignResult,
+  type OwnershipTransferResult,
+} from './staff.repository';
 import { STAFF_AUTH_ADMIN, type StaffAuthAdmin } from './staff.tokens';
 
 /**
@@ -52,6 +62,16 @@ const BAN_DURATION = '876000h';
 const PG_UNIQUE_VIOLATION = '23505';
 const PG_PLAN_LIMIT = 'R0001';
 const PG_OWNER_UNTOUCHABLE = 'R0002';
+/**
+ * `R0004`: la operación de PROPIEDAD se negó.
+ *
+ * Y es un código NUEVO, y no `R0001` ni `R0003`, por dos razones que están
+ * escritas en el plan: `R0003` está reservado para separar la *entitlement* del
+ * tope de plan —una decisión que este plan no toma—, y `R0001` ya significa dos
+ * cosas (el tope y la entitlement) y no puede absorber una tercera sin que el
+ * panel tenga que parsear el `detail` para distinguirla.
+ */
+const PG_OWNERSHIP_REFUSED = 'R0004';
 
 const ALIAS_CONSTRAINT = 'business_members_alias_key';
 const ONE_OWNER_CONSTRAINT = 'business_members_one_owner_per_business';
@@ -61,38 +81,18 @@ const MEMBER_PER_BUSINESS_CONSTRAINT =
 /**
  * The reach of whoever is calling, resolved once per request.
  *
- * `locationIds` is the caller's OWN set of branches and it is empty for an
- * `owner`: an owner is not restricted by branches at all (`can_manage_location`
- * hands it the whole business), so representing its reach as "the set of
- * branches of the business" would be a fiction this module then has to remember
- * to special-case. Empty means "no restriction" and only `role` decides that.
+ * There is NO `locationIds` here, and its absence is the point: the caller's
+ * branches are not what decides anything. The reach rule lives in the database
+ * (`business_member_reaches_member` and
+ * `business_member_covers_locations`), which answers it for the caller that the
+ * transaction declares. An actor that carried its own copy of the branches
+ * would be a second implementation of a rule that is supposed to have one.
  */
 type StaffActor = {
   userId: string;
   businessId: string;
   role: BusinessMemberRole;
-  locationIds: Set<string>;
 };
-
-/**
- * CONTAINMENT, NOT INTERSECTION. This is the whole reach rule of §8 in one line.
- *
- * A `manager` of A+B may touch an access whose branches are a SUBSET of {A, B}:
- * ∅, {A}, {B}, {A, B}. It may NOT touch an access scoped to {A, C} even though A
- * is inside its reach, because C is not, and that access can *write* C. Reading
- * it as "shares a branch" would hand every manager of a chain a way to widen a
- * colleague's reach by one overlapping branch.
- *
- * The empty scope is a subset of everything and that is deliberate, not a hole: a
- * member with no branches touches nothing anywhere (§5.1), so there is nothing
- * for the caller to reach through it.
- */
-function scopeIsContained(
-  reach: ReadonlySet<string>,
-  scope: readonly string[],
-): boolean {
-  return scope.every((locationId) => reach.has(locationId));
-}
 
 /** The SQL shape of a raise that carries machine-readable detail. */
 type PostgresLikeError = {
@@ -161,9 +161,21 @@ export class StaffService {
     const actor = await this.requireActor(user, businessId);
     const members = await this.repository.listMembersWithScope(businessId);
 
-    return members
-      .filter((member) => this.reaches(actor, member.row, member.locationIds))
-      .map((member) => StaffMapper.toMemberDto(member.row, member.locationIds));
+    // ─── UNA IDA A LA BASE POR ACCESO, Y ES UN COSTE CONSCIENTE ──────────────
+    //
+    // La regla la contesta la base, y la base la contesta de a uno en uno: no
+    // hay helper que devuelva el conjunto de ids alcanzables. El roster está
+    // topado por plan —2 accesos en `free`, 20 en `pro`, sin tope en
+    // `pro_plus`—, así que el peor caso son veinte idas. Una versión de una
+    // sola llamada es una decisión de performance, y este plan no la toma.
+    const reachable: MemberWithScope[] = [];
+    for (const member of members) {
+      if (await this.reaches(actor, member.row)) reachable.push(member);
+    }
+
+    return reachable.map((member) =>
+      StaffMapper.toMemberDto(member.row, member.locationIds),
+    );
   }
 
   /**
@@ -295,13 +307,34 @@ export class StaffService {
    * (`businesses.service.ts:114-157`). Without it a retry from the same form
    * finds the alias taken by an account nobody can reach — the alias index
    * includes archived rows precisely so that this cannot be papered over.
+   *
+   * ─── Y LA PUERTA DE LA PLATAFORMA, QUE ES OTRA PUERTA AL MISMO CAMINO ───────
+   *
+   * Un negocio cuyo dueño se fue puede quedarse SIN NINGÚN acceso, y entonces
+   * no hay ni a quién transferirle la propiedad ni quién administre el negocio
+   * que queda. La recuperación son dos pasos y las dos puertas existen: este
+   * (crear el acceso) y `POST /businesses/:id/ownership/restore` (darle el
+   * nombre).
+   *
+   * La rama del admin es DELTA y su condición es DOBLE: `user.role ===
+   * 'admin'` Y el negocio no tiene dueño vivo. Un admin NO administra un
+   * negocio con dueño —eso se le niega a propósito (ítem 11 de la herencia)— y
+   * `requireActor` sigue negándoselo; lo único que la rama abre es el alta en
+   * un negocio que se quedó sin nadie.
+   *
+   * Y la rama vive AQUÍ y no en `requireActor`: en la puerta común, un admin
+   * podría administrar cualquier negocio sin dueño —y de paso cualquier
+   * negocio CON dueño, que es justo lo que se le niega.
    */
   async create(
     user: AuthUser,
     businessId: string,
     body: CreateBusinessMemberDto,
   ): Promise<BusinessMemberDeliveryCardDto> {
-    const actor = await this.requireActor(user, businessId);
+    const isPlatformAdmin = user.role === 'admin';
+    const actor = isPlatformAdmin
+      ? null
+      : await this.requireActor(user, businessId);
 
     // §8: an owner is who created the business. `CreateBusinessMemberSchema`
     // accepts the whole vocabulary ON PURPOSE — the partner put this rejection
@@ -329,7 +362,15 @@ export class StaffService {
       businessId,
       body.business_location_ids,
     );
-    this.assertWithinReach(actor, locationIds);
+    if (actor) {
+      // The reach of the caller decides whether it may create this access here.
+      // A platform admin has NO reach —it is not a member of any business— and
+      // the branch that let it in does not ask: it administers the whole
+      // platform, and the business it is touching is one that has nobody.
+      await this.assertWithinReach(actor, locationIds);
+    } else {
+      await this.requireOwnerlessBusiness(businessId);
+    }
     this.assertPersistentSessionIsAllowed(role, body.session_ttl_hours);
 
     const alias = body.alias ?? this.proposedAlias(business.slug, body.label);
@@ -383,7 +424,10 @@ export class StaffService {
     this.logger.log({
       event: 'staff_access_created',
       businessId,
-      createdBy: actor.userId,
+      // `actor` is null on the platform branch, and there the caller is the
+      // admin: `requireActor` returns the caller's own id, so the two are the
+      // same person and the log says who asked.
+      createdBy: actor?.userId ?? user.id,
       role,
       locationCount: locationIds.length,
       aliasDomain: this.aliasDomain(parsedAlias.data),
@@ -420,12 +464,16 @@ export class StaffService {
     await this.assertCanReachMember(actor, member);
 
     if (body.role === 'owner') {
+      // La promoción existe, pero NO por esta vía: la propiedad se transfiere
+      // con la operación que degrada al dueño viejo y promueve al receptor en
+      // la MISMA transacción. Un `PATCH` que promueve es una degradación
+      // disfrazada, y una degradación suelta deja al negocio sin dueño.
       throw new UnprocessableEntityException(
-        'Un acceso no se promueve a dueño: la transferencia de propiedad no existe en esta versión.',
+        'Un acceso no se promueve a dueño por esta vía: la propiedad se transfiere con POST /businesses/:businessId/ownership/transfer.',
       );
     }
 
-    // ─── EL DUEÑO NO SE DEGRADA, Y HASTA QUE HAYA TRANSFERENCIA ────────────────
+    // ─── EL DUEÑO NO SE DEGRADA, Y HAY UNA PUERTA QUE SÍ LO ABRE ──────────────
     //
     // `PATCH {"role":"manager"}` sobre la fila del PROPIO dueño lo dejaba sin
     // dueño: las puertas owner-only niegan a todos (incluido el degradado),
@@ -433,12 +481,15 @@ export class StaffService {
     // devolver `role: 'owner'` — la promoción es un 422 desde el §5.4. El
     // negocio quedaba inmanejable e invisible con una operación de una línea.
     //
-    // La transferencia atómica no existe en esta versión, así que degradar se
-    // NIEGA, y se niega acá —antes de escribir, y sin depender del texto del
-    // trigger— además de negarse en la base (§2 de la revisión de la Task 6).
+    // La transferencia atómica EXISTE, y por eso degradar se sigue negando acá
+    // —antes de escribir, y sin depender del texto del trigger— además de
+    // negarse en la base: el trigger diferido aborta al commit la degradación
+    // suelta de un negocio que sigue activo. El mensaje nuevo nombra la puerta
+    // que sí abre, porque un mensaje que manda al operador a una puerta que no
+    // existe es peor que uno que no da ninguna.
     if (body.role !== undefined && member.role === 'owner') {
       throw new UnprocessableEntityException(
-        'Al dueño del negocio no se lo degrada: la transferencia de propiedad no existe en esta versión.',
+        'Al dueño del negocio no se lo degrada: la propiedad se transfiere con POST /businesses/:businessId/ownership/transfer.',
       );
     }
 
@@ -448,7 +499,7 @@ export class StaffService {
         businessId,
         body.business_location_ids,
       );
-      this.assertWithinReach(actor, locationIds);
+      await this.assertWithinReach(actor, locationIds);
     }
     this.assertPersistentSessionIsAllowed(
       body.role ?? member.role,
@@ -555,6 +606,159 @@ export class StaffService {
       // the employee could turn on password recovery with that address. It is
       // information the owner needs and nobody else can act on it.
       alias_warnings: businessMemberAliasWarnings(alias),
+    };
+  }
+
+  // ─────────────────────────────── la propiedad ───────────────────────────
+
+  /**
+   * `POST /businesses/:businessId/ownership/transfer`: el dueño entrega su
+   * negocio a otro acceso vivo del mismo negocio.
+   *
+   * ─── POR QUÉ LA PUERTA ES LA MEMBRESÍA Y NO EL ROL DE PLATAFORMA ───────────
+   *
+   * Porque «dueño» es un rol del NEGOCIO, y la fila que lo dice es
+   * `business_members`. El `app_role` de `profiles` dice si la cuenta es de
+   * negocio o de consumidor, y un admin de plataforma no es miembro de ningún
+   * negocio: `requireActor` lo niega, y con el mismo 403 que el de un
+   * consumidor.
+   *
+   * ─── POR QUÉ UN GERENTE RECIBE 403 Y NO UN 404 ─────────────────────────────
+   *
+   * Por la misma regla que el resto del módulo: el refusal no dice si el acceso
+   * receptor existe. Un gerente que recibiera un «no hay tal acceso» se
+   * enteraría de que el id existe en otro negocio, y un id de membresía es un
+   * dato que el panel no tiene por qué enseñarle. El 403 dice «esto es del
+   * dueño», y nada más.
+   *
+   * ─── POR QUÉ LA OPERACIÓN NO SE REESCRIBE AQUÍ ─────────────────────────────
+   *
+   * Porque la transferencia es una operación de BASE: una función `security
+   * definer` que degrada al dueño viejo, promueve al receptor y deja la
+   * membresía coherente, todo en una transacción. Dos llamadas de API dejarían
+   * una ventana con dos dueños o con ninguno, y el índice parcial
+   * `business_members_one_owner_per_business` no lo permite.
+   *
+   * Y esta capa NO vuelve a decidir quién puede transferir: la función comprueba
+   * adentro que el llamador es el dueño vivo del negocio. El 403 de acá es la
+   * puerta cómoda —y la que da un mensaje que el panel puede pintar—, no la
+   * única.
+   *
+   * ─── Y LA AUDITORÍA ────────────────────────────────────────────────────────
+   *
+   * El repo no tiene una tabla de auditoría de negocio: `order_events` es de
+   * pedidos, y nada más registra quién tocó qué. Lo que SÍ existe, y lo que
+   * este módulo ya usa para cada operación del equipo, es el log estructurado
+   * con un `event`. La transferencia entra por ahí —con los dos identificadores
+   * de membresía y quién la pidió— y no por una tabla inventada: una tabla
+   * nueva es un esquema nuevo que nadie pidió y que nadie lee.
+   */
+  async transferOwnership(
+    user: AuthUser,
+    businessId: string,
+    body: TransferBusinessOwnershipDto,
+  ): Promise<TransferBusinessOwnershipResponseDto> {
+    const actor = await this.requireActor(user, businessId);
+    if (actor.role !== 'owner') {
+      throw new ForbiddenException(
+        'Transferir la propiedad del negocio es del dueño, no de un gerente.',
+      );
+    }
+
+    let result: OwnershipTransferResult;
+    try {
+      result = await this.repository.transferOwnership(
+        businessId,
+        body.new_owner_member_id,
+        user.id,
+      );
+    } catch (err) {
+      // `R0004` es una regla de negocio con su mensaje, y el mensaje es el de
+      // la base: una frase que el dueño lee y que nombra la regla que falló.
+      throw this.mapWriteError(err);
+    }
+
+    this.logger.log({
+      event: 'business_ownership_transferred',
+      businessId,
+      previousOwnerMemberId: result.previous_owner_member_id,
+      newOwnerMemberId: result.new_owner_member_id,
+      transferredBy: actor.userId,
+    });
+
+    return {
+      previous_owner: await this.memberDto(
+        businessId,
+        result.previous_owner_member_id,
+      ),
+      new_owner: await this.memberDto(businessId, result.new_owner_member_id),
+    };
+  }
+
+  /**
+   * `POST /businesses/:businessId/ownership/restore`: the platform gives a
+   * business its owner back.
+   *
+   * ─── POR QUÉ ES ADMIN-ONLY Y POR QUÉ NO ES LA PUERTA DEL DUEÑO ───────────────
+   *
+   * Porque un negocio sin dueño no tiene a nadie que pueda entregar la
+   * propiedad: la puerta del dueño (`transferOwnership`) exige que quien llama
+   * SEA el dueño, y ese negocio no tiene uno. La recuperación la hace la
+   * plataforma —un `app_role = 'admin'`— y es un hecho distinto de una
+   * entrega: en la entrega hay dos personas y una entrega; en la recuperación
+   * hay una plataforma y un negocio que se quedó solo.
+   *
+   * ─── Y POR QUÉ NO ES UNA SEGUNDA PUERTA PARA SALTARSE EL INVARIANTE ─────────
+   *
+   * Porque la operación es de BASE (`public.assign_business_ownership`) y la
+   * base se niega con `R0004` si el negocio YA tiene un dueño vivo: para eso
+   * está la transferencia. Promover a un acceso vivo deja exactamente un dueño,
+   * que es lo que el índice parcial admite y lo que el trigger diferido exige
+   * al commit. La ruta no puede dejar un negocio con dos dueños ni con
+   * ninguno.
+   *
+   * ─── Y LA AUDITORÍA ─────────────────────────────────────────────────────────
+   *
+   * El repo no tiene una tabla de auditoría de negocio: `order_events` es de
+   * pedidos. Lo que SÍ existe, y lo que este módulo ya usa para cada operación
+   * del equipo, es el log estructurado con un `event`. La recuperación entra
+   * por ahí —con el identificador de la membresía y quién la pidió— y no por
+   * una tabla inventada.
+   */
+  async restoreOwnership(
+    user: AuthUser,
+    businessId: string,
+    body: RestoreBusinessOwnershipDto,
+  ): Promise<RestoreBusinessOwnershipResponseDto> {
+    if (user.role !== 'admin') {
+      throw new ForbiddenException(
+        'Devolver el dueño a un negocio es de la plataforma, no de un miembro del negocio.',
+      );
+    }
+
+    let result: OwnershipAssignResult;
+    try {
+      result = await this.repository.assignOwnership(
+        businessId,
+        body.member_id,
+        user.id,
+      );
+    } catch (err) {
+      // `R0004` es una regla de negocio con su mensaje, y el mensaje es el de
+      // la base: una frase que el operador lee y que nombra la regla que falló.
+      throw this.mapWriteError(err);
+    }
+
+    this.logger.log({
+      event: 'business_ownership_restored',
+      businessId,
+      ownerMemberId: result.owner_member_id,
+      ownerUserId: result.owner_user_id,
+      restoredBy: user.id,
+    });
+
+    return {
+      owner: await this.memberDto(businessId, result.owner_member_id),
     };
   }
 
@@ -767,6 +971,25 @@ export class StaffService {
     }
     const member = await this.requireMember(businessId, memberId);
 
+    // ─── EL DUEÑO NO SE DA DE BAJA POR ESTA PUERTA ────────────────────────────
+    //
+    // Antes lo negaba el trigger de la base —«el dueño del negocio no se puede
+    // dar de baja»— y el mensaje era el suyo. Hoy ese guard se fue: la baja de
+    // un dueño la decide el INVARIANTE, al commit, y sólo para un negocio que
+    // sigue activo. Un negocio INACTIVO puede quedarse sin dueño —es lo que
+    // hace posible la liberación— y esta puerta NO es la de la liberación: la
+    // liberación es la de `public.release_business_ownership`, que suelta al
+    // dueño del negocio junto con su alcance.
+    //
+    // Así que la negativa vive ACÁ, y es la misma regla que dice que un dueño
+    // no se degrada ni se pausa: el dueño se va ENTREGANDO el negocio, no
+    // archivándose a sí mismo por la puerta del equipo.
+    if (member.role === 'owner') {
+      throw new UnprocessableEntityException(
+        'Al dueño del negocio no se lo da de baja por esta puerta: la propiedad se transfiere con POST /businesses/:businessId/ownership/transfer.',
+      );
+    }
+
     try {
       await this.repository.transaction(async (tx) => {
         await this.repository.setScope(tx, memberId, []);
@@ -885,8 +1108,41 @@ export class StaffService {
       userId: user.id,
       businessId,
       role: row.role,
-      locationIds: new Set(await this.repository.locationIdsOfMember(row.id)),
     };
+  }
+
+  /**
+   * The platform's door to a business that has NO live owner.
+   *
+   * ─── POR QUÉ ES UNA COMPROBACIÓN DOBLE ──────────────────────────────────────
+   *
+   * Porque son dos hechos: que quien llama es de la plataforma (`user.role ===
+   * 'admin'`, que el servicio ya comprobó antes de llegar acá) Y que el
+   * negocio no tiene dueño vivo. Con uno solo de los dos, la puerta abriría
+   * de más: un admin que pudiera administrar cualquier negocio —incluido uno
+   * con dueño, que es lo que hoy se le niega a propósito (ítem 11 de la
+   * herencia)—, o un miembro del negocio que pudiera darse su propio dueño.
+   *
+   * ─── Y POR QUÉ LA PREGUNTA LA HACE LA BASE ───────────────────────────────────
+   *
+   * Porque «¿tiene dueño vivo?» es la misma pregunta que hace
+   * `public.assign_business_ownership` antes de promover a alguien, y las dos
+   * tienen que tener la misma respuesta: si esta API contara los dueños con su
+   * propio predicado, la puerta podría abrir un negocio que la operación
+   * después cierra.
+   */
+  private async requireOwnerlessBusiness(businessId: string): Promise<void> {
+    const business = await this.repository.findBusiness(businessId);
+    if (!business) {
+      throw new NotFoundException('Negocio no encontrado');
+    }
+
+    const liveOwners = await this.repository.liveOwnerCount(businessId);
+    if (liveOwners > 0) {
+      throw new ForbiddenException(
+        'Un negocio con dueño no se administra desde la plataforma: ese dueño lo administra.',
+      );
+    }
   }
 
   /** A live access of THIS business, or a 404. */
@@ -910,23 +1166,30 @@ export class StaffService {
    * no branches, so containment would admit it vacuously— it is the §8 sentence
    * that a manager never administers the owner. Keeping it here means the list and
    * the writes cannot drift apart on it either.
+   *
+   * The CONTAINMENT, though, is not decided here: it is the database's answer,
+   * and the only thing this method decides is which rule is whose. The §8
+   * containment rule is a rule of SCOPE, and the scope lives in
+   * `business_member_locations`.
    */
-  private reaches(
+  private async reaches(
     actor: StaffActor,
-    member: Pick<BusinessMemberRow, 'role'>,
-    locationIds: readonly string[],
-  ): boolean {
+    member: Pick<BusinessMemberRow, 'id' | 'role'>,
+  ): Promise<boolean> {
     if (actor.role === 'owner') return true;
     if (member.role === 'owner') return false;
-    return scopeIsContained(actor.locationIds, locationIds);
+    return this.repository.reachesMember(
+      actor.businessId,
+      member.id,
+      actor.userId,
+    );
   }
 
   private async assertCanReachMember(
     actor: StaffActor,
     member: BusinessMemberRow,
   ): Promise<void> {
-    const locationIds = await this.repository.locationIdsOfMember(member.id);
-    if (this.reaches(actor, member, locationIds)) return;
+    if (await this.reaches(actor, member)) return;
 
     // Only a manager arrives here: `reaches` is unconditionally true for an
     // owner, so there is no "you do not administer this" message to write.
@@ -935,13 +1198,23 @@ export class StaffService {
     );
   }
 
-  /** The same rule, applied to a reach that is ABOUT TO BE WRITTEN. */
-  private assertWithinReach(
+  /**
+   * The same rule, applied to a reach that is ABOUT TO BE WRITTEN.
+   *
+   * The database answers it, and the answer is the same one that decides
+   * whether the caller reaches the access it is about to widen: a manager of
+   * {A, B} can move an access to {A} or to {B}, and not to {A, C}.
+   */
+  private async assertWithinReach(
     actor: StaffActor,
     locationIds: readonly string[],
-  ): void {
-    if (actor.role === 'owner') return;
-    if (scopeIsContained(actor.locationIds, locationIds)) return;
+  ): Promise<void> {
+    const covered = await this.repository.coversLocations(
+      actor.businessId,
+      locationIds,
+      actor.userId,
+    );
+    if (covered) return;
 
     throw new ForbiddenException(
       'No puedes asignar sucursales que no gestionas.',
@@ -1176,11 +1449,25 @@ export class StaffService {
     if (postgresError.code === PG_OWNER_UNTOUCHABLE) {
       // `R0002`: the owner is untouchable and it is NOT the plan's fault. The
       // message is the trigger's own —a fixed string from our migration, and the
-      // one that names the reason: la transferencia de propiedad no existe en
-      // esta versión.
+      // one that names the reason: la propiedad se transfiere, no se degrada.
       return new UnprocessableEntityException(
         postgresError.message ??
           'El dueño del negocio no se puede desactivar, degradar ni dar de baja.',
+      );
+    }
+
+    if (postgresError.code === PG_OWNERSHIP_REFUSED) {
+      // `R0004`: la operación de propiedad se negó, y el motivo es EL DE LA
+      // BASE —«sólo el dueño puede transferir», «el receptor tiene que ser un
+      // acceso vivo de este negocio»—.
+      //
+      // El mensaje NO se reescribe: la base es la que sabe qué regla falló, y
+      // una traducción de segunda mano es una traducción que se aparta. Y no
+      // es la prosa cruda de Postgres: es un `raise` nuestro, con su `detail` y
+      // su `hint`, y lo que sale de acá es la frase que el dueño lee.
+      return new UnprocessableEntityException(
+        postgresError.message ??
+          'La propiedad del negocio no se puede transferir con estos datos.',
       );
     }
 

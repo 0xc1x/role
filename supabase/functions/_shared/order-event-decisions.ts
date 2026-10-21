@@ -157,14 +157,23 @@ export function decidePushes(input: {
   order: Order;
   business: { name?: string; image?: string | null } | null;
   offer: { image?: string | null } | null;
-  ownership: { owner_id?: string | null } | null;
+  /**
+   * The business's LIVE owner, read from `business_members`.
+   *
+   * `null` means the business has no live owner — and a business without a live
+   * owner is NOT notified at all. That is the rule, and it is the rule the
+   * database spells out (`public.business_member_role`): role `owner`, status
+   * `active`, not archived. A released business (its owner archived) is a
+   * business without an owner, and it hears nothing.
+   */
+  owner: { user_id?: string | null } | null;
   consumerPrefs: { push_enabled?: boolean | null } | null;
   businessPrefs: {
     push_enabled?: boolean | null;
     new_orders_enabled?: boolean | null;
   } | null;
 }): Decision {
-  const { event, order, business, offer, ownership } = input;
+  const { event, order, business, offer, owner } = input;
   const consumerPrefs = input.consumerPrefs;
   const businessPrefs = input.businessPrefs;
 
@@ -172,7 +181,7 @@ export function decidePushes(input: {
     return { kind: "skip", reason: "Internal marker" };
   }
 
-  const businessOwnerId = ownership?.owner_id ?? null;
+  const businessOwnerId = owner?.user_id ?? null;
   const businessName = business?.name ?? "Negocio";
   const label = labelFor(event.status);
   const image = offer?.image ?? business?.image ?? undefined;

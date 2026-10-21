@@ -197,6 +197,14 @@ describe('StaffService', () => {
       findMemberById: jest.fn(async () => memberRow()),
       listMembersWithScope: jest.fn(async () => []),
       locationIdsOfMember: jest.fn(async () => []),
+      /**
+       * Las dos preguntas que ahora contesta la BASE. El default es un `true`
+       * generoso y lo cambia `installScopeDatabase`, que está abajo: el doble
+       * tiene que responder como responde el SQL, o los tests de este archivo
+       * medirían un servicio que decide por su cuenta.
+       */
+      reachesMember: jest.fn(async () => true),
+      coversLocations: jest.fn(async () => true),
       findLocationIdsInBusiness: jest.fn(
         async (_b: string, ids: string[]) => ids,
       ),
@@ -222,6 +230,32 @@ describe('StaffService', () => {
         memberRow({ last_authenticated_at: at }),
       ),
       sessionStateAsCaller: jest.fn(async () => sessionState()),
+      /**
+       * La transferencia de propiedad, como la contesta la base: los cinco
+       * identificadores de la operación.
+       */
+      transferOwnership: jest.fn(async () => ({
+        business_id: BIZ,
+        previous_owner_member_id: MEMBER_OWNER,
+        previous_owner_user_id: OWNER_USER,
+        new_owner_member_id: MEMBER_STAFF,
+        new_owner_user_id: STAFF_USER,
+      })),
+      /**
+       * La RECUPERACIÓN, como la contesta la base: los tres identificadores de
+       * la operación.
+       */
+      assignOwnership: jest.fn(async () => ({
+        business_id: BIZ,
+        owner_member_id: MEMBER_STAFF,
+        owner_user_id: STAFF_USER,
+      })),
+      /**
+       * Los DUEÑOS VIVOS del negocio. El default es UNO —el negocio con
+       * dueño— y por eso la rama de la plataforma está cerrada en el default: la
+       * rama sólo se abre en un negocio que se quedó sin dueño.
+       */
+      liveOwnerCount: jest.fn(async () => 1),
     };
 
     authAdmin = {
@@ -251,7 +285,74 @@ describe('StaffService', () => {
 
     service = module.get(StaffService);
     logs = captureLogs();
+    installScopeDatabase();
   });
+
+  /**
+   * The double IS the database, and this is the rule it answers with.
+   *
+   * The two new repository methods are the two questions the base answers now,
+   * and the mock has to answer them the way the SQL does. If it answered
+   * "always yes", the tests of this file would pass against a service that
+   * still decided for itself —which is the thing this change removes— and they
+   * would pass against a service that asks the base and ignores the answer.
+   *
+   * The data it answers from is the data of the fixture: `findMemberByUser` is
+   * the caller's row, and `locationIdsOfMember` is the live scope of a member.
+   * The rule itself is measured in SQL, in
+   * `src/database/security/business-members.rls.db.spec.ts`; this is the model
+   * of that database, not a second copy of the rule in the product.
+   *
+   * THE THREE PARTS OF THE RULE, and they are the same three that the SQL has:
+   * the owner reaches everything; a member reaches an access only if its own
+   * scope is not empty, the access's scope is not empty, and the access's scope
+   * is contained in its own.
+   */
+  function installScopeDatabase(): void {
+    repository.reachesMember.mockImplementation(
+      async (
+        businessId: string,
+        memberId: string,
+        callerUserId: string,
+      ): Promise<boolean> => {
+        const caller = await repository.findMemberByUser(
+          businessId,
+          callerUserId,
+        );
+        if (!caller) return false;
+        if (caller.role === 'owner') return true;
+        const callerScope = (await repository.locationIdsOfMember(
+          caller.id,
+        )) as string[];
+        const targetScope = (await repository.locationIdsOfMember(
+          memberId,
+        )) as string[];
+        if (callerScope.length === 0) return false;
+        if (targetScope.length === 0) return false;
+        return targetScope.every((id) => callerScope.includes(id));
+      },
+    );
+
+    repository.coversLocations.mockImplementation(
+      async (
+        businessId: string,
+        locationIds: string[],
+        callerUserId: string,
+      ): Promise<boolean> => {
+        const caller = await repository.findMemberByUser(
+          businessId,
+          callerUserId,
+        );
+        if (!caller) return false;
+        if (caller.role === 'owner') return true;
+        if (locationIds.length === 0) return false;
+        const callerScope = (await repository.locationIdsOfMember(
+          caller.id,
+        )) as string[];
+        return locationIds.every((id) => callerScope.includes(id));
+      },
+    );
+  }
 
   // ───────────────────────── la regla que se rompe ────────────────────────
 
@@ -329,9 +430,13 @@ describe('StaffService', () => {
       expect(repository.updateMember).not.toHaveBeenCalled();
     });
 
-    it('un empleado sin sucursales está contenido: no alcanza ninguna', async () => {
-      // El conjunto vacío es subconjunto de todo, y es lo correcto: un acceso sin
-      // sucursales no toca nada (§5.1), así que no hay por dónde ampliarlo.
+    it('un acceso sin alcance NO lo alcanza ni un gerente con alcance: sólo el dueño', async () => {
+      // ESTA REGLA CAMBIÓ, y el cambio es de la regla y no del código: el
+      // conjunto vacío es subconjunto de todo, así que la versión que estaba
+      // escrita en TypeScript admitía al gerente a tocar un acceso sin
+      // sucursales. En la base el alcance del ACCESO también tiene que ser no
+      // vacío: un acceso sin alcance no toca ninguna sucursal, y no hay por
+      // dónde ampliarlo.
       repository.locationIdsOfMember.mockImplementation(async (id: string) =>
         id === MEMBER_MANAGER ? [LOC_A, LOC_B] : id === MEMBER_STAFF ? [] : [],
       );
@@ -339,17 +444,64 @@ describe('StaffService', () => {
         memberRow({ id: MEMBER_STAFF }),
       );
 
-      await service.update(managerAB, BIZ, MEMBER_STAFF, {
-        session_ttl_hours: 12,
-      });
+      await expect(
+        service.update(managerAB, BIZ, MEMBER_STAFF, {
+          session_ttl_hours: 12,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.updateMember).not.toHaveBeenCalled();
+      expect(repository.setScope).not.toHaveBeenCalled();
+    });
 
-      expect(repository.updateMember).toHaveBeenCalledWith(
+    it('un gerente SIN alcance no crea, no edita y no toca un acceso sin alcance', async () => {
+      // El caso que no estaba testeado (ítem 18 de la herencia): sin filas de
+      // alcance no se alcanza NADA, ni siquiera un acceso sin alcance. Las tres
+      // preguntas del §5.1 —crear, editar, tocar— con la misma respuesta.
+      repository.findMemberByUser.mockResolvedValue(managerRow([]));
+      repository.locationIdsOfMember.mockImplementation(async () => []);
+      repository.findMemberById.mockResolvedValue(
+        memberRow({ id: MEMBER_STAFF }),
+      );
+
+      // CREAR: ni siquiera un acceso sin sucursales.
+      await expect(
+        service.create(managerAB, BIZ, {
+          label: 'Carla',
+          business_location_ids: [],
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(authAdmin.createUser).not.toHaveBeenCalled();
+      expect(repository.insertMember).not.toHaveBeenCalled();
+
+      // EDITAR: el acceso sin alcance no lo alcanza, y tampoco puede dejarle
+      // un alcance que no tiene.
+      await expect(
+        service.update(managerAB, BIZ, MEMBER_STAFF, {
+          session_ttl_hours: 12,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.updateMember).not.toHaveBeenCalled();
+      expect(repository.setScope).not.toHaveBeenCalled();
+    });
+
+    it('el servicio NO vuelve a decidir: obedece a la base aunque el dato local diga otra cosa', async () => {
+      // El alcance local de MEMBER_STAFF ({LOC_A}) está contenido en el del
+      // gerente ({LOC_A, LOC_B}), así que un servicio que volviera a calcular
+      // la contención en TypeScript lo admitiría. La base dice que no —este
+      // `false` lo pone el doble, a mano— y el servicio tiene que obedecer.
+      // Esta es la prueba de que la regla vive en SQL y no en el servicio.
+      repository.reachesMember.mockResolvedValue(false);
+      repository.listMembersWithScope.mockResolvedValue([
+        { row: memberRow({ id: MEMBER_STAFF }), locationIds: [LOC_A] },
+      ]);
+
+      const members = await service.list(managerAB, BIZ);
+
+      expect(members).toEqual([]);
+      expect(repository.reachesMember).toHaveBeenCalledWith(
         BIZ,
         MEMBER_STAFF,
-        { session_ttl_hours: 12 },
-        // La cuarta es el executor de la transacción: el PATCH del rol y el del
-        // alcance tienen que commitear juntos.
-        expect.anything(),
+        MANAGER_USER,
       );
     });
 
@@ -489,8 +641,14 @@ describe('StaffService', () => {
         label: 'Nadia',
       });
       repository.findMemberById.mockResolvedValue(otroGerente);
+      // El que llama CONSERVA su alcance: la diferencia entre las dos mitades
+      // es `C`, no el rol ni un alcance vacío del que llama.
       repository.locationIdsOfMember.mockImplementation(async (id: string) =>
-        id === MEMBER_OUTSIDE ? [LOC_B, LOC_C] : [],
+        id === MEMBER_OUTSIDE
+          ? [LOC_B, LOC_C]
+          : id === MEMBER_MANAGER
+            ? [LOC_A, LOC_B]
+            : [],
       );
 
       await expect(
@@ -869,17 +1027,22 @@ describe('StaffService', () => {
     });
 
     it('un R0002 al dar de baja NO banea a nadie: la fila sigue viva', async () => {
-      repository.softDeleteMember.mockRejectedValue(
-        pgError('R0002', {
-          message:
-            'el dueño del negocio no se puede dar de baja; la transferencia de propiedad no existe en esta versión',
-        }),
-      );
+      // Y el refusal del dueño al dar de baja es de ESTA capa, no de la base:
+      // el guard de la fila que lo negaba se fue —la baja de un dueño la decide
+      // el invariante, al commit, y sólo para un negocio que sigue activo— y
+      // esta puerta no es la de la liberación, que además borra la fila de
+      // `business_ownership`.
       repository.findMemberById.mockResolvedValue(ownerRow());
 
-      await expect(
-        service.remove(owner, BIZ, MEMBER_OWNER),
-      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      const error = await service
+        .remove(owner, BIZ, MEMBER_OWNER)
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      expect((error as UnprocessableEntityException).message).toContain(
+        '/ownership/transfer',
+      );
+      expect(repository.softDeleteMember).not.toHaveBeenCalled();
       expect(authAdmin.updateUserById).not.toHaveBeenCalled();
     });
 
@@ -1515,6 +1678,311 @@ describe('StaffService', () => {
 
       expect(BusinessMemberSchema.parse(member)).toEqual(member);
       expect(member.business_location_ids).toEqual([]);
+    });
+  });
+
+  // ─────────────────────────────── la propiedad ───────────────────────────
+
+  /**
+   * La TRANSFERENCIA de propiedad: la puerta, la operación y su traducción.
+   *
+   * ─── POR QUÉ ESTOS TESTS NO REIMPLEMENTAN LA BASE ─────────────────────────
+   *
+   * El doble de `transferOwnership` contesta lo que contesta la FUNCIÓN —los
+   * cinco identificadores de la operación— y no simula el efecto: el efecto lo
+   * mide el spec de base, contra la base de verdad. Lo que se mide acá es la
+   * capa de arriba: quién puede pedir la transferencia, qué se devuelve, qué
+   * se registra y cómo se traduce un refusal.
+   */
+  describe('la transferencia de propiedad', () => {
+    beforeEach(() => {
+      // Las dos filas en su estado NUEVO, porque el servicio vuelve a leerlas
+      // para armar la respuesta: un doble que devolviera el estado viejo
+      // contestaría con un roster que contradice la transferencia.
+      repository.findMemberById.mockImplementation(
+        async (_businessId: string, memberId: string) =>
+          memberId === MEMBER_OWNER
+            ? memberRow({
+                id: MEMBER_OWNER,
+                user_id: OWNER_USER,
+                role: 'manager',
+                label: 'Dueña',
+              })
+            : memberRow({
+                id: memberId,
+                user_id: STAFF_USER,
+                role: 'owner',
+                label: 'Karla',
+              }),
+      );
+    });
+
+    it('el dueño transfiere la propiedad y los dos quedan con su rol nuevo', async () => {
+      const result = await service.transferOwnership(owner, BIZ, {
+        new_owner_member_id: MEMBER_STAFF,
+      });
+
+      // El dueño saliente queda como `manager` y el receptor como `owner`.
+      expect(result.previous_owner.id).toBe(MEMBER_OWNER);
+      expect(result.previous_owner.role).toBe('manager');
+      expect(result.new_owner.id).toBe(MEMBER_STAFF);
+      expect(result.new_owner.role).toBe('owner');
+
+      // Y la llamada a la base lleva el negocio, el receptor y QUIÉN PIDE.
+      expect(repository.transferOwnership).toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_STAFF,
+        OWNER_USER,
+      );
+    });
+
+    it('un gerente no puede transferir la propiedad', async () => {
+      repository.findMemberByUser.mockResolvedValue(managerRow([LOC_A]));
+
+      const error = await service
+        .transferOwnership(managerAB, BIZ, {
+          new_owner_member_id: MEMBER_STAFF,
+        })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      // Y el refusal NO dice si el acceso receptor existe: un 403 que lo
+      // dijera le enseñaría al gerente un id de membresía que no administra.
+      expect((error as ForbiddenException).message).not.toContain(MEMBER_STAFF);
+      expect((error as ForbiddenException).message).toContain('del dueño');
+
+      // Y no se llamó a la base: la puerta se neg antes.
+      expect(repository.transferOwnership).not.toHaveBeenCalled();
+    });
+
+    it('un R0004 de la base se traduce a un 422 con el motivo', async () => {
+      repository.transferOwnership.mockRejectedValue(
+        pgError('R0004', {
+          message: 'el receptor tiene que ser un acceso vivo de este negocio',
+        }),
+      );
+
+      const error = await service
+        .transferOwnership(owner, BIZ, {
+          new_owner_member_id: MEMBER_OUTSIDE,
+        })
+        .catch((err: unknown) => err);
+
+      // 422 y no 500: un refusal que llega como 500 es un refusal que el panel
+      // no puede pintar.
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      const message = (error as UnprocessableEntityException).message;
+      // El mensaje es el de la BASE —la prosa que el dueño lee— y no el código.
+      expect(message).toContain('acceso vivo de este negocio');
+      expect(message).not.toContain('R0004');
+    });
+
+    it('la transferencia no devuelve el PIN de nadie', async () => {
+      const result = await service.transferOwnership(owner, BIZ, {
+        new_owner_member_id: MEMBER_STAFF,
+      });
+
+      // La respuesta son DOS membresías, y una membresía no lleva PIN: el PIN
+      // es la contraseña del `auth.users` y se entrega una vez, en la tarjeta
+      // de alta.
+      expect(Object.keys(result).sort()).toEqual([
+        'new_owner',
+        'previous_owner',
+      ]);
+      expect(JSON.stringify(result)).not.toContain('pin');
+    });
+
+    it('la transferencia queda registrada con quién la pidió', async () => {
+      // La auditoría de esta operación es el log estructurado —el mismo
+      // `event` que el resto de las operaciones del equipo—, y no una tabla
+      // nueva: el repo no tiene una tabla de auditoría de negocio, y el log es
+      // lo que el negocio puede leer cuando pregunta quién entregó qué.
+      const logs = captureLogs();
+
+      await service.transferOwnership(owner, BIZ, {
+        new_owner_member_id: MEMBER_STAFF,
+      });
+
+      const event = logs.find(
+        (entry) =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          (entry as { event?: string }).event ===
+            'business_ownership_transferred',
+      );
+      expect(event).toBeDefined();
+      expect(event).toMatchObject({
+        businessId: BIZ,
+        previousOwnerMemberId: MEMBER_OWNER,
+        newOwnerMemberId: MEMBER_STAFF,
+        transferredBy: OWNER_USER,
+      });
+    });
+
+    it('el 422 de degradar nombra la puerta que sí abre', async () => {
+      repository.findMemberById.mockResolvedValue(ownerRow());
+
+      const error = await service
+        .update(owner, BIZ, MEMBER_OWNER, { role: 'manager' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      const message = (error as UnprocessableEntityException).message;
+      expect(message).toContain('no se lo degrada');
+      // Y nombra la puerta que EXISTE: un mensaje que manda al operador a una
+      // ruta que rebota es peor que uno que no da ninguna.
+      expect(message).toContain('/ownership/transfer');
+      expect(message).not.toContain('no existe en esta versión');
+    });
+
+    it('el 422 de promover nombra la misma puerta', async () => {
+      const error = await service
+        .update(owner, BIZ, MEMBER_STAFF, { role: 'owner' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      const message = (error as UnprocessableEntityException).message;
+      expect(message).toContain('/ownership/transfer');
+      expect(message).not.toContain('no existe en esta versión');
+    });
+  });
+
+  /**
+   * La RECUPERACIÓN: la plataforma le devuelve el dueño a un negocio que se
+   * quedó sin él.
+   *
+   * ─── POR QUÉ NO SE REIMPLEMENTA LA BASE ──────────────────────────────────────
+   *
+   * El doble de `assignOwnership` contesta lo que contesta la FUNCIÓN —los tres
+   * identificadores de la operación— y no simula el efecto: el efecto lo mide el
+   * spec de base, contra la base de verdad. Lo que se mide acá es la capa de
+   * arriba: QUIÉN puede pedir la recuperación, qué se devuelve, qué se registra y
+   * cómo se traduce un refusal.
+   */
+  describe('la recuperación del dueño', () => {
+    beforeEach(() => {
+      // La fila en su estado NUEVO, porque el servicio vuelve a leerla para
+      // armar la respuesta: un doble que devolviera el estado viejo
+      // contestaría con un roster que contradice la recuperación.
+      repository.findMemberById.mockResolvedValue(
+        memberRow({
+          id: MEMBER_STAFF,
+          user_id: STAFF_USER,
+          role: 'owner',
+          label: 'Carla',
+        }),
+      );
+    });
+
+    it('el admin puede darle el dueño a un negocio sin dueño', async () => {
+      const result = await service.restoreOwnership(admin, BIZ, {
+        member_id: MEMBER_STAFF,
+      });
+
+      // Y la respuesta es la membresía que quedó como dueña.
+      expect(result.owner.id).toBe(MEMBER_STAFF);
+      expect(result.owner.role).toBe('owner');
+
+      // Y la llamada a la base lleva el negocio, el miembro y QUIÉN PIDE.
+      expect(repository.assignOwnership).toHaveBeenCalledWith(
+        BIZ,
+        MEMBER_STAFF,
+        admin.id,
+      );
+    });
+
+    it('un dueño no puede usar la ruta de recuperación', async () => {
+      const error = await service
+        .restoreOwnership(owner, BIZ, { member_id: MEMBER_STAFF })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).message).toContain('plataforma');
+
+      // Y no se llamó a la base: la puerta se cerró antes.
+      expect(repository.assignOwnership).not.toHaveBeenCalled();
+    });
+
+    it('un R0004 de la base se traduce a un 422 con el motivo', async () => {
+      repository.assignOwnership.mockRejectedValue(
+        pgError('R0004', {
+          message: 'este negocio ya tiene un dueño: usá la transferencia',
+        }),
+      );
+
+      const error = await service
+        .restoreOwnership(admin, BIZ, { member_id: MEMBER_STAFF })
+        .catch((err: unknown) => err);
+
+      // 422 y no 500: un refusal que llega como 500 es un refusal que el panel
+      // no puede pintar.
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      const message = (error as UnprocessableEntityException).message;
+      expect(message).toContain('ya tiene un dueño');
+      expect(message).not.toContain('R0004');
+    });
+
+    it('la recuperación queda registrada con quién la pidió', async () => {
+      // La auditoría de esta operación es el log estructurado —el mismo
+      // `event` que el resto de las operaciones del equipo—, y no una tabla
+      // nueva: el repo no tiene una tabla de auditoría de negocio, y el log es
+      // lo que el negocio puede leer cuando pregunta quién devolvió qué.
+      const logs = captureLogs();
+
+      await service.restoreOwnership(admin, BIZ, { member_id: MEMBER_STAFF });
+
+      const event = logs.find(
+        (entry) =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          (entry as { event?: string }).event === 'business_ownership_restored',
+      );
+      expect(event).toBeDefined();
+      expect(event).toMatchObject({
+        businessId: BIZ,
+        ownerMemberId: MEMBER_STAFF,
+        restoredBy: admin.id,
+      });
+    });
+
+    it('la recuperación no devuelve el PIN de nadie', async () => {
+      const result = await service.restoreOwnership(admin, BIZ, {
+        member_id: MEMBER_STAFF,
+      });
+
+      expect(Object.keys(result)).toEqual(['owner']);
+      expect(JSON.stringify(result)).not.toContain('pin');
+    });
+
+    it('el admin puede crear un acceso en un negocio SIN dueño', async () => {
+      // La rama de la plataforma: un negocio cuyo dueño se fue puede quedarse
+      // sin ningún acceso, y la plataforma es la que puede poner a alguien.
+      repository.liveOwnerCount.mockResolvedValue(0);
+
+      const card = await service.create(admin, BIZ, {
+        label: 'Carla',
+        role: 'staff',
+      });
+
+      expect(card.alias).toBeTruthy();
+      expect(card.pin).toMatch(/^\d{6}$/);
+      // Y la comprobación es doble: el admin ES de la plataforma Y el negocio
+      // no tiene dueño vivo.
+      expect(repository.liveOwnerCount).toHaveBeenCalledWith(BIZ);
+    });
+
+    it('el admin NO puede crear un acceso en un negocio CON dueño', async () => {
+      // El default del doble es un negocio con dueño, y ahí la rama se cierra:
+      // un negocio con dueño lo administra su dueño, y el admin supervisa.
+      const error = await service
+        .create(admin, BIZ, { label: 'Carla', role: 'staff' })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).message).toContain(
+        'Un negocio con dueño no se administra desde la plataforma',
+      );
+      expect(authAdmin.createUser).not.toHaveBeenCalled();
     });
   });
 

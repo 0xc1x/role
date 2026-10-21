@@ -15,7 +15,6 @@ import {
 } from '../../../test/seed';
 import {
   businessMemberLocations,
-  businessOwnership,
   // Aliased: this file also has a `businesses` and an `orders` SERVICE, and a
   // service is not a table. The names would shadow each other.
   businesses as businessesTable,
@@ -185,54 +184,24 @@ async function fixture(): Promise<Fixture> {
 }
 
 /**
- * The OLD predicate, verbatim: `business_ownership` decides, and it decides
- * alone.
+ * ─── LO QUE YA NO SE PUEDE EJECUTAR ─────────────────────────────────────────
  *
- * This is the «before» of every comparison in this file. It is written here,
- * and not imported from anywhere, on purpose: it is the code that is being
- * replaced, and a spec that imported the replacement would be comparing the
- * answer with itself.
- */
-async function oldIsOwner(
-  businessId: string,
-  userId: string,
-): Promise<boolean> {
-  const [row] = await ctx.db
-    .select({ id: businessOwnership.business_id })
-    .from(businessOwnership)
-    .where(
-      and(
-        eq(businessOwnership.business_id, businessId),
-        eq(businessOwnership.owner_id, userId),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
-}
-
-/**
- * The OLD `findByIdWithBusinessOwner`, verbatim: the order row AND the
- * ownership row, in the same SELECT.
+ * Este archivo comparaba la respuesta de cada llamador con la del predicado
+ * VIEJO, ejecutado contra la tabla vieja. `oldIsOwner` —línea por línea, el
+ * `BusinessesRepository.isOwner` de antes— y `oldFindByIdWithBusiness` —el
+ * `INNER JOIN` que hacía del dueño una regla de PRESENCIA— leían
+ * `business_ownership`.
  *
- * This one is here for a different reason than {@link oldIsOwner}: the JOIN
- * carried a PRESENCE rule —an order of a business with no ownership row did
- * not EXIST— and a presence rule is not a permission, so no owner predicate
- * can express it. It is written here so the change from 404 to 403 is pinned
- * and not merely described.
+ * La tabla se retiró, así que las dos mitades del «antes» ya no se pueden
+ * calcular. Lo que queda es el punto FIJO: la tabla `BEFORE` de abajo, escrita
+ * a mano cuando la comparación todavía se podía hacer, que dice cuál es la
+ * respuesta correcta para cada persona. La comparación contra esa tabla escrita
+ * es la que sigue teniendo valor: si alguien abre una puerta, se ve acá.
+ *
+ * El join viejo sigue descrito más abajo, en «la regla de presencia del
+ * pedido», y lo que se afirma de él es la mitad que no necesita la tabla vieja:
+ * que hoy el pedido de un negocio sin dueño es un 403 y no un 404.
  */
-async function oldFindByIdWithBusiness(orderId: string): Promise<boolean> {
-  const [row] = await ctx.db
-    .select({ order: ordersTable })
-    .from(ordersTable)
-    .innerJoin(businessesTable, eq(ordersTable.business_id, businessesTable.id))
-    .innerJoin(
-      businessOwnership,
-      eq(ordersTable.business_id, businessOwnership.business_id),
-    )
-    .where(eq(ordersTable.id, orderId))
-    .limit(1);
-  return Boolean(row);
-}
 
 // ─── LOS LLAMADORES ──────────────────────────────────────────────────────────
 
@@ -506,19 +475,14 @@ describe('una sola respuesta a «¿esto es mi negocio?» (DB real)', () => {
         for (const persona of PERSONAS) {
           const user = f[persona];
 
-          // EL ANTES: el predicado viejo, ejecutado contra la tabla vieja.
-          const before = (await oldIsOwner(f.businessId, user.id))
-            ? ('allowed' as Answer)
-            : ('denied' as Answer);
-
-          // Y lo que la tabla dice que era la respuesta: para que la
-          // comparación tenga un punto fijo y no sea sólo «las dos coinciden».
-          expect(before, `el «antes» de ${persona}`).toBe(BEFORE[persona]);
-
-          // EL DESPUÉS: el llamador, con la base de verdad.
+          // EL DESPUÉS: el llamador, con la base de verdad, comparado con el
+          // PUNTO FIJO —lo que la tabla `BEFORE` dice que era la respuesta,
+          // escrita a mano cuando la comparación contra el predicado viejo
+          // todavía se podía hacer—. La comparación tiene un punto de partida
+          // escrito, y no sólo «las dos coinciden».
           const after = await site.ask(user, f);
 
-          expect(after, `${site.name} para ${persona}`).toBe(before);
+          expect(after, `${site.name} para ${persona}`).toBe(BEFORE[persona]);
         }
       });
     }
@@ -689,13 +653,15 @@ describe('una membresía que no está viva no abre ni la puerta de su dueño', (
       for (const state of ['disabled', 'deleted'] as const) {
         const f = await fixtureWithDeadOwner(state);
 
-        // EL HECHO: la fila de dueño sigue en `business_ownership` —la puerta
-        // vieja la habría dejado pasar— pero la membresía no está viva, así
-        // que el rol que contesta la base es `null`.
+        // EL HECHO: la membresía de dueño no está viva, así que el rol que
+        // contesta la base es `null` y la puerta es de dueño vivo.
+        //
+        // La fila de propiedad que la puerta vieja leía se retiró con la
+        // tabla: hoy no hay una segunda fuente que diga que esta persona era
+        // la dueña, y la que hay —la membresía— dice que no.
         expect(
           await businessesRepository.roleOf(f.businessId, f.owner.id),
         ).toBeNull();
-        expect(await oldIsOwner(f.businessId, f.owner.id)).toBe(true);
 
         let caught: unknown;
         try {
@@ -713,21 +679,18 @@ describe('una membresía que no está viva no abre ni la puerta de su dueño', (
 });
 
 describe('la regla de presencia del pedido: 404 → 403', () => {
-  test('un pedido de un negocio SIN fila en business_ownership: el join viejo no lo veía, y ahora es 403 y no 404', async () => {
+  test('un pedido de un negocio SIN dueño vivo: ahora es 403 y no 404', async () => {
     const consumerId = await seedProfile(ctx.db);
     const ownerId = await seedProfile(ctx.db);
     const strangerId = await seedProfile(ctx.db);
 
-    // Un negocio SIN fila de dueño: sin `business_ownership` y sin membresía
-    // viva. Es un estado que la API no produce —`insert` escribe las dos filas
-    // en la misma transacción—, pero era la regla de presencia del join viejo.
+    // Un negocio SIN dueño vivo: sin membresía viva. Es un estado que la API
+    // no produce —`insert` escribe la membresía en la misma transacción—, pero
+    // era la regla de presencia del join viejo.
     const business = await seedBusiness(ctx.db, ownerId, {
       verification_status: 'approved',
       owner_membership: false,
     });
-    await ctx.db
-      .delete(businessOwnership)
-      .where(eq(businessOwnership.business_id, business.id));
     const location = await seedLocation(ctx.db, business.id);
     const offer = await seedOffer(ctx.db, business.id, location.id, {
       stock: 5,
@@ -737,9 +700,10 @@ describe('la regla de presencia del pedido: 404 → 403', () => {
     });
 
     // EL ANTES: el `INNER JOIN` contra la fila de dueño. Sin esa fila el pedido
-    // NO EXISTÍA —404— y no había ningún permiso que decidir.
-    expect(await oldFindByIdWithBusiness(order.id)).toBe(false);
-
+    // NO EXISTÍA —404— y no había ningún permiso que decidir. Esa mitad ya no
+    // se puede ejecutar —la tabla que el join leía se retiró—, pero la de
+    // ahora sí, y es la que importa.
+    //
     // EL DESPUÉS: el pedido existe, y el permiso se decide aparte. Un 403 dice
     // «no puedes»; un 404 diría «no existe», que es otra verdad.
     const stranger: AuthUser = {

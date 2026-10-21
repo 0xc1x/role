@@ -53,158 +53,195 @@ Medido antes de escribir nada: 16 owners en 16 negocios distintos, ninguno con d
 Esta lista es el contrato de cierre del Plan 2: lo que este plan dejó abierto, con el
 archivo donde se ve. Lo que no está acá está resuelto y sellado.
 
+> **[cerrado por el Plan 3 — 2026-10-21]** Los veintidós ítems tienen destino: **diez
+> cerrados** (nueve por tareas del Plan 3, uno ya cerrado antes), **doce diferidos** con
+> su razón escrita, y **ninguno omitido**. Cada fila dice **quién** lo cerró y **cómo
+> se verificó** — y la columna «tarea» se contrastó contra el árbol, no contra el informe de
+> la tarea: un informe que dice «cerrado» no es evidencia. La tabla con la auditoría
+> completa, con las tres columnas, está en el **Plan 3**
+> (`docs/superpowers/plans/2026-10-21-business-scope-transfer-and-retirement.md`,
+> «La auditoría de herencia») y el detalle del addendum §B del **ADR-0013**.
+
 **Lo que ya estaba en la lista del brief**
 
 1. **`getBusinessesByOwnerId` y el `drop table public.business_ownership` con sus 19
-   policies.** El único consumidor que todavía lee la tabla vieja está en el móvil:
+   policies.** El único consumidor que todavía leía la tabla vieja estaba en el móvil:
    `apps/mobile/src/features/business/data/repository.ts:352`
    (`getBusinessesByOwnerId`, llamado desde `apps/mobile/src/features/business/hooks.ts:27`).
-   Plan 3 lo migra al modelo de membresías **primero**, y recién ahí la tabla se dropea.
+   **CERRADO — Tasks 8 y 10 del Plan 3.** El móvil lee `business_members`
+   (`user_id`, `role='owner'`, `status='active'`, `deleted_at is null`) y deduplica los
+   ids; la tabla se cayó en `20261021005034_drop_business_ownership.sql`. **Verificado
+   en la base viva el 2026-10-21:** `to_regclass('public.business_ownership')` → `NULL`,
+   **0** policies que la nombran, **0** funciones que la nombran.
 2. **El acantilado de performance**, con su eje por negocio: ~328 µs por fila en el camino
    de miembro. Medido y escrito en `supabase/migrations/README.md`.
+   **DIFERIDO — el Plan 3 no optimiza ese costo.** El lever es el costo por fila del
+   helper, y no urge antes de que un negocio se acerque a 1.000 pedidos. Lo que el Plan 3
+   sí dejó anotado: el helper nuevo se llama **una vez por fila de policy**, no una vez
+   por fila de la tabla.
 3. **El `Seq Scan on orders`** dentro del subplan hasheado de la policy de `profiles`,
    que ignora `idx_orders_user`.
+   **DIFERIDO — es un eje de tabla, medido y anotado.** El Plan 3 no cambia la forma de
+   la policy de `profiles` más que por el predicado que ya usaba.
 4. **El guard que compara `BUSINESS_PLAN_LIMITS` contra los triggers**
    (`apps/api/src/database/security/plan-limits.db.spec.ts`), que pasa a ser la **única**
    costura entre el número que ve el dueño y el que aplica el motor. Se vuelve más
    importante, no menos: el Plan 2 agrego una segunda fuente de plan —la feature
    `staff_access`— que también vive en el catálogo de TypeScript.
+   **YA CERRADO ANTES DEL PLAN 3, Y SIGUE VERDE.** El Plan 3 **no toca el catálogo de
+   planes**, así que el guard tiene que seguir verde; verificado en el cierre del Plan 3
+   (2026-10-21), con la suite del API completa en verde sobre este punto.
 5. **El QUINTO lector de `business_ownership`** —los otros cuatro son `aggregateSelect`,
    `insert`, `countRetained` y `announcements.ownerIdsForBusinesses`, y ninguno es una
    comprobación de permiso—:
    `apps/api/src/modules/notifications/notification.handlers.ts:36-39` hace un `INNER JOIN`
-   contra la tabla como REGLA DE PRESENCIA. Un negocio sin fila de propiedad devuelve cero
-   filas, el `if (!row) return;` se come el handler entero y NO SE AVISA NI AL CONSUMIDOR NI
-   AL NEGOCIO: sin error y sin log. Plan 3 tiene que moverlo al modelo de membresías
-   ANTES de dropear la tabla; si no, todas las push del negocio mueren en silencio. El test
-   que pinan el comportamiento de hoy está en `notification.handlers.spec.ts` —«un negocio SIN
-   fila en `business_ownership` no notifica a nadie»— y es el que tiene que cambiar cuando
-   el lector se mueva.
+   contra la tabla como REGLA DE PRESENCIA. Un negocio sin fila de propiedad devolvía cero
+   filas, el `if (!row) return;` se comía el handler entero y NO SE AVISA NI AL CONSUMIDOR
+   NI AL NEGOCIO: sin error y sin log.
+   **CERRADO — Task 9 del Plan 3, con el cambio deliberado del test que lo pinneaba.**
+   La regla de presencia pasó de «el negocio tiene una fila de `business_ownership`» a
+   «el negocio tiene un **dueño vivo**» (`role='owner'` ∧ `status='active'` ∧
+   `deleted_at is null`), y el test que lo pineaba **cambió de nombre y de fixture**, y
+   son **dos** tests: «un negocio SIN dueño vivo no notifica a nadie» y «un negocio con
+   dueño vivo notifica, aunque no tenga la fila vieja».
 
-**Lo que este plan agregó y todavía está abierto**
+**Lo que este plan agregó y todavía estaba abierto**
 
-6. **La transferencia de propiedad NO EXISTE, y por eso un dueño no puede irse.** Es el
-   ítem de mayor prioridad de Plan 3 y es un **hueco de producto**, no limpieza. Con el
-   dueño inmutable (`20261020052915_owner_cannot_be_demoted.sql` y
-   `apps/api/src/modules/staff/staff.service.ts:439-443`), un dueño **—de un negocio
-   activo o no—** **no puede borrar su cuenta por ninguna vía**: `DELETE /auth/account`
-   contesta 409 (`apps/api/src/modules/auth/auth.service.ts:691-746`), degradarse contesta
-   422/R0002, y darse de baja o pausarse también. La puerta cuenta membresías de dueño
-   **vivas** (`countRetained`,
-   `apps/api/src/modules/auth/auth-account.repository.ts:112-121`) y **no mira
-   `businesses.is_active`**: desactivar el negocio **no** abre la salida, y borrarlo
-   tampoco —la cascada `business_members_business_id_fkey` dispara el trigger del dueño
-   con `R0002`. El addendum §A.2 del ADR-0013 lo dice entero.
-   Mientras la transferencia no exista, un dueño que quiere dejar su negocio no tiene
-   salida: o se queda, o resuelve el caso por fuera de la API.
+6. **La transferencia de propiedad NO EXISTE, y por eso un dueño no puede irse.**
+   **CERRADO — Tasks 3 y 4 del Plan 3.** La operación de base es
+   `public.transfer_business_ownership(business_id, member_id)`
+   (`20261020163244_ownership_transfer.sql`; el cerrojo, en
+   `20261020174431_ownership_transfer_concurrency.sql`), y la puerta es
+   `POST /businesses/:businessId/ownership/transfer`
+   (`apps/api/src/modules/staff/ownership.controller.ts`). El invariante «un negocio
+   activo tiene un dueño vivo» es un `CONSTRAINT TRIGGER … DEFERRABLE INITIALLY DEFERRED`
+   sobre `business_members`, y no un `BEFORE`: la degradación y la promoción tienen que
+   ser **dos sentencias** —el índice parcial `business_members_one_owner_per_business`
+   comprueba fila por fila, así que en una sola el orden no está garantizado y la
+   promoción puede chocar con un `23505`—, y un `BEFORE` vería el estado intermedio y
+   negaría una transferencia legítima.
 7. **Un dueño legacy que sólo vive en `business_ownership` todavía borra su cuenta en
-   silencio.** La puerta del borrado lee `owner_memberships`, y ese número sale de
-   `business_members` y de **nada más**
-   (`apps/api/src/modules/auth/auth-account.repository.ts:99-131`). `businesses` —el conteo
-   de `business_ownership`— alimenta sólo la rama de `anonymise`, nunca la del 409. Un
-   dueño cuya fila de propiedad no tenga fila de membresía obtiene `owner_memberships = 0`,
-   no hay 409, y la cuenta se anonimiza dejando `business_ownership.owner_id` apuntando a
-   un perfil recién anonimizado: el negocio queda sin nadie que lo administre, en silencio.
-   **Verificado contra la base viva el 2026-10-20: hoy NO hay ninguna fila así** —16 filas
-   en `business_ownership`, 16 membresías de dueño vivas, 0 y 0 en los dos cruces—, así que
-   el daño es **latente**, no de datos perdidos hoy. Sigue siendo un riesgo vivo en
-   cuanto exista una fila de esas (una creada antes del backfill del Plan 1, o por un
-   camino que escriba la tabla vieja sin la membresía). Plan 3 lo cierra con un backfill.
+   silencio.**
+   **CERRADO — Task 5 del Plan 3. EL BACKFILL NO SE HACE:** medido, hay **0** filas en
+   ese estado (0 `business_ownership` sin membresía, 0 membresías sin `business_ownership`),
+   así que no hay nada que rellenar y no se inventa un backfill. Lo que se cierra es el
+   **camino**: la puerta del borrado (`countRetained`) cuenta **sólo dueños de negocios
+   ACTIVOS** —el join con `businesses.is_active` es lo que convierte el número en la
+   puerta—, y `anonymise` llama a `public.release_business_ownership` **antes** de
+   archivar las membresías, porque la función exige que el actor sea el dueño **VIVO**.
+   (La fila de `business_ownership` que `anonymise` borraba ya no existe: la tabla se
+   cayó en la Task 10.)
 8. **La combinación de «vencida» está duplicada en TypeScript.**
-   `apps/api/src/database/business-membership.ts:87-98` (`sessionInsidePromise`) escribe la
-   COMBINACIÓN de las dos mitades —`ttl = 0` OR `sello is not null AND expira >= now()`—
-   en el `.ts`. La **aritmética** sí es de la base
-   (`public.business_member_session_expires_at`), y el guard de catálogo lee
-   `pg_proc.prosrc` (`apps/api/src/database/security/plan-limits.db.spec.ts`), así que
-   **no puede ver un `.ts`**: una migración que cambie la definición de «vencida» en SQL
-   desincroniza la API en silencio. La mitigación concreta existe y está escrita: una
-   función SQL con los dos parámetros explícitos, como la que ya hay para `staff`.
+   **CERRADO — Task 7 del Plan 3.** La combinación —`ttl = 0` **o** (sello presente **y**
+   la fecha no pasó)— vive **una** vez, en
+   `public.business_member_session_inside_promise(ttl, last_authenticated_at)`, y
+   `apps/api/src/database/business-membership.ts` la llama. **La aritmética por separado**
+   ya era de la base; lo que se movió fue la **combinación**. Y hay un guard
+   unitario (`apps/api/src/database/business-membership.spec.ts`) que afirma que el SQL
+   que genera la API nombra la función **una** vez y **no** contiene `interval`, ni
+   `business_member_session_expires_at`, ni `now()`, ni `session_ttl_hours = 0`.
+   **Una mutación del instante del borde (`>= now()` → `> now()`) es INVISIBLE con el
+   código viejo y VISIBLE con el nuevo**, y la única aserción de toda la suite que la
+   atrapa es la comparación nueva contra un oráculo de TypeScript independiente.
 9. **`R0001` ahora cubre DOS negativas distintas**: el tope de plan (los triggers) y la
-   entitlement `staff_access` (la API, `staff.service.ts:1235-1244`). El panel conoce una
-   sola respuesta de plan y eso es lo que se quiso, pero el código ya no dice *por qué*
-   se negó: la UI tiene que leer el `detail`, que es prosa, para distinguir «te pasaste de
-   miembros» de «tu plan no trae la feature». Si se elige `R0003` —que es lo que pidió un
-   revisor—, el cambio es de un solo lado en la API (`PG_PLAN_LIMIT` y `mapWriteError`)
-   **más el mapeo del panel**, que es donde de verdad se nota. Ver §A.3 del ADR-0013.
+   entitlement `staff_access` (la API, `staff.service.ts:1235-1244`).
+   **DIFERIDO — el Plan 3 NO adopta `R0003`.** El panel no lo conoce y el Plan 3 no toca
+   el panel. La transferencia y la liberación usan **`R0004`, un código nuevo**, así que
+   `R0001` sigue significando exactamente las dos cosas que significa hoy, y el panel no
+   tiene que aprender un código nuevo para una operación que es suya. **El costo sigue
+   vivo:** la UI tiene que leer el `detail` —que es prosa— para distinguir «te pasaste de
+   miembros» de «tu plan no trae la feature». Registrado como decisión abierta en el
+   addendum §B.7 del ADR-0013.
 
-**Lo que las revisiones marcaron «Minor» o «needs partner» y sigue abierto**
+**Lo que las revisiones marcaron «Minor» o «needs partner» y seguía abierto**
 
 10. **La contención del `manager` sólo la aplica esta API, y para las operaciones que RLS
-    concede no es una frontera.** `can_manage_location` da el negocio entero al `manager`
-    lo mismo que al `owner` (`when r.member_role in ('owner','manager') then true`,
-    verificado en la base viva el 2026-10-20), y ese helper es lo que resuelven **cuatro
-    policies de escritura**: `Members can insert own offers`,
-    `Members can update own offers` y `Members can delete own offers` (las tres con
-    `can_manage_location(business_id, business_location_id)`) y
-    `Members can update business locations` (con `can_manage_location(business_id, id)`).
-    **Un `manager` acotado a la sucursal A puede, por PostgREST, editar y borrar los
-    productos de la sucursal B y renombrar la sucursal B.** El `assertWithinReach`
-    (`staff.service.ts:938`) lo impide **en esta API y sólo en esta API**: es un predicado
-    de TypeScript, y como el móvil escribe directo a Supabase (ADR-0002), la contención del
-    §8 **no es una frontera de seguridad para esas operaciones**. A eso se suma la lectura:
-    la policy `Owners and managers view business members` deja que cualquier gerente lea
-    todos los alias del negocio, así que «un `manager` no ve los accesos de sucursales que
-    no gestiona» **no está garantizada en el cliente**. La revisión de la Task 3 lo pidió
-    antes de que el panel exista; sigue sin decidir, y el costo **no es sólo de
-    *disclosure*: es de escritura sobre el catálogo**.
+    concede no es una frontera.**
+    **CERRADO — Tasks 1 y 2 del Plan 3.** El detalle que el Plan 2 escribió era
+    «cuatro policies de escritura»; **el Plan 3 verificó que son TRECE las policies que
+    usan `can_manage_location`**, y cambió **el helper, no las trece**: la rama del rol
+    pasó de `when r.member_role in ('owner', 'manager') then true` a
+    `when r.member_role = 'owner' then true`, así que el `manager` llega a la fila por
+    la rama del alcance. Un `manager` acotado a la sucursal A **ya no puede**, por
+    PostgREST, editar ni borrar los productos de la sucursal B ni renombrarla: la
+    contención pasó a ser una frontera de **datos**, en lecturas y en escrituras. Y las
+    dos policies del roster —que el Plan 2 señalaba como «el `manager` no ve los alias
+    fuera de su alcance»— se reescribieron como «el roster que alcanzas», con el
+    requisito de rol DENTRO.
 11. **La rama de admin de plataforma de `GET /staff` no está acotada.**
-    `staff.service.ts` —el `user.role === 'admin'`— sirve el roster de **cualquier**
-    negocio a **cualquier** `app_role='admin'`, sin comprobar que el negocio exista (un id
-    desconocido contesta 200 con `[]`) y sin poder acotar el admin a los negocios que
-    supervisa. Expone el `alias`, que espeja `auth.users.email`. Está deliberadamente
-    pineado por un test, pero la revisión de la Task 4 lo dejó explícitamente «para el
-    partner»: o el panel de admin lee esto por la API (y la forma es correcta), o debería
-    leer Supabase directo como el del dueño (y la rama sobra).
+    **DIFERIDO — y el Plan 3 le AGREGÓ una puerta de escritura, no le quitó ninguna de
+    lectura.** El admin **supervisa**, no administra: leer el roster de cualquier negocio
+    es deliberado y está pineado por un test. Lo que el Plan 3 añadió es la rama de
+    admin del **alta** de accesos, que sólo se abre si el negocio **no tiene dueño
+    vivo** —y esa segunda mitad la contesta la base
+    (`public.business_live_owner_count`), no un predicado propio de la API.
 12. **El aviso de «tu dirección cambió» sigue encolándose a la dirección actual sin
-    comprobar la entregabilidad.** `apps/api/src/modules/auth/auth.service.ts` —
-    `enqueueEmailChangeNotice({ to: current.email })`. Una cuenta cuya dirección actual es
-    un alias generado encola un envío a una bandeja que no existe. No lo arregla este plan
-    porque §8 nombra los dos endpoints que rechazan el **identificador enviado**, no el
-    actual; y el rebote cae en nuestro propio dominio, no en el del negocio.
+    comprobar la entregabilidad.**
+    **DIFERIDO — y la razón es del Plan 2, no del Plan 3.** El §8 nombra los dos
+    endpoints que rechazan el **identificador enviado**, no el actual; y el rebote cae en
+    nuestro propio dominio, no en el del negocio. El Plan 3 no toca los endpoints de Auth.
 13. **La propiedad «la cascada no destruye una membresía» vive sólo en el servicio.**
-    `AuthAccountRepository.eraseAccount` (`auth-account.repository.ts:319`) no tiene guarda
-    de membresía propia: si se llamara sin la puerta, la cascada borraría una fila de
-    `staff` (el trigger sólo protege las filas de **dueño** vivas) y reciclaría el alias.
-    Hoy hay un solo llamador y está detrás de la puerta, así que es defensa en profundidad,
-    no un bug vivo.
+    **CERRADO — Task 5 del Plan 3.** `AuthAccountRepository.eraseAccount` **ganó su
+    propia guarda**: si la cuenta tiene alguna membresía —viva o ya cerrada— la cierra y
+    **no** borra el perfil, porque borrarlo se la llevaría por la cascada
+    (`business_members.user_id` es `ON DELETE CASCADE` desde `profiles`) y con ella el
+    alias, que el índice único no libera a propósito. La rama es defensa en profundidad:
+    la puerta manda igual a `anonymise`.
 14. **El borrado archiva la membresía pero no sus filas de alcance.**
-    `auth-account.repository.ts:237` (`anonymise`) escribe `deleted_at` en
-    `business_members` y **no** en `business_member_locations`, que el §8 sí pide («marca
-    `deleted_at` en `business_members` y en sus filas de `business_member_locations`»). Las
-    dos tablas quedan discrepando sobre qué significa `deleted_at`.
-15. **El servicio escribe `role: 'staff'` explícitamente** (`staff.service.ts:310` y `:367`),
-    así que el default de la columna —que el contrato dice que es «la única copia de esa
-    decisión»— es una segunda copia.
-16. **El 404 «Negocio no encontrado» es inalcanzable** (`staff.service.ts:319`):
-    `requireActor` corre antes y rechaza a cualquiera que no tenga membresía en un negocio
-    que no existe. El test que lo cubre pasa porque los mocks dan una membresía en un
-    negocio inexistente, un estado imposible.
-17. **La compensación del alta es best-effort.** `staff.service.ts` —
-    `compensateCreatedUser`: si `deleteUser` falla, el `auth.users` sobrevive con el alias
-    quemado en Auth y libre en la base, y el reintento del dueño recibe un 409 «ese alias
-    ya está en uso» sin salida. El huérfano queda en el log, pero el mensaje al dueño no
-    dice «y la cuenta puede seguir existiendo».
+    **CERRADO — Task 5 del Plan 3.** `anonymise` archiva también las
+    `business_member_locations`, y `public.release_business_ownership` hace lo mismo
+    dentro de la base. Las dos tablas coinciden ahora sobre qué significa `deleted_at`:
+    una membresía archivada con su alcance vivo sigue diciendo «esta persona llegaba a
+    esta sucursal» de alguien que ya no está.
+15. **El servicio escribe `role: 'staff'` explícitamente.**
+    **DIFERIDO — el default de la columna no es una frontera.** Hoy el API y el esquema
+    coinciden (`const role = body.role ?? 'staff'`), y quitar el default sería un cambio
+    sin una decisión detrás. El Plan 3 no lo tocó.
+16. **El 404 «Negocio no encontrado» es inalcanzable.**
+    **DIFERIDO — pero el Plan 3 midió la afirmación y la encontró IMPRECISA, así que
+    queda con su forma verdadera.** `requireActor` —la puerta de las ocho rutas del
+    equipo— **nunca** lanza un 404: lanza 403 («No perteneces a este negocio»), así que
+    en esas ocho el 404 es inalcanzable. Los **dos** 404 que existen (`staff.service.ts`
+    en el alta y en `requireOwnerlessBusiness`) están en la **rama de admin de la
+    plataforma**, que **no** pasa por `requireActor`, y ahí **sí son alcanzables** y
+    **sí están probados** («un negocio que no existe es un 404 y no una membresía en la
+    nada»). El estado imposible es el del **fixture** de ese test —le da una membresía en
+    un negocio que no existe—, y el fixture es de `create`, que el Plan 3 no tocó.
+17. **La compensación del alta es best-effort.**
+    **DIFERIDO — la compensación existe** (`compensateCreatedUser` llama a
+    `deleteUser`); lo que falta es el **mensaje al dueño** («y la cuenta puede seguir
+    existiendo»), y el mensaje es de la pantalla del panel, que el Plan 3 no construye.
 18. **El alcance vacío del que llama no está documentado ni testeado.**
-    `assertWithinReach` (`staff.service.ts:939`) admite que un `manager` **sin filas de
-    alcance** cree un acceso sin alcance; el fixture del spec siempre le da
-    `[LOC_A, LOC_B]`. RLS le da el negocio entero, así que el caso es peor de lo que
-    parece.
-19. **Las nueve rutas no tienen bucket de throttler propio.** El tope global existe
-    (100/min/IP), pero `POST /businesses/:id/staff` llama `auth.admin.createUser`, que cae
-    bajo el rate limit de GoTrue. El §13 dice que «el API tiene throttler propio en las
-    rutas de gestión»; `orders` y `upload` ya lo tienen.
-20. **Un round-trip más por lectura de pedido.** `roleOf` es una segunda consulta en
-    `GET /orders/:id` (`apps/api/src/modules/orders/orders.service.ts`, `resolveAccessibleOrder`
-    y `updateStatus`). Correcto, pero son dos idas a la base por pedido.
-21. **El test del token forjado afirma sólo el status** (`staff.controller.spec.ts`), así que
-    no distingue el 401 del verificador real del 401 del stub de perfil. La afirmación es
-    cierta de hecho; la aserción no la fija.
+    **CERRADO — Task 1 del Plan 3.** La regla es explícita y está en la base, no en el
+    servicio: **sin filas de alcance no se alcanza nada, ni siquiera un acceso sin
+    alcance** —sólo el dueño lo alcanza—. Y el alcance vacío **no es «todo»**: un
+    `manager` sin alcance no lee ningún producto, ningún pedido, ninguna sucursal, y
+    tampoco inserta ni borra. Lo único que el alcance vacío alcanza es **la propia fila
+    de membresía**, por la excepción que vive en
+    `public.business_member_reaches_member` —y esa excepción concede su fila, **no un
+    recurso**: `can_manage_location` no se entera de ella.
+19. **Las nueve rutas no tienen bucket de throttler propio.**
+    **DIFERIDO.** El tope global (100/min/IP) cubre las dos rutas nuevas del Plan 3
+    (`ownership/transfer` y `ownership/restore`), y la presión sobre GoTrue viene de
+    `createUser`, que el Plan 3 **no agrega a una ruta nueva**: la recuperación crea el
+    acceso por la puerta que ya existe (`POST /businesses/:id/staff`, rama de admin).
+    Verificado en el árbol: `apps/api/src/modules/staff/` no tiene ningún decorador de
+    throttler.
+20. **Un round-trip más por lectura de pedido.**
+    **DIFERIDO — es un ítem de performance, con el mismo lever que el 2.**
+    `roleOf` es una segunda consulta en `GET /orders/:id`.
+21. **El test del token forjado afirma sólo el status.**
+    **DIFERIDO — el test viejo no se toca**, porque cambiarlo no es una decisión del
+    Plan 3. Los tests **nuevos** del Plan 3 (transfer, restore) **sí** afirman el
+    cuerpo de la respuesta y el código: «un R0004 de la base sale como un 422 con el
+    motivo, no como un 500» y «un cuerpo sin new_owner_member_id es 400 antes de tocar
+    la base».
 22. **El módulo no afirma el provider del `service_role`.**
-    `apps/api/src/modules/staff/staff.module.spec.ts` afirma `StaffService` y
-    `StaffRepository`, pero no `STAFF_AUTH_ADMIN` —que es el cliente `service_role`, la
-    razón de que el módulo exista—. Borrar ese provider deja la suite verde y la app no
-    arranca.
-
+    **DIFERIDO — y el Plan 3 no lo cambió.** `staff.module.spec.ts` sigue afirmando
+    `StaffService` y `StaffRepository`, y **no** `STAFF_AUTH_ADMIN` (verificado en el
+    árbol el 2026-10-21). Lo que el Plan 3 **sí** hizo fue **crecer** el módulo:
+    registra el controlador de la propiedad, y ahora son **exactamente tres**
+    controladores — hay un test que lo afirma.
 ### Lo que Plan 2 hereda como decisión, no como hallazgo
 
 - Los números `1/2/5/20` viven hoy en SQL y en `BUSINESS_PLAN_LIMITS`, con un guard que los

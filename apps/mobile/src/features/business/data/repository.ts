@@ -350,18 +350,33 @@ export const businessRepository = {
 	},
 
 	async getBusinessesByOwnerId(ownerId: string): Promise<Business[]> {
-		// owner_id lives in business_ownership, not on businesses. The RLS on that
-		// table is `owner_id = auth.uid()`, so a caller passing someone else's id
-		// gets an empty result instead of another tenant's businesses.
-		const { data: owned, error: ownedError } = await supabase
-			.from("business_ownership")
+		// The owner is a LIVE MEMBERSHIP, not a row in a legacy ownership
+		// table: `business_members.role = 'owner'`, `deleted_at is null` and
+		// `status = 'active'` — the same three conditions the database's own
+		// `business_member_role()` uses to decide that somebody IS the owner.
+		// The RLS on `business_members` filters by `user_id = auth.uid()`, so a
+		// caller passing someone else's id gets an empty result instead of
+		// another tenant's businesses.
+		const { data: memberships, error: membershipsError } = await supabase
+			.from("business_members")
 			.select("business_id")
-			.eq("owner_id", ownerId);
-		if (ownedError) throw toAppError(ownedError, "Error al cargar negocios");
+			.eq("user_id", ownerId)
+			.eq("role", "owner")
+			.eq("status", "active")
+			.is("deleted_at", null);
+		if (membershipsError)
+			throw toAppError(membershipsError, "Error al cargar negocios");
 
-		const ids = (owned ?? [])
-			.map((row) => (row as { business_id?: string }).business_id)
-			.filter((id): id is string => Boolean(id));
+		// One id per business: a membership read that answers with two rows
+		// for the same business (an owner who ALSO holds staff access there)
+		// must still list that business once.
+		const ids = [
+			...new Set(
+				(memberships ?? [])
+					.map((row) => (row as { business_id?: string }).business_id)
+					.filter((id): id is string => Boolean(id)),
+			),
+		];
 		if (ids.length === 0) return [];
 
 		const { data, error } = await supabase
@@ -417,9 +432,14 @@ export const businessRepository = {
 		const businessResult = await supabase
 			.from("businesses")
 			.insert({
-				// owner_id is NOT sent by the client. It lives in
-				// business_ownership and the database derives it from auth.uid()
-				// on insert, so ownership can no longer be written by a caller.
+				// owner_id is NOT sent by the client. The database derives the
+				// owner from auth.uid() on insert, so ownership can no longer be
+				// written by a caller.
+				//
+				// The owner's panel reads the live ownership MEMBERSHIP in
+				// `business_members` — see `getBusinessesByOwnerId` — and that
+				// membership is what the database trigger writes on insert. The
+				// API's alta writes it itself, in its own transaction.
 				name: input.name,
 				slug,
 				type: input.type,

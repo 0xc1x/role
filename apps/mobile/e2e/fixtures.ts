@@ -73,8 +73,8 @@ const VIEWER_IDS = {
 	consumer: TEST_USER_ID,
 	/**
 	 * The business owner. A DISTINCT id from the consumer, and that is the
-	 * point: `useBusinesses` reads `business_ownership` filtered by
-	 * `owner_id = auth.uid()`, so a fixture that reused `TEST_USER_ID` would
+	 * point: `useBusinesses` reads `business_members` filtered by
+	 * `user_id = auth.uid()`, so a fixture that reused `TEST_USER_ID` would
 	 * prove nothing about the panel's tenant scoping — it would look correct
 	 * precisely because the app and the fixture shared an id.
 	 */
@@ -1023,17 +1023,28 @@ export async function waitForBusinessShell(page: Page) {
  * not leak that mutation into the next test. Returning a fresh object per call
  * is the whole point.
  *
- * `business_ownership` is the FIRST read the panel makes and the one that
+ * `business_members` is the FIRST read the panel makes and the one that
  * decides whether the owner has a business at all: `useBusinesses` resolves
- * ids through it and returns `[]` when it is empty, which is the app's
- * "you have no business" state. Every other business read is keyed on the id
- * it hands back.
+ * ids through the owner's own LIVE membership and returns `[]` when it is
+ * empty, which is the app's "you have no business" state. Every other
+ * business read is keyed on the id it hands back.
+ *
+ * The body is a MEMBERSHIP, not an ownership row: the owner is
+ * `role = 'owner'`, `status = 'active'` and `deleted_at is null` — the same
+ * three halves the database uses to decide that somebody IS the owner.
  */
 export function businessBodies(
 	overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
 	return {
-		business_ownership: [{ business_id: BUSINESS_ID }],
+		business_members: [
+			{
+				business_id: BUSINESS_ID,
+				role: "owner",
+				status: "active",
+				deleted_at: null,
+			},
+		],
 		businesses: [businessFixture()],
 		business_locations: [businessLocationFixture()],
 		business_hours: [

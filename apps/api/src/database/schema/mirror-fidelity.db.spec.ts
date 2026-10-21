@@ -47,8 +47,6 @@ const EXPECTED: ReadonlyArray<readonly [string, string, string]> = [
   ['business_moderation', 'business_id', 'CASCADE'],
   ['business_moderation', 'verified_by', 'NO ACTION'],
   ['business_notification_preferences', 'business_id', 'NO ACTION'],
-  ['business_ownership', 'business_id', 'CASCADE'],
-  ['business_ownership', 'owner_id', 'CASCADE'],
   ['business_plans_state', 'business_id', 'CASCADE'],
   ['consumer_notification_preferences', 'user_id', 'NO ACTION'],
   ['coupons', 'business_id', 'CASCADE'],

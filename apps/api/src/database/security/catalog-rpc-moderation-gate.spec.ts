@@ -349,6 +349,28 @@ function functionDefinitions(): FunctionDefinition[] {
 
 const DEFINITIONS: FunctionDefinition[] = functionDefinitions();
 
+/**
+ * The definitions a target environment ACTUALLY HOLDS: one per function name,
+ * the last one in replay order.
+ *
+ * Una función puede redefinirse, y entonces el ledger tiene DOS cuerpos con el
+ * mismo nombre: el que se aplicó y el que lo reemplazó. Lo que corre es el
+ * último. Por eso el escaneo de las tablas gatingadas se hace sobre esta lista
+ * y no sobre `DEFINITIONS` a secas: contar dos veces la misma función daría un
+ * fallo que no dice nada del defecto que este archivo vigila.
+ *
+ * Y el modelo es el mismo que usa `latestDefinitionOf` y que la exención de
+ * la migración de ruteo: la exención vive mientras la migración sea ESTRICTAMENTE
+ * posterior a la última definición literal de ese nombre.
+ */
+function latestDefinitions(): FunctionDefinition[] {
+  const latest = new Map<string, FunctionDefinition>();
+  for (const definition of DEFINITIONS) {
+    latest.set(definition.name, definition);
+  }
+  return [...latest.values()];
+}
+
 /** The definition a target environment actually holds for a function name. */
 function latestDefinitionOf(name: string): FunctionDefinition {
   const all = DEFINITIONS.filter((d) => d.name === name);
@@ -801,6 +823,15 @@ describe('an invoker-owned body never inlines a subquery against a gated table',
     // disambiguates it, exactly as enable-rls.rls.db.spec.ts pins 39/39 beside
     // its empty set.
     const referencing = DEFINITIONS.filter((d) => readsGatedTable(d.body));
+
+    // El escaneo cubre TODAS las migraciones, para siempre, así que una
+    // función redefinida aparece DOS veces: una por cuerpo. Lo que se afirma
+    // es sobre los NOMBRES —que el ledger siga nombrando una tabla gatingada
+    // en estas seis funciones, y cuántas de ellas son invoker-owned—, porque
+    // un nombre repetido no dice nada del defecto que este archivo vigila.
+    const referencingNames = [
+      ...new Set(referencing.map((d) => d.name)),
+    ].sort();
     // `bootstrap_business_companions` is deliberately NOT in either list, and
     // the reason is worth keeping in the file: it names both companion tables,
     // but it WRITES them (`insert into public.business_moderation ...`), under
@@ -812,7 +843,7 @@ describe('an invoker-owned body never inlines a subquery against a gated table',
     // counting it here would have widened the scan to cover a failure mode that
     // cannot occur — and the next author would have had to work out whether to
     // exempt it.
-    expect(referencing.map((d) => d.name).sort()).toEqual([
+    expect(referencingNames).toEqual([
       'active_businesses_near',
       'active_offer_category_counts',
       'active_offers_near',
@@ -823,10 +854,9 @@ describe('an invoker-owned body never inlines a subquery against a gated table',
     // And the shape that made the split: the same subquery, sound under an
     // owner and fatal under a caller.
     expect(
-      referencing
-        .filter((d) => d.definer)
-        .map((d) => d.name)
-        .sort(),
+      [
+        ...new Set(referencing.filter((d) => d.definer).map((d) => d.name)),
+      ].sort(),
     ).toEqual(['business_is_approved', 'notify_business_pending']);
   });
 

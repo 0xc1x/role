@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import postgres, { type Sql } from 'postgres';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import {
   BUSINESS_FEATURES,
   BUSINESS_PLAN_FEATURES,
@@ -13,6 +15,8 @@ import {
   splitStatements,
   type SupabaseTestDb,
 } from '../../../test/supabase-platform';
+import { liveMembership } from '../business-membership';
+import { PROMISE_CASES, promiseAnswers } from '../../../test/session-promise';
 
 /**
  * Las tres tablas de acceso por sucursal y su perímetro, antes de que exista una
@@ -72,23 +76,25 @@ import {
  * migración. Lo que sí se mide es la forma en que la tabla nace, que es la única
  * mitad de esa garantía que depende de este DDL y no de la siguiente.
  *
- * ─── EL BACKFILL, Y POR QUÉ ESTE ARCHIVO LO EJECUTA DE SU PROPIO LEDGER ─────
+ * ─── EL DUEÑO DE UN NEGOCIO NUEVO, Y POR QUÉ NO SE MIDE POR SU BACKFILL ────
  *
- * El backfill es un cambio de DATOS, y los datos del ledger no llegan al replay:
- * los seeds de `auth.users` y de negocios son dos de las cuatro migraciones que
- * `KNOWN_REPLAY_FAILURES` declara irreproductibles, así que la base de prueba
- * empieza con cero filas en `business_ownership`. Una aserción de la forma
- * "todo dueño es un miembro owner" sobre ESA base es cierta antes y después del
- * backfill, y no distinguiría una migración de un archivo vacío.
+ * El dueño de un negocio se producía por dos caminos: un backfill de DATOS que
+ * copiaba `business_ownership` a `business_members`, y un trigger que escribía
+ * la fila vieja. Los dos se fueron con la tabla: el backfill no tiene de dónde
+ * leer, y el trigger ahora escribe la membresía.
  *
- * El fixture de las dos pruebas de acá se crea DESPUÉS del replay, y por eso el
- * backfill tiene que correr dentro de la prueba para alcanzarlo: se ejecuta
- * LEYÉNDOSE del archivo del ledger y con el mismo `splitStatements` que usa el
- * replay. Una copia del SQL pegada en la prueba probaría que la copia funciona,
- * y un día el archivo y la copia divergirían sin que nada se enterara.
- * `on conflict ... do nothing` es lo que hace posible esto: correr el backfill
- * dos veces sobre el mismo fixture es la operación que la migración promete
- * soportar, no un truco del test.
+ * Y el backfill era, además, un cambio de DATOS que los datos del ledger no
+ * traían al replay: los seeds de `auth.users` y de negocios son dos de las
+ * cuatro migraciones que `KNOWN_REPLAY_FAILURES` declara irreproductibles, así
+ * que la base de prueba nacía con cero filas en `business_ownership`. Una
+ * aserción de la forma "todo dueño es un miembro owner" sobre ESA base era
+ * cierta antes y después del backfill, y no distinguía una migración de un
+ * archivo vacío.
+ *
+ * Lo que queda es la pregunta de verdad —¿un negocio nuevo tiene dueño?— y la
+ * respuesta la da el trigger, que es lo que la produce para siempre. Se mide
+ * por el CAMINO REAL: un `insert` como `authenticated`, con el JWT del dueño,
+ * que es lo que hace el móvil.
  */
 
 let ctx: SupabaseTestDb;
@@ -172,12 +178,11 @@ async function rolledBack(
   return refusal;
 }
 
-// ─── EL FIXTURE DEL BACKFILL ────────────────────────────────────────────────
+// ─── EL FIXTURE ─────────────────────────────────────────────────────────────
 //
 // TRES negocios y DOS dueños, sembrados por el camino real de la plataforma
 // —`auth.users`, y el trigger `on_auth_user_created` escribe el `profiles` que
-// `business_ownership.owner_id` exige— y una fila de `business_ownership` por
-// negocio.
+// `business_members.user_id` exige—.
 //
 // Tres y no uno porque "exactamente una fila" necesita un denominador mayor de
 // uno: con un solo dueño, un backfill que duplicara y otro que borrara darían el
@@ -240,19 +245,6 @@ function seedId(prefix: string, businessId: string): string {
 }
 
 /**
- * Suffix del archivo del ledger, sin versión: el timestamp lo asigna el servidor
- * al aplicar la migración, así que nombrarlo acá con la versión sería una
- * constante que hay que reescribir cada vez que la migración se re-sella.
- */
-const BACKFILL_SUFFIX = '_backfill_business_members.sql';
-
-/**
- * Sufijo del archivo que quita el TTL a las filas del backfill, sin versión, por
- * la misma razón que `BACKFILL_SUFFIX`: el timestamp lo asigna el servidor.
- */
-const SESSION_FIX_SUFFIX = '_owner_memberships_no_session_expiry.sql';
-
-/**
  * Walks up until it finds `supabase/migrations`, for the reason
  * `catalog-rpc-moderation-gate.spec.ts` gives at length: a fixed `..` count is
  * right for `src/` and wrong for the compiled copy under `dist/src/`, and a
@@ -302,48 +294,6 @@ function ledgerStatements(suffix: string, what: string): string[] {
   return splitStatements(readFileSync(join(dir, file), 'utf8'));
 }
 
-function backfillStatements(): string[] {
-  return ledgerStatements(BACKFILL_SUFFIX, 'The backfill this file asserts');
-}
-
-/**
- * Las sentencias de la migración que pone `session_ttl_hours = 0` en las filas
- * que produjo el backfill.
- *
- * Se lee del ledger por la misma razón que el backfill, y por eso este archivo
- * prueba el PAR de archivos que producción corrió y no dos piezas sueltas: el
- * backfill solo deja a 16 dueños vencidos, y el arreglo solo no arregla nada.
- */
-function sessionFixStatements(): string[] {
-  return ledgerStatements(
-    SESSION_FIX_SUFFIX,
-    'The session fix this file asserts',
-  );
-}
-
-/**
- * Corre un archivo del ledger y lo COMMITEA, como hizo `apply_migration`.
- *
- * Una transacción para el archivo entero, como la transacción por archivo del
- * replay: una migración a medio aplicar es un estado contra el que nadie debería
- * afirmar nada.
- */
-async function runLedger(statements: string[]): Promise<void> {
-  await ctx.sql.begin(async (tx) => {
-    for (const statement of statements) {
-      await tx.unsafe(statement);
-    }
-  });
-}
-
-async function applyBackfill(): Promise<void> {
-  await runLedger(backfillStatements());
-}
-
-async function applySessionFix(): Promise<void> {
-  await runLedger(sessionFixStatements());
-}
-
 beforeAll(async () => {
   ctx = await createSupabaseTestDb();
 
@@ -365,18 +315,14 @@ beforeAll(async () => {
          on conflict (id) do nothing`,
       );
     }
-    // `business_ownership` se siembra a mano porque el trigger que lo escribe
-    // (`trg_set_business_owner_from_jwt`) guarda con `(select auth.uid()) is not
-    // null`, y esta transacción es la dueña del esquema sin JWT. Medido, no
-    // supuesto: es lo mismo que hace `businesses.rls.db.spec.ts`.
-    for (const business of BUSINESSES) {
-      const owner = OWNERS[business.owner] as (typeof OWNERS)[number];
-      await tx.unsafe(
-        `insert into public.business_ownership (business_id, owner_id)
-         values ('${business.id}', '${owner.id}')
-         on conflict (business_id) do nothing`,
-      );
-    }
+    // ─── LO QUE YA NO SE SIEMBRA ─────────────────────────────────────────────
+    //
+    // La fila de `business_ownership` que este bloque sembraba a mano (porque
+    // el trigger que la escribía guardaba con `(select auth.uid()) is not
+    // null`, y esta transacción es la dueña del esquema sin JWT) ya no se
+    // siembra: la tabla se retiró, y el dueño de un negocio ahora es una fila
+    // de `business_members`. La que produce el trigger se mide en su propio
+    // bloque, por el camino real del móvil.
 
     // UNA sucursal por negocio, y no por decoración: `can_manage_location`
     // comprueba que la sucursal exista y sea del negocio ANTES de mirar la
@@ -625,287 +571,160 @@ describe('las tres tablas de staff nacen cerradas', () => {
   });
 });
 
-describe('el backfill de dueños', () => {
+describe('el dueño de un negocio nuevo', () => {
   /**
-   * How many `business_members` rows the seeded owners hold right now.
+   * El alta del móvil, medida por el CAMINO REAL.
    *
-   * Read over the fixture's own businesses rather than with a global count: the
-   * three tables above it are asserted on their SCHEMA, and a global count would
-   * couple those tests to whatever the backfill test has already written.
+   * La membresía de dueño no la escribe el API —que la escribe él mismo, en su
+   * propia transacción— ni el móvil —que no puede: la RLS de `business_members`
+   * no tiene policy de escritura, y un `insert` desde el cliente se come un
+   * `42501`—. La escribe el TRIGGER `trg_bootstrap_business_companions`, que
+   * corre AFTER INSERT sobre `businesses`.
+   *
+   * Y esto se mide por el camino real y no llamando al trigger a mano: un
+   * `insert` sobre `public.businesses` como `authenticated`, con el JWT del
+   * dueño, que es exactamente lo que PostgREST hace cuando el móvil registra un
+   * negocio. Un trigger que se llamara a mano probaría que el trigger existe;
+   * esto prueba que el ALTA deja al dueño con su negocio.
+   *
+   * ─── POR QUÉ ESTE BLOQUE SUSTITUYE AL DEL BACKFILL ────────────────────────
+   *
+   * El backfill era una migración de DATOS que copiaba `business_ownership` a
+   * `business_members`. Con la tabla vieja retirada, ese backfill no tiene de
+   * dónde leer: su archivo sigue en el ledger —es historia, y el replay lo
+   * ejecuta antes de la retirada— pero no se puede volver a correr, y una
+   * prueba que lo correra midiendo un contrato que ya no existe.
+   *
+   * Lo que queda en su lugar es la pregunta de VERDAD: ¿un negocio nuevo tiene
+   * dueño? Y la respuesta no la da un archivo de datos sino el trigger, que es
+   * lo que la produces para siempre.
    */
-  function seededMemberRows(): Promise<number> {
-    return as(ctx.sql, 'service_role', null, (tx) =>
-      tx
-        .unsafe<{ n: number }[]>(
-          `
-          select count(*)::int as n from public.business_members m
-          where m.business_id in (${BUSINESSES.map((b) => `'${b.id}'`).join(', ')})`,
-        )
-        .then((rows) => plainRows(rows)[0]?.n ?? -1),
-    );
-  }
+  const MOBILE_OWNER = 'e3000000-0000-4000-8000-000000000001';
+  const MOBILE_EMAIL = 'owner-movil@rls-business-members.test';
+  const MOBILE_SLUG = 'rls-business-members-movil';
 
-  test('todo dueño de business_ownership es un miembro owner', async () => {
-    // Anti-vacuity first, and it is two assertions in one: the fixture exists,
-    // and the backfill has not touched it yet. Without the second, `n = 0` is
-    // also what a ledger where the backfill inserts nothing reports, and this
-    // file would be green against a migration that moves nobody. This is why the
-    // test seeds its own owners rather than trusting the replay: the replayed
-    // database has zero `business_ownership` rows, because the two seed
-    // migrations that would have carried them are the documented, irreproducible
-    // ones in `KNOWN_REPLAY_FAILURES`.
-    const owners = await as(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe<{ n: number }[]>(
-        `select count(*)::int as n from public.business_ownership o
-         where o.business_id in (${BUSINESSES.map((b) => `'${b.id}'`).join(', ')})`,
+  let mobileBusinessId: string;
+
+  beforeAll(async () => {
+    // El `profiles` lo escribe el trigger `on_auth_user_created`, y la
+    // membresía del dueño lo exige por FK (`business_members.user_id` →
+    // `profiles(id)`). Un dueño sin perfil no es un dueño.
+    await ctx.sql.unsafe(
+      `insert into auth.users (id, email) values ('${MOBILE_OWNER}', '${MOBILE_EMAIL}')
+       on conflict (id) do nothing`,
+    );
+
+    // El alta, como el móvil la hace: `insert` y nada más. Sin `returning`,
+    // porque `RETURNING` se evalúa bajo las policies de lectura y la fila
+    // recién creada todavía no la ve nadie.
+    await as(ctx.sql, 'authenticated', MOBILE_OWNER, (tx) =>
+      tx.unsafe(
+        `insert into public.businesses (name, type, slug)
+         values ('Negocio del móvil', 'restaurant', '${MOBILE_SLUG}')`,
       ),
     );
-    expect(
-      plainRows(owners)[0]?.n,
-      'el fixture de dueños no está en la base, así que "todo dueño es miembro" ' +
-        'es cierto porque no hay dueños.',
-    ).toBe(BUSINESSES.length);
-    expect(
-      await seededMemberRows(),
-      'el backfill ya corrió sobre este fixture antes de tiempo: el test que ' +
-        'sigue no va a poder distinguir una migración que funciona de una que no ' +
-        'inserta nada.',
-    ).toBe(0);
 
-    await applyBackfill();
-
-    const orphans = await as(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe<{ n: number }[]>(`
-      select count(*)::int as n from public.business_ownership o
-      where not exists (
-        select 1 from public.business_members m
-        where m.business_id = o.business_id
-          and m.user_id = o.owner_id
-          and m.role = 'owner'
-          and m.deleted_at is null
-      )`),
+    const rows = plainRows(
+      await ctx.sql.unsafe<{ id: string }[]>(
+        `select id::text from public.businesses where slug = '${MOBILE_SLUG}'`,
+      ),
     );
-    expect(orphans[0].n).toBe(0);
-
-    // Y el otro lado de "exactamente una": cero es lo que dice que ningún dueño
-    // se quedó atrás, y no dice nada de que no haya también filas de más. Un
-    // backfill que duplicara por el `join` a `businesses` pasaría el `orphans`.
-    expect(
-      await seededMemberRows(),
-      'el backfill produjo más de una fila de miembro por dueño, o menos de una. ' +
-        'El conteo tiene que ser exactamente el de los dueños sembrados, y son ' +
-        `${BUSINESSES.length} negocios y no ${OWNERS.length} dueños: el dueño ` +
-        'repetido tiene que producir una fila por negocio.',
-    ).toBe(BUSINESSES.length);
+    mobileBusinessId = rows[0]?.id ?? '';
   });
 
-  test('el miembro owner lleva el alias del correo y el label del negocio', async () => {
-    await applyBackfill();
+  test('el trigger crea la membresía de dueño del negocio nuevo', async () => {
+    const members = plainRows(
+      await ctx.sql.unsafe<
+        {
+          user_id: string;
+          role: string;
+          status: string;
+          alias: string;
+          ttl: number;
+          deleted: string | null;
+        }[]
+      >(
+        `select user_id::text, role::text, status::text, alias,
+                session_ttl_hours as ttl, deleted_at::text as deleted
+           from public.business_members
+          where business_id = '${mobileBusinessId}'`,
+      ),
+    );
 
-    // El `alias` es lo que la persona teclea y espeja `auth.users.email`: un
-    // backfill que lo dejara vacío o duplicado no rompe una constraint visible,
-    // rompe el acceso. Y el `label` del dueño es el NOMBRE DEL NEGOCIO, no el de
-    // una persona: en la UI esa fila representa al dueño, no a un humano con
-    // nombre.
+    // UNA fila, y es la del dueño: el que tiene `auth.uid()` en el `insert`.
     //
-    // Y el dueño repetido aparece DOS veces con el MISMO alias, que es lo
-    // correcto y no una excepción: el alias único es por negocio, así que un
-    // dueño en dos negocios son dos accesos. Contra el índice global esto no
-    // llegaba ni a la aserción.
-    const rows = await as(ctx.sql, 'service_role', null, (tx) =>
-      tx
-        .unsafe<
-          { business_id: string; role: string; label: string; alias: string }[]
-        >(
-          `
-          select business_id, role::text, label, alias
-          from public.business_members
-          where business_id in (${BUSINESSES.map((b) => `'${b.id}'`).join(', ')})
-          order by business_id`,
-        )
-        .then((r) => plainRows(r)),
-    );
-
-    expect(
-      rows.map((m) => ({
-        business_id: m.business_id,
-        role: m.role,
-        label: m.label,
-        alias: m.alias,
-      })),
-    ).toEqual(
-      BUSINESSES.map((business) => ({
-        business_id: business.id,
+    // El `alias` es el correo del dueño —como el backfill— y no un código de
+    // equipo: el dueño es una persona con una bandeja. El TTL es 0 —como
+    // `20261016022631` dejó los 16 dueños reales— porque un dueño no es una
+    // tablet compartida y su sesión no vence.
+    expect(members).toEqual([
+      {
+        user_id: MOBILE_OWNER,
         role: 'owner',
-        label: business.name,
-        alias: (OWNERS[business.owner] as (typeof OWNERS)[number]).email,
-      })),
-    );
+        status: 'active',
+        alias: MOBILE_EMAIL,
+        ttl: 0,
+        deleted: null,
+      },
+    ]);
   });
 
-  test('el backfill se puede volver a correr sin duplicar miembros', async () => {
-    await applyBackfill();
-    await applyBackfill();
-
-    // `on conflict (business_id, user_id) do nothing` es la mitad del contrato:
-    // esta migración corre una vez por máquina, pero el archivo se replayea en
-    // cada `db push` a un entorno que ya lo corrió, y una migración de datos que
-    // no es re-ejecutable convierte cada replay en un error de unicidad.
-    expect(await seededMemberRows()).toBe(BUSINESSES.length);
-  });
-
-  // ─── EL DUEÑO DEL BACKFILL TIENE QUE PODER ADMINISTRAR ─────────────────────
-  //
-  // Esta es la prueba cuya ausencia dejó pasar el defecto, y es una aparte de
-  // las tres de arriba porque las tres de arriba miden FORMA. Contaban filas,
-  // afirmaban `role`, `label` y `alias`, y afirmaban que el backfill fuera
-  // re-ejecutable. Ninguna de esas cosas dice que la fila sirva para algo, y la
-  // fila que producción se encontró —16 dueños, `ttl` 24, sin sello— era
-  // perfectamente correcta para las tres y completamente inútil para la cuarta.
-  //
-  // El defecto también era de forma, que es lo que lo hizo pasar: el `insert`
-  // del backfill nombra `(business_id, user_id, role, label, alias)` y nada más,
-  // así que cada fila heredó el `default 24` de `20261014002328:81` y nació sin
-  // `last_authenticated_at`. Un TTL sin sello es una sesión vencida por
-  // definición —la segunda mitad de la disyunción de `can_manage_location` y de
-  // `business_member_session_valid`—, y las 25 policies de `20261015015012` les
-  // negaban todo a los 16 dueños reales.
-  //
-  // Por eso la aserción es de USO y no de FORMA: que el dueño pase
-  // `can_manage_location` en su sucursal, y que modifique un horario por la
-  // policy. Afirmar el `session_ttl_hours` solo sería la forma otra vez.
-
-  test('el dueño del backfill administra su negocio, y su fila no vence', async () => {
-    const business = BUSINESSES[0] as (typeof BUSINESSES)[number];
-    const owner = OWNERS[0] as (typeof OWNERS)[number];
-    const ids = BUSINESSES.map((b) => `'${b.id}'`).join(', ');
-
-    /** The rows the owner the backfill made for itself, as the schema owner. */
-    const members = () =>
-      as(ctx.sql, 'service_role', null, (tx) =>
-        tx
-          .unsafe<{ business_id: string; ttl: number; sello: string | null }[]>(
-            `
-            select m.business_id, m.session_ttl_hours as ttl,
-                   m.last_authenticated_at::text as sello
-            from public.business_members m
-            where m.business_id in (${ids}) and m.user_id = '${owner.id}'
-            order by m.business_id`,
-          )
-          .then((rows) => plainRows(rows)),
-      );
-
-    /** The owner that the backfill makes rows for, over ITS businesses only. */
-    const ownBusinessIds = BUSINESSES.filter((b) => b.owner === 0).map(
-      (b) => b.id,
-    );
-
-    /** The one policy-level question: may this session edit the business? */
-    const editsHours = (userId: string, biz: (typeof BUSINESSES)[number]) =>
-      as(ctx.sql, 'authenticated', userId, (tx) =>
-        tx
-          .unsafe<{ id: string }[]>(
-            `update public.business_hours set open_time = '09:00'
-             where id = '${seedId('e3000000', biz.id)}'
-             returning id::text`,
-          )
-          .then((rows) => plainRows(rows).map((r) => r.id)),
-      );
-
-    await applyBackfill();
-
-    // El estado INTERMEDIO se afirma primero y por separado, porque es el que
-    // documenta el defecto: el backfill solo, sin el arreglo, deja al dueño
-    // fuera. Sin esta mitad un `applySessionFix` que no hiciera nada también
-    // daría verde en todo lo de abajo, con el permiso ya en su sitio.
-    expect(
-      (await members()).map((r) => r.ttl),
-      'el backfill no dejó al dueño repetido con un TTL por negocio. La fila se ' +
-        'identifica por negocio, no por persona: el dueño que dirige dos ' +
-        'negocios son dos accesos, y por eso el `toEqual` tiene dos elementos.',
-    ).toEqual([24, 24]);
-
-    expect(
-      await as(ctx.sql, 'authenticated', owner.id, (tx) =>
-        tx.unsafe<{ ok: boolean }[]>(
-          `select public.can_manage_location('${business.id}', '${seedId('e2000000', business.id)}') as ok`,
+  test('el dueño ve su negocio en la consulta del panel', async () => {
+    // La consulta del panel del dueño, la que hace el móvil: sus membresías de
+    // dueño, y los negocios de esos ids. Las DOS mitades, y en el MISMO rol —
+    // `authenticated`— en el que las hace el móvil.
+    const ids = plainRows(
+      await as(ctx.sql, 'authenticated', MOBILE_OWNER, (tx) =>
+        tx.unsafe<{ business_id: string }[]>(
+          `select business_id::text from public.business_members
+            where user_id = '${MOBILE_OWNER}'
+              and role = 'owner'
+              and status = 'active'
+              and deleted_at is null`,
         ),
-      ).then((rows) => plainRows(rows)[0]?.ok),
-      'un dueño con `session_ttl_hours = 24` y sin sello administra su ' +
-        'sucursal. Si esto da `true`, el backfill no nació con el TTL heredado ' +
-        'y el defecto que corrige esta migración no es el que se cree que es; el ' +
-        '`[24, 24]` de arriba es lo que lo prueba.',
-    ).toBe(false);
+      ),
+    );
+    expect(ids.map((r) => r.business_id)).toEqual([mobileBusinessId]);
 
-    expect(
-      await editsHours(owner.id, business),
-      'un dueño con TTL y sin sello dejó de editar el horario de su negocio por ' +
-        'la policy VIEJA de `business_ownership`. Esa fila está sembrada y esa ' +
-        'policy no lleva TTL, así que antes del arreglo el update tenía que ' +
-        'pasar: es la capa que sostuvo el producto mientras las 25 policies ' +
-        'nuevas le negaban todo. Si esto da `[]`, algo cambió en la capa vieja y ' +
-        'esta prueba ya no mide lo que dice medir.',
-    ).toEqual([seedId('e3000000', business.id)]);
+    const negocios = plainRows(
+      await as(ctx.sql, 'authenticated', MOBILE_OWNER, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `select id::text from public.businesses where id = '${mobileBusinessId}'`,
+        ),
+      ),
+    );
+    expect(negocios.map((r) => r.id)).toEqual([mobileBusinessId]);
+  });
 
-    // Ahora el archivo del ledger que arregla las filas, leído del ledger por la
-    // misma razón que el backfill.
-    await applySessionFix();
+  test('el alta de la API no rompe: el trigger escribe la fila y el API la vuelve a escribir sin duplicar', async () => {
+    // El API inserta el negocio y DESPUÉS la membresía del dueño, con
+    // `onConflictDoNothing()`. Con el trigger escribiendo la fila primero, lo
+    // que evita el `23505` de la única `(business_id, user_id)` es ese `on
+    // conflict`. Este bloque mide el efecto desde la base: la segunda escritura
+    // de la misma fila es un no-op, no un error.
+    const written = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `insert into public.business_members
+             (business_id, user_id, role, label, alias, status, session_ttl_hours)
+           values ('${mobileBusinessId}', '${MOBILE_OWNER}', 'owner',
+                   'Negocio del móvil', '${MOBILE_EMAIL}', 'active', 0)
+           on conflict do nothing
+           returning id::text`,
+        ),
+      ),
+    );
+    expect(written).toHaveLength(0);
 
-    // El `0` se afirma POR FILA: es la propiedad que decide, y afirmar el
-    // agregado dejaría pasar un arreglo que apagara una fila y dejara la otra en
-    // 24 — que es media corrección y un dueño más sin panel.
-    expect(
-      (await members()).map((r) => ({
-        business_id: r.business_id,
-        ttl: r.ttl,
-      })),
-      'la migración que apaga el TTL de las filas del backfill no lo apagó en ' +
-        'todas. Lo que se mide es `session_ttl_hours = 0` en CADA fila, no un ' +
-        'promedio ni un conteo: una fila que conserve el 24 sigue denegada.',
-    ).toEqual(ownBusinessIds.map((id) => ({ business_id: id, ttl: 0 })));
-
-    // Y lo que NO se hizo, afirmado para que el arreglo no pueda disfrazarse de
-    // sello. `last_authenticated_at = now()` haría pasar todo lo de arriba y
-    // volvería a vencer en 24 horas, sin que nada se note hasta el día siguiente.
-    expect(
-      (await members()).every((r) => r.sello === null),
-      'la migración selló las filas del backfill en vez de apagarles el TTL. Eso ' +
-        'es una mecha de 24 horas: el acceso vuelve ahora y se va solo mañana, ' +
-        'y hasta que exista el `POST /staff/session` del §8 nadie lo vuelve a ' +
-        'sellar. Sobre un dueño que nunca usó el flujo de personal, lo honesto ' +
-        'es `ttl = 0`: no tiene sello porque ese flujo no existe todavía.',
-    ).toBe(true);
-
-    // Y el permiso, que es la razón de todo lo anterior: el helper en la
-    // sucursal de cada negocio y la policy en el horario de cada negocio. Se
-    // recorre el fixture entero y no sólo `BUSINESSES[0]` porque el dueño se
-    // busca por negocio, y dos de los tres no son del mismo dueño: probar sólo
-    // el primero dejaría sin cubrir la fila de `OWNERS[1]`.
-    for (const biz of BUSINESSES) {
-      const bizOwner = OWNERS[biz.owner] as (typeof OWNERS)[number];
-
-      expect(
-        await as(ctx.sql, 'authenticated', bizOwner.id, (tx) =>
-          tx.unsafe<{ ok: boolean }[]>(
-            `select public.can_manage_location('${biz.id}', '${seedId('e2000000', biz.id)}') as ok`,
-          ),
-        ).then((rows) => plainRows(rows)[0]?.ok),
-        `el dueño del backfill no administra la sucursal de ${biz.id}. Esta es ` +
-          'la aserción que faltaba: las de arriba afirman la FORMA de la fila y ' +
-          'esta es lo único que dice que la fila sirva.',
-      ).toBe(true);
-
-      expect(
-        await editsHours(bizOwner.id, biz),
-        `el dueño del backfill no editó el horario de ${biz.id}. Ojo con lo que ` +
-          'esto SÍ y lo que NO demuestra: las dos generaciones de policies ' +
-          'coexisten y las dos conceden, así que un `update` que pasa no dice ' +
-          'cuál de las dos lo concedió. Lo que prueba es que el arreglo no le ' +
-          'quitó al dueño el negocio que ya tenía; que la fila nueva lo conceda ' +
-          'por sí sola lo mide el `can_manage_location` de arriba, que sólo ' +
-          'puede leer la membresía.',
-      ).toEqual([seedId('e3000000', biz.id)]);
-    }
+    // Y sigue habiendo UNA sola fila de dueño para ese negocio.
+    const count = plainRows(
+      await ctx.sql.unsafe<{ n: number }[]>(
+        `select count(*)::int as n from public.business_members
+          where business_id = '${mobileBusinessId}'
+            and role = 'owner'`,
+      ),
+    );
+    expect(count[0]?.n).toBe(1);
   });
 });
 
@@ -1003,11 +822,6 @@ describe('los helpers de permiso', () => {
          values ('${BIZ_A}', 'pro', null),
                 ('${BIZ_B}', 'pro_plus', null),
                 ('${BIZ_D}', 'pro', now())`,
-      );
-
-      await tx.unsafe(
-        `insert into public.business_ownership (business_id, owner_id)
-         values ('${BIZ_A}', '${OWNER_A}')`,
       );
 
       await tx.unsafe(
@@ -1149,6 +963,42 @@ describe('los helpers de permiso', () => {
       ),
     );
     return r[0].role;
+  }
+
+  /**
+   * What the API's OWN predicate says about that person's memberships, and
+   * what the database's function says about the same rows.
+   *
+   * ─── Por qué esto corre el SQL de la API y no una copia ────────────────────
+   *
+   * Porque una copia sería una tercera cuenta de la misma regla, y esta
+   * archivo existe para que no las haya. El predicado sale de
+   * `src/database/business-membership.ts` con el mismo renderizador que usa
+   * el driver, y lo ejecuta la base: lo que se compara es lo que la API
+   * manda, no lo que este archivo dice que la API manda.
+   *
+   * Las filas que se comparan son las de la persona: sus membresías VIVAS
+   * (`deleted_at is null`, `status = 'active'`). Las otras dos condiciones
+   * las filtra el predicado y no la promesa, así que la promesa no tiene nada
+   * que decir de ellas.
+   */
+  async function apiPromiseVerdict(userId: string) {
+    const rendered = new PgDialect().sqlToQuery(liveMembership(userId));
+    return as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string; sql_says: boolean; api_says: boolean }[]>(
+        `select business_members.id::text as id,
+                public.business_member_session_inside_promise(
+                  business_members.session_ttl_hours,
+                  business_members.last_authenticated_at
+                ) as sql_says,
+                (${rendered.sql}) as api_says
+         from public.business_members
+         where business_members.user_id = $1
+           and business_members.deleted_at is null
+           and business_members.status = 'active'`,
+        rendered.params,
+      ),
+    );
   }
 
   /**
@@ -1380,15 +1230,37 @@ describe('los helpers de permiso', () => {
     // la matriz falla cuando alguien tropieza con el caso, no cuando alguien
     // reintroduce el duplicado. Lo que hace falta es que la redundancia no exista.
     //
-    // Por eso esto mira el CUERPO de las cuatro funciones y no su respuesta:
-    // exactamente una puede tener escrita la cuenta, y las otras tres tienen que
-    // llamarla.
+    // Por eso esto mira el CUERPO de las funciones y no su respuesta: exactamente
+    // una puede tener escrita la cuenta, y las demás tienen que llamarla.
     //
     // Y se afirma la SUSTANCIA —`security definer`, `search_path = ''`, la lista
     // de argumentos, la volatilidad— y no el texto entero del `functiondef`. Un
     // cuerpo pegado con sus saltos de línea y sus espacios falla el test con un
     // reformateo que no cambia una sola cosa del comportamiento, y un test que se
     // rompe por eso enseña a ignorar los que importan.
+    //
+    // ─── LA CADENA, Y POR QUÉ SON DOS ESLABONES Y NO UNO ─────────────────────
+    //
+    // La cadena de la promesa tiene DOS eslabones, y cada uno tiene su regla:
+    //
+    //   business_member_session_expires_at    la ARITMÉTICA: cuándo vence
+    //   business_member_session_inside_promise la COMBINACIÓN: si está viva
+    //
+    // El segundo eslabón es nuevo: antes, la COMBINACIÓN —TTL apagado **o**
+    // (sello presente **y** la fecha no pasó)— estaba escrita a mano en
+    // `business_member_session_valid` y en `can_manage_location`, y en
+    // TypeScript. Ahora está en un lugar, y los dos que DECIDEN la llaman.
+    //
+    // Por eso las columnas se leen del CUERPO SIN COMENTARIOS, y no del
+    // `functiondef`: el `functiondef` incluye el NOMBRE de la función en su
+    // encabezado —así que una función «se llama a sí misma» para un `like` y la
+    // afirmación queda vacía— y el CUERPO incluye los comentarios, que nombran
+    // funciones sin llamarlas. Un guard que confunde «nombrar» con «llamar»
+    // grita por nada, y un guard que grita por nada se apaga.
+    //
+    // Con el cuerpo limpio las tres afirmaciones son exactas: una función
+    // tiene la aritmética, dos la llaman, y dos llaman a la combinación sin
+    // nombrarla.
     const ttlShapes = await as(ctx.sql, 'service_role', null, (tx) =>
       tx.unsafe<
         {
@@ -1399,32 +1271,46 @@ describe('los helpers de permiso', () => {
           search_path: string | null;
           computes_inline: boolean;
           calls_shared: boolean;
+          calls_promise: boolean;
         }[]
       >(`
-        select p.proname as fn,
-               pg_get_function_identity_arguments(p.oid) as args,
-               p.prosecdef as secdef,
-               p.provolatile as volatile,
-               p.proconfig::text as search_path,
-               pg_get_functiondef(p.oid) like '%interval ''1 hour''%' as computes_inline,
-               pg_get_functiondef(p.oid) like '%business_member_session_expires_at%'
-                 as calls_shared
-        from pg_proc p
-        join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public'
-          and p.proname in ('business_member_session_expires_at',
-                            'business_member_session_valid',
-                            'can_manage_location',
-                            'business_member_session_state')
-        order by p.proname`),
+        with bodies as (
+          select p.proname as fn,
+                 pg_get_function_identity_arguments(p.oid) as args,
+                 p.prosecdef as secdef,
+                 p.provolatile as volatile,
+                 p.proconfig::text as search_path,
+                 regexp_replace(p.prosrc, E'--[^\\n]*', '', 'g') as body
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in ('business_member_session_expires_at',
+                              'business_member_session_inside_promise',
+                              'business_member_session_valid',
+                              'can_manage_location',
+                              'business_member_session_state')
+        )
+        select fn,
+               args,
+               secdef,
+               volatile,
+               search_path,
+               body like '%interval ''1 hour''%' as computes_inline,
+               body like '%business_member_session_expires_at%' as calls_shared,
+               body like '%business_member_session_inside_promise%' as calls_promise
+        from bodies
+        order by fn`),
     );
     expect(
       plainRows(ttlShapes),
       'la cuenta de la expiración volvió a estar copiada, o dejó de estar ' +
         'compartida. Exactamente UNA función puede tener escrita la aritmética ' +
-        '—`business_member_session_expires_at`— y las otras tres tienen que ' +
-        'llamarla. Con dos copias, la que autoriza y la que explica pueden dejar ' +
-        'de contar la misma historia, y el §5.2 dice que no pueden.',
+        '—`business_member_session_expires_at`— y las demás tienen que ' +
+        'llamarla. La COMBINACIÓN tiene su propio lugar ' +
+        '—`business_member_session_inside_promise`—, que es el que la llama, y ' +
+        'las dos que DECIDEN la llaman sin escribirla. Con dos copias, la que ' +
+        'autoriza y la que explica pueden dejar de contar la misma historia, y ' +
+        'el §5.2 dice que no pueden.',
     ).toEqual([
       {
         fn: 'business_member_session_expires_at',
@@ -1433,7 +1319,18 @@ describe('los helpers de permiso', () => {
         volatile: 'i',
         search_path: '{"search_path=\\"\\""}',
         computes_inline: true,
+        calls_shared: false,
+        calls_promise: false,
+      },
+      {
+        fn: 'business_member_session_inside_promise',
+        args: 'p_session_ttl_hours integer, p_last_authenticated_at timestamp with time zone',
+        secdef: false,
+        volatile: 's',
+        search_path: '{"search_path=\\"\\""}',
+        computes_inline: false,
         calls_shared: true,
+        calls_promise: false,
       },
       {
         fn: 'business_member_session_state',
@@ -1443,6 +1340,7 @@ describe('los helpers de permiso', () => {
         search_path: '{"search_path=\\"\\""}',
         computes_inline: false,
         calls_shared: true,
+        calls_promise: false,
       },
       {
         fn: 'business_member_session_valid',
@@ -1451,7 +1349,8 @@ describe('los helpers de permiso', () => {
         volatile: 's',
         search_path: '{"search_path=\\"\\""}',
         computes_inline: false,
-        calls_shared: true,
+        calls_shared: false,
+        calls_promise: true,
       },
       {
         fn: 'can_manage_location',
@@ -1460,7 +1359,8 @@ describe('los helpers de permiso', () => {
         volatile: 's',
         search_path: '{"search_path=\\"\\""}',
         computes_inline: false,
-        calls_shared: true,
+        calls_shared: false,
+        calls_promise: true,
       },
     ]);
 
@@ -1498,6 +1398,242 @@ describe('los helpers de permiso', () => {
       { ttl: 24, hours_ago: 1, expires: true },
       { ttl: 24, hours_ago: null, expires: false },
     ]);
+  });
+
+  // ─── LA COMBINACIÓN DE «VENCIDA», QUE ESTABA EN DOS LUGARES ───────────────
+  //
+  // La ARITMÉTICA —`last_authenticated_at + ttl horas`— tuvo un solo sitio
+  // desde `20261015031154`. La COMBINACIÓN —las dos mitades de «vencida»
+  // juntas— no: estaba escrita a mano en `business_member_session_valid` y en
+  // `can_manage_location`, y en TypeScript, en
+  // `apps/api/src/database/business-membership.ts`.
+  //
+  // Y lo que hace daño de una copia no es que esté mal: es que se puede
+  // apartar SIN QUE NADIE LO NOTE. Una migración que cambia la definición de
+  // «vencida» en SQL deja la API con su propia cuenta, y no hay error, no hay
+  // excepción y no hay diferencia en ninguna respuesta: la API sigue
+  // concediendo con su regla y la base con la suya.
+  //
+  // Estos tres tests son la defensa, y son tres porque hay tres cosas que
+  // pueden romperse:
+  //
+  //   1. que la combinación vuelva a estar ESCRITA en los dos que deciden;
+  //   2. que la función y TypeScript no den la misma respuesta;
+  //   3. que el predicado que la API manda a la base y la función no elijan
+  //      las mismas filas.
+  //
+  // ─── 1. LA COMBINACIÓN VIVE UNA SOLA VEZ ───────────────────────────────────
+
+  test('la combinación de «vencida» vive una sola vez', async () => {
+    // Se mira el CUERPO, y el CUERPO sin comentarios: la respuesta puede
+    // coincidir con dos copias escritas a mano, y lo que hay que afirmar es
+    // que no HAY dos copias. Un comentario que nombra una función no es una
+    // llamada, y un guard que no lo sabe grita por nada.
+    //
+    // Las tres columnas son las tres maneras de escribir la regla a mano:
+    //
+    //   - `compares_now`: la comparación contra el reloj. La combinación
+    //     compara la fecha compartida con `now()`, así que un cuerpo que
+    //     compara contra `now()` está haciendo la regla él mismo.
+    //   - `writes_ttl_zero`: la mitad del TTL apagado. La combinación empieza
+    //     por `ttl = 0`, así que un cuerpo que compara el TTL con cero está
+    //     haciendo la regla él mismo.
+    //   - `calls_promise`: la llamada a la función que la tiene.
+    //
+    // Y `business_member_session_inside_promise` aparece en la lista para que
+    // se vea dónde está: es la que tiene el reloj y el TTL apagado, y es la
+    // única que puede.
+    const shapes = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          fn: string;
+          calls_promise: boolean;
+          compares_now: boolean;
+          writes_ttl_zero: boolean;
+        }[]
+      >(`
+        with bodies as (
+          select p.proname as fn,
+                 regexp_replace(p.prosrc, E'--[^\\n]*', '', 'g') as body
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in ('business_member_session_valid',
+                              'can_manage_location',
+                              'business_member_session_inside_promise')
+        )
+        select fn,
+               body like '%business_member_session_inside_promise%' as calls_promise,
+               body like '%now()%' as compares_now,
+               body ~ 'session_ttl_hours[[:space:]]*=[[:space:]]*0' as writes_ttl_zero
+        from bodies
+        order by fn`),
+    );
+    expect(
+      plainRows(shapes),
+      'la combinación de «vencida» volvió a estar escrita a mano, o dejó de ' +
+        'estar en un solo sitio. Los dos que DECIDEN —`business_member_session_valid` ' +
+        'y `can_manage_location`— tienen que PREGUNTAR a ' +
+        '`business_member_session_inside_promise`, no escribirla. Si la ' +
+        'escriben, hay dos reglas que pueden apartarse, y el §5.2 dice que la ' +
+        'que autoriza y la que explica nunca se contradicen.',
+    ).toEqual([
+      {
+        fn: 'business_member_session_inside_promise',
+        calls_promise: false,
+        compares_now: true,
+        writes_ttl_zero: true,
+      },
+      {
+        fn: 'business_member_session_valid',
+        calls_promise: true,
+        compares_now: false,
+        writes_ttl_zero: false,
+      },
+      {
+        fn: 'can_manage_location',
+        calls_promise: true,
+        compares_now: false,
+        writes_ttl_zero: false,
+      },
+    ]);
+  });
+
+  // ─── 2. LAS CUATRO MITADES, Y QUE SQL Y TYPESCRIPT DIGAN LO MISMO ──────────
+
+  test('las cuatro mitades de la promesa', async () => {
+    // La matriz vive en `test/session-promise.ts` y la comparten los dos
+    // lados: el oráculo de TypeScript y esta consulta. Los casos se arman
+    // desde la matriz, para que la lista de la base y la del oráculo no
+    // puedan separarse sin que se note.
+    const values = PROMISE_CASES.map(
+      (aCase) =>
+        `('${aCase.name.replace(/'/g, "''")}', ${aCase.ttlHours}::int, ` +
+        `${
+          aCase.sealedOffsetHours === null ? 'null' : aCase.sealedOffsetHours
+        }::int)`,
+    ).join(',\n          ');
+
+    // Se pregunta como `authenticated`, que es el rol con el grant y el mismo
+    // con el que el motor evalúa las policies.
+    const rows = await as(ctx.sql, 'authenticated', OWNER_A, (tx) =>
+      tx.unsafe<
+        {
+          name: string;
+          ttl: number;
+          inside: boolean;
+          expires_at: Date | null;
+        }[]
+      >(`
+        select c.name,
+               c.ttl,
+               public.business_member_session_inside_promise(
+                 c.ttl,
+                 case when c.offset_hours is null then null
+                      else now() + (c.offset_hours * interval '1 hour') end
+               ) as inside,
+               public.business_member_session_expires_at(
+                 c.ttl,
+                 case when c.offset_hours is null then null
+                      else now() + (c.offset_hours * interval '1 hour') end
+               ) as expires_at
+        from (values
+          ${values}
+        ) as c(name, ttl, offset_hours)`),
+    );
+
+    // El reloj del proceso. Cada caso es relativo a su propio «ahora», así que
+    // los dos relojes no tienen que coincidir: lo que se compara son las
+    // RESPUESTAS, no las fechas.
+    const oracle = promiseAnswers(new Date());
+
+    const answers = plainRows(rows).map((row) => ({
+      name: row.name,
+      inside: row.inside,
+      // La fecha compartida es `null` cuando el TTL está apagado o cuando nunca
+      // hubo sello: en los dos casos no hay sesión que pueda expirar.
+      expires_at_null: row.expires_at === null,
+    }));
+
+    expect(
+      answers,
+      'la función de la base no contesta lo mismo que el oráculo de ' +
+        'TypeScript. Las dos están midiendo la misma promesa, así que una ' +
+        'discrepancia significa que una de las dos cambió, y la que va a ' +
+        'equivocar es la que concede.',
+    ).toEqual(
+      PROMISE_CASES.map((aCase) => ({
+        name: aCase.name,
+        inside: oracle[aCase.name],
+        expires_at_null:
+          aCase.ttlHours === 0 || aCase.sealedOffsetHours === null,
+      })),
+    );
+
+    // Y el oráculo y la base dicen lo MISMO, caso por caso, y lo que dicen es
+    // lo que la promesa promete. La segunda aserción es la que hace el trabajo
+    // difícil: si la base cambiara su definición de «vencida», esta línea
+    // falla con el nombre del caso que se movió.
+    for (const row of answers) {
+      const aCase = PROMISE_CASES.find((c) => c.name === row.name);
+      expect(
+        row.inside,
+        `«${row.name}»: la base dice ${row.inside} y la promesa promete ` +
+          `${aCase?.expected}.`,
+      ).toBe(aCase?.expected);
+      expect(
+        row.inside,
+        `«${row.name}»: la base dice ${row.inside} y TypeScript dice ` +
+          `${oracle[row.name]}.`,
+      ).toBe(oracle[row.name]);
+    }
+  });
+
+  // ─── 3. EL PREDICADO DE LA API Y LA FUNCIÓN, SOBRE FILAS DE VERDAD ─────────
+
+  test('el predicado de la API y la función eligen las mismas filas', async () => {
+    // La prueba de arriba compara la FUNCIÓN con el ORÁCULO, y el oráculo es
+    // una cuenta hecha en TypeScript. Esta compara la FUNCIÓN con lo que la
+    // API manda de verdad: el SQL que Drizzle genera en
+    // `src/database/business-membership.ts`, ejecutado por la base, sobre
+    // filas que existen.
+    //
+    // Son las dos mitades de la misma afirmación: si el predicado de la API
+    // elige las mismas filas que la función, y la función da las mismas
+    // respuestas que el oráculo, entonces sacar la combinación de TypeScript
+    // no cambió el comportamiento de la API. Lo que no se puede afirmar con
+    // esta prueba es que la API y la base estén de acuerdo sobre una fila que
+    // las dos excluyen por otra razón —`deleted_at`, `status`—: esas las
+    // filtra el predicado, no la promesa.
+    const personas: readonly {
+      id: string;
+      label: string;
+      inside: boolean;
+    }[] = [
+      { id: OWNER_A, label: 'owner con sesión al día', inside: true },
+      { id: MEMBER_ETERNAL, label: 'staff sin TTL', inside: true },
+      { id: MEMBER_STALE, label: 'staff con sesión vencida', inside: false },
+      { id: MEMBER_UNSTAMPED, label: 'staff sin sello', inside: false },
+    ];
+
+    for (const persona of personas) {
+      const rows = await apiPromiseVerdict(persona.id);
+      expect(
+        rows.length,
+        `${persona.label}: el predicado de la API tiene que ver su fila, ` +
+          'que es lo que hace el resto de las pruebas de este archivo.',
+      ).toBe(1);
+      expect(
+        rows[0].sql_says,
+        `${persona.label}: la función de la base dice ${rows[0].sql_says}.`,
+      ).toBe(persona.inside);
+      expect(
+        rows[0].api_says,
+        `${persona.label}: el predicado que la API manda dice ` +
+          `${rows[0].api_says} y la función dice ${rows[0].sql_says}. Son la ` +
+          'misma promesa contada en dos lugares, y tienen que dar lo mismo.',
+      ).toBe(rows[0].sql_says);
+    }
   });
 
   // ─── LA MEMBRESÍA QUE RESPONDE SE ELIGE ENTRE LAS ACTIVAS ───────────────────
@@ -1752,43 +1888,458 @@ describe('los helpers de permiso', () => {
  *
  * ─── EL ORDEN, Y POR QUÉ LAS DOS MITADES ESTÁN AFIRMADAS ─────────────────────
  *
- * El §6.2 pone el orden como invariante: primero las policies nuevas, después se
- * retiran las viejas. Un orden al revés deja al dueño sin panel. Así que la
- * mitad nueva y la mitad vieja conviven, y CONVIVIR es lo que hay que medir: este
- * bloque afirma el conjunto nuevo completo por nombre, y afirma que el conjunto
- * viejo que resuelve por `business_ownership` sigue siendo exactamente el que
+ * El §6.2 puso el orden como invariante: primero las policies nuevas, después
+ * se retiran las viejas. Un orden al revés deja al dueño sin panel. Así que la
+ * mitad nueva y la mitad vieja convivieron, y CONVIVIR es lo que se midió: este
+ * bloque afirmaba el conjunto nuevo completo por nombre, y afirmaba que el
+ * conjunto viejo que resolvía por `business_ownership` era exactamente el que
  * había antes —19 policies en 12 tablas, medido, no estimado—.
  *
- * El residuo viejo NO es deuda que este bloque perdona: es lo que Plan 3 va a
- * recoger, y Plan 3 empieza por migrar `getBusinessesByOwnerId` porque el móvil
- * lee `business_ownership` en su primera consulta del panel. El `drop table` NO
- * es la migración siguiente de esta rama, y quien lea esto antes de escribirla
- * tiene que saber eso. Afirmar el número exacto es lo que convierte ese `drop`
- * en un diff de una línea: si cambia sin esa migración, alguien escribió una
- * policy a mano.
+ * Ese residuo viejo se retiró con la tabla, en la misma línea que el plan
+ * ordenaba: primero el móvil —`getBusinessesByOwnerId`—, después los cinco
+ * lectores de la API, y sólo entonces el `drop table`. Affirmar el número
+ * exacto era lo que convertía ese `drop` en un diff de una línea; hoy el mismo
+ * mecanismo afirma el CERO, y un `[]` que se cumpliera por la razón
+ * equivocada no probaría nada —por eso la mitad de arriba, que nombra las
+ * veinticuatro policies que SÍ están, es la que impide que este vacío sea el de
+ * una base vacía.
  *
- * Y el motivo por el que la lista de más abajo tiene 19 y no 0 no es sólo de
- * orden: las dos generaciones se declararon equivalentes después de verificarlo,
- * y esa equivalencia tiene un alcance. Vale para un dueño con la sesión viva,
- * que es lo único que estos tests miden. NO vale para un dueño con la sesión
- * vencida: las policies viejas no llevan TTL, así que siguen concediendo. La
- * diferencia es invisible mientras el dueño tenga sesión —entonces las dos
- * conceden lo mismo—, y deja de serlo en el instante en que la segunda generación
- * sea la única. Por eso el `drop` tiene que venir con el fin de la generación
- * vieja, y no antes.
+ * Y el motivo por el que la lista tenía 19 y no 0 era sólo de orden: las dos
+ * generaciones se declararon equivalentes después de verificarlo, y esa
+ * equivalencia tenía un alcance. Vale para un dueño con la sesión viva, que es
+ * lo único que estos tests miden. NO vale para un dueño con la sesión vencida:
+ * las policies viejas no llevan TTL, así que siguen concediendo. La diferencia
+ * era invisible mientras el dueño tuviera sesión —entonces las dos concedían lo
+ * mismo—, y dejó de serlo en el instante en que la segunda generación fue la
+ * única. Por eso el `drop` tenía que venir con el fin de la generación vieja, y
+ * no antes.
  *
  * ─── QUIÉN ES QUIÉN EN ESTE FIXTURE ──────────────────────────────────────────
  *
- * `business_ownership` tiene UNA fila: la del dueño de POL_BIZ. No hay fila para
- * el gerente ni para el staff, y esa ausencia es el experimento: las policies
- * viejas no les dicen nada, así que todo lo que vean aquí lo ven por las
- * nuevas. Si el gerente viera algo sin haber fila de dueño, el único camino
- * posible sería la policy nueva.
- *
- * El dueño, en cambio, tiene los dos caminos. Es la mitad de la paridad que este
- * bloque mide: el dueño conserva el acceso que ya tenía (una regresión aquí sería
- * un panel vacío) y encima gana el camino nuevo.
+ * El dueño de POL_BIZ es dueño por su membresía, y el gerente y el staff no son
+ * dueños de nada. Esa diferencia es el experimento: todo lo que el gerente y el
+ * staff vean aquí lo ven por la generación nueva, porque la vieja ya no está.
  */
+
+// ─── EL ALCANCE POR SUCURSAL, COMO REGLA DE LA BASE ──────────────────────────
+//
+// La regla del §5.1 —el dueño llega a todo, un gerente o un empleado llega a la
+// unión de sus sucursales, y SIN FILAS no llega a nada— estaba escrita en
+// TypeScript, en `scopeIsContained` de `staff.service.ts`, y en ningún otro
+// lugar. Este bloque mide la regla donde vive ahora: en SQL.
+//
+// Las dos funciones son las que produce la migración del alcance:
+//
+//   business_member_reaches_member(business_id, member_id)      → boolean
+//   business_member_covers_locations(business_id, location_ids) → boolean
+//
+// La PRIMERA la llama una policy —la migración siguiente la pone en las dos
+// policies del roster—, y una policy la evalúa el motor como el rol que la
+// invoca: sin el grant a `authenticated`, la policy nueva no concede NADA y el
+// roster se vacía. La SEGUNDA la llama sólo la API, y `authenticated` no tiene
+// por qué verla.
+//
+// ─── EL FIXTURE, Y POR QUÉ HAY TRES SUCURSALES Y DOS GERENTES ───────────────
+//
+// Un gerente de UNA sucursal y otro de DOS: «contenido» y «salido» sólo se
+// distinguen con las dos mitades, y una matriz con un solo ancho de alcance no
+// separa «{A} ⊆ {A,B}» de «{A,B} ⊆ {A,B}».
+//
+// Y TRES sucursales, no dos: el gerente de DOS necesita algo que NO cubre, y
+// ese algo es la mitad de la regla.
+//
+// Los dos gerentes y los tres empleados tienen alcances DISTINTOS a propósito:
+// `M_STAFF_A` ({LOC_A}) está contenido en `M_MANAGER` ({LOC_A}) y en
+// `M_MANAGER_AB` ({LOC_A, LOC_B}), y `M_STAFF_B` ({LOC_B}) está contenido en el
+// segundo y no en el primero. Un fixture donde las dos lecturas de la regla
+// dieran lo mismo probaría que la regla no está escrita.
+describe('el alcance por sucursal es una regla de la base', () => {
+  let ctx: SupabaseTestDb;
+
+  const BIZ_A = '9c000000-0000-4000-8000-000000000001';
+  const LOC_A = '9d000000-0000-4000-8000-000000000001';
+  const LOC_B = '9d000000-0000-4000-8000-000000000002';
+  const LOC_C = '9d000000-0000-4000-8000-000000000003';
+
+  const USER_OWNER = '9e000000-0000-4000-8000-000000000001';
+  const USER_MANAGER = '9e000000-0000-4000-8000-000000000002';
+  const USER_MANAGER_SIN_ALCANCE = '9e000000-0000-4000-8000-000000000003';
+  const USER_MANAGER_AB = '9e000000-0000-4000-8000-000000000004';
+  const USER_STAFF_A = '9e000000-0000-4000-8000-000000000005';
+  const USER_STAFF_B = '9e000000-0000-4000-8000-000000000006';
+  const USER_STAFF_C = '9e000000-0000-4000-8000-000000000007';
+  const USER_STAFF_SIN_ALCANCE = '9e000000-0000-4000-8000-000000000008';
+  const USER_STAFF_AC = '9e000000-0000-4000-8000-00000000000b';
+  const USER_STALE = '9e000000-0000-4000-8000-000000000009';
+  const USER_NOBODY = '9e000000-0000-4000-8000-00000000000a';
+
+  const M_OWNER = '9f000000-0000-4000-8000-000000000001';
+  const M_MANAGER = '9f000000-0000-4000-8000-000000000002';
+  const M_MANAGER_SIN_ALCANCE = '9f000000-0000-4000-8000-000000000003';
+  const M_MANAGER_AB = '9f000000-0000-4000-8000-000000000004';
+  const M_STAFF_A = '9f000000-0000-4000-8000-000000000005';
+  const M_STAFF_B = '9f000000-0000-4000-8000-000000000006';
+  const M_STAFF_C = '9f000000-0000-4000-8000-000000000007';
+  const M_STAFF_SIN_ALCANCE = '9f000000-0000-4000-8000-000000000008';
+  const M_STALE = '9f000000-0000-4000-8000-000000000009';
+  const M_STAFF_AC = '9f000000-0000-4000-8000-00000000000b';
+
+  beforeAll(async () => {
+    ctx = await createSupabaseTestDb();
+
+    await ctx.sql.begin(async (tx) => {
+      for (const id of [
+        USER_OWNER,
+        USER_MANAGER,
+        USER_MANAGER_SIN_ALCANCE,
+        USER_MANAGER_AB,
+        USER_STAFF_A,
+        USER_STAFF_B,
+        USER_STAFF_C,
+        USER_STAFF_SIN_ALCANCE,
+        USER_STAFF_AC,
+        USER_STALE,
+        USER_NOBODY,
+      ]) {
+        await tx.unsafe(
+          `insert into auth.users (id, email, raw_user_meta_data)
+           values ('${id}', 'alcance-${id}@test', '{"role":"business"}'::jsonb)
+           on conflict (id) do nothing`,
+        );
+      }
+
+      await tx.unsafe(
+        `insert into public.businesses (id, name, type, slug)
+         values ('${BIZ_A}', 'Alcance Biz A', 'restaurant', 'alcance-biz-a')`,
+      );
+
+      // El plan se escribe a mano y NO es el de defecto: sin esta fila el
+      // negocio se lee como `free`, y `free` admite UNA sucursal y DOS miembros
+      // (`trg_enforce_location_limit` y `trg_enforce_member_limit`). Este
+      // fixture necesita tres sucursales y nueve accesos.
+      await tx.unsafe(
+        `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+         values ('${BIZ_A}', 'pro', null)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
+         values ('${LOC_A}', '${BIZ_A}', 'A', 'Street', 40.41680000, -3.70380000),
+                ('${LOC_B}', '${BIZ_A}', 'B', 'Street2', 40.41680000, -3.70380000),
+                ('${LOC_C}', '${BIZ_A}', 'C', 'Street3', 40.41680000, -3.70380000)`,
+      );
+
+      // El dueño tiene TTL 0 y NUNCA fue sellado, que es lo que producción
+      // tiene (`20261016022631_owner_memberships_no_session_expiry`): un dueño
+      // con TTL y sin sello es una sesión vencida por definición, y el dueño
+      // REAL no podría administrar su propio negocio.
+      await tx.unsafe(
+        `insert into public.business_members
+           (id, business_id, user_id, role, label, alias, status, session_ttl_hours, last_authenticated_at, created_at, deleted_at)
+         values
+           ('${M_OWNER}', '${BIZ_A}', '${USER_OWNER}', 'owner', 'Dueña', 'alcance-duena@test', 'active', 0, null, now(), null),
+           ('${M_MANAGER}', '${BIZ_A}', '${USER_MANAGER}', 'manager', 'Gerente de A', 'alcance-gerente-a@test', 'active', 24, now(), now(), null),
+           ('${M_MANAGER_SIN_ALCANCE}', '${BIZ_A}', '${USER_MANAGER_SIN_ALCANCE}', 'manager', 'Gerente sin alcance', 'alcance-gerente-sin@test', 'active', 24, now(), now(), null),
+           ('${M_MANAGER_AB}', '${BIZ_A}', '${USER_MANAGER_AB}', 'manager', 'Gerente de A y B', 'alcance-gerente-ab@test', 'active', 24, now(), now(), null),
+           ('${M_STAFF_A}', '${BIZ_A}', '${USER_STAFF_A}', 'staff', 'Empleada de A', 'alcance-empleada-a@test', 'active', 24, now(), now(), null),
+           ('${M_STAFF_B}', '${BIZ_A}', '${USER_STAFF_B}', 'staff', 'Empleado de B', 'alcance-empleado-b@test', 'active', 24, now(), now(), null),
+           ('${M_STAFF_C}', '${BIZ_A}', '${USER_STAFF_C}', 'staff', 'Empleada de C', 'alcance-empleada-c@test', 'active', 24, now(), now(), null),
+           ('${M_STAFF_SIN_ALCANCE}', '${BIZ_A}', '${USER_STAFF_SIN_ALCANCE}', 'staff', 'Empleado sin alcance', 'alcance-empleado-sin@test', 'active', 24, now(), now(), null),
+           ('${M_STALE}', '${BIZ_A}', '${USER_STALE}', 'manager', 'Gerente vencido', 'alcance-vencido@test', 'active', 24, now() - interval '26 hours', now(), null),
+           ('${M_STAFF_AC}', '${BIZ_A}', '${USER_STAFF_AC}', 'staff', 'Empleada de A y C', 'alcance-empleada-ac@test', 'active', 24, now(), now(), null)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_member_locations (member_id, location_id, deleted_at)
+         values
+           ('${M_MANAGER}', '${LOC_A}', null),
+           ('${M_MANAGER_AB}', '${LOC_A}', null),
+           ('${M_MANAGER_AB}', '${LOC_B}', null),
+           ('${M_STAFF_A}', '${LOC_A}', null),
+           ('${M_STAFF_B}', '${LOC_B}', null),
+           ('${M_STAFF_C}', '${LOC_C}', null),
+           ('${M_STAFF_AC}', '${LOC_A}', null),
+           ('${M_STAFF_AC}', '${LOC_C}', null),
+           ('${M_STALE}', '${LOC_A}', null)`,
+      );
+    });
+  });
+
+  afterAll(async () => {
+    await ctx.stop();
+  });
+
+  /**
+   * «¿alcanzo a este acceso?», como la policy lo va a preguntar.
+   *
+   * Se llama como `authenticated` a propósito: el grant a ese rol es parte del
+   * contrato de la función —sin él, la policy nueva no concede nada— y una
+   * prueba que la llamara con el dueño de la base no mediría ese grant.
+   */
+  async function reaches(userId: string, memberId: string): Promise<boolean> {
+    const r = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ ok: boolean }[]>(
+        `select public.business_member_reaches_member('${BIZ_A}'::uuid, '${memberId}'::uuid) as ok`,
+      ),
+    );
+    return r[0].ok;
+  }
+
+  /**
+   * «¿estas sucursales están dentro de mi alcance?», como la API lo pregunta.
+   *
+   * Se llama como `service_role`, que es el rol con el que la API habla con la
+   * base, y el único que puede ejecutarla: `authenticated` no la ve.
+   */
+  async function covers(
+    userId: string,
+    locationIds: readonly string[],
+  ): Promise<boolean> {
+    const array =
+      locationIds.length === 0
+        ? `'{}'::uuid[]`
+        : `array[${locationIds.map((id) => `'${id}'::uuid`).join(', ')}]`;
+    const r = await as(ctx.sql, 'service_role', userId, (tx) =>
+      tx.unsafe<{ ok: boolean }[]>(
+        `select public.business_member_covers_locations('${BIZ_A}'::uuid, ${array}) as ok`,
+      ),
+    );
+    return r[0].ok;
+  }
+
+  /**
+   * The live scope of one access, read as the database sees it.
+   *
+   * It exists for ANTI-VACUITY: a `false` that comes from a fixture that was
+   * never seeded proves nothing, and the fixture of this block has three ways
+   * of being wrong —a row that was not inserted, a column that does not exist,
+   * and a `deleted_at` that is not null.
+   */
+  async function scopeOf(memberId: string): Promise<string[]> {
+    const r = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ location_id: string }[]>(
+        `select l.location_id
+           from public.business_member_locations l
+          where l.member_id = '${memberId}'::uuid
+            and l.deleted_at is null
+          order by l.location_id`,
+      ),
+    );
+    return plainRows(r).map((row) => row.location_id);
+  }
+
+  test('el dueño alcanza a todos los accesos del negocio, sin filas de alcance', async () => {
+    // Anti-vacuity: el dueño NO tiene filas de alcance, y su alcance implícito
+    // es el negocio entero.
+    expect(await scopeOf(M_OWNER)).toEqual([]);
+
+    expect(await reaches(USER_OWNER, M_STAFF_A)).toBe(true);
+    expect(await reaches(USER_OWNER, M_STAFF_B)).toBe(true);
+    expect(await reaches(USER_OWNER, M_STAFF_C)).toBe(true);
+    // Y también a los que no tienen alcance: el dueño llega a los accesos
+    // SCOPELESS, que es la mitad de la regla.
+    expect(await reaches(USER_OWNER, M_STAFF_SIN_ALCANCE)).toBe(true);
+    expect(await reaches(USER_OWNER, M_MANAGER_SIN_ALCANCE)).toBe(true);
+  });
+
+  test('un gerente alcanza el acceso cuyo alcance está contenido en el suyo', async () => {
+    // Anti-vacuity: los alcances del fixture son los que la prueba afirma.
+    expect(await scopeOf(M_MANAGER)).toEqual([LOC_A]);
+    expect(await scopeOf(M_MANAGER_AB)).toEqual([LOC_A, LOC_B]);
+    expect(await scopeOf(M_STAFF_A)).toEqual([LOC_A]);
+    expect(await scopeOf(M_STAFF_B)).toEqual([LOC_B]);
+
+    // Contenido exacto: el alcance del objetivo es el mismo.
+    expect(await reaches(USER_MANAGER, M_STAFF_A)).toBe(true);
+    // Contenido parcial: {A} ⊆ {A,B}.
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_A)).toBe(true);
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_B)).toBe(true);
+    // Y el mismo gerente de dos sucursales alcanza al de una.
+    expect(await reaches(USER_MANAGER_AB, M_MANAGER)).toBe(true);
+  });
+
+  test('un gerente NO alcanza el acceso cuyo alcance sale del suyo', async () => {
+    // {B} ⊄ {A}: comparte el negocio entero y no comparte ninguna sucursal.
+    expect(await reaches(USER_MANAGER, M_STAFF_B)).toBe(false);
+    expect(await reaches(USER_MANAGER, M_STAFF_C)).toBe(false);
+    // {C} ⊄ {A,B}: el gerente de dos sucursales tampoco llega a la tercera.
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_C)).toBe(false);
+    // Y ESTE es el caso que separa la contención de la intersección: {A, C}
+    // COMPARTE una sucursal con {A}, así que una lectura por intersección lo
+    // admitiría —y con ella, un gerente de A podría tocar un acceso que escribe
+    // en C—. La contención lo niega, y esta aserción es la que se pone roja si
+    // alguien cambia la regla por una intersección.
+    expect(await reaches(USER_MANAGER, M_STAFF_AC)).toBe(false);
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_AC)).toBe(false);
+    // Y el simétrico: el alcance del que llama es el que sale del del objetivo.
+    // {A} ⊄ {A,B}: el empleado de A no llega al gerente de A y B. La regla NO
+    // distingue por rol —un empleado de A alcanza a otro de A— porque el §5.1
+    // habla de ALCANCE y no de cargo: el que administra al equipo lo decide
+    // `requireActor`, que no deja entrar a un empleado.
+    expect(await reaches(USER_STAFF_A, M_MANAGER_AB)).toBe(false);
+    expect(await reaches(USER_STAFF_A, M_STAFF_A)).toBe(true);
+  });
+
+  test('un gerente sin filas de alcance no alcanza a nadie', async () => {
+    // Anti-vacuity: no tiene filas, y eso es lo que se está probando.
+    expect(await scopeOf(M_MANAGER_SIN_ALCANCE)).toEqual([]);
+
+    expect(await reaches(USER_MANAGER_SIN_ALCANCE, M_STAFF_A)).toBe(false);
+    expect(await reaches(USER_MANAGER_SIN_ALCANCE, M_MANAGER)).toBe(false);
+    // Ni siquiera a un acceso sin alcance: el conjunto vacío es subconjunto de
+    // todo, y por eso la versión de esta regla que estaba escrita en
+    // TypeScript admitía aquí a tocar cualquier acceso sin alcance.
+    expect(await reaches(USER_MANAGER_SIN_ALCANCE, M_STAFF_SIN_ALCANCE)).toBe(
+      false,
+    );
+  });
+
+  test('un acceso sin alcance sólo lo alcanza el dueño', async () => {
+    expect(await scopeOf(M_STAFF_SIN_ALCANCE)).toEqual([]);
+
+    expect(await reaches(USER_MANAGER, M_STAFF_SIN_ALCANCE)).toBe(false);
+    expect(await reaches(USER_MANAGER_AB, M_STAFF_SIN_ALCANCE)).toBe(false);
+    expect(await reaches(USER_OWNER, M_STAFF_SIN_ALCANCE)).toBe(true);
+  });
+
+  test('un miembro sin filas de alcance no cubre ni una sucursal', async () => {
+    expect(await covers(USER_MANAGER_SIN_ALCANCE, [LOC_A])).toBe(false);
+    expect(await covers(USER_STAFF_SIN_ALCANCE, [LOC_A])).toBe(false);
+  });
+
+  test('un gerente cubre las sucursales de su alcance y ninguna más', async () => {
+    expect(await covers(USER_MANAGER, [LOC_A])).toBe(true);
+    // La que no gestiona, no.
+    expect(await covers(USER_MANAGER, [LOC_B])).toBe(false);
+    // Y un conjunto que se sale por UNA sucursal no está cubierto: la
+    // contención es de conjunto, no «al menos una».
+    expect(await covers(USER_MANAGER, [LOC_A, LOC_B])).toBe(false);
+
+    expect(await covers(USER_MANAGER_AB, [LOC_A, LOC_B])).toBe(true);
+    expect(await covers(USER_MANAGER_AB, [LOC_A, LOC_B, LOC_C])).toBe(false);
+
+    // El dueño cubre el negocio entero.
+    expect(await covers(USER_OWNER, [LOC_A, LOC_B, LOC_C])).toBe(true);
+  });
+
+  test('el conjunto vacío de sucursales lo cubre sólo el dueño', async () => {
+    // El conjunto vacío es la forma degenerada de la regla, y es la que más
+    // puerta abre: un `true` acá significaría que un gerente sin alcance puede
+    // crear accesos sin alcance.
+    expect(await covers(USER_MANAGER, [])).toBe(false);
+    expect(await covers(USER_MANAGER_SIN_ALCANCE, [])).toBe(false);
+    expect(await covers(USER_OWNER, [])).toBe(true);
+  });
+
+  test('una sesión vencida no alcanza nada', async () => {
+    // Anti-vacuity: el alcance del gerente vencido SÍ contiene al de la
+    // empleada de A, así que el `false` de abajo no puede ser por el alcance.
+    expect(await scopeOf(M_STALE)).toEqual([LOC_A]);
+
+    expect(await reaches(USER_STALE, M_STAFF_A)).toBe(false);
+    expect(await covers(USER_STALE, [LOC_A])).toBe(false);
+  });
+
+  test('quien no es miembro del negocio no alcanza nada', async () => {
+    expect(await reaches(USER_NOBODY, M_STAFF_A)).toBe(false);
+    expect(await covers(USER_NOBODY, [LOC_A])).toBe(false);
+  });
+
+  test('las dos funciones se ejecutan con los roles que las necesitan', async () => {
+    const acl = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          fn: string;
+          args: string;
+          authenticated: boolean;
+          anon: boolean;
+          service_role: boolean;
+        }[]
+      >(`
+          select p.proname as fn,
+                 pg_get_function_identity_arguments(p.oid) as args,
+                 has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
+                 has_function_privilege('anon', p.oid, 'execute') as anon,
+                 has_function_privilege('service_role', p.oid, 'execute') as service_role
+          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in ('business_member_reaches_member',
+                              'business_member_covers_locations')
+          order by p.proname`),
+    );
+
+    // `business_member_reaches_member` la llama una POLICY, y una policy la
+    // evalúa el motor como el rol que la invoca: sin el grant a `authenticated`
+    // la policy nueva no concede NADA y el roster del gerente se vacía.
+    //
+    // `business_member_covers_locations` la llama SÓLO la API, así que
+    // `authenticated` no tiene por qué verla: una función que el cliente puede
+    // ejecutar es una función que hay que auditar.
+    expect(
+      plainRows(acl).map((r) => ({
+        fn: r.fn,
+        args: r.args,
+        authenticated: r.authenticated,
+        anon: r.anon,
+        service_role: r.service_role,
+      })),
+    ).toEqual([
+      {
+        fn: 'business_member_covers_locations',
+        args: 'p_business_id uuid, p_location_ids uuid[]',
+        authenticated: false,
+        anon: false,
+        service_role: true,
+      },
+      {
+        fn: 'business_member_reaches_member',
+        args: 'p_business_id uuid, p_target_member_id uuid',
+        authenticated: true,
+        anon: false,
+        service_role: true,
+      },
+    ]);
+  });
+
+  test('las dos funciones son estables, con `security definer` y el search_path pineado', async () => {
+    // `security definer` es lo que permite que una policy las llame sin
+    // recursionar la RLS del llamador (`business_members` →
+    // `business_member_locations` → `business_members`), y `search_path = ''`
+    // es lo que hace que el cuerpo tenga que calificar cada nombre.
+    const shape = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          fn: string;
+          prosecdef: boolean;
+          provolatile: string;
+          proconfig: string[] | null;
+        }[]
+      >(`
+          select p.proname as fn,
+                 p.prosecdef as prosecdef,
+                 p.provolatile::text as provolatile,
+                 p.proconfig as proconfig
+          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname in ('business_member_reaches_member',
+                              'business_member_covers_locations')
+          order by p.proname`),
+    );
+
+    expect(plainRows(shape).map((r) => r.fn)).toEqual([
+      'business_member_covers_locations',
+      'business_member_reaches_member',
+    ]);
+    for (const row of plainRows(shape)) {
+      expect(row.prosecdef).toBe(true);
+      // 's' = stable. 'v' (volatile) dejaría la función re-evaluada por fila y
+      // su resultado dentro de una policy dependería del orden de evaluación.
+      expect(row.provolatile).toBe('s');
+      expect(row.proconfig).toEqual(['search_path=""']);
+    }
+  });
+});
+
 describe('las policies y los RPCs resuelven por membresía', () => {
   let ctx: SupabaseTestDb;
 
@@ -1800,6 +2351,16 @@ describe('las policies y los RPCs resuelven por membresía', () => {
   const POL_CONSUMER2 = 'f0000000-0000-4000-8000-000000000006';
   const POL_DELETED = 'f0000000-0000-4000-8000-000000000007';
   const POL_PAUSED = 'f0000000-0000-4000-8000-000000000008';
+  /**
+   * Un admin DE PLATAFORMA: `profiles.role = 'admin'`, y no es miembro de
+   * ningún negocio.
+   *
+   * Existe por la policy `Admins can view all business members`, que es lo que
+   * permite al operador de un aviso resolver los dueños por PostgREST con su
+   * propia sesión: sin ella, un admin que no es miembro no vería el roster y
+   * la publicación se rechazaría con un motivo falso.
+   */
+  const POL_ADMIN = 'f0000000-0000-4000-8000-00000000000d';
   /**
    * Un dueño con la sesión VENCIDA.
    *
@@ -1830,10 +2391,10 @@ describe('las policies y los RPCs resuelven por membresía', () => {
    * todos los roles, y una fila de dueño es exactamente la que el backfill
    * produce.
    *
-   * SIN fila en `business_ownership`, a propósito: sin ella las policies viejas
-   * no dicen nada sobre estas dos personas, así que cualquier cosa que vieran —
-   *o que dejaran de ver— vendría por la generación nueva. Es la misma asimetría
-   * del cajero y el gerente, que tampoco tienen fila de dueño en este fixture.
+   * Y su NEGOCIO es propio: un dueño de otro negocio es un desconocido, y un
+   * desconocido es negado por la misma policy que lo negaría por sesión. La
+   * prueba dejaría de medir el TTL sin ponerse roja, que es la forma de fallar
+   * más difícil de ver.
    */
   const POL_UNSTAMPED_OWNER = 'f0000000-0000-4000-8000-00000000000a';
   const POL_UNSTAMPED_STAFF = 'f0000000-0000-4000-8000-00000000000b';
@@ -2038,6 +2599,7 @@ describe('las policies y los RPCs resuelven por membresía', () => {
         ['stale-owner', POL_STALE_OWNER],
         ['unstamped-owner', POL_UNSTAMPED_OWNER],
         ['unstamped-staff', POL_UNSTAMPED_STAFF],
+        ['admin', POL_ADMIN],
       ] as const) {
         await tx.unsafe(
           `insert into auth.users (id, email) values ('${id}', '${name}@rls-membership.test')
@@ -2045,18 +2607,20 @@ describe('las policies y los RPCs resuelven por membresía', () => {
         );
       }
 
+      // El admin es de PLATAFORMA, no de negocio: `handle_new_user` sólo
+      // acepta 'user' y 'business' del metadata, así que el rol se escribe
+      // después, en la fila del perfil. No es miembro de ningún negocio, que es
+      // justo lo que lo hace el caso que mide la policy del admin.
+      await tx.unsafe(
+        `update public.profiles set role = 'admin' where id = '${POL_ADMIN}'`,
+      );
+
       await tx.unsafe(`
         insert into public.businesses (id, name, type, slug)
         values ('${POL_BIZ}',          'RLS membership biz',        'restaurant', 'rls-membership-biz'),
                ('${POL_OTHER_BIZ}',    'RLS membership other',      'restaurant', 'rls-membership-other'),
                ('${POL_STALE_BIZ}',    'RLS membership vencido',    'restaurant', 'rls-membership-vencido'),
                ('${POL_UNSTAMPED_BIZ}', 'RLS membership sin sello',  'restaurant', 'rls-membership-sin-sello');
-
-        -- UNA fila de dueño, y solo una. Es el experimento: el gerente y el
-        -- staff no son dueños de nada, así que cualquier fila que vean vino de
-        -- una policy nueva.
-        insert into public.business_ownership (business_id, owner_id)
-        values ('${POL_BIZ}', '${POL_OWNER}');
 
         -- El plan NO es decorativo, y desde que los triggers de crecimiento
         -- existen es la razón por la que este negocio puede existir con la
@@ -2067,15 +2631,6 @@ describe('las policies y los RPCs resuelven por membresía', () => {
         -- negocio 'pro', que es lo que da el §4.5.
         insert into public.business_plans_state (business_id, plan_code)
         values ('${POL_BIZ}', 'pro');
-
-        -- Aprobados y activos porque enforce_offer_business_availability baja
-        -- is_active a false de una oferta de un negocio que no lo esté. La
-        -- business_finance que usa accrue_order_earnings la escribe el trigger
-        -- de bootstrap; no hay que sembrarla.
-        update public.business_moderation
-           set verification_status = 'approved'
-         where business_id in ('${POL_BIZ}', '${POL_OTHER_BIZ}',
-                               '${POL_STALE_BIZ}', '${POL_UNSTAMPED_BIZ}');
 
         insert into public.business_locations (id, business_id, name, address, latitude, longitude, is_active)
         values ('${POL_LOC_A}',     '${POL_BIZ}',       'A',     'Street A', 40.41680000, -3.70380000, true),
@@ -2135,6 +2690,26 @@ describe('las policies y los RPCs resuelven por membresía', () => {
           -- este cajero y M_STAFF es el sello, así que el update que no
           -- vuelve lo atribuye al TTL y no al alcance.
           ('${M_UNSTAMPED_STAFF}', '${POL_LOC_A}', null);
+      `);
+
+      // ─── LA APROBACIÓN, Y POR QUÉ VA DESPUÉS DE LAS MEMBRESÍAS ───────────────
+      //
+      // Aprobados y activos porque `enforce_offer_business_availability` baja
+      // `is_active` a false de una oferta de un negocio que no lo esté. La
+      // `business_finance` que usa `accrue_order_earnings` la escribe el trigger
+      // de bootstrap; no hay que sembrarla.
+      //
+      // Y va DESPUÉS de las membresías, y no antes, porque desde la Task 5 la
+      // aprobación de un negocio es una ACTIVACIÓN —`apply_business_verification_state`
+      // hace `update businesses set is_active = true`— y la guarda de
+      // reactivación exige que el negocio tenga un dueño vivo EN ESE MOMENTO.
+      // El orden del fixture es negocio → membresías → activar, y no es una
+      // recomendación: es lo que la base exige.
+      await tx.unsafe(`
+        update public.business_moderation
+           set verification_status = 'approved'
+         where business_id in ('${POL_BIZ}', '${POL_OTHER_BIZ}',
+                               '${POL_STALE_BIZ}', '${POL_UNSTAMPED_BIZ}');
       `);
 
       await tx.unsafe(`
@@ -2264,14 +2839,15 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     return plainRows(rows)[0]?.status;
   }
 
-  // ─── LA PARIDAD: LAS NUEVAS ESTÁN, LAS VIEJAS SIGUEN AL LADO ─────────────────
+  // ─── LA PARIDAD: LAS NUEVAS ESTÁN, Y LAS VIEJAS YA NO ──────────────────────
   //
   // El conjunto nuevo se afirma COMPLETO y por nombre, no por conteo: un conteo
   // pasaría con tres policies cambiada de sitio, y el nombre es lo que un
-  // revisor lee. El conjunto viejo se afirma por lo MISMO, porque su valor está
-  // en que sea exactamente el de antes: ese es el invariante del §6.2.
+  // revisor lee. El conjunto viejo se afirma por lo MISMO, y ahora lo que
+  // afirma es que NO HAY NINGUNA: la generación vieja de policies resolvía el
+  // acceso por `business_ownership`, y esa tabla se retiró.
 
-  test('ninguna policy de negocio resuelve por business_ownership, y las viejas siguen exactamente las 19 que había', async () => {
+  test('no queda ninguna policy que resuelva por business_ownership', async () => {
     const membership = await as(ctx.sql, 'service_role', null, (tx) =>
       tx.unsafe<{ tablename: string; policyname: string; cmd: string }[]>(
         `
@@ -2319,12 +2895,21 @@ describe('las policies y los RPCs resuelven por membresía', () => {
       'profiles:Members can view their order customers:SELECT',
     ]);
 
-    // Y el residuo viejo, que es lo que Plan 3 retira con el `drop table`, y no
-    // esta rama: Plan 3 empieza por migrar `getBusinessesByOwnerId`, porque el
-    // móvil lee `business_ownership` en su primera consulta del panel. MEDIDO:
-    // 19, en 12 tablas. El brief decía "unas 20"; lo que hay en la base son
-    // diecinueve, y el número va escrito porque es el que hace que el `drop` sea
-    // un diff de una línea.
+    // Y el residuo viejo, que es CERO. MEDIDO: eran 19, en 12 tablas, y las
+    // nineteen se caeran con la tabla —una por una, por su nombre— en la
+    // migración que la retiró.
+    //
+    // El conjunto vacío se afirma COMPLETO y no por conteo, porque un conteo
+    // pasaría con tres policies movidas a otro sitio, y porque una policy
+    // escrita a mano que resolviera por la tabla vieja se vería acá.
+    //
+    // Y el nombre del test dice lo que dice: no queda NINGUNA. Antes este
+    // bloque afirmaba las diecinueve por nombre, porque su valor estaba en que
+    // fueran exactamente ésas; ahora su valor está en que no hay ninguna, y un
+    // `[]` que se cumpliese por la razón equivocada —una base donde la tabla no
+    // existe y las policies tampoco— no probaría nada. Por eso la mitad de
+    // arriba, que nombra las veinticuatro policies que SÍ están, es la que
+    // impide que este vacío sea el de una base vacía.
     const legacy = await as(ctx.sql, 'service_role', null, (tx) =>
       tx
         .unsafe<{ tablename: string; policyname: string; cmd: string }[]>(
@@ -2339,33 +2924,84 @@ describe('las policies y los RPCs resuelven por membresía', () => {
 
     expect(
       legacy.map((p) => `${p.tablename}:${p.policyname}:${p.cmd}`),
-      'el conjunto de policies que resuelve por business_ownership cambió sin ' +
-        'que nadie lo decidiera. Su número solo baja cuando Plan 3 los retire, y ' +
-        'Plan 3 empieza por migrar `getBusinessesByOwnerId` —el móvil lee esa ' +
-        'tabla en su primera consulta del panel— y no antes: si bajan antes, ' +
-        'alguien dejó al dueño sin panel, y si sube, alguien escribió una policy ' +
-        'a mano.',
+      'queda una policy que resuelve por business_ownership. La tabla se retiró, ' +
+        'así que esa policy no puede resolver: es una policy que concede a ' +
+        'nadie o un error en tiempo de ejecución. Las diecinueve se cayó una ' +
+        'por una, por su nombre.',
+    ).toEqual([]);
+  });
+
+  // ─── LA PLATAFORMA LEE EL ROSTER ───────────────────────────────────────────
+  //
+  // La tercera policy de `business_members` es la del admin, y existe por una
+  // razón CONCRETA: la resolución de los dueños de un aviso va por PostgREST
+  // CON LA SESIÓN DEL OPERADOR —a propósito, para que la lectura quede
+  // registrada como lo que ese operador puede ver— y el operador es un admin
+  // de plataforma, que no es miembro de los negocios a los que apunta. Sin
+  // esta policy esa resolución devolvería CERO filas, y el service —que no
+  // degrada a «el negocio no tiene dueño», porque esa es otra afirmación—
+  // rechazaría la publicación con un motivo falso, sobre datos que sí están.
+  //
+  // Es el paralelo exacto de `Admins can view all business ownership`, que se
+  // cae con la tabla en la Task 10.
+
+  test('las policies de business_members son tres, y la tercera es la del admin', async () => {
+    const rows = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ tablename: string; policyname: string; cmd: string }[]>(
+        `
+        select tablename, policyname, cmd from pg_policies
+        where schemaname = 'public' and tablename = 'business_members'
+        order by policyname`,
+      ),
+    );
+
+    expect(
+      plainRows(rows).map((p) => `${p.policyname}:${p.cmd}`),
+      'las policies de `business_members` no son las que el plan dice. El ' +
+        'conjunto se afirma por NOMBRE: un conteo pasaría con tres policies ' +
+        'cambiadas de sitio.',
     ).toEqual([
-      'business_hours:Owners can manage own business hours:ALL',
-      'business_locations:Owners can manage own business locations:ALL',
-      'business_notification_preferences:Business owners insert own notification preferences:INSERT',
-      'business_notification_preferences:Business owners update own notification preferences:UPDATE',
-      'business_notification_preferences:Business owners view own notification preferences:SELECT',
-      'businesses:Owners can update own businesses:UPDATE',
-      'businesses:Owners can view own businesses:SELECT',
-      'coupons:Owners can manage own coupons:ALL',
-      'offer_categories:Owners can delete offer categories:DELETE',
-      'offer_categories:Owners can insert offer categories:INSERT',
-      'offers:Owners can delete own offers:DELETE',
-      'offers:Owners can insert own offers:INSERT',
-      'offers:Owners can update own offers:UPDATE',
-      'offers:Owners can view own offers:SELECT',
-      'order_events:Business can view own order events:SELECT',
-      'orders:Business can view own orders:SELECT',
-      'payment_intents:Business can view own payment intents:SELECT',
-      'payouts:Business can view own payouts:SELECT',
-      'profiles:Businesses can view their order customers:SELECT',
+      'Admins can view all business members:SELECT',
+      'Members can view own membership:SELECT',
+      'Owners and managers view business members:SELECT',
     ]);
+  });
+
+  test('un admin ve el roster de un negocio del que no es miembro', async () => {
+    // El admin ve TODAS las filas, de todos los negocios, incluidas las
+    // archivadas: la policy no filtra.
+    const seen = await as(ctx.sql, 'authenticated', POL_ADMIN, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `select id::text as id from public.business_members order by id`,
+      ),
+    );
+    expect(
+      plainRows(seen).map((r) => r.id),
+      'el admin de plataforma no ve el roster entero. Sin esta fila, la ' +
+        'resolución de los dueños de un aviso no podría hacerse con la sesión ' +
+        'del operador.',
+    ).toEqual(
+      [
+        M_OWNER,
+        M_MANAGER,
+        M_STAFF,
+        M_OUTSIDER,
+        M_DELETED,
+        M_PAUSED,
+        M_STALE_OWNER,
+        M_UNSTAMPED_OWNER,
+        M_UNSTAMPED_STAFF,
+      ].sort(),
+    );
+
+    // Y un dueño que NO es admin sigue viendo sólo lo suyo: la policy del
+    // admin no le abre el roster de al lado.
+    const ownerSeen = await as(ctx.sql, 'authenticated', POL_OWNER, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `select id::text as id from public.business_members order by id`,
+      ),
+    );
+    expect(plainRows(ownerSeen).map((r) => r.id)).not.toContain(M_OUTSIDER);
   });
 
   // ─── LA FORMA DEL PREDICADO, Y A QUIÉN LE HABLA ─────────────────────────────
@@ -2692,14 +3328,18 @@ describe('las policies y los RPCs resuelven por membresía', () => {
 
     // La cerrada es la que mide. El catálogo público enseña toda sucursal
     // activa, así que lo que diferencia la policy nueva es la que NO aparece ahí:
-    // el gerente entra por la suya, el cajero no porque su alcance es LOC_A, y el
-    // de fuera tampoco porque no es de su negocio.
+    // el dueño entra por la suya, y el cajero y el gerente no, porque
+    // `POL_LOC_CLOSED` no está en el alcance de ninguno de los dos.
+    //
+    // Y el gerente ve lo MISMO que el de fuera, y es el cambio de esta tarea:
+    // antes recibía el negocio entero —la cerrada incluida— y ahora ve lo que
+    // su alcance dice. Lo que lo distingue ya no es ver una sucursal ajena, que
+    // no puede, sino que la ajena le queda igual de ajena que al que no
+    // administra el negocio.
     const active = [POL_LOC_A, POL_LOC_B, POL_LOC_OTHER].sort();
     expect(await idsSeenBy(POL_STAFF, seeLocations)).toEqual(active);
     expect(await idsSeenBy(POL_OUTSIDER, seeLocations)).toEqual(active);
-    expect(await idsSeenBy(POL_MANAGER, seeLocations)).toEqual(
-      [...active, POL_LOC_CLOSED].sort(),
-    );
+    expect(await idsSeenBy(POL_MANAGER, seeLocations)).toEqual(active);
     expect(await idsSeenBy(POL_OWNER, seeLocations)).toEqual(
       [...active, POL_LOC_CLOSED].sort(),
     );
@@ -2759,10 +3399,38 @@ describe('las policies y los RPCs resuelven por membresía', () => {
         'usarlo: por eso es una policy aparte y por rol.',
     ).toEqual([POL_LOC_NEW]);
 
-    // Y la fila nueva entra en el perímetro del gerente sin tocar nada más.
+    // Y la fila nueva NO entra en el alcance del gerente, y es la consecuencia
+    // de la regla que esta tarea escribe: CREAR una sucursal es de negocio
+    // entero —la fila que se crea no tiene el alcance de nadie todavía—, pero
+    // ADMINISTRAR una sucursal es del alcance, y la nueva no está en el
+    // alcance de nadie. Hasta que el dueño la ponga en el alcance de alguien,
+    // nadie la administra.
+    //
+    // La ve igual, y no por la membresía: está ACTIVA, así que el catálogo
+    // público la enseña. Lo que no ve es la cerrada, que es la única que
+    // distinguiría las dos policies. Y lo que NO puede es modificarla: eso se
+    // mide abajo, con el `update`.
     expect(await idsSeenBy(POL_MANAGER, seeLocations)).toEqual(
+      [...active, POL_LOC_NEW].sort(),
+    );
+    expect(await idsSeenBy(POL_OWNER, seeLocations)).toEqual(
       [...active, POL_LOC_CLOSED, POL_LOC_NEW].sort(),
     );
+
+    // Y el gerente no la administra: la fila está fuera de su alcance, así que
+    // el `update` no la toca. Cero filas, no un error.
+    const renamedNew = await as(ctx.sql, 'authenticated', POL_MANAGER, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_locations set name = 'C (gerente)'
+          where id = '${POL_LOC_NEW}' returning id::text`,
+      ),
+    );
+    expect(
+      plainRows(renamedNew).map((r) => r.id),
+      'el gerente renombró la sucursal que acaba de crear. Crearla es de ' +
+        'negocio entero; administrarla es del alcance, y la nueva no está en ' +
+        'el alcance de nadie.',
+    ).toEqual([]);
 
     // ─── BORRAR SUCURSAL: DE DUEÑO, NO DE GERENTE ───────────────────────────
     //
@@ -2771,15 +3439,15 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     // true para el gerente. `20261015024825` la aprieta a `owner`.
     //
     // Y no es una regresión: la policy que ésta reemplaza —la de
-    // `business_ownership`— era de dueño solamente, así que un gerente que
-    // borraba una sucursal antes tampoco podía.
+    // `business_ownership`, de dueño solamente— también era de dueño, así que
+    // un gerente que borraba una sucursal antes tampoco podía.
     //
     // Y el costo de dejarlo pasar era de los que no se ven en un log:
     // `business_member_locations_location_id_fkey` es `ON DELETE CASCADE`, así
     // que el gerente que borraba una sucursal se llevaba por delante la fila de
-    // alcance de cada cajero que apuntaba a ella. Después del drop de
-    // `business_ownership` esta es la única puerta a DELETE que tiene el
-    // sistema, y es de dueño.
+    // alcance de cada cajero que apuntaba a ella. Con la generación vieja
+    // retirada, esta es la única puerta a DELETE que tiene el sistema, y es de
+    // dueño.
 
     // La fila descartable es la que el gerente acaba de crear más arriba
     // (`POL_LOC_NEW`): existe, es de este negocio y no tiene cascadas que
@@ -2931,8 +3599,8 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     );
     expect(
       plainRows(ownerUnlink).map((r) => r.offer_id),
-      'el dueño perdió el acceso que ya tenía. Esta migración es aditiva: la ' +
-        'policy vieja por `business_ownership` sigue concediéndosela.',
+      'el dueño perdió el acceso que ya tenía. El permiso de desvincular es ' +
+        'del negocio entero, y el dueño lo tiene.',
     ).toEqual([OFFER_A]);
     // Se restituye, para no dejar el fixture por debajo de lo que el resto del
     // archivo espera encontrar.
@@ -3259,10 +3927,11 @@ describe('las policies y los RPCs resuelven por membresía', () => {
   // `20261015015012` resolvían por `business_members`, leían la fila, y la
   // denegaban entera.
   //
-  // Estas dos personas no tienen fila en `business_ownership`, así que todo lo
-  // que ven o dejan de ver aquí viene de la generación nueva. La del cajero trae
-  // alcance a `POL_LOC_A` —igual que `M_STAFF`— y la del dueño tiene el rol que
-  // `business_member_role` devuelve sin preguntar por la fila de `business_ownership`.
+  // Estas dos personas son DUEÑAS de su negocio y no tienen más acceso que
+  // ese, así que todo lo que ven o dejan de ver aquí viene de su propia
+  // membresía. La del cajero trae alcance a `POL_LOC_A` —igual que `M_STAFF`— y
+  // la del dueño tiene el rol que `business_member_role` devuelve mirando esa
+  // misma fila.
   //
   // Y NO es un caso raro ni una hipótesis: es la forma exacta de las 16 filas de
   // producción antes de `owner_memberships_no_session_expiry`.
@@ -3551,8 +4220,8 @@ describe('las policies y los RPCs resuelven por membresía', () => {
       delResto.map((r) => ({ id: r.id, ttl: r.ttl })),
       'la migración que apaga el TTL de las filas del backfill alcanzó filas que ' +
         'no son del backfill. Su predicado es `exists (select 1 from ' +
-        'business_ownership)`, y una fila que la API cree después no puede caer ' +
-        'en eso: el backfill es lo que pega esa fila en `business_ownership`.',
+        'business_members)`, y una fila que la API cree después no puede caer ' +
+        'en eso: el backfill es lo que pega esa fila en `business_members`.',
     ).toEqual([
       { id: M_STALE_OWNER, ttl: 24 },
       { id: M_UNSTAMPED_OWNER, ttl: 24 },
@@ -3689,14 +4358,18 @@ describe('las policies y los RPCs resuelven por membresía', () => {
     // sigue siendo una membresía y el panel la tiene que poder pintar para
     // explicar por qué ese cajero no entra.
     //
-    // La fila borrada se va de la lista porque su `alias` espeja el correo de
-    // `auth.users`, y una persona que se fue del equipo no tiene por qué seguir
-    // dejando su correo de acceso en la lista que el panel dibuja. Antes de
-    // `20261015024825` seguía ahí: el `deleted_at is null` que pedía el §6.3
-    // estaba escrito, pero aplicado a la fila AJENA del `exists`, no a la que se
-    // estaba leyendo. Venía del SQL del brief, y era un hueco del brief.
+    // Y el dueño YA NO ESTÁ: el roster del gerente es «el roster que
+    // alcanzas», y el §8 dice que un gerente nunca administra al dueño —que es
+    // la misma regla que la API aplica en `reaches()—, así que la fila del
+    // dueño no está en la lista. La fila BORRADA se va de la lista porque su
+    // `alias` espeja el correo de `auth.users`, y una persona que se fue del
+    // equipo no tiene por qué seguir dejando su correo de acceso en la lista
+    // que el panel dibuja. Antes de `20261015024825` seguía ahí: el
+    // `deleted_at is null` que pedía el §6.3 estaba escrito, pero aplicado a la
+    // fila AJENA del `exists`, no a la que se estaba leyendo. Venía del SQL del
+    // brief, y era un hueco del brief.
     expect(await idsSeenBy(POL_MANAGER, allMembers)).toEqual(
-      [M_OWNER, M_MANAGER, M_STAFF, M_PAUSED, M_UNSTAMPED_STAFF].sort(),
+      [M_MANAGER, M_STAFF, M_PAUSED, M_UNSTAMPED_STAFF].sort(),
     );
     expect(await idsSeenBy(POL_OWNER, allMembers)).toEqual(
       [M_OWNER, M_MANAGER, M_STAFF, M_PAUSED, M_UNSTAMPED_STAFF].sort(),
@@ -3772,11 +4445,10 @@ describe('las policies y los RPCs resuelven por membresía', () => {
 
   // ─── LOS TRES RPCs ─────────────────────────────────────────────────────────
   //
-  // Los tres aceptan hoy al dueño con un `exists` escrito a mano sobre
-  // `business_ownership`, y los tres los recrea esta migración con el helper.
-  // Lo que no cambia es TODO lo demás: la matriz de estados, los códigos de error
-  // y los grants EXECUTE. Un código de error distinto es una outage de otra
-  // feature, no un detalle de estilo.
+  // Los tres aceptan hoy al dueño por la generación nueva —el helper de
+  // `business_member_role`—, y lo que no cambia es TODO lo demás: la matriz de
+  // estados, los códigos de error y los grants EXECUTE. Un código de error
+  // distinto es una outage de otra feature, no un detalle de estilo.
 
   test('cancel_order: la sucursal manda, y la matriz de estados sigue siendo la misma', async () => {
     // El cajero cancela el pedido de SU sucursal y repone el stock.
@@ -4398,14 +5070,6 @@ describe('los límites del plan bloquean crecer, no operar', () => {
                ('${BIZ_ARCHIVED}',      'Límites con archivo', 'restaurant', 'limits-archived'),
                ('${BIZ_ARCHIVED_ROOM}', 'Límites archivo sitio', 'restaurant', 'limits-archived-room'),
                ('${BIZ_BULK}',          'Límites una sentencia', 'restaurant', 'limits-bulk');
-
-        insert into public.business_ownership (business_id, owner_id)
-        select b.id, '${LIM_OWNER}'::uuid from public.businesses b
-        where b.id in ('${BIZ_FREE}', '${BIZ_GRANDFATHERED}', '${BIZ_AT_LIMIT}',
-                       '${BIZ_PLAN_DELETED}', '${BIZ_PRO}', '${BIZ_PRO_PLUS}',
-                       '${BIZ_ROOM}', '${BIZ_MOVES_FROM}', '${BIZ_MOVES_TO}',
-                       '${BIZ_MOVES_ROOM}', '${BIZ_ARCHIVED}',
-                       '${BIZ_ARCHIVED_ROOM}', '${BIZ_BULK}');
       `);
 
       // El plan va PRIMERO y por razones distintas en cada negocio: el
@@ -4522,6 +5186,17 @@ describe('los límites del plan bloquean crecer, no operar', () => {
         `update public.business_plans_state
             set plan_code = 'free'
           where business_id = '${BIZ_GRANDFATHERED}'`,
+      );
+
+      // Y EL NEGOCIO DEL TOPE SE ACTIVA, y el orden es obligatorio:
+      // `default_business_inactive` fuerza `is_active := false` en todo
+      // `insert`, así que un negocio insertado queda inactivo siempre.
+      //
+      // Hace falta que esté activo porque el invariante de la transferencia es
+      // «un negocio ACTIVO tiene un dueño vivo», y el test de abajo mide la
+      // degradación de su dueño contra ese invariante.
+      await tx.unsafe(
+        `update public.businesses set is_active = true where id = '${BIZ_ARCHIVED}'`,
       );
     });
   });
@@ -5001,8 +5676,8 @@ describe('los límites del plan bloquean crecer, no operar', () => {
     // El control es un cambio de rol entre dos roles que NO son de dueño: la
     // guarda es del dueño, y una fila que no lo es se puede cambiar de rol. Lo
     // que antes se medía acá —un dueño que deja de serlo y pasa a ocupar plaza—
-    // ya no es alcanzable: degradar al dueño está cerrado con `R0002` desde
-    // `20261020052915`.
+    // ya no lo niega el trigger del tope: la degradación sale ANTES de contar,
+    // y por eso no es un problema de plan.
     //
     // `rolledBack` porque el camino de éxito de este control ES una escritura y
     // no tiene que quedar nada detrás.
@@ -5019,18 +5694,27 @@ describe('los límites del plan bloquean crecer, no operar', () => {
     ).toBeNull();
 
     // Y ahora el dueño: bajarlo a `staff` se rechaza con `R0002` —no con el
-    // `R0001` del plan— porque la degradación no tiene nada que ver con el plan.
-    // El negocio está EN EL TOPE y aun así la respuesta es la del dueño: la
-    // guarda del dueño corre antes que el conteo, y el operador no recibe un
-    // «subí de plan» para una operación que no es del plan.
+    // `R0001` del plan— porque la degradación no tiene nada que ver con el
+    // plan. Y el rechazo NO es del statement: el trigger que la vigila es
+    // diferido, y el negocio está EN EL TOPE y aun así la respuesta no es la del
+    // plan sino la del invariante.
+    const degradar = `update public.business_members set role = 'staff'
+                       where id = '${MEM_ARCH_OWNER}'`;
+
+    const sentencia = await rolledBack(ctx.sql, async (tx) => {
+      await tx.unsafe(degradar);
+    });
+    expect(
+      sentencia,
+      'la degradación de un dueño se niega al commit, no en la sentencia: el ' +
+        'trigger que la vigila es diferido.',
+    ).toBeNull();
+
     const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe(
-        `update public.business_members set role = 'staff'
-          where id = '${MEM_ARCH_OWNER}'`,
-      ),
+      tx.unsafe(degradar),
     );
     expect(err?.code).toBe('R0002');
-    expect(err?.message).toContain('no se puede degradar');
+    expect(err?.message).toContain('no puede quedar sin dueño');
 
     // El conteo no se mueve y la fila sigue siendo la de la dueña.
     expect(await liveStaff(BIZ_ARCHIVED)).toBe(2);
@@ -5550,6 +6234,24 @@ describe('el dueño no se desactiva, no se degrada, y hay uno por negocio', () =
                ('${MEM_MIX_OK_OWNER}','${BIZ_MIX_OK}', '${OWNER}', 'owner',   'Dueña',         'inv-mix-ok-owner@test','active',   0, null),
                ('${MEM_MIX_NO_OWNER}','${BIZ_MIX_NO}', '${OWNER}', 'owner',   'Dueña',         'inv-mix-no-owner@test','active',   0, null);
       `);
+
+      // ─── TRES NEGOCIOS ACTIVOS, Y POR QUÉ EL ORDEN ES OBLIGATORIO ───────────
+      //
+      // `default_business_inactive` es un trigger `BEFORE INSERT` que FUERZA
+      // `new.is_active := false`, así que un negocio insertado queda inactivo
+      // siempre, ni siquiera con `is_active = true` en el `insert`. Por eso la
+      // activación es un `update` aparte, y por eso va DESPUÉS de sembrar las
+      // membresías.
+      //
+      // Y por qué estos tres: el invariante de la transferencia es «un negocio
+      // ACTIVO tiene un dueño vivo», y los tests de abajo lo miden contra
+      // negocios que lo están. `BIZ_BORN` NO se activa, y es a propósito: su
+      // dueño NACIÓ desactivado, así que un negocio activo sin dueño vivo
+      // haría que cualquier escritura sobre sus miembros rebotara al commit.
+      await tx.unsafe(`
+        update public.businesses set is_active = true
+         where id in ('${BIZ_A}', '${BIZ_DEMOTE}', '${BIZ_MIX_NO}')
+      `);
     });
   });
 
@@ -5758,16 +6460,35 @@ describe('el dueño no se desactiva, no se degrada, y hay uno por negocio', () =
   });
 
   test('al dueño no se lo da de baja', async () => {
+    // La baja del dueño ya NO la niega el guard de la fila: la decide el
+    // trigger DIFERIDO, que mira el estado final de la transacción. Y el
+    // negocio está ACTIVO, así que la degradación sola se aborta al commit.
+    //
+    // Por eso el test dice las DOS mitades: la sentencia pasa, y el commit no.
+    // Un test que afirmara que la sentencia falló estaría probando otra cosa.
+    const baja = `update public.business_members set deleted_at = now()
+                   where business_id = '${BIZ_A}' and role = 'owner' and deleted_at is null`;
+
+    const sentencia = await rolledBack(ctx.sql, async (tx) => {
+      await tx.unsafe(baja);
+    });
+    expect(
+      sentencia,
+      'la baja del dueño se niega en el commit, no en la sentencia: el trigger ' +
+        'que la vigila es diferido.',
+    ).toBeNull();
+
     const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe(
-        `update public.business_members set deleted_at = now()
-          where business_id = '${BIZ_A}' and role = 'owner' and deleted_at is null`,
-      ),
+      tx.unsafe(baja),
     );
 
     expect(err?.code).toBe('R0002');
     expect(err?.message).toContain('dueño');
+    // Y el `detail` es lo que la UI muestra para decir QUÉ pasó: el negocio y la
+    // fila, que es lo que hace falta para que un humano pueda buscarla.
     expect(err?.detail).toBe(`business=${BIZ_A} member=${MEM_A_OWNER}`);
+
+    // La fila sigue viva: el commit fallido deshizo la baja.
     expect((await ownerRow(MEM_A_OWNER))?.deleted).toBe(false);
   });
 
@@ -5815,25 +6536,33 @@ describe('el dueño no se desactiva, no se degrada, y hay uno por negocio', () =
     // puede dejar de serlo». La degradación se dejó pasar mientras la
     // transferencia de propiedad iba a necesitar exactamente esa salida.
     //
-    // La transferencia no existe, y mientras tanto la degradación era una puerta
-    // de una línea de HTTP: `PATCH /businesses/:id/staff/:memberId {"role":
-    // "manager"}` sobre la fila del PROPIO dueño. Lo que queda después es un
-    // negocio inmanejable e invisible —las puertas owner-only niegan a todos,
-    // `listForUser` lo borra del listado del panel— y sin ninguna operación que
-    // devuelva el rol de dueño.
+    // La transferencia EXISTE, y por eso la degradación suelta ya no se niega
+    // en la sentencia: la niega el INVARIANTE, al commit, y sólo para un
+    // negocio que sigue activo. Un negocio inactivo puede quedarse sin dueño
+    // —es lo que hace posible la liberación (D2)—.
     //
-    // Así que degradar se NIEGA, con el código que ya existía: `R0002`, el dueño
-    // intocable. No es una regla nueva: es la misma invariante con una tercera
-    // salida tapada.
+    // Así que el rechazo sigue existiendo, con el mismo código (`R0002`, el
+    // dueño intocable) y con la misma forma, pero lo dice el trigger diferido
+    // y no el guard de la fila. Y lo que se afirma son las DOS mitades: la
+    // sentencia pasa y el commit no.
+    const degradar = `update public.business_members set role = 'manager'
+                       where id = '${MEM_DEMOTE_OWNER}'`;
+
+    const sentencia = await rolledBack(ctx.sql, async (tx) => {
+      await tx.unsafe(degradar);
+    });
+    expect(
+      sentencia,
+      'la degradación de un dueño se niega al commit, no en la sentencia: el ' +
+        'trigger que la vigila es diferido.',
+    ).toBeNull();
+
     const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe(
-        `update public.business_members set role = 'manager'
-          where id = '${MEM_DEMOTE_OWNER}'`,
-      ),
+      tx.unsafe(degradar),
     );
 
     expect(err?.code).toBe('R0002');
-    expect(err?.message).toContain('no se puede degradar');
+    expect(err?.message).toContain('no puede quedar sin dueño');
 
     // Y la fila sigue siendo la del dueño, viva y con su rol.
     const row = await ownerRow(MEM_DEMOTE_OWNER);
@@ -5887,8 +6616,13 @@ describe('el dueño no se desactiva, no se degrada, y hay uno por negocio', () =
 
   test('degradar y desactivar en la misma escritura se rechaza', async () => {
     // La escritura DOBLE no es una puerta: es la misma puerta más corta. Y con
-    // la degradación cerrada, el gesto combinado tiene que rebotar también —y
-    // rebota con la regla del ROL, que es la que lo prohíbe.
+    // la degradación cerrada —la cierre el trigger diferido, no el guard de la
+    // fila— el gesto combinado tiene que rebotar también.
+    //
+    // Y rebota por la MITAD QUE SIGUE EN PIE: la desactivación del dueño. El
+    // guard de `status → 'disabled'` se quedó en el `BEFORE` a propósito,
+    // porque una revocación merece un error INMEDIATO y con su mensaje, y no
+    // un error al commit que confunde la desactivación con la degradación.
     //
     // `deniedAs` es lo correcto acá: el camino de éxito de este test es la falla
     // que el test existe para detectar, y esa es exactamente la asimetría que
@@ -5904,7 +6638,7 @@ describe('el dueño no se desactiva, no se degrada, y hay uno por negocio', () =
     );
 
     expect(err?.code).toBe('R0002');
-    expect(err?.message).toContain('no se puede degradar');
+    expect(err?.message).toContain('no se puede desactivar');
 
     // Y la fila sigue siendo la del dueño, viva y activa.
     const row = await ownerRow(MEM_MIX_OK_OWNER);
@@ -5915,30 +6649,35 @@ describe('el dueño no se desactiva, no se degrada, y hay uno por negocio', () =
   });
 
   test('degradar y dar de baja en la misma escritura se rechaza', async () => {
-    // Pinea la MISMA guarda por el otro lado, y es el borde peligroso: si la
-    // primera guarda se colapsa a `if new.role <> 'owner' then return new`, esta
-    // escritura entra. Baja por `deleted_at` con el rol cambiado en el mismo
-    // statement, o sea una baja irreversible desde la fila hecha en el mismo
-    // gesto que aparta al dueño.
+    // La MITAD QUE QUEDÓ DE LA GUARDA, y es el borde peligroso: si el guard que
+    // sobrevive —la desactivación— se colapsa a `if old.role <> 'owner' then
+    // return new`, esta escritura entra.
     //
-    // Y `deniedAs` es lo correcto acá: el camino de éxito de este test es la
-    // falla que el test existe para detectar, y esa es exactamente la asimetría
-    // que hace `deniedAs` commitear. Cuando la guard está bien no commitea
-    // nada; si algún día deja de estarlo, la fila commiteada envenena los tests
-    // que cuentan dueños de este bloque.
+    // Y la mitad que ya no está —la degradación y la baja— no se niegan acá:
+    // las niega el trigger diferido, al commit, porque lo que decide si el
+    // negocio tiene dueño es el estado FINAL de la transacción. Por eso el
+    // negocio de este test está ACTIVO y por eso el rechazo es del commit y no
+    // de la sentencia.
+    const combo = `update public.business_members
+                     set role = 'manager', deleted_at = now()
+                   where id = '${MEM_MIX_NO_OWNER}'`;
+
+    // La SENTENCIA pasa: la degradación sola ya no se niega, y la baja sola
+    // tampoco.
+    const sentencia = await rolledBack(ctx.sql, async (tx) => {
+      await tx.unsafe(combo);
+    });
+    expect(
+      sentencia,
+      'la degradación y la baja juntas se niegan al commit, no en la sentencia.',
+    ).toBeNull();
+
+    // Y el COMMIT no.
     const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe(
-        `update public.business_members
-            set role = 'manager', deleted_at = now()
-          where id = '${MEM_MIX_NO_OWNER}'`,
-      ),
+      tx.unsafe(combo),
     );
     expect(err?.code).toBe('R0002');
-    // El mensaje dice DEGRADAR: la guarda del rol es la primera que se topa con
-    // esta escritura, y es la que explica por qué. La de la baja sigue
-    // existiendo —para una baja sin cambio de rol— y dice «dar de baja».
-    expect(err?.message).toContain('no se puede degradar');
-    expect(err?.message).not.toContain('dar de baja');
+    expect(err?.message).toContain('no puede quedar sin dueño');
 
     // Y la fila sigue siendo la del dueño, viva y sin baja.
     const row = await ownerRow(MEM_MIX_NO_OWNER);
@@ -5974,18 +6713,27 @@ describe('el dueño no se desactiva, no se degrada, y hay uno por negocio', () =
         'estado de destino en vez de la transición.',
     ).toHaveLength(1);
 
-    // 2. Y la baja de ESA fila tiene que decir «baja», no «desactivar». Con la
-    // guarda por estado, la de desactivar dispara primero y la de baja —ocho
-    // líneas más abajo— no llega a existir para el operador.
-    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
-      tx.unsafe(
+    // 2. Y la baja de ESA fila ya no la niega el guard del dueño: la baja la
+    // decide el trigger DIFERIDO, que mira el estado final de la transacción, y
+    // no el estado de una fila. Y la frase que distinguía «dar de baja» de
+    // «desactivar» ya no la dice nadie: las dos se fundieron en el mensaje del
+    // invariante.
+    //
+    // El negocio de esta fila está INACTIVO a propósito —su dueño NACIÓ
+    // desactivado, así que un negocio activo no tendría dueño vivo y cualquier
+    // escritura sobre sus miembros rebotaría al commit— y por eso la baja sola
+    // pasa.
+    const baja = await rolledBack(ctx.sql, async (tx) => {
+      await tx.unsafe(
         `update public.business_members set deleted_at = now()
           where id = '${OWNER_BORN}'`,
-      ),
-    );
-    expect(err?.code).toBe('R0002');
-    expect(err?.message).toContain('dar de baja');
-    expect(err?.message).not.toContain('desactivar');
+      );
+    });
+    expect(
+      baja,
+      'la baja del dueño la decide el invariante diferido, no el guard de la ' +
+        'fila: la fila del dueño ya no está enclavada.',
+    ).toBeNull();
     expect((await ownerRow(OWNER_BORN))?.deleted).toBe(false);
 
     // 3. Y reactivar sí se puede —no es una fila enclavada—, porque «se puede
@@ -6294,5 +7042,2869 @@ describe('el dueño no se desactiva, no se degrada, y hay uno por negocio', () =
     expect(location?.hint).toBe(
       'subí de plan o gestioná el acceso que ya existe',
     );
+  });
+});
+
+// ─── LA FRONTERA DE SUCURSAL, EN LAS POLICIES ─────────────────────────────────
+//
+// La regla del alcance ya vive en la base —`business_member_reaches_member`,
+// la Task 1— y esta es la tarea que la pasa a las policies. Lo que se mide acá
+// es la MATRIZ `(rol, sucursal) → puede leer / puede escribir`, y hay TRES reglas
+// que este bloque existe para que no se rompan:
+//
+//   1. EL DUEÑO LLEGA A TODO. Un predicado que lo apriete por error deja al
+//      negocio sin nadie que lo administre.
+//   2. SIN FILAS DE ALCANCE NO SE LLEGA A NADA. El conjunto vacío NO es
+//      subconjunto de todo, y la versión de esta regla que estaba escrita en
+//      TypeScriptesquece eso.
+//   3. EL EMPLEADO NO VE EL ROSTER. La regla del alcance NO distingue por rol,
+//      así que un empleado cuyo alcance cubre al de otro empleado satisface el
+//      helper: lo que lo mantiene fuera del roster es el ROL, y por eso el
+//      requisito de rol va DENTRO de la policy y no implícito.
+//
+// ─── EL FIXTURE ───────────────────────────────────────────────────────────────
+//
+// Un negocio, TRES sucursales y SEIS personas, y cada una con un alcance
+// distinto, para que la matriz se lea de un vistazo:
+//
+//   dueño            sin filas    ve el negocio entero
+//   gerente de A     {A}          ve A y nada más
+//   gerente sin      {}           no ve NADA del negocio
+//   alcance
+//   empleada de A    {A}          ve A, y el roster NO
+//   empleada sin     {}           no ve NADA
+//   alcance
+//   empleada de C    {C}          ve C, y el gerente de A NO la alcanza
+//
+// Y las tres sucursales NO son todas visibles: LOC_B está CERRADA, así que el
+// catálogo público no la enseña y la ÚNICA policy que puede decide es la de la
+// membresía. Sin esa distinción, «el gerente ve su sucursal» podría ser
+// cierto porque todo el mundo ve todo.
+describe('la frontera de sucursal, en las policies', () => {
+  let ctx: SupabaseTestDb;
+
+  const BIZ_F = 'c1000000-0000-4000-8000-000000000001';
+
+  const LOC_A = 'c2000000-0000-4000-8000-000000000001';
+  const LOC_B = 'c2000000-0000-4000-8000-000000000002';
+  const LOC_C = 'c2000000-0000-4000-8000-000000000003';
+  const LOC_NUEVA = 'c2000000-0000-4000-8000-000000000004';
+
+  const USER_OWNER = 'c3000000-0000-4000-8000-000000000001';
+  const USER_MANAGER_A = 'c3000000-0000-4000-8000-000000000002';
+  const USER_MANAGER_SIN = 'c3000000-0000-4000-8000-000000000003';
+  const USER_STAFF_A = 'c3000000-0000-4000-8000-000000000004';
+  const USER_STAFF_SIN = 'c3000000-0000-4000-8000-000000000005';
+  const USER_STAFF_C = 'c3000000-0000-4000-8000-000000000006';
+  const USER_CONSUMER = 'c3000000-0000-4000-8000-000000000007';
+
+  const M_OWNER = 'c4000000-0000-4000-8000-000000000001';
+  const M_MANAGER_A = 'c4000000-0000-4000-8000-000000000002';
+  const M_MANAGER_SIN = 'c4000000-0000-4000-8000-000000000003';
+  const M_STAFF_A = 'c4000000-0000-4000-8000-000000000004';
+  const M_STAFF_SIN = 'c4000000-0000-4000-8000-000000000005';
+  const M_STAFF_C = 'c4000000-0000-4000-8000-000000000006';
+
+  const OFFER_A = 'c5000000-0000-4000-8000-000000000001';
+  const OFFER_B = 'c5000000-0000-4000-8000-000000000002';
+  const ORDER_A = 'c6000000-0000-4000-8000-000000000001';
+  const ORDER_B = 'c6000000-0000-4000-8000-000000000002';
+  const INTENT_A = 'c6000000-0000-4000-8000-000000000011';
+  const INTENT_B = 'c6000000-0000-4000-8000-000000000012';
+  const CATEGORY = 'c5000000-0000-4000-8000-00000000000a';
+  const CATEGORY_2 = 'c5000000-0000-4000-8000-00000000000b';
+  const HOUR = 'c7000000-0000-4000-8000-000000000001';
+  const COUPON = 'c7000000-0000-4000-8000-000000000002';
+  const PAYOUT = 'c7000000-0000-4000-8000-000000000003';
+
+  /**
+   * El título de la oferta que las pruebas de escritura crean.
+   *
+   * Un título y no un id, porque el grant de escritura de `offers` para el
+   * cliente es POR COLUMNA y `id` no está en la lista: un `insert` que la
+   * nombre muere con el 42501 del GRANT, que es el MISMO código que el de la
+   * RLS. La prueba tiene que poder distinguir los dos, y sólo puede hacerlo
+   * por el mensaje.
+   */
+  const TITLE_NUEVA = 'Producto que escribe el cliente';
+
+  const seeOffers = `select id::text as id from public.offers order by id`;
+  const seeOrders = `select id::text as id from public.orders order by id`;
+  const seeLocations = `select id::text as id from public.business_locations order by id`;
+  const seeMembers = `select id::text as id from public.business_members order by id`;
+  const seeScope = `select member_id::text || ':' || location_id::text as id
+                      from public.business_member_locations order by 1`;
+  const seeIntents = `select id::text as id from public.payment_intents order by id`;
+  const seeEvents = `select order_id::text as id from public.order_events order by order_id`;
+
+  beforeAll(async () => {
+    ctx = await createSupabaseTestDb();
+
+    await ctx.sql.begin(async (tx) => {
+      // Las tres mismas claves de Vault que el bloque de policies siembra, y por
+      // la misma razón: los triggers de AFTER INSERT de ofertas y de pedidos
+      // las levantan sin ellas.
+      for (const [name, value] of [
+        ['supabase_url', 'https://dispatch-stub.invalid'],
+        ['supabase_anon_key', 'frontera-stub-anon-key'],
+        ['internal_secret', 'frontera-internal-secret'],
+      ] as const) {
+        await tx.unsafe(
+          `insert into vault.secrets (name, secret) values ('${name}', '${value}')
+           on conflict (name) do update set secret = excluded.secret`,
+        );
+      }
+
+      for (const id of [
+        USER_OWNER,
+        USER_MANAGER_A,
+        USER_MANAGER_SIN,
+        USER_STAFF_A,
+        USER_STAFF_SIN,
+        USER_STAFF_C,
+        USER_CONSUMER,
+      ]) {
+        await tx.unsafe(
+          `insert into auth.users (id, email, raw_user_meta_data)
+           values ('${id}', 'frontera-${id}@test', '{"role":"business"}'::jsonb)
+           on conflict (id) do nothing`,
+        );
+      }
+
+      await tx.unsafe(
+        `insert into public.businesses (id, name, type, slug)
+         values ('${BIZ_F}', 'Frontera Biz', 'restaurant', 'frontera-biz')`,
+      );
+
+      // El plan NO es decorativo: sin esta fila el negocio se lee como `free`,
+      // y `free` admite UNA sucursal y DOS miembros. Este fixture necesita
+      // tres sucursales y seis accesos.
+      await tx.unsafe(
+        `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+         values ('${BIZ_F}', 'pro', null)`,
+      );
+
+      // El negocio se queda INACTIVO, y es a propósito: `Anyone can view active
+      // businesses` es `is_active = true and business_is_approved(id)`, así que
+      // un negocio inactivo NO lo ve el catálogo público y la lectura del
+      // negocio mide la policy de la membresía y no el catálogo. La fila del
+      // negocio no tiene dimensión de sucursal, pero ESO no significa que sea
+      // pública: es del negocio entero, y se concede por el ROL.
+      //
+      // Y de paso: `enforce_offer_business_availability` baja `is_active` a
+      // false de toda oferta de un negocio que no lo esté, así que las ofertas
+      // de abajo están cerradas por dos razones.
+
+      await tx.unsafe(
+        `insert into public.business_locations (id, business_id, name, address, latitude, longitude, is_active)
+         values ('${LOC_A}', '${BIZ_F}', 'A', 'Street A', 40.41680000, -3.70380000, true),
+                ('${LOC_B}', '${BIZ_F}', 'B', 'Street B', 40.41680000, -3.70380000, false),
+                ('${LOC_C}', '${BIZ_F}', 'C', 'Street C', 40.41680000, -3.70380000, true)`,
+      );
+
+      // El dueño tiene TTL 0 y nunca fue sellado, que es lo que producción
+      // tiene (`20261016022631_owner_memberships_no_session_expiry`).
+      await tx.unsafe(
+        `insert into public.business_members
+           (id, business_id, user_id, role, label, alias, status, session_ttl_hours, last_authenticated_at, created_at, deleted_at)
+         values
+           ('${M_OWNER}',       '${BIZ_F}', '${USER_OWNER}',       'owner',   'Dueña',         'frontera-duena@test',     'active', 0,  null, now(), null),
+           ('${M_MANAGER_A}',   '${BIZ_F}', '${USER_MANAGER_A}',   'manager', 'Gerente de A',  'frontera-gerente-a@test', 'active', 24, now(), now(), null),
+           ('${M_MANAGER_SIN}', '${BIZ_F}', '${USER_MANAGER_SIN}', 'manager', 'Gerente sin',   'frontera-gerente-sin@test','active', 24, now(), now(), null),
+           ('${M_STAFF_A}',     '${BIZ_F}', '${USER_STAFF_A}',     'staff',   'Empleada de A', 'frontera-empleada-a@test','active', 24, now(), now(), null),
+           ('${M_STAFF_SIN}',   '${BIZ_F}', '${USER_STAFF_SIN}',   'staff',   'Empleada sin',  'frontera-empleada-sin@test','active', 24, now(), now(), null),
+           ('${M_STAFF_C}',     '${BIZ_F}', '${USER_STAFF_C}',     'staff',   'Empleada de C', 'frontera-empleada-c@test','active', 24, now(), now(), null)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_member_locations (member_id, location_id, deleted_at)
+         values
+           ('${M_MANAGER_A}', '${LOC_A}', null),
+           ('${M_STAFF_A}',   '${LOC_A}', null),
+           ('${M_STAFF_C}',   '${LOC_C}', null)`,
+      );
+
+      // Las dos ofertas van CERRADAS a propósito: `Anyone can view active
+      // offers` es `using (is_active = true)`, así que una oferta activa la ve
+      // todo el mundo y una lectura no distinguiría la policy nueva de la
+      // vieja. Con la oferta cerrada, lo que se mide es la policy.
+      await tx.unsafe(
+        `insert into public.categories (id, name, slug, active)
+         values ('${CATEGORY}', 'Frontera category', 'frontera-category', true),
+                ('${CATEGORY_2}', 'Frontera category 2', 'frontera-category-2', true)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.offers
+           (id, business_id, business_location_id, title, original_price, discounted_price,
+            stock, initial_stock, pickup_start, pickup_end, is_active)
+         values ('${OFFER_A}', '${BIZ_F}', '${LOC_A}', 'Producto de A', 10.00, 4.00, 5, 5, now(), now() + interval '3 hours', false),
+                ('${OFFER_B}', '${BIZ_F}', '${LOC_B}', 'Producto de B', 10.00, 4.00, 5, 5, now(), now() + interval '3 hours', false)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.offer_categories (offer_id, category_id)
+         values ('${OFFER_A}', '${CATEGORY}')`,
+      );
+
+      for (const [key, offerId, status] of [
+        ['A', OFFER_A, 'pending'],
+        ['B', OFFER_B, 'pending'],
+      ] as const) {
+        await tx.unsafe(
+          `insert into public.orders
+             (id, user_id, offer_id, business_id, order_number, status, price,
+              original_price, pickup_code, commission_rate, platform_fee, net_amount)
+           values ('${key === 'A' ? ORDER_A : ORDER_B}', '${USER_CONSUMER}', '${offerId}', '${BIZ_F}',
+                   'FRONTERA-${key}', '${status}', 4.00, 10.00, 'PICKUP-${key}',
+                   0.4000, 0.4000, 3.2000)`,
+        );
+      }
+
+      await tx.unsafe(
+        `insert into public.payment_intents (id, order_id, gateway, amount, currency, status, idempotency_key)
+         values ('${INTENT_A}', '${ORDER_A}', 'stripe', 4.00, 'USD', 'approved', 'c8000000-0000-4000-8000-000000000001'),
+                ('${INTENT_B}', '${ORDER_B}', 'stripe', 4.00, 'USD', 'approved', 'c8000000-0000-4000-8000-000000000002')`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_hours (id, business_id, day, open_time, close_time, is_closed)
+         values ('${HOUR}', '${BIZ_F}', 'monday', '08:00', '20:00', false)`,
+      );
+
+      // El cupón va INACTIVO: `Anyone can view active coupons` filtra por
+      // `is_active`, y una lectura de un cupón activo no distinguiría la policy
+      // nueva del catálogo público.
+      await tx.unsafe(
+        `insert into public.coupons (id, business_id, code, name, type, value, is_active)
+         values ('${COUPON}', '${BIZ_F}', 'FRONTERA', 'Frontera coupon', 'percentage', 10.00, false)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.payouts (id, business_id, period_start, period_end, gross_amount, platform_fee, net_amount, status)
+         values ('${PAYOUT}', '${BIZ_F}', current_date - 30, current_date - 1, 100.00, 40.00, 60.00, 'pending')`,
+      );
+      // `business_notification_preferences` no se siembra: la escribe
+      // `trg_create_business_notification_preferences` al insertar el negocio.
+    });
+  });
+
+  afterAll(async () => {
+    await ctx.stop();
+  });
+
+  /** The ids one session sees in one table, sorted. */
+  async function idsSeenBy(userId: string, query: string) {
+    const rows = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ id: string }[]>(query),
+    );
+    return plainRows(rows)
+      .map((r) => r.id)
+      .sort();
+  }
+
+  /**
+   * «¿alcanzo a este acceso?», como lo pregunta la policy del roster.
+   *
+   * Se llama como `authenticated` a propósito: el grant a ese rol es parte del
+   * contrato de la función, y una prueba que la llamara con el dueño de la base
+   * no mediría ese grant.
+   */
+  async function reaches(userId: string, memberId: string): Promise<boolean> {
+    const r = await as(ctx.sql, 'authenticated', userId, (tx) =>
+      tx.unsafe<{ ok: boolean }[]>(
+        `select public.business_member_reaches_member('${BIZ_F}'::uuid, '${memberId}'::uuid) as ok`,
+      ),
+    );
+    return r[0].ok;
+  }
+
+  /** The live scope of one access, read as the database sees it. */
+  async function scopeOf(memberId: string): Promise<string[]> {
+    const r = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ location_id: string }[]>(
+        `select l.location_id
+           from public.business_member_locations l
+          where l.member_id = '${memberId}'::uuid
+            and l.deleted_at is null
+          order by l.location_id`,
+      ),
+    );
+    return plainRows(r).map((row) => row.location_id);
+  }
+
+  /**
+   * One write as one session, in a transaction that is ALWAYS rolled back.
+   *
+   * The fixture of this block is shared by every test, and a write that
+   * succeeds and STAYS would make the next test measure a fixture that is not
+   * the declared one. `as()` commits, so every write of this block goes
+   * through here.
+   */
+  async function writeRolledBack(
+    userId: string,
+    statement: string,
+  ): Promise<{ rows: string[]; refusal: string | null }> {
+    let rows: string[] = [];
+    const refusal = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        rows = plainRows(await tx.unsafe<{ id: string }[]>(statement)).map(
+          (r) => r.id,
+        );
+      },
+      { role: 'authenticated', userId },
+    );
+    return { rows, refusal };
+  }
+
+  // ─── EL ALCANCE POR SUCURSAL, EN LECTURA Y EN ESCRITURA ─────────────────────
+
+  test('un gerente con alcance en A no lee los productos de B', async () => {
+    // Anti-vacuity: las dos ofertas EXISTEN y las dos están CERRADAS, así que el
+    // catálogo público no las enseña y la única policy que puede decide es la
+    // de la membresía. Sin el `is_active = false` de abajo, el `[]` del gerente
+    // sin alcance podría ser cierto porque el catálogo las esconde a todos.
+    const offers = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string; is_active: boolean }[]>(
+        `select id::text as id, is_active from public.offers order by id`,
+      ),
+    );
+    expect(plainRows(offers)).toEqual([
+      { id: OFFER_A, is_active: false },
+      { id: OFFER_B, is_active: false },
+    ]);
+
+    expect(await scopeOf(M_MANAGER_A)).toEqual([LOC_A]);
+
+    expect(
+      await idsSeenBy(USER_MANAGER_A, seeOffers),
+      'el gerente de A lee el producto de B. Su alcance es una sucursal, y el ' +
+        'producto de B vive en la otra.',
+    ).toEqual([OFFER_A]);
+  });
+
+  test('un gerente con alcance en A no inserta un producto en B', async () => {
+    // SIN la columna `id`: el grant de escritura de `offers` para el cliente
+    // es POR COLUMNA y `id` no está en la lista, así que un `insert` que la
+    // nombre moraría con un 42501 del GRANT y no de la policy —y el mismo
+    // código, así que la prueba pasaría por la razón equivocada. Sin `id` la
+    // columna trae su default (`gen_random_uuid()`).
+    //
+    // Y las dos escrituras van en transacciones que se revierten: `deniedAs`
+    // COMMITEA cuando la sentencia pasa, y esta escritura es justo la que no
+    // debería pasar.
+    const insertAt = (locationId: string) => `
+      insert into public.offers
+        (business_id, business_location_id, title, original_price, discounted_price,
+         stock, initial_stock, pickup_start, pickup_end)
+      values ('${BIZ_F}', '${locationId}', '${TITLE_NUEVA}',
+              10.00, 4.00, 5, 5, now(), now() + interval '3 hours')`;
+
+    const denied = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        await tx.unsafe(insertAt(LOC_B));
+      },
+      { role: 'authenticated', userId: USER_MANAGER_A },
+    );
+    expect(
+      denied,
+      'el gerente de A insertó un producto en la sucursal que no administra.',
+    ).not.toBeNull();
+    expect(denied).toBe('42501');
+
+    // Y el MISMO insert, en la sucursal que sí administra, SÍ entra: la
+    // diferencia entre las dos escrituras es la sucursal y no un grant de
+    // columnas, así que la negación de arriba es de la policy.
+    const allowed = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        await tx.unsafe(insertAt(LOC_A));
+      },
+      { role: 'authenticated', userId: USER_MANAGER_A },
+    );
+    expect(
+      allowed,
+      'el gerente de A no pudo escribir en la sucursal que administra. Si esto ' +
+        'falla, la negación de arriba no era de la policy sino de un grant.',
+    ).toBeNull();
+
+    // Y la fila de B no existe.
+    const created = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ n: number }[]>(
+        `select count(*)::int as n from public.offers
+          where title = '${TITLE_NUEVA}' and business_location_id = '${LOC_B}'`,
+      ),
+    );
+    expect(plainRows(created)[0]?.n).toBe(0);
+  });
+
+  test('un gerente con alcance en A no borra un producto de B', async () => {
+    // Un DELETE denegado por RLS no levanta 42501: FILTRA la fila y devuelve
+    // cero. Por eso se mide por el conteo de filas que volvió.
+    //
+    // Y va en una transacción que se revierte: antes de que la frontera
+    // existiera, este DELETE PASABA, y una escritura que pasa y se queda
+    // envenena las pruebas de abajo —que cuentan las ofertas del negocio—.
+    let deleted: string[] = [];
+    const refusal = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        deleted = plainRows(
+          await tx.unsafe<{ id: string }[]>(
+            `delete from public.offers where id = '${OFFER_B}' returning id::text`,
+          ),
+        ).map((r) => r.id);
+      },
+      { role: 'authenticated', userId: USER_MANAGER_A },
+    );
+    expect(
+      refusal,
+      'el DELETE de un producto de B levantó un error.',
+    ).toBeNull();
+    expect(deleted, 'el gerente de A borró el producto de B.').toEqual([]);
+
+    // Y la fila sigue ahí, que es lo que hace válida la aserción anterior.
+    const still = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ n: number }[]>(
+        `select count(*)::int as n from public.offers where id = '${OFFER_B}'`,
+      ),
+    );
+    expect(plainRows(still)[0]?.n).toBe(1);
+  });
+
+  test('un gerente con alcance en A no lee los pedidos de B', async () => {
+    // Y lo mismo para las tablas que heredan la sucursal del pedido: los
+    // eventos y los intents de pago. `order_events` se pregunta por el pedido
+    // porque el id del evento lo genera el trigger.
+    expect(await idsSeenBy(USER_MANAGER_A, seeOrders)).toEqual([ORDER_A]);
+    expect(await idsSeenBy(USER_MANAGER_A, seeIntents)).toEqual([INTENT_A]);
+    expect(await idsSeenBy(USER_MANAGER_A, seeEvents)).toEqual([ORDER_A]);
+  });
+
+  test('un gerente con alcance en A no renombra la sucursal B', async () => {
+    // En una transacción que se revierte: antes de que la frontera existiera,
+    // este UPDATE PASABA, y un nombre cambiado envenena las pruebas de abajo.
+    let renamed: string[] = [];
+    const refusal = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        renamed = plainRows(
+          await tx.unsafe<{ id: string }[]>(
+            `update public.business_locations set name = 'B (gerente de A)'
+              where id = '${LOC_B}' returning id::text`,
+          ),
+        ).map((r) => r.id);
+      },
+      { role: 'authenticated', userId: USER_MANAGER_A },
+    );
+    expect(
+      refusal,
+      'el UPDATE de una sucursal ajena levantó un error.',
+    ).toBeNull();
+    expect(renamed, 'el gerente de A renombró la sucursal B.').toEqual([]);
+
+    const name = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ name: string }[]>(
+        `select name from public.business_locations where id = '${LOC_B}'`,
+      ),
+    );
+    expect(plainRows(name)[0]?.name).toBe('B');
+  });
+
+  test('un gerente SIN alcance no lee ningún producto del negocio', async () => {
+    // Anti-vacuity: no tiene filas de alcance, y eso es lo que se está probando.
+    expect(await scopeOf(M_MANAGER_SIN)).toEqual([]);
+
+    expect(
+      await idsSeenBy(USER_MANAGER_SIN, seeOffers),
+      'un gerente sin alcance lee los productos del negocio. Sin filas de ' +
+        'alcance no se alcanza NADA: el conjunto vacío no es subconjunto de todo.',
+    ).toEqual([]);
+    expect(await idsSeenBy(USER_MANAGER_SIN, seeOrders)).toEqual([]);
+    expect(await idsSeenBy(USER_MANAGER_SIN, seeIntents)).toEqual([]);
+    expect(await idsSeenBy(USER_MANAGER_SIN, seeEvents)).toEqual([]);
+  });
+
+  test('un gerente SIN alcance no lee ninguna sucursal del negocio', async () => {
+    // La única sucursal que la policy puede conceder es la CERRADA: las otras
+    // dos las enseña el catálogo público (`Anyone can view active business
+    // locations`), que el §5.1 del spec declara y que este plan no cambia.
+    //
+    // Y el `toContain` de abajo es la anti-vacuity: la lista NO está vacía, así
+    // que el `not.toContain` de la cerrada mide la policy y no una lista que no
+    // existía.
+    const seen = await idsSeenBy(USER_MANAGER_SIN, seeLocations);
+    expect(seen).toContain(LOC_A);
+    expect(
+      seen,
+      'un gerente sin alcance lee la sucursal cerrada del negocio.',
+    ).not.toContain(LOC_B);
+    // Y tampoco la puede escribir. En una transacción que se revierte, porque
+    // antes de que la frontera existiera este UPDATE PASABA.
+    let renamed: string[] = [];
+    const refusal = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        renamed = plainRows(
+          await tx.unsafe<{ id: string }[]>(
+            `update public.business_locations set name = 'A (gerente sin alcance)'
+              where id = '${LOC_A}' returning id::text`,
+          ),
+        ).map((r) => r.id);
+      },
+      { role: 'authenticated', userId: USER_MANAGER_SIN },
+    );
+    expect(
+      refusal,
+      'el UPDATE de una sucursal ajena levantó un error.',
+    ).toBeNull();
+    expect(renamed).toEqual([]);
+  });
+
+  test('el dueño lee y escribe el negocio entero', async () => {
+    // Anti-vacuity: el dueño NO tiene filas de alcance, y su alcance implícito
+    // es el negocio entero.
+    expect(await scopeOf(M_OWNER)).toEqual([]);
+
+    expect(await idsSeenBy(USER_OWNER, seeOffers)).toEqual(
+      [OFFER_A, OFFER_B].sort(),
+    );
+    expect(await idsSeenBy(USER_OWNER, seeOrders)).toEqual(
+      [ORDER_A, ORDER_B].sort(),
+    );
+    expect(await idsSeenBy(USER_OWNER, seeLocations)).toContain(LOC_B);
+
+    // Y escribe. Todo dentro de una transacción que se revierte, así que el
+    // fixture queda como estaba para las pruebas de abajo.
+    //
+    // La oferta se inserta SIN `id` —el grant de escritura de `offers` es por
+    // columna y `id` no está en la lista—, así que el id lo pone el default y
+    // no se puede saber de antemano: lo que se afirma es que la fila entró.
+    let inserted: string[] = [];
+    let renamed: string[] = [];
+    const refusal = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        inserted = plainRows(
+          await tx.unsafe<{ id: string }[]>(
+            `insert into public.offers
+               (business_id, business_location_id, title, original_price, discounted_price,
+                stock, initial_stock, pickup_start, pickup_end)
+             values ('${BIZ_F}', '${LOC_B}', '${TITLE_NUEVA}',
+                     10.00, 4.00, 5, 5, now(), now() + interval '3 hours')
+             returning id::text`,
+          ),
+        ).map((r) => r.id);
+        renamed = plainRows(
+          await tx.unsafe<{ id: string }[]>(
+            `update public.business_locations set name = 'B (dueño)'
+              where id = '${LOC_B}' returning id::text`,
+          ),
+        ).map((r) => r.id);
+      },
+      { role: 'authenticated', userId: USER_OWNER },
+    );
+    expect(
+      refusal,
+      'el dueño no pudo escribir en su propio negocio. Su alcance es el negocio ' +
+        'entero, y un predicado que lo apriete deja al negocio sin nadie.',
+    ).toBeNull();
+    expect(inserted).toHaveLength(1);
+    expect(renamed).toEqual([LOC_B]);
+  });
+
+  test('un empleado con alcance en A lee los productos de A y no los de B', async () => {
+    expect(await scopeOf(M_STAFF_A)).toEqual([LOC_A]);
+
+    expect(await idsSeenBy(USER_STAFF_A, seeOffers)).toEqual([OFFER_A]);
+    expect(await idsSeenBy(USER_STAFF_A, seeOrders)).toEqual([ORDER_A]);
+    expect(await idsSeenBy(USER_STAFF_A, seeIntents)).toEqual([INTENT_A]);
+    expect(await idsSeenBy(USER_STAFF_A, seeEvents)).toEqual([ORDER_A]);
+    // Y la sucursal cerrada de la otra no.
+    const seen = await idsSeenBy(USER_STAFF_A, seeLocations);
+    expect(seen).toContain(LOC_A);
+    expect(seen).not.toContain(LOC_B);
+  });
+
+  test('un empleado SIN alcance no lee ningún producto', async () => {
+    expect(await scopeOf(M_STAFF_SIN)).toEqual([]);
+
+    expect(await idsSeenBy(USER_STAFF_SIN, seeOffers)).toEqual([]);
+    expect(await idsSeenBy(USER_STAFF_SIN, seeOrders)).toEqual([]);
+    const seen = await idsSeenBy(USER_STAFF_SIN, seeLocations);
+    expect(seen).toContain(LOC_A);
+    expect(seen).not.toContain(LOC_B);
+  });
+
+  // ─── EL ROSTER: SOLO LO QUE SE ALCANZA ───────────────────────────────────────
+
+  test('un gerente no ve en el roster el alias de un acceso fuera de su alcance', async () => {
+    // Anti-vacuity: el acceso fuera de su alcance EXISTE y tiene alias. El
+    // alias espeja el correo de `auth.users`, así que verlo es ver quién
+    // trabaja en el negocio.
+    const roster = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string; alias: string }[]>(
+        `select id::text as id, alias from public.business_members
+          where business_id = '${BIZ_F}' order by id`,
+      ),
+    );
+    const aliases = plainRows(roster);
+    expect(aliases.find((r) => r.id === M_STAFF_C)?.alias).toBe(
+      'frontera-empleada-c@test',
+    );
+
+    // El gerente de A alcanza a la empleada de A (su alcance está contenido en
+    // el suyo) y a sí mismo. NO alcanza a la de C, ni a la del dueño, ni a la
+    // que no tiene alcance.
+    expect(await reaches(USER_MANAGER_A, M_STAFF_A)).toBe(true);
+    expect(await reaches(USER_MANAGER_A, M_STAFF_C)).toBe(false);
+    expect(await reaches(USER_MANAGER_A, M_OWNER)).toBe(false);
+
+    expect(
+      await idsSeenBy(USER_MANAGER_A, seeMembers),
+      'el gerente de A ve en el roster un acceso fuera de su alcance.',
+    ).toEqual([M_MANAGER_A, M_STAFF_A].sort());
+
+    // Y el ALIAS, que es la forma en que la fila se filtra de verdad.
+    const visible = await as(ctx.sql, 'authenticated', USER_MANAGER_A, (tx) =>
+      tx.unsafe<{ alias: string }[]>(
+        `select alias from public.business_members order by alias`,
+      ),
+    );
+    expect(plainRows(visible).map((r) => r.alias)).not.toContain(
+      'frontera-empleada-c@test',
+    );
+  });
+
+  test('un gerente no ve las filas de alcance de un acceso fuera de su alcance', async () => {
+    expect(
+      await idsSeenBy(USER_MANAGER_A, seeScope),
+      'el gerente de A ve las filas de alcance de un acceso fuera de su alcance.',
+    ).toEqual([`${M_MANAGER_A}:${LOC_A}`, `${M_STAFF_A}:${LOC_A}`].sort());
+  });
+
+  test('el dueño ve el roster entero', async () => {
+    expect(
+      await idsSeenBy(USER_OWNER, seeMembers),
+      'el dueño no ve el roster de su negocio. Su alcance es el negocio entero.',
+    ).toEqual(
+      [
+        M_OWNER,
+        M_MANAGER_A,
+        M_MANAGER_SIN,
+        M_STAFF_A,
+        M_STAFF_SIN,
+        M_STAFF_C,
+      ].sort(),
+    );
+    expect(await idsSeenBy(USER_OWNER, seeScope)).toEqual(
+      [
+        `${M_MANAGER_A}:${LOC_A}`,
+        `${M_STAFF_A}:${LOC_A}`,
+        `${M_STAFF_C}:${LOC_C}`,
+      ].sort(),
+    );
+  });
+
+  // ─── EL EMPLEADO NO VE EL ROSTER ────────────────────────────────────────────
+  //
+  // La regla del alcance NO distingue por rol: un empleado con alcance {A}
+  // alcanza a otro empleado con alcance {A}, y el helper lo dice. Lo que lo
+  // mantiene fuera del roster es el ROL, y es la razón por la que el
+  // requisito va DENTRO de la policy y no implícito en el helper.
+
+  test('un empleado con alcance no ve el roster', async () => {
+    // Anti-vacuity: el alcance de la empleada de A CUBRE el del gerente de A,
+    // así que el helper sí lo dice alcanzable. Si el `true` de abajo no está,
+    // el `[]` de más abajo no mide el rol.
+    expect(await reaches(USER_STAFF_A, M_MANAGER_A)).toBe(true);
+    expect(await reaches(USER_STAFF_A, M_STAFF_A)).toBe(true);
+
+    // Y en el roster no ve a nadie: ni al gerente, ni a la compañera, ni al
+    // dueño. Lo único que ve es SU PROPIA fila, por la policy
+    // `Members can view own membership`, que concede la fila propia y nada más.
+    expect(
+      await idsSeenBy(USER_STAFF_A, seeMembers),
+      'un empleado con alcance ve el roster. El roster es de dueño y gerente.',
+    ).toEqual([M_STAFF_A]);
+
+    // Y tampoco las filas de alcance de nadie.
+    expect(await idsSeenBy(USER_STAFF_A, seeScope)).toEqual([]);
+  });
+
+  // ─── LA EXCEPCIÓN DE LA PROPIA FILA ─────────────────────────────────────────
+  //
+  // ADR-0013, decisión 4: un gerente puede cortar su propio acceso, y es a
+  // propósito. Sin esta excepción, un gerente SIN filas de alcance no se
+  // alcanzaba a sí mismo, y el camino de autoservicio desaparecía.
+  //
+  // La excepción es de la MEMBRESÍA del que llama y de nada más: no concede
+  // ni una sucursal, ni un producto, ni un pedido.
+
+  test('un gerente sin alcance alcanza su propia fila y nada más', async () => {
+    expect(
+      await reaches(USER_MANAGER_SIN, M_MANAGER_SIN),
+      'un gerente sin alcance no se alcanza a sí mismo, y con eso desaparece ' +
+        'el camino de autoservicio del ADR-0013 (decisión 4).',
+    ).toBe(true);
+
+    // Y a NADIE MÁS: ni al gerente con alcance, ni a la empleada de A, ni a la
+    // que no tiene alcance, ni al dueño.
+    expect(await reaches(USER_MANAGER_SIN, M_MANAGER_A)).toBe(false);
+    expect(await reaches(USER_MANAGER_SIN, M_STAFF_A)).toBe(false);
+    expect(await reaches(USER_MANAGER_SIN, M_STAFF_SIN)).toBe(false);
+    expect(await reaches(USER_MANAGER_SIN, M_OWNER)).toBe(false);
+  });
+
+  test('un gerente sin alcance no toca ni una oferta, ni un pedido, ni una sucursal', async () => {
+    // La excepción es sobre la fila de membresía del que llama, y no concede
+    // NADA del negocio: el alcance sigue siendo el alcance.
+    expect(await idsSeenBy(USER_MANAGER_SIN, seeOffers)).toEqual([]);
+    expect(await idsSeenBy(USER_MANAGER_SIN, seeOrders)).toEqual([]);
+    expect(await idsSeenBy(USER_MANAGER_SIN, seeLocations)).not.toContain(
+      LOC_B,
+    );
+
+    // Y escribir tampoco: ni insertar un producto, ni renombrar una sucursal,
+    // ni borrar un producto.
+    const inserted = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        await tx.unsafe(
+          `insert into public.offers
+             (business_id, business_location_id, title, original_price, discounted_price,
+              stock, initial_stock, pickup_start, pickup_end)
+           values ('${BIZ_F}', '${LOC_A}', '${TITLE_NUEVA}',
+                   10.00, 4.00, 5, 5, now(), now() + interval '3 hours')`,
+        );
+      },
+      { role: 'authenticated', userId: USER_MANAGER_SIN },
+    );
+    expect(
+      inserted,
+      'un gerente sin alcance insertó un producto. La excepción de la propia ' +
+        'fila no concede acceso a ningún recurso.',
+    ).not.toBeNull();
+    expect(inserted).toBe('42501');
+
+    const renamed = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        await tx.unsafe(
+          `update public.business_locations set name = 'A (sin alcance)'
+            where id = '${LOC_A}' returning id::text`,
+        );
+      },
+      { role: 'authenticated', userId: USER_MANAGER_SIN },
+    );
+    expect(
+      renamed,
+      'el UPDATE de una sucursal ajena levantó un error.',
+    ).toBeNull();
+
+    let deleted: string[] = [];
+    const deletion = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        deleted = plainRows(
+          await tx.unsafe<{ id: string }[]>(
+            `delete from public.offers where id = '${OFFER_A}' returning id::text`,
+          ),
+        ).map((r) => r.id);
+      },
+      { role: 'authenticated', userId: USER_MANAGER_SIN },
+    );
+    expect(
+      deletion,
+      'el DELETE de un producto ajeno levantó un error.',
+    ).toBeNull();
+    expect(deleted).toEqual([]);
+  });
+
+  // ─── LAS OPERACIONES DE NEGOCIO ENTERO SIGUEN SIENDO DEL NEGOCIO ENTERO ────
+  //
+  // El alcance acota LAS COSAS QUE VIVEN EN UNA SUCURSAL. Lo que es del
+  // negocio entero sigue siendo del negocio entero, y la lista se nombra una
+  // por una para que nadie la acote "por error" más adelante.
+
+  test('el negocio, los horarios, los cupones, los payouts y las preferencias siguen siendo del negocio entero', async () => {
+    // El gerente SIN alcance es el que mide: con alcance, estas operaciones se
+    // le concederían igual, y el test no distinguiría "sigue siendo del negocio
+    // entero" de "acotada por el alcance".
+    //
+    // Y sus lecturas tienen que ser NO VACÍAS: un `[]` de una tabla que
+    // nadie sembró es cierto por la razón equivocada.
+
+    // 1. El negocio, LEER.
+    //
+    // Y el contrafactual: un cliente que NO es miembro del negocio no lo ve.
+    // El negocio está inactivo, así que el catálogo público no lo enseña y la
+    // fila se la concede la policy de la membresía, que es de ROL.
+    expect(
+      await idsSeenBy(
+        USER_CONSUMER,
+        `select id::text as id from public.businesses order by id`,
+      ),
+      'un cliente que no es miembro ve el negocio. El catálogo público no lo ' +
+        'enseña, porque el negocio está inactivo.',
+    ).not.toContain(BIZ_F);
+    expect(
+      await idsSeenBy(
+        USER_MANAGER_SIN,
+        `select id::text as id from public.businesses order by id`,
+      ),
+      'un gerente sin alcance no ve la fila de su negocio.',
+    ).toContain(BIZ_F);
+
+    // 2. El negocio, ESCRIBIR.
+    const business = await writeRolledBack(
+      USER_MANAGER_SIN,
+      `update public.businesses set name = 'Frontera Biz (gerente sin alcance)'
+        where id = '${BIZ_F}' returning id::text`,
+    );
+    expect(
+      business.refusal,
+      'un gerente sin alcance no pudo renombrar el negocio. La fila del negocio ' +
+        'no tiene dimensión de sucursal.',
+    ).toBeNull();
+    expect(business.rows).toEqual([BIZ_F]);
+
+    // 3. Los horarios, LEER y ESCRIBIR.
+    //
+    // La LECTURA no dice nada: `Anyone can view business hours` es `using
+    // (true)`, así que los horarios del mundo son públicos. Lo que sí dice es
+    // la ESCRITURA, que sólo la concede la policy de rol.
+    expect(
+      await idsSeenBy(
+        USER_MANAGER_SIN,
+        `select id::text as id from public.business_hours order by id`,
+      ),
+    ).toContain(HOUR);
+    const hours = await writeRolledBack(
+      USER_MANAGER_SIN,
+      `update public.business_hours set open_time = '07:00'
+        where id = '${HOUR}' returning id::text`,
+    );
+    expect(hours.refusal).toBeNull();
+    expect(hours.rows).toEqual([HOUR]);
+
+    // 4. Los cupones, LEER y ESCRIBIR.
+    //
+    // El cupón está INACTIVO, así que el catálogo público no lo enseña y la
+    // lectura mide la policy de la membresía. El contrafactual lo dice: un
+    // cliente que no es miembro no lo ve.
+    expect(
+      await idsSeenBy(
+        USER_CONSUMER,
+        `select id::text as id from public.coupons order by id`,
+      ),
+      'un cliente que no es miembro ve el cupón. El catálogo público no lo ' +
+        'enseña, porque el cupón está inactivo.',
+    ).not.toContain(COUPON);
+    expect(
+      await idsSeenBy(
+        USER_MANAGER_SIN,
+        `select id::text as id from public.coupons order by id`,
+      ),
+    ).toContain(COUPON);
+    const coupons = await writeRolledBack(
+      USER_MANAGER_SIN,
+      `update public.coupons set name = 'Frontera coupon (gerente sin alcance)'
+        where id = '${COUPON}' returning id::text`,
+    );
+    expect(coupons.refusal).toBeNull();
+    expect(coupons.rows).toEqual([COUPON]);
+
+    // 5. Las liquidaciones, LEER. (Su escritura no la tiene el panel: las
+    // escribe `generate_payouts` con `service_role`.)
+    expect(
+      await idsSeenBy(
+        USER_MANAGER_SIN,
+        `select id::text as id from public.payouts order by id`,
+      ),
+      'un gerente sin alcance no ve las liquidaciones de su negocio.',
+    ).toContain(PAYOUT);
+
+    // 6. Las preferencias de notificación, LEER y ESCRIBIR.
+    expect(
+      await idsSeenBy(
+        USER_MANAGER_SIN,
+        `select business_id::text as id from public.business_notification_preferences order by business_id`,
+      ),
+      'un gerente sin alcance no ve las preferencias de su negocio.',
+    ).toContain(BIZ_F);
+    const prefs = await writeRolledBack(
+      USER_MANAGER_SIN,
+      `update public.business_notification_preferences set push_enabled = false
+        where business_id = '${BIZ_F}' returning business_id::text as id`,
+    );
+    expect(prefs.refusal).toBeNull();
+    expect(prefs.rows).toEqual([BIZ_F]);
+
+    // 7. Las preferencias de notificación, INSERTAR. La fila ya existe —la
+    // escribe el trigger del negocio—, así que el INSERT se mide borrándola
+    // con el dueño de la base y volviéndola a poner con el gerente. El BORRADO
+    // no es lo que se mide: no hay policy de borrado para el cliente, y por eso
+    // lo hace `service_role`.
+    const insertedPrefs = await rolledBack(
+      ctx.sql,
+      async (tx) => {
+        await tx.unsafe(`set local role service_role`);
+        await tx.unsafe(
+          `delete from public.business_notification_preferences where business_id = '${BIZ_F}'`,
+        );
+        await tx.unsafe(`set local role authenticated`);
+        await tx.unsafe(
+          `insert into public.business_notification_preferences (business_id)
+           values ('${BIZ_F}')`,
+        );
+      },
+      { role: 'authenticated', userId: USER_MANAGER_SIN },
+    );
+    expect(
+      insertedPrefs,
+      'un gerente sin alcance no pudo insertar las preferencias de su negocio.',
+    ).toBeNull();
+
+    // 8. Crear una sucursal, que es de negocio entero: la fila que se crea no
+    // tiene el alcance de nadie todavía, así que no es "alcanzar" una sucursal.
+    //
+    // Y que NO la vea después es la otra mitad de la regla: crearla es del
+    // negocio entero, administrarla es del alcance, y una fila nueva no está
+    // en el alcance de nadie.
+    const created = await writeRolledBack(
+      USER_MANAGER_SIN,
+      `insert into public.business_locations (id, business_id, name, address, latitude, longitude)
+       values ('${LOC_NUEVA}', '${BIZ_F}', 'Nueva', 'Street N', 40.41680000, -3.70380000)
+       returning id::text`,
+    );
+    expect(
+      created.refusal,
+      'un gerente sin alcance no pudo crear una sucursal.',
+    ).toBeNull();
+    expect(created.rows).toEqual([LOC_NUEVA]);
+  });
+
+  // ─── LA FORMA DEL CAMBIO ───────────────────────────────────────────────────
+  //
+  // El diff es UN predicado y DOS policies, y esta prueba lo dice con el
+  // texto de las policies y con el del archivo del ledger.
+
+  test('el diff es un predicado y dos policies, y las trece no se tocaron', async () => {
+    const byHelper = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        {
+          tablename: string;
+          policyname: string;
+          qual: string | null;
+          with_check: string | null;
+        }[]
+      >(
+        `select tablename, policyname, qual, with_check
+           from pg_policies
+          where schemaname = 'public'
+            and (qual like '%can_manage_location%'
+              or with_check like '%can_manage_location%')
+          order by tablename, policyname`,
+      ),
+    );
+
+    // Las TRECE que pasan por `can_manage_location` siguen pasando por él, y
+    // ninguna menciona el helper nuevo: el alcance entra por la FUNCIÓN, y no
+    // por trece diffs de policy.
+    expect(plainRows(byHelper).length).toBe(13);
+    for (const policy of plainRows(byHelper)) {
+      expect(
+        `${policy.qual}\n${policy.with_check}`,
+        `${policy.tablename}:${policy.policyname} menciona el helper del roster. ` +
+          'Las trece no se tocan: lo que cambia es lo que el helper contesta.',
+      ).not.toContain('business_member_reaches_member');
+    }
+
+    // Y las DOS del roster son las únicas que mencionan el helper nuevo, y las
+    // dos llevan el requisito de rol DENTRO: sin él, un empleado con alcance
+    // que cubre al de otro empleado entraría al roster.
+    const byReach = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<
+        { tablename: string; policyname: string; qual: string | null }[]
+      >(
+        `select tablename, policyname, qual
+           from pg_policies
+          where schemaname = 'public'
+            and (qual like '%business_member_reaches_member%'
+              or with_check like '%business_member_reaches_member%')
+          order by tablename, policyname`,
+      ),
+    );
+    expect(
+      plainRows(byReach).map((p) => `${p.tablename}:${p.policyname}`),
+      'las policies del roster son las dos que cambian, y son las únicas que ' +
+        'pueden mencionar el helper del alcance.',
+    ).toEqual([
+      'business_member_locations:Owners and managers view member scope',
+      'business_members:Owners and managers view business members',
+    ]);
+    for (const policy of plainRows(byReach)) {
+      expect(
+        policy.qual,
+        `${policy.tablename}:${policy.policyname} no lleva el requisito de rol. ` +
+          'El helper del alcance no distingue por rol, así que sin este ' +
+          'requisito un empleado entra al roster.',
+      ).toContain('business_member_role');
+    }
+  });
+
+  test('la migración reescribe las dos policies con ALTER y no con DROP + CREATE', async () => {
+    // Postgres NO tiene `create or replace policy`: reescribir una policy es
+    // `alter policy`, que conserva el OID, o `drop policy` + `create policy`,
+    // que abre una ventana en la que la policy no existe. El plan exige
+    // `alter policy`, y esta es la prueba de que el archivo lo dice.
+    const statements = ledgerStatements(
+      '_location_scope_in_policies.sql',
+      'La migración de la frontera de sucursal',
+    );
+    const sql = statements.join('\n');
+
+    expect(sql).toContain(
+      'alter policy "Owners and managers view business members"',
+    );
+    expect(sql).toContain(
+      'alter policy "Owners and managers view member scope"',
+    );
+    for (const statement of statements) {
+      expect(
+        statement,
+        'la migración borra una policy y la vuelve a crear. Un DROP abre una ' +
+          'ventana en la que la policy no existe.',
+      ).not.toMatch(/^\s*drop\s+policy/im);
+    }
+
+    // Y el predicado: el gerente deja de recibir el negocio entero, y lo
+    // recibe por la rama del alcance.
+    //
+    // La afirmación va sobre el CUERPO de la función y no sobre el archivo
+    // entero, porque el archivo explica el cambio anterior en prosa —y esa
+    // prosa menciona el predicado viejo, que es justo lo que hay que poder
+    // leer sin que la prueba se confunda. El archivo entero tampoco sirve,
+    // porque el encabezado va en la misma sentencia que la función.
+    const helper = statements.find((statement) =>
+      statement.includes(
+        'create or replace function public.can_manage_location',
+      ),
+    );
+    expect(
+      helper,
+      'la migración no reescribe `can_manage_location`',
+    ).toBeDefined();
+    const body = (helper as string)
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('--'))
+      .join('\n');
+    expect(body).toContain("when r.member_role = 'owner' then true");
+    expect(
+      body,
+      'la migración todavía le da el negocio entero al gerente. El alcance ' +
+        'llega por las filas de `business_member_locations`, no por el rol.',
+    ).not.toContain("when r.member_role in ('owner', 'manager') then true");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LA TRANSFERENCIA DE PROPIEDAD
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// La decisión D1 del plan: un dueño puede entregar su negocio a otro acceso
+// vivo del mismo negocio, en UNA operación de base, y el negocio queda con un
+// dueño y sin ventana.
+//
+// ─── EL INVARIANTE, EN UNA FRASE ─────────────────────────────────────────────
+//
+// **Un negocio ACTIVO siempre tiene un dueño vivo. Un negocio INACTIVO puede no
+// tenerlo.** Y es la misma regla la que decide las tres cosas del plan: la
+// transferencia (D1), la liberación de un negocio inactivo (D2) y la
+// reactivación (Task 5). Una sola frase, y por eso una sola implementación.
+//
+// ─── POR QUÉ ESTE BLOQUE TIENE SU PROPIA BASE ─────────────────────────────────
+//
+// Porque los tests de acá MUTAN —transfieren, degradan, archivan— y
+// `deniedAs()` sólo revierte cuando la sentencia fue rechazada: su camino de
+// éxito commitea. Un fixture compartido con el bloque del dueño dejaría a los
+// dos midiendo sobre el mismo negocio y el orden de los tests pasaría a ser
+// parte del contrato. Base propia, como el bloque de arriba.
+//
+// ─── POR QUÉ UN NEGOCIO POR TEST Y NO UNO PARA EL BLOQUE ─────────────────────
+//
+// Por lo mismo, pero más fuerte: cada test que muta siembra el suyo. Un
+// negocio compartido entre dos tests que mutan haría que el segundo midiera
+// sobre el estado que dejó el primero, y el resultado dependería del orden de
+// ejecución —que es exactamente lo que un test no puede tener.
+//
+// ─── POR QUÉ LA FUNCIÓN SE LLAMA COMO `service_role` Y NO COMO `authenticated` ─
+//
+// Porque su ACL es `{postgres, service_role}`: los roles de cliente NO la
+// pueden ejecutar, y el móvil escribe directo a Supabase. La llamada es la que
+// hace la API: el rol del servicio y el `sub` del dueño, declarado con
+// `set_config` — que es lo que hace `sessionStateAsCaller` por el otro lado.
+// La FUNCIÓN comprueba adentro que el `sub` es el dueño vivo del negocio, así
+// que el ACL no es la única defensa: los dos tests lo dicen.
+
+describe('la transferencia de propiedad', () => {
+  let ctx: SupabaseTestDb;
+
+  beforeAll(async () => {
+    ctx = await createSupabaseTestDb();
+  });
+
+  afterAll(async () => {
+    await ctx.stop();
+  });
+
+  /**
+   * Un escenario sembrado para un test: un negocio, su dueño, su gerente, un
+   * empleado, un acceso pausado, uno archivado y dos sucursales.
+   *
+   * ─── EL ORDEN DEL SIEMBRA ES OBLIGATORIO ───────────────────────────────────
+   *
+   * NEGOCIO → MEMBRESÍAS → ACTIVAR. `default_business_inactive` es un trigger
+   * `BEFORE INSERT` que FUERZA `new.is_active := false`, así que un negocio
+   * insertado queda inactivo siempre, ni siquiera con `is_active = true` en el
+   * `insert`. Y el invariante de esta tarea es exactamente sobre los negocios
+   * ACTIVOS: sin ese `update` explícito, los tests del invariante no probarían
+   * nada y pasarían por la razón equivocada.
+   *
+   * ─── EL PLAN NO ES DECORATIVO ──────────────────────────────────────────────
+   *
+   * Sin fila de plan el negocio se lee como `free`, y `free` admite UNA
+   * sucursal y DOS miembros. Este fixture necesita dos sucursales y cinco
+   * accesos, así que lleva un plan `pro` explícito.
+   */
+  let scenarioCounter = 0;
+
+  type Scenario = {
+    businessId: string;
+    ownerUserId: string;
+    ownerMemberId: string;
+    managerUserId: string;
+    managerMemberId: string;
+    staffUserId: string;
+    staffMemberId: string;
+    disabledUserId: string;
+    disabledMemberId: string;
+    archivedUserId: string;
+    archivedMemberId: string;
+    locationIds: string[];
+  };
+
+  async function seedScenario(
+    options: { active?: boolean; plan?: 'pro' | 'free' } = {},
+  ): Promise<Scenario> {
+    scenarioCounter += 1;
+    const n = scenarioCounter.toString(16).padStart(12, '0');
+    const id = (prefix: string) => `${prefix}-0000-4000-8000-${n}`;
+
+    const businessId = id('a5000000');
+    const ownerUserId = id('a6000000');
+    const managerUserId = id('a6000001');
+    const staffUserId = id('a6000002');
+    const disabledUserId = id('a6000003');
+    const archivedUserId = id('a6000004');
+    const ownerMemberId = id('a7000000');
+    const managerMemberId = id('a7000001');
+    const staffMemberId = id('a7000002');
+    const disabledMemberId = id('a7000003');
+    const archivedMemberId = id('a7000004');
+    const locationIds =
+      (options.plan ?? 'pro') === 'free'
+        ? [id('a8000000')]
+        : [id('a8000000'), id('a8000001')];
+
+    await ctx.sql.begin(async (tx) => {
+      // Por `auth.users` y no por `profiles`: el único que escribe un perfil es
+      // el trigger `on_auth_user_created`, y `business_members.user_id` lo
+      // referencia.
+      for (const [userId, email] of [
+        [ownerUserId, `xfer-owner-${n}@test`],
+        [managerUserId, `xfer-manager-${n}@test`],
+        [staffUserId, `xfer-staff-${n}@test`],
+        [disabledUserId, `xfer-disabled-${n}@test`],
+        [archivedUserId, `xfer-archived-${n}@test`],
+      ] as const) {
+        await tx.unsafe(
+          `insert into auth.users (id, email) values ('${userId}', '${email}')
+           on conflict (id) do nothing`,
+        );
+      }
+
+      await tx.unsafe(
+        `insert into public.businesses (id, name, type, slug)
+         values ('${businessId}', 'Transferencia ${n}', 'restaurant', 'xfer-${n}')`,
+      );
+
+      if ((options.plan ?? 'pro') === 'pro') {
+        await tx.unsafe(
+          `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+           values ('${businessId}', 'pro', null)`,
+        );
+      }
+
+      await tx.unsafe(
+        `insert into public.business_locations
+           (id, business_id, name, address, latitude, longitude, is_active)
+         values ('${locationIds[0]}', '${businessId}', 'Una', 'Street', 40.41680000, -3.70380000, true)${
+           locationIds[1]
+             ? `,
+                ('${locationIds[1]}', '${businessId}', 'Dos', 'Street', 40.41680000, -3.70380000, true)`
+             : ''
+         }`,
+      );
+
+      // El dueño, el gerente y el empleado: `session_ttl_hours = 0` porque es lo
+      // que dejó `20261016022631` en producción —un dueño con TTL y sin sello es
+      // una sesión vencida por definición— y porque el TTL de los fixtures no
+      // es lo que esta tarea mide.
+      //
+      // Y el `free` se queda con TRES filas: su tope es dos miembros que no son
+      // dueño, y el cuarto acceso lo rechazaría el trigger del tope al
+      // insertarlo —que es exactamente lo que el escenario del tope quiere
+      // medir, y no lo que este escenario necesita.
+      const conExtras = (options.plan ?? 'pro') === 'pro';
+      await tx.unsafe(
+        `insert into public.business_members
+           (id, business_id, user_id, role, label, alias,
+            status, session_ttl_hours, last_authenticated_at)
+         values ('${ownerMemberId}',    '${businessId}', '${ownerUserId}',    'owner',   'Dueña',   'xfer-owner-${n}@test',    'active', 0, null),
+                ('${managerMemberId}',  '${businessId}', '${managerUserId}',  'manager', 'Gerente', 'xfer-manager-${n}@test',  'active', 0, null),
+                ('${staffMemberId}',    '${businessId}', '${staffUserId}',    'staff',   'Cajero',  'xfer-staff-${n}@test',    'active', 0, null)${
+                  conExtras
+                    ? `,
+                ('${disabledMemberId}', '${businessId}', '${disabledUserId}', 'staff',   'Pausado', 'xfer-disabled-${n}@test', 'disabled', 0, null)`
+                    : ''
+                }`,
+      );
+
+      // El archivado, sembrado con `deleted_at` en el mismo `insert`: un
+      // `update` sería exactamente lo que el guard del dueño ya no niega.
+      if (conExtras) {
+        await tx.unsafe(
+          `insert into public.business_members
+             (id, business_id, user_id, role, label, alias,
+              status, session_ttl_hours, last_authenticated_at, deleted_at)
+           values ('${archivedMemberId}', '${businessId}', '${archivedUserId}', 'staff', 'Se fue', 'xfer-archived-${n}@test', 'active', 0, null, now())`,
+        );
+      }
+
+      // Y AL FINAL el negocio se activa, que es lo que hace que el invariante
+      // tenga de qué hablar.
+      if (options.active !== false) {
+        await tx.unsafe(
+          `update public.businesses set is_active = true where id = '${businessId}'`,
+        );
+      }
+    });
+
+    return {
+      businessId,
+      ownerUserId,
+      ownerMemberId,
+      managerUserId,
+      managerMemberId,
+      staffUserId,
+      staffMemberId,
+      disabledUserId,
+      disabledMemberId,
+      archivedUserId,
+      archivedMemberId,
+      locationIds,
+    };
+  }
+
+  /**
+   * La llamada de la API: el rol del servicio y el `sub` de quien pregunta.
+   *
+   * `service_role` porque la función NO es ejecutable por los roles de cliente,
+   * y el `sub` porque la función lee `auth.uid()` para saber QUIÉN pide la
+   * transferencia. Es la misma forma que `sessionStateAsCaller` usa para
+   * declarar el llamador a la base.
+   */
+  async function transferAs(
+    scenario: Scenario,
+    callerUserId: string,
+    newOwnerMemberId: string,
+  ): Promise<Record<string, string>> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', callerUserId, (tx) =>
+        tx.unsafe<{ transfer: string }[]>(
+          `select public.transfer_business_ownership(
+                    '${scenario.businessId}'::uuid, '${newOwnerMemberId}'::uuid
+                  )::text as transfer`,
+        ),
+      ),
+    );
+    const raw = rows[0]?.transfer;
+    if (typeof raw !== 'string') {
+      throw new Error(
+        'transfer_business_ownership no devolvió una fila de jsonb legible',
+      );
+    }
+    return JSON.parse(raw) as Record<string, string>;
+  }
+
+  /** La misma llamada, en su forma negativa: el error, no la fila. */
+  async function transferDeniedAs(
+    scenario: Scenario,
+    callerUserId: string,
+    newOwnerMemberId: string,
+  ): Promise<{ code: string; message: string; detail?: string } | null> {
+    return deniedAs(ctx.sql, 'service_role', callerUserId, (tx) =>
+      tx.unsafe(
+        `select public.transfer_business_ownership(
+                  '${scenario.businessId}'::uuid, '${newOwnerMemberId}'::uuid
+                )`,
+      ),
+    );
+  }
+
+  /** El estado de una fila de membresía: rol, estado y si está archivada. */
+  async function memberState(
+    memberId: string,
+  ): Promise<{ role: string; status: string; deleted: boolean } | null> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ role: string; status: string; deleted: boolean }[]>(
+          `select m.role::text as role, m.status::text as status,
+                  (m.deleted_at is not null) as deleted
+             from public.business_members m where m.id = '${memberId}'`,
+        ),
+      ),
+    );
+    return rows[0] ?? null;
+  }
+
+  /** Los DUEÑOS VIVOS del negocio: `role = 'owner'`, activos y sin archivar. */
+  async function liveOwners(businessId: string): Promise<number> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ n: number }[]>(
+          `select count(*)::int as n
+             from public.business_members m
+            where m.business_id = '${businessId}'
+              and m.role = 'owner'::public.business_member_role
+              and m.status = 'active'::public.business_member_status
+              and m.deleted_at is null`,
+        ),
+      ),
+    );
+    return rows[0]?.n ?? -1;
+  }
+
+  /**
+   * LA CONSULTA DEL PANEL DEL DUEÑO, tal cual la hace el móvil.
+   *
+   * Es la que `getBusinessesByOwnerId` ejecuta: las membresías de dueño de la
+   * persona —`role = 'owner'`, `status = 'active'`, `deleted_at is null`— y los
+   * negocios de esos ids.
+   *
+   * Se mide como la mide el móvil —en el rol `authenticated` y con la RLS de la
+   * base decidiendo— porque una lista calculada por el service con los
+   * privilegios de `service_role` probaría el service y no el panel.
+   */
+  async function panelBusinessIds(userId: string): Promise<string[]> {
+    const ids = plainRows(
+      await as(ctx.sql, 'authenticated', userId, (tx) =>
+        tx.unsafe<{ business_id: string }[]>(
+          `select business_id::text from public.business_members
+            where user_id = '${userId}'
+              and role = 'owner'::public.business_member_role
+              and status = 'active'::public.business_member_status
+              and deleted_at is null`,
+        ),
+      ),
+    ).map((r) => r.business_id);
+
+    if (ids.length === 0) return [];
+
+    const negocios = plainRows(
+      await as(ctx.sql, 'authenticated', userId, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `select id::text from public.businesses
+            where id in (${ids.map((id) => `'${id}'`).join(', ')})
+            order by id`,
+        ),
+      ),
+    );
+    return negocios.map((r) => r.id).sort();
+  }
+
+  // ─── LA OPERACIÓN ───────────────────────────────────────────────────────────
+
+  test('la transferencia deja un dueño vivo y al anterior como gerente', async () => {
+    const s = await seedScenario();
+
+    const result = await transferAs(s, s.ownerUserId, s.managerMemberId);
+
+    // La respuesta son los CINCO identificadores, y nada más: la operación no
+    // devuelve filas de negocio ni datos de la persona.
+    expect(result.business_id).toBe(s.businessId);
+    expect(result.previous_owner_member_id).toBe(s.ownerMemberId);
+    expect(result.previous_owner_user_id).toBe(s.ownerUserId);
+    expect(result.new_owner_member_id).toBe(s.managerMemberId);
+    expect(result.new_owner_user_id).toBe(s.managerUserId);
+
+    // Y el estado de las dos filas: el dueño saliente queda como `manager` y
+    // vivo, y el receptor queda como `owner`.
+    expect(await memberState(s.ownerMemberId)).toEqual({
+      role: 'manager',
+      status: 'active',
+      deleted: false,
+    });
+    expect(await memberState(s.managerMemberId)).toEqual({
+      role: 'owner',
+      status: 'active',
+      deleted: false,
+    });
+
+    // Y EXACTAMENTE un dueño vivo, que es el invariante dicho por el otro lado.
+    expect(await liveOwners(s.businessId)).toBe(1);
+  });
+
+  test('el dueño saliente conserva el alcance de todas las sucursales del negocio', async () => {
+    const s = await seedScenario();
+
+    await transferAs(s, s.ownerUserId, s.managerMemberId);
+
+    // Una fila de alcance por cada sucursal del negocio.
+    const scope = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ location_id: string }[]>(
+          `select l.location_id::text as location_id
+             from public.business_member_locations l
+            where l.member_id = '${s.ownerMemberId}'
+              and l.deleted_at is null
+            order by l.location_id`,
+        ),
+      ),
+    );
+    expect(scope.map((row) => row.location_id)).toEqual(
+      [...s.locationIds].sort(),
+    );
+
+    // Y que el alcance ALCANZA: un `manager` sin filas de alcance no
+    // administra nada (§5.1 y D3), así que el dueño que entrega su negocio
+    // tiene que seguir viendo sus sucursales.
+    const alcanzables = plainRows(
+      await as(ctx.sql, 'authenticated', s.ownerUserId, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `select l.id::text as id
+             from public.business_locations l
+            where l.business_id = '${s.businessId}'
+            order by l.id`,
+        ),
+      ),
+    );
+    expect(alcanzables.map((row) => row.id)).toEqual([...s.locationIds].sort());
+  });
+
+  test('la transferencia deja al dueño nuevo con su negocio en el panel', async () => {
+    const s = await seedScenario();
+
+    // ANTES: el dueño de siempre es el dueño vivo, y el panel le enseña el
+    // negocio.
+    expect((await memberState(s.ownerMemberId))?.role).toBe('owner');
+    expect(await panelBusinessIds(s.ownerUserId)).toEqual([s.businessId]);
+
+    await transferAs(s, s.ownerUserId, s.managerMemberId);
+
+    // DESPUÉS: el dueño nuevo es el dueño vivo, y el panel le enseña el
+    // negocio; el viejo, que ya no es dueño, ve el panel vacío.
+    //
+    // Esta es la coherencia que antes la fila de `business_ownership`
+    // sostenía: sin ella, el dueño nuevo vería el negocio vacío en el móvil y
+    // el dueño viejo seguiría viéndolo. Ahora la sostiene la membresía, que es
+    // lo que el móvil lee.
+    expect((await memberState(s.managerMemberId))?.role).toBe('owner');
+    expect(await panelBusinessIds(s.managerUserId)).toEqual([s.businessId]);
+    expect(await panelBusinessIds(s.ownerUserId)).toEqual([]);
+  });
+
+  test('el dueño saliente pierde los poderes de dueño de inmediato', async () => {
+    const s = await seedScenario();
+
+    await transferAs(s, s.ownerUserId, s.managerMemberId);
+
+    // El poder de dueño que se mide: borrar una sucursal. La policy
+    // `Members can delete business locations` exige `role = 'owner'`, y con la
+    // fila degradada a `manager` la fila de la sucursal deja de ser alcanzable
+    // — RLS filtra la fila y el `delete` no borra nada, sin error.
+    const porElDueñoSaliente = plainRows(
+      await as(ctx.sql, 'authenticated', s.ownerUserId, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `delete from public.business_locations
+            where id = '${s.locationIds[0]}' returning id`,
+        ),
+      ),
+    );
+    expect(
+      porElDueñoSaliente,
+      'el dueño saliente todavía borra sucursales: la transferencia no le quitó ' +
+        'los poderes de dueño.',
+    ).toHaveLength(0);
+
+    // Y el dueño nuevo sí los tiene.
+    const porElDueñoNuevo = plainRows(
+      await as(ctx.sql, 'authenticated', s.managerUserId, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `delete from public.business_locations
+            where id = '${s.locationIds[0]}' returning id`,
+        ),
+      ),
+    );
+    expect(porElDueñoNuevo).toHaveLength(1);
+
+    // Y el poder de dueño por excelencia: la transferencia. El dueño saliente
+    // ya no puede transferírsela a nadie, y el dueño nuevo sí.
+    const errDelSaliente = await transferDeniedAs(
+      s,
+      s.ownerUserId,
+      s.staffMemberId,
+    );
+    expect(errDelSaliente?.code).toBe('R0004');
+
+    const okDelNuevo = await transferAs(s, s.managerUserId, s.staffMemberId);
+    expect(okDelNuevo.new_owner_member_id).toBe(s.staffMemberId);
+  });
+
+  // ─── LAS NEGATIVAS ──────────────────────────────────────────────────────────
+
+  test('sólo el dueño actual puede transferir', async () => {
+    const s = await seedScenario();
+
+    // El gerente: es miembro, tiene la sesión viva, y no es el dueño.
+    const err = await transferDeniedAs(s, s.managerUserId, s.staffMemberId);
+    expect(err?.code).toBe('R0004');
+    expect(err?.message).toContain('sólo el dueño');
+
+    // Un empleado: la función le dice que no, igual que al gerente.
+    const errDelEmpleado = await transferDeniedAs(
+      s,
+      s.staffUserId,
+      s.staffMemberId,
+    );
+    expect(errDelEmpleado?.code).toBe('R0004');
+
+    // Y el negocio queda como estaba: el dueño sigue siendo el dueño.
+    expect((await memberState(s.ownerMemberId))?.role).toBe('owner');
+    expect((await memberState(s.managerMemberId))?.role).toBe('manager');
+    expect(await liveOwners(s.businessId)).toBe(1);
+  });
+
+  test('el receptor tiene que ser un acceso vivo del mismo negocio', async () => {
+    const s = await seedScenario();
+    // Otro negocio, con su propio dueño: un id de acceso de otro negocio NO
+    // es un receptor, y el refusal no dice si ese id existe.
+    const otro = await seedScenario();
+
+    // Un acceso de otro negocio.
+    const deOtroNegocio = await transferDeniedAs(
+      s,
+      s.ownerUserId,
+      otro.managerMemberId,
+    );
+    expect(deOtroNegocio?.code).toBe('R0004');
+    expect(deOtroNegocio?.message).toContain('acceso vivo de este negocio');
+
+    // Un acceso archivado.
+    const archivado = await transferDeniedAs(
+      s,
+      s.ownerUserId,
+      s.archivedMemberId,
+    );
+    expect(archivado?.code).toBe('R0004');
+
+    // Un acceso pausado.
+    const pausado = await transferDeniedAs(
+      s,
+      s.ownerUserId,
+      s.disabledMemberId,
+    );
+    expect(pausado?.code).toBe('R0004');
+
+    // Y el propio dueño: transferirse la propiedad a sí mismo no es una
+    // transferencia.
+    const elPropioDueño = await transferDeniedAs(
+      s,
+      s.ownerUserId,
+      s.ownerMemberId,
+    );
+    expect(elPropioDueño?.code).toBe('R0004');
+    expect(elPropioDueño?.message).toContain('no puede ser el dueño actual');
+
+    // Y el negocio sigue con su dueño.
+    expect((await memberState(s.ownerMemberId))?.role).toBe('owner');
+    expect(await liveOwners(s.businessId)).toBe(1);
+  });
+
+  test('la transferencia es atómica: o pasa entera o no pasa', async () => {
+    const s = await seedScenario();
+
+    const err = await transferDeniedAs(s, s.ownerUserId, s.archivedMemberId);
+    expect(err?.code).toBe('R0004');
+
+    // El dueño viejo sigue siendo el dueño: no hay un estado intermedio
+    // commiteado, ni una degradación sin promoción.
+    expect((await memberState(s.ownerMemberId))?.role).toBe('owner');
+    expect((await memberState(s.managerMemberId))?.role).toBe('manager');
+    expect(await liveOwners(s.businessId)).toBe(1);
+
+    // Y el panel del dueño sigue enseñándole SU negocio: la operación no pasó,
+    // así que el dueño es el mismo de antes.
+    expect(await panelBusinessIds(s.ownerUserId)).toEqual([s.businessId]);
+    expect(await panelBusinessIds(s.managerUserId)).toEqual([]);
+
+    // Y el dueño saliente NO se quedó con el alcance: la degradación es parte
+    // de la operación, y la operación no pasó.
+    const alcance = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ n: number }[]>(
+          `select count(*)::int as n
+             from public.business_member_locations l
+            where l.member_id = '${s.ownerMemberId}'`,
+        ),
+      ),
+    );
+    expect(alcance[0]?.n).toBe(0);
+  });
+
+  // ─── EL INVARIANTE ──────────────────────────────────────────────────────────
+
+  test('un negocio activo no puede quedar sin dueño', async () => {
+    const s = await seedScenario();
+
+    const degradar = `update public.business_members set role = 'manager'
+                       where id = '${s.ownerMemberId}'`;
+
+    // ─── LA SENTENCIA PASA, Y EL COMMIT NO ───────────────────────────────────
+    //
+    // El trigger es DIFERIDO: se evalúa al commit, con el estado final. Un test
+    // que afirmara que la sentencia falló estaría probando otra cosa, y uno que
+    // afirmara sólo que el commit falló no probaría que la degradación suelta
+    // es la causa.
+    const sentencia = await rolledBack(ctx.sql, async (tx) => {
+      await tx.unsafe(degradar);
+    });
+    expect(
+      sentencia,
+      'la degradación sola no puede negarse en la sentencia: el trigger que ' +
+        'la vigila es diferido y se evalúa al commit.',
+    ).toBeNull();
+
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(degradar),
+    );
+    expect(err?.code).toBe('R0002');
+    expect(err?.message).toContain('no puede quedar sin dueño');
+    expect(err?.detail).toBe(
+      `business=${s.businessId} member=${s.ownerMemberId}`,
+    );
+
+    // Y la fila sigue siendo la del dueño: el commit fallido deshizo todo.
+    expect((await memberState(s.ownerMemberId))?.role).toBe('owner');
+    expect(await liveOwners(s.businessId)).toBe(1);
+
+    // ─── Y LA MISMA DEGRADACIÓN, CON LA PROMOCIÓN AL LADO, PASA ──────────────
+    //
+    // La degradación sola deja al negocio sin dueño y se aborta al commit. La
+    // MISMA degradación con la promoción al lado pasa, porque la promoción
+    // llega en la misma transacción y el trigger diferido la ve entera.
+    //
+    // Y por eso el trigger tiene que ser diferido y no `BEFORE`: un `BEFORE`
+    // vería el estado intermedio —el negocio sin dueño— y negaría una
+    // transferencia legítima.
+    //
+    // Esta es también la mutación que el plan exige: si la función degrada y
+    // NO promueve, esta llamada se aborta al commit con el mismo `R0002`, y
+    // es este test el que se pone rojo.
+    const conPromocion = await seedScenario();
+
+    const resultado = await transferAs(
+      conPromocion,
+      conPromocion.ownerUserId,
+      conPromocion.managerMemberId,
+    );
+    expect(resultado.new_owner_member_id).toBe(conPromocion.managerMemberId);
+    expect(await liveOwners(conPromocion.businessId)).toBe(1);
+    expect((await memberState(conPromocion.ownerMemberId))?.role).toBe(
+      'manager',
+    );
+    expect((await memberState(conPromocion.managerMemberId))?.role).toBe(
+      'owner',
+    );
+  });
+
+  test('un negocio inactivo puede quedar sin dueño', async () => {
+    // La otra mitad de la regla, y la que hace posible la liberación (D2): un
+    // negocio que se apaga suelta a su dueño y queda sin él hasta que la
+    // plataforma le devuelva uno.
+    const s = await seedScenario({ active: false });
+
+    const degradada = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe<{ id: string }[]>(
+        `update public.business_members set role = 'manager'
+          where id = '${s.ownerMemberId}' returning id`,
+      ),
+    );
+    expect(plainRows(degradada)).toHaveLength(1);
+    expect((await memberState(s.ownerMemberId))?.role).toBe('manager');
+    expect(await liveOwners(s.businessId)).toBe(0);
+  });
+
+  test('la transferencia no deja una ventana observable', async () => {
+    const s = await seedScenario();
+
+    // Una SEGUNDA conexión, con su propia sesión: la primera está
+    // escribiendo, y la segunda lee lo que hay committed.
+    const lector = postgres(ctx.connectionString, {
+      max: 1,
+      onnotice: () => {},
+    });
+
+    const duenios = async () =>
+      lector.unsafe(
+        `select count(*)::int as n,
+                (array_agg(m.user_id::text))[1] as owner_user_id
+           from public.business_members m
+          where m.business_id = '${s.businessId}'
+            and m.role = 'owner'::public.business_member_role
+            and m.deleted_at is null`,
+      ) as Promise<{ n: number; owner_user_id: string }[]>;
+
+    try {
+      await ctx.sql.begin(async (tx) => {
+        // El `sub` del dueño, declarado a la base como lo declara la API: sin
+        // él, la función no sabe QUIÉN está pidiendo la transferencia.
+        await tx.unsafe(
+          `select set_config('request.jwt.claim.sub', '${s.ownerUserId}', true),
+                  set_config('request.jwt.claim.role', 'service_role', true),
+                  set_config('request.jwt.claims',
+                             '{"sub":"${s.ownerUserId}","role":"service_role"}', true)`,
+        );
+
+        await tx.unsafe(
+          `select public.transfer_business_ownership(
+                    '${s.businessId}'::uuid, '${s.managerMemberId}'::uuid
+                  )`,
+        );
+
+        // La transferencia ya degradó al dueño viejo y ya promovió al nuevo,
+        // pero NO se commiteó: la otra conexión tiene que ver el estado
+        // viejo, y sobre todo tiene que ver UN dueño. Un estado intermedio
+        // —cero dueños, o dos— sería un negocio que nadie puede administrar.
+        const durante = await duenios();
+        expect(durante[0]?.n).toBe(1);
+        expect(durante[0]?.owner_user_id).toBe(s.ownerUserId);
+      });
+
+      // Y después del commit, el dueño nuevo. Nunca cero, nunca dos.
+      const despues = await duenios();
+      expect(despues[0]?.n).toBe(1);
+      expect(despues[0]?.owner_user_id).toBe(s.managerUserId);
+    } finally {
+      await lector.end({ timeout: 5 });
+    }
+  });
+
+  // ─── LA FORMA ───────────────────────────────────────────────────────────────
+
+  test('la función la puede ejecutar sólo el servicio, y el rol no la alcanza', async () => {
+    const acl = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<
+          { anon: boolean; authenticated: boolean; service: boolean }[]
+        >(
+          `select has_function_privilege('anon', p.oid, 'EXECUTE') as anon,
+                  has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated,
+                  has_function_privilege('service_role', p.oid, 'EXECUTE') as service
+             from pg_proc p
+             join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public'
+              and p.proname = 'transfer_business_ownership'`,
+        ),
+      ),
+    );
+
+    expect(acl).toHaveLength(1);
+    expect(acl[0]?.anon).toBe(false);
+    expect(acl[0]?.authenticated).toBe(false);
+    expect(acl[0]?.service).toBe(true);
+
+    // Y la forma de la función: `security definer`, con el `search_path`
+    // pineado y VOLATILE — lee y escribe, no contesta una pregunta.
+    const forma = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<
+          { secdef: boolean; volatile: boolean; config: string[] | null }[]
+        >(
+          `select p.prosecdef as secdef, p.provolatile = 'v' as volatile,
+                  p.proconfig as config
+             from pg_proc p
+             join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public'
+              and p.proname = 'transfer_business_ownership'`,
+        ),
+      ),
+    );
+    expect(forma[0]?.secdef).toBe(true);
+    expect(forma[0]?.volatile).toBe(true);
+    expect(forma[0]?.config).toEqual(['search_path=""']);
+  });
+
+  test('el invariante es un trigger diferido, de fila y por constraint', async () => {
+    const shape = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<
+          {
+            por_fila: boolean;
+            antes: boolean;
+            al_actualizar: boolean;
+            diferible: boolean;
+            diferido: boolean;
+            secdef: boolean;
+            config: string[] | null;
+          }[]
+        >(
+          `select (t.tgtype & 1) = 1 as por_fila,
+                  (t.tgtype & 2) = 2 as antes,
+                  (t.tgtype & 16) = 16 as al_actualizar,
+                  t.tgdeferrable as diferible,
+                  t.tginitdeferred as diferido,
+                  p.prosecdef as secdef,
+                  p.proconfig as config
+             from pg_trigger t
+             join pg_class c on c.oid = t.tgrelid
+             join pg_namespace n on n.oid = c.relnamespace
+             join pg_proc p on p.oid = t.tgfoid
+            where n.nspname = 'public'
+              and c.relname = 'business_members'
+              and t.tgname = 'trg_business_keeps_an_owner'
+              and not t.tgisinternal`,
+        ),
+      ),
+    );
+
+    expect(shape).toHaveLength(1);
+    // `por_fila` y `al_actualizar`: el trigger ve las filas que cambian.
+    expect(shape[0]?.por_fila).toBe(true);
+    expect(shape[0]?.al_actualizar).toBe(true);
+    expect(shape[0]?.antes).toBe(false);
+    // Y DIFERIDO: es lo que permite que la transferencia degrade y promueva en
+    // dos sentencias y el commit las vea juntas.
+    expect(shape[0]?.diferible).toBe(true);
+    expect(shape[0]?.diferido).toBe(true);
+    // `security definer` porque el conteo tiene que ver todas las membresías,
+    // no las que la RLS le deja ver a quien escribe.
+    expect(shape[0]?.secdef).toBe(true);
+    expect(shape[0]?.config).toEqual(['search_path=""']);
+  });
+
+  test('ningún rol cliente puede ejecutar la transferencia ni su trigger', async () => {
+    // La misma guarda que el bloque del dueño tiene, con las dos funciones
+    // nuevas adentro: el trigger diferido es tan de negocio como los topes, y
+    // la función de la transferencia es la puerta que el móvil no puede abrir.
+    const acl = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ fn: string; anon: boolean; authenticated: boolean }[]>(`
+          select p.proname as fn,
+                 has_function_privilege('anon', p.oid, 'EXECUTE') as anon,
+                 has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated
+            from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public'
+             and p.proname in ('enforce_business_keeps_an_owner',
+                               'transfer_business_ownership')
+           order by p.proname`),
+      ),
+    );
+
+    expect(
+      acl.filter((f) => f.anon || f.authenticated).map((f) => f.fn),
+      'una función de la transferencia quedó ejecutable por un rol cliente.',
+    ).toEqual([]);
+  });
+
+  // ─── EL TOPE, Y POR QUÉ NO ES LA PUERTA DE LA TRANSFERENCIA ─────────────────
+
+  test('una transferencia no es un tope de plan', async () => {
+    // El plan dice que la transferencia puede fallar por el tope de miembros,
+    // porque la degradación «cuenta como crecimiento». Medido en la base viva,
+    // NO es así: `enforce_business_member_limit` sale ANTES de contar cuando la
+    // fila deja de ser dueño, y una promoción a `owner` sale antes todavía.
+    //
+    // Y tiene sentido que no lo sea: la transferencia NO crece el equipo. El
+    // dueño saliente entra al conteo de no-dueños y el receptor sale de él, así
+    // que el número de miembros es el mismo antes y después. Un negocio en su
+    // tope puede entregar su negocio, y si no pudiera, el tope sería una
+    // jaula.
+    const s = await seedScenario({ plan: 'free' });
+
+    // `free` admite dos miembros que no son dueño: el dueño, el gerente y el
+    // empleado son tres filas, y el tope es dos. El negocio está EN EL TOPE.
+    const enElTope = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ n: number }[]>(
+          `select count(*)::int as n
+             from public.business_members m
+            where m.business_id = '${s.businessId}'
+              and m.role <> 'owner'::public.business_member_role
+              and m.deleted_at is null`,
+        ),
+      ),
+    );
+    expect(enElTope[0]?.n).toBe(2);
+
+    const result = await transferAs(s, s.ownerUserId, s.managerMemberId);
+    expect(result.new_owner_member_id).toBe(s.managerMemberId);
+
+    // Y el conteo no se movió: el dueño viejo ocupa la plaza que el receptor
+    // dejó.
+    const despues = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ n: number }[]>(
+          `select count(*)::int as n
+             from public.business_members m
+            where m.business_id = '${s.businessId}'
+              and m.role <> 'owner'::public.business_member_role
+              and m.deleted_at is null`,
+        ),
+      ),
+    );
+    expect(despues[0]?.n).toBe(2);
+  });
+});
+
+/**
+ * ─── LA LIBERACIÓN, LA RECUPERACIÓN Y LA CONCURRENCIA ─────────────────────────
+ *
+ * Un negocio inactivo libera a su dueño (D2), y un negocio sin dueño no vuelve
+ * a la vida sin que la plataforma le devuelva uno. Las dos mitades son la misma
+ * regla, y las dos están en la base: el móvil escribe directo a Supabase
+ * (ADR-0002) y no pasa por la API.
+ *
+ * El escenario es UN negocio con su dueño, su gerente, su empleado, una
+ * sucursal y el alcance del dueño sobre esa sucursal —todo lo que una
+ * liberación tiene que dejar en un estado concreto—.
+ */
+describe('la liberación y la recuperación del dueño', () => {
+  let ctx: SupabaseTestDb;
+
+  beforeAll(async () => {
+    ctx = await createSupabaseTestDb();
+    // La secuencia del RENDEZVOUS, que es lo que hace que las dos
+    // transacciones sean realmente concurrentes (más abajo lo explica), y la
+    // función VOLATILE que la cuenta: una subconsulta que no depende de la
+    // fila se evalúa una sola vez por el planificador.
+    await ctx.sql.unsafe(
+      `create sequence if not exists public.test_rendezvous_seq`,
+    );
+    await ctx.sql.unsafe(`
+      create or replace function public.test_rendezvous_seen()
+      returns integer
+      language sql
+      volatile
+      as $fn$ select last_value::int from public.test_rendezvous_seq $fn$;
+    `);
+  });
+
+  afterAll(async () => {
+    await ctx.stop();
+  });
+
+  type Scenario = {
+    businessId: string;
+    ownerUserId: string;
+    ownerMemberId: string;
+    managerUserId: string;
+    managerMemberId: string;
+    staffUserId: string;
+    staffMemberId: string;
+    locationId: string;
+  };
+
+  let counter = 0;
+
+  /**
+   * Un negocio, su dueño, su gerente, su empleado, su sucursal y el alcance del
+   * dueño sobre ella.
+   *
+   * EL ORDEN DEL SIEMBRA ES OBLIGATORIO, y desde esta tarea es obligatorio por
+   * DOS razones: `default_business_inactive` fuerza `is_active := false` en
+   * todo insert, así que activar es un `update` aparte; y ese `update` dispara
+   * la guarda de reactivación, que exige que el dueño YA exista.
+   */
+  async function seedScenario(
+    options: { active?: boolean } = {},
+  ): Promise<Scenario> {
+    counter += 1;
+    const n = counter.toString(16).padStart(12, '0');
+    const id = (prefix: string) => `${prefix}-0000-4000-8000-${n}`;
+
+    const businessId = id('b5000000');
+    const ownerUserId = id('b6000000');
+    const managerUserId = id('b6000001');
+    const staffUserId = id('b6000002');
+    const ownerMemberId = id('b7000000');
+    const managerMemberId = id('b7000001');
+    const staffMemberId = id('b7000002');
+    const locationId = id('b8000000');
+
+    await ctx.sql.begin(async (tx) => {
+      for (const [userId, email] of [
+        [ownerUserId, `lib-owner-${n}@test`],
+        [managerUserId, `lib-manager-${n}@test`],
+        [staffUserId, `lib-staff-${n}@test`],
+      ] as const) {
+        await tx.unsafe(
+          `insert into auth.users (id, email) values ('${userId}', '${email}')
+           on conflict (id) do nothing`,
+        );
+      }
+
+      await tx.unsafe(
+        `insert into public.businesses (id, name, type, slug)
+         values ('${businessId}', 'Liberacion ${n}', 'restaurant', 'lib-${n}')`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+         values ('${businessId}', 'pro', null)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_locations
+           (id, business_id, name, address, latitude, longitude, is_active)
+         values ('${locationId}', '${businessId}', 'Una', 'Street', 40.41680000, -3.70380000, true)`,
+      );
+
+      await tx.unsafe(
+        `insert into public.business_members
+           (id, business_id, user_id, role, label, alias,
+            status, session_ttl_hours, last_authenticated_at)
+         values ('${ownerMemberId}',   '${businessId}', '${ownerUserId}',   'owner',   'Dueña',   'lib-owner-${n}@test',   'active', 0, null),
+                ('${managerMemberId}', '${businessId}', '${managerUserId}', 'manager', 'Gerente', 'lib-manager-${n}@test', 'active', 0, null),
+                ('${staffMemberId}',   '${businessId}', '${staffUserId}',   'staff',   'Cajero',  'lib-staff-${n}@test',   'active', 0, null)`,
+      );
+
+      // El alcance del dueño sobre su sucursal: es lo que la liberación tiene
+      // que archivar con la membresía.
+      await tx.unsafe(
+        `insert into public.business_member_locations (member_id, location_id)
+         values ('${ownerMemberId}', '${locationId}')`,
+      );
+
+      if (options.active) {
+        await tx.unsafe(
+          `update public.businesses set is_active = true where id = '${businessId}'`,
+        );
+      }
+    });
+
+    return {
+      businessId,
+      ownerUserId,
+      ownerMemberId,
+      managerUserId,
+      managerMemberId,
+      staffUserId,
+      staffMemberId,
+      locationId,
+    };
+  }
+
+  /** La llamada de la liberación, y su error cuando se niega. */
+  async function releaseAs(
+    scenario: Scenario,
+    actorUserId: string,
+  ): Promise<Record<string, string>> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', actorUserId, (tx) =>
+        tx.unsafe<{ release: string }[]>(
+          `select public.release_business_ownership(
+                    '${scenario.businessId}'::uuid, '${actorUserId}'::uuid
+                  )::text as release`,
+        ),
+      ),
+    );
+    const raw = rows[0]?.release;
+    if (typeof raw !== 'string') {
+      throw new Error(
+        'release_business_ownership no devolvió una fila de jsonb legible',
+      );
+    }
+    return JSON.parse(raw) as Record<string, string>;
+  }
+
+  /** La misma llamada, en su forma negativa: el error, no la fila. */
+  async function releaseDeniedAs(
+    scenario: Scenario,
+    actorUserId: string,
+  ): Promise<{ code: string; message: string; detail?: string } | null> {
+    return deniedAs(ctx.sql, 'service_role', actorUserId, (tx) =>
+      tx.unsafe(
+        `select public.release_business_ownership(
+                  '${scenario.businessId}'::uuid, '${actorUserId}'::uuid
+                )`,
+      ),
+    );
+  }
+
+  /** La llamada de la recuperación. */
+  async function assignAs(
+    scenario: Scenario,
+    memberId: string,
+  ): Promise<Record<string, string>> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ assignment: string }[]>(
+          `select public.assign_business_ownership(
+                    '${scenario.businessId}'::uuid, '${memberId}'::uuid
+                  )::text as assignment`,
+        ),
+      ),
+    );
+    const raw = rows[0]?.assignment;
+    if (typeof raw !== 'string') {
+      throw new Error(
+        'assign_business_ownership no devolvió una fila de jsonb legible',
+      );
+    }
+    return JSON.parse(raw) as Record<string, string>;
+  }
+
+  /** La misma llamada, en su forma negativa. */
+  async function assignDeniedAs(
+    scenario: Scenario,
+    memberId: string,
+  ): Promise<{ code: string; message: string; detail?: string } | null> {
+    return deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `select public.assign_business_ownership(
+                  '${scenario.businessId}'::uuid, '${memberId}'::uuid
+                )`,
+      ),
+    );
+  }
+
+  /** El estado de una fila de membresía. */
+  async function memberState(
+    memberId: string,
+  ): Promise<{ role: string; status: string; deleted: boolean } | null> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ role: string; status: string; deleted: boolean }[]>(
+          `select m.role::text as role, m.status::text as status,
+                  (m.deleted_at is not null) as deleted
+             from public.business_members m where m.id = '${memberId}'`,
+        ),
+      ),
+    );
+    return rows[0] ?? null;
+  }
+
+  /** Los DUEÑOS VIVOS del negocio. */
+  async function liveOwners(businessId: string): Promise<number> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ n: number }[]>(
+          `select count(*)::int as n
+             from public.business_members m
+            where m.business_id = '${businessId}'
+              and m.role = 'owner'::public.business_member_role
+              and m.status = 'active'::public.business_member_status
+              and m.deleted_at is null`,
+        ),
+      ),
+    );
+    return rows[0]?.n ?? -1;
+  }
+
+  /**
+   * LA CONSULTA DEL PANEL DEL DUEÑO, tal cual la hace el móvil.
+   *
+   * Es la que `getBusinessesByOwnerId` ejecuta: las membresías de dueño de la
+   * persona —`role = 'owner'`, `status = 'active'`, `deleted_at is null`— y los
+   * negocios de esos ids. Se mide en el rol `authenticated` y con la RLS de la
+   * base decidiendo, porque una lista calculada con los privilegios de
+   * `service_role` probaría el service y no el panel.
+   */
+  async function panelBusinessIds(userId: string): Promise<string[]> {
+    const ids = plainRows(
+      await as(ctx.sql, 'authenticated', userId, (tx) =>
+        tx.unsafe<{ business_id: string }[]>(
+          `select business_id::text from public.business_members
+            where user_id = '${userId}'
+              and role = 'owner'::public.business_member_role
+              and status = 'active'::public.business_member_status
+              and deleted_at is null`,
+        ),
+      ),
+    ).map((r) => r.business_id);
+
+    if (ids.length === 0) return [];
+
+    const negocios = plainRows(
+      await as(ctx.sql, 'authenticated', userId, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `select id::text from public.businesses
+            where id in (${ids.map((id) => `'${id}'`).join(', ')})
+            order by id`,
+        ),
+      ),
+    );
+    return negocios.map((r) => r.id).sort();
+  }
+
+  /** El negocio: si sigue ahí, y si está activo. */
+  async function businessState(
+    businessId: string,
+  ): Promise<{ exists: boolean; active: boolean }> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ exists: boolean; active: boolean }[]>(
+          `select true as exists, b.is_active as active
+             from public.businesses b where b.id = '${businessId}'`,
+        ),
+      ),
+    );
+    return rows[0] ?? { exists: false, active: false };
+  }
+
+  // ─── LA LIBERACIÓN ──────────────────────────────────────────────────────────
+
+  test('la liberación archiva la membresía de dueño y borra la fila de propiedad', async () => {
+    const s = await seedScenario();
+
+    const result = await releaseAs(s, s.ownerUserId);
+
+    // La respuesta son los TRES identificadores, y nada más.
+    expect(result.business_id).toBe(s.businessId);
+    expect(result.released_member_id).toBe(s.ownerMemberId);
+    expect(result.released_user_id).toBe(s.ownerUserId);
+
+    // La membresía queda ARCHIVADA, no borrada: la fila sigue ahí, con su rol,
+    // para saber quién operó en el negocio.
+    expect(await memberState(s.ownerMemberId)).toEqual({
+      role: 'owner',
+      status: 'active',
+      deleted: true,
+    });
+
+    // Y el negocio se queda SIN DUEÑO VIVO: es lo que la liberación significa.
+    // El panel del dueño queda vacío —la membresía está archivada— y el negocio
+    // no lo nombra a nadie, así que no hay huérfano que un dueño que ya no está
+    // siga nombrando.
+    expect(await liveOwners(s.businessId)).toBe(0);
+    expect(await panelBusinessIds(s.ownerUserId)).toEqual([]);
+
+    // Y el negocio SIGUE AHÍ y sigue inactivo: esto es una jubilación, no un
+    // borrado. Conserva sus ofertas, sus pedidos y sus sucursales.
+    expect(await businessState(s.businessId)).toEqual({
+      exists: true,
+      active: false,
+    });
+  });
+
+  test('la liberación deja al resto del equipo intacto', async () => {
+    const s = await seedScenario();
+
+    await releaseAs(s, s.ownerUserId);
+
+    // El gerente y el empleado NO se tocan: la liberación es del dueño, y el
+    // equipo que se queda sigue siendo equipo, con su alcance.
+    expect(await memberState(s.managerMemberId)).toEqual({
+      role: 'manager',
+      status: 'active',
+      deleted: false,
+    });
+    expect(await memberState(s.staffMemberId)).toEqual({
+      role: 'staff',
+      status: 'active',
+      deleted: false,
+    });
+  });
+
+  test('la liberación archiva el alcance de la membresía que archiva', async () => {
+    const s = await seedScenario();
+
+    await releaseAs(s, s.ownerUserId);
+
+    // El §8 pide marcar `deleted_at` en las dos tablas, y las dos discrepaban
+    // sobre qué significaba: una membresía archivada con su alcance vivo sigue
+    // diciendo «esta persona llegaba a esta sucursal» de alguien que ya no está.
+    const alcance = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ deleted: boolean }[]>(
+          `select (l.deleted_at is not null) as deleted
+             from public.business_member_locations l
+            where l.member_id = '${s.ownerMemberId}'`,
+        ),
+      ),
+    );
+    expect(alcance[0]?.deleted).toBe(true);
+  });
+
+  test('la liberación de un negocio ACTIVO se niega y no cambia nada', async () => {
+    const s = await seedScenario({ active: true });
+
+    const err = await releaseDeniedAs(s, s.ownerUserId);
+    expect(err?.code).toBe('R0004');
+    expect(err?.message).toContain('un negocio activo no libera a su dueño');
+
+    // Y nada se movió: el dueño sigue siendo el dueño, y el negocio sigue
+    // teniendo a su dueño vivo.
+    expect(await memberState(s.ownerMemberId)).toEqual({
+      role: 'owner',
+      status: 'active',
+      deleted: false,
+    });
+    expect(await liveOwners(s.businessId)).toBe(1);
+  });
+
+  test('la liberación la puede pedir sólo el dueño vivo del negocio', async () => {
+    const s = await seedScenario();
+
+    // El gerente: es miembro y tiene su sesión viva, y no es el dueño.
+    const errDelGerente = await releaseDeniedAs(s, s.managerUserId);
+    expect(errDelGerente?.code).toBe('R0004');
+    expect(errDelGerente?.message).toContain('sólo el dueño vivo');
+
+    // El empleado: igual.
+    const errDelEmpleado = await releaseDeniedAs(s, s.staffUserId);
+    expect(errDelEmpleado?.code).toBe('R0004');
+
+    // Y un dueño de OTRO negocio: es un dueño, pero no de ÉSTE.
+    const otro = await seedScenario();
+    const errDelOtro = await releaseDeniedAs(s, otro.ownerUserId);
+    expect(errDelOtro?.code).toBe('R0004');
+
+    // Y el negocio sigue con su dueño vivo.
+    expect(await liveOwners(s.businessId)).toBe(1);
+    expect(await panelBusinessIds(s.ownerUserId)).toEqual([s.businessId]);
+  });
+
+  // ─── LA REACTIVACIÓN ────────────────────────────────────────────────────────
+
+  test('un negocio sin dueño no se reactiva', async () => {
+    const s = await seedScenario();
+
+    await releaseAs(s, s.ownerUserId);
+
+    // La guarda vive en `businesses`, en el `BEFORE UPDATE`, porque es la
+    // escritura la que decide: activar un negocio sin dueño no puede pasar.
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.businesses set is_active = true where id = '${s.businessId}'`,
+      ),
+    );
+    expect(err?.code).toBe('R0002');
+    expect(err?.message).toContain('no se reactiva');
+
+    // Y el negocio sigue inactivo.
+    expect((await businessState(s.businessId)).active).toBe(false);
+  });
+
+  test('un negocio con dueño se reactiva', async () => {
+    const s = await seedScenario();
+
+    await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.businesses set is_active = true where id = '${s.businessId}'`,
+      ),
+    );
+
+    expect((await businessState(s.businessId)).active).toBe(true);
+  });
+
+  test('un negocio con dueño y otro sin él se reactivan por caminos distintos', async () => {
+    // El control del caso anterior: la guarda NO es un veto general a activar
+    // negocios, sino la regla de que un negocio sin dueño no vuelve a la vida.
+    const conDueño = await seedScenario();
+    const sinDueño = await seedScenario();
+
+    await releaseAs(sinDueño, sinDueño.ownerUserId);
+
+    const ok = await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.businesses set is_active = true where id = '${conDueño.businessId}'`,
+      ),
+    );
+    expect(ok).toBeDefined();
+
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.businesses set is_active = true where id = '${sinDueño.businessId}'`,
+      ),
+    );
+    expect(err?.code).toBe('R0002');
+  });
+
+  // ─── EL BORRADO DE LA FILA DE DUEÑO ─────────────────────────────────────────
+
+  test('una fila de dueño archivada a mano se puede borrar: la verdad del dueño es la membresía', async () => {
+    const s = await seedScenario();
+
+    // El camino sin puerta: archivar al dueño a mano y borrarlo.
+    //
+    // Antes esto se negaba con un `R0002` porque el negocio lo nombraba en
+    // `business_ownership`: dos fuentes de la verdad, y la fila archivada
+    // dejando una propiedad apuntando a alguien que ya no está. Con la tabla
+    // retirada no hay segunda fuente: el dueño de un negocio es su fila de
+    // `business_members`, y una fila archivada es HISTORIA, no una propiedad que
+    // alguien conserve.
+    await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.business_members set deleted_at = now() where id = '${s.ownerMemberId}'`,
+      ),
+    );
+
+    const borrada = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `delete from public.business_members where id = '${s.ownerMemberId}' returning id`,
+        ),
+      ),
+    );
+    expect(borrada).toHaveLength(1);
+
+    // Y el negocio se queda sin dueño vivo: por eso no puede reactivarse, y eso
+    // lo mide el guard de la reactivación, no el borrado.
+    expect(await liveOwners(s.businessId)).toBe(0);
+  });
+
+  test('una fila de dueño VIVA no se borra', async () => {
+    const s = await seedScenario();
+
+    // La guarda que queda, y es la que importa: el dueño vivo no se borra, se
+    // da de baja. El borrado es físico y se lleva la fila que dice quién operó
+    // en el negocio.
+    const err = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `delete from public.business_members where id = '${s.ownerMemberId}'`,
+      ),
+    );
+    expect(err?.code).toBe('R0002');
+    expect(err?.message).toContain('no se puede borrar');
+
+    // Y la fila sigue ahí.
+    expect(await memberState(s.ownerMemberId)).not.toBeNull();
+  });
+
+  test('después de la liberación, la fila de dueño sí se puede borrar', async () => {
+    const s = await seedScenario();
+
+    await releaseAs(s, s.ownerUserId);
+
+    // La liberación archiva la membresía en la MISMA transacción en que suelta
+    // al negocio, así que después de ella el borrado es limpieza de historia:
+    // ya no queda ningún dueño que dar de baja primero.
+    const borrada = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `delete from public.business_members where id = '${s.ownerMemberId}' returning id`,
+        ),
+      ),
+    );
+    expect(borrada).toHaveLength(1);
+  });
+
+  test('el móvil no puede escribir en las membresías: la RLS no tiene policy de escritura', async () => {
+    const s = await seedScenario();
+
+    // El móvil escribe directo a Supabase (ADR-0002), así que la pregunta no es
+    // «¿el servicio lo bloquea?» sino «¿la base lo bloquea?». Y lo bloquea: no
+    // hay policy de UPDATE ni de DELETE sobre `business_members`, así que RLS
+    // no deja pasar NINGUNA fila —las tablas tienen el privilegio, la policy no
+    // está.
+    const actualizadas = plainRows(
+      await as(ctx.sql, 'authenticated', s.ownerUserId, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `update public.business_members set deleted_at = now() where id = '${s.ownerMemberId}' returning id`,
+        ),
+      ),
+    );
+    expect(actualizadas).toHaveLength(0);
+
+    const borradas = plainRows(
+      await as(ctx.sql, 'authenticated', s.ownerUserId, (tx) =>
+        tx.unsafe<{ id: string }[]>(
+          `delete from public.business_members where id = '${s.ownerMemberId}' returning id`,
+        ),
+      ),
+    );
+    expect(borradas).toHaveLength(0);
+
+    // Y la fila sigue como estaba: viva y con su rol.
+    expect(await memberState(s.ownerMemberId)).toEqual({
+      role: 'owner',
+      status: 'active',
+      deleted: false,
+    });
+  });
+
+  // ─── LA RECUPERACIÓN ────────────────────────────────────────────────────────
+
+  test('la plataforma le devuelve el dueño a un negocio que se quedó sin él', async () => {
+    const s = await seedScenario();
+
+    await releaseAs(s, s.ownerUserId);
+    expect(await liveOwners(s.businessId)).toBe(0);
+
+    const result = await assignAs(s, s.managerMemberId);
+
+    expect(result.business_id).toBe(s.businessId);
+    expect(result.owner_member_id).toBe(s.managerMemberId);
+    expect(result.owner_user_id).toBe(s.managerUserId);
+
+    // El miembro queda como dueño, y el negocio tiene EXACTAMENTE un dueño
+    // vivo: el índice parcial no deja dos y el trigger diferido exige uno.
+    expect(await memberState(s.managerMemberId)).toEqual({
+      role: 'owner',
+      status: 'active',
+      deleted: false,
+    });
+    expect(await liveOwners(s.businessId)).toBe(1);
+
+    // Y el panel del dueño nuevo vuelve a enseñarle el negocio: la recuperación
+    // deja al negocio con dueño, y el dueño lo ve.
+    expect(await panelBusinessIds(s.managerUserId)).toEqual([s.businessId]);
+    expect(await panelBusinessIds(s.ownerUserId)).toEqual([]);
+  });
+
+  test('la plataforma NO puede darle el dueño a un negocio que ya tiene dueño', async () => {
+    const s = await seedScenario();
+
+    const err = await assignDeniedAs(s, s.managerMemberId);
+    expect(err?.code).toBe('R0004');
+    expect(err?.message).toContain('ya tiene un dueño');
+    expect(err?.message).toContain('usá la transferencia');
+
+    // Y nada se movió: el dueño sigue siendo el dueño y el gerente sigue
+    // siendo gerente. La recuperación NO es una segunda puerta para saltarse el
+    // invariante.
+    expect(await memberState(s.ownerMemberId)).toEqual({
+      role: 'owner',
+      status: 'active',
+      deleted: false,
+    });
+    expect(await memberState(s.managerMemberId)).toEqual({
+      role: 'manager',
+      status: 'active',
+      deleted: false,
+    });
+    expect(await liveOwners(s.businessId)).toBe(1);
+  });
+
+  test('el miembro que recibe el dueño tiene que ser un acceso vivo de ese negocio', async () => {
+    const s = await seedScenario();
+    const otro = await seedScenario();
+
+    // El negocio tiene que estar SIN dueño: la recuperación es para los que se
+    // quedaron sin él, y con dueño la operación se niega por otra razón.
+    await releaseAs(s, s.ownerUserId);
+
+    // Un acceso de otro negocio.
+    const deOtroNegocio = await assignDeniedAs(s, otro.managerMemberId);
+    expect(deOtroNegocio?.code).toBe('R0004');
+    expect(deOtroNegocio?.message).toContain('acceso vivo de este negocio');
+
+    // Un id que no existe.
+    const inexistente = await assignDeniedAs(
+      s,
+      'b7000009-0000-4000-8000-000000000000',
+    );
+    expect(inexistente?.code).toBe('R0004');
+
+    // Y el negocio se quedó sin dueño, que es el estado en el que la
+    // recuperación tiene sentido.
+    expect(await liveOwners(s.businessId)).toBe(0);
+  });
+
+  test('después de la recuperación, el negocio se puede reactivar', async () => {
+    const s = await seedScenario();
+
+    await releaseAs(s, s.ownerUserId);
+
+    // Antes de la recuperación, reactivar se niega.
+    const antes = await deniedAs(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.businesses set is_active = true where id = '${s.businessId}'`,
+      ),
+    );
+    expect(antes?.code).toBe('R0002');
+
+    // Y después, no: la plataforma le devuelve el dueño y el negocio vuelve.
+    await assignAs(s, s.managerMemberId);
+    await as(ctx.sql, 'service_role', null, (tx) =>
+      tx.unsafe(
+        `update public.businesses set is_active = true where id = '${s.businessId}'`,
+      ),
+    );
+
+    expect((await businessState(s.businessId)).active).toBe(true);
+    expect(await liveOwners(s.businessId)).toBe(1);
+  });
+
+  test('ningún rol cliente puede ejecutar la liberación ni la recuperación', async () => {
+    // La misma guarda que la transferencia tiene, con las dos funciones nuevas
+    // adentro y el helper del dueño vivo: la base es la frontera, y una puerta
+    // que el móvil puede abrir no es una puerta.
+    const acl = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ fn: string; anon: boolean; authenticated: boolean }[]>(`
+          select p.proname as fn,
+                 has_function_privilege('anon', p.oid, 'EXECUTE') as anon,
+                 has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated
+            from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public'
+             and p.proname in ('business_live_owner_count',
+                               'release_business_ownership',
+                               'assign_business_ownership',
+                               'enforce_business_reactivation_needs_owner')
+           order by p.proname`),
+      ),
+    );
+
+    expect(
+      acl.filter((f) => f.anon || f.authenticated).map((f) => f.fn),
+      'una función de la propiedad quedó ejecutable por un rol cliente.',
+    ).toEqual([]);
+  });
+
+  test('el dueño vivo vive en UNA función, y el invariante la consulta', async () => {
+    // La definición de «dueño vivo» —`role = 'owner'`, `status = 'active'`,
+    // `deleted_at is null`— no puede estar escrita dos veces: el trigger
+    // diferido, la guarda de reactivación y la recuperación la consultan, y
+    // varias copias del mismo predicado son varias reglas que pueden apartarse.
+    const cuerpo = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ proname: string; prosrc: string }[]>(`
+          select p.proname as proname, p.prosrc as prosrc
+            from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public'
+             and p.proname in ('enforce_business_keeps_an_owner',
+                               'enforce_business_reactivation_needs_owner',
+                               'assign_business_ownership')`),
+      ),
+    );
+
+    const helper = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ prosrc: string }[]>(`
+          select p.prosrc as prosrc
+            from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.proname = 'business_live_owner_count'`),
+      ),
+    );
+
+    expect(helper).toHaveLength(1);
+    for (const fn of cuerpo) {
+      expect(
+        fn.prosrc,
+        `${fn.proname} no consulta la definición del dueño vivo: el predicado ` +
+          'está escrito dos veces y puede apartarse.',
+      ).toContain('business_live_owner_count');
+    }
+  });
+
+  // ─── LA CONCURRENCIA ─────────────────────────────────────────────────────────
+
+  /**
+   * El RENDEZVOUS: dos transacciones que esperan a que la otra llegue.
+   *
+   * Una SECUENCIA no es transaccional: el `nextval` de una es visible para las
+   * demás transacciones ANTES del commit. Eso es lo que permite que dos
+   * transacciones se esperen entre sí —que es lo que las hace concurrentes— sin
+   * que ninguna pueda ver una fila no commiteada de la otra.
+   *
+   * Y sin esto el test no probaría nada: dos llamadas seguidas, una después de
+   * la otra, nunca se cruzan, y una carrera que no existe no se puede medir.
+   *
+   * El conteo va por una función VOLATILE a propósito: una subconsulta que no
+   * depende de la fila se evalúa UNA vez por el planificador, y el esperón se
+   * convertiría en diez segundos de dormir en vez de en una espera.
+   */
+  async function rendezvous(tx: Sql): Promise<void> {
+    await tx.unsafe(`select nextval('public.test_rendezvous_seq')`);
+    await tx.unsafe(`
+      select pg_sleep(0.02)
+        from generate_series(1, 500)
+       where public.test_rendezvous_seen() < 2
+    `);
+  }
+
+  type RaceResult = {
+    ok: boolean;
+    code?: string;
+    message?: string;
+  };
+
+  /**
+   * La transferencia, en una transacción propia.
+   *
+   * La conexión es un argumento porque hace falta UNA POR TRANSACCIÓN: el
+   * cliente del harness es `max: 1`, así que dos transacciones sobre él serían
+   * dos llamadas SEGUIDAS, que no se cruzan con nadie.
+   */
+  async function transferIn(
+    sql: Sql,
+    scenario: Scenario,
+    callerUserId: string,
+    newOwnerMemberId: string,
+  ): Promise<RaceResult> {
+    try {
+      await sql.begin(async (tx) => {
+        await tx.unsafe(
+          `select set_config('request.jwt.claim.sub', '${callerUserId}', true), ` +
+            `set_config('request.jwt.claim.role', 'service_role', true), ` +
+            `set_config('request.jwt.claims', '{"sub":"${callerUserId}","role":"service_role"}', true)`,
+        );
+        await rendezvous(tx);
+        await tx.unsafe(
+          `select public.transfer_business_ownership('${scenario.businessId}'::uuid, '${newOwnerMemberId}'::uuid)`,
+        );
+      });
+      return { ok: true };
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      return { ok: false, code: e.code, message: e.message };
+    }
+  }
+
+  /**
+   * La liberación —la operación que el borrado de cuenta dispara— en una
+   * transacción propia.
+   */
+  async function releaseIn(
+    sql: Sql,
+    scenario: Scenario,
+    actorUserId: string,
+  ): Promise<RaceResult> {
+    try {
+      await sql.begin(async (tx) => {
+        await rendezvous(tx);
+        await tx.unsafe(
+          `select public.release_business_ownership('${scenario.businessId}'::uuid, '${actorUserId}'::uuid)`,
+        );
+      });
+      return { ok: true };
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      return { ok: false, code: e.code, message: e.message };
+    }
+  }
+
+  /** El dueño vivo del negocio, con su identificador de persona. */
+  async function liveOwner(
+    businessId: string,
+  ): Promise<{ member_id: string; user_id: string } | null> {
+    const rows = plainRows(
+      await as(ctx.sql, 'service_role', null, (tx) =>
+        tx.unsafe<{ member_id: string; user_id: string }[]>(
+          `select m.id::text as member_id, m.user_id::text as user_id
+             from public.business_members m
+            where m.business_id = '${businessId}'
+              and m.role = 'owner'::public.business_member_role
+              and m.status = 'active'::public.business_member_status
+              and m.deleted_at is null`,
+        ),
+      ),
+    );
+    return rows[0] ?? null;
+  }
+
+  test('dos transferencias concurrentes no pueden dejar el negocio con dos dueños ni sin dueño', async () => {
+    const s = await seedScenario({ active: true });
+    await ctx.sql.unsafe(
+      `alter sequence public.test_rendezvous_seq restart with 1`,
+    );
+
+    // La segunda conexión: el cliente del harness es `max: 1`, así que las dos
+    // transacciones tienen que estar en conexiones DISTINTAS para cruzarse.
+    const otra = postgres(ctx.connectionString, { prepare: false, max: 1 });
+    try {
+      const [a, b] = await Promise.all([
+        transferIn(ctx.sql, s, s.ownerUserId, s.managerMemberId),
+        transferIn(otra, s, s.ownerUserId, s.staffMemberId),
+      ]);
+
+      // UNA SOLO pasó, y la otra se negó con el motivo de la REGLA —el dueño ya
+      // no es el dueño, porque la primera lo degradó a gerente— y no con el
+      // error del índice parcial. Eso es lo que prueba el cerrojo: sin él, la
+      // segunda habría competes por el índice con un `23505`.
+      const exitosas = [a, b].filter((r) => r.ok);
+      const negadas = [a, b].filter((r) => !r.ok);
+      expect(exitosas).toHaveLength(1);
+      expect(negadas).toHaveLength(1);
+      expect(negadas[0]?.code).toBe('R0004');
+      expect(negadas[0]?.message).toContain('sólo el dueño');
+
+      // Y el negocio quedó con EXACTAMENTE un dueño vivo: ni dos ni ninguno.
+      expect(await liveOwners(s.businessId)).toBe(1);
+
+      // Y el dueño que quedó es el que el panel le enseña al negocio: la
+      // coherencia que antes sostenía la fila de propiedad la sostiene ahora la
+      // membresía, que es lo que el móvil lee.
+      const dueño = await liveOwner(s.businessId);
+      expect(await panelBusinessIds(dueño?.user_id ?? '')).toEqual([
+        s.businessId,
+      ]);
+    } finally {
+      await otra.end({ timeout: 5 });
+    }
+  });
+
+  test('una liberación y una transferencia concurrentes no dejan el negocio incoherente', async () => {
+    // El negocio es INACTIVO, que es el único caso en el que la liberación
+    // existe: un negocio activo se ENTREGA, no se libera.
+    const s = await seedScenario();
+    await ctx.sql.unsafe(
+      `alter sequence public.test_rendezvous_seq restart with 1`,
+    );
+
+    const otra = postgres(ctx.connectionString, { prepare: false, max: 1 });
+    try {
+      const [transfer, release] = await Promise.all([
+        transferIn(ctx.sql, s, s.ownerUserId, s.managerMemberId),
+        releaseIn(otra, s, s.ownerUserId),
+      ]);
+
+      // UNA SOLO pasó: el cerrojo del negocio las puso en fila, y la segunda
+      // leyó el estado final de la primera.
+      const exitosas = [transfer, release].filter((r) => r.ok);
+      expect(exitosas).toHaveLength(1);
+      const negada = [transfer, release].find((r) => !r.ok);
+      expect(negada?.code).toBe('R0004');
+
+      // Y el estado final es COHERENTE: o no hay dueño vivo (ganó la
+      // liberación) o hay exactamente uno (ganó la transferencia), y en el
+      // segundo caso es el dueño que el panel le enseña al negocio. Lo que NO
+      // puede pasar es un negocio con dos dueños, ni un negocio con un dueño
+      // vivo que el panel no le enseña: el huérfano silencioso, por el otro
+      // lado.
+      const duenos = await liveOwners(s.businessId);
+      expect(duenos).toBeLessThanOrEqual(1);
+      if (duenos === 0) {
+        expect(await panelBusinessIds(s.ownerUserId)).toEqual([]);
+      } else {
+        const dueño = await liveOwner(s.businessId);
+        expect(await panelBusinessIds(dueño?.user_id ?? '')).toEqual([
+          s.businessId,
+        ]);
+      }
+    } finally {
+      await otra.end({ timeout: 5 });
+    }
   });
 });

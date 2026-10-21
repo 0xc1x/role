@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import { ConflictException } from '@nestjs/common';
 import {
   businesses,
   businessFinance,
+  businessMemberLocations,
   businessMembers,
-  businessOwnership,
   consumerNotificationPreferences,
   deviceTokens,
   marketingPreferences,
@@ -396,8 +396,8 @@ describe('AuthAccountRepository.delete (DB real)', () => {
       { status: 'completed' },
     );
 
-    // The owner's OWNERSHIP is what retains them, and it is a membership now:
-    // the owner of a business has a row in `business_members` with
+    // The owner's OWNERSHIP is what retains them, and it is a membership: the
+    // owner of a business has a row in `business_members` with
     // `role = 'owner'`, and `owner_memberships` is the number that says «this
     // account administers a business and cannot be erased».
     const retained = await accounts().countRetained(ownerId);
@@ -420,10 +420,63 @@ describe('AuthAccountRepository.delete (DB real)', () => {
     // The customer's order, and the business itself, are still there.
     expect(await orderRow(customerOrder.id)).not.toBeNull();
     const [stillOwned] = await ctx.db
-      .select({ owner: businessOwnership.owner_id })
-      .from(businessOwnership)
-      .where(eq(businessOwnership.business_id, business.id));
-    expect(stillOwned?.owner).toBe(ownerId);
+      .select({ user_id: businessMembers.user_id })
+      .from(businessMembers)
+      .where(eq(businessMembers.business_id, business.id));
+    expect(stillOwned?.user_id).toBe(ownerId);
+  });
+
+  /**
+   * The `businesses` counter comes from the MEMBERSHIP.
+   *
+   * The counter is half of the erase gate: it says whether the account still
+   * administers a business. The row that says so is `business_members`, la
+   * única que queda: la fila de propiedad se retiró con su tabla.
+   *
+   * El dueño cuenta 1 y un tercero cuenta 0, que es lo que la puerta necesita:
+   * el que administra un negocio no puede borrarse, y el que no administra
+   * ninguno puede.
+   */
+  test('el conteo de negocios sale de la membresía de dueño', async () => {
+    const ownerId = await seedProfile(ctx.db);
+    const otroId = await seedProfile(ctx.db);
+    const business = await seedBusiness(ctx.db, ownerId);
+
+    const delDueño = await accounts().countRetained(ownerId);
+    expect(delDueño.businesses).toBe(1);
+
+    const delOtro = await accounts().countRetained(otroId);
+    expect(delOtro.businesses).toBe(0);
+  });
+
+  /**
+   * An ARCHIVED owner membership is history, and it does not retain anything.
+   *
+   * The release (D2) archives the owner's membership instead of deleting it,
+   * precisely so that the fact survives; but an archived row grants nothing, so
+   * it is not a business the account still administers.
+   *
+   * The erase gate does NOT widen because of this: `memberships` counts every
+   * row of the account —archived ones included— and it is the one that keeps
+   * the profile alive. What changes is the NUMBER of businesses that the
+   * account administers, which is what this test measures.
+   */
+  test('un dueño archivado no cuenta como dueño de un negocio', async () => {
+    const ownerId = await seedProfile(ctx.db);
+    // INACTIVO a propósito: el invariante «un negocio activo tiene dueño vivo»
+    // lo impide archivar el dueño de un negocio que sigue encendido.
+    const business = await seedBusiness(ctx.db, ownerId, { is_active: false });
+
+    await ctx.db
+      .update(businessMembers)
+      .set({ deleted_at: new Date() })
+      .where(eq(businessMembers.business_id, business.id));
+
+    const retained = await accounts().countRetained(ownerId);
+    expect(retained.businesses).toBe(0);
+    expect(retained.owner_memberships).toBe(0);
+    // Y la cuenta sigue retenida por la fila archivada: la puerta no se abrió.
+    expect(retained.memberships).toBe(1);
   });
 
   test('anonymising scrubs the identifying columns and keeps the key ones', async () => {
@@ -751,13 +804,18 @@ describe('the erase with a membership (DB real)', () => {
   }
 
   /** A profile that owns a business, with the membership that says so. */
-  async function seedOwner() {
+  async function seedOwner(options: { is_active?: boolean } = {}) {
     const userId = await seedProfile(ctx.db, undefined);
     // `owner_membership: false` porque esta spec siembra su propia fila —necesita
     // el id para degradarla después— y el seeder la crearía con otro alias.
+    //
+    // Y `is_active` porque el negocio APAGADO es el caso de la liberación: un
+    // dueño de un negocio inactivo no tiene que entregar nada para poder borrar
+    // su cuenta (D2), y un dueño de un negocio activo sí.
     const business = await seedBusiness(ctx.db, userId, {
       verification_status: 'approved',
       owner_membership: false,
+      is_active: options.is_active ?? true,
     });
     const member = await seedBusinessMember(ctx.db, business.id, userId, {
       role: 'owner',
@@ -768,24 +826,35 @@ describe('the erase with a membership (DB real)', () => {
     return { userId, businessId: business.id, memberId: member.id };
   }
 
-  test('CONTROL: erasing that profile straight through the repository is R0002', async () => {
-    const { userId, memberId } = await seedOwner();
+  test('CONTROL: el harness tiene la guarda del dueño, y el borrado no se lleva una membresía', async () => {
+    // El negocio está APAGADO: la liberación sólo existe para un negocio
+    // inactivo, y un borrado de un dueño de un negocio ACTIVO se niego antes
+    // (es el 409 de la puerta).
+    const { userId, memberId } = await seedOwner({ is_active: false });
 
-    // The premise, asserted rather than assumed: the cascade really does reach the
-    // guard. If this ever stops raising, the trigger is not in the harness (or a
-    // future change weakened it) and the two tests below would be asserting
-    // nothing.
-    const bounced = await accounts()
-      .eraseAccount(userId)
+    // La premisa, afirmada y no supuesta: la guarda EXISTE en el espejo. Un
+    // borrado directo de la fila viva del dueño levanta R0002, y esa es la
+    // guarda que la cascada desde `profiles` venía finden.
+    const borrado = await ctx.db
+      .delete(businessMembers)
+      .where(eq(businessMembers.id, memberId))
       .then(() => null)
       .catch((err: unknown) => err);
-    expect(bounced).not.toBeNull();
-    expect(sqlErrorCode(bounced)).toBe('R0002');
+    expect(borrado).not.toBeNull();
+    expect(sqlErrorCode(borrado)).toBe('R0002');
 
-    // And the transaction left nothing behind: the profile and the membership are
-    // both still there, because the whole erase rolled back.
+    // Y el borrado por el repositorio NO se lleva la membresía con él: la
+    // membresía se CIERRA y el perfil se queda, porque borrar el perfil se la
+    // llevaría por la cascada —y con ella el alias, que el índice único no
+    // libera a propósito (ítem 13 de la herencia).
+    const erased = await accounts().eraseAccount(userId);
+    expect(erased).toBe(false);
+
+    // El perfil sigue ahí, y la membresía también: cerrada, no borrada.
     expect(await profileRow(userId)).not.toBeNull();
-    expect(await memberRow(memberId)).not.toBeNull();
+    const member = await memberRow(memberId);
+    expect(member).not.toBeNull();
+    expect(member?.deleted_at).not.toBeNull();
   });
 
   test('an owner cannot be erased while the business is live, and the answer says so', async () => {
@@ -827,8 +896,10 @@ describe('the erase with a membership (DB real)', () => {
     const message = (
       error as { getResponse: () => { message: string } }
     ).getResponse().message;
-    expect(message).toContain('still owns a business');
+    expect(message).toContain('still owns an active business');
     expect(message).toContain('cannot be deleted');
+    // Y la salida que el mensaje nombra es la que EXISTE: la transferencia.
+    expect(message).toContain('/ownership/transfer');
     expect(message).not.toContain('manager');
     expect(message).not.toContain('PATCH');
 
@@ -874,6 +945,107 @@ describe('the erase with a membership (DB real)', () => {
       }),
     ).rejects.toThrow(ConflictException);
     expect((await profileRow(userId))?.email).not.toContain('anonymized');
+  });
+
+  /**
+   * ─── LA LIBERACIÓN: UN DUEÑO DE UN NEGOCIO INACTIVO SÍ PUEDE BORRAR SU CUENTA ──
+   *
+   * La regla de D2, medida contra la base y no contra el servicio: un negocio
+   * apagado libera a su dueño, y el borrado de la cuenta deja el negocio en un
+   * estado que se puede describir —la membresía archivada, el alcance
+   * archivado y la fila de propiedad borrada—.
+   */
+  describe('el dueño de un negocio inactivo', () => {
+    test('puede borrar su cuenta, y la puerta ya no lo bloquea', async () => {
+      const { userId } = await seedOwner({ is_active: false });
+      const auth = service();
+
+      // La puerta: `owner_memberships` cuenta los dueños de negocios ACTIVOS.
+      // Un dueño de un negocio apagado no bloquea su cuenta, porque un negocio
+      // apagado no es un negocio que alguien pueda administrar.
+      expect(await accounts().countRetained(userId)).toEqual({
+        orders: 0,
+        businesses: 1,
+        memberships: 1,
+        owner_memberships: 0,
+        reviews: 0,
+      });
+
+      await expect(
+        auth.deleteAccount({
+          id: userId,
+          email: `${userId}@test.cl`,
+          role: 'business' as const,
+        }),
+      ).resolves.toBeUndefined();
+
+      // Y el perfil quedó anonimizado, que es la rama que conserva la fila
+      // para que los pedidos y el negocio la puedan seguir nombrando.
+      expect((await profileRow(userId))?.email).toBe(
+        `anonymized-${userId}@role.invalid`,
+      );
+    });
+
+    test('al borrar la cuenta, el negocio inactivo queda sin dueño vivo', async () => {
+      const { userId, businessId, memberId } = await seedOwner({
+        is_active: false,
+      });
+
+      // El dueño de un negocio es su membresía, y la de un negocio INACTIVO se
+      // archiva cuando la persona se va: el negocio queda sin dueño vivo, que es
+      // el estado que la base sabe reponer por la puerta de la plataforma.
+      const antes = await ctx.db
+        .select({ user_id: businessMembers.user_id })
+        .from(businessMembers)
+        .where(eq(businessMembers.business_id, businessId));
+      expect(antes).toHaveLength(1);
+
+      await accounts().anonymise(userId);
+
+      // Y la membresía quedó ARCHIVADA, no borrada: la fila sigue ahí para
+      // saber quién operó en el negocio, y no es un dueño vivo —el panel del
+      // dueño queda vacío y el negocio no lo nombra a nadie.
+      expect(await memberRow(memberId)).toMatchObject({
+        role: 'owner',
+        deleted_at: expect.anything(),
+      });
+
+      const vivos = await ctx.db
+        .select({ user_id: businessMembers.user_id })
+        .from(businessMembers)
+        .where(
+          and(
+            eq(businessMembers.business_id, businessId),
+            eq(businessMembers.role, 'owner'),
+            isNull(businessMembers.deleted_at),
+          ),
+        );
+      expect(vivos).toHaveLength(0);
+    });
+
+    test('al borrar la cuenta, las filas de alcance quedan archivadas', async () => {
+      const { userId, businessId, memberId } = await seedOwner({
+        is_active: false,
+      });
+      const location = await seedLocation(ctx.db, businessId);
+      await ctx.db.insert(businessMemberLocations).values({
+        member_id: memberId,
+        location_id: location.id,
+      });
+
+      await accounts().anonymise(userId);
+
+      // El §8 pide marcar `deleted_at` en las dos tablas, y las dos discrepaban
+      // sobre qué significaba (ítem 14 de la herencia): una membresía archivada
+      // con su alcance vivo sigue diciendo «esta persona llegaba a esta
+      // sucursal» de alguien que ya no está.
+      const alcance = await ctx.db
+        .select({ deleted_at: businessMemberLocations.deleted_at })
+        .from(businessMemberLocations)
+        .where(eq(businessMemberLocations.member_id, memberId));
+      expect(alcance).toHaveLength(1);
+      expect(alcance[0]?.deleted_at).not.toBeNull();
+    });
   });
 
   test('an employee membership is detached by the erase, not taken by the cascade', async () => {

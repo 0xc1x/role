@@ -143,6 +143,8 @@ const STRANGER = '33333333-3333-3333-3333-333333333333';
 const OWNER = '44444444-4444-4444-4444-444444444444';
 /** Owner of `BIZ_B`, which nobody bought from. The strict negative for #8. */
 const OWNER2 = '55555555-5555-5555-5555-555555555555';
+const MEMBER_OWNER = '66666666-6666-6666-6666-666666666666';
+const MEMBER_OWNER2 = '77777777-7777-7777-7777-777777777777';
 
 const BIZ_A = 'aaaaaaaa-0000-4000-8000-000000000001';
 const BIZ_B = 'aaaaaaaa-0000-4000-8000-000000000002';
@@ -345,10 +347,10 @@ beforeAll(async () => {
      * its comment and the one on `ORDER` above for why the other four are
      * `completed` rather than `confirmed`.
      *
-     * `business_ownership` is seeded by hand because
-     * `trg_bootstrap_business_companions` writes that row only when
-     * `(select auth.uid()) is not null`, and this transaction is the schema
-     * owner with no JWT. Both consumers bought from `BIZ_A` and nobody bought
+     * La membresía de dueño se siembra a mano porque
+     * `trg_bootstrap_business_companions` la escribe sólo cuando
+     * `(select auth.uid()) is not null`, y esta transacción es la dueña del
+     * esquema sin JWT. Both consumers bought from `BIZ_A` and nobody bought
      * from `BIZ_B`, which is what makes #7 and #8 measurable: `OWNER` must read
      * two customer profiles, `OWNER2` must read none.
      *
@@ -371,9 +373,20 @@ beforeAll(async () => {
       values ('${BIZ_A}', 'RLS profiles A', 'restaurant', 'rls-pr-a'),
              ('${BIZ_B}', 'RLS profiles B', 'restaurant', 'rls-pr-b');
 
-      insert into public.business_ownership (business_id, owner_id)
-      values ('${BIZ_A}', '${OWNER}'),
-             ('${BIZ_B}', '${OWNER2}');
+      -- LA MEMBRESÍA DE DUEÑO de cada negocio, sembrada a mano porque
+      -- el trigger bootstrap_business_companions la escribe sólo cuando
+      -- (select auth.uid()) is not null, y esta transacción es la dueña del
+      -- esquema sin JWT.
+      --
+      -- Es la fila de la que se sirve la policy del dueño para leer a sus
+      -- clientes: "Businesses can view their order customers" se retiró con la
+      -- tabla de propiedad, y la que queda —"Members can view their order
+      -- customers"— resuelve por la membresía y por la sucursal del pedido.
+      insert into public.business_members
+        (id, business_id, user_id, role, label, alias,
+         status, session_ttl_hours, last_authenticated_at)
+      values ('${MEMBER_OWNER}',  '${BIZ_A}', '${OWNER}',  'owner', 'Dueña', 'rls-pr-owner@test',  'active', 0, null),
+             ('${MEMBER_OWNER2}', '${BIZ_B}', '${OWNER2}', 'owner', 'Dueño', 'rls-pr-owner2@test', 'active', 0, null);
 
       insert into public.business_locations (id, business_id, name, address, latitude, longitude)
       values ('${LOC_A}', '${BIZ_A}', 'Main', 'Street 1', 40.41680000, -3.70380000);
@@ -860,21 +873,16 @@ describe('public.profiles: the shape of the grants', () => {
 
     // The sixth is "Members can view their order customers", the §6.2 policy that
     // resolves the customer's business by membership and by the location of the
-    // order. It sits NEXT TO "Businesses can view their order customers", which
-    // resolves it by `business_ownership` and is still standing. That table has
-    // NOT been dropped, and the drop is not the next migration: it moved to
-    // Plan 3, which has to migrate `getBusinessesByOwnerId` first because the
-    // mobile app reads `business_ownership` on its first panel query.
-    //
-    // They coexist because they were verified equivalent, and the scope of that
-    // word is worth keeping: equivalent for an owner with a live session, which is
-    // what the assertion below exercises. Not equivalent for a lapsed one — the
-    // legacy policy carries no TTL and keeps granting — and that asymmetry is
-    // exactly what the new set was built to end, so it disappears with the drop.
+    // order. It sat NEXT TO "Businesses can view their order customers", which
+    // resolved it by `business_ownership`; las dos convivieron porque se
+    // verificaron equivalentes —para un dueño con la sesión viva, que es lo que
+    // la aserción de abajo ejercita— y NO para uno vencido: la policy vieja no
+    // lleva TTL y seguía concediendo. Esa asimetría era exactamente la que la
+    // generación nueva vino a terminar, y terminó con la caída de la tabla: hoy
+    // la policy del dueño resuelve por la membresía y la vieja ya no está.
     expect(plainRows(rows).map((r) => r.policyname)).toEqual([
       'Admins can update all profiles',
       'Admins can view all profiles',
-      'Businesses can view their order customers',
       'Members can view their order customers',
       'Users can update own profile',
       'Users can view own profile',
@@ -914,15 +922,17 @@ describe('public.profiles: the shape of the grants', () => {
       'Users can update own profile:UPDATE',
     ]);
 
-    // And the four SELECT policies: three name `auth.uid()` or `my_role()`, and
-    // the cross-tenant one resolves ownership through `business_ownership`, which
-    // is what makes #7 a tenant boundary rather than a business-id comparison.
+    // And the SELECT policies: two name `auth.uid()` or `my_role()`, and the
+    // cross-tenant one resolves ownership through the MEMBERSHIP, which is what
+    // makes #7 a tenant boundary rather than a business-id comparison.
     expect(byName.get('Users can view own profile')?.qual).toBe(
       '(id = ( SELECT auth.uid() AS uid))',
     );
     expect(
-      byName.get('Businesses can view their order customers')?.qual,
-    ).toContain('business_ownership');
+      byName.get('Businesses can view their order customers'),
+      'la policy vieja del dueño de un negocio desapareció con la tabla de ' +
+        'propiedad: el dueño entra por su membresía.',
+    ).toBeUndefined();
 
     // The sixth resolves the SAME question through the membership, and says which
     // one: the location of the order decides, not the business alone, so a cajero
@@ -934,7 +944,6 @@ describe('public.profiles: the shape of the grants', () => {
 
     for (const name of [
       'Admins can view all profiles',
-      'Businesses can view their order customers',
       'Members can view their order customers',
       'Users can view own profile',
     ]) {
@@ -1369,12 +1378,14 @@ describe('the cross-tenant profile read', () => {
    * #7, measured: a business owner reads ALL NINE columns of every consumer
    * that ever bought from its business, and `email` is one of them.
    *
-   * "Businesses can view their order customers" is `TO authenticated`,
-   * `FOR SELECT`, and its `qual` is
+   * "Members can view their order customers" is `TO authenticated`,
+   * `FOR SELECT`, y su `qual` resuelve por la membresía y por la sucursal del
+   * pedido:
    *
    *     EXISTS (SELECT 1 FROM orders o
-   *             JOIN business_ownership bo ON bo.business_id = o.business_id
-   *             WHERE o.user_id = profiles.id AND bo.owner_id = auth.uid())
+   *             JOIN business_members bm ON bm.business_id = o.business_id
+   *             WHERE o.user_id = profiles.id AND bm.user_id = auth.uid()
+   *               AND public.can_manage_location(o.business_id, o.business_location_id))
    *
    * There is no column list anywhere in it and there is no column grant on this
    * table: `authenticated` holds table-level `SELECT`, so "RLS filtered the
@@ -3443,7 +3454,7 @@ describe('the two things the reviews grant does not stop', () => {
  *
  * The file is long, and the fixture is the reason it stays one file. Seeding
  * means three Vault secrets, five `auth.users` rows, a role promotion, two
- * businesses with hand-written `business_ownership`, a location, two offers and
+ * businesses with hand-written owner memberships, a location, two offers and
  * five orders, and it is all coupled: `auth_helpers.my_role()` reads `profiles`,
  * `trg_bootstrap_business_companions` only fires with a JWT, and
  * `on_order_status_change` raises without the Vault rows. Duplicating that to

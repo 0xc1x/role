@@ -18,7 +18,7 @@ import {
 import {
   AnnouncementsRepository,
   type AnnouncementRow,
-  type BusinessOwnershipRow,
+  type BusinessOwnerRow,
 } from './announcements.repository';
 import { AnnouncementMapper } from './mappers/announcements.mapper';
 
@@ -47,7 +47,7 @@ const SPECIFIC_WITHOUT_TARGET =
  * puede arreglar: ir a darle dueño al negocio.
  *
  * Se nombran los ids y no los nombres porque el nombre del negocio no está en
- * `business_ownership`: el service lee esa tabla, no el catálogo. Un id es
+ * `business_members`: el service lee esa tabla, no el catálogo. Un id es
  * suficiente para ir a buscar el negocio, y un nombre inventado sería peor que
  * ninguno.
  */
@@ -60,7 +60,7 @@ const BUSINESS_WITHOUT_OWNER = (businessIds: readonly string[]) =>
  *
  * El orden estable no es un detalle de estilo. `user_ids` es lo que queda
  * guardado, y una fila cuyo contenido depende del orden en que Postgres devolvió
- * `business_ownership` no se puede comparar entre dos escrituras ni leer en el
+ * `business_members` no se puede comparar entre dos escrituras ni leer en el
  * panel. El `Set` además evita el `uuid` repetido cuando el dueño de un negocio
  * también estaba en la lista de personas.
  */
@@ -327,8 +327,8 @@ export class AnnouncementsService {
   }
 
   /**
-   * Los `owner_id` de los negocios elegidos, o `[]` cuando no hay nada que
-   * resolver.
+   * Los `user_id` de los dueños de los negocios elegidos, o `[]` cuando no hay
+   * nada que resolver.
    *
    * SOLO con `audience_kind = 'specific'`, y esa restricción es el corazón de la
    * decisión. En las otras tres audiencias la policy decide por ROL —`all`,
@@ -352,7 +352,7 @@ export class AnnouncementsService {
   ): Promise<string[]> {
     // Sin negocios no hay consulta. Además acá se decide el alcance de la
     // expansión, y una `await` que no se dispara es la mitad de la razón por la
-    // que publicar un aviso común no depende de `business_ownership`.
+    // que publicar un aviso común no depende de `business_members`.
     if (audienceKind !== 'specific' || businessIds.length === 0) {
       return [];
     }
@@ -361,8 +361,8 @@ export class AnnouncementsService {
       // La ruta es `@Roles('admin')`: el guard ya verificó un JWT antes de llegar
       // acá. Que la cabecera no haya llegado no es un error del operador, es que
       // se intentó resolver sin identidad — y sin identidad no se puede, porque
-      // `anon` no tiene ni grant ni policy sobre `business_ownership` y la
-      // lectura saldría vacía, es decir, todos los negocios "sin dueño".
+      // `anon` no tiene ni grant ni policy que le sirva sobre `business_members`
+      // y la lectura saldría vacía, es decir, todos los negocios "sin dueño".
       this.logger.error({
         event: 'announcements_owner_resolve_without_session',
         businessCount: businessIds.length,
@@ -372,7 +372,7 @@ export class AnnouncementsService {
       );
     }
 
-    let filas: BusinessOwnershipRow[];
+    let filas: BusinessOwnerRow[];
     try {
       filas = await this.repository.ownerIdsForBusinesses(token, businessIds);
     } catch (err) {
@@ -410,6 +410,6 @@ export class AnnouncementsService {
       throw new BadRequestException(BUSINESS_WITHOUT_OWNER(sinDueño));
     }
 
-    return filas.flatMap((fila) => [fila.owner_id]);
+    return filas.flatMap((fila) => [fila.user_id]);
   }
 }

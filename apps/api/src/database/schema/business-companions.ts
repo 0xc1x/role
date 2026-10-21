@@ -10,36 +10,26 @@ import { profiles } from './profiles';
  * relationships). Column-level grants cannot hide a column, so the columns
  * that must not be public left the table that anon must be able to read:
  *
- *   business_ownership  → owner_id
  *   business_finance    → balance, commission_rate
  *   business_moderation → verification_status, verified_at, verified_by,
  *                         rejection_reason
  *
  * INVARIANT: every business has exactly one row in each companion. The API
- * writes all four rows in the same transaction (BusinessesRepository.insert /
+ * writes all three rows in the same transaction (BusinessesRepository.insert /
  * .update) and Supabase backfilled the tables when they were created, so a
  * business without companions is a broken invariant, not a normal state.
  * Aggregate reads inner-join them for that reason.
  *
  * These mirror the tables created in Supabase; see
  * supabase/migrations/20260925225227_businesses_companion_tables.sql.
+ *
+ * ─── LO QUE NO ESTÁ AQUÍ, Y POR QUÉ ────────────────────────────────────────
+ *
+ * La fila de propiedad (`business_ownership`) se retiró con la tabla: el dueño
+ * de un negocio es su fila de `business_members`, que es lo que escriben el
+ * trigger `trg_bootstrap_business_companions` y el alta del API. El espejo
+ * declara lo que la base tiene, y la base ya no tiene esa tabla.
  */
-
-export const businessOwnership = pgTable('business_ownership', {
-  business_id: uuid('business_id')
-    .primaryKey()
-    .references(() => businesses.id, { onDelete: 'cascade' }),
-  owner_id: uuid('owner_id')
-    .notNull()
-    .references(() => profiles.id, { onDelete: 'cascade' }),
-  created_at: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
 export const businessFinance = pgTable('business_finance', {
   business_id: uuid('business_id')
     .primaryKey()
