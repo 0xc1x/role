@@ -6,6 +6,8 @@ import { strings } from "@/src/core/i18n/strings";
 import type { UserProfile } from "../domain/user";
 import { parseRole } from "../domain/user";
 
+import { stampStaffSession } from "./staff-session";
+
 export interface SignUpResult {
 	requiresEmailConfirmation: boolean;
 	profile: UserProfile | null;
@@ -87,6 +89,10 @@ export const authRepository = {
 		if (error) throw mapAuthError(error);
 		const user = data.user;
 		if (!user) throw Errors.unauthorized(strings.auth.noUserOnLogin);
+		// El sello de staff va con la sesión YA abierta y sin negocio: el panel
+		// todavía no eligió cuál, y para eso la base resuelve la membresía
+		// única. Si el sello falla, el login sigue: `stampStaffSession` no lanza.
+		await stampStaffSession();
 		// Role must come from the DB row, not signup metadata (it can change).
 		return enrichProfile(profileFromUser(user));
 	},
