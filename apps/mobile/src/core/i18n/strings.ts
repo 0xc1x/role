@@ -1561,6 +1561,48 @@ export const strings = {
 			sessionPolicy: "Política de sesión",
 			sessionNever: "Sin expiración",
 			sessionHours: "Sesión de {n} h",
+			// El alta de un acceso (Task 8). El formulario y la tarjeta de
+			// entrega viven en `business.staff` porque son de la misma sección:
+			// lo que se escribe aquí y lo que se entrega después son el mismo
+			// dato en dos momentos.
+			//
+			// El recordatorio del alias lleva el formato entre llaves porque es
+			// LITERAL: `{código}@{slug}.role.ec` no es un marcador que alguien
+			// interpole, es la forma que el sistema propone.
+			newTitle: "Dar de alta un acceso",
+			createAccess: "Crear acceso",
+			identityTitle: "Identidad",
+			nameLabel: "Nombre",
+			nameHint: "El nombre con el que lo reconocerás en el equipo.",
+			nameRequired: "Escribe un nombre",
+			roleLabel: "Rol",
+			roleHint:
+				"El gerente administra al equipo; el empleado sólo retira ofertas.",
+			locationsLabel: "Sucursales",
+			locationsHint: "Marca las sucursales a las que llega este acceso.",
+			locationsEmpty: "Este negocio aún no tiene sucursales.",
+			locationsRequired: "Marca al menos una sucursal",
+			aliasLabel: "Alias (correo)",
+			aliasHint: "Vacío: el sistema propone {código}@{slug}.role.ec",
+			aliasPlaceholder: "ana@panaderia.role.ec",
+			aliasInvalid: "El alias debe ser un correo, como ana@panaderia.role.ec",
+			aliasWarning:
+				"Este dominio puede recibir correos. El empleado podría activar la recuperación de contraseña con esta dirección.",
+			sessionShifts: "Por turnos",
+			sessionShiftsHint: "La sesión dura 24 horas y después caduca.",
+			sessionPersistentHint:
+				"El acceso no caduca nunca. Es para el equipo propio.",
+			deliveryTitle: "Tarjeta de entrega",
+			deliveryAliasLabel: "Alias",
+			deliveryPinLabel: "PIN",
+			deliveryQrHint:
+				"El QR lleva el alias: tu empleado lo escanea o lo teclea.",
+			deliveryPinWarning:
+				"El PIN no se puede recuperar: sólo se puede rotar. Anótalo y entrégaselo a tu empleado.",
+			deliveryCopy: "Copiar",
+			deliveryShare: "Compartir",
+			deliveryCopied: "Alias y PIN copiados",
+			deliveryClose: "Listo, ya lo entregué",
 		},
 	},
 	// Copy del panel multi-negocio (app/my-business/*). Antes vivía como

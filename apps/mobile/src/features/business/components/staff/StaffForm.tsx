@@ -1,0 +1,402 @@
+import { useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import {
+	BusinessMemberAliasSchema,
+	type BusinessLocation,
+} from "@0xc1x/role-commons";
+
+import { Button } from "@/components/ui/button";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { strings } from "@/src/core/i18n/strings";
+import { AppText, TextField } from "@/src/core/ui";
+import { useTheme } from "@/src/core/theme";
+import { spacing, radii } from "@/src/core/theme/spacing";
+import { withAlpha } from "@/src/core/theme/alpha";
+import { aliasWarnings } from "@/src/features/business/data/staff";
+
+/**
+ * Lo que el formulario entrega al API.
+ *
+ * El alias es OPCIONAL y su ausencia es un dato: vacío significa que lo
+ * propone el servidor (`{código}@{slug}.role.ec`), y mandarlo vacío sería
+ * mandarle un alias que no existe.
+ */
+export interface StaffFormValues {
+	label: string;
+	role: "manager" | "staff";
+	business_location_ids: string[];
+	session_ttl_hours: number;
+	alias?: string;
+}
+
+/**
+ * Las horas de la sesión POR TURNOS (§9.2).
+ *
+ * Es el valor por defecto de todo acceso que no es del equipo propio: la
+ * sesión caduca y el empleado vuelve a entrar. La otra mitad del par es el
+ * `0` —«sin expiración»—, que sólo existe para el gerente.
+ */
+const SHIFT_SESSION_TTL_HOURS = 24;
+
+/**
+ * El formulario del alta de un acceso (§9.2).
+ *
+ * ─── POR QUÉ EL AVISO DEL DOMINIO LO CONTESTA COMMONS ─────────────────────────
+ *
+ * Porque la pregunta «¿este dominio tiene una bandeja detrás?» tiene una sola
+ * respuesta en todo el sistema, y esa respuesta vive en
+ * `businessMemberAliasWarnings`. Este archivo la CONSUME —a través del
+ * envoltorio `aliasWarnings` del módulo de los accesos— y no la reimplementa:
+ * dos verdades sobre la misma regla son dos reglas que algún día dejan de
+ * coincidir.
+ *
+ * ─── Y POR QUÉ EL MODO PERSISTENTE SÓLO EXISTE PARA EL GERENTE ───────────────
+ *
+ * Porque lo dice el §9.2 y porque el API lo rechaza: `assertPersistentSessionIsAllowed`
+ * no permite un acceso sin expiración para un empleado. Ofrecerlo y que el
+ * servidor lo rechace sería mandar a la persona a leer un 422 por una opción
+ * que la propia aplicación le ofreció.
+ */
+export function StaffForm({
+	locations,
+	submitting,
+	error,
+	onSubmit,
+}: {
+	/** Las sucursales del negocio: el alcance que se puede marcar. */
+	locations: BusinessLocation[];
+	/** El alta está en vuelo: el botón no se vuelve a tocar. */
+	submitting: boolean;
+	/** El motivo del fallo, con la prosa que el API ya escribió. */
+	error: string | null;
+	onSubmit: (values: StaffFormValues) => void;
+}) {
+	const { colors } = useTheme();
+	const [label, setLabel] = useState("");
+	const [role, setRole] = useState<"manager" | "staff">("staff");
+	const [alias, setAlias] = useState("");
+	const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+	const [persistentSession, setPersistentSession] = useState(false);
+
+	const trimmedAlias = alias.trim();
+	const labelValid = label.trim().length > 0;
+	// El alias vacío es válido —lo propone el servidor—; uno escrito tiene que
+	// ser un correo, y el validador es el del CONTRATO, no uno más laxo.
+	const aliasValid =
+		trimmedAlias === "" ||
+		BusinessMemberAliasSchema.safeParse(trimmedAlias).success;
+	const locationsValid = selectedLocationIds.length > 0;
+	const canSubmit = labelValid && aliasValid && locationsValid && !submitting;
+
+	// El modo persistente sólo existe para el gerente: si el rol baja a empleado,
+	// la política vuelve a ser la de por turnos aunque el interruptor siga dado.
+	const sessionTtlHours =
+		role === "manager" && persistentSession ? 0 : SHIFT_SESSION_TTL_HOURS;
+
+	// El aviso del §9.4 vive con el campo, mientras se escribe: el dueño ve la
+	// consecuencia de lo que está tecleando antes de guardarlo.
+	const showsDomainWarning =
+		trimmedAlias !== "" && aliasWarnings(trimmedAlias).length > 0;
+
+	const toggleLocation = (locationId: string) => {
+		setSelectedLocationIds((current) =>
+			current.includes(locationId)
+				? current.filter((id) => id !== locationId)
+				: [...current, locationId],
+		);
+	};
+
+	const submit = () => {
+		if (!canSubmit) return;
+		onSubmit({
+			label: label.trim(),
+			role,
+			business_location_ids: selectedLocationIds,
+			session_ttl_hours: sessionTtlHours,
+			// La clave se OMITE cuando el alias está vacío: mandarla vacía es
+			// mandar un alias, y el servidor no propone uno para un valor vacío.
+			...(trimmedAlias === "" ? {} : { alias: trimmedAlias }),
+		});
+	};
+
+	return (
+		<View style={styles.container}>
+			<Card>
+				<CardHeader>
+					<AppText variant="labelSmall" weight="bold">
+						{strings.business.staff.identityTitle}
+					</AppText>
+				</CardHeader>
+				<CardContent>
+					<TextField
+						label={strings.business.staff.nameLabel}
+						value={label}
+						onChangeText={setLabel}
+						hint={strings.business.staff.nameHint}
+						error={
+							label.length > 0 && !labelValid
+								? strings.business.staff.nameRequired
+								: null
+						}
+					/>
+					<View style={styles.spaced}>
+						<TextField
+							label={strings.business.staff.aliasLabel}
+							value={alias}
+							onChangeText={setAlias}
+							placeholder={strings.business.staff.aliasPlaceholder}
+							autoCapitalize="none"
+							autoCorrect={false}
+							keyboardType="email-address"
+							error={
+								trimmedAlias !== "" && !aliasValid
+									? strings.business.staff.aliasInvalid
+									: null
+							}
+						/>
+						{showsDomainWarning ? (
+							<AppText
+								variant="bodySmall"
+								style={{ color: colors.destructive }}
+							>
+								{strings.business.staff.aliasWarning}
+							</AppText>
+						) : null}
+					</View>
+				</CardContent>
+				<CardFooter>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
+						{strings.business.staff.aliasHint}
+					</AppText>
+				</CardFooter>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<AppText variant="labelSmall" weight="bold">
+						{strings.business.staff.roleLabel}
+					</AppText>
+				</CardHeader>
+				<CardContent>
+					<RoleOption
+						label={strings.business.staff.roleManager}
+						selected={role === "manager"}
+						onPress={() => setRole("manager")}
+					/>
+					<View style={styles.spaced}>
+						<RoleOption
+							label={strings.business.staff.roleStaff}
+							selected={role === "staff"}
+							onPress={() => setRole("staff")}
+						/>
+					</View>
+				</CardContent>
+				<CardFooter>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
+						{strings.business.staff.roleHint}
+					</AppText>
+				</CardFooter>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<AppText variant="labelSmall" weight="bold">
+						{strings.business.staff.locationsLabel}
+					</AppText>
+				</CardHeader>
+				<CardContent>
+					{locations.map((location, index) => (
+						<View
+							key={location.id}
+							style={index === 0 ? undefined : styles.spaced}
+						>
+							<LocationOption
+								location={location}
+								checked={selectedLocationIds.includes(location.id)}
+								onPress={() => toggleLocation(location.id)}
+							/>
+						</View>
+					))}
+				</CardContent>
+				<CardFooter>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
+						{locations.length === 0
+							? strings.business.staff.locationsEmpty
+							: selectedLocationIds.length === 0
+								? strings.business.staff.locationsRequired
+								: strings.business.staff.locationsHint}
+					</AppText>
+				</CardFooter>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<AppText variant="labelSmall" weight="bold">
+						{strings.business.staff.sessionPolicy}
+					</AppText>
+				</CardHeader>
+				<CardContent>
+					{role === "manager" ? (
+						<View style={styles.sessionRow}>
+							<View style={styles.flex1}>
+								<AppText variant="bodyMedium" weight="semiBold">
+									{strings.business.staff.sessionNever}
+								</AppText>
+								<AppText
+									variant="bodySmall"
+									style={{ color: colors.mutedForeground }}
+								>
+									{strings.business.staff.sessionPersistentHint}
+								</AppText>
+							</View>
+							<Switch
+								checked={persistentSession}
+								onCheckedChange={setPersistentSession}
+							/>
+						</View>
+					) : (
+						<AppText variant="bodyMedium" weight="semiBold">
+							{strings.business.staff.sessionShifts}
+						</AppText>
+					)}
+				</CardContent>
+				<CardFooter>
+					<AppText
+						variant="bodySmall"
+						style={{ color: colors.mutedForeground }}
+					>
+						{strings.business.staff.sessionShiftsHint}
+					</AppText>
+				</CardFooter>
+			</Card>
+
+			{error ? (
+				<AppText variant="bodySmall" style={{ color: colors.destructive }}>
+					{error}
+				</AppText>
+			) : null}
+
+			<Button
+				fullWidth
+				loading={submitting}
+				disabled={!canSubmit}
+				onPress={submit}
+			>
+				{strings.business.staff.createAccess}
+			</Button>
+		</View>
+	);
+}
+
+/**
+ * Una de las dos opciones de rol.
+ *
+ * El rol se elige con un radio y no con un desplegable porque son DOS y
+ * ninguna es la que está por defecto: el dueño tiene que ver las dos para
+ * saber que el cajero no administra al equipo.
+ */
+function RoleOption({
+	label,
+	selected,
+	onPress,
+}: {
+	label: string;
+	selected: boolean;
+	onPress: () => void;
+}) {
+	const { colors } = useTheme();
+	return (
+		<Pressable
+			onPress={onPress}
+			accessibilityRole="radio"
+			accessibilityState={{ selected }}
+			style={[
+				styles.option,
+				{
+					borderColor: selected ? colors.primary : colors.borderSolid,
+					backgroundColor: selected
+						? withAlpha(colors.primary, 0.051)
+						: colors.card,
+				},
+			]}
+		>
+			<AppText
+				variant="bodyMedium"
+				weight={selected ? "bold" : "medium"}
+				style={{ color: selected ? colors.primary : colors.foreground }}
+			>
+				{label}
+			</AppText>
+		</Pressable>
+	);
+}
+
+/**
+ * Una sucursal que el acceso puede alcanzar.
+ *
+ * La casilla es la que el §9.2 pide —«sucursales (casillas)»— y su estado
+ * vive en el formulario: la lista de alcance es lo que se manda.
+ */
+function LocationOption({
+	location,
+	checked,
+	onPress,
+}: {
+	location: BusinessLocation;
+	checked: boolean;
+	onPress: () => void;
+}) {
+	const { colors } = useTheme();
+	return (
+		<Pressable
+			onPress={onPress}
+			accessibilityRole="checkbox"
+			accessibilityState={{ checked }}
+			style={styles.locationRow}
+		>
+			<Checkbox checked={checked} onCheckedChange={onPress} />
+			<AppText variant="bodyMedium" style={{ color: colors.foreground }}>
+				{location.name}
+			</AppText>
+		</Pressable>
+	);
+}
+
+const styles = StyleSheet.create({
+	container: { gap: spacing.md },
+	spaced: { marginTop: spacing.lg },
+	flex1: { flex: 1, gap: 2 },
+	option: {
+		borderRadius: radii.md,
+		borderWidth: 1,
+		paddingVertical: spacing.md,
+		paddingHorizontal: spacing.lg,
+	},
+	locationRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.md,
+		paddingVertical: spacing.sm,
+	},
+	sessionRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.md,
+	},
+});
