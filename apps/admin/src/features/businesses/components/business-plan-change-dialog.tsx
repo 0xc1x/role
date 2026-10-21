@@ -134,8 +134,13 @@ export function BusinessPlanChangeDialog({
 									name="business-plan"
 									value={plan.code}
 									aria-label={businessPlanLabel(plan.code)}
+									aria-describedby={limitsId(plan.code)}
 									checked={selected === plan.code}
 									onChange={() => setSelected(plan.code)}
+									// El plan que ya tiene el negocio NO se puede volver a elegir:
+									// reasignarlo sería un PATCH que no cambia nada, y un PATCH de
+									// más en el log del servidor.
+									disabled={plan.code === currentPlanCode}
 									className="mt-1 size-4"
 								/>
 								<span className="space-y-1">
@@ -147,7 +152,10 @@ export function BusinessPlanChangeDialog({
 											<Badge variant="secondary">actual</Badge>
 										) : null}
 									</span>
-									<span className="block text-muted-foreground text-xs">
+									<span
+										id={limitsId(plan.code)}
+										className="block text-muted-foreground text-xs"
+									>
 										{limitPhrase(
 											plan.limits.max_locations,
 											"sucursal",
@@ -197,6 +205,18 @@ export function BusinessPlanChangeDialog({
 			</AlertDialogContent>
 		</AlertDialog>
 	);
+}
+
+/**
+ * El id de la línea de topes de un plan.
+ *
+ * El radio la referencia con `aria-describedby`: el nombre accesible del plan
+ * es su nombre («Pro»), y sin esta descripción el lector de pantalla anuncia
+ * el plan sin decir qué topes trae —que es justo lo que el operador tiene que
+ * comparar antes de elegir—.
+ */
+function limitsId(planCode: BusinessPlanCode): string {
+	return `business-plan-limits-${planCode}`;
 }
 
 /**

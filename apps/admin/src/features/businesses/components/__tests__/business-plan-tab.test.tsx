@@ -117,7 +117,11 @@ function stubFetch(
 		/** El catálogo falla: es la rama de error de la lectura. */
 		catalogueError?: { status?: number; body?: unknown };
 		locations?: unknown[];
+		/** La lista de puntos de retiro falla. */
+		locationsError?: { status?: number; body?: unknown };
 		staff?: unknown[];
+		/** El roster del equipo falla. */
+		staffError?: { status?: number; body?: unknown };
 		patch?: { status?: number; body?: unknown };
 	} = {},
 ) {
@@ -157,6 +161,12 @@ function stubFetch(
 			return json(options.catalogue ?? CATALOGUE);
 		}
 		if (method === "GET" && url.includes("/locations")) {
+			if (options.locationsError) {
+				return json(
+					options.locationsError.body ?? { message: "Internal server error" },
+					options.locationsError.status ?? 500,
+				);
+			}
 			const rows = options.locations ?? [];
 			return json({
 				data: rows,
@@ -164,6 +174,12 @@ function stubFetch(
 			});
 		}
 		if (method === "GET" && url.includes("/staff")) {
+			if (options.staffError) {
+				return json(
+					options.staffError.body ?? { message: "Internal server error" },
+					options.staffError.status ?? 500,
+				);
+			}
 			return json(options.staff ?? []);
 		}
 		return json([]);
@@ -171,15 +187,29 @@ function stubFetch(
 	return calls;
 }
 
+/**
+ * Renderiza la pestaña y devuelve, además, la forma de volver a renderizarla
+ * con OTRO negocio: la lista la cambia el drawer cuando se deja de mirar la
+ * pestaña, y ese cambio es lo que tiene que cerrar el diálogo.
+ */
 function renderTab(id: string | null = businessId) {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
-	return render(
+	const view = render(
 		<QueryClientProvider client={queryClient}>
 			<BusinessPlanTab businessId={id} />
 		</QueryClientProvider>,
 	);
+	return {
+		...view,
+		rerenderWithBusiness: (nextId: string | null) =>
+			view.rerender(
+				<QueryClientProvider client={queryClient}>
+					<BusinessPlanTab businessId={nextId} />
+				</QueryClientProvider>,
+			),
+	};
 }
 
 afterEach(() => {
@@ -213,6 +243,8 @@ describe("pestaña Plan del negocio", () => {
 		renderTab();
 
 		await waitFor(() => expect(screen.getByText("Pro")).toBeDefined());
+		// La fecha real del plan, la que trae la respuesta.
+		expect(screen.getByText("1/10/2026")).toBeDefined();
 		// El tope del catálogo, tal como lo aplica el motor.
 		expect(screen.getByText("5")).toBeDefined();
 		expect(screen.getByText("20")).toBeDefined();
@@ -264,6 +296,33 @@ describe("pestaña Plan del negocio", () => {
 			).toBeDefined(),
 		);
 		expect(screen.queryByRole("button", { name: "Cambiar plan" })).toBeNull();
+	});
+
+	// Un conteo que no se pudo leer NO es un cero: este bloque existe para
+	// decir si el negocio está por encima del tope, y un «0 de 5» pintado por
+	// un error de red afirma lo contrario.
+	test("si la lectura del uso falla, el panel no inventa un cero", async () => {
+		stubFetch({
+			subscription: subscription({
+				plan_code: "pro",
+				since: "2026-10-01T10:00:00.000Z",
+				limits: PRO_PLAN.limits,
+				features: PRO_PLAN.features,
+			}),
+			locationsError: { status: 500, body: { message: "boom" } },
+			staffError: { status: 500, body: { message: "boom" } },
+		});
+		renderTab();
+
+		await waitFor(() => expect(screen.getByText("Pro")).toBeDefined());
+		await waitFor(() => expect(screen.getAllByText("—")).toHaveLength(2));
+		expect(screen.queryByText("0 de 5")).toBeNull();
+		expect(screen.queryByText("0 de 20")).toBeNull();
+		expect(
+			screen.getByText(
+				"No se pudo leer el uso del negocio: los conteos de arriba no están disponibles.",
+			),
+		).toBeDefined();
 	});
 
 	// El admin no expulsa a nadie y no le cambia el acceso a nadie: la única
@@ -340,6 +399,67 @@ describe("cambio de plan desde el panel", () => {
 		const dialog = await screen.findByRole("alertdialog");
 		expect(dialog.textContent).toContain("no se corta");
 		expect(dialog.textContent).toContain("crecer");
+	});
+
+	// Reasignar el plan que ya tiene el negocio no cambia nada: sería un PATCH
+	// de más en el log del servidor, así que el plan actual no se puede elegir.
+	test("el plan que ya tiene el negocio no se puede volver a elegir", async () => {
+		stubFetch();
+		renderTab();
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Cambiar plan" }),
+		);
+
+		const current = await screen.findByRole("radio", { name: "Gratis" });
+		expect((current as HTMLInputElement).disabled).toBe(true);
+		// Los demás sí se pueden elegir: es a eso que viene el diálogo.
+		const other = screen.getByRole("radio", { name: "Pro" });
+		expect((other as HTMLInputElement).disabled).toBe(false);
+	});
+
+	// El nombre accesible del plan es su nombre; los topes van en la
+	// descripción, que es lo que el lector de pantalla anuncia después.
+	test("el radio describe sus topes para el lector de pantalla", async () => {
+		stubFetch();
+		renderTab();
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Cambiar plan" }),
+		);
+
+		const radio = await screen.findByRole("radio", { name: "Pro" });
+		const describedBy = radio.getAttribute("aria-describedby");
+		expect(describedBy).not.toBeNull();
+		const description = document.getElementById(describedBy ?? "");
+		expect(description?.textContent).toContain("5 sucursales");
+		expect(description?.textContent).toContain("20 miembros");
+	});
+
+	// La pestaña sigue montada cuando se deja de mirarla: el diálogo se cierra
+	// solo, y volver a entrar no lo encuentra abierto.
+	test("al dejar de mirar el negocio, el diálogo se cierra", async () => {
+		stubFetch();
+		const view = renderTab();
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Cambiar plan" }),
+		);
+		expect(await screen.findByRole("alertdialog")).toBeDefined();
+
+		// La lista del negocio pasa a null: la pestaña deja de mirarlo.
+		view.rerenderWithBusiness(null);
+		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+
+		// Y al volver a mirarlo, el diálogo NO se abre solo: la decisión se pide
+		// de nuevo, con el plan sin elegir.
+		view.rerenderWithBusiness(businessId);
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Cambiar plan" }),
+			).toBeDefined(),
+		);
+		expect(screen.queryByRole("alertdialog")).toBeNull();
 	});
 
 	// La asignación que sí se aplica se avisa y cierra el diálogo.

@@ -49,7 +49,17 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 	const plans = useBusinessPlans(Boolean(businessId));
 	const locations = useBusinessLocations(businessId);
 	const staff = useBusinessStaff(businessId);
-	const [changeOpen, setChangeOpen] = useState(false);
+	// El diálogo se abre PARA un negocio. La pestaña sigue montada cuando se
+	// deja de mirarla (los paneles inactivos no se desmontan), así que el
+	// estado se ajusta al cambiar el negocio: sin este reset, volver a entrar
+	// encontraría el diálogo abierto y sin plan elegido.
+	const [changeOpenFor, setChangeOpenFor] = useState<string | null>(null);
+	const [lastBusinessId, setLastBusinessId] = useState(businessId);
+	if (businessId !== lastBusinessId) {
+		setLastBusinessId(businessId);
+		setChangeOpenFor(null);
+	}
+	const changeOpen = changeOpenFor !== null && changeOpenFor === businessId;
 
 	// Sin negocio no hay nada que supervisar: la consulta ni siquiera se
 	// dispara (`enabled: false`) y la pantalla no muestra un estado de carga
@@ -85,14 +95,20 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 	// las filas que trae la lista del panel, que pide el máximo del contrato
 	// (100): un negocio con más de cien sucursales contaría las que se le
 	// ven, y los topes del catálogo llegan hasta cinco.
-	const locationsUsed = (locations.data?.data ?? []).filter(
-		(location) => location.is_active,
-	).length;
+	//
+	// `null` cuando la lectura FALLÓ: un «0» pintado por un error de red
+	// afirma que el negocio no usa nada, y este bloque existe justo para
+	// dizer si está por encima del tope. Un conteo que no se pudo leer se
+	// dice que no se pudo leer.
+	const locationsUsed = locations.isError
+		? null
+		: (locations.data?.data ?? []).filter((location) => location.is_active)
+				.length;
 	// El dueño NO consume cupo: el motor excluye al `owner` del conteo, y el
 	// conteo del panel tiene que contar lo mismo que el motor.
-	const membersUsed = (staff.data ?? []).filter(
-		(member) => member.role !== "owner",
-	).length;
+	const membersUsed = staff.isError
+		? null
+		: (staff.data ?? []).filter((member) => member.role !== "owner").length;
 
 	const cataloguePlan = plans.data?.find(
 		(plan) => plan.code === current.plan_code,
@@ -159,6 +175,12 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 					cap={current.limits.max_members}
 					isPending={staff.isPending}
 				/>
+				{locations.isError || staff.isError ? (
+					<p className="text-destructive text-sm">
+						No se pudo leer el uso del negocio: los conteos de arriba no están
+						disponibles.
+					</p>
+				) : null}
 			</section>
 
 			{/*
@@ -173,7 +195,9 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 					No se pudo cargar el catálogo de planes: no se puede asignar uno.
 				</p>
 			) : (
-				<Button onClick={() => setChangeOpen(true)}>Cambiar plan</Button>
+				<Button onClick={() => setChangeOpenFor(businessId)}>
+					Cambiar plan
+				</Button>
 			)}
 
 			<BusinessPlanChangeDialog
@@ -181,7 +205,7 @@ export function BusinessPlanTab({ businessId }: { businessId: string | null }) {
 				currentPlanCode={current.plan_code}
 				plans={plans.data ?? []}
 				open={changeOpen}
-				onOpenChange={setChangeOpen}
+				onOpenChange={(open) => setChangeOpenFor(open ? businessId : null)}
 			/>
 		</div>
 	);
@@ -208,6 +232,10 @@ function LimitRow({ label, value }: { label: string; value: string }) {
  *
  * Con tope: «2 de 5». Sin tope: «2 (sin tope)». El rótulo dice de QUÉ es el
  * conteo, así que el número no necesita de plurales para entenderse.
+ *
+ * El «—» es para el conteo que NO SE PUDO LEER (la lectura falló): no es un
+ * cero. Un «0» ahí afirmaría que el negocio no usa nada, y este bloque
+ * existe para decir si está por encima del tope.
  */
 function UsageRow({
 	label,
@@ -216,7 +244,7 @@ function UsageRow({
 	isPending,
 }: {
 	label: string;
-	used: number;
+	used: number | null;
 	cap: number | null;
 	isPending: boolean;
 }) {
@@ -225,6 +253,8 @@ function UsageRow({
 			<span className="text-muted-foreground text-sm">{label}</span>
 			{isPending ? (
 				<Skeleton className="h-4 w-16" />
+			) : used === null ? (
+				<span className="text-muted-foreground text-sm">—</span>
 			) : (
 				<span className="text-sm">
 					{cap === null ? `${used} (sin tope)` : `${used} de ${cap}`}
