@@ -106,6 +106,80 @@ interface PressableProbe {
 const textFields: TextFieldProbe[] = [];
 const pressables: PressableProbe[] = [];
 
+/**
+ * La llave con la que se montó cada `TextField`.
+ *
+ * `TextField` no reenvía refs, así que el foco al PIN se pide **remontando** el
+ * campo con una `key` nueva: un `autoFocus` sólo actúa al montar. Y la `key` no
+ * llega a las props del componente —React la consume al crear el elemento—, así
+ * que el arnés la lee del runtime de JSX, que es donde se crea. Sin esto, quitar
+ * la `key` del campo del PIN no rompe ningún test y el foco deja de funcionar en
+ * el dispositivo sin que nada lo note.
+ */
+const elementKeys: { label?: string; key: string | null }[] = [];
+
+const TextFieldDouble = (props: TextFieldProbe) => {
+	textFields.push(props);
+	return null;
+};
+
+const jsxRuntime = await import("react/jsx-dev-runtime");
+// La función original se guarda ANTES del doble: el doble reemplaza el
+// binding del módulo, y llamarla a través del namespace se llama a sí misma.
+const originalJsxDEV = jsxRuntime.jsxDEV;
+
+const jsxDEV = (
+	type: unknown,
+	props: unknown,
+	key?: unknown,
+	...rest: unknown[]
+) => {
+	if (type === TextFieldDouble) {
+		elementKeys.push({
+			label: (props as { label?: string }).label,
+			key: key === undefined ? null : String(key),
+		});
+	}
+	return (originalJsxDEV as (...args: unknown[]) => unknown)(
+		type,
+		props,
+		key,
+		...rest,
+	);
+};
+
+// Bun compila el JSX al runtime de DESARROLLO cuando `NODE_ENV` no es
+// `production`; el de producción se doblea también, para que el arnés no
+// dependa del modo en que se corran los tests.
+mock.module("react/jsx-dev-runtime", () => ({
+	...jsxRuntime,
+	jsxDEV,
+}));
+
+const jsxProd = await import("react/jsx-runtime");
+const originalJsx = jsxProd.jsx;
+const originalJsxs = jsxProd.jsxs;
+
+const conLlave = (
+	original: (...args: unknown[]) => unknown,
+): ((type: unknown, props: unknown, key?: unknown) => unknown) => {
+	return (type, props, key) => {
+		if (type === TextFieldDouble) {
+			elementKeys.push({
+				label: (props as { label?: string }).label,
+				key: key === undefined ? null : String(key),
+			});
+		}
+		return original(type, props, key);
+	};
+};
+
+mock.module("react/jsx-runtime", () => ({
+	...jsxProd,
+	jsx: conLlave(originalJsx as (...args: unknown[]) => unknown),
+	jsxs: conLlave(originalJsxs as (...args: unknown[]) => unknown),
+}));
+
 mock.module("react-native", () => ({
 	...nativeWeb,
 	Pressable: (props: { onPress?: () => void; children?: React.ReactNode }) => {
@@ -123,10 +197,7 @@ mock.module("@/src/core/theme", () => ({
 }));
 mock.module("@/src/core/ui", () => ({
 	AppText: nativeWeb.Text,
-	TextField: (props: TextFieldProbe) => {
-		textFields.push(props);
-		return null;
-	},
+	TextField: TextFieldDouble,
 }));
 mock.module("@/src/core/ui/Logo", () => ({ Logo: () => null }));
 mock.module("@/src/features/auth/presentation/AuthScreenShell", () => ({
@@ -184,6 +255,7 @@ function montar(element: React.ReactElement): string {
 	stateIndex = 0;
 	textFields.length = 0;
 	pressables.length = 0;
+	elementKeys.length = 0;
 	return renderToStaticMarkup(element);
 }
 
@@ -211,6 +283,14 @@ function tocarChip(identifier: string): void {
 	const chip = pressables.find((item) => item.label === identifier);
 	if (!chip?.onPress) throw new Error(`no se montó ningún chip ${identifier}`);
 	chip.onPress();
+}
+
+/** La llave con la que se montó el campo del PIN en el último render. */
+function llaveDelPin(): string | null {
+	const pines = elementKeys.filter(
+		(entry) => entry.label === strings.auth.password,
+	);
+	return pines.length > 0 ? (pines[pines.length - 1]?.key ?? null) : null;
 }
 
 // ─── El diálogo condicional (§9.1) ────────────────────────────────────────────
@@ -274,6 +354,26 @@ test("y al revés: un dominio propio que pasa a ser de staff deja de enviar", as
 	expect(sendPasswordResetEmail).not.toHaveBeenCalled();
 });
 
+test("un identificador a medias no decide nada: el diálogo es el de siempre", () => {
+	const markup = montarDialogo("ana");
+
+	// Todavía no hay una dirección que juzgar: el aviso de las cuentas de
+	// negocio no puede caerle a un consumidor que está escribiendo su correo.
+	expect(markup).toContain(strings.auth.resetDescription);
+	expect(markup).toContain(strings.auth.sendLink);
+	expect(markup).not.toContain(strings.auth.staffNoMailboxNotice);
+});
+
+test("y al completar el identificador de staff, el aviso aparece", () => {
+	montarDialogo("caje");
+
+	campo(strings.auth.email).onChangeText?.("cajero@mibarrio.role.ec");
+	const markup = montarDialogo("caje");
+
+	expect(markup).toContain(strings.auth.staffNoMailboxNotice);
+	expect(markup).not.toContain(strings.auth.sendLink);
+});
+
 // ─── Los chips con los identificadores usados en este dispositivo ────────────
 
 test("sin identificadores recordado no hay chips", () => {
@@ -298,6 +398,23 @@ test("el chip llena el campo del identificador y lleva el foco al PIN", () => {
 
 	expect(campo(strings.auth.email).value).toBe("cajero@mibarrio.role.ec");
 	expect(campo(strings.auth.password).autoFocus).toBe(true);
+});
+
+test("el foco al PIN pide un remontaje: la llave del campo cambia", () => {
+	rememberedIdentifiers = ["cajero@mibarrio.role.ec"];
+
+	montarPantalla();
+	const antes = llaveDelPin();
+	expect(antes).not.toBeNull();
+
+	tocarChip("cajero@mibarrio.role.ec");
+	montarPantalla();
+	const despues = llaveDelPin();
+
+	// Un `autoFocus` sólo actúa al montar: sin una llave nueva, el campo no se
+	// remonta y el foco se queda donde estaba.
+	expect(despues).not.toBe(antes);
+	expect(despues).not.toBeNull();
 });
 
 // ─── El campo del identificador no ofrece el correo del sistema ──────────────

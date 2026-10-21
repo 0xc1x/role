@@ -85,8 +85,10 @@ export default function LoginScreen() {
 			useAuthStore.getState().setProfile(profile);
 			// El identificador se recuerda para el próximo ingreso. El PIN no:
 			// `rememberLoginIdentifier` sólo guarda identificadores, y un fallo
-			// de almacenamiento no puede tumbar un login que ya ocurrió.
-			await rememberLoginIdentifier(email.trim());
+			// de almacenamiento no puede tumbar un login que ya ocurrió. La
+			// escritura NO se espera: la navegación no tiene por qué pagar dos
+			// vueltas al disco para que el chip exista la próxima vez.
+			void rememberLoginIdentifier(email.trim());
 			if (profile.role === "business" || profile.role === "admin") {
 				// cast: la ruta business no está publicada en los tipos generados aún
 				router.replace("/(business)/products" as Href);
@@ -377,14 +379,16 @@ export function ForgotPasswordDialog({
  * el §8 bloquea, y manda un correo a un buzón que no existe (ver
  * `business-member.schema.ts`).
  *
- * ─── UN CAMPO VACÍO NO DECIDE NADA ───────────────────────────────────────────
+ * ─── UN IDENTIFICADOR A MEDIAS NO DECIDE NADA ────────────────────────────────
  *
- * Mientras no se escriba un identificador, el diálogo es el de siempre: la
- * persona puede teclear el suyo y ver la decisión tomar forma con lo que
- * escribió.
+ * Mientras no haya una dirección —un `@` y su dominio— no hay nada que
+ * juzgar: el diálogo sigue siendo el de siempre. Un identificador a medias no
+ * puede affirmar «las cuentas de negocio no usan correo» sobre un consumidor
+ * que está escribiendo su correo, y el camino de envío exige un `@` igual, así
+ * que esto no le quita nada a la guarda.
  */
 function recoveryFlow(identifier: string): "email" | "no-mailbox" {
-	if (identifier === "") return "email";
+	if (!identifier.includes("@")) return "email";
 	return isDeliverableAlias(identifier) ? "email" : "no-mailbox";
 }
 
