@@ -22,6 +22,10 @@ import { notificationRepository } from "@/src/features/business/data/notificatio
 // Los accesos del equipo se administran por el API (ADR-0013 §A.1): el tope
 // del plan y el alcance del gerente son reglas del servidor, no del cliente.
 import { staffRepository } from "@/src/features/business/data/staff";
+// El sello de la sesión de staff vive en el módulo de auth porque lo sella el
+// LOGIN también; la lista del equipo lo necesita porque es la lectura que
+// el API condiciona al sello (§5.2).
+import { stampStaffSession } from "@/src/features/auth/data/staff-session";
 // Los writes de pedidos (RPCs) viven en el repo de orders; estos hooks solo
 // orquestan vistas del rol negocio sobre esa API.
 import { orderRepository } from "@/src/features/orders/data/repository";
@@ -646,11 +650,41 @@ const staffMutationKey = (operation: string) => ["staff", operation];
  *
  * La consulta se habilita sólo con un negocio: sin id no hay ruta y una
  * consulta a `/businesses//staff` sería un 404 que nadie pidió.
+ *
+ * ─── POR QUÉ LA CONSULTA SELLA LA SESIÓN ANTES DE LEER ───────────────────────
+ *
+ * Porque la lectura del equipo está CONDICIONADA al sello (§5.2): una
+ * membresía con `session_ttl_hours > 0` que nunca se selló se rechaza con un
+ * 403 («Tu sesión venció…»), y el dueño es el único inmune. El sello del
+ * login sella SIN negocio —la base lo resuelve sólo cuando la persona tiene
+ * una membresía viva— y con dos o más no sella nada (`multiple_businesses`):
+ * un gerente con varios negocios llega al panel con la sesión sin sellar y su
+ * conteo de equipo nunca aparece.
+ *
+ * Por eso el sello va AQUÍ, y no en un efecto de la pantalla: el que lee la
+ * lista es el que necesita la puerta abierta. Sellar antes de leer quita la
+ * carrera —el 403 del primer intento y su reintento— y hace que la lectura
+ * valga en el primer intento.
+ *
+ * Y el sello NO es un error si falla: `stampStaffSession` nunca lanza (el
+ * login ya ocurrió), así que un API caído no convierte la lista en un fallo
+ * distinto del que ya iba a haber.
+ *
+ * ─── Y POR QUÉ LA PANTALLA DEL EQUIPO TAMBIÉN SELLA ───────────────────────────
+ *
+ * Porque el sello tiene un efecto observable que la consulta no tiene: la
+ * tarjeta de entrega y el alcance de la sesión se leen del estado del API.
+ * El POST es idempotente en efecto —sellar dos veces la misma membresía la
+ * deja sellada igual—, así que la duplicidad no molesta: lo que se evita es
+ * que la pantalla deje de sellar cuando el sello de la consulta no alcanza.
  */
 export function useStaffMembers(businessId: string) {
 	return useQuery({
 		queryKey: staffListKey(businessId),
-		queryFn: () => staffRepository.list(businessId),
+		queryFn: async () => {
+			await stampStaffSession(businessId);
+			return staffRepository.list(businessId);
+		},
 		enabled: Boolean(businessId),
 	});
 }

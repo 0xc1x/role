@@ -26,6 +26,14 @@ import {
  * ya sabe qué negocio está usando, así que el sello se repite aquí con el
  * negocio en el cuerpo: es lo que deja la membresía sellada de verdad.
  *
+ * Y el sello se repite PORQUE la consulta de la lista también sella
+ * (`useStaffMembers`): el 403 de «tu sesión venció» se cocina con la lectura
+ * sin sello, así que el sello tiene que estar pegado a la lectura. El POST
+ * duplicado es idempotente en efecto —sellar dos veces la misma membresía la
+ * deja sellada igual— y esta pantalla conserva el suyo porque el sello tiene
+ * un efecto observable que la consulta no tiene: la política de sesión y el
+ * alcance se leen del estado del API.
+ *
  * ─── Y POR QUÉ EL ROL SE RESUELVE AQUÍ Y NO VIENE EN LA URL ──────────────────
  *
  * Porque el rol NO es un dato de la ruta: es el que la persona tiene en ESTE

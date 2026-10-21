@@ -440,6 +440,45 @@ describe("los hooks del equipo", () => {
 		expect(opciones?.enabled).toBe(false);
 	});
 
+	test("la lista SELLA la sesión antes de leer: el sello va primero", async () => {
+		// La lectura del equipo está CONDICIONADA al sello (§5.2): una
+		// membresía con TTL que nunca se selló se rechaza con un 403. Por eso
+		// el sello tiene que salir ANTES de la lectura, y no a la vez.
+		const llamadas: string[] = [];
+		apiPost.mockImplementation(async (path: string) => {
+			llamadas.push(`POST ${path}`);
+			return { role: "manager" };
+		});
+		apiGet.mockImplementation(async (path: string) => {
+			llamadas.push(`GET ${path}`);
+			return [MIEMBRO];
+		});
+
+		const client = new QueryClient();
+		monta(client, () => hooks.useStaffMembers(BUSINESS_ID));
+
+		const query = client
+			.getQueryCache()
+			.find({ queryKey: ["staff", "list", BUSINESS_ID] });
+		const queryFn = query?.options.queryFn as unknown as (
+			context: unknown,
+		) => Promise<unknown>;
+		await queryFn({
+			client,
+			queryKey: ["staff", "list", BUSINESS_ID],
+			signal: new AbortController().signal,
+			meta: undefined,
+		});
+
+		expect(llamadas).toEqual([
+			"POST /staff/session",
+			`GET /businesses/${BUSINESS_ID}/staff`,
+		]);
+		// Y el sello lleva el NEGOCIO: sin él la base responde
+		// `multiple_businesses` y no sella nada.
+		expect(apiPost.mock.calls[0]?.[1]).toEqual({ business_id: BUSINESS_ID });
+	});
+
 	test("cada mutación se nombra a sí misma para el diagnóstico", async () => {
 		const client = new QueryClient({
 			defaultOptions: { mutations: { retry: false } },

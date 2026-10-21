@@ -50,6 +50,14 @@ mock.module("@/src/features/business/data/staff", () => ({
 	staffRepository: {},
 	aliasWarnings: () => [],
 }));
+// El sello de la sesión de staff se importa en `hooks.ts` desde que la lista
+// del equipo sella antes de leer (§5.2), y el suyo llega al cliente HTTP —que
+// llega al cliente de Supabase y de ahí a `react-native`, que bun no puede
+// parsear—. Por eso el doble va aquí también: sin él, este fichero no llega a
+// cargarse.
+mock.module("@/src/features/auth/data/staff-session", () => ({
+	stampStaffSession: mock(async () => null),
+}));
 mock.module("@/src/features/orders/data/repository", () => ({
 	orderRepository: {},
 }));
