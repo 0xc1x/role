@@ -448,6 +448,21 @@ test("el dueño ve la transferencia de la propiedad", () => {
 	expect(button(strings.business.staff.transferTrigger)).toBeDefined();
 });
 
+test("el disparador de la transferencia dice A QUIÉN se le transfiere", () => {
+	renderWith(member({ label: "Luis Vega" }), "owner");
+
+	// «Transferir la propiedad» a secas no dice el objeto de una acción
+	// irreversible: el lector de pantalla necesita el nombre.
+	expect(
+		button(strings.business.staff.transferTrigger)?.accessibilityLabel,
+	).toBe(
+		strings.business.staff.transferAccessibilityLabel.replace(
+			"{name}",
+			"Luis Vega",
+		),
+	);
+});
+
 test("un gerente no ve la transferencia: la propiedad no es suya", () => {
 	renderWith(member(), "manager");
 
@@ -474,9 +489,15 @@ test("al pulsar la transferencia se abre la hoja con el nombre del acceso", () =
 	renderWith(member({ label: "Luis Vega" }), "owner");
 
 	// La hoja de transferencia SUSTITUYE a la de acciones: son dos modales y
-	// sólo uno puede estar abierto.
+	// sólo uno puede estar abierto. El TÍTULO lo prueba —«Transferir la
+	// propiedad a Luis Vega» no es el título de las acciones—, y no sólo que
+	// el texto esté en el markup: el disparador —«Transferir la propiedad»—
+	// no contiene ese título.
+	expect(sheetProps?.title).toBe(
+		strings.business.staff.transferSheetTitle.replace("{name}", "Luis Vega"),
+	);
+	expect(sheetProps?.title).not.toBe(strings.business.staff.actionsTitle);
 	expect(html).toContain("Luis Vega");
-	expect(html).toContain(strings.business.staff.transferTitle);
 	expect(html).not.toContain(strings.business.staff.actionsTitle);
 });
 

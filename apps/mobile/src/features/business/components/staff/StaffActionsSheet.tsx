@@ -274,6 +274,13 @@ export function StaffActionsSheet({
 					<Button
 						variant="outline"
 						disabled={busy}
+						// «Transferir la propiedad» a secas no dice A QUIÉN se
+						// le transfiere: el lector de pantalla necesita el
+						// objeto de una acción irreversible.
+						accessibilityLabel={strings.business.staff.transferAccessibilityLabel.replace(
+							"{name}",
+							member.label,
+						)}
 						onPress={() => setTransferOpen(true)}
 						style={styles.action}
 					>

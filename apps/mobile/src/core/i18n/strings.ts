@@ -1684,7 +1684,12 @@ export const strings = {
 			// después de la transferencia el que entrega es un gerente —y un
 			// gerente sí puede borrar su cuenta—, así que el aviso no le puede
 			// atribuir esa condición a quien transfiere.
-			transferTitle: "Transferir la propiedad",
+			// El TÍTULO de la hoja nombra al receptor: el aviso del lector de
+			// pantalla tiene que decir a QUIÉN se le transfiere la propiedad, y
+			// el disparador —«Transferir la propiedad»— no lo dice.
+			transferSheetTitle: "Transferir la propiedad a {name}",
+			transferAccessibilityLabel:
+				"Transferir la propiedad del negocio a {name}",
 			transferBody:
 				"{name} pasa a ser el dueño del negocio y tú quedas como gerente, con el mismo alcance que tienes ahora.",
 			transferOwnerWarning:

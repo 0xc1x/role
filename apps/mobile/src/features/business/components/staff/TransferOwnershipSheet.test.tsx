@@ -334,7 +334,11 @@ test("la confirmación dice a QUIÉN se transfiere la propiedad", () => {
 	// El nombre del acceso que recibe es parte de la confirmación: una
 	// transferencia sin objeto es una transferencia a ciegas.
 	expect(html).toContain(TARGET.label);
-	expect(sheetProps?.title).toBe(strings.business.staff.transferTitle);
+	// Y el TÍTULO de la hoja lo nombra: el disparador —«Transferir la
+	// propiedad»— no lo dice, y el lector de pantalla anuncia el título.
+	expect(sheetProps?.title).toBe(
+		strings.business.staff.transferSheetTitle.replace("{name}", TARGET.label),
+	);
 });
 
 test("la confirmación dice que quien recibe queda como dueño y quien entrega como gerente", () => {
@@ -359,6 +363,11 @@ test("la confirmación avisa de que un dueño no se puede pausar ni dar de baja"
 	expect(strings.business.staff.transferOwnerWarning).toContain(
 		"borrar su cuenta",
 	);
+	// Y es un AVISO, no un fallo: lleva el ámbar de la casa, que es el único
+	// token de prosa que pasa AA en los dos temas.
+	expect(textStyle(strings.business.staff.transferOwnerWarning)).toEqual({
+		color: light.warningText,
+	});
 });
 
 test("la hoja ofrece cancelar y confirmar, y el botón dice a QUIÉN", () => {

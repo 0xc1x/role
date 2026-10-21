@@ -98,7 +98,10 @@ export function TransferOwnershipSheet({
 
 	return (
 		<BottomSheetModal
-			title={strings.business.staff.transferTitle}
+			title={strings.business.staff.transferSheetTitle.replace(
+				"{name}",
+				member.label,
+			)}
 			onClose={onClose}
 			footer={
 				<View style={styles.footer}>
@@ -128,11 +131,13 @@ export function TransferOwnershipSheet({
 				</AppText>
 
 				{/* La condición del dueño: es lo que hay que saber ANTES de
-				    confirmar, y por eso no va en un toast que se va. */}
+				    confirmar, y por eso no va en un toast que se va. Es un
+				    AVISO, no un fallo: por eso lleva el ámbar de la casa
+				    (`warningText`), no el rojo. */}
 				<AppText
 					variant="bodySmall"
 					weight="semiBold"
-					style={{ color: colors.destructiveVibrant }}
+					style={{ color: colors.warningText }}
 				>
 					{strings.business.staff.transferOwnerWarning}
 				</AppText>
