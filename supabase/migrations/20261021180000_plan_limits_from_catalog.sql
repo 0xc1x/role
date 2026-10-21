@@ -91,7 +91,11 @@
 -- cuenta— se escribe como `v_agrega::integer` y no como `case when v_agrega
 -- then 1 else 0 end`: el `then 1 else 0` era un número más en el cuerpo, y un
 -- número en el cuerpo de un trigger es un número que puede ser un tope. El
--- valor es el mismo (`true` → 1, `false` → 0) y la bandera nunca es `null`.
+-- valor es el mismo (`true` → 1, `false` → 0), y el cast no puede devolver
+-- `null` porque la bandera no puede serlo: se construye con `new.is_active` y
+-- `old.is_active` —`NOT NULL`—, con `new.deleted_at is null` y con
+-- `is distinct from`, y las cuatro dan `true` o `false`. El cuerpo de cada
+-- trigger lo explica en la línea del cast.
 --
 -- ─── LA ACL NO CAMBIA, Y LAS TRES LÍNEAS LA DICEN EN VOZ ALTA ────────────────
 --
@@ -251,8 +255,21 @@ begin
   -- cuando esta escritura mete una fila en el conteo, y cero cuando no. Es una
   -- CUENTA, no un tope —y por eso se escribe como un cast y no como un `then 1
   -- else 0`: un número escrito en el cuerpo de un trigger es un número que
-  -- puede ser un tope. La bandera nunca es `null` (`is_active` es `NOT NULL`),
-  -- así que el cast no puede devolver `null` donde el `case` devolvía cero.
+  -- puede ser un tope.
+  --
+  -- Y el cast NO PUEDE devolver `null`, que es lo único que lo haría
+  -- peligroso: `v_agrega` se construye con `new.is_active` y con
+  -- `old.is_active` —las dos columnas son `NOT NULL`— y con
+  -- `is distinct from`, que nunca devuelve `null`. La bandera es siempre
+  -- `true` o `false`, y el cast devuelve `1` o `0`.
+  --
+  -- Y el `return new` de ARRIBA es lo que hace que esta comparación signifique
+  -- algo: ahí `v_limit` ya no es `null` —el `pro_plus` se fue por su `null`, y
+  -- una escritura que no crece ni siquiera lo buscó— y las dos cantidades que
+  -- se comparan son números. Si la bandera fuera `null`, el cast devolvería
+  -- `null`, `v_despues` sería `null` y la comparación no sería cierta: el
+  -- trigger dejaría de rechazar. Por eso la no-nulabilidad de la bandera está
+  -- ESCRITA aquí y no supuesta.
   v_despues := v_otros + (v_agrega::integer);
 
   -- La comparación sólo cuando la escritura CRECIÓ. Un negocio por encima de su
@@ -408,9 +425,22 @@ begin
   -- cuando esta escritura mete una fila en el conteo, y cero cuando no. Es una
   -- CUENTA, no un tope —y por eso se escribe como un cast y no como un `then 1
   -- else 0`: un número escrito en el cuerpo de un trigger es un número que
-  -- puede ser un tope. La bandera nunca es `null` (`deleted_at is null` y las
-  -- comparaciones de `role` y `business_id` nunca lo son), así que el cast no
-  -- puede devolver `null` donde el `case` devolvía cero.
+  -- puede ser un tope.
+  --
+  -- Y el cast NO PUEDE devolver `null`, que es lo único que lo haría
+  -- peligroso: `v_agrega` se construye con `new.deleted_at is null` —que
+  -- devuelve `true` o `false`, nunca `null`— y con comparaciones de `role` y
+  -- de `business_id`: `old.role` es `NOT NULL` y `is distinct from` nunca
+  -- devuelve `null`. La bandera es siempre `true` o `false`, y el cast
+  -- devuelve `1` o `0`.
+  --
+  -- Y el `return new` de ARRIBA es lo que hace que esta comparación signifique
+  -- algo: ahí `v_limit` ya no es `null` —el `pro_plus` se fue por su `null`, y
+  -- una escritura que no crece ni siquiera lo buscó— y las dos cantidades que
+  -- se comparan son números. Si la bandera fuera `null`, el cast devolvería
+  -- `null`, `v_despues` sería `null` y la comparación no sería cierta: el
+  -- trigger dejaría de rechazar. Por eso la no-nulabilidad de la bandera está
+  -- ESCRITA aquí y no supuesta.
   v_despues := v_otros + (v_agrega::integer);
 
   -- La comparación sólo cuando la escritura CRECIÓ. Un negocio por encima de su

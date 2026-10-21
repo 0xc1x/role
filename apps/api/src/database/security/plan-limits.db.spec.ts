@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   BUSINESS_FEATURES,
   BUSINESS_PLAN_CODES,
-  BUSINESS_PLAN_FEATURES,
   BUSINESS_PLAN_LIMITS,
   PLAN_AUDIENCES,
 } from '@0xc1x/role-commons';
@@ -54,14 +53,21 @@ import {
  *
  * ─── POR QUÉ SE LEE LA BASE VIVA Y NO UNA COPIA DEL TEST ─────────────────────
  *
- * Las assertions de abajo leen `public.subscription_plans` y
- * `public.subscription_plan_features` de la base que este spec acaba de
- * construir replicando `supabase/migrations/`, y el `pg_proc.prosrc` de los
- * triggers, y los comparan contra el archivo de TypeScript. No hay una segunda
- * lista de números escrita a mano que pueda quedarse vieja: si alguien sube el
- * plan gratis a 3 miembros en la tabla y olvida el `.ts`, este spec se pone rojo
- * señalando la celda; y si lo sube en el trigger, se pone rojo señalando el
- * `case`.
+ * Las assertions de abajo leen `public.subscription_plans` de la base que este
+ * spec acaba de construir replicando `supabase/migrations/`, y el
+ * `pg_proc.prosrc` de los tres cuerpos del motor, y los comparan contra el
+ * archivo de TypeScript. No hay una segunda lista de números escrita a mano que
+ * pueda quedarse vieja: si alguien sube el plan gratis a 3 miembros en la
+ * tabla y olvida el `.ts`, este spec se pone rojo señalando la celda; y si lo
+ * sube en el trigger, se pone rojo señalando el `case`.
+ *
+ * El catálogo de FEATURES no se consulta desde acá: la tabla
+ * `public.subscription_plan_features` ya no la lee ningún test de este archivo,
+ * porque ya no hay una copia del plan → feature que comparar contra el espejo
+ * de TypeScript —la hay en la tabla, y `business-members.rls.db.spec.ts` la
+ * consulta y la llama como `authenticated`—. Lo que este archivo mira de las
+ * features es el TEXTO del cuerpo de `business_has_feature`, que es lo que
+ * tiene que nombrarlas.
  *
  * Y al revés también, que es la mitad que importa más: si alguien sube el plan
  * gratis a 3 miembros en `commons` para venderlo, la tabla y el trigger siguen
@@ -1136,7 +1142,21 @@ describe('un plan que no está en el catálogo', () => {
   // seguir operándose entero (§5.3 bloquea crecer, no operar).
 
   test('el motor se niega en voz alta, y no es `R0001`', async () => {
-    const r = await rolledBackAttempts(async (_tx, attempt) => {
+    // ─── LA PRECONDICIÓN, Y POR QUÉ HAY QUE AFIRMARLA ───────────────────────
+    //
+    // Este test mide una cosa que sólo se mide si las features del `pro` se
+    // fueron con su fila: que el motor mira la fila del PLAN antes de
+    // preguntar por la feature.
+    //
+    // Con las features todavía en la tabla, los dos órdenes se niegan —con la
+    // feature primero por el `R0001` de siempre, con la fila primero por el
+    // refusal de catálogo roto— y el test seguiría en verde sin probar nada.
+    // Por eso el `on delete cascade` de `subscription_plan_features` es una
+    // PRECONDICIÓN de esta medición, y una precondición que no se afirma no es
+    // una precondición: es un supuesto que se rompe en silencio.
+    let featuresDelPro = -1;
+
+    const r = await rolledBackAttempts(async (tx, attempt) => {
       await attempt(
         'el negocio pro',
         `insert into public.businesses (id, name, type, slug)
@@ -1169,6 +1189,16 @@ describe('un plan que no está en el catálogo', () => {
         'borrar el plan del catálogo',
         `delete from public.subscription_plans where code = 'pro'`,
       );
+
+      // Y SE COMPRUEBA, dentro de la MISMA transacción: las features tienen que
+      // ser cero. Esta es la lectura que hace que lo de abajo signifique algo.
+      const [{ restantes }] = await tx.unsafe<{ restantes: number }[]>(
+        `select count(*)::int as restantes
+           from public.subscription_plan_features
+          where plan_code = 'pro'`,
+      );
+      featuresDelPro = restantes;
+
       await attempt(
         'renombrar un acceso',
         `update public.business_members set label = 'Renombrado'
@@ -1182,6 +1212,15 @@ describe('un plan que no está en el catálogo', () => {
                  'plancat-pro-dos@test')`,
       );
     });
+
+    expect(
+      featuresDelPro,
+      'las features del `pro` siguen en el catálogo después de borrar su fila. ' +
+        'El `on delete cascade` de `subscription_plan_features` es lo que deja ' +
+        'al motor con la fila del plan pero sin features, y SIN esa precondición ' +
+        'este test no mide el orden de las comprobaciones: con las features ' +
+        'presentes, los dos órdenes se niegan y el test sigue en verde.',
+    ).toBe(0);
 
     expect(
       r.get('borrar el plan del catálogo')?.code,
