@@ -633,6 +633,15 @@ export function useValidatePickupCode(businessId: string) {
 const staffListKey = (businessId: string) => ["staff", "list", businessId];
 
 /**
+ * El nombre con el que una mutación del equipo se presenta al diagnóstico.
+ *
+ * El `MutationCache` global lee `mutation.options.mutationKey` para el reporte
+ * de Sentry (`src/core/query/client.ts`), así que sin nombre un fallo del
+ * equipo sería anónimo: no se sabría si fue el alta, la pausa o la baja.
+ */
+const staffMutationKey = (operation: string) => ["staff", operation];
+
+/**
  * Los accesos del negocio, con su rol, su estado y su alcance.
  *
  * La consulta se habilita sólo con un negocio: sin id no hay ruta y una
@@ -664,6 +673,12 @@ export function useStaffMembers(businessId: string) {
  * leer. Y la transferencia invalida además los NEGOCIOS: el dueño cambió y el
  * panel lee ese rol en `useBusinesses`.
  *
+ * ─── Y POR QUÉ CADA UNA TIENE NOMBRE ─────────────────────────────────────────
+ *
+ * Porque el `MutationCache` global lee `mutation.options.mutationKey` para el
+ * reporte de Sentry: sin nombre, un fallo del equipo sería anónimo y no se
+ * sabría si fue el alta, la pausa o la baja.
+ *
  * Las variables de cada mutación: `create(body)`, `update({ memberId, body })`,
  * `updateAlias({ memberId, alias })` y —las que sólo necesitan a quién——
  * `rotate(memberId)`, `disable(memberId)`, `enable(memberId)`,
@@ -677,12 +692,14 @@ export function useStaffMutations(businessId: string) {
 	};
 
 	const create = useMutation({
+		mutationKey: staffMutationKey("create"),
 		mutationFn: (body: CreateBusinessMemberDto) =>
 			staffRepository.create(businessId, body),
 		onSuccess: invalidateStaffList,
 	});
 
 	const update = useMutation({
+		mutationKey: staffMutationKey("update"),
 		mutationFn: ({
 			memberId,
 			body,
@@ -694,36 +711,42 @@ export function useStaffMutations(businessId: string) {
 	});
 
 	const updateAlias = useMutation({
+		mutationKey: staffMutationKey("update-alias"),
 		mutationFn: ({ memberId, alias }: { memberId: string; alias: string }) =>
 			staffRepository.updateAlias(businessId, memberId, alias),
 		onSuccess: invalidateStaffList,
 	});
 
 	const rotate = useMutation({
+		mutationKey: staffMutationKey("rotate"),
 		mutationFn: (memberId: string) =>
 			staffRepository.rotate(businessId, memberId),
 		onSuccess: invalidateStaffList,
 	});
 
 	const disable = useMutation({
+		mutationKey: staffMutationKey("disable"),
 		mutationFn: (memberId: string) =>
 			staffRepository.disable(businessId, memberId),
 		onSuccess: invalidateStaffList,
 	});
 
 	const enable = useMutation({
+		mutationKey: staffMutationKey("enable"),
 		mutationFn: (memberId: string) =>
 			staffRepository.enable(businessId, memberId),
 		onSuccess: invalidateStaffList,
 	});
 
 	const remove = useMutation({
+		mutationKey: staffMutationKey("remove"),
 		mutationFn: (memberId: string) =>
 			staffRepository.remove(businessId, memberId),
 		onSuccess: invalidateStaffList,
 	});
 
 	const transferOwnership = useMutation({
+		mutationKey: staffMutationKey("transfer-ownership"),
 		mutationFn: (memberId: string) =>
 			staffRepository.transferOwnership(businessId, memberId),
 		onSuccess: () => {

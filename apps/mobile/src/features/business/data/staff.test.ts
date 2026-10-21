@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { BusinessMemberDto } from "@0xc1x/role-commons";
+import type { AppError } from "@/src/core/error/app-error";
 
 /**
  * Los accesos del equipo, por el API.
@@ -227,18 +228,32 @@ describe("staffRepository: las rutas y los verbos", () => {
 });
 
 describe("staffRepository: la frontera se valida con zod", () => {
+	/**
+	 * Una respuesta rota sale como `AppError` de la taxonomía, NO como un
+	 * `ZodError`: las pantallas pintan `error.message` y deciden con
+	 * `error.kind`, y un volcado de zod no es una respuesta que se pueda pintar.
+	 */
+	const ROTTA = {
+		kind: "unknown",
+		message: "El API devolvió una respuesta inesperada.",
+	};
+
 	test("una lista con un rol fuera del vocabulario falla", async () => {
 		apiGet.mockResolvedValue([
 			{ ...MIEMBRO, role: "jefe" as unknown as BusinessMemberDto["role"] },
 		]);
 
-		await expect(staffRepository.list(BUSINESS_ID)).rejects.toThrow();
+		await expect(staffRepository.list(BUSINESS_ID)).rejects.toMatchObject(
+			ROTTA,
+		);
 	});
 
 	test("la lista es un arreglo pelado: { members } no es la respuesta", async () => {
 		apiGet.mockResolvedValue({ members: [MIEMBRO] });
 
-		await expect(staffRepository.list(BUSINESS_ID)).rejects.toThrow();
+		await expect(staffRepository.list(BUSINESS_ID)).rejects.toMatchObject(
+			ROTTA,
+		);
 	});
 
 	test("un miembro con un rol fuera del vocabulario falla", async () => {
@@ -249,7 +264,7 @@ describe("staffRepository: la frontera se valida con zod", () => {
 
 		await expect(
 			staffRepository.disable(BUSINESS_ID, MEMBER_ID),
-		).rejects.toThrow();
+		).rejects.toMatchObject(ROTTA);
 	});
 
 	test("un miembro con un PIN de menos de seis dígitos no pasa por la tarjeta", async () => {
@@ -260,7 +275,26 @@ describe("staffRepository: la frontera se valida con zod", () => {
 				label: "Ana",
 				business_location_ids: [LOCATION_ID],
 			}),
-		).rejects.toThrow();
+		).rejects.toMatchObject(ROTTA);
+	});
+
+	test("el mensaje de una respuesta rota no trae el cuerpo crudo", async () => {
+		apiPost.mockResolvedValue({ ...TARJETA, pin: "48291" });
+
+		const intento = staffRepository.create(BUSINESS_ID, {
+			label: "Ana",
+			business_location_ids: [LOCATION_ID],
+		});
+
+		await intento.catch((error: unknown) => {
+			const fallo = error as AppError;
+			// El PIN no sale: el mensaje es la prosa de la taxonomía, no el
+			// volcado del schema.
+			expect(fallo.message).toBe(ROTTA.message);
+			expect(fallo.message).not.toContain("48291");
+			expect(fallo.message).not.toMatch(/invalid_type|expected|received/i);
+		});
+		await expect(intento).rejects.toMatchObject(ROTTA);
 	});
 
 	test("la edición se valida contra el schema del miembro", async () => {
@@ -270,7 +304,21 @@ describe("staffRepository: la frontera se valida con zod", () => {
 			staffRepository.update(BUSINESS_ID, MEMBER_ID, {
 				role: "manager",
 			}),
-		).rejects.toThrow();
+		).rejects.toMatchObject(ROTTA);
+	});
+
+	test("el cambio de alias se valida contra el schema de su respuesta", async () => {
+		// Sin `alias_warnings`: el aviso del §9.4 es obligatorio, y una
+		// respuesta que no lo trae es una rotura del servidor.
+		apiPatch.mockResolvedValue({ member: MIEMBRO });
+
+		await expect(
+			staffRepository.updateAlias(
+				BUSINESS_ID,
+				MEMBER_ID,
+				"ana@panaderia.role.ec",
+			),
+		).rejects.toMatchObject(ROTTA);
 	});
 
 	test("la transferencia se valida contra el schema de las dos membresías", async () => {
@@ -278,7 +326,10 @@ describe("staffRepository: la frontera se valida con zod", () => {
 
 		await expect(
 			staffRepository.transferOwnership(BUSINESS_ID, MEMBER_ID),
-		).rejects.toThrow();
+		).rejects.toMatchObject({
+			kind: "unknown",
+			message: "El API devolvió una respuesta inesperada.",
+		});
 	});
 });
 
@@ -388,6 +439,58 @@ describe("los hooks del equipo", () => {
 			.find({ queryKey: ["staff", "list", ""] });
 		const opciones = query?.options as { enabled?: boolean } | undefined;
 		expect(opciones?.enabled).toBe(false);
+	});
+
+	test("cada mutación se nombra a sí misma para el diagnóstico", async () => {
+		const client = new QueryClient({
+			defaultOptions: { mutations: { retry: false } },
+		});
+		const mutations = monta(client, () => hooks.useStaffMutations(BUSINESS_ID));
+		// Lo que el API conteste no importa acá: la mutación queda en el caché
+		// de mutaciones con su nombre, y ese nombre es lo que el
+		// `MutationCache` global lee para el reporte de Sentry.
+		apiPost.mockResolvedValue({});
+		apiPatch.mockResolvedValue({});
+		apiDelete.mockResolvedValue(undefined);
+
+		await mutations.create
+			.mutateAsync({
+				label: "Ana",
+				business_location_ids: [LOCATION_ID],
+			})
+			.catch(() => undefined);
+		await mutations.update
+			.mutateAsync({ memberId: MEMBER_ID, body: { role: "manager" } })
+			.catch(() => undefined);
+		await mutations.updateAlias
+			.mutateAsync({
+				memberId: MEMBER_ID,
+				alias: "ana@panaderia.role.ec",
+			})
+			.catch(() => undefined);
+		await mutations.rotate.mutateAsync(MEMBER_ID).catch(() => undefined);
+		await mutations.disable.mutateAsync(MEMBER_ID).catch(() => undefined);
+		await mutations.enable.mutateAsync(MEMBER_ID).catch(() => undefined);
+		await mutations.remove.mutateAsync(MEMBER_ID).catch(() => undefined);
+		await mutations.transferOwnership
+			.mutateAsync(MEMBER_ID)
+			.catch(() => undefined);
+
+		expect(
+			client
+				.getMutationCache()
+				.getAll()
+				.map((mutation) => mutation.options.mutationKey),
+		).toEqual([
+			["staff", "create"],
+			["staff", "update"],
+			["staff", "update-alias"],
+			["staff", "rotate"],
+			["staff", "disable"],
+			["staff", "enable"],
+			["staff", "remove"],
+			["staff", "transfer-ownership"],
+		]);
 	});
 
 	test("las ocho mutaciones invalidan la lista del equipo", async () => {

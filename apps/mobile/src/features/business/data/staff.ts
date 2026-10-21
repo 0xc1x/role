@@ -13,7 +13,7 @@ import {
 	type UpdateBusinessMemberAliasResponseDto,
 	type UpdateBusinessMemberDto,
 } from "@0xc1x/role-commons";
-import { z } from "zod";
+import { type ZodType, z } from "zod";
 
 import { api } from "@/src/core/api/client";
 import { Errors } from "@/src/core/error/app-error";
@@ -35,7 +35,9 @@ import { Errors } from "@/src/core/error/app-error";
  * app. Un cuerpo que no cumple el contrato es una ROTURA DEL SERVIDOR, y lo
  * honesto es fallar en voz alta: un `cast` dejaría pasar un `role: "jefe"` o un
  * PIN de cinco dígitos como si fueran buenos, y el error aparecería tres
- * pantallas más abajo, en el sitio menos útil.
+ * pantallas más abajo, en el sitio menos útil. Y cuando falla, sale como un
+ * `AppError` de la taxonomía —con su categoría y su prosa— y no como el
+ * volcado técnico de un schema: ver {@link parseResponse}.
  *
  * ─── EL PIN NO SE GUARDA ─────────────────────────────────────────────────────
  *
@@ -43,6 +45,37 @@ import { Errors } from "@/src/core/error/app-error";
  * ahí sale: no va a una clave de caché, no se registra y no se guarda en el
  * dispositivo. La tarjeta se la queda la pantalla que la muestra, una vez.
  */
+
+/**
+ * Lo que se le dice a la persona cuando el servidor contesta algo que no
+ * cumple el contrato.
+ *
+ * Es una frase, no un volcado: el cuerpo crudo —donde puede venir el PIN de la
+ * tarjeta de entrega— no se muestra, ni se registra, ni se cuela en el
+ * mensaje.
+ */
+const RESPUESTA_INESPERADA = "El API devolvió una respuesta inesperada.";
+
+/**
+ * Valida la respuesta del API contra el schema del contrato.
+ *
+ * ─── POR QUÉ UN `AppError` Y NO UN `ZodError` ────────────────────────────────
+ *
+ * Porque la UI no sabe pintar un `ZodError`: no tiene `kind` y su `message` es
+ * un volcado técnico con las rutas del schema. Las pantallas del equipo (Tasks
+ * 7 en adelante) pintan `error.message` y deciden con `error.kind`, así que un
+ * `ZodError` que se escapara pondría un volcado de zod delante de la persona
+ * en el preciso momento en que el servidor se rompió.
+ *
+ * La categoría es `unknown` a propósito: es la que el `MutationCache` global
+ * reporta a Sentry (`src/core/query/client.ts`), porque una respuesta rota no
+ * es algo que la persona pueda corregir.
+ */
+function parseResponse<T>(schema: ZodType<T>, body: unknown): T {
+	const parsed = schema.safeParse(body);
+	if (!parsed.success) throw Errors.unknown(RESPUESTA_INESPERADA);
+	return parsed.data;
+}
 
 /** La ruta base de las ocho rutas del equipo (§8). */
 function staffPath(businessId: string): string {
@@ -102,15 +135,16 @@ export const staffRepository = {
 	 */
 	async list(businessId: string): Promise<BusinessMemberDto[]> {
 		const body = await api.get<unknown>(staffPath(businessId));
-		return z.array(BusinessMemberSchema).parse(body);
+		return parseResponse(z.array(BusinessMemberSchema), body);
 	},
 
 	/**
 	 * `POST /businesses/:businessId/staff` — el alta, y la tarjeta de entrega.
 	 *
-	 * El cuerpo NO lleva `business_id`: lo trae la ruta, y un cuerpo que
-	 * pudiera contradecirla sería una puerta de atrás para dar de alta un
-	 * acceso en otro negocio.
+	 * El cuerpo no lleva `business_id`: lo trae la ruta. Esa frontera es el
+	 * TIPO del cuerpo y el schema estricto del servidor —un `business_id` de más
+	 * lo rechaza el API con un 400—, no el cliente: acá no se revalida el cuerpo
+	 * entero, sólo el alias.
 	 *
 	 * ─── Y EL ALIAS QUE NO VIENE ──────────────────────────────────────────────
 	 *
@@ -125,7 +159,7 @@ export const staffRepository = {
 	): Promise<BusinessMemberDeliveryCardDto> {
 		if (body.alias !== undefined) assertAlias(body.alias);
 		const response = await api.post<unknown>(staffPath(businessId), body);
-		return BusinessMemberDeliveryCardSchema.parse(response);
+		return parseResponse(BusinessMemberDeliveryCardSchema, response);
 	},
 
 	/**
@@ -142,7 +176,7 @@ export const staffRepository = {
 			memberPath(businessId, memberId),
 			body,
 		);
-		return BusinessMemberSchema.parse(response);
+		return parseResponse(BusinessMemberSchema, response);
 	},
 
 	/**
@@ -166,7 +200,7 @@ export const staffRepository = {
 			`${memberPath(businessId, memberId)}/alias`,
 			{ alias: validAlias },
 		);
-		return UpdateBusinessMemberAliasResponseSchema.parse(response);
+		return parseResponse(UpdateBusinessMemberAliasResponseSchema, response);
 	},
 
 	/**
@@ -185,7 +219,7 @@ export const staffRepository = {
 		const response = await api.post<unknown>(
 			`${memberPath(businessId, memberId)}/rotate`,
 		);
-		return BusinessMemberDeliveryCardSchema.parse(response);
+		return parseResponse(BusinessMemberDeliveryCardSchema, response);
 	},
 
 	/**
@@ -202,7 +236,7 @@ export const staffRepository = {
 		const response = await api.post<unknown>(
 			`${memberPath(businessId, memberId)}/disable`,
 		);
-		return BusinessMemberSchema.parse(response);
+		return parseResponse(BusinessMemberSchema, response);
 	},
 
 	/** `POST /businesses/:businessId/staff/:memberId/enable`: lo mismo, al revés. */
@@ -213,7 +247,7 @@ export const staffRepository = {
 		const response = await api.post<unknown>(
 			`${memberPath(businessId, memberId)}/enable`,
 		);
-		return BusinessMemberSchema.parse(response);
+		return parseResponse(BusinessMemberSchema, response);
 	},
 
 	/**
@@ -246,6 +280,6 @@ export const staffRepository = {
 			`/businesses/${businessId}/ownership/transfer`,
 			{ new_owner_member_id: memberId },
 		);
-		return TransferBusinessOwnershipResponseSchema.parse(response);
+		return parseResponse(TransferBusinessOwnershipResponseSchema, response);
 	},
 };
