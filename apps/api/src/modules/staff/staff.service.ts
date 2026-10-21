@@ -1028,14 +1028,19 @@ export class StaffService {
    * alcance contesta una pregunta distinta —«¿esto está dentro de lo que
    * administras?»— y la del dueño es «¿esto se puede cortar?».
    *
-   * ─── Y `owner_skipped` SE CALCULA SOBRE EL ROSTER CRUDO ──────────────────────
+   * ─── Y `owner_skipped` LO CONTESTA LA BASE ────────────────────────────────────
    *
-   * Antes del filtro de alcance, a propósito: si hay una fila de dueño viva, el
-   * dueño quedó FUERA del corte, y eso hay que decirlo. Preguntarlo después
-   * del filtro lo haría depender de QUIÉN corta —el dueño se cortaría a sí
-   * mismo y su `owner_skipped` sería `false`—, y el campo tiene que decir lo
-   * mismo para todos los que cortan. Un negocio sin dueño vivo dice `false`, y
-   * también lo dice: no había nadie que dejar afuera.
+   * «¿tiene dueño vivo?» es la pregunta de `public.business_live_owner_count` —
+   * `role = 'owner'`, `status = 'active'` y `deleted_at is null`— y la MISMA que
+   * hace la puerta de la plataforma (`requireOwnerlessBusiness`). La contesta la
+   * BASE, y el predicado vive en la base y no en dos sitios: inferirlo del roster
+   * contaría como dueño a un dueño PAUSADO —que no administra nada, y que la
+   * plataforma ve como cero dueños vivos—, y esta ruta diría que se saltó un
+   * dueño donde la plataforma no ve ninguno.
+   *
+   * Y no depende de QUIÉN corta: un gerente que corta ve el mismo `true` que el
+   * dueño, porque la pregunta no es «¿lo alcanzaba?» sino «¿había un dueño vivo
+   * que el corte dejó afuera?».
    *
    * ─── SOLO LOS ACTIVOS ────────────────────────────────────────────────────────
    *
@@ -1043,6 +1048,26 @@ export class StaffService {
    * re-banea y no se toca. Volver a banear una cuenta que ya está baneada es
    * ruido, y una lista que lo devolviera como «cortado» sería una lista de
    * lo que pasó, no de lo que había.
+   *
+   * ─── Y UN NEGOCIO VACÍO O QUE NO EXISTE: 200, NO 404 ───────────────────────────
+   *
+   * La puerta de la plataforma no pregunta por el negocio: no hay una búsqueda
+   * de negocio que hacer y no se agrega una. Un corte sobre un negocio vacío es
+   * un corte que no corta nada, y la respuesta lo dice:
+   * `200 { disabled: [], owner_skipped: false }`. Es idempotente, que es lo que
+   * hace que un reintento sea seguro.
+   *
+   * La puerta de la MEMBRESÍA sí contesta 403 —«No perteneces a este
+   * negocio.»— porque un miembro que no es miembro no administra: ésa es la
+   * diferencia entre las dos puertas, y por eso la del admin no es un 404.
+   *
+   * ─── Y LA PAUSA QUE LLEGA TARDE ───────────────────────────────────────────────
+   *
+   * El roster se lee una vez y la escritura viene después: un acceso que se
+   * pausa ENTRE la lectura y su corte se vuelve a banear y aparece en la
+   * respuesta. Es el mismo TOCTOU que tiene la pausa de una persona
+   * (`disableAccess`), y es coherencia a propósito: las dos rutas cortan lo que
+   * leyeron, y una que se saltara la fila ya pausada sería una segunda regla.
    *
    * ─── EL COSTE, Y ES EL MISMO DE `list()` ─────────────────────────────────────
    *
@@ -1061,7 +1086,7 @@ export class StaffService {
 
     const roster = await this.repository.listMembersWithScope(businessId);
 
-    const ownerSkipped = roster.some((member) => member.row.role === 'owner');
+    const ownerSkipped = (await this.repository.liveOwnerCount(businessId)) > 0;
 
     const disabled: BusinessMemberDto[] = [];
     for (const member of roster) {
@@ -1116,6 +1141,13 @@ export class StaffService {
    * cortes ANTERIORES quedan hechos y el que falló queda a medias: no hay una
    * compensación nueva que deshaga lo que sí se pudo cortar, porque deshacer un
    * ban es más caro que el corte que se quiso hacer.
+   *
+   * ─── Y LA PAUSA QUE LLEGA TARDE ───────────────────────────────────────────────
+   *
+   * Si el acceso se pausa entre la lectura del roster y esta escritura, esta
+   * escritura lo vuelve a pausar y lo vuelve a banear: es el mismo TOCTOU que
+   * tiene `disableAccess` sobre una fila, y es coherencia a propósito —las dos
+   * rutas cortan lo que leyeron— y no un olvido.
    *
    * Y el error es el de `disableAccess`, literal: el que lee el dueño es el
    * mismo texto en las dos rutas.

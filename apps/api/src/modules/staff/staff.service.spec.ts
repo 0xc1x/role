@@ -1301,6 +1301,11 @@ describe('StaffService', () => {
         MEMBER_MANAGER,
         MEMBER_CASHIER,
       ]);
+      // Y el `owner_skipped` NO depende de QUIÉN corta: lo contesta la base
+      // («¿hay dueño vivo?»), y el gerente ve lo mismo que ve el dueño. Si se
+      // calculara después del filtro de alcance —o con el predicado del roster—
+      // acá sería `false`, y la respuesta dependería de quién preguntó.
+      expect(result.owner_skipped).toBe(true);
       // Y el gerente se corta A SÍ MISMO, que es lo que el predicado dice: su
       // alcance lo contiene. La exclusión del §8 es la del DUEÑO —una frase
       // sobre un ROL—, no la de quien llama, y un gerente atrapado en un
@@ -1324,15 +1329,15 @@ describe('StaffService', () => {
     /**
      * El dueño NUNCA entra en la lista, y su fila y su login no se tocan.
      *
-     * ─── POR QUÉ NO SE AFIRMA `business_live_owner_count` ────────────────────────
+     * ─── Y POR QUÉ NO SE AFIRMA QUE `business_live_owner_count` NO CAMBIÓ ─────────
      *
-     * El brief lo pedía, y es la pregunta que hace la base —«¿este negocio tiene
-     * dueño vivo?»— pero el doble de este archivo ES la base y no puede llamar a
-     * una función de Postgres. Lo que sí se puede afirmar, y es la consecuencia
-     * que importa, es lo de abajo: la fila del dueño no se escribe y su
-     * `auth.users` no se banea, ni por el dueño, ni por un gerente, ni por la
-     * plataforma. Y el `owner_skipped` dice que el dueño quedó afuera, que es
-     * la otra mitad de la misma verdad.
+     * El brief lo pedía, y la pregunta —«¿este negocio tiene dueño vivo?»— la
+     * contesta la base: el servicio la PREGUNTA (`liveOwnerCount`), y no la
+     * infiere del roster. Un contador no «cambia» por un corte: o hay dueño
+     * vivo o no hay, y el corte no toca la fila del dueño. Lo que sí se puede
+     * afirmar, y es la consecuencia que importa, es lo de abajo: la fila del
+     * dueño no se escribe y su `auth.users` no se banea, ni por el dueño, ni por
+     * un gerente, ni por la plataforma.
      */
     it('el dueño NUNCA entra en la lista, y su fila y su login no se tocan', async () => {
       const result = await service.revokeAll(owner, BIZ);
@@ -1350,6 +1355,46 @@ describe('StaffService', () => {
         OWNER_USER,
         expect.anything(),
       );
+      // Y la pregunta del dueño vivo la hizo la BASE, con la misma función que
+      // usa la puerta de la plataforma.
+      expect(repository.liveOwnerCount).toHaveBeenCalledWith(BIZ);
+    });
+
+    /**
+     * Un dueño PAUSADO no es un dueño vivo, y la ruta tiene que decir lo mismo
+     * que la plataforma.
+     *
+     * El roster de `listMembersWithScope` trae las filas VIVAS (`deleted_at is
+     * null`), pero trae también las PAUSADAS: el dueño pausado sigue en el
+     * roster. Inferir el `owner_skipped` del roster lo contaría como un dueño
+     * que se saltó el corte, y la plataforma —que usa
+     * `business_live_owner_count`, con `status = 'active'`— vería cero dueños
+     * vivos. Las dos respuestas tienen que ser la misma.
+     */
+    it('un dueño pausado no cuenta como dueño vivo: `owner_skipped` es false', async () => {
+      // La fila del dueño está en el roster, pero PAUSADA: es lo que la base
+      // devuelve para un dueño que no administra.
+      repository.listMembersWithScope.mockResolvedValue([
+        { row: memberRow({ id: MEMBER_STAFF }), locationIds: [LOC_A] },
+        {
+          row: { ...ownerRow(), status: 'disabled' },
+          locationIds: [],
+        },
+      ]);
+      // Y la base dice que no hay dueño vivo.
+      repository.liveOwnerCount.mockResolvedValue(0);
+
+      const result = await service.revokeAll(admin, BIZ);
+
+      expect(result.owner_skipped).toBe(false);
+      // El dueño sigue sin estar en la respuesta: no se corta ni en vivo ni
+      // pausado.
+      expect(result.disabled.map((member) => member.id)).not.toContain(
+        MEMBER_OWNER,
+      );
+      expect(result.disabled.map((member) => member.id)).toEqual([
+        MEMBER_STAFF,
+      ]);
     });
 
     it('un negocio sin dueño vivo corta igual, y lo dice: `owner_skipped` es false', async () => {
@@ -1357,12 +1402,14 @@ describe('StaffService', () => {
       // que corta es la PLATAFORMA, porque es la única puerta que queda: un
       // dueño que no existe no puede abrir la suya.
       //
-      // El `owner_skipped` sale del roster crudo, así que es `false` —y no un
-      // silencio—: la UI puede decir que no había dueño que dejar afuera.
+      // El `owner_skipped` sale de la BASE —«¿hay dueño vivo?»—, así que es
+      // `false` —y no un silencio—: la UI puede decir que no había dueño que
+      // dejar afuera.
       repository.listMembersWithScope.mockResolvedValue([
         { row: memberRow({ id: MEMBER_STAFF }), locationIds: [LOC_A] },
         { row: cashierRow(), locationIds: [LOC_A] },
       ]);
+      repository.liveOwnerCount.mockResolvedValue(0);
 
       const result = await service.revokeAll(admin, BIZ);
 
