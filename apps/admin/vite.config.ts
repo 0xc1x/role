@@ -45,6 +45,8 @@ const config = defineConfig(({ mode }) => {
 	return {
 		resolve: { tsconfigPaths: true },
 		server: {
+			// WSL: sin esto Vite queda atado a ::1 y Windows no lo ve.
+			host: true,
 			watch: {
 				usePolling: true,
 			},
