@@ -1,24 +1,26 @@
 /**
- * El catálogo de planes del §4.5, en código.
+ * El catálogo de planes del §4.5, tipado.
  *
- * ─── POR QUÉ VIVE AQUÍ Y NO EN UNA TABLA ─────────────────────────────────────
+ * ─── POR QUÉ ESTE ARCHIVO YA NO ES LA FUENTE ────────────────────────────────
  *
- * Un feature es una línea y un typecheck; un tier es una entrada más. Cuando
- * existan precios, suscripciones reales o tiers por tamaño, esto se mueve a
- * tablas — con el negocio ya diciendo qué necesita, no antes.
+ * Un feature es una línea y un typecheck; un tier es una entrada más. Eso fue
+ * el motivo de que el catálogo viviera en código mientras no hubiera precios,
+ * suscripciones reales ni tiers por tamaño. Ese día llegó: el catálogo se mudó
+ * a tablas —`subscription_plans` y `subscription_plan_features`— y la fila es
+ * la fuente. Este archivo queda como el ESPEJO TIPADO de esas tablas: el
+ * vocabulario que el compilador conoce, para que ningún consumidor escriba
+ * `plan_code` a mano y para que el panel y la API lean la misma lista.
  *
  * ─── POR QUÉ ESTOS NÚMEROS SON UNA SEGUNDA COPIA, Y CÓMO SE SABE ─────────────
  *
- * La otra copia está en dos triggers de Postgres,
- * `enforce_business_location_limit` y `enforce_business_member_limit`, cada uno
- * con su `case v_plan` escrito a mano. El dueño ve un número en el panel y el
- * motor aplica un número en la base: si divergen, se le está mintiendo, y la
- * mentira no se ve hasta que alguien llega al tope.
+ * La otra copia está en la tabla del catálogo, una fila por plan. El dueño ve un
+ * número en el panel y el motor aplica un número en la base: si divergen, se le
+ * está mintiendo, y la mentira no se ve hasta que alguien llega al tope.
  *
- * Por eso la comparación no es una nota: `plan-limits.db.spec.ts` en
- * `apps/api/src/database/security/` lee los límites y las features del
- * `pg_proc` VIVO y los compara con este archivo, celda por celda. Si alguien
- * agrega un plan aquí y no al trigger —o al revés— ese spec se pone rojo.
+ * Por eso la comparación no es una nota: el guard de
+ * `apps/api/src/database/security/` lee el catálogo VIVO y lo compara con este
+ * archivo, celda por celda. Si alguien agrega un plan aquí y no a la tabla —o
+ * al revés— ese spec se pone rojo.
  *
  * ─── LOS DOS TOPES SON ACUMULATIVOS, Y EL DUEÑO NO CUENTA ────────────────────
  *
@@ -28,9 +30,10 @@
  * estas constantes.
  *
  * `null` es «este plan no tiene tope», no «este tope no se ha decidido todavía».
- * La diferencia la defiende el trigger: su `case` tiene un `else` que levanta
- * excepción, así que un plan sin fila en este archivo no cae en `null` por
- * accidente.
+ * La diferencia la defienden dos cosas: el CHECK de la tabla, que prohíbe el
+ * `0` como tope, y el motor, que levanta excepción en vez de caer en `null`
+ * cuando no resuelve el plan. Un plan sin fila no puede salirse por el hueco
+ * del «sin tope».
  */
 
 export const BUSINESS_PLAN_CODES = ["free", "pro", "pro_plus"] as const;
