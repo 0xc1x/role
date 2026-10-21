@@ -29,6 +29,11 @@ import { aliasWarnings as computeAliasWarnings } from "@/src/features/business/d
  * propone el servidor (`{código}@{slug}.role.ec`), y mandarlo vacío sería
  * mandarle un alias que no existe. En la EDICIÓN el alias nunca falta: lo
  * tiene el acceso, y un acceso sin alias es un acceso con el que nadie entra.
+ *
+ * El `label` viaja en la interfaz compartida, pero en modo EDICIÓN es de SOLO
+ * LECTURA: el nombre se muestra y no se renombra (§8), y es la pantalla la que
+ * arma el cuerpo de tres campos del `PATCH` —sin `label`—. Aquí va para que el
+ * alta y la edición compartan el mismo tipo de salida.
  */
 export interface StaffFormValues {
 	label: string;
@@ -108,6 +113,7 @@ export function StaffForm({
 	locations,
 	initial,
 	aliasWarnings,
+	aliasWarningsFor,
 	submitting,
 	error,
 	onSubmit,
@@ -130,6 +136,14 @@ export function StaffForm({
 	 * autoridad.
 	 */
 	aliasWarnings?: StaffAliasWarningCode[];
+	/**
+	 * El alias con el que el servidor CONTESTÓ esos avisos.
+	 *
+	 * Los avisos son de UN alias: si la persona escribe otro, el aviso ya no
+	 * habla de lo que hay escrito, y mostrarlo sería mentarle. Sin este
+	 * alias no hay aviso que pintar.
+	 */
+	aliasWarningsFor?: string;
 	/** El alta está en vuelo: el botón no se vuelve a tocar. */
 	submitting: boolean;
 	/** El motivo del fallo, con la prosa que el API ya escribió. */
@@ -163,7 +177,13 @@ export function StaffForm({
 		? BusinessMemberAliasSchema.safeParse(trimmedAlias).success
 		: trimmedAlias === "" ||
 			BusinessMemberAliasSchema.safeParse(trimmedAlias).success;
-	const locationsValid = selectedLocationIds.length > 0;
+	// En el ALTA el alcance es obligatorio: un acceso sin sucursales no tiene
+	// dónde trabajar. En la EDICIÓN NO: el alcance ya existe y puede estar
+	// vacío —§5.1: sin filas no se alcanza ningún recurso—, y obligar a
+	// marcar una sería REGALAR una sucursal como efecto secundario de cambiar
+	// el rol. Un permiso que se concede sin que nadie lo pidiera es un
+	// permiso que no se pidió.
+	const locationsValid = isEdit || selectedLocationIds.length > 0;
 	const canSubmit = labelValid && aliasValid && locationsValid && !submitting;
 
 	// El modo persistente sólo existe para el gerente: si el rol baja a empleado,
@@ -174,12 +194,25 @@ export function StaffForm({
 	// El aviso del §9.4: en el ALTA se anticipa con la regla del contrato,
 	// mientras se escribe —el dueño ve la consecuencia de lo que está
 	// tecleando antes de guardarlo—; en la EDICIÓN lo cuenta el API, y lo
-	// único que se pinta es lo que él devolvió.
+	// único que se pinta es lo que él devolvió PARA EL ALIAS QUE HAY ESCRITO.
+	const serverWarnings =
+		isEdit &&
+		aliasWarningsFor !== undefined &&
+		trimmedAlias === aliasWarningsFor
+			? (aliasWarnings ?? [])
+			: [];
 	const warningCodes: StaffAliasWarningCode[] = isEdit
-		? (aliasWarnings ?? [])
+		? serverWarnings
 		: trimmedAlias !== ""
 			? computeAliasWarnings(trimmedAlias)
 			: [];
+
+	// El alcance vacío en la EDICIÓN es una verdad que se dice, no un error:
+	// el acceso ya existe y puede no alcanzar ninguna sucursal (§5.1). En el
+	// ALTA no cabe —un acceso sin sucursales no tiene dónde trabajar—, y por
+	// eso el aviso se pinta sólo en modo edición.
+	const showsNoLocationsWarning =
+		isEdit && locations.length > 0 && selectedLocationIds.length === 0;
 
 	const toggleLocation = (locationId: string) => {
 		setSelectedLocationIds((current) =>
@@ -349,14 +382,24 @@ export function StaffForm({
 					))}
 				</CardContent>
 				<CardFooter>
+					{/* El pie dice el alcance EFECTIVO: en el alta, marcar al
+					    menos una es obligatorio; en la edición, un alcance vacío
+					    es una verdad que se avisa, no un error que impide
+					    guardar. */}
 					<AppText
 						variant="bodySmall"
-						style={{ color: colors.mutedForeground }}
+						style={{
+							color: showsNoLocationsWarning
+								? colors.destructive
+								: colors.mutedForeground,
+						}}
 					>
 						{locations.length === 0
 							? strings.business.staff.locationsEmpty
 							: selectedLocationIds.length === 0
-								? strings.business.staff.locationsRequired
+								? isEdit
+									? strings.business.staff.noLocationsWarning
+									: strings.business.staff.locationsRequired
 								: strings.business.staff.locationsHint}
 					</AppText>
 				</CardFooter>

@@ -1558,6 +1558,12 @@ export const strings = {
 			locations: "{n} sucursales",
 			locationsOne: "1 sucursal",
 			allLocations: "Todas las sucursales",
+			// El alcance vacío NO es «todo»: §5.1 dice que un gerente o un
+			// empleado sin filas de alcance no alcanzan ningún recurso. Sólo
+			// el dueño alcanza el negocio entero, con o sin filas.
+			noLocations: "Sin sucursales",
+			noLocationsWarning:
+				"Sin sucursales, este acceso no alcanza ninguna.",
 			sessionPolicy: "Política de sesión",
 			sessionNever: "Sin expiración",
 			sessionHours: "Sesión de {n} h",

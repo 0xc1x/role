@@ -392,9 +392,10 @@ test("una sesión por turnos dice las horas y un acceso que nunca entró lo dice
 	expect(html).toContain(strings.business.staff.statusActive);
 });
 
-test("el alcance dice el nombre cuando el negocio tiene una sola sucursal", () => {
+test("el alcance dice el nombre cuando el acceso alcanza una sola sucursal", () => {
 	const html = renderCard(member({ business_location_ids: [CENTRO.id] }), [
 		CENTRO,
+		SUR,
 	]);
 
 	expect(html).toContain("Centro");
@@ -412,13 +413,15 @@ test("el alcance cuenta las sucursales cuando el negocio tiene varias", () => {
 	expect(html).toContain(strings.business.staff.locations.replace("{n}", "3"));
 });
 
-test("un acceso con un solo alcance lo cuenta en singular", () => {
-	// El negocio tiene varias sucursales y el acceso alcanza una: el conteo
-	// es UNO, y «1 sucursales» no es español.
-	const html = renderCard(member({ business_location_ids: [CENTRO.id] }), [
-		CENTRO,
-		SUR,
-	]);
+test("un alcance de una sola fila que ya no resuelve se cuenta en singular", () => {
+	// La sucursal se borró y el id quedó viejo: el alcance sigue siendo de
+	// UNA, y el nombre no se inventa.
+	const html = renderCard(
+		member({
+			business_location_ids: ["99999999-9999-4999-8999-999999999999"],
+		}),
+		[CENTRO, SUR],
+	);
 
 	expect(html).toContain(strings.business.staff.locationsOne);
 	expect(html).not.toContain(
@@ -426,13 +429,27 @@ test("un acceso con un solo alcance lo cuenta en singular", () => {
 	);
 });
 
-test("un acceso sin alcance alcanza a todas las sucursales", () => {
+test("un acceso sin alcance no alcanza ninguna sucursal", () => {
+	// §5.1: sin filas de alcance no se alcanza NINGÚN recurso. El alcance
+	// vacío no es «todo» —eso es del dueño—.
 	const html = renderCard(member({ business_location_ids: [] }), [CENTRO, SUR]);
 
-	expect(html).toContain(strings.business.staff.allLocations);
+	expect(html).toContain(strings.business.staff.noLocations);
+	expect(html).not.toContain(strings.business.staff.allLocations);
 	expect(html).not.toContain(
 		strings.business.staff.locations.replace("{n}", "0"),
 	);
+});
+
+test("el dueño alcanza todas las sucursales aunque no tenga filas de alcance", () => {
+	// El dueño llega al negocio entero por su ROL, con o sin filas (§5.1).
+	const html = renderCard(
+		member({ role: "owner", business_location_ids: [] }),
+		[CENTRO, SUR],
+	);
+
+	expect(html).toContain(strings.business.staff.allLocations);
+	expect(html).not.toContain(strings.business.staff.noLocations);
 });
 
 // ─── La entrada a la edición ─────────────────────────────────────────────────

@@ -216,13 +216,23 @@ const INITIAL: StaffFormInitial = {
 	alias: "ana@panaderia.role.ec",
 };
 
+/**
+ * Las props con las que está pintado el formulario AHORA.
+ *
+ * Un re-render conserva las props —como en la app—: por eso `typeAlias` puede
+ * seguir pintando el mismo formulario con los mismos avisos del servidor.
+ */
+let currentProps: {
+	initial: StaffFormInitial;
+	aliasWarnings?: StaffAliasWarningCode[];
+	aliasWarningsFor?: string;
+	locations: BusinessLocation[];
+} = { initial: INITIAL, locations: [CENTRO, SUR] };
+
 function render(
-	props: {
-		initial?: typeof INITIAL;
-		aliasWarnings?: StaffAliasWarningCode[];
-		locations?: BusinessLocation[];
-	} = {},
+	props: Partial<typeof currentProps> = {},
 ): void {
+	currentProps = { ...currentProps, ...props };
 	hookCursor = 0;
 	fields = [];
 	buttons = [];
@@ -231,9 +241,10 @@ function render(
 	radios = [];
 	html = renderToStaticMarkup(
 		createElement(StaffForm, {
-			locations: props.locations ?? [CENTRO, SUR],
-			initial: props.initial ?? INITIAL,
-			aliasWarnings: props.aliasWarnings,
+			locations: currentProps.locations,
+			initial: currentProps.initial,
+			aliasWarnings: currentProps.aliasWarnings,
+			aliasWarningsFor: currentProps.aliasWarningsFor,
 			submitting: false,
 			error: null,
 			onSubmit: (values: StaffFormValues) => submitted.push(values),
@@ -248,13 +259,7 @@ function render(
  * re-render con otros valores no los cambia, igual que en la app. Por eso
  * este helper tira las casillas del estado antes de pintar.
  */
-function mount(
-	props: {
-		initial?: typeof INITIAL;
-		aliasWarnings?: StaffAliasWarningCode[];
-		locations?: BusinessLocation[];
-	} = {},
-): void {
+function mount(props: Partial<typeof currentProps> = {}): void {
 	slots.length = 0;
 	render(props);
 }
@@ -284,6 +289,7 @@ const typeAlias = (text: string): void => {
 beforeEach(() => {
 	submitted.length = 0;
 	slots.length = 0;
+	currentProps = { initial: INITIAL, locations: [CENTRO, SUR] };
 	mount();
 });
 
@@ -359,9 +365,42 @@ test("un alias de dominio propio NO avisa si el API no lo dijo", () => {
 
 test("el aviso que devuelve el API se pinta", () => {
 	typeAlias("ana@panaderialafamilia.ec");
-	render({ aliasWarnings: ["alias_domain_can_receive_mail"] });
+	render({
+		aliasWarnings: ["alias_domain_can_receive_mail"],
+		aliasWarningsFor: "ana@panaderialafamilia.ec",
+	});
 
 	expect(html).toContain(strings.business.staff.aliasWarning);
+});
+
+test("el aviso del servidor deja de pintarse cuando se escribe otro alias", () => {
+	typeAlias("ana@panaderialafamilia.ec");
+	render({
+		aliasWarnings: ["alias_domain_can_receive_mail"],
+		aliasWarningsFor: "ana@panaderialafamilia.ec",
+	});
+	expect(html).toContain(strings.business.staff.aliasWarning);
+
+	// El aviso era de ESE alias: con otro escrito ya no habla de lo que hay
+	// en el campo, y mostrarlo sería mentarle.
+	typeAlias("otra@panaderialafamilia.ec");
+	expect(html).not.toContain(strings.business.staff.aliasWarning);
+});
+
+// ─── El alcance vacío ────────────────────────────────────────────────────────
+
+test("un alcance vacío se puede guardar en la edición", () => {
+	mount({ initial: { ...INITIAL, business_location_ids: [] } });
+
+	// El aviso se DICE —sin sucursales el acceso no alcanza ninguna (§5.1)—
+	// pero no impide guardar: obligar a marcar una sería regalar un permiso
+	// sin que nadie lo pidiera.
+	expect(html).toContain(strings.business.staff.noLocationsWarning);
+	expect(submitButton().disabled).toBe(false);
+
+	submitButton().onPress?.();
+
+	expect(submitted[0]?.business_location_ids).toEqual([]);
 });
 
 // ─── La política de sesión ───────────────────────────────────────────────────

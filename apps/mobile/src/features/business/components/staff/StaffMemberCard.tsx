@@ -28,29 +28,44 @@ const ROLE_LABELS: Record<BusinessMemberDto["role"], string> = {
  *
  * ─── POR QUÉ EL NOMBRE CUANDO HAY UNA SOLA SUCURSAL ───────────────────────────
  *
- * Porque «Centro» dice más que «1 sucursal»: cuando el negocio tiene una sola,
+ * Porque «Centro» dice más que «1 sucursal»: cuando el acceso alcanza una sola,
  * el número es ruido y el nombre es el dato.
  *
- * ─── Y POR QUÉ «TODAS LAS SUCURSALES» CUANDO EL ALCANCE ESTÁ VACÍO ───────────
+ * ─── Y POR QUÉ EL ALCANCE VACÍO NO ES «TODAS LAS SUCURSALES» ──────────────────
  *
- * Porque un alcance vacío no es una ausencia: es el acceso que alcanza todas
- * las sucursales del negocio (§4.1). Decirlo es lo contrario de inventar un
- * cero.
+ * Porque §5.1 dice que «sin filas de alcance» no es «todo»: un gerente o un
+ * empleado sin filas NO ALCANZA ningún recurso —y lo que alcanza es su propia
+ * fila de membresía—. Sólo el dueño llega al negocio entero, con o sin filas,
+ * porque su rol se lo da. Decirle «todas las sucursales» a un acceso que no
+ * llega a ninguna sería mentirle sobre lo que ese acceso puede hacer.
  *
  * ─── Y POR QUÉ EL CONTEO TIENE SU FORMA EN SINGULAR ───────────────────────────
  *
- * Porque «1 sucursales» no es español: el acceso con un solo alcance es un
- * caso de verdad —el negocio con varias sucursales y un empleado en una—.
+ * Porque «1 sucursales» no es español. Y una sola fila que ya no resuelve —
+ * la sucursal se borró y el id quedó viejo— se cuenta igual: el nombre no se
+ * inventa, pero el alcance sigue siendo de una.
  */
 function staffLocationsLabel(
-	member: Pick<BusinessMemberDto, "business_location_ids">,
-	locations: Pick<BusinessLocation, "name">[],
+	member: Pick<BusinessMemberDto, "role" | "business_location_ids">,
+	locations: Pick<BusinessLocation, "id" | "name">[],
 ): string {
-	if (locations.length === 1) return locations[0].name;
-	const count = member.business_location_ids.length;
-	if (count === 0) return strings.business.staff.allLocations;
-	if (count === 1) return strings.business.staff.locationsOne;
-	return strings.business.staff.locations.replace("{n}", String(count));
+	// El dueño alcanza el negocio entero, con o sin filas de alcance (§5.1).
+	if (member.role === "owner") return strings.business.staff.allLocations;
+
+	const ids = member.business_location_ids;
+	// Sin filas no se alcanza ningún recurso (§5.1): el alcance vacío no es
+	// «todo», es «nada».
+	if (ids.length === 0) return strings.business.staff.noLocations;
+
+	if (ids.length === 1) {
+		// Una sola fila: se dice el NOMBRE de esa sucursal. Y si su id ya no
+		// resuelve —la sucursal se borró y la fila quedó vieja—, se dice el
+		// número: el nombre no se inventa.
+		const only = locations.find((location) => location.id === ids[0]);
+		return only ? only.name : strings.business.staff.locationsOne;
+	}
+
+	return strings.business.staff.locations.replace("{n}", String(ids.length));
 }
 
 /**

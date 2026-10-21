@@ -83,6 +83,7 @@ interface FormProps {
 		alias: string;
 	};
 	aliasWarnings?: StaffAliasWarningCode[];
+	aliasWarningsFor?: string;
 	submitting: boolean;
 	error: string | null;
 	onSubmit: (values: StaffFormValues) => void;
@@ -99,8 +100,15 @@ let formProps: FormProps | null = null;
 let errorStates: ErrorStateProps[] = [];
 /** Los avisos que se pintaron. */
 const toasts: Array<{ kind: "success" | "error"; message: string }> = [];
-/** A dónde se ha navegado en este test. */
-const navigations: string[] = [];
+/**
+ * A dónde se ha navegado en este test.
+ *
+ * La pantalla NO navega al guardar —se queda con el aviso del §9.4— y esta
+ * sonda lo afirma: si algún día alguien le pone una navegación, el mock de
+ * `expo-router` la registra y el test falla.
+ */
+const navigations: Array<{ kind: "push" | "replace" | "navigate"; path: string }> =
+	[];
 
 interface UpdateCall {
 	memberId: string;
@@ -166,6 +174,17 @@ let membersRefetchCalls = 0;
 let locationsRefetchCalls = 0;
 
 mockNativeUi();
+
+// El router se dobla para que la ausencia de navegación sea una AFIRMACIÓN y
+// no un accidente: si la pantalla importara `router` para irse al guardar,
+// esta sonda lo vería.
+mock.module("expo-router", () => ({
+	router: {
+		push: (path: string) => navigations.push({ kind: "push", path }),
+		replace: (path: string) => navigations.push({ kind: "replace", path }),
+		navigate: (path: string) => navigations.push({ kind: "navigate", path }),
+	},
+}));
 
 mock.module("sonner-native", () => ({
 	toast: {
@@ -365,6 +384,24 @@ test("un alias que no cambió no llama a la ruta del alias", () => {
 	]);
 });
 
+test("un segundo guardado no reenvía el alias que ya se guardó", () => {
+	formProps?.onSubmit(VALUES);
+	updateCalls[0]?.options.onSuccess?.(member());
+	aliasCalls[0]?.options.onSuccess?.(aliasResponse());
+	// El guardado del alias se pinta: la pantalla vuelve a pintar con el
+	// alias que ahora tiene el acceso.
+	render();
+	expect(aliasCalls).toHaveLength(1);
+
+	// La lista se vuelve a leer sola después de cada guardado, y su respuesta
+	// puede tardar: si la comparación se hiciese contra el `member` de vivo,
+	// este segundo guardado reenviaría el alias que ya está guardado.
+	formProps?.onSubmit(VALUES);
+	updateCalls[1]?.options.onSuccess?.(member());
+
+	expect(aliasCalls).toHaveLength(1);
+});
+
 test("un fallo del rol no toca el alias", () => {
 	formProps?.onSubmit(VALUES);
 
@@ -406,6 +443,20 @@ test("el aviso que devuelve el API se pasa al formulario", () => {
 	render();
 
 	expect(formProps?.aliasWarnings).toEqual(["alias_domain_can_receive_mail"]);
+	// Y se sabe PARA QUÉ alias es el aviso: es lo que lo ata al campo.
+	expect(formProps?.aliasWarningsFor).toBe("ana@panaderialafamilia.ec");
+});
+
+test("un alcance vacío se envía como un alcance vacío", () => {
+	// §5.1: un acceso sin filas de alcance no alcanza ningún recurso, y ese
+	// estado es legítimo: cambiar el rol no puede REGALAR una sucursal.
+	formProps?.onSubmit({ ...VALUES, business_location_ids: [] });
+
+	expect(updateCalls[0]?.body).toEqual({
+		role: "manager",
+		session_ttl_hours: 0,
+		business_location_ids: [],
+	});
 });
 
 // ─── El éxito ────────────────────────────────────────────────────────────────
@@ -420,7 +471,8 @@ test("al guardar bien se avisa y NO se navega", () => {
 		{ kind: "success", message: strings.business.staff.editSaved },
 	]);
 	// La pantalla se queda: el aviso del §9.4 y el formulario abierto son la
-	// respuesta a lo que se acaba de guardar.
+	// respuesta a lo que se acaba de guardar. Ninguna navegación, de ninguna
+	// clase.
 	expect(navigations).toEqual([]);
 	expect(formProps).not.toBeNull();
 });

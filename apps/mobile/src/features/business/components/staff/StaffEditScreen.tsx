@@ -85,10 +85,27 @@ export function StaffEditScreen({
 	const [aliasWarnings, setAliasWarnings] = useState<StaffAliasWarningCode[]>(
 		[],
 	);
+	// El alias con el que el servidor CONTESTÓ esos avisos: los avisos son de
+	// un alias, y si la persona escribe otro el aviso ya no habla de lo que
+	// hay escrito.
+	const [aliasWarningsFor, setAliasWarningsFor] = useState<string | undefined>(
+		undefined,
+	);
+	// El alias con el que el acceso está AHORA.
+	//
+	// Vive en estado y no se lee del `member` de vivo porque la lista se
+	// vuelve a leer sola después de cada guardado y su respuesta puede
+	// tardar: comparar contra el alias de la lista haría que un segundo
+	// guardado —antes de que llegue la respuesta— reenviara el alias que ya
+	// se guardó.
+	const [savedAlias, setSavedAlias] = useState<string | null>(null);
 
 	const isLoading = locationsLoading || membersLoading;
 	const isError = locationsError || membersError;
 	const member = members?.find((m) => m.id === memberId) ?? null;
+	// El alias con el que está el acceso: el guardado, si hubo uno; el de la
+	// lista, si no.
+	const currentAlias = savedAlias ?? member?.alias ?? "";
 
 	const header = (
 		<ScreenHeader
@@ -101,10 +118,15 @@ export function StaffEditScreen({
 		if (!member) return;
 		setError(null);
 		setAliasWarnings([]);
+		setAliasWarningsFor(undefined);
 
 		// El cuerpo es EXACTAMENTE el del `UpdateBusinessMemberSchema`: el rol,
 		// la política de sesión y el alcance. Ni el nombre —que no se renombra—
 		// ni el alias —que tiene su propia ruta—.
+		//
+		// El alcance puede viajar VACÍO: el acceso ya existe y puede no
+		// alcanzar ninguna sucursal (§5.1), y obligar a marcar una sería
+		// regalar un permiso sin que nadie lo pidiera.
 		const body: UpdateBusinessMemberDto = {
 			role: values.role,
 			session_ttl_hours: values.session_ttl_hours,
@@ -115,7 +137,7 @@ export function StaffEditScreen({
 		// nada, y —peor— cambiaría el correo de `auth.users` sin que nadie lo
 		// pidiera.
 		const alias = values.alias?.trim() ?? "";
-		const aliasChanged = alias !== "" && alias !== member.alias;
+		const aliasChanged = alias !== "" && alias !== currentAlias;
 
 		update.mutate(
 			{ memberId, body },
@@ -132,6 +154,10 @@ export function StaffEditScreen({
 								// El aviso del §9.4 lo cuenta el API: se pinta lo
 								// que él devolvió, no lo que el cliente opinaba.
 								setAliasWarnings(response.alias_warnings);
+								setAliasWarningsFor(alias);
+								// El alias guardado es el que hay a partir de
+								// ahora: un segundo guardado no lo reenvía.
+								setSavedAlias(alias);
 								toast.success(strings.business.staff.editSaved);
 							},
 							onError: (e) =>
@@ -233,6 +259,7 @@ export function StaffEditScreen({
 						alias: member.alias,
 					}}
 					aliasWarnings={aliasWarnings}
+					aliasWarningsFor={aliasWarningsFor}
 					submitting={update.isPending || updateAlias.isPending}
 					error={error}
 					onSubmit={save}
