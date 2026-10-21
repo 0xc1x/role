@@ -118,7 +118,7 @@ const STAFF_A = 'e1000000-0000-4000-8000-000000000002';
 const STAFF_B = 'e1000000-0000-4000-8000-000000000003';
 const STAFF_C = 'e1000000-0000-4000-8000-000000000004';
 
-/** Un negocio `free` —sin fila en `business_plans_state`— y uno `pro_plus`. */
+/** Un negocio `free` —sin suscripción— y uno `pro_plus`. */
 const BIZ_FREE = 'e2000000-0000-4000-8000-000000000001';
 const BIZ_PRO_PLUS = 'e2000000-0000-4000-8000-000000000002';
 const LOC_FREE = 'e3000000-0000-4000-8000-000000000001';
@@ -240,11 +240,11 @@ beforeAll(async () => {
 			values ('${BIZ_FREE}', 'Plan cat free',  'restaurant', 'plancat-free'),
 			       ('${BIZ_PRO_PLUS}', 'Plan cat plus', 'restaurant', 'plancat-plus');
 
-			insert into public.business_plans_state (business_id, plan_code)
+			insert into public.subscriptions (business_id, plan_code)
 			values ('${BIZ_PRO_PLUS}', 'pro_plus');
 		`);
 
-    // El `free` NO lleva fila a propósito: `business_plan_of` cae a `free`
+    // El `free` NO lleva suscripción a propósito: `business_plan_of` cae a `free`
     // por ausencia, que es el caso por el que el dueño se encuentra el plan
     // gratis sin haber elegido nada.
     await tx.unsafe(`

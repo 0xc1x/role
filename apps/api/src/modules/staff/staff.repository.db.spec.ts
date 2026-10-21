@@ -69,10 +69,10 @@ beforeAll(async () => {
        values ('${BIZ}', 'Alcance Repo', 'restaurant', 'alcance-repo')`,
     );
 
-    // El plan se escribe a mano: sin esta fila el negocio se lee como `free`, y
-    // `free` admite UNA sucursal y DOS miembros.
+    // El plan se escribe a mano: sin esta suscripción el negocio se lee como
+    // `free`, y `free` admite UNA sucursal y DOS miembros.
     await tx.unsafe(
-      `insert into public.business_plans_state (business_id, plan_code, deleted_at)
+      `insert into public.subscriptions (business_id, plan_code, deleted_at)
        values ('${BIZ}', 'pro', null)`,
     );
 

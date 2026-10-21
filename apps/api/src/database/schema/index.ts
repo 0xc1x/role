@@ -4,6 +4,7 @@ export * from './businesses';
 export * from './business-companions';
 export * from './business-members';
 export * from './subscription-plans';
+export * from './subscriptions';
 export * from './business-locations';
 export * from './business-hours';
 export * from './offers';
@@ -68,15 +69,12 @@ import {
 import { payouts } from './payouts';
 import { paymentMethods } from './payment-methods';
 import { businessFinance, businessModeration } from './business-companions';
-import {
-  businessMemberLocations,
-  businessMembers,
-  businessPlansState,
-} from './business-members';
+import { businessMemberLocations, businessMembers } from './business-members';
 import {
   subscriptionPlanFeatures,
   subscriptionPlans,
 } from './subscription-plans';
+import { subscriptions } from './subscriptions';
 import { defineRelations } from 'drizzle-orm';
 
 /** Schema map passed to drizzle() for typed queries. */
@@ -121,9 +119,9 @@ export const schema = {
   businessModeration,
   businessMembers,
   businessMemberLocations,
-  businessPlansState,
   subscriptionPlans,
   subscriptionPlanFeatures,
+  subscriptions,
 };
 
 export type DatabaseSchema = typeof schema;
@@ -176,12 +174,6 @@ export const relations = defineRelations(schema, (helpers) => ({
       to: helpers.businessLocations.id,
     }),
   },
-  businessPlansState: {
-    business: helpers.one.businesses({
-      from: helpers.businessPlansState.business_id,
-      to: helpers.businesses.id,
-    }),
-  },
   // El catálogo: cada feature pertenece a un plan, y ese vínculo es lo que una
   // consulta no puede inferir — `plan_code` es el código del plan y no una
   // foreign key a `subscription_plans.code` que el query builder sepa resolver.
@@ -189,6 +181,21 @@ export const relations = defineRelations(schema, (helpers) => ({
     plan: helpers.one.subscriptionPlans({
       from: helpers.subscriptionPlanFeatures.plan_code,
       to: helpers.subscriptionPlans.code,
+    }),
+  },
+  // La suscripción declara SUS DOS POSIBLES SUJETOS, y las dos columnas son
+  // nulables: una fila es de un negocio o de una persona, nunca de las dos. Las
+  // dos relaciones se declaran porque el vínculo es lo que una consulta no
+  // puede inferir —`business_id` y `user_id` son columnas, no claves foráneas
+  // que el query builder sepa resolver por su cuenta.
+  subscriptions: {
+    business: helpers.one.businesses({
+      from: helpers.subscriptions.business_id,
+      to: helpers.businesses.id,
+    }),
+    profile: helpers.one.profiles({
+      from: helpers.subscriptions.user_id,
+      to: helpers.profiles.id,
     }),
   },
 }));

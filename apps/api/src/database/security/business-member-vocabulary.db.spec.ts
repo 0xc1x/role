@@ -197,7 +197,7 @@ beforeAll(async () => {
       insert into public.businesses (id, name, type, slug)
       values ('${BIZ}', 'Vocabulario', 'restaurant', 'vocabulario');
 
-      insert into public.business_plans_state (business_id, plan_code)
+      insert into public.subscriptions (business_id, plan_code)
       values ('${BIZ}', 'pro_plus');
     `);
   });

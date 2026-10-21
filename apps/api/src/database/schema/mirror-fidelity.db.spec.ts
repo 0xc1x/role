@@ -30,10 +30,11 @@ const EXPECTED: ReadonlyArray<readonly [string, string, string]> = [
   ['business_finance', 'business_id', 'CASCADE'],
   ['business_hours', 'business_id', 'CASCADE'],
   ['business_locations', 'business_id', 'CASCADE'],
-  // Las tres tablas de acceso de la migración `20261014002328`, con CASCADE en
-  // las cinco: un negocio que se borra se lleva a sus miembros, a sus filas de
-  // alcance y a su estado de plan, y un perfil que se borra se lleva sus
-  // membresías.
+  // Las tablas de acceso de la migración `20261014002328`, con CASCADE en las
+  // cuatro que quedan: un negocio que se borra se lleva a sus miembros y a sus
+  // filas de alcance, y un perfil que se borra se lleva sus membresías. La
+  // quinta —el estado de plan— se fue con `business_plans_state`, que
+  // `20261021170000_generic_subscriptions.sql` sustituyó por `subscriptions`.
   //
   // `business_members.user_id` NO es una divergencia declarada como lo son
   // `marketing_preferences.user_id` y `payment_methods.user_id`: el espejo y la
@@ -47,7 +48,6 @@ const EXPECTED: ReadonlyArray<readonly [string, string, string]> = [
   ['business_moderation', 'business_id', 'CASCADE'],
   ['business_moderation', 'verified_by', 'NO ACTION'],
   ['business_notification_preferences', 'business_id', 'NO ACTION'],
-  ['business_plans_state', 'business_id', 'CASCADE'],
   ['consumer_notification_preferences', 'user_id', 'NO ACTION'],
   ['coupons', 'business_id', 'CASCADE'],
   ['device_tokens', 'user_id', 'CASCADE'],
@@ -106,6 +106,11 @@ const EXPECTED: ReadonlyArray<readonly [string, string, string]> = [
   ['saved_addresses', 'user_id', 'CASCADE'],
   ['segment_users', 'segment_id', 'CASCADE'],
   ['segment_users', 'user_id', 'CASCADE'],
+  // La suscripción se lleva con su sujeto: un negocio que se borra se lleva
+  // su suscripción, y un perfil que se borra se lleva la suya. Las dos
+  // columnas son nulables —el sujeto es una de las dos— y las dos cascadean.
+  ['subscriptions', 'business_id', 'CASCADE'],
+  ['subscriptions', 'user_id', 'CASCADE'],
   // La fila de una feature pertenece a su plan, y muere con él: si el plan se
   // borra del catálogo, sus features tienen que irse con él y no quedar
   // apuntando a un plan que ya no existe.
