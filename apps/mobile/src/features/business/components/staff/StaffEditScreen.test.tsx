@@ -107,8 +107,10 @@ const toasts: Array<{ kind: "success" | "error"; message: string }> = [];
  * sonda lo afirma: si algún día alguien le pone una navegación, el mock de
  * `expo-router` la registra y el test falla.
  */
-const navigations: Array<{ kind: "push" | "replace" | "navigate"; path: string }> =
-	[];
+const navigations: Array<{
+	kind: "push" | "replace" | "navigate";
+	path: string;
+}> = [];
 
 interface UpdateCall {
 	memberId: string;
@@ -169,9 +171,8 @@ let staffQuery: {
 	error: null,
 };
 
-/** Cuántas veces se reintentó cada consulta. */
+/** Cuántas veces se reintentó la lista del equipo. */
 let membersRefetchCalls = 0;
-let locationsRefetchCalls = 0;
 
 mockNativeUi();
 
@@ -220,9 +221,9 @@ mock.module("@/src/features/business/hooks", () => ({
 		isLoading: false,
 		isError: false,
 		error: null,
-		refetch: () => {
-			locationsRefetchCalls += 1;
-		},
+		// El reintento de las SUCURSALES no se cuenta: lo que este fichero
+		// afirma es el de la lista del equipo.
+		refetch: () => {},
 	}),
 	useStaffMembers: () => ({
 		...staffQuery,
@@ -282,7 +283,10 @@ const { StaffEditScreen } = await import("./StaffEditScreen");
 
 let html = "";
 
-function render(businessId: string = BUSINESS_ID, memberId: string = MEMBER_ID) {
+function render(
+	businessId: string = BUSINESS_ID,
+	memberId: string = MEMBER_ID,
+) {
 	hookCursor = 0;
 	formProps = null;
 	errorStates = [];
@@ -314,7 +318,6 @@ beforeEach(() => {
 	aliasCalls.length = 0;
 	slots.length = 0;
 	membersRefetchCalls = 0;
-	locationsRefetchCalls = 0;
 	staffQuery = {
 		data: [member()],
 		isLoading: false,
@@ -419,9 +422,7 @@ test("un fallo del alias deja la pantalla abierta con el acceso ya actualizado",
 	formProps?.onSubmit(VALUES);
 	updateCalls[0]?.options.onSuccess?.(member());
 
-	aliasCalls[0]?.options.onError?.(
-		Errors.conflict("Ese alias ya existe."),
-	);
+	aliasCalls[0]?.options.onError?.(Errors.conflict("Ese alias ya existe."));
 	render();
 
 	// El rol, el alcance y la política YA están guardados: su fallo no

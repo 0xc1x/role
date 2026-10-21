@@ -1562,8 +1562,7 @@ export const strings = {
 			// empleado sin filas de alcance no alcanzan ningún recurso. Sólo
 			// el dueño alcanza el negocio entero, con o sin filas.
 			noLocations: "Sin sucursales",
-			noLocationsWarning:
-				"Sin sucursales, este acceso no alcanza ninguna.",
+			noLocationsWarning: "Sin sucursales, este acceso no alcanza ninguna.",
 			sessionPolicy: "Política de sesión",
 			sessionNever: "Sin expiración",
 			sessionHours: "Sesión de {n} h",
@@ -1621,14 +1620,12 @@ export const strings = {
 			editSaved: "Acceso actualizado",
 			ownerNotEditable:
 				"El acceso del dueño no se edita: la propiedad del negocio se transfiere.",
-			nameReadOnly:
-				"El nombre con el que lo reconoces no se cambia aquí.",
+			nameReadOnly: "El nombre con el que lo reconoces no se cambia aquí.",
 			// El alias no puede quedar vacío en la edición: es con lo que la
 			// persona entra. «Vacío = lo propone el servidor» es una regla del
 			// ALTA, no de la edición.
 			aliasRequired: "El alias no puede quedar vacío",
-			aliasEditHint:
-				"Con este alias entra la persona. No puede quedar vacío.",
+			aliasEditHint: "Con este alias entra la persona. No puede quedar vacío.",
 			// Las acciones sobre un acceso (Task 10). Cada confirmación dice
 			// TRES cosas: qué pasa, qué NO pasa y qué hay que saber antes de
 			// pulsar. Lo que no pasa es lo que más importa: quien rota el PIN

@@ -161,9 +161,7 @@ export function StaffEditScreen({
 								toast.success(strings.business.staff.editSaved);
 							},
 							onError: (e) =>
-								setError(
-									toAppError(e, strings.business.genericError).message,
-								),
+								setError(toAppError(e, strings.business.genericError).message),
 						},
 					);
 				},

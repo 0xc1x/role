@@ -153,7 +153,9 @@ export function StaffForm({
 	const { colors } = useTheme();
 	const isEdit = initial !== undefined;
 	const [label, setLabel] = useState(initial?.label ?? "");
-	const [role, setRole] = useState<"manager" | "staff">(initial?.role ?? "staff");
+	const [role, setRole] = useState<"manager" | "staff">(
+		initial?.role ?? "staff",
+	);
 	const [alias, setAlias] = useState(initial?.alias ?? "");
 	const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(
 		initial?.business_location_ids ?? [],

@@ -229,9 +229,7 @@ let currentProps: {
 	locations: BusinessLocation[];
 } = { initial: INITIAL, locations: [CENTRO, SUR] };
 
-function render(
-	props: Partial<typeof currentProps> = {},
-): void {
+function render(props: Partial<typeof currentProps> = {}): void {
 	currentProps = { ...currentProps, ...props };
 	hookCursor = 0;
 	fields = [];
