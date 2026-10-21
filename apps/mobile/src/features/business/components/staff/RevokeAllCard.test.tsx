@@ -29,10 +29,10 @@ import { mockNativeUi } from "@/src/test-utils/native-mocks";
  *     dice que el dueño quedó fuera SÓLO cuando la respuesta lo dice.
  *  4. Un negocio sin accesos activos no es «se cortaron 0»: es «no había
  *     accesos activos que cortar».
- *  5. Un 403 se pinta con la COPIA CURADA de la taxonomía —la que el cliente
- *     entrega en `error.message`— y deja la tarjeta usable: se puede volver a
- *     intentarlo. La prosa cruda del servidor NO se muestra: vive en
- *     `context.serverMessage`, para el diagnóstico (política de T1).
+ *  5. Un 403 se pinta con la PROSA DEL API —la ruta del corte es de la
+ *     superficie del equipo, y ahí el 403 es la copia del producto— y deja
+ *     la tarjeta usable: se puede volver a intentarlo. El texto crudo del
+ *     servidor viaja también en `context.serverMessage`, para el diagnóstico.
  *  6. Un gerente ve, además, que su propio acceso se corta: el servidor corta
  *     a quien llama y sólo deja fuera al dueño.
  *  7. Los textos de la tarjeta se pintan con los colores que CONTRASTAN con
@@ -592,10 +592,10 @@ test("los textos de la tarjeta se pintan con los colores que contrastan", async 
  * La prosa que el API escribe en su sobre cuando el corte se rechaza.
  *
  * El API habla en español para esta persona («Un empleado no administra los
- * accesos del negocio»), pero el cliente NO la muestra: la política de T1
- * (`src/core/api/errors.ts`) reserva la prosa del servidor para las
- * categorías cuya copia ES la del producto, y un 403 no lo es —el guard de
- * auth responde en inglés y `orders`/`reviews` escriben texto técnico—.
+ * accesos del negocio»), y esa prosa ES la copia del producto: la ruta del
+ * corte es de la superficie del equipo, así que el cliente la adopta tal cual
+ * (`src/core/api/errors.ts`). El texto crudo sigue en `context.serverMessage`,
+ * para el diagnóstico.
  */
 const SERVER_PROSE = "Un empleado no administra los accesos del negocio.";
 
@@ -622,7 +622,7 @@ async function forbiddenFromApi(): Promise<AppError> {
 	return rejection as AppError;
 }
 
-test("un 403 se pinta con la copia curada de la taxonomía y deja la tarjeta usable", async () => {
+test("un 403 se pinta con la prosa del API y deja la tarjeta usable", async () => {
 	const error = await forbiddenFromApi();
 	apiPost.mockRejectedValue(error);
 
@@ -631,12 +631,14 @@ test("un 403 se pinta con la copia curada de la taxonomía y deja la tarjeta usa
 	await flush();
 	render("owner");
 
-	// Lo que ve la persona es la COPIA CURADA, tal cual: el mensaje del error,
-	// sin taparlo con un texto genérico.
-	expect(html).toContain(Errors.forbidden().message);
-	// Y la prosa cruda del servidor NO sale: es diagnóstico, no copia.
-	expect(html).not.toContain(SERVER_PROSE);
-	// Pero no se pierde: vive en el contexto, para el log.
+	// Lo que ve la persona es la PROSA DEL API, tal cual: el 403 del equipo
+	// dice POR QUÉ, y taparlo con un «no tienes permiso» esconde justo el
+	// motivo que hay que corregir.
+	expect(html).toContain(SERVER_PROSE);
+	// Y no sale la copia genérica de un permiso: sería mentira, porque el
+	// problema no era un permiso.
+	expect(html).not.toContain(Errors.forbidden().message);
+	// Pero la prosa cruda tampoco se pierde: vive en el contexto, para el log.
 	expect(error.context?.serverMessage).toBe(SERVER_PROSE);
 	// Y la tarjeta sigue en pie: se puede volver a intentarlo.
 	expect(button(strings.business.staff.revokeAllTitle)).toBeDefined();

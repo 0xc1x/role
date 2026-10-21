@@ -50,6 +50,20 @@ const GENERIC_FALLBACK = Errors.unknown().message;
  * usa la app: ahí manda la copia curada de la taxonomía ("Debes iniciar
  * sesión para continuar."). El texto crudo nunca se pierde: vive en
  * `context.serverMessage` para el diagnóstico.
+ *
+ * ─── Y EL 403 DEL EQUIPO ES LA EXCEPCIÓN ──────────────────────────────────────
+ *
+ * El 403 que el móvil puede recibir del API es, TODOS, el del módulo de
+ * staff —y ahí el servidor escribe la prosa del PRODUCTO, no texto técnico:
+ * «No perteneces a este negocio.», «Tu acceso está pausado.», «Un empleado no
+ * administra los accesos del negocio.», «Tu sesión venció. Entra otra vez
+ * para seguir administrando el equipo.» y «Dar de baja un acceso es del dueño
+ * del negocio, no de un gerente.»—. Son el motivo por el que la persona tiene
+ * que actuar, y el plan promete enseñarlas (T12: «un 403 muestra la prosa del
+ * API»).
+ *
+ * La excepción es POR RUTA, no por categoría: el 403 genérico —el de los
+ * guards de auth y de roles, que escriben texto técnico— sigue curado.
  */
 const ADOPTS_SERVER_COPY: ReadonlySet<ErrorKind> = new Set([
 	"business_rule",
@@ -57,6 +71,22 @@ const ADOPTS_SERVER_COPY: ReadonlySet<ErrorKind> = new Set([
 	"conflict",
 	"not_found",
 ]);
+
+/**
+ * La superficie del EQUIPO: las rutas cuyo 403 trae la prosa del producto.
+ *
+ * Cubre `/businesses/:id/staff…` —la lista y las nueve rutas—, las de la
+ * PROPIEDAD (`/businesses/:id/ownership/transfer`, `/ownership/restore`) y el
+ * sello de la sesión (`/staff/session`). Ninguna otra ruta del móvil habla
+ * con el API (ADR-0002; ADR-0013 §A.1), así que el alcance real de la
+ * excepción son estas.
+ */
+const STAFF_SURFACE = /\/(?:staff|ownership)(?:\/|$)/;
+
+/** ¿La ruta es de la superficie del equipo? */
+function isStaffSurface(path: string): boolean {
+	return STAFF_SURFACE.test(path);
+}
 
 /**
  * Las fábricas de `Errors` sólo aceptan el mensaje: la categoría y el texto
@@ -150,13 +180,44 @@ function readServerText(
 }
 
 /**
+ * La prosa que ve la persona.
+ *
+ * La del servidor cuando esa prosa ES la copia del producto —las categorías
+ * de `ADOPTS_SERVER_COPY` y el 403 de la superficie del equipo— y la curada
+ * de la taxonomía cuando el servidor escribió texto técnico.
+ *
+ * `productProse` es el `message` del sobre —la prosa escrita PARA esta
+ * persona— y `serverMessage` es el texto crudo que se diagnosticó, que puede
+ * ser el `statusText` de un cuerpo que no era JSON. El 403 del equipo usa el
+ * primero: un `statusText` —«Forbidden»— es texto técnico en inglés, y
+ * enseñarlo sería volver al problema que la excepción viene a resolver.
+ */
+function copyFor(
+	kind: ErrorKind,
+	path: string,
+	productProse: string | undefined,
+	serverMessage: string | undefined,
+	response: Response,
+): string {
+	// El 403 del EQUIPO: la prosa del servidor ES la del producto.
+	if (kind === "forbidden" && isStaffSurface(path)) {
+		return productProse ?? ERRORS_BY_KIND[kind]().message;
+	}
+	if (ADOPTS_SERVER_COPY.has(kind)) {
+		return serverMessage ?? fallbackMessage(response, kind);
+	}
+	return ERRORS_BY_KIND[kind]().message;
+}
+
+/**
  * Convierte una respuesta de error del API en el `AppError` que la UI sabe
  * pintar, y no devuelve nunca: el llamador la usa como `return`.
  *
  * El `message` es la copia del producto: la prosa del API cuando esa prosa
- * ES la copia del producto (`ADOPTS_SERVER_COPY`), y la de la taxonomía
- * cuando el servidor escribió texto técnico. El texto crudo del servidor
- * viaja siempre en `context.serverMessage`, para el diagnóstico.
+ * ES la copia del producto (`ADOPTS_SERVER_COPY` y el 403 de la superficie
+ * del equipo) y la de la taxonomía cuando el servidor escribió texto técnico.
+ * El texto crudo del servidor viaja siempre en `context.serverMessage`, para
+ * el diagnóstico.
  *
  * El `code` es el estado HTTP (`String(status)`), que es lo accionable del
  * diagnóstico; el `context` lleva el path y el `requestId` del servidor para
@@ -169,9 +230,13 @@ export async function fromApiResponse(
 	const envelope = await readEnvelope(response);
 	const kind = kindForStatus(response.status);
 	const serverMessage = readServerText(envelope, response);
-	const message = ADOPTS_SERVER_COPY.has(kind)
-		? (serverMessage ?? fallbackMessage(response, kind))
-		: ERRORS_BY_KIND[kind]().message;
+	const message = copyFor(
+		kind,
+		path,
+		readMessage(envelope),
+		serverMessage,
+		response,
+	);
 
 	throw withContext(ERRORS_BY_KIND[kind](message), String(response.status), {
 		path: readString(envelope?.path) ?? path,

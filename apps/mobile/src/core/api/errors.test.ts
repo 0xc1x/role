@@ -66,6 +66,15 @@ const ADOPTS_SERVER_COPY: ErrorKind[] = [
  */
 const CURATED_COPY: ErrorKind[] = ["unauthorized", "forbidden", "unknown"];
 
+/**
+ * Una ruta que NO es de la superficie del equipo.
+ *
+ * El 403 del equipo es la excepción (la prosa del servidor ES la del
+ * producto), así que la copia curada se afirma sobre otra ruta: la del 403
+ * genérico, el de los guards de auth y de roles.
+ */
+const GENERIC_PATH = "/businesses/x/products";
+
 /** El texto que el servidor escribió en el sobre de todos los casos. */
 const SERVER_MESSAGE = "El plan no admite otro acceso";
 
@@ -132,13 +141,78 @@ describe("fromApiResponse", () => {
 			});
 
 			await expect(
-				fromApiResponse(response, "/businesses/x/staff"),
+				fromApiResponse(response, GENERIC_PATH),
 			).rejects.toMatchObject({
 				kind,
 				code: String(status),
 				message: TAXONOMY_COPY[kind]().message,
 			});
 		}
+	});
+
+	// ─── El 403 del EQUIPO: la prosa del API ES la del producto ────────────────
+
+	/**
+	 * La prosa del servidor en un 403 del equipo.
+	 *
+	 * Es el motivo por el que la persona tiene que actuar: «Tu sesión venció.
+	 * Entra otra vez para seguir administrando el equipo.» Lo que el plan
+	 * promete (T12) es que esa prosa se muestre, y hoy el 403 la traducía a
+	 * «No tienes permiso para realizar esta acción.» —un permiso que el
+	 * problema no era de permisos.
+	 */
+	const STAFF_PROSE =
+		"Tu sesión venció. Entra otra vez para seguir administrando el equipo.";
+
+	for (const path of [
+		"/businesses/x/staff",
+		"/businesses/x/staff/revoke-all",
+		"/businesses/x/ownership/transfer",
+		"/staff/session",
+	]) {
+		test(`un 403 en ${path} muestra la prosa del API`, async () => {
+			const response = apiResponse(403, {
+				statusCode: 403,
+				message: STAFF_PROSE,
+			});
+
+			await expect(fromApiResponse(response, path)).rejects.toMatchObject({
+				kind: "forbidden",
+				code: "403",
+				message: STAFF_PROSE,
+				// Y el texto crudo sigue en el contexto, para el diagnóstico.
+				context: { serverMessage: STAFF_PROSE },
+			});
+		});
+	}
+
+	test("un 403 fuera del equipo sigue curado: ése es texto técnico", async () => {
+		const response = apiResponse(403, {
+			statusCode: 403,
+			message: "Missing access token",
+		});
+
+		await expect(fromApiResponse(response, GENERIC_PATH)).rejects.toMatchObject(
+			{
+				kind: "forbidden",
+				code: "403",
+				message: Errors.forbidden().message,
+				context: { serverMessage: "Missing access token" },
+			},
+		);
+	});
+
+	test("un 403 del equipo sin prosa en el sobre no enseña el statusText", async () => {
+		// «Forbidden» es texto técnico en inglés: si el sobre no trae `message`,
+		// se queda la copia curada de la taxonomía.
+		const response = apiResponse(403, { statusCode: 403 }, "Forbidden");
+
+		await expect(
+			fromApiResponse(response, "/businesses/x/staff"),
+		).rejects.toMatchObject({
+			kind: "forbidden",
+			message: Errors.forbidden().message,
+		});
 	});
 
 	test("el texto crudo del servidor viaja en el contexto, sea cual sea la categoría", async () => {

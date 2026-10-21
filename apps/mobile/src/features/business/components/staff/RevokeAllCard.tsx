@@ -77,6 +77,11 @@ export function RevokeAllCard({
 		null,
 	);
 	// El error del último corte: lo escribió el API y se pinta tal cual.
+	// Y «tal cual» es LITERAL: la ruta del corte es de la superficie del
+	// equipo, así que su 403 trae la prosa del producto —«Un empleado no
+	// administra los accesos del negocio»— y no la copia genérica de un
+	// permiso («No tienes permiso para realizar esta acción.»). El motivo
+	// es justo lo que la persona tiene que corregir.
 	const [error, setError] = useState<string | null>(null);
 	// El corte en vuelo: mientras dura, el botón no admite otro toque.
 	const [pending, setPending] = useState(false);
