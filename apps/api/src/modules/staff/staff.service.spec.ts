@@ -159,6 +159,30 @@ function pgError(
   return Object.assign(new Error(extra.message ?? code), { code, ...extra });
 }
 
+/**
+ * EL MISMO ERROR, COMO LO ENTREGA DRIZZLE.
+ *
+ * Drizzle envuelve todo error de consulta en un `DrizzleQueryError` que copia
+ * SÓLO el `cause`: el `code`, el `constraint_name`, el `message` y el `detail`
+ * viven un nivel más abajo. Los tests de arriba lanzan el error de Postgres
+ * PELADO —una forma que la base NUNCA produce—, así que probaban la
+ * traducción contra una forma que en producción no existe.
+ *
+ * Éste es el doble con la forma real, y el que hace que la traducción se
+ * pueda perder sin que nadie lo note: con el error pelado, el `code` se
+ * encuentra; con el envuelto, hay que buscarlo en el `cause`.
+ */
+function drizzleError(
+  code: string,
+  extra: { constraint_name?: string; message?: string; detail?: string } = {},
+): DrizzleQueryError {
+  return new DrizzleQueryError(
+    'insert into "business_members" ("business_id", "user_id", "role") values ($1, $2, $3)',
+    [],
+    pgError(code, extra),
+  );
+}
+
 describe('StaffService', () => {
   let service: StaffService;
   let repository: Record<string, ReturnType<typeof jest.fn>>;
@@ -1237,6 +1261,118 @@ describe('StaffService', () => {
 
     it('un código que no se conoce sube tal cual, para que un 500 lo investigate alguien', async () => {
       const boom = pgError('XX000', { message: 'internal' });
+      repository.insertMember.mockRejectedValue(boom);
+
+      const error = await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch((err: unknown) => err);
+
+      expect(error).toBe(boom);
+    });
+  });
+
+  /**
+   * EL ERROR LLEGA ENVUELTO, Y LA TRADUCCIÓN LO TIENE QUE ENCONTRAR.
+   *
+   * Los tests de arriba lanzan el error de Postgres PELADO. En producción no
+   * llega así: Drizzle envuelve todo error de consulta en un
+   * `DrizzleQueryError` que copia SÓLO el `cause`, así que el `code`, el
+   * `constraint_name`, el `message` y el `detail` viven un nivel más abajo.
+   *
+   * Con la traducción mirando el error de arriba, las cuatro se quedaban
+   * mudas y el dueño recibía un 500 genérico. Estos tests usan la forma real.
+   */
+  describe('el error llega envuelto, como lo entrega Drizzle', () => {
+    it('el 23505 del alias se traduce igual: 409 y su mensaje', async () => {
+      repository.insertMember.mockRejectedValue(
+        drizzleError('23505', {
+          constraint_name: 'business_members_alias_key',
+        }),
+      );
+
+      const error = await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).message).toBe(
+        'Ese alias ya está en uso en este negocio.',
+      );
+    });
+
+    it('el 23505 de un segundo dueño también: 422, y no 409', async () => {
+      repository.insertMember.mockRejectedValue(
+        drizzleError('23505', {
+          constraint_name: 'business_members_one_owner_per_business',
+        }),
+      );
+
+      const error = await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      expect((error as UnprocessableEntityException).message).toBe(
+        'Este negocio ya tiene un dueño.',
+      );
+    });
+
+    it('el R0001 del tope se traduce con su prosa y su detail', async () => {
+      repository.insertMember.mockRejectedValue(
+        drizzleError('R0001', {
+          message: 'el plan free admite hasta 2 miembros, no más',
+          detail: `business=${BIZ} plan=free limit=2 current=3`,
+        }),
+      );
+
+      const error = await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      const message = (error as UnprocessableEntityException).message;
+      expect(message).toContain('el plan free admite hasta 2 miembros, no más');
+      expect(message).toContain('plan free: admite hasta 2');
+      expect(message).toContain('serían 3');
+    });
+
+    it('el R0002 del dueño intocable también, con la prosa del trigger', async () => {
+      repository.updateMember.mockRejectedValue(
+        drizzleError('R0002', {
+          message:
+            'el dueño del negocio no se puede desactivar; la transferencia de propiedad no existe en esta versión',
+        }),
+      );
+
+      const error = await service
+        .disableAccess(owner, BIZ, MEMBER_OWNER)
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      expect((error as UnprocessableEntityException).message).toContain(
+        'no se puede desactivar',
+      );
+    });
+
+    it('el catálogo roto del trigger también: su prosa vive en el cause', async () => {
+      repository.insertMember.mockRejectedValue(
+        drizzleError('P0001', {
+          message: 'el plan pro no está en el catálogo de planes',
+        }),
+      );
+
+      const error = await service
+        .create(owner, BIZ, { label: 'Carla', business_location_ids: [] })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(InternalServerErrorException);
+      expect((error as InternalServerErrorException).message).toContain(
+        'catálogo de planes está roto',
+      );
+    });
+
+    it('un código desconocido sigue subiendo tal cual: un 500 sin traducir', async () => {
+      const boom = drizzleError('XX000', { message: 'internal' });
       repository.insertMember.mockRejectedValue(boom);
 
       const error = await service

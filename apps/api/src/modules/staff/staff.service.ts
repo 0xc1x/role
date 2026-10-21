@@ -115,10 +115,47 @@ type PostgresLikeError = {
   detail?: string;
 };
 
+/**
+ * EL ERROR Y SU `cause`: los dos sitios donde puede estar un error de Postgres.
+ *
+ * ─── POR QUÉ HAY QUE MIRAR LOS DOS ────────────────────────────────────────────
+ *
+ * Porque Drizzle envuelve TODO error de consulta en un `DrizzleQueryError` que
+ * copia SÓLO el `cause`: el `code`, el `constraint_name`, el `message` y el
+ * `detail` viven un nivel más abajo, en el error de Postgres que Drizzle se
+ * quedó como causa. Una búsqueda sobre el error de arriba NO encuentra nada— y
+ * todas las escrituras de este módulo pasan por el query builder de Drizzle—,
+ * así que las cuatro traducciones de `mapWriteError` eran código muerto: el
+ * dueño recibía un 500 genérico en vez de «Ese alias ya está en uso en este
+ * negocio.» o de «subí de plan».
+ *
+ * Es la misma búsqueda que ya hacen en la casa
+ * `BusinessesService.mapBusinessWriteError` (`businesses.service.ts:478-486`,
+ * cuyo comentario documenta justo esta trampa) y
+ * `SubscriptionsService.isLiveBusinessKeyViolation`
+ * (`subscriptions.service.ts:482`).
+ */
+function errorCandidates(error: unknown): unknown[] {
+  return [error, (error as { cause?: unknown } | null)?.cause] as unknown[];
+}
+
+/**
+ * El error de Postgres, sea cual sea de los dos niveles el que lo lleve.
+ *
+ * Vuelve el que TIENE el código, porque el código es lo que decide la
+ * traducción —y el `message` y el `detail` tienen que salir de ESE MISMO
+ * error: leídos del otro, la traducción hablaría del error equivocado.
+ *
+ * `null` cuando ningún nivel trae código: no hay nada que traducir, y quien
+ * llama deja subir el error tal cual.
+ */
 function asPostgresError(error: unknown): PostgresLikeError | null {
-  if (error instanceof Error) return error as PostgresLikeError;
-  if (typeof error === 'object' && error !== null) {
-    return error as PostgresLikeError;
+  for (const candidate of errorCandidates(error)) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const postgresError = candidate as PostgresLikeError;
+    if (typeof postgresError.code === 'string' && postgresError.code !== '') {
+      return postgresError;
+    }
   }
   return null;
 }
@@ -1875,15 +1912,11 @@ export class StaffService {
    * Porque Drizzle envuelve el error de Postgres en un `DrizzleQueryError` que
    * no copia el mensaje: la prosa del trigger vive un nivel más abajo, en el
    * `cause`. Es la misma búsqueda que hacen `BusinessesService.mapBusinessWriteError`
-   * y `SubscriptionsService.isLiveBusinessKeyViolation`.
+   * y `SubscriptionsService.isLiveBusinessKeyViolation`, y la misma que usa
+   * `asPostgresError` para los `code`.
    */
   private brokenCataloguePlan(error: unknown): BusinessPlanCode | null {
-    const candidates = [
-      error,
-      (error as { cause?: unknown } | null)?.cause,
-    ] as unknown[];
-
-    for (const candidate of candidates) {
+    for (const candidate of errorCandidates(error)) {
       const message = (candidate as { message?: string } | null)?.message;
       if (!message) continue;
       const match = CATALOGUE_BROKEN_BY_TRIGGER.exec(message);
