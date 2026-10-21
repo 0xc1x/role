@@ -25,6 +25,17 @@ import { SubscriptionsService } from './subscriptions.service';
  * alcanza el rol de servicio —`DATABASE_URL`, que es `postgres` y tiene
  * BYPASSRLS— y ningún cliente. No hay que abrirle nada a `anon` ni a
  * `authenticated` para que esta API las lea: las lee desde el servidor.
+ *
+ * ─── EL ORDEN DE LAS DOS PUERTAS, Y POR QUÉ NO ES EL MISMO ───────────────────
+ *
+ * En el `GET …/subscription` va PRIMERO la existencia del negocio (404) y
+ * después la pertenencia (403); en el `PATCH …/subscription` va PRIMERO la
+ * plataforma (403) y después la existencia (404). No es un descuido: la
+ * puerta del `PATCH` no depende del negocio —es de quien llama—, así que
+ * responder «ese negocio no existe» a alguien que no puede asignar planes le
+ * diría más de lo que le corresponde; y la del `GET` sí depende del negocio, y
+ * la existencia de un negocio no es un secreto en esta API —la ruta pública la
+ * responde—.
  */
 @Module({
   controllers: [SubscriptionsController],

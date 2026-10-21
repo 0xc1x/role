@@ -300,13 +300,36 @@ export class SubscriptionsService {
    * Se mira el NOMBRE del índice y no sólo el código: un `23505` de otra
    * unicidad es un error de otra cosa, y tragárselo —o reintentarlo— sería
    * estar mintiendo sobre lo que pasó.
+   *
+   * ─── Y SE BUSCA EN EL ERROR **Y** EN SU `cause` ──────────────────────────────
+   *
+   * Porque Drizzle envuelve el error de Postgres en un `DrizzleQueryError` que
+   * **no copia el código**: el `code` y el `constraint_name` viven un nivel
+   * más abajo, en el `cause`. Un `error.code === '23505'` a secas no
+   * encontraría NUNCA nada, y la carrera de dos writers terminaría en un 500
+   * en vez de en el reintento —que es el comportamiento que este método
+   * promete.
+   *
+   * Es la misma búsqueda que hace `BusinessesService.mapBusinessWriteError`
+   * (`businesses.service.ts:482-507`), y se copia en vez de inventar una
+   * tercera forma: tres búsquedas del mismo código de Postgres son tres
+   * lugares donde puede estar la copia que no encuentra nada.
    */
   private isLiveBusinessKeyViolation(error: unknown): boolean {
-    if (typeof error !== 'object' || error === null) return false;
-    const pgError = error as { code?: string; constraint_name?: string };
-    return (
-      pgError.code === PG_UNIQUE_VIOLATION &&
-      pgError.constraint_name === LIVE_BUSINESS_KEY
-    );
+    const candidates = [
+      error,
+      (error as { cause?: unknown } | null)?.cause,
+    ] as unknown[];
+
+    for (const candidate of candidates) {
+      const postgresError = candidate as {
+        code?: string;
+        constraint_name?: string;
+      } | null;
+      if (postgresError?.code !== PG_UNIQUE_VIOLATION) continue;
+      if (postgresError.constraint_name !== LIVE_BUSINESS_KEY) continue;
+      return true;
+    }
+    return false;
   }
 }

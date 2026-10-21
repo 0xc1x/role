@@ -4,6 +4,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { DrizzleQueryError } from 'drizzle-orm';
 import {
   BusinessSubscriptionSchema,
   SubscriptionPlanSchema,
@@ -75,6 +76,27 @@ function subscriptionEntry(
     plan_code: 'pro',
     started_at: SINCE,
     plan: proPlan,
+    ...overrides,
+  };
+}
+
+/**
+ * La fila viva de `subscriptions`, tal como la base la tiene.
+ *
+ * La escribe el REPOSITORIO —la base pone el `id` y las fechas—, y por eso el
+ * doble no inventa un `id` que la base no pondría.
+ */
+function subscriptionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'sub-1',
+    business_id: BIZ,
+    user_id: null,
+    plan_code: 'pro',
+    started_at: SINCE,
+    cancelled_at: null,
+    deleted_at: null,
+    created_at: SINCE,
+    updated_at: SINCE,
     ...overrides,
   };
 }
@@ -319,6 +341,80 @@ describe('SubscriptionsService', () => {
       expect(dto.plan_code).toBe('pro');
       // La fecha es la de la fila: cambiar de plan no reinicia la suscripción.
       expect(dto.since).toBe(SINCE.toISOString());
+    });
+
+    /**
+     * LA CARRERA DE DOS ESCRITORES.
+     *
+     * El `23505` de la carrera llega ENVUELTO: Drizzle mete el error de
+     * Postgres en un `DrizzleQueryError` que no copia el código, así que el
+     * `code` y el `constraint_name` están un nivel más abajo, en el `cause`.
+     *
+     * Y esto no es un detalle de forma: una búsqueda que mirara sólo el error
+     * de arriba NO ENCONTRARÍA NUNCA el `23505`, la carrera terminaría en un
+     * 500 sin traducir, y el reintento —que es lo que el servicio promete— no
+     * existiría. El test de abajo falla si el `cause` deja de mirarse.
+     */
+    it('dos escritores a la vez: el segundo reintenta y su plan queda aplicado', async () => {
+      const postgresError = Object.assign(
+        new Error(
+          'duplicate key value violates unique constraint "subscriptions_live_business_key"',
+        ),
+        {
+          code: '23505',
+          constraint_name: 'subscriptions_live_business_key',
+        },
+      );
+
+      repository.insertBusinessSubscription.mockRejectedValue(
+        new DrizzleQueryError(
+          'insert into "subscriptions" ("business_id", "plan_code") values ($1, $2)',
+          [],
+          postgresError,
+        ),
+      );
+      repository.updateLiveSubscription
+        // El primer `UPDATE` no encuentra fila: los dos escritores vieron que
+        // no la había.
+        .mockResolvedValueOnce(null)
+        // El reintento sí la encuentra: el otro escritor ya la insertó.
+        .mockResolvedValueOnce(subscriptionRow());
+
+      const dto = await service.assign(admin, BIZ, { plan_code: 'pro' });
+
+      expect(repository.updateLiveSubscription).toHaveBeenCalledTimes(2);
+      expect(dto.plan_code).toBe('pro');
+    });
+
+    /**
+     * Y el `23505` DE OTRA COSA no se reintenta.
+     *
+     * Un `23505` de otra unicidad es un error de otra cosa: tragárselo —o
+     * reintentarlo— sería estar mintiendo sobre lo que pasó. El nombre del
+     * índice es lo que distingue los dos.
+     */
+    it('un 23505 de OTRA unicidad no se reintenta: sale tal cual', async () => {
+      const postgresError = Object.assign(
+        new Error('duplicate key value violates unique constraint "otra_cosa"'),
+        { code: '23505', constraint_name: 'otra_cosa' },
+      );
+
+      repository.insertBusinessSubscription.mockRejectedValue(
+        new DrizzleQueryError(
+          'insert into "subscriptions" ...',
+          [],
+          postgresError,
+        ),
+      );
+
+      // El error sale TAL CUAL: no se traga, no se reintenta y no se
+      // traduce. Lo que no se sabe, esta capa no lo inventa.
+      await expect(
+        service.assign(admin, BIZ, { plan_code: 'pro' }),
+      ).rejects.toThrow(DrizzleQueryError);
+      // Y NO se reintenta: el `UPDATE` se llamó una vez, la de antes del
+      // `INSERT`.
+      expect(repository.updateLiveSubscription).toHaveBeenCalledTimes(1);
     });
 
     it('el cambio queda en el log con el evento, el de antes y el de después', async () => {

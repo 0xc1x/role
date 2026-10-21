@@ -31,12 +31,66 @@ let ctx: SupabaseTestDb;
 let repo: SubscriptionsRepository;
 let client: postgres.Sql;
 
+/**
+ * El SQL que sale, tal cual.
+ *
+ * Lo emite el LOGGER de Drizzle, que es la única puerta por la que se ve la
+ * consulta antes de que la base la conteste.
+ *
+ * ─── POR QUÉ HACE FALTA, Y POR QUÉ EL RESULTADO NO PUEDE AFIRMAR LO MISMO ─────
+ *
+ * El trigger del `updated_at` es `before update`: pisa CUALQUIER valor que la
+ * aplicación mande. Así que una implementación que escribiera `updated_at` a
+ * mano dejaría la columna con la fecha del trigger, y el resultado sería
+ * EXACTAMENTE el mismo —el test del «la columna se movió» pasaría con las
+ * dos implementaciones—. Lo que se afirma aquí es la FORMA de la consulta: las
+ * columnas que la aplicación escribe de verdad.
+ */
+const queries: string[] = [];
+
+/** La última consulta que salió, para no buscarla entre todas. */
+const lastQuery = (): string => queries.at(-1) ?? '';
+
+/**
+ * El `SET` del `UPDATE`: lo que la aplicación escribe DE VERDAD.
+ *
+ * El `RETURNING` sí menciona las tres fechas —las devuelve—, así que la
+ * afirmación tiene que caer sobre la parte del `SET`, que es la que decide
+ * qué columnas se escriben.
+ */
+const updateSetClause = (sql: string): string => {
+  const match = sql.match(/set (.*?) where /s);
+  return match?.[1] ?? '';
+};
+
+/**
+ * Las columnas del `INSERT` a las que la aplicación da un VALOR.
+ *
+ * Drizzle nombra todas las columnas de la tabla y pone `default` en las que
+ * no se escriben: en ésas, el valor lo pone la base. Lo que se afirma es que
+ * las columnas con valor son exactamente dos, y que las tres fechas no están
+ * entre ellas.
+ */
+const insertColumnsWithValue = (sql: string): string[] => {
+  const match = sql.match(
+    /insert into "subscriptions" \(([^)]*)\) values \(([^)]*)\)/,
+  );
+  if (!match) return [];
+  const columns = match[1]!
+    .split(',')
+    .map((column) => column.trim().replaceAll('"', ''));
+  const values = match[2]!.split(',').map((value) => value.trim());
+  return columns.filter((_, index) => values[index] !== 'default');
+};
+
 /** Un negocio CON una suscripción viva. */
 const BIZ_VIVA = 'c1000000-0000-4000-8000-000000000001';
 /** Un negocio SIN fila: se lee `free`. */
 const BIZ_SIN = 'c1000000-0000-4000-8000-000000000002';
 /** Un negocio cuya única fila está CANCELADA. */
 const BIZ_CANCELADA = 'c1000000-0000-4000-8000-000000000003';
+/** Un negocio para el `INSERT` cuya FORMA se afirma. */
+const BIZ_INSERT = 'c1000000-0000-4000-8000-000000000004';
 /** Un negocio que no existe. */
 const BIZ_FANTASMA = 'c1000000-0000-4000-8000-0000000000ff';
 
@@ -52,14 +106,24 @@ const FECHA_VIEJA = '2020-01-01T00:00:00Z';
 beforeAll(async () => {
   ctx = await createSupabaseTestDb();
   client = postgres(ctx.connectionString, { prepare: false });
-  repo = new SubscriptionsRepository(drizzle({ client }));
+  repo = new SubscriptionsRepository(
+    drizzle({
+      client,
+      logger: {
+        logQuery: (query: string) => {
+          queries.push(query);
+        },
+      },
+    }),
+  );
 
   await ctx.sql.begin(async (tx) => {
     await tx.unsafe(
       `insert into public.businesses (id, name, type, slug)
        values ('${BIZ_VIVA}',      'Suscripción viva',      'restaurant', 'sub-repo-viva'),
               ('${BIZ_SIN}',       'Suscripción sin fila',  'restaurant', 'sub-repo-sin'),
-              ('${BIZ_CANCELADA}', 'Suscripción cancelada', 'restaurant', 'sub-repo-cancelada')`,
+              ('${BIZ_CANCELADA}', 'Suscripción cancelada', 'restaurant', 'sub-repo-cancelada'),
+              ('${BIZ_INSERT}',    'Suscripción insertada', 'restaurant', 'sub-repo-insert')`,
     );
 
     await tx.unsafe(
@@ -183,7 +247,7 @@ describe('la escritura', () => {
 
   test('el `updated_at` lo mueve el TRIGGER, no la aplicación', async () => {
     // La fila nació con `updated_at` de 2020, escrito a mano. Si la columna se
-    // movió, fue el trigger: la aplicación no manda esa columna.
+    // movió, fue el trigger.
     const rows = await ctx.sql.unsafe<{ updated_at: number }[]>(
       `select extract(epoch from updated_at)::float8 as updated_at
          from public.subscriptions
@@ -196,6 +260,35 @@ describe('la escritura', () => {
     expect(updatedAt).toBeGreaterThan(Date.now() / 1000 - 600);
   });
 
+  test('el UPDATE NO manda `updated_at`: el `SET` lleva `plan_code` y nada más', async () => {
+    // El resultado NO puede afirmar esto —el trigger pisa cualquier valor que
+    // la aplicación mande—, así que lo que se afirma es la FORMA de la
+    // consulta: las columnas que el `SET` escribe. Una implementación que
+    // escribiera la columna a mano dejaría el mismo resultado y aparecería
+    // acá.
+    await repo.updateLiveSubscription(BIZ_VIVA, 'pro');
+
+    const set = updateSetClause(lastQuery());
+    expect(set).toContain('"plan_code"');
+    expect(set).not.toContain('updated_at');
+    expect(set).not.toContain('started_at');
+    expect(set).not.toContain('created_at');
+  });
+
+  test('el INSERT NO manda las fechas: sólo nombra `business_id` y `plan_code`', async () => {
+    // Mismo motivo que el `UPDATE`: las tres fechas las pone la base —el
+    // `id` y el `created_at` son defaults, el `started_at` también— y la
+    // aplicación no escribe ninguna. Drizzle nombra todas las columnas de la
+    // tabla y pone `default` en las que no se escriben, así que lo que se
+    // afirma es cuáles reciben un VALOR.
+    await repo.insertBusinessSubscription(BIZ_INSERT, 'pro');
+
+    expect(insertColumnsWithValue(lastQuery())).toEqual([
+      'business_id',
+      'plan_code',
+    ]);
+  });
+
   test('un UPDATE sobre un negocio sin fila viva no inventa una fila', async () => {
     expect(await repo.updateLiveSubscription(BIZ_SIN, 'pro')).toBeNull();
 
@@ -205,6 +298,33 @@ describe('la escritura', () => {
         where business_id = '${BIZ_SIN}'`,
     );
     expect(rows[0]?.filas).toBe(0);
+  });
+
+  test('una suscripción CANCELADA no se reescribe: el historial es historial', async () => {
+    // El caso que el requisito nombra: un negocio cuya única fila está
+    // CANCELADA. Un `UPDATE` ingenuo —`where business_id = X`— le reescribiría
+    // el plan a la fila muerta, y el negocio se leería como si tuviera ese
+    // plan. Con el predicado de la fila viva no la toca.
+    const updated = await repo.updateLiveSubscription(BIZ_CANCELADA, 'pro');
+
+    expect(updated).toBeNull();
+
+    // La fila cancelada sigue diciendo lo que decía.
+    const rows = await ctx.sql.unsafe<{ plan_code: string; vivas: number }[]>(
+      `select plan_code,
+              (select count(*)::int
+                 from public.subscriptions s2
+                where s2.business_id = '${BIZ_CANCELADA}'
+                  and s2.cancelled_at is null
+                  and s2.deleted_at is null) as vivas
+         from public.subscriptions
+        where business_id = '${BIZ_CANCELADA}'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.plan_code).toBe('pro_plus');
+    // Y no se creó una fila viva nueva: el `UPDATE` no inserta, y el negocio
+    // sigue sin plan —que es lo que dice el motor.
+    expect(rows[0]?.vivas).toBe(0);
   });
 
   test('el INSERT deja las fechas a la base, y la fila queda viva', async () => {
