@@ -5,7 +5,7 @@ import {
 	fromInvalidBody,
 	fromNetworkFailure,
 } from "@/src/core/api/errors";
-import { AppError, type ErrorKind } from "@/src/core/error/app-error";
+import { AppError, Errors, type ErrorKind } from "@/src/core/error/app-error";
 
 /**
  * El sobre del API (`AllExceptionsFilter`): `{ statusCode, message, error,
@@ -49,12 +49,44 @@ const STATUS_TABLE: Array<[number, ErrorKind]> = [
 	[503, "unknown"],
 ];
 
+/**
+ * Las categorías cuya prosa del API ES la copia del producto: el servidor
+ * escribió la frase para esta persona y se muestra tal cual.
+ */
+const ADOPTS_SERVER_COPY: ErrorKind[] = [
+	"validation",
+	"not_found",
+	"conflict",
+	"business_rule",
+];
+
+/**
+ * Las que muestran la copia curada de la taxonomía: el texto del servidor
+ * es técnico ('Missing access token') y no puede ser lo que ve la persona.
+ */
+const CURATED_COPY: ErrorKind[] = ["unauthorized", "forbidden", "unknown"];
+
+/** El texto que el servidor escribió en el sobre de todos los casos. */
+const SERVER_MESSAGE = "El plan no admite otro acceso";
+
+/** LaTaxonomía, para comparar contra su propia copia. */
+const TAXONOMY_COPY: Record<ErrorKind, () => AppError> = {
+	network: () => Errors.network(),
+	unauthorized: () => Errors.unauthorized(),
+	forbidden: () => Errors.forbidden(),
+	not_found: () => Errors.notFound(),
+	validation: () => Errors.validation(),
+	conflict: () => Errors.conflict(),
+	business_rule: () => Errors.businessRule("x"),
+	unknown: () => Errors.unknown(),
+};
+
 describe("fromApiResponse", () => {
 	test("cada estado del API cae en su categoría, con el estado como código", async () => {
 		for (const [status, kind] of STATUS_TABLE) {
 			const response = apiResponse(status, {
 				statusCode: status,
-				message: "El plan no admite otro acceso",
+				message: SERVER_MESSAGE,
 				error: "Unprocessable Entity",
 				path: "/api/v1/businesses/x/staff",
 				requestId: "req-000042",
@@ -65,12 +97,67 @@ describe("fromApiResponse", () => {
 			).rejects.toMatchObject({
 				kind,
 				code: String(status),
-				message: "El plan no admite otro acceso",
 			});
 		}
 	});
 
-	test("el fallo es de la taxonomía del app, no una excepción suelta", async () => {
+	test("la prosa del API se muestra cuando ES la copia del producto", async () => {
+		for (const [status, kind] of STATUS_TABLE) {
+			if (!ADOPTS_SERVER_COPY.includes(kind)) continue;
+
+			const response = apiResponse(status, {
+				statusCode: status,
+				message: SERVER_MESSAGE,
+			});
+
+			await expect(
+				fromApiResponse(response, "/businesses/x/staff"),
+			).rejects.toMatchObject({
+				kind,
+				code: String(status),
+				message: SERVER_MESSAGE,
+			});
+		}
+	});
+
+	test("un 401, un 403 o un 5xx no muestran el texto técnico del servidor", async () => {
+		for (const [status, kind] of STATUS_TABLE) {
+			if (!CURATED_COPY.includes(kind)) continue;
+
+			// El guard de auth del API responde en inglés: 'Missing access
+			// token'. Eso es diagnóstico, no la copia que ve la persona.
+			const response = apiResponse(status, {
+				statusCode: status,
+				message: "Missing access token",
+			});
+
+			await expect(
+				fromApiResponse(response, "/businesses/x/staff"),
+			).rejects.toMatchObject({
+				kind,
+				code: String(status),
+				message: TAXONOMY_COPY[kind]().message,
+			});
+		}
+	});
+
+	test("el texto crudo del servidor viaja en el contexto, sea cual sea la categoría", async () => {
+		for (const [status, kind] of STATUS_TABLE) {
+			const response = apiResponse(status, {
+				statusCode: status,
+				message: SERVER_MESSAGE,
+			});
+
+			await expect(
+				fromApiResponse(response, "/businesses/x/staff"),
+			).rejects.toMatchObject({
+				kind,
+				context: { serverMessage: SERVER_MESSAGE },
+			});
+		}
+	});
+
+	test("el error es de la taxonomía del app, no una excepción suelta", async () => {
 		const response = apiResponse(422, { message: "Tope del plan" });
 
 		const error = await fromApiResponse(response, "/businesses/x/staff").catch(
@@ -81,6 +168,20 @@ describe("fromApiResponse", () => {
 	});
 
 	test("un cuerpo que no es JSON usa el statusText", async () => {
+		// El 404 es de las categorías cuya copia ES la del producto: el
+		// statusText es el único texto que hay.
+		const response = brokenResponse(404, "Not Found");
+
+		await expect(
+			fromApiResponse(response, "/businesses/x/staff"),
+		).rejects.toMatchObject({
+			kind: "not_found",
+			code: "404",
+			message: "Not Found",
+		});
+	});
+
+	test("un 5xx con un cuerpo que no es JSON no muestra el statusText", async () => {
 		const response = brokenResponse(502, "Bad Gateway");
 
 		await expect(
@@ -88,7 +189,8 @@ describe("fromApiResponse", () => {
 		).rejects.toMatchObject({
 			kind: "unknown",
 			code: "502",
-			message: "Bad Gateway",
+			message: TAXONOMY_COPY.unknown().message,
+			context: { serverMessage: "Bad Gateway" },
 		});
 	});
 

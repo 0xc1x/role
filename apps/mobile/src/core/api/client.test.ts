@@ -161,6 +161,25 @@ describe("apiRequest", () => {
 		});
 	});
 
+	test("un 401 del API no muestra su texto técnico", async () => {
+		// El guard de auth responde en inglés; la persona ve la copia de la
+		// taxonomía y el texto crudo queda para el diagnóstico.
+		fetchResponse = jsonResponse(401, {
+			statusCode: 401,
+			message: "Missing access token",
+			error: "Unauthorized",
+		});
+
+		await expect(
+			apiRequest("GET", "/businesses/x/staff"),
+		).rejects.toMatchObject({
+			kind: "unauthorized",
+			code: "401",
+			message: "Debes iniciar sesión para continuar.",
+			context: { serverMessage: "Missing access token" },
+		});
+	});
+
 	test("un fallo de red es `network`", async () => {
 		globalThis.fetch = (async () => {
 			throw new TypeError("fetch failed");

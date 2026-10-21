@@ -39,6 +39,26 @@ const KIND_BY_STATUS: Partial<Record<number, ErrorKind>> = {
 const GENERIC_FALLBACK = Errors.unknown().message;
 
 /**
+ * Las categorías cuyo texto del API ES la copia del producto.
+ *
+ * En un 422, un 400 o un 409 el servidor escribe la prosa para ESTA persona
+ * ("Tu plan no admite otro acceso", "Elige una sucursal") y esa prosa es la
+ * promesa que el plan hace: se muestra tal cual.
+ *
+ * En un 401, un 403 o un 5xx el servidor escribe texto TÉCNICO —el guard de
+ * auth responde 'Missing access token'— y eso no puede ser lo que ve quien
+ * usa la app: ahí manda la copia curada de la taxonomía ("Debes iniciar
+ * sesión para continuar."). El texto crudo nunca se pierde: vive en
+ * `context.serverMessage` para el diagnóstico.
+ */
+const ADOPTS_SERVER_COPY: ReadonlySet<ErrorKind> = new Set([
+	"business_rule",
+	"validation",
+	"conflict",
+	"not_found",
+]);
+
+/**
  * Las fábricas de `Errors` sólo aceptan el mensaje: la categoría y el texto
  * salen de ahí, y el código y el contexto se añaden después con el
  * constructor de `AppError` (el mismo truco de `src/core/error/mapper.ts`).
@@ -113,8 +133,30 @@ function fallbackMessage(response: Response, kind: ErrorKind): string {
 }
 
 /**
+ * El texto crudo que el servidor dijo, como venga: el `message` del sobre, o
+ * el `statusText` cuando el cuerpo no era JSON. Es diagnóstico, nunca la
+ * copia que ve la persona.
+ */
+function readServerText(
+	envelope: ApiEnvelope | null,
+	response: Response,
+): string | undefined {
+	const message = readMessage(envelope);
+	if (message) return message;
+	// Un sobre sin `message` no trae texto crudo; un cuerpo que no era JSON
+	// sólo deja el `statusText`.
+	if (envelope) return undefined;
+	return response.statusText?.trim() || undefined;
+}
+
+/**
  * Convierte una respuesta de error del API en el `AppError` que la UI sabe
  * pintar, y no devuelve nunca: el llamador la usa como `return`.
+ *
+ * El `message` es la copia del producto: la prosa del API cuando esa prosa
+ * ES la copia del producto (`ADOPTS_SERVER_COPY`), y la de la taxonomía
+ * cuando el servidor escribió texto técnico. El texto crudo del servidor
+ * viaja siempre en `context.serverMessage`, para el diagnóstico.
  *
  * El `code` es el estado HTTP (`String(status)`), que es lo accionable del
  * diagnóstico; el `context` lleva el path y el `requestId` del servidor para
@@ -126,11 +168,15 @@ export async function fromApiResponse(
 ): Promise<never> {
 	const envelope = await readEnvelope(response);
 	const kind = kindForStatus(response.status);
-	const message = readMessage(envelope) ?? fallbackMessage(response, kind);
+	const serverMessage = readServerText(envelope, response);
+	const message = ADOPTS_SERVER_COPY.has(kind)
+		? (serverMessage ?? fallbackMessage(response, kind))
+		: ERRORS_BY_KIND[kind]().message;
 
 	throw withContext(ERRORS_BY_KIND[kind](message), String(response.status), {
 		path: readString(envelope?.path) ?? path,
 		requestId: readString(envelope?.requestId),
+		...(serverMessage ? { serverMessage } : {}),
 	});
 }
 
