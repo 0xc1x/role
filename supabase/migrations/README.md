@@ -2859,3 +2859,27 @@ habilitada en las dos tablas con **cero** policies, el
 copia de los números sigue en el motor hasta que la migración de la Task 4 la
 retire. El catálogo y el motor todavía no están atados; el guard que los ata es el
 de `apps/api/src/database/security/plan-limits.db.spec.ts`.
+
+## Applied: `20261021172305_generic_subscriptions`
+
+Applied via `apply_migration` on 2026-10-21. The file's `md5sum` is
+`401bbebc347920f8643cd5a1a4a9d3b7` and that is also the ledger's
+`md5(statements[1])`: byte for byte, ending on `;` with no trailing newline.
+
+**What it does, in this order:** creates `public.subscriptions` (sujeto un negocio
+**o** una persona, `check` de XOR, índice único parcial
+`subscriptions_live_business_key`, **sin** FK al catálogo), reescribe
+`public.business_plan_of()` para leer de ahí conservando el `coalesce` a `'free'`,
+su firma, su `security definer`, su `search_path` y su ACL (`postgres` y
+`service_role`; ni `authenticated` ni `anon`), y **al final** hace
+`drop table public.business_plans_state` **sin `cascade`**.
+
+**La tabla que se va estaba vacía**, medido el 2026-10-21: 0 filas y 16 negocios,
+todos leyendo `free` por el `coalesce`. No hay backfill porque no hay datos que
+migrar, y la nota está aquí para que quien lea esto no sospeche una pérdida.
+
+**Verificado en la base viva tras aplicar:** `to_regclass('public.business_plans_state')`
+es `null`; `public.subscriptions` existe con RLS activa y **0** policies; los
+**16** negocios siguen leyéndose `free`; y la ACL de `business_plan_of` queda
+igual que antes (ejecuta `postgres` y `service_role`, no `authenticated` ni
+`anon`).
