@@ -64,15 +64,20 @@ export function StaffSectionCard({
 							variant="bodySmall"
 							style={{ color: colors.mutedForeground }}
 						>
-							{strings.business.staff.sectionSubtitle.replace(
-								"{count}",
-								String(members.length),
-							)}
+							{members.length === 1
+								? strings.business.staff.sectionSubtitleOne
+								: strings.business.staff.sectionSubtitle.replace(
+										"{count}",
+										String(members.length),
+									)}
 						</AppText>
 					) : null}
 				</View>
 				<Button
 					size="sm"
+					// «Administrar» a secas no dice a qué se administra: el
+					// lector de pantalla necesita el objeto.
+					accessibilityLabel={strings.business.staff.manageAccessibilityLabel}
 					onPress={() => router.push(`/business/${businessId}/staff` as Href)}
 				>
 					{strings.business.staff.manage}

@@ -34,19 +34,21 @@ const ROLE_LABELS: Record<BusinessMemberDto["role"], string> = {
  * Porque un alcance vacío no es una ausencia: es el acceso que alcanza todas
  * las sucursales del negocio (§4.1). Decirlo es lo contrario de inventar un
  * cero.
+ *
+ * ─── Y POR QUÉ EL CONTEO TIENE SU FORMA EN SINGULAR ───────────────────────────
+ *
+ * Porque «1 sucursales» no es español: el acceso con un solo alcance es un
+ * caso de verdad —el negocio con varias sucursales y un empleado en una—.
  */
 function staffLocationsLabel(
 	member: Pick<BusinessMemberDto, "business_location_ids">,
 	locations: Pick<BusinessLocation, "name">[],
 ): string {
 	if (locations.length === 1) return locations[0].name;
-	if (member.business_location_ids.length === 0) {
-		return strings.business.staff.allLocations;
-	}
-	return strings.business.staff.locations.replace(
-		"{n}",
-		String(member.business_location_ids.length),
-	);
+	const count = member.business_location_ids.length;
+	if (count === 0) return strings.business.staff.allLocations;
+	if (count === 1) return strings.business.staff.locationsOne;
+	return strings.business.staff.locations.replace("{n}", String(count));
 }
 
 /**

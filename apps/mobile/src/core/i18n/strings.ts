@@ -1533,14 +1533,21 @@ export const strings = {
 		// cuenta CUÁNTAS personas tienen acceso; la lista cuenta QUIÉN. Los
 		// marcadores `{count}` y `{n}` los reemplaza el componente: este
 		// archivo es un catálogo, no un formateador.
+		//
+		// Y los conteos que pueden ser UNO tienen su propia forma: «1 personas
+		// con acceso» y «1 sucursales» no son español, y el caso de un solo
+		// acceso es el caso normal de un negocio nuevo.
 		staff: {
 			title: "Equipo",
 			sectionTitle: "Equipo y accesos",
 			sectionSubtitle: "{count} personas con acceso",
+			sectionSubtitleOne: "1 persona con acceso",
 			manage: "Administrar",
+			manageAccessibilityLabel: "Administrar los accesos del equipo",
 			emptyTitle: "Aún no hay accesos",
 			emptyBody: "Dale acceso a tu equipo para que retiren las ofertas por ti.",
 			addAccess: "Dar acceso",
+			addAccessAccessibilityLabel: "Dar de alta un acceso",
 			roleOwner: "Dueño",
 			roleManager: "Gerente",
 			roleStaff: "Empleado",
@@ -1549,6 +1556,7 @@ export const strings = {
 			lastLogin: "Última entrada",
 			neverLoggedIn: "Nunca ha entrado",
 			locations: "{n} sucursales",
+			locationsOne: "1 sucursal",
 			allLocations: "Todas las sucursales",
 			sessionPolicy: "Política de sesión",
 			sessionNever: "Sin expiración",

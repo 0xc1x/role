@@ -40,10 +40,11 @@ const BUSINESS_ID = "11111111-1111-4111-8111-111111111111";
 /** A dónde se ha navegado en este test. */
 const navigations: string[] = [];
 
-/** Los botones pintados, con su etiqueta y su `onPress`. */
+/** Los botones pintados, con su etiqueta, su `onPress` y su objeto. */
 interface ButtonProbe {
 	label: string;
 	onPress?: () => void;
+	accessibilityLabel?: string;
 }
 const buttons: ButtonProbe[] = [];
 
@@ -96,11 +97,26 @@ mock.module("@/src/core/theme", () => ({
 }));
 
 // El botón se pinta con su texto: es el texto el que prueba que el alta está
-// ofrecida, y su `onPress` el que prueba a dónde lleva.
+// ofrecida, y su `onPress` el que prueba a dónde lleva. El
+// `accessibilityLabel` se pinta como `aria-label`, que es lo que
+// react-native-web hace con él en un `Pressable`: así el objeto del botón se
+// puede leer en el markup, no sólo en las props.
 mock.module("@/components/ui/button", () => ({
-	Button: (props: { children?: ReactNode; onPress?: () => void }) => {
-		buttons.push({ label: textOf(props.children), onPress: props.onPress });
-		return createElement(nativeWeb.Text, null, props.children);
+	Button: (props: {
+		children?: ReactNode;
+		onPress?: () => void;
+		accessibilityLabel?: string;
+	}) => {
+		buttons.push({
+			label: textOf(props.children),
+			onPress: props.onPress,
+			accessibilityLabel: props.accessibilityLabel,
+		});
+		return createElement(
+			nativeWeb.Text,
+			{ "aria-label": props.accessibilityLabel },
+			props.children,
+		);
 	},
 }));
 
@@ -134,13 +150,25 @@ mock.module("@/src/core/ui", () => ({
 	},
 }));
 
+/**
+ * Los ids con los que se pidió la lista.
+ *
+ * Se registran porque la protección del cajero —que no dispare la consulta—
+ * no se puede afirmar leyendo el código del hook: se afirma mirando el id
+ * que la tarjeta le pasó.
+ */
+const staffQueries: string[] = [];
+
 mock.module("@/src/features/business/hooks", () => ({
-	useStaffMembers: () => ({
-		...staffQuery,
-		refetch: () => {
-			refetchCalls += 1;
-		},
-	}),
+	useStaffMembers: (businessId: string) => {
+		staffQueries.push(businessId);
+		return {
+			...staffQuery,
+			refetch: () => {
+				refetchCalls += 1;
+			},
+		};
+	},
 }));
 
 const { StaffList } = await import("./StaffList");
@@ -211,6 +239,7 @@ beforeEach(() => {
 	navigations.length = 0;
 	buttons.length = 0;
 	errorStates.length = 0;
+	staffQueries.length = 0;
 	refetchCalls = 0;
 	staffQuery = {
 		data: undefined,
@@ -300,6 +329,24 @@ test("con dos accesos hay una tarjeta por acceso y la sección cuenta dos", () =
 	);
 });
 
+test("con un solo acceso la sección lo cuenta en singular", () => {
+	staffQuery = {
+		data: [member()],
+		isLoading: false,
+		isError: false,
+		error: null,
+	};
+
+	const section = renderSection("owner");
+
+	// «1 personas con acceso» no es español, y el negocio con un acceso es el
+	// caso normal de un negocio nuevo.
+	expect(section).toContain(strings.business.staff.sectionSubtitleOne);
+	expect(section).not.toContain(
+		strings.business.staff.sectionSubtitle.replace("{count}", "1"),
+	);
+});
+
 // ─── La tarjeta de un acceso ──────────────────────────────────────────────────
 
 test("la tarjeta dice el rol, el alcance, la sesión, la última entrada y el estado", () => {
@@ -361,6 +408,20 @@ test("el alcance cuenta las sucursales cuando el negocio tiene varias", () => {
 	expect(html).toContain(strings.business.staff.locations.replace("{n}", "3"));
 });
 
+test("un acceso con un solo alcance lo cuenta en singular", () => {
+	// El negocio tiene varias sucursales y el acceso alcanza una: el conteo
+	// es UNO, y «1 sucursales» no es español.
+	const html = renderCard(member({ business_location_ids: [CENTRO.id] }), [
+		CENTRO,
+		SUR,
+	]);
+
+	expect(html).toContain(strings.business.staff.locationsOne);
+	expect(html).not.toContain(
+		strings.business.staff.locations.replace("{n}", "1"),
+	);
+});
+
 test("un acceso sin alcance alcanza a todas las sucursales", () => {
 	const html = renderCard(member({ business_location_ids: [] }), [CENTRO, SUR]);
 
@@ -389,6 +450,35 @@ test("la sección la ve el gerente y el cajero no", () => {
 	expect(cajero).not.toContain(strings.business.staff.manage);
 });
 
+test("el cajero no dispara la consulta de la lista", () => {
+	staffQuery = {
+		data: [member()],
+		isLoading: false,
+		isError: false,
+		error: null,
+	};
+
+	renderSection("staff");
+
+	// ─── LA FORMA DEL ÁRBOL QUE ESTO FIXA ───────────────────────────────────────
+	//
+	// La tarjeta se MONTA siempre —es el panel el que la pinta, y el panel no
+	// filtra por rol—; lo que cambia es el id que la tarjeta le pasa a la
+	// consulta. Para un cajero ese id es VACÍO, y `useStaffMembers` deja la
+	// consulta apagada con `enabled: Boolean(businessId)`: el cajero no pide
+	// una lista que el API le negaría.
+	//
+	// La forma alternativa —que la tarjeta no se montara— también sería
+	// válida, pero no es la que hay: el filtro vive DENTRO de la tarjeta, que
+	// es donde el §9.3 quiere que viva el mínimo.
+	expect(staffQueries).toEqual([""]);
+
+	// Y el gerente sí pide la lista, con su negocio.
+	staffQueries.length = 0;
+	renderSection("manager");
+	expect(staffQueries).toEqual([BUSINESS_ID]);
+});
+
 test("el botón de la sección lleva a la pantalla del equipo", () => {
 	const html = renderSection("owner");
 
@@ -413,8 +503,45 @@ test("un fallo en la lista no borra la sección: el título y el botón siguen",
 
 	expect(html).toContain(strings.business.staff.sectionTitle);
 	expect(html).toContain(strings.business.staff.manage);
-	// El conteo no se inventa: sin datos no hay número que anunciar.
-	expect(html).not.toContain(
-		strings.business.staff.sectionSubtitle.replace("{count}", "0"),
+
+	// El conteo no se inventa: sin datos no hay NINGÚN subtítulo, ni el
+	// singular ni el plural, ni con el número que sea. Se afirma la AUSENCIA
+	// del nodo de conteo, no la ausencia de una forma concreta de él.
+	for (const count of [0, 1, 2, 3, 5, 10]) {
+		expect(html).not.toContain(
+			strings.business.staff.sectionSubtitle.replace("{count}", String(count)),
+		);
+	}
+	expect(html).not.toContain(strings.business.staff.sectionSubtitleOne);
+	// Ni el marcador sin interpolar: el catálogo no se pinta nunca.
+	expect(html).not.toContain(strings.business.staff.sectionSubtitle);
+});
+
+test("los botones del equipo dicen a qué se refieren", () => {
+	staffQuery = { data: [], isLoading: false, isError: false, error: null };
+
+	// El botón del estado vacío.
+	const lista = renderList();
+	expect(lista).toContain(
+		`aria-label="${strings.business.staff.addAccessAccessibilityLabel}"`,
+	);
+	const add = buttons.find(
+		(button) => button.label === strings.business.staff.addAccess,
+	);
+	expect(add?.accessibilityLabel).toBe(
+		strings.business.staff.addAccessAccessibilityLabel,
+	);
+
+	// Y el de la sección.
+	buttons.length = 0;
+	const seccion = renderSection("owner");
+	expect(seccion).toContain(
+		`aria-label="${strings.business.staff.manageAccessibilityLabel}"`,
+	);
+	const manage = buttons.find(
+		(button) => button.label === strings.business.staff.manage,
+	);
+	expect(manage?.accessibilityLabel).toBe(
+		strings.business.staff.manageAccessibilityLabel,
 	);
 });

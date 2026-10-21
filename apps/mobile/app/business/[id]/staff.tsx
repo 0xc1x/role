@@ -42,6 +42,11 @@ export default function BusinessStaffScreen() {
 				<Button
 					size="sm"
 					icon={<Plus size={16} color={colors.primaryForeground} />}
+					// «Dar acceso» a secas no dice a QUIÉN se da el acceso: el
+					// lector de pantalla necesita el objeto.
+					accessibilityLabel={
+						strings.business.staff.addAccessAccessibilityLabel
+					}
 					onPress={() =>
 						router.push(`/business/${businessId}/staff/new` as Href)
 					}
