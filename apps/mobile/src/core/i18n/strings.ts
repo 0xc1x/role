@@ -1649,6 +1649,28 @@ export const strings = {
 			removeTitle: "Dar de baja el acceso de {name}",
 			removeBody:
 				"La persona no puede volver a entrar hasta que se le dé un acceso nuevo, y el alias no se recicla: ese correo queda quemado.",
+			// El corte de emergencia (Task 12). Es la única operación que corta
+			// el acceso de TODO el equipo de una vez, y su confirmación dice
+			// TRES cosas: que corta todos los accesos del negocio, que con
+			// ellos se van las sesiones abiertas, y —cuando quien corta es un
+			// gerente— que también se corta su propio acceso (el servidor
+			// corta a quien llama y sólo deja fuera al dueño).
+			revokeAllTitle: "Cortar todos los accesos",
+			revokeAllHeading: "Corte de emergencia",
+			revokeAllAccessibilityLabel:
+				"Cortar todos los accesos del equipo de este negocio",
+			revokeAllBody:
+				"Se cortan todos los accesos del equipo de este negocio, incluidas las sesiones abiertas de las tablets: quien esté dentro se queda fuera.",
+			revokeAllManagerWarning:
+				"El corte incluye también tu propio acceso: te vas a quedar fuera.",
+			// El resultado se pinta en la tarjeta, no en un toast que se va: el
+			// conteo es el que devolvió el API y el dueño queda fuera SÓLO si
+			// la respuesta lo dice.
+			revokeAllResult: "Se cortaron {count} accesos.",
+			revokeAllResultOne: "Se cortó 1 acceso.",
+			revokeAllResultOwnerSkipped:
+				"El dueño del negocio quedó fuera del corte.",
+			revokeAllResultEmpty: "No había accesos activos que cortar.",
 		},
 	},
 	// Copy del panel multi-negocio (app/my-business/*). Antes vivía como

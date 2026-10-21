@@ -3,11 +3,13 @@ import {
 	BusinessMemberDeliveryCardSchema,
 	BusinessMemberSchema,
 	businessMemberAliasWarnings,
+	RevokeBusinessAccessResponseSchema,
 	TransferBusinessOwnershipResponseSchema,
 	UpdateBusinessMemberAliasResponseSchema,
 	type BusinessMemberDeliveryCardDto,
 	type BusinessMemberDto,
 	type CreateBusinessMemberDto,
+	type RevokeBusinessAccessResponseDto,
 	type StaffAliasWarningCode,
 	type TransferBusinessOwnershipResponseDto,
 	type UpdateBusinessMemberAliasResponseDto,
@@ -75,7 +77,7 @@ function parseResponse<T>(schema: ZodType<T>, body: unknown): T {
 	return parsed.data;
 }
 
-/** La ruta base de las ocho rutas del equipo (§8). */
+/** La ruta base de las nueve rutas del equipo (§8). */
 function staffPath(businessId: string): string {
 	return `/businesses/${businessId}/staff`;
 }
@@ -256,6 +258,39 @@ export const staffRepository = {
 	 */
 	async remove(businessId: string, memberId: string): Promise<void> {
 		await api.delete<void>(memberPath(businessId, memberId));
+	},
+
+	/**
+	 * `POST /businesses/:businessId/staff/revoke-all` — el corte de emergencia.
+	 *
+	 * ─── POR QUÉ NO LLEVA CUERPO ────────────────────────────────────────────────
+	 *
+	 * Porque el alcance NO lo pide el cliente: lo decide QUIEN llama. Un cuerpo
+	 * con una lista de ids sería una segunda puerta de alcance —una por la que
+	 * se podría cortar el acceso de alguien que no administra—, y el servidor
+	 * la cierra con un 400 (`RevokeBusinessAccessSchema` es estricto y vacío).
+	 *
+	 * ─── Y POR QUÉ EL DONO NO SE CORTE ─────────────────────────────────────────
+	 *
+	 * Porque el dueño NUNCA se corta: la operación que degrada al dueño es la
+	 * transferencia de propiedad. El API no lo corta y lo dice: `owner_skipped`
+	 * viaja OBLIGATORIO en la respuesta, para que el panel pueda contarlo en
+	 * vez de dejar que el dueño se entere porque su tablet se apagó.
+	 *
+	 * ─── Y POR QUÉ EL CORTE DE UN GERENTE TAMBIÉN SE CORTE A SÍ MISMO ──────────
+	 *
+	 * Porque el corte es de lo que quien llama ADMINISTRA, y un gerente
+	 * administra su propio acceso. El API lo incluye en el corte y lo hace
+	 * explícito en la respuesta: la lista trae las membresías que esta llamada
+	 * dejó pausadas, y el que llama puede estar entre ellas.
+	 */
+	async revokeAll(
+		businessId: string,
+	): Promise<RevokeBusinessAccessResponseDto> {
+		const response = await api.post<unknown>(
+			`${staffPath(businessId)}/revoke-all`,
+		);
+		return parseResponse(RevokeBusinessAccessResponseSchema, response);
 	},
 
 	/**

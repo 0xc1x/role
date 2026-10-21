@@ -7,9 +7,14 @@ import { strings } from "@/src/core/i18n/strings";
 import { Screen, ScreenHeader } from "@/src/core/ui";
 import { useTheme } from "@/src/core/theme";
 import { spacing } from "@/src/core/theme/spacing";
+import { useAuthStore } from "@/src/features/auth/store";
 import { useStaffSessionStamp } from "@/src/features/auth/presentation/use-staff-session-stamp";
+import { RevokeAllCard } from "@/src/features/business/components/staff/RevokeAllCard";
 import { StaffList } from "@/src/features/business/components/staff/StaffList";
-import { useBusinessLocations } from "@/src/features/business/hooks";
+import {
+	useBusinessLocations,
+	useBusinesses,
+} from "@/src/features/business/hooks";
 
 /**
  * La pantalla del equipo: los accesos del negocio (§9.2).
@@ -20,6 +25,14 @@ import { useBusinessLocations } from "@/src/features/business/hooks";
  * membresía, y con dos o más no sella nada (§5.2). Quien abre esta pantalla
  * ya sabe qué negocio está usando, así que el sello se repite aquí con el
  * negocio en el cuerpo: es lo que deja la membresía sellada de verdad.
+ *
+ * ─── Y POR QUÉ EL ROL SE RESUELVE AQUÍ Y NO VIENE EN LA URL ──────────────────
+ *
+ * Porque el rol NO es un dato de la ruta: es el que la persona tiene en ESTE
+ * negocio, y por eso se busca en los negocios que opera —`useBusinesses`— y se
+ * compara con el id de la ruta. Pasarlo por la URL dejaría que la URL mintiera
+ * sobre el rol, y el rol decide si se ofrece el corte de emergencia. La
+ * puerta de verdad, de todas formas, la tiene el API: esto es UX.
  */
 export default function BusinessStaffScreen() {
 	const { colors } = useTheme();
@@ -27,6 +40,12 @@ export default function BusinessStaffScreen() {
 	const businessId = id ?? "";
 
 	useStaffSessionStamp(businessId);
+
+	// El rol de quien mira en este negocio: sin él no se sabe si el corte de
+	// emergencia se ofrece (un empleado no lo ve).
+	const profile = useAuthStore((s) => s.profile);
+	const { data: businesses } = useBusinesses(profile?.id ?? "");
+	const role = businesses?.find((business) => business.id === businessId)?.role;
 
 	// Las sucursales las trae quien pinta: la tarjeta dice el alcance de cada
 	// acceso y, con una sola sucursal, dice su nombre.
@@ -54,6 +73,7 @@ export default function BusinessStaffScreen() {
 					{strings.business.staff.addAccess}
 				</Button>
 			</View>
+			{role ? <RevokeAllCard businessId={businessId} role={role} /> : null}
 			<StaffList businessId={businessId} locations={locations ?? []} />
 		</Screen>
 	);

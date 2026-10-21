@@ -656,7 +656,7 @@ export function useStaffMembers(businessId: string) {
 }
 
 /**
- * Las ocho operaciones del equipo, una mutación cada una.
+ * Las nueve operaciones del equipo, una mutación cada una.
  *
  * ─── POR QUÉ NO HAY UN TOAST POR MUTACIÓN ───────────────────────────────────
  *
@@ -682,7 +682,8 @@ export function useStaffMembers(businessId: string) {
  * Las variables de cada mutación: `create(body)`, `update({ memberId, body })`,
  * `updateAlias({ memberId, alias })` y —las que sólo necesitan a quién——
  * `rotate(memberId)`, `disable(memberId)`, `enable(memberId)`,
- * `remove(memberId)` y `transferOwnership(memberId)`.
+ * `remove(memberId)` y `transferOwnership(memberId)`. El corte de emergencia
+ * no necesita ni a quién: `revokeAll()` corta lo que quien llama administra.
  */
 export function useStaffMutations(businessId: string) {
 	const queryClient = useQueryClient();
@@ -756,6 +757,21 @@ export function useStaffMutations(businessId: string) {
 		},
 	});
 
+	/**
+	 * El corte de emergencia: todos los accesos del negocio de una vez.
+	 *
+	 * ─── POR QUÉ NO INVALIDA LOS NEGOCIOS ─────────────────────────────────────
+	 *
+	 * Porque el corte no cambia el ROL de nadie: corta accesos, y el rol se
+	 * lee de la membresía. La lista sí cambia —TODAS sus filas—, así que la
+	 * lista es lo que hay que volver a leer.
+	 */
+	const revokeAll = useMutation({
+		mutationKey: staffMutationKey("revoke-all"),
+		mutationFn: () => staffRepository.revokeAll(businessId),
+		onSuccess: invalidateStaffList,
+	});
+
 	return {
 		create,
 		update,
@@ -765,5 +781,6 @@ export function useStaffMutations(businessId: string) {
 		enable,
 		remove,
 		transferOwnership,
+		revokeAll,
 	};
 }
