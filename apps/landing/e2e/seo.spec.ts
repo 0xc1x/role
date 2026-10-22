@@ -158,9 +158,17 @@ test.describe("SEO metadata per route", () => {
 		// og:* is what a link renders as in a chat or a social feed, and it is
 		// the metadata most often left pointing at the root defaults.
 		const { html } = await getServedHtml(request, "/how-it-works");
+		// og:title mirrors the route's `<title>`: `pageHead` builds both from the
+		// same argument. The original assertion expected a shorter "Cómo funciona
+		// Rolé" that no code has ever produced — checked against the SSR output,
+		// which emits exactly the full title below, once.
 		expect(html).toContain(
-			'<meta property="og:title" content="Cómo funciona Rolé"/>',
+			'<meta property="og:title" content="Cómo funciona Rolé | App de comida excedente"/>',
 		);
+		// If the route's head ever loses the merge order to the root's, the
+		// og:title (and its twitter twin) comes out as the generic marketing
+		// claim. The root titles are the only place that string exists.
+		expect(html).not.toContain('content="Rolé — Comida deliciosa');
 		expect(html).toContain("<meta property=\"og:site_name\" content=\"Rolé\"/>");
 	});
 
